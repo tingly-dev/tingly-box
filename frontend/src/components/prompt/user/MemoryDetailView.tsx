@@ -570,6 +570,23 @@ const SessionDetailView: React.FC<SessionDetailViewProps> = ({ session, sessionI
                 }}
               />
             </Box>
+            {/* Title - show if available */}
+            {currentSessionItem?.title && (
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.primary',
+                  fontSize: '0.85rem',
+                  lineHeight: 1.4,
+                  mb: 0.25,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {currentSessionItem.title}
+              </Typography>
+            )}
             <Typography variant="caption" color="text.secondary">
               {sessionData.sessionId.slice(-12)} · {sessionData.stats.totalRounds} messages · {formatTokens(sessionData.stats.totalTokens)} tokens
             </Typography>

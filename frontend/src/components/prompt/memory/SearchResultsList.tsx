@@ -162,7 +162,8 @@ const SearchResultsList: React.FC<SearchResultsListProps> = ({
       const metadataMatch =
         session.account_name.toLowerCase().includes(query) ||
         session.model.toLowerCase().includes(query) ||
-        session.provider_name.toLowerCase().includes(query);
+        session.provider_name.toLowerCase().includes(query) ||
+        session.title?.toLowerCase().includes(query);
 
       return metadataMatch || result.matchedRounds.length > 0;
     });
@@ -291,8 +292,8 @@ const SearchResultsList: React.FC<SearchResultsListProps> = ({
                   onClick={() => onSelectSession(session)}
                   sx={{ p: 1.25 }}
                 >
-                  {/* Row 1: Avatar + Account + Scenario */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.5 }}>
+                  {/* Row 1: Title as main identifier */}
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75, mb: 0.5 }}>
                     <Avatar
                       sx={{
                         width: 26,
@@ -300,13 +301,27 @@ const SearchResultsList: React.FC<SearchResultsListProps> = ({
                         bgcolor: `${scenarioConfig.color}.main`,
                         fontSize: '0.65rem',
                         fontWeight: 600,
+                        flexShrink: 0,
                       }}
                     >
                       {getInitials(session.account_name)}
                     </Avatar>
-                    <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>
-                      {session.account_name}
-                    </Typography>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontWeight: 600,
+                          lineHeight: 1.3,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                        }}
+                      >
+                        {searchQuery && session.title ? highlightMatch(session.title, searchQuery) : (session.title || session.account_name)}
+                      </Typography>
+                    </Box>
                     <Chip
                       label={scenarioConfig.label}
                       size="small"
@@ -315,16 +330,27 @@ const SearchResultsList: React.FC<SearchResultsListProps> = ({
                         fontSize: '0.6rem',
                         bgcolor: `${scenarioConfig.color}.light`,
                         color: `${scenarioConfig.color}.dark`,
+                        flexShrink: 0,
                       }}
                     />
+                  </Box>
+
+                  {/* Row 2: Account + Time */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5, pl: '32px' }}>
                     <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                      {session.account_name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                      ·
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
                       {formatTime(session.created_at)}
                     </Typography>
                   </Box>
 
-                  {/* Row 2: Model + Stats */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                    <Typography variant="caption" sx={{ fontWeight: 500, fontSize: '0.75rem' }}>
+                  {/* Row 3: Model + Stats */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, pl: '32px' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 500, fontSize: '0.7rem' }}>
                       {session.model}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>

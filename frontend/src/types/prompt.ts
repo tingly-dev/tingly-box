@@ -171,6 +171,7 @@ export interface PromptRoundItem {
   request_id?: string;
   project_id?: string;
   session_id?: string;
+  working_dir?: string;
   metadata?: Record<string, unknown>;
   round_index: number;
   user_input: string;
@@ -239,6 +240,8 @@ export interface MemorySessionItem {
   model: string;
   account_id: string;
   account_name: string;
+  title: string; // First user input as session title
+  working_dir?: string; // Working directory from system prompt
   created_at: string;
   total_rounds: number;
   total_tokens: number;
