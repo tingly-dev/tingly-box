@@ -584,6 +584,13 @@ func handleClaudeCodeMessage(
 		shouldResume = true
 	}
 
+	logrus.WithFields(logrus.Fields{
+		"chatID":       chatID,
+		"sessionID":    sessionID,
+		"projectPath":  projectPath,
+		"shouldResume": shouldResume,
+	}).Info("Starting agent execution")
+
 	// Create a streaming message handler that sends formatted messages to the bot
 	streamHandler := newStreamingMessageHandler(bot, chatID, replyTo)
 
@@ -593,6 +600,13 @@ func handleClaudeCodeMessage(
 		SessionID:   sessionID,
 		Resume:      shouldResume,
 	})
+
+	logrus.WithFields(logrus.Fields{
+		"chatID":    chatID,
+		"sessionID": sessionID,
+		"hasError":  err != nil,
+		"hasResult": result != nil,
+	}).Info("Agent execution completed")
 
 	response := streamHandler.GetOutput()
 	if response == "" {
@@ -606,7 +620,17 @@ func handleClaudeCodeMessage(
 
 	if err != nil {
 		sessionMgr.SetFailed(sessionID, response)
-		logrus.WithError(err).Warn("Remote-coder execution failed")
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"chatID":    chatID,
+			"sessionID": sessionID,
+			"response":  response,
+		}).Warn("Remote-coder execution failed")
+
+		// Send error message to user
+		if response == "" {
+			response = fmt.Sprintf("Execution failed: %v", err)
+		}
+		sendTextWithReply(bot, chatID, response, replyTo)
 		return
 	}
 
@@ -1653,6 +1677,11 @@ func (h *streamingMessageHandler) OnMessage(msg interface{}) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
+	logrus.WithFields(logrus.Fields{
+		"msgType": fmt.Sprintf("%T", msg),
+		"chatID":  h.chatID,
+	}).Debug("Received message from agent")
+
 	// Convert to claude.Message if possible
 	var claudeMsg claude.Message
 	switch m := msg.(type) {
@@ -1660,16 +1689,20 @@ func (h *streamingMessageHandler) OnMessage(msg interface{}) error {
 		claudeMsg = m
 	default:
 		// Skip non-claude messages
+		logrus.WithField("msgType", fmt.Sprintf("%T", msg)).Debug("Skipping non-claude message")
 		return nil
 	}
 
 	// Format using the formatter
 	formatted := h.formatter.Format(claudeMsg)
 	d, _ := json.Marshal(claudeMsg.GetRawData())
-	logrus.Infof("[bot] %s", d)
-	logrus.Infof("[bot] %s", formatted)
+	logrus.Infof("[bot] Raw: %s", d)
+	logrus.Infof("[bot] Formatted: %s", formatted)
+
 	if strings.TrimSpace(formatted) != "" {
 		h.sendMessage(formatted)
+	} else {
+		logrus.WithField("msgType", claudeMsg.GetType()).Debug("Skipping empty formatted message")
 	}
 
 	return nil
@@ -1715,9 +1748,23 @@ func (h *streamingMessageHandler) sendMessage(text string) {
 			ReplyTo: h.replyTo,
 		})
 		if err != nil {
-			logrus.WithError(err).Warn("Failed to send streaming message")
+			logrus.WithFields(logrus.Fields{
+				"chatID":  h.chatID,
+				"replyTo": h.replyTo,
+				"error":   err,
+				"chunk":   chunk[:minInt(100, len(chunk))],
+			}).Error("Failed to send streaming message")
+			continue
 		}
+		logrus.WithField("chatID", h.chatID).WithField("chunkLen", len(chunk)).Debug("Sent streaming message chunk")
 	}
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // NewStoreForChatOnly creates a minimal bot.Store for chat state management only
