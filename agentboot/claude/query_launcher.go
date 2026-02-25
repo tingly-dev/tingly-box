@@ -78,6 +78,7 @@ func (l *QueryLauncher) Query(ctx context.Context, qc QueryConfig) (*Query, erro
 	}
 
 	// Start the command
+	logrus.Infof("Claude CLI command: %s %s", cliPath, strings.Join(args, " "))
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start command: %w", err)
 	}
