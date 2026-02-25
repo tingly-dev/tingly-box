@@ -98,6 +98,17 @@ func exampleChannelQuery() {
 }
 
 // Example 3: Stream prompt with canCallTool
+//
+// stdin input format (line-delimited JSON):
+// {"type":"text","content":"You are a helpful assistant"}
+// {"role":"user","content":"List the files in current directory"}
+//
+// Complete bash example:
+/*
+cd agentboot/claude/examples && \
+echo '{"role":"user","content":"List the files in current directory"}' | \
+go run query_example.go 3
+*/
 func exampleStreamPrompt() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()

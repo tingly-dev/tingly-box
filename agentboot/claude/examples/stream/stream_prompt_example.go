@@ -49,7 +49,7 @@ func exampleStreamPromptExplained() {
 	launcher := claude.NewQueryLauncher(claude.Config{})
 
 	query, err := launcher.Query(ctx, claude.QueryConfig{
-		Prompt:  promptChannel,  // 使用流式 prompt
+		Prompt: promptChannel, // 使用流式 prompt
 		Options: &claude.QueryOptionsConfig{
 			CWD: "/tmp",
 		},
@@ -119,7 +119,7 @@ func exampleInteractiveStreamPrompt() {
 
 	launcher := claude.NewQueryLauncher(claude.Config{})
 	query, err := launcher.Query(ctx, claude.QueryConfig{
-		Prompt:  promptChannel,
+		Prompt: promptChannel,
 		Options: &claude.QueryOptionsConfig{
 			CWD: "/tmp",
 		},
@@ -190,10 +190,10 @@ func exampleStreamPromptWithToolCallback() {
 	launcher := claude.NewQueryLauncher(claude.Config{})
 
 	query, err := launcher.Query(ctx, claude.QueryConfig{
-		Prompt:  builder.Messages(),
+		Prompt: builder.Messages(),
 		Options: &claude.QueryOptionsConfig{
 			CWD:         "/root/tingly-box",
-			CanCallTool: canCallTool,  // 注册回调
+			CanCallTool: canCallTool, // 注册回调
 		},
 	})
 	if err != nil {
@@ -299,7 +299,7 @@ func exampleFullInteractiveSession() {
 	launcher := claude.NewQueryLauncher(claude.Config{})
 
 	query, err := launcher.Query(ctx, claude.QueryConfig{
-		Prompt:  builder.Messages(),
+		Prompt: builder.Messages(),
 		Options: &claude.QueryOptionsConfig{
 			CWD:         "/root/tingly-box",
 			CanCallTool: canCallTool,
