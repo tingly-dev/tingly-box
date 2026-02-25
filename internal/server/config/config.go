@@ -64,8 +64,8 @@ type Config struct {
 	usageStore         *db.UsageStore
 	ruleStateStore     *db.RuleStateStore     // Persists current_service_index to SQLite
 	imbotSettingsStore *db.ImBotSettingsStore // Persists ImBot credentials
-	providerStore   *db.ProviderStore  // Persists provider configurations and credentials
-	templateManager *data.TemplateManager
+	providerStore      *db.ProviderStore      // Persists provider configurations and credentials
+	templateManager    *data.TemplateManager
 
 	mu sync.RWMutex
 }
@@ -719,6 +719,7 @@ func (c *Config) HasToken() bool {
 
 // migrateProvidersToDB migrates providers from JSON config to database
 // This is a one-time migration that runs on startup if the database is empty
+// Note: Providers are kept in JSON config as backup for now, will be cleared in a future version
 func (c *Config) migrateProvidersToDB() error {
 	if c.providerStore == nil {
 		return nil // Provider store not initialized, skip migration
@@ -741,7 +742,7 @@ func (c *Config) migrateProvidersToDB() error {
 		return nil // No providers to migrate
 	}
 
-	logrus.Infof("Migrating %d providers from JSON config to database...", len(c.Providers))
+	logrus.Infof("Migrating %d providers from JSON config to database (keeping JSON as backup)...", len(c.Providers))
 
 	// Migrate each provider to database
 	for _, provider := range c.Providers {
@@ -751,13 +752,8 @@ func (c *Config) migrateProvidersToDB() error {
 	}
 
 	logrus.Infof("Successfully migrated %d providers to database", len(c.Providers))
-
-	// Clear providers from JSON after successful migration
-	c.Providers = nil
-	c.ProvidersV1 = nil
-	if err := c.Save(); err != nil {
-		logrus.Warnf("Failed to save config after provider migration: %v", err)
-	}
+	// Note: We keep c.Providers in JSON config as backup for now
+	// In a future version, we will clear: c.Providers = nil; c.ProvidersV1 = nil; c.Save()
 
 	return nil
 }
