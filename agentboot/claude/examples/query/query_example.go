@@ -19,8 +19,8 @@ func exampleSimpleQuery() {
 	query, err := launcher.Query(ctx, claude.QueryConfig{
 		Prompt: "Say hello in one word",
 		Options: &claude.QueryOptionsConfig{
-			CWD:   "/tmp",
-			Model: "claude-sonnet-4-6",
+			CWD: "/tmp",
+			//Model: "claude-sonnet-4-6",
 		},
 	})
 	if err != nil {
@@ -52,6 +52,8 @@ func exampleSimpleQuery() {
 			}
 		case "result":
 			fmt.Printf("  Result: %s\n", msg.Result)
+		default:
+			fmt.Printf("  Unknown message type: %s\n", msg.Type)
 		}
 	}
 
@@ -100,13 +102,12 @@ func exampleChannelQuery() {
 // Example 3: Stream prompt with canCallTool
 //
 // stdin input format (line-delimited JSON):
-// {"type":"text","content":"You are a helpful assistant"}
-// {"role":"user","content":"List the files in current directory"}
+// {"type":"user","message":{"role":"user","content":"List the files in current directory"}}
 //
 // Complete bash example:
 /*
-cd agentboot/claude/examples && \
-echo '{"role":"user","content":"List the files in current directory"}' | \
+cd agentboot/claude/examples/query && \
+echo '{"type":"user","message":{"role":"user","content":"List the files in current directory"}}' | \
 go run query_example.go 3
 */
 func exampleStreamPrompt() {
@@ -133,7 +134,7 @@ func exampleStreamPrompt() {
 	}
 
 	query, err := launcher.Query(ctx, claude.QueryConfig{
-		Prompt: builder.Messages(),
+		Prompt: builder.Close(), // IMPORTANT: Use Close() to properly close the channel
 		Options: &claude.QueryOptionsConfig{
 			CWD:         "/tmp",
 			CanCallTool: canCallTool,
@@ -235,9 +236,9 @@ func exampleFunctionalOptions() {
 	ctx := context.Background()
 
 	query, err := claude.QueryWithContext(ctx, "Explain Go channels in one sentence",
-		claude.WithModel("claude-sonnet-4-6"),
+		//claude.WithModel("claude-sonnet-4-6"),
 		claude.WithCWD("/tmp"),
-		claude.WithAllowedTools("editor"),
+		claude.WithAllowedTools("Read"),
 	)
 	if err != nil {
 		log.Printf("Query failed: %v", err)

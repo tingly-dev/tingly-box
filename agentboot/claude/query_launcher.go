@@ -92,8 +92,23 @@ func (l *QueryLauncher) Query(ctx context.Context, qc QueryConfig) (*Query, erro
 
 	// Create process done channel
 	processDone := make(chan struct{})
+	var exitCode int
 	go func() {
-		cmd.Wait()
+		err := cmd.Wait()
+		if err != nil {
+			// Try to get exit code from ProcessState
+			if cmd.ProcessState != nil {
+				exitCode = cmd.ProcessState.ExitCode()
+			} else {
+				// If ProcessState is not available, use a non-zero exit code
+				exitCode = 1
+			}
+		} else {
+			// Process exited successfully
+			if cmd.ProcessState != nil {
+				exitCode = cmd.ProcessState.ExitCode()
+			}
+		}
 		close(processDone)
 	}()
 
@@ -102,12 +117,18 @@ func (l *QueryLauncher) Query(ctx context.Context, qc QueryConfig) (*Query, erro
 	case string:
 		// String prompt - close stdin immediately
 		stdin.Close()
-	case StreamPrompt:
+	case StreamPrompt, chan map[string]interface{}:
 		// Stream prompt - start streaming to stdin
 		if qc.Options.CanCallTool == nil {
 			return nil, fmt.Errorf("stream prompt requires canCallTool callback")
 		}
-		go StreamToStdin(ctx, stdin, prompt)
+		var ch <-chan map[string]interface{}
+		if sp, ok := prompt.(StreamPrompt); ok {
+			ch = sp
+		} else {
+			ch = prompt.(chan map[string]interface{})
+		}
+		go StreamToStdin(ctx, stdin, ch)
 	case nil:
 		// No prompt - close stdin
 		stdin.Close()
@@ -128,8 +149,8 @@ func (l *QueryLauncher) Query(ctx context.Context, qc QueryConfig) (*Query, erro
 	go func() {
 		<-processDone
 		if !query.IsClosed() {
-			if cmd.ProcessState.ExitCode() != 0 {
-				query.SetError(fmt.Errorf("Claude process exited with code %d", cmd.ProcessState.ExitCode()))
+			if exitCode != 0 {
+				query.SetError(fmt.Errorf("Claude process exited with code %d", exitCode))
 			}
 		}
 	}()
@@ -257,9 +278,14 @@ func (l *QueryLauncher) buildQueryArgs(qc QueryConfig) []string {
 		if strings.TrimSpace(prompt) != "" {
 			args = append(args, "--print", strings.TrimSpace(prompt))
 		}
-	case StreamPrompt, nil:
-		// Use --input-format stream-json
+	case StreamPrompt, chan map[string]interface{}:
+		// Use --input-format stream-json for stream prompts
+		// IMPORTANT: --input-format requires --print to work
+		// We use --print "" to enable stdin reading without a prompt string
+		args = append(args, "--print", "")
 		args = append(args, "--input-format", "stream-json")
+	case nil:
+		// No prompt - don't add --print or --input-format
 	}
 
 	return args
@@ -309,13 +335,10 @@ func (b *StreamPromptBuilder) AddText(text string) error {
 // AddUserMessage adds a user message to the stream
 func (b *StreamPromptBuilder) AddUserMessage(content string) error {
 	msg := map[string]interface{}{
-		"role": "user",
-		"type": "message",
-		"content": []map[string]interface{}{
-			{
-				"type": "text",
-				"text": content,
-			},
+		"type": "user",
+		"message": map[string]interface{}{
+			"role":    "user",
+			"content": content,
 		},
 	}
 	return b.Add(msg)

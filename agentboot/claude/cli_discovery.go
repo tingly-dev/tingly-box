@@ -19,14 +19,14 @@ import (
 
 const (
 	// Environment variable names
-	EnvClaudePath   = "CLAUDE_CLI_PATH"
-	EnvUseBundled   = "CLAUDE_USE_BUNDLED"
-	EnvUseGlobal    = "CLAUDE_USE_GLOBAL"
-	EnvClaudeHome   = "CLAUDE_HOME"
-	EnvBunEnv       = "BUN_INSTALL"
-	EnvNodePath     = "NODE_PATH"
-	EnvBunVersions  = "BUN_VERSIONS"
-	EnvBunInstall   = "BUN_INSTALL"
+	EnvClaudePath  = "CLAUDE_CLI_PATH"
+	EnvUseBundled  = "CLAUDE_USE_BUNDLED"
+	EnvUseGlobal   = "CLAUDE_USE_GLOBAL"
+	EnvClaudeHome  = "CLAUDE_HOME"
+	EnvBunEnv      = "BUN_INSTALL"
+	EnvNodePath    = "NODE_PATH"
+	EnvBunVersions = "BUN_VERSIONS"
+	EnvBunInstall  = "BUN_INSTALL"
 
 	// Default paths
 	DefaultBundledPathLinux   = "/opt/claude-code/dist/claude"
@@ -433,7 +433,11 @@ func InvalidateDiscoveryCache() {
 func StreamToStdin(ctx context.Context, stdin io.WriteCloser, messages <-chan map[string]interface{}) error {
 	defer stdin.Close()
 
-	encoder := json.NewEncoder(stdin)
+	// Use buffered writer for efficient I/O and ensure data is flushed
+	writer := bufio.NewWriter(stdin)
+	defer writer.Flush()
+
+	encoder := json.NewEncoder(writer)
 
 	for {
 		select {
@@ -441,12 +445,17 @@ func StreamToStdin(ctx context.Context, stdin io.WriteCloser, messages <-chan ma
 			return ctx.Err()
 		case msg, ok := <-messages:
 			if !ok {
-				// Channel closed, we're done
+				// Channel closed, flush any remaining data and return
+				writer.Flush()
 				return nil
 			}
 
 			if err := encoder.Encode(msg); err != nil {
 				return fmt.Errorf("encode message: %w", err)
+			}
+			// Flush immediately after each message to ensure prompt delivery
+			if err := writer.Flush(); err != nil {
+				return fmt.Errorf("flush message: %w", err)
 			}
 		}
 	}
@@ -455,7 +464,6 @@ func StreamToStdin(ctx context.Context, stdin io.WriteCloser, messages <-chan ma
 // StreamReader reads line-delimited JSON from a reader
 type StreamReader struct {
 	scanner *bufio.Scanner
-	decoder *json.Decoder
 }
 
 // NewStreamReader creates a new stream reader

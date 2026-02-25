@@ -11,6 +11,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	// maxScannerLineSize is the maximum size of a line that can be read from stdout
+	// Default bufio.Scanner buffer is 64KB which may not be enough for large JSON outputs
+	maxScannerLineSize = 1024 * 1024 // 1MB
+)
+
 // SDKMessage represents a message from Claude SDK via stdout
 type SDKMessage struct {
 	Type      string                 `json:"type"`
@@ -18,13 +24,13 @@ type SDKMessage struct {
 	Request   map[string]interface{} `json:"request,omitempty"`
 	Response  map[string]interface{} `json:"response,omitempty"`
 	// Message fields for regular messages
-	SessionID  string                 `json:"session_id,omitempty"`
-	Message    map[string]interface{} `json:"message,omitempty"`
-	SubType    string                 `json:"subtype,omitempty"`
-	Result     string                 `json:"result,omitempty"`
-	UUID       string                 `json:"uuid,omitempty"`
-	Timestamp  string                 `json:"timestamp,omitempty"`
-	RawData    map[string]interface{} `json:"-"`
+	SessionID string                 `json:"session_id,omitempty"`
+	Message   map[string]interface{} `json:"message,omitempty"`
+	SubType   string                 `json:"subtype,omitempty"`
+	Result    string                 `json:"result,omitempty"`
+	UUID      string                 `json:"uuid,omitempty"`
+	Timestamp string                 `json:"timestamp,omitempty"`
+	RawData   map[string]interface{} `json:"-"`
 }
 
 // CanCallToolCallback is called when Claude requests permission to use a tool
@@ -39,14 +45,14 @@ type CallToolOptions struct {
 // Query manages the interaction with Claude process in stdio mode
 // It implements an iterator-like pattern for consuming messages
 type Query struct {
-	ctx           context.Context
-	cancel        context.CancelFunc
-	childStdin    io.WriteCloser
-	childStdout   io.Reader
-	processDone   <-chan struct{}
-	messages      chan SDKMessage
-	errors        chan error
-	canCallTool   CanCallToolCallback
+	ctx         context.Context
+	cancel      context.CancelFunc
+	childStdin  io.WriteCloser
+	childStdout io.Reader
+	processDone <-chan struct{}
+	messages    chan SDKMessage
+	errors      chan error
+	canCallTool CanCallToolCallback
 
 	pendingControlResponses map[string]chan map[string]interface{}
 	cancelControllers       map[string]context.CancelFunc
@@ -57,9 +63,9 @@ type Query struct {
 
 // QueryOptions contains options for creating a Query
 type QueryOptions struct {
-	CanCallTool    CanCallToolCallback
-	AbortSignal    <-chan struct{}
-	ProcessDone    <-chan struct{}
+	CanCallTool CanCallToolCallback
+	AbortSignal <-chan struct{}
+	ProcessDone <-chan struct{}
 }
 
 // NewQuery creates a new Query instance for stdio-based communication
@@ -240,6 +246,9 @@ func (q *Query) readMessages() {
 	defer q.Close()
 
 	scanner := bufio.NewScanner(q.childStdout)
+	// Increase buffer size to handle large JSON lines (e.g., tool outputs)
+	buf := make([]byte, 0, maxScannerLineSize)
+	scanner.Buffer(buf, maxScannerLineSize)
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -346,9 +355,17 @@ func (q *Query) handleControlRequest(raw map[string]interface{}) {
 	}
 
 	// Write response to stdin
-	data, _ := json.Marshal(controlResponse)
+	data, err := json.Marshal(controlResponse)
+	if err != nil {
+		logrus.Errorf("Failed to marshal control response: %v", err)
+		return
+	}
 	data = append(data, '\n')
-	q.childStdin.Write(data)
+	if _, err := q.childStdin.Write(data); err != nil {
+		logrus.Errorf("Failed to write control response to stdin: %v", err)
+		// If write fails, the communication is broken - close the query
+		q.Close()
+	}
 }
 
 // handleControlCancelRequest handles a cancel notification from Claude
@@ -426,10 +443,13 @@ func (q *Query) enqueueMessage(raw map[string]interface{}) {
 		msg.Response = response
 	}
 
+	// Try to send to messages channel, block if full
+	// This ensures we don't lose messages when the consumer is slow
 	select {
 	case q.messages <- msg:
+		// Message enqueued successfully
 	case <-q.ctx.Done():
-	case q.errors <- fmt.Errorf("message channel full"):
+		// Context cancelled, message will be dropped
 	}
 }
 
@@ -482,12 +502,12 @@ type QueryOptionsConfig struct {
 	FallbackModel string
 
 	// System prompts
-	CustomSystemPrompt  string
-	AppendSystemPrompt  string
+	CustomSystemPrompt string
+	AppendSystemPrompt string
 
 	// Conversation control
 	ContinueConversation bool
-	Resume              string
+	Resume               string
 
 	// Tool filtering
 	AllowedTools    []string
@@ -532,8 +552,22 @@ func ValidateQueryConfig(qc QueryConfig) error {
 	}
 
 	// Validate prompt matches options
-	if _, ok := qc.Prompt.(StreamPrompt); ok && qc.Options.CanCallTool == nil {
-		return fmt.Errorf("stream prompt requires canCallTool callback")
+	// Check if prompt is a channel (stream prompt) - if so, canCallTool is required
+	if qc.Prompt != nil {
+		// Use type switch for proper channel type detection
+		switch prompt := qc.Prompt.(type) {
+		case string:
+			// String prompt is valid
+		case StreamPrompt, chan map[string]interface{}:
+			// Stream prompt requires canCallTool callback
+			if qc.Options.CanCallTool == nil {
+				return fmt.Errorf("stream prompt requires canCallTool callback")
+			}
+		case nil:
+			// nil prompt is valid
+		default:
+			return fmt.Errorf("unsupported prompt type: %T", prompt)
+		}
 	}
 
 	return nil
