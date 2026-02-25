@@ -3,6 +3,17 @@ import { api } from '@/services/api';
 import type { SmartRouting, ConfigProvider, Rule, ConfigRecord } from '@/components/RoutingGraphTypes';
 
 // ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Checks if a model name is a wildcard that matches any model
+ */
+export function isWildcardModelName(modelName: string): boolean {
+    return modelName === '*' || modelName === '[any]';
+}
+
+// ============================================================================
 // Converter Functions
 // ============================================================================
 
