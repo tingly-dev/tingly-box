@@ -27,7 +27,7 @@ import (
 // Wildcard rule names that match any model
 const (
 	WildcardRuleName    = "*"
-	WildcardRuleNameAlt = "[all]"
+	WildcardRuleNameAlt = "[any]"
 )
 
 // Config represents the global configuration
@@ -324,9 +324,9 @@ func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
 
 	// Guard name unique
 	for _, rc := range c.Rules {
-		if rc.RequestModel == rule.RequestModel {
+		if rc.RequestModel == rule.RequestModel && rc.GetScenario() == rule.Scenario {
 			if rc.UUID != rule.UUID {
-				return fmt.Errorf("rule with Name %s already exists", rule.RequestModel)
+				return fmt.Errorf("rule with Name %s already exists in same scenario", rule.RequestModel)
 			}
 		}
 	}
