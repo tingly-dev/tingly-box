@@ -24,6 +24,12 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 )
 
+// Wildcard rule names that match any model
+const (
+	WildcardRuleName    = "*"
+	WildcardRuleNameAlt = "[all]"
+)
+
 // Config represents the global configuration
 type Config struct {
 	Rules             []typ.Rule           `yaml:"rules" json:"rules"`                             // List of request configurations
@@ -457,6 +463,35 @@ func (c *Config) IsRequestModelInScenario(modelName string, scenario typ.RuleSce
 		}
 	}
 	return false
+}
+
+// IsWildcardRuleName checks if the given rule name is a wildcard that matches any model
+func IsWildcardRuleName(name string) bool {
+	return name == WildcardRuleName || name == WildcardRuleNameAlt
+}
+
+// MatchRuleByModelAndScenario finds a rule by model name with wildcard support
+// Priority: exact match > wildcard match
+// Returns nil if no rule matches
+func (c *Config) MatchRuleByModelAndScenario(requestModel string, scenario typ.RuleScenario) *typ.Rule {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// First, try exact match
+	for _, rule := range c.Rules {
+		if rule.RequestModel == requestModel && rule.GetScenario() == scenario {
+			return &rule
+		}
+	}
+
+	// Then, try wildcard match
+	for _, rule := range c.Rules {
+		if IsWildcardRuleName(rule.RequestModel) && rule.GetScenario() == scenario {
+			return &rule
+		}
+	}
+
+	return nil
 }
 
 // SetRequestConfigs updates all Rules
