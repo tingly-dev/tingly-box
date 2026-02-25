@@ -44,6 +44,7 @@ export function ruleToConfigRecord(rule: Rule): ConfigRecord {
 
     return {
         uuid: rule.uuid || uuidv4(),
+        scenario: rule.scenario,
         requestModel: rule.request_model || '',
         responseModel: rule.response_model || '',
         active: rule.active !== undefined ? rule.active : true,
