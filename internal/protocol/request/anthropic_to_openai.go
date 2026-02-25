@@ -38,9 +38,10 @@ func ConvertAnthropicToOpenAIRequestWithProvider(
 	provider *typ.Provider,
 	model string,
 	isStreaming bool,
+	disableStreamUsage bool,
 ) *openai.ChatCompletionNewParams {
 	// Base conversion
-	openaiReq, config := ConvertAnthropicToOpenAIRequest(anthropicReq, compatible, isStreaming)
+	openaiReq, config := ConvertAnthropicToOpenAIRequest(anthropicReq, compatible, isStreaming, disableStreamUsage)
 
 	// Apply provider-specific transforms
 	openaiReq = transformer.ApplyProviderTransforms(openaiReq, provider, model, config)
@@ -59,9 +60,10 @@ func ConvertAnthropicBetaToOpenAIRequestWithProvider(
 	provider *typ.Provider,
 	model string,
 	isStreaming bool,
+	disableStreamUsage bool,
 ) *openai.ChatCompletionNewParams {
 	// Base conversion
-	openaiReq, config := ConvertAnthropicBetaToOpenAIRequest(anthropicReq, compatible, isStreaming)
+	openaiReq, config := ConvertAnthropicBetaToOpenAIRequest(anthropicReq, compatible, isStreaming, disableStreamUsage)
 
 	// Apply provider-specific transforms
 	openaiReq = transformer.ApplyProviderTransforms(openaiReq, provider, model, config)
@@ -152,7 +154,7 @@ func ConvertAnthropicToolChoiceToOpenAI(tc *anthropic.ToolChoiceUnionParam) open
 
 // ConvertAnthropicToOpenAIRequest converts Anthropic request to OpenAI format
 // Returns the OpenAI request and a config object with metadata for provider transforms
-func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams, compatible bool, isStreaming bool) (*openai.ChatCompletionNewParams, *transformer.OpenAIConfig) {
+func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams, compatible bool, isStreaming bool, disableStreamUsage bool) (*openai.ChatCompletionNewParams, *transformer.OpenAIConfig) {
 	openaiReq := &openai.ChatCompletionNewParams{
 		Model: openai.ChatModel(anthropicReq.Model),
 	}
@@ -200,7 +202,7 @@ func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams, c
 	}
 
 	// Only set stream_options for streaming requests (per OpenAI API spec)
-	if isStreaming {
+	if isStreaming && !disableStreamUsage {
 		openaiReq.StreamOptions.IncludeUsage = param.Opt[bool]{Value: true}
 	}
 	return openaiReq, config
@@ -400,7 +402,7 @@ func IsThinkingEnabledBeta(anthropicReq *anthropic.BetaMessageNewParams) bool {
 
 // ConvertAnthropicBetaToOpenAIRequest converts Anthropic beta request to OpenAI format
 // Returns the OpenAI request and a config object with metadata for provider transforms
-func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewParams, compatible bool, isStreaming bool) (*openai.ChatCompletionNewParams, *transformer.OpenAIConfig) {
+func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewParams, compatible bool, isStreaming bool, disableStreamUsage bool) (*openai.ChatCompletionNewParams, *transformer.OpenAIConfig) {
 	openaiReq := &openai.ChatCompletionNewParams{
 		Model: openai.ChatModel(anthropicReq.Model),
 	}
@@ -449,7 +451,7 @@ func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewP
 	}
 
 	// Only set stream_options for streaming requests (per OpenAI API spec)
-	if isStreaming {
+	if isStreaming && !disableStreamUsage {
 		openaiReq.StreamOptions.IncludeUsage = param.Opt[bool]{Value: true}
 	}
 	return openaiReq, config
