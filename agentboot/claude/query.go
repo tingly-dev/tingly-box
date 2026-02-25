@@ -133,6 +133,25 @@ func (q *Query) Next() (SDKMessage, bool) {
 	}
 }
 
+// SendMessage sends a user message (e.g., tool result) to Claude
+func (q *Query) SendMessage(msg map[string]interface{}) error {
+	if q.closed {
+		return fmt.Errorf("query is closed")
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("marshal message: %w", err)
+	}
+
+	data = append(data, '\n')
+	if _, err := q.childStdin.Write(data); err != nil {
+		return fmt.Errorf("write to stdin: %w", err)
+	}
+
+	return nil
+}
+
 // Messages returns the read-only channel of messages
 func (q *Query) Messages() <-chan SDKMessage {
 	return q.messages
@@ -273,6 +292,11 @@ func (q *Query) readMessages() {
 
 		msgType, _ := raw["type"].(string)
 
+		// Log message types for debugging
+		if msgType == "control_request" || msgType == "control_response" || msgType == "control_cancel_request" {
+			logrus.Infof("[Control Message] Type: %s, Raw: %s", msgType, line)
+		}
+
 		// Handle different message types
 		switch msgType {
 		case "control_response":
@@ -321,6 +345,8 @@ func (q *Query) handleControlRequest(raw map[string]interface{}) {
 	request, _ := raw["request"].(map[string]interface{})
 	subtype, _ := request["subtype"].(string)
 
+	logrus.Infof("[handleControlRequest] RequestID: %s, Subtype: %s", requestID, subtype)
+
 	// Create cancel controller for this request
 	ctx, cancel := context.WithCancel(q.ctx)
 	q.mu.Lock()
@@ -339,6 +365,7 @@ func (q *Query) handleControlRequest(raw map[string]interface{}) {
 
 	switch subtype {
 	case "can_use_tool":
+		logrus.Infof("[handleControlRequest] Processing can_use_tool request")
 		response, err = q.processCanUseTool(ctx, request, requestID)
 	default:
 		err = fmt.Errorf("unsupported control request subtype: %s", subtype)
@@ -369,10 +396,13 @@ func (q *Query) handleControlRequest(raw map[string]interface{}) {
 		return
 	}
 	data = append(data, '\n')
+	logrus.Infof("[handleControlRequest] Writing control response to stdin: %s", string(data))
 	if _, err := q.childStdin.Write(data); err != nil {
 		logrus.Errorf("Failed to write control response to stdin: %v", err)
 		// If write fails, the communication is broken - close the query
 		q.Close()
+	} else {
+		logrus.Infof("[handleControlRequest] Control response written successfully")
 	}
 }
 
@@ -392,30 +422,24 @@ func (q *Query) handleControlCancelRequest(raw map[string]interface{}) {
 // processCanUseTool processes a can_use_tool control request
 func (q *Query) processCanUseTool(ctx context.Context, request map[string]interface{}, requestID string) (map[string]interface{}, error) {
 	if q.canCallTool == nil {
+		logrus.Errorf("[processCanUseTool] ERROR: canCallTool callback is nil!")
 		return nil, fmt.Errorf("canCallTool callback not provided")
 	}
 
 	toolName, _ := request["tool_name"].(string)
 	input, _ := request["input"].(map[string]interface{})
 
-	// Create cancel signal channel
-	signal := make(chan struct{})
-	cancelled := false
+	logrus.Infof("[processCanUseTool] Tool: %s, RequestID: %s", toolName, requestID)
 
-	go func() {
-		<-ctx.Done()
-		cancelled = true
-		close(signal)
-	}()
-
-	// Call the callback
+	// Call the callback - pass q's context.Done() as the signal for query cancellation
+	// We use q.ctx instead of the request-scoped ctx because the callback should
+	// only be cancelled if the entire query is cancelled, not this specific request
+	logrus.Infof("[processCanUseTool] Calling canCallTool callback...")
 	response, err := q.canCallTool(q.ctx, toolName, input, CallToolOptions{
-		Signal: signal,
+		Signal: q.ctx.Done(),
 	})
 
-	if cancelled {
-		return nil, fmt.Errorf("request cancelled")
-	}
+	logrus.Infof("[processCanUseTool] Callback returned: response=%v, err=%v", response, err)
 
 	if err != nil {
 		return nil, err

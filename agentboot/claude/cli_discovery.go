@@ -431,24 +431,30 @@ func InvalidateDiscoveryCache() {
 
 // StreamToStdin streams messages to the stdin of a running process
 func StreamToStdin(ctx context.Context, stdin io.WriteCloser, messages <-chan map[string]interface{}) error {
-	defer stdin.Close()
+	logrus.Debugln("[StreamToStdin] Starting to stream messages to stdin")
 
 	// Use buffered writer for efficient I/O and ensure data is flushed
 	writer := bufio.NewWriter(stdin)
-	defer writer.Flush()
 
 	encoder := json.NewEncoder(writer)
 
+	messageCount := 0
 	for {
 		select {
 		case <-ctx.Done():
+			logrus.Debugln("[StreamToStdin] Context cancelled, stopping")
 			return ctx.Err()
 		case msg, ok := <-messages:
 			if !ok {
 				// Channel closed, flush any remaining data and return
+				// IMPORTANT: Do NOT close stdin here - it will be managed by the Query
 				writer.Flush()
+				logrus.Debugf("[StreamToStdin] Message channel closed after sending %d messages", messageCount)
 				return nil
 			}
+
+			messageCount++
+			logrus.Debugf("[StreamToStdin] Sending message #%d", messageCount)
 
 			if err := encoder.Encode(msg); err != nil {
 				return fmt.Errorf("encode message: %w", err)

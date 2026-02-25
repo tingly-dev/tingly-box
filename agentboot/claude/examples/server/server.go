@@ -76,19 +76,19 @@ func (s *Server) ProcessQuery(ctx context.Context, userPrompt string, continueCo
 	builder.AddUserMessage(userPrompt)
 
 	// Define tool permission callback
-	// Note: --permission-prompt-tool stdio is automatically added for stream input
-	// which handles actual permission requests via stdio. This callback is
-	// kept for validation purposes and can be used for additional filtering.
-	//
 	// Response format according to Claude CLI Agent Protocol:
 	// - Allow: {"behavior": "allow", "updatedInput": {...}}
 	// - Deny:  {"behavior": "deny", "message": "reason"}
+	//
+	// This callback sends permission requests to the main loop for user interaction.
 	canCallTool := func(ctx context.Context, toolName string, input map[string]interface{}, opts claude.CallToolOptions) (map[string]interface{}, error) {
+		// Always log permission requests for verification
+		log.Printf("[Permission Request] Tool: %s", toolName)
 		if s.debug {
-			log.Printf("[Tool Permission] %s: %v", toolName, input)
+			log.Printf("[Permission Request] Input: %+v", input)
 		}
 
-		// Check if tool is allowed
+		// Check if tool is explicitly allowed
 		if s.allowTools != nil {
 			allowed := false
 			for _, t := range s.allowTools {
@@ -99,6 +99,7 @@ func (s *Server) ProcessQuery(ctx context.Context, userPrompt string, continueCo
 			}
 			if !allowed {
 				// Deny with message
+				log.Printf("[Permission] DENIED: tool %s is not in allowed list", toolName)
 				return map[string]interface{}{
 					"behavior": "deny",
 					"message":  fmt.Sprintf("tool %s is not allowed", toolName),
@@ -106,11 +107,65 @@ func (s *Server) ProcessQuery(ctx context.Context, userPrompt string, continueCo
 			}
 		}
 
-		// Allow with updatedInput (required by protocol)
-		return map[string]interface{}{
-			"behavior":     "allow",
-			"updatedInput": input,
-		}, nil
+		// Auto-approve if tool is in allowed list
+		if s.allowTools != nil {
+			for _, t := range s.allowTools {
+				if t == toolName {
+					log.Printf("[Permission] AUTO-APPROVED: tool %s is in allowed list", toolName)
+					return map[string]interface{}{
+						"behavior":     "allow",
+						"updatedInput": input,
+					}, nil
+				}
+			}
+		}
+
+		// Ask user directly via stdin
+		// Note: Main loop is blocked waiting for query result, so we can safely read from stdin
+		fmt.Printf("\r%s[Tool Permission]%s Claude wants to use: %s%s\n", ColorYellow, ColorReset, ColorCyan, toolName)
+		if cmd, ok := input["command"].(string); ok {
+			fmt.Printf("%sCommand%s: %s\n", ColorCyan, ColorReset, cmd)
+		} else if s.debug {
+			fmt.Printf("%sInput%s: %+v\n", ColorCyan, ColorReset, input)
+		}
+		fmt.Printf("%sAllow?%s (y=yes/n=no/a=always): ", ColorGreen, ColorReset)
+
+		reader := bufio.NewReader(os.Stdin)
+		response, _ := reader.ReadString('\n')
+		response = strings.TrimSpace(strings.ToLower(response))
+
+		switch response {
+		case "y", "yes":
+			log.Printf("[Permission] User APPROVED tool: %s", toolName)
+			return map[string]interface{}{
+				"behavior":     "allow",
+				"updatedInput": input,
+			}, nil
+		case "a", "always", "al":
+			// Add to allowed tools
+			if s.allowTools == nil {
+				s.allowTools = []string{}
+			}
+			s.allowTools = append(s.allowTools, toolName)
+			log.Printf("[Permission] User APPROVED tool: %s (added to allowed list)", toolName)
+			fmt.Printf("%s-> Tool '%s' added to allowed list%s\n", ColorGreen, toolName, ColorReset)
+			return map[string]interface{}{
+				"behavior":     "allow",
+				"updatedInput": input,
+			}, nil
+		case "n", "no":
+			log.Printf("[Permission] User DENIED tool: %s", toolName)
+			return map[string]interface{}{
+				"behavior": "deny",
+				"message":  "User denied this tool use",
+			}, nil
+		default:
+			log.Printf("[Permission] User DENIED tool: %s (invalid response)", toolName)
+			return map[string]interface{}{
+				"behavior": "deny",
+				"message":  fmt.Sprintf("Invalid response. Please answer with 'y' (yes), 'n' (no), or 'a' (always)"),
+			}, nil
+		}
 	}
 
 	// Build query options
@@ -141,14 +196,17 @@ func (s *Server) ProcessQuery(ctx context.Context, userPrompt string, continueCo
 	var response strings.Builder
 	var assistantText strings.Builder
 
+messageLoop:
 	for {
 		msg, ok := query.Next()
 		if !ok {
+			log.Printf("[ProcessQuery] No more messages")
 			break
 		}
 
+		log.Printf("[ProcessQuery] Received message type: %s", msg.Type)
+
 		if s.debug {
-			log.Printf("[Debug] Message type: %s", msg.Type)
 			bs, err := json.Marshal(msg)
 			if err != nil {
 				log.Printf("[Debug] Failed to marshal msg: %v", err)
@@ -170,24 +228,36 @@ func (s *Server) ProcessQuery(ctx context.Context, userPrompt string, continueCo
 					response.WriteString(content)
 				}
 			}
+		case "user":
+			// User messages contain tool results or other user content
+			// These are handled internally by Claude CLI, but we can log them for debugging
+			if s.debug {
+				log.Printf("[User] User message received (tool result or user input)")
+			}
 		case "tool_use":
-			if s.debug {
-				if name, ok := msg.Request["name"].(string); ok {
-					log.Printf("[Tool Use] %s", name)
-				}
-			}
+			log.Printf("[Tool Use] Tool: %v", msg.Request)
+			// Tool use is handled internally by Claude CLI
 		case "tool_result":
-			if s.debug {
-				log.Printf("[Tool Result]")
-			}
+			log.Printf("[Tool Result] Tool result received")
+			// Tool result is handled internally by Claude CLI
 		case "result":
-			if msg.Result != "" && assistantText.Len() == 0 {
-				// If we haven't captured assistant text yet, use the result
+			log.Printf("[Result] Result: %s", msg.Result)
+			if msg.Result != "" {
+				// Always append result - it contains the final response
 				response.WriteString(msg.Result)
 			}
+			// Result message indicates the turn is complete
+			// Use labeled break to exit the for loop
+			break messageLoop
+		case "control_request", "control_response", "control_cancel_request":
+			// These are handled internally by the Query
+			log.Printf("[Control] %s message handled internally", msg.Type)
+		default:
+			log.Printf("[Unknown] Unknown message type: %s", msg.Type)
 		}
 	}
 
+	log.Printf("[ProcessQuery] Returning response length: %d", response.Len())
 	return response.String(), nil
 }
 
@@ -220,98 +290,94 @@ func extractTextContent(msg map[string]interface{}) string {
 	return result.String()
 }
 
+// QueryResult represents the result of a query execution
+type QueryResult struct {
+	Response string
+	Error    error
+}
+
+// ProcessQueryAsync processes a query asynchronously, sending results to the provided channel
+// The main loop can continue handling permission requests while the query runs
+func (s *Server) ProcessQueryAsync(ctx context.Context, userPrompt string, continueConversation bool, resultChan chan<- QueryResult, interruptFunc context.CancelFunc) {
+	go func() {
+		response, err := s.ProcessQuery(ctx, userPrompt, continueConversation)
+		resultChan <- QueryResult{Response: response, Error: err}
+		interruptFunc()
+	}()
+}
+
 // Run starts the server's interactive loop
 func (s *Server) Run(ctx context.Context) error {
-	scanner := bufio.NewScanner(os.Stdin)
 	fmt.Printf("%sClaude Interactive Server (stream-json mode)%s\n", ColorCyan, ColorReset)
 	fmt.Printf("%sType your message and press Enter. Type 'quit' or 'exit' to quit.%s\n", ColorYellow, ColorReset)
 	fmt.Printf("%sPress Ctrl-C to exit.%s\n\n", ColorYellow, ColorReset)
 
+	reader := bufio.NewReader(os.Stdin)
 	conversationActive := false
 
-	// Channel to signal scanner to stop
-	stopScan := make(chan struct{})
-	defer close(stopScan)
-
-	// Goroutine to handle input
-	inputChan := make(chan string)
-	errChan := make(chan error, 1)
-
-	go func() {
-		for {
-			select {
-			case <-stopScan:
-				return
-			default:
-				if !scanner.Scan() {
-					errChan <- scanner.Err()
-					return
-				}
-				userInput := strings.TrimSpace(scanner.Text())
-				inputChan <- userInput
-			}
-		}
-	}()
+	// Show prompt BEFORE waiting for input
+	prompt := fmt.Sprintf("%sYou%s> ", ColorGreen, ColorReset)
 
 	for {
-		// Show prompt BEFORE waiting for input
-		prompt := fmt.Sprintf("%sYou%s> ", ColorGreen, ColorReset)
 		if conversationActive {
 			prompt = fmt.Sprintf("%sYou%s> ", ColorBlue, ColorReset)
 		}
 		fmt.Print(prompt)
 
-		select {
-		case <-ctx.Done():
-			fmt.Printf("\n%sInterrupted. Goodbye!%s\n", ColorYellow, ColorReset)
-			return nil
-
-		case err := <-errChan:
+		// Read user input
+		line, err := reader.ReadString('\n')
+		if err != nil {
 			return err
-
-		case userInput := <-inputChan:
-			if userInput == "" {
-				continue
-			}
-
-			// Check for exit commands
-			if userInput == "quit" || userInput == "exit" || userInput == "q" {
-				fmt.Printf("%sGoodbye!%s\n", ColorYellow, ColorReset)
-				return nil
-			}
-
-			// Check for debug toggle
-			if userInput == "debug" {
-				s.debug = !s.debug
-				fmt.Printf("%sDebug mode: %v%s\n", ColorYellow, s.debug, ColorReset)
-				continue
-			}
-
-			// Check for new conversation
-			if userInput == "new" {
-				conversationActive = false
-				fmt.Printf("%sStarted new conversation%s\n", ColorYellow, ColorReset)
-				continue
-			}
-
-			// Create timeout context for this query
-			queryCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-
-			// Process the query
-			response, err := s.ProcessQuery(queryCtx, userInput, conversationActive)
-			cancel()
-
-			if err != nil {
-				fmt.Printf("%sError: %v%s\n", ColorRed, err, ColorReset)
-				continue
-			}
-
-			// Display response
-			fmt.Printf("\n%sClaude%s:\n%s%s%s\n\n", ColorPurple, ColorReset, ColorWhite, response, ColorReset)
-
-			// Continue the conversation
-			conversationActive = true
 		}
+		userInput := strings.TrimSpace(line)
+
+		if userInput == "" {
+			continue
+		}
+
+		// Check for exit commands
+		if userInput == "quit" || userInput == "exit" || userInput == "q" {
+			fmt.Printf("%sGoodbye!%s\n", ColorYellow, ColorReset)
+			return nil
+		}
+
+		// Check for debug toggle
+		if userInput == "debug" {
+			s.debug = !s.debug
+			fmt.Printf("%sDebug mode: %v%s\n", ColorYellow, s.debug, ColorReset)
+			continue
+		}
+
+		// Check for new conversation
+		if userInput == "new" {
+			conversationActive = false
+			fmt.Printf("%sStarted new conversation%s\n", ColorYellow, ColorReset)
+			continue
+		}
+
+		// Create timeout context for this query
+		queryCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+
+		// Channel for query result
+		resultChan := make(chan QueryResult, 1)
+
+		// Start query asynchronously so permission prompts can read from stdin
+		s.ProcessQueryAsync(queryCtx, userInput, conversationActive, resultChan, cancel)
+
+		// Wait for result
+		result := <-resultChan
+		cancel()
+
+		if result.Error != nil {
+			fmt.Printf("%sError: %v%s\n", ColorRed, result.Error, ColorReset)
+			continue
+		}
+
+		// Display response
+		fmt.Printf("\n%sClaude%s:\n%s%s%s\n\n", ColorPurple, ColorReset, ColorWhite, result.Response, ColorReset)
+
+		// Continue the conversation
+		conversationActive = true
 	}
 }
 
