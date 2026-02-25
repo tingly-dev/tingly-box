@@ -33,8 +33,16 @@ type SDKMessage struct {
 	RawData   map[string]interface{} `json:"-"`
 }
 
-// CanCallToolCallback is called when Claude requests permission to use a tool
-// The callback can return an error to deny permission, or a PermissionResult to approve/deny
+// Callback is called when Claude requests permission to use a tool
+//
+// Response format according to Claude CLI Agent Protocol:
+// - Allow: {"behavior": "allow", "updatedInput": {...}}
+// - Deny:  {"behavior": "deny", "message": "reason"}
+//
+// The updatedInput field is REQUIRED when allowing - it must contain the original
+// or modified input that will be passed to the tool.
+//
+// Returning an error will also deny the tool with the error message as the reason.
 type CanCallToolCallback func(ctx context.Context, toolName string, input map[string]interface{}, opts CallToolOptions) (map[string]interface{}, error)
 
 // CallToolOptions contains options for tool calls

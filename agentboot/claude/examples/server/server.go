@@ -75,11 +75,19 @@ func (s *Server) ProcessQuery(ctx context.Context, userPrompt string, continueCo
 	builder := claude.NewStreamPromptBuilder()
 	builder.AddUserMessage(userPrompt)
 
-	// Define tool permission callback - auto-approve allowed tools
+	// Define tool permission callback
+	// Note: --permission-prompt-tool stdio is automatically added for stream input
+	// which handles actual permission requests via stdio. This callback is
+	// kept for validation purposes and can be used for additional filtering.
+	//
+	// Response format according to Claude CLI Agent Protocol:
+	// - Allow: {"behavior": "allow", "updatedInput": {...}}
+	// - Deny:  {"behavior": "deny", "message": "reason"}
 	canCallTool := func(ctx context.Context, toolName string, input map[string]interface{}, opts claude.CallToolOptions) (map[string]interface{}, error) {
 		if s.debug {
-			log.Printf("[Tool] %s: %v", toolName, input)
+			log.Printf("[Tool Permission] %s: %v", toolName, input)
 		}
+
 		// Check if tool is allowed
 		if s.allowTools != nil {
 			allowed := false
@@ -90,11 +98,19 @@ func (s *Server) ProcessQuery(ctx context.Context, userPrompt string, continueCo
 				}
 			}
 			if !allowed {
-				return nil, fmt.Errorf("tool %s is not allowed", toolName)
+				// Deny with message
+				return map[string]interface{}{
+					"behavior": "deny",
+					"message":  fmt.Sprintf("tool %s is not allowed", toolName),
+				}, nil
 			}
 		}
-		// Auto-approve
-		return map[string]interface{}{"approved": true}, nil
+
+		// Allow with updatedInput (required by protocol)
+		return map[string]interface{}{
+			"behavior":     "allow",
+			"updatedInput": input,
+		}, nil
 	}
 
 	// Build query options
@@ -111,6 +127,7 @@ func (s *Server) ProcessQuery(ctx context.Context, userPrompt string, continueCo
 	}
 
 	// Create and execute query (uses stream-json input format internally)
+	// --permission-prompt-tool stdio is automatically added for stream input
 	query, err := s.launcher.Query(ctx, claude.QueryConfig{
 		Prompt:  builder.Close(),
 		Options: options,
