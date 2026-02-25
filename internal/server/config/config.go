@@ -163,6 +163,8 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	if cfg.VirtualModelToken == "" {
 		cfg.VirtualModelToken = constant.DefaultVirtualModelToken
 	}
+	// Ensure default scenario configs are set
+	cfg.EnsureDefaultScenarioConfigs()
 	cfg.Save()
 
 	// Ensure tokens exist even for existing configs
@@ -1507,4 +1509,40 @@ func (c *Config) InsertDefaultRule() error {
 		c.AddRule(r)
 	}
 	return nil
+}
+
+// EnsureDefaultScenarioConfigs ensures that all scenarios have default config with appropriate flags
+func (c *Config) EnsureDefaultScenarioConfigs() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Define default scenario configs
+	// xcode: DisableStreamUsage = true (to fix compatibility with Xcode client)
+	// others: DisableStreamUsage = false (default behavior, include usage in streaming)
+	defaultScenarios := []typ.ScenarioConfig{
+		{
+			Scenario: typ.ScenarioXcode,
+			Flags: typ.ScenarioFlags{
+				DisableStreamUsage: true, // Xcode client cannot handle usage in streaming chunks
+			},
+		},
+	}
+
+	// Add or update scenario configs
+	for _, defaultConfig := range defaultScenarios {
+		found := false
+		for i := range c.Scenarios {
+			if c.Scenarios[i].Scenario == defaultConfig.Scenario {
+				// Update existing config if flags are not set
+				if !c.Scenarios[i].Flags.DisableStreamUsage {
+					c.Scenarios[i].Flags.DisableStreamUsage = defaultConfig.Flags.DisableStreamUsage
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.Scenarios = append(c.Scenarios, defaultConfig)
+		}
+	}
 }

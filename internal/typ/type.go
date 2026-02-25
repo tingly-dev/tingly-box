@@ -29,6 +29,9 @@ type ScenarioFlags struct {
 	// Experimental feature flags (scenario-based opt-in)
 	SmartCompact bool `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"` // Enable smart compact (remove thinking blocks)
 	Recording    bool `json:"recording,omitempty" yaml:"recording,omitempty"`         // Enable scenario recording
+
+	// Stream configuration flags
+	DisableStreamUsage bool `json:"disable_stream_usage,omitempty" yaml:"disable_stream_usage,omitempty"` // Don't include usage in streaming chunks (for incompatible clients like xcode)
 }
 
 // ScenarioConfig represents configuration for a specific scenario
@@ -67,10 +70,10 @@ type OAuthDetail struct {
 
 // ToolInterceptorConfig contains configuration for tool interceptor (search & fetch)
 type ToolInterceptorConfig struct {
-	PreferLocalSearch bool `json:"prefer_local_search,omitempty"` // Prefer local tool interception even if provider has built-in search
-	SearchAPI  string `json:"search_api,omitempty"`  // "brave" or "google"
-	SearchKey  string `json:"search_key,omitempty"`  // API key for search service
-	MaxResults int    `json:"max_results,omitempty"` // Max search results to return (default: 10)
+	PreferLocalSearch bool   `json:"prefer_local_search,omitempty"` // Prefer local tool interception even if provider has built-in search
+	SearchAPI         string `json:"search_api,omitempty"`          // "brave" or "google"
+	SearchKey         string `json:"search_key,omitempty"`          // API key for search service
+	MaxResults        int    `json:"max_results,omitempty"`         // Max search results to return (default: 10)
 
 	// Proxy configuration
 	ProxyURL string `json:"proxy_url,omitempty"` // HTTP proxy URL (e.g., "http://127.0.0.1:7897")
@@ -106,13 +109,13 @@ func (p *Provider) GetEffectiveConfig(global *ToolInterceptorConfig) (*ToolInter
 
 		effective := &ToolInterceptorConfig{
 			PreferLocalSearch: base.PreferLocalSearch,
-			SearchAPI:    base.SearchAPI,
-			SearchKey:    base.SearchKey,
-			MaxResults:   base.MaxResults,
-			ProxyURL:     base.ProxyURL,
-			MaxFetchSize: base.MaxFetchSize,
-			FetchTimeout: base.FetchTimeout,
-			MaxURLLength: base.MaxURLLength,
+			SearchAPI:         base.SearchAPI,
+			SearchKey:         base.SearchKey,
+			MaxResults:        base.MaxResults,
+			ProxyURL:          base.ProxyURL,
+			MaxFetchSize:      base.MaxFetchSize,
+			FetchTimeout:      base.FetchTimeout,
+			MaxURLLength:      base.MaxURLLength,
 		}
 
 		if p.ToolInterceptor.PreferLocalSearch {
@@ -162,13 +165,13 @@ func (p *Provider) GetEffectiveConfig(global *ToolInterceptorConfig) (*ToolInter
 	// Start with global config
 	effective := &ToolInterceptorConfig{
 		PreferLocalSearch: global.PreferLocalSearch,
-		SearchAPI:    global.SearchAPI,
-		SearchKey:    global.SearchKey,
-		MaxResults:   global.MaxResults,
-		ProxyURL:     global.ProxyURL,
-		MaxFetchSize: global.MaxFetchSize,
-		FetchTimeout: global.FetchTimeout,
-		MaxURLLength: global.MaxURLLength,
+		SearchAPI:         global.SearchAPI,
+		SearchKey:         global.SearchKey,
+		MaxResults:        global.MaxResults,
+		ProxyURL:          global.ProxyURL,
+		MaxFetchSize:      global.MaxFetchSize,
+		FetchTimeout:      global.FetchTimeout,
+		MaxURLLength:      global.MaxURLLength,
 	}
 
 	// Apply provider overrides
