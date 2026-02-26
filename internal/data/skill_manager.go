@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -329,7 +331,7 @@ func scanDirectoryForSkills(dirPath string, patterns []string) ([]typ.Skill, err
 			relPath, err := filepath.Rel(dirPath, fullPath)
 			if err == nil {
 				// Split path and check each component
-				components := filepath.SplitList(relPath)
+				components := strings.Split(relPath, string(filepath.Separator))
 				isHidden := false
 				for _, comp := range components {
 					if len(comp) > 0 && comp[0] == '.' {
@@ -363,15 +365,23 @@ func scanDirectoryForSkills(dirPath string, patterns []string) ([]typ.Skill, err
 			hash := sha256.Sum256([]byte(fullPath))
 			stableID := hex.EncodeToString(hash[:])[:16]
 
+			// Read file content to extract description
+			content, err := os.ReadFile(fullPath)
+			description := ""
+			if err == nil {
+				description = parseSkillDescription(string(content))
+			}
+
 			skill := typ.Skill{
-				ID:         stableID,
-				Name:       nameWithoutExt,
-				Filename:   info.Name(),
-				Path:       fullPath,
-				LocationID: "", // Set by caller
-				FileType:   ext,
-				Size:       info.Size(),
-				ModifiedAt: info.ModTime(),
+				ID:          stableID,
+				Name:        nameWithoutExt,
+				Filename:    info.Name(),
+				Path:        fullPath,
+				LocationID:  "", // Set by caller
+				FileType:    ext,
+				Description: description,
+				Size:        info.Size(),
+				ModifiedAt:  info.ModTime(),
 			}
 
 			skills = append(skills, skill)
@@ -387,6 +397,80 @@ func resolvePath(homeDir, path string) string {
 		return path
 	}
 	return filepath.Join(homeDir, path)
+}
+
+// parseSkillDescription extracts a description from skill markdown content.
+// It looks for:
+// 1. First heading (e.g., "# Skill Name") - returns the heading text
+// 2. First non-empty paragraph - returns the paragraph text (truncated if too long)
+func parseSkillDescription(content string) string {
+	// Try to find first heading (# Heading)
+	headingRegex := regexp.MustCompile(`(?m)^#+\s*(.+)$`)
+	if matches := headingRegex.FindStringSubmatch(content); len(matches) > 1 {
+		desc := strings.TrimSpace(matches[1])
+		if desc != "" {
+			return desc
+		}
+	}
+
+	// Fallback: find first non-empty paragraph
+	lines := strings.Split(content, "\n")
+	var paragraph strings.Builder
+	inParagraph := false
+	inCodeBlock := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Track code blocks
+		if strings.HasPrefix(trimmed, "```") {
+			inCodeBlock = !inCodeBlock
+			if inParagraph && paragraph.Len() > 0 {
+				break
+			}
+			continue
+		}
+
+		// Skip content inside code blocks
+		if inCodeBlock {
+			continue
+		}
+
+		// Skip empty lines and markdown markers
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") ||
+			strings.HasPrefix(trimmed, "-") || strings.HasPrefix(trimmed, "*") ||
+			strings.HasPrefix(trimmed, "|") {
+			if inParagraph && paragraph.Len() > 0 {
+				break
+			}
+			continue
+		}
+
+		// Skip HTML tags and links
+		if strings.HasPrefix(trimmed, "<") || strings.HasPrefix(trimmed, "[") {
+			continue
+		}
+
+		if !inParagraph {
+			inParagraph = true
+		}
+		if paragraph.Len() > 0 {
+			paragraph.WriteString(" ")
+		}
+		paragraph.WriteString(trimmed)
+
+		// Limit paragraph length
+		if paragraph.Len() > 200 {
+			break
+		}
+	}
+
+	desc := strings.TrimSpace(paragraph.String())
+	if len(desc) > 200 {
+		desc = desc[:200] + "..."
+	}
+
+	return desc
 }
 
 // loadClientConfig loads IDE client scanning configuration
@@ -610,15 +694,16 @@ func (sm *SkillManager) GetSkillContent(locationID, skillID, skillPath string) (
 		stableID := hex.EncodeToString(hash[:])[:16]
 
 		skill := &typ.Skill{
-			ID:         stableID,
-			Name:       nameWithoutExt,
-			Filename:   filepath.Base(skillPath),
-			Path:       skillPath,
-			LocationID: locationID,
-			FileType:   ext,
-			Size:       info.Size(),
-			ModifiedAt: info.ModTime(),
-			Content:    string(content),
+			ID:          stableID,
+			Name:        nameWithoutExt,
+			Filename:    filepath.Base(skillPath),
+			Path:        skillPath,
+			LocationID:  locationID,
+			FileType:    ext,
+			Description: parseSkillDescription(string(content)),
+			Size:        info.Size(),
+			ModifiedAt:  info.ModTime(),
+			Content:     string(content),
 		}
 		return skill, nil
 	}
@@ -649,5 +734,6 @@ func (sm *SkillManager) GetSkillContent(locationID, skillID, skillPath string) (
 	}
 
 	targetSkill.Content = string(content)
+	targetSkill.Description = parseSkillDescription(string(content))
 	return targetSkill, nil
 }
