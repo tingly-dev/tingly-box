@@ -365,6 +365,33 @@ func handleBotMessage(
 			case "/bot":
 				handleBotCommand(ctx, bot, store, sessionMgr, directoryBrowser, chatID, text, msg.Sender.ID, isDirectChat, isGroupChat)
 				return
+			case "/bot-help", "/bot-h":
+				showBotHelp(bot, chatID, msg.Sender.ID, isDirectChat)
+				return
+			case "/bot-bind", "/bot-b":
+				// Format: /bot-bind [path] or /bot bind [path]
+				handleBotBindCommand(ctx, bot, store, sessionMgr, chatID, fields[1:], msg.Sender.ID, isDirectChat, isGroupChat)
+				return
+			case "/bot-join", "/bot-j":
+				// Format: /bot-join <group>
+				if !isDirectChat {
+					sendText(bot, chatID, "/bot-join can only be used in direct chat.")
+					return
+				}
+				handleJoinCommand(bot, store, chatID, fields, msg.Sender.ID)
+				return
+			case "/bot-project", "/bot-p":
+				handleBotProjectCommand(ctx, bot, store, sessionMgr, chatID, msg.Sender.ID, isDirectChat, isGroupChat)
+				return
+			case "/bot-status", "/bot-s":
+				handleBotStatusCommand(bot, store, sessionMgr, chatID)
+				return
+			case "/bot-clear":
+				handleClearCommand(bot, store, sessionMgr, chatID)
+				return
+			case "/bot-bash":
+				handleBashCommand(ctx, bot, store, sessionMgr, chatID, fields[1:])
+				return
 			case "/clear":
 				handleClearCommand(bot, store, sessionMgr, chatID)
 				return
@@ -692,13 +719,13 @@ func showBotHelp(bot imbot.Bot, chatID string, senderID string, isDirectChat boo
 		helpText = fmt.Sprintf(`Your User ID: %s
 
 Bot Commands:
-/bot help - Show this help
-/bot bind [path] - Bind a project
-/bot project - Show & switch projects
-/bot status - Show session status
-/bot clear - Clear session context
-/bot bash <cmd> - Execute allowed bash (cd, ls, pwd)
-/bot join <group> - Add group to whitelist
+/bot help, /bot-help - Show this help
+/bot bind [path], /bot-bind [path] - Bind a project
+/bot project, /bot-project - Show & switch projects
+/bot status, /bot-status - Show session status
+/bot clear, /bot-clear - Clear session context
+/bot bash <cmd>, /bot-bash <cmd> - Execute allowed bash (cd, ls, pwd)
+/bot join <group>, /bot-join <group> - Add group to whitelist
 
 All other messages are sent to Claude Code.
 Use /help to see Claude Code's commands.`, senderID)
@@ -706,11 +733,11 @@ Use /help to see Claude Code's commands.`, senderID)
 		helpText = fmt.Sprintf(`Group Chat ID: %s
 
 Bot Commands:
-/bot help - Show this help
-/bot bind [path] - Bind a project to this group
-/bot project - Show current project info
-/bot status - Show session status
-/bot clear - Clear session context
+/bot help, /bot-help - Show this help
+/bot bind [path], /bot-bind [path] - Bind a project to this group
+/bot project, /bot-project - Show current project info
+/bot status, /bot-status - Show session status
+/bot clear, /bot-clear - Clear session context
 
 All other messages are sent to Claude Code.`, chatID)
 	}
