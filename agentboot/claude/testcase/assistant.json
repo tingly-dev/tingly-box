@@ -1,0 +1,100 @@
+{
+  "type": "assistant",
+  "session_id": "a3dffe85-39e5-4c0a-8cb4-648200b018d3",
+  "message": {
+    "container": {
+      "expires_at": "0001-01-01T00:00:00Z",
+      "id": "",
+      "skills": null
+    },
+    "content": [
+      {
+        "caller": {
+          "tool_id": "",
+          "type": ""
+        },
+        "citations": null,
+        "content": {
+          "OfBetaMCPToolResultBlockContent": null,
+          "OfBetaWebSearchResultBlockArray": null,
+          "OfString": "",
+          "content": {
+            "OfContent": null,
+            "OfString": "",
+            "citations": {
+              "enabled": false
+            },
+            "source": {
+              "data": "",
+              "media_type": "",
+              "type": ""
+            },
+            "title": "",
+            "type": "document"
+          },
+          "error_code": "",
+          "error_message": "",
+          "file_type": "",
+          "is_file_update": false,
+          "lines": null,
+          "new_lines": 0,
+          "new_start": 0,
+          "num_lines": 0,
+          "old_lines": 0,
+          "old_start": 0,
+          "retrieved_at": "",
+          "return_code": 0,
+          "start_line": 0,
+          "stderr": "",
+          "stdout": "",
+          "tool_references": null,
+          "total_lines": 0,
+          "type": "",
+          "url": ""
+        },
+        "data": "",
+        "file_id": "",
+        "id": "toolu_tool-9961f909af3c4f6897d21a7871279c22",
+        "input": {
+          "command": "git add .",
+          "description": "Stage all changes"
+        },
+        "is_error": false,
+        "name": "Bash",
+        "server_name": "",
+        "signature": "",
+        "text": "",
+        "thinking": "",
+        "tool_use_id": "",
+        "type": "tool_use"
+      }
+    ],
+    "context_management": {
+      "applied_edits": null
+    },
+    "id": "msg_c09a5322-952b-4242-b743-94b1245f15ad",
+    "model": "tingly/cc",
+    "role": "assistant",
+    "stop_reason": "",
+    "stop_sequence": "",
+    "type": "message",
+    "usage": {
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "inference_geo": "",
+      "input_tokens": 0,
+      "iterations": null,
+      "output_tokens": 0,
+      "server_tool_use": {
+        "web_fetch_requests": 0,
+        "web_search_requests": 0
+      },
+      "service_tier": ""
+    }
+  },
+  "uuid": "2d440538-de78-423c-89b7-3cd3c089932c"
+}

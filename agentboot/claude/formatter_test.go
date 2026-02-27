@@ -2,6 +2,7 @@ package claude
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
@@ -498,5 +499,38 @@ func TestTextFormatter_RealWorldEmptyUserMessage(t *testing.T) {
 	// Empty user message should produce empty output
 	if output != "" {
 		t.Errorf("Expected empty output for empty user message, got: %q", output)
+	}
+}
+
+// TestTextFormatter_RealWorldAssistantMessageWithExtraFields tests real-world assistant message
+// with additional fields like caller, citations, thinking, etc.
+func TestTextFormatter_RealWorldAssistantMessageWithExtraFields(t *testing.T) {
+	formatter := NewTextFormatter()
+	formatter.SetShowToolDetails(true)
+
+	// Read test data from file
+	data, err := os.ReadFile("testcase/assistant.json")
+	if err != nil {
+		t.Fatalf("Failed to read test data file: %v", err)
+	}
+
+	var msg AssistantMessage
+	err = json.Unmarshal(data, &msg)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal JSON: %v", err)
+	}
+
+	output := formatter.Format(&msg)
+	t.Logf("Real world assistant output with extra fields:\n%s", output)
+
+	// Verify key components
+	if !contains(output, "[ASSISTANT]") {
+		t.Errorf("Expected [ASSISTANT] in output: %s", output)
+	}
+	if !contains(output, "git add .") {
+		t.Errorf("Expected text content in output: %s", output)
+	}
+	if !contains(output, "msg_c09a5322-952b-4242-b743-94b1245f15ad") {
+		t.Errorf("Expected message ID in output: %s", output)
 	}
 }
