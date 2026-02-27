@@ -2,6 +2,7 @@ import react from '@vitejs/plugin-react-swc';
 import wails from "@wailsio/runtime/plugins/vite";
 import {defineConfig} from 'vite';
 import {viteMockServe} from 'vite-plugin-mock';
+import {visualizer} from 'rollup-plugin-visualizer';
 import path from 'path';
 
 // https://vite.dev/config/
@@ -23,6 +24,13 @@ export default defineConfig(({mode}) => {
                 enable: useMock,
                 logger: true,
             })] : []),
+            // Bundle analyzer - generates dist/stats.html for analysis
+            visualizer({
+                open: false,
+                gzipSize: true,
+                brotliSize: true,
+                filename: 'dist/stats.html',
+            }),
         ],
         resolve: {
             alias: {
@@ -45,17 +53,78 @@ export default defineConfig(({mode}) => {
             },
             port: 3000
         },
+        // Memory optimization for build process
+        optimizeDeps: {
+            // Pre-bundle large dependencies to reduce build memory
+            include: [
+                'react',
+                'react-dom',
+                '@mui/material',
+                '@mui/icons-material',
+            ],
+        },
         build: {
             rollupOptions: {
                 output: {
-                    manualChunks: {
-                        'mui-vendor': ['@mui/material', '@mui/icons-material'],
-                        'router-vendor': ['react-router-dom'],
-                        'react-vendor': ['react', 'react-dom'],
-                    }
-                }
+                    // Optimized chunk splitting strategy
+                    manualChunks: (id) => {
+                        // Skip node_modules internal
+                        if (!id.includes('node_modules/')) {
+                            return;
+                        }
+
+                        // Core React vendors
+                        if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+                            return 'react-vendor';
+                        }
+                        if (id.includes('node_modules/react-router-dom/')) {
+                            return 'router-vendor';
+                        }
+
+                        // MUI split by sub-package for better caching
+                        if (id.includes('node_modules/@mui/material/')) {
+                            return 'mui-material';
+                        }
+                        if (id.includes('node_modules/@mui/icons-material/')) {
+                            return 'mui-icons';
+                        }
+                        if (id.includes('node_modules/@mui/x-date-pickers/')) {
+                            return 'mui-pickers';
+                        }
+
+                        // Visualization - recharts brings heavy D3 dependencies
+                        if (id.includes('node_modules/recharts/') || id.includes('node_modules/d3-')) {
+                            return 'charts-vendor';
+                        }
+
+                        // Third-party icon libraries
+                        if (id.includes('node_modules/@lobehub/icons/')) {
+                            return 'lobehub-icons';
+                        }
+                        if (id.includes('node_modules/devicons-react/')) {
+                            return 'devicons';
+                        }
+
+                        // i18n
+                        if (id.includes('node_modules/i18next/') || id.includes('node_modules/react-i18next/')) {
+                            return 'i18n-vendor';
+                        }
+
+                        // Markdown processing
+                        if (id.includes('node_modules/@ant-design/x-markdown/')) {
+                            return 'markdown-vendor';
+                        }
+                    },
+                },
+                // Increase parallel file operations limit for faster builds
+                maxParallelFileOps: 20,
             },
-            chunkSizeWarningLimit: 600
-        }
+            chunkSizeWarningLimit: 500,
+            // Disable sourcemap in production to reduce memory and output size
+            sourcemap: mode !== 'production',
+            // Use SWC for minification (via @vitejs/plugin-react-swc)
+            // SWC minify is 20-40x faster than terser
+            minify: 'swc',
+        },
     }
 })
