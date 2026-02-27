@@ -57,57 +57,15 @@ export default defineConfig(({mode}) => {
         build: {
             rollupOptions: {
                 output: {
-                    // Optimized chunk splitting strategy
-                    manualChunks: (id) => {
-                        if (!id.includes('node_modules/')) {
-                            return;
-                        }
-
-                        // Core React vendors
-                        if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
-                            return 'react-vendor';
-                        }
-                        if (id.includes('node_modules/react-router-dom/')) {
-                            return 'router-vendor';
-                        }
-
-                        // MUI split by sub-package for better caching
-                        if (id.includes('node_modules/@mui/material/')) {
-                            return 'mui-material';
-                        }
-                        if (id.includes('node_modules/@mui/icons-material/')) {
-                            return 'mui-icons';
-                        }
-                        if (id.includes('node_modules/@mui/x-date-pickers/')) {
-                            return 'mui-pickers';
-                        }
-
-                        // Visualization - recharts brings heavy D3 dependencies
-                        if (id.includes('node_modules/recharts/') || id.includes('node_modules/d3-')) {
-                            return 'charts-vendor';
-                        }
-
-                        // Third-party icon libraries
-                        if (id.includes('node_modules/@lobehub/icons/')) {
-                            return 'lobehub-icons';
-                        }
-                        if (id.includes('node_modules/devicons-react/')) {
-                            return 'devicons';
-                        }
-
-                        // i18n
-                        if (id.includes('node_modules/i18next/') || id.includes('node_modules/react-i18next/')) {
-                            return 'i18n-vendor';
-                        }
-
-                        // Markdown processing
-                        if (id.includes('node_modules/@ant-design/x-markdown/')) {
-                            return 'markdown-vendor';
-                        }
-                    },
-                },
-                // Increase parallel file operations limit for faster builds
-                maxParallelFileOps: 20,
+                    manualChunks: {
+                        'mui-vendor': ['@mui/material'],
+                        'mui-icons-vendor': ['@mui/icons-material'],
+                        'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+                        'recharts-vendor': ['recharts'],
+                        'antd-vendor': ['@ant-design/x-markdown'],
+                        'lobe-vendor': ['@lobehub/icons'],
+                    }
+                }
             },
             chunkSizeWarningLimit: 500,
             // Disable sourcemap in production to reduce memory and output size
