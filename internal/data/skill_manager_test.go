@@ -812,3 +812,146 @@ func TestScanLocation_TimeAccuracy(t *testing.T) {
 		t.Errorf("expected size %d, got %d", len(content), skill.Size)
 	}
 }
+
+func TestParseSkillDescription(t *testing.T) {
+	testCases := []struct {
+		name     string
+		content  string
+		expected string
+	}{
+		{
+			name:     "Simple heading",
+			content:  "# Commit Skill\n\nThis is a commit skill.",
+			expected: "Commit Skill",
+		},
+		{
+			name:     "Heading with multiple hashes",
+			content:  "## Review Skill\n\nThis is a review skill.",
+			expected: "Review Skill",
+		},
+		{
+			name:     "No heading - uses first paragraph",
+			content:  "This is a skill description.\n\nSecond paragraph.",
+			expected: "This is a skill description.",
+		},
+		{
+			name:     "Heading with extra spaces",
+			content:  "#   Spaced Heading  \n\nContent here.",
+			expected: "Spaced Heading",
+		},
+		{
+			name:     "Empty content",
+			content:  "",
+			expected: "",
+		},
+		{
+			name:     "Only whitespace",
+			content:  "   \n\n   ",
+			expected: "",
+		},
+		{
+			name:     "Content with code blocks - skips them",
+			content:  "```go\nfunc main() {}\n```\n\nActual description here.",
+			expected: "Actual description here.",
+		},
+		{
+			name:     "Long paragraph gets truncated",
+			content:  "A" + string(make([]byte, 250)),
+			expected: string(make([]byte, 200)),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := parseSkillDescription(tc.content)
+			if tc.name == "Long paragraph gets truncated" {
+				// Special check for truncation
+				if len(result) != 203 { // 200 + "..."
+					t.Errorf("expected truncated length 203, got %d", len(result))
+				}
+				return
+			}
+			if result != tc.expected {
+				t.Errorf("expected %q, got %q", tc.expected, result)
+			}
+		})
+	}
+}
+
+func TestScanLocation_WithDescription(t *testing.T) {
+	sm, tempDir := setupTestManager(t)
+	defer cleanupTestManager(t, sm, tempDir)
+
+	// Create a temporary directory with skill files
+	skillDir, err := os.MkdirTemp("", "skills-desc-test-*")
+	if err != nil {
+		t.Fatalf("failed to create skill dir: %v", err)
+	}
+	defer os.RemoveAll(skillDir)
+
+	// Create skills directory
+	skillsPath := filepath.Join(skillDir, "skills")
+	if err := os.MkdirAll(skillsPath, 0755); err != nil {
+		t.Fatalf("failed to create skills directory: %v", err)
+	}
+
+	// Create test skill files with descriptions
+	testSkills := []struct {
+		path        string
+		content     string
+		expectedDesc string
+	}{
+		{
+			path:        filepath.Join(skillsPath, "commit.md"),
+			content:     "# Commit Skill\n\nThis skill helps with commits.",
+			expectedDesc: "Commit Skill",
+		},
+		{
+			path:        filepath.Join(skillsPath, "review.md"),
+			content:     "## Code Review\n\nThis skill helps with code reviews.",
+			expectedDesc: "Code Review",
+		},
+		{
+			path:        filepath.Join(skillDir, "SKILL.md"),
+			content:     "No heading here, just a description.",
+			expectedDesc: "No heading here, just a description.",
+		},
+	}
+
+	for _, ts := range testSkills {
+		if err := os.WriteFile(ts.path, []byte(ts.content), 0644); err != nil {
+			t.Fatalf("failed to write test file: %v", err)
+		}
+	}
+
+	// Add and scan location
+	loc, err := sm.AddLocation("desc-test", skillDir, typ.IDESourceClaudeCode)
+	if err != nil {
+		t.Fatalf("failed to add location: %v", err)
+	}
+
+	result, err := sm.ScanLocation(loc.ID)
+	if err != nil {
+		t.Fatalf("failed to scan location: %v", err)
+	}
+
+	// Build map of skill names to descriptions
+	skillDescs := make(map[string]string)
+	for _, skill := range result.Skills {
+		skillDescs[skill.Name] = skill.Description
+	}
+
+	// Verify descriptions were extracted
+	for _, ts := range testSkills {
+		name := filepath.Base(ts.path)
+		name = name[:len(name)-len(filepath.Ext(name))]
+		desc, found := skillDescs[name]
+		if !found {
+			t.Errorf("skill %q not found", name)
+			continue
+		}
+		if desc != ts.expectedDesc {
+			t.Errorf("skill %q: expected description %q, got %q", name, ts.expectedDesc, desc)
+		}
+	}
+}
