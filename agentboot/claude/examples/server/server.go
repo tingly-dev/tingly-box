@@ -134,7 +134,6 @@ func (s *Server) ProcessQuery(ctx context.Context, userPrompt string, continueCo
 	var response strings.Builder
 	var assistantText strings.Builder
 
-messageLoop:
 	for {
 		msg, ok := query.Next()
 		if !ok {
@@ -185,8 +184,7 @@ messageLoop:
 				response.WriteString(msg.Result)
 			}
 			// Result message indicates the turn is complete
-			// Use labeled break to exit the for loop
-			break messageLoop
+			goto done
 		case "control_request", "control_response", "control_cancel_request":
 			// These are handled internally by the Query
 			log.Printf("[Control] %s message handled internally", msg.Type)
@@ -194,6 +192,7 @@ messageLoop:
 			log.Printf("[Unknown] Unknown message type: %s", msg.Type)
 		}
 	}
+done:
 
 	log.Printf("[ProcessQuery] Returning response length: %d", response.Len())
 	return response.String(), nil
