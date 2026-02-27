@@ -704,17 +704,18 @@ func (s *Server) setupRoutes() {
 }
 
 func (s *Server) UseAIEndpoints() {
-	// OpenAI v1 API group
-	openaiV1 := s.engine.Group("/openai/v1")
-	s.SetupOpenAIEndpoints(openaiV1)
-
-	// OpenAI API alias (without version)
-	openai := s.engine.Group("/openai")
-	s.SetupOpenAIEndpoints(openai)
-
-	// Anthropic v1 API group
-	anthropicV1 := s.engine.Group("/anthropic/v1")
-	s.SetupAnthropicEndpoints(anthropicV1)
+	// DEPRECATED: now we only use path with scenario for openai and anthropic
+	//// OpenAI v1 API group
+	//openaiV1 := s.engine.Group("/openai/v1")
+	//s.SetupOpenAIEndpoints(openaiV1)
+	//
+	//// OpenAI API alias (without version)
+	//openai := s.engine.Group("/openai")
+	//s.SetupOpenAIEndpoints(openai)
+	//
+	//// Anthropic v1 API group
+	//anthropicV1 := s.engine.Group("/anthropic/v1")
+	//s.SetupAnthropicEndpoints(anthropicV1)
 
 	// Passthrough endpoints (no request/response transformation, just model replacement)
 	// Non-versioned passthrough routes

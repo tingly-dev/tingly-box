@@ -32,6 +32,7 @@ export interface SmartRouting {
 
 export interface ConfigRecord {
     uuid: string;
+    scenario?: string;
     requestModel: string;
     responseModel: string;
     active: boolean;

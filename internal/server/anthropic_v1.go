@@ -68,6 +68,13 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		req.MessageNewParams.Tools = toolinterceptor.StripSearchFetchToolsAnthropic(req.MessageNewParams.Tools)
 	}
 
+	// Get scenario config for DisableStreamUsage flag
+	scenarioType := rule.GetScenario()
+	disableStreamUsage := false
+	if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
+		disableStreamUsage = scenarioConfig.Flags.DisableStreamUsage
+	}
+
 	// Check provider's API style to decide which path to take
 	apiStyle := provider.APIStyle
 
@@ -242,7 +249,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		// Use OpenAI conversion path (default behavior)
 		if isStreaming {
 			// Convert Anthropic request to OpenAI format for streaming
-			openaiReq := request.ConvertAnthropicToOpenAIRequestWithProvider(&req.MessageNewParams, true, provider, actualModel, isStreaming)
+			openaiReq := request.ConvertAnthropicToOpenAIRequestWithProvider(&req.MessageNewParams, true, provider, actualModel, isStreaming, disableStreamUsage)
 
 			// Create streaming request with request context for proper cancellation
 			wrapper := s.clientPool.GetOpenAIClient(provider, string(openaiReq.Model))
@@ -273,7 +280,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		} else {
 			// Handle non-streaming request
 			// Convert Anthropic request to OpenAI format with provider transforms
-			openaiReq := request.ConvertAnthropicToOpenAIRequestWithProvider(&req.MessageNewParams, true, provider, actualModel, isStreaming)
+			openaiReq := request.ConvertAnthropicToOpenAIRequestWithProvider(&req.MessageNewParams, true, provider, actualModel, isStreaming, disableStreamUsage)
 			wrapper := s.clientPool.GetOpenAIClient(provider, string(openaiReq.Model))
 			fc := NewForwardContext(nil, provider)
 			response, err := ForwardOpenAIChat(fc, wrapper, openaiReq)

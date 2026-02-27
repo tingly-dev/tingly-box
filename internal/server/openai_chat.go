@@ -204,7 +204,7 @@ func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq 
 }
 
 // handleOpenAIChatStreamingRequest handles streaming chat completion requests
-func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, shouldIntercept, shouldStripTools bool) {
+func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, shouldIntercept, shouldStripTools bool, disableStreamUsage bool) {
 	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
 	req := originalReq
 	if shouldIntercept {
@@ -231,6 +231,7 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 
 	// Create handle context and handle stream
 	hc := protocol.NewHandleContext(c, responseModel)
+	hc.DisableStreamUsage = disableStreamUsage
 	usage, err := stream.HandleOpenAIChatStream(hc, streamResp, req)
 
 	// Track usage from stream handler
@@ -238,7 +239,7 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 }
 
 // handleOpenAIStreamResponse processes the streaming response and sends it to the client
-func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams, responseModel string) {
+func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
 	// Accumulate usage from stream chunks
 	var inputTokens, outputTokens int
 	var hasUsage bool
@@ -385,8 +386,8 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestrea
 			},
 		}
 
-		// Add usage if present (usually only in the last chunk)
-		if chatChunk.Usage.PromptTokens != 0 || chatChunk.Usage.CompletionTokens != 0 {
+		// Add usage if present (usually only in the last chunk) and not disabled
+		if !disableStreamUsage && (chatChunk.Usage.PromptTokens != 0 || chatChunk.Usage.CompletionTokens != 0) {
 			chunk["usage"] = chatChunk.Usage
 		}
 
@@ -489,30 +490,32 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestrea
 			chunkID = fmt.Sprintf("chatcmpl-%d", time.Now().Unix())
 		}
 
-		// Send estimated usage as final chunk
-		usageChunk := map[string]interface{}{
-			"id":      chunkID,
-			"object":  "chat.completion.chunk",
-			"created": 0,
-			"model":   responseModel,
-			"choices": []map[string]interface{}{
-				{
-					"index":         0,
-					"delta":         map[string]interface{}{},
-					"finish_reason": nil,
+		// Send estimated usage as final chunk (only if not disabled)
+		if !disableStreamUsage {
+			usageChunk := map[string]interface{}{
+				"id":      chunkID,
+				"object":  "chat.completion.chunk",
+				"created": 0,
+				"model":   responseModel,
+				"choices": []map[string]interface{}{
+					{
+						"index":         0,
+						"delta":         map[string]interface{}{},
+						"finish_reason": nil,
+					},
 				},
-			},
-			"usage": map[string]interface{}{
-				"prompt_tokens":     inputTokens,
-				"completion_tokens": outputTokens,
-				"total_tokens":      inputTokens + outputTokens,
-			},
-		}
+				"usage": map[string]interface{}{
+					"prompt_tokens":     inputTokens,
+					"completion_tokens": outputTokens,
+					"total_tokens":      inputTokens + outputTokens,
+				},
+			}
 
-		usageChunkJSON, err := json.Marshal(usageChunk)
-		if err == nil {
-			c.SSEvent("", usageChunkJSON)
-			flusher.Flush()
+			usageChunkJSON, err := json.Marshal(usageChunk)
+			if err == nil {
+				c.SSEvent("", usageChunkJSON)
+				flusher.Flush()
+			}
 		}
 	}
 

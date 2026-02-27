@@ -3,6 +3,17 @@ import { api } from '@/services/api';
 import type { SmartRouting, ConfigProvider, Rule, ConfigRecord } from '@/components/RoutingGraphTypes';
 
 // ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Checks if a model name is a wildcard that matches any model
+ */
+export function isWildcardModelName(modelName: string): boolean {
+    return modelName === '*' || modelName === '[any]';
+}
+
+// ============================================================================
 // Converter Functions
 // ============================================================================
 
@@ -44,6 +55,7 @@ export function ruleToConfigRecord(rule: Rule): ConfigRecord {
 
     return {
         uuid: rule.uuid || uuidv4(),
+        scenario: rule.scenario,
         requestModel: rule.request_model || '',
         responseModel: rule.response_model || '',
         active: rule.active !== undefined ? rule.active : true,

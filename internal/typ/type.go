@@ -30,6 +30,9 @@ type ScenarioFlags struct {
 	// Experimental feature flags (scenario-based opt-in)
 	SmartCompact bool `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"` // Enable smart compact (remove thinking blocks)
 	Recording    bool `json:"recording,omitempty" yaml:"recording,omitempty"`         // Enable scenario recording
+
+	// Stream configuration flags
+	DisableStreamUsage bool `json:"disable_stream_usage,omitempty" yaml:"disable_stream_usage,omitempty"` // Don't include usage in streaming chunks (for incompatible clients like xcode)
 }
 
 // ScenarioConfig represents configuration for a specific scenario
