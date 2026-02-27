@@ -1,25 +1,18 @@
 import react from '@vitejs/plugin-react-swc';
+import wails from "@wailsio/runtime/plugins/vite";
 import {defineConfig} from 'vite';
-import {viteMockServe} from 'vite-plugin-mock';
 import {visualizer} from 'rollup-plugin-visualizer';
 import path from 'path';
 
-// Web-only Vite configuration
-// For Wails builds, use vite.config.wails.ts instead
+// Wails-specific Vite configuration
+// This config extends the base configuration with Wails-specific plugins
 export default defineConfig(({mode}) => {
-    // Check if we should use mock data
-    const useMock = process.env.USE_MOCK === 'true'
-    console.log("use mock", useMock)
-
     return {
         plugins: [
             react(),
-            ...(useMock ? [viteMockServe({
-                mockPath: 'src/mock',
-                enable: useMock,
-                logger: true,
-            })] : []),
-            // Bundle analyzer - generates dist/stats.html for analysis
+            // Wails plugin for binding generation
+            wails("./src/bindings"),
+            // Bundle analyzer
             visualizer({
                 open: false,
                 gzipSize: true,
@@ -29,24 +22,13 @@ export default defineConfig(({mode}) => {
         ],
         resolve: {
             alias: {
-                // Web mode: always use mock bindings
-                '@/bindings': '/src/bindings-web',
+                // Wails mode: use real bindings
+                '@/bindings': '/src/bindings-wails',
                 '@': path.resolve(__dirname, './src'),
             }
         },
-        server: {
-            proxy: useMock ? {} : {
-                '/api': {
-                    target: 'http://localhost:12580',
-                    changeOrigin: true,
-                    secure: false,
-                }
-            },
-            port: 3000
-        },
         // Memory optimization for build process
         optimizeDeps: {
-            // Pre-bundle large dependencies to reduce build memory
             include: [
                 'react',
                 'react-dom',
@@ -71,7 +53,7 @@ export default defineConfig(({mode}) => {
                             return 'router-vendor';
                         }
 
-                        // MUI split by sub-package for better caching
+                        // MUI split by sub-package
                         if (id.includes('node_modules/@mui/material/')) {
                             return 'mui-material';
                         }
@@ -82,12 +64,12 @@ export default defineConfig(({mode}) => {
                             return 'mui-pickers';
                         }
 
-                        // Visualization - recharts brings heavy D3 dependencies
+                        // Visualization
                         if (id.includes('node_modules/recharts/') || id.includes('node_modules/d3-')) {
                             return 'charts-vendor';
                         }
 
-                        // Third-party icon libraries
+                        // Icon libraries
                         if (id.includes('node_modules/@lobehub/icons/')) {
                             return 'lobehub-icons';
                         }
@@ -100,19 +82,16 @@ export default defineConfig(({mode}) => {
                             return 'i18n-vendor';
                         }
 
-                        // Markdown processing
+                        // Markdown
                         if (id.includes('node_modules/@ant-design/x-markdown/')) {
                             return 'markdown-vendor';
                         }
                     },
                 },
-                // Increase parallel file operations limit for faster builds
                 maxParallelFileOps: 20,
             },
             chunkSizeWarningLimit: 500,
-            // Disable sourcemap in production to reduce memory and output size
             sourcemap: mode !== 'production',
-            // Use SWC for minification (via @vitejs/plugin-react-swc)
             minify: 'swc',
         },
     }
