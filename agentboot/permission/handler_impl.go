@@ -18,6 +18,7 @@ type DefaultHandler struct {
 	pendingRequests  map[string]*pendingRequest
 	decisions        map[string]*cachedDecision
 	decisionChannels map[string]chan agentboot.PermissionResponse
+	userPrompter     UserPrompter
 }
 
 type pendingRequest struct {
@@ -97,6 +98,43 @@ func (h *DefaultHandler) CanUseTool(ctx context.Context, req agentboot.Permissio
 
 // handleManualPermission handles manual permission requests
 func (h *DefaultHandler) handleManualPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
+	// If user prompter is set, use it for interactive permission
+	if h.userPrompter != nil {
+		approved, remember, err := h.userPrompter.PromptPermission(ctx, req)
+		if err != nil {
+			return agentboot.PermissionResult{
+				Approved: false,
+				Reason:   fmt.Sprintf("Permission prompt failed: %v", err),
+			}, nil
+		}
+
+		// If remember is true, add to whitelist
+		if remember && approved && h.config.EnableWhitelist {
+			h.mu.Lock()
+			h.config.Whitelist = append(h.config.Whitelist, req.ToolName)
+			h.mu.Unlock()
+		}
+
+		// Cache decision if enabled
+		if h.config.RememberDecisions {
+			h.cacheDecision(req, agentboot.PermissionResponse{
+				RequestID: req.RequestID,
+				Approved:  approved,
+				Timestamp: time.Now(),
+			})
+		}
+
+		reason := "User approved"
+		if !approved {
+			reason = "User denied"
+		}
+		return agentboot.PermissionResult{
+			Approved: approved,
+			Reason:   reason,
+		}, nil
+	}
+
+	// Fallback to channel-based decision waiting
 	// Create channel for response
 	responseChan := make(chan agentboot.PermissionResponse, 1)
 
@@ -207,6 +245,13 @@ func (h *DefaultHandler) GetMode(scopeID string) (agentboot.PermissionMode, erro
 		return mode, nil
 	}
 	return h.config.DefaultMode, nil
+}
+
+// SetUserPrompter sets the user prompter for manual permission mode
+func (h *DefaultHandler) SetUserPrompter(prompter UserPrompter) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.userPrompter = prompter
 }
 
 // RecordDecision records a permission decision for learning

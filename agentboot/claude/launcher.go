@@ -49,6 +49,8 @@ type Launcher struct {
 	skipPerms         bool
 	config            Config
 	permissionHandler permission.Handler
+	controlManager    *ControlManager
+	discovery         *CLIDiscovery
 }
 
 // NewLauncher creates a new Claude launcher
@@ -59,7 +61,23 @@ func NewLauncher(config Config) *Launcher {
 		skipPerms:         false,
 		config:            config,
 		permissionHandler: nil,
+		controlManager:    NewControlManager(),
+		discovery:         NewCLIDiscovery(),
 	}
+}
+
+// GetControlManager returns the control manager
+func (l *Launcher) GetControlManager() *ControlManager {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.controlManager
+}
+
+// GetDiscovery returns the CLI discovery instance
+func (l *Launcher) GetDiscovery() *CLIDiscovery {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.discovery
 }
 
 // SetPermissionHandler sets the permission handler
@@ -80,7 +98,14 @@ func (l *Launcher) GetPermissionHandler() permission.Handler {
 func (l *Launcher) Execute(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (*agentboot.Result, error) {
 	timeout := opts.Timeout
 	if timeout == 0 {
-		timeout = 5 * time.Minute
+		// Use configured default timeout
+		l.mu.RLock()
+		timeout = l.config.DefaultExecutionTimeout
+		l.mu.RUnlock()
+		// Fallback to 5 minutes if not configured
+		if timeout == 0 {
+			timeout = 5 * time.Minute
+		}
 	}
 	logrus.Infof("launching claude code...: %s", prompt)
 	// If handler is provided in options, use ExecuteWithHandler directly
@@ -356,16 +381,75 @@ func (l *Launcher) ExecuteStream(
 	return streamHandler, nil
 }
 
-// buildCommandArgs constructs CLI arguments based on format and prompt
+// buildCommandArgs constructs CLI arguments based on format, prompt, and config options
 func (l *Launcher) buildCommandArgs(format agentboot.OutputFormat, prompt string, opts agentboot.ExecutionOptions) ([]string, error) {
 	var args []string
 
-	// Add --resume flag if resuming an existing session
-	if opts.SessionID != "" && opts.Resume {
-		args = append(args, "--resume", opts.SessionID)
-	} else if opts.SessionID != "" && !opts.Resume {
+	// Get config options
+	l.mu.RLock()
+	config := l.config
+	l.mu.RUnlock()
+
+	// Model selection
+	if config.Model != "" {
+		args = append(args, "--model", config.Model)
+	}
+
+	// Resume / Continue handling
+	sessionID := opts.SessionID
+	if sessionID == "" && config.ResumeSessionID != "" {
+		sessionID = config.ResumeSessionID
+	}
+
+	if sessionID != "" && (opts.Resume || config.ContinueConversation) {
+		args = append(args, "--resume", sessionID)
+	} else if sessionID != "" {
 		// Use --session-id for new sessions with specific ID
-		args = append(args, "--session-id", opts.SessionID)
+		args = append(args, "--session-id", sessionID)
+	} else if config.ContinueConversation {
+		args = append(args, "--continue")
+	}
+
+	// System prompt options
+	if config.CustomSystemPrompt != "" {
+		args = append(args, "--custom-system-prompt", config.CustomSystemPrompt)
+	}
+	if config.AppendSystemPrompt != "" {
+		args = append(args, "--append-system-prompt", config.AppendSystemPrompt)
+	}
+
+	// Tool filtering
+	if len(config.AllowedTools) > 0 {
+		args = append(args, "--allowed-tools", strings.Join(config.AllowedTools, ","))
+	}
+	if len(config.DisallowedTools) > 0 {
+		args = append(args, "--disallowed-tools", strings.Join(config.DisallowedTools, ","))
+	}
+
+	// Settings path
+	if config.SettingsPath != "" {
+		args = append(args, "--settings", config.SettingsPath)
+	}
+
+	// Permission mode
+	if config.PermissionMode != "" {
+		switch config.PermissionMode {
+		case PermissionModeAuto:
+			args = append(args, "--permission-mode", "auto")
+		case PermissionModeManual:
+			args = append(args, "--permission-mode", "manual")
+		case PermissionModeOnce:
+			args = append(args, "--permission-mode", "once")
+		}
+	}
+
+	// MCP server configuration (if any)
+	if len(config.MCPServers) > 0 {
+		mcpArgs, err := l.buildMCPArgs(config.MCPServers)
+		if err != nil {
+			return nil, fmt.Errorf("build MCP args: %w", err)
+		}
+		args = append(args, mcpArgs...)
 	}
 
 	switch format {
@@ -387,6 +471,7 @@ func (l *Launcher) buildCommandArgs(format agentboot.OutputFormat, prompt string
 	skipPerms := l.skipPerms
 	l.mu.RUnlock()
 
+	// Skip permissions takes precedence over permission mode
 	if skipPerms && !isRoot() {
 		args = append(args, "--dangerously-skip-permissions")
 	}
@@ -394,14 +479,48 @@ func (l *Launcher) buildCommandArgs(format agentboot.OutputFormat, prompt string
 	return args, nil
 }
 
-// buildCommand creates the exec.Cmd with proper working directory
+// buildMCPArgs constructs MCP server arguments from config
+func (l *Launcher) buildMCPArgs(servers map[string]interface{}) ([]string, error) {
+	var args []string
+
+	for name, config := range servers {
+		serverConfig, ok := config.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Build --mcp-server argument: name:key1=value1:key2=value2
+		var parts []string
+		parts = append(parts, name)
+
+		for k, v := range serverConfig {
+			parts = append(parts, fmt.Sprintf("%s=%v", k, v))
+		}
+
+		args = append(args, "--mcp-server", strings.Join(parts, ":"))
+	}
+
+	return args, nil
+}
+
+// buildCommand creates the exec.Cmd with proper working directory and environment
 func (l *Launcher) buildCommand(ctx context.Context, args []string, opts agentboot.ExecutionOptions) (*exec.Cmd, error) {
 	l.mu.RLock()
 	cliPath := l.cliPath
+	config := l.config
+	discovery := l.discovery
 	l.mu.RUnlock()
+
+	// Use CLI discovery if path is not explicitly set
+	if cliPath == "claude" || cliPath == "anthropic" {
+		if variant, err := discovery.FindClaudeCLI(ctx); err == nil && variant != nil {
+			cliPath = variant.Path
+		}
+	}
 
 	cmd := exec.CommandContext(ctx, cliPath, args...)
 
+	// Set working directory
 	if strings.TrimSpace(opts.ProjectPath) != "" {
 		if stat, err := os.Stat(opts.ProjectPath); err == nil && stat.IsDir() {
 			cmd.Dir = opts.ProjectPath
@@ -410,6 +529,20 @@ func (l *Launcher) buildCommand(ctx context.Context, args []string, opts agentbo
 		} else {
 			return nil, os.ErrInvalid
 		}
+	}
+
+	// Build clean environment with custom variables
+	cleanEnv, err := discovery.GetCleanEnv(ctx)
+	if err != nil {
+		logrus.Debugf("Failed to get clean env: %v", err)
+		cleanEnv = os.Environ()
+	}
+
+	// Merge custom environment variables
+	if len(config.CustomEnv) > 0 {
+		cmd.Env = MergeEnv(cleanEnv, config.CustomEnv)
+	} else {
+		cmd.Env = cleanEnv
 	}
 
 	return cmd, nil
@@ -453,26 +586,33 @@ func (l *Launcher) handleExecutionError(err error, stderr string, handler Messag
 	return fmt.Errorf("claude execution failed: %w", err)
 }
 
-// IsAvailable checks if Claude Code CLI is available
+// IsAvailable checks if Claude Code CLI is available using CLI discovery
 func (l *Launcher) IsAvailable() bool {
-	cmd := exec.Command("which", "claude")
-	if err := cmd.Run(); err == nil {
-		l.mu.Lock()
-		l.cliPath = "claude"
-		l.mu.Unlock()
-		return true
+	l.mu.RLock()
+	discovery := l.discovery
+	cliPath := l.cliPath
+	l.mu.RUnlock()
+
+	// If explicit path is set, verify it exists
+	if cliPath != "" && cliPath != "claude" && cliPath != "anthropic" {
+		if _, err := os.Stat(cliPath); err == nil {
+			return true
+		}
+		return false
 	}
 
-	// Fallback to anthropic CLI
-	cmd = exec.Command("which", "anthropic")
-	if err := cmd.Run(); err == nil {
-		l.mu.Lock()
-		l.cliPath = "anthropic"
-		l.mu.Unlock()
-		return true
+	// Use discovery to find CLI
+	variant, err := discovery.FindClaudeCLI(context.Background())
+	if err != nil {
+		return false
 	}
 
-	return false
+	// Update cliPath for future use
+	l.mu.Lock()
+	l.cliPath = variant.Path
+	l.mu.Unlock()
+
+	return true
 }
 
 // Type returns the agent type
@@ -516,6 +656,7 @@ func (l *Launcher) SetCLIPath(path string) {
 // handleControlMessages handles incoming control messages from stderr
 func (l *Launcher) handleControlMessages(ctx context.Context, stdin io.WriteCloser, stderr io.Reader) {
 	parser := events.NewParser()
+	controlMgr := l.GetControlManager()
 
 	// Parse stderr for control messages
 	go func() {
@@ -533,6 +674,13 @@ func (l *Launcher) handleControlMessages(ctx context.Context, stdin io.WriteClos
 
 			// Check if this is a control request event (e.g., "control_request")
 			if strings.HasPrefix(event.Type, EventTypeControl) {
+				// Try to handle via control manager first
+				if err := controlMgr.HandleControlMessage(event.Data); err == nil {
+					// Control manager handled it
+					continue
+				}
+
+				// Fall back to legacy handling
 				if controlData, ok := event.Data["request"].(map[string]interface{}); ok {
 					if subtype, _ := controlData["subtype"].(string); subtype == "can_use_tool" {
 						req := l.parsePermissionRequest(controlData)
@@ -599,4 +747,41 @@ func (l *Launcher) sendPermissionResponse(stdin io.WriteCloser, requestID string
 func isRoot() bool {
 	uid := os.Getuid()
 	return uid == 0
+}
+
+// Interrupt sends an interrupt request to the Claude process
+func (l *Launcher) Interrupt(ctx context.Context, stdin io.WriteCloser, reason string) error {
+	controlMgr := l.GetControlManager()
+
+	builder := NewCancelRequestBuilder().
+		WithCancel("execution").
+		WithReason(reason)
+
+	return controlMgr.SendRequestAsync(builder.Build(), stdin)
+}
+
+// SendPermissionRequest sends a permission request and waits for response
+func (l *Launcher) SendPermissionRequest(ctx context.Context, req agentboot.PermissionRequest, stdin io.WriteCloser) (agentboot.PermissionResult, error) {
+	controlMgr := l.GetControlManager()
+
+	builder := NewPermissionRequestBuilder().
+		WithRequestID(req.RequestID).
+		WithTool(req.ToolName, req.Input)
+
+	ctrlReq := builder.Build()
+	resp, err := controlMgr.SendRequest(ctx, ctrlReq, stdin)
+	if err != nil {
+		return agentboot.PermissionResult{Approved: false}, err
+	}
+
+	// Parse response
+	result := agentboot.PermissionResult{Approved: true}
+	if resp.Response != nil {
+		if subtype, _ := resp.Response["subtype"].(string); subtype == "error" {
+			result.Approved = false
+			result.Reason, _ = resp.Response["error"].(string)
+		}
+	}
+
+	return result, nil
 }

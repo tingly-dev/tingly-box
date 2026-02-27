@@ -1,9 +1,9 @@
 package claude
 
 import (
-	"bytes"
 	"embed"
 	"fmt"
+	"strings"
 	"sync"
 	"text/template"
 )
@@ -32,20 +32,45 @@ func NewTextFormatter() *TextFormatter {
 	}
 }
 
-// Format formats a message using its template
+// Format formats a message using sprintf for better performance
 func (f *TextFormatter) Format(msg Message) string {
 	if msg == nil {
 		return ""
 	}
 
-	tmpl, err := f.getTemplate(msg.GetType())
-	if err != nil {
-		return fmt.Sprintf("[ERROR] template: %v", err)
+	// Check for custom template first
+	f.mu.RLock()
+	customTmpl, hasCustom := f.customTemplates[msg.GetType()]
+	f.mu.RUnlock()
+
+	if hasCustom {
+		return f.formatWithTemplate(customTmpl, msg)
 	}
 
-	var buf bytes.Buffer
+	switch m := msg.(type) {
+	case *SystemMessage:
+		return f.formatSystem(m)
+	case *AssistantMessage:
+		return f.formatAssistant(m)
+	case *UserMessage:
+		return f.formatUser(m)
+	case *ToolUseMessage:
+		return f.formatToolUse(m)
+	case *ToolResultMessage:
+		return f.formatToolResult(m)
+	case *StreamEventMessage:
+		return f.formatStreamEvent(m)
+	case *ResultMessage:
+		return f.formatResult(m)
+	default:
+		return fmt.Sprintf("[UNKNOWN] %s", msg.GetType())
+	}
+}
 
-	// Create template data with formatter options
+// formatWithTemplate formats a message using a template (for custom templates)
+func (f *TextFormatter) formatWithTemplate(tmpl *template.Template, msg Message) string {
+	var buf strings.Builder
+
 	data := map[string]interface{}{
 		"Message":          msg,
 		"IncludeTimestamp": f.IncludeTimestamp,
@@ -107,7 +132,6 @@ func (f *TextFormatter) Format(msg Message) string {
 		data["PermissionDenials"] = m.PermissionDenials
 		data["Timestamp"] = m.Timestamp
 	default:
-		// For unknown types, try to use raw data
 		data["Type"] = msg.GetType()
 		data["Data"] = msg.GetRawData()
 	}
@@ -117,6 +141,208 @@ func (f *TextFormatter) Format(msg Message) string {
 	}
 
 	return buf.String()
+}
+
+func (f *TextFormatter) formatSystem(m *SystemMessage) string {
+	var b strings.Builder
+	b.WriteString("[SYSTEM]")
+	if m.SubType != "" {
+		b.WriteString(" ")
+		b.WriteString(m.SubType)
+	}
+	b.WriteString(" Session: ")
+	b.WriteString(m.SessionID)
+	if f.IncludeTimestamp && !m.Timestamp.IsZero() {
+		b.WriteString(" at ")
+		b.WriteString(m.Timestamp.Format("2006-01-02 15:04:05"))
+	}
+	return b.String()
+}
+
+func (f *TextFormatter) formatAssistant(m *AssistantMessage) string {
+	var b strings.Builder
+
+	if m.Message.ID != "" {
+		b.WriteString("[ASSISTANT] ")
+		b.WriteString(m.Message.ID)
+		b.WriteString("\n")
+	} else {
+		b.WriteString("[ASSISTANT]")
+	}
+
+	for _, content := range m.Message.Content {
+		switch content.Type {
+		case "text":
+			if content.Text != "" {
+				b.WriteString(content.Text)
+				b.WriteString("\n")
+			}
+		case "tool_use":
+			if f.ShowToolDetails {
+				b.WriteString("[TOOL] ")
+				b.WriteString(content.Name)
+				switch content.Name {
+				case "Bash":
+					b.WriteString("\n")
+					b.WriteString(fmt.Sprintf("%s", content.Input))
+				}
+				b.WriteString("\n")
+			}
+		case "thinking":
+			if f.Verbose && content.Thinking != "" {
+				b.WriteString("[THINKING] ")
+				b.WriteString(content.Thinking)
+				b.WriteString("\n")
+			}
+		case "web_search_tool_result":
+			if f.ShowToolDetails && content.ToolUseID != "" {
+				b.WriteString("[TOOL_RESULT] ")
+				b.WriteString(content.ToolUseID)
+				b.WriteString("\n")
+			}
+		}
+	}
+
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func (f *TextFormatter) formatUser(m *UserMessage) string {
+	if m.Message == "" {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("[USER] ")
+	b.WriteString(m.Message)
+	if m.ParentToolUseID != nil && *m.ParentToolUseID != "" {
+		b.WriteString(" (in reply to ")
+		b.WriteString(*m.ParentToolUseID)
+		b.WriteString(")")
+	}
+	return b.String()
+}
+
+func (f *TextFormatter) formatToolUse(m *ToolUseMessage) string {
+	var b strings.Builder
+	b.WriteString("[TOOL_USE] ")
+	b.WriteString(m.ToolUseID)
+	b.WriteString(" (")
+	b.WriteString(m.Name)
+	b.WriteString(")")
+
+	if m.Input != nil && len(m.Input) > 0 {
+		b.WriteString("\nInput: ")
+		for key, value := range m.Input {
+			b.WriteString(key)
+			b.WriteString("=")
+			b.WriteString(fmt.Sprintf("%v", value))
+			b.WriteString(" ")
+		}
+	}
+	return b.String()
+}
+
+func (f *TextFormatter) formatToolResult(m *ToolResultMessage) string {
+	var b strings.Builder
+	b.WriteString("[TOOL_RESULT] ")
+	b.WriteString(m.ToolUseID)
+	b.WriteString(" [")
+	if m.IsError {
+		b.WriteString("ERROR")
+	} else {
+		b.WriteString("SUCCESS")
+	}
+	b.WriteString("]")
+
+	if m.Output != "" {
+		b.WriteString("\n")
+		b.WriteString(m.Output)
+	} else if m.Content != nil {
+		for _, c := range m.Content {
+			if tr, ok := c.(*ToolResultContentBlock); ok && tr.Content != "" {
+				b.WriteString("\n")
+				b.WriteString(tr.Content)
+				break
+			}
+		}
+	}
+	return b.String()
+}
+
+func (f *TextFormatter) formatStreamEvent(m *StreamEventMessage) string {
+	var b strings.Builder
+	b.WriteString("[STREAM]")
+	if m.Event.Type != "" {
+		b.WriteString(" ")
+		b.WriteString(m.Event.Type)
+	}
+
+	if m.Event.Delta != nil {
+		switch delta := m.Event.Delta.(type) {
+		case *TextDelta:
+			b.WriteString(" +")
+			b.WriteString(delta.Text)
+		case *InputJSONDelta:
+			b.WriteString(" +JSON: ")
+			b.WriteString(delta.PartialJSON)
+		}
+	}
+	return b.String()
+}
+
+func (f *TextFormatter) formatResult(m *ResultMessage) string {
+	var b strings.Builder
+	b.WriteString("[RESULT] ")
+	if m.IsError {
+		b.WriteString("ERROR")
+	} else {
+		b.WriteString("SUCCESS")
+	}
+
+	if m.DurationMS > 0 {
+		b.WriteString("\nDuration: ")
+		b.WriteString(fmt.Sprintf("%dms", m.DurationMS))
+		if m.DurationAPIMS > 0 {
+			b.WriteString(" (API: ")
+			b.WriteString(fmt.Sprintf("%dms", m.DurationAPIMS))
+			b.WriteString(")")
+		}
+	}
+
+	if m.TotalCostUSD > 0 {
+		b.WriteString("\nCost: $")
+		b.WriteString(fmt.Sprintf("%.4f", m.TotalCostUSD))
+	}
+
+	if m.Usage.InputTokens > 0 || m.Usage.OutputTokens > 0 {
+		b.WriteString("\nTokens: ")
+		b.WriteString(fmt.Sprintf("%d", m.Usage.InputTokens))
+		b.WriteString(" in, ")
+		b.WriteString(fmt.Sprintf("%d", m.Usage.OutputTokens))
+		b.WriteString(" out")
+		if m.Usage.CacheReadInputTokens > 0 {
+			b.WriteString(" (cache: ")
+			b.WriteString(fmt.Sprintf("%d", m.Usage.CacheReadInputTokens))
+			b.WriteString(")")
+		}
+	}
+
+	if m.Result != "" {
+		b.WriteString("\n")
+		b.WriteString(m.Result)
+	}
+
+	if len(m.PermissionDenials) > 0 {
+		b.WriteString("\nPermission Denials:")
+		for _, pd := range m.PermissionDenials {
+			b.WriteString("\n  - ")
+			b.WriteString(pd.RequestID)
+			b.WriteString(": ")
+			b.WriteString(pd.Reason)
+		}
+	}
+
+	return b.String()
 }
 
 // SetTemplate sets a custom template for a message type
