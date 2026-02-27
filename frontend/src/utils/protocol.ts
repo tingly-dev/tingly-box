@@ -1,8 +1,6 @@
 // Centralized protocol and URL handling for GUI (Wails) and Web modes
 import TinglyService from "@/bindings";
 
-const svc = TinglyService;
-
 /**
  * Runtime mode enumeration
  */
@@ -45,8 +43,7 @@ export async function getApiBaseUrl(): Promise<string> {
   const protocol = getApiProtocol();
 
   if (mode === RuntimeMode.GUI) {
-    const svc = await import('@/bindings');
-    const port = await svc.default.GetPort();
+    const port = await TinglyService.GetPort();
     return `${protocol}//localhost:${port}`;
   }
 
@@ -89,7 +86,7 @@ export function isGuiMode(): boolean {
 export async function getOAuthRedirectPath(): Promise<string> {
   const mode = getRuntimeMode();
   if (mode === RuntimeMode.GUI) {
-    const port = await svc.default.GetPort();
+    const port = await TinglyService.GetPort();
     return `http://localhost:${port}/oauth/callback`;
   }
   return `${window.location.origin}/oauth/callback`;
