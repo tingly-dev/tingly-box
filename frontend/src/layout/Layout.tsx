@@ -15,6 +15,7 @@ import {
     NewReleases,
     ErrorOutline,
     LaptopMac,
+    AutoAwesome,
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -151,6 +152,11 @@ const Layout = ({ children }: LayoutProps) => {
                     path: '/use-anthropic',
                     label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }),
                     icon: <Anthropic size={20} />,
+                },
+                {
+                    path: '/use-agent',
+                    label: 'Claw | Agent',
+                    icon: <AutoAwesome sx={{ fontSize: 20 }} />,
                 },
                 {
                     path: '/use-claude-code',
