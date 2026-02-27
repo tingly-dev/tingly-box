@@ -198,24 +198,24 @@ const Layout = ({ children }: LayoutProps) => {
             icon: <PromptIcon sx={{ fontSize: 20 }} />,
             items: promptMenuItems,
         }] : []),
-        ...(enableRemoteCoder ? [{
-            key: 'remote-coder' as const,
-            label: 'Remote Coder',
-            icon: <RemoteIcon sx={{ fontSize: 20 }} />,
-            path: '/remote-coder/chat',
-            items: [
-                {
-                    path: '/remote-coder/chat',
-                    label: 'Chat',
-                    icon: <ChatIcon sx={{ fontSize: 20 }} />,
-                },
-                {
-                    path: '/remote-coder/sessions',
-                    label: 'Sessions',
-                    icon: <RemoteIcon sx={{ fontSize: 20 }} />,
-                },
-            ],
-        }] : []),
+        // ...(enableRemoteCoder ? [{
+        //     key: 'remote-coder' as const,
+        //     label: 'Remote Coder',
+        //     icon: <RemoteIcon sx={{ fontSize: 20 }} />,
+        //     path: '/remote-coder/chat',
+        //     items: [
+        //         {
+        //             path: '/remote-coder/chat',
+        //             label: 'Chat',
+        //             icon: <ChatIcon sx={{ fontSize: 20 }} />,
+        //         },
+        //         {
+        //             path: '/remote-coder/sessions',
+        //             label: 'Sessions',
+        //             icon: <RemoteIcon sx={{ fontSize: 20 }} />,
+        //         },
+        //     ],
+        // }] : []),
         {
             key: 'system',
             label: 'System',
