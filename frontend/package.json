@@ -38,6 +38,7 @@
     "react-virtualized-auto-sizer": "^1.0.26",
     "react-window": "^2.2.6",
     "recharts": "^3.7.0",
+    "upath": "^2.0.1",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
