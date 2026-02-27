@@ -3,14 +3,16 @@ package agentboot
 import (
 	"fmt"
 	"sync"
+	"time"
 )
 
 // Config holds the AgentBoot configuration
 type Config struct {
-	DefaultAgent     AgentType    `json:"default_agent"`
-	DefaultFormat    OutputFormat `json:"default_format"`
-	EnableStreamJSON bool         `json:"enable_stream_json"`
-	StreamBufferSize int          `json:"stream_buffer_size"`
+	DefaultAgent            AgentType     `json:"default_agent"`
+	DefaultFormat           OutputFormat  `json:"default_format"`
+	EnableStreamJSON        bool          `json:"enable_stream_json"`
+	StreamBufferSize        int           `json:"stream_buffer_size"`
+	DefaultExecutionTimeout time.Duration `json:"default_execution_timeout"`
 }
 
 // AgentBoot manages agent instances

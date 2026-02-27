@@ -25,6 +25,11 @@ type Handler interface {
 
 	// RecordDecision records a permission decision for learning
 	RecordDecision(req agentboot.PermissionRequest, response agentboot.PermissionResponse) error
+
+	// SetUserPrompter sets the user prompter for manual permission mode
+	// When set, manual permission requests will use the prompter instead of
+	// waiting for SubmitDecision calls
+	SetUserPrompter(prompter UserPrompter)
 }
 
 // NewDefaultHandler creates a new permission handler with the given config

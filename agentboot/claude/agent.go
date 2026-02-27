@@ -15,8 +15,9 @@ type Agent struct {
 // NewAgent creates a new Claude agent
 func NewAgent(config agentboot.Config) *Agent {
 	launcherConfig := Config{
-		EnableStreamJSON: config.EnableStreamJSON,
-		StreamBufferSize: config.StreamBufferSize,
+		EnableStreamJSON:        config.EnableStreamJSON,
+		StreamBufferSize:        config.StreamBufferSize,
+		DefaultExecutionTimeout: config.DefaultExecutionTimeout,
 	}
 
 	return &Agent{

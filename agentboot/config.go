@@ -7,10 +7,11 @@ import (
 // DefaultConfig returns the default AgentBoot configuration
 func DefaultConfig() Config {
 	return Config{
-		DefaultAgent:     AgentTypeClaude,
-		DefaultFormat:    OutputFormatStreamJSON,
-		EnableStreamJSON: true,
-		StreamBufferSize: 100,
+		DefaultAgent:            AgentTypeClaude,
+		DefaultFormat:           OutputFormatStreamJSON,
+		EnableStreamJSON:        true,
+		StreamBufferSize:        100,
+		DefaultExecutionTimeout: 5 * time.Minute,
 	}
 }
 
