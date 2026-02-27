@@ -1,5 +1,7 @@
 package claude
 
+import "time"
+
 // PermissionMode defines how permission requests are handled
 type PermissionMode string
 
@@ -17,6 +19,10 @@ type Config struct {
 	// Stream Options
 	EnableStreamJSON bool `json:"enable_stream_json"`
 	StreamBufferSize int  `json:"stream_buffer_size"`
+
+	// Execution Timeout
+	// DefaultExecutionTimeout is the default timeout for agent execution
+	DefaultExecutionTimeout time.Duration `json:"default_execution_timeout,omitempty"`
 
 	// Model Selection
 	Model         string `json:"model,omitempty"`
