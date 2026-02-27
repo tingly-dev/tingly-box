@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
+	"github.com/tingly-dev/tingly-box/agentboot/permission"
 )
 
 // Color codes for output
@@ -30,21 +31,24 @@ const (
 // Server handles Claude interaction with simplified input/output
 // It uses stream-json input format internally
 type Server struct {
-	launcher   *claude.QueryLauncher
-	model      string
-	cwd        string
-	allowTools []string
-	debug      bool
+	launcher    *claude.QueryLauncher
+	model       string
+	cwd         string
+	allowTools  []string
+	debug       bool
+	permHandler permission.Handler
+	permAdapter *claude.SimplePermissionAdapter
 }
 
 // NewServer creates a new server instance
 func NewServer() *Server {
 	return &Server{
-		launcher:   claude.NewQueryLauncher(claude.Config{}),
-		model:      "",
-		cwd:        "",
-		allowTools: nil, // Allow all tools by default
-		debug:      false,
+		launcher:    claude.NewQueryLauncher(claude.Config{}),
+		model:       "",
+		cwd:         "",
+		allowTools:  nil, // Allow all tools by default
+		debug:       false,
+		permHandler: nil,
 	}
 }
 
@@ -68,6 +72,12 @@ func (s *Server) SetDebug(debug bool) {
 	s.debug = debug
 }
 
+// SetPermissionHandler sets a custom permission handler
+// When set, the handler takes precedence over the simple adapter
+func (s *Server) SetPermissionHandler(handler permission.Handler) {
+	s.permHandler = handler
+}
+
 // ProcessQuery processes a single user query using stream-json input
 func (s *Server) ProcessQuery(ctx context.Context, userPrompt string, continueConversation bool) (string, error) {
 	// Build stream prompt with the user message
@@ -75,97 +85,25 @@ func (s *Server) ProcessQuery(ctx context.Context, userPrompt string, continueCo
 	builder := claude.NewStreamPromptBuilder()
 	builder.AddUserMessage(userPrompt)
 
-	// Define tool permission callback
-	// Response format according to Claude CLI Agent Protocol:
-	// - Allow: {"behavior": "allow", "updatedInput": {...}}
-	// - Deny:  {"behavior": "deny", "message": "reason"}
-	//
-	// This callback sends permission requests to the main loop for user interaction.
-	canCallTool := func(ctx context.Context, toolName string, input map[string]interface{}, opts claude.CallToolOptions) (map[string]interface{}, error) {
-		// Always log permission requests for verification
-		log.Printf("[Permission Request] Tool: %s", toolName)
-		if s.debug {
-			log.Printf("[Permission Request] Input: %+v", input)
-		}
+	// Setup permission callback using the framework
+	var canCallTool claude.CanCallToolCallback
 
-		// Check if tool is explicitly allowed
-		if s.allowTools != nil {
-			allowed := false
-			for _, t := range s.allowTools {
-				if t == toolName {
-					allowed = true
-					break
-				}
-			}
-			if !allowed {
-				// Deny with message
-				log.Printf("[Permission] DENIED: tool %s is not in allowed list", toolName)
-				return map[string]interface{}{
-					"behavior": "deny",
-					"message":  fmt.Sprintf("tool %s is not allowed", toolName),
-				}, nil
-			}
+	if s.permAdapter != nil {
+		// Use the simple adapter if configured
+		canCallTool = s.permAdapter.AsCallback()
+	} else if s.permHandler != nil {
+		// Use the full permission handler if configured
+		adapter := claude.NewPermissionAdapter(s.permHandler)
+		canCallTool = adapter.AsCallback()
+	} else {
+		// Create a simple permission adapter with stdin prompter
+		adapter := &claude.SimplePermissionAdapter{
+			Whitelist:    s.allowTools,
+			UserPrompter: permission.NewStdinPrompter(),
+			Debug:        s.debug,
 		}
-
-		// Auto-approve if tool is in allowed list
-		if s.allowTools != nil {
-			for _, t := range s.allowTools {
-				if t == toolName {
-					log.Printf("[Permission] AUTO-APPROVED: tool %s is in allowed list", toolName)
-					return map[string]interface{}{
-						"behavior":     "allow",
-						"updatedInput": input,
-					}, nil
-				}
-			}
-		}
-
-		// Ask user directly via stdin
-		// Note: Main loop is blocked waiting for query result, so we can safely read from stdin
-		fmt.Printf("\r%s[Tool Permission]%s Claude wants to use: %s%s\n", ColorYellow, ColorReset, ColorCyan, toolName)
-		if cmd, ok := input["command"].(string); ok {
-			fmt.Printf("%sCommand%s: %s\n", ColorCyan, ColorReset, cmd)
-		} else if s.debug {
-			fmt.Printf("%sInput%s: %+v\n", ColorCyan, ColorReset, input)
-		}
-		fmt.Printf("%sAllow?%s (y=yes/n=no/a=always): ", ColorGreen, ColorReset)
-
-		reader := bufio.NewReader(os.Stdin)
-		response, _ := reader.ReadString('\n')
-		response = strings.TrimSpace(strings.ToLower(response))
-
-		switch response {
-		case "y", "yes":
-			log.Printf("[Permission] User APPROVED tool: %s", toolName)
-			return map[string]interface{}{
-				"behavior":     "allow",
-				"updatedInput": input,
-			}, nil
-		case "a", "always", "al":
-			// Add to allowed tools
-			if s.allowTools == nil {
-				s.allowTools = []string{}
-			}
-			s.allowTools = append(s.allowTools, toolName)
-			log.Printf("[Permission] User APPROVED tool: %s (added to allowed list)", toolName)
-			fmt.Printf("%s-> Tool '%s' added to allowed list%s\n", ColorGreen, toolName, ColorReset)
-			return map[string]interface{}{
-				"behavior":     "allow",
-				"updatedInput": input,
-			}, nil
-		case "n", "no":
-			log.Printf("[Permission] User DENIED tool: %s", toolName)
-			return map[string]interface{}{
-				"behavior": "deny",
-				"message":  "User denied this tool use",
-			}, nil
-		default:
-			log.Printf("[Permission] User DENIED tool: %s (invalid response)", toolName)
-			return map[string]interface{}{
-				"behavior": "deny",
-				"message":  fmt.Sprintf("Invalid response. Please answer with 'y' (yes), 'n' (no), or 'a' (always)"),
-			}, nil
-		}
+		s.permAdapter = adapter
+		canCallTool = adapter.AsCallback()
 	}
 
 	// Build query options
