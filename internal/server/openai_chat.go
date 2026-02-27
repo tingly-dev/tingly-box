@@ -647,7 +647,7 @@ func (s *Server) convertMessagesToResponseInputItems(messages []openai.ChatCompl
 // isValidRuleScenario checks if the given scenario is a valid RuleScenario
 func isValidRuleScenario(scenario typ.RuleScenario) bool {
 	switch scenario {
-	case typ.ScenarioOpenAI, typ.ScenarioAnthropic, typ.ScenarioClaudeCode, typ.ScenarioOpenCode, typ.ScenarioXcode:
+	case typ.ScenarioOpenAI, typ.ScenarioAnthropic, typ.ScenarioAgent, typ.ScenarioClaudeCode, typ.ScenarioOpenCode, typ.ScenarioXcode:
 		return true
 	default:
 		return false
