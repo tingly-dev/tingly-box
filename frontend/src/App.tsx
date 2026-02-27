@@ -20,6 +20,7 @@ const Guiding = lazy(() => import('./pages/./Guiding'));
 const UseOpenAIPage = lazy(() => import('./pages/UseOpenAIPage'));
 const UseAnthropicPage = lazy(() => import('./pages/UseAnthropicPage'));
 const UseClaudeCodePage = lazy(() => import('./pages/UseClaudeCodePage'));
+const UseAgentPage = lazy(() => import('./pages/UseAgentPage'));
 const UseOpenCodePage = lazy(() => import('./pages/UseOpenCodePage'));
 const UseXcodePage = lazy(() => import('./pages/UseXcodePage'));
 const CredentialPage = lazy(() => import('./pages/CredentialPage'));
@@ -274,6 +275,7 @@ function AppContent() {
                                         <Route path="/use-openai" element={<UseOpenAIPage/>}/>
                                         <Route path="/use-anthropic" element={<UseAnthropicPage/>}/>
                                         <Route path="/use-claude-code" element={<UseClaudeCodePage/>}/>
+                                        <Route path="/use-agent" element={<UseAgentPage/>}/>
                                         <Route path="/use-opencode" element={<UseOpenCodePage/>}/>
                                         <Route path="/use-xcode" element={<UseXcodePage/>}/>
                                         {/* Credential routes - new unified page */}

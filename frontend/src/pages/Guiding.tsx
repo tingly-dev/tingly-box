@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import OpenAI from '@lobehub/icons/es/OpenAI';
 import Anthropic from '@lobehub/icons/es/Anthropic';
 import Claude from '@lobehub/icons/es/Claude';
-import { Settings as SystemIcon, Code as CodeIcon, BarChart as BarChartIcon, Lock as LockIcon } from '@mui/icons-material';
+import { Settings as SystemIcon, Code as CodeIcon, BarChart as BarChartIcon, Lock as LockIcon, AutoAwesome } from '@mui/icons-material';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useTranslation } from 'react-i18next';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
@@ -77,6 +77,13 @@ const Guiding = () => {
                     path: '/use-anthropic',
                     icon: <Anthropic size={40} />,
                     color: '#D4915D',
+                },
+                {
+                    title: 'Claw | Agent',
+                    description: 'Use Agent for AI-powered assistance',
+                    path: '/use-agent',
+                    icon: <AutoAwesome sx={{ fontSize: 40 }} />,
+                    color: '#0891b2',
                 },
                 {
                     title: t('layout.nav.useClaudeCode', { defaultValue: 'Claude Code' }),

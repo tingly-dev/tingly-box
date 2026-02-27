@@ -1361,6 +1361,32 @@ func init() {
 			Active: true,
 		},
 		{
+			UUID:          "built-in-agent",
+			Scenario:      typ.ScenarioAgent,
+			RequestModel:  "tingly-agent",
+			ResponseModel: "",
+			Description:   "Default proxy rule in tingly-box for agent",
+			Services:      []*loadbalance.Service{}, // Empty services initially
+			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "built-in-agent-claw",
+			Scenario:      typ.ScenarioAgent,
+			RequestModel:  "tingly-claw",
+			ResponseModel: "",
+			Description:   "Built in model rule for agent - claw",
+			Services:      []*loadbalance.Service{},
+			LBTactic: typ.Tactic{
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
 			UUID:          "built-in-openai",
 			Scenario:      typ.ScenarioOpenAI,
 			RequestModel:  "tingly-gpt",
