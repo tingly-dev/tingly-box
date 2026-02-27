@@ -567,8 +567,8 @@ func handleClaudeCodeMessage(
 	sendTextWithReply(bot, chatID, formatResponseWithMeta(meta, "⏳ Processing..."), replyTo)
 
 	// Use context.Background() to avoid cancellation when bot reconnects
-	// The 10-minute timeout is sufficient to prevent runaway executions
-	execCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	// Timeout is handled by agentBoot's DefaultExecutionTimeout (30 minutes)
+	execCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	agent, err := agentBoot.GetDefaultAgent()
@@ -594,6 +594,7 @@ func handleClaudeCodeMessage(
 	// Create a streaming message handler that sends formatted messages to the bot
 	streamHandler := newStreamingMessageHandler(bot, chatID, replyTo)
 
+	// Timeout is not set here; agent will use DefaultExecutionTimeout from config (30 minutes)
 	result, err := agent.Execute(execCtx, text, agentboot.ExecutionOptions{
 		ProjectPath: projectPath,
 		Handler:     streamHandler,

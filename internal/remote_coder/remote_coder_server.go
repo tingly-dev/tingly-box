@@ -67,8 +67,9 @@ func Run(ctx context.Context, cfg *config.Config, imbotStore *db.ImBotSettingsSt
 		MessageRetention: cfg.MessageRetention,
 	}, store)
 
-	// Create AgentBoot instance with default config
+	// Create AgentBoot instance with 30-minute execution timeout for bot usage
 	agentBootConfig := agentboot.DefaultConfig()
+	agentBootConfig.DefaultExecutionTimeout = 30 * time.Minute
 	agentBoot := agentboot.New(agentBootConfig)
 
 	// Create permission handler with default config
