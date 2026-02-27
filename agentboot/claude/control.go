@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
@@ -87,7 +88,7 @@ func (m *ControlManager) SendRequest(ctx context.Context, req ControlRequest, st
 	case resp := <-respChan:
 		return resp, nil
 	case <-timeoutCtx.Done():
-		return ControlResponse{}, fmt.Errorf("control request timeout after %v", m.requestTimeout)
+		return ControlResponse{}, fmt.Errorf("control request timeout after %s", m.requestTimeout)
 	case <-ctx.Done():
 		return ControlResponse{}, ctx.Err()
 	}
@@ -239,7 +240,7 @@ func (m *ControlManager) IsClosed() bool {
 
 // generateRequestID generates a unique request ID
 func generateRequestID() string {
-	return fmt.Sprintf("req_%d", time.Now().UnixNano())
+	return uuid.New().String()
 }
 
 // PermissionRequestBuilder builds permission control requests
