@@ -403,6 +403,22 @@ func resolvePath(homeDir, path string) string {
 // It looks for:
 // 1. First heading (e.g., "# Skill Name") - returns the heading text
 // 2. First non-empty paragraph - returns the paragraph text (truncated if too long)
+//
+// Examples:
+//   Input: "# Commit Skill\n\nThis is a commit skill."
+//   Output: "Commit Skill"
+//
+//   Input: "## Code Review\n\nThis skill helps with reviews."
+//   Output: "Code Review"
+//
+//   Input: "No heading here, just a description."
+//   Output: "No heading here, just a description."
+//
+//   Input: "```go\nfunc main() {}\n```\n\nActual description here."
+//   Output: "Actual description here."
+//
+//   Input: "#   Spaced Heading  \n\nContent here."
+//   Output: "Spaced Heading"
 func parseSkillDescription(content string) string {
 	// Try to find first heading (# Heading)
 	headingRegex := regexp.MustCompile(`(?m)^#+\s*(.+)$`)
