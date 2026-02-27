@@ -18,7 +18,7 @@ import (
 
 // HandleAnthropicToOpenAIStreamResponse processes Anthropic streaming events and converts them to OpenAI format
 // Returns inputTokens, outputTokens, and error for usage tracking
-func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.MessageNewParams, stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion], responseModel string) (int, int, error) {
+func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.MessageNewParams, stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion], responseModel string, disableStreamUsage bool) (int, int, error) {
 	logrus.Info("Starting Anthropic to OpenAI streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
@@ -153,8 +153,8 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 				},
 			}
 
-			// Add usage if available
-			if usage != nil {
+			// Add usage if available and not disabled
+			if !disableStreamUsage && usage != nil {
 				chunk["usage"] = map[string]interface{}{
 					"prompt_tokens":     usage.InputTokens,
 					"completion_tokens": usage.OutputTokens,

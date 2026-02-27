@@ -40,6 +40,13 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	// === Tool Interceptor: Check if enabled and should be used ===
 	shouldIntercept, shouldStripTools, _ := s.resolveToolInterceptor(provider, hasBuiltInWebSearch)
 
+	// Get scenario config for DisableStreamUsage flag
+	scenarioType := rule.GetScenario()
+	disableStreamUsage := false
+	if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
+		disableStreamUsage = scenarioConfig.Flags.DisableStreamUsage
+	}
+
 	// Ensure max_tokens is set (Anthropic API requires this)
 	// and cap it at the model's maximum allowed value
 	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
@@ -213,7 +220,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		} else {
 			// Use Chat Completions path (fallback)
 			// Note: isStreaming is determined after conversion, so we need to re-evaluate
-			openaiReq := request.ConvertAnthropicBetaToOpenAIRequestWithProvider(&req.BetaMessageNewParams, true, provider, actualModel, isStreaming)
+			openaiReq := request.ConvertAnthropicBetaToOpenAIRequestWithProvider(&req.BetaMessageNewParams, true, provider, actualModel, isStreaming, disableStreamUsage)
 
 			// Set the rule and provider in context so middleware can use the same rule
 			if rule != nil {
@@ -227,7 +234,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			// Use OpenAI Chat Completions path
 			if isStreaming {
 				// Re-convert with streaming enabled since we're now in streaming mode
-				openaiReq = request.ConvertAnthropicBetaToOpenAIRequestWithProvider(&req.BetaMessageNewParams, true, provider, actualModel, isStreaming)
+				openaiReq = request.ConvertAnthropicBetaToOpenAIRequestWithProvider(&req.BetaMessageNewParams, true, provider, actualModel, isStreaming, disableStreamUsage)
 				// Set up stream recorder
 				streamRec := newStreamRecorder(recorder)
 				if streamRec != nil {

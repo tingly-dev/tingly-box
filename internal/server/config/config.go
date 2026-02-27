@@ -24,6 +24,12 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 )
 
+// Wildcard rule names that match any model
+const (
+	WildcardRuleName    = "*"
+	WildcardRuleNameAlt = "[any]"
+)
+
 // Config represents the global configuration
 type Config struct {
 	Rules             []typ.Rule           `yaml:"rules" json:"rules"`                             // List of request configurations
@@ -157,6 +163,8 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	if cfg.VirtualModelToken == "" {
 		cfg.VirtualModelToken = constant.DefaultVirtualModelToken
 	}
+	// Ensure default scenario configs are set
+	cfg.EnsureDefaultScenarioConfigs()
 	cfg.Save()
 
 	// Ensure tokens exist even for existing configs
@@ -318,9 +326,9 @@ func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
 
 	// Guard name unique
 	for _, rc := range c.Rules {
-		if rc.RequestModel == rule.RequestModel {
+		if rc.RequestModel == rule.RequestModel && rc.GetScenario() == rule.Scenario {
 			if rc.UUID != rule.UUID {
-				return fmt.Errorf("rule with Name %s already exists", rule.RequestModel)
+				return fmt.Errorf("rule with Name %s already exists in same scenario", rule.RequestModel)
 			}
 		}
 	}
@@ -457,6 +465,35 @@ func (c *Config) IsRequestModelInScenario(modelName string, scenario typ.RuleSce
 		}
 	}
 	return false
+}
+
+// IsWildcardRuleName checks if the given rule name is a wildcard that matches any model
+func IsWildcardRuleName(name string) bool {
+	return name == WildcardRuleName || name == WildcardRuleNameAlt
+}
+
+// MatchRuleByModelAndScenario finds a rule by model name with wildcard support
+// Priority: exact match > wildcard match
+// Returns nil if no rule matches
+func (c *Config) MatchRuleByModelAndScenario(requestModel string, scenario typ.RuleScenario) *typ.Rule {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// First, try exact match
+	for _, rule := range c.Rules {
+		if rule.RequestModel == requestModel && rule.GetScenario() == scenario {
+			return &rule
+		}
+	}
+
+	// Then, try wildcard match
+	for _, rule := range c.Rules {
+		if IsWildcardRuleName(rule.RequestModel) && rule.GetScenario() == scenario {
+			return &rule
+		}
+	}
+
+	return nil
 }
 
 // SetRequestConfigs updates all Rules
@@ -1498,4 +1535,40 @@ func (c *Config) InsertDefaultRule() error {
 		c.AddRule(r)
 	}
 	return nil
+}
+
+// EnsureDefaultScenarioConfigs ensures that all scenarios have default config with appropriate flags
+func (c *Config) EnsureDefaultScenarioConfigs() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Define default scenario configs
+	// xcode: DisableStreamUsage = true (to fix compatibility with Xcode client)
+	// others: DisableStreamUsage = false (default behavior, include usage in streaming)
+	defaultScenarios := []typ.ScenarioConfig{
+		{
+			Scenario: typ.ScenarioXcode,
+			Flags: typ.ScenarioFlags{
+				DisableStreamUsage: true, // Xcode client cannot handle usage in streaming chunks
+			},
+		},
+	}
+
+	// Add or update scenario configs
+	for _, defaultConfig := range defaultScenarios {
+		found := false
+		for i := range c.Scenarios {
+			if c.Scenarios[i].Scenario == defaultConfig.Scenario {
+				// Update existing config if flags are not set
+				if !c.Scenarios[i].Flags.DisableStreamUsage {
+					c.Scenarios[i].Flags.DisableStreamUsage = defaultConfig.Flags.DisableStreamUsage
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.Scenarios = append(c.Scenarios, defaultConfig)
+		}
+	}
 }
