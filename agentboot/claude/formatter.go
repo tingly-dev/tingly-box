@@ -327,10 +327,11 @@ func (f *TextFormatter) formatResult(m *ResultMessage) string {
 		}
 	}
 
-	if m.Result != "" {
-		b.WriteString("\n")
-		b.WriteString(m.Result)
-	}
+	// FIXME: since last assistant return result, we do not repeat here
+	//if m.Result != "" {
+	//	b.WriteString("\n")
+	//	b.WriteString(m.Result)
+	//}
 
 	if len(m.PermissionDenials) > 0 {
 		b.WriteString("\nPermission Denials:")
