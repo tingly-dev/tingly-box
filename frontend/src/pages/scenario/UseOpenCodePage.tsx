@@ -5,17 +5,18 @@ import { Box, Button, Tooltip, IconButton } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ExperimentalFeatures from '@/components/ExperimentalFeatures.tsx';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from '@/components/TemplatePage.tsx';
-import XcodeConfigModal from '@/components/XcodeConfigModal';
-import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
-import { useHeaderHeight } from '../hooks/useHeaderHeight';
-import { api, getBaseUrl } from '../services/api';
+import OpenCodeConfigModal from '@/components/OpenCodeConfigModal';
+import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
+import { useHeaderHeight } from '@/hooks/useHeaderHeight';
+import { api, getBaseUrl } from '@/services/api';
 
-const scenario = "xcode";
+const scenario = "opencode";
 
-const UseXcodePage: React.FC = () => {
+const UseOpenCodePage: React.FC = () => {
     const {
         showTokenModal,
         setShowTokenModal,
@@ -31,6 +32,12 @@ const UseXcodePage: React.FC = () => {
     const [loadingRule, setLoadingRule] = useState(true);
     const [newlyCreatedRuleUuids, setNewlyCreatedRuleUuids] = useState<Set<string>>(new Set());
     const [configModalOpen, setConfigModalOpen] = useState(false);
+    const [isApplyLoading, setIsApplyLoading] = useState(false);
+    // Config preview state
+    const [configJson, setConfigJson] = useState('');
+    const [scriptWindows, setScriptWindows] = useState('');
+    const [scriptUnix, setScriptUnix] = useState('');
+    const [isConfigLoading, setIsConfigLoading] = useState(false);
     const navigate = useNavigate();
 
     // Use shared hook for header height measurement
@@ -66,8 +73,39 @@ const UseXcodePage: React.FC = () => {
         }
     }, [rules.length]);
 
-    // Handle opening config modal
-    const handleOpenConfigModal = () => {
+    // Fetch OpenCode config preview from backend
+    const fetchConfigPreview = async () => {
+        setIsConfigLoading(true);
+        try {
+            const result = await api.getOpenCodeConfigPreview();
+            if (result.success) {
+                setConfigJson(result.configJson);
+                setScriptWindows(result.scriptWindows);
+                setScriptUnix(result.scriptUnix);
+            } else {
+                setConfigJson('// Error: ' + (result.message || 'Failed to load config'));
+                setScriptWindows('// Error loading config');
+                setScriptUnix('// Error loading config');
+                showNotification('Failed to load config preview: ' + (result.message || 'Unknown error'), 'error');
+            }
+        } catch (err) {
+            console.error('Failed to fetch config preview:', err);
+            setConfigJson('// Error: Failed to connect to server');
+            setScriptWindows('// Error: Failed to connect to server');
+            setScriptUnix('// Error: Failed to connect to server');
+            showNotification('Failed to load config preview', 'error');
+        } finally {
+            setIsConfigLoading(false);
+        }
+    };
+
+    // Handle opening config modal - fetch preview first
+    const handleOpenConfigModal = async () => {
+        // Reset config state
+        setConfigJson('// Loading...');
+        setScriptWindows('// Loading...');
+        setScriptUnix('// Loading...');
+        await fetchConfigPreview();
         setConfigModalOpen(true);
     };
 
@@ -95,6 +133,34 @@ const UseXcodePage: React.FC = () => {
         };
     }, []);
 
+    // Apply handler for OpenCode config - calls backend to generate and write config
+    const handleApply = async () => {
+        try {
+            setIsApplyLoading(true);
+            const result = await api.applyOpenCodeConfig();
+
+            if (result.success) {
+                const configPath = '~/.config/opencode/opencode.json';
+                let successMsg = `Configuration file written: ${configPath}`;
+                if (result.created) {
+                    successMsg += ' (created)';
+                } else if (result.updated) {
+                    successMsg += ' (updated)';
+                }
+                if (result.backupPath) {
+                    successMsg += `\nBackup created: ${result.backupPath}`;
+                }
+                showNotification(successMsg, 'success');
+            } else {
+                showNotification(`Failed to apply opencode.json: ${result.message || 'Unknown error'}`, 'error');
+            }
+        } catch (err) {
+            showNotification('Failed to apply OpenCode config', 'error');
+        } finally {
+            setIsApplyLoading(false);
+        }
+    };
+
     const isLoading = providersLoading || loadingRule;
 
     return (
@@ -104,7 +170,7 @@ const UseXcodePage: React.FC = () => {
                     <UnifiedCard
                         title={
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <span>Xcode SDK Configuration</span>
+                                <span>OpenCode SDK Configuration</span>
                             </Box>
                         }
                         size="full"
@@ -123,8 +189,8 @@ const UseXcodePage: React.FC = () => {
                         ref={headerRef}
                         title={
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <span>Xcode SDK Configuration</span>
-                                <Tooltip title={`Base URL: ${baseUrl}/tingly/xcode`}>
+                                <span>OpenCode SDK Configuration</span>
+                                <Tooltip title={`Base URL: ${baseUrl}/tingly/opencode`}>
                                     <IconButton size="small" sx={{ ml: 0.5 }}>
                                         <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                     </IconButton>
@@ -138,14 +204,14 @@ const UseXcodePage: React.FC = () => {
                                 variant="contained"
                                 size="small"
                             >
-                                Config Guide
+                                Config OpenCode
                             </Button>
                         }
                     >
                         {/* Use ProviderConfigCard without API key row, then ExperimentalFeatures */}
                         <ProviderConfigCard
-                            title="Xcode SDK Configuration"
-                            baseUrlPath="/tingly/xcode"
+                            title="OpenCode SDK Configuration"
+                            baseUrlPath="/tingly/opencode"
                             baseUrl={baseUrl}
                             onCopy={copyToClipboard}
                             token={token}
@@ -173,13 +239,17 @@ const UseXcodePage: React.FC = () => {
                         headerHeight={headerHeight}
                     />
 
-                    {/* Xcode Config Modal */}
-                    <XcodeConfigModal
+                    {/* OpenCode Config Modal */}
+                    <OpenCodeConfigModal
                         open={configModalOpen}
                         onClose={() => setConfigModalOpen(false)}
-                        baseUrl={baseUrl}
-                        token={token}
+                        generateConfigJson={() => configJson}
+                        generateScriptWindows={() => scriptWindows}
+                        generateScriptUnix={() => scriptUnix}
                         copyToClipboard={copyToClipboard}
+                        onApply={handleApply}
+                        isApplyLoading={isApplyLoading}
+                        isLoading={isConfigLoading}
                     />
                 </CardGrid>
             )}
@@ -187,4 +257,4 @@ const UseXcodePage: React.FC = () => {
     );
 };
 
-export default UseXcodePage;
+export default UseOpenCodePage;

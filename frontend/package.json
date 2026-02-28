@@ -22,6 +22,7 @@
     "@mui/icons-material": "^7.3.8",
     "@mui/material": "^7.3.8",
     "@mui/x-date-pickers": "^8.27.2",
+    "@tabler/icons-react": "^3.37.1",
     "@types/react": "^19.2.14",
     "axios": "^1.13.5",
     "date-fns": "^4.1.0",

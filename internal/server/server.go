@@ -118,6 +118,11 @@ type Server struct {
 	// experimental features
 	experimentalFeatures map[string]bool
 
+	// remote control lifecycle management
+	remoteCoderCtx    context.Context
+	remoteCoderCancel context.CancelFunc
+	remoteCoderMu     sync.Mutex
+
 	version string
 }
 
@@ -845,19 +850,9 @@ func (s *Server) Start(port int) error {
 	}
 
 	if s.config.GetScenarioFlag(typ.ScenarioGlobal, "enable_remote_coder") {
-		go func() {
-			rcCfg, err := remoteconfig.LoadFromAppConfig(s.config, remoteconfig.Options{})
-			if err != nil {
-				logrus.WithError(err).Warn("Remote-coder not started: invalid config")
-				return
-			}
-			// Pass the ImBotSettingsStore from main config to remote_coder
-			imbotStore := s.config.GetImBotSettingsStore()
-			if err := remote_coder.Run(ctx, rcCfg, imbotStore); err != nil {
-				logrus.WithError(err).Warn("Remote-coder stopped")
-			}
-		}()
-		logrus.Info("Remote-coder auto-start enabled")
+		if err := s.StartRemoteCoder(); err != nil {
+			logrus.WithError(err).Warn("Failed to auto-start remote-coder")
+		}
 	}
 
 	// Determine scheme and handle HTTPS setup
@@ -1000,11 +995,78 @@ func (s *Server) HealthMonitor() *loadbalance.HealthMonitor {
 	return s.healthMonitor
 }
 
+// StartRemoteCoder starts the remote control service if not already running
+func (s *Server) StartRemoteCoder() error {
+	s.remoteCoderMu.Lock()
+	defer s.remoteCoderMu.Unlock()
+
+	// Already running
+	if s.remoteCoderCancel != nil {
+		logrus.Debug("Remote control already running")
+		return nil
+	}
+
+	rcCfg, err := remoteconfig.LoadFromAppConfig(s.config, remoteconfig.Options{})
+	if err != nil {
+		logrus.WithError(err).Warn("Remote-coder not started: invalid config")
+		return fmt.Errorf("invalid remote control config: %w", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	s.remoteCoderCtx = ctx
+	s.remoteCoderCancel = cancel
+
+	go func() {
+		imbotStore := s.config.GetImBotSettingsStore()
+		if err := remote_coder.Run(ctx, rcCfg, imbotStore); err != nil && ctx.Err() == nil {
+			logrus.WithError(err).Warn("Remote-coder stopped with error")
+		}
+	}()
+
+	logrus.Info("Remote-coder started")
+	return nil
+}
+
+// StopRemoteCoder stops the remote control service if running
+func (s *Server) StopRemoteCoder() {
+	s.remoteCoderMu.Lock()
+	defer s.remoteCoderMu.Unlock()
+
+	if s.remoteCoderCancel == nil {
+		logrus.Debug("Remote control not running")
+		return
+	}
+
+	logrus.Info("Stopping remote-coder...")
+	s.remoteCoderCancel()
+	s.remoteCoderCancel = nil
+	s.remoteCoderCtx = nil
+}
+
+// IsRemoteCoderRunning returns whether the remote control service is running
+func (s *Server) IsRemoteCoderRunning() bool {
+	s.remoteCoderMu.Lock()
+	defer s.remoteCoderMu.Unlock()
+	return s.remoteCoderCancel != nil
+}
+
+// SyncRemoteCoderBots syncs bots with the remote control bot manager
+func (s *Server) SyncRemoteCoderBots(ctx context.Context) error {
+	botManager := remote_coder.GetBotManager()
+	if botManager == nil {
+		return fmt.Errorf("bot manager not available")
+	}
+	return botManager.Sync(ctx)
+}
+
 // Stop gracefully stops the HTTP server
 func (s *Server) Stop(ctx context.Context) error {
 	if s.httpServer == nil {
 		return nil
 	}
+
+	// Stop remote control if running
+	s.StopRemoteCoder()
 
 	// Stop token refresher
 	if s.oauthRefresher != nil {

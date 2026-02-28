@@ -23,9 +23,9 @@ import ClaudeCodeConfigModal from '@/components/ClaudeCodeConfigModal';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from '@/components/TemplatePage.tsx';
-import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
-import { useHeaderHeight } from '../hooks/useHeaderHeight';
-import { api, getBaseUrl } from '../services/api';
+import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
+import { useHeaderHeight } from '@/hooks/useHeaderHeight';
+import { api, getBaseUrl } from '@/services/api';
 import { toggleButtonGroupStyle, toggleButtonStyle } from "@/styles/toggleStyles";
 
 type ConfigMode = 'unified' | 'separate' | 'smart';

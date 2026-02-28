@@ -7,13 +7,13 @@ import { useNavigate } from 'react-router-dom';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from '@/components/TemplatePage.tsx';
-import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
-import { useHeaderHeight } from '../hooks/useHeaderHeight';
-import { api, getBaseUrl } from '../services/api';
+import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
+import { useHeaderHeight } from '@/hooks/useHeaderHeight';
+import { api, getBaseUrl } from '@/services/api';
 
-const scenario = "agent";
+const scenario = "anthropic";
 
-const UseAgentPage: React.FC = () => {
+const UseAnthropicPage: React.FC = () => {
     const {
         showTokenModal,
         setShowTokenModal,
@@ -73,7 +73,7 @@ const UseAgentPage: React.FC = () => {
             const result = await api.getRules(scenario);
             if (isMounted) {
                 if (result.success) {
-                    const ruleData = Array.isArray(result.data) ? result.data : [];
+                    const ruleData = result.data;
                     setRules(ruleData);
                 }
                 setLoadingRule(false);
@@ -93,7 +93,7 @@ const UseAgentPage: React.FC = () => {
         <PageLayout loading={isLoading} notification={notification}>
             {!providers.length ? (
                 <CardGrid>
-                    <UnifiedCard title="Claw | Agent Configuration" size="full">
+                    <UnifiedCard title="Anthropic SDK Configuration" size="full">
                         <EmptyStateGuide
                             title="No Providers Configured"
                             description="Add an API key or OAuth provider to get started"
@@ -107,15 +107,15 @@ const UseAgentPage: React.FC = () => {
                     <UnifiedCard
                         title={
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <span>Claw | Agent Configuration</span>
+                                <span>Anthropic SDK Configuration</span>
                             </Box>
                         }
                         size="full"
                     >
                         <ProviderConfigCard
                             headerRef={headerRef}
-                            title="Claw | Agent Configuration"
-                            baseUrlPath="/tingly/agent"
+                            title="Anthropic SDK Configuration"
+                            baseUrlPath="/tingly/anthropic"
                             baseUrl={baseUrl}
                             onCopy={copyToClipboard}
                             token={token}
@@ -144,4 +144,4 @@ const UseAgentPage: React.FC = () => {
     );
 };
 
-export default UseAgentPage;
+export default UseAnthropicPage;

@@ -1,4 +1,5 @@
-import {Delete, Edit, Route} from '@mui/icons-material';
+import { BotPlatformConfig, BotSettings } from '@/types/bot';
+import { Delete, Edit, Route } from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -17,8 +18,7 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import {useState} from 'react';
-import {BotPlatformConfig, BotSettings} from '@/types/bot';
+import { useState } from 'react';
 
 interface BotTableProps {
     bots: BotSettings[];
@@ -72,7 +72,7 @@ const BotTable = ({bots, platforms, onEdit, onToggle, onDelete}: BotTableProps) 
                     <TableHead>
                         <TableRow>
                             <TableCell sx={{fontWeight: 600, minWidth: 120}}>Status</TableCell>
-                            <TableCell sx={{fontWeight: 600, minWidth: 120}}>Name</TableCell>
+                            <TableCell sx={{fontWeight: 600, minWidth: 120}}>Alias</TableCell>
                             <TableCell sx={{fontWeight: 600, minWidth: 140}}>Platform</TableCell>
                             <TableCell sx={{fontWeight: 600, minWidth: 80}}>Proxy</TableCell>
                             <TableCell sx={{fontWeight: 600, minWidth: 120}}>Chat ID</TableCell>
