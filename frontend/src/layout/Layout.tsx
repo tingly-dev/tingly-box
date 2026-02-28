@@ -11,7 +11,7 @@ import {
     Bolt as SkillIcon,
     Send as UserPromptIcon,
     Lan as RemoteIcon,
-    SmartToy,
+    ChatBubble,
     NewReleases,
     ErrorOutline,
     LaptopMac,
@@ -206,13 +206,13 @@ const Layout = ({ children }: LayoutProps) => {
                 {
                     path: '/remote-control/bot',
                     label: 'Bot',
-                    icon: <SmartToy sx={{ fontSize: 20 }} />,
+                    icon: <ChatBubble sx={{ fontSize: 20 }} />,
                 },
-                {
-                    path: '/remote-control/agent',
-                    label: 'Agent',
-                    icon: <AutoAwesome sx={{ fontSize: 20 }} />,
-                },
+                // {
+                //     path: '/remote-control/agent',
+                //     label: 'Agent',
+                //     icon: <AutoAwesome sx={{ fontSize: 20 }} />,
+                // },
             ],
         }] : []),
         {
