@@ -10,13 +10,14 @@ import {
     Stack,
     Typography,
 } from '@mui/material';
-import {
-    IconBrandDingtalk,
-    IconBrandDiscord,
-    IconBrandSlack,
-    IconBrandTelegram,
-    IconBrandWechat
-} from '@tabler/icons-react';
+// Platform icons - keep for future use
+// import {
+//     IconBrandDingtalk,
+//     IconBrandDiscord,
+//     IconBrandSlack,
+//     IconBrandTelegram,
+//     IconBrandWechat
+// } from '@tabler/icons-react';
 
 interface PlatformGuideProps {
     expanded: string | false;
@@ -26,9 +27,6 @@ interface PlatformGuideProps {
 interface PlatformConfig {
     id: string;
     name: string;
-    icon: React.ReactNode;
-    bgColor: string;
-    iconColor: string;
     status: 'available' | 'coming-soon' | 'beta';
     requiredFields: string[];
     steps: React.ReactNode;
@@ -38,9 +36,6 @@ const platformConfigs: PlatformConfig[] = [
     {
         id: 'telegram',
         name: 'Telegram',
-        icon: <IconBrandTelegram size={24} stroke={1.5} />,
-        bgColor: '#0088cc',
-        iconColor: '#ffffff',
         status: 'available',
         requiredFields: ['Bot Token'],
         steps: (
@@ -78,9 +73,6 @@ const platformConfigs: PlatformConfig[] = [
     {
         id: 'feishu',
         name: 'Feishu (飞书)',
-        icon: <Typography sx={{ color: '#ffffff', fontWeight: 'bold', fontSize: '0.7rem' }}>飞书</Typography>,
-        bgColor: '#3370FF',
-        iconColor: '#ffffff',
         status: 'available',
         requiredFields: ['App ID', 'App Secret'],
         steps: (
@@ -120,9 +112,6 @@ const platformConfigs: PlatformConfig[] = [
     {
         id: 'dingtalk',
         name: 'DingTalk (钉钉)',
-        icon: <IconBrandDingtalk size={24} stroke={1.5} />,
-        bgColor: '#0089FF',
-        iconColor: '#ffffff',
         status: 'available',
         requiredFields: ['App Key', 'App Secret'],
         steps: (
@@ -164,9 +153,6 @@ const platformConfigs: PlatformConfig[] = [
     {
         id: 'lark',
         name: 'Lark',
-        icon: <Typography sx={{ color: '#ffffff', fontWeight: 'bold', fontSize: '0.7rem' }}>Lark</Typography>,
-        bgColor: '#3370FF',
-        iconColor: '#ffffff',
         status: 'available',
         requiredFields: ['App ID', 'App Secret'],
         steps: (
@@ -204,25 +190,30 @@ const platformConfigs: PlatformConfig[] = [
         ),
     },
     {
-        id: 'wechat',
-        name: 'WeChat',
-        icon: <IconBrandWechat size={24} stroke={1.5} />,
-        bgColor: '#07c160',
-        iconColor: '#ffffff',
+        id: 'wecom',
+        name: 'WeCom (企业微信）',
         status: 'coming-soon',
         requiredFields: ['App ID', 'App Secret'],
         steps: (
             <Typography variant="body2" color="text.secondary">
-                WeChat bot integration is currently under development. Stay tuned for updates!
+                WeCom bot integration is currently under development. Stay tuned for updates!
+            </Typography>
+        ),
+    },
+    {
+        id: 'qq',
+        name: 'QQ',
+        status: 'coming-soon',
+        requiredFields: ['App ID', 'App Secret'],
+        steps: (
+            <Typography variant="body2" color="text.secondary">
+                QQ bot integration is currently under development. Stay tuned for updates!
             </Typography>
         ),
     },
     {
         id: 'discord',
         name: 'Discord',
-        icon: <IconBrandDiscord size={24} stroke={1.5} />,
-        bgColor: '#5865F2',
-        iconColor: '#ffffff',
         status: 'coming-soon',
         requiredFields: ['Bot Token', 'Message Content Intent'],
         steps: (
@@ -234,9 +225,6 @@ const platformConfigs: PlatformConfig[] = [
     {
         id: 'slack',
         name: 'Slack',
-        icon: <IconBrandSlack size={24} stroke={1.5} />,
-        bgColor: '#4A154B',
-        iconColor: '#ffffff',
         status: 'coming-soon',
         requiredFields: ['Bot Token', 'App-Level Token'],
         steps: (
@@ -272,22 +260,16 @@ const PlatformGuide: React.FC<PlatformGuideProps> = ({ expanded, onChange }) => 
                             },
                         }}
                     >
-                        <Stack direction="row" spacing={2} alignItems="center">
+                        <Stack direction="row" spacing={1.5} alignItems="center">
                             <Box
                                 sx={{
-                                    width: 36,
-                                    height: 36,
-                                    borderRadius: 1.5,
-                                    bgcolor: platform.bgColor,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: '50%',
+                                    bgcolor: platform.status === 'available' ? 'success.main' : 'grey.400',
                                     flexShrink: 0,
-                                    color: platform.iconColor,
                                 }}
-                            >
-                                {platform.icon}
-                            </Box>
+                            />
                             <Box>
                                 <Stack direction="row" spacing={1} alignItems="center">
                                     <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
