@@ -3,17 +3,15 @@ import BotPlatformSelector from '@/components/bot/BotPlatformSelector';
 import BotTable from '@/components/bot/BotTable';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import { PageLayout } from '@/components/PageLayout';
+import PlatformGuide from '@/components/remote-control/PlatformGuide';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 import { BotPlatformConfig, BotSettings } from '@/types/bot';
-import { Add, OpenInNew } from '@mui/icons-material';
+import { Add } from '@mui/icons-material';
 import {
     Alert,
-    Box,
     Button,
-    Card,
     CircularProgress,
-    Link,
     Modal,
     Stack,
     TextField,
@@ -45,6 +43,7 @@ const BotPage = () => {
     const [botNotice, setBotNotice] = useState<string | null>(null);
     const [botError, setBotError] = useState<string | null>(null);
     const [botTokenDialogOpen, setBotTokenDialogOpen] = useState(false);
+    const [guideExpanded, setGuideExpanded] = useState<string | false>(false);
 
     useEffect(() => {
         loadBotPlatforms();
@@ -327,77 +326,12 @@ const BotPage = () => {
                 subtitle="How to configure different IM platforms"
                 size="full"
             >
-                <Stack spacing={2}>
-                    <Typography variant="body2" color="text.secondary">
-                        Each IM platform requires different authentication settings. Here's a quick guide:
-                    </Typography>
-
-                    <Card variant="outlined" sx={{ p: 2 }}>
-                        <Stack direction="row" spacing={2} alignItems="flex-start">
-                            <Box
-                                sx={{
-                                    width: 40,
-                                    height: 40,
-                                    borderRadius: 2,
-                                    bgcolor: '#0088cc',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    flexShrink: 0,
-                                }}
-                            >
-                                <Typography sx={{ color: 'white', fontWeight: 'bold', fontSize: '0.8rem' }}>
-                                    TG
-                                </Typography>
-                            </Box>
-                            <Box>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                                    Telegram Bot
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    1. Talk to <Link href="https://t.me/BotFather" target="_blank">@BotFather <OpenInNew sx={{ fontSize: 12 }} /></Link> on Telegram<br />
-                                    2. Use <code>/newbot</code> command to create a new bot<br />
-                                    3. Copy the API Token and paste it here
-                                </Typography>
-                            </Box>
-                        </Stack>
-                    </Card>
-
-                    <Card variant="outlined" sx={{ p: 2 }}>
-                        <Stack direction="row" spacing={2} alignItems="flex-start">
-                            <Box
-                                sx={{
-                                    width: 40,
-                                    height: 40,
-                                    borderRadius: 2,
-                                    bgcolor: '#07c160',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    flexShrink: 0,
-                                }}
-                            >
-                                <Typography sx={{ color: 'white', fontWeight: 'bold', fontSize: '0.8rem' }}>
-                                    WX
-                                </Typography>
-                            </Box>
-                            <Box>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                                    WeChat (Coming Soon)
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    WeChat bot integration is currently under development.
-                                    Stay tuned for updates!
-                                </Typography>
-                            </Box>
-                        </Stack>
-                    </Card>
-
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                        <strong>Tip:</strong> Use the Chat ID Lock field to restrict bot access to specific chats only.
-                        This enhances security by preventing unauthorized users from controlling your bot.
-                    </Typography>
-                </Stack>
+                <PlatformGuide
+                    expanded={guideExpanded}
+                    onChange={(panel: string) => (_event: React.SyntheticEvent, isExpanded: boolean) => {
+                        setGuideExpanded(isExpanded ? panel : false);
+                    }}
+                />
             </UnifiedCard>
 
             {/* Bot Add/Edit Dialog */}
