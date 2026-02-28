@@ -202,8 +202,11 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 		h.showBotHelp(hCtx)
 		return
 	case "/bot_bind", "/bot_b":
+		if len(fields) < 2 {
+			h.handleBindInteractive(hCtx)
+			return
+		}
 		h.handleBotBindCommand(hCtx, fields[1:])
-		return
 	case "/bot_join", "/bot_j":
 		if !hCtx.IsDirect {
 			h.SendText(hCtx, "/bot_join can only be used in direct chat.")
