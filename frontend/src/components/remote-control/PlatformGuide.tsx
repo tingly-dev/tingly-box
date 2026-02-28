@@ -55,30 +55,149 @@ const platformConfigs: PlatformConfig[] = [
                             @BotFather <OpenInNew sx={{ fontSize: 10 }} />
                         </Link>
                     </Typography>
-                </Box>
-                <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                        2. Get token
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                         Send <code>/newbot</code>, follow the prompts, and copy the token
                     </Typography>
                 </Box>
                 <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                        3. Configure
+                        2. Add bot
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        Paste the token into the bot configuration form above
+                        Click "Add Bot" button above and paste the token to create your bot.
+                    </Typography>
+                </Box>
+                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                    <Typography variant="body2" color="info.dark">
+                        Tip: Configure traffic proxy as needed for network access.
+                    </Typography>
+                </Box>
+            </Stack>
+        ),
+    },
+    {
+        id: 'feishu',
+        name: 'Feishu (飞书)',
+        icon: <Typography sx={{ color: '#ffffff', fontWeight: 'bold', fontSize: '0.7rem' }}>飞书</Typography>,
+        bgColor: '#3370FF',
+        iconColor: '#ffffff',
+        status: 'available',
+        requiredFields: ['App ID', 'App Secret'],
+        steps: (
+            <Stack spacing={2}>
+                <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                        1. Create a Feishu bot
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" component="div">
+                        <Box component="ul" sx={{ pl: 2, m: 0 }}>
+                            <li>Visit <Link href="https://open.feishu.cn/" target="_blank">Feishu Open Platform <OpenInNew sx={{ fontSize: 10 }} /></Link></li>
+                            <li>Create a new app - Enable Bot capability</li>
+                            <li>Permissions: Add <code>im:message</code> (send messages) and <code>im:message.p2p_msg:readonly</code> (receive messages)</li>
+                            <li>Events: Add <code>im.message.receive_v1</code> (receive messages)</li>
+                            <li>Select <strong>Long Connection</strong> mode (requires running nanobot first to establish connection)</li>
+                            <li>Get App ID and App Secret from "Credentials & Basic Info"</li>
+                            <li>Publish the app</li>
+                        </Box>
                     </Typography>
                 </Box>
                 <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                        💡 Tip: Find your Chat ID
+                        2. Add bot
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        Forward any message to <Link href="https://t.me/userinfobot" target="_blank">@userinfobot</Link> to get your Chat ID.
-                        Use this in the "Chat ID Lock" field to restrict bot access to yourself.
+                        Click "Add Bot" button above and fill in App ID and App Secret to create your bot.
+                    </Typography>
+                </Box>
+                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                    <Typography variant="body2" color="info.dark">
+                        Tip: Feishu uses WebSocket - no public IP needed. Configure traffic proxy as needed.
+                    </Typography>
+                </Box>
+            </Stack>
+        ),
+    },
+    {
+        id: 'dingtalk',
+        name: 'DingTalk (钉钉)',
+        icon: <IconBrandDingtalk size={24} stroke={1.5} />,
+        bgColor: '#0089FF',
+        iconColor: '#ffffff',
+        status: 'available',
+        requiredFields: ['App Key', 'App Secret'],
+        steps: (
+            <Stack spacing={2}>
+                <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                        1. Create a DingTalk bot
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" component="div">
+                        <Box component="ul" sx={{ pl: 2, m: 0 }}>
+                            <li>Visit <Link href="https://open.dingtalk.com/" target="_blank">DingTalk Open Platform <OpenInNew sx={{ fontSize: 10 }} /></Link></li>
+                            <li>Create a new app - Add Robot capability</li>
+                            <li>Configuration:</li>
+                            <Box component="ul" sx={{ pl: 2 }}>
+                                <li>Toggle <strong>Stream Mode</strong> ON</li>
+                                <li>Permissions: Add necessary permissions for sending messages</li>
+                            </Box>
+                            <li>Get AppKey (Client ID) and AppSecret (Client Secret) from "Credentials"</li>
+                            <li>Publish the app</li>
+                        </Box>
+                    </Typography>
+                </Box>
+                <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                        2. Add bot
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        Click "Add Bot" button above and fill in App Key and App Secret to create your bot.
+                    </Typography>
+                </Box>
+                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                    <Typography variant="body2" color="info.dark">
+                        Tip: DingTalk uses Stream Mode - no public IP required. Configure traffic proxy as needed.
+                    </Typography>
+                </Box>
+            </Stack>
+        ),
+    },
+    {
+        id: 'lark',
+        name: 'Lark',
+        icon: <Typography sx={{ color: '#ffffff', fontWeight: 'bold', fontSize: '0.7rem' }}>Lark</Typography>,
+        bgColor: '#3370FF',
+        iconColor: '#ffffff',
+        status: 'available',
+        requiredFields: ['App ID', 'App Secret'],
+        steps: (
+            <Stack spacing={2}>
+                <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                        1. Create a Lark bot
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" component="div">
+                        <Box component="ul" sx={{ pl: 2, m: 0 }}>
+                            <li>Visit <Link href="https://open.larksuite.com/" target="_blank">Lark Open Platform <OpenInNew sx={{ fontSize: 10 }} /></Link></li>
+                            <li>Create a new app - Enable Bot capability</li>
+                            <li>Permissions: Add <code>im:message</code> (send messages) and <code>im:message.p2p_msg:readonly</code> (receive messages)</li>
+                            <li>Events: Add <code>im.message.receive_v1</code> (receive messages)</li>
+                            <li>Select <strong>Long Connection</strong> mode</li>
+                            <li>Get App ID and App Secret from "Credentials & Basic Info"</li>
+                            <li>Publish the app</li>
+                        </Box>
+                    </Typography>
+                </Box>
+                <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                        2. Add bot
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        Click "Add Bot" button above and fill in App ID and App Secret to create your bot.
+                    </Typography>
+                </Box>
+                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                    <Typography variant="body2" color="info.dark">
+                        Tip: Lark uses WebSocket - no webhook or public IP needed. Configure traffic proxy as needed.
                     </Typography>
                 </Box>
             </Stack>
@@ -109,48 +228,6 @@ const platformConfigs: PlatformConfig[] = [
         steps: (
             <Typography variant="body2" color="text.secondary">
                 Discord bot integration is currently under development. Stay tuned for updates!
-            </Typography>
-        ),
-    },
-    {
-        id: 'Lark',
-        name: 'Lark',
-        icon: <Typography sx={{ color: '#ffffff', fontWeight: 'bold', fontSize: '0.7rem' }}>Lark</Typography>,
-        bgColor: '#3370FF',
-        iconColor: '#ffffff',
-        status: 'coming-soon',
-        requiredFields: ['App ID', 'App Secret'],
-        steps: (
-            <Typography variant="body2" color="text.secondary">
-                Lark bot integration is currently under development. Stay tuned for updates!
-            </Typography>
-        ),
-    },
-    {
-        id: 'feishu',
-        name: 'Feishu (飞书)',
-        icon: <Typography sx={{ color: '#ffffff', fontWeight: 'bold', fontSize: '0.7rem' }}></Typography>,
-        bgColor: '#3370FF',
-        iconColor: '#ffffff',
-        status: 'coming-soon',
-        requiredFields: ['App ID', 'App Secret'],
-        steps: (
-            <Typography variant="body2" color="text.secondary">
-                Feishu bot integration is currently under development. Stay tuned for updates!
-            </Typography>
-        ),
-    },
-    {
-        id: 'dingtalk',
-        name: 'DingTalk (钉钉)',
-        icon: <IconBrandDingtalk size={24} stroke={1.5} >钉钉</IconBrandDingtalk>,
-        bgColor: '#0089FF',
-        iconColor: '#ffffff',
-        status: 'coming-soon',
-        requiredFields: ['App Key', 'App Secret'],
-        steps: (
-            <Typography variant="body2" color="text.secondary">
-                DingTalk bot integration is currently under development. Stay tuned for updates!
             </Typography>
         ),
     },
