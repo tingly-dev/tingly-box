@@ -43,17 +43,6 @@ const (
 	botCommandBash    = "bash"
 )
 
-// Callback action constants
-const (
-	callbackActionClear   = "action:clear"
-	callbackActionBind    = "action:bind"
-	callbackProjectSwitch = "project:switch"
-	callbackBindNav       = "bind:nav"
-	callbackBindPrev      = "bind:prev"
-	callbackBindNext      = "bind:next"
-	callbackBindSelect    = "bind:select"
-	callbackBindCancel    = "bind:cancel"
-)
 
 var defaultBashAllowlist = map[string]struct{}{
 	"cd":  {},
