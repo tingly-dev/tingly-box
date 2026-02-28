@@ -74,12 +74,61 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 		return
 	}
 
-	// Handle streaming vs non-streaming
+	// Check if this is a proxy virtual model
+	if virtualModel.IsProxy() {
+		if req.Stream {
+			h.handleProxyStreaming(c, &req, virtualModel)
+		} else {
+			h.handleProxyRequest(c, &req, virtualModel)
+		}
+		return
+	}
+
+	// Handle streaming vs non-streaming for mock models
 	if req.Stream {
 		h.handleStreaming(c, &req, virtualModel)
 	} else {
 		h.handleNonStreaming(c, &req, virtualModel)
 	}
+}
+
+// handleProxyRequest handles proxy mode virtual models
+func (h *Handler) handleProxyRequest(c *gin.Context, req *ChatCompletionRequest, vm *VirtualModel) {
+	// Get transformer
+	transformer := vm.GetTransformer()
+	if transformer == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"message": "Proxy model has no transformer configured",
+				"type":    "internal_error",
+			},
+		})
+		return
+	}
+
+	logrus.Infof("Proxy model %s with transformer, messages: %d", req.Model, len(req.Messages))
+
+	// For the initial implementation, we return a response indicating compression is available
+	// The actual proxying to real LLM provider will be implemented by the user
+	c.JSON(http.StatusOK, ChatCompletionResponse{
+		ID:      fmt.Sprintf("chatcmpl-proxy-%d", time.Now().Unix()),
+		Object:  "chat.completion",
+		Created: time.Now().Unix(),
+		Model:   req.Model,
+		Choices: []Choice{{
+			Index: 0,
+			Message: Message{
+				Role:    "assistant",
+				Content: fmt.Sprintf("[Proxy Mode: Request was received by %s. The transformer is configured and ready. Implement actual LLM proxying to complete the flow.]", req.Model),
+			},
+			FinishReason: "stop",
+		}},
+		Usage: Usage{
+			PromptTokens:     estimateTokens(req.Messages),
+			CompletionTokens: 50,
+			TotalTokens:      estimateTokens(req.Messages) + 50,
+		},
+	})
 }
 
 // handleNonStreaming handles non-streaming requests
@@ -195,6 +244,95 @@ func (h *Handler) handleStreaming(c *gin.Context, req *ChatCompletionRequest, vm
 		}
 
 		data, _ := json.Marshal(finalResp)
+		c.SSEvent("", string(data))
+		c.Writer.Flush()
+
+		// Send [DONE] message
+		c.SSEvent("", "[DONE]")
+		c.Writer.Flush()
+
+		return false // Stop streaming
+	})
+}
+
+// handleProxyStreaming handles proxy mode with streaming response
+func (h *Handler) handleProxyStreaming(c *gin.Context, req *ChatCompletionRequest, vm *VirtualModel) {
+	// Get transformer
+	transformer := vm.GetTransformer()
+	if transformer == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"message": "Proxy model has no transformer configured",
+				"type":    "internal_error",
+			},
+		})
+		return
+	}
+
+	logrus.Infof("Proxy model %s with transformer (streaming), messages: %d", req.Model, len(req.Messages))
+
+	// Set SSE headers
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Allow-Headers", "Cache-Control")
+
+	// Check if streaming is supported
+	_, ok := c.Writer.(http.Flusher)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"message": "Streaming not supported by this connection",
+				"type":    "api_error",
+				"code":    "streaming_unsupported",
+			},
+		})
+		return
+	}
+
+	// Use gin.Stream for proper streaming handling
+	c.Stream(func(w io.Writer) bool {
+		// Create the response content
+		content := fmt.Sprintf("[Proxy Mode: Request was received by %s. The transformer is configured and ready. Implement actual LLM proxying to complete the flow.]", req.Model)
+
+		// Create streaming chunk response
+		streamResp := ChatCompletionStreamResponse{
+			ID:      fmt.Sprintf("chatcmpl-proxy-%d", time.Now().Unix()),
+			Object:  "chat.completion.chunk",
+			Created: time.Now().Unix(),
+			Model:   req.Model,
+			Choices: []StreamChoice{{
+				Index: 0,
+				Delta: Delta{
+					Content: content,
+				},
+				FinishReason: nil,
+			}},
+		}
+
+		// Send SSE event
+		data, _ := json.Marshal(streamResp)
+		c.SSEvent("", string(data))
+		c.Writer.Flush()
+
+		// Small delay to simulate streaming
+		time.Sleep(10 * time.Millisecond)
+
+		// Send final chunk with finish_reason
+		finalResp := ChatCompletionStreamResponse{
+			ID:      fmt.Sprintf("chatcmpl-proxy-%d", time.Now().Unix()),
+			Object:  "chat.completion.chunk",
+			Created: time.Now().Unix(),
+			Model:   req.Model,
+			Choices: []StreamChoice{{
+				Index:        0,
+				Delta:        Delta{},
+				FinishReason: stringPtr("stop"),
+			}},
+		}
+
+		data, _ = json.Marshal(finalResp)
 		c.SSEvent("", string(data))
 		c.Writer.Flush()
 
