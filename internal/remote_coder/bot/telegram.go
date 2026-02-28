@@ -410,7 +410,7 @@ func handleBotMessage(
 			return
 		}
 		// No session - show guidance
-		sendText(bot, chatID, "No active session. Use /bot bind <project_path> to create one.")
+		sendText(bot, chatID, "No active session. Use /bot_bind <project_path> to create one.")
 		return
 	}
 
@@ -444,7 +444,7 @@ func handleBotMessage(
 	}
 
 	// No session - show guidance
-	sendText(bot, chatID, "No active session. Use /bot bind <project_path> to create one.")
+	sendText(bot, chatID, "No active session. Use /bot_bind <project_path> to create one.")
 }
 
 // handleAgentMessage routes message to the appropriate agent handler.
@@ -552,7 +552,7 @@ func handleClaudeCodeMessage(
 	}
 
 	if !ok || sessionID == "" {
-		sendText(bot, chatID, "No session mapped. Use /bot bind <project_path> to create one.")
+		sendText(bot, chatID, "No session mapped. Use /bot_bind <project_path> to create one.")
 		return
 	}
 
@@ -573,7 +573,7 @@ func handleClaudeCodeMessage(
 		}
 	}
 	if projectPath == "" {
-		sendText(bot, chatID, "Project path is required. Use /bot bind <project_path> first.")
+		sendText(bot, chatID, "Project path is required. Use /bot_bind <project_path> first.")
 		return
 	}
 
@@ -723,6 +723,7 @@ func showBotHelp(bot imbot.Bot, chatID string, senderID string, isDirectChat boo
 		helpText = fmt.Sprintf(`Your User ID: %s
 
 Bot Commands:
+/help, /h - Show this help
 /bot help, /bot_help - Show this help
 /bot bind [path], /bot_bind [path] - Bind a project
 /bot project, /bot_project - Show & switch projects
@@ -731,12 +732,12 @@ Bot Commands:
 /bot bash <cmd>, /bot_bash <cmd> - Execute allowed bash (cd, ls, pwd)
 /bot join <group>, /bot_join <group> - Add group to whitelist
 
-All other messages are sent to Claude Code.
-Use /help to see Claude Code's commands.`, senderID)
+All other messages are sent to Claude Code.`, senderID)
 	} else {
 		helpText = fmt.Sprintf(`Group Chat ID: %s
 
 Bot Commands:
+/help, /h - Show this help
 /bot help, /bot_help - Show this help
 /bot bind [path], /bot_bind [path] - Bind a project to this group
 /bot project, /bot_project - Show current project info
@@ -751,13 +752,13 @@ All other messages are sent to Claude Code.`, chatID)
 // handleBotBindCommand handles /bot bind <path>
 func handleBotBindCommand(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, fields []string, senderID string, isDirectChat bool, isGroupChat bool) {
 	if len(fields) < 1 {
-		sendText(bot, chatID, "Usage: /bot bind <project_path>")
+		sendText(bot, chatID, "Usage: /bot_bind <project_path>")
 		return
 	}
 
 	projectPath := strings.TrimSpace(strings.Join(fields, " "))
 	if projectPath == "" {
-		sendText(bot, chatID, "Usage: /bot bind <project_path>")
+		sendText(bot, chatID, "Usage: /bot_bind <project_path>")
 		return
 	}
 
@@ -783,7 +784,7 @@ func handleBotStatusCommand(bot imbot.Bot, store *Store, sessionMgr *session.Man
 		logrus.WithError(err).Warn("Failed to load session mapping")
 	}
 	if !ok || sessionID == "" {
-		sendText(bot, chatID, "No session mapped. Use /bot bind <project_path> to create one.")
+		sendText(bot, chatID, "No session mapped. Use /bot_bind <project_path> to create one.")
 		return
 	}
 	sess, exists := sessionMgr.GetOrLoad(sessionID)
@@ -963,7 +964,7 @@ func handleClearCommand(bot imbot.Bot, store *Store, sessionMgr *session.Manager
 	}
 
 	if projectPath == "" {
-		sendText(bot, chatID, "No project path found. Use /bot bind <project_path> to create a session first.")
+		sendText(bot, chatID, "No project path found. Use /bot_bind <project_path> to create a session first.")
 		return
 	}
 
