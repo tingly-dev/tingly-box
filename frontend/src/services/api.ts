@@ -26,8 +26,7 @@ import {
 } from '../client';
 import {
     getApiBaseUrl,
-    getApiProtocol,
-    getDisplayOrigin,
+    getDisplayOrigin
 } from '../utils/protocol';
 
 const DEFAULT_BASE_PATH = getDisplayOrigin().replace(/\/+$/, "");
@@ -563,9 +562,9 @@ export const api = {
             const apiInstances = await getApiInstances();
             const response = await apiInstances
                 .testingApi.apiV1ProbePost({
-                provider: uuid,
-                model: model
-            });
+                    provider: uuid,
+                    model: model
+                });
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -1073,7 +1072,7 @@ export const api = {
     },
 
     // ============================================
-    // Remote Coder API (Session management only)
+    // Remote Control API (Session management only)
     // ============================================
 
     // Get the base URL for remote-coder service
@@ -1094,7 +1093,7 @@ export const api = {
             const data = await response.json();
             return data.available === true;
         } catch (error: any) {
-            console.error('Remote Coder availability check failed:', error);
+            console.error('Remote Control availability check failed:', error);
             return false;
         }
     },

@@ -1,18 +1,18 @@
+import { Events } from '@/bindings';
+import { ContentCopy, Error as ErrorIcon, GitHub, AppRegistration as NPM, Refresh, UpgradeOutlined } from '@mui/icons-material';
+import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, Paper, Stack, Typography } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
-import { CircularProgress, Box, Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, IconButton, Paper, Stack, Divider } from '@mui/material';
-import { BrowserRouter, Route, Routes, useNavigate, Navigate } from 'react-router-dom';
 import { lazy, Suspense, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/AuthContext';
-import { VersionProvider, useVersion } from './contexts/VersionContext';
-import { HealthProvider, useHealth } from './contexts/HealthContext';
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
+import { HealthProvider, useHealth } from './contexts/HealthContext';
+import { useVersion, VersionProvider } from './contexts/VersionContext';
 import Layout from './layout/Layout';
 import theme from './theme';
-import { CloudUpload, Refresh, Error as ErrorIcon, AppRegistration as NPM, GitHub, ContentCopy, UpgradeOutlined, CheckCircle } from '@mui/icons-material';
-import { useTranslation } from 'react-i18next';
-import { Events } from '@/bindings';
 
 // Lazy load pages for code splitting
 const Login = lazy(() => import('./pages/Login'));
@@ -33,13 +33,14 @@ const UserPage = lazy(() => import('./pages/prompt/UserPage'));
 const SkillPage = lazy(() => import('./pages/prompt/SkillPage'));
 const CommandPage = lazy(() => import('./pages/prompt/CommandPage'));
 
-// Remote Coder page
+// Remote Control page
 const RemoteCoderPage = lazy(() => import('./pages/remote-coder/RemoteCoderPage'));
 const RemoteCoderSessionsPage = lazy(() => import('./pages/remote-coder/RemoteCoderSessionsPage'));
 
 // Remote Control pages
 const BotPage = lazy(() => import('./pages/remote-control/BotPage'));
 const AgentPage = lazy(() => import('./pages/remote-control/AgentPage'));
+const RemoteControlOverviewPage = lazy(() => import('./pages/remote-control/OverviewPage'));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -264,47 +265,47 @@ function AppContent() {
     }, [navigate]);
 
     return (
-        <Suspense fallback={<PageLoader/>}>
+        <Suspense fallback={<PageLoader />}>
             <Routes>
-                <Route path="/login" element={<Login/>}/>
+                <Route path="/login" element={<Login />} />
                 <Route
                     path="/*"
                     element={
                         <ProtectedRoute>
                             <Layout>
-                                <Suspense fallback={<PageLoader/>}>
+                                <Suspense fallback={<PageLoader />}>
                                     <Routes>
-                                        <Route path="/" element={<DashboardPage/>}/>
+                                        <Route path="/" element={<DashboardPage />} />
                                         {/* Function panel routes */}
-                                        <Route path="/use-openai" element={<UseOpenAIPage/>}/>
-                                        <Route path="/use-anthropic" element={<UseAnthropicPage/>}/>
-                                        <Route path="/use-claude-code" element={<UseClaudeCodePage/>}/>
-                                        <Route path="/use-agent" element={<UseAgentPage/>}/>
-                                        <Route path="/use-opencode" element={<UseOpenCodePage/>}/>
-                                        <Route path="/use-xcode" element={<UseXcodePage/>}/>
+                                        <Route path="/use-openai" element={<UseOpenAIPage />} />
+                                        <Route path="/use-anthropic" element={<UseAnthropicPage />} />
+                                        <Route path="/use-claude-code" element={<UseClaudeCodePage />} />
+                                        <Route path="/use-agent" element={<UseAgentPage />} />
+                                        <Route path="/use-opencode" element={<UseOpenCodePage />} />
+                                        <Route path="/use-xcode" element={<UseXcodePage />} />
                                         {/* Credential routes - new unified page */}
-                                        <Route path="/credentials" element={<CredentialPage/>}/>
-                                        <Route path="/credentials/:tab" element={<CredentialPage/>}/>
+                                        <Route path="/credentials" element={<CredentialPage />} />
+                                        <Route path="/credentials/:tab" element={<CredentialPage />} />
                                         {/* Legacy redirects for backward compatibility */}
-                                        <Route path="/api-keys" element={<Navigate to="/credentials" replace/>}/>
-                                        <Route path="/oauth" element={<Navigate to="/credentials" replace/>}/>
+                                        <Route path="/api-keys" element={<Navigate to="/credentials" replace />} />
+                                        <Route path="/oauth" element={<Navigate to="/credentials" replace />} />
                                         {/* Other routes */}
-                                        <Route path="/system" element={<System/>}/>
-                                        <Route path="/logs" element={<Navigate to="/system" replace/>}/>
-                                        <Route path="/dashboard" element={<DashboardPage/>}/>
-                                        <Route path="/model-test/:providerUuid" element={<ModelTestPage/>}/>
+                                        <Route path="/system" element={<System />} />
+                                        <Route path="/logs" element={<Navigate to="/system" replace />} />
+                                        <Route path="/dashboard" element={<DashboardPage />} />
+                                        <Route path="/model-test/:providerUuid" element={<ModelTestPage />} />
                                         {/* Prompt routes */}
-                                        <Route path="/prompt/user" element={<UserPage/>}/>
-                                        <Route path="/prompt/skill" element={<SkillPage/>}/>
-                                        <Route path="/prompt/command" element={<CommandPage/>}/>
-                                        {/* Remote Coder routes */}
-                                        <Route path="/remote-coder" element={<Navigate to="/remote-coder/chat" replace/>}/>
-                                        <Route path="/remote-coder/chat" element={<RemoteCoderPage/>}/>
-                                        <Route path="/remote-coder/sessions" element={<RemoteCoderSessionsPage/>}/>
+                                        <Route path="/prompt/user" element={<UserPage />} />
+                                        <Route path="/prompt/skill" element={<SkillPage />} />
+                                        <Route path="/prompt/command" element={<CommandPage />} />
                                         {/* Remote Control routes */}
-                                        <Route path="/remote-control" element={<Navigate to="/remote-control/bot" replace/>}/>
-                                        <Route path="/remote-control/bot" element={<BotPage/>}/>
-                                        <Route path="/remote-control/agent" element={<AgentPage/>}/>
+                                        <Route path="/remote-coder" element={<Navigate to="/remote-coder/chat" replace />} />
+                                        <Route path="/remote-coder/chat" element={<RemoteCoderPage />} />
+                                        <Route path="/remote-coder/sessions" element={<RemoteCoderSessionsPage />} />
+                                        {/* Remote Control routes */}
+                                        <Route path="/remote-control" element={<RemoteControlOverviewPage />} />
+                                        <Route path="/remote-control/bot" element={<BotPage />} />
+                                        <Route path="/remote-control/agent" element={<AgentPage />} />
                                     </Routes>
                                 </Suspense>
                             </Layout>
@@ -319,14 +320,14 @@ function AppContent() {
 function App() {
     return (
         <ThemeProvider theme={theme}>
-            <CssBaseline/>
+            <CssBaseline />
             <BrowserRouter>
                 <HealthProvider>
                     <VersionProvider>
                         <AuthProvider>
                             <FeatureFlagsProvider>
-                                <AppContent/>
-                                <AppDialogs/>
+                                <AppContent />
+                                <AppDialogs />
                             </FeatureFlagsProvider>
                         </AuthProvider>
                     </VersionProvider>

@@ -309,7 +309,7 @@ const BotPage = () => {
                     <Typography variant="h6">{botDialogMode === 'edit' ? 'Edit Bot Configuration' : 'Add Bot Configuration'}</Typography>
                     <Stack spacing={2}>
                         <TextField
-                            label="Name"
+                            label="Alias"
                             placeholder="My Bot"
                             value={botNameDraft}
                             onChange={(e) => setBotNameDraft(e.target.value)}
