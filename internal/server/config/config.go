@@ -70,6 +70,7 @@ type Config struct {
 	usageStore         *db.UsageStore
 	ruleStateStore     *db.RuleStateStore     // Persists current_service_index to SQLite
 	imbotSettingsStore *db.ImBotSettingsStore // Persists ImBot credentials
+	providerStore      *db.ProviderStore      // Persists provider configurations and credentials
 	templateManager    *data.TemplateManager
 
 	mu sync.RWMutex
@@ -136,6 +137,13 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		return nil, fmt.Errorf("failed to initialize rule state store: %w", err)
 	}
 	cfg.ruleStateStore = ruleStateStore
+
+	// Initialize provider store (for persisting provider configurations and credentials)
+	providerStore, err := db.NewProviderStore(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize provider store: %w", err)
+	}
+	cfg.providerStore = providerStore
 
 	// Initialize ImBot settings store
 	imbotSettingsStore, err := db.NewImBotSettingsStore(configDir)
@@ -226,6 +234,13 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	if err := cfg.RefreshStatsFromStore(); err != nil {
 		return nil, err
 	}
+
+	// Migrate providers from JSON config to database if needed
+	if err := cfg.migrateProvidersToDB(); err != nil {
+		logrus.Warnf("Failed to migrate providers to database: %v", err)
+		// Continue anyway - provider store may already have data
+	}
+
 	return cfg, nil
 }
 
@@ -739,11 +754,49 @@ func (c *Config) HasToken() bool {
 
 // Provider-related methods (merged from AppConfig)
 
+// migrateProvidersToDB migrates providers from JSON config to database
+// This is a one-time migration that runs on startup if the database is empty
+// Note: Providers are kept in JSON config as backup for now, will be cleared in a future version
+func (c *Config) migrateProvidersToDB() error {
+	if c.providerStore == nil {
+		return nil // Provider store not initialized, skip migration
+	}
+
+	// Check if database already has providers
+	count, err := c.providerStore.Count()
+	if err != nil {
+		return fmt.Errorf("failed to check provider count: %w", err)
+	}
+
+	if count > 0 {
+		// Database already has providers, skip migration
+		logrus.Debugf("Database already has %d providers, skipping migration", count)
+		return nil
+	}
+
+	// Check if JSON config has providers to migrate
+	if len(c.Providers) == 0 {
+		return nil // No providers to migrate
+	}
+
+	logrus.Infof("Migrating %d providers from JSON config to database (keeping JSON as backup)...", len(c.Providers))
+
+	// Migrate each provider to database
+	for _, provider := range c.Providers {
+		if err := c.providerStore.Save(provider); err != nil {
+			return fmt.Errorf("failed to migrate provider %s: %w", provider.UUID, err)
+		}
+	}
+
+	logrus.Infof("Successfully migrated %d providers to database", len(c.Providers))
+	// Note: We keep c.Providers in JSON config as backup for now
+	// In a future version, we will clear: c.Providers = nil; c.ProvidersV1 = nil; c.Save()
+
+	return nil
+}
+
 // AddProviderByName adds a new AI provider configuration by name, API base, and token
 func (c *Config) AddProviderByName(name, apiBase, token string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if name == "" {
 		return errors.New("provider name cannot be empty")
 	}
@@ -756,13 +809,12 @@ func (c *Config) AddProviderByName(name, apiBase, token string) error {
 		Name:     name,
 		APIBase:  apiBase,
 		APIStyle: protocol.APIStyleOpenAI, // default to openai
+		AuthType: typ.AuthTypeAPIKey,
 		Token:    token,
 		Enabled:  true,
 	}
 
-	c.Providers = append(c.Providers, provider)
-
-	return c.Save()
+	return c.AddProvider(provider)
 }
 
 // GetProviderByUUID returns a provider
@@ -770,6 +822,14 @@ func (c *Config) GetProviderByUUID(uuid string) (*typ.Provider, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
+	// Try provider store first
+	if c.providerStore != nil {
+		if provider, err := c.providerStore.GetByUUID(uuid); err == nil {
+			return provider, nil
+		}
+	}
+
+	// Fallback to in-memory providers (for migration period)
 	for _, p := range c.Providers {
 		if p.UUID == uuid {
 			return p, nil
@@ -783,6 +843,14 @@ func (c *Config) GetProviderByName(name string) (*typ.Provider, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
+	// Try provider store first
+	if c.providerStore != nil {
+		if provider, err := c.providerStore.GetByName(name); err == nil {
+			return provider, nil
+		}
+	}
+
+	// Fallback to in-memory providers (for migration period)
 	for _, p := range c.Providers {
 		if p.Name == name {
 			return p, nil
@@ -797,6 +865,16 @@ func (c *Config) ListProviders() []*typ.Provider {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
+	// Try provider store first
+	if c.providerStore != nil {
+		providers, err := c.providerStore.List()
+		if err == nil {
+			return providers
+		}
+		logrus.Warnf("Failed to list providers from store: %v", err)
+	}
+
+	// Fallback to in-memory providers (for migration period)
 	return c.Providers
 }
 
@@ -805,6 +883,15 @@ func (c *Config) ListOAuthProviders() ([]*typ.Provider, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
+	// Try provider store first
+	if c.providerStore != nil {
+		providers, err := c.providerStore.ListOAuth()
+		if err == nil {
+			return providers, nil
+		}
+	}
+
+	// Fallback to in-memory providers (for migration period)
 	var oauthProviders []*typ.Provider
 	for _, p := range c.Providers {
 		if p.AuthType == typ.AuthTypeOAuth && p.OAuthDetail != nil {
@@ -817,9 +904,6 @@ func (c *Config) ListOAuthProviders() ([]*typ.Provider, error) {
 
 // AddProvider adds a new provider using Provider struct
 func (c *Config) AddProvider(provider *typ.Provider) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if provider.Name == "" {
 		return errors.New("provider name cannot be empty")
 	}
@@ -827,19 +911,37 @@ func (c *Config) AddProvider(provider *typ.Provider) error {
 		return errors.New("API base URL cannot be empty")
 	}
 
-	c.Providers = append(c.Providers, provider)
+	// Use provider store if available
+	if c.providerStore != nil {
+		if provider.UUID == "" {
+			provider.UUID = GenerateUUID()
+		}
+		return c.providerStore.Save(provider)
+	}
 
+	// Fallback to in-memory (for migration period)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.Providers = append(c.Providers, provider)
 	return c.Save()
 }
 
 // UpdateProvider updates an existing provider by UUID
 func (c *Config) UpdateProvider(uuid string, provider *typ.Provider) error {
+	// Use provider store if available
+	if c.providerStore != nil {
+		// Preserve the UUID
+		provider.UUID = uuid
+		return c.providerStore.Save(provider)
+	}
+
+	// Fallback to in-memory (for migration period)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	for i, p := range c.Providers {
 		if p.UUID == uuid {
-			// Preserve the UUID
 			provider.UUID = uuid
 			c.Providers[i] = provider
 			return c.Save()
@@ -851,6 +953,21 @@ func (c *Config) UpdateProvider(uuid string, provider *typ.Provider) error {
 
 // DeleteProvider removes a provider by UUID
 func (c *Config) DeleteProvider(uuid string) error {
+	// Use provider store if available
+	if c.providerStore != nil {
+		if err := c.providerStore.Delete(uuid); err != nil {
+			return err
+		}
+
+		// Delete the associated model file
+		if c.modelManager != nil {
+			_ = c.modelManager.RemoveProvider(uuid)
+		}
+
+		return nil
+	}
+
+	// Fallback to in-memory (for migration period)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
