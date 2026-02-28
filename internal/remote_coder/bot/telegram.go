@@ -395,6 +395,9 @@ func handleBotMessage(
 			case "/clear":
 				handleClearCommand(bot, store, sessionMgr, chatID)
 				return
+			case "/start", "/help", "/h":
+				showBotHelp(bot, chatID, msg.Sender.ID, isDirectChat)
+				return
 			}
 		}
 		// All other slash commands go to Claude Code
