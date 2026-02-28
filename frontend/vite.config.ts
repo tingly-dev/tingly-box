@@ -62,8 +62,8 @@ export default defineConfig(({mode}) => {
                         'mui-icons-vendor': ['@mui/icons-material'],
                         'react-vendor': ['react', 'react-dom', 'react-router-dom'],
                         'recharts-vendor': ['recharts'],
-                        'antd-vendor': ['@ant-design/x-markdown'],
-                        'lobe-vendor': ['@lobehub/icons'],
+                        // 'antd-vendor': ['@ant-design/x-markdown'],
+                        // 'lobe-vendor': ['@lobehub/icons'],
                     }
                 }
             },
