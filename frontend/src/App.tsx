@@ -17,12 +17,12 @@ import { Events } from '@/bindings';
 // Lazy load pages for code splitting
 const Login = lazy(() => import('./pages/Login'));
 const Guiding = lazy(() => import('./pages/./Guiding'));
-const UseOpenAIPage = lazy(() => import('./pages/UseOpenAIPage'));
-const UseAnthropicPage = lazy(() => import('./pages/UseAnthropicPage'));
-const UseClaudeCodePage = lazy(() => import('./pages/UseClaudeCodePage'));
-const UseAgentPage = lazy(() => import('./pages/UseAgentPage'));
-const UseOpenCodePage = lazy(() => import('./pages/UseOpenCodePage'));
-const UseXcodePage = lazy(() => import('./pages/UseXcodePage'));
+const UseOpenAIPage = lazy(() => import('./pages/scenario/UseOpenAIPage'));
+const UseAnthropicPage = lazy(() => import('./pages/scenario/UseAnthropicPage'));
+const UseClaudeCodePage = lazy(() => import('./pages/scenario/UseClaudeCodePage'));
+const UseAgentPage = lazy(() => import('./pages/scenario/UseAgentPage'));
+const UseOpenCodePage = lazy(() => import('./pages/scenario/UseOpenCodePage'));
+const UseXcodePage = lazy(() => import('./pages/scenario/UseXcodePage'));
 const CredentialPage = lazy(() => import('./pages/CredentialPage'));
 const System = lazy(() => import('./pages/System'));
 const DashboardPage = lazy(() => import('./pages/./DashboardPage'));
@@ -36,6 +36,10 @@ const CommandPage = lazy(() => import('./pages/prompt/CommandPage'));
 // Remote Coder page
 const RemoteCoderPage = lazy(() => import('./pages/remote-coder/RemoteCoderPage'));
 const RemoteCoderSessionsPage = lazy(() => import('./pages/remote-coder/RemoteCoderSessionsPage'));
+
+// Remote Control pages
+const BotPage = lazy(() => import('./pages/remote-control/BotPage'));
+const AgentPage = lazy(() => import('./pages/remote-control/AgentPage'));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -297,6 +301,10 @@ function AppContent() {
                                         <Route path="/remote-coder" element={<Navigate to="/remote-coder/chat" replace/>}/>
                                         <Route path="/remote-coder/chat" element={<RemoteCoderPage/>}/>
                                         <Route path="/remote-coder/sessions" element={<RemoteCoderSessionsPage/>}/>
+                                        {/* Remote Control routes */}
+                                        <Route path="/remote-control" element={<Navigate to="/remote-control/bot" replace/>}/>
+                                        <Route path="/remote-control/bot" element={<BotPage/>}/>
+                                        <Route path="/remote-control/agent" element={<AgentPage/>}/>
                                     </Routes>
                                 </Suspense>
                             </Layout>
