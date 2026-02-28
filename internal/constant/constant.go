@@ -43,6 +43,30 @@ const DBFileName = "tingly.db" // Unified SQLite database file
 const DefaultRequestThreshold = int64(10)  // Default request threshold for round-robin and hybrid tactics
 const DefaultTokenThreshold = int64(10000) // Default token threshold for token-based and hybrid tactics
 
+// Latency-based routing defaults
+const (
+	DefaultLatencyThresholdMs    = int64(2000)  // Default latency threshold in milliseconds
+	DefaultLatencySampleWindow   = 100          // Default number of latency samples to keep
+	DefaultLatencyPercentile     = 0.95         // Default percentile for latency comparison (0.95 = p95)
+	DefaultLatencyComparisonMode = "avg"        // Default comparison mode: "avg", "p50", "p95", "p99"
+)
+
+// Token speed-based routing defaults
+const (
+	DefaultMinSpeedSamples     = 5     // Minimum samples required before making speed-based decisions
+	DefaultSpeedThresholdTps   = 50.0  // Minimum acceptable tokens per second
+	DefaultSpeedSampleWindow   = 100   // Default number of speed samples to keep
+)
+
+// Adaptive routing defaults
+const (
+	DefaultLatencyWeight   = 0.4   // Weight for latency in adaptive scoring
+	DefaultTokenWeight     = 0.3   // Weight for token usage in adaptive scoring
+	DefaultSpeedWeight     = 0.2   // Weight for token speed in adaptive scoring
+	DefaultHealthWeight    = 0.1   // Weight for health status in adaptive scoring
+	DefaultScoringMode     = "weighted_sum"  // Default scoring mode: "weighted_sum", "multiplicative", "rank_based"
+)
+
 const ConfigDirName = ".tingly-box"
 
 const DBDirName = "db"

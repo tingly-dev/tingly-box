@@ -66,6 +66,19 @@ type ServiceStats struct {
 	WindowOutputTokens   int64        `json:"window_output_tokens"`   // Output tokens in current window
 	TimeWindow           int          `json:"time_window"`            // Copy of service's time window
 	mutex                sync.RWMutex `json:"-"`                      // Thread safety
+
+	// Latency tracking fields
+	LatencySamples    []int64   `json:"-"` // Rolling window of latency samples (in ms)
+	AvgLatencyMs      float64   `json:"avg_latency_ms"`      // Average latency in current window
+	P50LatencyMs      float64   `json:"p50_latency_ms"`      // 50th percentile latency
+	P95LatencyMs      float64   `json:"p95_latency_ms"`      // 95th percentile latency
+	P99LatencyMs      float64   `json:"p99_latency_ms"`      // 99th percentile latency
+	LastLatencyUpdate time.Time `json:"last_latency_update"` // When latency was last updated
+
+	// Token speed tracking fields (tokens per second)
+	SpeedSamples    []float64 `json:"-"`                 // Rolling window of token speed samples
+	AvgTokenSpeed   float64   `json:"avg_token_speed"`   // Average tokens per second
+	LastSpeedUpdate time.Time `json:"last_speed_update"` // When speed was last updated
 }
 
 // RecordUsage records a usage event for this service
@@ -159,7 +172,148 @@ func (ss *ServiceStats) GetStats() ServiceStats {
 		WindowInputTokens:    ss.WindowInputTokens,
 		WindowOutputTokens:   ss.WindowOutputTokens,
 		TimeWindow:           ss.TimeWindow,
+		AvgLatencyMs:         ss.AvgLatencyMs,
+		P50LatencyMs:         ss.P50LatencyMs,
+		P95LatencyMs:         ss.P95LatencyMs,
+		P99LatencyMs:         ss.P99LatencyMs,
+		LastLatencyUpdate:    ss.LastLatencyUpdate,
+		AvgTokenSpeed:        ss.AvgTokenSpeed,
+		LastSpeedUpdate:      ss.LastSpeedUpdate,
 	}
+}
+
+// RecordLatency records a latency sample for this service
+func (ss *ServiceStats) RecordLatency(latencyMs int64, maxSamples int) {
+	ss.mutex.Lock()
+	defer ss.mutex.Unlock()
+
+	// Initialize samples slice if needed
+	if ss.LatencySamples == nil {
+		ss.LatencySamples = make([]int64, 0, maxSamples)
+	}
+
+	// Add new sample
+	ss.LatencySamples = append(ss.LatencySamples, latencyMs)
+
+	// Remove oldest sample if we exceed max samples
+	if len(ss.LatencySamples) > maxSamples {
+		ss.LatencySamples = ss.LatencySamples[len(ss.LatencySamples)-maxSamples:]
+	}
+
+	// Recalculate statistics
+	ss.recalculateLatencyStats()
+	ss.LastLatencyUpdate = time.Now()
+}
+
+// recalculateLatencyStats recalculates latency statistics from samples
+// Must be called with mutex held
+func (ss *ServiceStats) recalculateLatencyStats() {
+	if len(ss.LatencySamples) == 0 {
+		ss.AvgLatencyMs = 0
+		ss.P50LatencyMs = 0
+		ss.P95LatencyMs = 0
+		ss.P99LatencyMs = 0
+		return
+	}
+
+	// Calculate average
+	var sum int64
+	for _, v := range ss.LatencySamples {
+		sum += v
+	}
+	ss.AvgLatencyMs = float64(sum) / float64(len(ss.LatencySamples))
+
+	// Sort for percentile calculation
+	sorted := make([]int64, len(ss.LatencySamples))
+	copy(sorted, ss.LatencySamples)
+	for i := 0; i < len(sorted); i++ {
+		for j := i + 1; j < len(sorted); j++ {
+			if sorted[i] > sorted[j] {
+				sorted[i], sorted[j] = sorted[j], sorted[i]
+			}
+		}
+	}
+
+	// Calculate percentiles
+	ss.P50LatencyMs = percentile(sorted, 0.50)
+	ss.P95LatencyMs = percentile(sorted, 0.95)
+	ss.P99LatencyMs = percentile(sorted, 0.99)
+}
+
+// percentile calculates the percentile value from a sorted slice
+func percentile(sorted []int64, p float64) float64 {
+	if len(sorted) == 0 {
+		return 0
+	}
+	if p <= 0 {
+		return float64(sorted[0])
+	}
+	if p >= 1 {
+		return float64(sorted[len(sorted)-1])
+	}
+
+	index := p * float64(len(sorted)-1)
+	lower := int(index)
+	upper := lower + 1
+	if upper >= len(sorted) {
+		return float64(sorted[lower])
+	}
+	fraction := index - float64(lower)
+	return float64(sorted[lower]) + fraction*float64(sorted[upper]-sorted[lower])
+}
+
+// GetLatencyStats returns current latency statistics
+func (ss *ServiceStats) GetLatencyStats() (avg, p50, p95, p99 float64, sampleCount int) {
+	ss.mutex.RLock()
+	defer ss.mutex.RUnlock()
+
+	return ss.AvgLatencyMs, ss.P50LatencyMs, ss.P95LatencyMs, ss.P99LatencyMs, len(ss.LatencySamples)
+}
+
+// RecordTokenSpeed records a token speed sample (tokens per second)
+func (ss *ServiceStats) RecordTokenSpeed(speedTps float64, maxSamples int) {
+	ss.mutex.Lock()
+	defer ss.mutex.Unlock()
+
+	// Initialize samples slice if needed
+	if ss.SpeedSamples == nil {
+		ss.SpeedSamples = make([]float64, 0, maxSamples)
+	}
+
+	// Add new sample
+	ss.SpeedSamples = append(ss.SpeedSamples, speedTps)
+
+	// Remove oldest sample if we exceed max samples
+	if len(ss.SpeedSamples) > maxSamples {
+		ss.SpeedSamples = ss.SpeedSamples[len(ss.SpeedSamples)-maxSamples:]
+	}
+
+	// Recalculate average
+	ss.recalculateSpeedStats()
+	ss.LastSpeedUpdate = time.Now()
+}
+
+// recalculateSpeedStats recalculates token speed statistics
+// Must be called with mutex held
+func (ss *ServiceStats) recalculateSpeedStats() {
+	if len(ss.SpeedSamples) == 0 {
+		ss.AvgTokenSpeed = 0
+		return
+	}
+
+	var sum float64
+	for _, v := range ss.SpeedSamples {
+		sum += v
+	}
+	ss.AvgTokenSpeed = sum / float64(len(ss.SpeedSamples))
+}
+
+// GetTokenSpeedStats returns current token speed statistics
+func (ss *ServiceStats) GetTokenSpeedStats() (avgSpeed float64, sampleCount int) {
+	ss.mutex.RLock()
+	defer ss.mutex.RUnlock()
+
+	return ss.AvgTokenSpeed, len(ss.SpeedSamples)
 }
 
 // TacticType represents different load balancing strategies
@@ -170,6 +324,9 @@ const (
 	TacticTokenBased                   // Rotate by token consumption
 	TacticHybrid                       // Hybrid: request count or tokens, whichever comes first
 	TacticRandom                       // Random selection with weighted probability
+	TacticLatencyBased                 // Route based on response latency
+	TacticSpeedBased                   // Route based on token generation speed
+	TacticAdaptive                     // Composite multi-dimensional routing
 )
 
 // MarshalJSON implements json.Marshaler for TacticType
@@ -204,6 +361,12 @@ func (tt TacticType) String() string {
 		return "hybrid"
 	case TacticRandom:
 		return "random"
+	case TacticLatencyBased:
+		return "latency_based"
+	case TacticSpeedBased:
+		return "speed_based"
+	case TacticAdaptive:
+		return "adaptive"
 	default:
 		return "unknown"
 	}
@@ -220,6 +383,12 @@ func ParseTacticType(s string) TacticType {
 		return TacticHybrid
 	case "random":
 		return TacticRandom
+	case "latency_based":
+		return TacticLatencyBased
+	case "speed_based":
+		return TacticSpeedBased
+	case "adaptive":
+		return TacticAdaptive
 	default:
 		return TacticRoundRobin // default
 	}
