@@ -210,12 +210,12 @@ const Layout = ({ children }: LayoutProps) => {
                 },
                 {
                     path: '/remote-control/bot',
-                    label: 'Bot',
+                    label: 'IM Bot',
                     icon: <ChatBubble sx={{ fontSize: 20 }} />,
                 },
                 {
                     path: '/remote-control/agent',
-                    label: 'Agent',
+                    label: 'Agent Assistant',
                     icon: <AutoAwesome sx={{ fontSize: 20 }} />,
                 },
             ],
