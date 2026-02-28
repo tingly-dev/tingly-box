@@ -2,20 +2,17 @@ package bot
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/agentboot/permission"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
@@ -724,13 +721,14 @@ func showBotHelp(bot imbot.Bot, chatID string, senderID string, isDirectChat boo
 
 Bot Commands:
 /help, /h - Show this help
-/bot help, /bot_help - Show this help
-/bot bind [path], /bot_bind [path] - Bind a project
-/bot project, /bot_project - Show & switch projects
-/bot status, /bot_status - Show session status
-/bot clear, /bot_clear - Clear session context
-/bot bash <cmd>, /bot_bash <cmd> - Execute allowed bash (cd, ls, pwd)
-/bot join <group>, /bot_join <group> - Add group to whitelist
+/bot_help - Show this help
+/bot_bind [path] - Bind a project
+/bot_project - Show & switch projects
+/bot_status - Show session status
+/bot_clear - Clear session context
+/bot_bash <cmd> - Execute allowed bash (cd, ls, pwd)
+/bot_join <group> - Add group to whitelist
+/clear - Clear context and create new session
 
 All other messages are sent to Claude Code.`, senderID)
 	} else {
@@ -738,11 +736,12 @@ All other messages are sent to Claude Code.`, senderID)
 
 Bot Commands:
 /help, /h - Show this help
-/bot help, /bot_help - Show this help
+/bot_help - Show this help
 /bot bind [path], /bot_bind [path] - Bind a project to this group
-/bot project, /bot_project - Show current project info
-/bot status, /bot_status - Show session status
-/bot clear, /bot_clear - Clear session context
+/bot_project - Show current project info
+/bot_status - Show session status
+/bot_clear - Clear session context
+/clear - Clear context and create new session
 
 All other messages are sent to Claude Code.`, chatID)
 	}
@@ -1714,135 +1713,6 @@ func convertActionKeyboardToTelegram(kb imbot.InlineKeyboardMarkup) tgbotapi.Inl
 		rows = append(rows, buttons)
 	}
 	return tgbotapi.InlineKeyboardMarkup{InlineKeyboard: rows}
-}
-
-// streamingMessageHandler implements agentboot.MessageHandler for real-time message streaming
-type streamingMessageHandler struct {
-	bot       imbot.Bot
-	chatID    string
-	replyTo   string
-	mu        sync.Mutex
-	formatter *claude.TextFormatter
-}
-
-// newStreamingMessageHandler creates a new streaming message handler
-func newStreamingMessageHandler(bot imbot.Bot, chatID, replyTo string) *streamingMessageHandler {
-	return &streamingMessageHandler{
-		bot:       bot,
-		chatID:    chatID,
-		replyTo:   replyTo,
-		formatter: claude.NewTextFormatter(),
-	}
-}
-
-// OnMessage implements agentboot.MessageHandler
-func (h *streamingMessageHandler) OnMessage(msg interface{}) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	logrus.WithFields(logrus.Fields{
-		"msgType": fmt.Sprintf("%T", msg),
-		"chatID":  h.chatID,
-	}).Debug("Received message from agent")
-
-	// Convert to claude.Message if possible
-	var claudeMsg claude.Message
-	switch m := msg.(type) {
-	case *claude.AssistantMessage:
-		meaningful := false
-		for _, c := range m.Message.Content {
-			logrus.Info(c.Content)
-			if strings.TrimSpace(c.Text) != "" {
-				meaningful = true
-			}
-		}
-		if !meaningful {
-			logrus.Debugf("ignoring non-meaningful message from assistant")
-			return nil
-		} else {
-			claudeMsg = m
-			logrus.Infof("assistant message from agent")
-		}
-	case claude.Message:
-		claudeMsg = m
-	default:
-		// Skip non-claude messages
-		logrus.WithField("msgType", fmt.Sprintf("%T", msg)).Debug("Skipping non-claude message")
-		return nil
-	}
-
-	// Format using the formatter
-	formatted := h.formatter.Format(claudeMsg)
-	d, _ := json.Marshal(claudeMsg.GetRawData())
-	logrus.Infof("[bot] Raw: %s", d)
-	logrus.Infof("[bot] Formatted: %s", formatted)
-
-	if strings.TrimSpace(formatted) != "" {
-		h.sendMessage(formatted)
-	} else {
-		logrus.WithField("msgType", claudeMsg.GetType()).Debug("Skipping empty formatted message")
-	}
-
-	return nil
-}
-
-// OnError implements agentboot.MessageHandler
-func (h *streamingMessageHandler) OnError(err error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.sendMessage(fmt.Sprintf("[ERROR] %v", err))
-}
-
-// OnComplete implements agentboot.MessageHandler - sends action keyboard when complete
-func (h *streamingMessageHandler) OnComplete(result *agentboot.CompletionResult) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	// Build action keyboard
-	kb := BuildActionKeyboard()
-	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
-
-	_, err := h.bot.SendMessage(context.Background(), h.chatID, &imbot.SendMessageOptions{
-		Text: "/bot tips",
-		Metadata: map[string]interface{}{
-			"replyMarkup": tgKeyboard,
-		},
-	})
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to send action keyboard")
-	}
-}
-
-// GetOutput returns the accumulated output (for compatibility, returns empty as we stream immediately)
-func (h *streamingMessageHandler) GetOutput() string {
-	return ""
-}
-
-// sendMessage sends a message to the bot
-func (h *streamingMessageHandler) sendMessage(text string) {
-	for _, chunk := range chunkText(text, imbot.DefaultMessageLimit) {
-		_, err := h.bot.SendMessage(context.Background(), h.chatID, &imbot.SendMessageOptions{
-			Text:    chunk,
-			ReplyTo: h.replyTo,
-		})
-		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"chatID":  h.chatID,
-				"replyTo": h.replyTo,
-				"error":   err,
-				"chunk":   chunk[:minInt(100, len(chunk))],
-			}).Error("Failed to send streaming message")
-			continue
-		}
-		logrus.WithField("chatID", h.chatID).WithField("chunkLen", len(chunk)).Debug("Sent streaming message chunk")
-	}
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // NewStoreForChatOnly creates a minimal bot.Store for chat state management only
