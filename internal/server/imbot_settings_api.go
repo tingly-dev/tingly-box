@@ -8,9 +8,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/bot"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/pkg/swagger"
 )
@@ -203,7 +203,7 @@ func (api *ImBotSettingsAPI) CreateSettings(c *gin.Context) {
 	// Get platform config to determine auth type if not provided
 	authType := strings.TrimSpace(req.AuthType)
 	if authType == "" {
-		if config, exists := bot.GetPlatformConfig(platform); exists {
+		if config, exists := imbot.GetPlatformConfig(platform); exists {
 			authType = config.AuthType
 		}
 	}
@@ -295,7 +295,7 @@ func (api *ImBotSettingsAPI) UpdateSettings(c *gin.Context) {
 	// Get platform config to determine auth type if not provided
 	authType := strings.TrimSpace(req.AuthType)
 	if authType == "" {
-		if config, exists := bot.GetPlatformConfig(platform); exists {
+		if config, exists := imbot.GetPlatformConfig(platform); exists {
 			authType = config.AuthType
 		}
 	}
@@ -441,7 +441,7 @@ func (api *ImBotSettingsAPI) ToggleSettings(c *gin.Context) {
 
 // GetPlatforms returns all supported ImBot platforms with their configurations
 func (api *ImBotSettingsAPI) GetPlatforms(c *gin.Context) {
-	platforms := bot.GetAllPlatforms()
+	platforms := imbot.GetAllPlatforms()
 	platformResponses := make([]PlatformConfig, 0, len(platforms))
 
 	for _, p := range platforms {
@@ -455,9 +455,9 @@ func (api *ImBotSettingsAPI) GetPlatforms(c *gin.Context) {
 	}
 
 	categories := gin.H{
-		"im":         bot.CategoryLabels["im"],
-		"enterprise": bot.CategoryLabels["enterprise"],
-		"business":   bot.CategoryLabels["business"],
+		"im":         imbot.CategoryLabels["im"],
+		"enterprise": imbot.CategoryLabels["enterprise"],
+		"business":   imbot.CategoryLabels["business"],
 	}
 
 	response := ImBotPlatformsResponse{
@@ -477,7 +477,7 @@ func (api *ImBotSettingsAPI) GetPlatformConfig(c *gin.Context) {
 		return
 	}
 
-	config, exists := bot.GetPlatformConfig(platform)
+	config, exists := imbot.GetPlatformConfig(platform)
 	if !exists {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Unknown platform"})
 		return
@@ -569,11 +569,11 @@ type ImBotPlatformConfigResponse struct {
 }
 
 type PlatformConfig struct {
-	Platform    string          `json:"platform"`
-	DisplayName string          `json:"display_name"`
-	AuthType    string          `json:"auth_type"`
-	Category    string          `json:"category"`
-	Fields      []bot.FieldSpec `json:"fields"`
+	Platform    string            `json:"platform"`
+	DisplayName string            `json:"display_name"`
+	AuthType    string            `json:"auth_type"`
+	Category    string            `json:"category"`
+	Fields      []imbot.FieldSpec `json:"fields"`
 }
 
 type DeleteResponse struct {

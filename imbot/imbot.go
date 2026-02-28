@@ -217,11 +217,6 @@ func GetPlatformName(platform string) string {
 	return core.GetPlatformName(Platform(platform))
 }
 
-// IsValidPlatform checks if a platform string is valid
-func IsValidPlatform(platform string) bool {
-	return core.IsValidPlatform(platform)
-}
-
 // Keyboard builder helpers
 
 // NewKeyboardBuilder creates a new keyboard builder
