@@ -41,12 +41,28 @@ func SetTrackingContext(c *gin.Context, rule *typ.Rule, provider *typ.Provider, 
 	c.Set(ContextKeyStartTime, time.Now())
 
 	// Extract scenario from path if not already set
+	scenario := "unknown"
 	if _, exists := c.Get(ContextKeyScenario); !exists {
-		scenario := "unknown"
 		if c.Request != nil && c.Request.URL != nil {
 			scenario = extractScenarioFromPath(c.Request.URL.Path)
 		}
 		c.Set(ContextKeyScenario, scenario)
+	} else {
+		if s, exists := c.Get(ContextKeyScenario); exists {
+			scenario = s.(string)
+		}
+	}
+
+	// Update global current request tracker for monitoring
+	if provider != nil && actualModel != "" {
+		GetGlobalCurrentRequestTracker().SetCurrent(CurrentRequestState{
+			ProviderName: provider.Name,
+			ProviderUUID: provider.UUID,
+			Model:        actualModel,
+			RequestModel: requestModel,
+			Scenario:     scenario,
+			Streamed:     streamed,
+		})
 	}
 }
 
