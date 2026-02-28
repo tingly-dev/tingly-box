@@ -409,8 +409,8 @@ func handleBotMessage(
 			handleAgentMessage(ctx, bot, store, sessionMgr, agentBoot, permHandler, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID, msg.ID)
 			return
 		}
-		// No session - show guidance
-		sendText(bot, chatID, "No active session. Use /bot_bind <project_path> to create one.")
+		// No session - show project selection or bind guidance
+		showProjectSelectionOrGuidance(ctx, bot, store, sessionMgr, chatID, msg.Sender.ID, isDirectChat)
 		return
 	}
 
@@ -443,8 +443,8 @@ func handleBotMessage(
 		return
 	}
 
-	// No session - show guidance
-	sendText(bot, chatID, "No active session. Use /bot_bind <project_path> to create one.")
+	// No session - show project selection or bind guidance
+	showProjectSelectionOrGuidance(ctx, bot, store, sessionMgr, chatID, msg.Sender.ID, isDirectChat)
 }
 
 // handleAgentMessage routes message to the appropriate agent handler.
@@ -832,6 +832,37 @@ func handleBotStatusCommand(bot imbot.Bot, store *Store, sessionMgr *session.Man
 	}
 
 	sendText(bot, chatID, strings.Join(statusParts, "\n"))
+}
+
+// showProjectSelectionOrGuidance shows project selection if user has bound projects, otherwise shows bind guidance.
+func showProjectSelectionOrGuidance(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, senderID string, isDirectChat bool) {
+	if store == nil || store.ChatStore() == nil {
+		sendText(bot, chatID, "No active session. Use /bot_bind <project_path> to create one.")
+		return
+	}
+
+	// For group chats, check if there's a project bound
+	if !isDirectChat {
+		if projectPath, ok := getProjectPathForGroup(store, chatID, string(imbot.PlatformTelegram)); ok {
+			sendText(bot, chatID, fmt.Sprintf("Project bound to this group:\n📁 %s\n\nPlease /clear the session to start fresh.", projectPath))
+			return
+		}
+		sendText(bot, chatID, "No project bound to this group. Use /bot_bind <path> to bind a project.")
+		return
+	}
+
+	// For direct chats, check if user has any bound projects
+	chatStore := store.ChatStore()
+	platform := string(imbot.PlatformTelegram)
+
+	chats, err := chatStore.ListChatsByOwner(senderID, platform)
+	if err == nil && len(chats) > 0 {
+		// User has projects, show project selection
+		handleBotProjectCommand(ctx, bot, store, sessionMgr, chatID, senderID, isDirectChat, false)
+		return
+	}
+
+	sendText(bot, chatID, "No active session. Use /bot_bind <project_path> to create one.")
 }
 
 // handleBotProjectCommand handles /bot project - shows current project and list with keyboard
