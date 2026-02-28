@@ -22,6 +22,18 @@ const (
 	stateExpiry     = 5 * time.Minute
 )
 
+// Callback action constants
+const (
+	callbackActionClear   = "action:clear"
+	callbackActionBind    = "action:bind"
+	callbackProjectSwitch = "project:switch"
+	callbackBindNav       = "bind:nav"
+	callbackBindPrev      = "bind:prev"
+	callbackBindNext      = "bind:next"
+	callbackBindSelect    = "bind:select"
+	callbackBindCancel    = "bind:cancel"
+)
+
 // BindFlowState represents the state of an ongoing bind flow
 type BindFlowState struct {
 	ChatID       string

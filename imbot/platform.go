@@ -1,4 +1,4 @@
-package bot
+package imbot
 
 // PlatformAuthConfig defines the authentication requirements for each platform
 type PlatformAuthConfig struct {
