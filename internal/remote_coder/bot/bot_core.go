@@ -43,7 +43,6 @@ const (
 	botCommandBash    = "bash"
 )
 
-
 var defaultBashAllowlist = map[string]struct{}{
 	"cd":  {},
 	"ls":  {},
@@ -130,9 +129,8 @@ func runBotOnce(ctx context.Context, store *Store, sessionMgr *session.Manager, 
 	}
 
 	// Register unified message handler with platform parameter
-	manager.OnMessage(func(msg imbot.Message, platform imbot.Platform) {
-		handleBotMessage(ctx, manager, store, sessionMgr, agentBoot, permHandler, summaryEngine, directoryBrowser, msg, platform)
-	})
+	handler := NewBotHandler(ctx, store, sessionMgr, agentBoot, permHandler, summaryEngine, directoryBrowser, manager)
+	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start bot manager: %w", err)
@@ -204,9 +202,8 @@ func runBotWithSettings(ctx context.Context, settings db.Settings, dbPath string
 	}
 
 	// Register unified message handler with platform parameter
-	manager.OnMessage(func(msg imbot.Message, platform imbot.Platform) {
-		handleBotMessage(ctx, manager, store, sessionMgr, agentBoot, permHandler, summaryEngine, directoryBrowser, msg, platform)
-	})
+	handler := NewBotHandler(ctx, store, sessionMgr, agentBoot, permHandler, summaryEngine, directoryBrowser, manager)
+	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start bot manager: %w", err)
