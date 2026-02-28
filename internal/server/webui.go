@@ -255,6 +255,42 @@ func (s *Server) GetStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// GetCurrentRequest returns the current request being processed
+// This endpoint is useful for monitoring and Web UI display
+// No authentication required for easy integration with status line tools
+func (s *Server) GetCurrentRequest(c *gin.Context) {
+	tracker := GetGlobalCurrentRequestTracker()
+	state := tracker.GetCurrent()
+
+	if state == nil {
+		c.JSON(http.StatusOK, CurrentRequestResponse{
+			Success: true,
+			Data:    nil,
+		})
+		return
+	}
+
+	// Calculate duration from start time
+	durationMs := int64(0)
+	if !state.StartTime.IsZero() {
+		durationMs = time.Since(state.StartTime).Milliseconds()
+	}
+
+	c.JSON(http.StatusOK, CurrentRequestResponse{
+		Success: true,
+		Data: &CurrentRequestData{
+			ProviderName: state.ProviderName,
+			ProviderUUID: state.ProviderUUID,
+			Model:        state.Model,
+			RequestModel: state.RequestModel,
+			Scenario:     state.Scenario,
+			StartTime:    state.StartTime,
+			DurationMs:   durationMs,
+			Streamed:     state.Streamed,
+		},
+	})
+}
+
 // ValidateAuthToken validates an authentication token without requiring auth
 // This is used during login flow to verify a token before establishing session
 func (s *Server) ValidateAuthToken(c *gin.Context) {
@@ -442,6 +478,13 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithDescription("Validate authentication token"),
 		swagger.WithTags("auth"),
 		swagger.WithResponseModel(gin.H{}),
+	)
+
+	// Current request status (no auth required) - for monitoring and status line tools
+	apiAuth.GET("/current-request", s.GetCurrentRequest,
+		swagger.WithDescription("Get current request being processed"),
+		swagger.WithTags("status"),
+		swagger.WithResponseModel(CurrentRequestResponse{}),
 	)
 
 	// Create authenticated API group
