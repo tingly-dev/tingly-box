@@ -211,6 +211,25 @@ type StatusResponse struct {
 	} `json:"data"`
 }
 
+// CurrentRequestResponse represents the response for current request status
+// This is useful for monitoring which model/provider is handling requests in real-time
+type CurrentRequestResponse struct {
+	Success bool              `json:"success" example:"true"`
+	Data    *CurrentRequestData `json:"data"`
+}
+
+// CurrentRequestData represents the current active request data
+type CurrentRequestData struct {
+	ProviderName string    `json:"provider_name" example:"openai"`
+	ProviderUUID string    `json:"provider_uuid" example:"uuid-1234"`
+	Model        string    `json:"model" example:"gpt-4"`
+	RequestModel string    `json:"request_model" example:"gpt-4"`
+	Scenario     string    `json:"scenario" example:"openai"`
+	StartTime    time.Time `json:"start_time" example:"2024-01-01T00:00:00Z"`
+	DurationMs   int64     `json:"duration_ms" example:"1500"`
+	Streamed     bool      `json:"streamed" example:"true"`
+}
+
 // HistoryResponse represents the response for request history
 type HistoryResponse struct {
 	Success bool        `json:"success" example:"true"`
