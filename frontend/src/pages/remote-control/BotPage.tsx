@@ -1,22 +1,25 @@
-import { SmartToy } from '@mui/icons-material';
+import BotAuthForm from '@/components/bot/BotAuthForm';
+import BotPlatformSelector from '@/components/bot/BotPlatformSelector';
+import BotTable from '@/components/bot/BotTable';
+import EmptyStateGuide from '@/components/EmptyStateGuide';
+import { PageLayout } from '@/components/PageLayout';
+import UnifiedCard from '@/components/UnifiedCard';
+import { api } from '@/services/api';
+import { BotPlatformConfig, BotSettings } from '@/types/bot';
+import { Add, OpenInNew } from '@mui/icons-material';
 import {
     Alert,
+    Box,
     Button,
+    Card,
     CircularProgress,
+    Link,
     Modal,
     Stack,
     TextField,
     Typography,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
-import { PageLayout } from '@/components/PageLayout';
-import UnifiedCard from '@/components/UnifiedCard';
-import { api } from '@/services/api';
-import BotPlatformSelector from '@/components/bot/BotPlatformSelector';
-import BotAuthForm from '@/components/bot/BotAuthForm';
-import BotTable from '@/components/bot/BotTable';
-import EmptyStateGuide from '@/components/EmptyStateGuide';
-import { BotPlatformConfig, BotSettings } from '@/types/bot';
 
 const BotPage = () => {
     // Bot settings state - V2 multi-bot support
@@ -241,11 +244,41 @@ const BotPage = () => {
     };
 
     return (
-        <PageLayout>
+        <PageLayout loading={false}>
+            {/* Preview Notice Card */}
+            <UnifiedCard
+                title="Preview Version"
+                subtitle="Work in progress"
+                size="full"
+                sx={{ mb: 2 }}
+            >
+                <Alert severity="info" sx={{ mb: 2 }}>
+                    <Typography variant="body2">
+                        This feature is currently in <strong>preview</strong>. It is designed to work with{' '}
+                        <strong>Claude Code</strong> installed on your local machine.
+                    </Typography>
+                </Alert>
+                <Typography variant="body2" color="text.secondary">
+                    The Remote Control Bot enables you to interact with Claude Code through instant messaging platforms
+                    like Telegram. Make sure you have Claude Code CLI installed and configured before using this feature.
+                </Typography>
+            </UnifiedCard>
+
             <UnifiedCard
                 title="Bots"
                 subtitle={`${bots.length} bot${bots.length !== 1 ? 's' : ''} configured`}
                 size="full"
+                rightAction={
+                    <Button
+                        variant="contained"
+                        startIcon={<Add />}
+                        onClick={() => handleOpenBotTokenDialog()}
+                        size="small"
+                    >
+                        Add Bot
+                    </Button>
+                }
+                sx={{ mb: 2 }}
             >
                 <Stack spacing={2}>
                     {botNotice && (
@@ -284,6 +317,86 @@ const BotPage = () => {
                             </Typography>
                         </Stack>
                     )}
+                </Stack>
+            </UnifiedCard>
+
+
+            {/* Platform Guide Card */}
+            <UnifiedCard
+                title="Platform Configuration Guide"
+                subtitle="How to configure different IM platforms"
+                size="full"
+            >
+                <Stack spacing={2}>
+                    <Typography variant="body2" color="text.secondary">
+                        Each IM platform requires different authentication settings. Here's a quick guide:
+                    </Typography>
+
+                    <Card variant="outlined" sx={{ p: 2 }}>
+                        <Stack direction="row" spacing={2} alignItems="flex-start">
+                            <Box
+                                sx={{
+                                    width: 40,
+                                    height: 40,
+                                    borderRadius: 2,
+                                    bgcolor: '#0088cc',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                }}
+                            >
+                                <Typography sx={{ color: 'white', fontWeight: 'bold', fontSize: '0.8rem' }}>
+                                    TG
+                                </Typography>
+                            </Box>
+                            <Box>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                    Telegram Bot
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    1. Talk to <Link href="https://t.me/BotFather" target="_blank">@BotFather <OpenInNew sx={{ fontSize: 12 }} /></Link> on Telegram<br />
+                                    2. Use <code>/newbot</code> command to create a new bot<br />
+                                    3. Copy the API Token and paste it here
+                                </Typography>
+                            </Box>
+                        </Stack>
+                    </Card>
+
+                    <Card variant="outlined" sx={{ p: 2 }}>
+                        <Stack direction="row" spacing={2} alignItems="flex-start">
+                            <Box
+                                sx={{
+                                    width: 40,
+                                    height: 40,
+                                    borderRadius: 2,
+                                    bgcolor: '#07c160',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                }}
+                            >
+                                <Typography sx={{ color: 'white', fontWeight: 'bold', fontSize: '0.8rem' }}>
+                                    WX
+                                </Typography>
+                            </Box>
+                            <Box>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                    WeChat (Coming Soon)
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    WeChat bot integration is currently under development.
+                                    Stay tuned for updates!
+                                </Typography>
+                            </Box>
+                        </Stack>
+                    </Card>
+
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                        <strong>Tip:</strong> Use the Chat ID Lock field to restrict bot access to specific chats only.
+                        This enhances security by preventing unauthorized users from controlling your bot.
+                    </Typography>
                 </Stack>
             </UnifiedCard>
 
