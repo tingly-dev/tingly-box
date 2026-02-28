@@ -204,15 +204,20 @@ const Layout = ({ children }: LayoutProps) => {
             icon: <RemoteIcon sx={{ fontSize: 20 }} />,
             items: [
                 {
+                    path: '/remote-control',
+                    label: 'Overview',
+                    icon: <RemoteIcon sx={{ fontSize: 20 }} />,
+                },
+                {
                     path: '/remote-control/bot',
                     label: 'Bot',
                     icon: <ChatBubble sx={{ fontSize: 20 }} />,
                 },
-                // {
-                //     path: '/remote-control/agent',
-                //     label: 'Agent',
-                //     icon: <AutoAwesome sx={{ fontSize: 20 }} />,
-                // },
+                {
+                    path: '/remote-control/agent',
+                    label: 'Agent',
+                    icon: <AutoAwesome sx={{ fontSize: 20 }} />,
+                },
             ],
         }] : []),
         {
