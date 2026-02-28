@@ -1,19 +1,21 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
-import { Box } from '@mui/material';
+import { Box, Button, Tooltip, IconButton } from '@mui/material';
+import InfoIcon from '@mui/icons-material/Info';
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from '@/components/TemplatePage.tsx';
-import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
-import { useHeaderHeight } from '../hooks/useHeaderHeight';
-import { api, getBaseUrl } from '../services/api';
+import XcodeConfigModal from '@/components/XcodeConfigModal';
+import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
+import { useHeaderHeight } from '@/hooks/useHeaderHeight';
+import { api, getBaseUrl } from '@/services/api';
 
-const scenario = "openai";
+const scenario = "xcode";
 
-const UseOpenAIPage: React.FC = () => {
+const UseXcodePage: React.FC = () => {
     const {
         showTokenModal,
         setShowTokenModal,
@@ -28,6 +30,7 @@ const UseOpenAIPage: React.FC = () => {
     const [rules, setRules] = useState<any[]>([]);
     const [loadingRule, setLoadingRule] = useState(true);
     const [newlyCreatedRuleUuids, setNewlyCreatedRuleUuids] = useState<Set<string>>(new Set());
+    const [configModalOpen, setConfigModalOpen] = useState(false);
     const navigate = useNavigate();
 
     // Use shared hook for header height measurement
@@ -63,6 +66,11 @@ const UseOpenAIPage: React.FC = () => {
         }
     }, [rules.length]);
 
+    // Handle opening config modal
+    const handleOpenConfigModal = () => {
+        setConfigModalOpen(true);
+    };
+
     useEffect(() => {
         let isMounted = true;
 
@@ -73,7 +81,7 @@ const UseOpenAIPage: React.FC = () => {
             const result = await api.getRules(scenario);
             if (isMounted) {
                 if (result.success) {
-                    const ruleData = Array.isArray(result.data) ? result.data : [];
+                    const ruleData = result.data;
                     setRules(ruleData);
                 }
                 setLoadingRule(false);
@@ -93,7 +101,14 @@ const UseOpenAIPage: React.FC = () => {
         <PageLayout loading={isLoading} notification={notification}>
             {!providers.length ? (
                 <CardGrid>
-                    <UnifiedCard title="OpenAI SDK Configuration" size="full">
+                    <UnifiedCard
+                        title={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <span>Xcode SDK Configuration</span>
+                            </Box>
+                        }
+                        size="full"
+                    >
                         <EmptyStateGuide
                             title="No Providers Configured"
                             description="Add an API key or OAuth provider to get started"
@@ -105,23 +120,41 @@ const UseOpenAIPage: React.FC = () => {
             ) : (
                 <CardGrid>
                     <UnifiedCard
+                        ref={headerRef}
                         title={
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <span>OpenAI SDK Configuration</span>
+                                <span>Xcode SDK Configuration</span>
+                                <Tooltip title={`Base URL: ${baseUrl}/tingly/xcode`}>
+                                    <IconButton size="small" sx={{ ml: 0.5 }}>
+                                        <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                                    </IconButton>
+                                </Tooltip>
                             </Box>
                         }
                         size="full"
+                        rightAction={
+                            <Button
+                                onClick={handleOpenConfigModal}
+                                variant="contained"
+                                size="small"
+                            >
+                                Config Guide
+                            </Button>
+                        }
                     >
+                        {/* Use ProviderConfigCard without API key row, then ExperimentalFeatures */}
                         <ProviderConfigCard
-                            headerRef={headerRef}
-                            title="OpenAI SDK Configuration"
-                            baseUrlPath="/tingly/openai"
+                            title="Xcode SDK Configuration"
+                            baseUrlPath="/tingly/xcode"
                             baseUrl={baseUrl}
                             onCopy={copyToClipboard}
                             token={token}
                             onShowTokenModal={() => setShowTokenModal(true)}
+                            scenario={scenario}
+                            showApiKeyRow={true}
                         />
                     </UnifiedCard>
+
                     <TemplatePage
                         title="Models and Forwarding Rules"
                         scenario={scenario}
@@ -136,7 +169,17 @@ const UseOpenAIPage: React.FC = () => {
                         newlyCreatedRuleUuids={newlyCreatedRuleUuids}
                         allowDeleteRule={true}
                         onRuleDelete={handleRuleDelete}
+                        showAddApiKeyButton={false}
                         headerHeight={headerHeight}
+                    />
+
+                    {/* Xcode Config Modal */}
+                    <XcodeConfigModal
+                        open={configModalOpen}
+                        onClose={() => setConfigModalOpen(false)}
+                        baseUrl={baseUrl}
+                        token={token}
+                        copyToClipboard={copyToClipboard}
                     />
                 </CardGrid>
             )}
@@ -144,4 +187,4 @@ const UseOpenAIPage: React.FC = () => {
     );
 };
 
-export default UseOpenAIPage;
+export default UseXcodePage;
