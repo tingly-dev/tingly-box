@@ -1,4 +1,5 @@
 import { OpenInNew } from '@mui/icons-material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
     Accordion,
     AccordionDetails,
@@ -9,7 +10,13 @@ import {
     Stack,
     Typography,
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import {
+    IconBrandDingtalk,
+    IconBrandDiscord,
+    IconBrandSlack,
+    IconBrandTelegram,
+    IconBrandWechat
+} from '@tabler/icons-react';
 
 interface PlatformGuideProps {
     expanded: string | false;
@@ -21,6 +28,7 @@ interface PlatformConfig {
     name: string;
     icon: React.ReactNode;
     bgColor: string;
+    iconColor: string;
     status: 'available' | 'coming-soon' | 'beta';
     requiredFields: string[];
     steps: React.ReactNode;
@@ -30,8 +38,9 @@ const platformConfigs: PlatformConfig[] = [
     {
         id: 'telegram',
         name: 'Telegram',
-        icon: <Typography sx={{ color: 'white', fontWeight: 'bold', fontSize: '0.75rem' }}>TG</Typography>,
+        icon: <IconBrandTelegram size={24} stroke={1.5} />,
         bgColor: '#0088cc',
+        iconColor: '#ffffff',
         status: 'available',
         requiredFields: ['Bot Token'],
         steps: (
@@ -78,8 +87,9 @@ const platformConfigs: PlatformConfig[] = [
     {
         id: 'wechat',
         name: 'WeChat',
-        icon: <Typography sx={{ color: 'white', fontWeight: 'bold', fontSize: '0.75rem' }}>微信</Typography>,
+        icon: <IconBrandWechat size={24} stroke={1.5} />,
         bgColor: '#07c160',
+        iconColor: '#ffffff',
         status: 'coming-soon',
         requiredFields: ['App ID', 'App Secret'],
         steps: (
@@ -91,8 +101,9 @@ const platformConfigs: PlatformConfig[] = [
     {
         id: 'discord',
         name: 'Discord',
-        icon: <Typography sx={{ color: 'white', fontWeight: 'bold', fontSize: '0.75rem' }}>DC</Typography>,
+        icon: <IconBrandDiscord size={24} stroke={1.5} />,
         bgColor: '#5865F2',
+        iconColor: '#ffffff',
         status: 'coming-soon',
         requiredFields: ['Bot Token', 'Message Content Intent'],
         steps: (
@@ -102,10 +113,25 @@ const platformConfigs: PlatformConfig[] = [
         ),
     },
     {
+        id: 'Lark',
+        name: 'Lark',
+        icon: <Typography sx={{ color: '#ffffff', fontWeight: 'bold', fontSize: '0.7rem' }}>Lark</Typography>,
+        bgColor: '#3370FF',
+        iconColor: '#ffffff',
+        status: 'coming-soon',
+        requiredFields: ['App ID', 'App Secret'],
+        steps: (
+            <Typography variant="body2" color="text.secondary">
+                Lark bot integration is currently under development. Stay tuned for updates!
+            </Typography>
+        ),
+    },
+    {
         id: 'feishu',
         name: 'Feishu (飞书)',
-        icon: <Typography sx={{ color: 'white', fontWeight: 'bold', fontSize: '0.75rem' }}>飞书</Typography>,
+        icon: <Typography sx={{ color: '#ffffff', fontWeight: 'bold', fontSize: '0.7rem' }}></Typography>,
         bgColor: '#3370FF',
+        iconColor: '#ffffff',
         status: 'coming-soon',
         requiredFields: ['App ID', 'App Secret'],
         steps: (
@@ -117,8 +143,9 @@ const platformConfigs: PlatformConfig[] = [
     {
         id: 'dingtalk',
         name: 'DingTalk (钉钉)',
-        icon: <Typography sx={{ color: 'white', fontWeight: 'bold', fontSize: '0.75rem' }}>钉钉</Typography>,
+        icon: <IconBrandDingtalk size={24} stroke={1.5} >钉钉</IconBrandDingtalk>,
         bgColor: '#0089FF',
+        iconColor: '#ffffff',
         status: 'coming-soon',
         requiredFields: ['App Key', 'App Secret'],
         steps: (
@@ -130,8 +157,9 @@ const platformConfigs: PlatformConfig[] = [
     {
         id: 'slack',
         name: 'Slack',
-        icon: <Typography sx={{ color: 'white', fontWeight: 'bold', fontSize: '0.75rem' }}>SL</Typography>,
+        icon: <IconBrandSlack size={24} stroke={1.5} />,
         bgColor: '#4A154B',
+        iconColor: '#ffffff',
         status: 'coming-soon',
         requiredFields: ['Bot Token', 'App-Level Token'],
         steps: (
@@ -178,6 +206,7 @@ const PlatformGuide: React.FC<PlatformGuideProps> = ({ expanded, onChange }) => 
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     flexShrink: 0,
+                                    color: platform.iconColor,
                                 }}
                             >
                                 {platform.icon}
