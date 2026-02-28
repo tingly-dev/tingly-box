@@ -1,5 +1,5 @@
 import React from 'react';
-import { Add as AddIcon, Key as KeyIcon, ExpandMore as ExpandMoreIcon, UnfoldMore as UnfoldMoreIcon } from '@mui/icons-material';
+import { Add as AddIcon, Key as KeyIcon, ExpandMore as ExpandMoreIcon, UnfoldMore as UnfoldMoreIcon, Upload as ImportIcon } from '@mui/icons-material';
 import { Button, Stack, Tooltip } from '@mui/material';
 
 export interface TemplatePageActionsProps {
@@ -11,6 +11,7 @@ export interface TemplatePageActionsProps {
     showCreateRuleButton: boolean;
     onCreateRule: () => void;
     showExpandCollapseButton: boolean;
+    onImportFromClipboard?: () => void;
 }
 
 export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
@@ -22,6 +23,7 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
     showCreateRuleButton,
     onCreateRule,
     showExpandCollapseButton,
+    onImportFromClipboard,
 }) => {
     return (
         <Stack direction="row" spacing={1}>
@@ -46,6 +48,18 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
                         size="small"
                     >
                         New Key
+                    </Button>
+                </Tooltip>
+            )}
+            {onImportFromClipboard && (
+                <Tooltip title="Import rule and keys from file or clipboard">
+                    <Button
+                        variant="outlined"
+                        startIcon={<ImportIcon />}
+                        onClick={onImportFromClipboard}
+                        size="small"
+                    >
+                        Import
                     </Button>
                 </Tooltip>
             )}
