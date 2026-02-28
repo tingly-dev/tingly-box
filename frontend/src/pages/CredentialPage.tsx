@@ -1,18 +1,14 @@
-import { Add, Edit, ExpandMore, SmartToy, VpnKey } from '@mui/icons-material';
+import { Add, Edit, ExpandMore, VpnKey } from '@mui/icons-material';
 import {
     Alert,
     Button,
     Chip,
-    CircularProgress,
     Menu,
     MenuItem,
-    Modal,
     Snackbar,
     Stack,
     Tab,
     Tabs,
-    TextField,
-    Typography,
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -26,10 +22,6 @@ import OAuthTable from '@/components/OAuthTable.tsx';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import OAuthDialog from '@/components/OAuthDialog.tsx';
 import OAuthDetailDialog from '@/components/OAuthDetailDialog.tsx';
-import BotPlatformSelector from '@/components/bot/BotPlatformSelector';
-import BotAuthForm from '@/components/bot/BotAuthForm';
-import BotTable from '@/components/bot/BotTable';
-import { BotPlatformConfig, BotSettings } from '@/types/bot';
 
 type ProviderFormData = EnhancedProviderFormData;
 
@@ -41,7 +33,7 @@ interface OAuthEditFormData {
     proxyUrl?: string;
 }
 
-type CredentialTab = 'api-keys' | 'oauth' | 'bot-token';
+type CredentialTab = 'api-keys' | 'oauth';
 
 const CredentialPage = () => {
     const navigate = useNavigate();
@@ -77,30 +69,6 @@ const CredentialPage = () => {
     const [oauthDetailProvider, setOAuthDetailProvider] = useState<any | null>(null);
     const [oauthDetailDialogOpen, setOAuthDetailDialogOpen] = useState(false);
 
-    // Bot settings state - V2 multi-bot support
-    const [bots, setBots] = useState<BotSettings[]>([]);
-
-    // Bot platforms config state
-    const [botPlatforms, setBotPlatforms] = useState<BotPlatformConfig[]>([]);
-    const [currentPlatformConfig, setCurrentPlatformConfig] = useState<BotPlatformConfig | null>(null);
-
-    // Bot form draft state for add/edit dialog
-    const [botDialogMode, setBotDialogMode] = useState<'add' | 'edit'>('add');
-    const [botEditUuid, setBotEditUuid] = useState<string | null>(null);
-    const [botNameDraft, setBotNameDraft] = useState('');
-    const [botPlatformDraft, setBotPlatformDraft] = useState('telegram');
-    const [botAuthDraft, setBotAuthDraft] = useState<Record<string, string>>({});
-    const [botProxyDraft, setBotProxyDraft] = useState('');
-    const [botChatIdDraft, setBotChatIdDraft] = useState('');
-    const [botAllowlistDraft, setBotAllowlistDraft] = useState('');
-
-    const [botLoading, setBotLoading] = useState(false);
-    const [botSaving, setBotSaving] = useState(false);
-    const [botPlatformsLoading, setBotPlatformsLoading] = useState(false);
-    const [botNotice, setBotNotice] = useState<string | null>(null);
-    const [botError, setBotError] = useState<string | null>(null);
-    const [botTokenDialogOpen, setBotTokenDialogOpen] = useState(false);
-
     // URL param handling for auto-opening dialogs
     useEffect(() => {
         const dialog = searchParams.get('dialog');
@@ -110,8 +78,6 @@ const CredentialPage = () => {
         // Set tab from URL
         if (tab === 'oauth') {
             setActiveTab('oauth');
-        } else if (tab === 'bot-token') {
-            setActiveTab('bot-token');
         } else if (tab === 'api-keys' || tab === null) {
             setActiveTab('api-keys');
         }
@@ -145,66 +111,7 @@ const CredentialPage = () => {
 
     useEffect(() => {
         loadProviders();
-        loadBotPlatforms();
     }, []);
-
-    // Load bot platforms configuration
-    const loadBotPlatforms = async () => {
-        try {
-            setBotPlatformsLoading(true);
-            const data = await api.getImBotPlatforms();
-            if (data?.success && data?.platforms) {
-                setBotPlatforms(data.platforms);
-            }
-        } catch (err) {
-            console.error('Failed to load bot platforms:', err);
-        } finally {
-            setBotPlatformsLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        const loadBotSettings = async () => {
-            try {
-                setBotLoading(true);
-                const data = await api.getImBotSettingsList();
-                if (data?.success && Array.isArray(data.settings)) {
-                    setBots(data.settings);
-                } else if (data?.success === false) {
-                    setBotError(data.error || 'Failed to load bot settings');
-                }
-            } catch (err) {
-                console.error('Failed to load bot settings:', err);
-                setBotError('Failed to load bot settings');
-            } finally {
-                setBotLoading(false);
-            }
-        };
-
-        loadBotSettings();
-    }, []);
-
-    // Update current platform config when platform draft changes
-    useEffect(() => {
-        if (botPlatformDraft && botPlatforms.length > 0) {
-            const config = botPlatforms.find(p => p.platform === botPlatformDraft);
-            if (config) {
-                setCurrentPlatformConfig(config);
-            }
-        }
-    }, [botPlatformDraft, botPlatforms]);
-
-    // Helper to reload bots
-    const reloadBots = async () => {
-        try {
-            const data = await api.getImBotSettingsList();
-            if (data?.success && Array.isArray(data.settings)) {
-                setBots(data.settings);
-            }
-        } catch (err) {
-            console.error('Failed to reload bot settings:', err);
-        }
-    };
 
     const showNotification = (message: string, severity: 'success' | 'error') => {
         setSnackbar({ open: true, message, severity });
@@ -253,44 +160,6 @@ const CredentialPage = () => {
         setOAuthDialogOpen(true);
     };
 
-    const handleAddBot = () => {
-        handleAddMenuClose();
-        handleOpenBotTokenDialog();
-    };
-
-    // Bot handlers
-    const handleEditBot = (uuid: string) => {
-        handleOpenBotTokenDialog(uuid);
-    };
-
-    const handleToggleBot = async (uuid: string) => {
-        try {
-            const result = await api.toggleImBotSetting(uuid);
-            if (result?.success) {
-                showNotification(result.enabled ? 'Bot enabled' : 'Bot disabled', 'success');
-                await reloadBots();
-            } else {
-                showNotification(`Failed to toggle bot: ${result?.error}`, 'error');
-            }
-        } catch (err) {
-            showNotification('Failed to toggle bot', 'error');
-        }
-    };
-
-    const handleDeleteBot = async (uuid: string) => {
-        try {
-            const result = await api.deleteImBotSetting(uuid);
-            if (result?.success) {
-                showNotification('Bot deleted successfully', 'success');
-                await reloadBots();
-            } else {
-                showNotification(`Failed to delete bot: ${result?.error}`, 'error');
-            }
-        } catch (err) {
-            showNotification('Failed to delete bot', 'error');
-        }
-    };
-
     const loadProviders = async () => {
         setLoading(true);
         const result = await api.getProviders();
@@ -300,111 +169,6 @@ const CredentialPage = () => {
             showNotification(`Failed to load providers: ${result.error}`, 'error');
         }
         setLoading(false);
-    };
-
-    const handleOpenBotTokenDialog = (editUuid?: string) => {
-        setBotNotice(null);
-        setBotError(null);
-
-        if (editUuid) {
-            // Edit mode
-            const bot = bots.find(b => b.uuid === editUuid);
-            if (bot) {
-                setBotDialogMode('edit');
-                setBotEditUuid(editUuid);
-                setBotNameDraft(bot.name || '');
-                setBotPlatformDraft(bot.platform || 'telegram');
-                setBotAuthDraft(bot.auth ? { ...bot.auth } : {});
-                setBotProxyDraft(bot.proxy_url || '');
-                setBotChatIdDraft(bot.chat_id || '');
-                setBotAllowlistDraft((bot.bash_allowlist || []).join('\n'));
-                // Set platform config
-                const config = botPlatforms.find(p => p.platform === bot.platform);
-                if (config) {
-                    setCurrentPlatformConfig(config);
-                }
-            }
-        } else {
-            // Add mode
-            setBotDialogMode('add');
-            setBotEditUuid(null);
-            setBotNameDraft('');
-            setBotPlatformDraft('telegram');
-            setBotAuthDraft({});
-            setBotProxyDraft('');
-            setBotChatIdDraft('');
-            setBotAllowlistDraft('');
-            // Set default platform config
-            const config = botPlatforms.find(p => p.platform === 'telegram');
-            if (config) {
-                setCurrentPlatformConfig(config);
-            }
-        }
-        setBotTokenDialogOpen(true);
-    };
-
-    const handleSaveBotToken = async () => {
-        setBotSaving(true);
-        setBotNotice(null);
-        setBotError(null);
-
-        try {
-            const allowlist = botAllowlistDraft
-                .split(/[\n,]+/)
-                .map((entry) => entry.trim())
-                .filter((entry) => entry.length > 0);
-
-            // Get platform config to validate required fields
-            const platformConfig = botPlatforms.find(p => p.platform === botPlatformDraft);
-            if (!platformConfig) {
-                setBotError(`Unknown platform: ${botPlatformDraft}`);
-                return;
-            }
-
-            // Validate required auth fields
-            const missingFields = platformConfig.fields
-                .filter(f => f.required && !botAuthDraft[f.key]?.trim())
-                .map(f => f.label);
-
-            if (missingFields.length > 0) {
-                setBotError(`Missing required fields: ${missingFields.join(', ')}`);
-                return;
-            }
-
-            const data = {
-                name: botNameDraft.trim(),
-                platform: botPlatformDraft,
-                auth_type: platformConfig.auth_type,
-                auth: botAuthDraft,
-                proxy_url: botProxyDraft.trim(),
-                chat_id: botChatIdDraft.trim(),
-                bash_allowlist: allowlist,
-                enabled: true,
-            };
-
-            let result;
-            if (botDialogMode === 'edit' && botEditUuid) {
-                result = await api.updateImBotSetting(botEditUuid, data);
-            } else {
-                result = await api.createImBotSetting(data);
-            }
-
-            if (result?.success === false) {
-                setBotError(result.error || 'Failed to save bot settings');
-                return;
-            }
-
-            // Reload bots
-            await reloadBots();
-
-            setBotNotice(`Bot ${botDialogMode === 'edit' ? 'updated' : 'created'} successfully.`);
-            setBotTokenDialogOpen(false);
-        } catch (err) {
-            console.error('Failed to save bot settings:', err);
-            setBotError('Failed to save bot settings');
-        } finally {
-            setBotSaving(false);
-        }
     };
 
     // API Key handlers
@@ -558,17 +322,16 @@ const CredentialPage = () => {
             credentialCounts: {
                 apiKeys: apiKeys.length,
                 oauth: oauth.length,
-                bots: bots.length,
-                total: providers.length + bots.length,
+                total: providers.length,
             },
         };
-    }, [providers, bots]);
+    }, [providers]);
 
     return (
         <PageLayout loading={loading}>
             <UnifiedCard
                 title="Credentials"
-                subtitle={`Managing ${credentialCounts.total} credential${credentialCounts.total > 1 ? 's' : ''}`}
+                subtitle={`Managing ${credentialCounts.total} credential${credentialCounts.total !== 1 ? 's' : ''}`}
                 size="full"
                 rightAction={
                     <Stack direction="row" spacing={1}>
@@ -602,285 +365,105 @@ const CredentialPage = () => {
                                 <VpnKey sx={{ mr: 1 }} fontSize="small" />
                                 Add OAuth Provider
                             </MenuItem>
-                            <MenuItem onClick={handleAddBot}>
-                                <SmartToy sx={{ mr: 1 }} fontSize="small" />
-                                Add Bot
-                            </MenuItem>
                         </Menu>
                     </Stack>
                 }
             >
-                    {/* Tab Navigation */}
-                    <Tabs
-                        value={activeTab}
-                        onChange={handleTabChange}
-                        sx={{
-                            borderBottom: 1,
-                            borderColor: 'divider',
-                            mb: 2,
-                            minHeight: 48,
-                            '& .MuiTab-root': {
-                                textTransform: 'none',
-                                fontWeight: 500,
-                                fontSize: '0.875rem',
-                                minHeight: 48,
-                            },
-                        }}
-                    >
-                        <Tab
-                            label={
-                                <Stack direction="row" alignItems="center" spacing={1}>
-                                    <span>API Keys</span>
-                                    <Chip
-                                        label={credentialCounts.apiKeys}
-                                        size="small"
-                                        color={activeTab === 'api-keys' ? 'primary' : 'default'}
-                                        variant={activeTab === 'api-keys' ? 'filled' : 'outlined'}
-                                        sx={{ height: 20, minWidth: 20, fontSize: '0.7rem' }}
-                                    />
-                                </Stack>
-                            }
-                            value="api-keys"
-                        />
-                        <Tab
-                            label={
-                                <Stack direction="row" alignItems="center" spacing={1}>
-                                    <span>OAuth</span>
-                                    <Chip
-                                        label={credentialCounts.oauth}
-                                        size="small"
-                                        color={activeTab === 'oauth' ? 'primary' : 'default'}
-                                        variant={activeTab === 'oauth' ? 'filled' : 'outlined'}
-                                        sx={{ height: 20, minWidth: 20, fontSize: '0.7rem' }}
-                                    />
-                                </Stack>
-                            }
-                            value="oauth"
-                        />
-                        <Tab
-                            label={
-                                <Stack direction="row" alignItems="center" spacing={1}>
-                                    <span>Bots</span>
-                                    <Chip
-                                        label={credentialCounts.bots}
-                                        size="small"
-                                        color={activeTab === 'bot-token' ? 'primary' : 'default'}
-                                        variant={activeTab === 'bot-token' ? 'filled' : 'outlined'}
-                                        sx={{ height: 20, minWidth: 20, fontSize: '0.7rem' }}
-                                    />
-                                </Stack>
-                            }
-                            value="bot-token"
-                        />
-                    </Tabs>
-
-                    {/* Tab Content */}
-                    {activeTab === 'api-keys' && (
-                        <>
-                            {credentialCounts.apiKeys > 0 ? (
-                                <ApiKeyTable
-                                    providers={apiKeyProviders}
-                                    onEdit={handleEditProvider}
-                                    onToggle={handleToggleProvider}
-                                    onDelete={handleDeleteProvider}
-                                />
-                            ) : (
-                                <EmptyStateGuide
-                                    title="No API Keys Configured"
-                                    description="Configure API keys to access AI services like OpenAI, Anthropic, etc."
-                                    showOAuthButton={false}
-                                    showHeroIcon={false}
-                                    primaryButtonLabel="Add API Key"
-                                    onAddApiKeyClick={handleAddApiKey}
-                                />
-                            )}
-                        </>
-                    )}
-
-                    {activeTab === 'oauth' && (
-                        <>
-                            {credentialCounts.oauth > 0 ? (
-                                <OAuthTable
-                                    providers={oauthProviders}
-                                    onEdit={handleEditProvider}
-                                    onToggle={handleToggleProvider}
-                                    onDelete={handleDeleteProvider}
-                                    onRefreshToken={handleRefreshToken}
-                                />
-                            ) : (
-                                <EmptyStateGuide
-                                    title="No OAuth Providers Configured"
-                                    description="Configure OAuth providers like Claude Code, Gemini CLI, Qwen, etc."
-                                    showOAuthButton={false}
-                                    showHeroIcon={false}
-                                    primaryButtonLabel="Add OAuth Provider"
-                                    onAddApiKeyClick={handleAddOAuth}
-                                />
-                            )}
-                        </>
-                    )}
-
-                    {activeTab === 'bot-token' && (
-                        <Stack spacing={2}>
-                            {botNotice && (
-                                <Alert severity="success" onClose={() => setBotNotice(null)}>
-                                    {botNotice}
-                                </Alert>
-                            )}
-                            {botError && (
-                                <Alert severity="error" onClose={() => setBotError(null)}>
-                                    {botError}
-                                </Alert>
-                            )}
-                            {bots.length > 0 ? (
-                                <BotTable
-                                    bots={bots}
-                                    platforms={botPlatforms}
-                                    onEdit={handleEditBot}
-                                    onToggle={handleToggleBot}
-                                    onDelete={handleDeleteBot}
-                                />
-                            ) : (
-                                <EmptyStateGuide
-                                    title="No Bots Configured"
-                                    description="Configure bots to enable remote-coder chat integration."
-                                    showOAuthButton={false}
-                                    showHeroIcon={false}
-                                    primaryButtonLabel="Add Bot"
-                                    onAddApiKeyClick={() => handleOpenBotTokenDialog()}
-                                />
-                            )}
-                            {botLoading && (
-                                <Stack direction="row" spacing={1} alignItems="center">
-                                    <CircularProgress size={16} />
-                                    <Typography variant="body2" color="text.secondary">
-                                        Loading bot settings...
-                                    </Typography>
-                                </Stack>
-                            )}
-                        </Stack>
-                    )}
-                </UnifiedCard>
-
-            {/* Bot Add/Edit Dialog */}
-            <Modal open={botTokenDialogOpen} onClose={() => setBotTokenDialogOpen(false)}>
-                <Stack
+                {/* Tab Navigation */}
+                <Tabs
+                    value={activeTab}
+                    onChange={handleTabChange}
                     sx={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        width: 600,
-                        maxWidth: '80vw',
-                        maxHeight: '80vh',
-                        overflowY: 'auto',
-                        bgcolor: 'background.paper',
-                        boxShadow: 24,
-                        p: 4,
-                        borderRadius: 2,
-                        gap: 2,
+                        borderBottom: 1,
+                        borderColor: 'divider',
+                        mb: 2,
+                        minHeight: 48,
+                        '& .MuiTab-root': {
+                            textTransform: 'none',
+                            fontWeight: 500,
+                            fontSize: '0.875rem',
+                            minHeight: 48,
+                        },
                     }}
                 >
-                    <Typography variant="h6">{botDialogMode === 'edit' ? 'Edit Bot Configuration' : 'Add Bot Configuration'}</Typography>
-                    <Stack spacing={2}>
-                        <TextField
-                            label="Name"
-                            placeholder="My Bot"
-                            value={botNameDraft}
-                            onChange={(e) => setBotNameDraft(e.target.value)}
-                            fullWidth
-                            size="small"
-                            helperText="Optional: a friendly name for this bot configuration."
-                            disabled={botSaving}
-                        />
+                    <Tab
+                        label={
+                            <Stack direction="row" alignItems="center" spacing={1}>
+                                <span>API Keys</span>
+                                <Chip
+                                    label={credentialCounts.apiKeys}
+                                    size="small"
+                                    color={activeTab === 'api-keys' ? 'primary' : 'default'}
+                                    variant={activeTab === 'api-keys' ? 'filled' : 'outlined'}
+                                    sx={{ height: 20, minWidth: 20, fontSize: '0.7rem' }}
+                                />
+                            </Stack>
+                        }
+                        value="api-keys"
+                    />
+                    <Tab
+                        label={
+                            <Stack direction="row" alignItems="center" spacing={1}>
+                                <span>OAuth</span>
+                                <Chip
+                                    label={credentialCounts.oauth}
+                                    size="small"
+                                    color={activeTab === 'oauth' ? 'primary' : 'default'}
+                                    variant={activeTab === 'oauth' ? 'filled' : 'outlined'}
+                                    sx={{ height: 20, minWidth: 20, fontSize: '0.7rem' }}
+                                />
+                            </Stack>
+                        }
+                        value="oauth"
+                    />
+                </Tabs>
 
-                        <Stack spacing={1}>
-                            <Typography variant="body2" color="text.secondary">
-                                Platform
-                            </Typography>
-                            <BotPlatformSelector
-                                value={botPlatformDraft}
-                                onChange={(platform) => {
-                                    setBotPlatformDraft(platform);
-                                    // Clear auth draft when platform changes
-                                    setBotAuthDraft({});
-                                    // Update current platform config
-                                    const config = botPlatforms.find(p => p.platform === platform);
-                                    if (config) {
-                                        setCurrentPlatformConfig(config);
-                                    }
-                                }}
-                                platforms={botPlatforms}
-                                loading={botPlatformsLoading}
-                                disabled={botSaving}
+                {/* Tab Content */}
+                {activeTab === 'api-keys' && (
+                    <>
+                        {credentialCounts.apiKeys > 0 ? (
+                            <ApiKeyTable
+                                providers={apiKeyProviders}
+                                onEdit={handleEditProvider}
+                                onToggle={handleToggleProvider}
+                                onDelete={handleDeleteProvider}
                             />
-                        </Stack>
-
-                        {currentPlatformConfig && (
-                            <BotAuthForm
-                                platform={botPlatformDraft}
-                                authType={currentPlatformConfig.auth_type}
-                                fields={currentPlatformConfig.fields}
-                                authData={botAuthDraft}
-                                onChange={(key, value) => setBotAuthDraft(prev => ({ ...prev, [key]: value }))}
-                                disabled={botSaving}
+                        ) : (
+                            <EmptyStateGuide
+                                title="No API Keys Configured"
+                                description="Configure API keys to access AI services like OpenAI, Anthropic, etc."
+                                showOAuthButton={false}
+                                showHeroIcon={false}
+                                primaryButtonLabel="Add API Key"
+                                onAddApiKeyClick={handleAddApiKey}
                             />
                         )}
+                    </>
+                )}
 
-                        <TextField
-                            label="Proxy URL"
-                            placeholder="http://user:pass@host:port"
-                            value={botProxyDraft}
-                            onChange={(e) => setBotProxyDraft(e.target.value)}
-                            fullWidth
-                            size="small"
-                            helperText="Optional HTTP/HTTPS proxy for bot API requests."
-                            disabled={botSaving}
-                        />
-
-                        <TextField
-                            label="Chat ID Lock"
-                            placeholder="e.g. 123456789"
-                            value={botChatIdDraft}
-                            onChange={(e) => setBotChatIdDraft(e.target.value)}
-                            fullWidth
-                            size="small"
-                            helperText="Optional: when set, only this chat ID can use the bot."
-                            disabled={botSaving}
-                        />
-
-                        <TextField
-                            label="Bash Allowlist"
-                            placeholder="cd\nls\npwd"
-                            value={botAllowlistDraft}
-                            onChange={(e) => setBotAllowlistDraft(e.target.value)}
-                            fullWidth
-                            multiline
-                            minRows={3}
-                            size="small"
-                            helperText="Allowlisted /bash subcommands. Default: cd, ls, pwd."
-                            disabled={botSaving}
-                        />
-                    </Stack>
-
-                    <Stack direction="row" spacing={2} justifyContent="flex-end">
-                        <Button
-                            onClick={() => setBotTokenDialogOpen(false)}
-                            color="inherit"
-                            disabled={botSaving}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="contained"
-                            onClick={handleSaveBotToken}
-                            disabled={botSaving || botLoading}
-                        >
-                            {botSaving ? 'Saving...' : 'Save Configuration'}
-                        </Button>
-                    </Stack>
-                </Stack>
-            </Modal>
+                {activeTab === 'oauth' && (
+                    <>
+                        {credentialCounts.oauth > 0 ? (
+                            <OAuthTable
+                                providers={oauthProviders}
+                                onEdit={handleEditProvider}
+                                onToggle={handleToggleProvider}
+                                onDelete={handleDeleteProvider}
+                                onRefreshToken={handleRefreshToken}
+                            />
+                        ) : (
+                            <EmptyStateGuide
+                                title="No OAuth Providers Configured"
+                                description="Configure OAuth providers like Claude Code, Gemini CLI, Qwen, etc."
+                                showOAuthButton={false}
+                                showHeroIcon={false}
+                                primaryButtonLabel="Add OAuth Provider"
+                                onAddApiKeyClick={handleAddOAuth}
+                            />
+                        )}
+                    </>
+                )}
+            </UnifiedCard>
 
             {/* API Key Provider Dialog */}
             <ProviderFormDialog
