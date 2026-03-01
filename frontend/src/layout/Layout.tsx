@@ -28,7 +28,6 @@ import {
     Typography,
     Popover,
     Tooltip,
-    Zoom,
     Divider,
 } from '@mui/material';
 import type { ReactNode } from 'react';
@@ -46,7 +45,7 @@ interface LayoutProps {
     children: ReactNode;
 }
 
-const activityBarWidth = 56;
+const activityBarWidth = 77;
 const sidebarWidth = 200;
 
 interface NavItem {
@@ -158,12 +157,6 @@ const Layout = ({ children }: LayoutProps) => {
                     },
                 ],
             },
-            {
-                key: 'credential',
-                icon: <LockIcon sx={{ fontSize: 22 }} />,
-                label: t('layout.nav.credential', { defaultValue: 'Credentials' }),
-                path: '/credentials',
-            },
             ...(promptMenuItems.length > 0 ? [{
                 key: 'prompt' as const,
                 icon: <PromptIcon sx={{ fontSize: 22 }} />,
@@ -173,7 +166,7 @@ const Layout = ({ children }: LayoutProps) => {
             ...(enableRemoteCoder ? [{
                 key: 'remote-control' as const,
                 icon: <RemoteIcon sx={{ fontSize: 22 }} />,
-                label: 'Remote Control',
+                label: 'Remote',
                 children: [
                     {
                         path: '/remote-control',
@@ -192,6 +185,12 @@ const Layout = ({ children }: LayoutProps) => {
                     },
                 ],
             }] : []),
+            {
+                key: 'credential',
+                icon: <LockIcon sx={{ fontSize: 22 }} />,
+                label: t('layout.nav.credential', { defaultValue: 'Credentials' }),
+                path: '/credentials',
+            },
             {
                 key: 'system',
                 icon: <SystemIcon sx={{ fontSize: 22 }} />,
@@ -278,7 +277,7 @@ const Layout = ({ children }: LayoutProps) => {
             </Box>
 
             {/* Activity Icons */}
-            <Box sx={{ flex: 1, py: 1.5, overflowY: 'auto' }}>
+            <Box sx={{ flex: 1, py: 0.5, overflowY: 'auto' }}>
                 {activityItems.map((item) => {
                     const isActiveItem = activeActivity === item.key;
 
@@ -290,59 +289,74 @@ const Layout = ({ children }: LayoutProps) => {
                         }
                     };
 
+                    // Short label for display (max 8 chars)
+                    const shortLabel = item.label.length > 12 ? item.label.slice(0, 7) + '…' : item.label;
+
                     return (
-                        <Tooltip
+                        <ListItemButton
                             key={item.key}
-                            title={item.label}
-                            placement="right"
-                            arrow
-                            TransitionComponent={Zoom}
-                        >
-                            <ListItemButton
-                                component={item.path ? RouterLink : 'div'}
-                                to={item.path}
-                                onClick={item.children ? handleClick : () => setMobileOpen(false)}
-                                sx={{
-                                    minHeight: 48,
-                                    px: 1.5,
-                                    py: 1.25,
-                                    justifyContent: 'center',
-                                    position: 'relative',
-                                    color: isActiveItem ? 'primary.main' : 'text.secondary',
-                                    transition: 'all 0.15s ease-in-out',
-                                    borderRadius: 0,
-                                    cursor: 'pointer',
-                                    '&:hover': {
-                                        bgcolor: 'action.hover',
-                                        color: 'primary.main',
+                            component={item.path ? RouterLink : 'div'}
+                            to={item.path}
+                            onClick={item.children ? handleClick : () => setMobileOpen(false)}
+                            sx={{
+                                minHeight: 56,
+                                px: 1,
+                                py: 1,
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 0.25,
+                                position: 'relative',
+                                color: isActiveItem ? 'primary.main' : 'text.secondary',
+                                transition: 'all 0.15s ease-in-out',
+                                borderRadius: 0,
+                                cursor: 'pointer',
+                                '&:hover': {
+                                    bgcolor: 'action.hover',
+                                    color: 'primary.main',
+                                },
+                                ...(isActiveItem && {
+                                    bgcolor: 'action.selected',
+                                    '&::before': {
+                                        content: '""',
+                                        position: 'absolute',
+                                        left: 0,
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        width: 3,
+                                        height: 36,
+                                        bgcolor: 'primary.main',
+                                        borderRadius: '0 2px 2px 0',
                                     },
-                                    ...(isActiveItem && {
-                                        bgcolor: 'action.selected',
-                                        '&::before': {
-                                            content: '""',
-                                            position: 'absolute',
-                                            left: 0,
-                                            top: '50%',
-                                            transform: 'translateY(-50%)',
-                                            width: 3,
-                                            height: 28,
-                                            bgcolor: 'primary.main',
-                                            borderRadius: '0 2px 2px 0',
-                                        },
-                                    }),
+                                }),
+                            }}
+                        >
+                            <ListItemIcon
+                                sx={{
+                                    minWidth: 0,
+                                    color: 'inherit',
+                                    justifyContent: 'center',
                                 }}
                             >
-                                <ListItemIcon
-                                    sx={{
-                                        minWidth: 0,
-                                        color: 'inherit',
-                                        justifyContent: 'center',
-                                    }}
-                                >
-                                    {item.icon}
-                                </ListItemIcon>
-                            </ListItemButton>
-                        </Tooltip>
+                                {item.icon}
+                            </ListItemIcon>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    fontSize: '0.65rem',
+                                    fontWeight: isActiveItem ? 600 : 400,
+                                    color: 'inherit',
+                                    textAlign: 'center',
+                                    lineHeight: 1.2,
+                                    maxWidth: '100%',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                }}
+                            >
+                                {shortLabel}
+                            </Typography>
+                        </ListItemButton>
                     );
                 })}
             </Box>
