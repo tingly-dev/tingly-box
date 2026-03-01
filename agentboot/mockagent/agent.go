@@ -60,32 +60,22 @@ func (a *Agent) Execute(ctx context.Context, prompt string, opts agentboot.Execu
 		sessionID = uuid.NewString()[:8]
 	}
 
-	// Generate session init event
-	events = append(events, agentboot.Event{
-		Type: "system",
-		Data: map[string]interface{}{
-			"session_id":     sessionID,
-			"agent_type":     "mock",
-			"max_iterations": a.config.MaxIterations,
-		},
-		Timestamp: startTime,
-	})
+	// Generate session init event using unified message
+	initMsg := agentboot.NewInitMessage(agentboot.AgentTypeMockAgent, sessionID, a.config.MaxIterations)
+	events = append(events, initMsg.ToEvent())
+
+	// Send via handler if available
+	if opts.Handler != nil {
+		opts.Handler.OnMessage(initMsg)
+	}
 
 	// Process through iterations
 	for step := 1; step <= a.config.MaxIterations; step++ {
 		select {
 		case <-ctx.Done():
 			logrus.Infof("[MockAgent] Context cancelled at step %d", step)
-			events = append(events, agentboot.Event{
-				Type: "result",
-				Data: map[string]interface{}{
-					"status":         "cancelled",
-					"message":        "Context cancelled by user",
-					"step":           step,
-					"total_cost_usd": 0.0,
-				},
-				Timestamp: time.Now(),
-			})
+			resultMsg := agentboot.NewResultMessage(agentboot.AgentTypeMockAgent, sessionID, "cancelled", "Context cancelled by user")
+			events = append(events, resultMsg.ToEvent())
 			return a.buildResult(events, startTime, sessionID), ctx.Err()
 		default:
 		}
@@ -93,42 +83,35 @@ func (a *Agent) Execute(ctx context.Context, prompt string, opts agentboot.Execu
 		// Generate tool name for this step
 		toolName := mockToolNames[(step-1)%len(mockToolNames)]
 
-		// Create permission request
+		// Create permission request with chat context for IM prompter
 		req := agentboot.PermissionRequest{
 			RequestID: uuid.NewString()[:8],
 			AgentType: agentboot.AgentTypeMockAgent,
 			ToolName:  toolName,
 			Input: map[string]interface{}{
-				"step":    step,
-				"total":   a.config.MaxIterations,
-				"prompt":  truncatePrompt(prompt),
-				"command": fmt.Sprintf("mock_command --step %d --input %q", step, truncatePrompt(prompt)),
+				"step":      step,
+				"total":     a.config.MaxIterations,
+				"prompt":    truncatePrompt(prompt),
+				"command":   fmt.Sprintf("mock_command --step %d --input %q", step, truncatePrompt(prompt)),
+				"_chat_id":  opts.ChatID,   // For IMPrompter to send keyboard
+				"_platform": opts.Platform, // For IMPrompter to get correct bot
 			},
 			Reason:    fmt.Sprintf("Mock permission request %d of %d", step, a.config.MaxIterations),
 			Timestamp: time.Now(),
 			SessionID: sessionID,
 		}
 
-		// Send permission request event
-		events = append(events, agentboot.Event{
-			Type: "permission_request",
-			Data: map[string]interface{}{
-				"request_id": req.RequestID,
-				"tool_name":  req.ToolName,
-				"input":      req.Input,
-				"reason":     req.Reason,
-				"step":       step,
-				"total":      a.config.MaxIterations,
-			},
-			Timestamp: time.Now(),
-		})
+		// Create unified permission request message
+		permReqMsg := agentboot.NewPermissionRequestMessage(
+			agentboot.AgentTypeMockAgent, sessionID, req.RequestID, req.ToolName, req.Input, req.Reason,
+		)
+		permReqMsg.Step = step
+		permReqMsg.Total = a.config.MaxIterations
+		events = append(events, permReqMsg.ToEvent())
 
 		// Send via handler if available (for real-time streaming)
 		if opts.Handler != nil {
-			opts.Handler.OnMessage(map[string]interface{}{
-				"type": "permission_request",
-				"data": req,
-			})
+			opts.Handler.OnMessage(permReqMsg)
 		}
 
 		// Get permission decision
@@ -152,58 +135,36 @@ func (a *Agent) Execute(ctx context.Context, prompt string, opts agentboot.Execu
 		if !result.Approved {
 			logrus.Infof("[MockAgent] Permission denied at step %d: %s", step, result.Reason)
 
-			// Send denial event
-			events = append(events, agentboot.Event{
-				Type: "permission_denied",
-				Data: map[string]interface{}{
-					"request_id": req.RequestID,
-					"reason":     result.Reason,
-					"step":       step,
-				},
-				Timestamp: time.Now(),
-			})
+			// Create unified permission result message (denied)
+			permResultMsg := agentboot.NewPermissionResultMessage(
+				agentboot.AgentTypeMockAgent, sessionID, req.RequestID, false, result.Reason,
+			)
+			events = append(events, permResultMsg.ToEvent())
 
 			// Send result event
-			events = append(events, agentboot.Event{
-				Type: "result",
-				Data: map[string]interface{}{
-					"status":          "permission_denied",
-					"message":         fmt.Sprintf("Permission denied at step %d: %s", step, result.Reason),
-					"steps_completed": step - 1,
-					"total_cost_usd":  0.0,
-				},
-				Timestamp: time.Now(),
-			})
+			resultMsg := agentboot.NewResultMessage(
+				agentboot.AgentTypeMockAgent, sessionID, "permission_denied",
+				fmt.Sprintf("Permission denied at step %d: %s", step, result.Reason),
+			)
+			events = append(events, resultMsg.ToEvent())
 
 			return a.buildResult(events, startTime, sessionID), nil
 		}
 
-		// Permission approved - record it
-		events = append(events, agentboot.Event{
-			Type: "permission_approved",
-			Data: map[string]interface{}{
-				"request_id": req.RequestID,
-				"step":       step,
-			},
-			Timestamp: time.Now(),
-		})
+		// Permission approved - create unified result message
+		permResultMsg := agentboot.NewPermissionResultMessage(
+			agentboot.AgentTypeMockAgent, sessionID, req.RequestID, true, "Approved",
+		)
+		events = append(events, permResultMsg.ToEvent())
 
-		// Generate assistant response
+		// Generate assistant response using unified message
 		responseText := a.formatResponse(step, prompt)
-		assistantEvent := agentboot.Event{
-			Type: "assistant",
-			Data: map[string]interface{}{
-				"message":   responseText,
-				"step":      step,
-				"tool_used": toolName,
-			},
-			Timestamp: time.Now(),
-		}
-		events = append(events, assistantEvent)
+		assistantMsg := agentboot.NewAssistantMessage(agentboot.AgentTypeMockAgent, sessionID, responseText)
+		events = append(events, assistantMsg.ToEvent())
 
 		// Send via handler if available
 		if opts.Handler != nil {
-			opts.Handler.OnMessage(assistantEvent)
+			opts.Handler.OnMessage(assistantMsg)
 		}
 
 		// Add delay between steps (except for the last step)
@@ -219,16 +180,10 @@ func (a *Agent) Execute(ctx context.Context, prompt string, opts agentboot.Execu
 	}
 
 	// All iterations completed successfully
-	events = append(events, agentboot.Event{
-		Type: "result",
-		Data: map[string]interface{}{
-			"status":          "success",
-			"message":         "Mock agent completed all iterations",
-			"steps_completed": a.config.MaxIterations,
-			"total_cost_usd":  0.0,
-		},
-		Timestamp: time.Now(),
-	})
+	resultMsg := agentboot.NewResultMessage(
+		agentboot.AgentTypeMockAgent, sessionID, "success", "Mock agent completed all iterations",
+	)
+	events = append(events, resultMsg.ToEvent())
 
 	// Notify handler of completion
 	if opts.Handler != nil {
