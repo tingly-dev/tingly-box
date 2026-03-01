@@ -151,6 +151,11 @@ func (h *BotHandler) handleDirectMessage(hCtx HandlerContext) {
 		return
 	}
 
+	// Check if there's a pending permission request and user is responding
+	if h.handlePermissionTextResponse(hCtx) {
+		return
+	}
+
 	// Check for active session or show project selection
 	sessionID, ok, err := h.store.GetSessionForChat(hCtx.ChatID)
 	if err != nil {
@@ -184,6 +189,11 @@ func (h *BotHandler) handleGroupMessage(hCtx HandlerContext) {
 	// Check if waiting for custom path input
 	if h.directoryBrowser.IsWaitingInput(hCtx.ChatID) {
 		h.handleCustomPathInput(hCtx)
+		return
+	}
+
+	// Check if there's a pending permission request and user is responding
+	if h.handlePermissionTextResponse(hCtx) {
 		return
 	}
 
@@ -1552,6 +1562,56 @@ func (h *BotHandler) handlePermissionCallback(hCtx HandlerContext, parts []strin
 
 	// Send feedback to user
 	h.SendText(hCtx, fmt.Sprintf("%s for tool: `%s`", resultText, pendingReq.ToolName))
+}
+
+// handlePermissionTextResponse handles text-based permission responses
+// Returns true if the message was a valid permission response, false otherwise
+func (h *BotHandler) handlePermissionTextResponse(hCtx HandlerContext) bool {
+	// Check if there are pending permission requests for this chat
+	pendingReqs := h.imPrompter.GetPendingRequestsForChat(hCtx.ChatID)
+	if len(pendingReqs) == 0 {
+		return false
+	}
+
+	// Try to parse the text as a permission response
+	approved, remember, isValid := ParseTextResponse(hCtx.Text)
+	if !isValid {
+		// Not a valid permission response, let other handlers process it
+		return false
+	}
+
+	// Get the most recent pending request for this chat
+	// (usually there's only one at a time)
+	latestReq := pendingReqs[0]
+
+	// Submit the decision
+	if err := h.imPrompter.SubmitDecision(latestReq.RequestID, approved, remember, ""); err != nil {
+		logrus.WithError(err).WithField("request_id", latestReq.RequestID).Error("Failed to submit permission decision")
+		h.SendText(hCtx, fmt.Sprintf("Failed to process permission response: %v", err))
+		return true
+	}
+
+	// Send feedback to user
+	var resultText string
+	if remember {
+		resultText = "🔄 Always allowed"
+	} else if approved {
+		resultText = "✅ Permission granted"
+	} else {
+		resultText = "❌ Permission denied"
+	}
+
+	h.SendText(hCtx, fmt.Sprintf("%s for tool: `%s`", resultText, latestReq.ToolName))
+
+	logrus.WithFields(logrus.Fields{
+		"request_id": latestReq.RequestID,
+		"tool_name":  latestReq.ToolName,
+		"user_id":    hCtx.SenderID,
+		"approved":   approved,
+		"remember":   remember,
+	}).Info("User responded to permission request via text")
+
+	return true
 }
 
 // handleCreateConfirm sends a confirmation prompt for creating a directory
