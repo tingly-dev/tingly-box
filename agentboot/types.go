@@ -94,6 +94,10 @@ type ExecutionOptions struct {
 	SessionID string
 	// Resume indicates whether to resume an existing session (true) or create a new one (false)
 	Resume bool
+	// ChatID is the chat ID for permission requests (used by mock agent)
+	ChatID string
+	// Platform is the platform for permission requests (used by mock agent)
+	Platform string
 }
 
 // Result represents the result of an agent execution
