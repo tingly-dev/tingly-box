@@ -286,8 +286,10 @@ type PermissionResponse struct {
 
 // PermissionResult represents the result of a permission check
 type PermissionResult struct {
-	Approved bool   `json:"approved"`
-	Reason   string `json:"reason,omitempty"`
+	Approved     bool                   `json:"approved"`
+	Reason       string                 `json:"reason,omitempty"`
+	UpdatedInput map[string]interface{} `json:"updated_input,omitempty"`
+	Remember     bool                   `json:"remember,omitempty"`
 }
 
 // PermissionConfig holds permission handler configuration

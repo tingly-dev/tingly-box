@@ -100,7 +100,7 @@ func (h *DefaultHandler) CanUseTool(ctx context.Context, req agentboot.Permissio
 func (h *DefaultHandler) handleManualPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
 	// If user prompter is set, use it for interactive permission
 	if h.userPrompter != nil {
-		approved, remember, err := h.userPrompter.PromptPermission(ctx, req)
+		result, err := h.userPrompter.PromptPermission(ctx, req)
 		if err != nil {
 			return agentboot.PermissionResult{
 				Approved: false,
@@ -109,7 +109,7 @@ func (h *DefaultHandler) handleManualPermission(ctx context.Context, req agentbo
 		}
 
 		// If remember is true, add to whitelist
-		if remember && approved && h.config.EnableWhitelist {
+		if result.Remember && result.Approved && h.config.EnableWhitelist {
 			h.mu.Lock()
 			h.config.Whitelist = append(h.config.Whitelist, req.ToolName)
 			h.mu.Unlock()
@@ -119,19 +119,19 @@ func (h *DefaultHandler) handleManualPermission(ctx context.Context, req agentbo
 		if h.config.RememberDecisions {
 			h.cacheDecision(req, agentboot.PermissionResponse{
 				RequestID: req.RequestID,
-				Approved:  approved,
+				Approved:  result.Approved,
 				Timestamp: time.Now(),
 			})
 		}
 
-		reason := "User approved"
-		if !approved {
-			reason = "User denied"
+		if result.Reason == "" {
+			if result.Approved {
+				result.Reason = "User approved"
+			} else {
+				result.Reason = "User denied"
+			}
 		}
-		return agentboot.PermissionResult{
-			Approved: approved,
-			Reason:   reason,
-		}, nil
+		return result, nil
 	}
 
 	// Fallback to channel-based decision waiting

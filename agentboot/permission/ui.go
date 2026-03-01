@@ -13,8 +13,8 @@ import (
 // UserPrompter handles user interaction for permission requests
 type UserPrompter interface {
 	// PromptPermission prompts the user for permission decision
-	// Returns: approved (whether to allow), remember (whether to remember this decision), error
-	PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (approved bool, remember bool, err error)
+	// Returns the result with approval status and optional updated input
+	PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error)
 }
 
 // StdinPrompter implements UserPrompter using stdin/stdout
@@ -49,7 +49,12 @@ func NewStdinPrompterDebug() *StdinPrompter {
 }
 
 // PromptPermission prompts the user via stdin for permission decision
-func (p *StdinPrompter) PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (bool, bool, error) {
+func (p *StdinPrompter) PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
+	// Check if this is an AskUserQuestion tool - handle specially
+	if req.ToolName == "AskUserQuestion" {
+		return p.promptAskUserQuestion(ctx, req)
+	}
+
 	// Display permission request
 	fmt.Printf("\r%s[Tool Permission]%s Claude wants to use: %s%s\n",
 		p.ColorYellow, p.ColorReset, p.ColorCyan, req.ToolName)
@@ -80,24 +85,162 @@ func (p *StdinPrompter) PromptPermission(ctx context.Context, req agentboot.Perm
 	// Wait for input or context cancellation
 	select {
 	case <-ctx.Done():
-		return false, false, ctx.Err()
+		return agentboot.PermissionResult{Approved: false}, ctx.Err()
 	case r := <-resultChan:
 		if r.err != nil {
-			return false, false, r.err
+			return agentboot.PermissionResult{Approved: false}, r.err
 		}
 
 		switch r.response {
 		case "y", "yes":
-			return true, false, nil
+			return agentboot.PermissionResult{
+				Approved:     true,
+				UpdatedInput: req.Input,
+			}, nil
 		case "a", "always", "al":
-			return true, true, nil
+			return agentboot.PermissionResult{
+				Approved:     true,
+				UpdatedInput: req.Input,
+				Remember:     true,
+			}, nil
 		case "n", "no":
-			return false, false, nil
+			return agentboot.PermissionResult{Approved: false}, nil
 		default:
 			// Invalid response - treat as deny with message
-			return false, false, nil
+			return agentboot.PermissionResult{Approved: false}, nil
 		}
 	}
+}
+
+// promptAskUserQuestion handles AskUserQuestion tool with multi-option selection
+func (p *StdinPrompter) promptAskUserQuestion(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
+	questions, ok := req.Input["questions"].([]interface{})
+	if !ok || len(questions) == 0 {
+		return agentboot.PermissionResult{
+			Approved:     true,
+			UpdatedInput: req.Input,
+		}, nil
+	}
+
+	// Display the questions and options
+	fmt.Printf("\r%s[Question]%s\n", p.ColorYellow, p.ColorReset)
+
+	answers := make(map[string]interface{})
+
+	for i, q := range questions {
+		question, ok := q.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		questionText, _ := question["question"].(string)
+		header, _ := question["header"].(string)
+
+		if header != "" {
+			fmt.Printf("\n%s[%s]%s\n", p.ColorCyan, header, p.ColorReset)
+		}
+		fmt.Printf("%s\n", questionText)
+
+		// Show options
+		options, ok := question["options"].([]interface{})
+		if !ok || len(options) == 0 {
+			continue
+		}
+
+		fmt.Printf("\nOptions:\n")
+		for j, opt := range options {
+			option, ok := opt.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			label, _ := option["label"].(string)
+			desc, _ := option["description"].(string)
+			if desc != "" {
+				fmt.Printf("  %s%d%s. %s - %s\n", p.ColorGreen, j+1, p.ColorReset, label, desc)
+			} else {
+				fmt.Printf("  %s%d%s. %s\n", p.ColorGreen, j+1, p.ColorReset, label)
+			}
+		}
+
+		// Prompt for selection
+		fmt.Printf("\n%sSelect option (1-%d) or type label: %s", p.ColorGreen, len(options), p.ColorReset)
+
+		// Read user input
+		type result struct {
+			response string
+			err      error
+		}
+		resultChan := make(chan result, 1)
+
+		go func() {
+			reader := bufio.NewReader(os.Stdin)
+			response, err := reader.ReadString('\n')
+			response = strings.TrimSpace(response)
+			resultChan <- result{response: response, err: err}
+		}()
+
+		// Wait for input or context cancellation
+		select {
+		case <-ctx.Done():
+			return agentboot.PermissionResult{Approved: false}, ctx.Err()
+		case r := <-resultChan:
+			if r.err != nil {
+				return agentboot.PermissionResult{Approved: false}, r.err
+			}
+
+			// Try to parse as number
+			var selectedIndex int = -1
+			var selectedLabel string
+
+			// Try numeric parsing
+			var num int
+			if _, err := fmt.Sscanf(r.response, "%d", &num); err == nil {
+				if num >= 1 && num <= len(options) {
+					selectedIndex = num - 1
+				}
+			}
+
+			// If not a valid number, try matching by label
+			if selectedIndex < 0 {
+				for j, opt := range options {
+					if option, ok := opt.(map[string]interface{}); ok {
+						if label, ok := option["label"].(string); ok {
+							if strings.EqualFold(label, r.response) {
+								selectedIndex = j
+								break
+							}
+						}
+					}
+				}
+			}
+
+			// If still not found, use the raw input as label
+			if selectedIndex < 0 {
+				selectedLabel = r.response
+			} else if selectedIndex >= 0 && selectedIndex < len(options) {
+				if option, ok := options[selectedIndex].(map[string]interface{}); ok {
+					if label, ok := option["label"].(string); ok {
+						selectedLabel = label
+					}
+				}
+			}
+
+			// Store answer (using index as key for now)
+			answers[fmt.Sprintf("%d", i)] = selectedLabel
+		}
+	}
+
+	// Build updated input with answers
+	updatedInput := make(map[string]interface{})
+	for k, v := range req.Input {
+		updatedInput[k] = v
+	}
+	updatedInput["answers"] = answers
+
+	return agentboot.PermissionResult{
+		Approved:     true,
+		UpdatedInput: updatedInput,
+	}, nil
 }
 
 // NoOpPrompter is a prompter that auto-approves everything
@@ -109,8 +252,11 @@ func NewNoOpPrompter() *NoOpPrompter {
 }
 
 // PromptPermission always approves without user interaction
-func (p *NoOpPrompter) PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (bool, bool, error) {
-	return true, false, nil
+func (p *NoOpPrompter) PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
+	return agentboot.PermissionResult{
+		Approved:     true,
+		UpdatedInput: req.Input,
+	}, nil
 }
 
 // DenyAllPrompter is a prompter that denies everything
@@ -122,6 +268,6 @@ func NewDenyAllPrompter() *DenyAllPrompter {
 }
 
 // PromptPermission always denies without user interaction
-func (p *DenyAllPrompter) PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (bool, bool, error) {
-	return false, false, nil
+func (p *DenyAllPrompter) PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
+	return agentboot.PermissionResult{Approved: false}, nil
 }

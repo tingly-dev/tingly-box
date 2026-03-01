@@ -1527,13 +1527,15 @@ func (h *BotHandler) handlePermissionCallback(hCtx HandlerContext, parts []strin
 		return
 	}
 
-	var approved, remember bool
 	var resultText string
 
 	switch subAction {
 	case "allow":
-		approved = true
-		remember = false
+		if err := h.imPrompter.SubmitDecision(requestID, true, false, ""); err != nil {
+			logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit permission decision")
+			h.SendText(hCtx, fmt.Sprintf("Failed to process permission response: %v", err))
+			return
+		}
 		resultText = "✅ Permission granted"
 		logrus.WithFields(logrus.Fields{
 			"request_id": requestID,
@@ -1542,8 +1544,11 @@ func (h *BotHandler) handlePermissionCallback(hCtx HandlerContext, parts []strin
 		}).Info("User approved tool permission")
 
 	case "deny":
-		approved = false
-		remember = false
+		if err := h.imPrompter.SubmitDecision(requestID, false, false, ""); err != nil {
+			logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit permission decision")
+			h.SendText(hCtx, fmt.Sprintf("Failed to process permission response: %v", err))
+			return
+		}
 		resultText = "❌ Permission denied"
 		logrus.WithFields(logrus.Fields{
 			"request_id": requestID,
@@ -1552,8 +1557,11 @@ func (h *BotHandler) handlePermissionCallback(hCtx HandlerContext, parts []strin
 		}).Info("User denied tool permission")
 
 	case "always":
-		approved = true
-		remember = true
+		if err := h.imPrompter.SubmitDecision(requestID, true, true, ""); err != nil {
+			logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit permission decision")
+			h.SendText(hCtx, fmt.Sprintf("Failed to process permission response: %v", err))
+			return
+		}
 		resultText = "🔄 Always allowed"
 		logrus.WithFields(logrus.Fields{
 			"request_id": requestID,
@@ -1561,15 +1569,33 @@ func (h *BotHandler) handlePermissionCallback(hCtx HandlerContext, parts []strin
 			"user_id":    hCtx.SenderID,
 		}).Info("User approved tool permission (always)")
 
+	case "option":
+		// Handle multi-option selection (e.g., AskUserQuestion)
+		if len(parts) < 4 {
+			logrus.WithField("parts", parts).Warn("Invalid option callback data")
+			return
+		}
+		optionValue := parts[3]
+
+		// Submit as a structured response
+		if err := h.imPrompter.SubmitUserResponse(requestID, permission.UserResponse{
+			Type: "selection",
+			Data: optionValue,
+		}); err != nil {
+			logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit option selection")
+			h.SendText(hCtx, fmt.Sprintf("Failed to process option selection: %v", err))
+			return
+		}
+		resultText = fmt.Sprintf("✅ Selected option %s", optionValue)
+		logrus.WithFields(logrus.Fields{
+			"request_id":   requestID,
+			"tool_name":    pendingReq.ToolName,
+			"option_value": optionValue,
+			"user_id":      hCtx.SenderID,
+		}).Info("User selected option")
+
 	default:
 		logrus.WithField("action", subAction).Warn("Unknown permission action")
-		return
-	}
-
-	// Submit the decision to the prompter
-	if err := h.imPrompter.SubmitDecision(requestID, approved, remember, ""); err != nil {
-		logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit permission decision")
-		h.SendText(hCtx, fmt.Sprintf("Failed to process permission response: %v", err))
 		return
 	}
 
@@ -1586,16 +1612,34 @@ func (h *BotHandler) handlePermissionTextResponse(hCtx HandlerContext) bool {
 		return false
 	}
 
-	// Try to parse the text as a permission response
+	// Get the most recent pending request for this chat
+	// (usually there's only one at a time)
+	latestReq := pendingReqs[0]
+
+	// For AskUserQuestion, try to parse as option selection first
+	if latestReq.ToolName == "AskUserQuestion" {
+		// Try to submit as a text selection
+		if err := h.imPrompter.SubmitUserResponse(latestReq.RequestID, permission.UserResponse{
+			Type: "text",
+			Data: hCtx.Text,
+		}); err == nil {
+			h.SendText(hCtx, fmt.Sprintf("✅ Selected: %s", hCtx.Text))
+			logrus.WithFields(logrus.Fields{
+				"request_id": latestReq.RequestID,
+				"tool_name":  latestReq.ToolName,
+				"user_id":    hCtx.SenderID,
+				"selection":  hCtx.Text,
+			}).Info("User selected option via text")
+			return true
+		}
+	}
+
+	// Try to parse the text as a standard permission response
 	approved, remember, isValid := ParseTextResponse(hCtx.Text)
 	if !isValid {
 		// Not a valid permission response, let other handlers process it
 		return false
 	}
-
-	// Get the most recent pending request for this chat
-	// (usually there's only one at a time)
-	latestReq := pendingReqs[0]
 
 	// Submit the decision
 	if err := h.imPrompter.SubmitDecision(latestReq.RequestID, approved, remember, ""); err != nil {

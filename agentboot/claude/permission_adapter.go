@@ -93,7 +93,12 @@ func (a *PermissionAdapter) AsCallback() CanCallToolCallback {
 		}
 
 		if result.Approved {
-			return allowResponse(input), nil
+			// Use UpdatedInput if provided, otherwise use original input
+			updatedInput := input
+			if result.UpdatedInput != nil {
+				updatedInput = result.UpdatedInput
+			}
+			return allowResponse(updatedInput), nil
 		}
 
 		return denyResponse(result.Reason), nil
@@ -176,18 +181,23 @@ func (a *SimplePermissionAdapter) AsCallback() CanCallToolCallback {
 			SessionID: a.SessionID,
 		}
 
-		approved, remember, err := a.UserPrompter.PromptPermission(ctx, req)
+		result, err := a.UserPrompter.PromptPermission(ctx, req)
 		if err != nil {
 			return denyResponse(fmt.Sprintf("Permission prompt failed: %v", err)), nil
 		}
 
-		if remember && approved {
+		if result.Remember && result.Approved {
 			// Add to whitelist
 			a.Whitelist = append(a.Whitelist, toolName)
 		}
 
-		if approved {
-			return allowResponse(input), nil
+		if result.Approved {
+			// Use UpdatedInput if provided, otherwise use original input
+			updatedInput := input
+			if result.UpdatedInput != nil {
+				updatedInput = result.UpdatedInput
+			}
+			return allowResponse(updatedInput), nil
 		}
 
 		return denyResponse("User denied this tool use"), nil
