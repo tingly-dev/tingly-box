@@ -63,6 +63,14 @@ func ParsePermissionMode(s string) (PermissionMode, bool) {
 	}
 }
 
+// PermissionHandler is the interface for permission handling
+// This is defined here to avoid circular dependencies
+type PermissionHandler interface {
+	CanUseTool(ctx context.Context, req PermissionRequest) (PermissionResult, error)
+	SetMode(scopeID string, mode PermissionMode) error
+	GetMode(scopeID string) (PermissionMode, error)
+}
+
 // MessageHandler is the interface for real-time message processing
 // This interface is defined here to avoid circular dependencies
 type MessageHandler interface {
@@ -317,4 +325,10 @@ type Agent interface {
 
 	// GetDefaultFormat returns the current default format
 	GetDefaultFormat() OutputFormat
+
+	// SetPermissionHandler sets the permission handler for the agent
+	SetPermissionHandler(handler PermissionHandler)
+
+	// GetPermissionHandler returns the current permission handler
+	GetPermissionHandler() PermissionHandler
 }

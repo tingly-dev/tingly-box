@@ -468,6 +468,17 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		return
 	}
 
+	// Ensure permission handler is set for the agent
+	if h.permHandler != nil && agent.GetPermissionHandler() == nil {
+		agent.SetPermissionHandler(h.permHandler)
+	}
+	// Set permission mode to manual for interactive prompts
+	if h.permHandler != nil {
+		if err := h.permHandler.SetMode(sessionID, agentboot.PermissionModeManual); err != nil {
+			logrus.WithError(err).Warn("Failed to set permission mode to manual")
+		}
+	}
+
 	// Determine if we should resume
 	shouldResume := false
 	if msgs, ok := h.sessionMgr.GetMessages(sessionID); ok && len(msgs) > 1 {
@@ -488,6 +499,8 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		Handler:     streamHandler,
 		SessionID:   sessionID,
 		Resume:      shouldResume,
+		ChatID:      hCtx.ChatID,
+		Platform:    string(hCtx.Platform),
 	})
 
 	logrus.WithFields(logrus.Fields{

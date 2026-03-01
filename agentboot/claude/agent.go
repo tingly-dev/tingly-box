@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/agentboot/permission"
 )
 
 // Agent implements the agentboot.Agent interface for Claude Code
@@ -26,7 +25,7 @@ func NewAgent(config agentboot.Config) *Agent {
 }
 
 // NewAgentWithPermissionHandler creates a new Claude agent with permission handler
-func NewAgentWithPermissionHandler(config agentboot.Config, handler permission.Handler) *Agent {
+func NewAgentWithPermissionHandler(config agentboot.Config, handler agentboot.PermissionHandler) *Agent {
 	agent := NewAgent(config)
 	agent.launcher.SetPermissionHandler(handler)
 	return agent
@@ -58,12 +57,12 @@ func (a *Agent) GetDefaultFormat() agentboot.OutputFormat {
 }
 
 // SetPermissionHandler sets the permission handler
-func (a *Agent) SetPermissionHandler(handler permission.Handler) {
+func (a *Agent) SetPermissionHandler(handler agentboot.PermissionHandler) {
 	a.launcher.SetPermissionHandler(handler)
 }
 
 // GetPermissionHandler returns the current permission handler
-func (a *Agent) GetPermissionHandler() permission.Handler {
+func (a *Agent) GetPermissionHandler() agentboot.PermissionHandler {
 	return a.launcher.GetPermissionHandler()
 }
 
