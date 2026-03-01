@@ -316,7 +316,7 @@ const CredentialPage = () => {
                 <Box sx={{ mb: 3 }}>
                     <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
                         <Typography variant="subtitle1" fontWeight={500}>
-                            OAuth Providers
+                            OAuth
                         </Typography>
                         <Chip
                             label={credentialCounts.oauth}
