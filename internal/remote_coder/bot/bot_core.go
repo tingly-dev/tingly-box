@@ -26,7 +26,8 @@ const (
 
 // Agent routing constants
 const (
-	agentClaudeCode = "claude_code"
+	agentClaudeCode = agentboot.AgentTypeClaude
+	agentMock       = agentboot.AgentTypeMockAgent
 )
 
 // Bot command constants

@@ -13,6 +13,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
+	mock "github.com/tingly-dev/tingly-box/agentboot/mockagent"
 	"github.com/tingly-dev/tingly-box/agentboot/permission"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
@@ -29,6 +30,7 @@ type BotHandler struct {
 	summaryEngine    *summarizer.Engine
 	directoryBrowser *DirectoryBrowser
 	manager          *imbot.Manager
+	imPrompter       *IMPrompter
 }
 
 // HandlerContext contains per-message context data
@@ -55,6 +57,14 @@ func NewBotHandler(
 	directoryBrowser *DirectoryBrowser,
 	manager *imbot.Manager,
 ) *BotHandler {
+	// Create IM prompter for permission requests
+	imPrompter := NewIMPrompter(manager)
+
+	// Set the IM prompter on the permission handler
+	if permHandler != nil {
+		permHandler.SetUserPrompter(imPrompter)
+	}
+
 	return &BotHandler{
 		ctx:              ctx,
 		store:            store,
@@ -64,6 +74,7 @@ func NewBotHandler(
 		summaryEngine:    summaryEngine,
 		directoryBrowser: directoryBrowser,
 		manager:          manager,
+		imPrompter:       imPrompter,
 	}
 }
 
@@ -229,6 +240,11 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 	case "/clear":
 		h.handleClearCommand(hCtx)
 		return
+	case "/mock":
+		// Mock agent command for testing
+		mockText := strings.TrimSpace(strings.TrimPrefix(hCtx.Text, "/mock"))
+		h.handleAgentMessage(hCtx, agentMock, mockText, "")
+		return
 	case "/start", "/help", "/h":
 		h.showBotHelp(hCtx)
 		return
@@ -335,7 +351,7 @@ func (h *BotHandler) newStreamingMessageHandler(hCtx HandlerContext) *streamingM
 }
 
 // handleAgentMessage routes message to the appropriate agent handler
-func (h *BotHandler) handleAgentMessage(hCtx HandlerContext, agent string, text string, projectPathOverride string) {
+func (h *BotHandler) handleAgentMessage(hCtx HandlerContext, agent agentboot.AgentType, text string, projectPathOverride string) {
 	logrus.WithFields(logrus.Fields{
 		"agent":    agent,
 		"chatID":   hCtx.ChatID,
@@ -345,6 +361,8 @@ func (h *BotHandler) handleAgentMessage(hCtx HandlerContext, agent string, text 
 	switch agent {
 	case agentClaudeCode:
 		h.handleClaudeCodeMessage(hCtx, text, projectPathOverride)
+	case agentMock:
+		h.handleMockAgentMessage(hCtx, text, projectPathOverride)
 	default:
 		h.SendText(hCtx, fmt.Sprintf("Unknown agent: %s", agent))
 	}
@@ -507,6 +525,152 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 	h.sendTextWithActionKeyboard(hCtx, response, hCtx.MessageID)
 }
 
+// handleMockAgentMessage executes a message through the mock agent for testing
+func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, projectPathOverride string) {
+	if strings.TrimSpace(text) == "" {
+		h.SendText(hCtx, "Please provide a message for the mock agent.")
+		return
+	}
+
+	// Get or create a session for mock agent (simpler than claude code)
+	sessionID, ok, err := h.store.GetSessionForChat(hCtx.ChatID)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to load session mapping")
+	}
+
+	var sess *session.Session
+	if ok && sessionID != "" {
+		if s, exists := h.sessionMgr.GetOrLoad(sessionID); exists {
+			sess = s
+		}
+	}
+
+	// Create new session if needed
+	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed {
+		sess = h.sessionMgr.Create()
+		sessionID = sess.ID
+		if projectPathOverride != "" {
+			h.sessionMgr.SetContext(sessionID, "project_path", projectPathOverride)
+		}
+		if err := h.store.SetSessionForChat(hCtx.ChatID, sessionID); err != nil {
+			logrus.WithError(err).Warn("Failed to save session mapping")
+		}
+	}
+
+	// Get project path (optional for mock)
+	projectPath := projectPathOverride
+	if projectPath == "" && sess != nil && sess.Context != nil {
+		if v, ok := sess.Context["project_path"]; ok {
+			if pv, ok := v.(string); ok {
+				projectPath = strings.TrimSpace(pv)
+			}
+		}
+	}
+
+	// Build meta
+	meta := ResponseMeta{
+		ProjectPath: projectPath,
+		SessionID:   sessionID,
+		ChatID:      hCtx.ChatID,
+		UserID:      hCtx.SenderID,
+	}
+
+	h.sessionMgr.AppendMessage(sessionID, session.Message{
+		Role:      "user",
+		Content:   text,
+		Timestamp: time.Now(),
+	})
+
+	h.sessionMgr.SetRunning(sessionID)
+
+	// Send status message
+	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, "🧪 Mock agent processing..."), hCtx.MessageID)
+
+	// Execute with context
+	execCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Get mock agent
+	mockAgent, err := h.agentBoot.GetAgent(agentboot.AgentTypeMockAgent)
+	if err != nil {
+		// Register mock agent if not exists
+		newMockAgent := mock.NewAgent(mock.Config{
+			MaxIterations: 3,
+			StepDelay:     2 * time.Second,
+		})
+		if h.permHandler != nil {
+			newMockAgent.SetPermissionHandler(h.permHandler)
+		}
+		h.agentBoot.RegisterAgent(agentboot.AgentTypeMockAgent, newMockAgent)
+		mockAgent = newMockAgent
+	}
+
+	// Set permission mode to manual for mock agent (to trigger IMPrompter)
+	if h.permHandler != nil {
+		if err := h.permHandler.SetMode(sessionID, agentboot.PermissionModeManual); err != nil {
+			logrus.WithError(err).Warn("Failed to set permission mode to manual")
+		}
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"chatID":    hCtx.ChatID,
+		"sessionID": sessionID,
+		"agent":     "mock",
+	}).Info("Starting mock agent execution")
+
+	streamHandler := h.newStreamingMessageHandler(hCtx)
+
+	result, err := mockAgent.Execute(execCtx, text, agentboot.ExecutionOptions{
+		ProjectPath: projectPath,
+		Handler:     streamHandler,
+		SessionID:   sessionID,
+		ChatID:      hCtx.ChatID,
+		Platform:    string(hCtx.Platform),
+	})
+
+	logrus.WithFields(logrus.Fields{
+		"chatID":    hCtx.ChatID,
+		"sessionID": sessionID,
+		"hasError":  err != nil,
+		"hasResult": result != nil,
+	}).Info("Mock agent execution completed")
+
+	response := streamHandler.GetOutput()
+	if response == "" {
+		if result != nil {
+			response = result.TextOutput()
+		}
+		if err != nil && response == "" {
+			response = fmt.Sprintf("Execution failed: %v", err)
+		}
+	}
+
+	if err != nil {
+		h.sessionMgr.SetFailed(sessionID, response)
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"chatID":    hCtx.ChatID,
+			"sessionID": sessionID,
+			"response":  response,
+		}).Warn("Mock agent execution failed")
+
+		if response == "" {
+			response = fmt.Sprintf("Execution failed: %v", err)
+		}
+		h.sendTextWithReply(hCtx, response, hCtx.MessageID)
+		return
+	}
+
+	h.sessionMgr.SetCompleted(sessionID, response)
+
+	h.sessionMgr.AppendMessage(sessionID, session.Message{
+		Role:      "assistant",
+		Content:   response,
+		Timestamp: time.Now(),
+	})
+
+	h.sendTextWithActionKeyboard(hCtx, response, hCtx.MessageID)
+}
+
 // handleBotCommand handles /bot <subcommand> commands
 func (h *BotHandler) handleBotCommand(hCtx HandlerContext, fields []string) {
 	subcmd := ""
@@ -558,6 +722,7 @@ Bot Commands:
 /bot_bash <cmd> - Execute allowed bash (cd, ls, pwd)
 /bot_join <group> - Add group to whitelist
 /clear - Clear context and create new session
+/mock <msg> - Test with mock agent (permission flow)
 
 All other messages are sent to Claude Code.`, hCtx.SenderID)
 	} else {
@@ -571,6 +736,7 @@ Bot Commands:
 /bot_status - Show session status
 /bot_clear - Clear session context
 /clear - Clear context and create new session
+/mock <msg> - Test with mock agent (permission flow)
 
 All other messages are sent to Claude Code.`, hCtx.ChatID)
 	}
@@ -1097,6 +1263,10 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 	action := parts[0]
 
 	switch action {
+	case "perm":
+		// Handle permission request response
+		h.handlePermissionCallback(hCtx, parts)
+
 	case "action":
 		if len(parts) < 2 {
 			return
@@ -1314,6 +1484,74 @@ func (h *BotHandler) handleCustomPathInput(hCtx HandlerContext) {
 	// Path exists and is a directory, complete the bind
 	h.completeBind(hCtx, expandedPath)
 	h.directoryBrowser.Clear(hCtx.ChatID)
+}
+
+// handlePermissionCallback handles permission request callback responses
+func (h *BotHandler) handlePermissionCallback(hCtx HandlerContext, parts []string) {
+	if len(parts) < 3 {
+		logrus.WithField("parts", parts).Warn("Invalid permission callback data")
+		return
+	}
+
+	subAction := parts[1]
+	requestID := parts[2]
+
+	// Check if the request exists
+	pendingReq, exists := h.imPrompter.GetPendingRequest(requestID)
+	if !exists {
+		logrus.WithField("request_id", requestID).Warn("Permission request not found or expired")
+		h.SendText(hCtx, "⚠️ This permission request has expired or already been answered.")
+		return
+	}
+
+	var approved, remember bool
+	var resultText string
+
+	switch subAction {
+	case "allow":
+		approved = true
+		remember = false
+		resultText = "✅ Permission granted"
+		logrus.WithFields(logrus.Fields{
+			"request_id": requestID,
+			"tool_name":  pendingReq.ToolName,
+			"user_id":    hCtx.SenderID,
+		}).Info("User approved tool permission")
+
+	case "deny":
+		approved = false
+		remember = false
+		resultText = "❌ Permission denied"
+		logrus.WithFields(logrus.Fields{
+			"request_id": requestID,
+			"tool_name":  pendingReq.ToolName,
+			"user_id":    hCtx.SenderID,
+		}).Info("User denied tool permission")
+
+	case "always":
+		approved = true
+		remember = true
+		resultText = "🔄 Always allowed"
+		logrus.WithFields(logrus.Fields{
+			"request_id": requestID,
+			"tool_name":  pendingReq.ToolName,
+			"user_id":    hCtx.SenderID,
+		}).Info("User approved tool permission (always)")
+
+	default:
+		logrus.WithField("action", subAction).Warn("Unknown permission action")
+		return
+	}
+
+	// Submit the decision to the prompter
+	if err := h.imPrompter.SubmitDecision(requestID, approved, remember, ""); err != nil {
+		logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit permission decision")
+		h.SendText(hCtx, fmt.Sprintf("Failed to process permission response: %v", err))
+		return
+	}
+
+	// Send feedback to user
+	h.SendText(hCtx, fmt.Sprintf("%s for tool: `%s`", resultText, pendingReq.ToolName))
 }
 
 // handleCreateConfirm sends a confirmation prompt for creating a directory
