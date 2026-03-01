@@ -1,17 +1,16 @@
-import { Add, Edit, ExpandMore, VpnKey } from '@mui/icons-material';
+import { Add, VpnKey } from '@mui/icons-material';
 import {
     Alert,
+    Box,
     Button,
     Chip,
-    Menu,
-    MenuItem,
+    Divider,
     Snackbar,
     Stack,
-    Tab,
-    Tabs,
+    Typography,
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { PageLayout } from '@/components/PageLayout';
 import ProviderFormDialog from '@/components/ProviderFormDialog.tsx';
 import { type EnhancedProviderFormData } from '@/components/ProviderFormDialog.tsx';
@@ -33,10 +32,7 @@ interface OAuthEditFormData {
     proxyUrl?: string;
 }
 
-type CredentialTab = 'api-keys' | 'oauth';
-
 const CredentialPage = () => {
-    const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const [providers, setProviders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -45,12 +41,6 @@ const CredentialPage = () => {
         message: string;
         severity: 'success' | 'error';
     }>({ open: false, message: '', severity: 'success' });
-
-    // Tab state
-    const [activeTab, setActiveTab] = useState<CredentialTab>('api-keys');
-
-    // Add button menu state
-    const [addMenuAnchorEl, setAddMenuAnchorEl] = useState<HTMLElement | null>(null);
 
     // API Key Dialog state
     const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
@@ -73,21 +63,13 @@ const CredentialPage = () => {
     useEffect(() => {
         const dialog = searchParams.get('dialog');
         const style = searchParams.get('style') as 'openai' | 'anthropic' | null;
-        const tab = searchParams.get('tab');
-
-        // Set tab from URL
-        if (tab === 'oauth') {
-            setActiveTab('oauth');
-        } else if (tab === 'api-keys' || tab === null) {
-            setActiveTab('api-keys');
-        }
 
         // Handle dialog auto-open from URL
         if (dialog === 'add') {
             // Clear URL params
             setSearchParams({});
 
-            if (style === 'oauth' || tab === 'oauth') {
+            if (style === 'oauth') {
                 // Open OAuth dialog
                 setOAuthDialogOpen(true);
             } else {
@@ -117,30 +99,7 @@ const CredentialPage = () => {
         setSnackbar({ open: true, message, severity });
     };
 
-    // Tab handlers
-    const handleTabChange = (_event: React.SyntheticEvent, newValue: CredentialTab) => {
-        setActiveTab(newValue);
-        // Update URL for deep linking
-        const params = new URLSearchParams(searchParams);
-        if (newValue === 'api-keys') {
-            params.delete('tab');
-        } else {
-            params.set('tab', newValue);
-        }
-        navigate({ search: params.toString() }, { replace: true });
-    };
-
-    // Add menu handlers
-    const handleAddClick = (event: React.MouseEvent<HTMLElement>) => {
-        setAddMenuAnchorEl(event.currentTarget);
-    };
-
-    const handleAddMenuClose = () => {
-        setAddMenuAnchorEl(null);
-    };
-
     const handleAddApiKey = () => {
-        handleAddMenuClose();
         setApiKeyDialogMode('add');
         setProviderFormData({
             uuid: undefined,
@@ -156,7 +115,6 @@ const CredentialPage = () => {
     };
 
     const handleAddOAuth = () => {
-        handleAddMenuClose();
         setOAuthDialogOpen(true);
     };
 
@@ -337,132 +295,91 @@ const CredentialPage = () => {
                     <Stack direction="row" spacing={1}>
                         <Button
                             variant="contained"
-                            startIcon={<Add />}
-                            onClick={handleAddClick}
+                            startIcon={<VpnKey />}
+                            onClick={handleAddOAuth}
                             size="small"
-                            endIcon={<ExpandMore />}
                         >
-                            Add Credential
+                            Add OAuth
                         </Button>
-                        <Menu
-                            anchorEl={addMenuAnchorEl}
-                            open={Boolean(addMenuAnchorEl)}
-                            onClose={handleAddMenuClose}
-                            anchorOrigin={{
-                                vertical: 'bottom',
-                                horizontal: 'right',
-                            }}
-                            transformOrigin={{
-                                vertical: 'top',
-                                horizontal: 'right',
-                            }}
+                        <Button
+                            variant="contained"
+                            startIcon={<Add />}
+                            onClick={handleAddApiKey}
+                            size="small"
                         >
-                            <MenuItem onClick={handleAddApiKey}>
-                                <Add sx={{ mr: 1 }} fontSize="small" />
-                                Add API Key
-                            </MenuItem>
-                            <MenuItem onClick={handleAddOAuth}>
-                                <VpnKey sx={{ mr: 1 }} fontSize="small" />
-                                Add OAuth Provider
-                            </MenuItem>
-                        </Menu>
+                            Add API Key
+                        </Button>
                     </Stack>
                 }
             >
-                {/* Tab Navigation */}
-                <Tabs
-                    value={activeTab}
-                    onChange={handleTabChange}
-                    sx={{
-                        borderBottom: 1,
-                        borderColor: 'divider',
-                        mb: 2,
-                        minHeight: 48,
-                        '& .MuiTab-root': {
-                            textTransform: 'none',
-                            fontWeight: 500,
-                            fontSize: '0.875rem',
-                            minHeight: 48,
-                        },
-                    }}
-                >
-                    <Tab
-                        label={
-                            <Stack direction="row" alignItems="center" spacing={1}>
-                                <span>API Keys</span>
-                                <Chip
-                                    label={credentialCounts.apiKeys}
-                                    size="small"
-                                    color={activeTab === 'api-keys' ? 'primary' : 'default'}
-                                    variant={activeTab === 'api-keys' ? 'filled' : 'outlined'}
-                                    sx={{ height: 20, minWidth: 20, fontSize: '0.7rem' }}
-                                />
-                            </Stack>
-                        }
-                        value="api-keys"
-                    />
-                    <Tab
-                        label={
-                            <Stack direction="row" alignItems="center" spacing={1}>
-                                <span>OAuth</span>
-                                <Chip
-                                    label={credentialCounts.oauth}
-                                    size="small"
-                                    color={activeTab === 'oauth' ? 'primary' : 'default'}
-                                    variant={activeTab === 'oauth' ? 'filled' : 'outlined'}
-                                    sx={{ height: 20, minWidth: 20, fontSize: '0.7rem' }}
-                                />
-                            </Stack>
-                        }
-                        value="oauth"
-                    />
-                </Tabs>
+                {/* OAuth Section */}
+                <Box sx={{ mb: 3 }}>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
+                        <Typography variant="subtitle1" fontWeight={500}>
+                            OAuth
+                        </Typography>
+                        <Chip
+                            label={credentialCounts.oauth}
+                            size="small"
+                            color="primary"
+                            variant="outlined"
+                            sx={{ height: 20, minWidth: 20, fontSize: '0.7rem' }}
+                        />
+                    </Stack>
+                    {credentialCounts.oauth > 0 ? (
+                        <OAuthTable
+                            providers={oauthProviders}
+                            onEdit={handleEditProvider}
+                            onToggle={handleToggleProvider}
+                            onDelete={handleDeleteProvider}
+                            onRefreshToken={handleRefreshToken}
+                        />
+                    ) : (
+                        <EmptyStateGuide
+                            title="No OAuth Providers Configured"
+                            description="Configure OAuth providers like Claude Code, Gemini CLI, Qwen, etc."
+                            showOAuthButton={false}
+                            showHeroIcon={false}
+                            primaryButtonLabel="Add OAuth Provider"
+                            onAddApiKeyClick={handleAddOAuth}
+                        />
+                    )}
+                </Box>
 
-                {/* Tab Content */}
-                {activeTab === 'api-keys' && (
-                    <>
-                        {credentialCounts.apiKeys > 0 ? (
-                            <ApiKeyTable
-                                providers={apiKeyProviders}
-                                onEdit={handleEditProvider}
-                                onToggle={handleToggleProvider}
-                                onDelete={handleDeleteProvider}
-                            />
-                        ) : (
-                            <EmptyStateGuide
-                                title="No API Keys Configured"
-                                description="Configure API keys to access AI services like OpenAI, Anthropic, etc."
-                                showOAuthButton={false}
-                                showHeroIcon={false}
-                                primaryButtonLabel="Add API Key"
-                                onAddApiKeyClick={handleAddApiKey}
-                            />
-                        )}
-                    </>
-                )}
+                <Divider sx={{ my: 3 }} />
 
-                {activeTab === 'oauth' && (
-                    <>
-                        {credentialCounts.oauth > 0 ? (
-                            <OAuthTable
-                                providers={oauthProviders}
-                                onEdit={handleEditProvider}
-                                onToggle={handleToggleProvider}
-                                onDelete={handleDeleteProvider}
-                                onRefreshToken={handleRefreshToken}
-                            />
-                        ) : (
-                            <EmptyStateGuide
-                                title="No OAuth Providers Configured"
-                                description="Configure OAuth providers like Claude Code, Gemini CLI, Qwen, etc."
-                                showOAuthButton={false}
-                                showHeroIcon={false}
-                                primaryButtonLabel="Add OAuth Provider"
-                                onAddApiKeyClick={handleAddOAuth}
-                            />
-                        )}
-                    </>
-                )}
+                {/* API Keys Section */}
+                <Box>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
+                        <Typography variant="subtitle1" fontWeight={500}>
+                            API Keys
+                        </Typography>
+                        <Chip
+                            label={credentialCounts.apiKeys}
+                            size="small"
+                            color="primary"
+                            variant="outlined"
+                            sx={{ height: 20, minWidth: 20, fontSize: '0.7rem' }}
+                        />
+                    </Stack>
+                    {credentialCounts.apiKeys > 0 ? (
+                        <ApiKeyTable
+                            providers={apiKeyProviders}
+                            onEdit={handleEditProvider}
+                            onToggle={handleToggleProvider}
+                            onDelete={handleDeleteProvider}
+                        />
+                    ) : (
+                        <EmptyStateGuide
+                            title="No API Keys Configured"
+                            description="Configure API keys to access AI services like OpenAI, Anthropic, etc."
+                            showOAuthButton={false}
+                            showHeroIcon={false}
+                            primaryButtonLabel="Add API Key"
+                            onAddApiKeyClick={handleAddApiKey}
+                        />
+                    )}
+                </Box>
             </UnifiedCard>
 
             {/* API Key Provider Dialog */}

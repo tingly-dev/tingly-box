@@ -98,7 +98,11 @@ tasks:
       - |
         echo "This is only for frontend dev, please start your tingly-box server too"
       - |
-        cd frontend; pnpm dev
+        cd frontend; 
+        pnpm install
+      - |
+        cd frontend; 
+        pnpm dev
   
   web:build:
     aliases:
