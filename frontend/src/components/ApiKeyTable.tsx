@@ -159,8 +159,8 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Status</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>Name</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>API Style</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>API Base URL</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 180 }}>API Key</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 120, maxWidth: 120 }}>API Base URL</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 120, maxWidth: 120 }}>API Key</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 80 }}>Proxy</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Model List</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Actions</TableCell>
@@ -195,7 +195,7 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                                         variant="body2"
                                         sx={{
                                             fontWeight: 500,
-                                            maxWidth: 150,
+                                            maxWidth: 120,
                                             overflow: 'hidden',
                                             textOverflow: 'ellipsis',
                                             whiteSpace: 'nowrap',
@@ -211,7 +211,10 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                             </TableCell>
                             {/* API Base URL */}
                             <TableCell>
-                                <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all', maxWidth: 200 }}>
+                                <Typography variant="body2" sx={{
+                                    maxWidth: 150,
+                                    fontFamily: 'monospace', wordBreak: 'break-all',
+                                }}>
                                     {provider.api_base}
                                 </Typography>
                             </TableCell>
