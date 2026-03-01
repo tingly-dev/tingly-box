@@ -339,14 +339,14 @@ export default function DashboardPage() {
 
             {/* Charts */}
             <Grid container spacing={2.5} sx={{ mb: 4 }}>
-                <Grid size={{ xs: 12, md: 6 }}>
+                <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
                     {timeRange === 'today' || timeRange === 'yesterday' ? (
                         <HourlyTokenHistoryChart data={timeSeries} />
                     ) : (
                         <DailyTokenHistoryChart data={timeSeries} />
                     )}
                 </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
+                <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
                     <TokenUsageChart data={tokenChartData} />
                 </Grid>
             </Grid>
