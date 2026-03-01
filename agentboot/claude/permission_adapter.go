@@ -17,6 +17,8 @@ type PermissionAdapter struct {
 	handler   permission.Handler
 	sessionID string
 	agentType agentboot.AgentType
+	chatID    string
+	platform  string
 }
 
 // PermissionAdapterOption is a functional option for PermissionAdapter
@@ -33,6 +35,14 @@ func WithSessionID(sessionID string) PermissionAdapterOption {
 func WithAgentType(agentType agentboot.AgentType) PermissionAdapterOption {
 	return func(a *PermissionAdapter) {
 		a.agentType = agentType
+	}
+}
+
+// WithChatContext sets the chat context for permission prompts
+func WithChatContext(chatID, platform string) PermissionAdapterOption {
+	return func(a *PermissionAdapter) {
+		a.chatID = chatID
+		a.platform = platform
 	}
 }
 
@@ -55,6 +65,17 @@ func NewPermissionAdapter(handler permission.Handler, opts ...PermissionAdapterO
 //   - Deny:  {"behavior": "deny", "message": "reason"}
 func (a *PermissionAdapter) AsCallback() CanCallToolCallback {
 	return func(ctx context.Context, toolName string, input map[string]interface{}, opts CallToolOptions) (map[string]interface{}, error) {
+		// Add chat context to input for IMPrompter
+		if input == nil {
+			input = make(map[string]interface{})
+		}
+		if a.chatID != "" {
+			input["_chat_id"] = a.chatID
+		}
+		if a.platform != "" {
+			input["_platform"] = a.platform
+		}
+
 		// Create permission request
 		req := agentboot.PermissionRequest{
 			RequestID: uuid.New().String(),

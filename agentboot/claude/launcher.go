@@ -17,7 +17,6 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/events"
-	"github.com/tingly-dev/tingly-box/agentboot/permission"
 )
 
 // handlerWrapper wraps agentboot.MessageHandler to claude.MessageHandler
@@ -48,9 +47,15 @@ type Launcher struct {
 	cliPath           string
 	skipPerms         bool
 	config            Config
-	permissionHandler permission.Handler
+	permissionHandler agentboot.PermissionHandler
 	controlManager    *ControlManager
 	discovery         *CLIDiscovery
+
+	// executionContext stores the current execution context for permission requests
+	executionContext struct {
+		chatID   string
+		platform string
+	}
 }
 
 // NewLauncher creates a new Claude launcher
@@ -81,14 +86,14 @@ func (l *Launcher) GetDiscovery() *CLIDiscovery {
 }
 
 // SetPermissionHandler sets the permission handler
-func (l *Launcher) SetPermissionHandler(handler permission.Handler) {
+func (l *Launcher) SetPermissionHandler(handler agentboot.PermissionHandler) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.permissionHandler = handler
 }
 
 // GetPermissionHandler returns the current permission handler
-func (l *Launcher) GetPermissionHandler() permission.Handler {
+func (l *Launcher) GetPermissionHandler() agentboot.PermissionHandler {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	return l.permissionHandler
@@ -160,6 +165,20 @@ func (l *Launcher) ExecuteWithHandler(
 	opts agentboot.ExecutionOptions,
 	handler MessageHandler,
 ) error {
+	// Set execution context for permission requests
+	l.mu.Lock()
+	l.executionContext.chatID = opts.ChatID
+	l.executionContext.platform = opts.Platform
+	l.mu.Unlock()
+
+	// Clear execution context when done
+	defer func() {
+		l.mu.Lock()
+		l.executionContext.chatID = ""
+		l.executionContext.platform = ""
+		l.mu.Unlock()
+	}()
+
 	// Create context with timeout
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -711,10 +730,29 @@ func (l *Launcher) handleControlMessages(ctx context.Context, stdin io.WriteClos
 func (l *Launcher) parsePermissionRequest(data map[string]interface{}) agentboot.PermissionRequest {
 	requestData, _ := data["request"].(map[string]interface{})
 
+	// Get input map
+	input := getMap(requestData, "input")
+	if input == nil {
+		input = make(map[string]interface{})
+	}
+
+	// Inject chat context from execution context
+	l.mu.RLock()
+	chatID := l.executionContext.chatID
+	platform := l.executionContext.platform
+	l.mu.RUnlock()
+
+	if chatID != "" {
+		input["_chat_id"] = chatID
+	}
+	if platform != "" {
+		input["_platform"] = platform
+	}
+
 	return agentboot.PermissionRequest{
 		RequestID: getString(data, "request_id"),
 		ToolName:  getString(requestData, "tool_name"),
-		Input:     getMap(requestData, "input"),
+		Input:     input,
 		Timestamp: time.Now(),
 	}
 }

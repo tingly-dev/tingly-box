@@ -11,7 +11,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/agentboot/permission"
 )
 
 // mockToolNames are the tool names used in mock permission requests
@@ -28,7 +27,7 @@ var mockToolNames = []string{
 type Agent struct {
 	config        Config
 	abConfig      agentboot.Config
-	permHandler   permission.Handler
+	permHandler   agentboot.PermissionHandler
 	defaultFormat agentboot.OutputFormat
 	mu            sync.RWMutex
 }
@@ -271,14 +270,14 @@ func (a *Agent) GetDefaultFormat() agentboot.OutputFormat {
 }
 
 // SetPermissionHandler sets the permission handler
-func (a *Agent) SetPermissionHandler(handler permission.Handler) {
+func (a *Agent) SetPermissionHandler(handler agentboot.PermissionHandler) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.permHandler = handler
 }
 
 // GetPermissionHandler returns the current permission handler
-func (a *Agent) GetPermissionHandler() permission.Handler {
+func (a *Agent) GetPermissionHandler() agentboot.PermissionHandler {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.permHandler
