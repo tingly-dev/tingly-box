@@ -1,3 +1,5 @@
+import { ApiStyleBadge } from '@/components/ApiStyleBadge.tsx';
+import ModelListDialog from '@/components/ModelListDialog';
 import { Delete, Edit, ListAlt, Refresh as RefreshIcon, Route, Schedule, VpnKey } from '@mui/icons-material';
 import {
     Box,
@@ -21,8 +23,6 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import type { Provider } from '../types/provider';
-import { ApiStyleBadge } from '@/components/ApiStyleBadge.tsx';
-import ModelListDialog from '@/components/ModelListDialog';
 
 interface OAuthTableProps {
     providers: Provider[];
@@ -172,12 +172,12 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                     <TableRow>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Status</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>Name</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Provider Type</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Expires At</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>API Style</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>API Style</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 180 }}>Provider</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 180 }}>Expires At</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 80 }}>Proxy</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Model List</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 140 }}>Actions</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Actions</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -209,17 +209,14 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                                 {/* Name */}
                                 <TableCell>
                                     <Stack direction="row" alignItems="center" spacing={1}>
-                                        <Chip
-                                            label="OAuth"
-                                            size="small"
-                                            color="primary"
-                                            variant="outlined"
-                                            sx={{ height: 20, fontSize: '0.7rem', '& .MuiChip-label': { px: 0.5 } }}
-                                        />
-                                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                        <Typography variant="body2" sx={{ fontWeight: 500, minWidth: 120 }}>
                                             {provider.name}
                                         </Typography>
                                     </Stack>
+                                </TableCell>
+                                {/* API Style */}
+                                <TableCell>
+                                    <ApiStyleBadge sx={{ minWidth: '110px' }} apiStyle={provider.api_style} />
                                 </TableCell>
                                 {/* Provider Type */}
                                 <TableCell>
@@ -238,10 +235,6 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                                             <Chip label="Expired" color="error" size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
                                         )}
                                     </Stack>
-                                </TableCell>
-                                {/* API Style */}
-                                <TableCell>
-                                    <ApiStyleBadge sx={{ minWidth: '110px' }} apiStyle={provider.api_style} />
                                 </TableCell>
                                 {/* Proxy */}
                                 <TableCell align="center">
