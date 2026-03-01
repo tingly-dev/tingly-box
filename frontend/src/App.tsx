@@ -275,7 +275,7 @@ function AppContent() {
                             <Layout>
                                 <Suspense fallback={<PageLoader />}>
                                     <Routes>
-                                        <Route path="/" element={<DashboardPage />} />
+                                        <Route path="/" element={<Navigate to="/dashboard/7d" replace />} />
                                         {/* Function panel routes */}
                                         <Route path="/use-openai" element={<UseOpenAIPage />} />
                                         <Route path="/use-anthropic" element={<UseAnthropicPage />} />
@@ -292,7 +292,9 @@ function AppContent() {
                                         {/* Other routes */}
                                         <Route path="/system" element={<System />} />
                                         <Route path="/logs" element={<Navigate to="/system" replace />} />
-                                        <Route path="/dashboard" element={<DashboardPage />} />
+                                        {/* Dashboard routes with time range */}
+                                        <Route path="/dashboard" element={<Navigate to="/dashboard/7d" replace />} />
+                                        <Route path="/dashboard/:timeRange" element={<DashboardPage />} />
                                         <Route path="/model-test/:providerUuid" element={<ModelTestPage />} />
                                         {/* Prompt routes */}
                                         <Route path="/prompt/user" element={<UserPage />} />

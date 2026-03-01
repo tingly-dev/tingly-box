@@ -14,6 +14,9 @@ import {
     LaptopMac,
     AutoAwesome,
     Menu as MenuIcon,
+    Today as TodayIcon,
+    CalendarToday as CalendarIcon,
+    DateRange as DateRangeIcon,
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -116,7 +119,38 @@ const Layout = ({ children }: LayoutProps) => {
                 key: 'dashboard',
                 icon: <BarChartIcon sx={{ fontSize: 22 }} />,
                 label: 'Dashboard',
-                path: '/dashboard',
+                children: [
+                    {
+                        path: '/dashboard/today',
+                        label: 'Today',
+                        icon: <TodayIcon sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/dashboard/yesterday',
+                        label: 'Yesterday',
+                        icon: <CalendarIcon sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/dashboard/3d',
+                        label: '3 Days',
+                        icon: <DateRangeIcon sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/dashboard/7d',
+                        label: '7 Days',
+                        icon: <DateRangeIcon sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/dashboard/30d',
+                        label: '30 Days',
+                        icon: <DateRangeIcon sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/dashboard/90d',
+                        label: '90 Days',
+                        icon: <DateRangeIcon sx={{ fontSize: 20 }} />,
+                    },
+                ],
             },
             {
                 key: 'scenario',
