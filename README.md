@@ -218,23 +218,16 @@ We welcome contributions! Follow these steps, inspired by popular open-source re
 | https://t.me/+V1sqeajw1pYwMzU1 | http://chv.ckcoa5.cn/t/OSFb |
 
 
-## Contributors
+## Early Contributors
 
-<a href="https://github.com/tingly-dev/tingly-box/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=tingly-dev/tingly-box" />
-</a>
-
-<br />
-<br />
-Eearly contributor badges are given to following contributors:
+Special badges are minted to recognize the contributions from following contributors:
 
 <br />
 
-<img width="128" height="128" alt="image" src="https://github.com/user-attachments/assets/18730cd4-5e04-4840-9ef7-eab5cb418032" />
-<img width="128" height="128" alt="image" src="https://github.com/user-attachments/assets/2df1c253-94f8-4cef-b6b7-9fef11ac9ecc" />
-
-
-
+<img width="144" height="144" alt="image" src="https://github.com/user-attachments/assets/18730cd4-5e04-4840-9ef7-eab5cb418032" />
+<img width="144" height="144" alt="image" src="https://github.com/user-attachments/assets/2df1c253-94f8-4cef-b6b7-9fef11ac9ecc" />
+<img width="144" height="144" alt="image" src="https://github.com/user-attachments/assets/67b90687-780c-42f8-ad7f-e58e28752c91" />
+<img width="144" height="144" alt="image" src="https://github.com/user-attachments/assets/85281640-678c-4391-b96f-4ec759018846" />
 
 ---
 
