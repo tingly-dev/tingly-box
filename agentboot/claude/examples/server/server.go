@@ -78,8 +78,8 @@ func (s *Server) SetPermissionHandler(handler permission.Handler) {
 	s.permHandler = handler
 }
 
-// ProcessQuery processes a single user query using stream-json input
-func (s *Server) ProcessQuery(ctx context.Context, userPrompt string, continueConversation bool) (string, error) {
+// QueryAgent processes a single user query using stream-json input
+func (s *Server) QueryAgent(ctx context.Context, userPrompt string, continueConversation bool) (string, error) {
 	// Build stream prompt with the user message
 	// The server automatically wraps the user input in the correct stream-json format
 	builder := claude.NewStreamPromptBuilder()
@@ -233,11 +233,11 @@ type QueryResult struct {
 	Error    error
 }
 
-// ProcessQueryAsync processes a query asynchronously, sending results to the provided channel
+// QueryAgentAsync processes a query asynchronously, sending results to the provided channel
 // The main loop can continue handling permission requests while the query runs
-func (s *Server) ProcessQueryAsync(ctx context.Context, userPrompt string, continueConversation bool, resultChan chan<- QueryResult, interruptFunc context.CancelFunc) {
+func (s *Server) QueryAgentAsync(ctx context.Context, userPrompt string, continueConversation bool, resultChan chan<- QueryResult, interruptFunc context.CancelFunc) {
 	go func() {
-		response, err := s.ProcessQuery(ctx, userPrompt, continueConversation)
+		response, err := s.QueryAgent(ctx, userPrompt, continueConversation)
 		resultChan <- QueryResult{Response: response, Error: err}
 		interruptFunc()
 	}()
@@ -299,7 +299,7 @@ func (s *Server) Run(ctx context.Context) error {
 		resultChan := make(chan QueryResult, 1)
 
 		// Start query asynchronously so permission prompts can read from stdin
-		s.ProcessQueryAsync(queryCtx, userInput, conversationActive, resultChan, cancel)
+		s.QueryAgentAsync(queryCtx, userInput, conversationActive, resultChan, cancel)
 
 		// Wait for result
 		result := <-resultChan
