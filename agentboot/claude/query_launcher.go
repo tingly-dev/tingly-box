@@ -3,7 +3,6 @@ package claude
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -164,35 +163,25 @@ func (l *QueryLauncher) buildQueryArgs(qc QueryConfig) []string {
 	opts := qc.Options
 	args := []string{"--output-format", "stream-json", "--verbose"}
 
-	// Model selection
-	if l.config.Model != "" {
-		args = append(args, "--model", l.config.Model)
-	}
-	if opts.Model != "" {
-		args = append(args, "--model", opts.Model)
-	}
-	if opts.FallbackModel != "" {
-		args = append(args, "--fallback-model", opts.FallbackModel)
-	}
-
-	// System prompts
-	if l.config.CustomSystemPrompt != "" {
-		args = append(args, "--system-prompt", l.config.CustomSystemPrompt)
-	}
-	if opts.CustomSystemPrompt != "" {
-		args = append(args, "--system-prompt", opts.CustomSystemPrompt)
-	}
-	if l.config.AppendSystemPrompt != "" {
-		args = append(args, "--append-system-prompt", l.config.AppendSystemPrompt)
-	}
-	if opts.AppendSystemPrompt != "" {
-		args = append(args, "--append-system-prompt", opts.AppendSystemPrompt)
+	// Convert QueryOptionsConfig to CommonOptions
+	commonOpts := CommonOptions{
+		Model:               opts.Model,
+		FallbackModel:       opts.FallbackModel,
+		MaxTurns:            opts.MaxTurns,
+		CustomSystemPrompt:  opts.CustomSystemPrompt,
+		AppendSystemPrompt:  opts.AppendSystemPrompt,
+		ContinueConversation: opts.ContinueConversation,
+		Resume:              opts.Resume,
+		AllowedTools:        opts.AllowedTools,
+		DisallowedTools:     opts.DisallowedTools,
+		MCPServers:          opts.MCPServers,
+		StrictMcpConfig:     opts.StrictMcpConfig,
+		PermissionMode:      opts.PermissionMode,
+		SettingsPath:        opts.SettingsPath,
 	}
 
-	// Max turns
-	if opts.MaxTurns > 0 {
-		args = append(args, "--max-turns", fmt.Sprintf("%d", opts.MaxTurns))
-	}
+	// Use shared argument builder
+	args = append(args, BuildCommonArgs(l.config, commonOpts)...)
 
 	// Check if we're using stream input
 	_, isStreamInput := qc.Prompt.(StreamPrompt)
@@ -206,71 +195,6 @@ func (l *QueryLauncher) buildQueryArgs(qc QueryConfig) []string {
 	// Permission handling
 	if usingStreamInput && opts.CanCallTool != nil {
 		args = append(args, "--permission-prompt-tool", "stdio")
-	}
-
-	if l.config.PermissionMode != "" {
-		args = append(args, "--permission-mode", string(l.config.PermissionMode))
-	}
-	if opts.PermissionMode != "" {
-		args = append(args, "--permission-mode", opts.PermissionMode)
-	}
-
-	// Conversation control
-	if l.config.ContinueConversation {
-		args = append(args, "--continue")
-	}
-	if opts.ContinueConversation {
-		args = append(args, "--continue")
-	}
-	if l.config.ResumeSessionID != "" {
-		args = append(args, "--resume", l.config.ResumeSessionID)
-	}
-	if opts.Resume != "" {
-		args = append(args, "--resume", opts.Resume)
-	}
-
-	// Tool filtering
-	if len(l.config.AllowedTools) > 0 {
-		args = append(args, "--allowedTools", strings.Join(l.config.AllowedTools, ","))
-	}
-	if len(opts.AllowedTools) > 0 {
-		args = append(args, "--allowedTools", strings.Join(opts.AllowedTools, ","))
-	}
-	if len(l.config.DisallowedTools) > 0 {
-		args = append(args, "--disallowedTools", strings.Join(l.config.DisallowedTools, ","))
-	}
-	if len(opts.DisallowedTools) > 0 {
-		args = append(args, "--disallowedTools", strings.Join(opts.DisallowedTools, ","))
-	}
-
-	// MCP servers
-	mcpServers := make(map[string]interface{})
-	if l.config.MCPServers != nil {
-		for k, v := range l.config.MCPServers {
-			mcpServers[k] = v
-		}
-	}
-	if opts.MCPServers != nil {
-		for k, v := range opts.MCPServers {
-			mcpServers[k] = v
-		}
-	}
-	if len(mcpServers) > 0 {
-		mcpConfig := map[string]interface{}{"mcpServers": mcpServers}
-		mcpJSON, _ := json.Marshal(mcpConfig)
-		args = append(args, "--mcp-config", string(mcpJSON))
-	}
-
-	if l.config.StrictMcpConfig || opts.StrictMcpConfig {
-		args = append(args, "--strict-mcp-config")
-	}
-
-	// Settings path
-	if l.config.SettingsPath != "" {
-		args = append(args, "--settings", l.config.SettingsPath)
-	}
-	if opts.SettingsPath != "" {
-		args = append(args, "--settings", opts.SettingsPath)
 	}
 
 	// Handle prompt input

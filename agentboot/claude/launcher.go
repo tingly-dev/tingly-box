@@ -421,75 +421,46 @@ func (l *Launcher) ExecuteStream(
 
 // buildCommandArgs constructs CLI arguments based on format, prompt, and config options
 func (l *Launcher) buildCommandArgs(format agentboot.OutputFormat, prompt string, opts agentboot.ExecutionOptions) ([]string, error) {
-	var args []string
-
 	// Get config options
 	l.mu.RLock()
 	config := l.config
+	skipPerms := l.skipPerms
 	l.mu.RUnlock()
 
-	// Model selection
-	if config.Model != "" {
-		args = append(args, "--model", config.Model)
+	// Convert ExecutionOptions to CommonOptions
+	commonOpts := CommonOptions{
+		Model:               opts.Model,
+		FallbackModel:       opts.FallbackModel,
+		MaxTurns:            opts.MaxTurns,
+		CustomSystemPrompt:  opts.CustomSystemPrompt,
+		AppendSystemPrompt:  opts.AppendSystemPrompt,
+		AllowedTools:        opts.AllowedTools,
+		DisallowedTools:     opts.DisallowedTools,
+		MCPServers:          opts.MCPServers,
+		StrictMcpConfig:     opts.StrictMcpConfig,
+		PermissionMode:      opts.PermissionMode,
+		SettingsPath:        opts.SettingsPath,
 	}
 
-	// Resume / Continue handling
-	sessionID := opts.SessionID
-	if sessionID == "" && config.ResumeSessionID != "" {
-		sessionID = config.ResumeSessionID
-	}
-
-	if sessionID != "" && (opts.Resume || config.ContinueConversation) {
-		args = append(args, "--resume", sessionID)
-	} else if sessionID != "" {
-		// Use --session-id for new sessions with specific ID
-		args = append(args, "--session-id", sessionID)
-	} else if config.ContinueConversation {
-		args = append(args, "--continue")
-	}
-
-	// System prompt options
-	if config.CustomSystemPrompt != "" {
-		args = append(args, "--custom-system-prompt", config.CustomSystemPrompt)
-	}
-	if config.AppendSystemPrompt != "" {
-		args = append(args, "--append-system-prompt", config.AppendSystemPrompt)
-	}
-
-	// Tool filtering
-	if len(config.AllowedTools) > 0 {
-		args = append(args, "--allowed-tools", strings.Join(config.AllowedTools, ","))
-	}
-	if len(config.DisallowedTools) > 0 {
-		args = append(args, "--disallowed-tools", strings.Join(config.DisallowedTools, ","))
-	}
-
-	// Settings path
-	if config.SettingsPath != "" {
-		args = append(args, "--settings", config.SettingsPath)
-	}
-
-	// Permission mode
-	if config.PermissionMode != "" {
-		switch config.PermissionMode {
-		case PermissionModeAuto:
-			args = append(args, "--permission-mode", "auto")
-		case PermissionModeManual:
-			args = append(args, "--permission-mode", "manual")
-		case PermissionModeOnce:
-			args = append(args, "--permission-mode", "once")
+	// Handle session/resume with opts.SessionID taking precedence
+	if opts.SessionID != "" {
+		if opts.Resume || config.ContinueConversation {
+			commonOpts.Resume = opts.SessionID
 		}
+		// Note: If not resuming, session-id is handled separately below
+	} else if config.ResumeSessionID != "" {
+		commonOpts.Resume = config.ResumeSessionID
 	}
 
-	// MCP server configuration (if any)
-	if len(config.MCPServers) > 0 {
-		mcpArgs, err := l.buildMCPArgs(config.MCPServers)
-		if err != nil {
-			return nil, fmt.Errorf("build MCP args: %w", err)
-		}
-		args = append(args, mcpArgs...)
+	// Use shared argument builder for common options
+	args := BuildCommonArgs(config, commonOpts)
+
+	// Handle --session-id for new sessions with specific ID (not resume)
+	if opts.SessionID != "" && !opts.Resume && !config.ContinueConversation {
+		args = append(args, "--session-id", opts.SessionID)
 	}
 
+	// Format-specific arguments
 	switch format {
 	case agentboot.OutputFormatStreamJSON:
 		args = append(args, "--output-format", "stream-json", "--verbose")
@@ -504,10 +475,6 @@ func (l *Launcher) buildCommandArgs(format agentboot.OutputFormat, prompt string
 	default:
 		return nil, fmt.Errorf("invalid output format: %s", format)
 	}
-
-	l.mu.RLock()
-	skipPerms := l.skipPerms
-	l.mu.RUnlock()
 
 	// Skip permissions takes precedence over permission mode
 	if skipPerms && !isRoot() {

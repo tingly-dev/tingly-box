@@ -94,6 +94,31 @@ type ExecutionOptions struct {
 	ChatID string
 	// Platform is the platform for permission requests (used by mock agent)
 	Platform string
+
+	// Model selection (per-execution override)
+	Model         string
+	FallbackModel string
+
+	// Execution control
+	MaxTurns int
+
+	// Tool filtering (per-execution override)
+	AllowedTools    []string
+	DisallowedTools []string
+
+	// MCP servers (per-execution override)
+	MCPServers      map[string]interface{}
+	StrictMcpConfig bool
+
+	// System prompts (per-execution override)
+	CustomSystemPrompt string
+	AppendSystemPrompt string
+
+	// Permission mode (per-execution override)
+	PermissionMode string
+
+	// Settings path (per-execution override)
+	SettingsPath string
 }
 
 // Result represents the result of an agent execution
