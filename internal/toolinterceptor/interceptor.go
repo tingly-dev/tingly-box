@@ -614,7 +614,7 @@ func CreateAnthropicBetaToolResultBlock(toolUseID, content string, isError bool)
 		resultContent = fmt.Sprintf("Error: %s", content)
 	}
 
-	block := anthropic.NewBetaToolResultBlock(toolUseID)
+	block := anthropic.NewBetaToolResultBlock(toolUseID, resultContent, isError)
 	if block.OfToolResult != nil {
 		block.OfToolResult.IsError = anthropic.Bool(isError)
 		block.OfToolResult.Content = []anthropic.BetaToolResultBlockParamContentUnion{
