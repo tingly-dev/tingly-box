@@ -334,6 +334,7 @@ const Layout = ({ children }: LayoutProps) => {
                             onClick={item.children ? handleClick : () => setMobileOpen(false)}
                             sx={{
                                 minHeight: 56,
+                                mx: 0.5,
                                 px: 1,
                                 py: 1,
                                 flexDirection: 'column',
@@ -341,16 +342,16 @@ const Layout = ({ children }: LayoutProps) => {
                                 justifyContent: 'center',
                                 gap: 0.25,
                                 position: 'relative',
-                                color: isActiveItem ? 'primary.main' : 'text.secondary',
-                                transition: 'all 0.15s ease-in-out',
-                                borderRadius: 0,
+                                color: 'text.secondary',
+                                borderRadius: 1.25,
                                 cursor: 'pointer',
                                 '&:hover': {
-                                    bgcolor: 'action.hover',
-                                    color: 'primary.main',
+                                    bgcolor: isActiveItem ? 'primary.dark' : 'action.hover',
+                                    color: isActiveItem ? 'primary.contrastText' : 'primary.main',
                                 },
                                 ...(isActiveItem && {
-                                    bgcolor: 'action.selected',
+                                    bgcolor: 'primary.main',
+                                    color: 'primary.contrastText',
                                     '&::before': {
                                         content: '""',
                                         position: 'absolute',
@@ -358,9 +359,10 @@ const Layout = ({ children }: LayoutProps) => {
                                         top: '50%',
                                         transform: 'translateY(-50%)',
                                         width: 3,
-                                        height: 36,
-                                        bgcolor: 'primary.main',
+                                        height: 28,
+                                        bgcolor: 'primary.light',
                                         borderRadius: '0 2px 2px 0',
+                                        boxShadow: '0 0 8px rgba(37, 99, 235, 0.5)',
                                     },
                                 }),
                             }}
@@ -509,7 +511,7 @@ const Layout = ({ children }: LayoutProps) => {
             </Box>
 
             {/* Sidebar Items */}
-            <List sx={{ flex: 1, py: 1.5, overflowY: 'auto', '&::-webkit-scrollbar': { width: 6 }, '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' }, '&::-webkit-scrollbar-thumb': { backgroundColor: 'grey.300', borderRadius: 1, '&:hover': { backgroundColor: 'grey.400' } } }}>
+            <List sx={{ flex: 1, py: 1, overflowY: 'auto', '&::-webkit-scrollbar': { width: 6 }, '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' }, '&::-webkit-scrollbar-thumb': { backgroundColor: 'grey.300', borderRadius: 1, '&:hover': { backgroundColor: 'grey.400' } } }}>
                 {sidebarItems.map((item) => (
                     <React.Fragment key={item.path}>
                         {item.divider && <Divider sx={{ mx: 2, my: 1 }} />}
@@ -520,16 +522,14 @@ const Layout = ({ children }: LayoutProps) => {
                                 onClick={() => setMobileOpen(false)}
                                 sx={{
                                     mx: 1.5,
-                                    borderRadius: 1.5,
+                                    borderRadius: 1.25,
                                     py: 1.25,
                                     px: 2,
                                     color: 'text.secondary',
-                                    transition: 'all 150ms ease-in-out',
                                     position: 'relative',
                                     ...(isActive(item.path) && {
                                         backgroundColor: 'primary.main',
                                         color: 'primary.contrastText',
-                                        fontWeight: 600,
                                         '&::before': {
                                             content: '""',
                                             position: 'absolute',
@@ -537,7 +537,7 @@ const Layout = ({ children }: LayoutProps) => {
                                             top: '50%',
                                             transform: 'translateY(-50%)',
                                             width: 3,
-                                            height: '70%',
+                                            height: 28,
                                             backgroundColor: 'primary.light',
                                             borderRadius: '0 2px 2px 0',
                                             boxShadow: '0 0 8px rgba(37, 99, 235, 0.5)',
@@ -556,7 +556,6 @@ const Layout = ({ children }: LayoutProps) => {
                                     '&:hover': {
                                         backgroundColor: isActive(item.path) ? 'primary.dark' : 'action.hover',
                                         color: isActive(item.path) ? 'primary.contrastText' : 'text.primary',
-                                        transform: 'translateX(2px)',
                                     },
                                 }}
                             >
@@ -564,7 +563,7 @@ const Layout = ({ children }: LayoutProps) => {
                                     <ListItemIcon
                                         sx={{
                                             minWidth: 32,
-                                            color: isActive(item.path) ? 'primary.contrastText' : 'text.secondary',
+                                            color: 'inherit',
                                             '& svg': { fontSize: 20 },
                                         }}
                                     >
