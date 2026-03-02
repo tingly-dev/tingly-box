@@ -121,6 +121,71 @@ func (r *Registry) RegisterDefaults() {
 
 	// Register compact proxy models
 	r.registerCompactModels()
+
+	// Register tool-type models
+	r.registerToolModels()
+}
+
+// registerToolModels registers tool-type virtual models
+func (r *Registry) registerToolModels() {
+	toolModels := []*VirtualModelConfig{
+		{
+			ID:          "ask-user-question",
+			Name:        "Ask User Question",
+			Description: "A virtual model that asks the user a question with predefined options",
+			Type:        VirtualModelTypeTool,
+			ToolCall: &ToolCallConfig{
+				Name: "ask_user_question",
+				Arguments: map[string]interface{}{
+					"question": "Which approach would you prefer?",
+					"options": []map[string]string{
+						{"label": "Fast Mode", "value": "fast", "description": "Quick results with less accuracy"},
+						{"label": "Accurate Mode", "value": "accurate", "description": "Slower but more accurate results"},
+					},
+				},
+			},
+			Delay: 100 * 1000000, // 100ms
+		},
+		{
+			ID:          "ask-confirmation",
+			Name:        "Ask Confirmation",
+			Description: "A virtual model that asks for user confirmation",
+			Type:        VirtualModelTypeTool,
+			ToolCall: &ToolCallConfig{
+				Name: "ask_user_question",
+				Arguments: map[string]interface{}{
+					"question": "Please confirm to proceed:",
+					"options": []map[string]string{
+						{"label": "Yes", "value": "yes", "description": "Proceed with the action"},
+						{"label": "No", "value": "no", "description": "Cancel the action"},
+					},
+				},
+			},
+			Delay: 50 * 1000000, // 50ms
+		},
+		// Example of a different tool type
+		{
+			ID:          "web-search-example",
+			Name:        "Web Search Example",
+			Description: "A virtual model that demonstrates web_search tool call",
+			Type:        VirtualModelTypeTool,
+			ToolCall: &ToolCallConfig{
+				Name: "web_search",
+				Arguments: map[string]interface{}{
+					"query": "latest AI developments",
+				},
+			},
+			Delay: 50 * 1000000,
+		},
+	}
+
+	for _, cfg := range toolModels {
+		vm := NewVirtualModel(cfg)
+		if err := r.Register(vm); err != nil {
+			// Log but continue
+			continue
+		}
+	}
 }
 
 // registerCompactModels registers compact compression virtual models
@@ -130,7 +195,7 @@ func (r *Registry) registerCompactModels() {
 			ID:            "compact-thinking",
 			Name:          "Compact Thinking",
 			Description:   "Removes thinking blocks from historical conversation rounds (10-20% compression)",
-			IsProxy:       true,
+			Type:          VirtualModelTypeProxy,
 			DelegateModel: "", // User should specify the real model
 			Transformer:   newSmartCompactTransformer(),
 		},
@@ -138,7 +203,7 @@ func (r *Registry) registerCompactModels() {
 			ID:            "compact-round-only",
 			Name:          "Compact Round Only",
 			Description:   "Keeps only user request + assistant conclusion, removes intermediate process (70-85% compression)",
-			IsProxy:       true,
+			Type:          VirtualModelTypeProxy,
 			DelegateModel: "",
 			Transformer:   compact.NewRoundOnlyTransformer(),
 		},
@@ -146,7 +211,7 @@ func (r *Registry) registerCompactModels() {
 			ID:            "compact-round-files",
 			Name:          "Compact Round Files",
 			Description:   "Keeps user/assistant + virtual file tools (75-88% compression)",
-			IsProxy:       true,
+			Type:          VirtualModelTypeProxy,
 			DelegateModel: "",
 			Transformer:   compact.NewRoundFilesTransformer(),
 		},

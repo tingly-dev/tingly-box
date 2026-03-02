@@ -74,12 +74,20 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 		return
 	}
 
-	// Check if this is a proxy virtual model
-	if virtualModel.IsProxy() {
+	// Route based on model type
+	switch virtualModel.GetType() {
+	case VirtualModelTypeProxy:
 		if req.Stream {
 			h.handleProxyStreaming(c, &req, virtualModel)
 		} else {
 			h.handleProxyRequest(c, &req, virtualModel)
+		}
+		return
+	case VirtualModelTypeTool:
+		if req.Stream {
+			h.handleToolModelStreaming(c, &req, virtualModel)
+		} else {
+			h.handleToolModelNonStreaming(c, &req, virtualModel)
 		}
 		return
 	}
@@ -366,4 +374,172 @@ func estimateTokensString(s string) int {
 // stringPtr returns a pointer to a string
 func stringPtr(s string) *string {
 	return &s
+}
+
+// handleToolModelNonStreaming handles non-streaming requests for tool-type models
+func (h *Handler) handleToolModelNonStreaming(c *gin.Context, req *ChatCompletionRequest, vm *VirtualModel) {
+	if delay := vm.GetDelay(); delay > 0 {
+		time.Sleep(delay)
+	}
+
+	toolCall := vm.GetToolCall()
+	if toolCall == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "tool call config not found"})
+		return
+	}
+
+	// Serialize tool arguments
+	argsJSON, _ := json.Marshal(toolCall.Arguments)
+
+	toolCalls := []ToolCall{
+		{
+			ID:   fmt.Sprintf("call_%d", time.Now().Unix()),
+			Type: "function",
+			Function: FunctionCall{
+				Name:      toolCall.Name,
+				Arguments: string(argsJSON),
+			},
+		},
+	}
+
+	// Extract message content from arguments if available
+	content := ""
+	if msg, ok := toolCall.Arguments["message"].(string); ok {
+		content = msg
+	} else if question, ok := toolCall.Arguments["question"].(string); ok {
+		content = question
+	}
+
+	resp := ChatCompletionResponse{
+		ID:      fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()),
+		Object:  "chat.completion",
+		Created: time.Now().Unix(),
+		Model:   req.Model,
+		Choices: []Choice{{
+			Index: 0,
+			Message: Message{
+				Role:      "assistant",
+				Content:   content,
+				ToolCalls: toolCalls,
+			},
+			FinishReason: "tool_calls",
+		}},
+		Usage: Usage{
+			PromptTokens:     estimateTokens(req.Messages),
+			CompletionTokens: estimateTokensString(content) + 20,
+			TotalTokens:      estimateTokens(req.Messages) + estimateTokensString(content) + 20,
+		},
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// handleToolModelStreaming handles streaming requests for tool-type models
+func (h *Handler) handleToolModelStreaming(c *gin.Context, req *ChatCompletionRequest, vm *VirtualModel) {
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Allow-Headers", "Cache-Control")
+
+	_, ok := c.Writer.(http.Flusher)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"message": "Streaming not supported",
+				"type":    "api_error",
+			},
+		})
+		return
+	}
+
+	toolCall := vm.GetToolCall()
+	if toolCall == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "tool call config not found"})
+		return
+	}
+
+	// Serialize tool arguments
+	argsJSON, _ := json.Marshal(toolCall.Arguments)
+
+	// Extract message content from arguments if available
+	content := ""
+	if msg, ok := toolCall.Arguments["message"].(string); ok {
+		content = msg
+	} else if question, ok := toolCall.Arguments["question"].(string); ok {
+		content = question
+	}
+
+	c.Stream(func(w io.Writer) bool {
+		if delay := vm.GetDelay(); delay > 0 {
+			time.Sleep(delay)
+		}
+
+		roleResp := ChatCompletionStreamResponse{
+			ID:      fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()),
+			Object:  "chat.completion.chunk",
+			Created: time.Now().Unix(),
+			Model:   req.Model,
+			Choices: []StreamChoice{{
+				Index: 0,
+				Delta: Delta{
+					Role: "assistant",
+				},
+			}},
+		}
+		data, _ := json.Marshal(roleResp)
+		c.SSEvent("", string(data))
+		c.Writer.Flush()
+
+		time.Sleep(50 * time.Millisecond)
+
+		contentResp := ChatCompletionStreamResponse{
+			ID:      fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()),
+			Object:  "chat.completion.chunk",
+			Created: time.Now().Unix(),
+			Model:   req.Model,
+			Choices: []StreamChoice{{
+				Index: 0,
+				Delta: Delta{
+					Content: content,
+				},
+			}},
+		}
+		data, _ = json.Marshal(contentResp)
+		c.SSEvent("", string(data))
+		c.Writer.Flush()
+
+		time.Sleep(50 * time.Millisecond)
+
+		toolCalls := []ToolCall{
+			{
+				ID:   fmt.Sprintf("call_%d", time.Now().Unix()),
+				Type: "function",
+				Function: FunctionCall{
+					Name:      toolCall.Name,
+					Arguments: string(argsJSON),
+				},
+			},
+		}
+
+		toolResp := ChatCompletionStreamResponse{
+			ID:      fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()),
+			Object:  "chat.completion.chunk",
+			Created: time.Now().Unix(),
+			Model:   req.Model,
+			Choices: []StreamChoice{{
+				Index:        0,
+				Delta:        Delta{ToolCalls: toolCalls},
+				FinishReason: stringPtr("tool_calls"),
+			}},
+		}
+		data, _ = json.Marshal(toolResp)
+		c.SSEvent("", string(data))
+		c.Writer.Flush()
+
+		c.SSEvent("", "[DONE]")
+		c.Writer.Flush()
+
+		return false
+	})
 }
