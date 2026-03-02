@@ -77,17 +77,17 @@ func (a *PermissionAdapter) AsCallback() CanCallToolCallback {
 		}
 
 		// Create permission request
-		req := agentboot.PermissionRequest{
+		permReq := agentboot.PermissionRequest{
 			RequestID: uuid.New().String(),
 			AgentType: a.agentType,
 			ToolName:  toolName,
 			Input:     input,
-			Timestamp: time.Now(),
 			SessionID: a.sessionID,
+			Timestamp: time.Now(),
 		}
 
 		// Call handler
-		result, err := a.handler.CanUseTool(ctx, req)
+		result, err := a.handler.CanUseTool(ctx, permReq)
 		if err != nil {
 			return denyResponse(fmt.Sprintf("Permission check failed: %v", err)), nil
 		}
@@ -171,17 +171,17 @@ func (a *SimplePermissionAdapter) AsCallback() CanCallToolCallback {
 			return denyResponse(fmt.Sprintf("Tool '%s' is not in whitelist", toolName)), nil
 		}
 
-		// Ask user
-		req := agentboot.PermissionRequest{
+		// Create permission request
+		permReq := agentboot.PermissionRequest{
 			RequestID: uuid.New().String(),
 			AgentType: agentboot.AgentTypeClaude,
 			ToolName:  toolName,
 			Input:     input,
-			Timestamp: time.Now(),
 			SessionID: a.SessionID,
+			Timestamp: time.Now(),
 		}
 
-		result, err := a.UserPrompter.PromptPermission(ctx, req)
+		result, err := a.UserPrompter.PromptPermission(ctx, permReq)
 		if err != nil {
 			return denyResponse(fmt.Sprintf("Permission prompt failed: %v", err)), nil
 		}
