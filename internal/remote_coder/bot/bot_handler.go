@@ -1301,6 +1301,9 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 		case "bind":
 			// Start interactive bind
 			h.handleBindInteractive(hCtx)
+		case "project":
+			// Start interactive bind
+			h.handleBotProjectCommand(hCtx)
 		}
 
 	case "project":

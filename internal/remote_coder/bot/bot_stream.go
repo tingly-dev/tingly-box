@@ -270,7 +270,7 @@ func (h *streamingMessageHandler) OnComplete(result *agentboot.CompletionResult)
 	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
 
 	_, err := h.bot.SendMessage(context.Background(), h.chatID, &imbot.SendMessageOptions{
-		Text: "/bot tips",
+		Text: "✅ Task done. \nContinue to chat with this session or /help.",
 		Metadata: map[string]interface{}{
 			"replyMarkup": tgKeyboard,
 		},
