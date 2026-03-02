@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/ask"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	mock "github.com/tingly-dev/tingly-box/agentboot/mockagent"
 	"github.com/tingly-dev/tingly-box/agentboot/permission"
@@ -1578,22 +1579,41 @@ func (h *BotHandler) handlePermissionCallback(hCtx HandlerContext, parts []strin
 			logrus.WithField("parts", parts).Warn("Invalid option callback data")
 			return
 		}
-		optionValue := parts[3]
+		optionIndex := parts[3]
 
-		// Submit as a structured response
-		if err := h.imPrompter.SubmitUserResponse(requestID, permission.UserResponse{
+		// Convert index to label from the pending request
+		optionLabel := optionIndex
+		if questions, ok := pendingReq.Input["questions"].([]interface{}); ok && len(questions) > 0 {
+			if question, ok := questions[0].(map[string]interface{}); ok {
+				if options, ok := question["options"].([]interface{}); ok {
+					// Parse index
+					var idx int
+					if _, err := fmt.Sscanf(optionIndex, "%d", &idx); err == nil && idx >= 0 && idx < len(options) {
+						if option, ok := options[idx].(map[string]interface{}); ok {
+							if label, ok := option["label"].(string); ok {
+								optionLabel = label
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Submit as a structured response with the label
+		if err := h.imPrompter.SubmitUserResponse(requestID, ask.Response{
 			Type: "selection",
-			Data: optionValue,
+			Data: optionLabel,
 		}); err != nil {
 			logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit option selection")
 			h.SendText(hCtx, fmt.Sprintf("Failed to process option selection: %v", err))
 			return
 		}
-		resultText = fmt.Sprintf("✅ Selected option %s", optionValue)
+		resultText = fmt.Sprintf("✅ Selected: %s", optionLabel)
 		logrus.WithFields(logrus.Fields{
 			"request_id":   requestID,
 			"tool_name":    pendingReq.ToolName,
-			"option_value": optionValue,
+			"option_index": optionIndex,
+			"option_label": optionLabel,
 			"user_id":      hCtx.SenderID,
 		}).Info("User selected option")
 
@@ -1622,7 +1642,7 @@ func (h *BotHandler) handlePermissionTextResponse(hCtx HandlerContext) bool {
 	// For AskUserQuestion, try to parse as option selection first
 	if latestReq.ToolName == "AskUserQuestion" {
 		// Try to submit as a text selection
-		if err := h.imPrompter.SubmitUserResponse(latestReq.ID, permission.UserResponse{
+		if err := h.imPrompter.SubmitUserResponse(latestReq.ID, ask.Response{
 			Type: "text",
 			Data: hCtx.Text,
 		}); err == nil {
@@ -1638,7 +1658,7 @@ func (h *BotHandler) handlePermissionTextResponse(hCtx HandlerContext) bool {
 	}
 
 	// Try to parse the text as a standard permission response
-	approved, remember, isValid := ParseTextResponse(hCtx.Text)
+	approved, remember, isValid := ask.ParseTextResponse(hCtx.Text)
 	if !isValid {
 		// Not a valid permission response, let other handlers process it
 		return false

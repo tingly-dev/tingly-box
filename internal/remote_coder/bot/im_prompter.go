@@ -134,8 +134,8 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 	p.mu.Unlock()
 
 	logrus.WithFields(logrus.Fields{
-		"id":       req.ID,
-		"chat_id":  chatID,
+		"id":        req.ID,
+		"chat_id":   chatID,
 		"tool_name": req.ToolName,
 	}).Info("Prompt sent, waiting for response")
 
@@ -241,10 +241,16 @@ func (p *IMPrompter) buildPromptText(req ask.Request) string {
 	// Try to use tool-specific prompt builder
 	builder := p.registry.FindPromptBuilder(req.ToolName, req.Input)
 	if builder != nil {
-		return builder.BuildPrompt(req)
+		prompt := builder.BuildPrompt(req)
+		logrus.WithFields(logrus.Fields{
+			"tool_name": req.ToolName,
+			"prompt_len": len(prompt),
+		}).Debug("Built prompt using tool-specific builder")
+		return prompt
 	}
 
 	// Fallback to default prompt
+	logrus.WithField("tool_name", req.ToolName).Debug("No specific builder found, using default prompt")
 	return fmt.Sprintf("🔐 *Tool Permission Request*\n\nTool: `%s`", req.ToolName)
 }
 
@@ -293,8 +299,10 @@ func (p *IMPrompter) buildAskUserQuestionKeyboard(req ask.Request) imbot.InlineK
 				if option, ok := opt.(map[string]interface{}); ok {
 					label, _ := option["label"].(string)
 					if label != "" {
-						buttonText := fmt.Sprintf("%d️⃣ %s", i+1, label)
-						callbackData := imbot.FormatCallbackData("perm", "option", req.ID, fmt.Sprintf("%d", i+1))
+						// Use simple button text with just the number
+						buttonText := fmt.Sprintf("Option %d", i+1)
+						// Use only the index in callback data to keep it short
+						callbackData := imbot.FormatCallbackData("perm", "option", req.ID, fmt.Sprintf("%d", i))
 						kb.AddRow(imbot.CallbackButton(buttonText, callbackData))
 					}
 				}
