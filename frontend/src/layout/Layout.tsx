@@ -1,26 +1,29 @@
+import Anthropic from '@lobehub/icons/es/Anthropic';
+import Claude from '@lobehub/icons/es/Claude';
+import OpenAI from '@lobehub/icons/es/OpenAI';
 import {
     AccountCircle as AccountIcon,
-    Dashboard as DashboardIcon,
-    Settings as SystemIcon,
+    AutoAwesome,
     BarChart as BarChartIcon,
-    Code as CodeIcon,
-    Psychology as PromptIcon,
-    Bolt as SkillIcon,
-    Send as UserPromptIcon,
-    Lan as RemoteIcon,
+    CalendarToday as CalendarIcon,
     ChatBubble,
-    NewReleases,
+    Code as CodeIcon,
+    DateRange as DateRangeIcon,
     ErrorOutline,
     LaptopMac,
-    AutoAwesome,
     Menu as MenuIcon,
+    NewReleases,
+    Psychology as PromptIcon,
+    Lan as RemoteIcon,
+    Bolt as SkillIcon,
+    Settings as SystemIcon,
     Today as TodayIcon,
-    CalendarToday as CalendarIcon,
-    DateRange as DateRangeIcon,
+    Send as UserPromptIcon
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
     Box,
+    Divider,
     Drawer,
     IconButton,
     List,
@@ -28,27 +31,23 @@ import {
     ListItemButton,
     ListItemIcon,
     ListItemText,
-    Typography,
     Popover,
     Tooltip,
-    Divider,
+    Typography,
 } from '@mui/material';
 import type { ReactNode } from 'react';
-import React, { useState, useMemo } from 'react';
-import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useVersion as useAppVersion } from '../contexts/VersionContext';
-import { useHealth } from '../contexts/HealthContext';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
-import OpenAI from '@lobehub/icons/es/OpenAI';
-import Anthropic from '@lobehub/icons/es/Anthropic';
-import Claude from '@lobehub/icons/es/Claude';
+import { useHealth } from '../contexts/HealthContext';
+import { useVersion as useAppVersion } from '../contexts/VersionContext';
 
 interface LayoutProps {
     children: ReactNode;
 }
 
-const activityBarWidth = 77;
+const activityBarWidth = 88;
 const sidebarWidth = 200;
 
 interface NavItem {
