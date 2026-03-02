@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -36,9 +38,24 @@ func NewMemoryLogMiddleware(maxEntries int) *MemoryLogMiddleware {
 // It logs all HTTP requests to the memory log hook
 func (m *MemoryLogMiddleware) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Skip health checks and static assets
+		if c.Request.URL.Path == "/health" ||
+			c.Request.URL.Path == "/favicon.ico" ||
+			c.Request.URL.Path == "/robots.txt" {
+			c.Next()
+			return
+		}
+
 		start := time.Now()
 		path := c.Request.URL.Path
 		raw := c.Request.URL.RawQuery
+
+		// Wrap response writer to capture body for error responses
+		w := &responseBodyWriter{
+			ResponseWriter: c.Writer,
+			body:           &bytes.Buffer{},
+		}
+		c.Writer = w
 
 		// Process request
 		c.Next()
@@ -54,7 +71,7 @@ func (m *MemoryLogMiddleware) Middleware() gin.HandlerFunc {
 			path = path + "?" + raw
 		}
 
-		entry := m.logger.WithFields(logrus.Fields{
+		fields := logrus.Fields{
 			"status":     statusCode,
 			"latency":    latency,
 			"client_ip":  clientIP,
@@ -62,7 +79,16 @@ func (m *MemoryLogMiddleware) Middleware() gin.HandlerFunc {
 			"path":       path,
 			"body_size":  bodySize,
 			"user_agent": c.Request.UserAgent(),
-		})
+		}
+
+		// Extract error message from response body for 4xx/5xx responses
+		if statusCode >= http.StatusBadRequest && w.body.Len() > 0 {
+			if errMsg := extractErrorMessage(w.body.Bytes()); errMsg != "" {
+				fields["error"] = errMsg
+			}
+		}
+
+		entry := m.logger.WithFields(fields)
 
 		msg := fmt.Sprintf("%s %s %d %v %s %d",
 			method,
@@ -81,6 +107,38 @@ func (m *MemoryLogMiddleware) Middleware() gin.HandlerFunc {
 			entry.Info(msg)
 		}
 	}
+}
+
+// extractErrorMessage parses JSON response body to extract error message
+func extractErrorMessage(body []byte) string {
+	if !json.Valid(body) {
+		// Not JSON, return as string if short enough
+		if len(body) <= 200 {
+			return string(body)
+		}
+		return string(body[:200]) + "..."
+	}
+
+	// Try to extract "error" field from JSON
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return ""
+	}
+
+	// Handle gin.H{"error": "..."} format
+	if errMsg, ok := parsed["error"]; ok {
+		switch v := errMsg.(type) {
+		case string:
+			return v
+		case map[string]interface{}:
+			// Handle {"error": {"message": "...", "type": "..."}} format
+			if msg, ok := v["message"].(string); ok {
+				return msg
+			}
+		}
+	}
+
+	return ""
 }
 
 // GetEntries returns all log entries in chronological order

@@ -49,6 +49,7 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
     const [loading, setLoading] = useState(false);
     const [filterLevel, setFilterLevel] = useState<string | null>(null);
     const [filterStatus, setFilterStatus] = useState<number | null>(null);
+    const [filterHasError, setFilterHasError] = useState(false);
     const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
     const [autoRefresh, setAutoRefresh] = useState(false);
     const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -133,7 +134,7 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
         }
     };
 
-    // Client-side filter when filterLevel or filterStatus changes
+    // Client-side filter when filterLevel, filterStatus or filterHasError changes
     useEffect(() => {
         let filtered = allLogs;
         if (filterLevel) {
@@ -142,8 +143,11 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
         if (filterStatus !== null) {
             filtered = filtered.filter(log => log.fields?.status === filterStatus);
         }
+        if (filterHasError) {
+            filtered = filtered.filter(log => log.fields?.error !== undefined);
+        }
         setLogs(filtered);
-    }, [filterLevel, filterStatus, allLogs]);
+    }, [filterLevel, filterStatus, filterHasError, allLogs]);
 
     // Get unique status codes from all logs
     const uniqueStatusCodes = Array.from(
@@ -188,7 +192,15 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
                     >
                         Refresh
                     </Button>
-                    {(filterLevel || filterStatus !== null) && (
+                    <Button
+                        variant={filterHasError ? 'contained' : 'outlined'}
+                        size="small"
+                        color="error"
+                        onClick={() => setFilterHasError(!filterHasError)}
+                    >
+                        Has Error
+                    </Button>
+                    {(filterLevel || filterStatus !== null || filterHasError) && (
                         <Button
                             variant="outlined"
                             size="small"
@@ -196,6 +208,7 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
                             onClick={() => {
                                 setFilterLevel(null);
                                 setFilterStatus(null);
+                                setFilterHasError(false);
                             }}
                         >
                             Clear Filter
@@ -311,7 +324,22 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
                                             )}
                                         </TableCell>
                                         <TableCell sx={{ fontSize: '0.8rem' }}>
-                                            {log.message}
+                                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                                <Typography sx={{ fontSize: '0.8rem' }}>
+                                                    {log.message}
+                                                </Typography>
+                                                {log.fields?.error && (
+                                                    <Typography
+                                                        sx={{
+                                                            fontSize: '0.75rem',
+                                                            color: 'error.main',
+                                                            fontFamily: 'monospace',
+                                                        }}
+                                                    >
+                                                        Error: {String(log.fields.error)}
+                                                    </Typography>
+                                                )}
+                                            </Box>
                                         </TableCell>
                                     </TableRow>
                                     <TableRow>
@@ -334,7 +362,12 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
                                                                 <Typography
                                                                     key={key}
                                                                     variant="body2"
-                                                                    sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
+                                                                    sx={{
+                                                                        fontFamily: 'monospace',
+                                                                        fontSize: '0.75rem',
+                                                                        color: key === 'error' ? 'error.main' : 'inherit',
+                                                                        fontWeight: key === 'error' ? 'medium' : 'inherit',
+                                                                    }}
                                                                 >
                                                                     <strong>{key}:</strong> {String(value)}
                                                                 </Typography>
