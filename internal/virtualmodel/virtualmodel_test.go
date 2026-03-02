@@ -208,3 +208,159 @@ func TestEstimateTokens(t *testing.T) {
 		t.Errorf("Expected %d tokens for '%s', got %d", expectedShort, shortContent, shortCount)
 	}
 }
+
+// Test unified type system
+func TestVirtualModelTypes(t *testing.T) {
+	tests := []struct {
+		name     string
+		vmType   VirtualModelType
+		isStatic bool
+		isTool   bool
+		isProxy  bool
+	}{
+		{"static", VirtualModelTypeStatic, true, false, false},
+		{"tool", VirtualModelTypeTool, false, true, false},
+		{"proxy", VirtualModelTypeProxy, false, false, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &VirtualModelConfig{
+				ID:   "test-" + tt.name,
+				Type: tt.vmType,
+			}
+			vm := NewVirtualModel(cfg)
+
+			if vm.GetType() != tt.vmType {
+				t.Errorf("Expected type %s, got %s", tt.vmType, vm.GetType())
+			}
+			if vm.IsStatic() != tt.isStatic {
+				t.Errorf("IsStatic() = %v, want %v", vm.IsStatic(), tt.isStatic)
+			}
+			if vm.IsTool() != tt.isTool {
+				t.Errorf("IsTool() = %v, want %v", vm.IsTool(), tt.isTool)
+			}
+			if vm.IsProxy() != tt.isProxy {
+				t.Errorf("IsProxy() = %v, want %v", vm.IsProxy(), tt.isProxy)
+			}
+		})
+	}
+}
+
+// Test default type is static
+func TestVirtualModelDefaultType(t *testing.T) {
+	cfg := &VirtualModelConfig{
+		ID:      "test-default",
+		Content: "Test",
+	}
+	vm := NewVirtualModel(cfg)
+
+	if vm.GetType() != VirtualModelTypeStatic {
+		t.Errorf("Expected default type %s, got %s", VirtualModelTypeStatic, vm.GetType())
+	}
+}
+
+// Test tool model with generic arguments
+func TestToolModel(t *testing.T) {
+	// Test ask_user_question tool
+	cfg := &VirtualModelConfig{
+		ID:   "test-ask",
+		Type: VirtualModelTypeTool,
+		ToolCall: &ToolCallConfig{
+			Name: "ask_user_question",
+			Arguments: map[string]interface{}{
+				"question": "Which option?",
+				"options": []map[string]string{
+					{"label": "A", "value": "a"},
+				},
+			},
+		},
+	}
+
+	vm := NewVirtualModel(cfg)
+
+	if !vm.IsTool() {
+		t.Error("Expected IsTool() to return true")
+	}
+
+	toolCall := vm.GetToolCall()
+	if toolCall == nil {
+		t.Fatal("Expected tool call config")
+	}
+
+	if toolCall.Name != "ask_user_question" {
+		t.Errorf("Expected tool name 'ask_user_question', got '%s'", toolCall.Name)
+	}
+
+	if toolCall.Arguments["question"] != "Which option?" {
+		t.Errorf("Expected question 'Which option?', got '%v'", toolCall.Arguments["question"])
+	}
+
+	// Test web_search tool (different tool type)
+	cfg2 := &VirtualModelConfig{
+		ID:   "test-search",
+		Type: VirtualModelTypeTool,
+		ToolCall: &ToolCallConfig{
+			Name: "web_search",
+			Arguments: map[string]interface{}{
+				"query": "latest AI news",
+			},
+		},
+	}
+
+	vm2 := NewVirtualModel(cfg2)
+	if vm2.GetToolCall().Name != "web_search" {
+		t.Errorf("Expected tool name 'web_search', got '%s'", vm2.GetToolCall().Name)
+	}
+}
+
+// Test proxy model
+func TestProxyModel(t *testing.T) {
+	cfg := &VirtualModelConfig{
+		ID:            "test-proxy",
+		Type:          VirtualModelTypeProxy,
+		DelegateModel: "claude-3-5-sonnet",
+	}
+
+	vm := NewVirtualModel(cfg)
+
+	if !vm.IsProxy() {
+		t.Error("Expected IsProxy() to return true")
+	}
+
+	if vm.GetDelegateModel() != "claude-3-5-sonnet" {
+		t.Errorf("Expected delegate model 'claude-3-5-sonnet', got '%s'", vm.GetDelegateModel())
+	}
+}
+
+// Test all default model types are registered
+func TestDefaultModelTypes(t *testing.T) {
+	registry := NewRegistry()
+	registry.RegisterDefaults()
+
+	testCases := []struct {
+		id       string
+		expected VirtualModelType
+	}{
+		{"virtual-gpt-4", VirtualModelTypeStatic},
+		{"virtual-claude-3", VirtualModelTypeStatic},
+		{"echo-model", VirtualModelTypeStatic},
+		{"compact-thinking", VirtualModelTypeProxy},
+		{"compact-round-only", VirtualModelTypeProxy},
+		{"compact-round-files", VirtualModelTypeProxy},
+		{"ask-user-question", VirtualModelTypeTool},
+		{"ask-confirmation", VirtualModelTypeTool},
+		{"web-search-example", VirtualModelTypeTool},
+	}
+
+	for _, tc := range testCases {
+		vm := registry.Get(tc.id)
+		if vm == nil {
+			t.Errorf("Model '%s' not found", tc.id)
+			continue
+		}
+		if vm.GetType() != tc.expected {
+			t.Errorf("Model '%s': expected type %s, got %s", tc.id, tc.expected, vm.GetType())
+		}
+	}
+}
