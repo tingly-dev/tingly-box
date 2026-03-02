@@ -46,7 +46,7 @@ func Run(ctx context.Context, cfg *config.Config, imbotStore *db.ImBotSettingsSt
 	agentBoot := agentboot.New(agentBootConfig)
 
 	// Create permission handler with default config
-	permHandler := permission.NewDefaultHandler(agentboot.DefaultPermissionConfig())
+	permHandler := permission.NewDefaultHandlerFromAgentboot(agentboot.DefaultPermissionConfig())
 
 	// Create and register Claude agent
 	claudeAgent := claude.NewAgent(agentBootConfig)

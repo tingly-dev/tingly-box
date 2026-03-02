@@ -10,11 +10,11 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/agentboot/permission"
+	"github.com/tingly-dev/tingly-box/agentboot/ask"
 	"github.com/tingly-dev/tingly-box/imbot"
 )
 
-// IMPrompter implements permission.UserPrompter using IM (Telegram, etc.) for user interaction
+// IMPrompter implements ask.Prompter using IM (Telegram, etc.) for user interaction
 type IMPrompter struct {
 	mu sync.RWMutex
 
@@ -22,56 +22,57 @@ type IMPrompter struct {
 	manager *imbot.Manager
 
 	// registry is the tool handler registry for customizing prompts and responses
-	registry *permission.ToolHandlerRegistry
+	registry *ask.ToolHandlerRegistry
 
-	// pendingRequests stores permission requests waiting for user response
-	// key: requestID, value: *pendingPermissionRequest
-	pendingRequests map[string]*pendingPermissionRequest
+	// pendingRequests stores requests waiting for user response
+	// key: requestID, value: *pendingIMRequest
+	pendingRequests map[string]*pendingIMRequest
 
 	// responseChannels stores channels for sending responses back to waiting goroutines
-	// key: requestID, value: channel for permission result
-	responseChannels map[string]chan agentboot.PermissionResult
+	// key: requestID, value: channel for result
+	responseChannels map[string]chan ask.Result
 
-	// defaultTimeout is the default timeout for permission requests
+	// defaultTimeout is the default timeout for requests
 	defaultTimeout time.Duration
 }
 
-// pendingPermissionRequest stores a pending permission request with its context
-type pendingPermissionRequest struct {
-	request   agentboot.PermissionRequest
+// pendingIMRequest stores a pending request with its context
+type pendingIMRequest struct {
+	request   ask.Request
 	chatID    string
 	platform  imbot.Platform
 	messageID string
 	createdAt time.Time
 }
 
-// NewIMPrompter creates a new IM-based permission prompter
+// NewIMPrompter creates a new IM-based prompter
 func NewIMPrompter(manager *imbot.Manager) *IMPrompter {
 	return &IMPrompter{
 		manager:          manager,
-		registry:         permission.NewToolHandlerRegistry(),
-		pendingRequests:  make(map[string]*pendingPermissionRequest),
-		responseChannels: make(map[string]chan agentboot.PermissionResult),
+		registry:         ask.NewToolHandlerRegistry(),
+		pendingRequests:  make(map[string]*pendingIMRequest),
+		responseChannels: make(map[string]chan ask.Result),
 		defaultTimeout:   5 * time.Minute,
 	}
 }
 
-// SetDefaultTimeout sets the default timeout for permission requests
+// SetDefaultTimeout sets the default timeout for requests
 func (p *IMPrompter) SetDefaultTimeout(timeout time.Duration) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.defaultTimeout = timeout
 }
 
-// PromptPermission prompts the user via IM for permission decision
-// This implements the permission.UserPrompter interface
-func (p *IMPrompter) PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
+// Prompt prompts the user via IM for response
+// This implements the ask.Prompter interface
+func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, error) {
 	// Get the chat context from the request
 	chatID, platform := p.getChatContextFromRequest(req)
 	if chatID == "" {
 		// No chat context, auto-approve
-		logrus.WithField("request_id", req.RequestID).Debug("No chat context for permission request, auto-approving")
-		return agentboot.PermissionResult{
+		logrus.WithField("id", req.ID).Debug("No chat context for request, auto-approving")
+		return ask.Result{
+			ID:           req.ID,
 			Approved:     true,
 			UpdatedInput: req.Input,
 		}, nil
@@ -80,32 +81,36 @@ func (p *IMPrompter) PromptPermission(ctx context.Context, req agentboot.Permiss
 	bot := p.manager.GetBot(platform)
 	if bot == nil {
 		logrus.WithFields(logrus.Fields{
-			"request_id": req.RequestID,
-			"platform":   platform,
+			"id":       req.ID,
+			"platform": platform,
 		}).Warn("Bot not found for platform, auto-approving")
-		return agentboot.PermissionResult{
+		return ask.Result{
+			ID:           req.ID,
 			Approved:     true,
 			UpdatedInput: req.Input,
 		}, nil
 	}
 
 	// Create response channel
-	responseChan := make(chan agentboot.PermissionResult, 1)
+	responseChan := make(chan ask.Result, 1)
 
 	p.mu.Lock()
-	p.pendingRequests[req.RequestID] = &pendingPermissionRequest{
+	p.pendingRequests[req.ID] = &pendingIMRequest{
 		request:   req,
 		chatID:    chatID,
 		platform:  platform,
 		createdAt: time.Now(),
 	}
-	p.responseChannels[req.RequestID] = responseChan
+	p.responseChannels[req.ID] = responseChan
 	timeout := p.defaultTimeout
+	if req.Timeout > 0 {
+		timeout = req.Timeout
+	}
 	p.mu.Unlock()
 
 	// Build prompt using tool handler
 	promptText := p.buildPromptText(req)
-	keyboard := p.buildPermissionKeyboard(req)
+	keyboard := p.buildKeyboard(req)
 
 	// Send the prompt message
 	msg, err := bot.SendMessage(context.Background(), chatID, &imbot.SendMessageOptions{
@@ -116,75 +121,63 @@ func (p *IMPrompter) PromptPermission(ctx context.Context, req agentboot.Permiss
 		},
 	})
 	if err != nil {
-		p.cleanup(req.RequestID)
-		logrus.WithError(err).WithField("request_id", req.RequestID).Error("Failed to send permission prompt")
-		return agentboot.PermissionResult{Approved: false}, fmt.Errorf("failed to send permission prompt: %w", err)
+		p.cleanup(req.ID)
+		logrus.WithError(err).WithField("id", req.ID).Error("Failed to send prompt")
+		return ask.Result{ID: req.ID, Approved: false}, fmt.Errorf("failed to send prompt: %w", err)
 	}
 
 	// Store message ID for potential editing
 	p.mu.Lock()
-	if pending, exists := p.pendingRequests[req.RequestID]; exists {
+	if pending, exists := p.pendingRequests[req.ID]; exists {
 		pending.messageID = msg.MessageID
 	}
 	p.mu.Unlock()
 
 	logrus.WithFields(logrus.Fields{
-		"request_id": req.RequestID,
-		"chat_id":    chatID,
-		"tool_name":  req.ToolName,
-	}).Info("Permission prompt sent, waiting for response")
+		"id":       req.ID,
+		"chat_id":  chatID,
+		"tool_name": req.ToolName,
+	}).Info("Prompt sent, waiting for response")
 
 	// Wait for response or timeout
 	select {
 	case result := <-responseChan:
-		p.cleanup(req.RequestID)
+		p.cleanup(req.ID)
+		// Edit message to show result
+		p.editPromptToResult(bot, chatID, msg.MessageID, req, result.Approved)
 		return result, nil
 
 	case <-time.After(timeout):
-		p.cleanup(req.RequestID)
+		p.cleanup(req.ID)
 		p.editPromptToTimeout(bot, chatID, msg.MessageID, req)
-		return agentboot.PermissionResult{
+		return ask.Result{
+			ID:       req.ID,
 			Approved: false,
-			Reason:   "permission request timed out",
-		}, fmt.Errorf("permission request timed out")
+			Reason:   "request timed out",
+		}, fmt.Errorf("request timed out")
 
 	case <-ctx.Done():
-		p.cleanup(req.RequestID)
-		return agentboot.PermissionResult{Approved: false}, ctx.Err()
+		p.cleanup(req.ID)
+		return ask.Result{ID: req.ID, Approved: false}, ctx.Err()
 	}
 }
 
-// SubmitDecision submits a user's decision for a pending permission request
-// This is called when a user clicks a button in response to a permission prompt
-// Deprecated: Use SubmitResult instead for structured responses
-func (p *IMPrompter) SubmitDecision(requestID string, approved bool, remember bool, reason string) error {
-	result := agentboot.PermissionResult{
-		Approved: approved,
-		Remember: remember,
-		Reason:   reason,
-	}
-	return p.SubmitResult(requestID, result)
-}
-
-// SubmitResult submits a permission result for a pending permission request
-// This is the preferred method for structured responses
-func (p *IMPrompter) SubmitResult(requestID string, result agentboot.PermissionResult) error {
+// SubmitResult submits a result for a pending request
+func (p *IMPrompter) SubmitResult(requestID string, result ask.Result) error {
 	p.mu.Lock()
 	responseChan, exists := p.responseChannels[requestID]
 	if !exists {
 		p.mu.Unlock()
-		return fmt.Errorf("permission request not found or expired: %s", requestID)
+		return fmt.Errorf("request not found or expired: %s", requestID)
 	}
 	// Keep lock held while sending to prevent race with cleanup
-	// Channel send with buffer size 1 is non-blocking
 	select {
 	case responseChan <- result:
 		p.mu.Unlock()
 		logrus.WithFields(logrus.Fields{
 			"request_id": requestID,
 			"approved":   result.Approved,
-			"remember":   result.Remember,
-		}).Info("Permission result submitted")
+		}).Info("Result submitted")
 		return nil
 	default:
 		p.mu.Unlock()
@@ -192,16 +185,16 @@ func (p *IMPrompter) SubmitResult(requestID string, result agentboot.PermissionR
 	}
 }
 
-// SubmitUserResponse submits a user response for a pending permission request
+// SubmitUserResponse submits a user response for a pending request
 // This parses the response using the appropriate tool handler
-func (p *IMPrompter) SubmitUserResponse(requestID string, response permission.UserResponse) error {
+func (p *IMPrompter) SubmitUserResponse(requestID string, response ask.Response) error {
 	// Get the pending request
 	p.mu.RLock()
 	pending, exists := p.pendingRequests[requestID]
 	p.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("permission request not found or expired: %s", requestID)
+		return fmt.Errorf("request not found or expired: %s", requestID)
 	}
 
 	// Find the appropriate handler and parse the response
@@ -218,8 +211,8 @@ func (p *IMPrompter) SubmitUserResponse(requestID string, response permission.Us
 	return p.SubmitResult(requestID, result)
 }
 
-// GetPendingRequest returns a pending permission request by ID
-func (p *IMPrompter) GetPendingRequest(requestID string) (*agentboot.PermissionRequest, bool) {
+// GetPendingRequest returns a pending request by ID
+func (p *IMPrompter) GetPendingRequest(requestID string) (*ask.Request, bool) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -230,11 +223,11 @@ func (p *IMPrompter) GetPendingRequest(requestID string) (*agentboot.PermissionR
 }
 
 // GetPendingRequestsForChat returns all pending requests for a specific chat
-func (p *IMPrompter) GetPendingRequestsForChat(chatID string) []agentboot.PermissionRequest {
+func (p *IMPrompter) GetPendingRequestsForChat(chatID string) []ask.Request {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	var requests []agentboot.PermissionRequest
+	var requests []ask.Request
 	for _, pending := range p.pendingRequests {
 		if pending.chatID == chatID {
 			requests = append(requests, pending.request)
@@ -243,8 +236,8 @@ func (p *IMPrompter) GetPendingRequestsForChat(chatID string) []agentboot.Permis
 	return requests
 }
 
-// buildPromptText builds the permission prompt message text using tool handlers
-func (p *IMPrompter) buildPromptText(req agentboot.PermissionRequest) string {
+// buildPromptText builds the prompt message text using tool handlers
+func (p *IMPrompter) buildPromptText(req ask.Request) string {
 	// Try to use tool-specific prompt builder
 	builder := p.registry.FindPromptBuilder(req.ToolName, req.Input)
 	if builder != nil {
@@ -255,42 +248,15 @@ func (p *IMPrompter) buildPromptText(req agentboot.PermissionRequest) string {
 	return fmt.Sprintf("🔐 *Tool Permission Request*\n\nTool: `%s`", req.ToolName)
 }
 
-// ParseTextResponse parses user text input as a permission response
-// Returns: (approved, remember, isValid)
-func ParseTextResponse(text string) (approved bool, remember bool, isValid bool) {
-	// Normalize input
-	text = normalizeText(text)
-
-	switch text {
-	case "1", "y", "yes":
-		return true, false, true
-	case "0", "n", "no":
-		return false, false, true
-	case "a", "always":
-		return true, true, true
-	default:
-		return false, false, false
-	}
-}
-
-// normalizeText normalizes user input for comparison
-func normalizeText(text string) string {
-	// Trim whitespace and convert to lowercase
-	text = strings.TrimSpace(text)
-	text = strings.ToLower(text)
-	return text
-}
-
-// buildPermissionKeyboard builds the inline keyboard for permission prompts
-// This uses tool-specific keyboards when available
-func (p *IMPrompter) buildPermissionKeyboard(req agentboot.PermissionRequest) imbot.InlineKeyboardMarkup {
+// buildKeyboard builds the inline keyboard for prompts
+func (p *IMPrompter) buildKeyboard(req ask.Request) imbot.InlineKeyboardMarkup {
 	// Check if this is AskUserQuestion - build option keyboard
 	if req.ToolName == "AskUserQuestion" {
 		return p.buildAskUserQuestionKeyboard(req)
 	}
 
 	// Default keyboard: Approve/Deny/Always
-	return p.buildDefaultKeyboard(req.RequestID)
+	return p.buildDefaultKeyboard(req.ID)
 }
 
 // buildDefaultKeyboard builds the default allow/deny keyboard
@@ -312,12 +278,12 @@ func (p *IMPrompter) buildDefaultKeyboard(requestID string) imbot.InlineKeyboard
 }
 
 // buildAskUserQuestionKeyboard builds a keyboard with options for AskUserQuestion
-func (p *IMPrompter) buildAskUserQuestionKeyboard(req agentboot.PermissionRequest) imbot.InlineKeyboardMarkup {
+func (p *IMPrompter) buildAskUserQuestionKeyboard(req ask.Request) imbot.InlineKeyboardMarkup {
 	kb := imbot.NewKeyboardBuilder()
 
 	questions, ok := req.Input["questions"].([]interface{})
 	if !ok || len(questions) == 0 {
-		return p.buildDefaultKeyboard(req.RequestID)
+		return p.buildDefaultKeyboard(req.ID)
 	}
 
 	// Build buttons for each option in the first question
@@ -327,9 +293,8 @@ func (p *IMPrompter) buildAskUserQuestionKeyboard(req agentboot.PermissionReques
 				if option, ok := opt.(map[string]interface{}); ok {
 					label, _ := option["label"].(string)
 					if label != "" {
-						// Use option index as callback data
 						buttonText := fmt.Sprintf("%d️⃣ %s", i+1, label)
-						callbackData := imbot.FormatCallbackData("perm", "option", req.RequestID, fmt.Sprintf("%d", i))
+						callbackData := imbot.FormatCallbackData("perm", "option", req.ID, fmt.Sprintf("%d", i+1))
 						kb.AddRow(imbot.CallbackButton(buttonText, callbackData))
 					}
 				}
@@ -338,13 +303,13 @@ func (p *IMPrompter) buildAskUserQuestionKeyboard(req agentboot.PermissionReques
 	}
 
 	// Add cancel button
-	kb.AddRow(imbot.CallbackButton("❌ Cancel", imbot.FormatCallbackData("perm", "deny", req.RequestID)))
+	kb.AddRow(imbot.CallbackButton("❌ Cancel", imbot.FormatCallbackData("perm", "deny", req.ID)))
 
 	return kb.Build()
 }
 
-// editPromptToResult edits the permission prompt message to show the result
-func (p *IMPrompter) editPromptToResult(bot imbot.Bot, chatID, messageID string, req agentboot.PermissionRequest, approved bool) {
+// editPromptToResult edits the prompt message to show the result
+func (p *IMPrompter) editPromptToResult(bot imbot.Bot, chatID, messageID string, req ask.Request, approved bool) {
 	resultText := p.buildPromptText(req)
 	if approved {
 		resultText += "\n\n✅ *Approved*"
@@ -354,7 +319,6 @@ func (p *IMPrompter) editPromptToResult(bot imbot.Bot, chatID, messageID string,
 
 	// Edit message to remove keyboard and show result
 	if tgBot, ok := imbot.AsTelegramBot(bot); ok {
-		// Use Telegram-specific editing with empty keyboard to remove buttons
 		_ = tgBot.EditMessageWithKeyboard(context.Background(), chatID, messageID, resultText, nil)
 	} else {
 		// Fallback: send a new message with the result
@@ -365,8 +329,8 @@ func (p *IMPrompter) editPromptToResult(bot imbot.Bot, chatID, messageID string,
 	}
 }
 
-// editPromptToTimeout edits the permission prompt message to show timeout
-func (p *IMPrompter) editPromptToTimeout(bot imbot.Bot, chatID, messageID string, req agentboot.PermissionRequest) {
+// editPromptToTimeout edits the prompt message to show timeout
+func (p *IMPrompter) editPromptToTimeout(bot imbot.Bot, chatID, messageID string, req ask.Request) {
 	resultText := p.buildPromptText(req)
 	resultText += "\n\n⏰ *Timed Out*"
 
@@ -375,17 +339,13 @@ func (p *IMPrompter) editPromptToTimeout(bot imbot.Bot, chatID, messageID string
 	}
 }
 
-// getChatContextFromRequest extracts chat context from a permission request
-func (p *IMPrompter) getChatContextFromRequest(req agentboot.PermissionRequest) (string, imbot.Platform) {
-	// Try to get chat context from the request's metadata
-	if chatID, ok := req.Input["_chat_id"].(string); ok {
-		platform := imbot.PlatformTelegram
-		if p, ok := req.Input["_platform"].(string); ok {
-			platform = imbot.Platform(p)
-		}
-		return chatID, platform
+// getChatContextFromRequest extracts chat context from a request
+func (p *IMPrompter) getChatContextFromRequest(req ask.Request) (string, imbot.Platform) {
+	chatID, platform := req.GetChatContext()
+	if platform != "" {
+		return chatID, imbot.Platform(platform)
 	}
-	return "", ""
+	return chatID, imbot.PlatformTelegram
 }
 
 // cleanup removes a pending request and its response channel
@@ -395,6 +355,44 @@ func (p *IMPrompter) cleanup(requestID string) {
 
 	delete(p.pendingRequests, requestID)
 	delete(p.responseChannels, requestID)
+}
+
+// ParseTextResponse parses user text input as a permission response
+// Returns: (approved, remember, isValid)
+func ParseTextResponse(text string) (approved bool, remember bool, isValid bool) {
+	return ask.ParseTextResponse(text)
+}
+
+// Legacy compatibility methods
+
+// SubmitDecision submits a user's decision for a pending request
+// Deprecated: Use SubmitResult instead
+func (p *IMPrompter) SubmitDecision(requestID string, approved bool, remember bool, reason string) error {
+	result := ask.Result{
+		ID:       requestID,
+		Approved: approved,
+		Remember: remember,
+		Reason:   reason,
+	}
+	return p.SubmitResult(requestID, result)
+}
+
+// PromptPermission implements the legacy permission.UserPrompter interface
+// Deprecated: Use Prompt instead
+func (p *IMPrompter) PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
+	askReq := ask.FromPermissionRequest(req)
+	result, err := p.Prompt(ctx, *askReq)
+	if err != nil {
+		return agentboot.PermissionResult{}, err
+	}
+	return result.ToPermissionResult(), nil
+}
+
+// normalizeText normalizes user input for comparison
+func normalizeText(text string) string {
+	text = strings.TrimSpace(text)
+	text = strings.ToLower(text)
+	return text
 }
 
 // truncateText truncates text to maxLen with ellipsis

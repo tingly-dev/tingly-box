@@ -36,6 +36,7 @@ func (f OutputFormat) String() string {
 }
 
 // PermissionMode defines how permission requests are handled
+// Deprecated: Use ask.Mode instead
 type PermissionMode string
 
 const (
@@ -49,22 +50,9 @@ func (m PermissionMode) String() string {
 	return string(m)
 }
 
-// ParsePermissionMode parses a permission mode from string
-func ParsePermissionMode(s string) (PermissionMode, bool) {
-	switch strings.ToLower(s) {
-	case "auto":
-		return PermissionModeAuto, true
-	case "manual":
-		return PermissionModeManual, true
-	case "skip":
-		return PermissionModeSkip, true
-	default:
-		return "", false
-	}
-}
-
 // PermissionHandler is the interface for permission handling
 // This is defined here to avoid circular dependencies
+// Deprecated: Use ask.Handler instead
 type PermissionHandler interface {
 	CanUseTool(ctx context.Context, req PermissionRequest) (PermissionResult, error)
 	SetMode(scopeID string, mode PermissionMode) error

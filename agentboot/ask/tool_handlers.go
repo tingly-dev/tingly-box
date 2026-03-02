@@ -1,10 +1,8 @@
-package permission
+package ask
 
 import (
 	"fmt"
 	"strings"
-
-	"github.com/tingly-dev/tingly-box/agentboot"
 )
 
 // AskUserQuestionHandler handles the AskUserQuestion tool which presents
@@ -27,7 +25,7 @@ func (h *AskUserQuestionHandler) Description() string {
 }
 
 // BuildPrompt creates a prompt showing all questions and options
-func (h *AskUserQuestionHandler) BuildPrompt(req agentboot.PermissionRequest) string {
+func (h *AskUserQuestionHandler) BuildPrompt(req Request) string {
 	var text strings.Builder
 
 	text.WriteString("❓ *Question*\n\n")
@@ -81,10 +79,11 @@ func (h *AskUserQuestionHandler) BuildPrompt(req agentboot.PermissionRequest) st
 }
 
 // ParseResponse parses the user's selection into the answers format
-func (h *AskUserQuestionHandler) ParseResponse(req agentboot.PermissionRequest, response UserResponse) (agentboot.PermissionResult, error) {
+func (h *AskUserQuestionHandler) ParseResponse(req Request, response Response) (Result, error) {
 	questions, ok := req.Input["questions"].([]interface{})
 	if !ok || len(questions) == 0 {
-		return agentboot.PermissionResult{
+		return Result{
+			ID:       req.ID,
 			Approved: false,
 			Reason:   "No questions in request",
 		}, nil
@@ -96,14 +95,14 @@ func (h *AskUserQuestionHandler) ParseResponse(req agentboot.PermissionRequest, 
 	// Handle selection by index or label
 	selection := strings.TrimSpace(response.Data)
 	if selection == "" {
-		return agentboot.PermissionResult{
+		return Result{
+			ID:       req.ID,
 			Approved: false,
 			Reason:   "No selection provided",
 		}, nil
 	}
 
 	// Try to match against first question (most common case)
-	// In the future, this could handle multiple questions
 	if len(questions) > 0 {
 		question, ok := questions[0].(map[string]interface{})
 		if ok {
@@ -115,7 +114,6 @@ func (h *AskUserQuestionHandler) ParseResponse(req agentboot.PermissionRequest, 
 					// Store the selected option label as the answer
 					if opt, ok := options[selectedIndex].(map[string]interface{}); ok {
 						if label, ok := opt["label"].(string); ok {
-							// Answers format: key is question identifier, value is selected label
 							answers["0"] = label
 						}
 					}
@@ -134,7 +132,8 @@ func (h *AskUserQuestionHandler) ParseResponse(req agentboot.PermissionRequest, 
 	}
 	updatedInput["answers"] = answers
 
-	return agentboot.PermissionResult{
+	return Result{
+		ID:           req.ID,
 		Approved:     true,
 		UpdatedInput: updatedInput,
 		Reason:       "User selected option",
@@ -168,4 +167,116 @@ func (h *AskUserQuestionHandler) parseSelection(selection string, options []inte
 
 	// Return the raw input as label
 	return -1, selection
+}
+
+// DefaultToolHandler is the fallback handler for tools without specific handlers
+type DefaultToolHandler struct{}
+
+// NewDefaultToolHandler creates a new DefaultToolHandler
+func NewDefaultToolHandler() *DefaultToolHandler {
+	return &DefaultToolHandler{}
+}
+
+// CanHandle returns true for all tools (acts as fallback)
+func (h *DefaultToolHandler) CanHandle(toolName string, input map[string]interface{}) bool {
+	return true
+}
+
+// Description returns the handler description
+func (h *DefaultToolHandler) Description() string {
+	return "Default handler for simple approve/deny decisions"
+}
+
+// BuildPrompt creates a simple permission prompt
+func (h *DefaultToolHandler) BuildPrompt(req Request) string {
+	return BuildDefaultPrompt(req)
+}
+
+// ParseResponse parses a simple approve/deny response
+func (h *DefaultToolHandler) ParseResponse(req Request, response Response) (Result, error) {
+	return ParseDefaultResponse(req, response)
+}
+
+// BuildDefaultPrompt creates the default permission prompt text
+func BuildDefaultPrompt(req Request) string {
+	text := "🔐 *Tool Permission Request*\n\n"
+	text += "Tool: `" + req.ToolName + "`\n"
+
+	// Show relevant input details
+	if cmd, ok := req.Input["command"].(string); ok && cmd != "" {
+		text += "Command: `" + truncateText(cmd, 200) + "`\n"
+	} else if filePath, ok := req.Input["file_path"].(string); ok && filePath != "" {
+		text += "File: `" + filePath + "`\n"
+	}
+
+	if req.Reason != "" {
+		text += "\nReason: " + req.Reason + "\n"
+	}
+
+	return text
+}
+
+// ParseDefaultResponse parses standard allow/deny responses
+func ParseDefaultResponse(req Request, response Response) (Result, error) {
+	switch response.Data {
+	case "allow", "yes", "y", "1":
+		return Result{
+			ID:           req.ID,
+			Approved:     true,
+			UpdatedInput: req.Input,
+			Reason:       "User approved",
+		}, nil
+	case "always":
+		return Result{
+			ID:           req.ID,
+			Approved:     true,
+			UpdatedInput: req.Input,
+			Remember:     true,
+			Reason:       "User approved (always)",
+		}, nil
+	case "deny", "no", "n", "0":
+		return Result{
+			ID:       req.ID,
+			Approved: false,
+			Reason:   "User denied",
+		}, nil
+	default:
+		return Result{
+			ID:       req.ID,
+			Approved: false,
+			Reason:   "Unknown response",
+		}, nil
+	}
+}
+
+// ParseTextResponse parses user text input as a permission response
+// Returns: (approved, remember, isValid)
+func ParseTextResponse(text string) (approved bool, remember bool, isValid bool) {
+	text = normalizeText(text)
+
+	switch text {
+	case "1", "y", "yes":
+		return true, false, true
+	case "0", "n", "no":
+		return false, false, true
+	case "a", "always":
+		return true, true, true
+	default:
+		return false, false, false
+	}
+}
+
+// normalizeText normalizes user input for comparison
+func normalizeText(text string) string {
+	text = strings.TrimSpace(text)
+	text = strings.ToLower(text)
+	return text
+}
+
+// truncateText truncates text to maxLen with ellipsis
+func truncateText(text string, maxLen int) string {
+	if len(text) <= maxLen {
+		return text
+	}
+	return text[:maxLen-3] + "..."
 }

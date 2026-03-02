@@ -53,8 +53,9 @@ type Launcher struct {
 
 	// executionContext stores the current execution context for permission requests
 	executionContext struct {
-		chatID   string
-		platform string
+		sessionID string
+		chatID    string
+		platform  string
 	}
 }
 
@@ -167,13 +168,21 @@ func (l *Launcher) ExecuteWithHandler(
 ) error {
 	// Set execution context for permission requests
 	l.mu.Lock()
+	l.executionContext.sessionID = opts.SessionID
 	l.executionContext.chatID = opts.ChatID
 	l.executionContext.platform = opts.Platform
+	permHandler := l.permissionHandler
 	l.mu.Unlock()
+
+	logrus.WithFields(logrus.Fields{
+		"session_id":      opts.SessionID,
+		"has_perm_handler": permHandler != nil,
+	}).Info("ExecuteWithHandler starting")
 
 	// Clear execution context when done
 	defer func() {
 		l.mu.Lock()
+		l.executionContext.sessionID = ""
 		l.executionContext.chatID = ""
 		l.executionContext.platform = ""
 		l.mu.Unlock()
@@ -244,8 +253,14 @@ func (l *Launcher) ExecuteWithHandler(
 	}
 
 	if stdin != nil {
-		go l.handleControlMessages(ctx, stdin, &stderr)
-		stdin.Close()
+		// Start goroutine to handle control messages from stderr
+		// stdin will be closed when handleControlMessages returns (context done or command finished)
+		go func() {
+			l.handleControlMessages(ctx, stdin, &stderr)
+			// Close stdin after handleControlMessages returns to ensure
+			// permission responses can be sent during execution
+			stdin.Close()
+		}()
 	}
 
 	// Start parser in background
@@ -367,8 +382,12 @@ func (l *Launcher) ExecuteStream(
 	}
 
 	if stdin != nil {
-		go l.handleControlMessages(ctx, stdin, &stderr)
-		_ = stdin.Close()
+		// Start goroutine to handle control messages from stderr
+		// stdin will be closed when handleControlMessages returns (context done or command finished)
+		go func() {
+			l.handleControlMessages(ctx, stdin, &stderr)
+			stdin.Close()
+		}()
 	}
 
 	// Create a pipe for real-time output streaming
@@ -691,6 +710,11 @@ func (l *Launcher) handleControlMessages(ctx context.Context, stdin io.WriteClos
 				return
 			}
 
+			logrus.WithFields(logrus.Fields{
+				"event_type": event.Type,
+				"has_handler": l.permissionHandler != nil,
+			}).Debug("handleControlMessages received event")
+
 			// Check if this is a control request event (e.g., "control_request")
 			if strings.HasPrefix(event.Type, EventTypeControl) {
 				// Try to handle via control manager first
@@ -703,6 +727,14 @@ func (l *Launcher) handleControlMessages(ctx context.Context, stdin io.WriteClos
 				if controlData, ok := event.Data["request"].(map[string]interface{}); ok {
 					if subtype, _ := controlData["subtype"].(string); subtype == "can_use_tool" {
 						req := l.parsePermissionRequest(controlData)
+						// request_id is in event.Data, not in controlData
+						req.RequestID = getString(event.Data, "request_id")
+
+						logrus.WithFields(logrus.Fields{
+							"tool_name":  req.ToolName,
+							"session_id": req.SessionID,
+							"request_id": req.RequestID,
+						}).Info("Processing can_use_tool control request")
 
 						// Get permission decision
 						l.mu.RLock()
@@ -718,6 +750,8 @@ func (l *Launcher) handleControlMessages(ctx context.Context, stdin io.WriteClos
 
 							// Send control response via stdin
 							_ = l.sendPermissionResponse(stdin, req.RequestID, result)
+						} else {
+							logrus.Warn("Permission handler is nil, cannot process permission request")
 						}
 					}
 				}
@@ -727,8 +761,10 @@ func (l *Launcher) handleControlMessages(ctx context.Context, stdin io.WriteClos
 }
 
 // parsePermissionRequest parses a permission request from control data
+// Note: data is already the "request" object from the control message, not the full event.Data
 func (l *Launcher) parsePermissionRequest(data map[string]interface{}) agentboot.PermissionRequest {
-	requestData, _ := data["request"].(map[string]interface{})
+	// data is already the request object, use it directly
+	requestData := data
 
 	// Get input map
 	input := getMap(requestData, "input")
@@ -738,6 +774,7 @@ func (l *Launcher) parsePermissionRequest(data map[string]interface{}) agentboot
 
 	// Inject chat context from execution context
 	l.mu.RLock()
+	sessionID := l.executionContext.sessionID
 	chatID := l.executionContext.chatID
 	platform := l.executionContext.platform
 	l.mu.RUnlock()
@@ -749,11 +786,15 @@ func (l *Launcher) parsePermissionRequest(data map[string]interface{}) agentboot
 		input["_platform"] = platform
 	}
 
+	// RequestID needs to be extracted from the parent event.Data, not from the request object
+	// This is passed separately via the control data flow
 	return agentboot.PermissionRequest{
-		RequestID: getString(data, "request_id"),
+		RequestID: getString(data, "request_id"), // This may be empty, needs to be set from caller
+		AgentType: agentboot.AgentTypeClaude,
 		ToolName:  getString(requestData, "tool_name"),
 		Input:     input,
 		Timestamp: time.Now(),
+		SessionID: sessionID,
 	}
 }
 

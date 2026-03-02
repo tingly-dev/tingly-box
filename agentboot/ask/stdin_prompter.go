@@ -1,4 +1,4 @@
-package permission
+package ask
 
 import (
 	"bufio"
@@ -10,14 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot"
 )
 
-// UserPrompter handles user interaction for permission requests
-type UserPrompter interface {
-	// PromptPermission prompts the user for permission decision
-	// Returns the result with approval status and optional updated input
-	PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error)
-}
-
-// StdinPrompter implements UserPrompter using stdin/stdout
+// StdinPrompter implements Prompter using stdin/stdout
 type StdinPrompter struct {
 	// Debug enables verbose output
 	Debug bool
@@ -28,6 +21,9 @@ type StdinPrompter struct {
 	ColorGreen  string
 	ColorYellow string
 	ColorCyan   string
+
+	// Registry for tool-specific handlers
+	registry *ToolHandlerRegistry
 }
 
 // NewStdinPrompter creates a new StdinPrompter with default colors
@@ -38,6 +34,7 @@ func NewStdinPrompter() *StdinPrompter {
 		ColorGreen:  "\033[32m",
 		ColorYellow: "\033[33m",
 		ColorCyan:   "\033[36m",
+		registry:    NewToolHandlerRegistry(),
 	}
 }
 
@@ -48,8 +45,8 @@ func NewStdinPrompterDebug() *StdinPrompter {
 	return p
 }
 
-// PromptPermission prompts the user via stdin for permission decision
-func (p *StdinPrompter) PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
+// Prompt prompts the user via stdin for response
+func (p *StdinPrompter) Prompt(ctx context.Context, req Request) (Result, error) {
 	// Check if this is an AskUserQuestion tool - handle specially
 	if req.ToolName == "AskUserQuestion" {
 		return p.promptAskUserQuestion(ctx, req)
@@ -85,38 +82,41 @@ func (p *StdinPrompter) PromptPermission(ctx context.Context, req agentboot.Perm
 	// Wait for input or context cancellation
 	select {
 	case <-ctx.Done():
-		return agentboot.PermissionResult{Approved: false}, ctx.Err()
+		return Result{ID: req.ID, Approved: false}, ctx.Err()
 	case r := <-resultChan:
 		if r.err != nil {
-			return agentboot.PermissionResult{Approved: false}, r.err
+			return Result{ID: req.ID, Approved: false}, r.err
 		}
 
 		switch r.response {
 		case "y", "yes":
-			return agentboot.PermissionResult{
+			return Result{
+				ID:           req.ID,
 				Approved:     true,
 				UpdatedInput: req.Input,
 			}, nil
 		case "a", "always", "al":
-			return agentboot.PermissionResult{
+			return Result{
+				ID:           req.ID,
 				Approved:     true,
 				UpdatedInput: req.Input,
 				Remember:     true,
 			}, nil
 		case "n", "no":
-			return agentboot.PermissionResult{Approved: false}, nil
+			return Result{ID: req.ID, Approved: false}, nil
 		default:
 			// Invalid response - treat as deny with message
-			return agentboot.PermissionResult{Approved: false}, nil
+			return Result{ID: req.ID, Approved: false}, nil
 		}
 	}
 }
 
 // promptAskUserQuestion handles AskUserQuestion tool with multi-option selection
-func (p *StdinPrompter) promptAskUserQuestion(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
+func (p *StdinPrompter) promptAskUserQuestion(ctx context.Context, req Request) (Result, error) {
 	questions, ok := req.Input["questions"].([]interface{})
 	if !ok || len(questions) == 0 {
-		return agentboot.PermissionResult{
+		return Result{
+			ID:           req.ID,
 			Approved:     true,
 			UpdatedInput: req.Input,
 		}, nil
@@ -182,10 +182,10 @@ func (p *StdinPrompter) promptAskUserQuestion(ctx context.Context, req agentboot
 		// Wait for input or context cancellation
 		select {
 		case <-ctx.Done():
-			return agentboot.PermissionResult{Approved: false}, ctx.Err()
+			return Result{ID: req.ID, Approved: false}, ctx.Err()
 		case r := <-resultChan:
 			if r.err != nil {
-				return agentboot.PermissionResult{Approved: false}, r.err
+				return Result{ID: req.ID, Approved: false}, r.err
 			}
 
 			// Try to parse as number
@@ -237,7 +237,8 @@ func (p *StdinPrompter) promptAskUserQuestion(ctx context.Context, req agentboot
 	}
 	updatedInput["answers"] = answers
 
-	return agentboot.PermissionResult{
+	return Result{
+		ID:           req.ID,
 		Approved:     true,
 		UpdatedInput: updatedInput,
 	}, nil
@@ -251,9 +252,10 @@ func NewNoOpPrompter() *NoOpPrompter {
 	return &NoOpPrompter{}
 }
 
-// PromptPermission always approves without user interaction
-func (p *NoOpPrompter) PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
-	return agentboot.PermissionResult{
+// Prompt always approves without user interaction
+func (p *NoOpPrompter) Prompt(ctx context.Context, req Request) (Result, error) {
+	return Result{
+		ID:           req.ID,
 		Approved:     true,
 		UpdatedInput: req.Input,
 	}, nil
@@ -267,7 +269,39 @@ func NewDenyAllPrompter() *DenyAllPrompter {
 	return &DenyAllPrompter{}
 }
 
-// PromptPermission always denies without user interaction
-func (p *DenyAllPrompter) PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
-	return agentboot.PermissionResult{Approved: false}, nil
+// Prompt always denies without user interaction
+func (p *DenyAllPrompter) Prompt(ctx context.Context, req Request) (Result, error) {
+	return Result{ID: req.ID, Approved: false}, nil
+}
+
+// Legacy adapters for backward compatibility
+
+// StdinPrompterFromLegacy creates a StdinPrompter from legacy config
+func StdinPrompterFromLegacy() *StdinPrompter {
+	return NewStdinPrompter()
+}
+
+// ToLegacyUserPrompter creates a legacy-compatible prompter wrapper
+func ToLegacyUserPrompter(p Prompter) UserPrompter {
+	return &legacyPrompterWrapper{p: p}
+}
+
+// UserPrompter is the legacy interface for backward compatibility
+type UserPrompter interface {
+	PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error)
+}
+
+// legacyPrompterWrapper wraps a Prompter to implement UserPrompter
+type legacyPrompterWrapper struct {
+	p Prompter
+}
+
+// PromptPermission implements UserPrompter
+func (w *legacyPrompterWrapper) PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
+	askReq := FromPermissionRequest(req)
+	result, err := w.p.Prompt(ctx, *askReq)
+	if err != nil {
+		return agentboot.PermissionResult{}, err
+	}
+	return result.ToPermissionResult(), nil
 }

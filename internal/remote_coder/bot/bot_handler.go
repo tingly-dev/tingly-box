@@ -1619,13 +1619,13 @@ func (h *BotHandler) handlePermissionTextResponse(hCtx HandlerContext) bool {
 	// For AskUserQuestion, try to parse as option selection first
 	if latestReq.ToolName == "AskUserQuestion" {
 		// Try to submit as a text selection
-		if err := h.imPrompter.SubmitUserResponse(latestReq.RequestID, permission.UserResponse{
+		if err := h.imPrompter.SubmitUserResponse(latestReq.ID, permission.UserResponse{
 			Type: "text",
 			Data: hCtx.Text,
 		}); err == nil {
 			h.SendText(hCtx, fmt.Sprintf("✅ Selected: %s", hCtx.Text))
 			logrus.WithFields(logrus.Fields{
-				"request_id": latestReq.RequestID,
+				"request_id": latestReq.ID,
 				"tool_name":  latestReq.ToolName,
 				"user_id":    hCtx.SenderID,
 				"selection":  hCtx.Text,
@@ -1642,8 +1642,8 @@ func (h *BotHandler) handlePermissionTextResponse(hCtx HandlerContext) bool {
 	}
 
 	// Submit the decision
-	if err := h.imPrompter.SubmitDecision(latestReq.RequestID, approved, remember, ""); err != nil {
-		logrus.WithError(err).WithField("request_id", latestReq.RequestID).Error("Failed to submit permission decision")
+	if err := h.imPrompter.SubmitDecision(latestReq.ID, approved, remember, ""); err != nil {
+		logrus.WithError(err).WithField("request_id", latestReq.ID).Error("Failed to submit permission decision")
 		h.SendText(hCtx, fmt.Sprintf("Failed to process permission response: %v", err))
 		return true
 	}
@@ -1661,7 +1661,7 @@ func (h *BotHandler) handlePermissionTextResponse(hCtx HandlerContext) bool {
 	h.SendText(hCtx, fmt.Sprintf("%s for tool: `%s`", resultText, latestReq.ToolName))
 
 	logrus.WithFields(logrus.Fields{
-		"request_id": latestReq.RequestID,
+		"request_id": latestReq.ID,
 		"tool_name":  latestReq.ToolName,
 		"user_id":    hCtx.SenderID,
 		"approved":   approved,
