@@ -1,26 +1,29 @@
+import Anthropic from '@lobehub/icons/es/Anthropic';
+import Claude from '@lobehub/icons/es/Claude';
+import OpenAI from '@lobehub/icons/es/OpenAI';
 import {
     AccountCircle as AccountIcon,
-    Dashboard as DashboardIcon,
-    Menu as MenuIcon,
-    Settings as SystemIcon,
-    ExpandLess,
-    ExpandMore,
+    AutoAwesome,
     BarChart as BarChartIcon,
-    Code as CodeIcon,
-    Psychology as PromptIcon,
-    Bolt as SkillIcon,
-    Send as UserPromptIcon,
-    Lan as RemoteIcon,
+    CalendarToday as CalendarIcon,
     ChatBubble,
-    NewReleases,
+    Code as CodeIcon,
+    DateRange as DateRangeIcon,
     ErrorOutline,
     LaptopMac,
-    AutoAwesome,
+    Menu as MenuIcon,
+    NewReleases,
+    Psychology as PromptIcon,
+    Lan as RemoteIcon,
+    Bolt as SkillIcon,
+    Settings as SystemIcon,
+    Today as TodayIcon,
+    Send as UserPromptIcon
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
     Box,
-    Collapse,
+    Divider,
     Drawer,
     IconButton,
     List,
@@ -28,59 +31,49 @@ import {
     ListItemButton,
     ListItemIcon,
     ListItemText,
-    Typography,
     Popover,
-    Divider,
+    Tooltip,
+    Typography,
 } from '@mui/material';
 import type { ReactNode } from 'react';
-import React, { useState, useMemo } from 'react';
-import { Link as RouterLink, useLocation } from 'react-router-dom';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useVersion as useAppVersion } from '../contexts/VersionContext';
-import { useHealth } from '../contexts/HealthContext';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
-import OpenAI from '@lobehub/icons/es/OpenAI';
-import Anthropic from '@lobehub/icons/es/Anthropic';
-import Claude from '@lobehub/icons/es/Claude';
+import { useHealth } from '../contexts/HealthContext';
+import { useVersion as useAppVersion } from '../contexts/VersionContext';
 
 interface LayoutProps {
     children: ReactNode;
 }
 
-const drawerWidth = 260;
+const activityBarWidth = 88;
+const sidebarWidth = 200;
 
-interface MenuItem {
+interface NavItem {
     path: string;
     label: string;
     icon?: ReactNode;
     divider?: boolean;
 }
 
-interface MenuGroup {
+interface ActivityItem {
     key: string;
-    label?: string;
-    path?: string;  // Optional path for group header click
-    icon?: ReactNode;
-    standalone?: boolean;
-    items: MenuItem[];
+    icon: ReactNode;
+    label: string;
+    path?: string; // Direct navigation if no children
+    children?: NavItem[];
 }
 
 const Layout = ({ children }: LayoutProps) => {
     const { t } = useTranslation();
     const location = useLocation();
+    const navigate = useNavigate();
     const { hasUpdate, currentVersion, showUpdateDialog } = useAppVersion();
     const { isHealthy, showDisconnectDialog } = useHealth();
     const { skillUser, skillIde, enableRemoteCoder } = useFeatureFlags();
     const [mobileOpen, setMobileOpen] = useState(false);
-    const [homeMenuOpen, setHomeMenuOpen] = useState(true);
-    const [promptMenuOpen, setPromptMenuOpen] = useState(true);
-    const [systemMenuOpen, setSystemMenuOpen] = useState(false);
-    const [remoteControlMenuOpen, setRemoteControlMenuOpen] = useState(true);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
-
-    const handleDrawerToggle = () => {
-        setMobileOpen(!mobileOpen);
-    };
 
     const handleEasterEgg = (event: React.MouseEvent<HTMLElement>) => {
         setEasterEggAnchorEl(event.currentTarget);
@@ -94,13 +87,13 @@ const Layout = ({ children }: LayoutProps) => {
         return location.pathname === path;
     };
 
-    const isGroupActive = (items: MenuItem[]) => {
-        return items.some(item => isActive(item.path));
+    const isChildActive = (children?: NavItem[]) => {
+        return children?.some(item => isActive(item.path)) ?? false;
     };
 
     // Build prompt menu items based on feature flags
     const promptMenuItems = useMemo(() => {
-        const items: MenuItem[] = [];
+        const items: NavItem[] = [];
         if (skillUser) {
             items.push({
                 path: '/prompt/user',
@@ -115,597 +108,581 @@ const Layout = ({ children }: LayoutProps) => {
                 icon: <SkillIcon sx={{ fontSize: 20 }} />,
             });
         }
-        // // Command is always available if either skill feature is enabled
-        // if (skillUser || skillIde) {
-        //     items.push({
-        //         path: '/prompt/command',
-        //         label: 'Command',
-        //         icon: <PromptIcon sx={{ fontSize: 20 }} />,
-        //     });
-        // }
         return items;
     }, [skillUser, skillIde]);
 
-    const menuGroups: MenuGroup[] = [
-        {
-            key: 'dashboard',
-            label: 'Dashboard',
-            icon: <BarChartIcon sx={{ fontSize: 20 }} />,
-            standalone: true,
-            items: [
-                {
-                    path: '/dashboard',
-                    label: 'Usage Dashboard',
-                    icon: <BarChartIcon sx={{ fontSize: 20 }} />,
-                },
-            ],
-        },
-        {
-            key: 'scenario',
-            label: t('layout.nav.home'),
-            icon: <DashboardIcon sx={{ fontSize: 20 }} />,
-            items: [
-                {
-                    path: '/use-openai',
-                    label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }),
-                    icon: <OpenAI size={20} />,
-                },
-                {
-                    path: '/use-anthropic',
-                    label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }),
-                    icon: <Anthropic size={20} />,
-                },
-                {
-                    divider: true,
-                    path: '/use-agent',
-                    label: 'Claw | Agent',
-                    icon: <AutoAwesome sx={{ fontSize: 20 }} />,
-                },
-                {
-                    divider: true,
-                    path: '/use-claude-code',
-                    label: t('layout.nav.useClaudeCode', { defaultValue: 'Claude Code' }),
-                    icon: <Claude size={20} />,
-                },
-                {
-                    path: '/use-opencode',
-                    label: t('layout.nav.useOpenCode', { defaultValue: 'OpenCode' }),
-                    icon: <CodeIcon sx={{ fontSize: 20 }} />,
-                },
-                {
-                    path: '/use-xcode',
-                    label: t('layout.nav.useXcode', { defaultValue: 'Xcode' }),
-                    icon: <LaptopMac sx={{ fontSize: 20 }} />,
-                },
-            ],
-        },
-        {
-            key: 'credential',
-            label: t('layout.nav.credential', { defaultValue: 'Credentials' }),
-            icon: <LockIcon sx={{ fontSize: 20 }} />,
-            standalone: true,
-            items: [
-                {
-                    path: '/credentials',
-                    label: t('layout.nav.credentials', { defaultValue: 'All Credentials' }),
-                    icon: <LockIcon sx={{ fontSize: 20 }} />,
-                },
-            ],
-        },
-        ...(promptMenuItems.length > 0 ? [{
-            key: 'prompt' as const,
-            label: 'Prompt',
-            icon: <PromptIcon sx={{ fontSize: 20 }} />,
-            items: promptMenuItems,
-        }] : []),
-        ...(enableRemoteCoder ? [{
-            key: 'remote-control' as const,
-            label: 'Remote Control',
-            icon: <RemoteIcon sx={{ fontSize: 20 }} />,
-            items: [
-                {
-                    path: '/remote-control',
-                    label: 'Overview',
-                    icon: <RemoteIcon sx={{ fontSize: 20 }} />,
-                },
-                {
-                    path: '/remote-control/bot',
-                    label: 'IM Bot',
-                    icon: <ChatBubble sx={{ fontSize: 20 }} />,
-                },
-                {
-                    path: '/remote-control/agent',
-                    label: 'Agent Assistant',
-                    icon: <AutoAwesome sx={{ fontSize: 20 }} />,
-                },
-            ],
-        }] : []),
-        {
-            key: 'system',
-            label: 'System',
-            icon: <SystemIcon sx={{ fontSize: 20 }} />,
-            standalone: true,
-            items: [
-                {
-                    path: '/system',
-                    label: 'System',
-                    icon: <SystemIcon sx={{ fontSize: 20 }} />,
-                },
-            ],
-        },
-    ];
+    // Activity bar items
+    const activityItems: ActivityItem[] = useMemo(() => {
+        const items: ActivityItem[] = [
+            {
+                key: 'dashboard',
+                icon: <BarChartIcon sx={{ fontSize: 22 }} />,
+                label: 'Dashboard',
+                children: [
+                    {
+                        path: '/dashboard/today',
+                        label: 'Today',
+                        icon: <TodayIcon sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/dashboard/yesterday',
+                        label: 'Yesterday',
+                        icon: <CalendarIcon sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/dashboard/3d',
+                        label: '3 Days',
+                        icon: <DateRangeIcon sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/dashboard/7d',
+                        label: '7 Days',
+                        icon: <DateRangeIcon sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/dashboard/30d',
+                        label: '30 Days',
+                        icon: <DateRangeIcon sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/dashboard/90d',
+                        label: '90 Days',
+                        icon: <DateRangeIcon sx={{ fontSize: 20 }} />,
+                    },
+                ],
+            },
+            {
+                key: 'scenario',
+                icon: <CodeIcon sx={{ fontSize: 22 }} />,
+                label: t('layout.nav.home'),
+                children: [
+                    {
+                        path: '/use-openai',
+                        label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }),
+                        icon: <OpenAI size={20} />,
+                    },
+                    {
+                        path: '/use-anthropic',
+                        label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }),
+                        icon: <Anthropic size={20} />,
+                    },
+                    {
+                        divider: true,
+                        path: '/use-agent',
+                        label: 'Claw | Agent',
+                        icon: <AutoAwesome sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        divider: true,
+                        path: '/use-claude-code',
+                        label: t('layout.nav.useClaudeCode', { defaultValue: 'Claude Code' }),
+                        icon: <Claude size={20} />,
+                    },
+                    {
+                        path: '/use-opencode',
+                        label: t('layout.nav.useOpenCode', { defaultValue: 'OpenCode' }),
+                        icon: <CodeIcon sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/use-xcode',
+                        label: t('layout.nav.useXcode', { defaultValue: 'Xcode' }),
+                        icon: <LaptopMac sx={{ fontSize: 20 }} />,
+                    },
+                ],
+            },
+            ...(promptMenuItems.length > 0 ? [{
+                key: 'prompt' as const,
+                icon: <PromptIcon sx={{ fontSize: 22 }} />,
+                label: 'Prompt',
+                children: promptMenuItems,
+            }] : []),
+            ...(enableRemoteCoder ? [{
+                key: 'remote-control' as const,
+                icon: <RemoteIcon sx={{ fontSize: 22 }} />,
+                label: 'Remote',
+                children: [
+                    {
+                        path: '/remote-control',
+                        label: 'Overview',
+                        icon: <RemoteIcon sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/remote-control/bot',
+                        label: 'IM Bot',
+                        icon: <ChatBubble sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/remote-control/agent',
+                        label: 'Agent Assistant',
+                        icon: <AutoAwesome sx={{ fontSize: 20 }} />,
+                    },
+                ],
+            }] : []),
+            {
+                key: 'credential',
+                icon: <LockIcon sx={{ fontSize: 22 }} />,
+                label: t('layout.nav.credential', { defaultValue: 'Credentials' }),
+                path: '/credentials',
+            },
+            {
+                key: 'system',
+                icon: <SystemIcon sx={{ fontSize: 22 }} />,
+                label: 'System',
+                path: '/system',
+            },
+        ];
+        return items;
+    }, [t, promptMenuItems, enableRemoteCoder]);
 
-    const drawerContent = (
-        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            {/* Logo Section */}
+    // Find current active activity
+    const activeActivity = useMemo(() => {
+        for (const item of activityItems) {
+            if (item.path && isActive(item.path)) return item.key;
+            if (item.children && isChildActive(item.children)) return item.key;
+        }
+        return 'dashboard';
+    }, [activityItems, location.pathname]);
+
+    // Get sidebar items for active activity
+    const sidebarItems = useMemo(() => {
+        const activity = activityItems.find(item => item.key === activeActivity);
+        return activity?.children || [];
+    }, [activityItems, activeActivity]);
+
+    // Get current activity label
+    const activeActivityLabel = useMemo(() => {
+        const activity = activityItems.find(item => item.key === activeActivity);
+        return activity?.label || '';
+    }, [activityItems, activeActivity]);
+
+    // Activity bar content (first column - icon only)
+    const activityBarContent = (
+        <Box
+            sx={{
+                width: activityBarWidth,
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                bgcolor: 'background.paper',
+                borderRight: '1px solid',
+                borderColor: 'divider',
+            }}
+        >
+            {/* Logo */}
             <Box
-                component="a"
-                href="https://github.com/tingly-dev/tingly-box"
-                target="_blank"
-                rel="noopener noreferrer"
                 sx={{
-                    p: 3,
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
+                    height: 56,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 2,
-                    textDecoration: 'none',
-                    cursor: 'pointer',
-                    '&:hover': {
-                        opacity: 0.8,
-                    },
-                    flexShrink: 0,
+                    justifyContent: 'center',
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
                 }}
             >
-                <Box
-                    sx={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 2,
-                        background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'white',
-                        fontWeight: 'bold',
-                        fontSize: '1.2rem',
-                    }}
-                >
-                    T
-                </Box>
-                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary', lineHeight: 1.2 }}>
-                        {t('layout.appTitle')}
-                    </Typography>
-                    <Typography
-                        variant="caption"
+                <Tooltip title={`Tingly-Box v${currentVersion}`} placement="right" arrow>
+                    <Box
+                        component="a"
+                        href="https://github.com/tingly-dev/tingly-box"
+                        target="_blank"
+                        rel="noopener noreferrer"
                         sx={{
-                            color: 'text.secondary',
-                            fontSize: '0.7rem',
+                            width: 36,
+                            height: 36,
+                            borderRadius: 2,
+                            background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'white',
+                            fontWeight: 'bold',
+                            fontSize: '1.1rem',
+                            textDecoration: 'none',
+                            cursor: 'pointer',
+                            transition: 'transform 0.2s',
+                            '&:hover': {
+                                transform: 'scale(1.08)',
+                            },
                         }}
                     >
-                        {currentVersion}
-                    </Typography>
-                </Box>
+                        T
+                    </Box>
+                </Tooltip>
             </Box>
 
-            {/* Navigation Menu */}
-            <List sx={{ flex: 1, py: 2, overflowY: 'auto', overflowX: 'hidden', '&::-webkit-scrollbar': { width: 6 }, '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' }, '&::-webkit-scrollbar-thumb': { backgroundColor: 'grey.300', borderRadius: 1, '&:hover': { backgroundColor: 'grey.400' } } }}>
-                {menuGroups.map((group) => {
-                    const isDashboardGroup = group.key === 'dashboard';
-                    const isHomeGroup = group.key === 'scenario';
-                    const isCredentialGroup = group.key === 'credential';
-                    const isPromptGroup = group.key === 'prompt';
-                    const isSystemGroup = group.key === 'system';
-                    const isRemoteCoderGroup = group.key === 'remote-control';
-                    const isStandalone = group.standalone;
+            {/* Activity Icons */}
+            <Box sx={{ flex: 1, py: 0.5, overflowY: 'auto' }}>
+                {activityItems.map((item) => {
+                    const isActiveItem = activeActivity === item.key;
 
-                    // For standalone groups (like Dashboard), no collapse state
-                    let isOpen = true;
-                    let setIsOpen: ((value: boolean) => void) | undefined = undefined;
-
-                    if (!isStandalone) {
-                        if (isHomeGroup) {
-                            isOpen = homeMenuOpen;
-                            setIsOpen = setHomeMenuOpen;
-                        } else if (isPromptGroup) {
-                            isOpen = promptMenuOpen;
-                            setIsOpen = setPromptMenuOpen;
-                        } else if (isSystemGroup) {
-                            isOpen = systemMenuOpen;
-                            setIsOpen = setSystemMenuOpen;
-                        } else if (isRemoteCoderGroup) {
-                            isOpen = remoteControlMenuOpen;
-                            setIsOpen = setRemoteControlMenuOpen;
+                    // Handle click: if has children, navigate to first child
+                    const handleClick = () => {
+                        setMobileOpen(false);
+                        if (item.children && item.children.length > 0) {
+                            navigate(item.children[0].path);
                         }
-                    }
+                    };
+
+                    // Short label for display (max 8 chars)
+                    const shortLabel = item.label.length > 12 ? item.label.slice(0, 7) + '…' : item.label;
 
                     return (
-                        <React.Fragment key={group.key}>
-                            {/* Group Header */}
-                            <ListItem key={`header-${group.key}`} disablePadding sx={{ mb: 0.5 }}>
-                                <ListItemButton
-                                    component={RouterLink}
-                                    to={group.path || group.items[0].path}
-                                    onClick={() => {
-                                        handleDrawerToggle();
-                                        // Expand the group when clicking header
-                                        if (!isStandalone && !isOpen && setIsOpen) {
-                                            setIsOpen(true);
-                                        }
-                                    }}
-                                    sx={{
-                                        mx: 1.5,
-                                        borderRadius: 1.5,
-                                        color: 'text.primary',
-                                        bgcolor: 'action.hover',
-                                        transition: 'all 150ms ease-in-out',
-                                        '&:hover': {
-                                            bgcolor: 'action.selected',
-                                            '& .MuiListItemIcon-root': {
-                                                color: 'primary.main',
-                                            },
-                                        },
-                                        '&:focus-visible': {
-                                            outline: 2,
-                                            outlineColor: 'primary.main',
-                                            outlineOffset: 2,
-                                            borderRadius: 1,
-                                        },
-                                    }}
-                                >
-                                    <ListItemIcon
-                                        sx={{
-                                            color: 'text.secondary',
-                                            minWidth: 40,
-                                        }}
-                                    >
-                                        {group.icon}
-                                    </ListItemIcon>
-                                    <ListItemText
-                                        primary={group.label || group.items[0].label}
-                                        slotProps={{
-                                            primary: {
-                                                fontWeight: 600,
-                                                fontSize: '0.875rem',
-                                                letterSpacing: 0.15,
-                                            },
-                                        }}
-                                    />
-                                    {!isStandalone && (
-                                        <Box
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                setIsOpen && setIsOpen(!isOpen);
-                                            }}
-                                            sx={{ display: 'flex', alignItems: 'center' }}
-                                            aria-expanded={isOpen}
-                                            aria-controls={`${group.key}-menu`}
-                                        >
-                                            {isOpen ? <ExpandLess /> : <ExpandMore />}
-                                        </Box>
-                                    )}
-                                </ListItemButton>
-                            </ListItem>
-
-                            {/* Group Items - only for non-standalone groups */}
-                            {!isStandalone && (
-                                <Collapse
-                                    in={isOpen}
-                                    timeout={250}
-                                    easing={{
-                                        enter: 'cubic-bezier(0.4, 0, 0.2, 1)',
-                                        exit: 'cubic-bezier(0.4, 0, 0.2, 1)',
-                                    }}
-                                    unmountOnExit
-                                >
-                                    <List sx={{ pl: 0, py: 0 }}>
-                                        {group.items.map((item) => (
-                                            <>
-                                            {item.divider && <Divider sx={{ mx: 4, my: 1 }} />}
-                                            <ListItem disablePadding>
-                                                <ListItemButton
-                                                    component={RouterLink}
-                                                    to={item.path}
-                                                    onClick={handleDrawerToggle}
-                                                    aria-current={isActive(item.path) ? 'page' : undefined}
-                                                    sx={{
-                                                        mx: 2,
-                                                        mb: 0.5,
-                                                        borderRadius: 1.5,
-                                                        pl: 3.5,
-                                                        pr: 2.5,
-                                                        py: 1,
-                                                        color: 'text.secondary',
-                                                        transition: 'all 150ms ease-in-out',
-                                                        position: 'relative',
-                                                        ...(isActive(item.path) && {
-                                                            backgroundColor: 'primary.main',
-                                                            color: 'primary.contrastText',
-                                                            fontWeight: 600,
-                                                            '&::before': {
-                                                                content: '""',
-                                                                position: 'absolute',
-                                                                left: 0,
-                                                                top: '50%',
-                                                                transform: 'translateY(-50%)',
-                                                                width: 3,
-                                                                height: '70%',
-                                                                backgroundColor: 'primary.light',
-                                                                borderRadius: '0 2px 2px 0',
-                                                                boxShadow: '0 0 8px rgba(37, 99, 235, 0.5)',
-                                                            },
-                                                            '&:hover': {
-                                                                backgroundColor: 'primary.dark',
-                                                            },
-                                                            '& .MuiListItemIcon-root': {
-                                                                color: 'primary.contrastText',
-                                                            },
-                                                            '& .MuiListItemText-primary': {
-                                                                color: 'primary.contrastText',
-                                                                fontWeight: 600,
-                                                            },
-                                                        }),
-                                                        '&:hover': {
-                                                            backgroundColor: isActive(item.path) ? 'primary.dark' : 'action.hover',
-                                                            transform: 'translateX(2px)',
-                                                        },
-                                                        '&:focus-visible': {
-                                                            outline: 2,
-                                                            outlineColor: 'primary.main',
-                                                            outlineOffset: 2,
-                                                            borderRadius: 1,
-                                                        },
-                                                        '& .MuiListItemIcon-root': {
-                                                            color: isActive(item.path) ? 'primary.contrastText' : 'text.secondary',
-                                                        },
-                                                    }}
-                                                >
-                                                    <ListItemIcon sx={{ minWidth: 28 }}>
-                                                        {item.icon}
-                                                    </ListItemIcon>
-                                                    <ListItemText
-                                                        primary={item.label}
-                                                        slotProps={{
-                                                            primary: {
-                                                                fontWeight: isActive(item.path) ? 600 : 400,
-                                                                fontSize: '0.875rem',
-                                                            },
-                                                        }}
-                                                    />
-                                                </ListItemButton>
-                                            </ListItem>
-                                            </>
-                                        ))}
-                                    </List>
-                                </Collapse>
-                            )}
-                        </React.Fragment>
+                        <ListItemButton
+                            key={item.key}
+                            component={item.path ? RouterLink : 'div'}
+                            to={item.path}
+                            onClick={item.children ? handleClick : () => setMobileOpen(false)}
+                            sx={{
+                                minHeight: 56,
+                                mx: 0.5,
+                                px: 1,
+                                py: 1,
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 0.25,
+                                position: 'relative',
+                                color: 'text.secondary',
+                                borderRadius: 1.25,
+                                cursor: 'pointer',
+                                '&:hover': {
+                                    bgcolor: isActiveItem ? 'primary.dark' : 'action.hover',
+                                    color: isActiveItem ? 'primary.contrastText' : 'primary.main',
+                                },
+                                ...(isActiveItem && {
+                                    bgcolor: 'primary.main',
+                                    color: 'primary.contrastText',
+                                    '&::before': {
+                                        content: '""',
+                                        position: 'absolute',
+                                        left: 0,
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        width: 3,
+                                        height: 28,
+                                        bgcolor: 'primary.light',
+                                        borderRadius: '0 2px 2px 0',
+                                        boxShadow: '0 0 8px rgba(37, 99, 235, 0.5)',
+                                    },
+                                }),
+                            }}
+                        >
+                            <ListItemIcon
+                                sx={{
+                                    minWidth: 0,
+                                    color: 'inherit',
+                                    justifyContent: 'center',
+                                }}
+                            >
+                                {item.icon}
+                            </ListItemIcon>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    fontSize: '0.65rem',
+                                    fontWeight: isActiveItem ? 600 : 400,
+                                    color: 'inherit',
+                                    textAlign: 'center',
+                                    lineHeight: 1.2,
+                                    maxWidth: '100%',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                }}
+                            >
+                                {shortLabel}
+                            </Typography>
+                        </ListItemButton>
                     );
                 })}
+            </Box>
+
+            {/* Bottom Section: Status + User */}
+            <Box sx={{ py: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+                {/* Status Indicators */}
+                {!isHealthy && (
+                    <Tooltip title="Disconnected" placement="right" arrow>
+                        <ListItemButton
+                            onClick={showDisconnectDialog}
+                            sx={{
+                                minHeight: 44,
+                                px: 1.5,
+                                justifyContent: 'center',
+                                color: 'error.main',
+                                borderRadius: 0,
+                                '&:hover': {
+                                    bgcolor: 'action.hover',
+                                },
+                            }}
+                        >
+                            <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
+                                <ErrorOutline sx={{ fontSize: 22 }} />
+                            </ListItemIcon>
+                        </ListItemButton>
+                    </Tooltip>
+                )}
+
+                {(hasUpdate || import.meta.env.DEV) && (
+                    <Tooltip
+                        title={import.meta.env.DEV && !hasUpdate ? 'Dev Mode' : 'New Version Available'}
+                        placement="right"
+                        arrow
+                    >
+                        <ListItemButton
+                            onClick={showUpdateDialog}
+                            sx={{
+                                minHeight: 44,
+                                px: 1.5,
+                                justifyContent: 'center',
+                                color: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main',
+                                borderRadius: 0,
+                                '&:hover': {
+                                    bgcolor: 'action.hover',
+                                },
+                            }}
+                        >
+                            <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
+                                <NewReleases sx={{ fontSize: 22 }} />
+                            </ListItemIcon>
+                        </ListItemButton>
+                    </Tooltip>
+                )}
+
+                {/* User */}
+                <Tooltip title="About" placement="right" arrow>
+                    <ListItemButton
+                        onClick={handleEasterEgg}
+                        sx={{
+                            minHeight: 44,
+                            px: 1.5,
+                            justifyContent: 'center',
+                            color: 'text.secondary',
+                            borderRadius: 0,
+                            '&:hover': {
+                                bgcolor: 'action.hover',
+                                color: 'text.primary',
+                            },
+                        }}
+                    >
+                        <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
+                            <AccountIcon sx={{ fontSize: 22 }} />
+                        </ListItemIcon>
+                    </ListItemButton>
+                </Tooltip>
+            </Box>
+        </Box>
+    );
+
+    // Sidebar panel content (second column - shows sub-items)
+    const sidebarContent = (
+        <Box
+            sx={{
+                width: sidebarWidth,
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                bgcolor: 'background.paper',
+                borderRight: '1px solid',
+                borderColor: 'divider',
+                overflow: 'hidden',
+            }}
+        >
+            {/* Sidebar Header */}
+            <Box
+                sx={{
+                    height: 56,
+                    px: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                }}
+            >
+                <Typography
+                    variant="subtitle2"
+                    sx={{
+                        color: 'text.primary',
+                        fontWeight: 600,
+                        fontSize: '0.875rem',
+                    }}
+                >
+                    {activeActivityLabel}
+                </Typography>
+            </Box>
+
+            {/* Sidebar Items */}
+            <List sx={{ flex: 1, py: 1, overflowY: 'auto', '&::-webkit-scrollbar': { width: 6 }, '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' }, '&::-webkit-scrollbar-thumb': { backgroundColor: 'grey.300', borderRadius: 1, '&:hover': { backgroundColor: 'grey.400' } } }}>
+                {sidebarItems.map((item) => (
+                    <React.Fragment key={item.path}>
+                        {item.divider && <Divider sx={{ mx: 2, my: 1 }} />}
+                        <ListItem disablePadding>
+                            <ListItemButton
+                                component={RouterLink}
+                                to={item.path}
+                                onClick={() => setMobileOpen(false)}
+                                sx={{
+                                    mx: 1.5,
+                                    borderRadius: 1.25,
+                                    py: 1.25,
+                                    px: 2,
+                                    color: 'text.secondary',
+                                    position: 'relative',
+                                    ...(isActive(item.path) && {
+                                        backgroundColor: 'primary.main',
+                                        color: 'primary.contrastText',
+                                        '&::before': {
+                                            content: '""',
+                                            position: 'absolute',
+                                            left: 0,
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            width: 3,
+                                            height: 28,
+                                            backgroundColor: 'primary.light',
+                                            borderRadius: '0 2px 2px 0',
+                                            boxShadow: '0 0 8px rgba(37, 99, 235, 0.5)',
+                                        },
+                                        '&:hover': {
+                                            backgroundColor: 'primary.dark',
+                                        },
+                                        '& .MuiListItemIcon-root': {
+                                            color: 'primary.contrastText',
+                                        },
+                                        '& .MuiListItemText-primary': {
+                                            color: 'primary.contrastText',
+                                            fontWeight: 600,
+                                        },
+                                    }),
+                                    '&:hover': {
+                                        backgroundColor: isActive(item.path) ? 'primary.dark' : 'action.hover',
+                                        color: isActive(item.path) ? 'primary.contrastText' : 'text.primary',
+                                    },
+                                }}
+                            >
+                                {item.icon && (
+                                    <ListItemIcon
+                                        sx={{
+                                            minWidth: 32,
+                                            color: 'inherit',
+                                            '& svg': { fontSize: 20 },
+                                        }}
+                                    >
+                                        {item.icon}
+                                    </ListItemIcon>
+                                )}
+                                <ListItemText
+                                    primary={item.label}
+                                    slotProps={{
+                                        primary: {
+                                            fontWeight: isActive(item.path) ? 600 : 400,
+                                            fontSize: '0.875rem',
+                                        },
+                                    }}
+                                />
+                            </ListItemButton>
+                        </ListItem>
+                    </React.Fragment>
+                ))}
             </List>
 
-            {/* Bottom Section - Version Update, Health Status, Slogan and User */}
+            {/* Bottom Slogan */}
             <Box
                 sx={{
                     p: 2,
                     borderTop: '1px solid',
                     borderColor: 'divider',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 1,
-                    flexShrink: 0,
                 }}
             >
-                {/* Status Indicators */}
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                    {/* Connection Lost Indicator */}
-                    {!isHealthy && (
-                        <Box
-                            onClick={showDisconnectDialog}
-                            sx={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: 0.5,
-                                flex: 1,
-                                px: 1.5,
-                                py: 0.75,
-                                borderRadius: 1.5,
-                                bgcolor: 'error.main',
-                                color: 'error.contrastText',
-                                cursor: 'pointer',
-                                transition: 'all 150ms ease-in-out',
-                                '&:hover': {
-                                    bgcolor: 'error.dark',
-                                    transform: 'scale(1.02)',
-                                },
-                                '&:active': {
-                                    transform: 'scale(0.98)',
-                                },
-                            }}
-                            role="button"
-                            aria-label="View connection details"
-                            tabIndex={0}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                    e.preventDefault();
-                                    showDisconnectDialog();
-                                }
-                            }}
-                        >
-                            <ErrorOutline sx={{ fontSize: 16 }} />
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    fontWeight: 600,
-                                    fontSize: '0.7rem',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: 0.5,
-                                }}
-                            >
-                                Disconnected
-                            </Typography>
-                        </Box>
-                    )}
-
-                    {/* New Version Available Indicator - always show in dev mode */}
-                    {(hasUpdate || import.meta.env.DEV) && (
-                        <Box
-                            onClick={showUpdateDialog}
-                            sx={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: 0.5,
-                                flex: 1,
-                                px: 1.5,
-                                py: 0.75,
-                                borderRadius: 1.5,
-                                bgcolor: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main',
-                                color: import.meta.env.DEV && !hasUpdate ? 'success.contrastText' : 'info.contrastText',
-                                cursor: 'pointer',
-                                transition: 'all 150ms ease-in-out',
-                                '&:hover': {
-                                    bgcolor: import.meta.env.DEV && !hasUpdate ? 'success.dark' : 'info.dark',
-                                    transform: 'scale(1.02)',
-                                },
-                                '&:active': {
-                                    transform: 'scale(0.98)',
-                                },
-                            }}
-                            role="button"
-                            aria-label="View update details"
-                            tabIndex={0}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                    e.preventDefault();
-                                    showUpdateDialog();
-                                }
-                            }}
-                        >
-                            <NewReleases sx={{ fontSize: 16 }} />
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    fontWeight: 600,
-                                    fontSize: '0.7rem',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: 0.5,
-                                }}
-                            >
-                                {import.meta.env.DEV && !hasUpdate ? 'Dev Mode' : 'New Version'}
-                            </Typography>
-                        </Box>
-                    )}
-                </Box>
                 <Typography
-                    variant="body2"
+                    variant="caption"
                     sx={{
                         color: 'text.secondary',
-                        fontSize: '0.75rem',
+                        fontSize: '0.7rem',
                         textAlign: 'center',
+                        display: 'block',
                         fontStyle: 'italic',
                     }}
                 >
                     {t('layout.slogan')}
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <IconButton
-                        color="inherit"
-                        onClick={handleEasterEgg}
-                        aria-label="About Tingly-Box"
-                        sx={{ color: 'text.secondary' }}
-                    >
-                        <AccountIcon sx={{ fontSize: 24 }} />
-                    </IconButton>
-                </Box>
             </Box>
+        </Box>
+    );
+
+    // Combined navigation for desktop (activity bar + conditional sidebar)
+    const desktopNavigation = (
+        <Box sx={{ display: 'flex', height: '100vh' }}>
+            {activityBarContent}
+            {sidebarItems.length > 0 && sidebarContent}
+        </Box>
+    );
+
+    // Mobile drawer content
+    const mobileDrawerContent = (
+        <Box sx={{ display: 'flex', height: '100%' }}>
+            {activityBarContent}
+            {sidebarItems.length > 0 && sidebarContent}
         </Box>
     );
 
     return (
         <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
-            {/* Mobile Menu Button */}
+            {/* Desktop Layout */}
+            <Box component="nav" sx={{ display: { xs: 'none', md: 'block' } }}>
+                {desktopNavigation}
+            </Box>
+
+            {/* Mobile Drawer */}
+            <Drawer
+                variant="temporary"
+                open={mobileOpen}
+                onClose={() => setMobileOpen(false)}
+                ModalProps={{ keepMounted: true }}
+                sx={{
+                    display: { xs: 'block', md: 'none' },
+                    '& .MuiDrawer-paper': {
+                        boxSizing: 'border-box',
+                        width: sidebarItems.length > 0 ? activityBarWidth + sidebarWidth : activityBarWidth,
+                        bgcolor: 'background.paper',
+                    },
+                }}
+            >
+                {mobileDrawerContent}
+            </Drawer>
+
+            {/* Mobile Toggle Button */}
             <IconButton
                 color="primary"
                 aria-label="Open navigation menu"
-                edge="start"
-                onClick={handleDrawerToggle}
+                onClick={() => setMobileOpen(!mobileOpen)}
                 sx={{
+                    display: { xs: 'flex', md: 'none' },
                     position: 'fixed',
-                    top: { xs: 12, sm: 16 },
-                    left: { xs: 12, sm: 16 },
+                    top: 12,
+                    left: 12,
                     zIndex: 1300,
-                    display: { sm: 'none' },
-                    backgroundColor: 'background.paper',
+                    bgcolor: 'background.paper',
                     boxShadow: 3,
                     width: 44,
                     height: 44,
                     '&:hover': {
-                        backgroundColor: 'action.hover',
+                        bgcolor: 'action.hover',
                         transform: 'scale(1.05)',
                     },
-                    '&:active': {
-                        transform: 'scale(0.95)',
-                    },
-                    transition: 'all 150ms ease-in-out',
+                    transition: 'all 0.15s',
                 }}
             >
                 <MenuIcon />
             </IconButton>
-
-            {/* Sidebar Drawer */}
-            <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }} aria-label="Main navigation">
-                <Drawer
-                    variant="temporary"
-                    open={mobileOpen}
-                    onClose={handleDrawerToggle}
-                    ModalProps={{
-                        keepMounted: true,
-                    }}
-                    sx={{
-                        display: { xs: 'block', sm: 'none' },
-                        '& .MuiDrawer-paper': {
-                            boxSizing: 'border-box',
-                            width: drawerWidth,
-                            backgroundColor: 'background.paper',
-                            borderRight: '1px solid',
-                            borderColor: 'divider',
-                        },
-                    }}
-                >
-                    {drawerContent}
-                </Drawer>
-                <Drawer
-                    variant="permanent"
-                    sx={{
-                        display: { xs: 'none', sm: 'block' },
-                        '& .MuiDrawer-paper': {
-                            boxSizing: 'border-box',
-                            width: drawerWidth,
-                            backgroundColor: 'background.paper',
-                            borderRight: '1px solid',
-                            borderColor: 'divider',
-                        },
-                    }}
-                    open
-                >
-                    {drawerContent}
-                </Drawer>
-            </Box>
 
             {/* Main Content */}
             <Box
                 component="main"
                 sx={{
                     flexGrow: 1,
-                    width: { sm: `calc(100% - ${drawerWidth}px)` },
                     height: '100vh',
                     display: 'flex',
                     flexDirection: 'column',
+                    overflow: 'hidden',
                 }}
             >
                 <Box

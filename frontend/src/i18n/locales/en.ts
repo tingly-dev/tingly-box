@@ -34,7 +34,7 @@ export default {
       "useOpenCode": "OpenCode",
       "apiKeys": "API Keys",
       "oauth": "OAuth",
-      "credential": "AI Credential",
+      "credential": "Credential",
       "prompt": "Prompt"
     }
   },
