@@ -11,12 +11,6 @@ import (
 
 // Example_mockAgent demonstrates using mock agent with agentboot
 func Example_mockAgent() {
-	// Create agentboot manager
-	ab := agentboot.New(agentboot.Config{
-		DefaultAgent:     agentboot.AgentTypeMockAgent,
-		EnableStreamJSON: true,
-	})
-
 	// Create mock agent with custom config
 	mockAgent := mock.NewAgent(mock.Config{
 		MaxIterations: 3,
@@ -24,19 +18,11 @@ func Example_mockAgent() {
 		AutoApprove:   true,                   // Auto-approve for demo
 	})
 
-	// Register mock agent
-	ab.RegisterAgent(agentboot.AgentTypeMockAgent, mockAgent)
-
 	// Execute with context
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	agent, err := ab.GetDefaultAgent()
-	if err != nil {
-		fmt.Printf("Error getting agent: %v\n", err)
-		return
-	}
-	result, err := agent.Execute(ctx, "Hello, mock agent!", agentboot.ExecutionOptions{
+	result, err := mockAgent.Execute(ctx, "Hello, mock agent!", agentboot.ExecutionOptions{
 		OutputFormat: agentboot.OutputFormatStreamJSON,
 	})
 	if err != nil {
@@ -51,35 +37,26 @@ func Example_mockAgent() {
 	// Steps: 11 events
 }
 
-// Example_mockAgentWithPermission demonstrates mock agent with permission handler
-func Example_mockAgentWithPermission() {
-	// Create agentboot manager
-	ab := agentboot.New(agentboot.Config{
-		DefaultAgent: agentboot.AgentTypeMockAgent,
-	})
-
-	// Create permission handler with auto mode
-	permHandler := agentboot.NewDefaultHandler(agentboot.PermissionConfig{
-		DefaultMode: agentboot.PermissionModeAuto,
-	})
-
+// Example_mockAgentWithHandler demonstrates mock agent with message handler
+func Example_mockAgentWithHandler() {
 	// Create mock agent
 	mockAgent := mock.NewAgent(mock.Config{
 		MaxIterations: 2,
 		StepDelay:     50 * time.Millisecond,
+		AutoApprove:   false, // Require manual approval
 	})
-	mockAgent.SetPermissionHandler(permHandler)
 
-	// Register and execute
-	ab.RegisterAgent(agentboot.AgentTypeMockAgent, mockAgent)
+	// Create message handler that auto-approves
+	handler := agentboot.NewCompositeHandler().
+		SetApprovalHandler(&autoApprovalHandler{}).
+		SetAskHandler(&autoAskHandler{})
 
+	// Execute with handler
 	ctx := context.Background()
-	agent, err := ab.GetDefaultAgent()
-	if err != nil {
-		fmt.Printf("Error getting agent: %v\n", err)
-		return
-	}
-	result, err := agent.Execute(ctx, "Test with permission", agentboot.ExecutionOptions{})
+	result, err := mockAgent.Execute(ctx, "Test with handler", agentboot.ExecutionOptions{
+		Handler:      handler,
+		OutputFormat: agentboot.OutputFormatStreamJSON,
+	})
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
@@ -88,4 +65,72 @@ func Example_mockAgentWithPermission() {
 	fmt.Printf("Completed: %v\n", result.IsSuccess())
 	// Output:
 	// Completed: true
+}
+
+// Example_mockAgentWithAskUserQuestion demonstrates mock agent with AskUserQuestion
+func Example_mockAgentWithAskUserQuestion() {
+	// Create mock agent that sends AskUserQuestion every 2 steps
+	mockAgent := mock.NewAgent(mock.Config{
+		MaxIterations:           4,
+		StepDelay:               50 * time.Millisecond,
+		AutoApprove:             false,
+		AskUserQuestionFrequency: 2, // Every 2 steps, send AskUserQuestion
+	})
+
+	// Create handler that auto-approves everything
+	handler := agentboot.NewCompositeHandler().
+		SetApprovalHandler(&autoApprovalHandler{}).
+		SetAskHandler(&autoAskHandler{})
+
+	// Execute
+	ctx := context.Background()
+	result, err := mockAgent.Execute(ctx, "Test with AskUserQuestion", agentboot.ExecutionOptions{
+		Handler:      handler,
+		OutputFormat: agentboot.OutputFormatStreamJSON,
+	})
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Completed: %v\n", result.IsSuccess())
+	fmt.Printf("Events: %d\n", len(result.Events))
+	// Output:
+	// Completed: true
+	// Events: 17 (including AskUserQuestion events)
+}
+
+// autoApprovalHandler is a simple handler that auto-approves all permissions
+type autoApprovalHandler struct{}
+
+func (h *autoApprovalHandler) OnApproval(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
+	return agentboot.PermissionResult{Approved: true, UpdatedInput: req.Input}, nil
+}
+
+// autoAskHandler is a simple handler that auto-approves all asks
+type autoAskHandler struct{}
+
+func (h *autoAskHandler) OnAsk(ctx context.Context, req agentboot.AskRequest) (agentboot.AskResult, error) {
+	// For AskUserQuestion, add answers to the input
+	if req.ToolName == "AskUserQuestion" && req.Input != nil {
+		questions, ok := req.Input["questions"].([]interface{})
+		if ok && len(questions) > 0 {
+			// Provide default answers (select first option for each question)
+			answers := make(map[string]interface{})
+			for i := range questions {
+				answers[fmt.Sprintf("%d", i)] = "Option A"
+			}
+			updatedInput := make(map[string]interface{})
+			for k, v := range req.Input {
+				updatedInput[k] = v
+			}
+			updatedInput["answers"] = answers
+			return agentboot.AskResult{
+				ID:           req.ID,
+				Approved:     true,
+				UpdatedInput: updatedInput,
+			}, nil
+		}
+	}
+	return agentboot.AskResult{ID: req.ID, Approved: true}, nil
 }
