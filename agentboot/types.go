@@ -10,7 +10,8 @@ import (
 type AgentType string
 
 const (
-	AgentTypeClaude AgentType = "claude"
+	AgentTypeClaude    AgentType = "claude"
+	AgentTypeMockAgent AgentType = "mock" // Mock agent for testing
 	// AgentTypeCodex  AgentType = "codex"  // Future
 	// AgentTypeGemini AgentType = "gemini" // Future
 	// AgentTypeCursor AgentType = "cursor" // Future
@@ -35,6 +36,7 @@ func (f OutputFormat) String() string {
 }
 
 // PermissionMode defines how permission requests are handled
+// Deprecated: Use ask.Mode instead
 type PermissionMode string
 
 const (
@@ -48,34 +50,83 @@ func (m PermissionMode) String() string {
 	return string(m)
 }
 
-// ParsePermissionMode parses a permission mode from string
-func ParsePermissionMode(s string) (PermissionMode, bool) {
-	switch strings.ToLower(s) {
-	case "auto":
-		return PermissionModeAuto, true
-	case "manual":
-		return PermissionModeManual, true
-	case "skip":
-		return PermissionModeSkip, true
-	default:
-		return "", false
-	}
+// PermissionHandler is the interface for permission handling
+// This is defined here to avoid circular dependencies
+// Deprecated: Use ask.Handler instead
+type PermissionHandler interface {
+	CanUseTool(ctx context.Context, req PermissionRequest) (PermissionResult, error)
+	SetMode(scopeID string, mode PermissionMode) error
+	GetMode(scopeID string) (PermissionMode, error)
 }
 
-// MessageHandler is the interface for real-time message processing
+// MessageHandler is the primary interface for handling agent callbacks
 // This interface is defined here to avoid circular dependencies
 type MessageHandler interface {
 	OnMessage(msg interface{}) error
 	OnError(err error)
 	OnComplete(result *CompletionResult)
+	OnApproval(ctx context.Context, req PermissionRequest) (PermissionResult, error)
+	OnAsk(ctx context.Context, req AskRequest) (AskResult, error)
+}
+
+// MessageStreamer handles streaming messages (subset of MessageHandler)
+type MessageStreamer interface {
+	OnMessage(msg interface{}) error
+	OnError(err error)
+}
+
+// ApprovalHandler handles permission confirmations
+type ApprovalHandler interface {
+	OnApproval(ctx context.Context, req PermissionRequest) (PermissionResult, error)
+}
+
+// AskHandler handles user questions/selections
+type AskHandler interface {
+	OnAsk(ctx context.Context, req AskRequest) (AskResult, error)
+}
+
+// CompletionCallback handles completion notification
+type CompletionCallback interface {
+	OnComplete(result *CompletionResult)
+}
+
+// AskRequest represents a request to ask the user something
+// This is a simplified version of ask.Request to avoid circular imports
+type AskRequest struct {
+	ID   string `json:"id"`
+	Type string `json:"type"` // "permission", "question", "confirmation", "text_input"
+
+	Platform  string `json:"platform"`
+	ChatID    string `json:"chat_id"`
+	SessionID string `json:"session_id,omitempty"`
+
+	AgentType AgentType              `json:"agent_type"`
+	ToolName  string                 `json:"tool_name,omitempty"`
+	Input     map[string]interface{} `json:"input,omitempty"`
+	Message   string                 `json:"message,omitempty"`
+	CallID    string                 `json:"call_id,omitempty"`
+	Reason    string                 `json:"reason,omitempty"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// AskResult represents the user's response to an ask request
+type AskResult struct {
+	ID           string                 `json:"id"`
+	Approved     bool                   `json:"approved,omitempty"`
+	Response     string                 `json:"response,omitempty"`
+	Selection    map[string]interface{} `json:"selection,omitempty"`
+	Remember     bool                   `json:"remember,omitempty"`
+	Reason       string                 `json:"reason,omitempty"`
+	UpdatedInput map[string]interface{} `json:"updated_input,omitempty"`
 }
 
 // CompletionResult contains the final result information
 type CompletionResult struct {
-	Success    bool
-	DurationMS int64
-	SessionID  string
-	Error      string
+	Success     bool
+	DurationMS  int64
+	SessionID   string
+	Error       string
+	ExtraFields map[string]any
 }
 
 // ExecutionOptions controls agent execution
@@ -93,6 +144,39 @@ type ExecutionOptions struct {
 	SessionID string
 	// Resume indicates whether to resume an existing session (true) or create a new one (false)
 	Resume bool
+	// ChatID is the chat ID for permission requests (used by mock agent)
+	ChatID string
+	// Platform is the platform for permission requests (used by mock agent)
+	Platform string
+
+	// Model selection (per-execution override)
+	Model         string
+	FallbackModel string
+
+	// Execution control
+	MaxTurns int
+
+	// Tool filtering (per-execution override)
+	AllowedTools    []string
+	DisallowedTools []string
+
+	// MCP servers (per-execution override)
+	MCPServers      map[string]interface{}
+	StrictMcpConfig bool
+
+	// System prompts (per-execution override)
+	CustomSystemPrompt string
+	AppendSystemPrompt string
+
+	// Permission mode (per-execution override)
+	PermissionMode string
+
+	// Settings path (per-execution override)
+	SettingsPath string
+
+	// PermissionPromptTool specifies the tool for permission prompts (e.g., "stdio")
+	// When set to "stdio", permission requests are sent via stdin/stdout for callback handling
+	PermissionPromptTool string
 }
 
 // Result represents the result of an agent execution
@@ -273,8 +357,10 @@ type PermissionResponse struct {
 
 // PermissionResult represents the result of a permission check
 type PermissionResult struct {
-	Approved bool   `json:"approved"`
-	Reason   string `json:"reason,omitempty"`
+	Approved     bool                   `json:"approved"`
+	Reason       string                 `json:"reason,omitempty"`
+	UpdatedInput map[string]interface{} `json:"updated_input,omitempty"`
+	Remember     bool                   `json:"remember,omitempty"`
 }
 
 // PermissionConfig holds permission handler configuration

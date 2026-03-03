@@ -8,7 +8,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/agentboot/permission"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
 )
@@ -42,23 +41,23 @@ type runningBot struct {
 
 // Manager manages the lifecycle of running bot instances
 type Manager struct {
-	mu          sync.RWMutex
-	running     map[string]*runningBot // uuid -> runningBot
-	store       SettingsStore
-	dbPath      string // Database path for chat store
-	sessionMgr  *session.Manager
-	agentBoot   *agentboot.AgentBoot
-	permHandler permission.Handler
+	mu         sync.RWMutex
+	running    map[string]*runningBot // uuid -> runningBot
+	store      SettingsStore
+	dbPath     string // Database path for chat store
+	sessionMgr *session.Manager
+	agentBoot  *agentboot.AgentBoot
+	msgHandler agentboot.MessageHandler
 }
 
 // NewManager creates a new bot manager with a settings store
-func NewManager(store SettingsStore, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) *Manager {
+func NewManager(store SettingsStore, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot,
+) *Manager {
 	return &Manager{
-		running:     make(map[string]*runningBot),
-		store:       store,
-		sessionMgr:  sessionMgr,
-		agentBoot:   agentBoot,
-		permHandler: permHandler,
+		running:    make(map[string]*runningBot),
+		store:      store,
+		sessionMgr: sessionMgr,
+		agentBoot:  agentBoot,
 	}
 }
 
@@ -148,7 +147,7 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 			m.mu.RLock()
 			dbPath := m.dbPath
 			m.mu.RUnlock()
-			if err := runBotWithSettings(ctx, s, dbPath, m.sessionMgr, m.agentBoot, m.permHandler); err != nil {
+			if err := runBotWithSettings(ctx, s, dbPath, m.sessionMgr, m.agentBoot); err != nil {
 				logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
 			}
 		case Settings:
@@ -157,7 +156,7 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 			tempStore := &Store{
 				// We'll need to set up a minimal store for chat state management
 			}
-			if err := RunBotWithSettingsOnly(ctx, s, tempStore, m.sessionMgr, m.agentBoot, m.permHandler); err != nil {
+			if err := RunBotWithSettingsOnly(ctx, s, tempStore, m.sessionMgr, m.agentBoot); err != nil {
 				logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
 			}
 		}

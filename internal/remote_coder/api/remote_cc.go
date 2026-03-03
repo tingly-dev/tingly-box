@@ -11,7 +11,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/agentboot/permission"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/audit"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/config"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
@@ -20,23 +19,23 @@ import (
 
 // RemoteCCHandler handles remote Claude Code requests
 type RemoteCCHandler struct {
-	sessionMgr      *session.Manager
-	agentBoot       *agentboot.AgentBoot
-	summaryEngine   *summarizer.Engine
-	auditLogger     *audit.Logger
-	config          *config.Config
-	permHandler     permission.Handler
+	sessionMgr    *session.Manager
+	agentBoot     *agentboot.AgentBoot
+	summaryEngine *summarizer.Engine
+	auditLogger   *audit.Logger
+	config        *config.Config
+	permHandler   agentboot.Handler
 }
 
 // NewRemoteCCHandler creates a new remote-coder handler
-func NewRemoteCCHandler(sessionMgr *session.Manager, ab *agentboot.AgentBoot, summaryEngine *summarizer.Engine, auditLogger *audit.Logger, cfg *config.Config, permHandler permission.Handler) *RemoteCCHandler {
+func NewRemoteCCHandler(sessionMgr *session.Manager, ab *agentboot.AgentBoot, summaryEngine *summarizer.Engine, auditLogger *audit.Logger, cfg *config.Config, permHandler agentboot.Handler) *RemoteCCHandler {
 	return &RemoteCCHandler{
 		sessionMgr:    sessionMgr,
-		agentBoot:    ab,
+		agentBoot:     ab,
 		summaryEngine: summaryEngine,
-		auditLogger:  auditLogger,
-		config:       cfg,
-		permHandler:  permHandler,
+		auditLogger:   auditLogger,
+		config:        cfg,
+		permHandler:   permHandler,
 	}
 }
 
