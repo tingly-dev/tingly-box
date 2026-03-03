@@ -12,8 +12,9 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/ask"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
-	"github.com/tingly-dev/tingly-box/agentboot/permission"
+	mock "github.com/tingly-dev/tingly-box/agentboot/mockagent"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
@@ -25,10 +26,10 @@ type BotHandler struct {
 	store            *Store
 	sessionMgr       *session.Manager
 	agentBoot        *agentboot.AgentBoot
-	permHandler      permission.Handler
 	summaryEngine    *summarizer.Engine
 	directoryBrowser *DirectoryBrowser
 	manager          *imbot.Manager
+	imPrompter       *IMPrompter
 }
 
 // HandlerContext contains per-message context data
@@ -50,20 +51,22 @@ func NewBotHandler(
 	store *Store,
 	sessionMgr *session.Manager,
 	agentBoot *agentboot.AgentBoot,
-	permHandler permission.Handler,
 	summaryEngine *summarizer.Engine,
 	directoryBrowser *DirectoryBrowser,
 	manager *imbot.Manager,
 ) *BotHandler {
+	// Create IM prompter for permission requests
+	imPrompter := NewIMPrompter(manager)
+
 	return &BotHandler{
 		ctx:              ctx,
 		store:            store,
 		sessionMgr:       sessionMgr,
 		agentBoot:        agentBoot,
-		permHandler:      permHandler,
 		summaryEngine:    summaryEngine,
 		directoryBrowser: directoryBrowser,
 		manager:          manager,
+		imPrompter:       imPrompter,
 	}
 }
 
@@ -140,6 +143,11 @@ func (h *BotHandler) handleDirectMessage(hCtx HandlerContext) {
 		return
 	}
 
+	// Check if there's a pending permission request and user is responding
+	if h.handlePermissionTextResponse(hCtx) {
+		return
+	}
+
 	// Check for active session or show project selection
 	sessionID, ok, err := h.store.GetSessionForChat(hCtx.ChatID)
 	if err != nil {
@@ -173,6 +181,11 @@ func (h *BotHandler) handleGroupMessage(hCtx HandlerContext) {
 	// Check if waiting for custom path input
 	if h.directoryBrowser.IsWaitingInput(hCtx.ChatID) {
 		h.handleCustomPathInput(hCtx)
+		return
+	}
+
+	// Check if there's a pending permission request and user is responding
+	if h.handlePermissionTextResponse(hCtx) {
 		return
 	}
 
@@ -228,6 +241,11 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 		return
 	case "/clear":
 		h.handleClearCommand(hCtx)
+		return
+	case "/mock":
+		// Mock agent command for testing
+		mockText := strings.TrimSpace(strings.TrimPrefix(hCtx.Text, "/mock"))
+		h.handleAgentMessage(hCtx, agentMock, mockText, "")
 		return
 	case "/start", "/help", "/h":
 		h.showBotHelp(hCtx)
@@ -335,7 +353,7 @@ func (h *BotHandler) newStreamingMessageHandler(hCtx HandlerContext) *streamingM
 }
 
 // handleAgentMessage routes message to the appropriate agent handler
-func (h *BotHandler) handleAgentMessage(hCtx HandlerContext, agent string, text string, projectPathOverride string) {
+func (h *BotHandler) handleAgentMessage(hCtx HandlerContext, agent agentboot.AgentType, text string, projectPathOverride string) {
 	logrus.WithFields(logrus.Fields{
 		"agent":    agent,
 		"chatID":   hCtx.ChatID,
@@ -345,6 +363,8 @@ func (h *BotHandler) handleAgentMessage(hCtx HandlerContext, agent string, text 
 	switch agent {
 	case agentClaudeCode:
 		h.handleClaudeCodeMessage(hCtx, text, projectPathOverride)
+	case agentMock:
+		h.handleMockAgentMessage(hCtx, text, projectPathOverride)
 	default:
 		h.SendText(hCtx, fmt.Sprintf("Unknown agent: %s", agent))
 	}
@@ -453,13 +473,24 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		"shouldResume": shouldResume,
 	}).Info("Starting agent execution")
 
+	// Create streaming handler for message output
 	streamHandler := h.newStreamingMessageHandler(hCtx)
 
+	// Create composite handler that combines streaming + approval + ask handling
+	compositeHandler := agentboot.NewCompositeHandler().
+		SetStreamer(streamHandler).
+		SetApprovalHandler(h.imPrompter).
+		SetAskHandler(h.imPrompter).
+		SetCompletionCallback(&CompletionCallback{hCtx: hCtx})
+
 	result, err := agent.Execute(execCtx, text, agentboot.ExecutionOptions{
-		ProjectPath: projectPath,
-		Handler:     streamHandler,
-		SessionID:   sessionID,
-		Resume:      shouldResume,
+		ProjectPath:          projectPath,
+		Handler:              compositeHandler,
+		SessionID:            sessionID,
+		Resume:               shouldResume,
+		ChatID:               hCtx.ChatID,
+		Platform:             string(hCtx.Platform),
+		PermissionPromptTool: "stdio",
 	})
 
 	logrus.WithFields(logrus.Fields{
@@ -501,6 +532,169 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		Role:      "assistant",
 		Content:   response,
 		Summary:   summary,
+		Timestamp: time.Now(),
+	})
+
+	h.sendTextWithActionKeyboard(hCtx, response, hCtx.MessageID)
+}
+
+type CompletionCallback struct {
+	hCtx HandlerContext
+}
+
+func (c *CompletionCallback) OnComplete(result *agentboot.CompletionResult) {
+	// Build action keyboard
+	kb := BuildActionKeyboard()
+	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+
+	_, err := c.hCtx.Bot.SendMessage(context.Background(), c.hCtx.ChatID, &imbot.SendMessageOptions{
+		Text: "✅ Task done. \nContinue to chat with this session or /help.",
+		Metadata: map[string]interface{}{
+			"replyMarkup": tgKeyboard,
+		},
+	})
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to send action keyboard")
+	}
+}
+
+// handleMockAgentMessage executes a message through the mock agent for testing
+func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, projectPathOverride string) {
+	if strings.TrimSpace(text) == "" {
+		h.SendText(hCtx, "Please provide a message for the mock agent.")
+		return
+	}
+
+	// Get or create a session for mock agent (simpler than claude code)
+	sessionID, ok, err := h.store.GetSessionForChat(hCtx.ChatID)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to load session mapping")
+	}
+
+	var sess *session.Session
+	if ok && sessionID != "" {
+		if s, exists := h.sessionMgr.GetOrLoad(sessionID); exists {
+			sess = s
+		}
+	}
+
+	// Create new session if needed
+	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed {
+		sess = h.sessionMgr.Create()
+		sessionID = sess.ID
+		if projectPathOverride != "" {
+			h.sessionMgr.SetContext(sessionID, "project_path", projectPathOverride)
+		}
+		if err := h.store.SetSessionForChat(hCtx.ChatID, sessionID); err != nil {
+			logrus.WithError(err).Warn("Failed to save session mapping")
+		}
+	}
+
+	// Get project path (optional for mock)
+	projectPath := projectPathOverride
+	if projectPath == "" && sess != nil && sess.Context != nil {
+		if v, ok := sess.Context["project_path"]; ok {
+			if pv, ok := v.(string); ok {
+				projectPath = strings.TrimSpace(pv)
+			}
+		}
+	}
+
+	// Build meta
+	meta := ResponseMeta{
+		ProjectPath: projectPath,
+		SessionID:   sessionID,
+		ChatID:      hCtx.ChatID,
+		UserID:      hCtx.SenderID,
+	}
+
+	h.sessionMgr.AppendMessage(sessionID, session.Message{
+		Role:      "user",
+		Content:   text,
+		Timestamp: time.Now(),
+	})
+
+	h.sessionMgr.SetRunning(sessionID)
+
+	// Send status message
+	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, "🧪 Mock agent processing..."), hCtx.MessageID)
+
+	// Execute with context
+	execCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Get mock agent
+	mockAgent, err := h.agentBoot.GetAgent(agentboot.AgentTypeMockAgent)
+	if err != nil {
+		// Register mock agent if not exists
+		newMockAgent := mock.NewAgent(mock.Config{
+			MaxIterations: 3,
+			StepDelay:     2 * time.Second,
+		})
+		h.agentBoot.RegisterAgent(agentboot.AgentTypeMockAgent, newMockAgent)
+		mockAgent = newMockAgent
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"chatID":    hCtx.ChatID,
+		"sessionID": sessionID,
+		"agent":     "mock",
+	}).Info("Starting mock agent execution")
+
+	// Create streaming handler for message output
+	streamHandler := h.newStreamingMessageHandler(hCtx)
+
+	// Create composite handler that combines streaming + approval + ask handling
+	compositeHandler := agentboot.NewCompositeHandler().
+		SetStreamer(streamHandler).
+		SetApprovalHandler(h.imPrompter).
+		SetAskHandler(h.imPrompter)
+
+	result, err := mockAgent.Execute(execCtx, text, agentboot.ExecutionOptions{
+		ProjectPath: projectPath,
+		Handler:     compositeHandler,
+		SessionID:   sessionID,
+		ChatID:      hCtx.ChatID,
+		Platform:    string(hCtx.Platform),
+	})
+
+	logrus.WithFields(logrus.Fields{
+		"chatID":    hCtx.ChatID,
+		"sessionID": sessionID,
+		"hasError":  err != nil,
+		"hasResult": result != nil,
+	}).Info("Mock agent execution completed")
+
+	response := streamHandler.GetOutput()
+	if response == "" {
+		if result != nil {
+			response = result.TextOutput()
+		}
+		if err != nil && response == "" {
+			response = fmt.Sprintf("Execution failed: %v", err)
+		}
+	}
+
+	if err != nil {
+		h.sessionMgr.SetFailed(sessionID, response)
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"chatID":    hCtx.ChatID,
+			"sessionID": sessionID,
+			"response":  response,
+		}).Warn("Mock agent execution failed")
+
+		if response == "" {
+			response = fmt.Sprintf("Execution failed: %v", err)
+		}
+		h.sendTextWithReply(hCtx, response, hCtx.MessageID)
+		return
+	}
+
+	h.sessionMgr.SetCompleted(sessionID, response)
+
+	h.sessionMgr.AppendMessage(sessionID, session.Message{
+		Role:      "assistant",
+		Content:   response,
 		Timestamp: time.Now(),
 	})
 
@@ -558,6 +752,7 @@ Bot Commands:
 /bot_bash <cmd> - Execute allowed bash (cd, ls, pwd)
 /bot_join <group> - Add group to whitelist
 /clear - Clear context and create new session
+/mock <msg> - Test with mock agent (permission flow)
 
 All other messages are sent to Claude Code.`, hCtx.SenderID)
 	} else {
@@ -571,6 +766,7 @@ Bot Commands:
 /bot_status - Show session status
 /bot_clear - Clear session context
 /clear - Clear context and create new session
+/mock <msg> - Test with mock agent (permission flow)
 
 All other messages are sent to Claude Code.`, hCtx.ChatID)
 	}
@@ -1097,6 +1293,10 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 	action := parts[0]
 
 	switch action {
+	case "perm":
+		// Handle permission request response
+		h.handlePermissionCallback(hCtx, parts)
+
 	case "action":
 		if len(parts) < 2 {
 			return
@@ -1108,6 +1308,9 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 		case "bind":
 			// Start interactive bind
 			h.handleBindInteractive(hCtx)
+		case "project":
+			// Start interactive bind
+			h.handleBotProjectCommand(hCtx)
 		}
 
 	case "project":
@@ -1314,6 +1517,187 @@ func (h *BotHandler) handleCustomPathInput(hCtx HandlerContext) {
 	// Path exists and is a directory, complete the bind
 	h.completeBind(hCtx, expandedPath)
 	h.directoryBrowser.Clear(hCtx.ChatID)
+}
+
+// handlePermissionCallback handles permission request callback responses
+func (h *BotHandler) handlePermissionCallback(hCtx HandlerContext, parts []string) {
+	if len(parts) < 3 {
+		logrus.WithField("parts", parts).Warn("Invalid permission callback data")
+		return
+	}
+
+	subAction := parts[1]
+	requestID := parts[2]
+
+	// Check if the request exists
+	pendingReq, exists := h.imPrompter.GetPendingRequest(requestID)
+	if !exists {
+		logrus.WithField("request_id", requestID).Warn("Permission request not found or expired")
+		h.SendText(hCtx, "⚠️ This permission request has expired or already been answered.")
+		return
+	}
+
+	var resultText string
+
+	switch subAction {
+	case "allow":
+		if err := h.imPrompter.SubmitDecision(requestID, true, false, ""); err != nil {
+			logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit permission decision")
+			h.SendText(hCtx, fmt.Sprintf("Failed to process permission response: %v", err))
+			return
+		}
+		resultText = "✅ Permission granted"
+		logrus.WithFields(logrus.Fields{
+			"request_id": requestID,
+			"tool_name":  pendingReq.ToolName,
+			"user_id":    hCtx.SenderID,
+		}).Info("User approved tool permission")
+
+	case "deny":
+		if err := h.imPrompter.SubmitDecision(requestID, false, false, ""); err != nil {
+			logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit permission decision")
+			h.SendText(hCtx, fmt.Sprintf("Failed to process permission response: %v", err))
+			return
+		}
+		resultText = "❌ Permission denied"
+		logrus.WithFields(logrus.Fields{
+			"request_id": requestID,
+			"tool_name":  pendingReq.ToolName,
+			"user_id":    hCtx.SenderID,
+		}).Info("User denied tool permission")
+
+	case "always":
+		if err := h.imPrompter.SubmitDecision(requestID, true, true, ""); err != nil {
+			logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit permission decision")
+			h.SendText(hCtx, fmt.Sprintf("Failed to process permission response: %v", err))
+			return
+		}
+		resultText = "🔄 Always allowed"
+		logrus.WithFields(logrus.Fields{
+			"request_id": requestID,
+			"tool_name":  pendingReq.ToolName,
+			"user_id":    hCtx.SenderID,
+		}).Info("User approved tool permission (always)")
+
+	case "option":
+		// Handle multi-option selection (e.g., AskUserQuestion)
+		if len(parts) < 4 {
+			logrus.WithField("parts", parts).Warn("Invalid option callback data")
+			return
+		}
+		optionIndex := parts[3]
+
+		// Convert index to label from the pending request
+		optionLabel := optionIndex
+		if questions, ok := pendingReq.Input["questions"].([]interface{}); ok && len(questions) > 0 {
+			if question, ok := questions[0].(map[string]interface{}); ok {
+				if options, ok := question["options"].([]interface{}); ok {
+					// Parse index
+					var idx int
+					if _, err := fmt.Sscanf(optionIndex, "%d", &idx); err == nil && idx >= 0 && idx < len(options) {
+						if option, ok := options[idx].(map[string]interface{}); ok {
+							if label, ok := option["label"].(string); ok {
+								optionLabel = label
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Submit as a structured response with the label
+		if err := h.imPrompter.SubmitUserResponse(requestID, ask.Response{
+			Type: "selection",
+			Data: optionLabel,
+		}); err != nil {
+			logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit option selection")
+			h.SendText(hCtx, fmt.Sprintf("Failed to process option selection: %v", err))
+			return
+		}
+		resultText = fmt.Sprintf("✅ Selected: %s", optionLabel)
+		logrus.WithFields(logrus.Fields{
+			"request_id":   requestID,
+			"tool_name":    pendingReq.ToolName,
+			"option_index": optionIndex,
+			"option_label": optionLabel,
+			"user_id":      hCtx.SenderID,
+		}).Info("User selected option")
+
+	default:
+		logrus.WithField("action", subAction).Warn("Unknown permission action")
+		return
+	}
+
+	// Send feedback to user
+	h.SendText(hCtx, fmt.Sprintf("%s for tool: `%s`", resultText, pendingReq.ToolName))
+}
+
+// handlePermissionTextResponse handles text-based permission responses
+// Returns true if the message was a valid permission response, false otherwise
+func (h *BotHandler) handlePermissionTextResponse(hCtx HandlerContext) bool {
+	// Check if there are pending permission requests for this chat
+	pendingReqs := h.imPrompter.GetPendingRequestsForChat(hCtx.ChatID)
+	if len(pendingReqs) == 0 {
+		return false
+	}
+
+	// Get the most recent pending request for this chat
+	// (usually there's only one at a time)
+	latestReq := pendingReqs[0]
+
+	// For AskUserQuestion, try to parse as option selection first
+	if latestReq.ToolName == "AskUserQuestion" {
+		// Try to submit as a text selection
+		if err := h.imPrompter.SubmitUserResponse(latestReq.ID, ask.Response{
+			Type: "text",
+			Data: hCtx.Text,
+		}); err == nil {
+			h.SendText(hCtx, fmt.Sprintf("✅ Selected: %s", hCtx.Text))
+			logrus.WithFields(logrus.Fields{
+				"request_id": latestReq.ID,
+				"tool_name":  latestReq.ToolName,
+				"user_id":    hCtx.SenderID,
+				"selection":  hCtx.Text,
+			}).Info("User selected option via text")
+			return true
+		}
+	}
+
+	// Try to parse the text as a standard permission response
+	approved, remember, isValid := ask.ParseTextResponse(hCtx.Text)
+	if !isValid {
+		// Not a valid permission response, let other handlers process it
+		return false
+	}
+
+	// Submit the decision
+	if err := h.imPrompter.SubmitDecision(latestReq.ID, approved, remember, ""); err != nil {
+		logrus.WithError(err).WithField("request_id", latestReq.ID).Error("Failed to submit permission decision")
+		h.SendText(hCtx, fmt.Sprintf("Failed to process permission response: %v", err))
+		return true
+	}
+
+	// Send feedback to user
+	var resultText string
+	if remember {
+		resultText = "🔄 Always allowed"
+	} else if approved {
+		resultText = "✅ Permission granted"
+	} else {
+		resultText = "❌ Permission denied"
+	}
+
+	h.SendText(hCtx, fmt.Sprintf("%s for tool: `%s`", resultText, latestReq.ToolName))
+
+	logrus.WithFields(logrus.Fields{
+		"request_id": latestReq.ID,
+		"tool_name":  latestReq.ToolName,
+		"user_id":    hCtx.SenderID,
+		"approved":   approved,
+		"remember":   remember,
+	}).Info("User responded to permission request via text")
+
+	return true
 }
 
 // handleCreateConfirm sends a confirmation prompt for creating a directory
