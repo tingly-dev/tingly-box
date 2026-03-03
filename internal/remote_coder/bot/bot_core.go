@@ -3,9 +3,6 @@ package bot
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -13,7 +10,6 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/agentboot/permission"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
@@ -29,7 +25,8 @@ const (
 
 // Agent routing constants
 const (
-	agentClaudeCode = "claude_code"
+	agentClaudeCode = agentboot.AgentTypeClaude
+	agentMock       = agentboot.AgentTypeMockAgent
 )
 
 // Bot command constants
@@ -49,14 +46,22 @@ var defaultBashAllowlist = map[string]struct{}{
 	"pwd": {},
 }
 
+// ResponseMeta contains metadata for response formatting
+type ResponseMeta struct {
+	ProjectPath string
+	ChatID      string
+	UserID      string
+	SessionID   string
+}
+
 // RunBot starts a multi-platform bot that proxies messages to remote-coder sessions.
-func RunBot(ctx context.Context, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) error {
+func RunBot(ctx context.Context, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot) error {
 	delay := telegramStartDelay
 	for attempt := 1; attempt <= telegramStartRetries; attempt++ {
 		if ctx.Err() != nil {
 			return nil
 		}
-		if err := runBotOnce(ctx, store, sessionMgr, agentBoot, permHandler); err != nil {
+		if err := runBotOnce(ctx, store, sessionMgr, agentBoot); err != nil {
 			if attempt == telegramStartRetries {
 				return err
 			}
@@ -75,7 +80,7 @@ func RunBot(ctx context.Context, store *Store, sessionMgr *session.Manager, agen
 	return nil
 }
 
-func runBotOnce(ctx context.Context, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) error {
+func runBotOnce(ctx context.Context, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot) error {
 	if store == nil {
 		return fmt.Errorf("bot store is nil")
 	}
@@ -129,7 +134,7 @@ func runBotOnce(ctx context.Context, store *Store, sessionMgr *session.Manager, 
 	}
 
 	// Register unified message handler with platform parameter
-	handler := NewBotHandler(ctx, store, sessionMgr, agentBoot, permHandler, summaryEngine, directoryBrowser, manager)
+	handler := NewBotHandler(ctx, store, sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager)
 	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {
@@ -141,7 +146,7 @@ func runBotOnce(ctx context.Context, store *Store, sessionMgr *session.Manager, 
 }
 
 // runBotWithSettings starts a bot using db.Settings instead of bot.Store
-func runBotWithSettings(ctx context.Context, settings db.Settings, dbPath string, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) error {
+func runBotWithSettings(ctx context.Context, settings db.Settings, dbPath string, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot) error {
 	// Create a temporary bot.Store for chat state management
 	store, err := NewStoreForChatOnly(dbPath)
 	if err != nil {
@@ -202,7 +207,7 @@ func runBotWithSettings(ctx context.Context, settings db.Settings, dbPath string
 	}
 
 	// Register unified message handler with platform parameter
-	handler := NewBotHandler(ctx, store, sessionMgr, agentBoot, permHandler, summaryEngine, directoryBrowser, manager)
+	handler := NewBotHandler(ctx, store, sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager)
 	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {
@@ -245,11 +250,11 @@ func buildAuthConfig(settings db.Settings) imbot.AuthConfig {
 }
 
 // RunBotWithSettingsOnly runs a bot using only the settings
-func RunBotWithSettingsOnly(ctx context.Context, settings Settings, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) error {
+func RunBotWithSettingsOnly(ctx context.Context, settings Settings, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot) error {
 	if err := store.SaveSettings(settings); err != nil {
 		return fmt.Errorf("failed to save bot settings: %w", err)
 	}
-	return runBotOnce(ctx, store, sessionMgr, agentBoot, permHandler)
+	return runBotOnce(ctx, store, sessionMgr, agentBoot,)
 }
 
 func sleepWithContext(ctx context.Context, delay time.Duration) bool {
