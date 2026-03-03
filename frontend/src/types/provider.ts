@@ -9,6 +9,18 @@ export interface Provider {
     auth_type?: "api_key" | "oauth"; // "api_key" or "oauth"
     oauth_detail?: OAuthDetail;
     proxy_url?: string;
+    // Credential source
+    credential_source?: "direct" | "helper";
+    helper_config?: HelperConfig;
+}
+
+export interface HelperConfig {
+    command: string;
+    args?: string[];
+    timeout_ms?: number;
+    env?: Record<string, string>;
+    pass_env?: string[];
+    simple_mode?: boolean;
 }
 
 export interface OAuthDetail {

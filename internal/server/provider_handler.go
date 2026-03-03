@@ -10,6 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/pkg/helper"
 )
 
 // maskProviderForResponse masks sensitive data and returns a safe ProviderResponse
@@ -487,4 +488,56 @@ func (s *Server) GetProviderModelsByUUID(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// TestHelperRequest is the request body for testing a helper command
+type TestHelperRequest struct {
+	Command    string            `json:"command"`
+	Args       []string          `json:"args,omitempty"`
+	TimeoutMs  int               `json:"timeout_ms,omitempty"`
+	Env        map[string]string `json:"env,omitempty"`
+	PassEnv    []string          `json:"pass_env,omitempty"`
+	SimpleMode bool              `json:"simple_mode,omitempty"`
+}
+
+// TestHelperResponse is the response for helper test
+type TestHelperResponse struct {
+	Success bool   `json:"success"`
+	Preview string `json:"preview,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+// TestHelper tests a helper command and returns a masked preview
+func (s *Server) TestHelper(c *gin.Context) {
+	var req TestHelperRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	if req.Command == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "command is required",
+		})
+		return
+	}
+
+	result := helper.TestHelper(c.Request.Context(), helper.TestConfig{
+		Command:    req.Command,
+		Args:       req.Args,
+		TimeoutMs:  req.TimeoutMs,
+		Env:        req.Env,
+		PassEnv:    req.PassEnv,
+		SimpleMode: req.SimpleMode,
+	})
+
+	c.JSON(http.StatusOK, TestHelperResponse{
+		Success: result.Success,
+		Preview: result.Preview,
+		Error:   result.Error,
+	})
 }
