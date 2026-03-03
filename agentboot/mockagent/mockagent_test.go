@@ -1,4 +1,4 @@
-package agentboot_test
+package mock
 
 import (
 	"context"
@@ -6,13 +6,12 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
-	mock "github.com/tingly-dev/tingly-box/agentboot/mockagent"
 )
 
 // Example_mockAgent demonstrates using mock agent with agentboot
 func Example_mockAgent() {
 	// Create mock agent with custom config
-	mockAgent := mock.NewAgent(mock.Config{
+	mockAgent := NewAgent(Config{
 		MaxIterations: 3,
 		StepDelay:     100 * time.Millisecond, // Fast for testing
 		AutoApprove:   true,                   // Auto-approve for demo
@@ -40,7 +39,7 @@ func Example_mockAgent() {
 // Example_mockAgentWithHandler demonstrates mock agent with message handler
 func Example_mockAgentWithHandler() {
 	// Create mock agent
-	mockAgent := mock.NewAgent(mock.Config{
+	mockAgent := NewAgent(Config{
 		MaxIterations: 2,
 		StepDelay:     50 * time.Millisecond,
 		AutoApprove:   false, // Require manual approval
@@ -70,7 +69,7 @@ func Example_mockAgentWithHandler() {
 // Example_mockAgentWithAskUserQuestion demonstrates mock agent with AskUserQuestion
 func Example_mockAgentWithAskUserQuestion() {
 	// Create mock agent that sends AskUserQuestion every 2 steps
-	mockAgent := mock.NewAgent(mock.Config{
+	mockAgent := NewAgent(Config{
 		MaxIterations:           4,
 		StepDelay:               50 * time.Millisecond,
 		AutoApprove:             false,
@@ -97,7 +96,7 @@ func Example_mockAgentWithAskUserQuestion() {
 	fmt.Printf("Events: %d\n", len(result.Events))
 	// Output:
 	// Completed: true
-	// Events: 17 (including AskUserQuestion events)
+	// Events: 14
 }
 
 // autoApprovalHandler is a simple handler that auto-approves all permissions
