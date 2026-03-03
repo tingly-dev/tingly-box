@@ -124,6 +124,7 @@ export default {
   },
   "providerDialog": {
     "addTitle": "Add New API Key",
+    "addDescription": "Select a provider and enter your API key to connect AI services. Multiple protocols can be enabled for providers that support them.",
     "editTitle": "Edit API Key",
     "addButton": "Add API Key",
     "apiStyle": {
@@ -132,12 +133,20 @@ export default {
       "helperOpenAI": "Supports models from OpenAI, Google and many other OpenAI-compatible providers",
       "helperAnthropic": "For Anthropic-compatible AI providers, commonly used with Claude Code.",
       "openAI": "OpenAI Compatible",
-      "anthropic": "Anthropic Compatible"
+      "anthropic": "Anthropic Compatible",
+      "switchWarning": "API style changed. Base URL has been reset. Please select a compatible provider."
+    },
+    "provider": {
+      "label": "Provider or Custom Base URL",
+      "placeholder": "Select a provider or enter custom base URL"
+    },
+    "protocol": {
+      "label": "Protocol"
     },
     "keyName": {
       "label": "API Key Name",
-      "placeholder": "e.g., OpenAI",
-      "autoFill": "{{title}}"
+      "placeholder": "e.g., OpenAI API Key",
+      "autoFill": "{{title}} API Key"
     },
     "providerOrUrl": {
       "label": "Provider or Custom Base URL",
@@ -145,17 +154,17 @@ export default {
     },
     "apiKey": {
       "label": "API Key",
-      "placeholderAdd": "Your API token",
-      "placeholderEdit": "Leave empty to keep current token",
-      "helperEdit": "Leave empty to keep current token"
+      "placeholderAdd": "Your API key",
+      "placeholderEdit": "Leave empty to keep current key",
+      "helperEdit": "Leave empty to keep current key"
     },
     "enabled": "Enabled",
     "advanced": {
       "title": "Advanced",
       "proxyUrl": {
-        "label": "Proxy URL",
-        "placeholder": "e.g., http://127.0.0.1:7890 or socks5://127.0.0.1:1080",
-        "helper": "Optional HTTP or SOCKS proxy for API requests"
+        "label": "HTTP/SOCKS Proxy URL (Optional)",
+        "placeholder": "http://127.0.0.1:7890 or socks5://127.0.0.1:7890",
+        "helper": "Optional: Use a proxy to bypass region restrictions. Saved for future use."
       }
     },
     "verification": {
@@ -175,7 +184,7 @@ export default {
       "explanation": "Some providers may not pass standard checks but still work correctly.",
       "whyFailed": "Connection check failed:",
       "errorDetails": "Error details",
-      "noKey": "No API key",
+      "noKey": "Not provided",
       "confirmNoteTitle": "Are you sure you want to continue?",
       "confirmNote": "Please verify that your Base URL and API Key are correct before adding. You can still add this provider, but it may not work properly if the configuration is incorrect.",
       "cancel": "Go Back",
