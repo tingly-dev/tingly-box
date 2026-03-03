@@ -2,6 +2,9 @@ package exporter
 
 import (
 	"context"
+	"fmt"
+	"sync"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/metric"
@@ -15,6 +18,8 @@ import (
 // Note: Service stats are updated directly in the tracking.go recordOnService method.
 type SQLiteExporter struct {
 	usageStore *db.UsageStore
+	mu         sync.Mutex
+	lastTotals map[string]int64
 }
 
 // NewSQLiteExporter creates a new SQLiteExporter.
@@ -22,6 +27,7 @@ func NewSQLiteExporter(statsStore *db.StatsStore, usageStore *db.UsageStore) *SQ
 	// statsStore is not used directly as service stats are updated in tracking.go
 	return &SQLiteExporter{
 		usageStore: usageStore,
+		lastTotals: make(map[string]int64),
 	}
 }
 
@@ -79,7 +85,8 @@ func (e *SQLiteExporter) processSum(data metricdata.Sum[int64], metricData metri
 		case "llm.token.usage":
 			e.recordTokenUsage(provider, providerUUID, model, ruleUUID, scenario, tokenType, value, status)
 		case "llm.token.total":
-			// Total tokens are already tracked via input + output
+			userTier := extractAttr(attrs, "llm.user.tier")
+			e.recordTokenTotalDelta(provider, providerUUID, scenario, status, userTier, value)
 		case "llm.request.count":
 			e.recordRequestCount(provider, providerUUID, model, ruleUUID, scenario, status, value)
 		case "llm.request.errors":
@@ -122,6 +129,40 @@ func (e *SQLiteExporter) recordTokenUsage(provider, providerUUID, model, ruleUUI
 // recordRequestCount records a request count to the database.
 func (e *SQLiteExporter) recordRequestCount(provider, providerUUID, model, ruleUUID, scenario, status string, count int64) {
 	// Request counts are tracked via usage records in tracking.go
+}
+
+func (e *SQLiteExporter) recordTokenTotalDelta(provider, providerUUID, scenario, status, userTier string, cumulative int64) {
+	if e.usageStore == nil {
+		return
+	}
+	key := fmt.Sprintf("%s|%s|%s|%s|%s", providerUUID, provider, scenario, status, userTier)
+	e.mu.Lock()
+	last, exists := e.lastTotals[key]
+	var delta int64
+	if !exists {
+		delta = cumulative
+	} else {
+		delta = cumulative - last
+	}
+	if delta < 0 {
+		// Counter reset/process restart.
+		delta = cumulative
+	}
+	e.lastTotals[key] = cumulative
+	e.mu.Unlock()
+
+	if delta <= 0 {
+		return
+	}
+	_ = e.usageStore.RecordOTelTokenDelta(&db.OTelTokenDelta{
+		Timestamp:    time.Now(),
+		ProviderUUID: providerUUID,
+		ProviderName: provider,
+		Scenario:     scenario,
+		Status:       status,
+		UserTier:     userTier,
+		DeltaTokens:  delta,
+	})
 }
 
 // ForceFlush forces a flush of pending data.

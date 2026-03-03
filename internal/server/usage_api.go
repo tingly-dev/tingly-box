@@ -42,9 +42,9 @@ func (s *Server) RegisterUsageRoutes(manager *swagger.RouteManager) {
 			Name:        "group_by",
 			Type:        "string",
 			Required:    false,
-			Description: "Aggregation level: model, provider, scenario, rule, daily, hourly",
+			Description: "Aggregation level: model, provider, scenario, rule, user, daily, hourly",
 			Default:     "model",
-			Enum:        []interface{}{"model", "provider", "scenario", "rule", "daily", "hourly"},
+			Enum:        []interface{}{"model", "provider", "scenario", "rule", "user", "daily", "hourly"},
 		}),
 		swagger.WithQueryConfig("start_time", swagger.QueryParamConfig{
 			Name:        "start_time",
@@ -81,6 +81,12 @@ func (s *Server) RegisterUsageRoutes(manager *swagger.RouteManager) {
 			Type:        "string",
 			Required:    false,
 			Description: "Filter by rule UUID",
+		}),
+		swagger.WithQueryConfig("user_id", swagger.QueryParamConfig{
+			Name:        "user_id",
+			Type:        "string",
+			Required:    false,
+			Description: "Filter by enterprise user ID",
 		}),
 		swagger.WithQueryConfig("status", swagger.QueryParamConfig{
 			Name:        "status",
@@ -232,6 +238,13 @@ func (s *Server) RegisterUsageRoutes(manager *swagger.RouteManager) {
 		),
 	)
 
+	// GET /api/v1/usage/otel/summary - Get OTel token total summary.
+	apiV1.GET("/usage/otel/summary", usageAPI.GetOTelSummary,
+		swagger.WithTags("usage"),
+		swagger.WithDescription("Returns OTel-exported token totals (delta-summed) for reconciliation"),
+		swagger.WithResponseModel(gin.H{}),
+	)
+
 	// DELETE /api/v1/usage/records - Delete old usage records
 	apiV1.DELETE("/usage/records", usageAPI.DeleteOldRecords,
 		swagger.WithTags("usage"),
@@ -264,6 +277,7 @@ func (api *UsageAPI) GetStats(c *gin.Context) {
 		Model:     c.Query("model"),
 		Scenario:  c.Query("scenario"),
 		RuleUUID:  c.Query("rule_uuid"),
+		UserID:    c.Query("user_id"),
 		Status:    c.Query("status"),
 	}
 
@@ -319,6 +333,9 @@ func (api *UsageAPI) GetTimeSeries(c *gin.Context) {
 	}
 	if scenario := c.Query("scenario"); scenario != "" {
 		filters["scenario"] = scenario
+	}
+	if userID := c.Query("user_id"); userID != "" {
+		filters["user_id"] = userID
 	}
 
 	data, err := api.usageStore.GetTimeSeries(interval, startTime, endTime, filters)
@@ -385,6 +402,9 @@ func (api *UsageAPI) GetRecords(c *gin.Context) {
 	if status := c.Query("status"); status != "" {
 		filters["status"] = status
 	}
+	if userID := c.Query("user_id"); userID != "" {
+		filters["user_id"] = userID
+	}
 
 	records, total, err := api.usageStore.GetRecords(startTime, endTime, filters, limit, offset)
 	if err != nil {
@@ -402,6 +422,7 @@ func (api *UsageAPI) GetRecords(c *gin.Context) {
 			Model:        r.Model,
 			Scenario:     r.Scenario,
 			RuleUUID:     r.RuleUUID,
+			UserID:       r.UserID,
 			RequestModel: r.RequestModel,
 			Timestamp:    r.Timestamp.Format(time.RFC3339),
 			InputTokens:  r.InputTokens,
@@ -453,6 +474,42 @@ func (api *UsageAPI) DeleteOldRecords(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+func (api *UsageAPI) GetOTelSummary(c *gin.Context) {
+	if api.usageStore == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Usage store not available"})
+		return
+	}
+
+	startTime := parseTimeQuery(c, "start_time", time.Now().Add(-24*time.Hour))
+	endTime := parseTimeQuery(c, "end_time", time.Now())
+	filters := map[string]string{}
+	if provider := c.Query("provider_uuid"); provider != "" {
+		filters["provider_uuid"] = provider
+	}
+	if scenario := c.Query("scenario"); scenario != "" {
+		filters["scenario"] = scenario
+	}
+	if status := c.Query("status"); status != "" {
+		filters["status"] = status
+	}
+	if userTier := c.Query("user_tier"); userTier != "" {
+		filters["user_tier"] = userTier
+	}
+
+	total, err := api.usageStore.SumOTelTokenDeltas(startTime, endTime, filters)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"start_time":   startTime.Format(time.RFC3339),
+		"end_time":     endTime.Format(time.RFC3339),
+		"total_tokens": total,
+		"filters":      filters,
+	})
 }
 
 // Helper functions
