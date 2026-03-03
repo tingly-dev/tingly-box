@@ -1,7 +1,6 @@
 package claude
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,56 +12,41 @@ import (
 	"sync"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/events"
-	"github.com/tingly-dev/tingly-box/agentboot/permission"
+	"github.com/tingly-dev/tingly-box/agentboot/mitm"
 )
-
-// handlerWrapper wraps agentboot.MessageHandler to claude.MessageHandler
-type handlerWrapper struct {
-	handler agentboot.MessageHandler
-}
-
-func (w *handlerWrapper) OnMessage(msg Message) error {
-	return w.handler.OnMessage(msg)
-}
-
-func (w *handlerWrapper) OnError(err error) {
-	w.handler.OnError(err)
-}
-
-func (w *handlerWrapper) OnComplete(result *ResultCompletion) {
-	w.handler.OnComplete(&agentboot.CompletionResult{
-		Success:   result.Success,
-		SessionID: result.SessionID,
-		Error:     result.Error,
-	})
-}
 
 // Launcher handles Claude Code CLI execution
 type Launcher struct {
-	mu                sync.RWMutex
-	defaultFormat     agentboot.OutputFormat
-	cliPath           string
-	skipPerms         bool
-	config            Config
-	permissionHandler permission.Handler
-	controlManager    *ControlManager
-	discovery         *CLIDiscovery
+	mu             sync.RWMutex
+	defaultFormat  agentboot.OutputFormat
+	cliPath        string
+	skipPerms      bool
+	config         Config
+	controlManager *ControlManager
+	discovery      *CLIDiscovery
+
+	// executionContext stores the current execution context for permission requests
+	executionContext struct {
+		sessionID string
+		chatID    string
+		platform  string
+	}
 }
 
 // NewLauncher creates a new Claude launcher
 func NewLauncher(config Config) *Launcher {
 	return &Launcher{
-		defaultFormat:     agentboot.OutputFormatStreamJSON,
-		cliPath:           "claude",
-		skipPerms:         false,
-		config:            config,
-		permissionHandler: nil,
-		controlManager:    NewControlManager(),
-		discovery:         NewCLIDiscovery(),
+		defaultFormat:  agentboot.OutputFormatStreamJSON,
+		cliPath:        "claude",
+		skipPerms:      false,
+		config:         config,
+		controlManager: NewControlManager(),
+		discovery:      NewCLIDiscovery(),
 	}
 }
 
@@ -78,20 +62,6 @@ func (l *Launcher) GetDiscovery() *CLIDiscovery {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	return l.discovery
-}
-
-// SetPermissionHandler sets the permission handler
-func (l *Launcher) SetPermissionHandler(handler permission.Handler) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.permissionHandler = handler
-}
-
-// GetPermissionHandler returns the current permission handler
-func (l *Launcher) GetPermissionHandler() permission.Handler {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	return l.permissionHandler
 }
 
 // Execute runs Claude Code with the given prompt
@@ -110,9 +80,7 @@ func (l *Launcher) Execute(ctx context.Context, prompt string, opts agentboot.Ex
 	logrus.Infof("launching claude code...: %s", prompt)
 	// If handler is provided in options, use ExecuteWithHandler directly
 	if opts.Handler != nil {
-		// Wrap the agentboot.Handler to claude.MessageHandler
-		wrappedHandler := &handlerWrapper{handler: opts.Handler}
-		err := l.ExecuteWithHandler(ctx, prompt, timeout, opts, wrappedHandler)
+		err := l.ExecuteWithHandler(ctx, prompt, timeout, opts, opts.Handler)
 		// The handler should have collected the result
 		return nil, err
 	}
@@ -152,14 +120,33 @@ func (l *Launcher) ExecuteWithTimeout(
 	return result, nil
 }
 
-// ExecuteWithHandler executes Claude and streams events to a message handler
-func (l *Launcher) ExecuteWithHandler(
-	ctx context.Context,
+func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 	prompt string,
 	timeout time.Duration,
 	opts agentboot.ExecutionOptions,
-	handler MessageHandler,
+	handler agentboot.MessageHandler,
 ) error {
+
+	// Set execution context for permission requests
+	l.mu.Lock()
+	l.executionContext.sessionID = opts.SessionID
+	l.executionContext.chatID = opts.ChatID
+	l.executionContext.platform = opts.Platform
+	l.mu.Unlock()
+
+	logrus.WithFields(logrus.Fields{
+		"session_id": opts.SessionID,
+	}).Info("ExecuteWithHandler starting")
+
+	// Clear execution context when done
+	defer func() {
+		l.mu.Lock()
+		l.executionContext.sessionID = ""
+		l.executionContext.chatID = ""
+		l.executionContext.platform = ""
+		l.mu.Unlock()
+	}()
+
 	// Create context with timeout
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -188,275 +175,255 @@ func (l *Launcher) ExecuteWithHandler(
 		return err
 	}
 
+	logrus.Infof("claude code cmd: %s", strings.Join(args, " "))
+
 	// Create command
 	cmd, err := l.buildCommand(ctx, args, opts)
 	if err != nil {
 		return err
 	}
 
-	// Setup pipes
-	var stderr bytes.Buffer
-	var stdin io.WriteCloser
-
-	// Create stdout pipe for real-time reading
-	stdoutReader, stdoutWriter, err := os.Pipe()
-	if err != nil {
-		return fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-	defer stdoutReader.Close()
-	// Note: stdoutWriter is closed by goroutine after cmd.Wait() completes
-
-	cmd.Stdout = stdoutWriter
-	cmd.Stderr = &stderr
-
-	if format == agentboot.OutputFormatStreamJSON && l.permissionHandler != nil {
-		stdin, err = cmd.StdinPipe()
-		if err != nil {
-			return fmt.Errorf("failed to create stdin pipe: %w", err)
-		}
-	}
-
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		if stdin != nil {
-			stdin.Close()
-		}
-		return fmt.Errorf("failed to start command: %w", err)
-	}
-
-	if stdin != nil {
-		go l.handleControlMessages(ctx, stdin, &stderr)
-		stdin.Close()
-	}
-
-	// Start parser in background
-	parser := events.NewParser()
 	accumulator := NewMessageAccumulator()
-	go parser.Parse(stdoutReader)
 
-	// Main event loop: process events until completion or context cancelled
-	for {
-		select {
-		case <-ctx.Done():
-			// Context cancelled: kill command and cleanup
-			_ = cmd.Process.Kill()
-			_ = stdoutWriter.Close() // Signal EOF to parser
-			// Drain parser events until channel closes
-			for range parser.Events() {
-			}
-			// Wait for command to complete and check error
+	// Build stream prompt with the user message
+	// The server automatically wraps the user input in the correct stream-json format
+	builder := NewStreamPromptBuilder()
+	builder.AddUserMessage(prompt)
+	inputPrompt := builder.Close()
+
+	runner := mitm.New(
+		cmd,
+		nil,
+		nil,
+	)
+
+	runner.Codec = mitm.CodecJSON
+
+	inputSource := mitm.NewChanSource(100)
+
+	go func() {
+		for m := range inputPrompt {
+			inputSource.Write(m)
+		}
+	}()
+
+	runner.InputSource = inputSource
+
+	outputHandler := func(ctx context.Context, c *mitm.IOContext) (*mitm.OutputResult, error) {
+		// Try to parse as JSON
+		var data map[string]interface{}
+		var ok = false
+		if data, ok = c.Msg.(map[string]any); !ok {
+
+			// Parser finished (EOF reached)
+			// Now wait for command to complete
 			if err := cmd.Wait(); err != nil {
-				return l.handleExecutionError(err, stderr.String(), handler)
+				return nil, l.handleExecutionError(err, "runtime error", handler)
 			}
-			return ctx.Err()
 
-		case event, ok := <-parser.Events():
-			if !ok {
-				// Parser finished (EOF reached)
-				// Now wait for command to complete
-				if err := cmd.Wait(); err != nil {
-					return l.handleExecutionError(err, stderr.String(), handler)
+			return nil, fmt.Errorf("invalid event data")
+		}
+
+		// Create event from parsed data
+		event := events.NewEventFromRaw("", data)
+
+		logrus.Debugf("[Event] %s", event)
+
+		messages, hasResult, resultSuccess := accumulator.AddEvent(event)
+
+		for _, msg := range messages {
+			logrus.WithFields(logrus.Fields{
+				"event_type": event.Type,
+			}).Debug("handleControlMessages received event")
+
+			switch {
+			// Check if this is a control request event (e.g., "control_request")
+			case strings.HasPrefix(event.Type, EventTypeControl):
+
+				// Fall back to legacy handling
+				if controlData, ok := event.Data["request"].(map[string]interface{}); ok {
+					subtype, _ := controlData["subtype"].(string)
+					requestID := getString(event.Data, "request_id")
+
+					switch subtype {
+					case "can_use_tool":
+						toolName, _ := controlData["tool_name"].(string)
+
+						// Check if this is an AskUserQuestion tool
+						if toolName == "AskUserQuestion" {
+							req := l.parseAskRequestFromControl(controlData)
+							req.ID = requestID
+
+							logrus.WithFields(logrus.Fields{
+								"platform":   req.Platform,
+								"chat_id":    req.ChatID,
+								"session_id": req.SessionID,
+								"request_id": req.ID,
+								"tool_name":  req.ToolName,
+							}).Info("Processing AskUserQuestion control request")
+
+							// Get ask response
+							if handler != nil {
+								result, err := handler.OnAsk(ctx, req)
+								if err != nil {
+									logrus.Errorf("Ask handler error: %v", err)
+									result = agentboot.AskResult{ID: requestID, Approved: false}
+								}
+
+								// Send control response via stdin
+								input := l.sendAskResponseNew(requestID, result)
+								inputSource.Write(input)
+							} else {
+								logrus.Warn("Ask handler is nil, cannot process ask request")
+							}
+						} else {
+							// Regular permission request
+							req := l.parsePermissionRequest(controlData)
+							req.RequestID = requestID
+
+							logrus.WithFields(logrus.Fields{
+								"tool_name":  req.ToolName,
+								"session_id": req.SessionID,
+								"request_id": req.RequestID,
+							}).Info("Processing can_use_tool control request")
+
+							// Get permission decision
+							if handler != nil {
+								result, err := handler.OnApproval(ctx, req)
+								if err != nil {
+									logrus.Errorf("Permission handler error: %v", err)
+									result = agentboot.PermissionResult{Approved: false}
+								}
+
+								// Send control response via stdin
+								input := l.sendPermissionResponseNew(requestID, result)
+								inputSource.Write(input)
+							} else {
+								logrus.Warn("Permission handler is nil, cannot process permission request")
+							}
+						}
+
+					default:
+						logrus.Warnf("Unsupported control request subtype: %s", subtype)
+
+					}
 				}
-				return nil
-			}
+			case event.Type == EventTypeAssistant && opts.PermissionPromptTool == "":
+				requestID := getString(event.Data, "request_id")
 
-			messages, hasResult, resultSuccess := accumulator.AddEvent(event)
+				if assistant, ok := msg.(*AssistantMessage); ok {
+					fmt.Printf("%s", assistant)
+					for _, c := range assistant.Message.Content {
+						if c.Name == "AskUserQuestion" {
+							req := l.parseAskRequest(c)
+							req.ID = requestID
 
-			for _, msg := range messages {
+							logrus.WithFields(logrus.Fields{
+								"platform":   req.Platform,
+								"chat_id":    req.ChatID,
+								"session_id": req.SessionID,
+								"request_id": req.ID,
+								"tool_name":  req.ToolName,
+							}).Info("Processing ask_user control request")
+
+							// Get ask response
+							if handler != nil {
+								result, err := handler.OnAsk(ctx, req)
+								if err != nil {
+									logrus.Errorf("Ask handler error: %v", err)
+									result = agentboot.AskResult{ID: requestID, Approved: false}
+								}
+
+								// Send control response via stdin
+								input := l.sendAskResponseNew(requestID, result)
+								inputSource.Write(input)
+							} else {
+								logrus.Warn("Ask handler is nil, cannot process ask request")
+							}
+						}
+					}
+
+				}
+
+			default:
 				if hErr := handler.OnMessage(msg); hErr != nil {
 					handler.OnError(hErr)
 				}
 			}
-
-			if hasResult {
-				handler.OnComplete(&ResultCompletion{
-					Success: resultSuccess,
-				})
-				// Got final result, terminate command early
-				_ = cmd.Process.Kill()
-				_ = stdoutWriter.Close()
-				_ = cmd.Wait() // Ignore error since we're terminating
-				return nil
-			}
 		}
-	}
-}
 
-// ExecuteStream executes Claude and returns a stream handler
-func (l *Launcher) ExecuteStream(
-	ctx context.Context,
-	prompt string,
-	timeout time.Duration,
-	opts agentboot.ExecutionOptions,
-) (*StreamHandler, error) {
-	// Create context with timeout
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		_ = cancel // Will be done when stream handler closes
-	}
-
-	if !l.IsAvailable() {
-		return nil, exec.ErrNotFound
-	}
-
-	// Determine output format
-	format := opts.OutputFormat
-	if format == "" {
-		l.mu.RLock()
-		format = l.defaultFormat
-		l.mu.RUnlock()
-	}
-	if format == "" {
-		format = agentboot.OutputFormatStreamJSON
-	}
-
-	// Build command args
-	args, err := l.buildCommandArgs(format, prompt, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create command
-	cmd, err := l.buildCommand(ctx, args, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create stream handler
-	streamHandler := NewStreamHandler(100)
-
-	// Setup pipes
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	var stdin io.WriteCloser
-	if format == agentboot.OutputFormatStreamJSON && l.permissionHandler != nil {
-		stdin, err = cmd.StdinPipe()
-		if err != nil {
-			return nil, fmt.Errorf("failed to create stdin pipe: %w", err)
+		if hasResult {
+			handler.OnComplete(&agentboot.CompletionResult{
+				Success: resultSuccess,
+			})
+			// Got final result, terminate command early
+			_ = cmd.Process.Kill()
 		}
+
+		return &mitm.OutputResult{Action: mitm.Pass}, nil
 	}
 
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		if stdin != nil {
-			stdin.Close()
-		}
-		return nil, fmt.Errorf("failed to start command: %w", err)
-	}
+	runner.OutputHandler = outputHandler
 
-	if stdin != nil {
-		go l.handleControlMessages(ctx, stdin, &stderr)
-		_ = stdin.Close()
-	}
-
-	// Create a pipe for real-time output streaming
-	stdoutReader, stdoutWriter, err := os.Pipe()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-	cmd.Stdout = stdoutWriter
-
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		stdoutReader.Close()
-		stdoutWriter.Close()
-		if stdin != nil {
-			stdin.Close()
-		}
-		return nil, fmt.Errorf("failed to start command: %w", err)
-	}
-
-	// Start parsing in background - read from pipe in real-time
-	go l.streamOutput(cmd, events.NewParser(), stdoutReader, streamHandler)
-
-	// Close writer after command starts (reader will get EOF)
-	go func() {
-		cmd.Wait()
-		stdoutWriter.Close()
-	}()
-
-	return streamHandler, nil
+	return runner.Run(ctx)
 }
 
 // buildCommandArgs constructs CLI arguments based on format, prompt, and config options
 func (l *Launcher) buildCommandArgs(format agentboot.OutputFormat, prompt string, opts agentboot.ExecutionOptions) ([]string, error) {
-	var args []string
-
 	// Get config options
 	l.mu.RLock()
 	config := l.config
+	skipPerms := l.skipPerms
 	l.mu.RUnlock()
 
-	// Model selection
-	if config.Model != "" {
-		args = append(args, "--model", config.Model)
+	// Convert ExecutionOptions to CommonOptions
+	commonOpts := CommonOptions{
+		Model:                opts.Model,
+		FallbackModel:        opts.FallbackModel,
+		MaxTurns:             opts.MaxTurns,
+		CustomSystemPrompt:   opts.CustomSystemPrompt,
+		AppendSystemPrompt:   opts.AppendSystemPrompt,
+		AllowedTools:         opts.AllowedTools,
+		DisallowedTools:      opts.DisallowedTools,
+		MCPServers:           opts.MCPServers,
+		StrictMcpConfig:      opts.StrictMcpConfig,
+		PermissionMode:       opts.PermissionMode,
+		SettingsPath:         opts.SettingsPath,
+		PermissionPromptTool: opts.PermissionPromptTool,
 	}
 
-	// Resume / Continue handling
-	sessionID := opts.SessionID
-	if sessionID == "" && config.ResumeSessionID != "" {
-		sessionID = config.ResumeSessionID
+	// Auto-enable permission-prompt-tool if handler is set and using stream-json format
+	if format == agentboot.OutputFormatStreamJSON && commonOpts.PermissionPromptTool == "" {
+		commonOpts.PermissionPromptTool = "stdio"
 	}
 
-	if sessionID != "" && (opts.Resume || config.ContinueConversation) {
-		args = append(args, "--resume", sessionID)
-	} else if sessionID != "" {
-		// Use --session-id for new sessions with specific ID
-		args = append(args, "--session-id", sessionID)
-	} else if config.ContinueConversation {
-		args = append(args, "--continue")
-	}
-
-	// System prompt options
-	if config.CustomSystemPrompt != "" {
-		args = append(args, "--custom-system-prompt", config.CustomSystemPrompt)
-	}
-	if config.AppendSystemPrompt != "" {
-		args = append(args, "--append-system-prompt", config.AppendSystemPrompt)
-	}
-
-	// Tool filtering
-	if len(config.AllowedTools) > 0 {
-		args = append(args, "--allowed-tools", strings.Join(config.AllowedTools, ","))
-	}
-	if len(config.DisallowedTools) > 0 {
-		args = append(args, "--disallowed-tools", strings.Join(config.DisallowedTools, ","))
-	}
-
-	// Settings path
-	if config.SettingsPath != "" {
-		args = append(args, "--settings", config.SettingsPath)
-	}
-
-	// Permission mode
-	if config.PermissionMode != "" {
-		switch config.PermissionMode {
-		case PermissionModeAuto:
-			args = append(args, "--permission-mode", "auto")
-		case PermissionModeManual:
-			args = append(args, "--permission-mode", "manual")
-		case PermissionModeOnce:
-			args = append(args, "--permission-mode", "once")
+	// Handle session/resume with opts.SessionID taking precedence
+	if opts.SessionID != "" {
+		if opts.Resume || config.ContinueConversation {
+			commonOpts.Resume = opts.SessionID
 		}
+		// Note: If not resuming, session-id is handled separately below
+	} else if config.ResumeSessionID != "" {
+		commonOpts.Resume = config.ResumeSessionID
 	}
 
-	// MCP server configuration (if any)
-	if len(config.MCPServers) > 0 {
-		mcpArgs, err := l.buildMCPArgs(config.MCPServers)
-		if err != nil {
-			return nil, fmt.Errorf("build MCP args: %w", err)
-		}
-		args = append(args, mcpArgs...)
+	// Use shared argument builder for common options
+	args := BuildCommonArgs(config, commonOpts)
+
+	// Handle --session-id for new sessions with specific ID (not resume)
+	if opts.SessionID != "" && !opts.Resume && !config.ContinueConversation {
+		args = append(args, "--session-id", opts.SessionID)
 	}
 
+	// Format-specific arguments
 	switch format {
 	case agentboot.OutputFormatStreamJSON:
 		args = append(args, "--output-format", "stream-json", "--verbose")
-		if prompt != "" {
+		if prompt != "" && commonOpts.PermissionPromptTool == "" {
 			args = append(args, "--print", prompt)
+		} else {
+			args = append(args, "--print", "")
+			args = append(args, "--input-format", "stream-json")
 		}
 	case agentboot.OutputFormatText:
 		args = append(args, "--print", "--output-format", "text")
@@ -466,10 +433,6 @@ func (l *Launcher) buildCommandArgs(format agentboot.OutputFormat, prompt string
 	default:
 		return nil, fmt.Errorf("invalid output format: %s", format)
 	}
-
-	l.mu.RLock()
-	skipPerms := l.skipPerms
-	l.mu.RUnlock()
 
 	// Skip permissions takes precedence over permission mode
 	if skipPerms && !isRoot() {
@@ -548,22 +511,9 @@ func (l *Launcher) buildCommand(ctx context.Context, args []string, opts agentbo
 	return cmd, nil
 }
 
-// streamOutput parses output and sends to stream handler
-func (l *Launcher) streamOutput(cmd *exec.Cmd, p *events.Parser, stdout io.Reader, handler *StreamHandler) {
-	defer handler.Close()
-
-	// Parse stdout in real-time
-	if err := p.Parse(stdout); err != nil {
-		handler.errorChan <- err
-		return
-	}
-
-	// Wait for command to complete
-	cmd.Wait()
-}
 
 // handleExecutionError processes execution errors
-func (l *Launcher) handleExecutionError(err error, stderr string, handler MessageHandler) error {
+func (l *Launcher) handleExecutionError(err error, stderr string, handler agentboot.MessageHandler) error {
 	var errMsg string
 
 	// Check for timeout error
@@ -578,7 +528,7 @@ func (l *Launcher) handleExecutionError(err error, stderr string, handler Messag
 		errMsg = err.Error()
 	}
 
-	handler.OnComplete(&ResultCompletion{
+	handler.OnComplete(&agentboot.CompletionResult{
 		Success: false,
 		Error:   errMsg,
 	})
@@ -653,70 +603,195 @@ func (l *Launcher) SetCLIPath(path string) {
 	}
 }
 
-// handleControlMessages handles incoming control messages from stderr
-func (l *Launcher) handleControlMessages(ctx context.Context, stdin io.WriteCloser, stderr io.Reader) {
-	parser := events.NewParser()
-	controlMgr := l.GetControlManager()
+// parseAskRequest parses an ask request from control data
+// Note: data is already the "request" object from the control message, not the full event.Data
+func (l *Launcher) parseAskRequest(content anthropic.ContentBlockUnion) agentboot.AskRequest {
 
-	// Parse stderr for control messages
-	go func() {
-		_ = parser.Parse(stderr)
-	}()
+	// Inject chat context from execution context
+	l.mu.RLock()
+	sessionID := l.executionContext.sessionID
+	chatID := l.executionContext.chatID
+	platform := l.executionContext.platform
+	l.mu.RUnlock()
 
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case event, ok := <-parser.Events():
-			if !ok {
-				return
-			}
+	input := map[string]any{}
+	json.Unmarshal(content.Input, &input)
 
-			// Check if this is a control request event (e.g., "control_request")
-			if strings.HasPrefix(event.Type, EventTypeControl) {
-				// Try to handle via control manager first
-				if err := controlMgr.HandleControlMessage(event.Data); err == nil {
-					// Control manager handled it
-					continue
-				}
+	return agentboot.AskRequest{
+		Type:      content.Type,
+		AgentType: agentboot.AgentTypeClaude,
 
-				// Fall back to legacy handling
-				if controlData, ok := event.Data["request"].(map[string]interface{}); ok {
-					if subtype, _ := controlData["subtype"].(string); subtype == "can_use_tool" {
-						req := l.parsePermissionRequest(controlData)
+		Platform:  platform,
+		ChatID:    chatID,
+		SessionID: sessionID,
 
-						// Get permission decision
-						l.mu.RLock()
-						handler := l.permissionHandler
-						l.mu.RUnlock()
-
-						if handler != nil {
-							result, err := handler.CanUseTool(ctx, req)
-							if err != nil {
-								logrus.Errorf("Permission handler error: %v", err)
-								result = agentboot.PermissionResult{Approved: false}
-							}
-
-							// Send control response via stdin
-							_ = l.sendPermissionResponse(stdin, req.RequestID, result)
-						}
-					}
-				}
-			}
-		}
+		ToolName: content.Name,
+		Input:    input,
+		Message:  content.Text,
+		CallID:   content.ID,
 	}
 }
 
-// parsePermissionRequest parses a permission request from control data
-func (l *Launcher) parsePermissionRequest(data map[string]interface{}) agentboot.PermissionRequest {
-	requestData, _ := data["request"].(map[string]interface{})
+// parseAskRequestFromControl parses an ask request from control_request event data
+func (l *Launcher) parseAskRequestFromControl(controlData map[string]interface{}) agentboot.AskRequest {
+	// Inject chat context from execution context
+	l.mu.RLock()
+	sessionID := l.executionContext.sessionID
+	chatID := l.executionContext.chatID
+	platform := l.executionContext.platform
+	l.mu.RUnlock()
 
-	return agentboot.PermissionRequest{
-		RequestID: getString(data, "request_id"),
-		ToolName:  getString(requestData, "tool_name"),
-		Input:     getMap(requestData, "input"),
-		Timestamp: time.Now(),
+	toolName, _ := controlData["tool_name"].(string)
+	toolUseID, _ := controlData["tool_use_id"].(string)
+	input, _ := controlData["input"].(map[string]interface{})
+
+	return agentboot.AskRequest{
+		Type:      "tool_use",
+		AgentType: agentboot.AgentTypeClaude,
+
+		Platform:  platform,
+		ChatID:    chatID,
+		SessionID: sessionID,
+
+		ToolName: toolName,
+		Input:    input,
+		CallID:   toolUseID,
 	}
+}
+
+// sendAskResponse sends an ask response to Claude Code
+func (l *Launcher) sendAskResponse(stdin io.WriteCloser, requestID string, result agentboot.AskResult) error {
+	response := map[string]interface{}{
+		"request_id": requestID,
+		"type":       "control_response",
+	}
+
+	innerResponse := map[string]interface{}{
+		"request_id": requestID,
+	}
+
+	if result.Approved {
+		innerResponse["subtype"] = "success"
+		if result.UpdatedInput != nil {
+			innerResponse["response"] = map[string]interface{}{
+				"behavior":     "allow",
+				"updatedInput": result.UpdatedInput,
+			}
+		} else {
+			innerResponse["response"] = map[string]interface{}{
+				"behavior": "allow",
+			}
+		}
+	} else {
+		innerResponse["subtype"] = "error"
+		innerResponse["error"] = result.Reason
+		if result.Reason == "" {
+			innerResponse["error"] = "User denied this request"
+		}
+	}
+
+	response["response"] = innerResponse
+
+	data, _ := json.Marshal(response)
+	_, err := stdin.Write(append(data, '\n'))
+	return err
+}
+
+// sendAskResponse sends an ask response to Claude Code
+func (l *Launcher) sendAskResponseNew(requestID string, result agentboot.AskResult) map[string]any {
+	response := map[string]interface{}{
+		"request_id": requestID,
+		"type":       "control_response",
+	}
+
+	innerResponse := map[string]interface{}{
+		"request_id": requestID,
+	}
+
+	if result.Approved {
+		innerResponse["subtype"] = "success"
+		if result.UpdatedInput != nil {
+			innerResponse["response"] = map[string]interface{}{
+				"behavior":     "allow",
+				"updatedInput": result.UpdatedInput,
+			}
+		} else {
+			innerResponse["response"] = map[string]interface{}{
+				"behavior": "allow",
+			}
+		}
+	} else {
+		innerResponse["subtype"] = "error"
+		innerResponse["error"] = result.Reason
+		if result.Reason == "" {
+			innerResponse["error"] = "User denied this request"
+		}
+	}
+
+	response["response"] = innerResponse
+
+	return response
+}
+
+// parsePermissionRequest parses a permission request from control data
+// Note: data is already the "request" object from the control message, not the full event.Data
+func (l *Launcher) parsePermissionRequest(data map[string]interface{}) agentboot.PermissionRequest {
+	// data is already the request object, use it directly
+	requestData := data
+
+	// Get input map
+	input := getMap(requestData, "input")
+	if input == nil {
+		input = make(map[string]interface{})
+	}
+
+	// Inject chat context from execution context
+	l.mu.RLock()
+	sessionID := l.executionContext.sessionID
+	chatID := l.executionContext.chatID
+	platform := l.executionContext.platform
+	l.mu.RUnlock()
+
+	if chatID != "" {
+		input["_chat_id"] = chatID
+	}
+	if platform != "" {
+		input["_platform"] = platform
+	}
+
+	// RequestID needs to be extracted from the parent event.Data, not from the request object
+	// This is passed separately via the control data flow
+	return agentboot.PermissionRequest{
+		RequestID: getString(data, "request_id"), // This may be empty, needs to be set from caller
+		AgentType: agentboot.AgentTypeClaude,
+		ToolName:  getString(requestData, "tool_name"),
+		Input:     input,
+		Timestamp: time.Now(),
+		SessionID: sessionID,
+	}
+}
+
+// sendPermissionResponse sends a permission response to Claude Code
+func (l *Launcher) sendPermissionResponseNew(requestID string, result agentboot.PermissionResult) map[string]any {
+	response := map[string]interface{}{
+		"request_id": requestID,
+		"type":       "control_response",
+	}
+
+	if result.Approved {
+		response["response"] = map[string]interface{}{
+			"subtype":    "success",
+			"request_id": requestID,
+		}
+	} else {
+		response["response"] = map[string]interface{}{
+			"subtype":    "error",
+			"request_id": requestID,
+			"error":      result.Reason,
+		}
+	}
+
+	return response
 }
 
 // sendPermissionResponse sends a permission response to Claude Code

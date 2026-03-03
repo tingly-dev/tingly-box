@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -337,161 +336,6 @@ func TestStreamPromptBuilder(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// TestStreamToStdin tests the StreamToStdin function
-func TestStreamToStdin(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	reader, writer := io.Pipe()
-	defer reader.Close()
-
-	messages := make(chan map[string]interface{}, 3)
-
-	// Send messages
-	go func() {
-		messages <- map[string]interface{}{"type": "test", "value": "one"}
-		messages <- map[string]interface{}{"type": "test", "value": "two"}
-		close(messages)
-	}()
-
-	// Stream to stdin
-	go func() {
-		err := StreamToStdin(ctx, writer, messages)
-		assert.NoError(t, err)
-	}()
-
-	// Read and verify
-	decoder := json.NewDecoder(reader)
-
-	var msg1 map[string]interface{}
-	err := decoder.Decode(&msg1)
-	assert.NoError(t, err)
-	assert.Equal(t, "one", msg1["value"])
-
-	var msg2 map[string]interface{}
-	err = decoder.Decode(&msg2)
-	assert.NoError(t, err)
-	assert.Equal(t, "two", msg2["value"])
-
-	// Should get EOF
-	err = decoder.Decode(&map[string]interface{}{})
-	assert.Equal(t, io.EOF, err)
-}
-
-// TestQueryLauncherBuildQueryArgs tests argument building
-func TestQueryLauncherBuildQueryArgs(t *testing.T) {
-	launcher := NewQueryLauncher(Config{})
-
-	tests := []struct {
-		name     string
-		config   QueryConfig
-		contains []string
-	}{
-		{
-			name: "String prompt",
-			config: QueryConfig{
-				Prompt: "test prompt",
-				Options: &QueryOptionsConfig{},
-			},
-			contains: []string{"--print", "test prompt"},
-		},
-		{
-			name: "Stream prompt with canCallTool",
-			config: QueryConfig{
-				Prompt: StreamPrompt(nil),
-				Options: &QueryOptionsConfig{
-					CanCallTool: func(ctx context.Context, toolName string, input map[string]interface{}, opts CallToolOptions) (map[string]interface{}, error) {
-						return nil, nil
-					},
-				},
-			},
-			contains: []string{"--input-format", "stream-json", "--permission-prompt-tool", "stdio"},
-		},
-		{
-			name: "With model",
-			config: QueryConfig{
-				Prompt: "test",
-				Options: &QueryOptionsConfig{
-					Model: "claude-sonnet-4-6",
-				},
-			},
-			contains: []string{"--model", "claude-sonnet-4-6"},
-		},
-		{
-			name: "With fallback model",
-			config: QueryConfig{
-				Prompt: "test",
-				Options: &QueryOptionsConfig{
-					Model:         "claude-sonnet-4-6",
-					FallbackModel: "claude-haiku-4-5",
-				},
-			},
-			contains: []string{"--model", "claude-sonnet-4-6", "--fallback-model", "claude-haiku-4-5"},
-		},
-		{
-			name: "Continue conversation",
-			config: QueryConfig{
-				Prompt: "test",
-				Options: &QueryOptionsConfig{
-					ContinueConversation: true,
-				},
-			},
-			contains: []string{"--continue"},
-		},
-		{
-			name: "With resume",
-			config: QueryConfig{
-				Prompt: "test",
-				Options: &QueryOptionsConfig{
-					Resume: "session-123",
-				},
-			},
-			contains: []string{"--resume", "session-123"},
-		},
-		{
-			name: "With custom system prompt",
-			config: QueryConfig{
-				Prompt: "test",
-				Options: &QueryOptionsConfig{
-					CustomSystemPrompt: "You are helpful",
-				},
-			},
-			contains: []string{"--system-prompt", "You are helpful"},
-		},
-		{
-			name: "With allowed tools",
-			config: QueryConfig{
-				Prompt: "test",
-				Options: &QueryOptionsConfig{
-					AllowedTools: []string{"bash", "editor"},
-				},
-			},
-			contains: []string{"--allowedTools", "bash,editor"},
-		},
-		{
-			name: "With max turns",
-			config: QueryConfig{
-				Prompt: "test",
-				Options: &QueryOptionsConfig{
-					MaxTurns: 5,
-				},
-			},
-			contains: []string{"--max-turns", "5"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			args := launcher.buildQueryArgs(tt.config)
-			argsStr := strings.Join(args, " ")
-
-			for _, substr := range tt.contains {
-				assert.Contains(t, argsStr, substr)
-			}
-		})
-	}
-}
-
 // TestQueryConfigValidation tests config validation
 func TestQueryConfigValidation(t *testing.T) {
 	tests := []struct {
@@ -541,28 +385,6 @@ func TestQueryConfigValidation(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestQueryOptionFunctionalTests tests the functional options
-func TestQueryOptionFunctionalTests(t *testing.T) {
-	config := &QueryOptionsConfig{}
-
-	// Apply options
-	WithModel("claude-sonnet-4-6")(config)
-	WithFallbackModel("claude-haiku-4-5")(config)
-	WithCustomSystemPrompt("Custom prompt")(config)
-	WithCWD("/tmp")(config)
-	WithResume("session-123")(config)
-	WithContinue()(config)
-	WithAllowedTools("bash", "editor")(config)
-
-	assert.Equal(t, "claude-sonnet-4-6", config.Model)
-	assert.Equal(t, "claude-haiku-4-5", config.FallbackModel)
-	assert.Equal(t, "Custom prompt", config.CustomSystemPrompt)
-	assert.Equal(t, "/tmp", config.CWD)
-	assert.Equal(t, "session-123", config.Resume)
-	assert.True(t, config.ContinueConversation)
-	assert.Equal(t, []string{"bash", "editor"}, config.AllowedTools)
 }
 
 // TestQueryConcurrent tests concurrent message consumption

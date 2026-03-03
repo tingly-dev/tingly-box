@@ -430,7 +430,7 @@ func InvalidateDiscoveryCache() {
 }
 
 // StreamToStdin streams messages to the stdin of a running process
-func StreamToStdin(ctx context.Context, stdin io.WriteCloser, messages <-chan map[string]interface{}) error {
+func StreamToStdin(ctx context.Context, stdin io.WriteCloser, messages <-chan any) error {
 	logrus.Debugln("[StreamToStdin] Starting to stream messages to stdin")
 
 	// Use buffered writer for efficient I/O and ensure data is flushed
