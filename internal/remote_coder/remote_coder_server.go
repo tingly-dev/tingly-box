@@ -9,7 +9,6 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
-	"github.com/tingly-dev/tingly-box/agentboot/permission"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/bot"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/config"
@@ -45,23 +44,22 @@ func Run(ctx context.Context, cfg *config.Config, imbotStore *db.ImBotSettingsSt
 	agentBootConfig.DefaultExecutionTimeout = 30 * time.Minute
 	agentBoot := agentboot.New(agentBootConfig)
 
-	// Create permission handler with default config
-	permHandler := permission.NewDefaultHandler(agentboot.DefaultPermissionConfig())
+	// Create permission handler with manual mode for interactive bot use
+	permConfig := agentboot.DefaultPermissionConfig()
+	permConfig.DefaultMode = agentboot.PermissionModeManual // Use manual mode for bot interactive prompts
 
 	// Create and register Claude agent
 	claudeAgent := claude.NewAgent(agentBootConfig)
-	claudeAgent.SetPermissionHandler(permHandler)
 	agentBoot.RegisterAgent(agentboot.AgentTypeClaude, claudeAgent)
 
 	// Store global instances for bot platform integration
 	globalAgentBoot = agentBoot
-	globalPermissionHandler = permHandler
 
 	// Create bot manager for runtime lifecycle control
 	// Use ImBotSettingsStore if provided (from main service), otherwise use local store
 	var botManager *bot.Manager
 	if imbotStore != nil {
-		botManager = bot.NewManager(imbotStore, sessionMgr, agentBoot, permHandler)
+		botManager = bot.NewManager(imbotStore, sessionMgr, agentBoot)
 		botManager.SetDBPath(cfg.DBPath) // Set db path for chat store
 		logrus.Info("Using ImBot settings store from main service")
 	} else {
@@ -72,7 +70,7 @@ func Run(ctx context.Context, cfg *config.Config, imbotStore *db.ImBotSettingsSt
 		defer func() {
 			_ = botStore.Close()
 		}()
-		botManager = bot.NewManager(botStore, sessionMgr, agentBoot, permHandler)
+		botManager = bot.NewManager(botStore, sessionMgr, agentBoot)
 		logrus.Info("Using local bot store")
 	}
 
@@ -219,11 +217,6 @@ func GetAgentBoot() *agentboot.AgentBoot {
 	return globalAgentBoot
 }
 
-// GetPermissionHandler returns the permission handler (for bot platform integration)
-func GetPermissionHandler() permission.Handler {
-	return globalPermissionHandler
-}
-
 // GetBotManager returns the bot manager instance (for API integration)
 func GetBotManager() bot.BotLifecycle {
 	return globalBotManager
@@ -232,6 +225,5 @@ func GetBotManager() bot.BotLifecycle {
 // Global instances for bot platform integration
 var (
 	globalAgentBoot         *agentboot.AgentBoot
-	globalPermissionHandler permission.Handler
 	globalBotManager        bot.BotLifecycle
 )

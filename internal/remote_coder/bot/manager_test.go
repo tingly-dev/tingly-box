@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/agentboot/permission"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
 )
 
@@ -31,7 +30,7 @@ func TestManagerStartStop(t *testing.T) {
 
 	// Create agentBoot and permission handler for test
 	agentBoot := agentboot.New(agentboot.Config{})
-	permHandler := permission.NewDefaultHandler(agentboot.PermissionConfig{})
+	permHandler := agentboot.NewDefaultHandler(ask.PermissionConfig{})
 
 	// Create manager
 	manager := NewManager(store, sessionMgr, agentBoot, permHandler)
@@ -81,7 +80,7 @@ func TestManagerStartEnabledBots(t *testing.T) {
 
 	// Create agentBoot and permission handler for test
 	agentBoot := agentboot.New(agentboot.Config{})
-	permHandler := permission.NewDefaultHandler(agentboot.PermissionConfig{})
+	permHandler := agentboot.NewDefaultHandler(agentboot.PermissionConfig{})
 
 	// Create manager
 	manager := NewManager(store, sessionMgr, agentBoot, permHandler)
@@ -120,7 +119,7 @@ func TestManagerStopAll(t *testing.T) {
 
 	// Create agentBoot and permission handler for test
 	agentBoot := agentboot.New(agentboot.Config{})
-	permHandler := permission.NewDefaultHandler(agentboot.PermissionConfig{})
+	permHandler := agentboot.NewDefaultHandler(agentboot.PermissionConfig{})
 
 	manager := NewManager(store, sessionMgr, agentBoot, permHandler)
 
