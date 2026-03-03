@@ -23,6 +23,7 @@ type UsageRecord struct {
 	Model        string    `gorm:"column:model;index:idx_provider_model;not null"`
 	Scenario     string    `gorm:"column:scenario;index:idx_scenario;not null"`
 	RuleUUID     string    `gorm:"column:rule_uuid;index:idx_rule"`
+	UserID       string    `gorm:"column:user_id;index:idx_user;not null;default:''"`
 	RequestModel string    `gorm:"column:request_model"`
 	Timestamp    time.Time `gorm:"column:timestamp;index:idx_timestamp;index:idx_timestamp_scenario;not null"`
 	InputTokens  int       `gorm:"column:input_tokens;not null"`
@@ -78,6 +79,22 @@ func (UsageMonthlyRecord) TableName() string {
 	return "usage_monthly"
 }
 
+// OTelTokenDelta stores token totals exported from OTel as incremental deltas.
+type OTelTokenDelta struct {
+	ID           uint      `gorm:"primaryKey;autoIncrement;column:id"`
+	Timestamp    time.Time `gorm:"column:timestamp;index:idx_otel_ts;not null"`
+	ProviderUUID string    `gorm:"column:provider_uuid;index:idx_otel_dims"`
+	ProviderName string    `gorm:"column:provider_name"`
+	Scenario     string    `gorm:"column:scenario;index:idx_otel_dims"`
+	Status       string    `gorm:"column:status;index:idx_otel_dims"`
+	UserTier     string    `gorm:"column:user_tier;index:idx_otel_dims"`
+	DeltaTokens  int64     `gorm:"column:delta_tokens;not null"`
+}
+
+func (OTelTokenDelta) TableName() string {
+	return "otel_token_deltas"
+}
+
 // UsageStore persists usage records in SQLite using GORM.
 type UsageStore struct {
 	db     *gorm.DB
@@ -109,12 +126,58 @@ func NewUsageStore(baseDir string) (*UsageStore, error) {
 	}
 
 	// Auto-migrate schema for all usage-related tables
-	if err := db.AutoMigrate(&UsageRecord{}, &UsageDailyRecord{}, &UsageMonthlyRecord{}); err != nil {
+	if err := db.AutoMigrate(&UsageRecord{}, &UsageDailyRecord{}, &UsageMonthlyRecord{}, &OTelTokenDelta{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate usage database: %w", err)
+	}
+	if err := ensureUsageRecordSchema(db); err != nil {
+		return nil, fmt.Errorf("failed to align usage schema: %w", err)
 	}
 	logrus.Debugf("Usage store initialization completed")
 
 	return store, nil
+}
+
+func (us *UsageStore) RecordOTelTokenDelta(delta *OTelTokenDelta) error {
+	if delta == nil {
+		return errors.New("delta cannot be nil")
+	}
+	if delta.Timestamp.IsZero() {
+		delta.Timestamp = time.Now()
+	}
+	us.mu.Lock()
+	defer us.mu.Unlock()
+	return us.db.Create(delta).Error
+}
+
+func (us *UsageStore) SumOTelTokenDeltas(startTime, endTime time.Time, filters map[string]string) (int64, error) {
+	us.mu.Lock()
+	defer us.mu.Unlock()
+
+	query := us.db.Model(&OTelTokenDelta{})
+	if !startTime.IsZero() {
+		query = query.Where("timestamp >= ?", startTime)
+	}
+	if !endTime.IsZero() {
+		query = query.Where("timestamp <= ?", endTime)
+	}
+	for key, value := range filters {
+		query = query.Where(key+" = ?", value)
+	}
+	var total int64
+	if err := query.Select("COALESCE(SUM(delta_tokens), 0)").Scan(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func ensureUsageRecordSchema(db *gorm.DB) error {
+	// Dev-stage breaking cleanup: remove deprecated department_id dimension.
+	if db.Migrator().HasColumn(&UsageRecord{}, "department_id") {
+		if err := db.Migrator().DropColumn(&UsageRecord{}, "department_id"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // RecordUsage records a single usage event
@@ -139,13 +202,14 @@ func (us *UsageStore) RecordUsage(record *UsageRecord) error {
 
 // GetAggregatedStats returns aggregated usage statistics based on query parameters
 type UsageStatsQuery struct {
-	GroupBy   string // model, provider, scenario, rule, daily, hourly
+	GroupBy   string // model, provider, scenario, rule, user, daily, hourly
 	StartTime time.Time
 	EndTime   time.Time
 	Provider  string
 	Model     string
 	Scenario  string
 	RuleUUID  string
+	UserID    string
 	Status    string
 	Limit     int
 	SortBy    string // total_tokens, request_count, avg_latency
@@ -159,6 +223,7 @@ type AggregatedStat struct {
 	ProviderName    string  `json:"provider_name,omitempty"`
 	Model           string  `json:"model,omitempty"`
 	Scenario        string  `json:"scenario,omitempty"`
+	UserID          string  `json:"user_id,omitempty"`
 	RequestCount    int64   `json:"request_count"`
 	TotalTokens     int64   `json:"total_tokens"`
 	InputTokens     int64   `json:"total_input_tokens"`
@@ -201,6 +266,9 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 	if query.RuleUUID != "" {
 		db = db.Where("rule_uuid = ?", query.RuleUUID)
 	}
+	if query.UserID != "" {
+		db = db.Where("user_id = ?", query.UserID)
+	}
 	if query.Status != "" {
 		db = db.Where("status = ?", query.Status)
 	}
@@ -218,6 +286,9 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 	case "rule":
 		groupBy = "rule_uuid"
 		keyField = "rule_uuid"
+	case "user":
+		groupBy = "user_id"
+		keyField = "user_id"
 	case "daily":
 		groupBy = "date(timestamp)"
 		keyField = "date(timestamp)"
@@ -235,6 +306,7 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 		ProviderName  string
 		Model         string
 		Scenario      string
+		UserID        string
 		RequestCount  int64
 		TotalTokens   int64
 		InputTokens   int64
@@ -251,6 +323,7 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 		COALESCE(provider_name, '') as provider_name,
 		COALESCE(model, '') as model,
 		COALESCE(scenario, '') as scenario,
+		COALESCE(user_id, '') as user_id,
 		COUNT(*) as request_count,
 		COALESCE(SUM(total_tokens), 0) as total_tokens,
 		COALESCE(SUM(input_tokens), 0) as input_tokens,
@@ -278,6 +351,7 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 			ProviderName:    r.ProviderName,
 			Model:           r.Model,
 			Scenario:        r.Scenario,
+			UserID:          r.UserID,
 			RequestCount:    r.RequestCount,
 			TotalTokens:     r.TotalTokens,
 			InputTokens:     r.InputTokens,
