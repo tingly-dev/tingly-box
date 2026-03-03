@@ -1,6 +1,7 @@
 package events
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -26,6 +27,11 @@ func NewEventFromRaw(raw string, data map[string]interface{}) Event {
 	eventType := "unknown"
 	if t, ok := data["type"].(string); ok {
 		eventType = t
+	}
+
+	if data != nil && raw == "" {
+		bs, _ := json.Marshal(data)
+		raw = string(bs)
 	}
 
 	return Event{
