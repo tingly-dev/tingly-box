@@ -156,62 +156,6 @@ func TestExecuteWithHandler(t *testing.T) {
 	assert.True(t, handler.success, "should be successful")
 }
 
-// TestExecuteStream tests streaming execution with channel-based handler
-func TestExecuteStream(t *testing.T) {
-	t.SkipNow()
-
-	// Skip if claude CLI is not available
-	launcher := NewLauncher(Config{})
-	if !launcher.IsAvailable() {
-		t.Skip("claude CLI not available")
-	}
-
-	ctx := context.Background()
-	opts := agentboot.ExecutionOptions{
-		ProjectPath:  "/tmp",
-		OutputFormat: agentboot.OutputFormatStreamJSON,
-		Timeout:      30 * time.Second,
-	}
-
-	prompt := "say hi"
-
-	streamHandler, err := launcher.ExecuteStream(ctx, prompt, opts.Timeout, opts)
-	require.NoError(t, err, "stream execution should start")
-	assert.NotNil(t, streamHandler)
-
-	// Collect messages from the stream
-	messages := make([]Message, 0)
-	timeout := time.After(35 * time.Second)
-
-loop:
-	for {
-		select {
-		case msg, ok := <-streamHandler.Messages():
-			if !ok {
-				break loop
-			}
-			messages = append(messages, msg)
-		case err, ok := <-streamHandler.Errors():
-			if ok && err != nil {
-				t.Errorf("unexpected error from stream: %v", err)
-			}
-		case <-timeout:
-			t.Fatal("timed out waiting for messages")
-		}
-	}
-
-	assert.NotEmpty(t, messages, "should receive messages")
-
-	// Verify result
-	result := streamHandler.GetResult()
-	assert.NotNil(t, result, "should have result")
-	assert.True(t, result.Success, "result should indicate success")
-
-	// Check session ID
-	sessionID := streamHandler.GetSessionID()
-	assert.NotEmpty(t, sessionID, "should have session ID")
-}
-
 // TestLauncherWithProjectPath tests execution with a project path
 func TestLauncherWithProjectPath(t *testing.T) {
 	t.SkipNow()
@@ -511,10 +455,10 @@ type TestMessageHandler struct {
 	mu        sync.Mutex
 }
 
-func (h *TestMessageHandler) OnMessage(msg Message) error {
+func (h *TestMessageHandler) OnMessage(msg interface{}) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.messages = append(h.messages, msg)
+	h.messages = append(h.messages, msg.(Message))
 	fmt.Printf("TestMessageHandler OnMessage %v\n", msg)
 	return nil
 }
@@ -533,6 +477,20 @@ func (h *TestMessageHandler) OnComplete(result *agentboot.CompletionResult) {
 	if result != nil {
 		h.success = result.Success
 	}
+}
+
+func (h *TestMessageHandler) OnApproval(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	// Auto-approve all permissions
+	return agentboot.PermissionResult{Approved: true, UpdatedInput: req.Input}, nil
+}
+
+func (h *TestMessageHandler) OnAsk(ctx context.Context, req agentboot.AskRequest) (agentboot.AskResult, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	// Auto-approve all asks
+	return agentboot.AskResult{ID: req.ID, Approved: true}, nil
 }
 
 func extractTextFromAssistant(msg *AssistantMessage) string {
