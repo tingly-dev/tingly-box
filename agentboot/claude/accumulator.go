@@ -42,6 +42,12 @@ func (a *MessageAccumulator) AddEvent(event events.Event) ([]Message, bool, bool
 	var resultSuccess bool
 
 	switch event.Type {
+	case MessageTypeControlRequest:
+		var msg ControlRequest
+		if err := unmarshalEvent(event, &msg); err == nil {
+			a.messages = append(a.messages, &msg)
+			newMessages = append(newMessages, &msg)
+		}
 	case MessageTypeText:
 		var msg ResultMessage
 		if err := unmarshalEvent(event, &msg); err == nil {

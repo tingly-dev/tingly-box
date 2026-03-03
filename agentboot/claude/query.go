@@ -510,7 +510,7 @@ type QueryPrompt interface{}
 type StringPrompt string
 
 // StreamPrompt is a channel-based prompt for streaming
-type StreamPrompt <-chan map[string]interface{}
+type StreamPrompt <-chan any
 
 // QueryConfig is the configuration for creating a Query
 type QueryConfig struct {

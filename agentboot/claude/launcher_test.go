@@ -118,11 +118,6 @@ func TestExecuteWithHandler(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	opts := agentboot.ExecutionOptions{
-		ProjectPath:  "/tmp",
-		OutputFormat: agentboot.OutputFormatStreamJSON,
-		Timeout:      30 * time.Second,
-	}
 
 	prompt := "say hello in one word"
 
@@ -131,9 +126,17 @@ func TestExecuteWithHandler(t *testing.T) {
 		messages: make([]Message, 0),
 	}
 
-	err := launcher.ExecuteWithHandler(ctx, prompt, opts.Timeout, opts, handler)
+	opts := agentboot.ExecutionOptions{
+		ProjectPath:  "/tmp",
+		OutputFormat: agentboot.OutputFormatStreamJSON,
+		Timeout:      30 * time.Second,
+		Handler:      handler,
+	}
+
+	result, err := launcher.Execute(ctx, prompt, opts)
 
 	require.NoError(t, err, "execution should succeed")
+	assert.NotNil(t, result)
 	assert.NotEmpty(t, handler.messages, "handler should receive messages")
 
 	// Check message types
@@ -151,62 +154,6 @@ func TestExecuteWithHandler(t *testing.T) {
 	assert.True(t, hasResult, "should have result message")
 	assert.True(t, handler.completed, "should be completed")
 	assert.True(t, handler.success, "should be successful")
-}
-
-// TestExecuteStream tests streaming execution with channel-based handler
-func TestExecuteStream(t *testing.T) {
-	t.SkipNow()
-
-	// Skip if claude CLI is not available
-	launcher := NewLauncher(Config{})
-	if !launcher.IsAvailable() {
-		t.Skip("claude CLI not available")
-	}
-
-	ctx := context.Background()
-	opts := agentboot.ExecutionOptions{
-		ProjectPath:  "/tmp",
-		OutputFormat: agentboot.OutputFormatStreamJSON,
-		Timeout:      30 * time.Second,
-	}
-
-	prompt := "say hi"
-
-	streamHandler, err := launcher.ExecuteStream(ctx, prompt, opts.Timeout, opts)
-	require.NoError(t, err, "stream execution should start")
-	assert.NotNil(t, streamHandler)
-
-	// Collect messages from the stream
-	messages := make([]Message, 0)
-	timeout := time.After(35 * time.Second)
-
-loop:
-	for {
-		select {
-		case msg, ok := <-streamHandler.Messages():
-			if !ok {
-				break loop
-			}
-			messages = append(messages, msg)
-		case err, ok := <-streamHandler.Errors():
-			if ok && err != nil {
-				t.Errorf("unexpected error from stream: %v", err)
-			}
-		case <-timeout:
-			t.Fatal("timed out waiting for messages")
-		}
-	}
-
-	assert.NotEmpty(t, messages, "should receive messages")
-
-	// Verify result
-	result := streamHandler.GetResult()
-	assert.NotNil(t, result, "should have result")
-	assert.True(t, result.Success, "result should indicate success")
-
-	// Check session ID
-	sessionID := streamHandler.GetSessionID()
-	assert.NotEmpty(t, sessionID, "should have session ID")
 }
 
 // TestLauncherWithProjectPath tests execution with a project path
@@ -373,92 +320,6 @@ func TestMessageAccumulator(t *testing.T) {
 	assert.Empty(t, accumulator.GetSessionID(), "should have no session ID after reset")
 }
 
-// TestStreamHandler tests the stream handler
-func TestStreamHandler(t *testing.T) {
-	handler := NewStreamHandler(10)
-	defer handler.Close()
-
-	// Test HandleEvent with system message
-	systemEvent := events.Event{
-		Type:      MessageTypeSystem,
-		Data:      map[string]interface{}{"subtype": "init", "session_id": "test-123"},
-		Timestamp: time.Now(),
-	}
-	err := handler.HandleEvent(systemEvent)
-	assert.NoError(t, err)
-
-	// Test HandleEvent with assistant message
-	assistantEvent := events.Event{
-		Type: MessageTypeAssistant,
-		Data: map[string]interface{}{
-			"message": map[string]interface{}{
-				"model":       "claude-sonnet-4-6",
-				"id":          "msg-123",
-				"type":        "message",
-				"role":        "assistant",
-				"stop_reason": "end_turn",
-				"content": []interface{}{
-					map[string]interface{}{"type": "text", "text": "Test message"},
-				},
-			},
-			"session_id": "test-123",
-		},
-		Timestamp: time.Now(),
-	}
-	err = handler.HandleEvent(assistantEvent)
-	assert.NoError(t, err)
-
-	// Test HandleEvent with result message
-	resultEvent := events.Event{
-		Type: MessageTypeResult,
-		Data: map[string]interface{}{
-			"subtype": "success",
-			"result":  "Complete",
-		},
-		Timestamp: time.Now(),
-	}
-	err = handler.HandleEvent(resultEvent)
-	assert.NoError(t, err)
-
-	// Check messages from channel
-	select {
-	case msg := <-handler.Messages():
-		assert.Equal(t, MessageTypeSystem, msg.GetType())
-	case <-time.After(1 * time.Second):
-		t.Fatal("timed out waiting for message")
-	}
-
-	select {
-	case msg := <-handler.Messages():
-		assert.Equal(t, MessageTypeAssistant, msg.GetType())
-	case <-time.After(1 * time.Second):
-		t.Fatal("timed out waiting for message")
-	}
-
-	select {
-	case msg := <-handler.Messages():
-		assert.Equal(t, MessageTypeResult, msg.GetType())
-	case <-time.After(1 * time.Second):
-		t.Fatal("timed out waiting for message")
-	}
-
-	// Check result
-	result := handler.GetResult()
-	assert.NotNil(t, result)
-	assert.True(t, result.Success)
-
-	// Check session ID
-	sessionID := handler.GetSessionID()
-	assert.Equal(t, "test-123", sessionID)
-
-	// Test IsClosed
-	assert.False(t, handler.IsClosed())
-
-	// Close and check
-	handler.Close()
-	assert.True(t, handler.IsClosed())
-}
-
 // TestResultCollector tests the result collector
 func TestResultCollector(t *testing.T) {
 	collector := NewResultCollector()
@@ -499,66 +360,6 @@ func TestResultCollector(t *testing.T) {
 	// Test BuildTextOutput
 	textOutput := collector.BuildTextOutput()
 	assert.Contains(t, textOutput, "Hello from assistant")
-}
-
-// TestMultiHandler tests the multi handler
-func TestMultiHandler(t *testing.T) {
-	handler1 := &TestMessageHandler{messages: make([]Message, 0)}
-	handler2 := &TestMessageHandler{messages: make([]Message, 0)}
-
-	multi := NewMultiHandler(handler1, handler2)
-
-	msg := &AssistantMessage{
-		Type: MessageTypeAssistant,
-		Message: anthropic.Message{
-			Content: []anthropic.ContentBlockUnion{
-				{Type: "text", Text: "Test"},
-			},
-		},
-	}
-
-	err := multi.OnMessage(msg)
-	assert.NoError(t, err)
-
-	assert.Len(t, handler1.messages, 1)
-	assert.Len(t, handler2.messages, 1)
-
-	multi.OnComplete(&ResultCompletion{Success: true})
-
-	assert.True(t, handler1.completed)
-	assert.True(t, handler2.completed)
-}
-
-// TestCallbackHandler tests the callback handler
-func TestCallbackHandler(t *testing.T) {
-	var receivedMsg Message
-	var completed bool
-
-	handler := NewCallbackHandler(
-		func(msg Message) error {
-			receivedMsg = msg
-			return nil
-		},
-		nil,
-		func(completion *ResultCompletion) {
-			completed = true
-		},
-	)
-
-	msg := &AssistantMessage{
-		Type: MessageTypeAssistant,
-		Message: anthropic.Message{
-			Content: []anthropic.ContentBlockUnion{
-				{Type: "text", Text: "Test"},
-			},
-		},
-	}
-
-	handler.OnMessage(msg)
-	handler.OnComplete(&ResultCompletion{Success: true})
-
-	assert.Same(t, msg, receivedMsg)
-	assert.True(t, completed)
 }
 
 // TestHelperFunctions tests the helper functions
@@ -643,54 +444,6 @@ func TestMessageTypes(t *testing.T) {
 	assert.True(t, resultMsg.IsSuccess())
 }
 
-// TestListenerFunc tests the listener function adapter
-func TestListenerFunc(t *testing.T) {
-	var received Message
-
-	listener := ListenerFunc(func(msg Message) {
-		received = msg
-	})
-
-	msg := &AssistantMessage{
-		Type: MessageTypeAssistant,
-		Message: anthropic.Message{
-			Content: []anthropic.ContentBlockUnion{
-				{Type: "text", Text: "Test"},
-			},
-		},
-	}
-
-	listener.OnMessage(msg)
-	assert.Same(t, msg, received)
-}
-
-// TestMessageHandlerFunc tests the message handler function adapter
-func TestMessageHandlerFunc(t *testing.T) {
-	var received Message
-
-	handler := MessageHandlerFunc(func(msg Message) error {
-		received = msg
-		return nil
-	})
-
-	msg := &AssistantMessage{
-		Type: MessageTypeAssistant,
-		Message: anthropic.Message{
-			Content: []anthropic.ContentBlockUnion{
-				{Type: "text", Text: "Test"},
-			},
-		},
-	}
-
-	err := handler.OnMessage(msg)
-	assert.NoError(t, err)
-	assert.Same(t, msg, received)
-
-	// Test OnError and OnComplete (should not panic)
-	handler.OnError(assert.AnError)
-	handler.OnComplete(&ResultCompletion{Success: true})
-}
-
 // Helper functions
 
 // TestMessageHandler is a test implementation of MessageHandler
@@ -702,10 +455,10 @@ type TestMessageHandler struct {
 	mu        sync.Mutex
 }
 
-func (h *TestMessageHandler) OnMessage(msg Message) error {
+func (h *TestMessageHandler) OnMessage(msg interface{}) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.messages = append(h.messages, msg)
+	h.messages = append(h.messages, msg.(Message))
 	fmt.Printf("TestMessageHandler OnMessage %v\n", msg)
 	return nil
 }
@@ -717,13 +470,27 @@ func (h *TestMessageHandler) OnError(err error) {
 	fmt.Printf("TestMessageHandler OnError %v\n", err)
 }
 
-func (h *TestMessageHandler) OnComplete(result *ResultCompletion) {
+func (h *TestMessageHandler) OnComplete(result *agentboot.CompletionResult) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.completed = true
 	if result != nil {
 		h.success = result.Success
 	}
+}
+
+func (h *TestMessageHandler) OnApproval(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	// Auto-approve all permissions
+	return agentboot.PermissionResult{Approved: true, UpdatedInput: req.Input}, nil
+}
+
+func (h *TestMessageHandler) OnAsk(ctx context.Context, req agentboot.AskRequest) (agentboot.AskResult, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	// Auto-approve all asks
+	return agentboot.AskResult{ID: req.ID, Approved: true}, nil
 }
 
 func extractTextFromAssistant(msg *AssistantMessage) string {

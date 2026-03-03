@@ -1,302 +1,607 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 )
 
-// Example 1: Simple string prompt query
-func exampleSimpleQuery() {
-	ctx := context.Background()
+// Color codes for output
+const (
+	ColorReset  = "\033[0m"
+	ColorGreen  = "\033[32m"
+	ColorYellow = "\033[33m"
+	ColorCyan   = "\033[36m"
+)
 
-	launcher := claude.NewQueryLauncher(claude.Config{})
-
-	query, err := launcher.Query(ctx, claude.QueryConfig{
-		Prompt: "Say hello in one word",
-		Options: &claude.QueryOptionsConfig{
-			CWD: "/tmp",
-			//Model: "claude-sonnet-4-6",
-		},
-	})
-	if err != nil {
-		log.Printf("Query failed: %v", err)
-		return
-	}
-	defer query.Close()
-
-	fmt.Println("=== Example 1: Simple Query ===")
-
-	// Read messages using Next()
-	for {
-		msg, ok := query.Next()
-		if !ok {
-			break
-		}
-
-		fmt.Printf("Message type: %s\n", msg.Type)
-
-		// Handle different message types
-		switch msg.Type {
-		case "system":
-			fmt.Printf("  Session: %s\n", msg.SessionID)
-		case "assistant":
-			if msg.Message != nil {
-				if role, ok := msg.Message["role"].(string); ok {
-					fmt.Printf("  Role: %s\n", role)
-				}
-			}
-		case "result":
-			fmt.Printf("  Result: %s\n", msg.Result)
-		default:
-			fmt.Printf("  Unknown message type: %s\n", msg.Type)
-		}
-	}
-
-	fmt.Println()
+// StdinHandler implements MessageHandler for stdin/stdout interaction
+type StdinHandler struct {
+	Debug bool
 }
 
-// Example 2: Using Messages channel
-func exampleChannelQuery() {
+// NewStdinHandler creates a new StdinHandler
+func NewStdinHandler() *StdinHandler {
+	return &StdinHandler{}
+}
+
+// OnApproval implements agentboot.ApprovalHandler
+func (h *StdinHandler) OnApproval(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
+	// AskUserQuestion is a special case - present options for user to select
+	if req.ToolName == "AskUserQuestion" {
+		return h.handleAskUserQuestionApproval(ctx, req)
+	}
+
+	// Regular tool permission - show y/n prompt
+	fmt.Printf("\r[Tool Permission] Claude wants to use: %s\n", req.ToolName)
+
+	// Show relevant input details
+	if cmd, ok := req.Input["command"].(string); ok {
+		fmt.Printf("Command: %s\n", cmd)
+	} else if h.Debug {
+		fmt.Printf("Input: %+v\n", req.Input)
+	}
+
+	fmt.Printf("Allow? (y=yes/n=no/a=always): ")
+
+	// Read user input
+	type result struct {
+		response string
+		err      error
+	}
+	resultChan := make(chan result, 1)
+
+	go func() {
+		reader := bufio.NewReader(os.Stdin)
+		response, err := reader.ReadString('\n')
+		response = strings.TrimSpace(strings.ToLower(response))
+		resultChan <- result{response: response, err: err}
+	}()
+
+	// Wait for input or context cancellation
+	select {
+	case <-ctx.Done():
+		return agentboot.PermissionResult{Approved: false}, ctx.Err()
+	case r := <-resultChan:
+		if r.err != nil {
+			return agentboot.PermissionResult{Approved: false}, r.err
+		}
+
+		switch r.response {
+		case "y", "yes":
+			return agentboot.PermissionResult{
+				Approved:     true,
+				UpdatedInput: req.Input,
+			}, nil
+		case "a", "always":
+			return agentboot.PermissionResult{
+				Approved:     true,
+				UpdatedInput: req.Input,
+				Remember:     true,
+			}, nil
+		case "n", "no":
+			return agentboot.PermissionResult{Approved: false}, nil
+		default:
+			return agentboot.PermissionResult{Approved: false}, nil
+		}
+	}
+}
+
+// handleAskUserQuestionApproval handles AskUserQuestion with option selection
+func (h *StdinHandler) handleAskUserQuestionApproval(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
+	questions, ok := req.Input["questions"].([]interface{})
+	if !ok || len(questions) == 0 {
+		return agentboot.PermissionResult{
+			Approved:     true,
+			UpdatedInput: req.Input,
+		}, nil
+	}
+
+	fmt.Printf("\r%s[Question]%s\n", ColorYellow, ColorReset)
+
+	answers := make(map[string]interface{})
+
+	for i, q := range questions {
+		question, ok := q.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		questionText, _ := question["question"].(string)
+		header, _ := question["header"].(string)
+
+		if header != "" {
+			fmt.Printf("\n%s[%s]%s\n", ColorCyan, header, ColorReset)
+		}
+		fmt.Printf("%s\n", questionText)
+
+		options, ok := question["options"].([]interface{})
+		if !ok || len(options) == 0 {
+			continue
+		}
+
+		fmt.Printf("\nOptions:\n")
+		for j, opt := range options {
+			option, ok := opt.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			label, _ := option["label"].(string)
+			desc, _ := option["description"].(string)
+			if desc != "" {
+				fmt.Printf("  %s%d%s. %s - %s\n", ColorGreen, j+1, ColorReset, label, desc)
+			} else {
+				fmt.Printf("  %s%d%s. %s\n", ColorGreen, j+1, ColorReset, label)
+			}
+		}
+
+		fmt.Printf("\n%sSelect option (1-%d) or type label: %s", ColorGreen, len(options), ColorReset)
+
+		type result struct {
+			response string
+			err      error
+		}
+		resultChan := make(chan result, 1)
+
+		go func() {
+			reader := bufio.NewReader(os.Stdin)
+			response, err := reader.ReadString('\n')
+			response = strings.TrimSpace(response)
+			resultChan <- result{response: response, err: err}
+		}()
+
+		select {
+		case <-ctx.Done():
+			return agentboot.PermissionResult{Approved: false}, ctx.Err()
+		case r := <-resultChan:
+			if r.err != nil {
+				return agentboot.PermissionResult{Approved: false}, r.err
+			}
+
+			var selectedIndex int = -1
+			var selectedLabel string
+
+			var num int
+			if _, err := fmt.Sscanf(r.response, "%d", &num); err == nil {
+				if num >= 1 && num <= len(options) {
+					selectedIndex = num - 1
+				}
+			}
+
+			if selectedIndex < 0 {
+				for j, opt := range options {
+					if option, ok := opt.(map[string]interface{}); ok {
+						if label, ok := option["label"].(string); ok {
+							if strings.EqualFold(label, r.response) {
+								selectedIndex = j
+								break
+							}
+						}
+					}
+				}
+			}
+
+			if selectedIndex < 0 {
+				selectedLabel = r.response
+			} else if selectedIndex >= 0 && selectedIndex < len(options) {
+				if option, ok := options[selectedIndex].(map[string]interface{}); ok {
+					if label, ok := option["label"].(string); ok {
+						selectedLabel = label
+					}
+				}
+			}
+
+			answers[fmt.Sprintf("%d", i)] = selectedLabel
+		}
+	}
+
+	updatedInput := make(map[string]interface{})
+	for k, v := range req.Input {
+		updatedInput[k] = v
+	}
+	updatedInput["answers"] = answers
+
+	return agentboot.PermissionResult{
+		Approved:     true,
+		UpdatedInput: updatedInput,
+	}, nil
+}
+
+// OnAsk implements agentboot.AskHandler
+func (h *StdinHandler) OnAsk(ctx context.Context, req agentboot.AskRequest) (agentboot.AskResult, error) {
+	if req.ToolName == "AskUserQuestion" {
+		return h.handleAskUserQuestion(ctx, req)
+	}
+
+	if req.Type == "text_input" || req.Message != "" {
+		return h.handleTextInput(ctx, req)
+	}
+
+	return agentboot.AskResult{ID: req.ID, Approved: true}, nil
+}
+
+func (h *StdinHandler) handleTextInput(ctx context.Context, req agentboot.AskRequest) (agentboot.AskResult, error) {
+	if req.Message != "" {
+		fmt.Printf("\r%s[Input Required]%s %s\n", ColorYellow, ColorReset, req.Message)
+	} else {
+		fmt.Printf("\r%s[Input Required]%s\n", ColorYellow, ColorReset)
+	}
+	fmt.Printf("%sEnter response%s: ", ColorGreen, ColorReset)
+
+	type result struct {
+		response string
+		err      error
+	}
+	resultChan := make(chan result, 1)
+
+	go func() {
+		reader := bufio.NewReader(os.Stdin)
+		response, err := reader.ReadString('\n')
+		response = strings.TrimSpace(response)
+		resultChan <- result{response: response, err: err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return agentboot.AskResult{ID: req.ID, Approved: false}, ctx.Err()
+	case r := <-resultChan:
+		if r.err != nil {
+			return agentboot.AskResult{ID: req.ID, Approved: false}, r.err
+		}
+		return agentboot.AskResult{
+			ID:       req.ID,
+			Approved: true,
+			Response: r.response,
+		}, nil
+	}
+}
+
+func (h *StdinHandler) handleAskUserQuestion(ctx context.Context, req agentboot.AskRequest) (agentboot.AskResult, error) {
+	questions, ok := req.Input["questions"].([]interface{})
+	if !ok || len(questions) == 0 {
+		return agentboot.AskResult{
+			ID:           req.ID,
+			Approved:     true,
+			UpdatedInput: req.Input,
+		}, nil
+	}
+
+	fmt.Printf("\r%s[Question]%s\n", ColorYellow, ColorReset)
+
+	answers := make(map[string]interface{})
+
+	for i, q := range questions {
+		question, ok := q.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		questionText, _ := question["question"].(string)
+		header, _ := question["header"].(string)
+
+		if header != "" {
+			fmt.Printf("\n%s[%s]%s\n", ColorCyan, header, ColorReset)
+		}
+		fmt.Printf("%s\n", questionText)
+
+		options, ok := question["options"].([]interface{})
+		if !ok || len(options) == 0 {
+			continue
+		}
+
+		fmt.Printf("\nOptions:\n")
+		for j, opt := range options {
+			option, ok := opt.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			label, _ := option["label"].(string)
+			desc, _ := option["description"].(string)
+			if desc != "" {
+				fmt.Printf("  %s%d%s. %s - %s\n", ColorGreen, j+1, ColorReset, label, desc)
+			} else {
+				fmt.Printf("  %s%d%s. %s\n", ColorGreen, j+1, ColorReset, label)
+			}
+		}
+
+		fmt.Printf("\n%sSelect option (1-%d) or type label: %s", ColorGreen, len(options), ColorReset)
+
+		type result struct {
+			response string
+			err      error
+		}
+		resultChan := make(chan result, 1)
+
+		go func() {
+			reader := bufio.NewReader(os.Stdin)
+			response, err := reader.ReadString('\n')
+			response = strings.TrimSpace(response)
+			resultChan <- result{response: response, err: err}
+		}()
+
+		select {
+		case <-ctx.Done():
+			return agentboot.AskResult{ID: req.ID, Approved: false}, ctx.Err()
+		case r := <-resultChan:
+			if r.err != nil {
+				return agentboot.AskResult{ID: req.ID, Approved: false}, r.err
+			}
+
+			var selectedIndex int = -1
+			var selectedLabel string
+
+			var num int
+			if _, err := fmt.Sscanf(r.response, "%d", &num); err == nil {
+				if num >= 1 && num <= len(options) {
+					selectedIndex = num - 1
+				}
+			}
+
+			if selectedIndex < 0 {
+				for j, opt := range options {
+					if option, ok := opt.(map[string]interface{}); ok {
+						if label, ok := option["label"].(string); ok {
+							if strings.EqualFold(label, r.response) {
+								selectedIndex = j
+								break
+							}
+						}
+					}
+				}
+			}
+
+			if selectedIndex < 0 {
+				selectedLabel = r.response
+			} else if selectedIndex >= 0 && selectedIndex < len(options) {
+				if option, ok := options[selectedIndex].(map[string]interface{}); ok {
+					if label, ok := option["label"].(string); ok {
+						selectedLabel = label
+					}
+				}
+			}
+
+			answers[fmt.Sprintf("%d", i)] = selectedLabel
+		}
+	}
+
+	updatedInput := make(map[string]interface{})
+	for k, v := range req.Input {
+		updatedInput[k] = v
+	}
+	updatedInput["answers"] = answers
+
+	return agentboot.AskResult{
+		ID:           req.ID,
+		Approved:     true,
+		UpdatedInput: updatedInput,
+	}, nil
+}
+
+// OnError implements agentboot.MessageStreamer
+func (h *StdinHandler) OnError(err error) {
+	fmt.Printf("[Error]: %v\n", err)
+}
+
+// OnMessage implements agentboot.MessageStreamer
+func (h *StdinHandler) OnMessage(msg interface{}) error {
+	return nil
+}
+
+// OnComplete implements agentboot.CompletionCallback
+func (h *StdinHandler) OnComplete(result *agentboot.CompletionResult) {
+	if h.Debug {
+		status := "completed"
+		if !result.Success {
+			status = "failed"
+		}
+		fmt.Printf("[Complete]: %s\n", status)
+	}
+}
+
+var _ agentboot.MessageHandler = (*StdinHandler)(nil)
+
+// Example 1: Simple query with Launcher
+func exampleSimpleQuery() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	launcher := claude.NewQueryLauncher(claude.Config{})
+	launcher := claude.NewLauncher(claude.Config{})
+	handler := NewStdinHandler()
 
-	query, err := launcher.Query(ctx, claude.QueryConfig{
-		Prompt: "What is 2+2? Answer with just the number.",
-		Options: &claude.QueryOptionsConfig{
-			CWD: "/tmp",
-		},
+	fmt.Println("=== Example 1: Simple Query ===")
+
+	result, err := launcher.Execute(ctx, "Say hello in one word", agentboot.ExecutionOptions{
+		Handler:      handler,
+		ProjectPath:  "/tmp",
+		OutputFormat: agentboot.OutputFormatText,
 	})
 	if err != nil {
-		log.Printf("Query failed: %v", err)
+		log.Printf("Execute failed: %v", err)
 		return
 	}
-	defer query.Close()
 
-	fmt.Println("=== Example 2: Channel Query ===")
-
-	// Read from Messages channel
-	for {
-		select {
-		case msg := <-query.Messages():
-			fmt.Printf("Message: %s\n", msg.Type)
-			if msg.Type == "result" {
-				fmt.Printf("  Final result: %s\n", msg.Result)
-			}
-		case err := <-query.Errors():
-			log.Printf("Error: %v", err)
-			return
-		case <-query.Done():
-			fmt.Println("Query complete")
-			return
-		}
-	}
+	fmt.Printf("Result: %s\n", result.Output)
+	fmt.Printf("Duration: %v\n", result.Duration)
 }
 
-// Example 3: Stream prompt with canCallTool
-//
-// stdin input format (line-delimited JSON):
-// {"type":"user","message":{"role":"user","content":"List the files in current directory"}}
-//
-// Complete bash example:
-/*
-cd agentboot/claude/examples/query && \
-echo '{"type":"user","message":{"role":"user","content":"List the files in current directory"}}' | \
-go run query_example.go 3
-*/
-func exampleStreamPrompt() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+// Example 2: Stream format query
+func exampleStreamQuery() {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	// Build stream prompt
-	builder := claude.NewStreamPromptBuilder()
-	builder.AddUserMessage("List the files in current directory")
+	launcher := claude.NewLauncher(claude.Config{})
+	handler := NewStdinHandler()
 
-	launcher := claude.NewQueryLauncher(claude.Config{})
+	fmt.Println("=== Example 2: Stream Format Query ===")
 
-	// Define canCallTool callback
-	canCallTool := func(ctx context.Context, toolName string, input map[string]interface{}, opts claude.CallToolOptions) (map[string]interface{}, error) {
-		log.Printf("Tool permission requested: %s", toolName)
-		// Auto-approve bash tool
-		if toolName == "bash" {
-			return map[string]interface{}{
-				"approved": true,
-			}, nil
-		}
-		// Deny other tools
-		return nil, fmt.Errorf("tool %s not approved", toolName)
-	}
-
-	query, err := launcher.Query(ctx, claude.QueryConfig{
-		Prompt: builder.Close(), // IMPORTANT: Use Close() to properly close the channel
-		Options: &claude.QueryOptionsConfig{
-			CWD:         "/tmp",
-			CanCallTool: canCallTool,
-		},
+	result, err := launcher.Execute(ctx, "What is 2+2? Answer with just the number.", agentboot.ExecutionOptions{
+		Handler:      handler,
+		ProjectPath:  "/tmp",
+		OutputFormat: agentboot.OutputFormatStreamJSON,
 	})
 	if err != nil {
-		log.Printf("Query failed: %v", err)
+		log.Printf("Execute failed: %v", err)
 		return
 	}
-	defer query.Close()
 
-	fmt.Println("=== Example 3: Stream Prompt with Tool Callback ===")
+	fmt.Printf("Text Output: %s\n", result.TextOutput())
+	fmt.Printf("Status: %s\n", result.GetStatus())
+}
 
-	// Process messages
-	messageCount := 0
-	for {
-		msg, ok := query.Next()
-		if !ok {
-			break
-		}
-		messageCount++
+// Example 3: With model selection
+func exampleWithModel() {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
 
-		if msg.Type == "tool_use" {
-			fmt.Printf("Tool used: %s\n", msg.Request["name"])
-		}
-		if msg.Type == "result" {
-			fmt.Printf("Final result received\n")
-		}
+	launcher := claude.NewLauncher(claude.Config{})
+	handler := NewStdinHandler()
+
+	fmt.Println("=== Example 3: With Model Selection ===")
+
+	result, err := launcher.Execute(ctx, "Explain Go channels in one sentence", agentboot.ExecutionOptions{
+		Handler:      handler,
+		ProjectPath:  "/tmp",
+		OutputFormat: agentboot.OutputFormatText,
+		//Model:        "claude-sonnet-4-6",
+	})
+	if err != nil {
+		log.Printf("Execute failed: %v", err)
+		return
 	}
-	fmt.Printf("Total messages: %d\n", messageCount)
+
+	fmt.Printf("Result: %s\n", result.Output)
 }
 
 // Example 4: Resume conversation
 func exampleResume() {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
 
-	launcher := claude.NewQueryLauncher(claude.Config{})
+	launcher := claude.NewLauncher(claude.Config{})
+	handler := NewStdinHandler()
 
-	// First, start a conversation and get session ID
-	// (In real usage, you'd save this from a previous query)
+	// In real usage, you'd get sessionID from a previous execution
 	sessionID := "your-session-id-here"
-
-	query, err := launcher.Query(ctx, claude.QueryConfig{
-		Prompt: "Continue our conversation about Go",
-		Options: &claude.QueryOptionsConfig{
-			CWD:    "/tmp",
-			Resume: sessionID,
-		},
-	})
-	if err != nil {
-		log.Printf("Query failed: %v", err)
-		return
-	}
-	defer query.Close()
 
 	fmt.Println("=== Example 4: Resume Conversation ===")
 
-	for {
-		msg, ok := query.Next()
-		if !ok {
-			break
-		}
-		fmt.Printf("Message: %s\n", msg.Type)
-	}
-}
-
-// Example 5: With continue flag
-func exampleContinue() {
-	ctx := context.Background()
-
-	launcher := claude.NewQueryLauncher(claude.Config{})
-
-	query, err := launcher.Query(ctx, claude.QueryConfig{
-		Prompt: "What were we discussing?",
-		Options: &claude.QueryOptionsConfig{
-			CWD:                  "/tmp",
-			ContinueConversation: true,
-		},
+	result, err := launcher.Execute(ctx, "Continue our conversation about Go", agentboot.ExecutionOptions{
+		Handler:       handler,
+		ProjectPath:   "/tmp",
+		OutputFormat:  agentboot.OutputFormatText,
+		SessionID:     sessionID,
+		Resume:        true,
 	})
 	if err != nil {
-		log.Printf("Query failed: %v", err)
+		log.Printf("Execute failed: %v", err)
 		return
 	}
-	defer query.Close()
+
+	fmt.Printf("Result: %s\n", result.Output)
+	fmt.Printf("Session ID: %s\n", result.GetSessionID())
+}
+
+// Example 5: Continue conversation
+func exampleContinue() {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	launcher := claude.NewLauncher(claude.Config{
+		ContinueConversation: true,
+	})
+	handler := NewStdinHandler()
 
 	fmt.Println("=== Example 5: Continue Conversation ===")
 
-	for {
-		msg, ok := query.Next()
-		if !ok {
-			break
-		}
-		fmt.Printf("Message: %s\n", msg.Type)
-	}
-}
-
-// Example 6: Using functional options
-func exampleFunctionalOptions() {
-	ctx := context.Background()
-
-	query, err := claude.QueryWithContext(ctx, "Explain Go channels in one sentence",
-		//claude.WithModel("claude-sonnet-4-6"),
-		claude.WithCWD("/tmp"),
-		claude.WithAllowedTools("Read"),
-	)
-	if err != nil {
-		log.Printf("Query failed: %v", err)
-		return
-	}
-	defer query.Close()
-
-	fmt.Println("=== Example 6: Functional Options ===")
-
-	for {
-		msg, ok := query.Next()
-		if !ok {
-			break
-		}
-		if msg.Type == "result" {
-			fmt.Printf("Result: %s\n", msg.Result)
-		}
-	}
-}
-
-// Example 7: With interrupt support
-func exampleInterrupt() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	launcher := claude.NewQueryLauncher(claude.Config{})
-
-	query, err := launcher.Query(ctx, claude.QueryConfig{
-		Prompt: "Count to 100 slowly",
-		Options: &claude.QueryOptionsConfig{
-			CWD: "/tmp",
-		},
+	result, err := launcher.Execute(ctx, "What were we discussing?", agentboot.ExecutionOptions{
+		Handler:      handler,
+		ProjectPath:  "/tmp",
+		OutputFormat: agentboot.OutputFormatText,
 	})
 	if err != nil {
-		log.Printf("Query failed: %v", err)
+		log.Printf("Execute failed: %v", err)
 		return
 	}
-	defer query.Close()
 
-	fmt.Println("=== Example 7: Interrupt ===")
+	fmt.Printf("Result: %s\n", result.Output)
+}
 
-	// Read some messages then interrupt
-	count := 0
-	for {
-		msg, ok := query.Next()
-		if !ok {
-			break
-		}
-		count++
+// Example 6: With tool filtering
+func exampleWithToolFiltering() {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
 
-		// After getting a few messages, send interrupt
-		if count == 3 {
-			fmt.Println("Sending interrupt...")
-			query.Interrupt()
-		}
+	launcher := claude.NewLauncher(claude.Config{})
+	handler := NewStdinHandler()
 
-		fmt.Printf("Message %d: %s\n", count, msg.Type)
+	fmt.Println("=== Example 6: With Tool Filtering ===")
+
+	result, err := launcher.Execute(ctx, "Read the files in current directory", agentboot.ExecutionOptions{
+		Handler:         handler,
+		ProjectPath:     "/tmp",
+		OutputFormat:    agentboot.OutputFormatStreamJSON,
+		AllowedTools:    []string{"Read", "Bash"},
+		DisallowedTools: []string{"Write", "Edit"},
+	})
+	if err != nil {
+		log.Printf("Execute failed: %v", err)
+		return
 	}
+
+	fmt.Printf("Text Output: %s\n", result.TextOutput())
+}
+
+// Example 7: With timeout
+func exampleWithTimeout() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	launcher := claude.NewLauncher(claude.Config{})
+	handler := NewStdinHandler()
+
+	fmt.Println("=== Example 7: With Timeout ===")
+
+	result, err := launcher.Execute(ctx, "Count to 100 slowly", agentboot.ExecutionOptions{
+		Handler:      handler,
+		ProjectPath:  "/tmp",
+		OutputFormat: agentboot.OutputFormatText,
+		Timeout:      30 * time.Second,
+	})
+	if err != nil {
+		log.Printf("Execute failed: %v", err)
+		return
+	}
+
+	fmt.Printf("Result: %s\n", result.Output)
+}
+
+// Example 8: With AskUserQuestion handling
+func exampleAskUserQuestion() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	launcher := claude.NewLauncher(claude.Config{})
+	handler := NewStdinHandler()
+
+	fmt.Println("=== Example 8: AskUserQuestion Handling ===")
+
+	result, err := launcher.Execute(ctx, "Ask me what I want to help with today", agentboot.ExecutionOptions{
+		Handler:      handler,
+		ProjectPath:  "/tmp",
+		OutputFormat: agentboot.OutputFormatStreamJSON,
+	})
+	if err != nil {
+		log.Printf("Execute failed: %v", err)
+		return
+	}
+
+	fmt.Printf("Text Output: %s\n", result.TextOutput())
 }
 
 func main() {
@@ -304,12 +609,13 @@ func main() {
 		fmt.Println("Usage: go run query_example.go <example>")
 		fmt.Println("Examples:")
 		fmt.Println("  1 - Simple query")
-		fmt.Println("  2 - Channel query")
-		fmt.Println("  3 - Stream prompt with tools")
+		fmt.Println("  2 - Stream format query")
+		fmt.Println("  3 - With model selection")
 		fmt.Println("  4 - Resume conversation")
 		fmt.Println("  5 - Continue conversation")
-		fmt.Println("  6 - Functional options")
-		fmt.Println("  7 - Interrupt")
+		fmt.Println("  6 - With tool filtering")
+		fmt.Println("  7 - With timeout")
+		fmt.Println("  8 - AskUserQuestion handling")
 		os.Exit(1)
 	}
 
@@ -319,17 +625,19 @@ func main() {
 	case "1":
 		exampleSimpleQuery()
 	case "2":
-		exampleChannelQuery()
+		exampleStreamQuery()
 	case "3":
-		exampleStreamPrompt()
+		exampleWithModel()
 	case "4":
 		exampleResume()
 	case "5":
 		exampleContinue()
 	case "6":
-		exampleFunctionalOptions()
+		exampleWithToolFiltering()
 	case "7":
-		exampleInterrupt()
+		exampleWithTimeout()
+	case "8":
+		exampleAskUserQuestion()
 	default:
 		fmt.Printf("Unknown example: %s\n", example)
 		os.Exit(1)
