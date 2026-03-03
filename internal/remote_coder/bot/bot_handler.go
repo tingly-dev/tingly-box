@@ -30,6 +30,7 @@ type BotHandler struct {
 	directoryBrowser *DirectoryBrowser
 	manager          *imbot.Manager
 	imPrompter       *IMPrompter
+	fileStore        *FileStore
 }
 
 // HandlerContext contains per-message context data
@@ -42,6 +43,7 @@ type HandlerContext struct {
 	IsDirect  bool
 	IsGroup   bool
 	Text      string
+	Media     []imbot.MediaAttachment
 	Metadata  map[string]interface{}
 }
 
@@ -67,6 +69,7 @@ func NewBotHandler(
 		directoryBrowser: directoryBrowser,
 		manager:          manager,
 		imPrompter:       imPrompter,
+		fileStore:        NewFileStore(),
 	}
 }
 
@@ -89,6 +92,7 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform) {
 	}
 
 	// Create handler context
+	mediaAttachments := msg.GetMedia()
 	hCtx := HandlerContext{
 		Bot:       bot,
 		ChatID:    chatID,
@@ -98,11 +102,19 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform) {
 		IsDirect:  msg.IsDirectMessage(),
 		IsGroup:   msg.IsGroupMessage(),
 		Text:      strings.TrimSpace(msg.GetText()),
+		Media:     mediaAttachments,
 		Metadata:  msg.Metadata,
 	}
 
+	// Handle media content (with or without text)
+	if msg.IsMediaContent() && len(hCtx.Media) > 0 {
+		h.handleMediaMessage(hCtx)
+		return
+	}
+
+	// Handle text-only messages
 	if !msg.IsTextContent() {
-		h.SendText(hCtx, "Only text messages are supported.")
+		h.SendText(hCtx, "Only text and media messages are supported.")
 		return
 	}
 
@@ -196,6 +208,101 @@ func (h *BotHandler) handleGroupMessage(hCtx HandlerContext) {
 	}
 
 	h.SendText(hCtx, "No project bound to this group. Use /bind <path> to bind a project.")
+}
+
+// handleMediaMessage handles messages with media attachments
+func (h *BotHandler) handleMediaMessage(hCtx HandlerContext) {
+	// Get project path for storage
+	projectPath, ok := h.getProjectPath(hCtx)
+	if !ok {
+		h.SendText(hCtx, "No project bound. Please bind a project first.")
+		return
+	}
+
+	// Set platform-specific token on FileStore if needed
+	if len(hCtx.Media) > 0 && strings.HasPrefix(hCtx.Media[0].URL, "tgfile://") {
+		// Get settings for the current platform
+		allSettings, err := h.store.ListEnabledSettings()
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to load bot settings")
+		} else {
+			for _, settings := range allSettings {
+				if settings.Platform == string(hCtx.Platform) {
+					// Get token from settings (check both Auth map and legacy Token field)
+					token := settings.Token
+					if token == "" && len(settings.Auth) > 0 {
+						token = settings.Auth["token"]
+					}
+					if token != "" {
+						h.fileStore.SetTelegramToken(token)
+					}
+					break
+				}
+			}
+		}
+	}
+
+	// 1. Download and store media files
+	var fileTags []string
+	for _, attachment := range hCtx.Media {
+		// Check file type
+		if !h.fileStore.IsAllowedType(attachment.MimeType) {
+			h.SendText(hCtx, fmt.Sprintf("File type not supported: %s", attachment.MimeType))
+			return
+		}
+
+		// Check file size
+		if attachment.Size > 0 && !h.fileStore.IsAllowedSize(attachment.MimeType, attachment.Size) {
+			maxSize := h.fileStore.maxImageSize
+			if attachment.Type == "document" {
+				maxSize = h.fileStore.maxDocSize
+			}
+			h.SendText(hCtx, fmt.Sprintf("File too large. Max size: %d MB", maxSize/1024/1024))
+			return
+		}
+
+		// Download file to project's .download directory
+		storedFile, err := h.fileStore.DownloadFile(h.ctx, projectPath, attachment.URL, attachment.MimeType)
+		if err != nil {
+			h.SendText(hCtx, fmt.Sprintf("Failed to download file: %v", err))
+			return
+		}
+
+		// Add file tag to message
+		fileTags = append(fileTags, fmt.Sprintf("<upload_file>%s</upload_file>", storedFile.RelPath))
+	}
+
+	// 2. Construct message with file tags
+	message := hCtx.Text
+	if len(fileTags) > 0 {
+		if message == "" {
+			message = strings.Join(fileTags, " ")
+		} else {
+			message = message + " " + strings.Join(fileTags, " ")
+		}
+	}
+
+	// 3. Execute with augmented message (using Claude Code)
+	h.handleAgentMessage(hCtx, agentClaudeCode, message, projectPath)
+}
+
+// getProjectPath returns the project path for the current chat
+func (h *BotHandler) getProjectPath(hCtx HandlerContext) (string, bool) {
+	if hCtx.IsDirect {
+		sessionID, ok, _ := h.store.GetSessionForChat(hCtx.ChatID)
+		if ok {
+			// Get project path from session context
+			if session, exists := h.sessionMgr.Get(sessionID); exists && session.Context != nil {
+				if projectPath, ok := session.Context["project_path"].(string); ok {
+					return projectPath, true
+				}
+			}
+		}
+	} else {
+		// Group chat: get bound project path
+		return getProjectPathForGroup(h.store, hCtx.ChatID, string(hCtx.Platform))
+	}
+	return "", false
 }
 
 // handleSlashCommands handles slash commands

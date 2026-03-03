@@ -125,11 +125,13 @@ func (a *Adapter) extractContent(msg *tgbotapi.Message) core.Content {
 			media := make([]core.MediaAttachment, len(m.Photo))
 			for i, photo := range m.Photo {
 				media[i] = core.MediaAttachment{
-					Type:   "image",
-					URL:    fmt.Sprintf("file://%s", photo.FileID),
-					Width:  photo.Width,
-					Height: photo.Height,
-					Raw:    map[string]interface{}{"file_unique_id": photo.FileUniqueID},
+					Type:     "image",
+					URL:      a.getTelegramFileURL(photo.FileID),
+					Width:    photo.Width,
+					Height:   photo.Height,
+					Size:     int64(photo.FileSize),
+					Raw:      map[string]interface{}{"file_id": photo.FileID, "file_unique_id": photo.FileUniqueID, "platform": "telegram"},
+					MimeType: "image/jpeg",
 				}
 			}
 			caption := m.Caption
@@ -142,11 +144,11 @@ func (a *Adapter) extractContent(msg *tgbotapi.Message) core.Content {
 		if m.Document != nil {
 			return []core.MediaAttachment{{
 				Type:     "document",
-				URL:      fmt.Sprintf("file://%s", m.Document.FileID),
+				URL:      a.getTelegramFileURL(m.Document.FileID),
 				MimeType: m.Document.MimeType,
 				Filename: m.Document.FileName,
 				Size:     int64(m.Document.FileSize),
-				Raw:      map[string]interface{}{"file_unique_id": m.Document.FileUniqueID},
+				Raw:      map[string]interface{}{"file_unique_id": m.Document.FileUniqueID, "platform": "telegram"},
 			}}, m.Caption, true
 		}
 		return nil, "", false
@@ -156,10 +158,10 @@ func (a *Adapter) extractContent(msg *tgbotapi.Message) core.Content {
 		if m.Sticker != nil {
 			return []core.MediaAttachment{{
 				Type:   "sticker",
-				URL:    fmt.Sprintf("file://%s", m.Sticker.FileID),
+				URL:    a.getTelegramFileURL(m.Sticker.FileID),
 				Width:  m.Sticker.Width,
 				Height: m.Sticker.Height,
-				Raw:    map[string]interface{}{"file_unique_id": m.Sticker.FileUniqueID},
+				Raw:    map[string]interface{}{"file_unique_id": m.Sticker.FileUniqueID, "platform": "telegram"},
 			}}, "", true
 		}
 		return nil, "", false
@@ -278,4 +280,11 @@ func (a *Adapter) getChatType(chat *tgbotapi.Chat) core.ChatType {
 	default:
 		return core.ChatTypeDirect
 	}
+}
+
+// getTelegramFileURL returns the download URL for a Telegram file
+func (a *Adapter) getTelegramFileURL(fileID string) string {
+	// Store the file ID as a URL scheme that the FileStore can resolve
+	// The actual download will be done by the FileStore which has access to the bot API
+	return fmt.Sprintf("tgfile://%s", fileID)
 }
