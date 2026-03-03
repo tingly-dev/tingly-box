@@ -14,16 +14,34 @@ type Event struct {
 }
 
 // NewEvent creates a new event with the current timestamp
-func NewEvent(eventType string, data map[string]interface{}) Event {
+func NewEventFromMap(data map[string]interface{}) Event {
+	eventType := "unknown"
+	if t, ok := data["type"].(string); ok {
+		eventType = t
+	}
+
+	var raw string
+	if data != nil {
+		bs, _ := json.Marshal(data)
+		raw = string(bs)
+	}
+
 	return Event{
 		Type:      eventType,
 		Data:      data,
 		Timestamp: time.Now(),
+		Raw:       raw,
 	}
 }
 
 // NewEventFromRaw creates an event from a raw JSON string
-func NewEventFromRaw(raw string, data map[string]interface{}) Event {
+func NewEventFromRaw(raw string) Event {
+	data := map[string]any{}
+	err := json.Unmarshal([]byte(raw), &data)
+	if err != nil {
+		return Event{}
+	}
+
 	eventType := "unknown"
 	if t, ok := data["type"].(string); ok {
 		eventType = t
@@ -40,30 +58,4 @@ func NewEventFromRaw(raw string, data map[string]interface{}) Event {
 		Timestamp: time.Now(),
 		Raw:       raw,
 	}
-}
-
-// EventHandler processes events
-type EventHandler interface {
-	HandleEvent(event Event) error
-}
-
-// EventHandlerFunc is a function adapter for EventHandler
-type EventHandlerFunc func(event Event) error
-
-// HandleEvent implements EventHandler interface
-func (f EventHandlerFunc) HandleEvent(event Event) error {
-	return f(event)
-}
-
-// Listener receives events
-type Listener interface {
-	OnEvent(event Event)
-}
-
-// ListenerFunc is a function adapter for Listener
-type ListenerFunc func(event Event)
-
-// OnEvent implements Listener interface
-func (f ListenerFunc) OnEvent(event Event) {
-	f(event)
 }

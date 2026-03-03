@@ -225,7 +225,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 		}
 
 		// Create event from parsed data
-		event := events.NewEventFromRaw("", data)
+		event := events.NewEventFromMap(data)
 
 		logrus.Debugf("[Event] %s", event)
 
@@ -510,7 +510,6 @@ func (l *Launcher) buildCommand(ctx context.Context, args []string, opts agentbo
 
 	return cmd, nil
 }
-
 
 // handleExecutionError processes execution errors
 func (l *Launcher) handleExecutionError(err error, stderr string, handler agentboot.MessageHandler) error {
