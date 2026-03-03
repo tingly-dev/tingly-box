@@ -78,7 +78,7 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 		}, nil
 	}
 
-	bot := p.manager.GetBot(platform)
+	bot := p.manager.GetBotByPlatform(platform)
 	if bot == nil {
 		logrus.WithFields(logrus.Fields{
 			"id":       req.ID,

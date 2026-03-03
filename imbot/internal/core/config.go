@@ -8,6 +8,7 @@ import (
 
 // Config represents the bot configuration
 type Config struct {
+	UUID     string                 `json:"uuid" yaml:"uuid"`
 	Platform Platform               `json:"platform" yaml:"platform"`
 	Enabled  bool                   `json:"enabled" yaml:"enabled"`
 	Auth     AuthConfig             `json:"auth" yaml:"auth"`

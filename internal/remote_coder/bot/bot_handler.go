@@ -74,8 +74,8 @@ func NewBotHandler(
 }
 
 // HandleMessage is the main entry point for handling bot messages
-func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform) {
-	bot := h.manager.GetBot(platform)
+func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, botUUID string) {
+	bot := h.manager.GetBot(botUUID, platform)
 	if bot == nil {
 		return
 	}
@@ -221,6 +221,7 @@ func (h *BotHandler) handleMediaMessage(hCtx HandlerContext) {
 
 	// Set platform-specific token on FileStore if needed
 	if len(hCtx.Media) > 0 && strings.HasPrefix(hCtx.Media[0].URL, "tgfile://") {
+
 		// Get settings for the current platform
 		allSettings, err := h.store.ListEnabledSettings()
 		if err != nil {

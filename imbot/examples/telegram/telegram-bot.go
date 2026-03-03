@@ -111,7 +111,7 @@ func main() {
 	}
 
 	// Set up message handler
-	manager.OnMessage(func(msg imbot.Message, platform imbot.Platform) {
+	manager.OnMessage(func(msg imbot.Message, platform imbot.Platform, botUUID string) {
 		// Print incoming message for logging
 		fmt.Printf("[%-10s] %s (%s): %s\n",
 			platform,
@@ -120,10 +120,11 @@ func main() {
 			msg.GetText(),
 		)
 
-		// Get bot instance
-		bot := manager.GetBot(platform)
+		// Get bot instance by UUID (preferred) or fallback to platform
+		var bot imbot.Bot
+		bot = manager.GetBot(botUUID, platform)
 		if bot == nil {
-			log.Printf("Bot not found for platform: %s", platform)
+			log.Printf("Bot not found for platform: %s, UUID: %s", platform, botUUID)
 			return
 		}
 
@@ -157,7 +158,7 @@ func main() {
 	})
 
 	// Set up error handler
-	manager.OnError(func(err error, platform imbot.Platform) {
+	manager.OnError(func(err error, platform imbot.Platform, botUUID string) {
 		log.Printf("[%s] Error: %v", platform, err)
 	})
 
