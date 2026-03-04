@@ -61,7 +61,7 @@ type Config struct {
 	ToolConfigs map[string]json.RawMessage `json:"tool_configs,omitempty"`
 
 	// Error log settings
-	ErrorLogFilterExpression string `json:"error_log_filter_expression"` // Expression for filtering error log entries (default: "StatusCode >= 400 && Path matches '^/api/'")
+	ErrorLogFilterExpression string `json:"error_log_filter_expression"` // Expression for filtering error log entries (default: "StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')")
 
 	// Health monitor settings
 	HealthMonitor loadbalance.HealthMonitorConfig `json:"health_monitor,omitempty" yaml:"health_monitor,omitempty"`
@@ -219,7 +219,7 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		updated = true
 	}
 	if cfg.ErrorLogFilterExpression == "" {
-		cfg.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
+		cfg.ErrorLogFilterExpression = "StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')"
 		updated = true
 	}
 	if cfg.applyRemoteCoderDefaults() {
@@ -1823,7 +1823,7 @@ func (c *Config) CreateDefaultConfig() error {
 	c.JWTSecret = generateSecret()
 	// Set default error log filter expression
 	if c.ErrorLogFilterExpression == "" {
-		c.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
+		c.ErrorLogFilterExpression = "StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')"
 	}
 	c.applyRemoteCoderDefaults()
 	if err := c.Save(); err != nil {
