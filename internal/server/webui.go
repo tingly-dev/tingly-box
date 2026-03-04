@@ -55,6 +55,12 @@ func (s *Server) UseUIEndpoints() {
 	// Exclude API routes from SPA catch-all by registering them first
 	// The routes registered below (manager APIs, OAuth, usage, etc.) will take precedence
 
+	// Claude Code status line endpoints (no auth required)
+	// These must be registered before the /tingly/:scenario routes
+	ccGroup := s.engine.Group("/tingly/claude_code")
+	ccGroup.POST("/status", s.GetClaudeCodeStatus)
+	ccGroup.POST("/statusline", s.GetClaudeCodeStatusLine)
+
 	// Create route manager
 	manager := swagger.NewRouteManager(s.engine)
 
@@ -289,6 +295,100 @@ func (s *Server) GetCurrentRequest(c *gin.Context) {
 			Streamed:     state.Streamed,
 		},
 	})
+}
+
+// GetClaudeCodeStatus returns combined status from Claude Code input and Tingly Box
+// This endpoint receives Claude Code status JSON and combines it with Tingly Box current request info
+// POST /tingly/claude_code/status
+func (s *Server) GetClaudeCodeStatus(c *gin.Context) {
+	var input ClaudeCodeStatusInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		// If no body provided, use empty defaults
+		input = ClaudeCodeStatusInput{}
+	}
+
+	// Get Tingly Box current request
+	tracker := GetGlobalCurrentRequestTracker()
+	tbState := tracker.GetCurrent()
+
+	// Build response
+	resp := &ClaudeCodeCombinedStatusData{
+		CCModel:      input.Model.DisplayName,
+		CCUsedPct:    int(input.ContextWindow.UsedPercentage),
+		CCUsedTokens: input.ContextWindow.UsedTokens,
+		CCMaxTokens:  input.ContextWindow.MaxTokens,
+		CCCost:       input.Cost.TotalCostUSD,
+	}
+
+	// Add Tingly Box info if available
+	if tbState != nil {
+		durationMs := int64(0)
+		if !tbState.StartTime.IsZero() {
+			durationMs = time.Since(tbState.StartTime).Milliseconds()
+		}
+		resp.TBProviderName = tbState.ProviderName
+		resp.TBProviderUUID = tbState.ProviderUUID
+		resp.TBModel = tbState.Model
+		resp.TBRequestModel = tbState.RequestModel
+		resp.TBScenario = tbState.Scenario
+		resp.TBDurationMs = durationMs
+		resp.TBStreamed = tbState.Streamed
+	}
+
+	c.JSON(http.StatusOK, ClaudeCodeCombinedStatus{
+		Success: true,
+		Data:    resp,
+	})
+}
+
+// GetClaudeCodeStatusLine returns rendered status line text for Claude Code
+// This endpoint receives Claude Code status JSON and returns a pre-rendered status line string
+// POST /tingly/claude_code/statusline
+func (s *Server) GetClaudeCodeStatusLine(c *gin.Context) {
+	var input ClaudeCodeStatusInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		// If no body provided, use empty defaults
+		input = ClaudeCodeStatusInput{}
+	}
+
+	// Get Tingly Box current request
+	tracker := GetGlobalCurrentRequestTracker()
+	tbState := tracker.GetCurrent()
+
+	// Build status line
+	// Format: [CC Model] → TB Model@Provider | ▓▓▓░░░░░ 7% | $0.05
+	ccModel := input.Model.DisplayName
+	if ccModel == "" {
+		ccModel = "unknown"
+	}
+
+	usedPct := int(input.ContextWindow.UsedPercentage)
+	cost := input.Cost.TotalCostUSD
+
+	// Build context bar (8 characters wide)
+	barWidth := 8
+	filled := usedPct * barWidth / 100
+	empty := barWidth - filled
+	bar := ""
+	for i := 0; i < filled; i++ {
+		bar += "▓"
+	}
+	for i := 0; i < empty; i++ {
+		bar += "░"
+	}
+
+	// Build output
+	output := fmt.Sprintf("[%s]", ccModel)
+
+	// Add Tingly Box info if available
+	if tbState != nil && tbState.Model != "" {
+		output += fmt.Sprintf(" → %s@%s", tbState.Model, tbState.ProviderName)
+	}
+
+	// Add context bar and cost
+	output += fmt.Sprintf(" | %s %d%% | $%.2f", bar, usedPct, cost)
+
+	c.String(http.StatusOK, output)
 }
 
 // ValidateAuthToken validates an authentication token without requiring auth
