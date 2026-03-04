@@ -54,8 +54,15 @@ type Config struct {
 	Verbose          bool `json:"verbose"`            // Verbose mode for detailed logging
 	Debug            bool `json:"-"`                  // Debug mode for Gin debug level logging
 	OpenBrowser      bool `yaml:"-" json:"-"`         // Auto-open browser in web UI mode (default: true)
+
 	// Tool interceptor (local web_search/web_fetch)
+	// Deprecated: Use ToolConfigs instead for new code
 	ToolInterceptor *typ.ToolInterceptorConfig `json:"tool_interceptor,omitempty"`
+
+	// Generic tool configs map for all tool types
+	// Key is tool_type (e.g., "tool_interceptor", "code_execution")
+	// Value is the JSON-encoded config for that tool type
+	ToolConfigs map[string]json.RawMessage `json:"tool_configs,omitempty"`
 
 	// Error log settings
 	ErrorLogFilterExpression string `json:"error_log_filter_expression"` // Expression for filtering error log entries (default: "StatusCode >= 400 && Path matches '^/api/'")
@@ -1171,11 +1178,65 @@ func (c *Config) GetDefaultMaxTokens() int {
 }
 
 // GetToolInterceptorConfig returns the global tool interceptor config
+// Checks both the legacy ToolInterceptor field and the new ToolConfigs map
 func (c *Config) GetToolInterceptorConfig() *typ.ToolInterceptorConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
+	// First, try the new ToolConfigs map
+	if c.ToolConfigs != nil {
+		var config typ.ToolInterceptorConfig
+		if data, ok := c.ToolConfigs[db.ToolTypeInterceptor]; ok {
+			if err := json.Unmarshal(data, &config); err == nil {
+				return &config
+			}
+		}
+	}
+
+	// Fallback to legacy ToolInterceptor field for backward compatibility
 	return c.ToolInterceptor
+}
+
+// GetToolConfig returns the global config for a specific tool type
+// target is a pointer to the config struct to unmarshal into
+// Returns true if config was found and successfully unmarshaled
+func (c *Config) GetToolConfig(toolType string, target interface{}) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if c.ToolConfigs == nil {
+		return false
+	}
+
+	data, ok := c.ToolConfigs[toolType]
+	if !ok {
+		return false
+	}
+
+	if err := json.Unmarshal(data, target); err != nil {
+		logrus.Warnf("Failed to unmarshal tool config for type %s: %v", toolType, err)
+		return false
+	}
+
+	return true
+}
+
+// SetToolConfig sets the global config for a specific tool type
+func (c *Config) SetToolConfig(toolType string, config interface{}) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.ToolConfigs == nil {
+		c.ToolConfigs = make(map[string]json.RawMessage)
+	}
+
+	data, err := json.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal tool config: %w", err)
+	}
+
+	c.ToolConfigs[toolType] = data
+	return c.Save()
 }
 
 // GetToolInterceptorConfigForProvider returns the effective tool interceptor config for a specific provider
@@ -1259,6 +1320,56 @@ func (c *Config) GetToolInterceptorConfigForProvider(providerUUID string) (*typ.
 
 	typ.ApplyToolInterceptorDefaults(effective)
 	return effective, true
+}
+
+// GetEffectiveToolConfig returns the effective tool config for a specific provider and tool type
+// This is a generic method that works for any tool type
+// The mergeFunc parameter defines how to merge global and provider-specific configs
+//
+// Usage:
+//
+//	var globalCfg typ.ToolInterceptorConfig
+//	if !c.GetToolConfig(db.ToolTypeInterceptor, &globalCfg) {
+//	    // No global config
+//	    return nil, false
+//	}
+//
+//	effective, enabled := c.GetEffectiveToolConfig(providerUUID, db.ToolTypeInterceptor,
+//	    func(globalJSON, providerJSON []byte) ([]byte, error) {
+//	        // Custom merge logic
+//	        return mergedJSON, nil
+//	    },
+//	    &globalCfg,
+//	)
+func (c *Config) GetEffectiveToolConfig(providerUUID, toolType string, mergeFunc func(global, provider interface{}) interface{}, globalConfig interface{}) (interface{}, bool) {
+	if c.toolConfigStore == nil {
+		return nil, false
+	}
+
+	// Get provider-specific config
+	record, err := c.toolConfigStore.GetByProviderAndType(providerUUID, toolType)
+	if err != nil {
+		logrus.Warnf("Failed to get tool config for provider %s, type %s: %v", providerUUID, toolType, err)
+	}
+
+	// If provider explicitly disabled, return disabled
+	if record != nil && record.Disabled {
+		return nil, false
+	}
+
+	// If provider has config, merge with global
+	if record != nil {
+		var providerConfig interface{}
+		if err := json.Unmarshal([]byte(record.ConfigJSON), &providerConfig); err != nil {
+			logrus.Warnf("Failed to unmarshal provider tool config: %v", err)
+			return globalConfig, true
+		}
+
+		return mergeFunc(globalConfig, providerConfig), true
+	}
+
+	// No provider-specific config, use global
+	return globalConfig, globalConfig != nil
 }
 
 // SetDefaultMaxTokens updates the default max_tokens

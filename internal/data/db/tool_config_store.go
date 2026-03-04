@@ -264,6 +264,77 @@ func (tcs *ToolConfigStore) IsDisabled(providerUUID string) bool {
 	return record.Disabled
 }
 
+// GetToolConfig returns the config for a specific provider and tool type (generic)
+// target is a pointer to the config struct to unmarshal into
+// Returns (disabled, found, error)
+// - disabled: true if the tool is explicitly disabled for this provider
+// - found: true if a config record exists for this provider/tool type
+// - error: any unmarshaling error
+func (tcs *ToolConfigStore) GetToolConfig(providerUUID, toolType string, target interface{}) (disabled, found bool, err error) {
+	record, err := tcs.GetByProviderAndType(providerUUID, toolType)
+	if err != nil {
+		return false, false, err
+	}
+	if record == nil {
+		return false, false, nil
+	}
+
+	if record.Disabled {
+		return true, true, nil
+	}
+
+	if record.ConfigJSON == "" || record.ConfigJSON == "null" {
+		return false, true, nil
+	}
+
+	if err := json.Unmarshal([]byte(record.ConfigJSON), target); err != nil {
+		return false, true, fmt.Errorf("failed to unmarshal tool config: %w", err)
+	}
+
+	return false, true, nil
+}
+
+// SetToolConfig sets the config for a specific provider and tool type (generic)
+// config is any struct that can be marshaled to JSON
+// Returns the UUID of the created/updated record
+func (tcs *ToolConfigStore) SetToolConfig(providerUUID, toolType string, config interface{}, disabled bool) (string, error) {
+	configJSON, err := json.Marshal(config)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal tool config: %w", err)
+	}
+
+	// Check if existing record exists
+	existing, err := tcs.GetByProviderAndType(providerUUID, toolType)
+	if err != nil {
+		return "", err
+	}
+
+	var uuid string
+	if existing != nil {
+		uuid = existing.UUID
+		existing.ConfigJSON = string(configJSON)
+		existing.Disabled = disabled
+		if err := tcs.Save(existing); err != nil {
+			return "", err
+		}
+	} else {
+		// Create new record with UUID based on provider UUID and tool type
+		uuid = fmt.Sprintf("%s-%s", providerUUID, toolType)
+		record := &ToolConfigRecord{
+			UUID:         uuid,
+			ProviderUUID: providerUUID,
+			ToolType:     toolType,
+			ConfigJSON:   string(configJSON),
+			Disabled:     disabled,
+		}
+		if err := tcs.Save(record); err != nil {
+			return "", err
+		}
+	}
+
+	return uuid, nil
+}
+
 // GetDB returns the underlying GORM DB instance (for testing/advanced usage)
 func (tcs *ToolConfigStore) GetDB() *gorm.DB {
 	return tcs.db
