@@ -6,7 +6,7 @@ import { PageLayout } from '@/components/PageLayout';
 import PlatformGuide from '@/components/remote-control/PlatformGuide';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
-import { BotPlatformConfig, BotSettings } from '@/types/bot';
+import type { BotPlatformConfig, BotSettings } from '@/types/bot';
 import { Add } from '@mui/icons-material';
 import {
     Alert,
