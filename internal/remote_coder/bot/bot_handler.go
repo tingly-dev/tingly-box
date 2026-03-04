@@ -63,6 +63,18 @@ func NewBotHandler(
 	// Create IM prompter for permission requests
 	imPrompter := NewIMPrompter(manager)
 
+	// Create file store with proxy support
+	fileStore, err := NewFileStoreWithProxy(botSetting.ProxyURL)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to create file store with proxy, using default")
+		fileStore = NewFileStore()
+	}
+
+	// Set telegram token for file URL resolution
+	if token, ok := botSetting.Auth["token"]; ok {
+		fileStore.SetTelegramToken(token)
+	}
+
 	return &BotHandler{
 		ctx:              ctx,
 		botSetting:       botSetting,
@@ -73,7 +85,7 @@ func NewBotHandler(
 		directoryBrowser: directoryBrowser,
 		manager:          manager,
 		imPrompter:       imPrompter,
-		fileStore:        NewFileStore(),
+		fileStore:        fileStore,
 	}
 }
 

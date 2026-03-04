@@ -2,10 +2,12 @@ package bot
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,6 +56,33 @@ func NewFileStore() *FileStore {
 			Timeout: 60 * time.Second,
 		},
 	}
+}
+
+// NewFileStoreWithProxy creates a new file store with proxy support
+func NewFileStoreWithProxy(proxyURL string) (*FileStore, error) {
+	httpClient := &http.Client{
+		Timeout: 60 * time.Second,
+	}
+
+	if proxyURL != "" {
+		proxyParsed, err := url.Parse(proxyURL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid proxy URL: %w", err)
+		}
+		transport := &http.Transport{
+			Proxy: http.ProxyURL(proxyParsed),
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: false,
+			},
+		}
+		httpClient.Transport = transport
+	}
+
+	return &FileStore{
+		maxImageSize: DefaultMaxImageSize,
+		maxDocSize:   DefaultMaxDocSize,
+		httpClient:   httpClient,
+	}, nil
 }
 
 // NewFileStoreWithLimits creates a new file store with custom limits
