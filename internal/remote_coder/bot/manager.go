@@ -87,7 +87,7 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 
 	// Handle both bot.Settings and db.Settings types
 	// Determine the type and extract common fields
-	var platform, token, authToken string
+	var platform, token string
 	var auth map[string]string
 	var name string
 	var record db.Settings
@@ -112,7 +112,6 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	}
 
 	platform = s.Platform
-	authToken = s.Token
 	auth = s.Auth
 	name = s.Name
 
@@ -121,9 +120,6 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	}
 
 	token = auth["token"]
-	if token == "" {
-		token = authToken // Legacy field
-	}
 
 	// Validate auth credentials based on platform
 	hasValidAuth := false
@@ -149,7 +145,7 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	m.running[uuid] = &runningBot{cancel: cancel}
 
 	// Start bot in goroutine
-	go func(s BotSetting) {
+	go func() {
 		m.mu.RLock()
 		dbPath := m.dbPath
 		m.mu.RUnlock()
@@ -160,7 +156,7 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 		// Bot stopped, remove from running map
 		m.removeRunning(uuid)
 		logrus.WithField("uuid", uuid).Info("Bot stopped")
-	}(s)
+	}()
 
 	logrus.WithField("uuid", uuid).WithField("name", name).WithField("platform", platform).Info("Bot started")
 	return nil
