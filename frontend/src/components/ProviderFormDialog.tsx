@@ -1,4 +1,4 @@
-import { WarningAmber, Close } from '@mui/icons-material';
+import { WarningAmber, Close, Visibility, VisibilityOff } from '@mui/icons-material';
 import {
     Alert,
     Autocomplete,
@@ -10,8 +10,11 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
+    FormControl,
     FormControlLabel,
+    FormLabel,
     IconButton,
+    InputAdornment,
     Stack,
     Switch,
     TextField,
@@ -68,6 +71,7 @@ const ProviderFormDialog = ({
 
     const [verifying, setVerifying] = useState(false);
     const [noApiKey, setNoApiKey] = useState(data.noKeyRequired || false);
+    const [showApiKey, setShowApiKey] = useState(false);
     const [verificationResult, setVerificationResult] = useState<{
         success: boolean;
         message: string;
@@ -85,6 +89,37 @@ const ProviderFormDialog = ({
 
     // All unique providers
     const allProviders = useMemo(() => getAllUniqueProviders(), []);
+
+    // Helper component for displaying base URL
+    const ProtocolBaseUrlDisplay: React.FC<{ url: string }> = ({ url }) => {
+        if (!url) return null;
+        return (
+            <Box
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    mt: 0.5,
+                    px: 1,
+                    py: 0.5,
+                    bgcolor: 'background.default',
+                    borderRadius: 0.75,
+                }}
+            >
+                <Typography
+                    variant="caption"
+                    sx={{
+                        fontFamily: 'monospace',
+                        color: 'primary.main',
+                        fontSize: '0.7rem',
+                        wordBreak: 'break-all',
+                    }}
+                >
+                    {url}
+                </Typography>
+            </Box>
+        );
+    };
 
     // Sync noApiKey state with data.noKeyRequired prop
     useEffect(() => {
@@ -234,7 +269,6 @@ const ProviderFormDialog = ({
                 setVerificationResult({
                     success: false,
                     message: result.error?.message || t('providerDialog.verification.failed'),
-                    details: result.error?.type,
                 });
                 return false;
             }
@@ -242,7 +276,6 @@ const ProviderFormDialog = ({
             setVerificationResult({
                 success: false,
                 message: t('providerDialog.verification.networkError'),
-                details: error instanceof Error ? error.message : 'Unknown error',
             });
             return false;
         } finally {
@@ -263,6 +296,9 @@ const ProviderFormDialog = ({
             }
         }
 
+        // Close dialog immediately for better UX
+        // The parent onSubmit will handle the actual API operation
+        onClose();
         onSubmit(e);
     };
 
@@ -354,6 +390,14 @@ const ProviderFormDialog = ({
                                             setProtocolAnthropic(false);
                                         }
                                     }
+                                } else if (reason === 'clear') {
+                                    // Handle clear button click
+                                    setSelectedProvider(null);
+                                    onChange('apiBase', '');
+                                    onChange('providerBaseUrls', undefined);
+                                    setProtocolOpenAI(false);
+                                    setProtocolAnthropic(false);
+                                    setVerificationResult(null);
                                 }
                             }}
                             renderOption={(props, option) => (
@@ -378,29 +422,42 @@ const ProviderFormDialog = ({
                         />
 
                         {/* ② Protocol Selection (Checkboxes) */}
-                        <Box
-                            component="fieldset"
+                        <FormControl
+                            required
                             sx={{
+                                position: 'relative',
                                 border: 1,
-                                borderColor: 'divider',
+                                borderColor: 'text.primary',
+                                borderWidth: 0.5,
+                                // opacity: 0.23,
                                 borderRadius: 1,
-                                p: 0,
+                                p: 0.5,
                                 m: 0,
-                                '& > legend': {
-                                    ml: 1,
-                                    px: 0.5,
-                                    fontSize: '0.75rem',
-                                    color: 'text.secondary',
-                                },
                             }}
                         >
-                            <legend>{t('providerDialog.protocol.label')}</legend>
-                            <Stack spacing={0}>
+                            <FormLabel
+                                sx={{
+                                    position: 'absolute',
+                                    top: -10,
+                                    left: 12,
+                                    px: 0.5,
+                                    bgcolor: 'background.paper',
+                                    fontSize: '0.75rem',
+                                    color: 'text.secondary',
+                                    '&.Mui-focused': {
+                                        color: 'text.secondary',
+                                    },
+                                }}
+                            >
+                                {t('providerDialog.protocol.label')}
+                            </FormLabel>
+                            <Stack spacing={0.5} sx={{ mt: 0.5 }}>
                                 {/* OpenAI Protocol */}
                                 <Box
                                     sx={{
-                                        px: 2,
+                                        px: 1.5,
                                         py: 1,
+                                        borderRadius: 1,
                                         cursor: 'pointer',
                                         transition: 'all 0.15s',
                                         bgcolor: protocolOpenAI ? 'action.selected' : 'transparent',
@@ -414,30 +471,32 @@ const ProviderFormDialog = ({
                                         setVerificationResult(null);
                                     }}
                                 >
-                                    <Stack direction="row" alignItems="center" spacing={1}>
-                                        <OpenAI size={18} />
+                                    <Stack direction="row" alignItems="flex-start" spacing={1}>
+                                        <OpenAI size={18} sx={{ mt: 0.2 }} />
                                         <Box sx={{ flex: 1 }}>
                                             <Typography variant="body2" fontWeight={500}>
                                                 {t('providerDialog.apiStyle.openAI')}
                                             </Typography>
-                                            <Typography variant="caption" color="text.secondary">
+                                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.2 }}>
                                                 {t('providerDialog.apiStyle.helperOpenAI')}
                                             </Typography>
+                                            {selectedProvider?.baseUrlOpenAI && (
+                                                <ProtocolBaseUrlDisplay url={selectedProvider.baseUrlOpenAI} />
+                                            )}
                                         </Box>
                                         <Checkbox
                                             size="small"
                                             checked={protocolOpenAI}
                                             disabled={selectedProvider ? !selectedProvider.supportsOpenAI : false}
-                                            sx={{ p: 0 }}
+                                            sx={{ p: 0, mt: -0.5 }}
                                         />
                                     </Stack>
                                 </Box>
                                 {/* Anthropic Protocol */}
                                 <Box
                                     sx={{
-                                        borderTop: 1,
-                                        borderColor: 'divider',
-                                        px: 2,
+                                        borderRadius: 1,
+                                        px: 1.5,
                                         py: 1,
                                         cursor: 'pointer',
                                         transition: 'all 0.15s',
@@ -452,34 +511,37 @@ const ProviderFormDialog = ({
                                         setVerificationResult(null);
                                     }}
                                 >
-                                    <Stack direction="row" alignItems="center" spacing={1}>
-                                        <Anthropic size={18} />
+                                    <Stack direction="row" alignItems="flex-start" spacing={1}>
+                                        <Anthropic size={18} sx={{ mt: 0.2 }} />
                                         <Box sx={{ flex: 1 }}>
                                             <Typography variant="body2" fontWeight={500}>
                                                 {t('providerDialog.apiStyle.anthropic')}
                                             </Typography>
-                                            <Typography variant="caption" color="text.secondary">
+                                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.2 }}>
                                                 {t('providerDialog.apiStyle.helperAnthropic')}
                                             </Typography>
+                                            {selectedProvider?.baseUrlAnthropic && (
+                                                <ProtocolBaseUrlDisplay url={selectedProvider.baseUrlAnthropic} />
+                                            )}
                                         </Box>
                                         <Checkbox
                                             size="small"
                                             checked={protocolAnthropic}
                                             disabled={selectedProvider ? !selectedProvider.supportsAnthropic : false}
-                                            sx={{ p: 0 }}
+                                            sx={{ p: 0, mt: -0.5 }}
                                         />
                                     </Stack>
                                 </Box>
                             </Stack>
-                        </Box>
+                        </FormControl>
 
                         {/* ③ API Key Field */}
-                        <Box sx={{ position: 'relative' }}>
+                        <Box>
                             <TextField
                                 size="small"
                                 fullWidth
                                 label={noApiKey ? 'API Key (Not Required)' : t('providerDialog.apiKey.label')}
-                                type="password"
+                                type={showApiKey ? 'text' : 'password'}
                                 value={data.token}
                                 onChange={(e) => {
                                     onChange('token', e.target.value);
@@ -491,39 +553,46 @@ const ProviderFormDialog = ({
                                 disabled={noApiKey}
                                 slotProps={{
                                     input: {
-                                        sx: { pr: 12 },
+                                        sx: {
+                                            '& input': {
+                                                textOverflow: 'ellipsis',
+                                            },
+                                        },
+                                        endAdornment: (
+                                            <InputAdornment position="end">
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => setShowApiKey(!showApiKey)}
+                                                    edge="end"
+                                                    disabled={noApiKey}
+                                                >
+                                                    {showApiKey ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                                                </IconButton>
+                                            </InputAdornment>
+                                        ),
                                     },
                                 }}
                             />
-                            <Stack
-                                direction="row"
-                                alignItems="center"
-                                spacing={0.5}
-                                sx={{
-                                    position: 'absolute',
-                                    right: 12,
-                                    top: 20,
-                                    transform: 'translateY(-50%)',
-                                    pointerEvents: 'auto',
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                <Typography variant="subtitle2" color="text.secondary">
-                                    No API Key
-                                </Typography>
-                                <Switch
-                                    size="small"
-                                    checked={noApiKey}
-                                    onChange={(e) => {
-                                        setNoApiKey(e.target.checked);
-                                        onChange('noKeyRequired', e.target.checked);
-                                        setVerificationResult(null);
-                                        if (e.target.checked) {
-                                            onChange('token', '');
-                                        }
-                                    }}
+                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.5, pr: 2 }}>
+                                <FormControlLabel
+                                    control={
+                                        <Checkbox
+                                            size="small"
+                                            checked={noApiKey}
+                                            onChange={(e) => {
+                                                setNoApiKey(e.target.checked);
+                                                onChange('noKeyRequired', e.target.checked);
+                                                setVerificationResult(null);
+                                                if (e.target.checked) {
+                                                    onChange('token', '');
+                                                }
+                                            }}
+                                        />
+                                    }
+                                    label="No API Key Required"
+                                    labelPlacement="start"
                                 />
-                            </Stack>
+                            </Box>
                         </Box>
 
                         {/* ④ Name Field */}
@@ -590,14 +659,9 @@ const ProviderFormDialog = ({
                                         </Typography>
                                     )}
                                     {!verificationResult.success && (
-                                        <>
-                                            <Typography variant="caption" display="block" sx={{ mt: 0.5, color: 'text.secondary' }}>
-                                                {t('providerDialog.forceAdd.message')}
-                                            </Typography>
-                                            <Typography variant="caption" display="block" sx={{ mt: 0.5, color: 'text.secondary' }}>
-                                                {t('providerDialog.forceAdd.explanation')}
-                                            </Typography>
-                                        </>
+                                        <Typography variant="body2" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
+                                            {t('providerDialog.verification.failureHint')}
+                                        </Typography>
                                     )}
                                     {verificationResult.responseTime && (
                                         <Typography variant="caption" display="block">
@@ -634,12 +698,12 @@ const ProviderFormDialog = ({
                         variant="contained"
                         size="small"
                         disabled={verifying || !hasAnyProtocol}
+                        sx={{
+                            minWidth: verifying ? '80px' : 'auto',
+                        }}
                     >
                         {verifying ? (
-                            <>
-                                <CircularProgress size={16} sx={{ mr: 1 }} />
-                                {mode === 'add' ? 'Adding...' : 'Saving...'}
-                            </>
+                            <CircularProgress size={20} thickness={4} />
                         ) : (
                             submitText || defaultSubmitText
                         )}
