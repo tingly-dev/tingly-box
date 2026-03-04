@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 )
 
@@ -40,11 +42,17 @@ type ImBotSettingsStore struct {
 
 // NewImBotSettingsStore creates or loads an ImBot settings store using SQLite database.
 func NewImBotSettingsStore(baseDir string) (*ImBotSettingsStore, error) {
+	logrus.Debugf("Initializing stats store in directory: %s", baseDir)
 	if err := os.MkdirAll(baseDir, 0700); err != nil {
-		return nil, fmt.Errorf("failed to create imbot settings store directory: %w", err)
+		return nil, fmt.Errorf("failed to create stats store directory: %w", err)
 	}
 
 	dbPath := constant.GetDBFile(baseDir)
+	// Ensure the db subdirectory exists
+	dbDir := filepath.Dir(dbPath)
+	if err := os.MkdirAll(dbDir, 0700); err != nil {
+		return nil, fmt.Errorf("failed to create db directory: %w", err)
+	}
 	// Configure SQLite with busy timeout and other settings
 	dsn := dbPath + "?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=1"
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
