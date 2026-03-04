@@ -11,6 +11,9 @@ const (
 	DefaultUserToken         = "tingly-box-user-token"
 	DefaultModelToken        = "tingly-box-model-token"
 	DefaultVirtualModelToken = "tingly-virtual-model-token"
+
+	// Default mode name
+	DefaultModeName = "tingly"
 )
 
 const (

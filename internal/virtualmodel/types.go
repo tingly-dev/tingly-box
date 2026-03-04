@@ -1,6 +1,10 @@
 package virtualmodel
 
-import "time"
+import (
+	"time"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+)
 
 // Model represents a virtual model in the models list (OpenAI-compatible format)
 type Model struct {
@@ -10,16 +14,44 @@ type Model struct {
 	OwnedBy string `json:"owned_by"`
 }
 
+// VirtualModelType represents the type of virtual model
+type VirtualModelType string
+
+const (
+	VirtualModelTypeStatic VirtualModelType = "static" // Original: fixed response
+	VirtualModelTypeTool   VirtualModelType = "tool"   // Returns tool calls
+	VirtualModelTypeProxy  VirtualModelType = "proxy"  // Proxy mode with transformer
+)
+
+// ToolCallConfig defines a tool call to be returned by the virtual model
+// This is a generic configuration that can represent any tool call
+type ToolCallConfig struct {
+	// Tool name (e.g., "ask_user_question", "web_search", "code_interpreter")
+	Name string `json:"name" yaml:"name"`
+	// Tool arguments as a map (will be serialized to JSON)
+	// For ask_user_question: {"question": "...", "options": [...]}
+	// For web_search: {"query": "..."}
+	Arguments map[string]interface{} `json:"arguments" yaml:"arguments"`
+}
+
 // VirtualModelConfig holds the configuration for a virtual model
 type VirtualModelConfig struct {
 	ID           string
 	Name         string
 	Description  string
-	Content      string
+	Type         VirtualModelType // "static", "tool", or "proxy"
+	Content      string           // For static models
 	Role         string
 	FinishReason string
 	Delay        time.Duration
 	StreamChunks []string // For streaming: chunks to send
+
+	// For tool-type models
+	ToolCall *ToolCallConfig
+
+	// For proxy-type models
+	DelegateModel string              // Real model to delegate to (e.g., "claude-3-5-sonnet-20241022")
+	Transformer   protocol.Transformer // Optional transformer for proxy mode
 }
 
 // VirtualModel represents a registered virtual model
@@ -34,6 +66,9 @@ func NewVirtualModel(cfg *VirtualModelConfig) *VirtualModel {
 	}
 	if cfg.FinishReason == "" {
 		cfg.FinishReason = "stop"
+	}
+	if cfg.Type == "" {
+		cfg.Type = VirtualModelTypeStatic
 	}
 	return &VirtualModel{config: cfg}
 }
@@ -68,6 +103,41 @@ func (vm *VirtualModel) GetStreamChunks() []string {
 		return splitIntoChunks(vm.config.Content)
 	}
 	return vm.config.StreamChunks
+}
+
+// GetType returns the model type
+func (vm *VirtualModel) GetType() VirtualModelType {
+	return vm.config.Type
+}
+
+// IsStatic returns true if this is a static model
+func (vm *VirtualModel) IsStatic() bool {
+	return vm.config.Type == VirtualModelTypeStatic
+}
+
+// IsTool returns true if this is a tool-type model
+func (vm *VirtualModel) IsTool() bool {
+	return vm.config.Type == VirtualModelTypeTool
+}
+
+// IsProxy returns true if this is a proxy model
+func (vm *VirtualModel) IsProxy() bool {
+	return vm.config.Type == VirtualModelTypeProxy
+}
+
+// GetDelegateModel returns the delegate model for proxy mode
+func (vm *VirtualModel) GetDelegateModel() string {
+	return vm.config.DelegateModel
+}
+
+// GetTransformer returns the transformer for proxy mode
+func (vm *VirtualModel) GetTransformer() protocol.Transformer {
+	return vm.config.Transformer
+}
+
+// GetToolCall returns the tool call configuration
+func (vm *VirtualModel) GetToolCall() *ToolCallConfig {
+	return vm.config.ToolCall
 }
 
 // ToModel converts to Model type for API response
