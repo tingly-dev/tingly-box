@@ -139,13 +139,14 @@ func (s *Server) testProviderConnectivity(req *ProbeProviderRequest) (bool, stri
 		return true, result.Message, 0, nil
 	}
 
-	// Tier 3: Try OPTIONS request for basic connectivity
-	result = prober.ProbeOptionsEndpoint(ctx)
-	if result.Success {
-		return true, "API key is valid and endpoint accessible", 0, nil
+	// Both tiers failed - provider is not accessible or not compatible
+	errorMsg := "Provider connectivity check failed. "
+	if result.ErrorMessage != "" {
+		errorMsg += result.ErrorMessage
+	} else {
+		errorMsg += "Neither models nor chat endpoints are accessible. This provider may not be compatible."
 	}
-
-	return false, "Failed to connect to provider: " + result.ErrorMessage, 0, nil
+	return false, errorMsg, 0, nil
 }
 
 // getDefaultModelForAPIStyle returns a default model name for probing based on API style
