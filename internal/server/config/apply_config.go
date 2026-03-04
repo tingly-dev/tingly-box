@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/internal"
 )
 
 // ApplyResult contains the result of applying a configuration
@@ -74,9 +76,14 @@ func ensureDir(path string) error {
 	return os.MkdirAll(dir, 0755)
 }
 
+type KV struct {
+	Key   string
+	Value any
+}
+
 // ApplyClaudeSettingsFromEnv applies Claude settings configuration with env vars
 // This is the safe version - env map is controlled by backend
-func ApplyClaudeSettingsFromEnv(env map[string]string) (*ApplyResult, error) {
+func ApplyClaudeSettingsFromEnv(env map[string]string, extras ...KV) (*ApplyResult, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
@@ -131,7 +138,11 @@ func ApplyClaudeSettingsFromEnv(env map[string]string) (*ApplyResult, error) {
 	for k, v := range env {
 		envInterface[k] = v
 	}
+
 	existingConfig["env"] = envInterface
+	for _, extra := range extras {
+		existingConfig[extra.Key] = extra.Value
+	}
 
 	// Write the merged config
 	output, err := json.MarshalIndent(existingConfig, "", "  ")
@@ -155,6 +166,39 @@ func ApplyClaudeSettingsFromEnv(env map[string]string) (*ApplyResult, error) {
 	}
 
 	return result, nil
+}
+
+// InstallStatusLineScript installs the tingly-statusline.sh script to ~/.claude/
+// Returns the path to the installed script and whether it was newly created
+func InstallStatusLineScript() (scriptPath string, created bool, err error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", false, fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	scriptPath = filepath.Join(homeDir, ".claude", "tingly-statusline.sh")
+
+	// Read script from embedded assets
+	content, err := internal.ScriptAssets.ReadFile("script/tingly-statusline.sh")
+	if err != nil {
+		return "", false, fmt.Errorf("failed to read status line script from assets: %w", err)
+	}
+
+	// Ensure directory exists
+	if err := ensureDir(scriptPath); err != nil {
+		return "", false, fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Check if file exists
+	_, err = os.Stat(scriptPath)
+	fileExists := err == nil
+
+	// Write the script
+	if err := os.WriteFile(scriptPath, content, 0755); err != nil {
+		return "", false, fmt.Errorf("failed to write script: %w", err)
+	}
+
+	return scriptPath, !fileExists, nil
 }
 
 // ApplyClaudeOnboarding applies Claude onboarding configuration
