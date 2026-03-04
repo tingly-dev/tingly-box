@@ -300,15 +300,15 @@ func (s *Server) determineRuleWithScenario(ctx *gin.Context, scenario typ.RuleSc
 		if rule != nil && rule.Active {
 			return rule, nil
 		}
-		// Enterprise virtual-key requests are department-policy constrained by middleware.
-		// If endpoint scenario has no matching rule, allow lookup by model across scenarios.
-		clientID := ctx.GetString("client_id")
-		if clientID == "enterprise_virtual_key" {
-			for _, anyRule := range cfg.GetRequestConfigs() {
-				if anyRule.Active && anyRule.RequestModel == modelName && enterpriseModelAllowed(ctx, modelName, anyRule.GetScenario()) {
-					return &anyRule, nil
+			// Enterprise access-token requests are department-policy constrained by middleware.
+			// If endpoint scenario has no matching rule, allow lookup by model across scenarios.
+			clientID := ctx.GetString("client_id")
+			if clientID == "enterprise_access_token" {
+				for _, anyRule := range cfg.GetRequestConfigs() {
+					if anyRule.Active && anyRule.RequestModel == modelName && enterpriseModelAllowed(ctx, modelName, anyRule.GetScenario()) {
+						return &anyRule, nil
+					}
 				}
-			}
 		}
 	}
 
