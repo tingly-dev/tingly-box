@@ -86,6 +86,37 @@ const ProviderFormDialog = ({
     // All unique providers
     const allProviders = useMemo(() => getAllUniqueProviders(), []);
 
+    // Helper component for displaying base URL
+    const ProtocolBaseUrlDisplay: React.FC<{ url: string }> = ({ url }) => {
+        if (!url) return null;
+        return (
+            <Box
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    mt: 0.5,
+                    px: 1,
+                    py: 0.5,
+                    bgcolor: 'background.default',
+                    borderRadius: 0.75,
+                }}
+            >
+                <Typography
+                    variant="caption"
+                    sx={{
+                        fontFamily: 'monospace',
+                        color: 'primary.main',
+                        fontSize: '0.7rem',
+                        wordBreak: 'break-all',
+                    }}
+                >
+                    {url}
+                </Typography>
+            </Box>
+        );
+    };
+
     // Sync noApiKey state with data.noKeyRequired prop
     useEffect(() => {
         setNoApiKey(data.noKeyRequired || false);
@@ -357,6 +388,14 @@ const ProviderFormDialog = ({
                                             setProtocolAnthropic(false);
                                         }
                                     }
+                                } else if (reason === 'clear') {
+                                    // Handle clear button click
+                                    setSelectedProvider(null);
+                                    onChange('apiBase', '');
+                                    onChange('providerBaseUrls', undefined);
+                                    setProtocolOpenAI(false);
+                                    setProtocolAnthropic(false);
+                                    setVerificationResult(null);
                                 }
                             }}
                             renderOption={(props, option) => (
@@ -426,6 +465,9 @@ const ProviderFormDialog = ({
                                             <Typography variant="caption" color="text.secondary">
                                                 {t('providerDialog.apiStyle.helperOpenAI')}
                                             </Typography>
+                                            {selectedProvider?.baseUrlOpenAI && protocolOpenAI && (
+                                                <ProtocolBaseUrlDisplay url={selectedProvider.baseUrlOpenAI} />
+                                            )}
                                         </Box>
                                         <Checkbox
                                             size="small"
@@ -464,6 +506,9 @@ const ProviderFormDialog = ({
                                             <Typography variant="caption" color="text.secondary">
                                                 {t('providerDialog.apiStyle.helperAnthropic')}
                                             </Typography>
+                                            {selectedProvider?.baseUrlAnthropic && protocolAnthropic && (
+                                                <ProtocolBaseUrlDisplay url={selectedProvider.baseUrlAnthropic} />
+                                            )}
                                         </Box>
                                         <Checkbox
                                             size="small"
