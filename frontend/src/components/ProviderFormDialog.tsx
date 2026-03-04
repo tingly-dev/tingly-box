@@ -440,59 +440,61 @@ const ProviderFormDialog = ({
                                     }}
                                 />
 
-                                {/* API Key Field */}
-                                <Box sx={{ position: 'relative' }}>
-                                    <TextField
-                                        size="small"
-                                        fullWidth
-                                        label={noApiKey ? 'API Key (Not Required)' : t('providerDialog.apiKey.label')}
-                                        type="password"
-                                        value={data.token}
-                                        onChange={(e) => {
-                                            onChange('token', e.target.value);
-                                            // Clear verification result when token changes
-                                            setVerificationResult(null);
-                                        }}
-                                        required={!noApiKey}
-                                        placeholder={mode === 'add' ? t('providerDialog.apiKey.placeholderAdd') : t('providerDialog.apiKey.placeholderEdit')}
-                                        helperText={mode === 'edit' && t('providerDialog.apiKey.helperEdit')}
-                                        disabled={noApiKey}
-                                        slotProps={{
-                                            input: {
-                                                sx: { pr: 12 },
-                                            },
-                                        }}
-                                    />
-                                    <Stack
-                                        direction="row"
-                                        alignItems="center"
-                                        spacing={0.5}
-                                        sx={{
-                                            position: 'absolute',
-                                            right: 12,
-                                            top: '50%',
-                                            transform: 'translateY(-50%)',
-                                            pointerEvents: 'auto',
-                                        }}
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        <Typography variant="subtitle2" color="text.secondary">
-                                            No Key
-                                        </Typography>
-                                        <Switch
+                                {/* API Key Field - hidden when using helper */}
+                                {data.credentialSource !== 'helper' && (
+                                    <Box sx={{ position: 'relative' }}>
+                                        <TextField
                                             size="small"
-                                            checked={noApiKey}
+                                            fullWidth
+                                            label={noApiKey ? 'API Key (Not Required)' : t('providerDialog.apiKey.label')}
+                                            type="password"
+                                            value={data.token}
                                             onChange={(e) => {
-                                                setNoApiKey(e.target.checked);
-                                                onChange('noKeyRequired', e.target.checked);
+                                                onChange('token', e.target.value);
+                                                // Clear verification result when token changes
                                                 setVerificationResult(null);
-                                                if (e.target.checked) {
-                                                    onChange('token', '');
-                                                }
+                                            }}
+                                            required={!noApiKey}
+                                            placeholder={mode === 'add' ? t('providerDialog.apiKey.placeholderAdd') : t('providerDialog.apiKey.placeholderEdit')}
+                                            helperText={mode === 'edit' && t('providerDialog.apiKey.helperEdit')}
+                                            disabled={noApiKey}
+                                            slotProps={{
+                                                input: {
+                                                    sx: { pr: 12 },
+                                                },
                                             }}
                                         />
-                                    </Stack>
-                                </Box>
+                                        <Stack
+                                            direction="row"
+                                            alignItems="center"
+                                            spacing={0.5}
+                                            sx={{
+                                                position: 'absolute',
+                                                right: 12,
+                                                top: '50%',
+                                                transform: 'translateY(-50%)',
+                                                pointerEvents: 'auto',
+                                            }}
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            <Typography variant="subtitle2" color="text.secondary">
+                                                No Key
+                                            </Typography>
+                                            <Switch
+                                                size="small"
+                                                checked={noApiKey}
+                                                onChange={(e) => {
+                                                    setNoApiKey(e.target.checked);
+                                                    onChange('noKeyRequired', e.target.checked);
+                                                    setVerificationResult(null);
+                                                    if (e.target.checked) {
+                                                        onChange('token', '');
+                                                    }
+                                                }}
+                                            />
+                                        </Stack>
+                                    </Box>
+                                )}
 
                                 {/* Proxy URL Field */}
                                 <TextField
@@ -513,7 +515,11 @@ const ProviderFormDialog = ({
                                         </Typography>
                                         <Box sx={{ display: 'flex', gap: 1 }}>
                                             <Box
-                                                onClick={() => onChange('credentialSource', 'direct')}
+                                                onClick={() => {
+                                                    onChange('credentialSource', 'direct');
+                                                    onChange('helperConfig', undefined);
+                                                    setVerificationResult(null);
+                                                }}
                                                 sx={{
                                                     flex: 1,
                                                     border: 2,
@@ -537,6 +543,8 @@ const ProviderFormDialog = ({
                                             <Box
                                                 onClick={() => {
                                                     onChange('credentialSource', 'helper');
+                                                    onChange('token', '');
+                                                    setVerificationResult(null);
                                                     if (!data.helperConfig) {
                                                         onChange('helperConfig', { command: '', simple_mode: true, timeout_ms: 5000 });
                                                     }
