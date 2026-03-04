@@ -594,6 +594,18 @@ export const api = {
         }
     },
 
+    testHelper: async (config: { command: string; args?: string[]; timeout_ms?: number; simple_mode?: boolean }): Promise<any> => {
+        try {
+            const response = await fetchUIAPI('/providers/helper/test', {
+                method: 'POST',
+                body: JSON.stringify(config),
+            });
+            return response;
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
     getVersion: async (): Promise<string> => {
         try {
             const apiInstances = await getApiInstances();

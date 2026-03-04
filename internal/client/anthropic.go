@@ -37,8 +37,13 @@ func defaultNewAnthropicClient(provider *typ.Provider) (*AnthropicClient, error)
 		apiBase = strings.TrimSuffix(apiBase, "/v1")
 	}
 
+	token, err := provider.GetAccessToken(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get access token: %w", err)
+	}
+
 	options := []anthropicOption.RequestOption{
-		anthropicOption.WithAPIKey(provider.GetAccessToken()),
+		anthropicOption.WithAPIKey(token),
 		anthropicOption.WithBaseURL(apiBase),
 	}
 
@@ -292,7 +297,14 @@ func (c *AnthropicClient) ProbeOptionsEndpoint(ctx context.Context) ProbeResult 
 	}
 
 	// Set authentication headers
-	req.Header.Set("x-api-key", c.provider.GetAccessToken())
+	accessToken, err := c.provider.GetAccessToken(ctx)
+	if err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: fmt.Sprintf("Failed to get access token: %v", err),
+		}
+	}
+	req.Header.Set("x-api-key", accessToken)
 	req.Header.Set("anthropic-version", "2023-06-01")
 
 	client := &http.Client{Timeout: 5 * time.Second}

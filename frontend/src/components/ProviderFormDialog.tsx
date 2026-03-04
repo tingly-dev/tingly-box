@@ -1,4 +1,4 @@
-import { WarningAmber, Close } from '@mui/icons-material';
+import { WarningAmber, Close, VpnKey, Terminal } from '@mui/icons-material';
 import {
     Alert,
     Autocomplete,
@@ -31,6 +31,15 @@ export interface EnhancedProviderFormData {
     noKeyRequired?: boolean;
     enabled?: boolean;
     proxyUrl?: string;
+    credentialSource?: 'direct' | 'helper';
+    helperConfig?: {
+        command: string;
+        args?: string[];
+        timeout_ms?: number;
+        env?: Record<string, string>;
+        pass_env?: string[];
+        simple_mode?: boolean;
+    };
 }
 
 interface PresetProviderFormDialogProps {
@@ -431,59 +440,61 @@ const ProviderFormDialog = ({
                                     }}
                                 />
 
-                                {/* API Key Field */}
-                                <Box sx={{ position: 'relative' }}>
-                                    <TextField
-                                        size="small"
-                                        fullWidth
-                                        label={noApiKey ? 'API Key (Not Required)' : t('providerDialog.apiKey.label')}
-                                        type="password"
-                                        value={data.token}
-                                        onChange={(e) => {
-                                            onChange('token', e.target.value);
-                                            // Clear verification result when token changes
-                                            setVerificationResult(null);
-                                        }}
-                                        required={!noApiKey}
-                                        placeholder={mode === 'add' ? t('providerDialog.apiKey.placeholderAdd') : t('providerDialog.apiKey.placeholderEdit')}
-                                        helperText={mode === 'edit' && t('providerDialog.apiKey.helperEdit')}
-                                        disabled={noApiKey}
-                                        slotProps={{
-                                            input: {
-                                                sx: { pr: 12 },
-                                            },
-                                        }}
-                                    />
-                                    <Stack
-                                        direction="row"
-                                        alignItems="center"
-                                        spacing={0.5}
-                                        sx={{
-                                            position: 'absolute',
-                                            right: 12,
-                                            top: '50%',
-                                            transform: 'translateY(-50%)',
-                                            pointerEvents: 'auto',
-                                        }}
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        <Typography variant="subtitle2" color="text.secondary">
-                                            No Key
-                                        </Typography>
-                                        <Switch
+                                {/* API Key Field - hidden when using helper */}
+                                {data.credentialSource !== 'helper' && (
+                                    <Box sx={{ position: 'relative' }}>
+                                        <TextField
                                             size="small"
-                                            checked={noApiKey}
+                                            fullWidth
+                                            label={noApiKey ? 'API Key (Not Required)' : t('providerDialog.apiKey.label')}
+                                            type="password"
+                                            value={data.token}
                                             onChange={(e) => {
-                                                setNoApiKey(e.target.checked);
-                                                onChange('noKeyRequired', e.target.checked);
+                                                onChange('token', e.target.value);
+                                                // Clear verification result when token changes
                                                 setVerificationResult(null);
-                                                if (e.target.checked) {
-                                                    onChange('token', '');
-                                                }
+                                            }}
+                                            required={!noApiKey}
+                                            placeholder={mode === 'add' ? t('providerDialog.apiKey.placeholderAdd') : t('providerDialog.apiKey.placeholderEdit')}
+                                            helperText={mode === 'edit' && t('providerDialog.apiKey.helperEdit')}
+                                            disabled={noApiKey}
+                                            slotProps={{
+                                                input: {
+                                                    sx: { pr: 12 },
+                                                },
                                             }}
                                         />
-                                    </Stack>
-                                </Box>
+                                        <Stack
+                                            direction="row"
+                                            alignItems="center"
+                                            spacing={0.5}
+                                            sx={{
+                                                position: 'absolute',
+                                                right: 12,
+                                                top: '50%',
+                                                transform: 'translateY(-50%)',
+                                                pointerEvents: 'auto',
+                                            }}
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            <Typography variant="subtitle2" color="text.secondary">
+                                                No Key
+                                            </Typography>
+                                            <Switch
+                                                size="small"
+                                                checked={noApiKey}
+                                                onChange={(e) => {
+                                                    setNoApiKey(e.target.checked);
+                                                    onChange('noKeyRequired', e.target.checked);
+                                                    setVerificationResult(null);
+                                                    if (e.target.checked) {
+                                                        onChange('token', '');
+                                                    }
+                                                }}
+                                            />
+                                        </Stack>
+                                    </Box>
+                                )}
 
                                 {/* Proxy URL Field */}
                                 <TextField
@@ -495,6 +506,117 @@ const ProviderFormDialog = ({
                                     onChange={(e) => onChange('proxyUrl', e.target.value)}
                                     helperText={t('providerDialog.advanced.proxyUrl.helper')}
                                 />
+
+                                {/* Credential Source Selector */}
+                                {!noApiKey && (
+                                    <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
+                                        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                                            Credential Source
+                                        </Typography>
+                                        <Box sx={{ display: 'flex', gap: 1 }}>
+                                            <Box
+                                                onClick={() => {
+                                                    onChange('credentialSource', 'direct');
+                                                    onChange('helperConfig', undefined);
+                                                    setVerificationResult(null);
+                                                }}
+                                                sx={{
+                                                    flex: 1,
+                                                    border: 2,
+                                                    borderColor: (data.credentialSource || 'direct') === 'direct' ? 'primary.main' : 'divider',
+                                                    borderRadius: 1,
+                                                    p: 1.5,
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                    bgcolor: (data.credentialSource || 'direct') === 'direct' ? 'primary.50' : 'background.paper',
+                                                    '&:hover': { borderColor: 'primary.light' },
+                                                }}
+                                            >
+                                                <Stack direction="row" spacing={1} alignItems="center">
+                                                    <VpnKey fontSize="small" />
+                                                    <Box>
+                                                        <Typography variant="body2" fontWeight={600}>Stored</Typography>
+                                                        <Typography variant="caption" color="text.secondary">API key stored in Tingly Box</Typography>
+                                                    </Box>
+                                                </Stack>
+                                            </Box>
+                                            <Box
+                                                onClick={() => {
+                                                    onChange('credentialSource', 'helper');
+                                                    onChange('token', '');
+                                                    setVerificationResult(null);
+                                                    if (!data.helperConfig) {
+                                                        onChange('helperConfig', { command: '', simple_mode: true, timeout_ms: 5000 });
+                                                    }
+                                                }}
+                                                sx={{
+                                                    flex: 1,
+                                                    border: 2,
+                                                    borderColor: data.credentialSource === 'helper' ? 'primary.main' : 'divider',
+                                                    borderRadius: 1,
+                                                    p: 1.5,
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                    bgcolor: data.credentialSource === 'helper' ? 'primary.50' : 'background.paper',
+                                                    '&:hover': { borderColor: 'primary.light' },
+                                                }}
+                                            >
+                                                <Stack direction="row" spacing={1} alignItems="center">
+                                                    <Terminal fontSize="small" />
+                                                    <Box>
+                                                        <Typography variant="body2" fontWeight={600}>Token Helper</Typography>
+                                                        <Typography variant="caption" color="text.secondary">External command</Typography>
+                                                    </Box>
+                                                </Stack>
+                                            </Box>
+                                        </Box>
+
+                                        {/* Helper Configuration */}
+                                        {data.credentialSource === 'helper' && data.helperConfig && (
+                                            <Stack spacing={1.5} sx={{ mt: 2 }}>
+                                                <TextField
+                                                    size="small"
+                                                    fullWidth
+                                                    label="Helper Command"
+                                                    placeholder="/usr/local/bin/op"
+                                                    value={data.helperConfig.command || ''}
+                                                    onChange={(e) => onChange('helperConfig', { ...data.helperConfig, command: e.target.value })}
+                                                    required
+                                                    helperText="Absolute path to helper executable"
+                                                />
+                                                <TextField
+                                                    size="small"
+                                                    fullWidth
+                                                    label="Arguments"
+                                                    placeholder="read op://Private/Anthropic/api-key"
+                                                    value={data.helperConfig.args?.join(' ') || ''}
+                                                    onChange={(e) => onChange('helperConfig', { ...data.helperConfig, args: e.target.value ? e.target.value.split(' ') : undefined })}
+                                                    helperText="Space-separated arguments"
+                                                />
+                                                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                                                    <FormControlLabel
+                                                        control={
+                                                            <Switch
+                                                                size="small"
+                                                                checked={data.helperConfig.simple_mode ?? true}
+                                                                onChange={(e) => onChange('helperConfig', { ...data.helperConfig, simple_mode: e.target.checked })}
+                                                            />
+                                                        }
+                                                        label={<Typography variant="body2">Simple Mode</Typography>}
+                                                    />
+                                                    <TextField
+                                                        size="small"
+                                                        type="number"
+                                                        label="Timeout (ms)"
+                                                        value={data.helperConfig.timeout_ms || 5000}
+                                                        onChange={(e) => onChange('helperConfig', { ...data.helperConfig, timeout_ms: parseInt(e.target.value) || 5000 })}
+                                                        sx={{ width: 120 }}
+                                                    />
+                                                </Box>
+                                            </Stack>
+                                        )}
+                                    </Box>
+                                )}
 
                                 {/* Verification Result */}
                                 {verificationResult && (

@@ -726,6 +726,11 @@ func useV2Provider(s *Server, api *swagger.RouteGroup) {
 		swagger.WithResponseModel(DeleteProviderResponse{}),
 	)
 
+	api.POST("/providers/helper/test", s.TestHelper,
+		swagger.WithDescription("Test a token helper command"),
+		swagger.WithTags("providers"),
+	)
+
 	// Provider template endpoints
 	api.GET("/provider-templates", s.GetProviderTemplates,
 		swagger.WithDescription("Get all provider templates"),

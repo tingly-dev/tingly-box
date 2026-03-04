@@ -1,11 +1,13 @@
 package typ
 
 import (
+	"context"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
+	"github.com/tingly-dev/tingly-box/pkg/helper"
 )
 
 // RuleScenario represents the scenario for a routing rule
@@ -58,6 +60,24 @@ const (
 	AuthTypeAPIKey AuthType = "api_key"
 	AuthTypeOAuth  AuthType = "oauth"
 )
+
+// CredentialSource represents how credentials are obtained
+type CredentialSource string
+
+const (
+	CredentialSourceDirect CredentialSource = "direct" // Stored directly in Token field
+	CredentialSourceHelper CredentialSource = "helper" // Execute external helper
+)
+
+// HelperConfig contains configuration for token helper execution
+type HelperConfig struct {
+	Command     string            `json:"command"`                     // Helper command path (required)
+	Args        []string          `json:"args,omitempty"`              // Additional arguments
+	TimeoutMs   int               `json:"timeout_ms,omitempty"`        // Timeout in ms (default: 5000)
+	Env         map[string]string `json:"env,omitempty"`               // Environment variables to set
+	PassEnv     []string          `json:"pass_env,omitempty"`          // Environment variables to inherit
+	SimpleMode  bool              `json:"simple_mode,omitempty"`       // Return plain text instead of JSON
+}
 
 // OAuthDetail contains OAuth-specific authentication information
 type OAuthDetail struct {
@@ -239,20 +259,45 @@ type Provider struct {
 	OAuthDetail             *OAuthDetail             `json:"oauth_detail,omitempty"`              // OAuth credentials (only for oauth auth type)
 	ToolInterceptor         *ToolInterceptorConfig   `json:"tool_interceptor,omitempty"`          // Provider-level tool interceptor config
 	ToolInterceptorOverride *ToolInterceptorOverride `json:"tool_interceptor_override,omitempty"` // Provider-level override for tool interceptor
+
+	// Credential source configuration
+	CredentialSource CredentialSource `json:"credential_source,omitempty"` // direct or helper
+	HelperConfig     *HelperConfig    `json:"helper_config,omitempty"`     // Helper config (only for helper source)
 }
 
 // GetAccessToken returns the access token based on auth type
-func (p *Provider) GetAccessToken() string {
+func (p *Provider) GetAccessToken(ctx context.Context) (string, error) {
 	switch p.AuthType {
 	case AuthTypeOAuth:
 		if p.OAuthDetail != nil {
-			return p.OAuthDetail.AccessToken
+			return p.OAuthDetail.AccessToken, nil
 		}
 	case AuthTypeAPIKey, "":
 		// Default to api_key for backward compatibility
-		return p.Token
+		if p.CredentialSource == CredentialSourceHelper && p.HelperConfig != nil {
+			return p.getHelperToken(ctx)
+		}
+		return p.Token, nil
 	}
-	return ""
+	return "", nil
+}
+
+// GetHelperToken fetches the token from the configured helper command
+func (p *Provider) getHelperToken(ctx context.Context) (string, error) {
+	if p.HelperConfig == nil {
+		return "", nil
+	}
+
+	executor := helper.NewExecutor(helper.Config{
+		Command:    p.HelperConfig.Command,
+		Args:       p.HelperConfig.Args,
+		TimeoutMs:  p.HelperConfig.TimeoutMs,
+		Env:        p.HelperConfig.Env,
+		PassEnv:    p.HelperConfig.PassEnv,
+		SimpleMode: p.HelperConfig.SimpleMode,
+	})
+
+	return executor.Fetch(ctx, p.APIBase)
 }
 
 // IsOAuthExpired checks if the OAuth token is expired (only valid for oauth auth type)
