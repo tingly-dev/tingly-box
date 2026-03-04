@@ -143,7 +143,7 @@ func (s *Server) GetClaudeCodeStatusLine(c *gin.Context) {
 
 	// Query Tingly Box model mapping and add info if available
 	if mapping := s.getTBModelMapping(merged.Model.ID, typ.RuleScenario(scenario)); mapping != nil && mapping.model != "" {
-		output += fmt.Sprintf(" → %s@%s", mapping.model, mapping.providerName)
+		output += fmt.Sprintf(" → %s @ %s", mapping.model, mapping.providerName)
 	}
 
 	// Add context bar and cost

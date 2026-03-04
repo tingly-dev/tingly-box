@@ -368,15 +368,25 @@ export default {
     "jsonConfig": "JSON Config",
     "step1": "1. Configure Model",
     "step2": "2. Skip Onboarding - Make Claude Code directly usable",
+    "step3": "3. Status Line Integration (Optional)",
     "unifiedConfig": "Unified Configuration",
     "separateConfig": "Separate Configuration",
     "switchToSeparate": "Switch to Separate",
     "switchToUnified": "Switch to Unified",
+    "configButton": "Configuration Guide",
+    "quickApply": "Quick Apply",
+    "quickApplyWithStatusLine": "Quick Apply & Status Line",
+    "statusLine": {
+      "description": "Install status line integration to show real-time request information in your terminal.",
+      "jsonDescription": "Configure the status line integration to display real-time request information in your terminal prompt.",
+      "addToSettingsJson": "Add the statusLine section to your ~/.claude/settings.json (alongside the env section):",
+      "manualSetup": "Or manually download and install the status line script:",
+      "downloadLink": "Download Status Line Script"
+    },
     "modal": {
       "title": "Claude Code Configuration Guide",
       "subtitle": "Follow these steps to configure Claude Code to use Tingly Box as your AI proxy",
-      "dontRemindAgain": "Do not remind again",
-      "showGuide": "Config Claude Code"
+      "dontRemindAgain": "Do not remind again"
     }
   },
   "prompt": {
