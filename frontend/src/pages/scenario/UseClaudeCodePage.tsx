@@ -143,7 +143,7 @@ const UseClaudeCodePage: React.FC = () => {
         setPendingMode(null);
     };
 
-    // Show config guide modal (manual trigger) - user wants to be reminded again
+    // Show config guide modal
     const handleShowConfigGuide = () => {
         setConfigModalOpen(true);
     };
@@ -440,7 +440,35 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
     const handleApply = async () => {
         try {
             setIsApplyLoading(true);
-            const result = await api.applyClaudeConfig(configMode);
+            const result = await api.applyClaudeConfig(configMode, false);
+
+            if (result.success) {
+                // Build success message from backend response
+                const createdFiles = result.createdFiles || [];
+                const updatedFiles = result.updatedFiles || [];
+                const backupPaths = result.backupPaths || [];
+
+                const allFiles = [...createdFiles, ...updatedFiles];
+                let successMsg = `Configuration files written: ${allFiles.join(', ')}`;
+                if (backupPaths.length > 0) {
+                    successMsg += `\nBackups created: ${backupPaths.join(', ')}`;
+                }
+                showNotification(successMsg, 'success');
+            } else {
+                showNotification(`Failed to apply configurations: ${result.message || 'Unknown error'}`, 'error');
+            }
+        } catch (err) {
+            showNotification('Failed to apply configurations', 'error');
+        } finally {
+            setIsApplyLoading(false);
+        }
+    };
+
+    // Apply handler with status line
+    const handleApplyWithStatusLine = async () => {
+        try {
+            setIsApplyLoading(true);
+            const result = await api.applyClaudeConfig(configMode, true);
 
             if (result.success) {
                 // Build success message from backend response
@@ -555,7 +583,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                 color="primary"
                                 size="small"
                             >
-                                {t('claudeCode.modal.showGuide')}
+                                {t('claudeCode.configButton')}
                             </Button>
                         }
                     >
@@ -620,7 +648,9 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                     {/* Claude Code Config Modal */}
                     <ClaudeCodeConfigModal
                         open={configModalOpen}
-                        onClose={() => setConfigModalOpen(false)}
+                        onClose={() => {
+                            setConfigModalOpen(false);
+                        }}
                         configMode={configMode}
                         generateSettingsConfig={generateSettingsConfig}
                         generateSettingsScriptWindows={generateSettingsScriptWindows}
@@ -630,6 +660,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                         generateScriptUnix={generateScriptUnix}
                         copyToClipboard={copyToClipboard}
                         onApply={handleApply}
+                        onApplyWithStatusLine={handleApplyWithStatusLine}
                         isApplyLoading={isApplyLoading}
                     />
                 </CardGrid>

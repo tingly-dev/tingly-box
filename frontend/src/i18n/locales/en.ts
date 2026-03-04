@@ -372,11 +372,13 @@ export default {
     "separateConfig": "Separate Configuration",
     "switchToSeparate": "Switch to Separate",
     "switchToUnified": "Switch to Unified",
+    "configButton": "Configuration Guide",
+    "quickApply": "Quick Apply",
+    "quickApplyWithStatusLine": "Quick Apply & Status Line",
     "modal": {
       "title": "Claude Code Configuration Guide",
       "subtitle": "Follow these steps to configure Claude Code to use Tingly Box as your AI proxy",
-      "dontRemindAgain": "Do not remind again",
-      "showGuide": "Config Claude Code"
+      "dontRemindAgain": "Do not remind again"
     }
   },
   "prompt": {

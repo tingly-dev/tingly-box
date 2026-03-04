@@ -18,8 +18,9 @@ interface ClaudeCodeConfigModalProps {
     generateScriptWindows: () => string;
     generateScriptUnix: () => string;
     copyToClipboard: (text: string, label: string) => Promise<void>;
-    // Apply handler
+    // Apply handlers
     onApply?: () => Promise<void>;
+    onApplyWithStatusLine?: () => Promise<void>;
     isApplyLoading?: boolean;
 }
 
@@ -37,11 +38,24 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     generateScriptUnix,
     copyToClipboard,
     onApply,
+    onApplyWithStatusLine,
     isApplyLoading = false,
 }) => {
     const { t } = useTranslation();
     const [settingsTab, setSettingsTab] = React.useState<ScriptTab>('json');
     const [claudeJsonTab, setClaudeJsonTab] = React.useState<ScriptTab>('json');
+
+    const handleApplyClick = () => {
+        if (onApply) {
+            onApply();
+        }
+    };
+
+    const handleApplyWithStatusLineClick = () => {
+        if (onApplyWithStatusLine) {
+            onApplyWithStatusLine();
+        }
+    };
 
     return (
         <Dialog
@@ -192,18 +206,28 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                 </Box>
             </DialogContent>
 
-            <DialogActions sx={{ px: 3, pb: 2, pt: 1, gap: 1, justifyContent: 'flex-end' }}>
+            <DialogActions sx={{ px: 3, pb: 2, pt: 1, gap: 1, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                 <Button onClick={onClose} color="inherit">
                     {t('common.cancel')}
                 </Button>
                 {onApply && (
                     <Button
-                        onClick={onApply}
+                        onClick={handleApplyClick}
                         variant="contained"
                         disabled={isApplyLoading}
                         startIcon={isApplyLoading ? <CircularProgress size={16} color="inherit" /> : null}
                     >
-                        {isApplyLoading ? 'Applying...' : 'Apply Configurations'}
+                        {t('claudeCode.quickApply')}
+                    </Button>
+                )}
+                {onApplyWithStatusLine && (
+                    <Button
+                        onClick={handleApplyWithStatusLineClick}
+                        variant="contained"
+                        disabled={isApplyLoading}
+                        startIcon={isApplyLoading ? <CircularProgress size={16} color="inherit" /> : null}
+                    >
+                        {t('claudeCode.quickApplyWithStatusLine')}
                     </Button>
                 )}
             </DialogActions>
