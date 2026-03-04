@@ -15,15 +15,15 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import React, { useCallback } from 'react';
-import type { Provider } from '../../types/provider';
-import { getModelTypeInfo } from '../../utils/modelUtils';
-import { useCustomModels } from '../../hooks/useCustomModels';
-import { useProviderModels } from '../../hooks/useProviderModels';
-import { usePagination } from '../../hooks/usePagination';
-import { useModelSelectContext } from '../../contexts/ModelSelectContext';
-import { useRecentModels } from '../../hooks/useRecentModels';
-import { useNewModels } from '../../hooks/useNewModels';
+import React, { useCallback, useEffect } from 'react';
+import type { Provider } from '@/types/provider';
+import { getModelTypeInfo } from '@/utils/modelUtils';
+import { useCustomModels } from '@/hooks/useCustomModels';
+import { useProviderModels } from '@/hooks/useProviderModels';
+import { usePagination } from '@/hooks/usePagination';
+import { useModelSelectContext } from '@/contexts/ModelSelectContext';
+import { useRecentModels } from '@/hooks/useRecentModels';
+import { useNewModels } from '@/hooks/useNewModels';
 import CustomModelCard from './CustomModelCard';
 import ModelCard from './ModelCard';
 import RecentModelsSection from './RecentModelsSection';
@@ -55,10 +55,17 @@ export function ModelsPanel({
     testing = false,
 }: ModelsPanelProps) {
     const { customModels } = useCustomModels();
-    const { providerModels, refreshingProviders, refreshModels } = useProviderModels();
-    const { isModelProbing } = useModelSelectContext();
+    const { providerModels, refreshingProviders, refreshModels, fetchModels } = useProviderModels();
+    const { isModelProbing, refreshTrigger } = useModelSelectContext();
     const { recentModels } = useRecentModels();
     const { newModels, clearNewModels } = useNewModels();
+
+    // Re-fetch provider models when refresh trigger changes (e.g., after custom model deletion)
+    useEffect(() => {
+        if (refreshTrigger > 0) {
+            fetchModels(provider.uuid);
+        }
+    }, [refreshTrigger, provider.uuid, fetchModels]);
 
     const isProviderSelected = selectedProvider === provider.uuid;
     const isRefreshing = refreshingProviders.includes(provider.uuid);
@@ -71,15 +78,28 @@ export function ModelsPanel({
     const modelTypeInfo = getModelTypeInfo(provider, providerModels, customModels);
     const { standardModelsForDisplay, isCustomModel } = modelTypeInfo;
 
-    // Combine all models for unified pagination
-    // Custom models come first, then standard models
+    // Consolidate all custom models from different sources with proper deduplication
+    // Sources: localStorage (providerCustomModels), backend (backendCustomModel), selected model
+    const customModelsSet = new Set<string>();
+
+    // Add from localStorage
+    providerCustomModels.forEach(model => customModelsSet.add(model));
+
+    // Add from backend if not already present (only when no localStorage models exist)
+    if (backendCustomModel && providerCustomModels.length === 0) {
+        customModelsSet.add(backendCustomModel);
+    }
+
+    // Add currently selected model if it's a custom model not in any other source
+    if (isProviderSelected && selectedModel && isCustomModel(selectedModel) &&
+        !providerCustomModels.includes(selectedModel) &&
+        selectedModel !== backendCustomModel) {
+        customModelsSet.add(selectedModel);
+    }
+
+    // Combine all models for unified pagination: custom models first, then standard models
     const allModels = [
-        ...providerCustomModels.map(model => ({ model, type: 'custom' as const })),
-        ...(backendCustomModel && providerCustomModels.length === 0 ? [{ model: backendCustomModel, type: 'custom' as const }] : []),
-        ...(isProviderSelected && selectedModel && isCustomModel(selectedModel) &&
-            !providerCustomModels.includes(selectedModel) &&
-            selectedModel !== backendCustomModel ? [{ model: selectedModel, type: 'custom' as const }] : []
-        ),
+        ...Array.from(customModelsSet).map(model => ({ model, type: 'custom' as const })),
         ...standardModelsForDisplay.map(model => ({ model, type: 'standard' as const })),
     ];
 

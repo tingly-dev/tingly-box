@@ -198,6 +198,7 @@ const ModelListDialog = ({ open, onClose, provider }: ModelListDialogProps) => {
                             selectedProvider={provider?.uuid}
                             selectedModel={selectedModel}
                             onSelected={(option) => setSelectedModel(option.model || '')}
+                            onSelectionClear={() => setSelectedModel('')}
                             singleProvider={provider}
                             onTest={handleTest}
                             testing={testing}
