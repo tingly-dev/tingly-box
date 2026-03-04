@@ -1,4 +1,4 @@
-package compact
+package smart_compact
 
 import (
 	"github.com/anthropics/anthropic-sdk-go"
@@ -8,14 +8,14 @@ import (
 // RoundWithFilesStrategy keeps user/assistant + file paths as virtual tool calls.
 type RoundWithFilesStrategy struct {
 	rounder   *protocol.Grouper
-	extractor *FilePathExtractor
+	pathUtil  *PathUtil
 }
 
 // NewRoundWithFilesStrategy creates a new round+files strategy.
 func NewRoundWithFilesStrategy() *RoundWithFilesStrategy {
 	return &RoundWithFilesStrategy{
-		rounder:   protocol.NewGrouper(),
-		extractor: NewFilePathExtractor(),
+		rounder:  protocol.NewGrouper(),
+		pathUtil: NewPathUtil(),
 	}
 }
 
@@ -63,7 +63,7 @@ func (s *RoundWithFilesStrategy) compressRoundWithVirtualTools(round protocol.V1
 			for _, block := range msg.Content {
 				if block.OfToolUse != nil {
 					if inputMap, ok := block.OfToolUse.Input.(map[string]any); ok {
-						files := s.extractor.ExtractFromMap(inputMap)
+						files := s.pathUtil.ExtractFromMap(inputMap)
 						collectedFiles = append(collectedFiles, files...)
 					}
 				}
@@ -169,7 +169,7 @@ func (s *RoundWithFilesStrategy) compressBetaRoundWithVirtualTools(round protoco
 			for _, block := range msg.Content {
 				if block.OfToolUse != nil {
 					if inputMap, ok := block.OfToolUse.Input.(map[string]any); ok {
-						files := s.extractor.ExtractFromMap(inputMap)
+						files := s.pathUtil.ExtractFromMap(inputMap)
 						collectedFiles = append(collectedFiles, files...)
 					}
 				}

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/tingly-dev/tingly-box/internal/compact"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/smart_compact"
 )
@@ -205,7 +204,7 @@ func (r *Registry) registerCompactModels() {
 			Description:   "Keeps only user request + assistant conclusion, removes intermediate process (70-85% compression)",
 			Type:          VirtualModelTypeProxy,
 			DelegateModel: "",
-			Transformer:   compact.NewRoundOnlyTransformer(),
+			Transformer:   smart_compact.NewRoundOnlyTransformer(),
 		},
 		{
 			ID:            "compact-round-files",
@@ -213,7 +212,7 @@ func (r *Registry) registerCompactModels() {
 			Description:   "Keeps user/assistant + virtual file tools (75-88% compression)",
 			Type:          VirtualModelTypeProxy,
 			DelegateModel: "",
-			Transformer:   compact.NewRoundFilesTransformer(),
+			Transformer:   smart_compact.NewRoundFilesTransformer(),
 		},
 	}
 

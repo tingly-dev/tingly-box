@@ -1,7 +1,14 @@
-// Package smart_compact provides smart context compression for Anthropic requests.
+// Package smart_compact provides conversation compression strategies and transformers
+// for Anthropic requests.
 //
-// The transformer removes thinking fields from non-current conversation rounds.
-// MVP focuses on Anthropic v1 and beta APIs.
+// The package includes:
+//   - CompressionStrategy interface for defining compression algorithms
+//   - Strategy implementations (thinking removal, round-only, round-files)
+//   - Transformer adapters that bridge strategies to the protocol.Transformer interface
+//
+// Strategies compress conversation rounds by removing thinking blocks,
+// tool calls, and tool results while preserving the essential flow
+// of user requests and assistant responses.
 package smart_compact
 
 import (
@@ -10,6 +17,18 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
+
+// CompressionStrategy defines the interface for compression algorithms.
+type CompressionStrategy interface {
+	// Name returns the strategy identifier
+	Name() string
+
+	// CompressV1 compresses v1 messages
+	CompressV1(messages []anthropic.MessageParam) []anthropic.MessageParam
+
+	// CompressBeta compresses beta messages
+	CompressBeta(messages []anthropic.BetaMessageParam) []anthropic.BetaMessageParam
+}
 
 // CompactTransformer implements the Transformer interface.
 type CompactTransformer struct {

@@ -1,4 +1,4 @@
-package compact
+package smart_compact
 
 import (
 	"fmt"
@@ -8,15 +8,15 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
-// FilePathExtractor extracts file paths from tool parameters.
-type FilePathExtractor struct {
+// PathUtil extracts and manipulates file paths from tool parameters.
+type PathUtil struct {
 	// Pattern for file paths (extension-agnostic)
 	pattern *regexp.Regexp
 }
 
-// NewFilePathExtractor creates a new extractor.
-func NewFilePathExtractor() *FilePathExtractor {
-	return &FilePathExtractor{
+// NewPathUtil creates a new path utility.
+func NewPathUtil() *PathUtil {
+	return &PathUtil{
 		// Match any path-like string (preserves original format)
 		// Matches: /path, ./path, ../path, C:\path, relative/path, etc.
 		pattern: regexp.MustCompile(`[a-zA-Z0-9_\-./\\]+[a-zA-Z0-9_\-./\\]`),
@@ -24,7 +24,7 @@ func NewFilePathExtractor() *FilePathExtractor {
 }
 
 // Extract extracts all file paths from input string.
-func (e *FilePathExtractor) Extract(input string) []string {
+func (e *PathUtil) Extract(input string) []string {
 	seen := make(map[string]bool)
 	var results []string
 
@@ -45,7 +45,7 @@ func (e *FilePathExtractor) Extract(input string) []string {
 }
 
 // looksLikePath checks if string looks like a file path.
-func (e *FilePathExtractor) looksLikePath(s string) bool {
+func (e *PathUtil) looksLikePath(s string) bool {
 	if len(s) < 2 {
 		return false
 	}
@@ -71,7 +71,7 @@ func (e *FilePathExtractor) looksLikePath(s string) bool {
 }
 
 // ExtractFromMap extracts file paths from map (tool input parameters).
-func (e *FilePathExtractor) ExtractFromMap(m map[string]any) []string {
+func (e *PathUtil) ExtractFromMap(m map[string]any) []string {
 	var results []string
 
 	// Common parameter names that contain file paths

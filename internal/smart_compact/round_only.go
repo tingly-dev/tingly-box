@@ -1,4 +1,4 @@
-package compact
+package smart_compact
 
 import (
 	"github.com/anthropics/anthropic-sdk-go"
