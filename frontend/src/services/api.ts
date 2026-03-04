@@ -740,10 +740,10 @@ export const api = {
     },
 
     // Config Apply API - Safe endpoints that generate config from system state
-    applyClaudeConfig: async (mode: string): Promise<any> => {
+    applyClaudeConfig: async (mode: string, installStatusLine?: boolean): Promise<any> => {
         return fetchUIAPI('/config/apply/claude', {
             method: 'POST',
-            body: JSON.stringify({ mode }),
+            body: JSON.stringify({ mode, installStatusLine }),
         });
     },
 
