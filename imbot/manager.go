@@ -263,32 +263,6 @@ func (m *Manager) OnReady(handler func(Platform)) {
 	m.handlers.ready = append(m.handlers.ready, handler)
 }
 
-// SendTo sends a message to a specific platform and target
-func (m *Manager) SendTo(platform Platform, target string, opts *core.SendMessageOptions) (*core.SendResult, error) {
-	bot := m.GetBotByPlatform(platform)
-	if bot == nil {
-		return nil, fmt.Errorf("no bot available for platform: %s", platform)
-	}
-
-	return bot.SendMessage(context.Background(), target, opts)
-}
-
-// Broadcast sends a message to multiple targets
-func (m *Manager) Broadcast(targets []Target, opts *core.SendMessageOptions) map[Platform]*core.SendResult {
-	results := make(map[Platform]*core.SendResult)
-
-	for _, target := range targets {
-		result, err := m.SendTo(target.Platform, target.Target, opts)
-		if err != nil {
-			m.logger.Error("Failed to send to %s:%s: %v", target.Platform, target.Target, err)
-			continue
-		}
-		results[target.Platform] = result
-	}
-
-	return results
-}
-
 // GetStatus returns the status of all bots
 func (m *Manager) GetStatus() map[string]*core.BotStatus {
 	m.mu.RLock()
@@ -297,7 +271,7 @@ func (m *Manager) GetStatus() map[string]*core.BotStatus {
 	statuses := make(map[string]*core.BotStatus)
 
 	for i, bot := range m.bots {
-		key := fmt.Sprintf("%s:%d", bot.UUID(), i)
+		key := fmt.Sprintf("%s:%s", bot.PlatformInfo().Name, bot.UUID())
 		statuses[key] = bot.Status()
 	}
 	return statuses

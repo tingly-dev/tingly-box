@@ -15,7 +15,7 @@ func TestStoreSettingsRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 
-	settings := Settings{
+	settings := BotSetting{
 		Token:         "telegram-token",
 		Platform:      "telegram",
 		ProxyURL:      "http://proxy.test:8080",

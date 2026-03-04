@@ -97,7 +97,7 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 		authToken = s.Token
 		auth = s.Auth
 		name = s.Name
-	case Settings:
+	case BotSetting:
 		platform = s.Platform
 		authToken = s.Token
 		auth = s.Auth
@@ -150,7 +150,7 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 			if err := runBotWithSettings(ctx, s, dbPath, m.sessionMgr, m.agentBoot); err != nil {
 				logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
 			}
-		case Settings:
+		case BotSetting:
 			// For legacy Settings, we need to create a store to use RunBot
 			// Create a temporary in-memory store with just this settings
 			tempStore := &Store{
@@ -208,7 +208,7 @@ func (m *Manager) StartEnabled(ctx context.Context) error {
 				logrus.WithError(err).WithField("uuid", setting.UUID).Warn("Failed to start bot")
 			}
 		}
-	case []Settings:
+	case []BotSetting:
 		for _, setting := range s {
 			if setting.UUID == "" {
 				continue
@@ -253,7 +253,7 @@ func (m *Manager) Sync(ctx context.Context) error {
 				enabledUUIDs[setting.UUID] = true
 			}
 		}
-	case []Settings:
+	case []BotSetting:
 		for _, setting := range s {
 			if setting.UUID != "" {
 				enabledUUIDs[setting.UUID] = true

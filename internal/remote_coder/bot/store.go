@@ -13,8 +13,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// Settings represents bot configuration with platform-specific auth
-type Settings struct {
+// BotSetting represents bot configuration with platform-specific auth
+type BotSetting struct {
 	UUID          string            `json:"uuid,omitempty"`
 	Name          string            `json:"name,omitempty"`           // User-defined name for the bot
 	Token         string            `json:"token,omitempty"`          // Legacy: for backward compatibility
@@ -360,8 +360,8 @@ func migrateV1ToV2(db *sql.DB) error {
 	return err
 }
 
-func (s *Store) GetSettings() (Settings, error) {
-	settings := Settings{
+func (s *Store) GetSettings() (BotSetting, error) {
+	settings := BotSetting{
 		Auth: make(map[string]string),
 	}
 	if s == nil || s.db == nil {
@@ -429,7 +429,7 @@ func (s *Store) GetSettings() (Settings, error) {
 	return settings, nil
 }
 
-func (s *Store) SaveSettings(settings Settings) error {
+func (s *Store) SaveSettings(settings BotSetting) error {
 	if s == nil || s.db == nil {
 		return nil
 	}
@@ -491,7 +491,7 @@ func (s *Store) SaveSettings(settings Settings) error {
 // ============== V2 CRUD Methods ==============
 
 // ListSettings returns all bot configurations from v2 table
-func (s *Store) ListSettings() ([]Settings, error) {
+func (s *Store) ListSettings() ([]BotSetting, error) {
 	if s == nil || s.db == nil {
 		return nil, nil
 	}
@@ -502,7 +502,7 @@ func (s *Store) ListSettings() ([]Settings, error) {
 	}
 	defer rows.Close()
 
-	var settings []Settings
+	var settings []BotSetting
 	for rows.Next() {
 		setting, err := scanSettings(rows)
 		if err != nil {
@@ -514,7 +514,7 @@ func (s *Store) ListSettings() ([]Settings, error) {
 }
 
 // ListEnabledSettings returns all enabled bot configurations
-func (s *Store) ListEnabledSettings() ([]Settings, error) {
+func (s *Store) ListEnabledSettings() ([]BotSetting, error) {
 	if s == nil || s.db == nil {
 		return nil, nil
 	}
@@ -525,7 +525,7 @@ func (s *Store) ListEnabledSettings() ([]Settings, error) {
 	}
 	defer rows.Close()
 
-	var settings []Settings
+	var settings []BotSetting
 	for rows.Next() {
 		setting, err := scanSettings(rows)
 		if err != nil {
@@ -537,23 +537,23 @@ func (s *Store) ListEnabledSettings() ([]Settings, error) {
 }
 
 // GetSettingsByUUID returns a single bot configuration by UUID
-func (s *Store) GetSettingsByUUID(uuid string) (Settings, error) {
+func (s *Store) GetSettingsByUUID(uuid string) (BotSetting, error) {
 	if s == nil || s.db == nil {
-		return Settings{Auth: make(map[string]string)}, nil
+		return BotSetting{Auth: make(map[string]string)}, nil
 	}
 
 	row := s.db.QueryRow(`SELECT uuid, name, platform, auth_type, auth_config, proxy_url, chat_id_lock, bash_allowlist, enabled, created_at, updated_at FROM remote_coder_bot_settings_v2 WHERE uuid = ?`, uuid)
 	setting, err := scanSettingsRow(row)
 	if err == sql.ErrNoRows {
-		return Settings{Auth: make(map[string]string)}, nil
+		return BotSetting{Auth: make(map[string]string)}, nil
 	}
 	return setting, err
 }
 
 // CreateSettings creates a new bot configuration
-func (s *Store) CreateSettings(settings Settings) (Settings, error) {
+func (s *Store) CreateSettings(settings BotSetting) (BotSetting, error) {
 	if s == nil || s.db == nil {
-		return Settings{Auth: make(map[string]string)}, nil
+		return BotSetting{Auth: make(map[string]string)}, nil
 	}
 
 	if settings.UUID == "" {
@@ -588,7 +588,7 @@ func (s *Store) CreateSettings(settings Settings) (Settings, error) {
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, settings.UUID, settings.Name, settings.Platform, settings.AuthType, authConfigJSON, settings.ProxyURL, settings.ChatIDLock, allowlistJSON, enabled, settings.CreatedAt, settings.UpdatedAt)
 	if err != nil {
-		return Settings{Auth: make(map[string]string)}, err
+		return BotSetting{Auth: make(map[string]string)}, err
 	}
 
 	// Also save to legacy table for backward compatibility
@@ -614,7 +614,7 @@ func (s *Store) CreateSettings(settings Settings) (Settings, error) {
 }
 
 // UpdateSettings updates an existing bot configuration
-func (s *Store) UpdateSettings(uuid string, settings Settings) error {
+func (s *Store) UpdateSettings(uuid string, settings BotSetting) error {
 	if s == nil || s.db == nil {
 		return nil
 	}
@@ -722,8 +722,8 @@ func (s *Store) ToggleSettings(uuid string) (bool, error) {
 }
 
 // scanSettings is a helper to scan a row into Settings
-func scanSettings(rows *sql.Rows) (Settings, error) {
-	var setting Settings
+func scanSettings(rows *sql.Rows) (BotSetting, error) {
+	var setting BotSetting
 	var uuid, name, platform, authType, authConfig, proxyURL, chatIDLock, bashAllowlist, createdAt, updatedAt sql.NullString
 	var enabled int
 
@@ -754,8 +754,8 @@ func scanSettings(rows *sql.Rows) (Settings, error) {
 }
 
 // scanSettingsRow is a helper to scan a single row into Settings
-func scanSettingsRow(row *sql.Row) (Settings, error) {
-	var setting Settings
+func scanSettingsRow(row *sql.Row) (BotSetting, error) {
+	var setting BotSetting
 	var uuid, name, platform, authType, authConfig, proxyURL, chatIDLock, bashAllowlist, createdAt, updatedAt sql.NullString
 	var enabled int
 

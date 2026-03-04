@@ -59,7 +59,7 @@ func TestManagerStartEnabledBots(t *testing.T) {
 	}, msgStore)
 
 	// Create enabled bot (without token - won't actually run)
-	_, err = store.CreateSettings(Settings{
+	_, err = store.CreateSettings(BotSetting{
 		Name:     "Test Bot",
 		Platform: "telegram",
 		AuthType: "token",
@@ -69,7 +69,7 @@ func TestManagerStartEnabledBots(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create disabled bot
-	_, err = store.CreateSettings(Settings{
+	_, err = store.CreateSettings(BotSetting{
 		Name:     "Disabled Bot",
 		Platform: "telegram",
 		AuthType: "token",

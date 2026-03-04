@@ -24,18 +24,16 @@ type RemoteCCHandler struct {
 	summaryEngine *summarizer.Engine
 	auditLogger   *audit.Logger
 	config        *config.Config
-	permHandler   agentboot.Handler
 }
 
 // NewRemoteCCHandler creates a new remote-coder handler
-func NewRemoteCCHandler(sessionMgr *session.Manager, ab *agentboot.AgentBoot, summaryEngine *summarizer.Engine, auditLogger *audit.Logger, cfg *config.Config, permHandler agentboot.Handler) *RemoteCCHandler {
+func NewRemoteCCHandler(sessionMgr *session.Manager, ab *agentboot.AgentBoot, summaryEngine *summarizer.Engine, auditLogger *audit.Logger, cfg *config.Config) *RemoteCCHandler {
 	return &RemoteCCHandler{
 		sessionMgr:    sessionMgr,
 		agentBoot:     ab,
 		summaryEngine: summaryEngine,
 		auditLogger:   auditLogger,
 		config:        cfg,
-		permHandler:   permHandler,
 	}
 }
 

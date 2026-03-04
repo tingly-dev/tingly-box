@@ -134,7 +134,7 @@ func runBotOnce(ctx context.Context, store *Store, sessionMgr *session.Manager, 
 	}
 
 	// Register unified message handler with platform parameter
-	handler := NewBotHandler(ctx, store, sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager)
+	handler := NewBotHandler(ctx, BotSetting{},  store, sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager)
 	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {
@@ -155,7 +155,7 @@ func runBotWithSettings(ctx context.Context, settings db.Settings, dbPath string
 	defer store.Close()
 
 	// Convert db.Settings to the legacy Settings format
-	botSettings := Settings{
+	botSettings := BotSetting{
 		UUID:          settings.UUID,
 		Name:          settings.Name,
 		Token:         settings.Auth["token"],
@@ -207,7 +207,7 @@ func runBotWithSettings(ctx context.Context, settings db.Settings, dbPath string
 	}
 
 	// Register unified message handler with platform parameter
-	handler := NewBotHandler(ctx, store, sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager)
+	handler := NewBotHandler(ctx, botSettings, store, sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager)
 	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {
@@ -250,11 +250,11 @@ func buildAuthConfig(settings db.Settings) imbot.AuthConfig {
 }
 
 // RunBotWithSettingsOnly runs a bot using only the settings
-func RunBotWithSettingsOnly(ctx context.Context, settings Settings, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot) error {
+func RunBotWithSettingsOnly(ctx context.Context, settings BotSetting, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot) error {
 	if err := store.SaveSettings(settings); err != nil {
 		return fmt.Errorf("failed to save bot settings: %w", err)
 	}
-	return runBotOnce(ctx, store, sessionMgr, agentBoot,)
+	return runBotOnce(ctx, store, sessionMgr, agentBoot)
 }
 
 func sleepWithContext(ctx context.Context, delay time.Duration) bool {

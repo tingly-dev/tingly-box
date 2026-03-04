@@ -23,6 +23,7 @@ import (
 // BotHandler encapsulates all bot message handling logic and dependencies
 type BotHandler struct {
 	ctx              context.Context
+	botSetting       BotSetting
 	store            *Store
 	sessionMgr       *session.Manager
 	agentBoot        *agentboot.AgentBoot
@@ -50,6 +51,7 @@ type HandlerContext struct {
 // NewBotHandler creates a new bot handler with all dependencies
 func NewBotHandler(
 	ctx context.Context,
+	botSetting BotSetting,
 	store *Store,
 	sessionMgr *session.Manager,
 	agentBoot *agentboot.AgentBoot,
@@ -62,6 +64,7 @@ func NewBotHandler(
 
 	return &BotHandler{
 		ctx:              ctx,
+		botSetting:       botSetting,
 		store:            store,
 		sessionMgr:       sessionMgr,
 		agentBoot:        agentBoot,
