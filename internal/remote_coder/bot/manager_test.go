@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
 )
 
@@ -30,10 +31,10 @@ func TestManagerStartStop(t *testing.T) {
 
 	// Create agentBoot and permission handler for test
 	agentBoot := agentboot.New(agentboot.Config{})
-	permHandler := agentboot.NewDefaultHandler(ask.PermissionConfig{})
 
 	// Create manager
-	manager := NewManager(store, sessionMgr, agentBoot, permHandler)
+	botStore, err := db.NewImBotSettingsStore(dir)
+	manager := NewManager(botStore, sessionMgr, agentBoot)
 
 	// Test: IsRunning returns false for non-existent bot
 	require.False(t, manager.IsRunning("non-existent-uuid"))
@@ -58,8 +59,13 @@ func TestManagerStartEnabledBots(t *testing.T) {
 		MessageRetention: 24 * time.Hour,
 	}, msgStore)
 
+	botStore, err := db.NewImBotSettingsStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// Create enabled bot (without token - won't actually run)
-	_, err = store.CreateSettings(Settings{
+	_, err = botStore.CreateSettings(db.Settings{
 		Name:     "Test Bot",
 		Platform: "telegram",
 		AuthType: "token",
@@ -69,7 +75,7 @@ func TestManagerStartEnabledBots(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create disabled bot
-	_, err = store.CreateSettings(Settings{
+	_, err = botStore.CreateSettings(db.Settings{
 		Name:     "Disabled Bot",
 		Platform: "telegram",
 		AuthType: "token",
@@ -80,10 +86,10 @@ func TestManagerStartEnabledBots(t *testing.T) {
 
 	// Create agentBoot and permission handler for test
 	agentBoot := agentboot.New(agentboot.Config{})
-	permHandler := agentboot.NewDefaultHandler(agentboot.PermissionConfig{})
 
 	// Create manager
-	manager := NewManager(store, sessionMgr, agentBoot, permHandler)
+	// Create manager
+	manager := NewManager(botStore, sessionMgr, agentBoot)
 
 	// Start enabled bots - should not fail
 	ctx := context.Background()
@@ -94,7 +100,7 @@ func TestManagerStartEnabledBots(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Bot without token should not be running
-	settings, err := store.ListEnabledSettings()
+	settings, err := botStore.ListEnabledSettings()
 	require.NoError(t, err)
 	if len(settings) > 0 {
 		// The bot without token won't start
@@ -119,9 +125,10 @@ func TestManagerStopAll(t *testing.T) {
 
 	// Create agentBoot and permission handler for test
 	agentBoot := agentboot.New(agentboot.Config{})
-	permHandler := agentboot.NewDefaultHandler(agentboot.PermissionConfig{})
 
-	manager := NewManager(store, sessionMgr, agentBoot, permHandler)
+	// Create manager
+	botStore, err := db.NewImBotSettingsStore(dir)
+	manager := NewManager(botStore, sessionMgr, agentBoot)
 
 	// StopAll should be safe even with no running bots
 	manager.StopAll()

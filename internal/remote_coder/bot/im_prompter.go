@@ -68,6 +68,7 @@ func (p *IMPrompter) SetDefaultTimeout(timeout time.Duration) {
 func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, error) {
 	// Get the chat context from the request
 	chatID, platform := req.ChatID, imbot.Platform(req.Platform)
+	botUUID := req.BotUUID
 	if chatID == "" {
 		// No chat context, auto-approve
 		logrus.WithField("id", req.ID).Debug("No chat context for request, auto-approving")
@@ -78,12 +79,15 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 		}, nil
 	}
 
-	bot := p.manager.GetBot(platform)
+	// Use UUID to get bot (preferred) or fall back to platform lookup
+	var bot imbot.Bot
+	bot = p.manager.GetBot(botUUID, platform)
 	if bot == nil {
 		logrus.WithFields(logrus.Fields{
 			"id":       req.ID,
 			"platform": platform,
-		}).Warn("Bot not found for platform, auto-approving")
+			"botUUID":  botUUID,
+		}).Warn("Bot not found for request, auto-approving")
 		return ask.Result{
 			ID:           req.ID,
 			Approved:     true,
@@ -384,6 +388,7 @@ func (p *IMPrompter) OnAsk(ctx context.Context, req agentboot.AskRequest) (agent
 		Type:      ask.Type(req.Type),
 		ChatID:    req.ChatID,
 		Platform:  req.Platform,
+		BotUUID:   req.BotUUID,
 		SessionID: req.SessionID,
 		AgentType: req.AgentType,
 		ToolName:  req.ToolName,

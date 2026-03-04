@@ -6,12 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
 )
@@ -54,99 +51,8 @@ type ResponseMeta struct {
 	SessionID   string
 }
 
-// RunBot starts a multi-platform bot that proxies messages to remote-coder sessions.
-func RunBot(ctx context.Context, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot) error {
-	delay := telegramStartDelay
-	for attempt := 1; attempt <= telegramStartRetries; attempt++ {
-		if ctx.Err() != nil {
-			return nil
-		}
-		if err := runBotOnce(ctx, store, sessionMgr, agentBoot); err != nil {
-			if attempt == telegramStartRetries {
-				return err
-			}
-			logrus.WithError(err).Warnf("Remote-coder bot failed to start; retrying in %s (%d/%d)", delay, attempt, telegramStartRetries)
-			if !sleepWithContext(ctx, delay) {
-				return nil
-			}
-			delay *= 2
-			if delay > telegramStartMaxDelay {
-				delay = telegramStartMaxDelay
-			}
-			continue
-		}
-		return nil
-	}
-	return nil
-}
-
-func runBotOnce(ctx context.Context, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot) error {
-	if store == nil {
-		return fmt.Errorf("bot store is nil")
-	}
-
-	settings, err := store.GetSettings()
-	if err != nil {
-		return fmt.Errorf("failed to load bot settings: %w", err)
-	}
-	if strings.TrimSpace(settings.Token) == "" {
-		return fmt.Errorf("bot token is not configured")
-	}
-	platform := strings.TrimSpace(settings.Platform)
-	if platform == "" {
-		platform = "telegram"
-	}
-	if platform != "telegram" {
-		return fmt.Errorf("unsupported bot platform: %s", platform)
-	}
-
-	if sessionMgr == nil {
-		return fmt.Errorf("session manager is nil")
-	}
-
-	summaryEngine := summarizer.NewEngine()
-	directoryBrowser := NewDirectoryBrowser()
-
-	manager := imbot.NewManager(
-		imbot.WithAutoReconnect(true),
-		imbot.WithMaxReconnectAttempts(5),
-		imbot.WithReconnectDelay(3000),
-	)
-
-	options := map[string]interface{}{
-		"updateTimeout": 30,
-	}
-	if strings.TrimSpace(settings.ProxyURL) != "" {
-		options["proxy"] = strings.TrimSpace(settings.ProxyURL)
-	}
-
-	err = manager.AddBot(&imbot.Config{
-		Platform: imbot.Platform(platform),
-		Enabled:  true,
-		Auth: imbot.AuthConfig{
-			Type:  "token",
-			Token: settings.Token,
-		},
-		Options: options,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to start %s bot: %w", platform, err)
-	}
-
-	// Register unified message handler with platform parameter
-	handler := NewBotHandler(ctx, store, sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager)
-	manager.OnMessage(handler.HandleMessage)
-
-	if err := manager.Start(ctx); err != nil {
-		return fmt.Errorf("failed to start bot manager: %w", err)
-	}
-
-	<-ctx.Done()
-	return nil
-}
-
 // runBotWithSettings starts a bot using db.Settings instead of bot.Store
-func runBotWithSettings(ctx context.Context, settings db.Settings, dbPath string, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot) error {
+func runBotWithSettings(ctx context.Context, setting BotSetting, dbPath string, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot) error {
 	// Create a temporary bot.Store for chat state management
 	store, err := NewStoreForChatOnly(dbPath)
 	if err != nil {
@@ -154,27 +60,9 @@ func runBotWithSettings(ctx context.Context, settings db.Settings, dbPath string
 	}
 	defer store.Close()
 
-	// Convert db.Settings to the legacy Settings format
-	botSettings := Settings{
-		UUID:          settings.UUID,
-		Name:          settings.Name,
-		Token:         settings.Auth["token"],
-		Platform:      settings.Platform,
-		AuthType:      settings.AuthType,
-		Auth:          settings.Auth,
-		ProxyURL:      settings.ProxyURL,
-		ChatIDLock:    settings.ChatIDLock,
-		BashAllowlist: settings.BashAllowlist,
-		Enabled:       settings.Enabled,
-	}
-
-	if err := store.SaveSettings(botSettings); err != nil {
-		return fmt.Errorf("failed to set bot settings: %w", err)
-	}
-
 	// Create platform-specific auth config
-	authConfig := buildAuthConfig(settings)
-	platform := imbot.Platform(settings.Platform)
+	authConfig := buildAuthConfig(setting)
+	platform := imbot.Platform(setting.Platform)
 
 	if sessionMgr == nil {
 		return fmt.Errorf("session manager is nil")
@@ -192,22 +80,23 @@ func runBotWithSettings(ctx context.Context, settings db.Settings, dbPath string
 	options := map[string]interface{}{
 		"updateTimeout": 30,
 	}
-	if settings.ProxyURL != "" {
-		options["proxy"] = settings.ProxyURL
+	if setting.ProxyURL != "" {
+		options["proxy"] = setting.ProxyURL
 	}
 
 	err = manager.AddBot(&imbot.Config{
+		UUID:     setting.UUID,
 		Platform: platform,
 		Enabled:  true,
 		Auth:     authConfig,
 		Options:  options,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to start %s bot: %w", settings.Platform, err)
+		return fmt.Errorf("failed to start %s bot: %w", setting.Platform, err)
 	}
 
 	// Register unified message handler with platform parameter
-	handler := NewBotHandler(ctx, store, sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager)
+	handler := NewBotHandler(ctx, setting, store.ChatStore(), sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager)
 	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {
@@ -219,9 +108,9 @@ func runBotWithSettings(ctx context.Context, settings db.Settings, dbPath string
 }
 
 // buildAuthConfig creates auth config based on platform
-func buildAuthConfig(settings db.Settings) imbot.AuthConfig {
-	platform := settings.Platform
-	auth := settings.Auth
+func buildAuthConfig(setting BotSetting) imbot.AuthConfig {
+	platform := setting.Platform
+	auth := setting.Auth
 
 	switch platform {
 	case "telegram", "discord", "slack":
@@ -249,14 +138,6 @@ func buildAuthConfig(settings db.Settings) imbot.AuthConfig {
 	}
 }
 
-// RunBotWithSettingsOnly runs a bot using only the settings
-func RunBotWithSettingsOnly(ctx context.Context, settings Settings, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot) error {
-	if err := store.SaveSettings(settings); err != nil {
-		return fmt.Errorf("failed to save bot settings: %w", err)
-	}
-	return runBotOnce(ctx, store, sessionMgr, agentBoot,)
-}
-
 func sleepWithContext(ctx context.Context, delay time.Duration) bool {
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
@@ -278,11 +159,11 @@ func getReplyTarget(msg imbot.Message) string {
 }
 
 // getProjectPathForGroup retrieves the project path bound to a group chat.
-func getProjectPathForGroup(store *Store, chatID string, platform string) (string, bool) {
-	if store == nil || store.ChatStore() == nil {
+func getProjectPathForGroup(chatStore *ChatStore, chatID string, platform string) (string, bool) {
+	if chatStore == nil {
 		return "", false
 	}
-	path, ok, err := store.ChatStore().GetProjectPath(chatID)
+	path, ok, err := chatStore.GetProjectPath(chatID)
 	if err != nil {
 		return "", false
 	}

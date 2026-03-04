@@ -467,10 +467,11 @@ func (b *Bot) handleFiles(files []slack.File) core.Content {
 		media[i] = core.MediaAttachment{
 			Type:     mediaType,
 			URL:      file.URLPrivate,
+			MimeType: file.Mimetype,
 			Filename: file.Name,
 			Size:     int64(file.Size),
 			Title:    file.Title,
-			Raw:      make(map[string]interface{}),
+			Raw:      map[string]interface{}{"platform": "slack", "mimetype": file.Mimetype},
 		}
 	}
 

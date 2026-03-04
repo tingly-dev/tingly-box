@@ -44,6 +44,14 @@ func NewBaseBot(config *Config) *BaseBot {
 	}
 }
 
+// UUID returns the bot's unique identifier
+func (b *BaseBot) UUID() string {
+	if b.config == nil {
+		return ""
+	}
+	return b.config.UUID
+}
+
 // Config returns the bot configuration
 func (b *BaseBot) Config() *Config {
 	return b.config

@@ -87,33 +87,39 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 
 	// Handle both bot.Settings and db.Settings types
 	// Determine the type and extract common fields
-	var platform, token, authToken string
+	var platform, token string
 	var auth map[string]string
 	var name string
+	var record db.Settings
+	var ok bool
 
-	switch s := settingsAny.(type) {
-	case db.Settings:
-		platform = s.Platform
-		authToken = s.Token
-		auth = s.Auth
-		name = s.Name
-	case Settings:
-		platform = s.Platform
-		authToken = s.Token
-		auth = s.Auth
-		name = s.Name
-	default:
-		return fmt.Errorf("unknown settings type")
+	if record, ok = settingsAny.(db.Settings); !ok {
+		return fmt.Errorf("invalid bot setting")
 	}
 
+	// Convert db.Settings to the legacy Settings format
+	s := BotSetting{
+		UUID:          record.UUID,
+		Name:          record.Name,
+		Token:         record.Auth["token"],
+		Platform:      record.Platform,
+		AuthType:      record.AuthType,
+		Auth:          record.Auth,
+		ProxyURL:      record.ProxyURL,
+		ChatIDLock:    record.ChatIDLock,
+		BashAllowlist: record.BashAllowlist,
+		Enabled:       record.Enabled,
+	}
+
+	platform = s.Platform
+	auth = s.Auth
+	name = s.Name
+
 	if platform == "" {
-		platform = "telegram"
+		return fmt.Errorf("unknown platform: %s", platform)
 	}
 
 	token = auth["token"]
-	if token == "" {
-		token = authToken // Legacy field
-	}
 
 	// Validate auth credentials based on platform
 	hasValidAuth := false
@@ -139,32 +145,18 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	m.running[uuid] = &runningBot{cancel: cancel}
 
 	// Start bot in goroutine
-	go func(settingsCopy interface{}) {
-		// Use the original settings type to determine which function to call
-		switch s := settingsCopy.(type) {
-		case db.Settings:
-			// Use new standard database store - need to get dbPath from manager
-			m.mu.RLock()
-			dbPath := m.dbPath
-			m.mu.RUnlock()
-			if err := runBotWithSettings(ctx, s, dbPath, m.sessionMgr, m.agentBoot); err != nil {
-				logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
-			}
-		case Settings:
-			// For legacy Settings, we need to create a store to use RunBot
-			// Create a temporary in-memory store with just this settings
-			tempStore := &Store{
-				// We'll need to set up a minimal store for chat state management
-			}
-			if err := RunBotWithSettingsOnly(ctx, s, tempStore, m.sessionMgr, m.agentBoot); err != nil {
-				logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
-			}
+	go func() {
+		m.mu.RLock()
+		dbPath := m.dbPath
+		m.mu.RUnlock()
+		if err := runBotWithSettings(ctx, s, dbPath, m.sessionMgr, m.agentBoot); err != nil {
+			logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
 		}
 
 		// Bot stopped, remove from running map
 		m.removeRunning(uuid)
 		logrus.WithField("uuid", uuid).Info("Bot stopped")
-	}(settingsAny)
+	}()
 
 	logrus.WithField("uuid", uuid).WithField("name", name).WithField("platform", platform).Info("Bot started")
 	return nil
@@ -208,7 +200,7 @@ func (m *Manager) StartEnabled(ctx context.Context) error {
 				logrus.WithError(err).WithField("uuid", setting.UUID).Warn("Failed to start bot")
 			}
 		}
-	case []Settings:
+	case []BotSetting:
 		for _, setting := range s {
 			if setting.UUID == "" {
 				continue
@@ -253,7 +245,7 @@ func (m *Manager) Sync(ctx context.Context) error {
 				enabledUUIDs[setting.UUID] = true
 			}
 		}
-	case []Settings:
+	case []BotSetting:
 		for _, setting := range s {
 			if setting.UUID != "" {
 				enabledUUIDs[setting.UUID] = true

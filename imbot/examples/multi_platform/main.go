@@ -81,12 +81,12 @@ func main() {
 	}
 
 	// 设置统一的消息处理器 - 核心业务逻辑只写一次
-	manager.OnMessage(func(msg imbot.Message, platform core.Platform) {
-		handleMessage(ctx, manager, msg, platform)
+	manager.OnMessage(func(msg imbot.Message, platform core.Platform, botUUID string) {
+		handleMessage(ctx, manager, msg, platform, botUUID)
 	})
 
 	// 设置错误处理器
-	manager.OnError(func(err error, platform core.Platform) {
+	manager.OnError(func(err error, platform core.Platform, botUUID string) {
 		log.Printf("[%-10s] ❌ 错误: %v", platform, err)
 	})
 
@@ -209,7 +209,7 @@ func loadConfigs() []*imbot.Config {
 // ============================================================
 
 // handleMessage 统一处理所有平台的消息
-func handleMessage(ctx context.Context, manager *imbot.Manager, msg imbot.Message, platform core.Platform) {
+func handleMessage(ctx context.Context, manager *imbot.Manager, msg imbot.Message, platform core.Platform, botUUID string) {
 	// 日志记录
 	log.Printf("[%-10s] %s: %s",
 		platform,
@@ -217,10 +217,11 @@ func handleMessage(ctx context.Context, manager *imbot.Manager, msg imbot.Messag
 		truncateText(msg.GetText(), 50),
 	)
 
-	// 获取 Bot 实例
-	bot := manager.GetBot(platform)
+	// 获取 Bot 实例 by UUID (preferred) or fallback to platform
+	var bot imbot.Bot
+		bot = manager.GetBot(botUUID, platform)
 	if bot == nil {
-		log.Printf("[%-10s] Bot 未找到", platform)
+		log.Printf("[%-10s] Bot 未找到, UUID: %s", platform, botUUID)
 		return
 	}
 
