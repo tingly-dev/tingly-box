@@ -57,7 +57,7 @@ func (s *Server) UseUIEndpoints() {
 
 	// Claude Code status line endpoints (no auth required)
 	// These must be registered before the /tingly/:scenario routes
-	ccGroup := s.engine.Group("/tingly/claude_code")
+	ccGroup := s.engine.Group("/tingly/:scenario")
 	ccGroup.POST("/status", s.GetClaudeCodeStatus)
 	ccGroup.POST("/statusline", s.GetClaudeCodeStatusLine)
 
@@ -298,9 +298,11 @@ func (s *Server) GetCurrentRequest(c *gin.Context) {
 }
 
 // GetClaudeCodeStatus returns combined status from Claude Code input and Tingly Box
-// This endpoint receives Claude Code status JSON and combines it with Tingly Box current request info
+// This endpoint receives Claude Code status JSON and combines it with Tingly Box model mapping
 // POST /tingly/claude_code/status
 func (s *Server) GetClaudeCodeStatus(c *gin.Context) {
+	scenario := c.Param("scenario")
+
 	var input ClaudeCodeStatusInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		// If no body provided, use empty defaults
@@ -356,8 +358,10 @@ func (s *Server) GetClaudeCodeStatus(c *gin.Context) {
 
 // GetClaudeCodeStatusLine returns rendered status line text for Claude Code
 // This endpoint receives Claude Code status JSON and returns a pre-rendered status line string
-// POST /tingly/claude_code/statusline
+// POST /tingly/:scenario/statusline
 func (s *Server) GetClaudeCodeStatusLine(c *gin.Context) {
+	scenario := c.Param("scenario")
+
 	var input ClaudeCodeStatusInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		// If no body provided, use empty defaults
