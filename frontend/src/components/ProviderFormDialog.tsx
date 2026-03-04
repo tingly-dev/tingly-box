@@ -539,7 +539,12 @@ const ProviderFormDialog = ({
                                 disabled={noApiKey}
                                 slotProps={{
                                     input: {
-                                        sx: { pr: 12 },
+                                        sx: {
+                                            pr: 15,
+                                            '& input': {
+                                                textOverflow: 'ellipsis',
+                                            },
+                                        },
                                     },
                                 }}
                             />
