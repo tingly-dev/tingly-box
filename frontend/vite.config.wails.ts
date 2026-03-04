@@ -34,6 +34,8 @@ export default defineConfig(({mode}) => {
                 'react-dom',
                 '@mui/material',
                 '@mui/icons-material',
+                // Fix pnpm dependency resolution for langium/chevrotain
+                '@chevrotain/regexp-to-ast',
             ],
         },
         build: {
