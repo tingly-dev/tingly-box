@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import type { Provider } from '../types/provider';
+import React, { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import type { Provider } from '@/types/provider';
 
 export interface SnackbarState {
     open: boolean;
@@ -43,9 +43,10 @@ const ModelSelectContext = createContext<ModelSelectContextValue | undefined>(un
 
 export interface ModelSelectProviderProps {
     children: ReactNode;
+    key?: string; // Key to force reset state when changed
 }
 
-export function ModelSelectProvider({ children }: ModelSelectProviderProps) {
+export function ModelSelectProvider({ children, key: providerKey }: ModelSelectProviderProps) {
     const [internalCurrentTab, setInternalCurrentTab] = useState<string | undefined>(undefined);
     const [isInitialized, setIsInitialized] = useState(false);
     const [probingModels, setProbingModels] = useState<Set<string>>(new Set());
@@ -59,6 +60,15 @@ export function ModelSelectProvider({ children }: ModelSelectProviderProps) {
         provider: null,
         value: ''
     });
+
+    // Reset state when providerKey changes (dialog reopens with different selection)
+    useEffect(() => {
+        setInternalCurrentTab(undefined);
+        setIsInitialized(false);
+        setProbingModels(new Set());
+        setSnackbar({ open: false, message: '', severity: 'error' });
+        setCustomModelDialog({ open: false, provider: null, value: '' });
+    }, [providerKey]);
 
     const addProbingModel = useCallback((key: string) => {
         setProbingModels(prev => new Set(prev).add(key));

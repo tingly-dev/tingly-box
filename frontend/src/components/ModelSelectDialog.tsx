@@ -1,13 +1,13 @@
 import { Box } from '@mui/material';
-import React, { useEffect, useCallback } from 'react';
-import { useCustomModels } from '../hooks/useCustomModels';
-import { useProviderModels } from '../hooks/useProviderModels';
-import { useGridLayout } from '../hooks/useGridLayout';
-import { useProviderGroups } from '../hooks/useProviderGroups';
-import { useModelSelection } from '../hooks/useModelSelection';
-import { ModelSelectProvider, useModelSelectContext } from '../contexts/ModelSelectContext';
-import type { Provider } from '../types/provider';
-import { getModelTypeInfo } from '../utils/modelUtils';
+import React, { useEffect, useCallback, useRef } from 'react';
+import { useCustomModels } from '@/hooks/useCustomModels';
+import { useProviderModels } from '@/hooks/useProviderModels';
+import { useGridLayout } from '@/hooks/useGridLayout';
+import { useProviderGroups } from '@/hooks/useProviderGroups';
+import { useModelSelection } from '@/hooks/useModelSelection';
+import { ModelSelectProvider, useModelSelectContext } from '@/contexts/ModelSelectContext';
+import type { Provider } from '@/types/provider';
+import { getModelTypeInfo } from '@/utils/modelUtils';
 import { ProviderSidebar, ModelsPanel, CustomModelDialog } from './model-select';
 import { Alert, Snackbar } from '@mui/material';
 
@@ -65,7 +65,8 @@ function ModelSelectTabInner({
     } = useProviderGroups(providers, singleProvider);
 
     // Use external activeTab if provided, otherwise use internal state
-    const currentTab = externalActiveTab !== undefined ? externalActiveTab : internalCurrentTab;
+    // Add fallback to prevent flickering: use selectedProvider or first available provider
+    const currentTab = externalActiveTab ?? internalCurrentTab ?? selectedProvider ?? flattenedProviders[0]?.uuid;
 
     const handleTabChange = useCallback(async (providerUuid: string) => {
         if (externalActiveTab === undefined) {
@@ -113,8 +114,11 @@ function ModelSelectTabInner({
     }, [customModelDialog, saveCustomModel, updateCustomModel, onCustomModelSave, closeCustomModelDialog]);
 
     // Auto-switch to selected provider tab and navigate to selected model on component mount (only once)
+    // Use ref to track which provider we've initialized for to prevent re-initialization
+    const initializedProviderRef = useRef<string | null>(null);
+
     useEffect(() => {
-        if (!isInitialized && selectedProvider) {
+        if (selectedProvider && selectedProvider !== initializedProviderRef.current) {
             const targetProviderIndex = flattenedProviders.findIndex(provider => provider.uuid === selectedProvider);
 
             // Auto-switch to the selected provider's tab
@@ -131,12 +135,12 @@ function ModelSelectTabInner({
                 if (onProviderChange) {
                     onProviderChange(targetProvider);
                 }
-            }
 
-            // Mark as initialized to prevent further automatic switching
-            setIsInitialized(true);
+                // Mark this provider as initialized
+                initializedProviderRef.current = selectedProvider;
+            }
         }
-    }, [isInitialized, selectedProvider, flattenedProviders, externalActiveTab, onProviderChange, setInternalCurrentTab, setIsInitialized, fetchModels]);
+    }, [selectedProvider, flattenedProviders, externalActiveTab, onProviderChange, setInternalCurrentTab, fetchModels]);
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%', width: '100%' }}>
@@ -192,8 +196,10 @@ function ModelSelectTabInner({
 }
 
 export default function ModelSelectDialog(props: ModelSelectTabProps) {
+    // Create a unique key based on selected provider and model to force context reset when selection changes
+    const providerKey = `${props.selectedProvider || ''}-${props.selectedModel || ''}`;
     return (
-        <ModelSelectProvider>
+        <ModelSelectProvider key={providerKey}>
             <ModelSelectTabInner {...props} />
         </ModelSelectProvider>
     );
