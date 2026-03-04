@@ -4,6 +4,7 @@ import {
     Autocomplete,
     Box,
     Button,
+    Checkbox,
     CircularProgress,
     Dialog,
     DialogActions,
@@ -16,13 +17,14 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getProvidersByStyle, serviceProviders } from '../services/serviceProviders';
+import { getAllUniqueProviders, type UniqueProvider } from '../services/serviceProviders';
 import { api } from '../services/api';
 import { OpenAI, Anthropic } from './BrandIcons';
 
 export interface EnhancedProviderFormData {
+    uuid?: string;
     name: string;
     apiBase: string;
     apiStyle: 'openai' | 'anthropic' | undefined;
@@ -30,13 +32,16 @@ export interface EnhancedProviderFormData {
     noKeyRequired?: boolean;
     enabled?: boolean;
     proxyUrl?: string;
+    // New fields for multi-protocol support
+    protocols?: ('openai' | 'anthropic')[];
+    providerBaseUrls?: { openai?: string; anthropic?: string };
 }
 
 interface PresetProviderFormDialogProps {
     open: boolean;
     onClose: () => void;
     onSubmit: (e: React.FormEvent) => void;
-    onForceAdd?: () => void;  // Optional: handler for force-add without probe
+    onForceAdd?: () => void;
     data: EnhancedProviderFormData;
     onChange: (field: keyof EnhancedProviderFormData, value: any) => void;
     mode: 'add' | 'edit';
@@ -70,69 +75,138 @@ const ProviderFormDialog = ({
         responseTime?: number;
         modelsCount?: number;
     } | null>(null);
-    const [styleChangedWarning, setStyleChangedWarning] = useState(false);
+
+    // Selected provider object (null for custom URL)
+    const [selectedProvider, setSelectedProvider] = useState<UniqueProvider | null>(null);
+
+    // Protocol checkboxes state
+    const [protocolOpenAI, setProtocolOpenAI] = useState(false);
+    const [protocolAnthropic, setProtocolAnthropic] = useState(false);
+
+    // All unique providers
+    const allProviders = useMemo(() => getAllUniqueProviders(), []);
 
     // Sync noApiKey state with data.noKeyRequired prop
     useEffect(() => {
         setNoApiKey(data.noKeyRequired || false);
     }, [data.noKeyRequired]);
 
-    const openaiProviders = getProvidersByStyle('openai');
-    const anthropicProviders = getProvidersByStyle('anthropic');
+    // Initialize state when dialog opens or mode changes
+    useEffect(() => {
+        if (open) {
+            setVerificationResult(null);
 
-    // Get current provider options based on apiStyle
-    const getCurrentProviders = () => {
-        const providers = data.apiStyle === 'openai' ? openaiProviders : anthropicProviders;
+            if (mode === 'edit') {
+                // In edit mode, set protocol based on existing apiStyle
+                setProtocolOpenAI(data.apiStyle === 'openai');
+                setProtocolAnthropic(data.apiStyle === 'anthropic');
 
-        // Filter out OAuth providers
-        const oauthProviderIds = Object.values(serviceProviders as any)
-            .filter((p: any) => p.auth_type === 'api_key' || p.oauth_provider)
-            .map((p: any) => p.id);
+                // Try to find matching provider
+                const matchingProvider = allProviders.find(p =>
+                    (p.baseUrlOpenAI === data.apiBase && data.apiStyle === 'openai') ||
+                    (p.baseUrlAnthropic === data.apiBase && data.apiStyle === 'anthropic')
+                );
+                setSelectedProvider(matchingProvider || null);
+            } else {
+                // In add mode, check if protocols were pre-set
+                if (data.protocols && data.protocols.length > 0) {
+                    setProtocolOpenAI(data.protocols.includes('openai'));
+                    setProtocolAnthropic(data.protocols.includes('anthropic'));
+                } else if (data.apiStyle) {
+                    setProtocolOpenAI(data.apiStyle === 'openai');
+                    setProtocolAnthropic(data.apiStyle === 'anthropic');
+                } else {
+                    setProtocolOpenAI(false);
+                    setProtocolAnthropic(false);
+                }
+                setSelectedProvider(null);
+            }
+        }
+    }, [open, mode]);
 
-        return providers.filter(option => {
-            // Extract provider ID from value (format: "providerId:api_style")
-            const providerId = option.value.split(':')[0];
-            return !oauthProviderIds.includes(providerId);
-        });
-    };
+    // Sync protocol state back to parent data
+    useEffect(() => {
+        const protocols: ('openai' | 'anthropic')[] = [];
+        if (protocolOpenAI) protocols.push('openai');
+        if (protocolAnthropic) protocols.push('anthropic');
+        onChange('protocols', protocols);
 
-    // Handle provider/baseurl selection
-    const handleProviderOrBaseUrlSelect = (newValue: string | { title: string; value: string; baseUrl: string; api_style: string } | null) => {
+        // Set apiStyle to the first selected protocol (for backward compatibility)
+        if (protocols.length > 0) {
+            onChange('apiStyle', protocols[0]);
+        } else {
+            onChange('apiStyle', undefined);
+        }
+
+        // Update providerBaseUrls
+        if (selectedProvider) {
+            onChange('providerBaseUrls', {
+                openai: selectedProvider.baseUrlOpenAI,
+                anthropic: selectedProvider.baseUrlAnthropic,
+            });
+            // Set apiBase to match the first selected protocol
+            if (protocolOpenAI && selectedProvider.baseUrlOpenAI) {
+                onChange('apiBase', selectedProvider.baseUrlOpenAI);
+            } else if (protocolAnthropic && selectedProvider.baseUrlAnthropic) {
+                onChange('apiBase', selectedProvider.baseUrlAnthropic);
+            }
+        }
+    }, [protocolOpenAI, protocolAnthropic]);
+
+    // Handle provider selection from autocomplete
+    const handleProviderSelect = (newValue: string | UniqueProvider | null) => {
         setVerificationResult(null);
 
         if (typeof newValue === 'string') {
-            // Check if this string matches a provider's display format "Title - URL"
-            // If so, extract just the URL part
-            const providers = getCurrentProviders();
-            const matchingProvider = providers.find(p => `${p.title} - ${p.baseUrl}` === newValue);
-            if (matchingProvider) {
-                onChange('apiBase', matchingProvider.baseUrl);
-            } else {
-                // Custom input - only update apiBase
-                onChange('apiBase', newValue);
-            }
-        } else if (newValue && newValue.baseUrl) {
-            // Preset selected - update apiBase
-            onChange('apiBase', newValue.baseUrl);
-            // If name is empty and token is empty, set default name
-            if (!data.name && !data.token) {
-                onChange('name', t('providerDialog.keyName.autoFill', { title: newValue.title }));
-            }
-        } else if (newValue === null) {
-            // Clear selection - only clear apiBase, preserve name
+            // Custom URL input
+            setSelectedProvider(null);
+            onChange('apiBase', newValue);
+            onChange('providerBaseUrls', undefined);
+        } else if (newValue) {
+            // Preset provider selected
+            setSelectedProvider(newValue);
+            const displayName = newValue.alias || newValue.name;
+
+            // Auto-select all supported protocols
+            setProtocolOpenAI(newValue.supportsOpenAI);
+            setProtocolAnthropic(newValue.supportsAnthropic);
+
+            // Set base URL (prefer OpenAI if both supported)
+            const baseUrl = newValue.baseUrlOpenAI || newValue.baseUrlAnthropic || '';
+            onChange('apiBase', baseUrl);
+            onChange('providerBaseUrls', {
+                openai: newValue.baseUrlOpenAI,
+                anthropic: newValue.baseUrlAnthropic,
+            });
+
+            // Auto-fill name when provider changes
+            const autoName = t('providerDialog.keyName.autoFill', { title: displayName });
+            onChange('name', autoName);
+        } else {
+            // Cleared
+            setSelectedProvider(null);
             onChange('apiBase', '');
+            onChange('providerBaseUrls', undefined);
+            setProtocolOpenAI(false);
+            setProtocolAnthropic(false);
         }
     };
 
     // Handle verification
     const handleVerify = async () => {
-        // Skip verification if no API key mode is enabled
         if (noApiKey) {
             setVerificationResult(null);
             return true;
         }
 
-        if (!data.name || !data.apiBase || !data.token || !data.apiStyle) {
+        const apiStyle = protocolOpenAI ? 'openai' : protocolAnthropic ? 'anthropic' : undefined;
+        const apiBase = protocolOpenAI && selectedProvider?.baseUrlOpenAI
+            ? selectedProvider.baseUrlOpenAI
+            : protocolAnthropic && selectedProvider?.baseUrlAnthropic
+                ? selectedProvider.baseUrlAnthropic
+                : data.apiBase;
+
+        if (!data.name || !apiBase || !data.token || !apiStyle) {
             setVerificationResult({
                 success: false,
                 message: t('providerDialog.verification.missingFields'),
@@ -144,14 +218,9 @@ const ProviderFormDialog = ({
         setVerificationResult(null);
 
         try {
-            const result = await api.probeProvider(
-                data.apiStyle,
-                data.apiBase,
-                data.token,
-            )
+            const result = await api.probeProvider(apiStyle, apiBase, data.token);
 
             if (result.success && result.data) {
-                // Check if the provider validation actually succeeded
                 const isValid = result.data.valid !== false;
                 setVerificationResult({
                     success: isValid,
@@ -181,24 +250,23 @@ const ProviderFormDialog = ({
         }
     };
 
-    // Wrapped submit handler that includes verification
+    // Wrapped submit handler
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Skip verification for edit mode with empty token, or if no API key is checked
         const shouldVerify = mode === 'add' ? !noApiKey : (data.token !== '' && !noApiKey);
 
         if (shouldVerify) {
             const verified = await handleVerify();
             if (!verified) {
-                // Verification failed - user can click "Add Anyway" button to proceed
                 return;
             }
         }
 
-        // Call the original onSubmit
         onSubmit(e);
     };
+
+    const hasAnyProtocol = protocolOpenAI || protocolAnthropic;
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ sx: { minHeight: 200 } }}>
@@ -216,7 +284,12 @@ const ProviderFormDialog = ({
                 </Box>
             </DialogTitle>
             <form onSubmit={handleSubmit}>
-                <DialogContent sx={{ pb: 1, minHeight: 280 }}>
+                <DialogContent sx={{ pt: 1, pb: 1, minHeight: 280 }}>
+                    {mode === 'add' && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                            {t('providerDialog.addDescription')}
+                        </Typography>
+                    )}
                     <Stack spacing={2.5}>
                         {/* First Provider Welcome Message */}
                         {isFirstProvider && mode === 'add' && (
@@ -227,363 +300,351 @@ const ProviderFormDialog = ({
                                 </Typography>
                             </Alert>
                         )}
-                        {/* API Style Selection - Big Box Cards */}
-                        <Box sx={{ display: 'flex', gap: 2 }}>
-                            {/* OpenAI Style Card */}
-                            <Box
-                                onClick={() => {
-                                    if (data.apiStyle !== 'openai') {
-                                        const oldStyle = data.apiStyle;
-                                        onChange('apiStyle', 'openai');
-                                        setVerificationResult(null);
-                                        if (oldStyle && oldStyle !== 'openai' as any) {
-                                            onChange('apiBase', '');
-                                            onChange('name', '');
-                                            if (mode === 'edit') {
-                                                setStyleChangedWarning(true);
-                                                setTimeout(() => setStyleChangedWarning(false), 4000);
-                                            }
-                                        }
-                                    }
-                                }}
-                                sx={{
-                                    flex: 1,
-                                    border: 2,
-                                    borderColor: data.apiStyle === 'openai' ? 'primary.main' : 'divider',
-                                    borderRadius: 2,
-                                    p: 2,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    bgcolor: data.apiStyle === 'openai' ? 'primary.50' : 'background.paper',
-                                    '&:hover': {
-                                        borderColor: data.apiStyle === 'openai' ? 'primary.main' : 'primary.light',
-                                        bgcolor: data.apiStyle === 'openai' ? 'primary.100' : 'action.hover',
-                                    },
-                                }}
-                            >
-                                <Stack spacing={1} alignItems="center">
-                                    <OpenAI size={28} />
-                                    <Typography variant="subtitle1" fontWeight={600}>
-                                        OpenAI Compatible
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary" textAlign="center">
-                                        {t('providerDialog.apiStyle.helperOpenAI')}
-                                    </Typography>
-                                </Stack>
-                            </Box>
 
-                            {/* Anthropic Style Card */}
-                            <Box
-                                onClick={() => {
-                                    if (data.apiStyle !== 'anthropic') {
-                                        const oldStyle = data.apiStyle;
-                                        onChange('apiStyle', 'anthropic');
+                        {/* ① Provider Selection */}
+                        <Autocomplete
+                            freeSolo
+                            autoHighlight
+                            openOnFocus
+                            selectOnFocus
+                            handleHomeEndKeys
+                            size="small"
+                            options={allProviders}
+                            filterOptions={(options, state) => {
+                                const inputValue = state.inputValue.toLowerCase();
+                                // If input matches a selected provider's display, show all
+                                const isSelectedFormat = selectedProvider &&
+                                    (selectedProvider.alias || selectedProvider.name).toLowerCase() === inputValue;
+                                if (isSelectedFormat) return options;
+
+                                return options.filter(option => {
+                                    const displayName = (option.alias || option.name).toLowerCase();
+                                    return displayName.includes(inputValue) ||
+                                        (option.baseUrlOpenAI || '').toLowerCase().includes(inputValue) ||
+                                        (option.baseUrlAnthropic || '').toLowerCase().includes(inputValue);
+                                });
+                            }}
+                            getOptionLabel={(option) => {
+                                if (typeof option === 'string') return option;
+                                return option.alias || option.name;
+                            }}
+                            value={selectedProvider}
+                            onChange={(_event, newValue) => {
+                                handleProviderSelect(newValue);
+                            }}
+                            inputValue={(() => {
+                                if (selectedProvider) {
+                                    return selectedProvider.alias || selectedProvider.name;
+                                }
+                                return data.apiBase;
+                            })()}
+                            onInputChange={(_event, newInputValue, reason) => {
+                                if (reason === 'input') {
+                                    // If typing, treat as custom URL when no provider matches
+                                    const matchingProvider = allProviders.find(p =>
+                                        (p.alias || p.name).toLowerCase() === newInputValue.toLowerCase()
+                                    );
+                                    if (!matchingProvider) {
+                                        setSelectedProvider(null);
+                                        onChange('apiBase', newInputValue);
                                         setVerificationResult(null);
-                                        if (oldStyle && oldStyle !== 'anthropic' as any) {
-                                            onChange('apiBase', '');
-                                            onChange('name', '');
-                                            if (mode === 'edit') {
-                                                setStyleChangedWarning(true);
-                                                setTimeout(() => setStyleChangedWarning(false), 4000);
-                                            }
+                                        // Clear protocols when input is cleared
+                                        if (!newInputValue) {
+                                            setProtocolOpenAI(false);
+                                            setProtocolAnthropic(false);
                                         }
                                     }
-                                }}
-                                sx={{
-                                    flex: 1,
-                                    border: 2,
-                                    borderColor: data.apiStyle === 'anthropic' ? 'primary.main' : 'divider',
-                                    borderRadius: 2,
-                                    p: 2,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    bgcolor: data.apiStyle === 'anthropic' ? 'primary.50' : 'background.paper',
-                                    '&:hover': {
-                                        borderColor: data.apiStyle === 'anthropic' ? 'primary.main' : 'primary.light',
-                                        bgcolor: data.apiStyle === 'anthropic' ? 'primary.100' : 'action.hover',
-                                    },
-                                }}
-                            >
-                                <Stack spacing={1} alignItems="center">
-                                    <Anthropic size={28} />
-                                    <Typography variant="subtitle1" fontWeight={600}>
-                                        Anthropic Compatible
+                                }
+                            }}
+                            renderOption={(props, option) => (
+                                <Box component="li" {...props} sx={{ fontSize: '0.875rem' }}>
+                                    <Typography variant="body2" fontWeight="medium">
+                                        {option.alias || option.name}
                                     </Typography>
-                                    <Typography variant="caption" color="text.secondary" textAlign="center">
-                                        {t('providerDialog.apiStyle.helperAnthropic')}
-                                    </Typography>
-                                </Stack>
-                            </Box>
+                                </Box>
+                            )}
+                            renderInput={(params) => (
+                                <TextField
+                                    {...params}
+                                    label={t('providerDialog.provider.label')}
+                                    required
+                                    placeholder={t('providerDialog.provider.placeholder')}
+                                />
+                            )}
+                            isOptionEqualToValue={(option, value) => {
+                                if (typeof value === 'string') return false;
+                                return option.id === value?.id;
+                            }}
+                        />
+
+                        {/* ② Protocol Selection (Checkboxes) */}
+                        <Box
+                            component="fieldset"
+                            sx={{
+                                border: 1,
+                                borderColor: 'divider',
+                                borderRadius: 1,
+                                p: 0,
+                                m: 0,
+                                '& > legend': {
+                                    ml: 1,
+                                    px: 0.5,
+                                    fontSize: '0.75rem',
+                                    color: 'text.secondary',
+                                },
+                            }}
+                        >
+                            <legend>{t('providerDialog.protocol.label')}</legend>
+                            <Stack spacing={0}>
+                                {/* OpenAI Protocol */}
+                                <Box
+                                    sx={{
+                                        px: 2,
+                                        py: 1,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s',
+                                        bgcolor: protocolOpenAI ? 'action.selected' : 'transparent',
+                                        '&:hover': {
+                                            bgcolor: protocolOpenAI ? 'action.selected' : 'action.hover',
+                                        },
+                                    }}
+                                    onClick={() => {
+                                        if (selectedProvider && !selectedProvider.supportsOpenAI) return;
+                                        setProtocolOpenAI(!protocolOpenAI);
+                                        setVerificationResult(null);
+                                    }}
+                                >
+                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                        <OpenAI size={18} />
+                                        <Box sx={{ flex: 1 }}>
+                                            <Typography variant="body2" fontWeight={500}>
+                                                {t('providerDialog.apiStyle.openAI')}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                {t('providerDialog.apiStyle.helperOpenAI')}
+                                            </Typography>
+                                        </Box>
+                                        <Checkbox
+                                            size="small"
+                                            checked={protocolOpenAI}
+                                            disabled={selectedProvider ? !selectedProvider.supportsOpenAI : false}
+                                            sx={{ p: 0 }}
+                                        />
+                                    </Stack>
+                                </Box>
+                                {/* Anthropic Protocol */}
+                                <Box
+                                    sx={{
+                                        borderTop: 1,
+                                        borderColor: 'divider',
+                                        px: 2,
+                                        py: 1,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s',
+                                        bgcolor: protocolAnthropic ? 'action.selected' : 'transparent',
+                                        '&:hover': {
+                                            bgcolor: protocolAnthropic ? 'action.selected' : 'action.hover',
+                                        },
+                                    }}
+                                    onClick={() => {
+                                        if (selectedProvider && !selectedProvider.supportsAnthropic) return;
+                                        setProtocolAnthropic(!protocolAnthropic);
+                                        setVerificationResult(null);
+                                    }}
+                                >
+                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                        <Anthropic size={18} />
+                                        <Box sx={{ flex: 1 }}>
+                                            <Typography variant="body2" fontWeight={500}>
+                                                {t('providerDialog.apiStyle.anthropic')}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                {t('providerDialog.apiStyle.helperAnthropic')}
+                                            </Typography>
+                                        </Box>
+                                        <Checkbox
+                                            size="small"
+                                            checked={protocolAnthropic}
+                                            disabled={selectedProvider ? !selectedProvider.supportsAnthropic : false}
+                                            sx={{ p: 0 }}
+                                        />
+                                    </Stack>
+                                </Box>
+                            </Stack>
                         </Box>
 
-                        {/* Style change warning alert */}
-                        {styleChangedWarning && (
+                        {/* ③ API Key Field */}
+                        <Box sx={{ position: 'relative' }}>
+                            <TextField
+                                size="small"
+                                fullWidth
+                                label={noApiKey ? 'API Key (Not Required)' : t('providerDialog.apiKey.label')}
+                                type="password"
+                                value={data.token}
+                                onChange={(e) => {
+                                    onChange('token', e.target.value);
+                                    setVerificationResult(null);
+                                }}
+                                required={!noApiKey}
+                                placeholder={mode === 'add' ? t('providerDialog.apiKey.placeholderAdd') : t('providerDialog.apiKey.placeholderEdit')}
+                                helperText={mode === 'edit' && t('providerDialog.apiKey.helperEdit')}
+                                disabled={noApiKey}
+                                slotProps={{
+                                    input: {
+                                        sx: { pr: 12 },
+                                    },
+                                }}
+                            />
+                            <Stack
+                                direction="row"
+                                alignItems="center"
+                                spacing={0.5}
+                                sx={{
+                                    position: 'absolute',
+                                    right: 12,
+                                    top: 20,
+                                    transform: 'translateY(-50%)',
+                                    pointerEvents: 'auto',
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <Typography variant="subtitle2" color="text.secondary">
+                                    No API Key
+                                </Typography>
+                                <Switch
+                                    size="small"
+                                    checked={noApiKey}
+                                    onChange={(e) => {
+                                        setNoApiKey(e.target.checked);
+                                        onChange('noKeyRequired', e.target.checked);
+                                        setVerificationResult(null);
+                                        if (e.target.checked) {
+                                            onChange('token', '');
+                                        }
+                                    }}
+                                />
+                            </Stack>
+                        </Box>
+
+                        {/* ④ Name Field */}
+                        <TextField
+                            size="small"
+                            fullWidth
+                            label={t('providerDialog.keyName.label')}
+                            value={data.name}
+                            onChange={(e) => {
+                                onChange('name', e.target.value);
+                                setVerificationResult(null);
+                            }}
+                            required
+                            placeholder={t('providerDialog.keyName.placeholder')}
+                        />
+
+                        {/* Proxy URL Field */}
+                        <TextField
+                            size="small"
+                            fullWidth
+                            label={t('providerDialog.advanced.proxyUrl.label')}
+                            placeholder={t('providerDialog.advanced.proxyUrl.placeholder')}
+                            value={data.proxyUrl || ''}
+                            onChange={(e) => onChange('proxyUrl', e.target.value)}
+                        />
+
+                        {/* Enabled Toggle (Edit mode only) */}
+                        {mode === 'edit' && (
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        size="small"
+                                        checked={data.enabled || false}
+                                        onChange={(e) => onChange('enabled', e.target.checked)}
+                                    />
+                                }
+                                label={t('providerDialog.enabled')}
+                            />
+                        )}
+
+                        {/* Verification Result */}
+                        {verificationResult && (
                             <Alert
-                                severity="warning"
-                                icon={<WarningAmber fontSize="inherit" />}
+                                severity={verificationResult.success ? 'success' : 'warning'}
                                 sx={{ mt: 1 }}
                                 action={
                                     <IconButton
                                         aria-label="close"
                                         color="inherit"
                                         size="small"
-                                        onClick={() => setStyleChangedWarning(false)}
+                                        onClick={() => setVerificationResult(null)}
                                     >
                                         ×
                                     </IconButton>
                                 }
                             >
-                                <Typography variant="body2">
-                                    {t('providerDialog.apiStyle.switchWarning', { defaultValue: 'API style changed. Base URL has been reset. Please select a compatible provider.' })}
-                                </Typography>
-                            </Alert>
-                        )}
-
-                        {/* Show other fields only after API Style is selected */}
-                        {data.apiStyle && (
-                            <>
-                                {/* API Key Name */}
-                                <TextField
-                                    size="small"
-                                    fullWidth
-                                    label={t('providerDialog.keyName.label')}
-                                    value={data.name}
-                                    onChange={(e) => {
-                                        onChange('name', e.target.value);
-                                        setVerificationResult(null);
-                                    }}
-                                    required
-                                    placeholder={t('providerDialog.keyName.placeholder')}
-                                />
-
-                                {/* Merged Provider Preset and Base URL Input */}
-                                <Autocomplete
-                                    freeSolo
-                                    autoSelect
-                                    size="small"
-                                    options={getCurrentProviders()}
-                                    filterOptions={(options, state) => {
-                                        // Custom filter: when input is in "Title - URL" format (from selection),
-                                        const inputValue = state.inputValue.toLowerCase();
-                                        const isSelectedFormat = options.some(
-                                            opt => `${opt.title} - ${opt.baseUrl}`.toLowerCase() === inputValue
-                                        );
-                                        if (isSelectedFormat) {
-                                            // Show all options when the input is just the selected display format
-                                            return options;
-                                        }
-                                        // Otherwise, use default filtering logic
-                                        return options.filter(option =>
-                                            option.title.toLowerCase().includes(inputValue) ||
-                                            option.baseUrl.toLowerCase().includes(inputValue)
-                                        );
-                                    }}
-                                    getOptionLabel={(option) => {
-                                        if (typeof option === 'string') return option;
-                                        return `${option.title} - ${option.baseUrl}`;
-                                    }}
-                                    value={data.apiBase}
-                                    onChange={(_event, newValue) => {
-                                        handleProviderOrBaseUrlSelect(newValue);
-                                    }}
-                                    inputValue={(() => {
-                                        // Find the provider that matches current apiBase and show "Title - URL" format
-                                        const providers = getCurrentProviders();
-                                        const matchingProvider = providers.find(p => p.baseUrl === data.apiBase);
-                                        if (matchingProvider) {
-                                            return `${matchingProvider.title} - ${matchingProvider.baseUrl}`;
-                                        }
-                                        return data.apiBase;
-                                    })()}
-                                    onInputChange={(_event, newInputValue, reason) => {
-                                        // Only update apiBase when user is typing (not when selecting from dropdown)
-                                        if (reason === 'input') {
-                                            onChange('apiBase', newInputValue);
-                                            setVerificationResult(null);
-                                        }
-                                    }}
-                                    renderOption={(props, option) => (
-                                        <Box component="li" {...props} sx={{ fontSize: '0.875rem' }}>
-                                            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                                                <Typography variant="body2" fontWeight="medium">
-                                                    {option.title}
-                                                </Typography>
-                                                <Typography variant="caption" color="text.secondary">
-                                                    {option.baseUrl}
-                                                </Typography>
-                                            </Box>
-                                        </Box>
-                                    )}
-                                    renderInput={(params) => (
-                                        <TextField
-                                            {...params}
-                                            label={t('providerDialog.providerOrUrl.label')}
-                                            required
-                                            placeholder={t('providerDialog.providerOrUrl.placeholder')}
-                                        />
-                                    )}
-                                    isOptionEqualToValue={(option, value) => {
-                                        if (typeof value === 'string') {
-                                            return option.baseUrl === value;
-                                        }
-                                        return option.value === value.value;
-                                    }}
-                                />
-
-                                {/* API Key Field */}
-                                <Box sx={{ position: 'relative' }}>
-                                    <TextField
-                                        size="small"
-                                        fullWidth
-                                        label={noApiKey ? 'API Key (Not Required)' : t('providerDialog.apiKey.label')}
-                                        type="password"
-                                        value={data.token}
-                                        onChange={(e) => {
-                                            onChange('token', e.target.value);
-                                            // Clear verification result when token changes
-                                            setVerificationResult(null);
-                                        }}
-                                        required={!noApiKey}
-                                        placeholder={mode === 'add' ? t('providerDialog.apiKey.placeholderAdd') : t('providerDialog.apiKey.placeholderEdit')}
-                                        helperText={mode === 'edit' && t('providerDialog.apiKey.helperEdit')}
-                                        disabled={noApiKey}
-                                        slotProps={{
-                                            input: {
-                                                sx: { pr: 12 },
-                                            },
-                                        }}
-                                    />
-                                    <Stack
-                                        direction="row"
-                                        alignItems="center"
-                                        spacing={0.5}
-                                        sx={{
-                                            position: 'absolute',
-                                            right: 12,
-                                            top: '50%',
-                                            transform: 'translateY(-50%)',
-                                            pointerEvents: 'auto',
-                                        }}
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        <Typography variant="subtitle2" color="text.secondary">
-                                            No Key
+                                <Box>
+                                    <Typography variant="body2" fontWeight="bold">
+                                        {verificationResult.message}
+                                    </Typography>
+                                    {verificationResult.details && (
+                                        <Typography variant="caption" display="block">
+                                            {verificationResult.details}
                                         </Typography>
-                                        <Switch
-                                            size="small"
-                                            checked={noApiKey}
-                                            onChange={(e) => {
-                                                setNoApiKey(e.target.checked);
-                                                onChange('noKeyRequired', e.target.checked);
-                                                setVerificationResult(null);
-                                                if (e.target.checked) {
-                                                    onChange('token', '');
-                                                }
-                                            }}
-                                        />
-                                    </Stack>
-                                </Box>
-
-                                {/* Proxy URL Field */}
-                                <TextField
-                                    size="small"
-                                    fullWidth
-                                    label={t('providerDialog.advanced.proxyUrl.label')}
-                                    placeholder={t('providerDialog.advanced.proxyUrl.placeholder')}
-                                    value={data.proxyUrl || ''}
-                                    onChange={(e) => onChange('proxyUrl', e.target.value)}
-                                    helperText={t('providerDialog.advanced.proxyUrl.helper')}
-                                />
-
-                                {/* Verification Result */}
-                                {verificationResult && (
-                                    <Alert
-                                        severity={verificationResult.success ? 'success' : 'warning'}
-                                        sx={{ mt: 1 }}
-                                        action={
-                                            <IconButton
-                                                aria-label="close"
-                                                color="inherit"
-                                                size="small"
-                                                onClick={() => setVerificationResult(null)}
-                                            >
-                                                ×
-                                            </IconButton>
-                                        }
-                                    >
-                                        <Box>
-                                            <Typography variant="body2" fontWeight="bold">
-                                                {verificationResult.message}
+                                    )}
+                                    {!verificationResult.success && (
+                                        <>
+                                            <Typography variant="caption" display="block" sx={{ mt: 0.5, color: 'text.secondary' }}>
+                                                {t('providerDialog.forceAdd.message')}
                                             </Typography>
-                                            {verificationResult.details && (
-                                                <Typography variant="caption" display="block">
-                                                    {verificationResult.details}
-                                                </Typography>
-                                            )}
-                                            {!verificationResult.success && (
-                                                <>
-                                                <Typography variant="caption" display="block" sx={{ mt: 0.5, color: 'text.secondary' }}>
-                                                    {t('providerDialog.forceAdd.message')}
-                                                </Typography>
-                                                <Typography variant="caption" display="block" sx={{ mt: 0.5, color: 'text.secondary' }}>
-                                                    {t('providerDialog.forceAdd.explanation')}
-                                                </Typography>
-                                                </>
-                                            )}
-                                            {verificationResult.responseTime && (
-                                                <Typography variant="caption" display="block">
-                                                    {t('providerDialog.verification.responseTime', { time: verificationResult.responseTime })}
-                                                    {verificationResult.modelsCount && ` • ${t('providerDialog.verification.modelsAvailable', { count: verificationResult.modelsCount })}`}
-                                                </Typography>
-                                            )}
-                                        </Box>
-                                    </Alert>
-                                )}
-
-                                {/* Enabled Toggle (Edit mode only) */}
-                                {mode === 'edit' && (
-                                    <FormControlLabel
-                                        control={
-                                            <Switch
-                                                size="small"
-                                                checked={data.enabled || false}
-                                                onChange={(e) => onChange('enabled', e.target.checked)}
-                                            />
-                                        }
-                                        label={t('providerDialog.enabled')}
-                                    />
-                                )}
-                            </>
+                                            <Typography variant="caption" display="block" sx={{ mt: 0.5, color: 'text.secondary' }}>
+                                                {t('providerDialog.forceAdd.explanation')}
+                                            </Typography>
+                                        </>
+                                    )}
+                                    {verificationResult.responseTime && (
+                                        <Typography variant="caption" display="block">
+                                            {t('providerDialog.verification.responseTime', { time: verificationResult.responseTime })}
+                                            {verificationResult.modelsCount && ` • ${t('providerDialog.verification.modelsAvailable', { count: verificationResult.modelsCount })}`}
+                                        </Typography>
+                                    )}
+                                </Box>
+                            </Alert>
                         )}
                     </Stack>
                 </DialogContent>
-                {data.apiStyle && (
-                    <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
-                        {/* Add/Save Anyway button - skip verification */}
-                        {(mode === 'add' || mode === 'edit') && (
-                            <Button
-                                type="button"
-                                variant="outlined"
-                                color="warning"
-                                size="small"
-                                onClick={() => onForceAdd?.()}
-                                title="Skip connectivity check and save anyway. The provider may not work correctly if the connection fails."
-                            >
-                                {mode === 'add' ? 'Add Anyway' : 'Save Anyway'}
-                            </Button>
+                <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
+                    {/* Add/Save Anyway button - skip verification */}
+                    <Button
+                        type="button"
+                        variant="outlined"
+                        color="warning"
+                        size="small"
+                        disabled={!hasAnyProtocol}
+                        onClick={() => onForceAdd?.()}
+                        title="Skip connectivity check and save anyway. The provider may not work correctly if the connection fails."
+                        sx={{
+                            '&.Mui-disabled': {
+                                color: 'text.disabled',
+                                borderColor: 'action.disabledBackground',
+                            },
+                        }}
+                    >
+                        {mode === 'add' ? 'Add Anyway' : 'Save Anyway'}
+                    </Button>
+                    <Button
+                        type="submit"
+                        variant="contained"
+                        size="small"
+                        disabled={verifying || !hasAnyProtocol}
+                    >
+                        {verifying ? (
+                            <>
+                                <CircularProgress size={16} sx={{ mr: 1 }} />
+                                {mode === 'add' ? 'Adding...' : 'Saving...'}
+                            </>
+                        ) : (
+                            submitText || defaultSubmitText
                         )}
-                        <Button type="submit" variant="contained" size="small" disabled={verifying}>
-                            {verifying ? (
-                                <>
-                                    <CircularProgress size={16} sx={{ mr: 1 }} />
-                                    {mode === 'add' ? 'Adding...' : 'Saving...'}
-                                </>
-                            ) : (
-                                submitText || defaultSubmitText
-                            )}
-                        </Button>
-                    </DialogActions>
-                )}
+                    </Button>
+                </DialogActions>
             </form>
         </Dialog>
     );

@@ -6,7 +6,6 @@ import TinglyService from "@/bindings";
 import {
     Configuration,
     HistoryApi,
-    ImbotSettingsApi,
     InfoApi,
     LogsApi,
     ModelsApi,
@@ -45,7 +44,6 @@ interface ApiInstances {
     oauthApi: OauthApi;
     logsApi: LogsApi;
     usageApi: UsageApi;
-    imbotSettingsApi: ImbotSettingsApi;
 }
 
 
@@ -143,7 +141,6 @@ const createApiInstances = async () => {
         oauthApi: new OauthApi(config),
         logsApi: new LogsApi(config),
         usageApi: new UsageApi(config),
-        imbotSettingsApi: new ImbotSettingsApi(config),
     };
 };
 
@@ -934,32 +931,12 @@ export const api = {
 
     // Get all ImBot settings
     getImBotSettingsList: async (): Promise<any> => {
-        try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsGet();
-            return response.data;
-        } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
-            return { success: false, error: error.message };
-        }
+        return fetchUIAPI('/imbot/settings');
     },
 
     // Get a specific ImBot setting by UUID
     getImBotSetting: async (uuid: string): Promise<any> => {
-        try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidGet(uuid);
-            return response.data;
-        } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
-            return { success: false, error: error.message };
-        }
+        return fetchUIAPI(`/imbot/settings/${uuid}`);
     },
 
     // Create a new ImBot setting
@@ -974,17 +951,10 @@ export const api = {
         enabled?: boolean;
         token?: string;
     }): Promise<any> => {
-        try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsPost(data as any);
-            return response.data;
-        } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
-            return { success: false, error: error.message };
-        }
+        return fetchUIAPI('/imbot/settings', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
     },
 
     // Update an ImBot setting
@@ -998,77 +968,34 @@ export const api = {
         bash_allowlist?: string[];
         enabled?: boolean;
     }): Promise<any> => {
-        try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidPut(uuid, data as any);
-            return response.data;
-        } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
-            return { success: false, error: error.message };
-        }
+        return fetchUIAPI(`/imbot/settings/${uuid}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
     },
 
     // Delete an ImBot setting
     deleteImBotSetting: async (uuid: string): Promise<any> => {
-        try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidDelete(uuid);
-            return response.data;
-        } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
-            return { success: false, error: error.message };
-        }
+        return fetchUIAPI(`/imbot/settings/${uuid}`, {
+            method: 'DELETE',
+        });
     },
 
     // Toggle an ImBot setting's enabled status
     toggleImBotSetting: async (uuid: string): Promise<any> => {
-        try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidTogglePost(uuid);
-            return response.data;
-        } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
-            return { success: false, error: error.message };
-        }
+        return fetchUIAPI(`/imbot/settings/${uuid}/toggle`, {
+            method: 'POST',
+        });
     },
 
     // Get all supported ImBot platforms
     getImBotPlatforms: async (): Promise<any> => {
-        try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.imbotSettingsApi.apiV1ImbotPlatformsGet();
-            return response.data;
-        } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
-            return { success: false, error: error.message };
-        }
+        return fetchUIAPI('/imbot/platforms');
     },
 
     // Get platform auth configuration
     getImBotPlatformConfig: async (platform: string): Promise<any> => {
-        try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.imbotSettingsApi.apiV1ImbotPlatformConfigGet(platform);
-            return response.data;
-        } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
-            return { success: false, error: error.message };
-        }
+        return fetchUIAPI(`/imbot/platform-config?platform=${platform}`);
     },
 
     // ============================================

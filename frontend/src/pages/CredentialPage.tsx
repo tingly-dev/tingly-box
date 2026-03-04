@@ -133,66 +133,121 @@ const CredentialPage = () => {
     const handleProviderSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        const providerData = {
-            name: providerFormData.name,
-            api_base: providerFormData.apiBase,
-            api_style: providerFormData.apiStyle,
-            token: providerFormData.token,
-            no_key_required: (providerFormData as any).noKeyRequired || false,
-            ...(apiKeyDialogMode === 'add' && { proxy_url: (providerFormData as any).proxyUrl ?? '' }),
-            ...(apiKeyDialogMode === 'edit' && { enabled: providerFormData.enabled }),
-        };
-
-        const result = apiKeyDialogMode === 'add'
-            ? await api.addProvider(providerData)
-            : await api.updateProvider(providerFormData.uuid!, {
-                name: providerData.name,
-                api_base: providerData.api_base,
-                api_style: providerData.api_style,
-                token: providerData.token || undefined,
-                no_key_required: providerData.no_key_required,
-                enabled: providerData.enabled,
+        if (apiKeyDialogMode === 'edit') {
+            // Edit mode: single provider update
+            const providerData = {
+                name: providerFormData.name,
+                api_base: providerFormData.apiBase,
+                api_style: providerFormData.apiStyle,
+                token: providerFormData.token || undefined,
+                no_key_required: (providerFormData as any).noKeyRequired || false,
+                enabled: providerFormData.enabled,
                 proxy_url: (providerFormData as any).proxyUrl ?? '',
-            });
+            };
 
-        if (result.success) {
-            showNotification(`Provider ${apiKeyDialogMode === 'add' ? 'added' : 'updated'} successfully!`, 'success');
-            setApiKeyDialogOpen(false);
-            loadProviders();
+            const result = await api.updateProvider(providerFormData.uuid!, providerData);
+            if (result.success) {
+                showNotification('Provider updated successfully!', 'success');
+                setApiKeyDialogOpen(false);
+                loadProviders();
+            } else {
+                showNotification(`Failed to update provider: ${result.error}`, 'error');
+            }
         } else {
-            showNotification(`Failed to ${apiKeyDialogMode === 'add' ? 'add' : 'update'} provider: ${result.error}`, 'error');
+            // Add mode: support multi-protocol
+            const protocols = (providerFormData as any).protocols as ('openai' | 'anthropic')[] || [providerFormData.apiStyle].filter(Boolean);
+            const providerBaseUrls = (providerFormData as any).providerBaseUrls as { openai?: string; anthropic?: string } | undefined;
+
+            let allSuccess = true;
+            let lastError = '';
+
+            for (const protocol of protocols) {
+                const apiBase = providerBaseUrls?.[protocol] || providerFormData.apiBase;
+                const providerData = {
+                    name: protocols.length > 1
+                        ? `${providerFormData.name} (${protocol === 'openai' ? 'OpenAI' : 'Anthropic'})`
+                        : providerFormData.name,
+                    api_base: apiBase,
+                    api_style: protocol,
+                    token: providerFormData.token,
+                    no_key_required: (providerFormData as any).noKeyRequired || false,
+                    proxy_url: (providerFormData as any).proxyUrl ?? '',
+                };
+
+                const result = await api.addProvider(providerData);
+                if (!result.success) {
+                    allSuccess = false;
+                    lastError = result.error;
+                }
+            }
+
+            if (allSuccess) {
+                const count = protocols.length;
+                showNotification(`${count > 1 ? `${count} providers` : 'Provider'} added successfully!`, 'success');
+                setApiKeyDialogOpen(false);
+                loadProviders();
+            } else {
+                showNotification(`Failed to add provider: ${lastError}`, 'error');
+            }
         }
     };
 
     const handleProviderForceAdd = async () => {
-        const providerData = {
-            name: providerFormData.name,
-            api_base: providerFormData.apiBase,
-            api_style: providerFormData.apiStyle,
-            token: providerFormData.token,
-            no_key_required: (providerFormData as any).noKeyRequired || false,
-            ...(apiKeyDialogMode === 'add' && { proxy_url: (providerFormData as any).proxyUrl ?? '' }),
-            ...(apiKeyDialogMode === 'edit' && { enabled: providerFormData.enabled }),
-        };
-
-        const result = apiKeyDialogMode === 'add'
-            ? await api.addProvider(providerData, true)
-            : await api.updateProvider(providerFormData.uuid!, {
-                name: providerData.name,
-                api_base: providerData.api_base,
-                api_style: providerData.api_style,
-                token: providerData.token || undefined,
-                no_key_required: providerData.no_key_required,
-                enabled: providerData.enabled,
+        if (apiKeyDialogMode === 'edit') {
+            const providerData = {
+                name: providerFormData.name,
+                api_base: providerFormData.apiBase,
+                api_style: providerFormData.apiStyle,
+                token: providerFormData.token || undefined,
+                no_key_required: (providerFormData as any).noKeyRequired || false,
+                enabled: providerFormData.enabled,
                 proxy_url: (providerFormData as any).proxyUrl ?? '',
-            });
+            };
 
-        if (result.success) {
-            showNotification(`Provider ${apiKeyDialogMode === 'add' ? 'added' : 'updated'} successfully!`, 'success');
-            setApiKeyDialogOpen(false);
-            loadProviders();
+            const result = await api.updateProvider(providerFormData.uuid!, providerData);
+            if (result.success) {
+                showNotification('Provider updated successfully!', 'success');
+                setApiKeyDialogOpen(false);
+                loadProviders();
+            } else {
+                showNotification(`Failed to update provider: ${result.error}`, 'error');
+            }
         } else {
-            showNotification(`Failed to ${apiKeyDialogMode === 'add' ? 'add' : 'update'} provider: ${result.error}`, 'error');
+            // Force add with multi-protocol support
+            const protocols = (providerFormData as any).protocols as ('openai' | 'anthropic')[] || [providerFormData.apiStyle].filter(Boolean);
+            const providerBaseUrls = (providerFormData as any).providerBaseUrls as { openai?: string; anthropic?: string } | undefined;
+
+            let allSuccess = true;
+            let lastError = '';
+
+            for (const protocol of protocols) {
+                const apiBase = providerBaseUrls?.[protocol] || providerFormData.apiBase;
+                const providerData = {
+                    name: protocols.length > 1
+                        ? `${providerFormData.name} (${protocol === 'openai' ? 'OpenAI' : 'Anthropic'})`
+                        : providerFormData.name,
+                    api_base: apiBase,
+                    api_style: protocol,
+                    token: providerFormData.token,
+                    no_key_required: (providerFormData as any).noKeyRequired || false,
+                    proxy_url: (providerFormData as any).proxyUrl ?? '',
+                };
+
+                const result = await api.addProvider(providerData, true);
+                if (!result.success) {
+                    allSuccess = false;
+                    lastError = result.error;
+                }
+            }
+
+            if (allSuccess) {
+                const count = protocols.length;
+                showNotification(`${count > 1 ? `${count} providers` : 'Provider'} added successfully!`, 'success');
+                setApiKeyDialogOpen(false);
+                loadProviders();
+            } else {
+                showNotification(`Failed to add provider: ${lastError}`, 'error');
+            }
         }
     };
 
