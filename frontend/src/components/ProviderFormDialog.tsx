@@ -20,8 +20,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getProvidersByStyle, serviceProviders } from '../services/serviceProviders';
 import { api } from '../services/api';
-import { OpenAI } from '@lobehub/icons';
-import { Anthropic } from '@lobehub/icons';
+import { OpenAI, Anthropic } from './BrandIcons';
 
 export interface EnhancedProviderFormData {
     name: string;

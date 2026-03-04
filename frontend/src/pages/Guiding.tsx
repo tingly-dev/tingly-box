@@ -1,8 +1,6 @@
 import { Box, Button, Card, CardContent, CardActions, Typography, alpha } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import OpenAI from '@lobehub/icons/es/OpenAI';
-import Anthropic from '@lobehub/icons/es/Anthropic';
-import Claude from '@lobehub/icons/es/Claude';
+import { OpenAI, Anthropic, Claude } from '../components/BrandIcons';
 import { Settings as SystemIcon, Code as CodeIcon, BarChart as BarChartIcon, Lock as LockIcon, AutoAwesome } from '@mui/icons-material';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useTranslation } from 'react-i18next';
@@ -89,7 +87,7 @@ const Guiding = () => {
                     title: t('layout.nav.useClaudeCode', { defaultValue: 'Claude Code' }),
                     description: 'Use Claude Code for AI Coding',
                     path: '/use-claude-code',
-                    icon: <Claude style={{ fontSize: 40 }} />,
+                    icon: <Claude size={40} />,
                     color: '#cc785c',
                 },
                 {
