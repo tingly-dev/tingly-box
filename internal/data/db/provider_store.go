@@ -46,17 +46,6 @@ type ProviderRecord struct {
 	OAuthExpiresAt    string `gorm:"column:oauth_expires_at"`             // For oauth: token expiration (RFC3339)
 	OAuthExtraFields  string `gorm:"column:oauth_extra_fields;type:text"` // For oauth: JSON
 
-	// Tool interceptor config
-	ToolInterceptorPreferLocalSearch bool   `gorm:"column:tool_interceptor_prefer_local_search;default:false"`
-	ToolInterceptorSearchAPI         string `gorm:"column:tool_interceptor_search_api"`
-	ToolInterceptorSearchKey         string `gorm:"column:tool_interceptor_search_key"`
-	ToolInterceptorMaxResults        int    `gorm:"column:tool_interceptor_max_results"`
-	ToolInterceptorProxyURL          string `gorm:"column:tool_interceptor_proxy_url"`
-	ToolInterceptorMaxFetchSize      int64  `gorm:"column:tool_interceptor_max_fetch_size"`
-	ToolInterceptorFetchTimeout      int64  `gorm:"column:tool_interceptor_fetch_timeout"`
-	ToolInterceptorMaxURLLength      int    `gorm:"column:tool_interceptor_max_url_length"`
-	ToolInterceptorDisabled          bool   `gorm:"column:tool_interceptor_disabled;default:false"`
-
 	CreatedAt time.Time `gorm:"column:created_at"`
 	UpdatedAt time.Time `gorm:"column:updated_at"`
 }
@@ -101,27 +90,6 @@ func (r *ProviderRecord) toProvider() *typ.Provider {
 		}
 	case typ.AuthTypeAPIKey, "":
 		provider.Token = r.Token
-	}
-
-	// Parse tool interceptor config
-	if r.ToolInterceptorSearchAPI != "" || r.ToolInterceptorSearchKey != "" || r.ToolInterceptorMaxResults != 0 {
-		provider.ToolInterceptor = &typ.ToolInterceptorConfig{
-			PreferLocalSearch: r.ToolInterceptorPreferLocalSearch,
-			SearchAPI:         r.ToolInterceptorSearchAPI,
-			SearchKey:         r.ToolInterceptorSearchKey,
-			MaxResults:        r.ToolInterceptorMaxResults,
-			ProxyURL:          r.ToolInterceptorProxyURL,
-			MaxFetchSize:      r.ToolInterceptorMaxFetchSize,
-			FetchTimeout:      r.ToolInterceptorFetchTimeout,
-			MaxURLLength:      r.ToolInterceptorMaxURLLength,
-		}
-	}
-
-	if r.ToolInterceptorDisabled {
-		if provider.ToolInterceptorOverride == nil {
-			provider.ToolInterceptorOverride = &typ.ToolInterceptorOverride{}
-		}
-		provider.ToolInterceptorOverride.Disabled = true
 	}
 
 	return provider
@@ -174,22 +142,6 @@ func toRecord(p *typ.Provider) *ProviderRecord {
 		record.Token = p.Token
 	}
 
-	// Marshal tool interceptor config
-	if p.ToolInterceptor != nil {
-		record.ToolInterceptorPreferLocalSearch = p.ToolInterceptor.PreferLocalSearch
-		record.ToolInterceptorSearchAPI = p.ToolInterceptor.SearchAPI
-		record.ToolInterceptorSearchKey = p.ToolInterceptor.SearchKey
-		record.ToolInterceptorMaxResults = p.ToolInterceptor.MaxResults
-		record.ToolInterceptorProxyURL = p.ToolInterceptor.ProxyURL
-		record.ToolInterceptorMaxFetchSize = p.ToolInterceptor.MaxFetchSize
-		record.ToolInterceptorFetchTimeout = p.ToolInterceptor.FetchTimeout
-		record.ToolInterceptorMaxURLLength = p.ToolInterceptor.MaxURLLength
-	}
-
-	if p.ToolInterceptorOverride != nil {
-		record.ToolInterceptorDisabled = p.ToolInterceptorOverride.Disabled
-	}
-
 	return record
 }
 
@@ -237,32 +189,6 @@ func updateRecordFromProvider(record *ProviderRecord, p *typ.Provider) {
 		record.OAuthRefreshToken = ""
 		record.OAuthExpiresAt = ""
 		record.OAuthExtraFields = ""
-	}
-
-	// Marshal tool interceptor config
-	if p.ToolInterceptor != nil {
-		record.ToolInterceptorPreferLocalSearch = p.ToolInterceptor.PreferLocalSearch
-		record.ToolInterceptorSearchAPI = p.ToolInterceptor.SearchAPI
-		record.ToolInterceptorSearchKey = p.ToolInterceptor.SearchKey
-		record.ToolInterceptorMaxResults = p.ToolInterceptor.MaxResults
-		record.ToolInterceptorProxyURL = p.ToolInterceptor.ProxyURL
-		record.ToolInterceptorMaxFetchSize = p.ToolInterceptor.MaxFetchSize
-		record.ToolInterceptorFetchTimeout = p.ToolInterceptor.FetchTimeout
-		record.ToolInterceptorMaxURLLength = p.ToolInterceptor.MaxURLLength
-	} else {
-		record.ToolInterceptorSearchAPI = ""
-		record.ToolInterceptorSearchKey = ""
-		record.ToolInterceptorMaxResults = 0
-		record.ToolInterceptorProxyURL = ""
-		record.ToolInterceptorMaxFetchSize = 0
-		record.ToolInterceptorFetchTimeout = 0
-		record.ToolInterceptorMaxURLLength = 0
-	}
-
-	if p.ToolInterceptorOverride != nil {
-		record.ToolInterceptorDisabled = p.ToolInterceptorOverride.Disabled
-	} else {
-		record.ToolInterceptorDisabled = false
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/constant"
@@ -71,6 +72,7 @@ type Config struct {
 	ruleStateStore     *db.RuleStateStore     // Persists current_service_index to SQLite
 	imbotSettingsStore *db.ImBotSettingsStore // Persists ImBot credentials
 	providerStore      *db.ProviderStore      // Persists provider configurations and credentials
+	toolConfigStore    *db.ToolConfigStore    // Persists provider-specific tool configurations
 	templateManager    *data.TemplateManager
 
 	mu sync.RWMutex
@@ -144,6 +146,13 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		return nil, fmt.Errorf("failed to initialize provider store: %w", err)
 	}
 	cfg.providerStore = providerStore
+
+	// Initialize tool config store (for persisting provider-specific tool configurations)
+	toolConfigStore, err := db.NewToolConfigStore(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize tool config store: %w", err)
+	}
+	cfg.toolConfigStore = toolConfigStore
 
 	// Initialize ImBot settings store
 	imbotSettingsStore, err := db.NewImBotSettingsStore(configDir)
@@ -239,6 +248,12 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	if err := cfg.migrateProvidersToDB(); err != nil {
 		logrus.Warnf("Failed to migrate providers to database: %v", err)
 		// Continue anyway - provider store may already have data
+	}
+
+	// Migrate tool interceptor config from provider table to tool_config_store if needed
+	if err := cfg.migrateToolInterceptorFromProvider(); err != nil {
+		logrus.Warnf("Failed to migrate tool interceptor config: %v", err)
+		// Continue anyway - tool config may already have been migrated
 	}
 
 	return cfg, nil
@@ -795,6 +810,139 @@ func (c *Config) migrateProvidersToDB() error {
 	return nil
 }
 
+// migrateToolInterceptorFromProvider migrates tool interceptor config from provider table to tool_config_store
+// This is a one-time migration that runs on startup
+func (c *Config) migrateToolInterceptorFromProvider() error {
+	if c.providerStore == nil || c.toolConfigStore == nil {
+		return nil // Stores not initialized, skip migration
+	}
+
+	// Check if migration has already been done by checking if any tool_configs exist
+	// If tool_configs table has entries, assume migration is done
+	var toolConfigCount int64
+	if err := c.toolConfigStore.GetDB().Model(&db.ToolConfigRecord{}).Count(&toolConfigCount).Error; err != nil {
+		return fmt.Errorf("failed to check tool config count: %w", err)
+	}
+
+	// Get all provider UUIDs that need to be migrated
+	providerDB := c.providerStore.GetDB()
+
+	// Check if old columns exist by trying to query them
+	// We use raw SQL to check since the columns are no longer in the ProviderRecord struct
+	columnsExist, err := c.checkOldToolInterceptorColumnsExist(providerDB)
+	if err != nil {
+		logrus.Warnf("Failed to check if old tool interceptor columns exist: %v", err)
+		return nil // Continue anyway, columns may have been dropped
+	}
+
+	if !columnsExist {
+		logrus.Debugf("Old tool interceptor columns do not exist in provider table, skipping migration")
+		return nil
+	}
+
+	// Get all providers with tool interceptor config using raw SQL
+	type OldProviderToolConfig struct {
+		ProviderUUID string
+		ConfigJSON   string
+		Disabled     bool
+	}
+
+	var oldConfigs []OldProviderToolConfig
+	query := `
+		SELECT uuid as provider_uuid,
+		       json_object(
+		           'prefer_local_search', tool_interceptor_prefer_local_search,
+		           'search_api', tool_interceptor_search_api,
+		           'search_key', tool_interceptor_search_key,
+		           'max_results', tool_interceptor_max_results,
+		           'proxy_url', tool_interceptor_proxy_url,
+		           'max_fetch_size', tool_interceptor_max_fetch_size,
+		           'fetch_timeout', tool_interceptor_fetch_timeout,
+		           'max_url_length', tool_interceptor_max_url_length
+		       ) as config_json,
+		       tool_interceptor_disabled as disabled
+		FROM providers
+		WHERE tool_interceptor_search_api IS NOT NULL
+		   OR tool_interceptor_search_key IS NOT NULL
+		   OR tool_interceptor_max_results != 0
+	`
+
+	if err := providerDB.Raw(query).Scan(&oldConfigs).Error; err != nil {
+		logrus.Warnf("Failed to query old tool interceptor configs: %v", err)
+		return nil // Continue anyway, may have already been migrated
+	}
+
+	if len(oldConfigs) == 0 {
+		logrus.Debugf("No tool interceptor configs found in provider table, skipping migration")
+		return nil
+	}
+
+	logrus.Infof("Migrating %d tool interceptor configs from provider table to tool_config_store...", len(oldConfigs))
+
+	// Migrate each config
+	for _, oldConfig := range oldConfigs {
+		if oldConfig.ConfigJSON == "null" || oldConfig.ConfigJSON == "" {
+			continue
+		}
+
+		// Check if already migrated
+		existing, err := c.toolConfigStore.GetByProviderAndType(oldConfig.ProviderUUID, db.ToolTypeInterceptor)
+		if err != nil {
+			logrus.Warnf("Failed to check existing tool config for provider %s: %v", oldConfig.ProviderUUID, err)
+			continue
+		}
+		if existing != nil {
+			// Already migrated, skip
+			continue
+		}
+
+		// Create new tool config record
+		uuid := fmt.Sprintf("%s-%s", oldConfig.ProviderUUID, db.ToolTypeInterceptor)
+		record := &db.ToolConfigRecord{
+			UUID:         uuid,
+			ProviderUUID: oldConfig.ProviderUUID,
+			ToolType:     db.ToolTypeInterceptor,
+			ConfigJSON:   oldConfig.ConfigJSON,
+			Disabled:     oldConfig.Disabled,
+		}
+
+		if err := c.toolConfigStore.Save(record); err != nil {
+			logrus.Warnf("Failed to migrate tool config for provider %s: %v", oldConfig.ProviderUUID, err)
+			continue
+		}
+	}
+
+	logrus.Infof("Successfully migrated tool interceptor configs to tool_config_store")
+
+	// Note: The old columns will be dropped when GORM AutoMigrate is run
+	// since they're no longer in the ProviderRecord struct
+
+	return nil
+}
+
+// checkOldToolInterceptorColumnsExist checks if the old tool interceptor columns still exist in the provider table
+func (c *Config) checkOldToolInterceptorColumnsExist(database *gorm.DB) (bool, error) {
+	// Try to query one of the old columns
+	type ColumnCheck struct {
+		HasColumn bool
+	}
+
+	// SQLite specific check using pragma_table_info
+	query := `
+		SELECT EXISTS (
+			SELECT 1 FROM pragma_table_info('providers')
+			WHERE name = 'tool_interceptor_search_api'
+		) as has_column
+	`
+
+	var result ColumnCheck
+	if err := database.Raw(query).Scan(&result).Error; err != nil {
+		return false, err
+	}
+
+	return result.HasColumn, nil
+}
+
 // AddProviderByName adds a new AI provider configuration by name, API base, and token
 func (c *Config) AddProviderByName(name, apiBase, token string) error {
 	if name == "" {
@@ -1028,6 +1176,89 @@ func (c *Config) GetToolInterceptorConfig() *typ.ToolInterceptorConfig {
 	defer c.mu.RUnlock()
 
 	return c.ToolInterceptor
+}
+
+// GetToolInterceptorConfigForProvider returns the effective tool interceptor config for a specific provider
+// This merges the global config with provider-specific config from the tool config store
+func (c *Config) GetToolInterceptorConfigForProvider(providerUUID string) (*typ.ToolInterceptorConfig, bool) {
+	global := c.GetToolInterceptorConfig()
+	if global == nil && c.toolConfigStore == nil {
+		return nil, false
+	}
+
+	// Try to get provider-specific config from the store
+	providerConfig, enabled, err := c.toolConfigStore.GetToolInterceptorConfig(providerUUID)
+	if err != nil {
+		logrus.Warnf("Failed to get tool interceptor config for provider %s: %v", providerUUID, err)
+	}
+
+	// If provider explicitly disabled, return disabled
+	if providerConfig != nil && !enabled {
+		return nil, false
+	}
+
+	// If provider has config, merge with global (provider takes precedence)
+	if providerConfig != nil {
+		effective := &typ.ToolInterceptorConfig{
+			PreferLocalSearch: global.PreferLocalSearch,
+			SearchAPI:         global.SearchAPI,
+			SearchKey:         global.SearchKey,
+			MaxResults:        global.MaxResults,
+			ProxyURL:          global.ProxyURL,
+			MaxFetchSize:      global.MaxFetchSize,
+			FetchTimeout:      global.FetchTimeout,
+			MaxURLLength:      global.MaxURLLength,
+		}
+
+		// Apply provider overrides
+		if providerConfig.PreferLocalSearch {
+			effective.PreferLocalSearch = true
+		}
+		if providerConfig.SearchAPI != "" {
+			effective.SearchAPI = providerConfig.SearchAPI
+		}
+		if providerConfig.SearchKey != "" {
+			effective.SearchKey = providerConfig.SearchKey
+		}
+		if providerConfig.MaxResults != 0 {
+			effective.MaxResults = providerConfig.MaxResults
+		}
+		if providerConfig.ProxyURL != "" {
+			effective.ProxyURL = providerConfig.ProxyURL
+		}
+		if providerConfig.MaxFetchSize != 0 {
+			effective.MaxFetchSize = providerConfig.MaxFetchSize
+		}
+		if providerConfig.FetchTimeout != 0 {
+			effective.FetchTimeout = providerConfig.FetchTimeout
+		}
+		if providerConfig.MaxURLLength != 0 {
+			effective.MaxURLLength = providerConfig.MaxURLLength
+		}
+
+		// Apply defaults
+		typ.ApplyToolInterceptorDefaults(effective)
+		return effective, true
+	}
+
+	// No provider-specific config, use global if enabled
+	if global == nil {
+		return nil, false
+	}
+
+	effective := &typ.ToolInterceptorConfig{
+		PreferLocalSearch: global.PreferLocalSearch,
+		SearchAPI:         global.SearchAPI,
+		SearchKey:         global.SearchKey,
+		MaxResults:        global.MaxResults,
+		ProxyURL:          global.ProxyURL,
+		MaxFetchSize:      global.MaxFetchSize,
+		FetchTimeout:      global.FetchTimeout,
+		MaxURLLength:      global.MaxURLLength,
+	}
+
+	typ.ApplyToolInterceptorDefaults(effective)
+	return effective, true
 }
 
 // SetDefaultMaxTokens updates the default max_tokens
