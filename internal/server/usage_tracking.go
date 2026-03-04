@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/obs/otel"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -57,7 +58,7 @@ func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens
 	}
 
 	// 1. Update service stats (inline, no UsageTracker allocation)
-	s.updateServiceStats(rule, provider, model, inputTokens, outputTokens)
+	s.updateServiceStats(rule, provider, model, inputTokens, outputTokens, latencyMs)
 
 	// 2. Record to OTel (primary path for metrics)
 	if s.tokenTracker != nil {
@@ -129,7 +130,7 @@ func (s *Server) recordDetailedUsage(c *gin.Context, rule *typ.Rule, provider *t
 
 // updateServiceStats updates the service-level statistics for load balancing.
 // This is inlined from the old UsageTracker.recordOnService to avoid unnecessary allocations.
-func (s *Server) updateServiceStats(rule *typ.Rule, provider *typ.Provider, model string, inputTokens, outputTokens int) {
+func (s *Server) updateServiceStats(rule *typ.Rule, provider *typ.Provider, model string, inputTokens, outputTokens int, latencyMs int) {
 	if rule == nil || provider == nil || s.config == nil {
 		return
 	}
@@ -139,6 +140,15 @@ func (s *Server) updateServiceStats(rule *typ.Rule, provider *typ.Provider, mode
 		service := rule.Services[i]
 		if service.Active && service.Provider == provider.UUID && service.Model == model {
 			service.RecordUsage(inputTokens, outputTokens)
+
+			// Record latency metrics for latency-based routing
+			service.Stats.RecordLatency(int64(latencyMs), constant.DefaultLatencySampleWindow)
+
+			// Record token speed metrics (tokens per second) for speed-based routing
+			if latencyMs > 0 && outputTokens > 0 {
+				speedTps := float64(outputTokens) / (float64(latencyMs) / 1000.0) // Convert ms to seconds
+				service.Stats.RecordTokenSpeed(speedTps, constant.DefaultSpeedSampleWindow)
+			}
 
 			// Persist to stats store
 			if statsStore := s.config.GetStatsStore(); statsStore != nil {
