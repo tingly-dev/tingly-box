@@ -47,6 +47,8 @@ interface LayoutProps {
 
 const activityBarWidth = 88;
 const sidebarWidth = 200;
+const headerHeight = 60;
+const footerHeight = 60;
 
 interface NavItem {
     path: string;
@@ -269,7 +271,7 @@ const Layout = ({ children }: LayoutProps) => {
             {/* Logo */}
             <Box
                 sx={{
-                    height: 56,
+                    height: headerHeight,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -395,7 +397,11 @@ const Layout = ({ children }: LayoutProps) => {
             </Box>
 
             {/* Bottom Section: Status + User */}
-            <Box sx={{ py: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+            <Box sx={{
+                py: 1, borderTop: '1px solid', borderColor: 'divider',
+                    height: footerHeight,
+                }}
+            >
                 {/* Status Indicators */}
                 {!isHealthy && (
                     <Tooltip title="Disconnected" placement="right" arrow>
@@ -444,14 +450,22 @@ const Layout = ({ children }: LayoutProps) => {
                         </ListItemButton>
                     </Tooltip>
                 )}
+            </Box>
 
+
+            <Box
+                sx={{
+                    height: footerHeight,
+                    py: 1.5,
+                    borderTop: '1px solid',
+                    borderColor: 'divider',
+                }}
+            >
                 {/* User */}
                 <Tooltip title="About" placement="right" arrow>
                     <ListItemButton
                         onClick={handleEasterEgg}
                         sx={{
-                            minHeight: 44,
-                            px: 1.5,
                             justifyContent: 'center',
                             color: 'text.secondary',
                             borderRadius: 0,
@@ -487,7 +501,7 @@ const Layout = ({ children }: LayoutProps) => {
             {/* Sidebar Header */}
             <Box
                 sx={{
-                    height: 56,
+                    height: headerHeight,
                     px: 2,
                     display: 'flex',
                     alignItems: 'center',
@@ -508,7 +522,18 @@ const Layout = ({ children }: LayoutProps) => {
             </Box>
 
             {/* Sidebar Items */}
-            <List sx={{ flex: 1, py: 1, overflowY: 'auto', '&::-webkit-scrollbar': { width: 6 }, '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' }, '&::-webkit-scrollbar-thumb': { backgroundColor: 'grey.300', borderRadius: 1, '&:hover': { backgroundColor: 'grey.400' } } }}>
+            <List sx={{
+                flex: 1,
+                py: 1,
+                overflowY: 'auto',
+                '&::-webkit-scrollbar': { width: 6 },
+                '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
+                '&::-webkit-scrollbar-thumb': {
+                    backgroundColor: 'grey.300',
+                    borderRadius: 1,
+                    '&:hover': { backgroundColor: 'grey.400' }
+                }
+            }}>
                 {sidebarItems.map((item) => (
                     <React.Fragment key={item.path}>
                         {item.divider && <Divider sx={{ mx: 2, my: 1 }} />}
@@ -585,7 +610,9 @@ const Layout = ({ children }: LayoutProps) => {
             {/* Bottom Slogan */}
             <Box
                 sx={{
-                    p: 2,
+                    height: footerHeight,
+                    py: 1.5,
+                    px: 2,
                     borderTop: '1px solid',
                     borderColor: 'divider',
                 }}
