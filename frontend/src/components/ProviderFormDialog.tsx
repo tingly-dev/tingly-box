@@ -524,7 +524,7 @@ const ProviderFormDialog = ({
                         </Box>
 
                         {/* ③ API Key Field */}
-                        <Box sx={{ position: 'relative' }}>
+                        <Box>
                             <TextField
                                 size="small"
                                 fullWidth
@@ -542,7 +542,6 @@ const ProviderFormDialog = ({
                                 slotProps={{
                                     input: {
                                         sx: {
-                                            pr: 15,
                                             '& input': {
                                                 textOverflow: 'ellipsis',
                                             },
@@ -562,35 +561,26 @@ const ProviderFormDialog = ({
                                     },
                                 }}
                             />
-                            <Stack
-                                direction="row"
-                                alignItems="center"
-                                spacing={0.5}
-                                sx={{
-                                    position: 'absolute',
-                                    right: 12,
-                                    top: 20,
-                                    transform: 'translateY(-50%)',
-                                    pointerEvents: 'auto',
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                <Typography variant="subtitle2" color="text.secondary">
-                                    No API Key
-                                </Typography>
-                                <Switch
-                                    size="small"
-                                    checked={noApiKey}
-                                    onChange={(e) => {
-                                        setNoApiKey(e.target.checked);
-                                        onChange('noKeyRequired', e.target.checked);
-                                        setVerificationResult(null);
-                                        if (e.target.checked) {
-                                            onChange('token', '');
-                                        }
-                                    }}
+                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.5, pr: 2 }}>
+                                <FormControlLabel
+                                    control={
+                                        <Checkbox
+                                            size="small"
+                                            checked={noApiKey}
+                                            onChange={(e) => {
+                                                setNoApiKey(e.target.checked);
+                                                onChange('noKeyRequired', e.target.checked);
+                                                setVerificationResult(null);
+                                                if (e.target.checked) {
+                                                    onChange('token', '');
+                                                }
+                                            }}
+                                        />
+                                    }
+                                    label="No API Key Required"
+                                    labelPlacement="start"
                                 />
-                            </Stack>
+                            </Box>
                         </Box>
 
                         {/* ④ Name Field */}
