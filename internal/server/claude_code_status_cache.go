@@ -1,40 +1,32 @@
 package server
 
 import (
-	"container/list"
 	"sync"
 	"time"
 )
 
 // sessionCacheEntry holds cached data for a single session
 type sessionCacheEntry struct {
-	lastInput   *ClaudeCodeStatusInput
-	lastUpdate  time.Time
-	listElement *list.Element
+	lastInput  *ClaudeCodeStatusInput
+	lastUpdate time.Time
 }
 
-// ClaudeCodeStatusCache caches Claude Code status inputs per session with LRU eviction
+// ClaudeCodeStatusCache caches Claude Code status inputs per session
 type ClaudeCodeStatusCache struct {
-	mu sync.RWMutex
-
-	maxSessions int
-	maxAge      time.Duration
-
+	mu       sync.RWMutex
 	sessions map[string]*sessionCacheEntry
-	lruList  *list.List
+	maxAge   time.Duration
 }
 
 // NewClaudeCodeStatusCache creates a new cache
 func NewClaudeCodeStatusCache() *ClaudeCodeStatusCache {
 	return &ClaudeCodeStatusCache{
-		maxSessions: 100,
-		maxAge:      30 * time.Minute,
-		sessions:    make(map[string]*sessionCacheEntry),
-		lruList:     list.New(),
+		sessions: make(map[string]*sessionCacheEntry),
+		maxAge:   30 * time.Minute,
 	}
 }
 
-// Update stores input for the session (one entry per session)
+// Update stores input for the session
 func (c *ClaudeCodeStatusCache) Update(input *ClaudeCodeStatusInput) {
 	if input == nil || input.SessionID == "" {
 		return
@@ -43,29 +35,10 @@ func (c *ClaudeCodeStatusCache) Update(input *ClaudeCodeStatusInput) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	sessionID := input.SessionID
-
-	if entry, exists := c.sessions[sessionID]; exists {
-		entry.lastInput = input
-		entry.lastUpdate = time.Now()
-		c.lruList.MoveToFront(entry.listElement)
-		return
-	}
-
-	// Evict LRU if at capacity
-	if len(c.sessions) >= c.maxSessions {
-		if oldest := c.lruList.Back(); oldest != nil {
-			c.removeEntry(oldest.Value.(string))
-		}
-	}
-
-	// Add new entry
-	entry := &sessionCacheEntry{
+	c.sessions[input.SessionID] = &sessionCacheEntry{
 		lastInput:  input,
 		lastUpdate: time.Now(),
 	}
-	entry.listElement = c.lruList.PushFront(sessionID)
-	c.sessions[sessionID] = entry
 }
 
 // Get returns cached input for the session, merging zero values from cache
@@ -85,62 +58,54 @@ func (c *ClaudeCodeStatusCache) Get(input *ClaudeCodeStatusInput) *ClaudeCodeSta
 		return input
 	}
 
-	// Stale cache - return input as-is
+	// Stale cache - return input as-is and clean up
 	if time.Since(entry.lastUpdate) > c.maxAge {
-		c.removeEntry(input.SessionID)
+		delete(c.sessions, input.SessionID)
 		return input
 	}
 
-	c.lruList.MoveToFront(entry.listElement)
-
 	// Merge zero values from cache
-	merged, cached := *input, entry.lastInput
+	return mergeStatusInput(input, entry.lastInput)
+}
 
-	if merged.Model.DisplayName == "" && cached.Model.DisplayName != "" {
-		merged.Model.DisplayName = cached.Model.DisplayName
-	}
-	if merged.Model.ID == "" && cached.Model.ID != "" {
-		merged.Model.ID = cached.Model.ID
-	}
-	if merged.ContextWindow.UsedPercentage == 0 && cached.ContextWindow.UsedPercentage > 0 {
-		merged.ContextWindow.UsedPercentage = cached.ContextWindow.UsedPercentage
-	}
-	if merged.ContextWindow.ContextWindowSize == 0 && cached.ContextWindow.ContextWindowSize > 0 {
-		merged.ContextWindow.ContextWindowSize = cached.ContextWindow.ContextWindowSize
-	}
-	if merged.ContextWindow.TotalInputTokens == 0 && cached.ContextWindow.TotalInputTokens > 0 {
-		merged.ContextWindow.TotalInputTokens = cached.ContextWindow.TotalInputTokens
-	}
-	if merged.ContextWindow.TotalOutputTokens == 0 && cached.ContextWindow.TotalOutputTokens > 0 {
-		merged.ContextWindow.TotalOutputTokens = cached.ContextWindow.TotalOutputTokens
-	}
-	if merged.Cost.TotalCostUSD == 0 && cached.Cost.TotalCostUSD > 0 {
-		merged.Cost.TotalCostUSD = cached.Cost.TotalCostUSD
-	}
-	if merged.Cost.TotalDurationMs == 0 && cached.Cost.TotalDurationMs > 0 {
-		merged.Cost.TotalDurationMs = cached.Cost.TotalDurationMs
-	}
-	if merged.Cost.TotalAPIDurationMs == 0 && cached.Cost.TotalAPIDurationMs > 0 {
-		merged.Cost.TotalAPIDurationMs = cached.Cost.TotalAPIDurationMs
-	}
-	if merged.Cost.TotalLinesAdded == 0 && cached.Cost.TotalLinesAdded > 0 {
-		merged.Cost.TotalLinesAdded = cached.Cost.TotalLinesAdded
-	}
-	if merged.Cost.TotalLinesRemoved == 0 && cached.Cost.TotalLinesRemoved > 0 {
-		merged.Cost.TotalLinesRemoved = cached.Cost.TotalLinesRemoved
-	}
+// mergeStatusInput merges zero/empty fields from cached into input
+func mergeStatusInput(input, cached *ClaudeCodeStatusInput) *ClaudeCodeStatusInput {
+	merged := *input
+
+	// Model fields
+	merged.Model.DisplayName = mergeIfEmpty(merged.Model.DisplayName, cached.Model.DisplayName)
+	merged.Model.ID = mergeIfEmpty(merged.Model.ID, cached.Model.ID)
+
+	// ContextWindow fields
+	merged.ContextWindow.UsedPercentage = mergeIfZero(merged.ContextWindow.UsedPercentage, cached.ContextWindow.UsedPercentage)
+	merged.ContextWindow.ContextWindowSize = mergeIfZero(merged.ContextWindow.ContextWindowSize, cached.ContextWindow.ContextWindowSize)
+	merged.ContextWindow.TotalInputTokens = mergeIfZero(merged.ContextWindow.TotalInputTokens, cached.ContextWindow.TotalInputTokens)
+	merged.ContextWindow.TotalOutputTokens = mergeIfZero(merged.ContextWindow.TotalOutputTokens, cached.ContextWindow.TotalOutputTokens)
+
+	// Cost fields
+	merged.Cost.TotalCostUSD = mergeIfZero(merged.Cost.TotalCostUSD, cached.Cost.TotalCostUSD)
+	merged.Cost.TotalDurationMs = mergeIfZero(merged.Cost.TotalDurationMs, cached.Cost.TotalDurationMs)
+	merged.Cost.TotalAPIDurationMs = mergeIfZero(merged.Cost.TotalAPIDurationMs, cached.Cost.TotalAPIDurationMs)
+	merged.Cost.TotalLinesAdded = mergeIfZero(merged.Cost.TotalLinesAdded, cached.Cost.TotalLinesAdded)
+	merged.Cost.TotalLinesRemoved = mergeIfZero(merged.Cost.TotalLinesRemoved, cached.Cost.TotalLinesRemoved)
 
 	return &merged
 }
 
-// removeEntry removes a session entry (must hold lock)
-func (c *ClaudeCodeStatusCache) removeEntry(sessionID string) {
-	if entry, ok := c.sessions[sessionID]; ok {
-		if entry.listElement != nil {
-			c.lruList.Remove(entry.listElement)
-		}
-		delete(c.sessions, sessionID)
+// mergeIfEmpty returns cached if target is empty
+func mergeIfEmpty(target, cached string) string {
+	if target == "" && cached != "" {
+		return cached
 	}
+	return target
+}
+
+// mergeIfZero returns cached if target is zero (for numeric types where 0 means "not set")
+func mergeIfZero[T int | int64 | float64](target, cached T) T {
+	if target == 0 && cached != 0 {
+		return cached
+	}
+	return target
 }
 
 // globalClaudeCodeStatusCache is the global cache instance
