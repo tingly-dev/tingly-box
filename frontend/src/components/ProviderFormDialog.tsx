@@ -269,7 +269,6 @@ const ProviderFormDialog = ({
                 setVerificationResult({
                     success: false,
                     message: result.error?.message || t('providerDialog.verification.failed'),
-                    details: result.error?.type,
                 });
                 return false;
             }
@@ -277,7 +276,6 @@ const ProviderFormDialog = ({
             setVerificationResult({
                 success: false,
                 message: t('providerDialog.verification.networkError'),
-                details: error instanceof Error ? error.message : 'Unknown error',
             });
             return false;
         } finally {
@@ -661,14 +659,9 @@ const ProviderFormDialog = ({
                                         </Typography>
                                     )}
                                     {!verificationResult.success && (
-                                        <>
-                                            <Typography variant="caption" display="block" sx={{ mt: 0.5, color: 'text.secondary' }}>
-                                                {t('providerDialog.forceAdd.message')}
-                                            </Typography>
-                                            <Typography variant="caption" display="block" sx={{ mt: 0.5, color: 'text.secondary' }}>
-                                                {t('providerDialog.forceAdd.explanation')}
-                                            </Typography>
-                                        </>
+                                        <Typography variant="body2" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
+                                            {t('providerDialog.verification.failureHint')}
+                                        </Typography>
                                     )}
                                     {verificationResult.responseTime && (
                                         <Typography variant="caption" display="block">

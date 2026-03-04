@@ -171,8 +171,9 @@ export default {
       "verifying": "Verifying...",
       "verifyButton": "Verify",
       "missingFields": "Please fill in all required fields (API Style, Name, API Base URL, API Key)",
-      "failed": "Verification failed",
-      "networkError": "Network error or unable to connect to verification service",
+      "failed": "Connection check failed",
+      "networkError": "Unable to connect. Please check your network and proxy settings.",
+      "failureHint": "You can still add this provider using the 'Add Anyway' button if you're sure the configuration is correct.",
       "responseTime": "Response time: {{time}}ms",
       "modelsAvailable": "{{count}} models available",
       "testResult": "Test result: {{result}}"
