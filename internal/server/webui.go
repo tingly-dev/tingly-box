@@ -55,6 +55,12 @@ func (s *Server) UseUIEndpoints() {
 	// Exclude API routes from SPA catch-all by registering them first
 	// The routes registered below (manager APIs, OAuth, usage, etc.) will take precedence
 
+	// Claude Code status line endpoints (no auth required)
+	// These must be registered before the /tingly/:scenario routes
+	ccGroup := s.engine.Group("/tingly/:scenario")
+	ccGroup.POST("/status", s.GetClaudeCodeStatus)
+	ccGroup.POST("/statusline", s.GetClaudeCodeStatusLine)
+
 	// Create route manager
 	manager := swagger.NewRouteManager(s.engine)
 
@@ -832,6 +838,7 @@ func (s *Server) useWebStaticEndpoints(engine *gin.Engine) {
 					"code":    "not_found",
 				},
 			})
+			c.Abort()
 			return
 		}
 
