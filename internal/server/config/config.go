@@ -53,11 +53,7 @@ type Config struct {
 	DefaultMaxTokens int  `json:"default_max_tokens"` // Default max_tokens for anthropic API requests
 	Verbose          bool `json:"verbose"`            // Verbose mode for detailed logging
 	Debug            bool `json:"-"`                  // Debug mode for Gin debug level logging
-	OpenBrowser      bool `yaml:"-" json:"-"`         // Auto-open browser in web UI mode (default: true)
-
-	// Tool interceptor (local web_search/web_fetch)
-	// Deprecated: Use ToolConfigs instead for new code
-	ToolInterceptor *typ.ToolInterceptorConfig `json:"tool_interceptor,omitempty"`
+	OpenBrowser      bool `yaml:"-" json:"-"` // Auto-open browser in web UI mode (default: true)
 
 	// Generic tool configs map for all tool types
 	// Key is tool_type (e.g., "tool_interceptor", "code_execution")
@@ -1178,14 +1174,12 @@ func (c *Config) GetDefaultMaxTokens() int {
 }
 
 // GetToolInterceptorConfig returns the global tool interceptor config
-// Checks both the legacy ToolInterceptor field and the new ToolConfigs map
 func (c *Config) GetToolInterceptorConfig() *typ.ToolInterceptorConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	// First, try the new ToolConfigs map
+	var config typ.ToolInterceptorConfig
 	if c.ToolConfigs != nil {
-		var config typ.ToolInterceptorConfig
 		if data, ok := c.ToolConfigs[db.ToolTypeInterceptor]; ok {
 			if err := json.Unmarshal(data, &config); err == nil {
 				return &config
@@ -1193,8 +1187,7 @@ func (c *Config) GetToolInterceptorConfig() *typ.ToolInterceptorConfig {
 		}
 	}
 
-	// Fallback to legacy ToolInterceptor field for backward compatibility
-	return c.ToolInterceptor
+	return nil
 }
 
 // GetToolConfig returns the global config for a specific tool type
