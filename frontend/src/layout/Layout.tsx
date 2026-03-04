@@ -1,6 +1,4 @@
-import Anthropic from '@lobehub/icons/es/Anthropic';
-import Claude from '@lobehub/icons/es/Claude';
-import OpenAI from '@lobehub/icons/es/OpenAI';
+import { OpenAI, Anthropic, Claude } from '../components/BrandIcons';
 import {
     AccountCircle as AccountIcon,
     AutoAwesome,

@@ -14,7 +14,7 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import {Claude, Gemini, Google, OpenAI, Qwen} from '@lobehub/icons';
+import {Claude, Gemini, Google, OpenAI, Qwen} from './BrandIcons';
 import {useEffect, useState} from 'react';
 import api from "@/services/api.ts";
 import {getOAuthRedirectPath} from "@/utils/protocol";
