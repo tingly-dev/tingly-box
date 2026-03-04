@@ -427,8 +427,8 @@ const ProviderFormDialog = ({
                             sx={{
                                 border: 1,
                                 borderColor: 'divider',
-                                borderRadius: 1,
-                                p: 0,
+                                borderRadius: 1.5,
+                                p: 0.5,
                                 m: 0,
                                 '& > legend': {
                                     ml: 1,
@@ -439,12 +439,13 @@ const ProviderFormDialog = ({
                             }}
                         >
                             <legend>{t('providerDialog.protocol.label')}</legend>
-                            <Stack spacing={0}>
+                            <Stack spacing={0.5}>
                                 {/* OpenAI Protocol */}
                                 <Box
                                     sx={{
-                                        px: 2,
+                                        px: 1.5,
                                         py: 1,
+                                        borderRadius: 1,
                                         cursor: 'pointer',
                                         transition: 'all 0.15s',
                                         bgcolor: protocolOpenAI ? 'action.selected' : 'transparent',
@@ -458,16 +459,16 @@ const ProviderFormDialog = ({
                                         setVerificationResult(null);
                                     }}
                                 >
-                                    <Stack direction="row" alignItems="center" spacing={1}>
-                                        <OpenAI size={18} />
+                                    <Stack direction="row" alignItems="flex-start" spacing={1}>
+                                        <OpenAI size={18} sx={{ mt: 0.2 }} />
                                         <Box sx={{ flex: 1 }}>
                                             <Typography variant="body2" fontWeight={500}>
                                                 {t('providerDialog.apiStyle.openAI')}
                                             </Typography>
-                                            <Typography variant="caption" color="text.secondary">
+                                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.2 }}>
                                                 {t('providerDialog.apiStyle.helperOpenAI')}
                                             </Typography>
-                                            {selectedProvider?.baseUrlOpenAI && protocolOpenAI && (
+                                            {selectedProvider?.baseUrlOpenAI && (
                                                 <ProtocolBaseUrlDisplay url={selectedProvider.baseUrlOpenAI} />
                                             )}
                                         </Box>
@@ -475,16 +476,15 @@ const ProviderFormDialog = ({
                                             size="small"
                                             checked={protocolOpenAI}
                                             disabled={selectedProvider ? !selectedProvider.supportsOpenAI : false}
-                                            sx={{ p: 0 }}
+                                            sx={{ p: 0, mt: -0.5 }}
                                         />
                                     </Stack>
                                 </Box>
                                 {/* Anthropic Protocol */}
                                 <Box
                                     sx={{
-                                        borderTop: 1,
-                                        borderColor: 'divider',
-                                        px: 2,
+                                        borderRadius: 1,
+                                        px: 1.5,
                                         py: 1,
                                         cursor: 'pointer',
                                         transition: 'all 0.15s',
@@ -499,16 +499,16 @@ const ProviderFormDialog = ({
                                         setVerificationResult(null);
                                     }}
                                 >
-                                    <Stack direction="row" alignItems="center" spacing={1}>
-                                        <Anthropic size={18} />
+                                    <Stack direction="row" alignItems="flex-start" spacing={1}>
+                                        <Anthropic size={18} sx={{ mt: 0.2 }} />
                                         <Box sx={{ flex: 1 }}>
                                             <Typography variant="body2" fontWeight={500}>
                                                 {t('providerDialog.apiStyle.anthropic')}
                                             </Typography>
-                                            <Typography variant="caption" color="text.secondary">
+                                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.2 }}>
                                                 {t('providerDialog.apiStyle.helperAnthropic')}
                                             </Typography>
-                                            {selectedProvider?.baseUrlAnthropic && protocolAnthropic && (
+                                            {selectedProvider?.baseUrlAnthropic && (
                                                 <ProtocolBaseUrlDisplay url={selectedProvider.baseUrlAnthropic} />
                                             )}
                                         </Box>
@@ -516,7 +516,7 @@ const ProviderFormDialog = ({
                                             size="small"
                                             checked={protocolAnthropic}
                                             disabled={selectedProvider ? !selectedProvider.supportsAnthropic : false}
-                                            sx={{ p: 0 }}
+                                            sx={{ p: 0, mt: -0.5 }}
                                         />
                                     </Stack>
                                 </Box>
