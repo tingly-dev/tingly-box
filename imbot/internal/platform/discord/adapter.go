@@ -201,7 +201,7 @@ func (a *Adapter) convertAttachment(att *discordgo.MessageAttachment) core.Media
 		Size:     int64(att.Size),
 		Width:    att.Width,
 		Height:   att.Height,
-		Raw:      make(map[string]interface{}),
+		Raw:      map[string]interface{}{"platform": "discord"},
 	}
 }
 

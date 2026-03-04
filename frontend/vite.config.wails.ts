@@ -70,7 +70,7 @@ export default defineConfig(({mode}) => {
                         }
 
                         // Icon libraries
-                        if (id.includes('node_modules/@lobehub/icons/')) {
+                        if (id.includes('node_modules/@lobehub/icons-static-svg/')) {
                             return 'lobehub-icons';
                         }
                         if (id.includes('node_modules/devicons-react/')) {

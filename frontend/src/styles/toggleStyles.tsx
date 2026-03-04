@@ -7,7 +7,7 @@
  * 3. Consistent visual language across all components
  */
 
-import { SxProps, Theme } from '@mui/material/styles';
+import type { SxProps, Theme } from '@mui/material/styles';
 
 // ============================================================================
 // ToggleButtonGroup Styles (Multi-Choice Selection)

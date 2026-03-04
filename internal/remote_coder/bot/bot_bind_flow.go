@@ -343,6 +343,7 @@ func BuildActionKeyboard() *imbot.KeyboardBuilder {
 		AddRow(
 			imbot.CallbackButton("🗑 Clear", imbot.FormatCallbackData("action", "clear")),
 			imbot.CallbackButton("📁 Bind", imbot.FormatCallbackData("action", "bind")),
+			imbot.CallbackButton("📁 Project", imbot.FormatCallbackData("action", "project")),
 		)
 }
 

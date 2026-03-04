@@ -28,6 +28,9 @@ type Config struct {
 	Model         string `json:"model,omitempty"`
 	FallbackModel string `json:"fallback_model,omitempty"`
 
+	// MaxTurns limits the number of agentic turns
+	MaxTurns int `json:"max_turns,omitempty"`
+
 	// System Prompt Options
 	CustomSystemPrompt string `json:"custom_system_prompt,omitempty"`
 	// AppendSystemPrompt adds additional system prompt content

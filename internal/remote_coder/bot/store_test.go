@@ -1,11 +1,14 @@
 package bot
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/data/db"
 )
 
 func TestStoreSettingsRoundTrip(t *testing.T) {
@@ -15,16 +18,29 @@ func TestStoreSettingsRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 
-	settings := Settings{
+	uid, err := uuid.NewUUID()
+	settings := db.Settings{
+		UUID:          uid.String(),
 		Token:         "telegram-token",
 		Platform:      "telegram",
 		ProxyURL:      "http://proxy.test:8080",
 		ChatIDLock:    "chat-123",
 		BashAllowlist: []string{"cd", "ls", "pwd"},
+		Auth: map[string]string{
+			"token": "telegram-token",
+		},
 	}
-	require.NoError(t, store.SaveSettings(settings))
 
-	loaded, err := store.GetSettings()
+	botStore, err := db.NewImBotSettingsStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = botStore.CreateSettings(settings)
+	require.NoError(t, err)
+
+	loaded, err := botStore.GetSettingsByUUID(uid.String())
+	fmt.Printf("loaded: %v", loaded)
 	require.NoError(t, err)
 	require.Equal(t, "telegram-token", loaded.Token)
 	require.Equal(t, "telegram", loaded.Platform)

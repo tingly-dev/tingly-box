@@ -21,7 +21,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getAllUniqueProviders, type UniqueProvider } from '../services/serviceProviders';
 import { api } from '../services/api';
-import { OpenAI, Anthropic } from '@lobehub/icons';
+import { OpenAI, Anthropic } from './BrandIcons';
 
 export interface EnhancedProviderFormData {
     uuid?: string;
