@@ -203,26 +203,26 @@ export default function CustomModelCard({
                                 color: 'error.main',
                             }
                         }}
-                        title={isSelected ? "Delete selected model" : "Delete custom model"}
+                        title="Delete custom model"
                     >
                         <DeleteIcon sx={{ fontSize: 14 }} />
                     </IconButton>
                 </Box>
             </Card>
 
-            {/* Confirmation dialog for deleting selected custom model */}
+            {/* Confirmation dialog for deleting custom model */}
             <Dialog
                 open={deleteConfirmOpen}
                 onClose={handleCancelDelete}
                 aria-labelledby="delete-confirm-title"
             >
                 <DialogTitle id="delete-confirm-title">
-                    Delete Selected Custom Model?
+                    Delete Custom Model?
                 </DialogTitle>
                 <DialogContent sx={{ pb: 2 }}>
                     <Typography variant="body2" color="text.secondary">
-                        You are about to delete the custom model <strong>"{model}"</strong> which is currently selected.
-                        The selection will be cleared after deletion. Do you want to continue?
+                        Are you sure you want to delete the custom model <strong>"{model}"</strong>?
+                        {isSelected && " The selection will be cleared after deletion."}
                     </Typography>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
