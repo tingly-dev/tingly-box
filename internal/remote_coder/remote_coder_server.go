@@ -63,13 +63,10 @@ func Run(ctx context.Context, cfg *config.Config, imbotStore *db.ImBotSettingsSt
 		botManager.SetDBPath(cfg.DBPath) // Set db path for chat store
 		logrus.Info("Using ImBot settings store from main service")
 	} else {
-		botStore, err := bot.NewStore(cfg.DBPath)
+		botStore, err := db.NewImBotSettingsStore(cfg.DBPath)
 		if err != nil {
 			return fmt.Errorf("failed to initialize bot store: %w", err)
 		}
-		defer func() {
-			_ = botStore.Close()
-		}()
 		botManager = bot.NewManager(botStore, sessionMgr, agentBoot)
 		logrus.Info("Using local bot store")
 	}
@@ -224,6 +221,6 @@ func GetBotManager() bot.BotLifecycle {
 
 // Global instances for bot platform integration
 var (
-	globalAgentBoot         *agentboot.AgentBoot
-	globalBotManager        bot.BotLifecycle
+	globalAgentBoot  *agentboot.AgentBoot
+	globalBotManager bot.BotLifecycle
 )
