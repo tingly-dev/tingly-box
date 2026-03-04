@@ -38,13 +38,18 @@ type OpenCodeConfigPayload struct {
 	Provider map[string]OpenCodeProviderConfig `json:"provider"`
 }
 
-// generateBackupPath generates a backup file path with timestamp
+// generateBackupPath generates a backup file path with timestamp in a backup subdirectory
+// Backup is placed in <original-file-directory>/backup/<filename>.bak-<timestamp><ext>
 func generateBackupPath(originalPath string) string {
 	now := time.Now()
 	timestamp := now.Format("20060102-150405")
 	ext := filepath.Ext(originalPath)
-	base := originalPath[:len(originalPath)-len(ext)]
-	return fmt.Sprintf("%s.bak-%s%s", base, timestamp, ext)
+	base := filepath.Base(originalPath)
+	dir := filepath.Dir(originalPath)
+
+	// Place backup in a "backup" subdirectory of the original file's directory
+	backupDir := filepath.Join(dir, "backup")
+	return filepath.Join(backupDir, fmt.Sprintf("%s.bak-%s%s", base, timestamp, ext))
 }
 
 // backupFile creates a backup of the existing file
@@ -57,6 +62,12 @@ func backupFile(path string) (string, error) {
 	defer src.Close()
 
 	backupPath := generateBackupPath(path)
+
+	// Ensure backup directory exists
+	if err := os.MkdirAll(filepath.Dir(backupPath), 0755); err != nil {
+		return "", fmt.Errorf("failed to create backup directory: %w", err)
+	}
+
 	dst, err := os.OpenFile(backupPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0644)
 	if err != nil {
 		return "", fmt.Errorf("failed to create backup file: %w", err)
