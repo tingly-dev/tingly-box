@@ -15,7 +15,7 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import type { Provider } from '@/types/provider';
 import { getModelTypeInfo } from '@/utils/modelUtils';
 import { useCustomModels } from '@/hooks/useCustomModels';
@@ -55,10 +55,17 @@ export function ModelsPanel({
     testing = false,
 }: ModelsPanelProps) {
     const { customModels } = useCustomModels();
-    const { providerModels, refreshingProviders, refreshModels } = useProviderModels();
-    const { isModelProbing } = useModelSelectContext();
+    const { providerModels, refreshingProviders, refreshModels, fetchModels } = useProviderModels();
+    const { isModelProbing, refreshTrigger } = useModelSelectContext();
     const { recentModels } = useRecentModels();
     const { newModels, clearNewModels } = useNewModels();
+
+    // Re-fetch provider models when refresh trigger changes (e.g., after custom model deletion)
+    useEffect(() => {
+        if (refreshTrigger > 0) {
+            fetchModels(provider.uuid);
+        }
+    }, [refreshTrigger, provider.uuid, fetchModels]);
 
     const isProviderSelected = selectedProvider === provider.uuid;
     const isRefreshing = refreshingProviders.includes(provider.uuid);

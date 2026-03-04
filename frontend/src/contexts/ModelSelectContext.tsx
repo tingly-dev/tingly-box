@@ -37,6 +37,10 @@ export interface ModelSelectContextValue {
     openCustomModelDialog: (provider: Provider, value?: string) => void;
     closeCustomModelDialog: () => void;
     updateCustomModelDialogValue: (value: string) => void;
+
+    // Refresh trigger to force UI update after custom model changes
+    refreshTrigger: number;
+    triggerRefresh: () => void;
 }
 
 const ModelSelectContext = createContext<ModelSelectContextValue | undefined>(undefined);
@@ -60,6 +64,7 @@ export function ModelSelectProvider({ children, key: providerKey }: ModelSelectP
         provider: null,
         value: ''
     });
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     // Reset state when providerKey changes (dialog reopens with different selection)
     useEffect(() => {
@@ -68,7 +73,12 @@ export function ModelSelectProvider({ children, key: providerKey }: ModelSelectP
         setProbingModels(new Set());
         setSnackbar({ open: false, message: '', severity: 'error' });
         setCustomModelDialog({ open: false, provider: null, value: '' });
+        setRefreshTrigger(0);
     }, [providerKey]);
+
+    const triggerRefresh = useCallback(() => {
+        setRefreshTrigger(prev => prev + 1);
+    }, []);
 
     const addProbingModel = useCallback((key: string) => {
         setProbingModels(prev => new Set(prev).add(key));
@@ -127,6 +137,8 @@ export function ModelSelectProvider({ children, key: providerKey }: ModelSelectP
         openCustomModelDialog,
         closeCustomModelDialog,
         updateCustomModelDialogValue,
+        refreshTrigger,
+        triggerRefresh,
     };
 
     return (

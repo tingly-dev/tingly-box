@@ -22,6 +22,7 @@ interface ModelSelectTabProps {
     selectedModel?: string;
     activeTab?: string; // Provider UUID
     onSelected?: (option: ProviderSelectTabOption) => void;
+    onSelectionClear?: () => void; // Called when selection should be cleared (e.g., after deleting selected model)
     onProviderChange?: (provider: Provider) => void; // Called when switching to a provider tab
     onCustomModelSave?: (provider: Provider, customModel: string) => void;
     // Single provider mode props
@@ -36,6 +37,7 @@ function ModelSelectTabInner({
     selectedModel,
     activeTab: externalActiveTab,
     onSelected,
+    onSelectionClear,
     onProviderChange,
     onCustomModelSave,
     singleProvider,
@@ -55,6 +57,7 @@ function ModelSelectTabInner({
         openCustomModelDialog,
         closeCustomModelDialog,
         customModelDialog,
+        triggerRefresh,
     } = useModelSelectContext();
 
     const { handleModelSelect } = useModelSelection({ onSelected });
@@ -88,7 +91,16 @@ function ModelSelectTabInner({
 
     const handleDeleteCustomModel = useCallback((provider: Provider, customModel: string) => {
         removeCustomModel(provider.uuid, customModel);
-    }, [removeCustomModel]);
+
+        // If the deleted model is currently selected, clear the selection
+        // Use onSelectionClear to avoid triggering the parent's save/close logic
+        if (selectedProvider === provider.uuid && selectedModel === customModel && onSelectionClear) {
+            onSelectionClear();
+        }
+
+        // Trigger refresh to update UI
+        triggerRefresh();
+    }, [removeCustomModel, selectedProvider, selectedModel, onSelectionClear, triggerRefresh]);
 
     const handleCustomModelEdit = useCallback((provider: Provider, currentValue?: string) => {
         openCustomModelDialog(provider, currentValue);
