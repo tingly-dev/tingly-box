@@ -263,6 +263,9 @@ const ProviderFormDialog = ({
             }
         }
 
+        // Close dialog immediately for better UX
+        // The parent onSubmit will handle the actual API operation
+        onClose();
         onSubmit(e);
     };
 
@@ -634,12 +637,12 @@ const ProviderFormDialog = ({
                         variant="contained"
                         size="small"
                         disabled={verifying || !hasAnyProtocol}
+                        sx={{
+                            minWidth: verifying ? '80px' : 'auto',
+                        }}
                     >
                         {verifying ? (
-                            <>
-                                <CircularProgress size={16} sx={{ mr: 1 }} />
-                                {mode === 'add' ? 'Adding...' : 'Saving...'}
-                            </>
+                            <CircularProgress size={20} thickness={4} />
                         ) : (
                             submitText || defaultSubmitText
                         )}
