@@ -1,4 +1,4 @@
-import { WarningAmber, Close } from '@mui/icons-material';
+import { WarningAmber, Close, Visibility, VisibilityOff } from '@mui/icons-material';
 import {
     Alert,
     Autocomplete,
@@ -12,6 +12,7 @@ import {
     DialogTitle,
     FormControlLabel,
     IconButton,
+    InputAdornment,
     Stack,
     Switch,
     TextField,
@@ -68,6 +69,7 @@ const ProviderFormDialog = ({
 
     const [verifying, setVerifying] = useState(false);
     const [noApiKey, setNoApiKey] = useState(data.noKeyRequired || false);
+    const [showApiKey, setShowApiKey] = useState(false);
     const [verificationResult, setVerificationResult] = useState<{
         success: boolean;
         message: string;
@@ -527,7 +529,7 @@ const ProviderFormDialog = ({
                                 size="small"
                                 fullWidth
                                 label={noApiKey ? 'API Key (Not Required)' : t('providerDialog.apiKey.label')}
-                                type="password"
+                                type={showApiKey ? 'text' : 'password'}
                                 value={data.token}
                                 onChange={(e) => {
                                     onChange('token', e.target.value);
@@ -545,6 +547,18 @@ const ProviderFormDialog = ({
                                                 textOverflow: 'ellipsis',
                                             },
                                         },
+                                        endAdornment: (
+                                            <InputAdornment position="end">
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => setShowApiKey(!showApiKey)}
+                                                    edge="end"
+                                                    disabled={noApiKey}
+                                                >
+                                                    {showApiKey ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                                                </IconButton>
+                                            </InputAdornment>
+                                        ),
                                     },
                                 }}
                             />
