@@ -10,7 +10,9 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
+    FormControl,
     FormControlLabel,
+    FormLabel,
     IconButton,
     InputAdornment,
     Stack,
@@ -422,24 +424,36 @@ const ProviderFormDialog = ({
                         />
 
                         {/* ② Protocol Selection (Checkboxes) */}
-                        <Box
-                            component="fieldset"
+                        <FormControl
+                            required
                             sx={{
+                                position: 'relative',
                                 border: 1,
-                                borderColor: 'divider',
-                                borderRadius: 1.5,
+                                borderColor: 'text.primary',
+                                borderWidth: 0.5,
+                                // opacity: 0.23,
+                                borderRadius: 1,
                                 p: 0.5,
                                 m: 0,
-                                '& > legend': {
-                                    ml: 1,
-                                    px: 0.5,
-                                    fontSize: '0.75rem',
-                                    color: 'text.secondary',
-                                },
                             }}
                         >
-                            <legend>{t('providerDialog.protocol.label')}</legend>
-                            <Stack spacing={0.5}>
+                            <FormLabel
+                                sx={{
+                                    position: 'absolute',
+                                    top: -10,
+                                    left: 12,
+                                    px: 0.5,
+                                    bgcolor: 'background.paper',
+                                    fontSize: '0.75rem',
+                                    color: 'text.secondary',
+                                    '&.Mui-focused': {
+                                        color: 'text.secondary',
+                                    },
+                                }}
+                            >
+                                {t('providerDialog.protocol.label')}
+                            </FormLabel>
+                            <Stack spacing={0.5} sx={{ mt: 0.5 }}>
                                 {/* OpenAI Protocol */}
                                 <Box
                                     sx={{
@@ -521,7 +535,7 @@ const ProviderFormDialog = ({
                                     </Stack>
                                 </Box>
                             </Stack>
-                        </Box>
+                        </FormControl>
 
                         {/* ③ API Key Field */}
                         <Box>
