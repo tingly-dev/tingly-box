@@ -436,6 +436,99 @@ console.log("Onboarding config written to", claudeJsonPath);`;
 node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
     };
 
+    // Status line JSON config
+    const generateStatusLineConfig = () => {
+        // Default to Unix path for JSON config (user can adjust for Windows)
+        const scriptPath = '~/.claude/tingly-statusline.sh';
+
+        return JSON.stringify({
+            statusLine: {
+                type: 'command',
+                command: scriptPath
+            }
+        }, null, 2);
+    };
+
+    // Status line scripts - downloads and installs the status line integration
+    const generateStatusLineScriptWindows = () => {
+        // TODO: Replace with actual download URL
+        const downloadUrl = "https://github.com/your-repo/tingly-statusline/raw/main/tingly-statusline.ps1";
+
+        const nodeCode = `const fs = require("fs");
+const path = require("path");
+const os = require("os");
+const https = require("https");
+
+const homeDir = os.homedir();
+const statusLineDir = path.join(homeDir, ".claude", "scripts");
+const statusLinePath = path.join(statusLineDir, "tingly-statusline.ps1");
+
+// Create directory if it doesn't exist
+if (!fs.existsSync(statusLineDir)) {
+    fs.mkdirSync(statusLineDir, { recursive: true });
+}
+
+// Download the status line script
+const file = fs.createWriteStream(statusLinePath);
+https.get("${downloadUrl}", (response) => {
+    response.pipe(file);
+    file.on('finish', () => {
+        file.close();
+        console.log("Status line script installed to:", statusLinePath);
+        console.log("Add this to your PowerShell profile:");
+        console.log("\\n. ~/.claude/scripts/tingly-statusline.ps1");
+    });
+}).on('error', (err) => {
+    fs.unlink(statusLinePath, () => {});
+    console.error("Error downloading status line script:", err.message);
+});`;
+
+        return `# PowerShell - Run in PowerShell
+# This will download and install the status line script
+@"
+${nodeCode}
+"@ | node`;
+    };
+
+    const generateStatusLineScriptUnix = () => {
+        // TODO: Replace with actual download URL
+        const downloadUrl = "https://github.com/your-repo/tingly-statusline/raw/main/tingly-statusline.sh";
+
+        const nodeCode = `const fs = require("fs");
+const path = require("path");
+const os = require("os");
+const https = require("https");
+
+const homeDir = os.homedir();
+const statusLineDir = path.join(homeDir, ".claude", "scripts");
+const statusLinePath = path.join(statusLineDir, "tingly-statusline.sh");
+
+// Create directory if it doesn't exist
+if (!fs.existsSync(statusLineDir)) {
+    fs.mkdirSync(statusLineDir, { recursive: true });
+}
+
+// Download the status line script
+const file = fs.createWriteStream(statusLinePath);
+https.get("${downloadUrl}", (response) => {
+    response.pipe(file);
+    file.on('finish', () => {
+        file.close();
+        fs.chmodSync(statusLinePath, '755');
+        console.log("Status line script installed to:", statusLinePath);
+        console.log("Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):");
+        console.log("\\nsource ~/.claude/scripts/tingly-statusline.sh");
+    });
+}).on('error', (err) => {
+    fs.unlink(statusLinePath, () => {});
+    console.error("Error downloading status line script:", err.message);
+});`;
+
+        return `# Bash - Run in terminal
+# This will download and install the status line script
+node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
+    };
+
     // Apply handler - calls backend to generate and write config
     const handleApply = async () => {
         try {
@@ -658,6 +751,9 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                         generateClaudeJsonConfig={generateClaudeJsonConfig}
                         generateScriptWindows={generateScriptWindows}
                         generateScriptUnix={generateScriptUnix}
+                        generateStatusLineConfig={generateStatusLineConfig}
+                        generateStatusLineScriptWindows={generateStatusLineScriptWindows}
+                        generateStatusLineScriptUnix={generateStatusLineScriptUnix}
                         copyToClipboard={copyToClipboard}
                         onApply={handleApply}
                         onApplyWithStatusLine={handleApplyWithStatusLine}

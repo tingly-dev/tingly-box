@@ -1,7 +1,7 @@
-import { Box, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Button, Typography, Tab, Tabs } from '@mui/material';
+import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Link, Tab, Tabs, Typography } from '@mui/material';
 import React from 'react';
-import CodeBlock from './CodeBlock';
 import { useTranslation } from 'react-i18next';
+import CodeBlock from './CodeBlock';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -17,6 +17,10 @@ interface ClaudeCodeConfigModalProps {
     generateClaudeJsonConfig: () => string;
     generateScriptWindows: () => string;
     generateScriptUnix: () => string;
+    // Status line scripts
+    generateStatusLineConfig?: () => string;
+    generateStatusLineScriptWindows?: () => string;
+    generateStatusLineScriptUnix?: () => string;
     copyToClipboard: (text: string, label: string) => Promise<void>;
     // Apply handlers
     onApply?: () => Promise<void>;
@@ -36,6 +40,9 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     generateClaudeJsonConfig,
     generateScriptWindows,
     generateScriptUnix,
+    generateStatusLineConfig,
+    generateStatusLineScriptWindows,
+    generateStatusLineScriptUnix,
     copyToClipboard,
     onApply,
     onApplyWithStatusLine,
@@ -44,6 +51,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     const { t } = useTranslation();
     const [settingsTab, setSettingsTab] = React.useState<ScriptTab>('json');
     const [claudeJsonTab, setClaudeJsonTab] = React.useState<ScriptTab>('json');
+    const [statusLineTab, setStatusLineTab] = React.useState<ScriptTab>('json');
 
     const handleApplyClick = () => {
         if (onApply) {
@@ -173,8 +181,8 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                                     filename="Set hasCompletedOnboarding as true into ~/.claude.json"
                                     wrap={true}
                                     onCopy={(code) => copyToClipboard(code, '.claude.json')}
-                                    maxHeight={280}
-                                    minHeight={280}
+                                    maxHeight={120}
+                                    minHeight={80}
                                 />
                             )}
                             {claudeJsonTab === 'windows' && (
@@ -185,8 +193,8 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                                     filename="PowerShell script to setup ~/.claude.json"
                                     wrap={true}
                                     onCopy={(code) => copyToClipboard(code, 'Windows script')}
-                                    maxHeight={280}
-                                    minHeight={280}
+                                    maxHeight={120}
+                                    minHeight={80}
                                 />
                             )}
                             {claudeJsonTab === 'unix' && (
@@ -197,12 +205,111 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                                     filename="Bash script to setup ~/.claude.json"
                                     wrap={true}
                                     onCopy={(code) => copyToClipboard(code, 'Unix script')}
-                                    maxHeight={280}
-                                    minHeight={280}
+                                    maxHeight={120}
+                                    minHeight={80}
                                 />
                             )}
                         </Box>
                     </Box>
+
+                    {/* Status Line section */}
+                    {(generateStatusLineConfig || generateStatusLineScriptWindows || generateStatusLineScriptUnix) && (
+                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                            <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Typography variant="subtitle2" color="text.secondary">
+                                    {t('claudeCode.step3')}
+                                </Typography>
+                                <Tabs
+                                    value={statusLineTab}
+                                    onChange={(_, value) => setStatusLineTab(value)}
+                                    variant="standard"
+                                    sx={{ minHeight: 32, '& .MuiTabs-indicator': { height: 3 } }}
+                                >
+                                    {generateStatusLineConfig && (
+                                        <Tab label="JSON" value="json" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                    )}
+                                    {generateStatusLineScriptWindows && (
+                                        <Tab label="Windows" value="windows" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                    )}
+                                    {generateStatusLineScriptUnix && (
+                                        <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                    )}
+                                </Tabs>
+                            </Box>
+                            <Box>
+                                {statusLineTab === 'json' && generateStatusLineConfig && (
+                                    <>
+                                        <Box sx={{ mb: 2 }}>
+                                            <Typography variant="body2" sx={{ mb: 1 }}>
+                                                {t('claudeCode.statusLine.jsonDescription')}
+                                            </Typography>
+                                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                                {t('claudeCode.statusLine.addToSettingsJson')}
+                                            </Typography>
+                                            <Typography variant="body2" color="text.secondary">
+                                                {t('claudeCode.statusLine.manualSetup')}{' '}
+                                                <Link
+                                                    href="https://raw.githubusercontent.com/tingly-dev/tingly-box/refs/heads/main/internal/script/tingly-statusline.sh"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                >
+                                                    {t('claudeCode.statusLine.downloadLink')}
+                                                </Link>
+                                            </Typography>
+                                        </Box>
+                                        <CodeBlock
+                                            code={generateStatusLineConfig()}
+                                            language="json"
+                                            filename="Add statusLine config to ~/.claude/settings.json"
+                                            wrap={true}
+                                            onCopy={(code) => copyToClipboard(code, 'statusLine config')}
+                                            maxHeight={200}
+                                            minHeight={150}
+                                        />
+                                    </>
+                                )}
+                                {(statusLineTab === 'windows' || statusLineTab === 'unix') && (
+                                    <Box sx={{ mb: 2 }}>
+                                        <Typography variant="body2" sx={{ mb: 1 }}>
+                                            {t('claudeCode.statusLine.description')}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {t('claudeCode.statusLine.manualSetup')}{' '}
+                                            <Link
+                                                href="https://raw.githubusercontent.com/tingly-dev/tingly-box/refs/heads/main/internal/script/tingly-statusline.sh"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
+                                                {t('claudeCode.statusLine.downloadLink')}
+                                            </Link>
+                                        </Typography>
+                                    </Box>
+                                )}
+                                {statusLineTab === 'windows' && generateStatusLineScriptWindows && (
+                                    <CodeBlock
+                                        code={generateStatusLineScriptWindows()}
+                                        language="js"
+                                        filename="PowerShell script to install status line"
+                                        wrap={true}
+                                        onCopy={(code) => copyToClipboard(code, 'Status line script')}
+                                        maxHeight={280}
+                                        minHeight={280}
+                                    />
+                                )}
+                                {statusLineTab === 'unix' && generateStatusLineScriptUnix && (
+                                    <CodeBlock
+                                        code={generateStatusLineScriptUnix()}
+                                        language="js"
+                                        filename="Bash script to install status line"
+                                        wrap={true}
+                                        onCopy={(code) => copyToClipboard(code, 'Status line script')}
+                                        maxHeight={280}
+                                        minHeight={280}
+                                    />
+                                )}
+                            </Box>
+                        </Box>
+                    )}
                 </Box>
             </DialogContent>
 
