@@ -146,7 +146,7 @@ func (m *Manager) RemoveBot(uid string) error {
 
 	bot, ok := m.bots[uid]
 	if !ok {
-		return fmt.Errorf("bot not found: %s[%d]", bot.PlatformInfo().Name, bot.UUID())
+		return fmt.Errorf("bot not found: %s", uid)
 	}
 
 	if err := bot.Close(); err != nil {
@@ -154,7 +154,7 @@ func (m *Manager) RemoveBot(uid string) error {
 	}
 
 	// Remove
-	logrus.Infof("remove bot: %s[%d]", bot.PlatformInfo().Name, bot.UUID())
+	logrus.Infof("remove bot: %s[%s]", bot.PlatformInfo().Name, bot.UUID())
 	return nil
 }
 
@@ -270,7 +270,7 @@ func (m *Manager) GetStatus() map[string]*core.BotStatus {
 
 	statuses := make(map[string]*core.BotStatus)
 
-	for i, bot := range m.bots {
+	for _, bot := range m.bots {
 		key := fmt.Sprintf("%s:%s", bot.PlatformInfo().Name, bot.UUID())
 		statuses[key] = bot.Status()
 	}

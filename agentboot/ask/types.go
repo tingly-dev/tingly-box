@@ -61,6 +61,7 @@ type Request struct {
 	Type     Type   `json:"type"`
 	ChatID   string `json:"chat_id"`
 	Platform string `json:"platform"`
+	BotUUID  string `json:"bot_uuid"`
 
 	// SessionID is the session this request belongs to
 	SessionID string `json:"session_id,omitempty"`

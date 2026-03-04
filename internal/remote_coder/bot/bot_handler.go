@@ -24,7 +24,7 @@ import (
 type BotHandler struct {
 	ctx              context.Context
 	botSetting       BotSetting
-	store            *Store
+	chatStore        *ChatStore
 	sessionMgr       *session.Manager
 	agentBoot        *agentboot.AgentBoot
 	summaryEngine    *summarizer.Engine
@@ -37,6 +37,7 @@ type BotHandler struct {
 // HandlerContext contains per-message context data
 type HandlerContext struct {
 	Bot       imbot.Bot
+	BotUUID   string
 	ChatID    string
 	SenderID  string
 	MessageID string
@@ -52,7 +53,7 @@ type HandlerContext struct {
 func NewBotHandler(
 	ctx context.Context,
 	botSetting BotSetting,
-	store *Store,
+	chatStore *ChatStore,
 	sessionMgr *session.Manager,
 	agentBoot *agentboot.AgentBoot,
 	summaryEngine *summarizer.Engine,
@@ -65,7 +66,7 @@ func NewBotHandler(
 	return &BotHandler{
 		ctx:              ctx,
 		botSetting:       botSetting,
-		store:            store,
+		chatStore:        chatStore,
 		sessionMgr:       sessionMgr,
 		agentBoot:        agentBoot,
 		summaryEngine:    summaryEngine,
@@ -98,6 +99,7 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	mediaAttachments := msg.GetMedia()
 	hCtx := HandlerContext{
 		Bot:       bot,
+		BotUUID:   botUUID,
 		ChatID:    chatID,
 		SenderID:  msg.Sender.ID,
 		MessageID: msg.ID,
@@ -138,11 +140,7 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 // handleDirectMessage handles messages from direct chat
 func (h *BotHandler) handleDirectMessage(hCtx HandlerContext) {
 	// Check chat ID lock
-	settings, err := h.store.GetSettings()
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to load bot settings")
-	}
-	if settings.ChatIDLock != "" && hCtx.ChatID != settings.ChatIDLock {
+	if h.botSetting.ChatIDLock != "" && hCtx.ChatID != h.botSetting.ChatIDLock {
 		return
 	}
 
@@ -164,7 +162,7 @@ func (h *BotHandler) handleDirectMessage(hCtx HandlerContext) {
 	}
 
 	// Check for active session or show project selection
-	sessionID, ok, err := h.store.GetSessionForChat(hCtx.ChatID)
+	sessionID, ok, err := h.chatStore.GetSession(hCtx.ChatID)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to load session mapping")
 	}
@@ -181,7 +179,7 @@ func (h *BotHandler) handleGroupMessage(hCtx HandlerContext) {
 	logrus.Infof("Group chat ID: %s", hCtx.ChatID)
 
 	// Check whitelist first
-	if !h.store.IsGroupWhitelisted(hCtx.ChatID) {
+	if !h.chatStore.IsWhitelisted(hCtx.ChatID) {
 		logrus.Debugf("Group %s is not whitelisted, ignoring message", hCtx.ChatID)
 		h.SendText(hCtx, fmt.Sprintf("This group is not enabled. Please DM the bot with `/join %s` to enable.", hCtx.ChatID))
 		return
@@ -205,7 +203,7 @@ func (h *BotHandler) handleGroupMessage(hCtx HandlerContext) {
 	}
 
 	// Check for project binding
-	if projectPath, ok := getProjectPathForGroup(h.store, hCtx.ChatID, string(hCtx.Platform)); ok {
+	if projectPath, ok := getProjectPathForGroup(h.chatStore, hCtx.ChatID, string(hCtx.Platform)); ok {
 		h.handleAgentMessage(hCtx, agentClaudeCode, hCtx.Text, projectPath)
 		return
 	}
@@ -224,25 +222,13 @@ func (h *BotHandler) handleMediaMessage(hCtx HandlerContext) {
 
 	// Set platform-specific token on FileStore if needed
 	if len(hCtx.Media) > 0 && strings.HasPrefix(hCtx.Media[0].URL, "tgfile://") {
-
-		// Get settings for the current platform
-		allSettings, err := h.store.ListEnabledSettings()
-		if err != nil {
-			logrus.WithError(err).Warn("Failed to load bot settings")
-		} else {
-			for _, settings := range allSettings {
-				if settings.Platform == string(hCtx.Platform) {
-					// Get token from settings (check both Auth map and legacy Token field)
-					token := settings.Token
-					if token == "" && len(settings.Auth) > 0 {
-						token = settings.Auth["token"]
-					}
-					if token != "" {
-						h.fileStore.SetTelegramToken(token)
-					}
-					break
-				}
-			}
+		// Get token from bot settings (check both Auth map and legacy Token field)
+		token := h.botSetting.Token
+		if token == "" && len(h.botSetting.Auth) > 0 {
+			token = h.botSetting.Auth["token"]
+		}
+		if token != "" {
+			h.fileStore.SetTelegramToken(token)
 		}
 	}
 
@@ -293,7 +279,7 @@ func (h *BotHandler) handleMediaMessage(hCtx HandlerContext) {
 // getProjectPath returns the project path for the current chat
 func (h *BotHandler) getProjectPath(hCtx HandlerContext) (string, bool) {
 	if hCtx.IsDirect {
-		sessionID, ok, _ := h.store.GetSessionForChat(hCtx.ChatID)
+		sessionID, ok, _ := h.chatStore.GetSession(hCtx.ChatID)
 		if ok {
 			// Get project path from session context
 			if session, exists := h.sessionMgr.Get(sessionID); exists && session.Context != nil {
@@ -304,7 +290,7 @@ func (h *BotHandler) getProjectPath(hCtx HandlerContext) (string, bool) {
 		}
 	} else {
 		// Group chat: get bound project path
-		return getProjectPathForGroup(h.store, hCtx.ChatID, string(hCtx.Platform))
+		return getProjectPathForGroup(h.chatStore, hCtx.ChatID, string(hCtx.Platform))
 	}
 	return "", false
 }
@@ -364,7 +350,7 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 	}
 
 	// All other slash commands go to Claude Code
-	sessionID, ok, err := h.store.GetSessionForChat(hCtx.ChatID)
+	sessionID, ok, err := h.chatStore.GetSession(hCtx.ChatID)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to load session mapping")
 	}
@@ -488,7 +474,7 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		return
 	}
 
-	sessionID, ok, err := h.store.GetSessionForChat(hCtx.ChatID)
+	sessionID, ok, err := h.chatStore.GetSession(hCtx.ChatID)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to load session mapping")
 	}
@@ -509,7 +495,7 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		h.sessionMgr.Update(sessionID, func(s *session.Session) {
 			s.ExpiresAt = time.Time{} // Zero value means no expiration
 		})
-		if err := h.store.SetSessionForChat(hCtx.ChatID, sessionID); err != nil {
+		if err := h.chatStore.SetSession(hCtx.ChatID, sessionID); err != nil {
 			logrus.WithError(err).Warn("Failed to save session mapping")
 		}
 		ok = true
@@ -601,6 +587,7 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		Resume:               shouldResume,
 		ChatID:               hCtx.ChatID,
 		Platform:             string(hCtx.Platform),
+		BotUUID:              hCtx.BotUUID,
 		PermissionPromptTool: "stdio",
 	})
 
@@ -677,7 +664,7 @@ func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, pr
 	}
 
 	// Get or create a session for mock agent (simpler than claude code)
-	sessionID, ok, err := h.store.GetSessionForChat(hCtx.ChatID)
+	sessionID, ok, err := h.chatStore.GetSession(hCtx.ChatID)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to load session mapping")
 	}
@@ -696,7 +683,7 @@ func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, pr
 		if projectPathOverride != "" {
 			h.sessionMgr.SetContext(sessionID, "project_path", projectPathOverride)
 		}
-		if err := h.store.SetSessionForChat(hCtx.ChatID, sessionID); err != nil {
+		if err := h.chatStore.SetSession(hCtx.ChatID, sessionID); err != nil {
 			logrus.WithError(err).Warn("Failed to save session mapping")
 		}
 	}
@@ -767,6 +754,7 @@ func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, pr
 		SessionID:   sessionID,
 		ChatID:      hCtx.ChatID,
 		Platform:    string(hCtx.Platform),
+		BotUUID:     hCtx.BotUUID,
 	})
 
 	logrus.WithFields(logrus.Fields{
@@ -914,7 +902,7 @@ func (h *BotHandler) handleBotBindCommand(hCtx HandlerContext, fields []string) 
 
 // handleBotStatusCommand handles /bot status
 func (h *BotHandler) handleBotStatusCommand(hCtx HandlerContext) {
-	sessionID, ok, err := h.store.GetSessionForChat(hCtx.ChatID)
+	sessionID, ok, err := h.chatStore.GetSession(hCtx.ChatID)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to load session mapping")
 	}
@@ -971,7 +959,7 @@ func (h *BotHandler) handleBotStatusCommand(hCtx HandlerContext) {
 
 // handleClearCommand clears the current session context and creates a new one
 func (h *BotHandler) handleClearCommand(hCtx HandlerContext) {
-	sessionID, ok, err := h.store.GetSessionForChat(hCtx.ChatID)
+	sessionID, ok, err := h.chatStore.GetSession(hCtx.ChatID)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to load session mapping")
 	}
@@ -989,7 +977,7 @@ func (h *BotHandler) handleClearCommand(hCtx HandlerContext) {
 
 	// For group chats, also check group binding if no project path from session
 	if projectPath == "" {
-		if path, found := getProjectPathForGroup(h.store, hCtx.ChatID, string(hCtx.Platform)); found {
+		if path, found := getProjectPathForGroup(h.chatStore, hCtx.ChatID, string(hCtx.Platform)); found {
 			projectPath = path
 		}
 	}
@@ -1003,7 +991,7 @@ func (h *BotHandler) handleClearCommand(hCtx HandlerContext) {
 	sess := h.sessionMgr.Create()
 	h.sessionMgr.SetContext(sess.ID, "project_path", projectPath)
 
-	if err := h.store.SetSessionForChat(hCtx.ChatID, sess.ID); err != nil {
+	if err := h.chatStore.SetSession(hCtx.ChatID, sess.ID); err != nil {
 		logrus.WithError(err).Warn("Failed to update session mapping")
 		h.SendText(hCtx, "Failed to clear context.")
 		return
@@ -1014,14 +1002,14 @@ func (h *BotHandler) handleClearCommand(hCtx HandlerContext) {
 
 // showProjectSelectionOrGuidance shows project selection if user has bound projects, otherwise shows bind guidance
 func (h *BotHandler) showProjectSelectionOrGuidance(hCtx HandlerContext) {
-	if h.store == nil || h.store.ChatStore() == nil {
+	if h.chatStore == nil {
 		h.SendText(hCtx, "No active session. Use /bot_bind <project_path> to create one.")
 		return
 	}
 
 	// For group chats, check if there's a project bound
 	if !hCtx.IsDirect {
-		if projectPath, ok := getProjectPathForGroup(h.store, hCtx.ChatID, string(imbot.PlatformTelegram)); ok {
+		if projectPath, ok := getProjectPathForGroup(h.chatStore, hCtx.ChatID, string(imbot.PlatformTelegram)); ok {
 			h.SendText(hCtx, fmt.Sprintf("Project bound to this group:\n📁 %s\n\nPlease /clear the session to start fresh.", projectPath))
 			return
 		}
@@ -1030,10 +1018,9 @@ func (h *BotHandler) showProjectSelectionOrGuidance(hCtx HandlerContext) {
 	}
 
 	// For direct chats, check if user has any bound projects
-	chatStore := h.store.ChatStore()
 	platform := string(imbot.PlatformTelegram)
 
-	chats, err := chatStore.ListChatsByOwner(hCtx.SenderID, platform)
+	chats, err := h.chatStore.ListChatsByOwner(hCtx.SenderID, platform)
 	if err == nil && len(chats) > 0 {
 		// User has projects, show project selection
 		h.handleBotProjectCommand(hCtx)
@@ -1045,16 +1032,15 @@ func (h *BotHandler) showProjectSelectionOrGuidance(hCtx HandlerContext) {
 
 // handleBotProjectCommand handles /bot project - shows current project and list with keyboard
 func (h *BotHandler) handleBotProjectCommand(hCtx HandlerContext) {
-	if h.store == nil || h.store.ChatStore() == nil {
+	if h.chatStore == nil {
 		h.SendText(hCtx, "Store not available")
 		return
 	}
 
-	chatStore := h.store.ChatStore()
 	platform := string(imbot.PlatformTelegram)
 
 	// Get current project path for this chat
-	currentPath, _, _ := chatStore.GetProjectPath(hCtx.ChatID)
+	currentPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
 
 	// Build message text
 	var buf strings.Builder
@@ -1067,7 +1053,7 @@ func (h *BotHandler) handleBotProjectCommand(hCtx HandlerContext) {
 	// Get all projects for user
 	var projectPaths []string
 	if hCtx.IsDirect {
-		chats, err := chatStore.ListChatsByOwner(hCtx.SenderID, platform)
+		chats, err := h.chatStore.ListChatsByOwner(hCtx.SenderID, platform)
 		if err == nil {
 			seen := make(map[string]bool)
 			for _, chat := range chats {
@@ -1122,13 +1108,13 @@ func (h *BotHandler) handleBotProjectCommand(hCtx HandlerContext) {
 
 // handleProjectSwitch handles switching to a different project
 func (h *BotHandler) handleProjectSwitch(hCtx HandlerContext, projectPath string) {
-	if h.store == nil || h.store.ChatStore() == nil {
+	if h.chatStore == nil {
 		h.SendText(hCtx, "Store not available")
 		return
 	}
 
 	// Bind the project to this chat
-	if err := h.store.ChatStore().BindProject(hCtx.ChatID, string(imbot.PlatformTelegram), projectPath, hCtx.SenderID); err != nil {
+	if err := h.chatStore.BindProject(hCtx.ChatID, string(imbot.PlatformTelegram), projectPath, hCtx.SenderID); err != nil {
 		h.SendText(hCtx, "Failed to switch project")
 		return
 	}
@@ -1137,7 +1123,7 @@ func (h *BotHandler) handleProjectSwitch(hCtx HandlerContext, projectPath string
 	sess := h.sessionMgr.Create()
 	h.sessionMgr.SetContext(sess.ID, "project_path", projectPath)
 
-	if err := h.store.SetSessionForChat(hCtx.ChatID, sess.ID); err != nil {
+	if err := h.chatStore.SetSession(hCtx.ChatID, sess.ID); err != nil {
 		logrus.WithError(err).Warn("Failed to update session mapping")
 		h.SendText(hCtx, "Failed to switch project")
 		return
@@ -1188,7 +1174,7 @@ func (h *BotHandler) completeBind(hCtx HandlerContext, projectPath string) {
 	platform := string(imbot.PlatformTelegram)
 
 	// Bind project to chat using ChatStore
-	if err := h.store.ChatStore().BindProject(hCtx.ChatID, platform, expandedPath, hCtx.SenderID); err != nil {
+	if err := h.chatStore.BindProject(hCtx.ChatID, platform, expandedPath, hCtx.SenderID); err != nil {
 		h.SendText(hCtx, fmt.Sprintf("Failed to bind project: %v", err))
 		return
 	}
@@ -1197,7 +1183,7 @@ func (h *BotHandler) completeBind(hCtx HandlerContext, projectPath string) {
 	sess := h.sessionMgr.Create()
 	h.sessionMgr.SetContext(sess.ID, "project_path", expandedPath)
 
-	if err := h.store.SetSessionForChat(hCtx.ChatID, sess.ID); err != nil {
+	if err := h.chatStore.SetSession(hCtx.ChatID, sess.ID); err != nil {
 		logrus.WithError(err).Warn("Failed to save session mapping")
 		h.SendText(hCtx, fmt.Sprintf("Project bound but failed to create session: %v", err))
 		return
@@ -1241,14 +1227,14 @@ func (h *BotHandler) handleJoinCommand(hCtx HandlerContext, fields []string) {
 	}
 
 	// Check if already whitelisted
-	if h.store.IsGroupWhitelisted(groupID) {
+	if h.chatStore.IsWhitelisted(groupID) {
 		h.SendText(hCtx, fmt.Sprintf("Group %s is already in whitelist.", groupID))
 		return
 	}
 
 	// Add group to whitelist
 	platform := string(imbot.PlatformTelegram)
-	if err := h.store.AddGroupToWhitelist(groupID, platform, hCtx.SenderID); err != nil {
+	if err := h.chatStore.AddToWhitelist(groupID, platform, hCtx.SenderID); err != nil {
 		logrus.WithError(err).Error("Failed to add group to whitelist")
 		h.SendText(hCtx, fmt.Sprintf("Failed to add group to whitelist: %v", err))
 		return
@@ -1264,11 +1250,7 @@ func (h *BotHandler) handleBashCommand(hCtx HandlerContext, fields []string) {
 		h.SendText(hCtx, "Usage: /bash <command>")
 		return
 	}
-	settings, err := h.store.GetSettings()
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to load bot settings")
-	}
-	allowlist := normalizeAllowlistToMap(settings.BashAllowlist)
+	allowlist := normalizeAllowlistToMap(h.botSetting.BashAllowlist)
 	if len(allowlist) == 0 {
 		allowlist = defaultBashAllowlist
 	}
@@ -1278,7 +1260,7 @@ func (h *BotHandler) handleBashCommand(hCtx HandlerContext, fields []string) {
 		return
 	}
 
-	sessionID, ok, err := h.store.GetSessionForChat(hCtx.ChatID)
+	sessionID, ok, err := h.chatStore.GetSession(hCtx.ChatID)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to load session mapping")
 	}
@@ -1296,7 +1278,7 @@ func (h *BotHandler) handleBashCommand(hCtx HandlerContext, fields []string) {
 			}
 		}
 	}
-	bashCwd, _, err := h.store.GetBashCwd(hCtx.ChatID)
+	bashCwd, _, err := h.chatStore.GetBashCwd(hCtx.ChatID)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to load bash cwd")
 	}
@@ -1347,7 +1329,7 @@ func (h *BotHandler) handleBashCommand(hCtx HandlerContext, fields []string) {
 		if err == nil {
 			nextPath = absPath
 		}
-		if err := h.store.SetBashCwd(hCtx.ChatID, nextPath); err != nil {
+		if err := h.chatStore.SetBashCwd(hCtx.ChatID, nextPath); err != nil {
 			logrus.WithError(err).Warn("Failed to update bash cwd")
 		}
 		h.SendText(hCtx, fmt.Sprintf("Bash working directory set to %s", nextPath))

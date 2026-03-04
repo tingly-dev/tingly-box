@@ -134,7 +134,7 @@ func runBotOnce(ctx context.Context, store *Store, sessionMgr *session.Manager, 
 	}
 
 	// Register unified message handler with platform parameter
-	handler := NewBotHandler(ctx, BotSetting{},  store, sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager)
+	handler := NewBotHandler(ctx, settings, store.ChatStore(), sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager)
 	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {
@@ -166,10 +166,6 @@ func runBotWithSettings(ctx context.Context, settings db.Settings, dbPath string
 		ChatIDLock:    settings.ChatIDLock,
 		BashAllowlist: settings.BashAllowlist,
 		Enabled:       settings.Enabled,
-	}
-
-	if err := store.SaveSettings(botSettings); err != nil {
-		return fmt.Errorf("failed to set bot settings: %w", err)
 	}
 
 	// Create platform-specific auth config
@@ -207,7 +203,7 @@ func runBotWithSettings(ctx context.Context, settings db.Settings, dbPath string
 	}
 
 	// Register unified message handler with platform parameter
-	handler := NewBotHandler(ctx, botSettings, store, sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager)
+	handler := NewBotHandler(ctx, botSettings, store.ChatStore(), sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager)
 	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {
@@ -278,11 +274,11 @@ func getReplyTarget(msg imbot.Message) string {
 }
 
 // getProjectPathForGroup retrieves the project path bound to a group chat.
-func getProjectPathForGroup(store *Store, chatID string, platform string) (string, bool) {
-	if store == nil || store.ChatStore() == nil {
+func getProjectPathForGroup(chatStore *ChatStore, chatID string, platform string) (string, bool) {
+	if chatStore == nil {
 		return "", false
 	}
-	path, ok, err := store.ChatStore().GetProjectPath(chatID)
+	path, ok, err := chatStore.GetProjectPath(chatID)
 	if err != nil {
 		return "", false
 	}

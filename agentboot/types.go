@@ -98,6 +98,7 @@ type AskRequest struct {
 
 	Platform  string `json:"platform"`
 	ChatID    string `json:"chat_id"`
+	BotUUID   string `json:"bot_uuid"`
 	SessionID string `json:"session_id,omitempty"`
 
 	AgentType AgentType              `json:"agent_type"`
@@ -148,6 +149,8 @@ type ExecutionOptions struct {
 	ChatID string
 	// Platform is the platform for permission requests (used by mock agent)
 	Platform string
+	// BotUUID is the bot UUID for permission callbacks
+	BotUUID string
 
 	// Model selection (per-execution override)
 	Model         string
