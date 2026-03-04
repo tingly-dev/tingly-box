@@ -195,7 +195,6 @@ func (h *Handler) handleStreaming(c *gin.Context, req *ChatCompletionRequest, vm
 	// Use gin.Stream for proper streaming handling
 	c.Stream(func(w io.Writer) bool {
 		chunks := vm.GetStreamChunks()
-		content := ""
 		chunkIndex := 0
 
 		for i, chunk := range chunks {
@@ -214,7 +213,6 @@ func (h *Handler) handleStreaming(c *gin.Context, req *ChatCompletionRequest, vm
 				time.Sleep(50 * time.Millisecond) // Default chunk delay
 			}
 
-			content += chunk
 			chunkIndex = i + 1
 
 			// Create streaming chunk response
@@ -352,7 +350,10 @@ func (h *Handler) handleProxyStreaming(c *gin.Context, req *ChatCompletionReques
 	})
 }
 
-// estimateTokens estimates token count (rough approximation)
+// estimateTokens estimates token count (rough approximation).
+// This is a simple heuristic for demonstration purposes.
+// For accurate token counting, use a proper tokenizer library
+// such as tiktoken (OpenAI) or the anthropic SDK's token counter.
 func estimateTokens(messages []Message) int {
 	total := 0
 	for _, msg := range messages {
@@ -362,7 +363,9 @@ func estimateTokens(messages []Message) int {
 	return total
 }
 
-// estimateTokensString estimates token count for a string
+// estimateTokensString estimates token count for a string.
+// Uses a rough approximation of ~4 characters per token.
+// Actual token count varies by language and tokenization method.
 func estimateTokensString(s string) int {
 	// Rough estimate: ~4 characters per token
 	if len(s) == 0 {

@@ -891,8 +891,7 @@ func (s *Server) Start(port int) error {
 		fmt.Printf("OpenAI v1 Chat API endpoint: %s://%s:%d/openai/v1/chat/completions\n", scheme, resolvedHost, port)
 		fmt.Printf("Anthropic v1 Message API endpoint: %s://%s:%d/anthropic/v1/messages\n", scheme, resolvedHost, port)
 		fmt.Printf("Virtual Model API endpoint: %s://%s:%d/virtual/v1/chat/completions\n", scheme, resolvedHost, port)
-		//Fixme:: we should not hardcode it here
-		fmt.Printf("Mode name: %s\n", "tingly")
+		fmt.Printf("Mode name: %s\n", constant.DefaultModeName)
 		fmt.Printf("Model API key: %s\n", s.config.GetModelToken())
 		fmt.Printf("Virtual Model API key: %s\n", s.config.GetVirtualModelToken())
 

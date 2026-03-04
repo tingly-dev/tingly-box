@@ -5,9 +5,8 @@
 package smart_compact
 
 import (
-	"log"
-
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
@@ -47,9 +46,9 @@ func (t *CompactTransformer) HandleV1(req *anthropic.MessageNewParams) error {
 	}
 
 	rounds := t.rounder.GroupV1(req.Messages)
-	log.Printf("[smart_compact] v1: found %d rounds", len(rounds))
+	logrus.Debugf("[smart_compact] v1: found %d rounds", len(rounds))
 	compacted, removedCount := t.compactV1Rounds(rounds)
-	log.Printf("[smart_compact] v1: removed %d thinking blocks", removedCount)
+	logrus.Debugf("[smart_compact] v1: removed %d thinking blocks", removedCount)
 	req.Messages = compacted
 
 	return nil
@@ -63,9 +62,9 @@ func (t *CompactTransformer) HandleV1Beta(req *anthropic.BetaMessageNewParams) e
 	}
 
 	rounds := t.rounder.GroupBeta(req.Messages)
-	log.Printf("[smart_compact] v1beta: found %d rounds", len(rounds))
+	logrus.Debugf("[smart_compact] v1beta: found %d rounds", len(rounds))
 	compacted, removedCount := t.compactBetaRounds(rounds)
-	log.Printf("[smart_compact] v1beta: removed %d thinking blocks", removedCount)
+	logrus.Debugf("[smart_compact] v1beta: removed %d thinking blocks", removedCount)
 	req.Messages = compacted
 
 	return nil
@@ -104,7 +103,7 @@ func (t *CompactTransformer) compactV1Rounds(rounds []protocol.V1Round) ([]anthr
 		// Guard: check round structure before compacting
 		if rnd.Stats != nil {
 			guardPassed = t.shouldCompactRound(rnd.Stats)
-			log.Printf("[smart_compact] v1: round %d: user=%d, assistant=%d, tool_result=%d, has_thinking=%v, preserve=%v, guard_ok=%v",
+			logrus.Debugf("[smart_compact] v1: round %d: user=%d, assistant=%d, tool_result=%d, has_thinking=%v, preserve=%v, guard_ok=%v",
 				i, rnd.Stats.UserMessageCount, rnd.Stats.AssistantCount, rnd.Stats.ToolResultCount, rnd.Stats.HasThinking, shouldPreserve, guardPassed)
 		} else {
 			// No stats available, assume guard passed for backward compatibility
@@ -142,7 +141,7 @@ func (t *CompactTransformer) compactBetaRounds(rounds []protocol.BetaRound) ([]a
 		// Guard: check round structure before compacting
 		if rnd.Stats != nil {
 			guardPassed = t.shouldCompactRound(rnd.Stats)
-			log.Printf("[smart_compact] v1beta: round %d: user=%d, assistant=%d, tool_result=%d, has_thinking=%v, preserve=%v, guard_ok=%v",
+			logrus.Debugf("[smart_compact] v1beta: round %d: user=%d, assistant=%d, tool_result=%d, has_thinking=%v, preserve=%v, guard_ok=%v",
 				i, rnd.Stats.UserMessageCount, rnd.Stats.AssistantCount, rnd.Stats.ToolResultCount, rnd.Stats.HasThinking, shouldPreserve, guardPassed)
 		} else {
 			// No stats available, assume guard passed for backward compatibility
@@ -198,11 +197,18 @@ func (t *CompactTransformer) removeBetaThinkingBlocks(content []anthropic.BetaCo
 // Guard checks:
 //   - UserMessageCount == 1: Round should have exactly one pure user message as start
 //   - AssistantCount >= 1: Round should have at least one assistant response
-//   - ToolResultCount >= 1: Round should have at least one assistant response
+//
+// Note: ToolResultCount is not enforced as a guard because not all conversations
+// use tools. A round is valid with just user/assistant text exchanges.
 //
 // Returns false if the round structure appears malformed, preventing compaction
 // on potentially incorrectly grouped rounds.
 func (t *CompactTransformer) shouldCompactRound(stats *protocol.RoundStats) bool {
+	// Guard: nil stats check
+	if stats == nil {
+		return false
+	}
+
 	// Guard: should have exactly one pure user message as the round start
 	if stats.UserMessageCount != 1 {
 		return false
@@ -210,10 +216,6 @@ func (t *CompactTransformer) shouldCompactRound(stats *protocol.RoundStats) bool
 
 	// Guard: should have at least one assistant response
 	if stats.AssistantCount < 1 {
-		return false
-	}
-
-	if stats.ToolResultCount < 1 {
 		return false
 	}
 
