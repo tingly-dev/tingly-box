@@ -307,17 +307,30 @@ func (s *Server) GetClaudeCodeStatus(c *gin.Context) {
 		input = ClaudeCodeStatusInput{}
 	}
 
+	// Get cache and merge with cached values for zero/empty fields
+	cache := GetGlobalClaudeCodeStatusCache()
+	merged := cache.Get(&input)
+
+	// Update cache with new input (even if partial)
+	cache.Update(&input)
+
 	// Get Tingly Box current request
 	tracker := GetGlobalCurrentRequestTracker()
 	tbState := tracker.GetCurrent()
 
 	// Build response
 	resp := &ClaudeCodeCombinedStatusData{
-		CCModel:      input.Model.DisplayName,
-		CCUsedPct:    int(input.ContextWindow.UsedPercentage),
-		CCUsedTokens: input.ContextWindow.UsedTokens,
-		CCMaxTokens:  input.ContextWindow.MaxTokens,
-		CCCost:       input.Cost.TotalCostUSD,
+		CCModel:             merged.Model.DisplayName,
+		CCUsedPct:           int(merged.ContextWindow.UsedPercentage),
+		CCUsedTokens:        merged.ContextWindow.TotalInputTokens + merged.ContextWindow.TotalOutputTokens,
+		CCMaxTokens:         merged.ContextWindow.ContextWindowSize,
+		CCCost:              merged.Cost.TotalCostUSD,
+		CCDurationMs:        merged.Cost.TotalDurationMs,
+		CCAPIDurationMs:     merged.Cost.TotalAPIDurationMs,
+		CCLinesAdded:        merged.Cost.TotalLinesAdded,
+		CCLinesRemoved:      merged.Cost.TotalLinesRemoved,
+		CCSessionID:         merged.SessionID,
+		CCExceeds200kTokens: merged.Exceeds200kTokens,
 	}
 
 	// Add Tingly Box info if available
@@ -351,19 +364,26 @@ func (s *Server) GetClaudeCodeStatusLine(c *gin.Context) {
 		input = ClaudeCodeStatusInput{}
 	}
 
+	// Get cache and merge with cached values for zero/empty fields
+	cache := GetGlobalClaudeCodeStatusCache()
+	merged := cache.Get(&input)
+
+	// Update cache with new input (even if partial)
+	cache.Update(&input)
+
 	// Get Tingly Box current request
 	tracker := GetGlobalCurrentRequestTracker()
 	tbState := tracker.GetCurrent()
 
 	// Build status line
 	// Format: [CC Model] → TB Model@Provider | ▓▓▓░░░░░ 7% | $0.05
-	ccModel := input.Model.DisplayName
+	ccModel := merged.Model.DisplayName
 	if ccModel == "" {
 		ccModel = "unknown"
 	}
 
-	usedPct := int(input.ContextWindow.UsedPercentage)
-	cost := input.Cost.TotalCostUSD
+	usedPct := int(merged.ContextWindow.UsedPercentage)
+	cost := merged.Cost.TotalCostUSD
 
 	// Build context bar (8 characters wide)
 	barWidth := 8

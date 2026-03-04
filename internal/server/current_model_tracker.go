@@ -17,20 +17,15 @@ type CurrentRequestState struct {
 }
 
 // CurrentRequestTracker tracks the currently active request in real-time
-// It provides status information for monitoring and Web UI display
+// It provides status information for monitoring and status line display
 type CurrentRequestTracker struct {
-	mu             sync.RWMutex
-	current        *CurrentRequestState
-	recentRequests []CurrentRequestState
-	maxRecent      int
+	mu      sync.RWMutex
+	current *CurrentRequestState
 }
 
 // NewCurrentRequestTracker creates a new tracker
 func NewCurrentRequestTracker() *CurrentRequestTracker {
-	return &CurrentRequestTracker{
-		maxRecent:      10,
-		recentRequests: make([]CurrentRequestState, 0, 10),
-	}
+	return &CurrentRequestTracker{}
 }
 
 // SetCurrent updates the current request state
@@ -40,12 +35,6 @@ func (t *CurrentRequestTracker) SetCurrent(state CurrentRequestState) {
 
 	state.StartTime = time.Now()
 	t.current = &state
-
-	// Add to recent requests
-	t.recentRequests = append(t.recentRequests, state)
-	if len(t.recentRequests) > t.maxRecent {
-		t.recentRequests = t.recentRequests[1:]
-	}
 }
 
 // GetCurrent returns the current request state
@@ -62,14 +51,11 @@ func (t *CurrentRequestTracker) GetCurrent() *CurrentRequestState {
 	return &state
 }
 
-// GetRecent returns recent requests
-func (t *CurrentRequestTracker) GetRecent() []CurrentRequestState {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
-	result := make([]CurrentRequestState, len(t.recentRequests))
-	copy(result, t.recentRequests)
-	return result
+// Clear clears the current request state (call when request completes)
+func (t *CurrentRequestTracker) Clear() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.current = nil
 }
 
 // globalCurrentRequestTracker is the global instance
