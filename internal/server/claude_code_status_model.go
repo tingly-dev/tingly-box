@@ -97,12 +97,10 @@ type ClaudeCodeCombinedStatusData struct {
 	CCLinesRemoved      int     `json:"cc_lines_removed" example:"50"`
 	CCSessionID         string  `json:"cc_session_id" example:"session-123"`
 	CCExceeds200kTokens bool    `json:"cc_exceeds_200k_tokens"`
-	// Tingly Box info
+	// Tingly Box model mapping info
 	TBProviderName string `json:"tb_provider_name,omitempty" example:"openai"`
 	TBProviderUUID string `json:"tb_provider_uuid,omitempty" example:"uuid-1234"`
 	TBModel        string `json:"tb_model,omitempty" example:"gpt-4"`
 	TBRequestModel string `json:"tb_request_model,omitempty" example:"gpt-4"`
 	TBScenario     string `json:"tb_scenario,omitempty" example:"openai"`
-	TBDurationMs   int64  `json:"tb_duration_ms,omitempty" example:"1500"`
-	TBStreamed     bool   `json:"tb_streamed,omitempty" example:"true"`
 }

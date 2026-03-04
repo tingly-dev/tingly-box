@@ -261,40 +261,44 @@ func (s *Server) GetStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// GetCurrentRequest returns the current request being processed
-// This endpoint is useful for monitoring and Web UI display
-// No authentication required for easy integration with status line tools
-func (s *Server) GetCurrentRequest(c *gin.Context) {
-	tracker := GetGlobalModelRequestTracker()
-	state := tracker.GetCurrent()
+// tbModelMappingResult contains the result of model mapping lookup
+type tbModelMappingResult struct {
+	providerName string
+	providerUUID string
+	model        string
+	scenario     string
+}
 
-	if state == nil {
-		c.JSON(http.StatusOK, CurrentRequestResponse{
-			Success: true,
-			Data:    nil,
-		})
-		return
+// getTBModelMapping looks up the model mapping from Tingly Box configuration
+// It queries the routing rules to find which provider/model would be used for the given model and scenario
+func (s *Server) getTBModelMapping(modelID string, scenario typ.RuleScenario) *tbModelMappingResult {
+	if s.config == nil || modelID == "" {
+		return nil
 	}
 
-	// Calculate duration from start time
-	durationMs := int64(0)
-	if !state.StartTime.IsZero() {
-		durationMs = time.Since(state.StartTime).Milliseconds()
+	rule := s.config.MatchRuleByModelAndScenario(modelID, scenario)
+	if rule == nil {
+		return nil
 	}
 
-	c.JSON(http.StatusOK, CurrentRequestResponse{
-		Success: true,
-		Data: &CurrentRequestData{
-			ProviderName: state.ProviderName,
-			ProviderUUID: state.ProviderUUID,
-			Model:        state.Model,
-			RequestModel: state.RequestModel,
-			Scenario:     state.Scenario,
-			StartTime:    state.StartTime,
-			DurationMs:   durationMs,
-			Streamed:     state.Streamed,
-		},
-	})
+	// Get the service that would be selected
+	service, err := s.loadBalancer.SelectService(rule)
+	if err != nil || service == nil {
+		return nil
+	}
+
+	// Find the provider (service.Provider stores the provider UUID)
+	provider, err := s.config.GetProviderByUUID(service.Provider)
+	if err != nil || provider == nil {
+		return nil
+	}
+
+	return &tbModelMappingResult{
+		providerName: provider.Name,
+		providerUUID: provider.UUID,
+		model:        service.Model,
+		scenario:     string(scenario),
+	}
 }
 
 // GetClaudeCodeStatus returns combined status from Claude Code input and Tingly Box
@@ -316,10 +320,6 @@ func (s *Server) GetClaudeCodeStatus(c *gin.Context) {
 	// Update cache with new input (even if partial)
 	cache.Update(&input)
 
-	// Get Tingly Box current request
-	tracker := GetGlobalModelRequestTracker()
-	tbState := tracker.GetCurrent()
-
 	// Build response
 	resp := &ClaudeCodeCombinedStatusData{
 		CCModel:             merged.Model.DisplayName,
@@ -335,19 +335,13 @@ func (s *Server) GetClaudeCodeStatus(c *gin.Context) {
 		CCExceeds200kTokens: merged.Exceeds200kTokens,
 	}
 
-	// Add Tingly Box info if available
-	if tbState != nil {
-		durationMs := int64(0)
-		if !tbState.StartTime.IsZero() {
-			durationMs = time.Since(tbState.StartTime).Milliseconds()
-		}
-		resp.TBProviderName = tbState.ProviderName
-		resp.TBProviderUUID = tbState.ProviderUUID
-		resp.TBModel = tbState.Model
-		resp.TBRequestModel = tbState.RequestModel
-		resp.TBScenario = tbState.Scenario
-		resp.TBDurationMs = durationMs
-		resp.TBStreamed = tbState.Streamed
+	// Query Tingly Box model mapping
+	if mapping := s.getTBModelMapping(merged.Model.ID, typ.RuleScenario(scenario)); mapping != nil {
+		resp.TBProviderName = mapping.providerName
+		resp.TBProviderUUID = mapping.providerUUID
+		resp.TBModel = mapping.model
+		resp.TBRequestModel = merged.Model.ID
+		resp.TBScenario = mapping.scenario
 	}
 
 	c.JSON(http.StatusOK, ClaudeCodeCombinedStatus{
@@ -375,10 +369,6 @@ func (s *Server) GetClaudeCodeStatusLine(c *gin.Context) {
 	// Update cache with new input (even if partial)
 	cache.Update(&input)
 
-	// Get Tingly Box current request
-	tracker := GetGlobalModelRequestTracker()
-	tbState := tracker.GetCurrent()
-
 	// Build status line
 	// Format: [CC Model] → TB Model@Provider | ▓▓▓░░░░░ 7% | $0.05
 	ccModel := merged.Model.DisplayName
@@ -404,9 +394,9 @@ func (s *Server) GetClaudeCodeStatusLine(c *gin.Context) {
 	// Build output
 	output := fmt.Sprintf("[%s]", ccModel)
 
-	// Add Tingly Box info if available
-	if tbState != nil && tbState.Model != "" {
-		output += fmt.Sprintf(" → %s@%s", tbState.Model, tbState.ProviderName)
+	// Query Tingly Box model mapping and add info if available
+	if mapping := s.getTBModelMapping(merged.Model.ID, typ.RuleScenario(scenario)); mapping != nil && mapping.model != "" {
+		output += fmt.Sprintf(" → %s@%s", mapping.model, mapping.providerName)
 	}
 
 	// Add context bar and cost
@@ -602,13 +592,6 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithDescription("Validate authentication token"),
 		swagger.WithTags("auth"),
 		swagger.WithResponseModel(gin.H{}),
-	)
-
-	// Current request status (no auth required) - for monitoring and status line tools
-	apiAuth.GET("/current-request", s.GetCurrentRequest,
-		swagger.WithDescription("Get current request being processed"),
-		swagger.WithTags("status"),
-		swagger.WithResponseModel(CurrentRequestResponse{}),
 	)
 
 	// Create authenticated API group
@@ -999,6 +982,7 @@ func (s *Server) useWebStaticEndpoints(engine *gin.Engine) {
 					"code":    "not_found",
 				},
 			})
+            c.Abort()
 			return
 		}
 
