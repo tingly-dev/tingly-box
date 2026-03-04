@@ -120,7 +120,7 @@ func deduplicate(slice []string) []string {
 // Virtual tool constants
 const (
 	VirtualReadTool   = "read_file"
-	ExpiredContentMsg = "内容已过期,请重新查看"
+	ExpiredContentMsg = "Content has expired, please view again"
 )
 
 // CreateVirtualToolCalls creates virtual tool use + result messages.
