@@ -420,7 +420,10 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.config.SetTemplateManager(templateManager)
 
 	// Initialize tool interceptor (local web_search/web_fetch)
-	server.toolInterceptor = toolinterceptor.NewInterceptor(cfg.GetToolInterceptorConfig())
+	// Pass a config provider function that gets effective config for each provider
+	server.toolInterceptor = toolinterceptor.NewInterceptor(func(providerUUID string) (*typ.ToolInterceptorConfig, bool) {
+		return cfg.GetToolInterceptorConfigForProvider(providerUUID)
+	})
 
 	// Initialize skill manager for skill locations
 	skillManager, err := data.NewSkillManager(cfg.ConfigDir)

@@ -94,100 +94,8 @@ type ToolInterceptorOverride struct {
 	MaxResults *int `json:"max_results,omitempty"`
 }
 
-// GetEffectiveConfig returns the effective tool interceptor config for a provider
-// Global config is used as base, with provider overrides applied
-func (p *Provider) GetEffectiveConfig(global *ToolInterceptorConfig) (*ToolInterceptorConfig, bool) {
-	// Provider-level config (preferred)
-	if p.ToolInterceptor != nil {
-		if p.ToolInterceptorOverride != nil && p.ToolInterceptorOverride.Disabled {
-			return nil, false
-		}
-
-		base := global
-		if base == nil {
-			base = &ToolInterceptorConfig{}
-		}
-
-		effective := &ToolInterceptorConfig{
-			PreferLocalSearch: base.PreferLocalSearch,
-			SearchAPI:         base.SearchAPI,
-			SearchKey:         base.SearchKey,
-			MaxResults:        base.MaxResults,
-			ProxyURL:          base.ProxyURL,
-			MaxFetchSize:      base.MaxFetchSize,
-			FetchTimeout:      base.FetchTimeout,
-			MaxURLLength:      base.MaxURLLength,
-		}
-
-		if p.ToolInterceptor.PreferLocalSearch {
-			effective.PreferLocalSearch = true
-		}
-		if p.ToolInterceptor.SearchAPI != "" {
-			effective.SearchAPI = p.ToolInterceptor.SearchAPI
-		}
-		if p.ToolInterceptor.SearchKey != "" {
-			effective.SearchKey = p.ToolInterceptor.SearchKey
-		}
-		if p.ToolInterceptor.MaxResults != 0 {
-			effective.MaxResults = p.ToolInterceptor.MaxResults
-		}
-		if p.ToolInterceptor.ProxyURL != "" {
-			effective.ProxyURL = p.ToolInterceptor.ProxyURL
-		}
-		if p.ToolInterceptor.MaxFetchSize != 0 {
-			effective.MaxFetchSize = p.ToolInterceptor.MaxFetchSize
-		}
-		if p.ToolInterceptor.FetchTimeout != 0 {
-			effective.FetchTimeout = p.ToolInterceptor.FetchTimeout
-		}
-		if p.ToolInterceptor.MaxURLLength != 0 {
-			effective.MaxURLLength = p.ToolInterceptor.MaxURLLength
-		}
-
-		// Apply legacy overrides if present
-		if p.ToolInterceptorOverride != nil && p.ToolInterceptorOverride.MaxResults != nil {
-			effective.MaxResults = *p.ToolInterceptorOverride.MaxResults
-		}
-
-		applyToolInterceptorDefaults(effective)
-		return effective, true
-	}
-
-	// Legacy override path (requires global enabled)
-	if global == nil {
-		return nil, false
-	}
-
-	// Check if provider has explicitly disabled
-	if p.ToolInterceptorOverride != nil && p.ToolInterceptorOverride.Disabled {
-		return nil, false
-	}
-
-	// Start with global config
-	effective := &ToolInterceptorConfig{
-		PreferLocalSearch: global.PreferLocalSearch,
-		SearchAPI:         global.SearchAPI,
-		SearchKey:         global.SearchKey,
-		MaxResults:        global.MaxResults,
-		ProxyURL:          global.ProxyURL,
-		MaxFetchSize:      global.MaxFetchSize,
-		FetchTimeout:      global.FetchTimeout,
-		MaxURLLength:      global.MaxURLLength,
-	}
-
-	// Apply provider overrides
-	if p.ToolInterceptorOverride != nil {
-		if p.ToolInterceptorOverride.MaxResults != nil {
-			effective.MaxResults = *p.ToolInterceptorOverride.MaxResults
-		}
-	}
-
-	applyToolInterceptorDefaults(effective)
-
-	return effective, true
-}
-
-func applyToolInterceptorDefaults(config *ToolInterceptorConfig) {
+// ApplyToolInterceptorDefaults applies default values to tool interceptor config
+func ApplyToolInterceptorDefaults(config *ToolInterceptorConfig) {
 	if config.MaxResults == 0 {
 		config.MaxResults = 10
 	}
@@ -234,11 +142,9 @@ type Provider struct {
 	Models        []string          `json:"models,omitempty"`       // Available models for this provider (cached)
 	LastUpdated   string            `json:"last_updated,omitempty"` // Last update timestamp
 
-	// Auth configuration
+// Auth configuration
 	AuthType                AuthType                 `json:"auth_type"`                           // api_key or oauth
 	OAuthDetail             *OAuthDetail             `json:"oauth_detail,omitempty"`              // OAuth credentials (only for oauth auth type)
-	ToolInterceptor         *ToolInterceptorConfig   `json:"tool_interceptor,omitempty"`          // Provider-level tool interceptor config
-	ToolInterceptorOverride *ToolInterceptorOverride `json:"tool_interceptor_override,omitempty"` // Provider-level override for tool interceptor
 }
 
 // GetAccessToken returns the access token based on auth type

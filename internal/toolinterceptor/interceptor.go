@@ -12,71 +12,59 @@ import (
 	"github.com/openai/openai-go/v3"
 )
 
+// ConfigProvider is a function that returns the tool interceptor config for a provider
+// Returns (config, enabled) where enabled is false if the provider has explicitly disabled tool interception
+type ConfigProvider func(providerUUID string) (*typ.ToolInterceptorConfig, bool)
+
 // Interceptor handles tool interception and execution
 type Interceptor struct {
-	globalConfig  *typ.ToolInterceptorConfig
-	searchHandler *SearchHandler
-	fetchHandler  *FetchHandler
-	cache         *Cache
+	configProvider ConfigProvider
+	globalConfig   *typ.ToolInterceptorConfig
+	searchHandler  *SearchHandler
+	fetchHandler   *FetchHandler
+	cache          *Cache
 }
 
-// NewInterceptor creates a new tool interceptor with global configuration
-func NewInterceptor(globalConfig *typ.ToolInterceptorConfig) *Interceptor {
+// NewInterceptor creates a new tool interceptor with a config provider function
+// The configProvider function should return the effective config for a provider UUID
+func NewInterceptor(configProvider ConfigProvider) *Interceptor {
 	cache := NewCache()
+
+	// Get global config to initialize handlers with defaults
+	// We use a default config that will be overridden per-request
 	handlerConfig := DefaultConfig()
-	if globalConfig != nil {
-		if globalConfig.SearchAPI != "" {
-			handlerConfig.SearchAPI = globalConfig.SearchAPI
-		}
-		if globalConfig.SearchKey != "" {
-			handlerConfig.SearchKey = globalConfig.SearchKey
-		}
-		if globalConfig.MaxResults != 0 {
-			handlerConfig.MaxResults = globalConfig.MaxResults
-		}
-		if globalConfig.ProxyURL != "" {
-			handlerConfig.ProxyURL = globalConfig.ProxyURL
-		}
-		if globalConfig.MaxFetchSize != 0 {
-			handlerConfig.MaxFetchSize = globalConfig.MaxFetchSize
-		}
-		if globalConfig.FetchTimeout != 0 {
-			handlerConfig.FetchTimeout = globalConfig.FetchTimeout
-		}
-		if globalConfig.MaxURLLength != 0 {
-			handlerConfig.MaxURLLength = globalConfig.MaxURLLength
-		}
-	}
 
 	return &Interceptor{
-		globalConfig:  globalConfig,
-		searchHandler: NewSearchHandler(handlerConfig, cache),
-		fetchHandler:  NewFetchHandlerWithConfig(cache, handlerConfig),
-		cache:         cache,
+		configProvider: configProvider,
+		globalConfig:   nil, // Will be set via configProvider
+		searchHandler:  NewSearchHandler(handlerConfig, cache),
+		fetchHandler:   NewFetchHandlerWithConfig(cache, handlerConfig),
+		cache:          cache,
 	}
 }
 
 // IsEnabledForProvider checks if interceptor is enabled for a specific provider
 func (i *Interceptor) IsEnabledForProvider(provider *typ.Provider) bool {
-	if provider == nil {
-		return false
-	}
-	if i.globalConfig == nil && provider.ToolInterceptor == nil {
+	if provider == nil || i.configProvider == nil {
 		return false
 	}
 
-	effectiveConfig, enabled := provider.GetEffectiveConfig(i.globalConfig)
-	return enabled && effectiveConfig != nil
+	_, enabled := i.configProvider(provider.UUID)
+	return enabled
 }
 
 // GetConfigForProvider returns the effective config for a specific provider
 func (i *Interceptor) GetConfigForProvider(provider *typ.Provider) *typ.ToolInterceptorConfig {
-	effectiveConfig, enabled := provider.GetEffectiveConfig(i.globalConfig)
-	if !enabled || effectiveConfig == nil {
+	if provider == nil || i.configProvider == nil {
 		return nil
 	}
 
-	return effectiveConfig
+	config, enabled := i.configProvider(provider.UUID)
+	if !enabled || config == nil {
+		return nil
+	}
+
+	return config
 }
 
 // InterceptOpenAIRequest intercepts tool calls in an OpenAI request
