@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@ant-design/x-markdown": "^2.3.0",
-    "@lobehub/icons": "^5.0.1",
+    "@lobehub/icons-static-svg": "^1.82.0",
     "@mui/icons-material": "^7.3.8",
     "@mui/material": "^7.3.8",
     "@mui/x-date-pickers": "^8.27.2",

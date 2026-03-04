@@ -34,8 +34,6 @@ export default defineConfig(({mode}) => {
                 'react-dom',
                 '@mui/material',
                 '@mui/icons-material',
-                // Fix pnpm dependency resolution for langium/chevrotain
-                '@chevrotain/regexp-to-ast',
             ],
         },
         build: {
@@ -72,7 +70,7 @@ export default defineConfig(({mode}) => {
                         }
 
                         // Icon libraries
-                        if (id.includes('node_modules/@lobehub/icons/')) {
+                        if (id.includes('node_modules/@lobehub/icons-static-svg/')) {
                             return 'lobehub-icons';
                         }
                         if (id.includes('node_modules/devicons-react/')) {
