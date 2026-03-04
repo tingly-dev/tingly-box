@@ -244,7 +244,7 @@ func TestHandleV1Beta_WithToolUse(t *testing.T) {
 			},
 			{
 				Role:    anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolResultBlock("tool-1")},
+				Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolResultBlock("tool-1", "result", false)},
 			},
 			// Current round - keep thinking
 			{
