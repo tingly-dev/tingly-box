@@ -55,7 +55,7 @@ func SetTrackingContext(c *gin.Context, rule *typ.Rule, provider *typ.Provider, 
 
 	// Update global current request tracker for monitoring
 	if provider != nil && actualModel != "" {
-		GetGlobalCurrentRequestTracker().SetCurrent(CurrentRequestState{
+		GetGlobalModelRequestTracker().SetCurrent(ModelRequestState{
 			ProviderName: provider.Name,
 			ProviderUUID: provider.UUID,
 			Model:        actualModel,

@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// CurrentRequestState represents the current request being processed
-type CurrentRequestState struct {
+// ModelRequestState represents the current request being processed
+type ModelRequestState struct {
 	ProviderName string    `json:"provider_name"`
 	ProviderUUID string    `json:"provider_uuid"`
 	Model        string    `json:"model"`
@@ -16,20 +16,20 @@ type CurrentRequestState struct {
 	Streamed     bool      `json:"streamed"`
 }
 
-// CurrentRequestTracker tracks the currently active request in real-time
+// ModelRequestTracker tracks the currently active request in real-time
 // It provides status information for monitoring and status line display
-type CurrentRequestTracker struct {
+type ModelRequestTracker struct {
 	mu      sync.RWMutex
-	current *CurrentRequestState
+	current *ModelRequestState
 }
 
-// NewCurrentRequestTracker creates a new tracker
-func NewCurrentRequestTracker() *CurrentRequestTracker {
-	return &CurrentRequestTracker{}
+// NewModelRequestTracker creates a new tracker
+func NewModelRequestTracker() *ModelRequestTracker {
+	return &ModelRequestTracker{}
 }
 
 // SetCurrent updates the current request state
-func (t *CurrentRequestTracker) SetCurrent(state CurrentRequestState) {
+func (t *ModelRequestTracker) SetCurrent(state ModelRequestState) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -38,7 +38,7 @@ func (t *CurrentRequestTracker) SetCurrent(state CurrentRequestState) {
 }
 
 // GetCurrent returns the current request state
-func (t *CurrentRequestTracker) GetCurrent() *CurrentRequestState {
+func (t *ModelRequestTracker) GetCurrent() *ModelRequestState {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
@@ -52,16 +52,16 @@ func (t *CurrentRequestTracker) GetCurrent() *CurrentRequestState {
 }
 
 // Clear clears the current request state (call when request completes)
-func (t *CurrentRequestTracker) Clear() {
+func (t *ModelRequestTracker) Clear() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.current = nil
 }
 
-// globalCurrentRequestTracker is the global instance
-var globalCurrentRequestTracker = NewCurrentRequestTracker()
+// globalModelRequestTracker is the global instance
+var globalModelRequestTracker = NewModelRequestTracker()
 
-// GetGlobalCurrentRequestTracker returns the global tracker instance
-func GetGlobalCurrentRequestTracker() *CurrentRequestTracker {
-	return globalCurrentRequestTracker
+// GetGlobalModelRequestTracker returns the global tracker instance
+func GetGlobalModelRequestTracker() *ModelRequestTracker {
+	return globalModelRequestTracker
 }

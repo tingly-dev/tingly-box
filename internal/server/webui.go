@@ -265,7 +265,7 @@ func (s *Server) GetStatus(c *gin.Context) {
 // This endpoint is useful for monitoring and Web UI display
 // No authentication required for easy integration with status line tools
 func (s *Server) GetCurrentRequest(c *gin.Context) {
-	tracker := GetGlobalCurrentRequestTracker()
+	tracker := GetGlobalModelRequestTracker()
 	state := tracker.GetCurrent()
 
 	if state == nil {
@@ -315,7 +315,7 @@ func (s *Server) GetClaudeCodeStatus(c *gin.Context) {
 	cache.Update(&input)
 
 	// Get Tingly Box current request
-	tracker := GetGlobalCurrentRequestTracker()
+	tracker := GetGlobalModelRequestTracker()
 	tbState := tracker.GetCurrent()
 
 	// Build response
@@ -372,7 +372,7 @@ func (s *Server) GetClaudeCodeStatusLine(c *gin.Context) {
 	cache.Update(&input)
 
 	// Get Tingly Box current request
-	tracker := GetGlobalCurrentRequestTracker()
+	tracker := GetGlobalModelRequestTracker()
 	tbState := tracker.GetCurrent()
 
 	// Build status line
