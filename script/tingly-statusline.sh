@@ -29,4 +29,4 @@ CC_INPUT=$(cat)
 echo "$CC_INPUT" | curl -s -X POST \
 	-H "Content-Type: application/json" \
 	-d @- \
-	"${TINGLY_API_URL}/tingly/claude_code/statusline" 2>/dev/null || echo "Tingly Box unavailable"
+	"${TINGLY_API_URL}/tingly/claude_code/statusline" 2>/dev/null || echo "⚠ Tingly Box service stopped"
