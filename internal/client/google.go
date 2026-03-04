@@ -50,8 +50,13 @@ func NewGoogleClient(provider *typ.Provider) (*GoogleClient, error) {
 		BaseURL: provider.APIBase,
 	}
 
+	token, err := provider.GetAccessToken(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get access token: %w", err)
+	}
+
 	config := &genai.ClientConfig{
-		APIKey:      provider.GetAccessToken(),
+		APIKey:      token,
 		HTTPOptions: httpOptions,
 		HTTPClient:  httpClient,
 	}
@@ -227,7 +232,14 @@ func (c *GoogleClient) ProbeOptionsEndpoint(ctx context.Context) ProbeResult {
 	}
 
 	// Set authentication header
-	req.Header.Set("x-goog-api-key", c.provider.GetAccessToken())
+	accessToken, err := c.provider.GetAccessToken(ctx)
+	if err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: fmt.Sprintf("Failed to get access token: %v", err),
+		}
+	}
+	req.Header.Set("x-goog-api-key", accessToken)
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)

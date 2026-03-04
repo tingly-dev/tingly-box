@@ -207,7 +207,12 @@ func (s *Server) makeChatGPTBackendRequest(wrapper *client.OpenAIClient, provide
 
 	// Set required headers for ChatGPT backend API
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+provider.GetAccessToken())
+	accessToken, err := provider.GetAccessToken(ctx)
+	if err != nil {
+		cancel()
+		return nil, nil, fmt.Errorf("failed to get access token: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("OpenAI-Beta", "responses=experimental")
 	req.Header.Set("originator", "tingly-box")
 

@@ -1,11 +1,13 @@
 package typ
 
 import (
+	"context"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
+	"github.com/tingly-dev/tingly-box/pkg/helper"
 )
 
 // RuleScenario represents the scenario for a routing rule
@@ -264,17 +266,38 @@ type Provider struct {
 }
 
 // GetAccessToken returns the access token based on auth type
-func (p *Provider) GetAccessToken() string {
+func (p *Provider) GetAccessToken(ctx context.Context) (string, error) {
 	switch p.AuthType {
 	case AuthTypeOAuth:
 		if p.OAuthDetail != nil {
-			return p.OAuthDetail.AccessToken
+			return p.OAuthDetail.AccessToken, nil
 		}
 	case AuthTypeAPIKey, "":
 		// Default to api_key for backward compatibility
-		return p.Token
+		if p.CredentialSource == CredentialSourceHelper && p.HelperConfig != nil {
+			return p.getHelperToken(ctx)
+		}
+		return p.Token, nil
 	}
-	return ""
+	return "", nil
+}
+
+// GetHelperToken fetches the token from the configured helper command
+func (p *Provider) getHelperToken(ctx context.Context) (string, error) {
+	if p.HelperConfig == nil {
+		return "", nil
+	}
+
+	executor := helper.NewExecutor(helper.Config{
+		Command:    p.HelperConfig.Command,
+		Args:       p.HelperConfig.Args,
+		TimeoutMs:  p.HelperConfig.TimeoutMs,
+		Env:        p.HelperConfig.Env,
+		PassEnv:    p.HelperConfig.PassEnv,
+		SimpleMode: p.HelperConfig.SimpleMode,
+	})
+
+	return executor.Fetch(ctx, p.APIBase)
 }
 
 // IsOAuthExpired checks if the OAuth token is expired (only valid for oauth auth type)

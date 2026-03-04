@@ -35,8 +35,13 @@ type OpenAIClient struct {
 
 // defaultNewOpenAIClient creates a new OpenAI client wrapper
 func defaultNewOpenAIClient(provider *typ.Provider) (*OpenAIClient, error) {
+	token, err := provider.GetAccessToken(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get access token: %w", err)
+	}
+
 	options := []option.RequestOption{
-		option.WithAPIKey(provider.GetAccessToken()),
+		option.WithAPIKey(token),
 		option.WithBaseURL(provider.APIBase),
 	}
 
@@ -191,7 +196,10 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]string, error) {
 	}
 
 	// Set headers based on provider style and auth type
-	accessToken := c.provider.GetAccessToken()
+	accessToken, err := c.provider.GetAccessToken(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get access token: %w", err)
+	}
 	if c.provider.APIStyle == protocol.APIStyleAnthropic {
 		// Add OAuth custom headers if applicable
 		if c.provider.AuthType == typ.AuthTypeOAuth && c.provider.OAuthDetail != nil {
@@ -396,7 +404,14 @@ func (c *OpenAIClient) ProbeOptionsEndpoint(ctx context.Context) ProbeResult {
 	}
 
 	// Set authentication header
-	req.Header.Set("Authorization", "Bearer "+c.provider.GetAccessToken())
+	accessToken, err := c.provider.GetAccessToken(ctx)
+	if err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: fmt.Sprintf("Failed to get access token: %v", err),
+		}
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
@@ -473,7 +488,14 @@ func (c *OpenAIClient) probeResponsesEndpoint(ctx context.Context, model string)
 
 	// Set required headers
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.provider.GetAccessToken())
+	accessToken, err := c.provider.GetAccessToken(ctx)
+	if err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: fmt.Sprintf("Failed to get access token: %v", err),
+		}
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("OpenAI-Beta", "responses=experimental")
 	req.Header.Set("originator", "tingly-box")
 
