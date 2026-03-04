@@ -1,12 +1,12 @@
-import React from 'react';
+import type { BotPlatformConfig } from '@/types/bot';
 import {
-    Select,
-    MenuItem,
     Box,
-    Typography,
     CircularProgress,
+    MenuItem,
+    Select,
+    Typography,
 } from '@mui/material';
-import { BotPlatformConfig } from '../../types/bot';
+import React from 'react';
 
 interface BotPlatformSelectorProps {
     value: string;

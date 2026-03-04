@@ -1,4 +1,4 @@
-import { BotPlatformConfig, BotSettings } from '@/types/bot';
+import type { BotPlatformConfig, BotSettings } from '@/types/bot';
 import { Delete, Edit, Route } from '@mui/icons-material';
 import {
     Box,
