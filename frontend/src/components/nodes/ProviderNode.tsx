@@ -15,7 +15,7 @@ import {
 import { styled } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Provider } from '../../types/provider.ts';
+import type { Provider } from '@/types/provider.ts';
 import { ApiStyleBadge } from '../ApiStyleBadge.tsx';
 import type { ConfigProvider } from '../RoutingGraphTypes.ts';
 import { ProviderNodeContainer, providerNode } from './styles.tsx';
