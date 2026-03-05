@@ -156,6 +156,8 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                                     sx={{
                                         fontSize: '0.8rem',
                                         fontStyle: !provider.provider ? 'italic' : 'normal',
+                                        width: '80px',
+                                        textAlign: 'center',
                                     }}
                                 >
                                     {providerName || t('rule.graph.selectProvider')}
@@ -173,6 +175,8 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                                         sx={{
                                             fontSize: '0.8rem',
                                             fontStyle: !provider.model ? 'italic' : 'normal',
+                                            width: '80px',
+                                            textAlign: 'center',
                                         }}
                                     >
                                         {provider.model || '?'}
