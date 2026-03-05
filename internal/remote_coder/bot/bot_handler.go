@@ -23,18 +23,18 @@ import (
 
 // BotHandler encapsulates all bot message handling logic and dependencies
 type BotHandler struct {
-	ctx              context.Context
-	botSetting       BotSetting
-	chatStore        *ChatStore
-	sessionMgr       *session.Manager
-	agentBoot        *agentboot.AgentBoot
-	summaryEngine    *summarizer.Engine
-	directoryBrowser *DirectoryBrowser // DEPRECATED: Use directoryBrowserV2 instead
+	ctx                context.Context
+	botSetting         BotSetting
+	chatStore          *ChatStore
+	sessionMgr         *session.Manager
+	agentBoot          *agentboot.AgentBoot
+	summaryEngine      *summarizer.Engine
+	directoryBrowser   *DirectoryBrowser   // DEPRECATED: Use directoryBrowserV2 instead
 	directoryBrowserV2 *DirectoryBrowserV2 // New interaction-based directory browser
-	manager          *imbot.Manager
-	imPrompter       *IMPrompter
-	fileStore        *FileStore
-	interaction      *imbot.InteractionHandler // New interaction handler
+	manager            *imbot.Manager
+	imPrompter         *IMPrompter
+	fileStore          *FileStore
+	interaction        *imbot.InteractionHandler // New interaction handler
 
 	// runningCancel tracks cancel functions for active executions per chatID
 	runningCancel   map[string]context.CancelFunc
@@ -97,20 +97,20 @@ func NewBotHandler(
 	}
 
 	return &BotHandler{
-		ctx:               ctx,
-		botSetting:        botSetting,
-		chatStore:         chatStore,
-		sessionMgr:        sessionMgr,
-		agentBoot:         agentBoot,
-		summaryEngine:     summaryEngine,
-		directoryBrowser:  directoryBrowser, // DEPRECATED: Kept for backward compatibility
+		ctx:                ctx,
+		botSetting:         botSetting,
+		chatStore:          chatStore,
+		sessionMgr:         sessionMgr,
+		agentBoot:          agentBoot,
+		summaryEngine:      summaryEngine,
+		directoryBrowser:   directoryBrowser,        // DEPRECATED: Kept for backward compatibility
 		directoryBrowserV2: NewDirectoryBrowserV2(), // New interaction-based browser
-		manager:           manager,
-		imPrompter:        imPrompter,
-		fileStore:         fileStore,
-		interaction:       interactionHandler,
-		runningCancel:     make(map[string]context.CancelFunc),
-		pendingBinds:      make(map[string]*PendingBind),
+		manager:            manager,
+		imPrompter:         imPrompter,
+		fileStore:          fileStore,
+		interaction:        interactionHandler,
+		runningCancel:      make(map[string]context.CancelFunc),
+		pendingBinds:       make(map[string]*PendingBind),
 	}
 }
 
@@ -693,7 +693,7 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		SetStreamer(streamHandler).
 		SetApprovalHandler(h.imPrompter).
 		SetAskHandler(h.imPrompter).
-		SetCompletionCallback(&CompletionCallback{hCtx: hCtx})
+		SetCompletionCallback(&CompletionCallback{hCtx: hCtx, sessionID: sessionID, sessionMgr: h.sessionMgr})
 
 	result, err := agent.Execute(execCtx, text, agentboot.ExecutionOptions{
 		ProjectPath:          projectPath,
@@ -752,10 +752,21 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 }
 
 type CompletionCallback struct {
-	hCtx HandlerContext
+	hCtx       HandlerContext
+	sessionID  string
+	sessionMgr *session.Manager
 }
 
 func (c *CompletionCallback) OnComplete(result *agentboot.CompletionResult) {
+	// Update session status based on completion result
+	if c.sessionMgr != nil && c.sessionID != "" {
+		if result.Success {
+			c.sessionMgr.SetCompleted(c.sessionID, "")
+		} else {
+			c.sessionMgr.SetFailed(c.sessionID, result.Error)
+		}
+	}
+
 	// Build action keyboard
 	kb := BuildActionKeyboard()
 	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
@@ -769,6 +780,15 @@ func (c *CompletionCallback) OnComplete(result *agentboot.CompletionResult) {
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to send action keyboard")
 	}
+
+	// Log completion event
+	logrus.WithFields(logrus.Fields{
+		"chatID":    c.hCtx.ChatID,
+		"sessionID": c.sessionID,
+		"success":   result.Success,
+		"duration":  result.DurationMS,
+		"error":     result.Error,
+	}).Info("Agent execution completed via callback")
 }
 
 // handleMockAgentMessage executes a message through the mock agent for testing
