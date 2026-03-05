@@ -29,7 +29,8 @@ type BotHandler struct {
 	sessionMgr       *session.Manager
 	agentBoot        *agentboot.AgentBoot
 	summaryEngine    *summarizer.Engine
-	directoryBrowser *DirectoryBrowser
+	directoryBrowser *DirectoryBrowser // DEPRECATED: Use directoryBrowserV2 instead
+	directoryBrowserV2 *DirectoryBrowserV2 // New interaction-based directory browser
 	manager          *imbot.Manager
 	imPrompter       *IMPrompter
 	fileStore        *FileStore
@@ -96,19 +97,20 @@ func NewBotHandler(
 	}
 
 	return &BotHandler{
-		ctx:              ctx,
-		botSetting:       botSetting,
-		chatStore:        chatStore,
-		sessionMgr:       sessionMgr,
-		agentBoot:        agentBoot,
-		summaryEngine:    summaryEngine,
-		directoryBrowser: directoryBrowser,
-		manager:          manager,
-		imPrompter:       imPrompter,
-		fileStore:        fileStore,
-		interaction:      interactionHandler,
-		runningCancel:    make(map[string]context.CancelFunc),
-		pendingBinds:     make(map[string]*PendingBind),
+		ctx:               ctx,
+		botSetting:        botSetting,
+		chatStore:         chatStore,
+		sessionMgr:        sessionMgr,
+		agentBoot:         agentBoot,
+		summaryEngine:     summaryEngine,
+		directoryBrowser:  directoryBrowser, // DEPRECATED: Kept for backward compatibility
+		directoryBrowserV2: NewDirectoryBrowserV2(), // New interaction-based browser
+		manager:           manager,
+		imPrompter:        imPrompter,
+		fileStore:         fileStore,
+		interaction:       interactionHandler,
+		runningCancel:     make(map[string]context.CancelFunc),
+		pendingBinds:      make(map[string]*PendingBind),
 	}
 }
 
@@ -1564,6 +1566,8 @@ func (h *BotHandler) handleBashCommand(hCtx HandlerContext, fields []string) {
 }
 
 // handleCallbackQuery handles callback queries from inline keyboards
+// DEPRECATED: Use HandleCallbackQueryV2() for new interaction system
+// This method handles legacy callbacks for backward compatibility
 func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot.Message) {
 	callbackData, _ := msg.Metadata["callback_data"].(string)
 	if callbackData == "" {
