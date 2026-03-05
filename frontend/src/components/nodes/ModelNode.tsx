@@ -9,12 +9,14 @@ import {
     Menu,
     MenuItem,
     Tooltip,
+    ToggleButton,
+    Divider,
 } from '@mui/material';
 import { Settings as SettingsIcon } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyledModelNode } from './styles.tsx';
+import { StyledModelNode, NODE_LAYER_STYLES } from './styles.tsx';
 import { isWildcardModelName } from '@/components/rule-card/utils';
 
 // Action button container
@@ -35,7 +37,7 @@ const ModelNodeWrapper = styled(Box)(({ theme }) => ({
     }
 }));
 
-// Model Node Component with editing support
+// Model Node Component Props
 export interface ModelNodeProps {
     active: boolean;
     label: string;
@@ -44,6 +46,11 @@ export interface ModelNodeProps {
     onUpdate?: (value: string) => void;
     showStatusIcon?: boolean;
     compact?: boolean;
+    // Smart routing props
+    smartEnabled?: boolean;
+    showSmartSwitch?: boolean;
+    switchDisabled?: boolean;
+    onSwitch?: () => void;
 }
 
 export const ModelNode: React.FC<ModelNodeProps> = ({
@@ -53,7 +60,12 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
     editable = false,
     onUpdate,
     showStatusIcon = true,
-    compact = false
+    compact = false,
+    // Smart routing props
+    smartEnabled = false,
+    showSmartSwitch = false,
+    switchDisabled = false,
+    onSwitch,
 }) => {
     const { t } = useTranslation();
     const [editMode, setEditMode] = useState(false);
@@ -118,12 +130,12 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                 transformOrigin={{ horizontal: 'right', vertical: 'top' }}
                 anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
             >
-                <MenuItem onClick={handleSetWildcard} sx={{ color: isWildcard ? 'primary.main' : 'text.primary' }}>
+                <MenuItem onClick={handleSetWildcard}>
                     <ListItemText sx={{ fontWeight: isWildcard ? 600 : 400 }}>
                         Match any model (* or [any])
                     </ListItemText>
                 </MenuItem>
-                <MenuItem onClick={handleSetCustom} sx={{ color: !isWildcard ? 'primary.main' : 'text.primary' }}>
+                <MenuItem onClick={handleSetCustom}>
                     <ListItemText sx={{ fontWeight: !isWildcard ? 600 : 400 }}>
                         Custom model name
                     </ListItemText>
@@ -132,9 +144,11 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                     <ListItemText>Cancel</ListItemText>
                 </MenuItem>
             </Menu>
-            <StyledModelNode compact={compact}>
-                {editMode && editable ? (
-                    <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', p: 1 }}>
+            <StyledModelNode compact={compact} sx={{ display: 'flex', flexDirection: 'column' }}>
+                {/* Top Layer - Model Name */}
+                <Box sx={NODE_LAYER_STYLES.topLayer}>
+                    {editMode && editable ? (
+                        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', p: 1 }}>
                         <TextField
                             value={tempValue}
                             onChange={(e) => setTempValue(e.target.value)}
@@ -151,15 +165,15 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                                     backgroundColor: 'transparent',
                                 },
                                 '& .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: 'primary.main',
+                                    borderColor: 'text.secondary',
                                 },
                                 '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: 'primary.dark',
+                                    borderColor: 'text.primary',
                                 },
                             }}
                         />
                     </Box>
-                ) : (
+                    ) : (
                     <Box
                         onClick={() => editable && setEditMode(true)}
                         sx={{
@@ -184,7 +198,6 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                                         </Typography>
                                     }
                                     size="small"
-                                    color="primary"
                                     variant="outlined"
                                     sx={{
                                         '& .MuiChip-label': {
@@ -194,10 +207,68 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                                 />
                             </Tooltip>
                         ) : (
-                            <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.9rem' }}>
+                            <Typography variant="body2" sx={{ ...NODE_LAYER_STYLES.typography, color: 'text.primary' }}>
                                 {value || label}
                             </Typography>
                         )}
+                    </Box>
+                    )}
+                </Box>
+
+                {/* Divider - only show when smart switch is visible */}
+                {showSmartSwitch && !editMode && (
+                    <Divider sx={NODE_LAYER_STYLES.divider} />
+                )}
+
+                {/* Bottom Layer - Smart Switch */}
+                {showSmartSwitch && !editMode && (
+                    <Box sx={NODE_LAYER_STYLES.bottomLayer}>
+                        <Tooltip title="Direct routing mode" arrow>
+                            <ToggleButton
+                                value="direct"
+                                selected={!smartEnabled}
+                                disabled={!active || switchDisabled}
+                                onClick={onSwitch}
+                                sx={{
+                                    ...NODE_LAYER_STYLES.toggleButton,
+                                    flex: 1,
+                                    borderColor: 'text.primary',
+                                    '&.Mui-selected': {
+                                        backgroundColor: !smartEnabled ? 'secondary.main' : 'transparent',
+                                        color: !smartEnabled ? 'white' : 'text.primary',
+                                        borderColor: 'text.primary',
+                                    },
+                                    '&:hover': {
+                                        backgroundColor: !smartEnabled ? 'secondary.dark' : 'action.hover',
+                                    },
+                                }}
+                            >
+                                Direct
+                            </ToggleButton>
+                        </Tooltip>
+                        <Tooltip title="Smart routing mode" arrow>
+                            <ToggleButton
+                                value="smart"
+                                selected={smartEnabled}
+                                disabled={!active || switchDisabled}
+                                onClick={onSwitch}
+                                sx={{
+                                    ...NODE_LAYER_STYLES.toggleButton,
+                                    flex: 1,
+                                    borderColor: 'text.primary',
+                                    '&.Mui-selected': {
+                                        backgroundColor: smartEnabled ? 'secondary.main' : 'transparent',
+                                        color: smartEnabled ? 'white' : 'text.primary',
+                                        borderColor: 'text.primary',
+                                    },
+                                    '&:hover': {
+                                        backgroundColor: smartEnabled ? 'secondary.dark' : 'action.hover',
+                                    },
+                                }}
+                            >
+                                Smart
+                            </ToggleButton>
+                        </Tooltip>
                     </Box>
                 )}
             </StyledModelNode>

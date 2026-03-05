@@ -15,10 +15,10 @@ import {
 import { styled } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Provider } from '../../types/provider.ts';
+import type { Provider } from '@/types/provider.ts';
 import { ApiStyleBadge } from '../ApiStyleBadge.tsx';
 import type { ConfigProvider } from '../RoutingGraphTypes.ts';
-import { ProviderNodeContainer, providerNode } from './styles.tsx';
+import { ProviderNodeContainer, providerNode, NODE_LAYER_STYLES } from './styles.tsx';
 
 // Action button container
 const ActionButtonsBox = styled(Box)(({ theme }) => ({
@@ -95,93 +95,82 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
             >
                 <MenuItem onClick={handleDelete}>
                     <ListItemIcon>
-                        <DeleteIcon color="error" />
+                        <DeleteIcon />
                     </ListItemIcon>
-                    <ListItemText sx={{ color: 'error.main' }}>{t('rule.menu.deleteProvider')}</ListItemText>
+                    <ListItemText>{t('rule.menu.deleteProvider')}</ListItemText>
                 </MenuItem>
                 <MenuItem onClick={handleMenuClose} sx={{ color: 'text.secondary' }}>
                     <ListItemText>Cancel</ListItemText>
                 </MenuItem>
             </Menu>
-            <ProviderNodeContainer onClick={onNodeClick} sx={{ cursor: active ? 'pointer' : 'default' }}>
-                {/* API Style Title */}
+            <ProviderNodeContainer onClick={onNodeClick} sx={{ cursor: active ? 'pointer' : 'default', display: 'flex', flexDirection: 'column' }}>
+                {/* Top Layer - Provider/Model Field */}
+                <Box sx={NODE_LAYER_STYLES.topLayer}>
+                    <Tooltip title={
+                        provider.provider && provider.model
+                            ? <>Provider: {providerName}<br/>Model: {provider.model}</>
+                            : provider.provider
+                                ? <>Provider: {providerName}<br/>Model: (select model)</>
+                                : t('rule.graph.selectProvider')
+                    } arrow>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                            <Typography
+                                variant="body2"
+                                color="text.primary"
+                                noWrap
+                                sx={{
+                                    ...NODE_LAYER_STYLES.typography,
+                                    fontStyle: !provider.provider ? 'italic' : 'normal',
+                                    width: '80px',
+                                    textAlign: 'center',
+                                }}
+                            >
+                                {providerName || t('rule.graph.selectProvider')}
+                            </Typography>
+
+                            {provider.provider && (
+                                <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+                            )}
+
+                            {provider.provider && (
+                                <Typography
+                                    variant="body2"
+                                    color="text.primary"
+                                    noWrap
+                                    sx={{
+                                        ...NODE_LAYER_STYLES.typography,
+                                        fontStyle: !provider.model ? 'italic' : 'normal',
+                                        width: '80px',
+                                        textAlign: 'center',
+                                    }}
+                                >
+                                    {provider.model || '?'}
+                                </Typography>
+                            )}
+                        </Box>
+                    </Tooltip>
+                </Box>
+
+                {/* Divider */}
+                <Divider sx={NODE_LAYER_STYLES.divider} />
+
+                {/* Bottom Layer - API Style Badge */}
                 {provider.provider && (
-                    <Box sx={{ width: '100%', mb: providerNode.elementMargin }}>
+                    <Box sx={NODE_LAYER_STYLES.bottomLayer}>
                         <ApiStyleBadge
                             apiStyle={apiStyle}
                             sx={{
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                p: providerNode.fieldPadding,
                                 borderRadius: 1,
                                 transition: 'all 0.2s',
                                 width: '100%',
-                                maxHeight: providerNode.badgeHeight
+                                fontWeight: null,
                             }}
                         />
                     </Box>
                 )}
-
-                {/* Combined Provider/Model Field */}
-                <Box sx={{ width: '100%', mb: providerNode.elementMargin }}>
-                    <Box
-                        sx={{
-                            width: '100%',
-                            p: providerNode.fieldPadding,
-                            pr: 0.5,
-                            border: '1px solid',
-                            borderColor: 'text.primary',
-                            borderRadius: 1,
-                            backgroundColor: 'background.paper',
-                            transition: 'all 0.2s',
-                            display: 'flex',
-                            alignItems: 'center',
-                            maxHeight: providerNode.fieldHeight,
-                            overflow: 'hidden',
-                        }}
-                    >
-                        <Tooltip title={
-                            provider.provider && provider.model
-                                ? <>Credential: {providerName}<br/>Model: {provider.model}</>
-                                : provider.provider
-                                    ? <>Credential: {providerName}<br/>Model: (select model)</>
-                                    : t('rule.graph.selectProvider')
-                        } arrow>
-                            <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
-                                <Typography
-                                    variant="body2"
-                                    color="text.primary"
-                                    noWrap
-                                    sx={{
-                                        fontSize: '0.8rem',
-                                        fontStyle: !provider.provider ? 'italic' : 'normal',
-                                    }}
-                                >
-                                    {providerName || t('rule.graph.selectProvider')}
-                                </Typography>
-
-                                {provider.provider && (
-                                    <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
-                                )}
-
-                                {provider.provider && (
-                                    <Typography
-                                        variant="body2"
-                                        color="text.primary"
-                                        noWrap
-                                        sx={{
-                                            fontSize: '0.8rem',
-                                            fontStyle: !provider.model ? 'italic' : 'normal',
-                                        }}
-                                    >
-                                        {provider.model || '?'}
-                                    </Typography>
-                                )}
-                            </Box>
-                        </Tooltip>
-                    </Box>
-                </Box>
 
                 {/* Action Buttons - visible on hover */}
                 <ActionButtonsBox className="action-buttons">

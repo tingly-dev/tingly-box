@@ -31,19 +31,6 @@ export const SmartFallbackNode: React.FC<DefaultNodeProps> = ({
             <StyledSmartNodeWarning active={active}>
                 {/* Content */}
                 <Box sx={{ mt: 1, width: '100%' }}>
-                    {/* Description */}
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            fontWeight: 600,
-                            color: 'text.primary',
-                            fontSize: '0.85rem',
-                            mb: 1,
-                        }}
-                    >
-                        Fallback
-                    </Typography>
-
                     {/* Summary Info */}
                     <Box
                         sx={{
@@ -55,7 +42,7 @@ export const SmartFallbackNode: React.FC<DefaultNodeProps> = ({
                                 width: '100%',
                                 p: 1,
                                 border: '1px solid',
-                                borderColor: active ? 'warning.main' : 'divider',
+                                borderColor: 'divider',
                                 borderRadius: 1,
                                 backgroundColor: 'background.paper',
                                 transition: 'all 0.2s',
@@ -68,7 +55,7 @@ export const SmartFallbackNode: React.FC<DefaultNodeProps> = ({
                                 variant="body2"
                                 sx={{
                                     fontSize: '0.8rem',
-                                    color: active ? 'warning.main' : 'text.secondary',
+                                    color: 'text.secondary',
                                     fontWeight: 500,
                                 }}
                             >

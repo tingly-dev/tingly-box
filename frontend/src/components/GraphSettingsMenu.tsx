@@ -1,10 +1,9 @@
-import { Block as InactiveIcon, CheckCircle as ActiveIcon, Delete as DeleteIcon, Download as ExportIcon, PlayArrow as ProbeIcon, Settings as SettingsIcon, SmartDisplay as SmartIcon } from '@mui/icons-material';
+import { Block as InactiveIcon, CheckCircle as ActiveIcon, Delete as DeleteIcon, Download as ExportIcon, PlayArrow as ProbeIcon, Settings as SettingsIcon } from '@mui/icons-material';
 import { IconButton, Menu, MenuItem, Tooltip } from '@mui/material';
 import React, { useCallback } from 'react';
 
 export interface GraphSettingsMenuProps {
     // Common props
-    smartEnabled: boolean;
     canProbe: boolean;
     isProbing: boolean;
     allowDeleteRule: boolean;
@@ -13,7 +12,6 @@ export interface GraphSettingsMenuProps {
     saving: boolean;
 
     // Callbacks
-    onToggleSmartRouting: () => void;
     onProbe: () => void;
     onExport: () => void;
     onDelete: () => void;
@@ -21,14 +19,12 @@ export interface GraphSettingsMenuProps {
 }
 
 export const GraphSettingsMenu: React.FC<GraphSettingsMenuProps> = ({
-    smartEnabled,
     canProbe,
     isProbing,
     allowDeleteRule,
     active,
     allowToggleRule,
     saving,
-    onToggleSmartRouting,
     onProbe,
     onExport,
     onDelete,
@@ -44,11 +40,6 @@ export const GraphSettingsMenu: React.FC<GraphSettingsMenuProps> = ({
     const handleMenuClose = useCallback(() => {
         setMenuAnchorEl(null);
     }, []);
-
-    const handleToggleSmartRouting = useCallback(() => {
-        handleMenuClose();
-        onToggleSmartRouting();
-    }, [onToggleSmartRouting]);
 
     const handleProbe = useCallback(() => {
         handleMenuClose();
@@ -145,12 +136,6 @@ export const GraphSettingsMenu: React.FC<GraphSettingsMenuProps> = ({
                         Delete Rule
                     </MenuItem>
                 )}
-
-                {/* Toggle Smart Routing */}
-                <MenuItem onClick={handleToggleSmartRouting}>
-                    <SmartIcon fontSize="small" sx={{ mr: 1 }} />
-                    {smartEnabled ? 'Convert To Direct Routing' : 'Convert To Smart Routing'}
-                </MenuItem>
             </Menu>
         </>
     );
