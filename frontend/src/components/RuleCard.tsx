@@ -62,7 +62,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     const { configRecord, setConfigRecord } = useRuleCardData({ rule, providers });
 
     // Auto-save functionality
-    const { updateField } = useRuleAutoSave({
+    const { autoSave, updateField } = useRuleAutoSave({
         rule,
         onRuleChange,
         showNotification,
@@ -78,11 +78,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     const { dialogState: smartDialogState, handlers: smartHandlers } = useSmartRoutingHandlers({
         configRecord,
         setConfigRecord,
-        autoSave: async () => {
-            // Minimal auto-save implementation for smart routing handlers
-            // In a future refactor, this could be consolidated
-            return true;
-        },
+        autoSave,
         ruleUuid: rule.uuid,
         onModelSelectOpen,
         showNotification,
