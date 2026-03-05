@@ -3,7 +3,7 @@
 [//]: # (  <img src="docs/banner.png" alt="Tingly Box Banner" width="100%" />)
 </p>
 
-![Tingly Box Web UI Demo](./docs/images/hero.png)
+![Tingly Box Web UI Demo](./docs/hero.png)
 
 <h1 align="center">Tingly Box</h1>
 
