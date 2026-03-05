@@ -493,6 +493,9 @@ func SendDirectoryBrowser(ctx context.Context, bot imbot.Bot, browser *Directory
 }
 
 // convertToTelegramKeyboard converts imbot.InlineKeyboardMarkup to tgbotapi.InlineKeyboardMarkup
+// DEPRECATED: This function is for V1 backward compatibility only.
+// New code should use SendDirectoryBrowserV2() which uses platform adapters
+// for automatic markup conversion.
 func convertToTelegramKeyboard(kb imbot.InlineKeyboardMarkup) tgbotapi.InlineKeyboardMarkup {
 	var rows [][]tgbotapi.InlineKeyboardButton
 	for _, row := range kb.InlineKeyboard {

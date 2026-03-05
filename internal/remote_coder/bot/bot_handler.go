@@ -482,7 +482,10 @@ func (h *BotHandler) sendTextWithReply(hCtx HandlerContext, text string, replyTo
 }
 
 // sendTextWithActionKeyboard sends a text message with Clear/Bind action buttons
+// DEPRECATED: Uses old V1 keyboard pattern. New code should use BuildActionInteractionsV2()
+// and send via the interaction handler for multi-platform support.
 func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string, replyTo string) {
+	// TODO: Migrate to v2 interaction system
 	kb := BuildActionKeyboard()
 	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
 
