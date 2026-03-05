@@ -1,5 +1,6 @@
 import {
     Box,
+    CircularProgress,
     Tooltip,
     Typography,
     ToggleButton,
@@ -33,13 +34,16 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
     const [features, setFeatures] = useState<Record<string, boolean>>({});
     const [effort, setEffort] = useState<string>('');
     const [loading, setLoading] = useState(true);
+    const [updating, setUpdating] = useState<Record<string, boolean>>({});
 
     const loadData = async () => {
         try {
             setLoading(true);
             // Load effort level first (will be displayed first)
             const effortResult = await api.getScenarioStringFlag(scenario, 'thinking_effort');
-            setEffort(effortResult?.data?.value || '');
+            if (effortResult?.success && effortResult?.data?.value !== undefined) {
+                setEffort(effortResult.data.value);
+            }
 
             // Load plugin features
             const featureResults = await Promise.all(
@@ -47,7 +51,11 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
             );
             const newFeatures: Record<string, boolean> = {};
             PLUGIN_FEATURES.forEach((f, i) => {
-                newFeatures[f.key] = featureResults[i]?.data?.value || false;
+                if (featureResults[i]?.success && featureResults[i]?.data?.value !== undefined) {
+                    newFeatures[f.key] = featureResults[i].data.value;
+                } else {
+                    newFeatures[f.key] = false;
+                }
             });
             setFeatures(newFeatures);
         } catch (error) {
@@ -58,28 +66,50 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
     };
 
     const toggleFeature = (featureKey: string) => {
+        if (updating[featureKey]) return; // Prevent rapid clicks
+
         const newValue = !features[featureKey];
+        setUpdating(prev => ({ ...prev, [featureKey]: true }));
+
         api.setScenarioFlag(scenario, featureKey, newValue)
             .then((result) => {
                 if (result.success) {
                     setFeatures(prev => ({ ...prev, [featureKey]: newValue }));
                 } else {
-                    loadData();
+                    console.error('Failed to update feature:', result.error);
+                    loadData(); // Reload to show actual state
                 }
             })
-            .catch(() => loadData());
+            .catch((error) => {
+                console.error('Failed to update feature:', error);
+                loadData();
+            })
+            .finally(() => {
+                setUpdating(prev => ({ ...prev, [featureKey]: false }));
+            });
     };
 
     const setEffortLevel = (level: string) => {
+        if (updating.effort || level === effort) return; // Prevent rapid clicks or no-ops
+
+        setUpdating(prev => ({ ...prev, effort: true }));
+
         api.setScenarioStringFlag(scenario, 'thinking_effort', level)
             .then((result) => {
                 if (result.success) {
                     setEffort(level);
                 } else {
+                    console.error('Failed to update effort level:', result.error);
                     loadData();
                 }
             })
-            .catch(() => loadData());
+            .catch((error) => {
+                console.error('Failed to update effort level:', error);
+                loadData();
+            })
+            .finally(() => {
+                setUpdating(prev => ({ ...prev, effort: false }));
+            });
     };
 
     useEffect(() => {
@@ -87,7 +117,12 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
     }, [scenario]);
 
     if (loading) {
-        return null;
+        return (
+            <Box sx={{ display: 'flex', flexDirection: 'column', py: 2, gap: 2, alignItems: 'center', justifyContent: 'center', minHeight: 100 }}>
+                <CircularProgress size={24} />
+                <Typography variant="body2" color="text.secondary">Loading features...</Typography>
+            </Box>
+        );
     }
 
     return (
@@ -107,6 +142,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                         value={effort}
                         exclusive
                         size="small"
+                        disabled={updating.effort}
                         onChange={(_, value) => value !== null && setEffortLevel(value)}
                         sx={toggleButtonGroupStyle}
                     >
@@ -134,11 +170,13 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                     {PLUGIN_FEATURES.map((feature) => {
                         const isEnabled = features[feature.key] || false;
+                        const isUpdating = updating[feature.key] || false;
                         return (
                             <Tooltip key={feature.key} title={feature.description} arrow>
                                 <Chip
                                     label={`${feature.label} · ${isEnabled ? 'On' : 'Off'}`}
-                                    onClick={() => toggleFeature(feature.key)}
+                                    onClick={() => !isUpdating && toggleFeature(feature.key)}
+                                    disabled={isUpdating}
                                     sx={{
                                         height: 32,
                                         bgcolor: isEnabled ? 'primary.main' : 'action.hover',
@@ -146,6 +184,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                                         fontWeight: isEnabled ? 600 : 400,
                                         border: isEnabled ? 'none' : '1px solid',
                                         borderColor: 'divider',
+                                        opacity: isUpdating ? 0.6 : 1,
                                         '&:hover': {
                                             bgcolor: isEnabled ? 'primary.dark' : 'action.selected',
                                         },
