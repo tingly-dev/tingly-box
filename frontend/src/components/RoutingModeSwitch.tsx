@@ -32,34 +32,47 @@ export const RoutingModeSwitch: React.FC<RoutingModeSwitchProps> = ({
                 value={smartEnabled ? 'smart' : 'direct'}
                 exclusive
                 onChange={handleModeChange}
-                size="small"
+                orientation="vertical"
                 sx={{
                     '& .MuiToggleButton-root': {
-                        padding: '4px 8px',
-                        fontSize: '0.75rem',
+                        padding: '6px 10px',
+                        fontSize: '0.7rem',
                         fontWeight: 600,
                         textTransform: 'none',
                         border: '1px solid',
                         borderColor: 'divider',
+                        borderRadius: 1,
+                        minWidth: 60,
+                    },
+                    '& .MuiToggleButton-root:first-of-type': {
+                        borderBottomLeftRadius: 0,
+                        borderBottomRightRadius: 0,
+                        marginBottom: '-1px',
+                    },
+                    '& .MuiToggleButton-root:last-of-type': {
+                        borderTopLeftRadius: 0,
+                        borderTopRightRadius: 0,
                     },
                     '& .MuiToggleButton-root.Mui-selected': {
-                        color: 'white',
-                    },
-                    '& .MuiToggleButton-root:first-of-type.Mui-selected': {
-                        backgroundColor: 'primary.main',
-                        '&:hover': {
-                            backgroundColor: 'primary.dark',
-                        },
-                    },
-                    '& .MuiToggleButton-root:last-of-type.Mui-selected': {
                         backgroundColor: 'secondary.main',
+                        color: 'white',
+                        borderColor: 'secondary.main',
                         '&:hover': {
                             backgroundColor: 'secondary.dark',
                         },
                     },
                     '& .MuiToggleButton-root:not(.Mui-selected)': {
                         color: 'text.secondary',
-                        backgroundColor: 'action.hover',
+                        backgroundColor: 'background.paper',
+                        borderColor: 'divider',
+                        '&:hover': {
+                            backgroundColor: 'action.hover',
+                        },
+                    },
+                    '& .MuiToggleButton-root:disabled': {
+                        borderColor: 'action.disabled',
+                        color: 'text.disabled',
+                        backgroundColor: 'action.disabledBackground',
                     },
                 }}
             >

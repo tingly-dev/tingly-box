@@ -4,7 +4,6 @@ import {
     Info as InfoIcon,
     Warning as WarningIcon,
     ExpandMore as ExpandMoreIcon,
-    Settings as SettingsIcon,
 } from '@mui/icons-material';
 import {
     Box,
@@ -22,6 +21,7 @@ import { styled } from '@mui/material/styles';
 import React from 'react';
 import type { Provider } from '../types/provider';
 import { SmartOpNode, ActionAddNode, SmartFallbackNode, ConnectionLine, ModelNode, NodeContainer, ProviderNode } from '@/components/nodes';
+import { RoutingModeSwitch } from '@/components/RoutingModeSwitch';
 import type { ConfigRecord } from './RoutingGraphTypes.ts';
 
 // Use same style constants as RuleGraph for consistency
@@ -76,11 +76,12 @@ interface SmartRoutingGraphProps {
     // Additional props matching RoutingGraph
     saving?: boolean;
     collapsible?: boolean;
-    allowToggleRule?: boolean;
     expanded?: boolean;
     onToggleExpanded?: () => void;
     extraActions?: React.ReactNode;
     onUpdateRecord?: (field: keyof ConfigRecord, value: any) => void;
+    // Routing mode switch
+    onSwitchRoutingMode?: () => void;
 }
 
 // Styled Card matching RuleGraph style
@@ -114,7 +115,7 @@ const StyledCard = styled(Card, {
 
 const SummarySection = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'collapsible',
-})<{ collapsible?: boolean }>(({ theme, collapsible }) => ({
+})<{ collapsible?: boolean }>(({ collapsible }) => ({
     display: 'flex',
     flexWrap: 'wrap',
     alignItems: 'center',
@@ -157,11 +158,11 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
     onProviderNodeClick,
     saving = false,
     collapsible = false,
-    allowToggleRule = true,
     expanded = true,
     onToggleExpanded,
     extraActions,
     onUpdateRecord,
+    onSwitchRoutingMode,
 }) => {
     const smartRouting = record.smartRouting || [];
     const isExpanded = !collapsible || expanded;
@@ -205,29 +206,6 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                             model = {record.requestModel || 'Unspecified'}
                         </Typography>
                     </Tooltip>
-                    {/* Convert to Direct Routing Button - placed after model in smart mode */}
-                    <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={<SettingsIcon />}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            // Disable smart routing to convert to direct mode
-                            onUpdateRecord?.('smartEnabled', false);
-                        }}
-                        disabled={!active || saving}
-                        sx={{
-                            borderColor: 'text.secondary',
-                            color: 'text.secondary',
-                            height: 24,
-                            '&:hover': {
-                                borderColor: 'text.primary',
-                                backgroundColor: 'action.hover',
-                            },
-                        }}
-                    >
-                        To Direct Routing
-                    </Button>
                     {/* Rule Description - moved to top bar with auto-truncate, after Rules chip */}
                     {record.description && (
                         <Tooltip title={record.description} arrow>
@@ -316,8 +294,8 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                 <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
                                             </Tooltip>
                                         </Box>
-                                        {/* Node + Arrow as a row */}
-                                        <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
+                                        {/* Node + Switch as a row */}
+                                        <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 2 }}>
                                             <NodeContainer>
                                                 <ModelNode
                                                     active={active}
@@ -329,13 +307,24 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                     }}
                                                 />
                                             </NodeContainer>
-                                            {/* Arrow to rules section */}
-                                            <ConnectionLine>
-                                                <ArrowDownIcon sx={{ transform: 'rotate(270deg)' }} />
-                                            </ConnectionLine>
+
+                                            {/* Routing Mode Toggle Switch - to the right of NodeContainer */}
+                                            <RoutingModeSwitch
+                                                smartEnabled={true}
+                                                active={active}
+                                                disabled={saving}
+                                                onSwitch={() => onSwitchRoutingMode?.()}
+                                            />
                                         </Box>
                                     </Box>
 
+                                    {/* Arrow to rules section - aligned to center of ModelNode */}
+                                    <Box sx={{ flex: 0, display: 'flex', alignItems: 'center' }}>
+                                        <ConnectionLine>
+                                            <ArrowDownIcon sx={{ transform: 'rotate(270deg)' }} />
+                                        </ConnectionLine>
+                                    </Box>
+                                    
                         {/* Rules section on the right */}
                         <Box sx={{ flex: 1, display: 'flex', alignItems:"flex-start", flexDirection: 'column', gap: 1.5 }}>
                             {/* Smart Rules */}

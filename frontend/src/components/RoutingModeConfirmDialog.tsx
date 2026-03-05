@@ -1,5 +1,4 @@
 import {
-    Alert,
     Box,
     Button,
     Dialog,
@@ -8,7 +7,6 @@ import {
     DialogTitle,
     Typography,
 } from '@mui/material';
-import WarningIcon from '@mui/icons-material/Warning';
 import React from 'react';
 
 interface RoutingModeConfirmDialogProps {
@@ -41,39 +39,13 @@ export const RoutingModeConfirmDialog: React.FC<RoutingModeConfirmDialogProps> =
             <DialogTitle>Switch to Direct Routing?</DialogTitle>
             <DialogContent>
                 <Box sx={{ mb: 2 }}>
-                    {hasRules ? (
-                        <Alert severity="warning" icon={<WarningIcon fontSize="inherit" />} sx={{ mb: 2 }}>
-                            You have {ruleCount} smart {ruleCount === 1 ? 'rule' : 'rules'} configured.
-                        </Alert>
-                    ) : (
-                        <Alert severity="info" sx={{ mb: 2 }}>
-                            No smart rules will be affected.
-                        </Alert>
-                    )}
-
                     <Typography variant="body1" color="text.primary">
                         {hasRules
-                            ? "Switching to Direct Routing will remove all smart rules. Your default providers will be kept as direct routing providers."
-                            : "Switch to Direct Routing mode. Your providers will handle requests directly."
+                            ? `You have ${ruleCount} smart ${ruleCount === 1 ? 'rule' : 'rules'} configured. They will be preserved but inactive in Direct mode.`
+                            : "Switch to Direct Routing mode."
                         }
                     </Typography>
                 </Box>
-
-                {hasRules && (
-                    <Box
-                        sx={{
-                            p: 2,
-                            backgroundColor: 'warning.50',
-                            borderRadius: 1,
-                            border: '1px solid',
-                            borderColor: 'warning.200',
-                        }}
-                    >
-                        <Typography variant="caption" color="text.secondary">
-                            <strong>Tip:</strong> Consider exporting your smart rules before switching if you might need them later.
-                        </Typography>
-                    </Box>
-                )}
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2 }}>
                 <Button onClick={onCancel} color="inherit">

@@ -91,6 +91,14 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     // Delete confirmation state
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
+    // Handler: Switch routing mode (simple toggle, preserves data)
+    const handleRoutingModeSwitch = useCallback(async () => {
+        if (!configRecord) return;
+
+        // Simply toggle the smartEnabled flag, preserve all data
+        await updateField(configRecord, setConfigRecord, 'smartEnabled', !configRecord.smartEnabled);
+    }, [configRecord, updateField]);
+
     // Handler: Delete provider
     const handleDeleteProvider = useCallback(
         async (_recordId: string, providerId: string) => {
@@ -203,6 +211,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                     onAddDefaultProvider={handleAddProviderButtonClick}
                     onDeleteDefaultProvider={smartHandlers.handleDeleteDefaultProvider}
                     onProviderNodeClick={handleProviderNodeClick}
+                    onSwitchRoutingMode={handleRoutingModeSwitch}
                 />
             ) : (
                 <RoutingGraph
@@ -224,6 +233,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                     onDeleteSmartRule={smartHandlers.handleDeleteSmartRule}
                     onAddServiceToSmartRule={handleAddServiceToSmartRuleByUuid}
                     onDeleteServiceFromSmartRule={smartHandlers.handleDeleteServiceFromSmartRule}
+                    onSwitchRoutingMode={handleRoutingModeSwitch}
                 />
             )}
 
