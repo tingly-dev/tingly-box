@@ -931,12 +931,12 @@ export const api = {
 
     // Get all ImBot settings
     getImBotSettingsList: async (): Promise<any> => {
-        return fetchUIAPI('/imbot/settings');
+        return fetchUIAPI('/imbot-settings');
     },
 
     // Get a specific ImBot setting by UUID
     getImBotSetting: async (uuid: string): Promise<any> => {
-        return fetchUIAPI(`/imbot/settings/${uuid}`);
+        return fetchUIAPI(`/imbot-settings/${uuid}`);
     },
 
     // Create a new ImBot setting
@@ -951,7 +951,7 @@ export const api = {
         enabled?: boolean;
         token?: string;
     }): Promise<any> => {
-        return fetchUIAPI('/imbot/settings', {
+        return fetchUIAPI('/imbot-settings', {
             method: 'POST',
             body: JSON.stringify(data),
         });
@@ -968,7 +968,7 @@ export const api = {
         bash_allowlist?: string[];
         enabled?: boolean;
     }): Promise<any> => {
-        return fetchUIAPI(`/imbot/settings/${uuid}`, {
+        return fetchUIAPI(`/imbot-settings/${uuid}`, {
             method: 'PUT',
             body: JSON.stringify(data),
         });
@@ -976,26 +976,26 @@ export const api = {
 
     // Delete an ImBot setting
     deleteImBotSetting: async (uuid: string): Promise<any> => {
-        return fetchUIAPI(`/imbot/settings/${uuid}`, {
+        return fetchUIAPI(`/imbot-settings/${uuid}`, {
             method: 'DELETE',
         });
     },
 
     // Toggle an ImBot setting's enabled status
     toggleImBotSetting: async (uuid: string): Promise<any> => {
-        return fetchUIAPI(`/imbot/settings/${uuid}/toggle`, {
+        return fetchUIAPI(`/imbot-settings/${uuid}/toggle`, {
             method: 'POST',
         });
     },
 
     // Get all supported ImBot platforms
     getImBotPlatforms: async (): Promise<any> => {
-        return fetchUIAPI('/imbot/platforms');
+        return fetchUIAPI('/imbot-platforms');
     },
 
     // Get platform auth configuration
     getImBotPlatformConfig: async (platform: string): Promise<any> => {
-        return fetchUIAPI(`/imbot/platform-config?platform=${platform}`);
+        return fetchUIAPI(`/imbot-platform-config?platform=${platform}`);
     },
 
     // ============================================

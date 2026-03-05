@@ -1253,15 +1253,19 @@ func (c *Config) GetToolInterceptorConfigForProvider(providerUUID string) (*typ.
 
 	// If provider has config, merge with global (provider takes precedence)
 	if providerConfig != nil {
-		effective := &typ.ToolInterceptorConfig{
-			PreferLocalSearch: global.PreferLocalSearch,
-			SearchAPI:         global.SearchAPI,
-			SearchKey:         global.SearchKey,
-			MaxResults:        global.MaxResults,
-			ProxyURL:          global.ProxyURL,
-			MaxFetchSize:      global.MaxFetchSize,
-			FetchTimeout:      global.FetchTimeout,
-			MaxURLLength:      global.MaxURLLength,
+		// Start with an empty config or copy from global if available
+		effective := &typ.ToolInterceptorConfig{}
+
+		// Copy global config values if global is not nil
+		if global != nil {
+			effective.PreferLocalSearch = global.PreferLocalSearch
+			effective.SearchAPI = global.SearchAPI
+			effective.SearchKey = global.SearchKey
+			effective.MaxResults = global.MaxResults
+			effective.ProxyURL = global.ProxyURL
+			effective.MaxFetchSize = global.MaxFetchSize
+			effective.FetchTimeout = global.FetchTimeout
+			effective.MaxURLLength = global.MaxURLLength
 		}
 
 		// Apply provider overrides

@@ -12,10 +12,10 @@ func (s *Server) resolveToolInterceptor(provider *typ.Provider, hasBuiltInWebSea
 		interceptorConfig = s.toolInterceptor.GetConfigForProvider(provider)
 	}
 
-	shouldIntercept = interceptorConfig != nil && (interceptorConfig.PreferLocalSearch || !hasBuiltInWebSearch)
+	shouldIntercept = interceptorConfig != nil && (bool(interceptorConfig.PreferLocalSearch) || !hasBuiltInWebSearch)
 	shouldStripTools = interceptorConfig == nil && !hasBuiltInWebSearch
 
-	if interceptorConfig != nil && interceptorConfig.PreferLocalSearch {
+	if interceptorConfig != nil && bool(interceptorConfig.PreferLocalSearch) {
 		logrus.Debugf("Tool interceptor active for provider %s (prefer_local_search enabled)", provider.Name)
 	} else if shouldIntercept {
 		logrus.Debugf("Tool interceptor active for provider %s (no built-in web_search)", provider.Name)

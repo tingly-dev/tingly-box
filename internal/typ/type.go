@@ -1,12 +1,50 @@
 package typ
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 )
+
+// FlexibleBool is a boolean type that can unmarshal from both bool and int (0/1)
+// This handles cases where JSON data may contain numeric values instead of booleans
+type FlexibleBool bool
+
+// UnmarshalJSON implements json.Unmarshaler for FlexibleBool
+func (fb *FlexibleBool) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as boolean first
+	var b bool
+	if err := json.Unmarshal(data, &b); err == nil {
+		*fb = FlexibleBool(b)
+		return nil
+	}
+
+	// Try to unmarshal as number (0 or 1)
+	var n float64
+	if err := json.Unmarshal(data, &n); err == nil {
+		*fb = FlexibleBool(n != 0)
+		return nil
+	}
+
+	// Try to unmarshal as string
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		*fb = FlexibleBool(s == "true" || s == "1")
+		return nil
+	}
+
+	// If all attempts fail, use false as default
+	*fb = false
+	return nil
+}
+
+// MarshalJSON implements json.Marshaler for FlexibleBool
+func (fb FlexibleBool) MarshalJSON() ([]byte, error) {
+	return json.Marshal(bool(fb))
+}
 
 // RuleScenario represents the scenario for a routing rule
 type RuleScenario string
@@ -71,7 +109,7 @@ type OAuthDetail struct {
 
 // ToolInterceptorConfig contains configuration for tool interceptor (search & fetch)
 type ToolInterceptorConfig struct {
-	PreferLocalSearch bool   `json:"prefer_local_search,omitempty"` // Prefer local tool interception even if provider has built-in search
+	PreferLocalSearch FlexibleBool `json:"prefer_local_search,omitempty"` // Prefer local tool interception even if provider has built-in search
 	SearchAPI         string `json:"search_api,omitempty"`          // "brave" or "google"
 	SearchKey         string `json:"search_key,omitempty"`          // API key for search service
 	MaxResults        int    `json:"max_results,omitempty"`         // Max search results to return (default: 10)
