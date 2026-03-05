@@ -341,11 +341,9 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                                 index={index}
                                                                 active={active}
                                                                 onEdit={() => {
-                                                                    console.log('SmartRoutingGraph: onEdit called for rule:', rule.uuid, rule.description);
                                                                     onEditSmartRule(rule.uuid);
                                                                 }}
                                                                 onDelete={() => {
-                                                                    console.log('SmartRoutingGraph: onDelete called for rule:', rule.uuid);
                                                                     onDeleteSmartRule(rule.uuid);
                                                                 }}
                                                             />
@@ -381,7 +379,6 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                                                 providersData={providers}
                                                                                 active={active && service.active !== false}
                                                                                 onDelete={() => {
-                                                                                    console.log('SmartRoutingGraph: onDelete clicked for service:', service.uuid, 'rule:', rule.uuid, 'active:', active, 'service.active:', service.active);
                                                                                     onDeleteServiceFromSmartRule(rule.uuid, service.uuid);
                                                                                 }}
                                                                                 onNodeClick={() => onProviderNodeClick?.(service.uuid)}

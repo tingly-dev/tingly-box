@@ -34,10 +34,13 @@ export function serviceToConfigProvider(service: any): ConfigProvider {
 
 /**
  * Converts smart routing services to ensure UUID presence
+ * NOTE: Also ensures smart routing rules have UUIDs (backend may not preserve them)
  */
 export function normalizeSmartRoutingServices(smartRouting: SmartRouting[]): SmartRouting[] {
     return smartRouting.map((routing) => ({
         ...routing,
+        // Ensure the routing itself has a UUID (backend might not preserve it)
+        uuid: routing.uuid || uuidv4(),
         services: (routing.services || []).map((service: ConfigProvider) => ({
             ...service,
             uuid: service.id || service.uuid || uuidv4(),
@@ -68,13 +71,30 @@ export function ruleToConfigRecord(rule: Rule): ConfigRecord {
 
 /**
  * Creates a deep copy of a SmartRouting object
+ * NOTE: Deep clone is critical to prevent mutation of source data when editing
  */
 export function cloneSmartRouting(smartRouting: SmartRouting): SmartRouting {
     return {
         uuid: smartRouting.uuid,
         description: smartRouting.description,
-        ops: smartRouting.ops.map((op) => ({ ...op })),
-        services: smartRouting.services.map((service) => ({ ...service })),
+        // Deep clone ops to prevent mutation of nested objects (especially meta)
+        ops: smartRouting.ops.map((op) => ({
+            uuid: op.uuid,
+            position: op.position,
+            operation: op.operation,
+            value: op.value,
+            meta: op.meta ? { ...op.meta } : undefined,
+        })),
+        // Deep clone services to prevent mutation
+        services: smartRouting.services.map((service) => ({
+            uuid: service.uuid,
+            provider: service.provider,
+            model: service.model,
+            isManualInput: service.isManualInput,
+            weight: service.weight,
+            active: service.active,
+            time_window: service.time_window,
+        })),
     };
 }
 
@@ -83,7 +103,7 @@ export function cloneSmartRouting(smartRouting: SmartRouting): SmartRouting {
  */
 export function createEmptySmartRouting(): SmartRouting {
     return {
-        uuid: crypto.randomUUID(),
+        uuid: uuidv4(),  // Use uuid library instead of crypto.randomUUID() for better compatibility
         description: 'Smart Routing',
         ops: [],
         services: [],
