@@ -33,6 +33,7 @@ type BotHandler struct {
 	manager          *imbot.Manager
 	imPrompter       *IMPrompter
 	fileStore        *FileStore
+	interaction      *imbot.InteractionHandler // New interaction handler
 
 	// runningCancel tracks cancel functions for active executions per chatID
 	runningCancel   map[string]context.CancelFunc
@@ -79,6 +80,9 @@ func NewBotHandler(
 	// Create IM prompter for permission requests
 	imPrompter := NewIMPrompter(manager)
 
+	// Create interaction handler for platform-agnostic interactions
+	interactionHandler := imbot.NewInteractionHandler(manager)
+
 	// Create file store with proxy support
 	fileStore, err := NewFileStoreWithProxy(botSetting.ProxyURL)
 	if err != nil {
@@ -102,6 +106,7 @@ func NewBotHandler(
 		manager:          manager,
 		imPrompter:       imPrompter,
 		fileStore:        fileStore,
+		interaction:      interactionHandler,
 		runningCancel:    make(map[string]context.CancelFunc),
 		pendingBinds:     make(map[string]*PendingBind),
 	}
@@ -119,7 +124,20 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 		return
 	}
 
-	// Check if this is a callback query
+	// NEW: Check if this is an interaction response first
+	// This handles both callback queries (interactive mode) and text replies (text mode)
+	resp, err := h.interaction.HandleMessage(msg)
+	if err == nil && resp != nil {
+		// Message was handled as an interaction response
+		logrus.WithFields(logrus.Fields{
+			"request_id": resp.RequestID,
+			"action":     resp.Action.Type,
+			"chat_id":    chatID,
+		}).Debug("Interaction response handled")
+		return
+	}
+
+	// OLD: Check if this is a legacy callback query (for backward compatibility)
 	if isCallback, _ := msg.Metadata["is_callback"].(bool); isCallback {
 		h.handleCallbackQuery(bot, chatID, msg)
 		return
@@ -1999,4 +2017,73 @@ func (h *BotHandler) handleCreateConfirm(hCtx HandlerContext, path string) {
 	if err != nil {
 		logrus.WithError(err).Error("Failed to send create confirmation")
 	}
+}
+
+// RequestInteraction sends an interaction request using the new interaction system
+// This is a convenience method for BotHandler to request platform-agnostic interactions
+func (h *BotHandler) RequestInteraction(ctx context.Context, hCtx HandlerContext, req imbot.InteractionRequest) (*imbot.InteractionResponse, error) {
+	// Set the bot and platform info from the handler context
+	req.BotUUID = hCtx.BotUUID
+	req.Platform = hCtx.Platform
+	req.ChatID = hCtx.ChatID
+
+	// Set default timeout if not specified
+	if req.Timeout == 0 {
+		req.Timeout = 5 * time.Minute
+	}
+
+	return h.interaction.RequestInteraction(ctx, req)
+}
+
+// RequestConfirmation requests a yes/no confirmation from the user
+// Uses the new interaction system with platform-agnostic UI
+func (h *BotHandler) RequestConfirmation(ctx context.Context, hCtx HandlerContext, message, requestID string) (bool, error) {
+	builder := imbot.NewInteractionBuilder()
+	builder.AddConfirm(requestID)
+
+	req := imbot.InteractionRequest{
+		ID:           requestID,
+		Message:      message,
+		ParseMode:    imbot.ParseModeMarkdown,
+		Mode:         imbot.ModeAuto,
+		Interactions: builder.Build(),
+		Timeout:      5 * time.Minute,
+	}
+
+	resp, err := h.RequestInteraction(ctx, hCtx, req)
+	if err != nil {
+		return false, err
+	}
+
+	return resp.IsConfirm(), nil
+}
+
+// RequestOptionSelection requests the user to select from a list of options
+// Uses the new interaction system with platform-agnostic UI
+func (h *BotHandler) RequestOptionSelection(ctx context.Context, hCtx HandlerContext, message, requestID string, options []imbot.Option) (int, *imbot.Interaction, error) {
+	builder := imbot.NewInteractionBuilder()
+	builder.AddOptions(requestID, options)
+
+	req := imbot.InteractionRequest{
+		ID:           requestID,
+		Message:      message,
+		ParseMode:    imbot.ParseModeMarkdown,
+		Mode:         imbot.ModeAuto,
+		Interactions: builder.Build(),
+		Timeout:      5 * time.Minute,
+	}
+
+	resp, err := h.RequestInteraction(ctx, hCtx, req)
+	if err != nil {
+		return -1, nil, err
+	}
+
+	// Find the selected index
+	for i, opt := range options {
+		if opt.Value == resp.Action.Value {
+			return i, &resp.Action, nil
+		}
+	}
+
+	return -1, &resp.Action, nil
 }

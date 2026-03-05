@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/imbot/internal/core"
 	"github.com/tingly-dev/tingly-box/imbot/internal/interaction"
 )
 
@@ -96,7 +96,7 @@ func (a *Adapter) BuildFallbackText(message string, interactions []interaction.I
 }
 
 // ParseResponse parses Discord interactions or returns nil for text handling
-func (a *Adapter) ParseResponse(msg imbot.Message) (*interaction.InteractionResponse, error) {
+func (a *Adapter) ParseResponse(msg core.Message) (*interaction.InteractionResponse, error) {
 	// Check if this is a Discord component interaction
 	// We'll try to extract custom_id from the metadata
 	if customID, ok := msg.Metadata["custom_id"].(string); ok {
@@ -131,7 +131,7 @@ func (a *Adapter) ParseResponse(msg imbot.Message) (*interaction.InteractionResp
 }
 
 // UpdateMessage edits a Discord message
-func (a *Adapter) UpdateMessage(ctx context.Context, bot imbot.Bot, chatID, messageID, text string, interactions []interaction.Interaction) error {
+func (a *Adapter) UpdateMessage(ctx context.Context, bot core.Bot, chatID, messageID, text string, interactions []interaction.Interaction) error {
 	// Discord message editing requires the Discord-specific bot interface
 	// For now, return not supported as we need to add this to the imbot interface
 	return interaction.ErrNotSupported

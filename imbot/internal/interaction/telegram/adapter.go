@@ -7,7 +7,7 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/imbot/internal/core"
 	"github.com/tingly-dev/tingly-box/imbot/internal/interaction"
 )
 
@@ -72,7 +72,7 @@ func (a *Adapter) BuildFallbackText(message string, interactions []interaction.I
 }
 
 // ParseResponse parses Telegram callback queries or returns nil for text handling
-func (a *Adapter) ParseResponse(msg imbot.Message) (*interaction.InteractionResponse, error) {
+func (a *Adapter) ParseResponse(msg core.Message) (*interaction.InteractionResponse, error) {
 	// Check if this is a callback query
 	if isCallback, _ := msg.Metadata["is_callback"].(bool); isCallback {
 		if callbackData, ok := msg.Metadata["callback_data"].(string); ok {
@@ -109,22 +109,10 @@ func (a *Adapter) ParseResponse(msg imbot.Message) (*interaction.InteractionResp
 }
 
 // UpdateMessage edits a Telegram message
-func (a *Adapter) UpdateMessage(ctx context.Context, bot imbot.Bot, chatID, messageID, text string, interactions []interaction.Interaction) error {
-	tgBot, ok := imbot.AsTelegramBot(bot)
-	if !ok {
-		return interaction.ErrNotSupported
-	}
-
-	var markup *tgbotapi.InlineKeyboardMarkup
-	if len(interactions) > 0 {
-		m, err := a.BuildMarkup(interactions)
-		if err != nil {
-			return err
-		}
-		markup = m.(*tgbotapi.InlineKeyboardMarkup)
-	}
-
-	return tgBot.EditMessageWithKeyboard(ctx, chatID, messageID, text, markup)
+func (a *Adapter) UpdateMessage(ctx context.Context, bot core.Bot, chatID, messageID, text string, interactions []interaction.Interaction) error {
+	// Need to use platform-specific bot interface
+	// This is a placeholder - actual implementation would use the platform adapter
+	return interaction.ErrNotSupported
 }
 
 // keyboardBuilder helps build Telegram inline keyboards

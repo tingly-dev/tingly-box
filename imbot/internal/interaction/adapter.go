@@ -3,7 +3,7 @@ package interaction
 import (
 	"context"
 
-	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/imbot/internal/core"
 )
 
 // Adapter converts platform-agnostic interactions to platform-specific format
@@ -51,13 +51,13 @@ type Adapter interface {
 	// - (*InteractionResponse, nil) if successfully parsed
 	// - (nil, nil) if not an interaction response (delegate to Handler)
 	// - (nil, error) if parsing failed
-	ParseResponse(msg imbot.Message) (*InteractionResponse, error)
+	ParseResponse(msg core.Message) (*InteractionResponse, error)
 
 	// UpdateMessage updates a message (optional, for platforms that support it)
 	//
 	// If interactions is nil/empty, removes any existing markup.
 	// Returns error if platform doesn't support message editing.
-	UpdateMessage(ctx context.Context, bot imbot.Bot, chatID, messageID, text string, interactions []Interaction) error
+	UpdateMessage(ctx context.Context, bot core.Bot, chatID, messageID, text string, interactions []Interaction) error
 
 	// CanEditMessages returns true if platform supports message editing
 	CanEditMessages() bool
@@ -88,7 +88,7 @@ func (a *BaseAdapter) CanEditMessages() bool {
 }
 
 // UpdateMessage default implementation returns ErrNotSupported
-func (a *BaseAdapter) UpdateMessage(ctx context.Context, bot imbot.Bot, chatID, messageID, text string, interactions []Interaction) error {
+func (a *BaseAdapter) UpdateMessage(ctx context.Context, bot core.Bot, chatID, messageID, text string, interactions []Interaction) error {
 	if !a.canEditMessages {
 		return ErrNotSupported
 	}

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/imbot/internal/core"
 )
 
 // ActionType represents the type of user action
@@ -68,13 +68,16 @@ type Option struct {
 
 // InteractionRequest represents a request for user interaction
 type InteractionRequest struct {
-	ID           string         // Unique request ID
-	Message      string         // Main message text
-	ParseMode    imbot.ParseMode // Text formatting
-	Mode         InteractionMode // Interaction mode (auto/interactive/text)
-	Interactions []Interaction  // Interactive elements
-	Timeout      time.Duration  // Request timeout
-	Meta         map[string]any // Additional metadata
+	ID           string              // Unique request ID
+	ChatID       string              // Target chat ID
+	Platform     core.Platform       // Target platform
+	BotUUID      string              // Bot UUID to use
+	Message      string              // Main message text
+	ParseMode    core.ParseMode     // Text formatting
+	Mode         InteractionMode     // Interaction mode (auto/interactive/text)
+	Interactions []Interaction       // Interactive elements
+	Timeout      time.Duration       // Request timeout
+	Meta         map[string]any      // Additional metadata
 }
 
 // Validate validates the interaction request

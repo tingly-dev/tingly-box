@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/imbot/internal/core"
 	"github.com/tingly-dev/tingly-box/imbot/internal/interaction"
 )
 
@@ -45,12 +45,12 @@ func (a *Adapter) BuildFallbackText(message string, interactions []interaction.I
 }
 
 // ParseResponse returns nil - text replies are handled by Handler.parseTextResponse
-func (a *Adapter) ParseResponse(msg imbot.Message) (*interaction.InteractionResponse, error) {
+func (a *Adapter) ParseResponse(msg core.Message) (*interaction.InteractionResponse, error) {
 	// All text replies are handled by Handler.parseTextResponse
 	return nil, nil
 }
 
 // UpdateMessage is not supported for DingTalk stream mode
-func (a *Adapter) UpdateMessage(ctx context.Context, bot imbot.Bot, chatID, messageID, text string, interactions []interaction.Interaction) error {
+func (a *Adapter) UpdateMessage(ctx context.Context, bot core.Bot, chatID, messageID, text string, interactions []interaction.Interaction) error {
 	return interaction.ErrNotSupported
 }
