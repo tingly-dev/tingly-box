@@ -376,6 +376,23 @@ func BuildCreateConfirmKeyboard(path string) (*imbot.KeyboardBuilder, string) {
 	return kb, text
 }
 
+// BuildBindConfirmKeyboard builds the confirmation keyboard for binding to current directory
+func BuildBindConfirmKeyboard() *imbot.KeyboardBuilder {
+	return imbot.NewKeyboardBuilder().
+		AddRow(
+			imbot.CallbackButton("✓ Confirm", imbot.FormatCallbackData("bind", "confirm")),
+			imbot.CallbackButton("✏️ Change", imbot.FormatCallbackData("bind", "custom")),
+		).
+		AddRow(
+			imbot.CallbackButton("❌ Cancel", imbot.FormatCallbackData("bind", "cancel")),
+		)
+}
+
+// BuildBindConfirmPrompt returns the text for bind confirmation prompt
+func BuildBindConfirmPrompt(proposedPath string) string {
+	return fmt.Sprintf("📁 *No project bound.*\n\nBind to current directory?\n\n`%s`", proposedPath)
+}
+
 // Helper functions
 
 func getHomeDir() (string, error) {

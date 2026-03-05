@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -32,6 +33,21 @@ type BotHandler struct {
 	manager          *imbot.Manager
 	imPrompter       *IMPrompter
 	fileStore        *FileStore
+
+	// runningCancel tracks cancel functions for active executions per chatID
+	runningCancel   map[string]context.CancelFunc
+	runningCancelMu sync.RWMutex
+
+	// pendingBinds tracks bind confirmation requests for unbound chats
+	pendingBinds   map[string]*PendingBind
+	pendingBindsMu sync.RWMutex
+}
+
+// PendingBind represents a pending bind confirmation request
+type PendingBind struct {
+	OriginalMessage string
+	ProposedPath    string
+	ExpiresAt       time.Time
 }
 
 // HandlerContext contains per-message context data
@@ -86,6 +102,8 @@ func NewBotHandler(
 		manager:          manager,
 		imPrompter:       imPrompter,
 		fileStore:        fileStore,
+		runningCancel:    make(map[string]context.CancelFunc),
+		pendingBinds:     make(map[string]*PendingBind),
 	}
 }
 
@@ -139,6 +157,13 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 		return
 	}
 
+	// Check for stop commands FIRST (highest priority)
+	// Supports: /stop, stop, /clear (stop+clear)
+	if isStopCommand(hCtx.Text) {
+		h.handleStopCommand(hCtx, hCtx.Text == "/clear")
+		return
+	}
+
 	// Handle direct chat
 	if hCtx.IsDirect {
 		h.handleDirectMessage(hCtx)
@@ -147,6 +172,43 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 
 	// Handle group chat
 	h.handleGroupMessage(hCtx)
+}
+
+// isStopCommand checks if the text is a stop command
+// Supports: /stop, stop, /clear
+func isStopCommand(text string) bool {
+	trimmed := strings.ToLower(strings.TrimSpace(text))
+	return trimmed == "/stop" || trimmed == "stop" || trimmed == "/clear"
+}
+
+// handleStopCommand handles stop commands (/stop, stop, /clear)
+func (h *BotHandler) handleStopCommand(hCtx HandlerContext, clearSession bool) {
+	h.runningCancelMu.Lock()
+	cancel, exists := h.runningCancel[hCtx.ChatID]
+	h.runningCancelMu.Unlock()
+
+	if !exists {
+		// No running task
+		if clearSession {
+			// /clear always works, even if nothing running
+			h.handleClearCommand(hCtx)
+			return
+		}
+		h.SendText(hCtx, "No running task to stop.")
+		return
+	}
+
+	// Cancel the execution
+	cancel()
+	delete(h.runningCancel, hCtx.ChatID)
+
+	if clearSession {
+		// /clear also clears the session
+		h.handleClearCommand(hCtx)
+		return
+	}
+
+	h.SendText(hCtx, "🛑 Task stopped.")
 }
 
 // handleDirectMessage handles messages from direct chat
@@ -553,6 +615,12 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		Timestamp: time.Now(),
 	})
 
+	// Check if session is already running (prevent concurrent execution)
+	if sess.Status == session.StatusRunning {
+		h.SendText(hCtx, "⚠️ A task is currently running.\n\nUse `stop` or `/stop` to cancel it first.")
+		return
+	}
+
 	h.sessionMgr.SetRunning(sessionID)
 
 	// Send status message
@@ -560,7 +628,19 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 
 	// Execute with context.Background() to avoid cancellation on reconnect
 	execCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+
+	// Store cancel function for /stop command
+	h.runningCancelMu.Lock()
+	h.runningCancel[hCtx.ChatID] = cancel
+	h.runningCancelMu.Unlock()
+
+	// Clean up cancel function when done
+	defer func() {
+		h.runningCancelMu.Lock()
+		delete(h.runningCancel, hCtx.ChatID)
+		h.runningCancelMu.Unlock()
+		cancel()
+	}()
 
 	agent, err := h.agentBoot.GetDefaultAgent()
 	if err != nil {
@@ -724,6 +804,12 @@ func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, pr
 		Timestamp: time.Now(),
 	})
 
+	// Check if session is already running (prevent concurrent execution)
+	if sess.Status == session.StatusRunning {
+		h.SendText(hCtx, "⚠️ A task is currently running.\n\nUse `stop` or `/stop` to cancel it first.")
+		return
+	}
+
 	h.sessionMgr.SetRunning(sessionID)
 
 	// Send status message
@@ -731,7 +817,19 @@ func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, pr
 
 	// Execute with context
 	execCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+
+	// Store cancel function for /stop command
+	h.runningCancelMu.Lock()
+	h.runningCancel[hCtx.ChatID] = cancel
+	h.runningCancelMu.Unlock()
+
+	// Clean up cancel function when done
+	defer func() {
+		h.runningCancelMu.Lock()
+		delete(h.runningCancel, hCtx.ChatID)
+		h.runningCancelMu.Unlock()
+		cancel()
+	}()
 
 	// Get mock agent
 	mockAgent, err := h.agentBoot.GetAgent(agentboot.AgentTypeMockAgent)
@@ -855,14 +953,13 @@ func (h *BotHandler) showBotHelp(hCtx HandlerContext) {
 
 Bot Commands:
 /help, /h - Show this help
-/bot_help - Show this help
+/stop - Stop current task
+/clear - Clear context, stop task, and create new session
 /bot_bind [path] - Bind a project
 /bot_project - Show & switch projects
 /bot_status - Show session status
-/bot_clear - Clear session context
 /bot_bash <cmd> - Execute allowed bash (cd, ls, pwd)
 /bot_join <group> - Add group to whitelist
-/clear - Clear context and create new session
 /mock <msg> - Test with mock agent (permission flow)
 
 All other messages are sent to Claude Code.`, hCtx.SenderID)
@@ -871,12 +968,11 @@ All other messages are sent to Claude Code.`, hCtx.SenderID)
 
 Bot Commands:
 /help, /h - Show this help
-/bot_help - Show this help
+/stop - Stop current task
+/clear - Clear context, stop task, and create new session
 /bot bind [path], /bot_bind [path] - Bind a project to this group
 /bot_project - Show current project info
 /bot_status - Show session status
-/bot_clear - Clear session context
-/clear - Clear context and create new session
 /mock <msg> - Test with mock agent (permission flow)
 
 All other messages are sent to Claude Code.`, hCtx.ChatID)
@@ -1012,20 +1108,16 @@ func (h *BotHandler) handleClearCommand(hCtx HandlerContext) {
 	h.SendText(hCtx, fmt.Sprintf("Context cleared. New session: %s\nProject: %s", sess.ID, projectPath))
 }
 
-// showProjectSelectionOrGuidance shows project selection if user has bound projects, otherwise shows bind guidance
+// showProjectSelectionOrGuidance shows project selection if user has bound projects, otherwise shows bind confirmation
 func (h *BotHandler) showProjectSelectionOrGuidance(hCtx HandlerContext) {
 	if h.chatStore == nil {
-		h.SendText(hCtx, "No active session. Use /bot_bind <project_path> to create one.")
+		h.showBindConfirmationPrompt(hCtx, "")
 		return
 	}
 
-	// For group chats, check if there's a project bound
+	// For group chats, show bind confirmation
 	if !hCtx.IsDirect {
-		if projectPath, ok := getProjectPathForGroup(h.chatStore, hCtx.ChatID, string(imbot.PlatformTelegram)); ok {
-			h.SendText(hCtx, fmt.Sprintf("Project bound to this group:\n📁 %s\n\nPlease /clear the session to start fresh.", projectPath))
-			return
-		}
-		h.SendText(hCtx, "No project bound to this group. Use /bot_bind <path> to bind a project.")
+		h.showBindConfirmationPrompt(hCtx, "")
 		return
 	}
 
@@ -1039,7 +1131,87 @@ func (h *BotHandler) showProjectSelectionOrGuidance(hCtx HandlerContext) {
 		return
 	}
 
-	h.SendText(hCtx, "No active session. Use /bot_bind <project_path> to create one.")
+	// No projects, show bind confirmation
+	h.showBindConfirmationPrompt(hCtx, "")
+}
+
+// showBindConfirmationPrompt shows a confirmation prompt for binding to current directory
+func (h *BotHandler) showBindConfirmationPrompt(hCtx HandlerContext, originalMessage string) {
+	// Get current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = "~" // fallback
+	}
+	absPath, err := filepath.Abs(cwd)
+	if err == nil {
+		cwd = absPath
+	}
+
+	// Store pending bind request
+	h.pendingBindsMu.Lock()
+	h.pendingBinds[hCtx.ChatID] = &PendingBind{
+		OriginalMessage: originalMessage,
+		ProposedPath:    cwd,
+		ExpiresAt:       time.Now().Add(5 * time.Minute),
+	}
+	h.pendingBindsMu.Unlock()
+
+	// Send confirmation with inline keyboard
+	kb := BuildBindConfirmKeyboard()
+	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+
+	_, err = hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
+		Text: BuildBindConfirmPrompt(cwd),
+		Metadata: map[string]interface{}{
+			"replyMarkup": tgKeyboard,
+		},
+	})
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to send bind confirmation")
+	}
+}
+
+// handleBindConfirm handles the bind confirmation callback
+func (h *BotHandler) handleBindConfirm(hCtx HandlerContext) {
+	h.pendingBindsMu.RLock()
+	pending, exists := h.pendingBinds[hCtx.ChatID]
+	h.pendingBindsMu.RUnlock()
+
+	if !exists || time.Now().After(pending.ExpiresAt) {
+		h.SendText(hCtx, "Bind request expired. Please try again.")
+		delete(h.pendingBinds, hCtx.ChatID)
+		return
+	}
+
+	// Bind the project
+	err := h.chatStore.BindProject(hCtx.ChatID, string(hCtx.Platform), hCtx.BotUUID, pending.ProposedPath)
+	if err != nil {
+		h.SendText(hCtx, fmt.Sprintf("Failed to bind project: %v", err))
+		delete(h.pendingBinds, hCtx.ChatID)
+		return
+	}
+
+	// Create a new session
+	sess := h.sessionMgr.Create()
+	sessionID := sess.ID
+	h.sessionMgr.SetContext(sessionID, "project_path", pending.ProposedPath)
+	// Clear expiration for direct chat sessions
+	h.sessionMgr.Update(sessionID, func(s *session.Session) {
+		s.ExpiresAt = time.Time{} // Zero value means no expiration
+	})
+
+	if err := h.chatStore.SetSession(hCtx.ChatID, sessionID); err != nil {
+		logrus.WithError(err).Warn("Failed to save session mapping")
+	}
+
+	delete(h.pendingBinds, hCtx.ChatID)
+
+	h.SendText(hCtx, fmt.Sprintf("✅ Bound to: `%s`", pending.ProposedPath))
+
+	// If there was an original message, process it now
+	if pending.OriginalMessage != "" {
+		h.handleAgentMessage(hCtx, agentClaudeCode, pending.OriginalMessage, pending.ProposedPath)
+	}
 }
 
 // handleBotProjectCommand handles /bot project - shows current project and list with keyboard
@@ -1435,6 +1607,10 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 		}
 		subAction := parts[1]
 		switch subAction {
+		case "confirm":
+			// Confirm bind to current directory
+			h.handleBindConfirm(hCtx)
+
 		case "dir":
 			// Navigate to directory by index
 			if len(parts) < 3 {
