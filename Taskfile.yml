@@ -34,7 +34,7 @@ tasks:
     cmds:
       - task: web:dist
       - task: start
-  
+
   start:
     aliases:
       - http
@@ -48,12 +48,12 @@ tasks:
   record:
     cmds:
       - go run ./cli/tingly-box --verbose start --port 12580 --record-mode=scenario --debug --browser=false
-  
+
   swagger:
     cmds:
       - |
         curl -s http://localhost:{{.PORT}}/swagger.json > swagger.json
-  
+
   codegen:
     cmds:
       - |
@@ -63,7 +63,7 @@ tasks:
         echo ref: https://openapi-generator.tech/docs/installation
       - |
         openapi-generator-cli generate -g typescript-axios -i ./swagger.json -o ./frontend/src/client
-  
+
   go:build:
     env:
       ARCH:
@@ -76,34 +76,34 @@ tasks:
         BUILD_TIME="$(date -u '+%Y-%m-%d-%H-%M-%S' 2>/dev/null || echo 'unknown')"
         GO_VERSION="$(go version | awk '{print $3}' | sed 's/go//' 2>/dev/null || echo 'unknown')"
         PLATFORM="${OS}/${ARCH}"
-        
+
         # Build with ldflags
         mkdir -p build
         LDFLAGS="-X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME} -X main.goVersion=${GO_VERSION} -X main.platform=${PLATFORM}"
         GOOS={{.OS}} GOARCH={{.ARCH}} go build -ldflags="${LDFLAGS}" -o ./build/{{.BIN_NAME}} ./cli/tingly-box
-  
+
   go:test:
     cmds:
       - |
         go test ./internal/...
-  
+
   tests:interface:
     summary: Run Python interface tests (test_automation)
     cmds:
       - |
         python -m tests.test_automation
-  
+
   web:dev:
     cmds:
       - |
         echo "This is only for frontend dev, please start your tingly-box server too"
       - |
-        cd frontend; 
+        cd frontend;
         pnpm install
       - |
-        cd frontend; 
+        cd frontend;
         pnpm dev
-  
+
   web:build:
     aliases:
       - web:dist
@@ -120,7 +120,7 @@ tasks:
       - |
         mkdir -p internal/web/dist/
         cp -R frontend/dist/* internal/web/dist/
-  
+
   web:build:dev:
     cmds:
       - task: codegen
@@ -135,7 +135,7 @@ tasks:
       - |
         mkdir -p internal/web/dist/
         cp -R frontend/dist/* internal/web/dist/
-  
+
   check:zig:
     summary: Check if zig is installed
     cmds:
@@ -150,7 +150,7 @@ tasks:
           exit 1
         fi
         echo "Found: $(zig version)"
-  
+
   # remote-coder Service tasks
   remote-coder:run:
     summary: Run remote-coder service via tingly-box rc
@@ -160,19 +160,19 @@ tasks:
     cmds:
       - |
         go run ./cli/tingly-box rc
-  
+
   remote-coder:test:
     summary: Run tests for remote-coder service
     cmds:
       - |
         go test ./internal/remote_coder/... -v
-  
+
   remote-coder-token:build:
     summary: Build the remote-coder-token binary
     cmds:
       - |
         go build -o ./bin/remote-coder-token ./cmd/remote-coder
-  
+
   remote-coder-token:run:
     summary: Generate an API token (run via SSH)
     cmds:
@@ -195,3 +195,20 @@ tasks:
             cd - > /dev/null
           fi
         done
+
+  changelog:
+    cmds:
+      - |
+        # Find the latest release tag (excluding alpha, beta, rc, pre, etc. suffixes)
+        LATEST_RELEASE_TAG=$(git tag -l "v*[0-9]" | grep -v -e 'alpha' -e 'beta' -e 'rc' -e 'pre' -e 'snapshot' | sort -V | tail -n 1)
+
+        # If no tag is found, use HEAD~10 as default value
+        if [ -z "$LATEST_RELEASE_TAG" ]; then
+          echo "Warning: No release tag found, showing last 10 commits"
+          git --no-pager log -10 --pretty=format:"%h - %s (%an, %ar)" --graph
+        else
+          echo "Latest release tag: $LATEST_RELEASE_TAG"
+          echo ""
+          echo "Commits since $LATEST_RELEASE_TAG:"
+          git --no-pager log ${LATEST_RELEASE_TAG}..HEAD --pretty=format:"%h - %s (%an, %ar)" --graph
+        fi
