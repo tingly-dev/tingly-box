@@ -317,7 +317,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                             <GraphContainer>
                                 <GraphRow>
                                     {/* Request Model section */}
-                                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pr: 1, mt: -1, }}>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pr: 1, }}>
                                         <NodeContainer>
                                             {record.responseModel ? (
                                                 // Split display when response model is configured
