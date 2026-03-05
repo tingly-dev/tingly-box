@@ -162,3 +162,44 @@ export const StyledSmartNodePrimary = styled(Box, {
 export const StyledSmartNodeWarning = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'active',
 })<{ active: boolean }>(({ active, theme }) => baseSmartNodeStyles({ active, theme }));
+
+// Shared node layer styles for two-layer layout (ModelNode, ProviderNode)
+export const NODE_LAYER_STYLES = {
+    // Top layer - takes available space
+    topLayer: {
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+    } as const,
+    // Divider between layers
+    divider: {
+        width: '80%',
+        my: 0.5,
+    } as const,
+    // Bottom layer - compact height
+    bottomLayer: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        // Match compact toggle button/badge height
+        minHeight: 24,
+    } as const,
+    // Typography matching ModelNode's model name
+    typography: {
+        fontWeight: 600,
+        fontSize: '0.9rem',
+    } as const,
+    // Toggle button style for bottom layer
+    toggleButton: {
+        height: 24,
+        padding: '0 8px',
+        fontSize: '0.65rem',
+        fontWeight: 600,
+        textTransform: 'none' as const,
+        border: '1px solid',
+        borderRadius: 1,
+    } as const,
+};
