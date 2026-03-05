@@ -34,14 +34,15 @@ export const RoutingModeSwitch: React.FC<RoutingModeSwitchProps> = ({
                 onChange={handleModeChange}
                 orientation="vertical"
                 sx={{
+                    height: 90, // Match ModelNode height
                     '& .MuiToggleButton-root': {
-                        padding: '6px 10px',
+                        height: 45, // Half of total height
+                        padding: '4px 10px',
                         fontSize: '0.7rem',
                         fontWeight: 600,
                         textTransform: 'none',
                         border: '1px solid',
                         borderColor: 'divider',
-                        borderRadius: 1,
                         minWidth: 60,
                     },
                     '& .MuiToggleButton-root:first-of-type': {

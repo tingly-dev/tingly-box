@@ -16,7 +16,6 @@ import {
     Select,
     Stack,
     TextField,
-    Tooltip,
     Typography,
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
@@ -305,15 +304,22 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
                                                 value={op.position || ''}
                                                 label="Position"
                                                 onChange={(e) => handleOpFieldChangeAtIndex(index, 'position', e.target.value)}
+                                                MenuProps={{
+                                                    slotProps: {
+                                                        paper: {
+                                                            sx: {
+                                                                maxHeight: 300,
+                                                            },
+                                                        },
+                                                    },
+                                                }}
                                             >
                                                 <MenuItem value="">
                                                     <em>Select...</em>
                                                 </MenuItem>
                                                 {POSITION_OPTIONS.map((opt) => (
                                                     <MenuItem key={opt.value} value={opt.value}>
-                                                        <Tooltip title={opt.description} placement="right">
-                                                            <span style={{ width: '100%' }}>{opt.label}</span>
-                                                        </Tooltip>
+                                                        {opt.label}
                                                     </MenuItem>
                                                 ))}
                                             </Select>
@@ -327,15 +333,22 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
                                                 label="Operation"
                                                 onChange={(e) => handleOpFieldChangeAtIndex(index, 'operation', e.target.value)}
                                                 disabled={!op.position}
+                                                MenuProps={{
+                                                    slotProps: {
+                                                        paper: {
+                                                            sx: {
+                                                                maxHeight: 300,
+                                                            },
+                                                        },
+                                                    },
+                                                }}
                                             >
                                                 <MenuItem value="">
                                                     <em>Select...</em>
                                                 </MenuItem>
                                                 {OPERATION_OPTIONS[op.position]?.map((opt) => (
                                                     <MenuItem key={opt.value} value={opt.value}>
-                                                        <Tooltip title={opt.description} placement="right">
-                                                            <span style={{ width: '100%' }}>{opt.label}</span>
-                                                        </Tooltip>
+                                                        {opt.label}
                                                     </MenuItem>
                                                 ))}
                                             </Select>

@@ -118,12 +118,12 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                 transformOrigin={{ horizontal: 'right', vertical: 'top' }}
                 anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
             >
-                <MenuItem onClick={handleSetWildcard} sx={{ color: isWildcard ? 'primary.main' : 'text.primary' }}>
+                <MenuItem onClick={handleSetWildcard}>
                     <ListItemText sx={{ fontWeight: isWildcard ? 600 : 400 }}>
                         Match any model (* or [any])
                     </ListItemText>
                 </MenuItem>
-                <MenuItem onClick={handleSetCustom} sx={{ color: !isWildcard ? 'primary.main' : 'text.primary' }}>
+                <MenuItem onClick={handleSetCustom}>
                     <ListItemText sx={{ fontWeight: !isWildcard ? 600 : 400 }}>
                         Custom model name
                     </ListItemText>
@@ -151,10 +151,10 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                                     backgroundColor: 'transparent',
                                 },
                                 '& .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: 'primary.main',
+                                    borderColor: 'text.secondary',
                                 },
                                 '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: 'primary.dark',
+                                    borderColor: 'text.primary',
                                 },
                             }}
                         />
@@ -184,7 +184,6 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                                         </Typography>
                                     }
                                     size="small"
-                                    color="primary"
                                     variant="outlined"
                                     sx={{
                                         '& .MuiChip-label': {

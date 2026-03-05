@@ -95,9 +95,9 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
             >
                 <MenuItem onClick={handleDelete}>
                     <ListItemIcon>
-                        <DeleteIcon color="error" />
+                        <DeleteIcon />
                     </ListItemIcon>
-                    <ListItemText sx={{ color: 'error.main' }}>{t('rule.menu.deleteProvider')}</ListItemText>
+                    <ListItemText>{t('rule.menu.deleteProvider')}</ListItemText>
                 </MenuItem>
                 <MenuItem onClick={handleMenuClose} sx={{ color: 'text.secondary' }}>
                     <ListItemText>Cancel</ListItemText>

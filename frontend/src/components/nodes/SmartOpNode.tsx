@@ -166,7 +166,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                     width: '100%',
                                     p: 1,
                                     border: '1px solid',
-                                    borderColor: active ? 'primary.main' : 'divider',
+                                    borderColor: 'divider',
                                     borderRadius: 1,
                                     backgroundColor: 'background.paper',
                                     transition: 'all 0.2s',
@@ -179,7 +179,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                     variant="body2"
                                     sx={{
                                         fontSize: '0.8rem',
-                                        color: active ? 'primary.main' : 'text.secondary',
+                                        color: 'text.secondary',
                                         fontWeight: 500,
                                         overflow: 'hidden',
                                         textOverflow: 'ellipsis',
@@ -219,9 +219,9 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
             >
                 <MenuItem onClick={handleDelete} disabled={!active}>
                     <ListItemIcon>
-                        <DeleteIcon color="error"/>
+                        <DeleteIcon />
                     </ListItemIcon>
-                    <ListItemText sx={{color: 'error.main'}}>
+                    <ListItemText>
                         {t('rule.menu.deleteSmartRule')}
                     </ListItemText>
                 </MenuItem>

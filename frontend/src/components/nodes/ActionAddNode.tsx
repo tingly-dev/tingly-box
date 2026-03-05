@@ -39,7 +39,7 @@ const StyledAddProviderNode = styled(Box, {
     cursor: active ? 'pointer' : 'default',
     opacity: active ? 1 : 0.5,
     '&:hover': active ? {
-        borderColor: warning ? 'warning.main' : 'primary.main',
+        borderColor: 'text.secondary',
         backgroundColor: 'action.hover',
         borderStyle: 'solid',
         boxShadow: theme.shadows[4],
