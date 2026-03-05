@@ -1,5 +1,4 @@
 import { ActionAddNode, ArrowNode, ConnectionLine, ModelNode, NodeContainer, ProviderNode, SmartOpNode } from '@/components/nodes';
-import { RoutingModeSwitch } from '@/components/RoutingModeSwitch';
 import {
     Add as AddIcon,
     ExpandMore as ExpandMoreIcon,
@@ -319,72 +318,69 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                 <GraphRow>
                                     {/* Request Model section */}
                                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pr: 1, mt: -1, }}>
-                                        {/* Node + Switch as a row */}
-                                        <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                                            <NodeContainer>
-                                                {record.responseModel ? (
-                                                    // Split display when response model is configured
-                                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: graph.modelGap }}>
-                                                        {/* Request Model Card */}
-                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: graph.wrapperGap }}>
-                                                            <Box sx={{ flex: 1 }}>
-                                                                <Tooltip title="The model name that clients use to make requests. This will be matched against incoming API calls." placement="top" arrow>
-                                                                    <Box>
-                                                                        <ModelNode
-                                                                            active={record.active}
-                                                                            label="Unspecified"
-                                                                            value={record.requestModel}
-                                                                            editable={record.active}
-                                                                            onUpdate={(value) => onUpdateRecord('requestModel', value)}
-                                                                            compact={true}
-                                                                        />
-                                                                    </Box>
-                                                                </Tooltip>
-                                                            </Box>
-                                                        </Box>
-
-                                                        {/* Response Model Card */}
-                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: graph.wrapperGap }}>
-                                                            <Box sx={{ flex: 1 }}>
-                                                                <Tooltip title="The model name returned to clients. Responses from upstream providers will be transformed to show this model name instead." placement="top" arrow>
-                                                                    <Box>
-                                                                        <ModelNode
-                                                                            active={record.active}
-                                                                            label=""
-                                                                            value={record.responseModel}
-                                                                            editable={true}
-                                                                            onUpdate={(value) => onUpdateRecord('responseModel', value)}
-                                                                            compact={true}
-                                                                        />
-                                                                    </Box>
-                                                                </Tooltip>
-                                                            </Box>
+                                        <NodeContainer>
+                                            {record.responseModel ? (
+                                                // Split display when response model is configured
+                                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: graph.modelGap }}>
+                                                    {/* Request Model Card */}
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: graph.wrapperGap }}>
+                                                        <Box sx={{ flex: 1 }}>
+                                                            <Tooltip title="The model name that clients use to make requests. This will be matched against incoming API calls." placement="top" arrow>
+                                                                <Box>
+                                                                    <ModelNode
+                                                                        active={record.active}
+                                                                        label="Unspecified"
+                                                                        value={record.requestModel}
+                                                                        editable={record.active}
+                                                                        onUpdate={(value) => onUpdateRecord('requestModel', value)}
+                                                                        compact={true}
+                                                                        showSmartSwitch={true}
+                                                                        smartEnabled={smartEnabled}
+                                                                        switchDisabled={saving}
+                                                                        onSwitch={() => onSwitchRoutingMode?.()}
+                                                                    />
+                                                                </Box>
+                                                            </Tooltip>
                                                         </Box>
                                                     </Box>
-                                                ) : (
-                                                    // Single display when no response model
-                                                    <Tooltip title="The model name that clients use to make requests. This will be matched against incoming API calls." placement="top" arrow>
-                                                        <Box>
-                                                            <ModelNode
-                                                                active={record.active}
-                                                                label="Unspecified"
-                                                                value={record.requestModel}
-                                                                editable={record.active}
-                                                                onUpdate={(value) => onUpdateRecord('requestModel', value)}
-                                                            />
-                                                        </Box>
-                                                    </Tooltip>
-                                                )}
-                                            </NodeContainer>
 
-                                            {/* Routing Mode Toggle Switch - to the right of NodeContainer */}
-                                            <RoutingModeSwitch
-                                                smartEnabled={smartEnabled}
-                                                active={record.active}
-                                                disabled={saving}
-                                                onSwitch={() => onSwitchRoutingMode?.()}
-                                            />
-                                        </Box>
+                                                    {/* Response Model Card */}
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: graph.wrapperGap }}>
+                                                        <Box sx={{ flex: 1 }}>
+                                                            <Tooltip title="The model name returned to clients. Responses from upstream providers will be transformed to show this model name instead." placement="top" arrow>
+                                                                <Box>
+                                                                    <ModelNode
+                                                                        active={record.active}
+                                                                        label=""
+                                                                        value={record.responseModel}
+                                                                        editable={true}
+                                                                        onUpdate={(value) => onUpdateRecord('responseModel', value)}
+                                                                        compact={true}
+                                                                    />
+                                                                </Box>
+                                                            </Tooltip>
+                                                        </Box>
+                                                    </Box>
+                                                </Box>
+                                            ) : (
+                                                // Single display when no response model
+                                                <Tooltip title="The model name that clients use to make requests. This will be matched against incoming API calls." placement="top" arrow>
+                                                    <Box>
+                                                        <ModelNode
+                                                            active={record.active}
+                                                            label="Unspecified"
+                                                            value={record.requestModel}
+                                                            editable={record.active}
+                                                            onUpdate={(value) => onUpdateRecord('requestModel', value)}
+                                                            showSmartSwitch={true}
+                                                            smartEnabled={smartEnabled}
+                                                            switchDisabled={saving}
+                                                            onSwitch={() => onSwitchRoutingMode?.()}
+                                                        />
+                                                    </Box>
+                                                </Tooltip>
+                                            )}
+                                        </NodeContainer>
                                     </Box>
 
                                     {/* Arrow to providers - aligned to center of ModelNode */}

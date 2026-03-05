@@ -27,7 +27,6 @@ import {
     NodeContainer,
     ProviderNode, MODEL_NODE_STYLES
 } from '@/components/nodes';
-import { RoutingModeSwitch } from '@/components/RoutingModeSwitch';
 import type { ConfigRecord } from './RoutingGraphTypes.ts';
 
 // Use same style constants as RuleGraph for consistency
@@ -296,37 +295,25 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                         alignItems: 'center',
                                         pr: 1,
                                     }}>
-                                        {/* Node + Switch as a row */}
-                                        <Box sx={{
-                                            display: 'flex',
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            gap: 2
-                                        }}>
-                                            <NodeContainer>
-                                                <Tooltip title="The model name that clients use to make requests." placement="top" arrow>
-                                                    <Box>
-                                                        <ModelNode
-                                                            active={active}
-                                                            label="Unspecified"
-                                                            value={record.requestModel}
-                                                            editable={active}
-                                                            onUpdate={(value) => {
-                                                                onUpdateRecord?.('requestModel', value);
-                                                            }}
-                                                        />
-                                                    </Box>
-                                                </Tooltip>
-                                            </NodeContainer>
-
-                                            {/* Routing Mode Toggle Switch - to the right of NodeContainer */}
-                                            <RoutingModeSwitch
-                                                smartEnabled={true}
-                                                active={active}
-                                                disabled={saving}
-                                                onSwitch={() => onSwitchRoutingMode?.()}
-                                            />
-                                        </Box>
+                                        <NodeContainer>
+                                            <Tooltip title="The model name that clients use to make requests." placement="top" arrow>
+                                                <Box>
+                                                    <ModelNode
+                                                        active={active}
+                                                        label="Unspecified"
+                                                        value={record.requestModel}
+                                                        editable={active}
+                                                        onUpdate={(value) => {
+                                                            onUpdateRecord?.('requestModel', value);
+                                                        }}
+                                                        showSmartSwitch={true}
+                                                        smartEnabled={true}
+                                                        switchDisabled={saving}
+                                                        onSwitch={() => onSwitchRoutingMode?.()}
+                                                    />
+                                                </Box>
+                                            </Tooltip>
+                                        </NodeContainer>
                                     </Box>
 
                                     {/* Arrow to rules section - aligned to center of ModelNode */}
