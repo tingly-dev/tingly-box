@@ -85,7 +85,7 @@ jobs:
         working-directory: ./frontend
 
       - name: Install openapi-generator-cli
-        run: pnpm add -g @openapitools/openapi-generator-cli
+        run: npm install -g @openapitools/openapi-generator-cli
 
       - name: Run codegen and build frontend
         run: |
@@ -305,7 +305,7 @@ jobs:
         working-directory: ./frontend
 
       - name: Install openapi-generator-cli
-        run: pnpm add -g @openapitools/openapi-generator-cli
+        run: npm install -g @openapitools/openapi-generator-cli
 
       - name: Run codegen
         run: task codegen
