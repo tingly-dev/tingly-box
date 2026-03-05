@@ -1,4 +1,8 @@
 import {
+    Add as AddIcon,
+    Delete as DeleteIcon
+} from '@mui/icons-material';
+import {
     Box,
     Button,
     Dialog,
@@ -6,6 +10,7 @@ import {
     DialogContent,
     DialogTitle,
     FormControl,
+    IconButton,
     InputLabel,
     MenuItem,
     Select,
@@ -16,7 +21,7 @@ import {
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import type { SmartRouting, SmartOp } from './RoutingGraphTypes';
+import type { SmartOp, SmartRouting } from './RoutingGraphTypes';
 
 // Position options with descriptions
 const POSITION_OPTIONS = [
@@ -77,25 +82,17 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
     onCancel,
 }) => {
     const [description, setDescription] = useState('');
-    const [op, setOp] = useState<SmartOp>({
-        uuid: uuidv4(),
-        position: '' as SmartOp['position'],
-        operation: '',
-        value: '',
-        meta: {
-            description: '',
-            type: 'string',
-        },
-    });
+    const [ops, setOps] = useState<SmartOp[]>([]);
+    const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
     // Reset form when smartRouting changes
     useEffect(() => {
         if (smartRouting) {
             setDescription(smartRouting.description || '');
-            // Get the first op if exists, otherwise create empty op
-            const existingOp = smartRouting.ops && smartRouting.ops.length > 0
-                ? { ...smartRouting.ops[0] }
-                : {
+            // Get existing ops or create one empty op
+            const existingOps = smartRouting.ops && smartRouting.ops.length > 0
+                ? [...smartRouting.ops]
+                : [{
                     uuid: uuidv4(),
                     position: '' as SmartOp['position'],
                     operation: '',
@@ -104,11 +101,12 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
                         description: '',
                         type: 'string',
                     },
-                } as SmartOp;
-            setOp(existingOp);
+                } as SmartOp];
+            setOps(existingOps);
+            setEditingIndex(null);
         } else {
             setDescription('');
-            setOp({
+            setOps([{
                 uuid: uuidv4(),
                 position: '' as SmartOp['position'],
                 operation: '',
@@ -117,23 +115,26 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
                     description: '',
                     type: 'string',
                 },
-            });
+            }]);
+            setEditingIndex(null);
         }
     }, [smartRouting, open]);
 
     const handleSave = () => {
         if (!smartRouting) return;
 
-        // Trim string value before saving
-        const cleanedOp: SmartOp = {
-            ...op,
-            value: op.meta?.type === 'string' ? op.value?.trim() ?? '' : op.value,
-        };
+        // Trim string values before saving and filter out empty ops
+        const cleanedOps: SmartOp[] = ops
+            .filter(op => op.position && op.operation) // Only keep valid ops
+            .map(op => ({
+                ...op,
+                value: op.meta?.type === 'string' ? op.value?.trim() ?? '' : op.value,
+            }));
 
         const updated: SmartRouting = {
             ...smartRouting,
             description,
-            ops: [cleanedOp],
+            ops: cleanedOps,
         };
         onSave(updated);
     };
@@ -153,8 +154,58 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
         return value.replace(/,/g, '');
     };
 
+    // Get the currently editing op, or the first one if none selected
+    const getEditingOp = (): SmartOp => {
+        if (editingIndex !== null && editingIndex < ops.length) {
+            return ops[editingIndex];
+        }
+        // Return first op if no specific editing index
+        return ops[0] || {
+            uuid: uuidv4(),
+            position: '' as SmartOp['position'],
+            operation: '',
+            value: '',
+            meta: {
+                description: '',
+                type: 'string',
+            },
+        };
+    };
+
+    const handleAddOperation = () => {
+        const newOp: SmartOp = {
+            uuid: uuidv4(),
+            position: '' as SmartOp['position'],
+            operation: '',
+            value: '',
+            meta: {
+                description: '',
+                type: 'string',
+            },
+        };
+        setOps([...ops, newOp]);
+        setEditingIndex(ops.length); // Edit the new op
+    };
+
+    const handleRemoveOperation = (index: number) => {
+        if (ops.length <= 1) return; // Keep at least one op
+        const newOps = ops.filter((_, i) => i !== index);
+        setOps(newOps);
+        if (editingIndex === index) {
+            setEditingIndex(null); // Clear editing index if we removed the edited op
+        } else if (editingIndex !== null && editingIndex > index) {
+            setEditingIndex(editingIndex - 1); // Adjust editing index
+        }
+    };
+
+    const handleSelectOperation = (index: number) => {
+        setEditingIndex(index);
+    };
+
     const handleOpFieldChange = (field: keyof SmartOp, value: any) => {
-        const updatedOp = { ...op, [field]: value };
+        const targetIndex = editingIndex !== null ? editingIndex : 0;
+        const updatedOps = [...ops];
+        const updatedOp = { ...updatedOps[targetIndex] };
 
         // When position changes, clear operation and value, reset metadata
         if (field === 'position') {
@@ -167,7 +218,7 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
         }
         // Update operation-specific metadata when operation is set
         else if (field === 'operation') {
-            const opDef = OPERATION_OPTIONS[op.position]?.find(opt => opt.value === value);
+            const opDef = OPERATION_OPTIONS[updatedOp.position]?.find(opt => opt.value === value);
             if (opDef) {
                 updatedOp.meta = {
                     description: opDef.description,
@@ -176,22 +227,31 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
                 // Clear value when operation changes
                 updatedOp.value = '';
             }
+        } else {
+            updatedOp[field] = value;
         }
 
-        setOp(updatedOp);
+        updatedOps[targetIndex] = updatedOp;
+        setOps(updatedOps);
     };
 
     const handleValueChange = (inputValue: string) => {
+        const targetIndex = editingIndex !== null ? editingIndex : 0;
+        const op = ops[targetIndex];
+        const updatedOps = [...ops];
+
         if (op.meta?.type === 'int') {
             // For int type, store the raw number (without commas)
-            setOp({ ...op, value: parseNumberInput(inputValue) });
+            updatedOps[targetIndex] = { ...op, value: parseNumberInput(inputValue) };
         } else {
             // For string type, store as-is
-            setOp({ ...op, value: inputValue });
+            updatedOps[targetIndex] = { ...op, value: inputValue };
         }
+        setOps(updatedOps);
     };
 
     const getDisplayValue = (): string => {
+        const op = getEditingOp();
         if (op.meta?.type === 'int') {
             return formatNumberWithCommas(op.value || '');
         }
@@ -199,18 +259,29 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
     };
 
     const isValid = () => {
-        if (!op.position || !op.operation) return false;
-        if (op.meta?.type === 'bool') {
-            return true; // bool operations don't require a value
-        }
-        return op.value && op.value.trim() !== '';
+        // At least one op must be complete
+        return ops.some(op => {
+            if (!op.position || !op.operation) return false;
+            if (op.meta?.type === 'bool') {
+                return true; // bool operations don't require a value
+            }
+            return op.value && op.value.trim() !== '';
+        });
     };
+
+    const getOpSummary = (op: SmartOp): string => {
+        if (!op.position || !op.operation) return 'New operation';
+        const valueStr = op.value ? `: ${op.value}` : '';
+        return `[${op.position}] [${op.operation}]${valueStr}`;
+    };
+
+    const currentOp = getEditingOp();
 
     return (
         <Dialog
             open={open}
             onClose={onCancel}
-            maxWidth="sm"
+            maxWidth="md"
             fullWidth
         >
             <DialogTitle>Edit Smart Rule</DialogTitle>
@@ -225,93 +296,153 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
                         placeholder="e.g., Route image requests to vision model"
                     />
 
-                    {/* Operation */}
+                    {/* Operations Section */}
                     <Box>
-                        <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
-                            Operation
-                        </Typography>
-
-                        <Box
-                            sx={{
-                                p: 2,
-                                border: '1px solid',
-                                borderColor: 'divider',
-                                borderRadius: 1,
-                                bgcolor: 'background.paper',
-                            }}
-                        >
-                            <Stack direction="row" spacing={2} alignItems="center">
-                                {/* Position Select */}
-                                <FormControl size="small" sx={{ minWidth: 120 }}>
-                                    <InputLabel>Position</InputLabel>
-                                    <Select
-                                        value={op.position || ''}
-                                        label="Position"
-                                        onChange={(e) => handleOpFieldChange('position', e.target.value)}
-                                    >
-                                        <MenuItem value="">
-                                            <em>Select...</em>
-                                        </MenuItem>
-                                        {POSITION_OPTIONS.map((opt) => (
-                                            <MenuItem key={opt.value} value={opt.value}>
-                                                <Tooltip title={opt.description} placement="right">
-                                                    <span style={{ width: '100%' }}>{opt.label}</span>
-                                                </Tooltip>
-                                            </MenuItem>
-                                        ))}
-                                    </Select>
-                                </FormControl>
-
-                                {/* Operation Select */}
-                                <FormControl size="small" sx={{ minWidth: 150 }}>
-                                    <InputLabel>Operation</InputLabel>
-                                    <Select
-                                        value={op.operation || ''}
-                                        label="Operation"
-                                        onChange={(e) => handleOpFieldChange('operation', e.target.value)}
-                                        disabled={!op.position}
-                                    >
-                                        <MenuItem value="">
-                                            <em>Select...</em>
-                                        </MenuItem>
-                                        {OPERATION_OPTIONS[op.position]?.map((opt) => (
-                                            <MenuItem key={opt.value} value={opt.value}>
-                                                <Tooltip title={opt.description} placement="right">
-                                                    <span style={{ width: '100%' }}>{opt.label}</span>
-                                                </Tooltip>
-                                            </MenuItem>
-                                        ))}
-                                    </Select>
-                                </FormControl>
-
-                                {/* Value Input - only show for string and int types */}
-                                {op.meta?.type !== 'bool' && (
-                                    <TextField
-                                        size="small"
-                                        label="Value"
-                                        value={getDisplayValue()}
-                                        onChange={(e) => handleValueChange(e.target.value)}
-                                        placeholder={
-                                            op.meta?.type === 'int' ? '1,234' :
-                                            'enter value'
-                                        }
-                                        sx={{ flex: 1 }}
-                                        type="text"
-                                    />
-                                )}
-                            </Stack>
-
-                            {/* Operation Description */}
-                            {op.meta?.description && (
-                                <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                    sx={{ mt: 1, display: 'block' }}
-                                >
-                                    {op.meta.description}
-                                </Typography>
-                            )}
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                            <Typography variant="subtitle1" fontWeight={600}>
+                                Operations (AND Logic)
+                            </Typography>
+                            <Button
+                                startIcon={<AddIcon />}
+                                onClick={handleAddOperation}
+                                size="small"
+                                variant="outlined"
+                            >
+                                Add Operation
+                            </Button>
                         </Box>
+
+                        {/* Operations List */}
+                        <Stack spacing={2} sx={{ mb: 2 }}>
+                            {ops.map((op, index) => {
+                                const isEditing = editingIndex === index || (editingIndex === null && index === 0);
+                                return (
+                                    <Box
+                                        key={op.uuid || index}
+                                        sx={{
+                                            p: 2,
+                                            border: '1px solid',
+                                            borderColor: isEditing ? 'primary.main' : 'divider',
+                                            borderRadius: 1,
+                                            bgcolor: 'background.paper',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s',
+                                            '&:hover': {
+                                                borderColor: isEditing ? 'primary.main' : 'action.hover',
+                                                backgroundColor: 'action.hover',
+                                            },
+                                        }}
+                                        onClick={() => handleSelectOperation(index)}
+                                    >
+                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                                            <Typography variant="subtitle2" color="text.secondary">
+                                                Operation {index + 1}
+                                            </Typography>
+                                            {ops.length > 1 && (
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleRemoveOperation(index);
+                                                    }}
+                                                    sx={{ color: 'error.main' }}
+                                                >
+                                                    <DeleteIcon fontSize="small" />
+                                                </IconButton>
+                                            )}
+                                        </Box>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {getOpSummary(op)}
+                                        </Typography>
+                                    </Box>
+                                );
+                            })}
+                        </Stack>
+
+                        {/* Current Operation Editor */}
+                        {editingIndex !== null || ops.length > 0 ? (
+                            <Box
+                                sx={{
+                                    p: 2,
+                                    border: '1px solid',
+                                    borderColor: 'primary.main',
+                                    borderRadius: 1,
+                                    bgcolor: 'background.paper',
+                                }}
+                            >
+                                <Stack direction="row" spacing={2} alignItems="center">
+                                    {/* Position Select */}
+                                    <FormControl size="small" sx={{ minWidth: 120 }}>
+                                        <InputLabel>Position</InputLabel>
+                                        <Select
+                                            value={currentOp.position || ''}
+                                            label="Position"
+                                            onChange={(e) => handleOpFieldChange('position', e.target.value)}
+                                        >
+                                            <MenuItem value="">
+                                                <em>Select...</em>
+                                            </MenuItem>
+                                            {POSITION_OPTIONS.map((opt) => (
+                                                <MenuItem key={opt.value} value={opt.value}>
+                                                    <Tooltip title={opt.description} placement="right">
+                                                        <span style={{ width: '100%' }}>{opt.label}</span>
+                                                    </Tooltip>
+                                                </MenuItem>
+                                            ))}
+                                        </Select>
+                                    </FormControl>
+
+                                    {/* Operation Select */}
+                                    <FormControl size="small" sx={{ minWidth: 150 }}>
+                                        <InputLabel>Operation</InputLabel>
+                                        <Select
+                                            value={currentOp.operation || ''}
+                                            label="Operation"
+                                            onChange={(e) => handleOpFieldChange('operation', e.target.value)}
+                                            disabled={!currentOp.position}
+                                        >
+                                            <MenuItem value="">
+                                                <em>Select...</em>
+                                            </MenuItem>
+                                            {OPERATION_OPTIONS[currentOp.position]?.map((opt) => (
+                                                <MenuItem key={opt.value} value={opt.value}>
+                                                    <Tooltip title={opt.description} placement="right">
+                                                        <span style={{ width: '100%' }}>{opt.label}</span>
+                                                    </Tooltip>
+                                                </MenuItem>
+                                            ))}
+                                        </Select>
+                                    </FormControl>
+
+                                    {/* Value Input - only show for string and int types */}
+                                    {currentOp.meta?.type !== 'bool' && (
+                                        <TextField
+                                            size="small"
+                                            label="Value"
+                                            value={getDisplayValue()}
+                                            onChange={(e) => handleValueChange(e.target.value)}
+                                            placeholder={
+                                                currentOp.meta?.type === 'int' ? '1,234' :
+                                                    'enter value'
+                                            }
+                                            sx={{ flex: 1 }}
+                                            type="text"
+                                        />
+                                    )}
+                                </Stack>
+
+                                {/* Operation Description */}
+                                {currentOp.meta?.description && (
+                                    <Typography
+                                        variant="caption"
+                                        color="text.secondary"
+                                        sx={{ mt: 1, display: 'block' }}
+                                    >
+                                        {currentOp.meta.description}
+                                    </Typography>
+                                )}
+                            </Box>
+                        ) : null}
                     </Box>
                 </Stack>
             </DialogContent>

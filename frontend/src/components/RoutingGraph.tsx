@@ -6,6 +6,7 @@ import {
     ExpandMore as ExpandMoreIcon,
     Info as InfoIcon,
     Warning as WarningIcon,
+    SmartDisplay as SmartIcon,
 } from '@mui/icons-material';
 import {
     Box,
@@ -229,40 +230,50 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                     <Tooltip title={record.requestModel
                         ? `Use "${record.requestModel}" as model name in your API requests. (click to copy)`
                         : 'No model specified'}>
-                        <Chip
-                            label={`model = ${record.requestModel || 'Unspecified'}`}
-                            size="small"
-                            variant="outlined"
+                        <Typography
                             onClick={handleCopyModel}
                             sx={{
-                                opacity: record.active ? 1 : 0.5,
-                                borderColor: record.active ? 'primary.main' : 'text.disabled',
-                                color: record.active ? 'primary.main' : 'text.disabled',
-                                minWidth: 150,
+                                fontFamily: 'monospace',
+                                fontSize: '0.875rem',
                                 fontWeight: 600,
-                                alignContent:"start",
+                                color: record.active ? 'primary.main' : 'text.disabled',
+                                opacity: record.active ? 1 : 0.5,
                                 cursor: record.requestModel ? 'pointer' : 'default',
-                                '& .MuiChip-label': {
-                                    fontWeight: 600,
+                                '&:hover': record.requestModel ? {
+                                    color: 'primary.dark',
+                                } : {},
+                            }}
+                        >
+                            model = {record.requestModel || 'Unspecified'}
+                        </Typography>
+                    </Tooltip>
+                    {/* Add Smart Rule Button - show in direct mode only, placed after model */}
+                    {!smartEnabled && (
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<SmartIcon />}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                // First enable smart routing, then add a rule
+                                onUpdateRecord('smartEnabled', true);
+                                setTimeout(() => {
+                                    onAddSmartRule?.();
+                                }, 100);
+                            }}
+                            disabled={!record.active || saving}
+                            sx={{
+                                borderColor: 'primary.main',
+                                color: 'primary.main',
+                                height: 24,
+                                '&:hover': {
+                                    borderColor: 'primary.dark',
+                                    backgroundColor: 'primary.50',
                                 },
                             }}
-                        />
-                    </Tooltip>
-                    {smartEnabled && (
-                        <Chip
-                            label="Smart Routing"
-                            size="small"
-                            color="primary"
-                            variant="outlined"
-                            onClick={(e) => e.stopPropagation()}
-                            sx={{
-                                opacity: record.active ? 1 : 0.5,
-                            borderColor: record.active ? 'primary.main' : 'text.disabled',
-                            minWidth: 90,
-                            fontWeight: 600,
-                            fontSize: '0.75rem',
-                        }}
-                        />
+                        >
+                            Add Smart Rule
+                        </Button>
                     )}
                     {/* Rule Description - moved to top bar with auto-truncate, after active badge */}
                     {record.description && (

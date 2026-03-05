@@ -4,6 +4,7 @@ import {
     Info as InfoIcon,
     Warning as WarningIcon,
     ExpandMore as ExpandMoreIcon,
+    Settings as SettingsIcon,
 } from '@mui/icons-material';
 import {
     Box,
@@ -182,10 +183,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                     <Tooltip title={record.requestModel
                         ? `Use "${record.requestModel}" as model name in your API requests. (click to copy)`
                         : 'No model specified'}>
-                        <Chip
-                            label={`model = ${record.requestModel || 'Unspecified'}`}
-                            size="small"
-                            variant="outlined"
+                        <Typography
                             onClick={(e) => {
                                 e.stopPropagation();
                                 if (record.requestModel) {
@@ -193,28 +191,43 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                 }
                             }}
                             sx={{
-                                opacity: active ? 1 : 0.5,
-                                borderColor: active ? 'primary.main' : 'text.disabled',
-                                color: active ? 'primary.main' : 'text.disabled',
-                                minWidth: 150,
+                                fontFamily: 'monospace',
+                                fontSize: '0.875rem',
                                 fontWeight: 600,
+                                color: active ? 'primary.main' : 'text.disabled',
+                                opacity: active ? 1 : 0.5,
                                 cursor: record.requestModel ? 'pointer' : 'default',
-                                '& .MuiChip-label': {
-                                    fontWeight: 600,
-                                },
+                                '&:hover': record.requestModel ? {
+                                    color: 'primary.dark',
+                                } : {},
                             }}
-                        />
+                        >
+                            model = {record.requestModel || 'Unspecified'}
+                        </Typography>
                     </Tooltip>
-                    <Chip
-                        label="smart"
+                    {/* Convert to Direct Routing Button - placed after model in smart mode */}
+                    <Button
                         size="small"
                         variant="outlined"
-                        sx={{
-                            opacity: active ? 1 : 0.5,
-                            borderColor: active ? 'inherit' : 'text.disabled',
-                            color: active ? 'inherit' : 'text.disabled',
+                        startIcon={<SettingsIcon />}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            // Disable smart routing to convert to direct mode
+                            onUpdateRecord?.('smartEnabled', false);
                         }}
-                    />
+                        disabled={!active || saving}
+                        sx={{
+                            borderColor: 'text.secondary',
+                            color: 'text.secondary',
+                            height: 24,
+                            '&:hover': {
+                                borderColor: 'text.primary',
+                                backgroundColor: 'action.hover',
+                            },
+                        }}
+                    >
+                        To Direct Routing
+                    </Button>
                     {/* Rule Description - moved to top bar with auto-truncate, after Rules chip */}
                     {record.description && (
                         <Tooltip title={record.description} arrow>

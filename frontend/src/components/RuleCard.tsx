@@ -168,14 +168,12 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     // Extra actions menu - shared between RoutingGraph and SmartRoutingGraph
     const extraActions = (
         <GraphSettingsMenu
-            smartEnabled={isSmartMode ?? false}
             canProbe={!!configRecord.providers[0]?.provider && !!configRecord.providers[0]?.model}
             isProbing={probeState.isProbing}
             allowDeleteRule={allowDeleteRule}
             active={configRecord.active}
             allowToggleRule={allowToggleRule}
             saving={saving}
-            onToggleSmartRouting={() => updateField(configRecord, setConfigRecord, 'smartEnabled', !isSmartMode)}
             onProbe={probeState.handleProbe}
             onExport={handleExport}
             onDelete={handleDeleteButtonClick}
