@@ -6,7 +6,6 @@ import {
     ArrowDownward as ArrowDownIcon,
     ArrowForward as ArrowForwardIcon,
     ExpandMore as ExpandMoreIcon,
-    Info as InfoIcon,
     Warning as WarningIcon,
 } from '@mui/icons-material';
 import {
@@ -321,17 +320,8 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                         <Box sx={{ overflowX: 'auto' }}>
                             <GraphContainer>
                                 <GraphRow>
-                                    {/* Request Model section - label + node + arrow as a unit */}
+                                    {/* Request Model section */}
                                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pr: 1, mt: -1, }}>
-                                        {/* Request Model Label */}
-                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: graph.iconGap, mb: graph.labelMargin }}>
-                                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                                Request Model
-                                            </Typography>
-                                            <Tooltip title="The model name that clients use to make requests. This will be matched against incoming API calls.">
-                                                <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
-                                            </Tooltip>
-                                        </Box>
                                         {/* Node + Switch as a row */}
                                         <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 2 }}>
                                             <NodeContainer>
@@ -341,48 +331,52 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                                         {/* Request Model Card */}
                                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: graph.wrapperGap }}>
                                                             <Box sx={{ flex: 1 }}>
-                                                                <ModelNode
-                                                                    active={record.active}
-                                                                    label="Unspecified"
-                                                                    value={record.requestModel}
-                                                                    editable={record.active}
-                                                                    onUpdate={(value) => onUpdateRecord('requestModel', value)}
-                                                                    compact={true}
-                                                                />
+                                                                <Tooltip title="The model name that clients use to make requests. This will be matched against incoming API calls." placement="top" arrow>
+                                                                    <Box>
+                                                                        <ModelNode
+                                                                            active={record.active}
+                                                                            label="Unspecified"
+                                                                            value={record.requestModel}
+                                                                            editable={record.active}
+                                                                            onUpdate={(value) => onUpdateRecord('requestModel', value)}
+                                                                            compact={true}
+                                                                        />
+                                                                    </Box>
+                                                                </Tooltip>
                                                             </Box>
                                                         </Box>
 
                                                         {/* Response Model Card */}
                                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: graph.wrapperGap }}>
                                                             <Box sx={{ flex: 1 }}>
-                                                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: graph.iconGap, mb: graph.labelMargin }}>
-                                                                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                                                        Response Model
-                                                                    </Typography>
-                                                                    <Tooltip title="The model name returned to clients. Responses from upstream providers will be transformed to show this model name instead.">
-                                                                        <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
-                                                                    </Tooltip>
-                                                                </Box>
-                                                                <ModelNode
-                                                                    active={record.active}
-                                                                    label=""
-                                                                    value={record.responseModel}
-                                                                    editable={true}
-                                                                    onUpdate={(value) => onUpdateRecord('responseModel', value)}
-                                                                    compact={true}
-                                                                />
+                                                                <Tooltip title="The model name returned to clients. Responses from upstream providers will be transformed to show this model name instead." placement="top" arrow>
+                                                                    <Box>
+                                                                        <ModelNode
+                                                                            active={record.active}
+                                                                            label=""
+                                                                            value={record.responseModel}
+                                                                            editable={true}
+                                                                            onUpdate={(value) => onUpdateRecord('responseModel', value)}
+                                                                            compact={true}
+                                                                        />
+                                                                    </Box>
+                                                                </Tooltip>
                                                             </Box>
                                                         </Box>
                                                     </Box>
                                                 ) : (
                                                     // Single display when no response model
-                                                    <ModelNode
-                                                        active={record.active}
-                                                        label="Unspecified"
-                                                        value={record.requestModel}
-                                                        editable={record.active}
-                                                        onUpdate={(value) => onUpdateRecord('requestModel', value)}
-                                                    />
+                                                    <Tooltip title="The model name that clients use to make requests. This will be matched against incoming API calls." placement="top" arrow>
+                                                        <Box>
+                                                            <ModelNode
+                                                                active={record.active}
+                                                                label="Unspecified"
+                                                                value={record.requestModel}
+                                                                editable={record.active}
+                                                                onUpdate={(value) => onUpdateRecord('requestModel', value)}
+                                                            />
+                                                        </Box>
+                                                    </Tooltip>
                                                 )}
                                             </NodeContainer>
 
@@ -577,23 +571,31 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
 
                                     {/* Providers Container - Default providers for normal mode or fallback for smart routing */}
                                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                        <Typography variant="caption" sx={{ color: 'text.secondary', gap: graph.iconGap, mb: graph.labelMargin }}>
-                                            {record.providers.length > 0
-                                                ? (smartEnabled && hasSmartRules ? 'Default Providers (Fallback)' : 'Forwarding to Providers')
-                                                : 'Forwarding to Providers'
-                                            }
-                                        </Typography>
                                         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'nowrap', justifyContent: 'flex-start', alignItems: 'center' }}>
-                                            {record.providers.map((provider) => (
-                                                <ProviderNode
+                                            {record.providers.map((provider, index) => (
+                                                <Tooltip
                                                     key={provider.uuid}
-                                                    provider={provider}
-                                                    apiStyle={getApiStyle(provider.provider)}
-                                                    providersData={providers as Provider[]}
-                                                    active={record.active && provider.active !== false}
-                                                    onDelete={() => onDeleteProvider(recordUuid, provider.uuid)}
-                                                    onNodeClick={() => onProviderNodeClick(provider.uuid)}
-                                                />
+                                                    title={
+                                                        smartEnabled && hasSmartRules
+                                                            ? 'Default provider (fallback when no smart rules match)'
+                                                            : record.providers.length >= 2
+                                                                ? `Provider ${index + 1} of ${record.providers.length} (requests are load balanced)`
+                                                                : 'Provider for request forwarding'
+                                                    }
+                                                    placement="top"
+                                                    arrow
+                                                >
+                                                    <Box>
+                                                        <ProviderNode
+                                                            provider={provider}
+                                                            apiStyle={getApiStyle(provider.provider)}
+                                                            providersData={providers as Provider[]}
+                                                            active={record.active && provider.active !== false}
+                                                            onDelete={() => onDeleteProvider(recordUuid, provider.uuid)}
+                                                            onNodeClick={() => onProviderNodeClick(provider.uuid)}
+                                                        />
+                                                    </Box>
+                                                </Tooltip>
                                             ))}
                                             <ActionAddNode
                                                 active={record.active && !saving}

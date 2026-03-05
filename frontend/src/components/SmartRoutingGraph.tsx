@@ -1,7 +1,6 @@
 import {
     Add as AddIcon,
     ArrowDownward as ArrowDownIcon,
-    Info as InfoIcon,
     Warning as WarningIcon,
     ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
@@ -27,7 +26,7 @@ import {
     ConnectionLine,
     ModelNode,
     NodeContainer,
-    ProviderNode
+    ProviderNode, MODEL_NODE_STYLES
 } from '@/components/nodes';
 import { RoutingModeSwitch } from '@/components/RoutingModeSwitch';
 import type { ConfigRecord } from './RoutingGraphTypes.ts';
@@ -290,34 +289,14 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                         {/* Graph Visualization */}
                         <Box sx={{ overflowX: 'auto' }}>
                             <GraphContainer>
-                                <GraphRow>
+                                <GraphRow sx={{ alignItems: 'flex-start' }}>
                                     {/* Request Model section - label + node + arrow as a unit */}
                                     <Box sx={{
                                         display: 'flex',
                                         flexDirection: 'column',
                                         alignItems: 'center',
                                         pr: 1,
-                                        mt: -1
                                     }}>
-                                        {/* Request Model Label */}
-                                        <Box sx={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: graph.iconGap,
-                                            mb: graph.labelMargin
-                                        }}>
-                                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                                Request Model
-                                            </Typography>
-                                            <Tooltip title="The model name that clients use to make requests.">
-                                                <InfoIcon sx={{
-                                                    fontSize: '0.9rem',
-                                                    color: 'text.secondary',
-                                                    cursor: 'help'
-                                                }} />
-                                            </Tooltip>
-                                        </Box>
                                         {/* Node + Switch as a row */}
                                         <Box sx={{
                                             display: 'flex',
@@ -326,15 +305,19 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                             gap: 2
                                         }}>
                                             <NodeContainer>
-                                                <ModelNode
-                                                    active={active}
-                                                    label="Unspecified"
-                                                    value={record.requestModel}
-                                                    editable={active}
-                                                    onUpdate={(value) => {
-                                                        onUpdateRecord?.('requestModel', value);
-                                                    }}
-                                                />
+                                                <Tooltip title="The model name that clients use to make requests." placement="top" arrow>
+                                                    <Box>
+                                                        <ModelNode
+                                                            active={active}
+                                                            label="Unspecified"
+                                                            value={record.requestModel}
+                                                            editable={active}
+                                                            onUpdate={(value) => {
+                                                                onUpdateRecord?.('requestModel', value);
+                                                            }}
+                                                        />
+                                                    </Box>
+                                                </Tooltip>
                                             </NodeContainer>
 
                                             {/* Routing Mode Toggle Switch - to the right of NodeContainer */}
@@ -348,7 +331,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                     </Box>
 
                                     {/* Arrow to rules section - aligned to center of ModelNode */}
-                                    <Box sx={{ flex: 0, display: 'flex', alignItems: 'center' }}>
+                                    <Box sx={{ flex: 0, display: 'flex', alignItems: 'center', height: MODEL_NODE_STYLES.height }}>
                                         <ConnectionLine>
                                             <ArrowDownIcon sx={{ transform: 'rotate(270deg)' }} />
                                         </ConnectionLine>
@@ -398,19 +381,31 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                                 justifyContent: 'flex-start',
                                                                 alignItems: 'center'
                                                             }}>
-                                                                {rule.services.map((service) => (
-                                                                    <ProviderNode
+                                                                {rule.services.map((service, serviceIndex) => (
+                                                                    <Tooltip
                                                                         key={service.uuid}
-                                                                        provider={service}
-                                                                        apiStyle={getApiStyle(service.provider)}
-                                                                        providersData={providers}
-                                                                        active={active && service.active !== false}
-                                                                        onDelete={() => {
-                                                                            console.log('SmartRoutingGraph: onDelete clicked for service:', service.uuid, 'rule:', rule.uuid, 'active:', active, 'service.active:', service.active);
-                                                                            onDeleteServiceFromSmartRule(rule.uuid, service.uuid);
-                                                                        }}
-                                                                        onNodeClick={() => onProviderNodeClick?.(service.uuid)}
-                                                                    />
+                                                                        title={
+                                                                            rule.services && rule.services.length >= 2
+                                                                                ? `Service ${serviceIndex + 1} of ${rule.services.length} (requests are load balanced)`
+                                                                                : 'Service for this smart rule'
+                                                                        }
+                                                                        placement="top"
+                                                                        arrow
+                                                                    >
+                                                                        <Box>
+                                                                            <ProviderNode
+                                                                                provider={service}
+                                                                                apiStyle={getApiStyle(service.provider)}
+                                                                                providersData={providers}
+                                                                                active={active && service.active !== false}
+                                                                                onDelete={() => {
+                                                                                    console.log('SmartRoutingGraph: onDelete clicked for service:', service.uuid, 'rule:', rule.uuid, 'active:', active, 'service.active:', service.active);
+                                                                                    onDeleteServiceFromSmartRule(rule.uuid, service.uuid);
+                                                                                }}
+                                                                                onNodeClick={() => onProviderNodeClick?.(service.uuid)}
+                                                                            />
+                                                                        </Box>
+                                                                    </Tooltip>
                                                                 ))}
                                                                 {/* Add Service Button */}
                                                                 <ActionAddNode
@@ -486,18 +481,30 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                 justifyContent: 'flex-start',
                                                 alignItems: 'center'
                                             }}>
-                                                {record.providers.map((provider) => (
-                                                    <ProviderNode
+                                                {record.providers.map((provider, providerIndex) => (
+                                                    <Tooltip
                                                         key={provider.uuid}
-                                                        provider={provider}
-                                                        apiStyle={getApiStyle(provider.provider)}
-                                                        providersData={providers}
-                                                        active={active && provider.active !== false}
-                                                        onDelete={() => {
-                                                            onDeleteDefaultProvider?.(provider.uuid);
-                                                        }}
-                                                        onNodeClick={() => onProviderNodeClick?.(provider.uuid)}
-                                                    />
+                                                        title={
+                                                            record.providers.length >= 2
+                                                                ? `Fallback provider ${providerIndex + 1} of ${record.providers.length} (requests are load balanced)`
+                                                                : 'Fallback provider for request forwarding'
+                                                        }
+                                                        placement="top"
+                                                        arrow
+                                                    >
+                                                        <Box>
+                                                            <ProviderNode
+                                                                provider={provider}
+                                                                apiStyle={getApiStyle(provider.provider)}
+                                                                providersData={providers}
+                                                                active={active && provider.active !== false}
+                                                                onDelete={() => {
+                                                                    onDeleteDefaultProvider?.(provider.uuid);
+                                                                }}
+                                                                onNodeClick={() => onProviderNodeClick?.(provider.uuid)}
+                                                            />
+                                                        </Box>
+                                                    </Tooltip>
                                                 ))}
                                                 {/* Add Provider Button */}
                                                 <ActionAddNode
