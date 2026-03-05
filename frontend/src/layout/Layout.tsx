@@ -394,25 +394,26 @@ const Layout = ({ children }: LayoutProps) => {
                         </ListItemButton>
                     );
                 })}
-            </Box>
 
-            {/* Bottom Section: Status + User */}
-            <Box sx={{
-                py: 1, borderTop: '1px solid', borderColor: 'divider',
-                    height: footerHeight,
-                }}
-            >
-                {/* Status Indicators */}
-                {!isHealthy && (
-                    <Tooltip title="Disconnected" placement="right" arrow>
+                {/* Divider before status icons */}
+                <Divider sx={{ mx: 2, my: 1 }} />
+
+                {/* Status Indicators - Inline with other icons */}
+                {(!isHealthy || import.meta.env.DEV) && (
+                    <Tooltip title={import.meta.env.DEV && isHealthy ? 'Disconnected (Debug)' : 'Disconnected'} placement="right" arrow>
                         <ListItemButton
                             onClick={showDisconnectDialog}
                             sx={{
-                                minHeight: 44,
-                                px: 1.5,
+                                minHeight: 56,
+                                mx: 0.5,
+                                px: 1,
+                                py: 1,
+                                flexDirection: 'column',
+                                alignItems: 'center',
                                 justifyContent: 'center',
+                                gap: 0.25,
                                 color: 'error.main',
-                                borderRadius: 0,
+                                borderRadius: 1.25,
                                 '&:hover': {
                                     bgcolor: 'action.hover',
                                 },
@@ -421,6 +422,22 @@ const Layout = ({ children }: LayoutProps) => {
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
                                 <ErrorOutline sx={{ fontSize: 22 }} />
                             </ListItemIcon>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    fontSize: '0.65rem',
+                                    fontWeight: 400,
+                                    color: 'inherit',
+                                    textAlign: 'center',
+                                    lineHeight: 1.2,
+                                    maxWidth: '100%',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                }}
+                            >
+                                Error
+                            </Typography>
                         </ListItemButton>
                     </Tooltip>
                 )}
@@ -434,11 +451,16 @@ const Layout = ({ children }: LayoutProps) => {
                         <ListItemButton
                             onClick={showUpdateDialog}
                             sx={{
-                                minHeight: 44,
-                                px: 1.5,
+                                minHeight: 56,
+                                mx: 0.5,
+                                px: 1,
+                                py: 1,
+                                flexDirection: 'column',
+                                alignItems: 'center',
                                 justifyContent: 'center',
+                                gap: 0.25,
                                 color: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main',
-                                borderRadius: 0,
+                                borderRadius: 1.25,
                                 '&:hover': {
                                     bgcolor: 'action.hover',
                                 },
@@ -447,28 +469,55 @@ const Layout = ({ children }: LayoutProps) => {
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
                                 <NewReleases sx={{ fontSize: 22 }} />
                             </ListItemIcon>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    fontSize: '0.65rem',
+                                    fontWeight: 400,
+                                    color: 'inherit',
+                                    textAlign: 'center',
+                                    lineHeight: 1.2,
+                                    maxWidth: '100%',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                }}
+                            >
+                                {import.meta.env.DEV && !hasUpdate ? 'Dev' : 'Update'}
+                            </Typography>
                         </ListItemButton>
                     </Tooltip>
                 )}
+
+                {/* User Icon - Inline with other icons */}
             </Box>
 
-
+            {/* Bottom Section: User/About Icon */}
             <Box
                 sx={{
-                    height: footerHeight,
-                    py: 1.5,
+                    py: 1,
                     borderTop: '1px solid',
                     borderColor: 'divider',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0.5,
+                    height: footerHeight,
                 }}
             >
-                {/* User */}
                 <Tooltip title="About" placement="right" arrow>
                     <ListItemButton
                         onClick={handleEasterEgg}
                         sx={{
+                            minHeight: 56,
+                            mx: 0.5,
+                            px: 1,
+                            py: 1,
+                            flexDirection: 'column',
+                            alignItems: 'center',
                             justifyContent: 'center',
+                            gap: 0.25,
                             color: 'text.secondary',
-                            borderRadius: 0,
+                            borderRadius: 1.25,
                             '&:hover': {
                                 bgcolor: 'action.hover',
                                 color: 'text.primary',
@@ -478,6 +527,21 @@ const Layout = ({ children }: LayoutProps) => {
                         <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
                             <AccountIcon sx={{ fontSize: 22 }} />
                         </ListItemIcon>
+                        <Typography
+                            variant="caption"
+                            sx={{
+                                fontSize: '0.65rem',
+                                fontWeight: 400,
+                                color: 'inherit',
+                                textAlign: 'center',
+                                lineHeight: 1.2,
+                                maxWidth: '100%',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                        </Typography>
                     </ListItemButton>
                 </Tooltip>
             </Box>
@@ -707,7 +771,7 @@ const Layout = ({ children }: LayoutProps) => {
                     height: '100vh',
                     display: 'flex',
                     flexDirection: 'column',
-                    overflow: 'hidden',
+                    overflow: 'visible',
                 }}
             >
                 <Box
