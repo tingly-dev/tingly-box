@@ -1,8 +1,4 @@
 import {
-    Add as AddIcon,
-    Delete as DeleteIcon
-} from '@mui/icons-material';
-import {
     Box,
     Button,
     Dialog,
@@ -16,11 +12,14 @@ import {
     Select,
     Stack,
     TextField,
+    Tooltip,
     Typography,
 } from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
+import AddIcon from '@mui/icons-material/Add';
 import React, { useEffect, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import type { SmartOp, SmartRouting } from './RoutingGraphTypes';
+import type { SmartRouting, SmartOp } from './RoutingGraphTypes';
 
 // Position options with descriptions
 const POSITION_OPTIONS = [
@@ -83,49 +82,41 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
     const [description, setDescription] = useState('');
     const [ops, setOps] = useState<SmartOp[]>([]);
 
+    // Create empty operation template
+    const createEmptyOp = (): SmartOp => ({
+        uuid: uuidv4(),
+        position: '' as SmartOp['position'],
+        operation: '',
+        value: '',
+        meta: {
+            description: '',
+            type: 'string',
+        },
+    });
+
     // Reset form when smartRouting changes
     useEffect(() => {
         if (smartRouting) {
             setDescription(smartRouting.description || '');
-            // Get existing ops or create one empty op
-            const existingOps = smartRouting.ops && smartRouting.ops.length > 0
+            // Use existing ops or create one empty op
+            setOps(smartRouting.ops && smartRouting.ops.length > 0
                 ? [...smartRouting.ops]
-                : [{
-                    uuid: uuidv4(),
-                    position: '' as SmartOp['position'],
-                    operation: '',
-                    value: '',
-                    meta: {
-                        description: '',
-                        type: 'string',
-                    },
-                } as SmartOp];
-            setOps(existingOps);
+                : [createEmptyOp()]
+            );
         } else {
             setDescription('');
-            setOps([{
-                uuid: uuidv4(),
-                position: '' as SmartOp['position'],
-                operation: '',
-                value: '',
-                meta: {
-                    description: '',
-                    type: 'string',
-                },
-            }]);
+            setOps([createEmptyOp()]);
         }
     }, [smartRouting, open]);
 
     const handleSave = () => {
         if (!smartRouting) return;
 
-        // Trim string values before saving and filter out empty ops
-        const cleanedOps: SmartOp[] = ops
-            .filter(op => op.position && op.operation) // Only keep valid ops
-            .map(op => ({
-                ...op,
-                value: op.meta?.type === 'string' ? op.value?.trim() ?? '' : op.value,
-            }));
+        // Trim string values before saving
+        const cleanedOps: SmartOp[] = ops.map(op => ({
+            ...op,
+            value: op.meta?.type === 'string' ? op.value?.trim() ?? '' : op.value,
+        }));
 
         const updated: SmartRouting = {
             ...smartRouting,
@@ -133,6 +124,47 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
             ops: cleanedOps,
         };
         onSave(updated);
+    };
+
+    const addOperation = () => {
+        setOps([...ops, createEmptyOp()]);
+    };
+
+    const removeOperation = (uuid: string) => {
+        if (ops.length <= 1) return; // Keep at least one operation
+        setOps(ops.filter(op => op.uuid !== uuid));
+    };
+
+    const updateOperation = (uuid: string, updates: Partial<SmartOp>) => {
+        setOps(ops.map(op => {
+            if (op.uuid !== uuid) return op;
+
+            const updatedOp = { ...op, ...updates };
+
+            // When position changes, clear operation and value, reset metadata
+            if ('position' in updates && updates.position !== undefined) {
+                updatedOp.operation = '';
+                updatedOp.value = '';
+                updatedOp.meta = {
+                    description: '',
+                    type: 'string',
+                };
+            }
+            // Update operation-specific metadata when operation is set
+            else if ('operation' in updates && updates.operation !== undefined) {
+                const opDef = OPERATION_OPTIONS[op.position]?.find(opt => opt.value === updates.operation);
+                if (opDef) {
+                    updatedOp.meta = {
+                        description: opDef.description,
+                        type: opDef.valueType,
+                    };
+                    // Clear value when operation changes
+                    updatedOp.value = '';
+                }
+            }
+
+            return updatedOp;
+        }));
     };
 
     // Format number with thousand separators for display
@@ -150,74 +182,29 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
         return value.replace(/,/g, '');
     };
 
-    const handleAddOperation = () => {
-        const newOp: SmartOp = {
-            uuid: uuidv4(),
-            position: '' as SmartOp['position'],
-            operation: '',
-            value: '',
-            meta: {
-                description: '',
-                type: 'string',
-            },
-        };
-        setOps([...ops, newOp]);
-    };
-
-    const handleRemoveOperation = (index: number) => {
-        if (ops.length <= 1) return; // Keep at least one op
-        setOps(ops.filter((_, i) => i !== index));
-    };
-
-    const handleOpFieldChangeAtIndex = (index: number, field: keyof SmartOp, value: any) => {
-        const updatedOps = [...ops];
-        const updatedOp = { ...updatedOps[index] };
-
-        // When position changes, clear operation and value, reset metadata
-        if (field === 'position') {
-            updatedOp.operation = '';
-            updatedOp.value = '';
-            updatedOp.meta = {
-                description: '',
-                type: 'string',
-            };
-        }
-        // Update operation-specific metadata when operation is set
-        else if (field === 'operation') {
-            const opDef = OPERATION_OPTIONS[updatedOp.position]?.find(opt => opt.value === value);
-            if (opDef) {
-                updatedOp.meta = {
-                    description: opDef.description,
-                    type: opDef.valueType,
-                };
-                // Clear value when operation changes
-                updatedOp.value = '';
-            }
-        } else {
-            updatedOp[field] = value;
-        }
-
-        updatedOps[index] = updatedOp;
-        setOps(updatedOps);
-    };
-
-    const handleValueChangeAtIndex = (index: number, inputValue: string) => {
-        const op = ops[index];
-        const updatedOps = [...ops];
-
+    const getDisplayValue = (op: SmartOp): string => {
         if (op.meta?.type === 'int') {
-            // For int type, store the raw number (without commas)
-            updatedOps[index] = { ...op, value: parseNumberInput(inputValue) };
-        } else {
-            // For string type, store as-is
-            updatedOps[index] = { ...op, value: inputValue };
+            return formatNumberWithCommas(op.value || '');
         }
-        setOps(updatedOps);
+        return op.value || '';
+    };
+
+    const handleValueChange = (uuid: string, inputValue: string) => {
+        const op = ops.find(o => o.uuid === uuid);
+        if (!op) return;
+
+        let parsedValue: string;
+        if (op.meta?.type === 'int') {
+            parsedValue = parseNumberInput(inputValue);
+        } else {
+            parsedValue = inputValue;
+        }
+
+        updateOperation(uuid, { value: parsedValue });
     };
 
     const isValid = () => {
-        // At least one op must be complete
-        return ops.some(op => {
+        return ops.every(op => {
             if (!op.position || !op.operation) return false;
             if (op.meta?.type === 'bool') {
                 return true; // bool operations don't require a value
@@ -230,7 +217,7 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
         <Dialog
             open={open}
             onClose={onCancel}
-            maxWidth="md"
+            maxWidth="sm"
             fullWidth
         >
             <DialogTitle>Edit Smart Rule</DialogTitle>
@@ -245,81 +232,72 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
                         placeholder="e.g., Route image requests to vision model"
                     />
 
-                    {/* Operations Section */}
+                    {/* Operations */}
                     <Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
                             <Typography variant="subtitle1" fontWeight={600}>
                                 Operations (AND Logic)
                             </Typography>
+                            <Box sx={{ flex: 1 }} />
                             <Button
                                 startIcon={<AddIcon />}
-                                onClick={handleAddOperation}
-                                size="small"
+                                onClick={addOperation}
                                 variant="outlined"
+                                size="small"
                             >
-                                Add Operation
+                                Add Condition
                             </Button>
-                        </Box>
+                        </Stack>
 
-                        {/* Operations List - each directly editable */}
+                        {/* Operations List */}
                         <Stack spacing={2}>
                             {ops.map((op, index) => (
                                 <Box
-                                    key={op.uuid || index}
+                                    key={op.uuid}
                                     sx={{
                                         p: 2,
                                         border: '1px solid',
                                         borderColor: 'divider',
                                         borderRadius: 1,
                                         bgcolor: 'background.paper',
-                                        transition: 'all 0.2s',
-                                        '&:hover': {
-                                            borderColor: 'action.hover',
-                                            backgroundColor: 'action.hover',
-                                        },
                                     }}
                                 >
-                                    {/* Header with index and delete button */}
-                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                                        <Typography variant="subtitle2" color="text.secondary">
-                                            Operation {index + 1}
+                                    {/* Operation Header */}
+                                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Condition {index + 1}
                                         </Typography>
+                                        <Box sx={{ flex: 1 }} />
                                         {ops.length > 1 && (
-                                            <IconButton
-                                                size="small"
-                                                onClick={() => handleRemoveOperation(index)}
-                                                sx={{ color: 'error.main' }}
-                                            >
-                                                <DeleteIcon fontSize="small" />
-                                            </IconButton>
+                                            <Tooltip title="Remove this condition">
+                                                <IconButton
+                                                    size="small"
+                                                    color="error"
+                                                    onClick={() => removeOperation(op.uuid)}
+                                                >
+                                                    <DeleteIcon fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
                                         )}
-                                    </Box>
+                                    </Stack>
 
-                                    {/* Direct editor for this operation */}
-                                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                                    <Stack direction="row" spacing={2} alignItems="center">
                                         {/* Position Select */}
-                                        <FormControl size="small" sx={{ minWidth: 140 }}>
+                                        <FormControl size="small" sx={{ minWidth: 120 }}>
                                             <InputLabel>Position</InputLabel>
                                             <Select
                                                 value={op.position || ''}
                                                 label="Position"
-                                                onChange={(e) => handleOpFieldChangeAtIndex(index, 'position', e.target.value)}
-                                                MenuProps={{
-                                                    slotProps: {
-                                                        paper: {
-                                                            sx: {
-                                                                maxHeight: 300,
-                                                            },
-                                                        },
-                                                    },
-                                                }}
+                                                onChange={(e) => updateOperation(op.uuid, { position: e.target.value as SmartOp['position'] })}
                                             >
                                                 <MenuItem value="">
                                                     <em>Select...</em>
                                                 </MenuItem>
                                                 {POSITION_OPTIONS.map((opt) => (
                                                     <MenuItem key={opt.value} value={opt.value}>
-                                                        {opt.label}
+                                                        <Tooltip title={opt.description} placement="right">
+                                                            <span style={{ width: '100%' }}>{opt.label}</span>
+                                                        </Tooltip>
                                                     </MenuItem>
                                                 ))}
                                             </Select>
@@ -331,24 +309,17 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
                                             <Select
                                                 value={op.operation || ''}
                                                 label="Operation"
-                                                onChange={(e) => handleOpFieldChangeAtIndex(index, 'operation', e.target.value)}
+                                                onChange={(e) => updateOperation(op.uuid, { operation: e.target.value })}
                                                 disabled={!op.position}
-                                                MenuProps={{
-                                                    slotProps: {
-                                                        paper: {
-                                                            sx: {
-                                                                maxHeight: 300,
-                                                            },
-                                                        },
-                                                    },
-                                                }}
                                             >
                                                 <MenuItem value="">
                                                     <em>Select...</em>
                                                 </MenuItem>
                                                 {OPERATION_OPTIONS[op.position]?.map((opt) => (
                                                     <MenuItem key={opt.value} value={opt.value}>
-                                                        {opt.label}
+                                                        <Tooltip title={opt.description} placement="right">
+                                                            <span style={{ width: '100%' }}>{opt.label}</span>
+                                                        </Tooltip>
                                                     </MenuItem>
                                                 ))}
                                             </Select>
@@ -359,11 +330,11 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
                                             <TextField
                                                 size="small"
                                                 label="Value"
-                                                value={op.meta?.type === 'int' ? formatNumberWithCommas(op.value || '') : (op.value || '')}
-                                                onChange={(e) => handleValueChangeAtIndex(index, e.target.value)}
+                                                value={getDisplayValue(op)}
+                                                onChange={(e) => handleValueChange(op.uuid, e.target.value)}
                                                 placeholder={
                                                     op.meta?.type === 'int' ? '1,234' :
-                                                        'enter value'
+                                                    'enter value'
                                                 }
                                                 sx={{ flex: 1 }}
                                                 type="text"
