@@ -1,6 +1,5 @@
 import {
     Add as AddIcon,
-    ArrowDownward as ArrowDownIcon,
     Warning as WarningIcon,
     ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
@@ -23,7 +22,7 @@ import {
     SmartOpNode,
     ActionAddNode,
     SmartFallbackNode,
-    ConnectionLine,
+    ArrowNode,
     ModelNode,
     NodeContainer,
     ProviderNode, MODEL_NODE_STYLES
@@ -332,9 +331,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
 
                                     {/* Arrow to rules section - aligned to center of ModelNode */}
                                     <Box sx={{ flex: 0, display: 'flex', alignItems: 'center', height: MODEL_NODE_STYLES.height }}>
-                                        <ConnectionLine>
-                                            <ArrowDownIcon sx={{ transform: 'rotate(270deg)' }} />
-                                        </ConnectionLine>
+                                        <ArrowNode direction="forward" />
                                     </Box>
 
                                     {/* Rules section on the right */}
@@ -368,9 +365,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                         </NodeContainer>
 
                                                         {/* Arrow to providers */}
-                                                        <ConnectionLine>
-                                                            <ArrowDownIcon sx={{ transform: 'rotate(270deg)' }} />
-                                                        </ConnectionLine>
+                                                        <ArrowNode direction="forward" />
 
                                                         {/* Providers for this smart rule */}
                                                         {rule.services && rule.services.length > 0 ? (
@@ -469,9 +464,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                             </NodeContainer>
 
                                             {/* Arrow to providers */}
-                                            <ConnectionLine>
-                                                <ArrowDownIcon sx={{ transform: 'rotate(270deg)' }} />
-                                            </ConnectionLine>
+                                            <ArrowNode direction="forward" />
 
                                             {/* Default Providers */}
                                             <Box sx={{

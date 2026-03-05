@@ -1,10 +1,7 @@
-import { ActionAddNode, ConnectionLine, ModelNode, NodeContainer, ProviderNode, SmartOpNode } from '@/components/nodes';
+import { ActionAddNode, ArrowNode, ConnectionLine, ModelNode, NodeContainer, ProviderNode, SmartOpNode } from '@/components/nodes';
 import { RoutingModeSwitch } from '@/components/RoutingModeSwitch';
 import {
     Add as AddIcon,
-    ArrowBack as ArrowBackIcon,
-    ArrowDownward as ArrowDownIcon,
-    ArrowForward as ArrowForwardIcon,
     ExpandMore as ExpandMoreIcon,
     Warning as WarningIcon,
 } from '@mui/icons-material';
@@ -392,18 +389,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
 
                                     {/* Arrow to providers - aligned to center of ModelNode */}
                                     <Box sx={{ flex: 0, display: 'flex', alignItems: 'center' }}>
-                                        <ConnectionLine>
-                                            {record.responseModel ? (
-                                                // When response model exists: show two rotated arrows
-                                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                                                    <ArrowForwardIcon sx={{ transform: 'rotate(45deg)' }} />
-                                                    <ArrowBackIcon sx={{ transform: 'rotate(-45deg)' }} />
-                                                </Box>
-                                            ) : (
-                                                // When no response model: show only forward arrow
-                                                <ArrowForwardIcon />
-                                            )}
-                                        </ConnectionLine>
+                                        <ArrowNode direction={record.responseModel ? 'bidirectional' : 'forward'} />
                                     </Box>
 
                                     {/* Smart Rules Section - Vertical layout between model and providers */}
@@ -411,9 +397,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                         // Smart routing layout: Model → Smart Rules (vertical) → Default Providers
                                         <>
                                             {/* Arrow from model to first smart rule */}
-                                            <ConnectionLine>
-                                                <ArrowDownIcon />
-                                            </ConnectionLine>
+                                            <ArrowNode direction="down" />
 
                                             {/* Smart Rules Stack - Each rule is a row with SmartOpNode and its services */}
                                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: graph.rowGap }}>
@@ -430,9 +414,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                                         </NodeContainer>
 
                                                         {/* Arrow to services */}
-                                                        <ConnectionLine>
-                                                            <ArrowForwardIcon />
-                                                        </ConnectionLine>
+                                                        <ArrowNode direction="forward" />
 
                                                         {/* Services for this smart rule */}
                                                         {rule.services && rule.services.length > 0 ? (
@@ -562,9 +544,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
 
                                             {/* Arrow from smart rules to default providers */}
                                             {record.providers.length > 0 && (
-                                                <ConnectionLine>
-                                                    <ArrowDownIcon />
-                                                </ConnectionLine>
+                                                <ArrowNode direction="down" />
                                             )}
                                         </>
                                     ) : <></>}
