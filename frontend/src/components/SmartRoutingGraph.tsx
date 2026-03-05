@@ -318,7 +318,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
 
                                     {/* Arrow to rules section - aligned to center of ModelNode */}
                                     <Box sx={{ flex: 0, display: 'flex', alignItems: 'center', height: MODEL_NODE_STYLES.height }}>
-                                        <ArrowNode direction="forward" flowing={active} flowSpeed={1.} />
+                                        <ArrowNode direction="forward" flowing={false} flowSpeed={1.} />
                                     </Box>
 
                                     {/* Rules section on the right */}
@@ -352,7 +352,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                         </NodeContainer>
 
                                                         {/* Arrow to providers */}
-                                                        <ArrowNode direction="forward" flowing={active} flowSpeed={1.} />
+                                                        <ArrowNode direction="forward" flowing={false} flowSpeed={1.} />
 
                                                         {/* Providers for this smart rule */}
                                                         {rule.services && rule.services.length > 0 ? (
@@ -451,7 +451,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                             </NodeContainer>
 
                                             {/* Arrow to providers */}
-                                            <ArrowNode direction="forward" flowing={active} flowSpeed={1.} />
+                                            <ArrowNode direction="forward" flowing={false} flowSpeed={1.} />
 
                                             {/* Default Providers */}
                                             <Box sx={{

@@ -385,7 +385,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
 
                                     {/* Arrow to providers - aligned to center of ModelNode */}
                                     <Box sx={{ flex: 0, display: 'flex', alignItems: 'center' }}>
-                                        <ArrowNode direction={record.responseModel ? 'bidirectional' : 'forward'} flowing={true} flowSpeed={1.} />
+                                        <ArrowNode direction={record.responseModel ? 'bidirectional' : 'forward'} flowing={false} flowSpeed={1.} />
                                     </Box>
 
                                     {/* Smart Rules Section - Vertical layout between model and providers */}
@@ -393,7 +393,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                         // Smart routing layout: Model → Smart Rules (vertical) → Default Providers
                                         <>
                                             {/* Arrow from model to first smart rule */}
-                                            <ArrowNode direction="down" flowing={true} flowSpeed={1.} />
+                                            <ArrowNode direction="down" flowing={false} flowSpeed={1.} />
 
                                             {/* Smart Rules Stack - Each rule is a row with SmartOpNode and its services */}
                                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: graph.rowGap }}>
@@ -410,7 +410,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                                         </NodeContainer>
 
                                                         {/* Arrow to services */}
-                                                        <ArrowNode direction="forward" flowing={true} flowSpeed={1.} />
+                                                        <ArrowNode direction="forward" flowing={false} flowSpeed={1.} />
 
                                                         {/* Services for this smart rule */}
                                                         {rule.services && rule.services.length > 0 ? (
@@ -540,7 +540,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
 
                                             {/* Arrow from smart rules to default providers */}
                                             {record.providers.length > 0 && (
-                                                <ArrowNode direction="down" flowing={true} flowSpeed={1.} />
+                                                <ArrowNode direction="down" flowing={false} flowSpeed={1.} />
                                             )}
                                         </>
                                     ) : <></>}
