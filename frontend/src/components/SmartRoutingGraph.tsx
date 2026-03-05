@@ -195,7 +195,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                 fontFamily: 'monospace',
                                 fontSize: '0.875rem',
                                 fontWeight: 600,
-                                color: active ? 'primary.main' : 'text.disabled',
+                                color: active ? 'text.primary' : 'text.disabled',
                                 opacity: active ? 1 : 0.5,
                                 cursor: record.requestModel ? 'pointer' : 'default',
                                 '&:hover': record.requestModel ? {

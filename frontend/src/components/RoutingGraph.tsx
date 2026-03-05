@@ -235,7 +235,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                 fontFamily: 'monospace',
                                 fontSize: '0.875rem',
                                 fontWeight: 600,
-                                color: record.active ? 'primary.main' : 'text.disabled',
+                                color: record.active ? 'text.primary' : 'text.disabled',
                                 opacity: record.active ? 1 : 0.5,
                                 cursor: record.requestModel ? 'pointer' : 'default',
                                 '&:hover': record.requestModel ? {
