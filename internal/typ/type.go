@@ -59,6 +59,26 @@ const (
 	ScenarioGlobal     RuleScenario = "_global" // Global flags that apply to all scenarios
 )
 
+// ThinkingEffortLevel represents the thinking effort level for extended thinking
+type ThinkingEffortLevel string
+
+const (
+	ThinkingEffortLow    ThinkingEffortLevel = "low"
+	ThinkingEffortMedium ThinkingEffortLevel = "medium"
+	ThinkingEffortHigh   ThinkingEffortLevel = "high"
+	ThinkingEffortMax    ThinkingEffortLevel = "max"
+	ThinkingEffortDefault ThinkingEffortLevel = "" // Use model default
+)
+
+// ThinkingBudgetMapping defines budget_tokens for each effort level
+// Note: Default max is 31,999 tokens per Claude Code documentation
+var ThinkingBudgetMapping = map[ThinkingEffortLevel]int64{
+	ThinkingEffortLow:    1024,  // ~1K tokens - minimal reasoning (minimum allowed)
+	ThinkingEffortMedium: 5120,  // ~5K tokens - balanced
+	ThinkingEffortHigh:   20480, // ~20K tokens - deep reasoning
+	ThinkingEffortMax:    31999, // ~32K tokens - maximum (default)
+}
+
 // ScenarioFlags represents configuration flags for a scenario
 type ScenarioFlags struct {
 	Unified  bool `json:"unified" yaml:"unified"`   // Single configuration for all models
@@ -71,6 +91,9 @@ type ScenarioFlags struct {
 
 	// Stream configuration flags
 	DisableStreamUsage bool `json:"disable_stream_usage,omitempty" yaml:"disable_stream_usage,omitempty"` // Don't include usage in streaming chunks (for incompatible clients like xcode)
+
+	// Thinking effort level (empty string = use model default)
+	ThinkingEffort ThinkingEffortLevel `json:"thinking_effort,omitempty" yaml:"thinking_effort,omitempty"`
 }
 
 // ScenarioConfig represents configuration for a specific scenario

@@ -73,6 +73,18 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	disableStreamUsage := false
 	if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
 		disableStreamUsage = scenarioConfig.Flags.DisableStreamUsage
+
+		// Apply thinking effort from scenario config
+		effort := scenarioConfig.Flags.ThinkingEffort
+		if effort != "" && effort != typ.ThinkingEffortDefault {
+			// Map effort level to budget_tokens
+			budgetTokens, ok := typ.ThinkingBudgetMapping[effort]
+			if !ok {
+				budgetTokens = typ.ThinkingBudgetMapping[typ.ThinkingEffortMedium] // fallback
+			}
+			// Set thinking with budget_tokens
+			req.Thinking = anthropic.ThinkingConfigParamOfEnabled(budgetTokens)
+		}
 	}
 
 	// Check provider's API style to decide which path to take

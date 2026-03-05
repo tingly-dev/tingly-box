@@ -624,6 +624,19 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(ScenarioFlagResponse{}),
 	)
 
+	apiV1.GET("/scenario/:scenario/string-flag/:flag", s.GetScenarioStringFlag,
+		swagger.WithDescription("Get a specific string flag value for a scenario"),
+		swagger.WithTags("scenarios"),
+		swagger.WithResponseModel(ScenarioFlagResponse{}),
+	)
+
+	apiV1.PUT("/scenario/:scenario/string-flag/:flag", s.SetScenarioStringFlag,
+		swagger.WithDescription("Set a specific string flag value for a scenario"),
+		swagger.WithTags("scenarios"),
+		swagger.WithRequestModel(ScenarioStringFlagUpdateRequest{}),
+		swagger.WithResponseModel(ScenarioFlagResponse{}),
+	)
+
 	// History
 	apiV1.GET("/history", s.GetHistory,
 		swagger.WithDescription("Get request history"),
