@@ -9,11 +9,11 @@ interface RoutingModeSwitchProps {
 }
 
 export const RoutingModeSwitch: React.FC<RoutingModeSwitchProps> = ({
-    smartEnabled,
-    active,
-    disabled = false,
-    onSwitch,
-}) => {
+                                                                        smartEnabled,
+                                                                        active,
+                                                                        disabled = false,
+                                                                        onSwitch,
+                                                                    }) => {
     const handleModeChange = (
         _event: React.MouseEvent<HTMLElement>,
         newMode: string | null,
@@ -42,38 +42,16 @@ export const RoutingModeSwitch: React.FC<RoutingModeSwitchProps> = ({
                         fontWeight: 600,
                         textTransform: 'none',
                         border: '1px solid',
-                        borderColor: 'divider',
+                        borderColor: 'text.primary',
                         minWidth: 60,
-                    },
-                    '& .MuiToggleButton-root:first-of-type': {
-                        borderBottomLeftRadius: 0,
-                        borderBottomRightRadius: 0,
-                        marginBottom: '-1px',
-                    },
-                    '& .MuiToggleButton-root:last-of-type': {
-                        borderTopLeftRadius: 0,
-                        borderTopRightRadius: 0,
                     },
                     '& .MuiToggleButton-root.Mui-selected': {
                         backgroundColor: 'secondary.main',
                         color: 'white',
-                        borderColor: 'secondary.main',
+                        borderColor: 'text.primary',
                         '&:hover': {
                             backgroundColor: 'secondary.dark',
                         },
-                    },
-                    '& .MuiToggleButton-root:not(.Mui-selected)': {
-                        color: 'text.secondary',
-                        backgroundColor: 'background.paper',
-                        borderColor: 'divider',
-                        '&:hover': {
-                            backgroundColor: 'action.hover',
-                        },
-                    },
-                    '& .MuiToggleButton-root:disabled': {
-                        borderColor: 'action.disabled',
-                        color: 'text.disabled',
-                        backgroundColor: 'action.disabledBackground',
                     },
                 }}
             >
