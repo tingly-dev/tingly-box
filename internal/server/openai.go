@@ -218,7 +218,13 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			}
 			defer cancel()
 
-			inputTokens, outputTokens, err := stream.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, streamResp, responseModel)
+			// Get scenario config for DisableStreamUsage flag
+			disableStreamUsage := false
+			if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
+				disableStreamUsage = scenarioConfig.Flags.DisableStreamUsage
+			}
+
+			inputTokens, outputTokens, err := stream.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, streamResp, responseModel, disableStreamUsage)
 			if err != nil {
 				// Track usage with error status
 				if inputTokens > 0 || outputTokens > 0 {
@@ -287,7 +293,13 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		}
 
 		if isStreaming {
-			s.handleOpenAIChatStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, shouldIntercept, shouldStripTools)
+			// Get scenario config for DisableStreamUsage flag
+			disableStreamUsage := false
+			if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
+				disableStreamUsage = scenarioConfig.Flags.DisableStreamUsage
+			}
+
+			s.handleOpenAIChatStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, shouldIntercept, shouldStripTools, disableStreamUsage)
 		} else {
 			s.handleNonStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, shouldIntercept, shouldStripTools)
 		}

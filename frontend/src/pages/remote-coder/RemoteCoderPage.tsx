@@ -1,32 +1,32 @@
-import React, { useState, useEffect, useRef } from 'react';
+import api from '@/services/api';
 import {
+    Refresh as RefreshIcon,
+    Send as SendIcon,
+} from '@mui/icons-material';
+import {
+    Alert,
     Box,
+    Button,
     Card,
     CardContent,
+    Chip,
+    CircularProgress,
     Dialog,
     DialogActions,
     DialogContent,
     DialogTitle,
-    Typography,
-    TextField,
-    Button,
-    Chip,
-    CircularProgress,
-    IconButton,
-    Paper,
-    Alert,
-    Select,
-    MenuItem,
     FormControl,
+    IconButton,
     InputLabel,
+    MenuItem,
+    Paper,
+    Select,
+    TextField,
+    Typography,
 } from '@mui/material';
-import {
-    Send as SendIcon,
-    Refresh as RefreshIcon,
-} from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import api from '@/services/api';
 
 interface Session {
     id: string;
@@ -300,7 +300,7 @@ const RemoteCoderPage: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
                 <Box>
                     <Typography variant="h4" fontWeight={700} gutterBottom>
-                        Remote Coder Chat
+                        Remote Control Chat
                     </Typography>
                     <Typography variant="body1" color="text.secondary">
                         Chat with Claude Code sessions remotely
@@ -344,7 +344,7 @@ const RemoteCoderPage: React.FC = () => {
                 </Alert>
             )}
 
-            <Dialog open={projectPathDialogOpen} onClose={() => {}}>
+            <Dialog open={projectPathDialogOpen} onClose={() => { }}>
                 <DialogTitle>Set Project Path</DialogTitle>
                 <DialogContent>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -227,12 +228,38 @@ func (s *Server) SetScenarioFlag(c *gin.Context) {
 		return
 	}
 
+	// Get the old value before setting
+	oldValue := cfg.GetScenarioFlag(scenario, flag)
+
 	if err := cfg.SetScenarioFlag(scenario, flag, request.Value); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to save scenario flag: " + err.Error(),
 		})
 		return
+	}
+
+	// Handle special flags that require runtime actions
+	if scenario == typ.ScenarioGlobal && flag == "enable_remote_coder" && oldValue != request.Value {
+		if request.Value {
+			// Enable remote control: start the service and sync bots
+			logrus.Info("Enabling remote control...")
+			if err := s.StartRemoteCoder(); err != nil {
+				logrus.WithError(err).Warn("Failed to start remote control")
+			} else {
+				// Sync bots after a short delay to allow the service to initialize
+				go func() {
+					ctx := context.Background()
+					if err := s.SyncRemoteCoderBots(ctx); err != nil {
+						logrus.WithError(err).Warn("Failed to sync bots after enabling remote control")
+					}
+				}()
+			}
+		} else {
+			// Disable remote control: stop the service
+			logrus.Info("Disabling remote control...")
+			s.StopRemoteCoder()
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

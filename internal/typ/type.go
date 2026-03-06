@@ -1,6 +1,7 @@
 package typ
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -8,12 +9,50 @@ import (
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 )
 
+// FlexibleBool is a boolean type that can unmarshal from both bool and int (0/1)
+// This handles cases where JSON data may contain numeric values instead of booleans
+type FlexibleBool bool
+
+// UnmarshalJSON implements json.Unmarshaler for FlexibleBool
+func (fb *FlexibleBool) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as boolean first
+	var b bool
+	if err := json.Unmarshal(data, &b); err == nil {
+		*fb = FlexibleBool(b)
+		return nil
+	}
+
+	// Try to unmarshal as number (0 or 1)
+	var n float64
+	if err := json.Unmarshal(data, &n); err == nil {
+		*fb = FlexibleBool(n != 0)
+		return nil
+	}
+
+	// Try to unmarshal as string
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		*fb = FlexibleBool(s == "true" || s == "1")
+		return nil
+	}
+
+	// If all attempts fail, use false as default
+	*fb = false
+	return nil
+}
+
+// MarshalJSON implements json.Marshaler for FlexibleBool
+func (fb FlexibleBool) MarshalJSON() ([]byte, error) {
+	return json.Marshal(bool(fb))
+}
+
 // RuleScenario represents the scenario for a routing rule
 type RuleScenario string
 
 const (
 	ScenarioOpenAI     RuleScenario = "openai"
 	ScenarioAnthropic  RuleScenario = "anthropic"
+	ScenarioAgent      RuleScenario = "agent"
 	ScenarioClaudeCode RuleScenario = "claude_code"
 	ScenarioOpenCode   RuleScenario = "opencode"
 	ScenarioXcode      RuleScenario = "xcode"
@@ -29,6 +68,9 @@ type ScenarioFlags struct {
 	// Experimental feature flags (scenario-based opt-in)
 	SmartCompact bool `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"` // Enable smart compact (remove thinking blocks)
 	Recording    bool `json:"recording,omitempty" yaml:"recording,omitempty"`         // Enable scenario recording
+
+	// Stream configuration flags
+	DisableStreamUsage bool `json:"disable_stream_usage,omitempty" yaml:"disable_stream_usage,omitempty"` // Don't include usage in streaming chunks (for incompatible clients like xcode)
 }
 
 // ScenarioConfig represents configuration for a specific scenario
@@ -67,10 +109,10 @@ type OAuthDetail struct {
 
 // ToolInterceptorConfig contains configuration for tool interceptor (search & fetch)
 type ToolInterceptorConfig struct {
-	PreferLocalSearch bool `json:"prefer_local_search,omitempty"` // Prefer local tool interception even if provider has built-in search
-	SearchAPI  string `json:"search_api,omitempty"`  // "brave" or "google"
-	SearchKey  string `json:"search_key,omitempty"`  // API key for search service
-	MaxResults int    `json:"max_results,omitempty"` // Max search results to return (default: 10)
+	PreferLocalSearch FlexibleBool `json:"prefer_local_search,omitempty"` // Prefer local tool interception even if provider has built-in search
+	SearchAPI         string `json:"search_api,omitempty"`          // "brave" or "google"
+	SearchKey         string `json:"search_key,omitempty"`          // API key for search service
+	MaxResults        int    `json:"max_results,omitempty"`         // Max search results to return (default: 10)
 
 	// Proxy configuration
 	ProxyURL string `json:"proxy_url,omitempty"` // HTTP proxy URL (e.g., "http://127.0.0.1:7897")
@@ -90,100 +132,8 @@ type ToolInterceptorOverride struct {
 	MaxResults *int `json:"max_results,omitempty"`
 }
 
-// GetEffectiveConfig returns the effective tool interceptor config for a provider
-// Global config is used as base, with provider overrides applied
-func (p *Provider) GetEffectiveConfig(global *ToolInterceptorConfig) (*ToolInterceptorConfig, bool) {
-	// Provider-level config (preferred)
-	if p.ToolInterceptor != nil {
-		if p.ToolInterceptorOverride != nil && p.ToolInterceptorOverride.Disabled {
-			return nil, false
-		}
-
-		base := global
-		if base == nil {
-			base = &ToolInterceptorConfig{}
-		}
-
-		effective := &ToolInterceptorConfig{
-			PreferLocalSearch: base.PreferLocalSearch,
-			SearchAPI:    base.SearchAPI,
-			SearchKey:    base.SearchKey,
-			MaxResults:   base.MaxResults,
-			ProxyURL:     base.ProxyURL,
-			MaxFetchSize: base.MaxFetchSize,
-			FetchTimeout: base.FetchTimeout,
-			MaxURLLength: base.MaxURLLength,
-		}
-
-		if p.ToolInterceptor.PreferLocalSearch {
-			effective.PreferLocalSearch = true
-		}
-		if p.ToolInterceptor.SearchAPI != "" {
-			effective.SearchAPI = p.ToolInterceptor.SearchAPI
-		}
-		if p.ToolInterceptor.SearchKey != "" {
-			effective.SearchKey = p.ToolInterceptor.SearchKey
-		}
-		if p.ToolInterceptor.MaxResults != 0 {
-			effective.MaxResults = p.ToolInterceptor.MaxResults
-		}
-		if p.ToolInterceptor.ProxyURL != "" {
-			effective.ProxyURL = p.ToolInterceptor.ProxyURL
-		}
-		if p.ToolInterceptor.MaxFetchSize != 0 {
-			effective.MaxFetchSize = p.ToolInterceptor.MaxFetchSize
-		}
-		if p.ToolInterceptor.FetchTimeout != 0 {
-			effective.FetchTimeout = p.ToolInterceptor.FetchTimeout
-		}
-		if p.ToolInterceptor.MaxURLLength != 0 {
-			effective.MaxURLLength = p.ToolInterceptor.MaxURLLength
-		}
-
-		// Apply legacy overrides if present
-		if p.ToolInterceptorOverride != nil && p.ToolInterceptorOverride.MaxResults != nil {
-			effective.MaxResults = *p.ToolInterceptorOverride.MaxResults
-		}
-
-		applyToolInterceptorDefaults(effective)
-		return effective, true
-	}
-
-	// Legacy override path (requires global enabled)
-	if global == nil {
-		return nil, false
-	}
-
-	// Check if provider has explicitly disabled
-	if p.ToolInterceptorOverride != nil && p.ToolInterceptorOverride.Disabled {
-		return nil, false
-	}
-
-	// Start with global config
-	effective := &ToolInterceptorConfig{
-		PreferLocalSearch: global.PreferLocalSearch,
-		SearchAPI:    global.SearchAPI,
-		SearchKey:    global.SearchKey,
-		MaxResults:   global.MaxResults,
-		ProxyURL:     global.ProxyURL,
-		MaxFetchSize: global.MaxFetchSize,
-		FetchTimeout: global.FetchTimeout,
-		MaxURLLength: global.MaxURLLength,
-	}
-
-	// Apply provider overrides
-	if p.ToolInterceptorOverride != nil {
-		if p.ToolInterceptorOverride.MaxResults != nil {
-			effective.MaxResults = *p.ToolInterceptorOverride.MaxResults
-		}
-	}
-
-	applyToolInterceptorDefaults(effective)
-
-	return effective, true
-}
-
-func applyToolInterceptorDefaults(config *ToolInterceptorConfig) {
+// ApplyToolInterceptorDefaults applies default values to tool interceptor config
+func ApplyToolInterceptorDefaults(config *ToolInterceptorConfig) {
 	if config.MaxResults == 0 {
 		config.MaxResults = 10
 	}
@@ -230,11 +180,9 @@ type Provider struct {
 	Models        []string          `json:"models,omitempty"`       // Available models for this provider (cached)
 	LastUpdated   string            `json:"last_updated,omitempty"` // Last update timestamp
 
-	// Auth configuration
+// Auth configuration
 	AuthType                AuthType                 `json:"auth_type"`                           // api_key or oauth
 	OAuthDetail             *OAuthDetail             `json:"oauth_detail,omitempty"`              // OAuth credentials (only for oauth auth type)
-	ToolInterceptor         *ToolInterceptorConfig   `json:"tool_interceptor,omitempty"`          // Provider-level tool interceptor config
-	ToolInterceptorOverride *ToolInterceptorOverride `json:"tool_interceptor_override,omitempty"` // Provider-level override for tool interceptor
 }
 
 // GetAccessToken returns the access token based on auth type

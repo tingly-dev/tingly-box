@@ -282,7 +282,7 @@ func TestConvertAnthropicToOpenAIRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, _ := ConvertAnthropicToOpenAIRequest(tt.anthropicReq, false)
+			result, _ := ConvertAnthropicToOpenAIRequest(tt.anthropicReq, false, false)
 
 			assert.Equal(t, openai.ChatModel(tt.expectedModel), result.Model)
 			assert.Equal(t, tt.expectedMaxTokens, result.MaxTokens.Value)

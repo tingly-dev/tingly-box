@@ -104,7 +104,25 @@ func (rm *RouteManager) GenerateSwaggerJSON() (string, error) {
 			}
 
 			// Handle path parameters (add them first so they appear before query/body params)
-			pathParams := rm.extractPathParams(route.Path)
+			// Use explicit path params if provided, otherwise auto-detect from path
+			var pathParams []Parameter
+			if len(route.PathParams) > 0 {
+				// Use explicitly defined path params
+				for _, pathParam := range route.PathParams {
+					swaggerParam := Parameter{
+						Name:        pathParam.Name,
+						In:          "path",
+						Description: pathParam.Description,
+						Required:    true,
+						Type:        pathParam.Type,
+						Format:      pathParam.Format,
+					}
+					pathParams = append(pathParams, swaggerParam)
+				}
+			} else {
+				// Auto-detect path params from the route path
+				pathParams = rm.extractPathParams(route.Path)
+			}
 			operation.Parameters = append(operation.Parameters, pathParams...)
 
 			// Handle query parameters from QueryParams

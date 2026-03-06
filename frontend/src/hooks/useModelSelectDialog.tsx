@@ -44,6 +44,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
     const [editingProviderUuid, setEditingProviderUuid] = useState<string | null>(null);
     const [currentRuleUuid, setCurrentRuleUuid] = useState<string | null>(null);
     const [currentConfigRecord, setCurrentConfigRecord] = useState<ConfigRecord | null>(null);
+    const [modelSelectionCleared, setModelSelectionCleared] = useState(false); // Track if model selection was cleared
 
     // Refs for tracking context
     const currentSmartRuleIndexRef = useRef<number | null>(null);
@@ -80,6 +81,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
         setCurrentRuleUuid(ruleUuid);
         setCurrentConfigRecord(configRecord);
         setMode(newMode);
+        setModelSelectionCleared(false); // Reset the cleared state when opening dialog
 
         // Check if providerUuid is a smart rule reference (format: "smart:${index}")
         if (providerUuid?.startsWith('smart:')) {
@@ -248,12 +250,16 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
     }, [mode, editingProviderUuid, currentConfigRecord, findService]);
 
     const getSelectedModel = useCallback(() => {
+        // If model selection was cleared (e.g., after deleting a custom model), return undefined
+        if (modelSelectionCleared) {
+            return undefined;
+        }
         if (mode === 'edit' && editingProviderUuid && currentConfigRecord) {
             const found = findService(currentConfigRecord, editingProviderUuid);
             return found?.service.model;
         }
         return undefined;
-    }, [mode, editingProviderUuid, currentConfigRecord, findService]);
+    }, [mode, editingProviderUuid, currentConfigRecord, findService, modelSelectionCleared]);
 
     // Get a unique key for ModelSelectTab to force remount when selection changes
     const dialogKey = open ? `${getSelectedProvider() || ''}-${getSelectedModel() || ''}` : 'closed';
@@ -292,6 +298,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
                     selectedProvider={getSelectedProvider()}
                     selectedModel={getSelectedModel()}
                     onSelected={handleModelSelect}
+                    onSelectionClear={() => setModelSelectionCleared(true)}
                 />
             </DialogContent>
         </Dialog>

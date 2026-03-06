@@ -57,4 +57,5 @@ func (s *Service) ListModels() []Model {
 func (s *Service) SetupRoutes(group *gin.RouterGroup) {
 	group.GET("/models", s.handler.ListModels)
 	group.POST("/chat/completions", s.handler.ChatCompletions)
+	group.POST("/messages", s.handler.Messages)
 }

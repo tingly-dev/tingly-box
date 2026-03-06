@@ -1,0 +1,7 @@
+[ASSISTANT]{{if .Message.ID}} {{.Message.ID}}
+{{end}}{{range .Message.Content }}
+{{- if .Text}}{{.Text}}
+{{end}}{{- if .Name }}{{if $.ShowToolDetails }}[TOOL] {{.Name}}
+{{end}}{{end}}{{- if .Thinking}}{{if $.Verbose }}[THINKING] {{.Thinking}}
+{{end}}{{end}}{{- if .ToolUseID}}{{if $.ShowToolDetails }}[TOOL_RESULT] {{.ToolUseID}}{{if .IsError}} [ERROR]{{end}}
+{{end}}{{end}}{{end}}

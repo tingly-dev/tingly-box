@@ -25,8 +25,7 @@ import {
 } from '../client';
 import {
     getApiBaseUrl,
-    getApiProtocol,
-    getDisplayOrigin,
+    getDisplayOrigin
 } from '../utils/protocol';
 
 const DEFAULT_BASE_PATH = getDisplayOrigin().replace(/\/+$/, "");
@@ -592,9 +591,9 @@ export const api = {
             const apiInstances = await getApiInstances();
             const response = await apiInstances
                 .testingApi.apiV1ProbePost({
-                provider: uuid,
-                model: model
-            });
+                    provider: uuid,
+                    model: model
+                });
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -773,10 +772,10 @@ export const api = {
     },
 
     // Config Apply API - Safe endpoints that generate config from system state
-    applyClaudeConfig: async (mode: string): Promise<any> => {
+    applyClaudeConfig: async (mode: string, installStatusLine?: boolean): Promise<any> => {
         return fetchUIAPI('/config/apply/claude', {
             method: 'POST',
-            body: JSON.stringify({ mode }),
+            body: JSON.stringify({ mode, installStatusLine }),
         });
     },
 
@@ -959,7 +958,80 @@ export const api = {
     },
 
     // ============================================
-    // Remote Coder API
+    // ImBot Settings API (Migrated to standard API)
+    // ============================================
+
+    // Get all ImBot settings
+    getImBotSettingsList: async (): Promise<any> => {
+        return fetchUIAPI('/imbot-settings');
+    },
+
+    // Get a specific ImBot setting by UUID
+    getImBotSetting: async (uuid: string): Promise<any> => {
+        return fetchUIAPI(`/imbot-settings/${uuid}`);
+    },
+
+    // Create a new ImBot setting
+    createImBotSetting: async (data: {
+        name?: string;
+        platform?: string;
+        auth_type?: string;
+        auth?: Record<string, string>;
+        proxy_url?: string;
+        chat_id?: string;
+        bash_allowlist?: string[];
+        enabled?: boolean;
+        token?: string;
+    }): Promise<any> => {
+        return fetchUIAPI('/imbot-settings', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    // Update an ImBot setting
+    updateImBotSetting: async (uuid: string, data: {
+        name?: string;
+        platform?: string;
+        auth_type?: string;
+        auth?: Record<string, string>;
+        proxy_url?: string;
+        chat_id?: string;
+        bash_allowlist?: string[];
+        enabled?: boolean;
+    }): Promise<any> => {
+        return fetchUIAPI(`/imbot-settings/${uuid}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    },
+
+    // Delete an ImBot setting
+    deleteImBotSetting: async (uuid: string): Promise<any> => {
+        return fetchUIAPI(`/imbot-settings/${uuid}`, {
+            method: 'DELETE',
+        });
+    },
+
+    // Toggle an ImBot setting's enabled status
+    toggleImBotSetting: async (uuid: string): Promise<any> => {
+        return fetchUIAPI(`/imbot-settings/${uuid}/toggle`, {
+            method: 'POST',
+        });
+    },
+
+    // Get all supported ImBot platforms
+    getImBotPlatforms: async (): Promise<any> => {
+        return fetchUIAPI('/imbot-platforms');
+    },
+
+    // Get platform auth configuration
+    getImBotPlatformConfig: async (platform: string): Promise<any> => {
+        return fetchUIAPI(`/imbot-platform-config?platform=${platform}`);
+    },
+
+    // ============================================
+    // Remote Control API (Session management only)
     // ============================================
 
     // Get the base URL for remote-coder service
@@ -980,7 +1052,7 @@ export const api = {
             const data = await response.json();
             return data.available === true;
         } catch (error: any) {
-            console.error('Remote Coder availability check failed:', error);
+            console.error('Remote Control availability check failed:', error);
             return false;
         }
     },
@@ -1165,53 +1237,6 @@ export const api = {
                     'Content-Type': 'application/json',
                     ...(token && { 'Authorization': `Bearer ${token}` }),
                 },
-            });
-
-            if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
-            }
-
-            return await response.json();
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Get remote-coder bot settings
-    getRemoteCCBotSettings: async (): Promise<any> => {
-        try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/settings`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
-            }
-
-            return await response.json();
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Update remote-coder bot settings
-    updateRemoteCCBotSettings: async (data: { token: string; platform?: string; proxy_url?: string; chat_id?: string; bash_allowlist?: string[] }): Promise<any> => {
-        try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/settings`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-                body: JSON.stringify(data),
             });
 
             if (response.status === 401) {

@@ -55,6 +55,12 @@ func (s *Server) UseUIEndpoints() {
 	// Exclude API routes from SPA catch-all by registering them first
 	// The routes registered below (manager APIs, OAuth, usage, etc.) will take precedence
 
+	// Claude Code status line endpoints (no auth required)
+	// These must be registered before the /tingly/:scenario routes
+	ccGroup := s.engine.Group("/tingly/:scenario")
+	ccGroup.POST("/status", s.GetClaudeCodeStatus)
+	ccGroup.POST("/statusline", s.GetClaudeCodeStatusLine)
+
 	// Create route manager
 	manager := swagger.NewRouteManager(s.engine)
 
@@ -65,6 +71,9 @@ func (s *Server) UseUIEndpoints() {
 
 	// Usage API routes
 	s.RegisterUsageRoutes(manager)
+
+	// ImBot settings API routes
+	s.RegisterImBotSettingsRoutes(manager)
 
 	// Config apply API routes
 	s.RegisterConfigApplyRoutes(manager)
@@ -149,8 +158,26 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 		prober = s.clientPool.GetOpenAIClient(provider, model)
 	case protocol.APIStyleAnthropic:
 		prober = s.clientPool.GetAnthropicClient(provider, model)
+	case protocol.APIStyleGoogle:
+		prober = s.clientPool.GetGoogleClient(provider, model)
 	default:
-		prober = s.clientPool.GetOpenAIClient(provider, model)
+		errorMessage := "unknown api style"
+		c.JSON(http.StatusNotFound, ProbeResponse{
+			Success: false,
+			Error: &ErrorDetail{
+				Message: fmt.Sprintf("Probe failed: %s", errorMessage),
+				Type:    "error",
+				Code:    "PROBE_FAILED",
+			},
+			Data: &ProbeResponseData{
+				Request:     mockRequest,
+				Response:    ProbeResponseDetail{Content: "", Model: model, Provider: provider.Name, FinishReason: "error", Error: errorMessage},
+				Usage:       ProbeUsage{},
+				CurlCommand: curlCommand,
+			},
+		})
+		c.Abort()
+		return
 	}
 
 	// Call the probe method
@@ -833,6 +860,7 @@ func (s *Server) useWebStaticEndpoints(engine *gin.Engine) {
 					"code":    "not_found",
 				},
 			})
+			c.Abort()
 			return
 		}
 

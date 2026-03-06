@@ -1,19 +1,18 @@
-import {
-    Box,
-    BoxProps,
-    Tooltip,
-    Typography,
-    IconButton,
-    Divider
-} from '@mui/material';
+import { ContentCopy as CopyIcon } from '@mui/icons-material';
 import InfoIcon from '@mui/icons-material/Info';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import { ContentCopy as CopyIcon } from '@mui/icons-material';
+import {
+    Box,
+    type BoxProps,
+    Divider,
+    IconButton,
+    Tooltip,
+    Typography
+} from '@mui/material';
 import React, { ReactNode, RefObject } from 'react';
-import { BaseUrlRow } from './BaseUrlRow';
 import { ApiConfigRow } from './ApiConfigRow';
+import { BaseUrlRow } from './BaseUrlRow';
 import ExperimentalFeatures from './ExperimentalFeatures';
-import { useHeaderHeight } from '../hooks/useHeaderHeight';
 
 export interface ConfigSectionProps {
     label: string;

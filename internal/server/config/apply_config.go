@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/internal"
 )
 
 // ApplyResult contains the result of applying a configuration
@@ -36,13 +38,18 @@ type OpenCodeConfigPayload struct {
 	Provider map[string]OpenCodeProviderConfig `json:"provider"`
 }
 
-// generateBackupPath generates a backup file path with timestamp
+// generateBackupPath generates a backup file path with timestamp in a backup subdirectory
+// Backup is placed in <original-file-directory>/backup/<filename>.bak-<timestamp><ext>
 func generateBackupPath(originalPath string) string {
 	now := time.Now()
 	timestamp := now.Format("20060102-150405")
 	ext := filepath.Ext(originalPath)
-	base := originalPath[:len(originalPath)-len(ext)]
-	return fmt.Sprintf("%s.bak-%s%s", base, timestamp, ext)
+	base := filepath.Base(originalPath)
+	dir := filepath.Dir(originalPath)
+
+	// Place backup in a "backup" subdirectory of the original file's directory
+	backupDir := filepath.Join(dir, "backup")
+	return filepath.Join(backupDir, fmt.Sprintf("%s.bak-%s%s", base, timestamp, ext))
 }
 
 // backupFile creates a backup of the existing file
@@ -55,6 +62,12 @@ func backupFile(path string) (string, error) {
 	defer src.Close()
 
 	backupPath := generateBackupPath(path)
+
+	// Ensure backup directory exists
+	if err := os.MkdirAll(filepath.Dir(backupPath), 0755); err != nil {
+		return "", fmt.Errorf("failed to create backup directory: %w", err)
+	}
+
 	dst, err := os.OpenFile(backupPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0644)
 	if err != nil {
 		return "", fmt.Errorf("failed to create backup file: %w", err)
@@ -74,9 +87,14 @@ func ensureDir(path string) error {
 	return os.MkdirAll(dir, 0755)
 }
 
+type KV struct {
+	Key   string
+	Value any
+}
+
 // ApplyClaudeSettingsFromEnv applies Claude settings configuration with env vars
 // This is the safe version - env map is controlled by backend
-func ApplyClaudeSettingsFromEnv(env map[string]string) (*ApplyResult, error) {
+func ApplyClaudeSettingsFromEnv(env map[string]string, extras ...KV) (*ApplyResult, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
@@ -131,7 +149,11 @@ func ApplyClaudeSettingsFromEnv(env map[string]string) (*ApplyResult, error) {
 	for k, v := range env {
 		envInterface[k] = v
 	}
+
 	existingConfig["env"] = envInterface
+	for _, extra := range extras {
+		existingConfig[extra.Key] = extra.Value
+	}
 
 	// Write the merged config
 	output, err := json.MarshalIndent(existingConfig, "", "  ")
@@ -155,6 +177,39 @@ func ApplyClaudeSettingsFromEnv(env map[string]string) (*ApplyResult, error) {
 	}
 
 	return result, nil
+}
+
+// InstallStatusLineScript installs the tingly-statusline.sh script to ~/.claude/
+// Returns the path to the installed script and whether it was newly created
+func InstallStatusLineScript() (scriptPath string, created bool, err error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", false, fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	scriptPath = filepath.Join(homeDir, ".claude", "tingly-statusline.sh")
+
+	// Read script from embedded assets
+	content, err := internal.ScriptAssets.ReadFile("script/tingly-statusline.sh")
+	if err != nil {
+		return "", false, fmt.Errorf("failed to read status line script from assets: %w", err)
+	}
+
+	// Ensure directory exists
+	if err := ensureDir(scriptPath); err != nil {
+		return "", false, fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Check if file exists
+	_, err = os.Stat(scriptPath)
+	fileExists := err == nil
+
+	// Write the script
+	if err := os.WriteFile(scriptPath, content, 0755); err != nil {
+		return "", false, fmt.Errorf("failed to write script: %w", err)
+	}
+
+	return scriptPath, !fileExists, nil
 }
 
 // ApplyClaudeOnboarding applies Claude onboarding configuration

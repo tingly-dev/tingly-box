@@ -1,38 +1,38 @@
-import React, { useEffect, useState } from 'react';
+import api from '@/services/api';
 import {
+    Cancel as ClosedIcon,
+    Error as ErrorIcon,
+    History as HistoryIcon,
+    Schedule as PendingIcon,
+    Refresh as RefreshIcon,
+    CheckCircle as SuccessIcon,
+} from '@mui/icons-material';
+import {
+    Alert,
     Box,
+    Button,
     Card,
     CardContent,
-    Typography,
-    List,
-    ListItem,
-    ListItemText,
-    ListItemIcon,
     Chip,
-    Divider,
     CircularProgress,
-    Paper,
-    Alert,
-    Select,
-    MenuItem,
-    FormControl,
-    InputLabel,
-    Button,
     Dialog,
     DialogActions,
     DialogContent,
     DialogTitle,
+    Divider,
+    FormControl,
+    InputLabel,
+    List,
+    ListItem,
+    ListItemIcon,
+    ListItemText,
+    MenuItem,
+    Paper,
+    Select,
+    Typography,
 } from '@mui/material';
-import {
-    History as HistoryIcon,
-    CheckCircle as SuccessIcon,
-    Error as ErrorIcon,
-    Schedule as PendingIcon,
-    Cancel as ClosedIcon,
-    Refresh as RefreshIcon,
-} from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
-import api from '@/services/api';
+import React, { useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
 interface Session {
@@ -138,7 +138,7 @@ const RemoteCoderSessionsPage: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
                 <Box>
                     <Typography variant="h4" fontWeight={700} gutterBottom>
-                        Remote Coder
+                        Remote Control
                     </Typography>
                     <Typography variant="body1" color="text.secondary">
                         Manage remote Claude Code sessions
@@ -180,7 +180,7 @@ const RemoteCoderSessionsPage: React.FC = () => {
                 <DialogTitle>Clear All Sessions</DialogTitle>
                 <DialogContent>
                     <Typography variant="body2" color="text.secondary">
-                        This will clear all stored Remote Coder sessions from the local UI cache.
+                        This will clear all stored Remote Control sessions from the local UI cache.
                         It does not delete sessions on the server.
                     </Typography>
                 </DialogContent>

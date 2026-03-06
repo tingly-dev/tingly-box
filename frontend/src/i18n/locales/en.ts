@@ -124,6 +124,7 @@ export default {
   },
   "providerDialog": {
     "addTitle": "Add New API Key",
+    "addDescription": "Select a provider and enter your API key to connect AI services. Multiple protocols can be enabled for providers that support them.",
     "editTitle": "Edit API Key",
     "addButton": "Add API Key",
     "apiStyle": {
@@ -132,12 +133,20 @@ export default {
       "helperOpenAI": "Supports models from OpenAI, Google and many other OpenAI-compatible providers",
       "helperAnthropic": "For Anthropic-compatible AI providers, commonly used with Claude Code.",
       "openAI": "OpenAI Compatible",
-      "anthropic": "Anthropic Compatible"
+      "anthropic": "Anthropic Compatible",
+      "switchWarning": "API style changed. Base URL has been reset. Please select a compatible provider."
+    },
+    "provider": {
+      "label": "Provider or Custom Base URL",
+      "placeholder": "Select a provider or enter custom base URL"
+    },
+    "protocol": {
+      "label": "Protocol"
     },
     "keyName": {
       "label": "API Key Name",
-      "placeholder": "e.g., OpenAI",
-      "autoFill": "Key For {{title}}"
+      "placeholder": "e.g., OpenAI API Key",
+      "autoFill": "{{title}} API Key"
     },
     "providerOrUrl": {
       "label": "Provider or Custom Base URL",
@@ -145,25 +154,26 @@ export default {
     },
     "apiKey": {
       "label": "API Key",
-      "placeholderAdd": "Your API token",
-      "placeholderEdit": "Leave empty to keep current token",
-      "helperEdit": "Leave empty to keep current token"
+      "placeholderAdd": "Your API key",
+      "placeholderEdit": "Leave empty to keep current key",
+      "helperEdit": "Leave empty to keep current key"
     },
     "enabled": "Enabled",
     "advanced": {
       "title": "Advanced",
       "proxyUrl": {
-        "label": "Proxy URL",
-        "placeholder": "e.g., http://127.0.0.1:7890 or socks5://127.0.0.1:1080",
-        "helper": "Optional HTTP or SOCKS proxy for API requests"
+        "label": "HTTP/SOCKS Proxy URL (Optional)",
+        "placeholder": "http://127.0.0.1:7890 or socks5://127.0.0.1:7890",
+        "helper": "Optional: Use a proxy to bypass region restrictions. Saved for future use."
       }
     },
     "verification": {
       "verifying": "Verifying...",
       "verifyButton": "Verify",
       "missingFields": "Please fill in all required fields (API Style, Name, API Base URL, API Key)",
-      "failed": "Verification failed",
-      "networkError": "Network error or unable to connect to verification service",
+      "failed": "Connection check failed",
+      "networkError": "Unable to connect. Please check your network and proxy settings.",
+      "failureHint": "You can still add this provider using the 'Add Anyway' button if you're sure the configuration is correct.",
       "responseTime": "Response time: {{time}}ms",
       "modelsAvailable": "{{count}} models available",
       "testResult": "Test result: {{result}}"
@@ -175,7 +185,7 @@ export default {
       "explanation": "Some providers may not pass standard checks but still work correctly.",
       "whyFailed": "Connection check failed:",
       "errorDetails": "Error details",
-      "noKey": "No API key",
+      "noKey": "Not provided",
       "confirmNoteTitle": "Are you sure you want to continue?",
       "confirmNote": "Please verify that your Base URL and API Key are correct before adding. You can still add this provider, but it may not work properly if the configuration is incorrect.",
       "cancel": "Go Back",
@@ -359,15 +369,25 @@ export default {
     "jsonConfig": "JSON Config",
     "step1": "1. Configure Model",
     "step2": "2. Skip Onboarding - Make Claude Code directly usable",
+    "step3": "3. Status Line Integration (Optional)",
     "unifiedConfig": "Unified Configuration",
     "separateConfig": "Separate Configuration",
     "switchToSeparate": "Switch to Separate",
     "switchToUnified": "Switch to Unified",
+    "configButton": "Configuration Guide",
+    "quickApply": "Quick Apply",
+    "quickApplyWithStatusLine": "Quick Apply & Status Line",
+    "statusLine": {
+      "description": "Install status line integration to show real-time request information in your terminal.",
+      "jsonDescription": "Configure the status line integration to display real-time request information in your terminal prompt.",
+      "addToSettingsJson": "Add the statusLine section to your ~/.claude/settings.json (alongside the env section):",
+      "manualSetup": "Or manually download and install the status line script:",
+      "downloadLink": "Download Status Line Script"
+    },
     "modal": {
       "title": "Claude Code Configuration Guide",
       "subtitle": "Follow these steps to configure Claude Code to use Tingly Box as your AI proxy",
-      "dontRemindAgain": "Do not remind again",
-      "showGuide": "Config Claude Code"
+      "dontRemindAgain": "Do not remind again"
     }
   },
   "prompt": {

@@ -15,10 +15,12 @@ import (
 // ApplyClaudeConfig generates and applies Claude Code configuration from system state
 func (s *Server) ApplyClaudeConfig(c *gin.Context) {
 	var req struct {
-		Mode string `json:"mode"` // "unified" or "separate"
+		Mode              string `json:"mode"`              // "unified" or "separate"
+		InstallStatusLine bool   `json:"installStatusLine"` // install status line integration
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		req.Mode = "unified" // default to unified
+		req.InstallStatusLine = false
 	}
 
 	cfg := s.config
@@ -100,8 +102,30 @@ func (s *Server) ApplyClaudeConfig(c *gin.Context) {
 		env["CLAUDE_CODE_SUBAGENT_MODEL"] = "tingly/cc"
 	}
 
-	// Apply settings.json
-	settingsResult, err := config.ApplyClaudeSettingsFromEnv(env)
+	// Install status line script if requested (before applying settings)
+	var statusLineInstalled bool
+	var statusLinePath string
+
+	var extras = []config.KV{}
+	if req.InstallStatusLine {
+		var scriptCreated bool
+		statusLinePath, scriptCreated, err = config.InstallStatusLineScript()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, config.ApplyResult{
+				Success: false,
+				Message: "Failed to install status line script: " + err.Error(),
+			})
+			return
+		}
+		statusLineInstalled = true
+		_ = scriptCreated // Used for tracking but not needed for response
+		// Add statusLine config to env
+		statusLine := map[string]any{"type": "command", "command": "~/.claude/tingly-statusline.sh"}
+		extras = append(extras, config.KV{Key: "statusLine", Value: statusLine})
+	}
+
+	// Apply settings.json (now including statusLine config if requested)
+	settingsResult, err := config.ApplyClaudeSettingsFromEnv(env, extras...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, config.ApplyResult{
 			Success: false,
@@ -155,6 +179,11 @@ func (s *Server) ApplyClaudeConfig(c *gin.Context) {
 		createdFiles = append(createdFiles, "~/.claude.json")
 	} else {
 		updatedFiles = append(updatedFiles, "~/.claude.json")
+	}
+
+	// Add status line script to created/updated files
+	if statusLineInstalled {
+		createdFiles = append(createdFiles, statusLinePath)
 	}
 
 	// Build response

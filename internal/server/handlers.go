@@ -253,16 +253,11 @@ func (s *Server) determineRule(modelName string) (*typ.Rule, error) {
 
 func (s *Server) determineRuleWithScenario(scenario typ.RuleScenario, modelName string) (*typ.Rule, error) {
 	c := s.config
-	if c != nil && c.IsRequestModelInScenario(modelName, scenario) {
-		// Get the Rule for this specific request model using the same method as middleware
-		uuid := c.GetUUIDByRequestModelAndScenario(modelName, scenario)
-		rules := c.GetRequestConfigs()
-		var rule *typ.Rule
-		for i := range rules {
-			if rules[i].UUID == uuid && rules[i].Active {
-				rule = &rules[i] // Get pointer to actual rule in config
-				return rule, nil
-			}
+	if c != nil {
+		// Use the new MatchRuleByModelAndScenario which supports wildcard matching
+		rule := c.MatchRuleByModelAndScenario(modelName, scenario)
+		if rule != nil && rule.Active {
+			return rule, nil
 		}
 	}
 

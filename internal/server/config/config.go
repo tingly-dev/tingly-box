@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/constant"
@@ -22,6 +23,12 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
+)
+
+// Wildcard rule names that match any model
+const (
+	WildcardRuleName    = "*"
+	WildcardRuleNameAlt = "[any]"
 )
 
 // Config represents the global configuration
@@ -46,21 +53,30 @@ type Config struct {
 	DefaultMaxTokens int  `json:"default_max_tokens"` // Default max_tokens for anthropic API requests
 	Verbose          bool `json:"verbose"`            // Verbose mode for detailed logging
 	Debug            bool `json:"-"`                  // Debug mode for Gin debug level logging
-	OpenBrowser      bool `yaml:"-" json:"-"`         // Auto-open browser in web UI mode (default: true)
-	// Tool interceptor (local web_search/web_fetch)
-	ToolInterceptor *typ.ToolInterceptorConfig `json:"tool_interceptor,omitempty"`
+	OpenBrowser      bool `yaml:"-" json:"-"` // Auto-open browser in web UI mode (default: true)
+
+	// Generic tool configs map for all tool types
+	// Key is tool_type (e.g., "tool_interceptor", "code_execution")
+	// Value is the JSON-encoded config for that tool type
+	ToolConfigs map[string]json.RawMessage `json:"tool_configs,omitempty"`
 
 	// Error log settings
 	ErrorLogFilterExpression string `json:"error_log_filter_expression"` // Expression for filtering error log entries (default: "StatusCode >= 400 && Path matches '^/api/'")
 
+	// Health monitor settings
+	HealthMonitor loadbalance.HealthMonitorConfig `json:"health_monitor,omitempty" yaml:"health_monitor,omitempty"`
+
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
 
-	modelManager    *data.ModelListManager
-	statsStore      *db.StatsStore
-	usageStore      *db.UsageStore
-	ruleStateStore  *db.RuleStateStore // Persists current_service_index to SQLite
-	templateManager *data.TemplateManager
+	modelManager       *data.ModelListManager
+	statsStore         *db.StatsStore
+	usageStore         *db.UsageStore
+	ruleStateStore     *db.RuleStateStore     // Persists current_service_index to SQLite
+	imbotSettingsStore *db.ImBotSettingsStore // Persists ImBot credentials
+	providerStore      *db.ProviderStore      // Persists provider configurations and credentials
+	toolConfigStore    *db.ToolConfigStore    // Persists provider-specific tool configurations
+	templateManager    *data.TemplateManager
 
 	mu sync.RWMutex
 }
@@ -127,6 +143,27 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	}
 	cfg.ruleStateStore = ruleStateStore
 
+	// Initialize provider store (for persisting provider configurations and credentials)
+	providerStore, err := db.NewProviderStore(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize provider store: %w", err)
+	}
+	cfg.providerStore = providerStore
+
+	// Initialize tool config store (for persisting provider-specific tool configurations)
+	toolConfigStore, err := db.NewToolConfigStore(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize tool config store: %w", err)
+	}
+	cfg.toolConfigStore = toolConfigStore
+
+	// Initialize ImBot settings store
+	imbotSettingsStore, err := db.NewImBotSettingsStore(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize imbot settings store: %w", err)
+	}
+	cfg.imbotSettingsStore = imbotSettingsStore
+
 	// Load existing cfg if exists
 	if err := cfg.load(); err != nil {
 		// If file doesn't exist, create default cfg
@@ -146,6 +183,8 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	if cfg.VirtualModelToken == "" {
 		cfg.VirtualModelToken = constant.DefaultVirtualModelToken
 	}
+	// Ensure default scenario configs are set
+	cfg.EnsureDefaultScenarioConfigs()
 	cfg.Save()
 
 	// Ensure tokens exist even for existing configs
@@ -210,6 +249,19 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	if err := cfg.RefreshStatsFromStore(); err != nil {
 		return nil, err
 	}
+
+	// Migrate providers from JSON config to database if needed
+	if err := cfg.migrateProvidersToDB(); err != nil {
+		logrus.Warnf("Failed to migrate providers to database: %v", err)
+		// Continue anyway - provider store may already have data
+	}
+
+	// Migrate tool interceptor config from provider table to tool_config_store if needed
+	if err := cfg.migrateToolInterceptorFromProvider(); err != nil {
+		logrus.Warnf("Failed to migrate tool interceptor config: %v", err)
+		// Continue anyway - tool config may already have been migrated
+	}
+
 	return cfg, nil
 }
 
@@ -310,9 +362,9 @@ func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
 
 	// Guard name unique
 	for _, rc := range c.Rules {
-		if rc.RequestModel == rule.RequestModel {
+		if rc.RequestModel == rule.RequestModel && rc.GetScenario() == rule.Scenario {
 			if rc.UUID != rule.UUID {
-				return fmt.Errorf("rule with Name %s already exists", rule.RequestModel)
+				return fmt.Errorf("rule with Name %s already exists in same scenario", rule.RequestModel)
 			}
 		}
 	}
@@ -449,6 +501,35 @@ func (c *Config) IsRequestModelInScenario(modelName string, scenario typ.RuleSce
 		}
 	}
 	return false
+}
+
+// IsWildcardRuleName checks if the given rule name is a wildcard that matches any model
+func IsWildcardRuleName(name string) bool {
+	return name == WildcardRuleName || name == WildcardRuleNameAlt
+}
+
+// MatchRuleByModelAndScenario finds a rule by model name with wildcard support
+// Priority: exact match > wildcard match
+// Returns nil if no rule matches
+func (c *Config) MatchRuleByModelAndScenario(requestModel string, scenario typ.RuleScenario) *typ.Rule {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// First, try exact match
+	for _, rule := range c.Rules {
+		if rule.RequestModel == requestModel && rule.GetScenario() == scenario {
+			return &rule
+		}
+	}
+
+	// Then, try wildcard match
+	for _, rule := range c.Rules {
+		if IsWildcardRuleName(rule.RequestModel) && rule.GetScenario() == scenario {
+			return &rule
+		}
+	}
+
+	return nil
 }
 
 // SetRequestConfigs updates all Rules
@@ -634,6 +715,14 @@ func (c *Config) GetUsageStore() *db.UsageStore {
 	return c.usageStore
 }
 
+// GetImBotSettingsStore returns the ImBot settings store (may be nil in tests).
+func (c *Config) GetImBotSettingsStore() *db.ImBotSettingsStore {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.imbotSettingsStore
+}
+
 // HasModelToken checks if a model token is configured
 func (c *Config) HasModelToken() bool {
 	c.mu.RLock()
@@ -686,11 +775,182 @@ func (c *Config) HasToken() bool {
 
 // Provider-related methods (merged from AppConfig)
 
+// migrateProvidersToDB migrates providers from JSON config to database
+// This is a one-time migration that runs on startup if the database is empty
+// Note: Providers are kept in JSON config as backup for now, will be cleared in a future version
+func (c *Config) migrateProvidersToDB() error {
+	if c.providerStore == nil {
+		return nil // Provider store not initialized, skip migration
+	}
+
+	// Check if database already has providers
+	count, err := c.providerStore.Count()
+	if err != nil {
+		return fmt.Errorf("failed to check provider count: %w", err)
+	}
+
+	if count > 0 {
+		// Database already has providers, skip migration
+		logrus.Debugf("Database already has %d providers, skipping migration", count)
+		return nil
+	}
+
+	// Check if JSON config has providers to migrate
+	if len(c.Providers) == 0 {
+		return nil // No providers to migrate
+	}
+
+	logrus.Infof("Migrating %d providers from JSON config to database (keeping JSON as backup)...", len(c.Providers))
+
+	// Migrate each provider to database
+	for _, provider := range c.Providers {
+		if err := c.providerStore.Save(provider); err != nil {
+			return fmt.Errorf("failed to migrate provider %s: %w", provider.UUID, err)
+		}
+	}
+
+	logrus.Infof("Successfully migrated %d providers to database", len(c.Providers))
+	// Note: We keep c.Providers in JSON config as backup for now
+	// In a future version, we will clear: c.Providers = nil; c.ProvidersV1 = nil; c.Save()
+
+	return nil
+}
+
+// migrateToolInterceptorFromProvider migrates tool interceptor config from provider table to tool_config_store
+// This is a one-time migration that runs on startup
+func (c *Config) migrateToolInterceptorFromProvider() error {
+	if c.providerStore == nil || c.toolConfigStore == nil {
+		return nil // Stores not initialized, skip migration
+	}
+
+	// Check if migration has already been done by checking if any tool_configs exist
+	// If tool_configs table has entries, assume migration is done
+	var toolConfigCount int64
+	if err := c.toolConfigStore.GetDB().Model(&db.ToolConfigRecord{}).Count(&toolConfigCount).Error; err != nil {
+		return fmt.Errorf("failed to check tool config count: %w", err)
+	}
+
+	// Get all provider UUIDs that need to be migrated
+	providerDB := c.providerStore.GetDB()
+
+	// Check if old columns exist by trying to query them
+	// We use raw SQL to check since the columns are no longer in the ProviderRecord struct
+	columnsExist, err := c.checkOldToolInterceptorColumnsExist(providerDB)
+	if err != nil {
+		logrus.Warnf("Failed to check if old tool interceptor columns exist: %v", err)
+		return nil // Continue anyway, columns may have been dropped
+	}
+
+	if !columnsExist {
+		logrus.Debugf("Old tool interceptor columns do not exist in provider table, skipping migration")
+		return nil
+	}
+
+	// Get all providers with tool interceptor config using raw SQL
+	type OldProviderToolConfig struct {
+		ProviderUUID string
+		ConfigJSON   string
+		Disabled     bool
+	}
+
+	var oldConfigs []OldProviderToolConfig
+	query := `
+		SELECT uuid as provider_uuid,
+		       json_object(
+		           'prefer_local_search', tool_interceptor_prefer_local_search,
+		           'search_api', tool_interceptor_search_api,
+		           'search_key', tool_interceptor_search_key,
+		           'max_results', tool_interceptor_max_results,
+		           'proxy_url', tool_interceptor_proxy_url,
+		           'max_fetch_size', tool_interceptor_max_fetch_size,
+		           'fetch_timeout', tool_interceptor_fetch_timeout,
+		           'max_url_length', tool_interceptor_max_url_length
+		       ) as config_json,
+		       tool_interceptor_disabled as disabled
+		FROM providers
+		WHERE tool_interceptor_search_api IS NOT NULL
+		   OR tool_interceptor_search_key IS NOT NULL
+		   OR tool_interceptor_max_results != 0
+	`
+
+	if err := providerDB.Raw(query).Scan(&oldConfigs).Error; err != nil {
+		logrus.Warnf("Failed to query old tool interceptor configs: %v", err)
+		return nil // Continue anyway, may have already been migrated
+	}
+
+	if len(oldConfigs) == 0 {
+		logrus.Debugf("No tool interceptor configs found in provider table, skipping migration")
+		return nil
+	}
+
+	logrus.Infof("Migrating %d tool interceptor configs from provider table to tool_config_store...", len(oldConfigs))
+
+	// Migrate each config
+	for _, oldConfig := range oldConfigs {
+		if oldConfig.ConfigJSON == "null" || oldConfig.ConfigJSON == "" {
+			continue
+		}
+
+		// Check if already migrated
+		existing, err := c.toolConfigStore.GetByProviderAndType(oldConfig.ProviderUUID, db.ToolTypeInterceptor)
+		if err != nil {
+			logrus.Warnf("Failed to check existing tool config for provider %s: %v", oldConfig.ProviderUUID, err)
+			continue
+		}
+		if existing != nil {
+			// Already migrated, skip
+			continue
+		}
+
+		// Create new tool config record
+		uuid := fmt.Sprintf("%s-%s", oldConfig.ProviderUUID, db.ToolTypeInterceptor)
+		record := &db.ToolConfigRecord{
+			UUID:         uuid,
+			ProviderUUID: oldConfig.ProviderUUID,
+			ToolType:     db.ToolTypeInterceptor,
+			ConfigJSON:   oldConfig.ConfigJSON,
+			Disabled:     oldConfig.Disabled,
+		}
+
+		if err := c.toolConfigStore.Save(record); err != nil {
+			logrus.Warnf("Failed to migrate tool config for provider %s: %v", oldConfig.ProviderUUID, err)
+			continue
+		}
+	}
+
+	logrus.Infof("Successfully migrated tool interceptor configs to tool_config_store")
+
+	// Note: The old columns will be dropped when GORM AutoMigrate is run
+	// since they're no longer in the ProviderRecord struct
+
+	return nil
+}
+
+// checkOldToolInterceptorColumnsExist checks if the old tool interceptor columns still exist in the provider table
+func (c *Config) checkOldToolInterceptorColumnsExist(database *gorm.DB) (bool, error) {
+	// Try to query one of the old columns
+	type ColumnCheck struct {
+		HasColumn bool
+	}
+
+	// SQLite specific check using pragma_table_info
+	query := `
+		SELECT EXISTS (
+			SELECT 1 FROM pragma_table_info('providers')
+			WHERE name = 'tool_interceptor_search_api'
+		) as has_column
+	`
+
+	var result ColumnCheck
+	if err := database.Raw(query).Scan(&result).Error; err != nil {
+		return false, err
+	}
+
+	return result.HasColumn, nil
+}
+
 // AddProviderByName adds a new AI provider configuration by name, API base, and token
 func (c *Config) AddProviderByName(name, apiBase, token string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if name == "" {
 		return errors.New("provider name cannot be empty")
 	}
@@ -703,13 +963,12 @@ func (c *Config) AddProviderByName(name, apiBase, token string) error {
 		Name:     name,
 		APIBase:  apiBase,
 		APIStyle: protocol.APIStyleOpenAI, // default to openai
+		AuthType: typ.AuthTypeAPIKey,
 		Token:    token,
 		Enabled:  true,
 	}
 
-	c.Providers = append(c.Providers, provider)
-
-	return c.Save()
+	return c.AddProvider(provider)
 }
 
 // GetProviderByUUID returns a provider
@@ -717,6 +976,14 @@ func (c *Config) GetProviderByUUID(uuid string) (*typ.Provider, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
+	// Try provider store first
+	if c.providerStore != nil {
+		if provider, err := c.providerStore.GetByUUID(uuid); err == nil {
+			return provider, nil
+		}
+	}
+
+	// Fallback to in-memory providers (for migration period)
 	for _, p := range c.Providers {
 		if p.UUID == uuid {
 			return p, nil
@@ -730,6 +997,14 @@ func (c *Config) GetProviderByName(name string) (*typ.Provider, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
+	// Try provider store first
+	if c.providerStore != nil {
+		if provider, err := c.providerStore.GetByName(name); err == nil {
+			return provider, nil
+		}
+	}
+
+	// Fallback to in-memory providers (for migration period)
 	for _, p := range c.Providers {
 		if p.Name == name {
 			return p, nil
@@ -744,6 +1019,16 @@ func (c *Config) ListProviders() []*typ.Provider {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
+	// Try provider store first
+	if c.providerStore != nil {
+		providers, err := c.providerStore.List()
+		if err == nil {
+			return providers
+		}
+		logrus.Warnf("Failed to list providers from store: %v", err)
+	}
+
+	// Fallback to in-memory providers (for migration period)
 	return c.Providers
 }
 
@@ -752,6 +1037,15 @@ func (c *Config) ListOAuthProviders() ([]*typ.Provider, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
+	// Try provider store first
+	if c.providerStore != nil {
+		providers, err := c.providerStore.ListOAuth()
+		if err == nil {
+			return providers, nil
+		}
+	}
+
+	// Fallback to in-memory providers (for migration period)
 	var oauthProviders []*typ.Provider
 	for _, p := range c.Providers {
 		if p.AuthType == typ.AuthTypeOAuth && p.OAuthDetail != nil {
@@ -764,9 +1058,6 @@ func (c *Config) ListOAuthProviders() ([]*typ.Provider, error) {
 
 // AddProvider adds a new provider using Provider struct
 func (c *Config) AddProvider(provider *typ.Provider) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if provider.Name == "" {
 		return errors.New("provider name cannot be empty")
 	}
@@ -774,19 +1065,37 @@ func (c *Config) AddProvider(provider *typ.Provider) error {
 		return errors.New("API base URL cannot be empty")
 	}
 
-	c.Providers = append(c.Providers, provider)
+	// Use provider store if available
+	if c.providerStore != nil {
+		if provider.UUID == "" {
+			provider.UUID = GenerateUUID()
+		}
+		return c.providerStore.Save(provider)
+	}
 
+	// Fallback to in-memory (for migration period)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.Providers = append(c.Providers, provider)
 	return c.Save()
 }
 
 // UpdateProvider updates an existing provider by UUID
 func (c *Config) UpdateProvider(uuid string, provider *typ.Provider) error {
+	// Use provider store if available
+	if c.providerStore != nil {
+		// Preserve the UUID
+		provider.UUID = uuid
+		return c.providerStore.Save(provider)
+	}
+
+	// Fallback to in-memory (for migration period)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	for i, p := range c.Providers {
 		if p.UUID == uuid {
-			// Preserve the UUID
 			provider.UUID = uuid
 			c.Providers[i] = provider
 			return c.Save()
@@ -798,6 +1107,21 @@ func (c *Config) UpdateProvider(uuid string, provider *typ.Provider) error {
 
 // DeleteProvider removes a provider by UUID
 func (c *Config) DeleteProvider(uuid string) error {
+	// Use provider store if available
+	if c.providerStore != nil {
+		if err := c.providerStore.Delete(uuid); err != nil {
+			return err
+		}
+
+		// Delete the associated model file
+		if c.modelManager != nil {
+			_ = c.modelManager.RemoveProvider(uuid)
+		}
+
+		return nil
+	}
+
+	// Fallback to in-memory (for migration period)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -857,7 +1181,195 @@ func (c *Config) GetToolInterceptorConfig() *typ.ToolInterceptorConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	return c.ToolInterceptor
+	var config typ.ToolInterceptorConfig
+	if c.ToolConfigs != nil {
+		if data, ok := c.ToolConfigs[db.ToolTypeInterceptor]; ok {
+			if err := json.Unmarshal(data, &config); err == nil {
+				return &config
+			}
+		}
+	}
+
+	return nil
+}
+
+// GetToolConfig returns the global config for a specific tool type
+// target is a pointer to the config struct to unmarshal into
+// Returns true if config was found and successfully unmarshaled
+func (c *Config) GetToolConfig(toolType string, target interface{}) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if c.ToolConfigs == nil {
+		return false
+	}
+
+	data, ok := c.ToolConfigs[toolType]
+	if !ok {
+		return false
+	}
+
+	if err := json.Unmarshal(data, target); err != nil {
+		logrus.Warnf("Failed to unmarshal tool config for type %s: %v", toolType, err)
+		return false
+	}
+
+	return true
+}
+
+// SetToolConfig sets the global config for a specific tool type
+func (c *Config) SetToolConfig(toolType string, config interface{}) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.ToolConfigs == nil {
+		c.ToolConfigs = make(map[string]json.RawMessage)
+	}
+
+	data, err := json.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal tool config: %w", err)
+	}
+
+	c.ToolConfigs[toolType] = data
+	return c.Save()
+}
+
+// GetToolInterceptorConfigForProvider returns the effective tool interceptor config for a specific provider
+// This merges the global config with provider-specific config from the tool config store
+func (c *Config) GetToolInterceptorConfigForProvider(providerUUID string) (*typ.ToolInterceptorConfig, bool) {
+	global := c.GetToolInterceptorConfig()
+	if global == nil && c.toolConfigStore == nil {
+		return nil, false
+	}
+
+	// Try to get provider-specific config from the store
+	providerConfig, enabled, err := c.toolConfigStore.GetToolInterceptorConfig(providerUUID)
+	if err != nil {
+		logrus.Warnf("Failed to get tool interceptor config for provider %s: %v", providerUUID, err)
+	}
+
+	// If provider explicitly disabled, return disabled
+	if providerConfig != nil && !enabled {
+		return nil, false
+	}
+
+	// If provider has config, merge with global (provider takes precedence)
+	if providerConfig != nil {
+		// Start with an empty config or copy from global if available
+		effective := &typ.ToolInterceptorConfig{}
+
+		// Copy global config values if global is not nil
+		if global != nil {
+			effective.PreferLocalSearch = global.PreferLocalSearch
+			effective.SearchAPI = global.SearchAPI
+			effective.SearchKey = global.SearchKey
+			effective.MaxResults = global.MaxResults
+			effective.ProxyURL = global.ProxyURL
+			effective.MaxFetchSize = global.MaxFetchSize
+			effective.FetchTimeout = global.FetchTimeout
+			effective.MaxURLLength = global.MaxURLLength
+		}
+
+		// Apply provider overrides
+		if providerConfig.PreferLocalSearch {
+			effective.PreferLocalSearch = true
+		}
+		if providerConfig.SearchAPI != "" {
+			effective.SearchAPI = providerConfig.SearchAPI
+		}
+		if providerConfig.SearchKey != "" {
+			effective.SearchKey = providerConfig.SearchKey
+		}
+		if providerConfig.MaxResults != 0 {
+			effective.MaxResults = providerConfig.MaxResults
+		}
+		if providerConfig.ProxyURL != "" {
+			effective.ProxyURL = providerConfig.ProxyURL
+		}
+		if providerConfig.MaxFetchSize != 0 {
+			effective.MaxFetchSize = providerConfig.MaxFetchSize
+		}
+		if providerConfig.FetchTimeout != 0 {
+			effective.FetchTimeout = providerConfig.FetchTimeout
+		}
+		if providerConfig.MaxURLLength != 0 {
+			effective.MaxURLLength = providerConfig.MaxURLLength
+		}
+
+		// Apply defaults
+		typ.ApplyToolInterceptorDefaults(effective)
+		return effective, true
+	}
+
+	// No provider-specific config, use global if enabled
+	if global == nil {
+		return nil, false
+	}
+
+	effective := &typ.ToolInterceptorConfig{
+		PreferLocalSearch: global.PreferLocalSearch,
+		SearchAPI:         global.SearchAPI,
+		SearchKey:         global.SearchKey,
+		MaxResults:        global.MaxResults,
+		ProxyURL:          global.ProxyURL,
+		MaxFetchSize:      global.MaxFetchSize,
+		FetchTimeout:      global.FetchTimeout,
+		MaxURLLength:      global.MaxURLLength,
+	}
+
+	typ.ApplyToolInterceptorDefaults(effective)
+	return effective, true
+}
+
+// GetEffectiveToolConfig returns the effective tool config for a specific provider and tool type
+// This is a generic method that works for any tool type
+// The mergeFunc parameter defines how to merge global and provider-specific configs
+//
+// Usage:
+//
+//	var globalCfg typ.ToolInterceptorConfig
+//	if !c.GetToolConfig(db.ToolTypeInterceptor, &globalCfg) {
+//	    // No global config
+//	    return nil, false
+//	}
+//
+//	effective, enabled := c.GetEffectiveToolConfig(providerUUID, db.ToolTypeInterceptor,
+//	    func(globalJSON, providerJSON []byte) ([]byte, error) {
+//	        // Custom merge logic
+//	        return mergedJSON, nil
+//	    },
+//	    &globalCfg,
+//	)
+func (c *Config) GetEffectiveToolConfig(providerUUID, toolType string, mergeFunc func(global, provider interface{}) interface{}, globalConfig interface{}) (interface{}, bool) {
+	if c.toolConfigStore == nil {
+		return nil, false
+	}
+
+	// Get provider-specific config
+	record, err := c.toolConfigStore.GetByProviderAndType(providerUUID, toolType)
+	if err != nil {
+		logrus.Warnf("Failed to get tool config for provider %s, type %s: %v", providerUUID, toolType, err)
+	}
+
+	// If provider explicitly disabled, return disabled
+	if record != nil && record.Disabled {
+		return nil, false
+	}
+
+	// If provider has config, merge with global
+	if record != nil {
+		var providerConfig interface{}
+		if err := json.Unmarshal([]byte(record.ConfigJSON), &providerConfig); err != nil {
+			logrus.Warnf("Failed to unmarshal provider tool config: %v", err)
+			return globalConfig, true
+		}
+
+		return mergeFunc(globalConfig, providerConfig), true
+	}
+
+	// No provider-specific config, use global
+	return globalConfig, globalConfig != nil
 }
 
 // SetDefaultMaxTokens updates the default max_tokens
@@ -1356,6 +1868,32 @@ func init() {
 			Active: true,
 		},
 		{
+			UUID:          "built-in-agent",
+			Scenario:      typ.ScenarioAgent,
+			RequestModel:  "tingly-agent",
+			ResponseModel: "",
+			Description:   "Default proxy rule in tingly-box for agent",
+			Services:      []*loadbalance.Service{}, // Empty services initially
+			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "built-in-agent-claw",
+			Scenario:      typ.ScenarioAgent,
+			RequestModel:  "tingly-claw",
+			ResponseModel: "",
+			Description:   "Built in model rule for agent - claw",
+			Services:      []*loadbalance.Service{},
+			LBTactic: typ.Tactic{
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
 			UUID:          "built-in-openai",
 			Scenario:      typ.ScenarioOpenAI,
 			RequestModel:  "tingly-gpt",
@@ -1467,4 +2005,40 @@ func (c *Config) InsertDefaultRule() error {
 		c.AddRule(r)
 	}
 	return nil
+}
+
+// EnsureDefaultScenarioConfigs ensures that all scenarios have default config with appropriate flags
+func (c *Config) EnsureDefaultScenarioConfigs() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Define default scenario configs
+	// xcode: DisableStreamUsage = true (to fix compatibility with Xcode client)
+	// others: DisableStreamUsage = false (default behavior, include usage in streaming)
+	defaultScenarios := []typ.ScenarioConfig{
+		{
+			Scenario: typ.ScenarioXcode,
+			Flags: typ.ScenarioFlags{
+				DisableStreamUsage: true, // Xcode client cannot handle usage in streaming chunks
+			},
+		},
+	}
+
+	// Add or update scenario configs
+	for _, defaultConfig := range defaultScenarios {
+		found := false
+		for i := range c.Scenarios {
+			if c.Scenarios[i].Scenario == defaultConfig.Scenario {
+				// Update existing config if flags are not set
+				if !c.Scenarios[i].Flags.DisableStreamUsage {
+					c.Scenarios[i].Flags.DisableStreamUsage = defaultConfig.Flags.DisableStreamUsage
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.Scenarios = append(c.Scenarios, defaultConfig)
+		}
+	}
 }

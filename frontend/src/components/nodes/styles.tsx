@@ -72,7 +72,7 @@ export const ProviderNodeContainer = styled(Box)(({ theme }) => ({
     transition: 'all 0.2s ease-in-out',
     position: 'relative',
     '&:hover': {
-        borderColor: 'primary.main',
+        borderColor: 'text.secondary',
         boxShadow: theme.shadows[4],
         transform: 'translateY(-2px)',
     }
@@ -99,7 +99,7 @@ export const StyledModelNode = styled(Box, {
     position: 'relative',
     cursor: 'pointer',
     '&:hover': {
-        borderColor: 'primary.main',
+        borderColor: 'text.secondary',
         boxShadow: theme.shadows[4],
         transform: 'translateY(-2px)',
     }
@@ -124,11 +124,10 @@ export const StyledSmartNodeWrapper = styled(Box)(({ theme }) => ({
     }
 }));
 
-// Base smart node styles - used to create themed variants
-const baseSmartNodeStyles = ({ active, theme, color }: {
+// Base smart node styles - simplified without color theming
+const baseSmartNodeStyles = ({ active, theme }: {
     active: boolean;
     theme: any;
-    color: 'primary' | 'warning' | 'secondary' | 'error' | 'info' | 'success';
 }) => ({
     display: 'flex',
     flexDirection: 'column' as const,
@@ -137,8 +136,8 @@ const baseSmartNodeStyles = ({ active, theme, color }: {
     padding: smartNode.padding,
     borderRadius: theme.shape.borderRadius,
     border: '1px solid',
-    borderColor: active ? `${color}.main` : 'divider',
-    backgroundColor: active ? `${color}.50` : 'background.paper',
+    borderColor: active ? 'text.secondary' : 'divider',
+    backgroundColor: active ? 'action.hover' : 'background.paper',
     textAlign: 'center',
     width: smartNode.width,
     height: smartNode.height,
@@ -147,19 +146,60 @@ const baseSmartNodeStyles = ({ active, theme, color }: {
     position: 'relative' as const,
     opacity: active ? 1 : 0.6,
     '&:hover': {
-        borderColor: `${color}.main`,
-        backgroundColor: `${color}.100`,
+        borderColor: 'text.secondary',
+        backgroundColor: 'action.hover',
         boxShadow: theme.shadows[4],
         transform: 'translateY(-2px)',
     }
 });
 
-// Smart node with primary color theme (used by SmartOpNode)
+// Smart node (used by SmartOpNode)
 export const StyledSmartNodePrimary = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'active',
-})<{ active: boolean }>(({ active, theme }) => baseSmartNodeStyles({ active, theme, color: 'primary' }));
+})<{ active: boolean }>(({ active, theme }) => baseSmartNodeStyles({ active, theme }));
 
-// Smart node with warning color theme (used by SmartFallbackNode)
+// Smart node (used by SmartFallbackNode)
 export const StyledSmartNodeWarning = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'active',
-})<{ active: boolean }>(({ active, theme }) => baseSmartNodeStyles({ active, theme, color: 'warning' }));
+})<{ active: boolean }>(({ active, theme }) => baseSmartNodeStyles({ active, theme }));
+
+// Shared node layer styles for two-layer layout (ModelNode, ProviderNode)
+export const NODE_LAYER_STYLES = {
+    // Top layer - takes available space
+    topLayer: {
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+    } as const,
+    // Divider between layers
+    divider: {
+        width: '80%',
+        my: 0.5,
+    } as const,
+    // Bottom layer - compact height
+    bottomLayer: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        // Match compact toggle button/badge height
+        minHeight: 24,
+    } as const,
+    // Typography matching ModelNode's model name
+    typography: {
+        fontWeight: 600,
+        fontSize: '0.9rem',
+    } as const,
+    // Toggle button style for bottom layer
+    toggleButton: {
+        height: 24,
+        padding: '0 8px',
+        fontSize: '0.65rem',
+        fontWeight: 600,
+        textTransform: 'none' as const,
+        border: '1px solid',
+        borderRadius: 1,
+    } as const,
+};

@@ -15,3 +15,6 @@ var GUIDistAssets embed.FS
 
 //go:embed web/dist
 var WebDistAssets embed.FS
+
+//go:embed all:script
+var ScriptAssets embed.FS

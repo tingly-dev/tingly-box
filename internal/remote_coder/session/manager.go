@@ -317,7 +317,7 @@ func (m *Manager) cleanupLoop() {
 	}
 }
 
-// cleanupExpired removes all expired sessions
+// cleanupExpired removes all expired sessions (skips sessions with zero ExpiresAt - persistent sessions)
 func (m *Manager) cleanupExpired() {
 	now := time.Now()
 
@@ -325,6 +325,10 @@ func (m *Manager) cleanupExpired() {
 	defer m.mu.Unlock()
 
 	for id, session := range m.sessions {
+		// Skip persistent sessions (zero ExpiresAt)
+		if session.ExpiresAt.IsZero() {
+			continue
+		}
 		if now.After(session.ExpiresAt) {
 			session.Status = StatusExpired
 			delete(m.sessions, id)
@@ -439,11 +443,16 @@ func (m *Manager) retentionLoop() {
 			cutoff := time.Now().Add(-m.config.MessageRetention)
 			if m.store != nil {
 				_ = m.store.PurgeOlderThan(cutoff)
-				_ = m.store.PurgeSessionsOlderThan(cutoff)
+				// Note: PurgeSessionsOlderThan is not called here to preserve persistent sessions
+				// Sessions are managed by cleanupExpired which respects ExpiresAt == zero
 			}
 			m.mu.Lock()
 			for id, session := range m.sessions {
 				if session.Status == StatusRunning {
+					continue
+				}
+				// Skip persistent sessions (zero ExpiresAt)
+				if session.ExpiresAt.IsZero() {
 					continue
 				}
 				if session.LastActivity.Before(cutoff) {

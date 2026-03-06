@@ -334,8 +334,32 @@ func (m *Manager) buildAuthURL(config *ProviderConfig, state string, codeVerifie
 	return u.String(), redirectURL, nil
 }
 
+// getHTTPClient returns appropriate HTTP client based on options and config
+func (m *Manager) getHTTPClient(opts *Options) *http.Client {
+	// 1. Use explicit HTTPClient from options if provided
+	if opts.HTTPClient != nil {
+		return opts.HTTPClient
+	}
+
+	// 2. Use proxy from options if provided
+	if opts.ProxyURL != nil {
+		transport := &http.Transport{
+			Proxy: http.ProxyURL(opts.ProxyURL),
+		}
+		return &http.Client{
+			Transport: transport,
+			Timeout:   30 * time.Second,
+		}
+	}
+
+	// 3. Fall back to config's HTTP client (which may have proxy)
+	return m.config.GetHTTPClient()
+}
+
 // HandleCallback handles the OAuth callback request
-func (m *Manager) HandleCallback(ctx context.Context, r *http.Request) (*Token, error) {
+func (m *Manager) HandleCallback(ctx context.Context, r *http.Request, opts ...Option) (*Token, error) {
+	options := applyOptions(opts...)
+
 	// Parse callback parameters
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
@@ -369,7 +393,7 @@ func (m *Manager) HandleCallback(ctx context.Context, r *http.Request) (*Token, 
 		codeVerifier = stateData.CodeVerifier
 	}
 
-	token, err := m.exchangeCodeForToken(ctx, config, state, code, codeVerifier, stateData.RedirectURI)
+	token, err := m.exchangeCodeForToken(ctx, config, state, code, codeVerifier, stateData.RedirectURI, options)
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +411,7 @@ func (m *Manager) HandleCallback(ctx context.Context, r *http.Request) (*Token, 
 }
 
 // exchangeCodeForToken exchanges the authorization code for an access token
-func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConfig, state string, code string, codeVerifier string, redirectURI string) (*Token, error) {
+func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConfig, state string, code string, codeVerifier string, redirectURI string, opts *Options) (*Token, error) {
 	// Build common parameters
 	params := map[string]string{
 		"grant_type":   "authorization_code",
@@ -456,7 +480,7 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 
 	// Send request with optional proxy support
 	// Uses OAUTH_PROXY_URL, HTTP_PROXY, or HTTPS_PROXY environment variables
-	client := m.config.GetHTTPClient()
+	client := m.getHTTPClient(opts)
 	client.Timeout = 60 * time.Second
 
 	resp, err := client.Do(req)
@@ -533,7 +557,8 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 }
 
 // GetToken retrieves a token for a user and provider, refreshing if necessary
-func (m *Manager) GetToken(ctx context.Context, userID string, providerType ProviderType) (*Token, error) {
+func (m *Manager) GetToken(ctx context.Context, userID string, providerType ProviderType, opts ...Option) (*Token, error) {
+	options := applyOptions(opts...)
 	token, err := m.config.TokenStorage.GetToken(userID, providerType)
 	if err != nil {
 		return nil, err
@@ -542,9 +567,13 @@ func (m *Manager) GetToken(ctx context.Context, userID string, providerType Prov
 	// Check if token needs refresh
 	if token.ExpiredIn(m.config.TokenExpiryBuffer) {
 		if token.RefreshToken != "" {
-			refreshed, err := m.refreshToken(ctx, providerType, token.RefreshToken)
+			refreshed, err := m.refreshToken(ctx, providerType, token.RefreshToken, options)
 			if err == nil {
 				refreshed.Provider = providerType
+				// Preserve old refresh token if new one is not returned
+				if refreshed.RefreshToken == "" {
+					refreshed.RefreshToken = token.RefreshToken
+				}
 				if err := m.config.TokenStorage.SaveToken(userID, providerType, refreshed); err == nil {
 					return refreshed, nil
 				}
@@ -561,7 +590,7 @@ func (m *Manager) GetToken(ctx context.Context, userID string, providerType Prov
 }
 
 // refreshToken refreshes an access token using a refresh token
-func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, refreshToken string) (*Token, error) {
+func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, refreshToken string, opts *Options) (*Token, error) {
 	config, ok := m.registry.Get(providerType)
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)
@@ -605,7 +634,7 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 
 	// Send request with optional proxy support
 	// Uses OAUTH_PROXY_URL, HTTP_PROXY, or HTTPS_PROXY environment variables
-	client := m.config.GetHTTPClient()
+	client := m.getHTTPClient(opts)
 	client.Timeout = 30 * time.Second
 
 	resp, err := client.Do(req)
@@ -653,14 +682,21 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 
 // RefreshToken refreshes an access token using a refresh token
 // This is a public method that can be called from HTTP handlers
-func (m *Manager) RefreshToken(ctx context.Context, userID string, providerType ProviderType, refreshToken string) (*Token, error) {
+func (m *Manager) RefreshToken(ctx context.Context, userID string, providerType ProviderType, refreshToken string, opts ...Option) (*Token, error) {
+	options := applyOptions(opts...)
 	// Refresh the token
-	token, err := m.refreshToken(ctx, providerType, refreshToken)
+	token, err := m.refreshToken(ctx, providerType, refreshToken, options)
 	if err != nil {
 		return nil, err
 	}
 
 	token.Provider = providerType
+
+	// Preserve old refresh token if new one is not returned
+	// Some OAuth providers don't return a new refresh token on each refresh
+	if token.RefreshToken == "" {
+		token.RefreshToken = refreshToken
+	}
 
 	// Save the refreshed token
 	if err := m.config.TokenStorage.SaveToken(userID, providerType, token); err != nil {
@@ -714,7 +750,8 @@ func (m *Manager) ResetProxyURL() {
 
 // InitiateDeviceCodeFlow initiates the Device Code flow and returns device code data
 // RFC 8628: OAuth 2.0 Device Authorization Grant
-func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, providerType ProviderType, redirectTo string, name string) (*DeviceCodeData, error) {
+func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, providerType ProviderType, redirectTo string, name string, opts ...Option) (*DeviceCodeData, error) {
+	options := applyOptions(opts...)
 	config, ok := m.registry.Get(providerType)
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)
@@ -779,7 +816,7 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 		req.Header.Set("Content-Type", contentType)
 	}
 
-	client := m.config.GetHTTPClient()
+	client := m.getHTTPClient(options)
 	client.Timeout = 30 * time.Second
 	resp, err := client.Do(req)
 	if err != nil {
@@ -817,7 +854,8 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 // PollForToken polls the token endpoint until the user completes authentication
 // or the device code expires
 // Polling timeout is limited to 5 minutes (user needs time to complete auth)
-func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callback func(*Token)) (*Token, error) {
+func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callback func(*Token), opts ...Option) (*Token, error) {
+	options := applyOptions(opts...)
 	config, ok := m.registry.Get(data.Provider)
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, data.Provider)
@@ -848,7 +886,7 @@ func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callba
 			return nil, ctx.Err()
 		case <-ticker.C:
 			fmt.Printf("[OAuth] Polling token endpoint for %s...\n", data.Provider)
-			token, err := m.pollTokenRequest(ctx, config, data.DeviceCode, data.CodeVerifier)
+			token, err := m.pollTokenRequest(ctx, config, data.DeviceCode, data.CodeVerifier, options)
 			if err != nil {
 				// Check if error is a transient error that we should retry
 				if isTransientDeviceCodeError(err) {
@@ -882,7 +920,7 @@ func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callba
 }
 
 // pollTokenRequest makes a single token polling request
-func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, deviceCode string, codeVerifier string) (*Token, error) {
+func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, deviceCode string, codeVerifier string, opts *Options) (*Token, error) {
 	// Build common parameters
 	params := map[string]string{
 		"grant_type":  config.GrantType,
@@ -922,7 +960,7 @@ func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, 
 		req.Body = io.NopCloser(reqBody)
 	}
 
-	client := m.config.GetHTTPClient()
+	client := m.getHTTPClient(opts)
 	client.Timeout = 30 * time.Second
 	resp, err := client.Do(req)
 	if err != nil {

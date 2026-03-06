@@ -12,18 +12,20 @@ import (
 
 // LoadBalancer manages load balancing across multiple services
 type LoadBalancer struct {
-	tactics map[loadbalance.TacticType]typ.LoadBalancingTactic
-	stats   map[string]*loadbalance.ServiceStats
-	config  *config.Config
-	mutex   sync.RWMutex
+	tactics      map[loadbalance.TacticType]typ.LoadBalancingTactic
+	stats        map[string]*loadbalance.ServiceStats
+	config       *config.Config
+	healthFilter *typ.HealthFilter
+	mutex        sync.RWMutex
 }
 
 // NewLoadBalancer creates a new load balancer
-func NewLoadBalancer(cfg *config.Config) *LoadBalancer {
+func NewLoadBalancer(cfg *config.Config, healthFilter *typ.HealthFilter) *LoadBalancer {
 	lb := &LoadBalancer{
-		tactics: make(map[loadbalance.TacticType]typ.LoadBalancingTactic),
-		stats:   make(map[string]*loadbalance.ServiceStats),
-		config:  cfg,
+		tactics:      make(map[loadbalance.TacticType]typ.LoadBalancingTactic),
+		stats:        make(map[string]*loadbalance.ServiceStats),
+		config:       cfg,
+		healthFilter: healthFilter,
 	}
 
 	// Initialize default tactics
@@ -70,20 +72,44 @@ func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, err
 		return nil, fmt.Errorf("no active services for rule %s", rule.RequestModel)
 	}
 
-	// For single service rules, return it directly
-	if len(activeServices) == 1 {
-		return activeServices[0], nil
+	// Filter healthy services using health filter
+	healthyServices := lb.healthFilter.Filter(activeServices)
+
+	// If no healthy services, return error
+	if len(healthyServices) == 0 {
+		return nil, fmt.Errorf("no healthy services available for rule %s", rule.RequestModel)
+	}
+
+	// For single healthy service rules, return it directly
+	if len(healthyServices) == 1 {
+		return healthyServices[0], nil
 	}
 
 	// Always instantiate tactic from rule's params to ensure correct parameters
 	// State is now stored globally (globalRoundRobinStreaks) so this is safe
 	actualTactic := rule.LBTactic.Instantiate()
 
+	// Create a temporary rule with only healthy services for the tactic
+	tempRule := &typ.Rule{
+		UUID:             rule.UUID,
+		RequestModel:     rule.RequestModel,
+		ResponseModel:    rule.ResponseModel,
+		CurrentServiceID: rule.CurrentServiceID,
+		LBTactic:         rule.LBTactic,
+		Active:           rule.Active,
+		SmartEnabled:     rule.SmartEnabled,
+		SmartRouting:     rule.SmartRouting,
+	}
+	// Set healthy services on the temp rule
+	for _, svc := range healthyServices {
+		tempRule.Services = append(tempRule.Services, svc)
+	}
+
 	// Select service using the tactic
-	selectedService := actualTactic.SelectService(rule)
+	selectedService := actualTactic.SelectService(tempRule)
 	if selectedService == nil {
-		// Fallback to first active service
-		return activeServices[0], nil
+		// Fallback to first healthy service
+		return healthyServices[0], nil
 	}
 
 	return selectedService, nil
@@ -311,4 +337,9 @@ func (lb *LoadBalancer) GetRuleSummary(rule *typ.Rule) map[string]interface{} {
 		"is_legacy":          false,
 		"services":           serviceSummaries,
 	}
+}
+
+// HealthFilter returns the health filter for the load balancer
+func (lb *LoadBalancer) HealthFilter() *typ.HealthFilter {
+	return lb.healthFilter
 }
