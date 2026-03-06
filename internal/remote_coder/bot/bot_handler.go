@@ -993,7 +993,7 @@ Bot Commands:
 /, /help, /h - Show this help
 /stop - Stop current task
 /clear - Clear context, stop task, and create new session
-/bind [path], /cd [path], /bot_bind [path] - Bind a project
+/cd [path] - Bind and cd into a project
 /bot_project - Show & switch projects
 /bot_status - Show session status
 /bot_bash <cmd> - Execute allowed bash (cd, ls, pwd)
@@ -1008,7 +1008,7 @@ Bot Commands:
 /, /help, /h - Show this help
 /stop - Stop current task
 /clear - Clear context, stop task, and create new session
-/bind [path], /cd [path], /bot bind [path], /bot_bind [path] - Bind a project to this group
+/cd [path] - Bind and cd into a project to this group
 /bot_project - Show current project info
 /bot_status - Show session status
 /mock <msg> - Test with mock agent (permission flow)
