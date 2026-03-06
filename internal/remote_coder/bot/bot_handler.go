@@ -30,7 +30,6 @@ type BotHandler struct {
 	agentBoot          *agentboot.AgentBoot
 	summaryEngine      *summarizer.Engine
 	directoryBrowser   *DirectoryBrowser   // DEPRECATED: Use directoryBrowserV2 instead
-	directoryBrowserV2 *DirectoryBrowserV2 // New interaction-based directory browser
 	manager            *imbot.Manager
 	imPrompter         *IMPrompter
 	fileStore          *FileStore
@@ -104,7 +103,6 @@ func NewBotHandler(
 		agentBoot:          agentBoot,
 		summaryEngine:      summaryEngine,
 		directoryBrowser:   directoryBrowser,        // DEPRECATED: Kept for backward compatibility
-		directoryBrowserV2: NewDirectoryBrowserV2(), // New interaction-based browser
 		manager:            manager,
 		imPrompter:         imPrompter,
 		fileStore:          fileStore,
