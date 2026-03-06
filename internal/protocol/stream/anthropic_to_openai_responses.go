@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -145,21 +146,30 @@ func HandleAnthropicToOpenAIResponsesStream(
 
 // responsesConverterState maintains the state during stream conversion
 type responsesConverterState struct {
-	responseID     string
-	itemID         string
-	outputIndex    int
-	accumulatedText string
-	inputTokens    int64
-	outputTokens   int64
-	finished       bool
+	responseID       string
+	itemID           string
+	outputIndex      int
+	accumulatedText  string
+	inputTokens      int64
+	outputTokens     int64
+	finished         bool
+	pendingToolCalls map[int]*pendingResponseToolCall
+}
+
+// pendingResponseToolCall tracks a tool call being assembled from Anthropic stream chunks
+type pendingResponseToolCall struct {
+	itemID    string
+	name      string
+	arguments strings.Builder
 }
 
 // newResponsesConverterState creates a new converter state with generated IDs
 func newResponsesConverterState(timestamp int64) *responsesConverterState {
 	return &responsesConverterState{
-		responseID:  fmt.Sprintf("resp_%d", timestamp),
-		itemID:      fmt.Sprintf("item_%d", timestamp),
-		outputIndex: 0,
+		responseID:       fmt.Sprintf("resp_%d", timestamp),
+		itemID:           fmt.Sprintf("item_%d", timestamp),
+		outputIndex:      0,
+		pendingToolCalls: make(map[int]*pendingResponseToolCall),
 	}
 }
 
@@ -189,45 +199,86 @@ func handleContentBlockStart(
 	event anthropic.MessageStreamEventUnion,
 	flusher http.Flusher,
 ) {
-	// Only handle text blocks for now
-	if event.ContentBlock.Type != "text" {
-		return
-	}
+	index := event.Index
+	blockType := event.ContentBlock.Type
 
-	outputEvent := map[string]interface{}{
-		"type":         "response.output_item.added",
-		"item_id":      state.itemID,
-		"output_index": state.outputIndex,
-		"item": map[string]interface{}{
-			"type":   "output_text",
-			"text":   "",
-			"status": "in_progress",
-		},
+	if blockType == "text" {
+		// Handle text output
+		outputEvent := map[string]interface{}{
+			"type":         "response.output_item.added",
+			"item_id":      state.itemID,
+			"output_index": state.outputIndex,
+			"item": map[string]interface{}{
+				"type":   "output_text",
+				"text":   "",
+				"status": "in_progress",
+			},
+		}
+		sendResponsesEvent(c, outputEvent, flusher)
+	} else if blockType == "tool_use" {
+		// Handle tool use - create a new pending tool call
+		// The ID and Name are in ContentBlock fields for tool_use type
+		toolID := event.ContentBlock.ID
+		toolName := event.ContentBlock.Name
+
+		state.pendingToolCalls[int(index)] = &pendingResponseToolCall{
+			itemID:    toolID,
+			name:      toolName,
+			arguments: strings.Builder{},
+		}
+
+		outputEvent := map[string]interface{}{
+			"type":  "response.output_item.added",
+			"item": map[string]interface{}{
+				"type":   "function_call",
+				"id":     toolID,
+				"name":   toolName,
+				"arguments": "",
+				"status": "in_progress",
+			},
+			"output_index": state.outputIndex,
+		}
+		sendResponsesEvent(c, outputEvent, flusher)
 	}
-	sendResponsesEvent(c, outputEvent, flusher)
+	// Ignore other block types (thinking, etc.)
 }
 
-// handleContentBlockDelta sends the response.output_text.delta event
+// handleContentBlockDelta sends the appropriate delta event
 func handleContentBlockDelta(
 	c *gin.Context,
 	state *responsesConverterState,
 	event anthropic.MessageStreamEventUnion,
 	flusher http.Flusher,
 ) {
-	if event.Delta.Type != "text_delta" {
-		return
-	}
+	deltaType := event.Delta.Type
+	index := event.Index
 
-	text := event.Delta.Text
-	state.accumulatedText += text
+	if deltaType == "text_delta" {
+		// Handle text delta
+		text := event.Delta.Text
+		state.accumulatedText += text
 
-	deltaEvent := map[string]interface{}{
-		"type":         "response.output_text.delta",
-		"delta":        text,
-		"item_id":      state.itemID,
-		"output_index": state.outputIndex,
+		deltaEvent := map[string]interface{}{
+			"type":         "response.output_text.delta",
+			"delta":        text,
+			"item_id":      state.itemID,
+			"output_index": state.outputIndex,
+		}
+		sendResponsesEvent(c, deltaEvent, flusher)
+	} else if deltaType == "input_json_delta" {
+		// Handle tool call arguments delta
+		if pending, exists := state.pendingToolCalls[int(index)]; exists {
+			argsDelta := event.Delta.PartialJSON
+			pending.arguments.WriteString(argsDelta)
+
+			deltaEvent := map[string]interface{}{
+				"type":   "response.function_call_arguments.delta",
+				"item_id": pending.itemID,
+				"delta":  argsDelta,
+			}
+			sendResponsesEvent(c, deltaEvent, flusher)
+		}
 	}
-	sendResponsesEvent(c, deltaEvent, flusher)
 }
 
 // handleContentBlockStop sends the response.output_item.done event
@@ -269,12 +320,26 @@ func handleMessageStop(
 	state.finished = true
 
 	// Build the final output array
-	output := []map[string]interface{}{
-		{
+	var output []map[string]interface{}
+
+	// Add text content if present
+	if state.accumulatedText != "" {
+		output = append(output, map[string]interface{}{
 			"type":   "output_text",
 			"text":   state.accumulatedText,
 			"status": "completed",
-		},
+		})
+	}
+
+	// Add tool calls
+	for _, pending := range state.pendingToolCalls {
+		output = append(output, map[string]interface{}{
+			"type":      "function_call",
+			"id":        pending.itemID,
+			"name":      pending.name,
+			"arguments": pending.arguments.String(),
+			"status":    "completed",
+		})
 	}
 
 	// Build usage info from state

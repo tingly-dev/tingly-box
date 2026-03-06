@@ -6,9 +6,18 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/sirupsen/logrus"
 )
 
 // ConvertOpenAIResponsesToAnthropicRequest converts OpenAI Responses API params to Anthropic v1 Message API format
+//
+// Note: The following Responses API fields are not supported in Anthropic's Message API:
+//   - MaxToolCalls: Anthropic doesn't have an equivalent limit
+//   - ParallelToolCalls: Anthropic supports parallel tool calls by default
+//   - Include (web_search sources, code interpreter outputs, etc.): Not supported
+//   - PreviousResponseID: Requires conversation state management
+//   - TopLogprobs: Anthropic Message API doesn't support logprobs
+//   - Reasoning tokens: Special handling required for o1/o3 models
 func ConvertOpenAIResponsesToAnthropicRequest(
 	params responses.ResponseNewParams,
 	defaultMaxTokens int64,
@@ -219,8 +228,10 @@ func convertResponsesUserMessageToAnthropic(msg *responses.EasyInputMessageParam
 		for _, contentItem := range msg.Content.OfInputItemContentList {
 			if !param.IsOmitted(contentItem.OfInputText) {
 				blocks = append(blocks, anthropic.NewTextBlock(contentItem.OfInputText.Text))
+			} else {
+				// Log unsupported content types (images, audio, etc.)
+				logrus.Warnf("Unsupported content type in Responses API user message, skipping. Content types available: %v", contentItem)
 			}
-			// Add other content types as needed (images, audio, etc.)
 		}
 		if len(blocks) > 0 {
 			return anthropic.NewUserMessage(blocks...)
@@ -244,6 +255,9 @@ func convertResponsesAssistantMessageToAnthropic(msg *responses.EasyInputMessage
 		for _, contentItem := range msg.Content.OfInputItemContentList {
 			if !param.IsOmitted(contentItem.OfInputText) {
 				blocks = append(blocks, anthropic.NewTextBlock(contentItem.OfInputText.Text))
+			} else {
+				// Log unsupported content types
+				logrus.Warnf("Unsupported content type in Responses API assistant message, skipping. Content types available: %v", contentItem)
 			}
 		}
 		if len(blocks) > 0 {
@@ -260,7 +274,11 @@ func convertResponsesFunctionCallToAnthropic(call *responses.ResponseFunctionToo
 	// Parse arguments JSON
 	var argsInput interface{}
 	if call.Arguments != "" {
-		_ = json.Unmarshal([]byte(call.Arguments), &argsInput)
+		if err := json.Unmarshal([]byte(call.Arguments), &argsInput); err != nil {
+			logrus.Warnf("Failed to parse function call arguments JSON for tool %s: %v", call.Name, err)
+			// Set to empty map to avoid nil issues
+			argsInput = map[string]interface{}{}
+		}
 	}
 
 	// Create assistant message with tool_use block
@@ -298,6 +316,9 @@ func convertResponsesUserMessageToAnthropicBeta(msg *responses.EasyInputMessageP
 		for _, contentItem := range msg.Content.OfInputItemContentList {
 			if !param.IsOmitted(contentItem.OfInputText) {
 				blocks = append(blocks, anthropic.NewBetaTextBlock(contentItem.OfInputText.Text))
+			} else {
+				// Log unsupported content types
+				logrus.Warnf("Unsupported content type in Responses API beta user message, skipping. Content types available: %v", contentItem)
 			}
 		}
 		if len(blocks) > 0 {
@@ -325,6 +346,9 @@ func convertResponsesAssistantMessageToAnthropicBeta(msg *responses.EasyInputMes
 		for _, contentItem := range msg.Content.OfInputItemContentList {
 			if !param.IsOmitted(contentItem.OfInputText) {
 				blocks = append(blocks, anthropic.NewBetaTextBlock(contentItem.OfInputText.Text))
+			} else {
+				// Log unsupported content types
+				logrus.Warnf("Unsupported content type in Responses API beta user message, skipping. Content types available: %v", contentItem)
 			}
 		}
 		if len(blocks) > 0 {
@@ -347,7 +371,11 @@ func convertResponsesFunctionCallToAnthropicBeta(call *responses.ResponseFunctio
 	// Parse arguments JSON
 	var argsInput interface{}
 	if call.Arguments != "" {
-		_ = json.Unmarshal([]byte(call.Arguments), &argsInput)
+		if err := json.Unmarshal([]byte(call.Arguments), &argsInput); err != nil {
+			logrus.Warnf("Failed to parse function call arguments JSON for tool %s: %v", call.Name, err)
+			// Set to empty map to avoid nil issues
+			argsInput = map[string]interface{}{}
+		}
 	}
 
 	// Create assistant message with tool_use block
@@ -389,7 +417,11 @@ func ConvertResponsesToolsToAnthropic(tools []responses.ToolUnionParam) []anthro
 		var inputSchema anthropic.ToolInputSchemaParam
 		if fn.Parameters != nil {
 			if schemaBytes, err := json.Marshal(fn.Parameters); err == nil {
-				_ = json.Unmarshal(schemaBytes, &inputSchema)
+				if err := json.Unmarshal(schemaBytes, &inputSchema); err != nil {
+					logrus.Warnf("Failed to convert tool schema for %s: %v", fn.Name, err)
+					// Use default empty schema
+					inputSchema = anthropic.ToolInputSchemaParam{}
+				}
 			}
 		}
 
@@ -430,7 +462,11 @@ func ConvertResponsesToolsToAnthropicBeta(tools []responses.ToolUnionParam) []an
 		var inputSchema anthropic.BetaToolInputSchemaParam
 		if fn.Parameters != nil {
 			if schemaBytes, err := json.Marshal(fn.Parameters); err == nil {
-				_ = json.Unmarshal(schemaBytes, &inputSchema)
+				if err := json.Unmarshal(schemaBytes, &inputSchema); err != nil {
+					logrus.Warnf("Failed to convert tool schema for %s: %v", fn.Name, err)
+					// Use default empty schema
+					inputSchema = anthropic.BetaToolInputSchemaParam{}
+				}
 			}
 		}
 
@@ -463,10 +499,17 @@ func ConvertResponsesToolChoiceToAnthropic(tc responses.ResponseNewParamsToolCho
 				OfAuto: &anthropic.ToolChoiceAutoParam{},
 			}
 		}
-		if mode == "required" || mode == "none" {
+		if mode == "required" {
 			// Map "required" to Anthropic's "any" mode
 			return anthropic.ToolChoiceUnionParam{
 				OfAny: &anthropic.ToolChoiceAnyParam{},
+			}
+		}
+		if mode == "none" {
+			// "none" means don't use tools - in Anthropic, omit tool_choice when no tools should be used
+			// Return auto mode since without tools defined, auto won't call tools
+			return anthropic.ToolChoiceUnionParam{
+				OfAuto: &anthropic.ToolChoiceAutoParam{},
 			}
 		}
 	}
@@ -493,10 +536,17 @@ func ConvertResponsesToolChoiceToAnthropicBeta(tc responses.ResponseNewParamsToo
 				OfAuto: &anthropic.BetaToolChoiceAutoParam{},
 			}
 		}
-		if mode == "required" || mode == "none" {
+		if mode == "required" {
 			// Map "required" to Anthropic's "any" mode
 			return anthropic.BetaToolChoiceUnionParam{
 				OfAny: &anthropic.BetaToolChoiceAnyParam{},
+			}
+		}
+		if mode == "none" {
+			// "none" means don't use tools - in Anthropic, omit tool_choice when no tools should be used
+			// Return auto mode since without tools defined, auto won't call tools
+			return anthropic.BetaToolChoiceUnionParam{
+				OfAuto: &anthropic.BetaToolChoiceAutoParam{},
 			}
 		}
 	}
