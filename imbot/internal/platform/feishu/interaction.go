@@ -2,7 +2,6 @@ package feishu
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -80,19 +79,7 @@ func (a *InteractionAdapter) buildCard(interactions []itx.Interaction) map[strin
 // BuildFallbackText creates numbered text options
 // This is used when Mode=Text or when cards are not appropriate
 func (a *InteractionAdapter) BuildFallbackText(message string, interactions []itx.Interaction) string {
-	var sb strings.Builder
-	sb.WriteString(message)
-	sb.WriteString("\n\n")
-	sb.WriteString("请回复数字：\n")
-
-	for i, item := range interactions {
-		if item.Type == itx.ActionSelect || item.Type == itx.ActionConfirm {
-			sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, item.Label))
-		}
-	}
-	sb.WriteString("0. 取消")
-
-	return sb.String()
+	return itx.BuildFallbackText(message, interactions, "请回复数字：", "取消")
 }
 
 // ParseResponse parses Feishu interaction responses

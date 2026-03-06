@@ -2,8 +2,6 @@ package dingtalk
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
 	"github.com/tingly-dev/tingly-box/imbot/internal/itx"
@@ -29,19 +27,7 @@ func (a *InteractionAdapter) BuildMarkup(interactions []itx.Interaction) (any, e
 // BuildFallbackText creates numbered text options
 // This is the PRIMARY mode for DingTalk, not a fallback
 func (a *InteractionAdapter) BuildFallbackText(message string, interactions []itx.Interaction) string {
-	var sb strings.Builder
-	sb.WriteString(message)
-	sb.WriteString("\n\n")
-	sb.WriteString("请回复数字：\n")
-
-	for i, item := range interactions {
-		if item.Type == itx.ActionSelect || item.Type == itx.ActionConfirm {
-			sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, item.Label))
-		}
-	}
-	sb.WriteString("0. 取消")
-
-	return sb.String()
+	return itx.BuildFallbackText(message, interactions, "请回复数字：", "取消")
 }
 
 // ParseResponse returns nil - text replies are handled by Handler.parseTextResponse

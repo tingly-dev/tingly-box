@@ -29,6 +29,11 @@ const (
 	ModeText        = itx.ModeText
 )
 
+// Re-export errors from itx
+var (
+	ErrNotSupported = itx.ErrNotSupported
+)
+
 // InteractionRequest represents a request for user interaction
 type InteractionRequest struct {
 	ID           string              // Unique request ID

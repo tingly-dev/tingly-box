@@ -2,7 +2,6 @@ package discord
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -80,19 +79,7 @@ func toMessageComponents(buttons []discordgo.Button) []discordgo.MessageComponen
 
 // BuildFallbackText creates numbered text options for text mode
 func (a *InteractionAdapter) BuildFallbackText(message string, interactions []itx.Interaction) string {
-	var sb strings.Builder
-	sb.WriteString(message)
-	sb.WriteString("\n\n")
-	sb.WriteString("Reply with number:\n")
-
-	for i, item := range interactions {
-		if item.Type == itx.ActionSelect || item.Type == itx.ActionConfirm {
-			sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, item.Label))
-		}
-	}
-	sb.WriteString("0. Cancel")
-
-	return sb.String()
+	return itx.BuildFallbackText(message, interactions, "Reply with number:", "Cancel")
 }
 
 // ParseResponse parses Discord interactions or returns nil for text handling
