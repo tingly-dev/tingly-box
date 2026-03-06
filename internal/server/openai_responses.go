@@ -127,6 +127,22 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 		return
 	}
 
+	// For direct /responses requests, verify that the selected provider actually
+	// supports the Responses API unless it's the known ChatGPT backend special case.
+	if provider.APIBase != protocol.ChatGPTBackendAPIBase {
+		preferredEndpoint := NewAdaptiveProbe(s).GetPreferredEndpoint(provider, actualModel)
+		if preferredEndpoint != "responses" {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: fmt.Sprintf("Selected provider '%s' for model '%s' does not support the Responses API; preferred endpoint is '%s'", provider.Name, actualModel, preferredEndpoint),
+					Type:    "invalid_request_error",
+					Code:    "responses_not_supported",
+				},
+			})
+			return
+		}
+	}
+
 	// Convert request to OpenAI SDK format
 	params, err := s.convertToResponsesParams(bodyBytes, actualModel)
 	if err != nil {

@@ -2,6 +2,7 @@ import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, Di
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import CodeBlock from './CodeBlock';
+import { shouldIgnoreDialogClose } from './dialogClose';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -69,15 +70,13 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
         <Dialog
             open={open}
             onClose={(event, reason) => {
-                // Only allow closing via the confirm button, not backdrop click or ESC
-                if (reason === 'backdropClick' || reason === 'escapeKeyDown') {
+                if (shouldIgnoreDialogClose(reason)) {
                     return;
                 }
                 onClose();
             }}
             maxWidth="lg"
             fullWidth
-            disableEscapeKeyDown
             PaperProps={{
                 sx: {
                     borderRadius: 3,
