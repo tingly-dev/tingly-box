@@ -281,7 +281,7 @@ type (
 	Adapter = interaction.Adapter
 
 	// InteractionHandler manages interaction requests and responses (concrete type)
-	InteractionHandler = interaction.Handler
+	InteractionHandler = Handler
 
 	// InteractionBuilder builds platform-agnostic interactions
 	InteractionBuilder = interaction.Builder
@@ -298,9 +298,9 @@ const (
 	ActionCustom   = interaction.ActionCustom
 
 	// Interaction modes
-	ModeAuto         = interaction.ModeAuto
-	ModeInteractive  = interaction.ModeInteractive
-	ModeText         = interaction.ModeText
+	ModeAuto        = interaction.ModeAuto
+	ModeInteractive = interaction.ModeInteractive
+	ModeText        = interaction.ModeText
 )
 
 // Interaction constructors
@@ -311,20 +311,20 @@ func NewInteractionBuilder() *interaction.Builder {
 }
 
 // NewInteractionHandler creates a new interaction handler
-func NewInteractionHandler(manager *Manager) *interaction.Handler {
-	return interaction.NewHandler(manager)
+func NewInteractionHandler(manager *Manager) *InteractionHandler {
+	return NewHandler(manager)
 }
 
 // Interaction errors
 var (
 	ErrNotInteraction         = interaction.ErrNotInteraction
-	ErrBotNotFound           = interaction.ErrBotNotFound
-	ErrNoAdapter             = interaction.ErrNoAdapter
-	ErrNotSupported          = interaction.ErrNotSupported
-	ErrRequestNotFound       = interaction.ErrRequestNotFound
-	ErrRequestExpired        = interaction.ErrRequestExpired
-	ErrInteractionTimeout    = interaction.ErrTimeout
-	ErrChannelClosed         = interaction.ErrChannelClosed
-	ErrInvalidMode           = interaction.ErrInvalidMode
+	ErrBotNotFound            = interaction.ErrBotNotFound
+	ErrNoAdapter              = interaction.ErrNoAdapter
+	ErrNotSupported           = interaction.ErrNotSupported
+	ErrRequestNotFound        = interaction.ErrRequestNotFound
+	ErrRequestExpired         = interaction.ErrRequestExpired
+	ErrInteractionTimeout     = interaction.ErrTimeout
+	ErrChannelClosed          = interaction.ErrChannelClosed
+	ErrInvalidMode            = interaction.ErrInvalidMode
 	ErrPendingRequestNotFound = interaction.ErrPendingRequestNotFound
 )

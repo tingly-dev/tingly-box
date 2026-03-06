@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
-	"github.com/tingly-dev/tingly-box/imbot/internal/itx"
+	itx "github.com/tingly-dev/tingly-box/imbot/internal/interaction"
 )
 
 // InteractionAdapter implements itx.Adapter for Feishu
@@ -63,12 +63,12 @@ func (a *InteractionAdapter) buildCard(interactions []itx.Interaction) map[strin
 		},
 		"elements": []map[string]interface{}{
 			{
-				"tag": "div",
+				"tag":    "div",
 				"fields": []map[string]interface{}{},
 			},
 			{
-				"tag":      "action",
-				"actions":  elements,
+				"tag":     "action",
+				"actions": elements,
 			},
 		},
 	}

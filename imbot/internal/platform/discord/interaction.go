@@ -7,7 +7,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
-	"github.com/tingly-dev/tingly-box/imbot/internal/itx"
+	itx "github.com/tingly-dev/tingly-box/imbot/internal/interaction"
 )
 
 // InteractionAdapter implements itx.Adapter for Discord

@@ -295,4 +295,3 @@ func TestInteractionResponse_IsConfirm(t *testing.T) {
 		})
 	}
 }
-

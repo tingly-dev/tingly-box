@@ -1,4 +1,4 @@
-package interaction
+package imbot
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
-	"github.com/tingly-dev/tingly-box/imbot/internal/itx"
+	"github.com/tingly-dev/tingly-box/imbot/internal/interaction"
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/dingtalk"
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/discord"
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/feishu"
@@ -19,10 +19,10 @@ import (
 // Handler manages interaction requests and responses
 type Handler struct {
 	mu            sync.RWMutex
-	adapters      map[core.Platform]itx.Adapter
+	adapters      map[core.Platform]Adapter
 	pending       map[string]*PendingRequest
 	botManager    BotManager
-	defaultMode   itx.InteractionMode
+	defaultMode   InteractionMode
 	pendingExpiry time.Duration
 }
 
@@ -41,8 +41,8 @@ type PendingRequest struct {
 	MessageID    string
 	CreatedAt    time.Time
 	ExpiresAt    time.Time
-	Mode         itx.InteractionMode // The mode actually used for this request
-	Interactions []itx.Interaction   // Original interactions for parsing text responses
+	Mode         InteractionMode // The mode actually used for this request
+	Interactions []Interaction   // Original interactions for parsing text responses
 	ResponseCh   chan InteractionResponse
 }
 
@@ -54,10 +54,10 @@ func (p *PendingRequest) IsExpired() bool {
 // NewHandler creates a new interaction handler
 func NewHandler(manager BotManager) *Handler {
 	h := &Handler{
-		adapters:      make(map[core.Platform]itx.Adapter),
+		adapters:      make(map[core.Platform]Adapter),
 		pending:       make(map[string]*PendingRequest),
 		botManager:    manager,
-		defaultMode:   itx.ModeAuto,
+		defaultMode:   ModeAuto,
 		pendingExpiry: 5 * time.Minute,
 	}
 
@@ -71,7 +71,7 @@ func NewHandler(manager BotManager) *Handler {
 }
 
 // SetDefaultMode sets the global default interaction mode
-func (h *Handler) SetDefaultMode(mode itx.InteractionMode) {
+func (h *Handler) SetDefaultMode(mode InteractionMode) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.defaultMode = mode
@@ -85,14 +85,14 @@ func (h *Handler) SetPendingExpiry(duration time.Duration) {
 }
 
 // RegisterAdapter registers an adapter for a platform
-func (h *Handler) RegisterAdapter(platform core.Platform, adapter itx.Adapter) {
+func (h *Handler) RegisterAdapter(platform core.Platform, adapter Adapter) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.adapters[platform] = adapter
 }
 
 // GetAdapter returns the adapter for a platform
-func (h *Handler) GetAdapter(platform core.Platform) (itx.Adapter, bool) {
+func (h *Handler) GetAdapter(platform core.Platform) (Adapter, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	adapter, ok := h.adapters[platform]
@@ -101,7 +101,7 @@ func (h *Handler) GetAdapter(platform core.Platform) (itx.Adapter, bool) {
 
 // shouldUseInteractive determines if interactive mode should be used
 // based on the requested mode and platform capabilities
-func (h *Handler) shouldUseInteractive(mode itx.InteractionMode, platform core.Platform) bool {
+func (h *Handler) shouldUseInteractive(mode InteractionMode, platform core.Platform) bool {
 	h.mu.RLock()
 	adapter := h.adapters[platform]
 	h.mu.RUnlock()
@@ -111,13 +111,13 @@ func (h *Handler) shouldUseInteractive(mode itx.InteractionMode, platform core.P
 	}
 
 	switch mode {
-	case itx.ModeInteractive:
+	case ModeInteractive:
 		// Force interactive - error if not supported
 		return adapter.SupportsInteractions()
-	case itx.ModeText:
+	case ModeText:
 		// Force text mode - never use interactions
 		return false
-	case itx.ModeAuto:
+	case ModeAuto:
 		// Auto-detect: use interactive if available
 		return adapter.SupportsInteractions()
 	default:
@@ -138,7 +138,7 @@ func (h *Handler) RequestInteraction(ctx context.Context, req InteractionRequest
 		mode = h.defaultMode
 	}
 	if mode == "" {
-		mode = itx.ModeAuto
+		mode = ModeAuto
 	}
 
 	// Get bot
@@ -157,8 +157,8 @@ func (h *Handler) RequestInteraction(ctx context.Context, req InteractionRequest
 	useInteractive := h.shouldUseInteractive(mode, req.Platform)
 
 	// Validate mode compatibility
-	if mode == itx.ModeInteractive && !useInteractive {
-		return nil, fmt.Errorf("%w: platform %s does not support interactive mode", itx.ErrInvalidMode, req.Platform)
+	if mode == ModeInteractive && !useInteractive {
+		return nil, fmt.Errorf("%w: platform %s does not support interactive mode", ErrInvalidMode, req.Platform)
 	}
 
 	// Create response channel
@@ -239,7 +239,7 @@ func (h *Handler) RequestInteraction(ctx context.Context, req InteractionRequest
 			_ = adapter.UpdateMessage(ctx, bot, req.ChatID, pending.MessageID,
 				req.Message+"\n\n⏰ Timed out", nil)
 		}
-		return nil, itx.ErrTimeout
+		return nil, interaction.ErrTimeout
 
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -265,12 +265,12 @@ func (h *Handler) HandleMessage(msg core.Message) (*InteractionResponse, error) 
 	if resp != nil && resp.RequestID == "" {
 		resp = h.parseTextResponse(msg)
 		if resp == nil {
-			return nil, itx.ErrNotInteraction
+			return nil, ErrNotInteraction
 		}
 	}
 
 	if resp == nil {
-		return nil, itx.ErrNotInteraction
+		return nil, ErrNotInteraction
 	}
 
 	// Deliver to pending request
@@ -329,8 +329,8 @@ func (h *Handler) parseTextResponse(msg core.Message) *InteractionResponse {
 			if num == 0 {
 				return &InteractionResponse{
 					RequestID: requestID,
-					Action: itx.Interaction{
-						Type:  itx.ActionCancel,
+					Action: Interaction{
+						Type:  ActionCancel,
 						Value: "cancel",
 					},
 					Timestamp: time.Now(),
@@ -426,8 +426,8 @@ func (h *Handler) CancelRequest(requestID string) error {
 	select {
 	case pending.ResponseCh <- InteractionResponse{
 		RequestID: requestID,
-		Action: itx.Interaction{
-			Type:  itx.ActionCancel,
+		Action: Interaction{
+			Type:  ActionCancel,
 			Value: "cancelled",
 		},
 		Timestamp: time.Now(),
@@ -466,21 +466,21 @@ func (h *Handler) SubmitResponse(requestID string, response InteractionResponse)
 // Platform adapter constructors
 
 // NewTelegramAdapter creates a new Telegram interaction adapter
-func NewTelegramAdapter() itx.Adapter {
+func NewTelegramAdapter() Adapter {
 	return telegram.NewInteractionAdapter()
 }
 
 // NewDingTalkAdapter creates a new DingTalk interaction adapter
-func NewDingTalkAdapter() itx.Adapter {
+func NewDingTalkAdapter() Adapter {
 	return dingtalk.NewInteractionAdapter()
 }
 
 // NewDiscordAdapter creates a new Discord interaction adapter
-func NewDiscordAdapter() itx.Adapter {
+func NewDiscordAdapter() Adapter {
 	return discord.NewInteractionAdapter()
 }
 
 // NewFeishuAdapter creates a new Feishu interaction adapter
-func NewFeishuAdapter() itx.Adapter {
+func NewFeishuAdapter() Adapter {
 	return feishu.NewInteractionAdapter()
 }

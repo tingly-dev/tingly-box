@@ -7,7 +7,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
-	"github.com/tingly-dev/tingly-box/imbot/internal/itx"
+	itx "github.com/tingly-dev/tingly-box/imbot/internal/interaction"
 )
 
 // InteractionAdapter implements itx.Adapter for Telegram
