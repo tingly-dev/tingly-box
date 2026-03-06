@@ -8,44 +8,44 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
-	"github.com/tingly-dev/tingly-box/imbot/internal/interaction"
+	"github.com/tingly-dev/tingly-box/imbot/internal/itx"
 )
 
-// Adapter implements interaction.Adapter for Telegram
-type Adapter struct {
-	*interaction.BaseAdapter
+// InteractionAdapter implements itx.Adapter for Telegram
+type InteractionAdapter struct {
+	*itx.BaseAdapter
 }
 
-// NewAdapter creates a new Telegram interaction adapter
-func NewAdapter() *Adapter {
-	return &Adapter{
-		BaseAdapter: interaction.NewBaseAdapter(true, true), // Supports interactions and editing
+// NewInteractionAdapter creates a new Telegram interaction adapter
+func NewInteractionAdapter() *InteractionAdapter {
+	return &InteractionAdapter{
+		BaseAdapter: itx.NewBaseAdapter(true, true), // Supports interactions and editing
 	}
 }
 
 // BuildMarkup creates Telegram inline keyboard markup from interactions
-func (a *Adapter) BuildMarkup(interactions []interaction.Interaction) (any, error) {
+func (a *InteractionAdapter) BuildMarkup(interactions []itx.Interaction) (any, error) {
 	kb := &keyboardBuilder{
 		rows: make([][]tgbotapi.InlineKeyboardButton, 0),
 	}
 
 	for _, item := range interactions {
 		switch item.Type {
-		case interaction.ActionSelect, interaction.ActionConfirm, interaction.ActionCancel:
+		case itx.ActionSelect, itx.ActionConfirm, itx.ActionCancel:
 			callbackData := formatCallbackData("ia", item.ID, item.Value)
 			kb.AddRow(tgbotapi.InlineKeyboardButton{
 				Text:         item.Label,
 				CallbackData: &callbackData,
 			})
 
-		case interaction.ActionNavigate:
+		case itx.ActionNavigate:
 			callbackData := formatCallbackData("ia", item.ID, item.Value)
 			kb.AddButton(tgbotapi.InlineKeyboardButton{
 				Text:         item.Label,
 				CallbackData: &callbackData,
 			})
 
-		case interaction.ActionInput:
+		case itx.ActionInput:
 			// Input actions don't translate to buttons, skip
 			continue
 		}
@@ -55,14 +55,14 @@ func (a *Adapter) BuildMarkup(interactions []interaction.Interaction) (any, erro
 }
 
 // BuildFallbackText creates numbered text options for text mode
-func (a *Adapter) BuildFallbackText(message string, interactions []interaction.Interaction) string {
+func (a *InteractionAdapter) BuildFallbackText(message string, interactions []itx.Interaction) string {
 	var sb strings.Builder
 	sb.WriteString(message)
 	sb.WriteString("\n\n")
 	sb.WriteString("Reply with number:\n")
 
 	for i, item := range interactions {
-		if item.Type == interaction.ActionSelect || item.Type == interaction.ActionConfirm {
+		if item.Type == itx.ActionSelect || item.Type == itx.ActionConfirm {
 			sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, item.Label))
 		}
 	}
@@ -72,7 +72,7 @@ func (a *Adapter) BuildFallbackText(message string, interactions []interaction.I
 }
 
 // ParseResponse parses Telegram callback queries or returns nil for text handling
-func (a *Adapter) ParseResponse(msg core.Message) (*interaction.InteractionResponse, error) {
+func (a *InteractionAdapter) ParseResponse(msg core.Message) (*itx.InteractionResponse, error) {
 	// Check if this is a callback query
 	if isCallback, _ := msg.Metadata["is_callback"].(bool); isCallback {
 		if callbackData, ok := msg.Metadata["callback_data"].(string); ok {
@@ -82,9 +82,9 @@ func (a *Adapter) ParseResponse(msg core.Message) (*interaction.InteractionRespo
 				// Or: ia:interactionID:requestID:value (for responses)
 				timestamp := time.Unix(msg.Timestamp, 0)
 				if len(parts) >= 4 {
-					return &interaction.InteractionResponse{
+					return &itx.InteractionResponse{
 						RequestID: parts[2],
-						Action: interaction.Interaction{
+						Action: itx.Interaction{
 							ID:    parts[1],
 							Value: parts[3],
 						},
@@ -92,8 +92,8 @@ func (a *Adapter) ParseResponse(msg core.Message) (*interaction.InteractionRespo
 					}, nil
 				}
 				// Simple format without requestID
-				return &interaction.InteractionResponse{
-					Action: interaction.Interaction{
+				return &itx.InteractionResponse{
+					Action: itx.Interaction{
 						ID:    parts[1],
 						Value: parts[2],
 					},
@@ -101,7 +101,7 @@ func (a *Adapter) ParseResponse(msg core.Message) (*interaction.InteractionRespo
 				}, nil
 			}
 		}
-		return nil, interaction.ErrNotInteraction
+		return nil, itx.ErrNotInteraction
 	}
 
 	// Text replies are handled by Handler.parseTextResponse
@@ -109,10 +109,10 @@ func (a *Adapter) ParseResponse(msg core.Message) (*interaction.InteractionRespo
 }
 
 // UpdateMessage edits a Telegram message
-func (a *Adapter) UpdateMessage(ctx context.Context, bot core.Bot, chatID, messageID, text string, interactions []interaction.Interaction) error {
+func (a *InteractionAdapter) UpdateMessage(ctx context.Context, bot core.Bot, chatID, messageID, text string, interactions []itx.Interaction) error {
 	// Need to use platform-specific bot interface
 	// This is a placeholder - actual implementation would use the platform adapter
-	return interaction.ErrNotSupported
+	return itx.ErrNotSupported
 }
 
 // keyboardBuilder helps build Telegram inline keyboards

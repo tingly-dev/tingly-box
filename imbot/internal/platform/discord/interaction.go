@@ -8,32 +8,32 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
-	"github.com/tingly-dev/tingly-box/imbot/internal/interaction"
+	"github.com/tingly-dev/tingly-box/imbot/internal/itx"
 )
 
-// Adapter implements interaction.Adapter for Discord
-type Adapter struct {
-	*interaction.BaseAdapter
+// InteractionAdapter implements itx.Adapter for Discord
+type InteractionAdapter struct {
+	*itx.BaseAdapter
 }
 
-// NewAdapter creates a new Discord interaction adapter
-func NewAdapter() *Adapter {
-	return &Adapter{
-		BaseAdapter: interaction.NewBaseAdapter(true, true), // Supports interactions and editing
+// NewInteractionAdapter creates a new Discord interaction adapter
+func NewInteractionAdapter() *InteractionAdapter {
+	return &InteractionAdapter{
+		BaseAdapter: itx.NewBaseAdapter(true, true), // Supports interactions and editing
 	}
 }
 
 // BuildMarkup creates Discord component buttons from interactions
-func (a *Adapter) BuildMarkup(interactions []interaction.Interaction) (any, error) {
+func (a *InteractionAdapter) BuildMarkup(interactions []itx.Interaction) (any, error) {
 	// Discord components are organized into rows (ActionsRow)
 	// We'll create a single row with all buttons for now
 	components := make([]discordgo.Button, 0)
 
 	for _, item := range interactions {
 		switch item.Type {
-		case interaction.ActionSelect, interaction.ActionConfirm, interaction.ActionCancel:
+		case itx.ActionSelect, itx.ActionConfirm, itx.ActionCancel:
 			style := discordgo.PrimaryButton
-			if item.Type == interaction.ActionCancel {
+			if item.Type == itx.ActionCancel {
 				style = discordgo.DangerButton
 			}
 
@@ -44,7 +44,7 @@ func (a *Adapter) BuildMarkup(interactions []interaction.Interaction) (any, erro
 			}
 			components = append(components, btn)
 
-		case interaction.ActionNavigate:
+		case itx.ActionNavigate:
 			btn := discordgo.Button{
 				Label:    item.Label,
 				CustomID: formatCustomID("ia", item.ID, item.Value),
@@ -52,7 +52,7 @@ func (a *Adapter) BuildMarkup(interactions []interaction.Interaction) (any, erro
 			}
 			components = append(components, btn)
 
-		case interaction.ActionInput:
+		case itx.ActionInput:
 			continue
 		}
 	}
@@ -79,14 +79,14 @@ func toMessageComponents(buttons []discordgo.Button) []discordgo.MessageComponen
 }
 
 // BuildFallbackText creates numbered text options for text mode
-func (a *Adapter) BuildFallbackText(message string, interactions []interaction.Interaction) string {
+func (a *InteractionAdapter) BuildFallbackText(message string, interactions []itx.Interaction) string {
 	var sb strings.Builder
 	sb.WriteString(message)
 	sb.WriteString("\n\n")
 	sb.WriteString("Reply with number:\n")
 
 	for i, item := range interactions {
-		if item.Type == interaction.ActionSelect || item.Type == interaction.ActionConfirm {
+		if item.Type == itx.ActionSelect || item.Type == itx.ActionConfirm {
 			sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, item.Label))
 		}
 	}
@@ -96,7 +96,7 @@ func (a *Adapter) BuildFallbackText(message string, interactions []interaction.I
 }
 
 // ParseResponse parses Discord interactions or returns nil for text handling
-func (a *Adapter) ParseResponse(msg core.Message) (*interaction.InteractionResponse, error) {
+func (a *InteractionAdapter) ParseResponse(msg core.Message) (*itx.InteractionResponse, error) {
 	// Check if this is a Discord component interaction
 	// We'll try to extract custom_id from the metadata
 	if customID, ok := msg.Metadata["custom_id"].(string); ok {
@@ -106,24 +106,24 @@ func (a *Adapter) ParseResponse(msg core.Message) (*interaction.InteractionRespo
 			// Format: ia:interactionID:value
 			// Or: ia:interactionID:requestID:value (for responses)
 			if len(parts) >= 4 {
-				return &interaction.InteractionResponse{
+				return &itx.InteractionResponse{
 					RequestID: parts[2],
-					Action: interaction.Interaction{
+					Action: itx.Interaction{
 						ID:    parts[1],
 						Value: parts[3],
 					},
 					Timestamp: timestamp,
 				}, nil
 			}
-			return &interaction.InteractionResponse{
-				Action: interaction.Interaction{
+			return &itx.InteractionResponse{
+				Action: itx.Interaction{
 					ID:    parts[1],
 					Value: parts[2],
 				},
 				Timestamp: timestamp,
 			}, nil
 		}
-		return nil, interaction.ErrNotInteraction
+		return nil, itx.ErrNotInteraction
 	}
 
 	// Text replies are handled by Handler.parseTextResponse
@@ -131,10 +131,10 @@ func (a *Adapter) ParseResponse(msg core.Message) (*interaction.InteractionRespo
 }
 
 // UpdateMessage edits a Discord message
-func (a *Adapter) UpdateMessage(ctx context.Context, bot core.Bot, chatID, messageID, text string, interactions []interaction.Interaction) error {
+func (a *InteractionAdapter) UpdateMessage(ctx context.Context, bot core.Bot, chatID, messageID, text string, interactions []itx.Interaction) error {
 	// Discord message editing requires the Discord-specific bot interface
 	// For now, return not supported as we need to add this to the imbot interface
-	return interaction.ErrNotSupported
+	return itx.ErrNotSupported
 }
 
 // Custom ID helpers
