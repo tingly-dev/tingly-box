@@ -1,5 +1,5 @@
 import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
-import { Cloud, Psychology } from '@mui/icons-material';
+import { Cloud, Psychology, Security } from '@mui/icons-material';
 import {
     Alert,
     Box,
@@ -37,6 +37,11 @@ const GlobalExperimentalFeatures: React.FC = () => {
             // Load Remote Control flag
             const remoteCoderResult = await api.getScenarioFlag('_global', 'enable_remote_coder');
             setRemoteCoderEnabled(remoteCoderResult?.data?.value || false);
+
+            // Load Guardrails flag
+            const guardrailsResult = await api.getScenarioFlag('_global', 'guardrails');
+            setGuardrailsEnabled(guardrailsResult?.data?.value || false);
+
         } catch (error) {
             console.error('Failed to load global experimental features:', error);
         } finally {

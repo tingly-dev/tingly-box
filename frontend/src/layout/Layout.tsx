@@ -219,6 +219,12 @@ const Layout = ({ children }: LayoutProps) => {
                     },
                 ],
             }] : []),
+            ...(enableGuardrails ? [{
+                key: 'guardrails',
+                icon: <Security sx={{ fontSize: 22 }} />,
+                label: 'Guardrails',
+                path: '/guardrails',
+            }] : []),
             {
                 key: 'credential',
                 icon: <LockIcon sx={{ fontSize: 22 }} />,
@@ -233,7 +239,7 @@ const Layout = ({ children }: LayoutProps) => {
             },
         ];
         return items;
-    }, [t, promptMenuItems, enableRemoteCoder]);
+    }, [t, promptMenuItems, enableRemoteCoder, enableGuardrails]);
 
     // Find current active activity
     const activeActivity = useMemo(() => {
