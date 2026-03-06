@@ -36,6 +36,64 @@ func NewAuthMiddleware(cfg *config.Config, jwtManager *auth.JWTManager) *AuthMid
 	}
 }
 
+func normalizeScenario(value string) string {
+	v := strings.TrimSpace(strings.ToLower(value))
+	v = strings.ReplaceAll(v, "-", "_")
+	v = strings.ReplaceAll(v, " ", "_")
+	aliases := map[string]string{
+		"claude":        "claude_code",
+		"claudecode":    "claude_code",
+		"open_code":     "opencode",
+		"openai_sdk":    "openai",
+		"anthropic_sdk": "anthropic",
+	}
+	if mapped, ok := aliases[v]; ok {
+		return mapped
+	}
+	return v
+}
+
+func inferScenarioFromRequest(c *gin.Context) string {
+	if scenario := strings.TrimSpace(c.Param("scenario")); scenario != "" {
+		return normalizeScenario(scenario)
+	}
+	path := strings.ToLower(c.Request.URL.Path)
+	switch {
+	case strings.Contains(path, "/passthrough/openai"):
+		return "openai"
+	case strings.Contains(path, "/passthrough/anthropic"):
+		return "anthropic"
+	default:
+		return ""
+	}
+}
+
+func parseTrustedEnterpriseProxyHeaders(c *gin.Context) (bool, string, []string, string) {
+	userID := strings.TrimSpace(c.GetHeader("X-TBE-Enterprise-User"))
+	if userID == "" {
+		return false, "", nil, ""
+	}
+	keyPrefix := strings.TrimSpace(c.GetHeader("X-TBE-Enterprise-Key-Prefix"))
+	if keyPrefix == "" {
+		keyPrefix = "tbe-proxy"
+	}
+	rawAllowed := strings.TrimSpace(c.GetHeader("X-TBE-Enterprise-Allowed-Models"))
+	allowedModels := make([]string, 0)
+	if rawAllowed != "" {
+		for _, item := range strings.Split(rawAllowed, ",") {
+			item = strings.TrimSpace(item)
+			if item == "" {
+				continue
+			}
+			allowedModels = append(allowedModels, item)
+		}
+	}
+	if len(allowedModels) == 0 {
+		allowedModels = []string{inferScenarioFromRequest(c)}
+	}
+	return true, userID, allowedModels, keyPrefix
+}
+
 // UserAuthMiddleware middleware for UI and control API authentication
 func (am *AuthMiddleware) UserAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -100,6 +158,15 @@ func (am *AuthMiddleware) UserAuthMiddleware() gin.HandlerFunc {
 // The auth will support both `Authorization` and `X-Api-Key`
 func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if ok, userID, allowedModels, keyPrefix := parseTrustedEnterpriseProxyHeaders(c); ok {
+			c.Set("client_id", "enterprise_access_token")
+			c.Set("enterprise_user_id", userID)
+			c.Set("enterprise_allowed_models", allowedModels)
+			c.Set("enterprise_key_prefix", keyPrefix)
+			c.Next()
+			return
+		}
+
 		authHeader := c.GetHeader("Authorization")
 		xApiKey := c.GetHeader("X-Api-Key")
 		if authHeader == "" && xApiKey == "" {
@@ -118,6 +185,8 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 		if strings.HasPrefix(token, "Bearer ") {
 			token = token[7:]
 		}
+		token = strings.TrimSpace(token)
+		xApiKey = strings.TrimSpace(xApiKey)
 
 		// Check against global config model token first
 		cfg := am.config
@@ -138,6 +207,22 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 			// Token matches the one in global config, allow access
 			c.Set("client_id", "model_authenticated")
 			c.Next()
+			return
+		}
+
+		// Enterprise short-lived access token authentication.
+		requestToken := token
+		if requestToken == "" {
+			requestToken = xApiKey
+		}
+		if strings.HasPrefix(strings.TrimSpace(requestToken), "sk-tbe-") {
+			c.JSON(http.StatusUnauthorized, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Virtual key must be exchanged at /api/enterprise/runtime/token/exchange before calling TB APIs",
+					Type:    "invalid_request_error",
+				},
+			})
+			c.Abort()
 			return
 		}
 

@@ -126,6 +126,14 @@ type Server struct {
 	version string
 }
 
+// UsageStore returns the server's usage store instance for internal integrations.
+func (s *Server) UsageStore() *db.UsageStore {
+	if s == nil || s.config == nil {
+		return nil
+	}
+	return s.config.GetUsageStore()
+}
+
 // ServerOption defines a functional option for Server configuration
 type ServerOption func(*Server)
 

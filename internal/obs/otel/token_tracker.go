@@ -44,6 +44,9 @@ type UsageOptions struct {
 
 	// LatencyMs is the request processing time in milliseconds
 	LatencyMs int
+
+	// UserTier is a low-cardinality class for enterprise observability.
+	UserTier string
 }
 
 // TokenTracker provides a unified interface for tracking token usage
@@ -139,6 +142,9 @@ func (tt *TokenTracker) RecordUsage(ctx context.Context, opts UsageOptions) {
 
 	if opts.RuleUUID != "" {
 		commonAttrs = append(commonAttrs, AttrLLMRuleUUID.String(opts.RuleUUID))
+	}
+	if opts.UserTier != "" {
+		commonAttrs = append(commonAttrs, AttrLLMUserTier.String(opts.UserTier))
 	}
 
 	if opts.ErrorCode != "" {
