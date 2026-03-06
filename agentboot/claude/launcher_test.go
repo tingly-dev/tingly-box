@@ -1,0 +1,504 @@
+package claude
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/events"
+
+	"github.com/anthropics/anthropic-sdk-go"
+)
+
+// TestLauncherTextFormat tests Claude Code execution in text format
+func TestLauncherTextFormat(t *testing.T) {
+	t.SkipNow()
+
+	// Skip if claude CLI is not available
+	launcher := NewLauncher(Config{})
+	if !launcher.IsAvailable() {
+		t.Skip("claude CLI not available")
+	}
+
+	ctx := context.Background()
+	opts := agentboot.ExecutionOptions{
+		ProjectPath:  "/tmp",
+		OutputFormat: agentboot.OutputFormatText,
+		Timeout:      30 * time.Second,
+	}
+
+	// Simple prompt that should return quickly
+	prompt := "echo hello"
+
+	result, err := launcher.Execute(ctx, prompt, opts)
+
+	// Check result
+	require.NoError(t, err, "execution should succeed")
+	assert.NotNil(t, result)
+	assert.Equal(t, 0, result.ExitCode, "exit code should be 0")
+	assert.Empty(t, result.Error, "error should be empty")
+	assert.Equal(t, agentboot.OutputFormatText, result.Format)
+	assert.Greater(t, result.Duration, 0, "duration should be positive")
+	assert.NotEmpty(t, result.Output, "output should not be empty")
+	assert.Contains(t, result.Output, "hello", "output should contain 'hello'")
+}
+
+// TestLauncherStreamJSONFormat tests Claude Code execution in stream-json format
+func TestLauncherStreamJSONFormat(t *testing.T) {
+	t.SkipNow()
+
+	// Skip if claude CLI is not available
+	launcher := NewLauncher(Config{})
+	if !launcher.IsAvailable() {
+		t.Skip("claude CLI not available")
+	}
+
+	ctx := context.Background()
+	opts := agentboot.ExecutionOptions{
+		ProjectPath:  "/tmp",
+		OutputFormat: agentboot.OutputFormatStreamJSON,
+		Timeout:      300 * time.Second,
+	}
+
+	// Simple prompt that should return quickly
+	prompt := "run bash ls"
+
+	result, err := launcher.Execute(ctx, prompt, opts)
+	for _, it := range result.Events {
+		fmt.Printf("%s\n", it)
+	}
+
+	// Check result
+	require.NoError(t, err, "execution should succeed")
+	assert.NotNil(t, result)
+	assert.Equal(t, 0, result.ExitCode, "exit code should be 0")
+	assert.Empty(t, result.Error, "error should be empty")
+	assert.Equal(t, agentboot.OutputFormatStreamJSON, result.Format)
+	assert.Greater(t, result.Duration, 0, "duration should be positive")
+
+	// Check events
+	assert.NotEmpty(t, result.Events, "should have events")
+
+	// Verify we have expected event types (new format: assistant, result)
+	hasAssistant := false
+	hasResult := false
+	for _, event := range result.Events {
+		if event.Type == MessageTypeAssistant {
+			hasAssistant = true
+		}
+		if event.Type == MessageTypeResult {
+			hasResult = true
+		}
+	}
+	assert.True(t, hasAssistant, "should have assistant events")
+	assert.True(t, hasResult, "should have result events")
+
+	// Check text output
+	textOutput := result.TextOutput()
+	assert.NotEmpty(t, textOutput, "text output should not be empty")
+	assert.Contains(t, strings.ToLower(textOutput), "hello", "output should contain 'hello'")
+}
+
+// TestExecuteWithHandler tests execution with a message handler
+func TestExecuteWithHandler(t *testing.T) {
+	t.SkipNow()
+
+	// Skip if claude CLI is not available
+	launcher := NewLauncher(Config{})
+	if !launcher.IsAvailable() {
+		t.Skip("claude CLI not available")
+	}
+
+	ctx := context.Background()
+
+	prompt := "say hello in one word"
+
+	// Create a test handler
+	handler := &TestMessageHandler{
+		messages: make([]Message, 0),
+	}
+
+	opts := agentboot.ExecutionOptions{
+		ProjectPath:  "/tmp",
+		OutputFormat: agentboot.OutputFormatStreamJSON,
+		Timeout:      30 * time.Second,
+		Handler:      handler,
+	}
+
+	result, err := launcher.Execute(ctx, prompt, opts)
+
+	require.NoError(t, err, "execution should succeed")
+	assert.NotNil(t, result)
+	assert.NotEmpty(t, handler.messages, "handler should receive messages")
+
+	// Check message types
+	hasAssistant := false
+	hasResult := false
+	for _, msg := range handler.messages {
+		if msg.GetType() == MessageTypeAssistant {
+			hasAssistant = true
+		}
+		if msg.GetType() == MessageTypeResult {
+			hasResult = true
+		}
+	}
+	assert.True(t, hasAssistant, "should have assistant message")
+	assert.True(t, hasResult, "should have result message")
+	assert.True(t, handler.completed, "should be completed")
+	assert.True(t, handler.success, "should be successful")
+}
+
+// TestLauncherWithProjectPath tests execution with a project path
+func TestLauncherWithProjectPath(t *testing.T) {
+	t.SkipNow()
+
+	// Skip if claude CLI is not available
+	launcher := NewLauncher(Config{})
+	if !launcher.IsAvailable() {
+		t.Skip("claude CLI not available")
+	}
+
+	// Get current directory as project path
+	projectPath, err := os.Getwd()
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	opts := agentboot.ExecutionOptions{
+		OutputFormat: agentboot.OutputFormatText,
+		Timeout:      30 * time.Second,
+		ProjectPath:  projectPath,
+	}
+
+	prompt := "what files are in this directory? list just the go files"
+
+	result, err := launcher.Execute(ctx, prompt, opts)
+
+	// Check result
+	require.NoError(t, err, "execution should succeed")
+	assert.NotNil(t, result)
+	assert.Equal(t, 0, result.ExitCode)
+	assert.NotEmpty(t, result.Output)
+}
+
+// TestLauncherTimeout tests execution timeout
+func TestLauncherTimeout(t *testing.T) {
+	t.SkipNow()
+
+	// Skip if claude CLI is not available
+	launcher := NewLauncher(Config{})
+	if !launcher.IsAvailable() {
+		t.Skip("claude CLI not available")
+	}
+
+	ctx := context.Background()
+	opts := agentboot.ExecutionOptions{
+		OutputFormat: agentboot.OutputFormatText,
+		Timeout:      1 * time.Nanosecond, // Very short timeout
+	}
+
+	prompt := "count to 100 slowly"
+
+	result, err := launcher.Execute(ctx, prompt, opts)
+
+	// Should timeout
+	assert.Error(t, err, "execution should timeout")
+	assert.NotNil(t, result)
+	assert.Contains(t, result.Error, "timed out", "error should mention timeout")
+}
+
+// TestLauncherNotAvailable tests behavior when CLI is not available
+func TestLauncherNotAvailable(t *testing.T) {
+	t.SkipNow()
+
+	launcher := NewLauncher(Config{})
+	// Set an invalid CLI path
+	launcher.SetCLIPath("nonexistent-cli-command-xyz123")
+
+	ctx := context.Background()
+	opts := agentboot.ExecutionOptions{
+		OutputFormat: agentboot.OutputFormatText,
+		Timeout:      5 * time.Second,
+	}
+
+	result, err := launcher.Execute(ctx, "test", opts)
+
+	// Should fail with exec.ErrNotFound or similar
+	assert.Error(t, err)
+	assert.NotNil(t, result)
+	assert.NotEmpty(t, result.Error)
+}
+
+// TestLauncherSetDefaultFormat tests setting and getting default format
+func TestLauncherSetDefaultFormat(t *testing.T) {
+	launcher := NewLauncher(Config{})
+
+	// Test setting stream-json as default
+	launcher.SetDefaultFormat(agentboot.OutputFormatStreamJSON)
+	assert.Equal(t, agentboot.OutputFormatStreamJSON, launcher.GetDefaultFormat())
+
+	// Test setting text as default
+	launcher.SetDefaultFormat(agentboot.OutputFormatText)
+	assert.Equal(t, agentboot.OutputFormatText, launcher.GetDefaultFormat())
+}
+
+// TestLauncherType tests the Type method
+func TestLauncherType(t *testing.T) {
+	launcher := NewLauncher(Config{})
+	assert.Equal(t, agentboot.AgentTypeClaude, launcher.Type())
+}
+
+// TestMessageAccumulator tests the message accumulator
+func TestMessageAccumulator(t *testing.T) {
+	accumulator := NewMessageAccumulator()
+
+	// Test system message
+	systemEventJSON := `{"type":"system","subtype":"init","session_id":"test-session-123","timestamp":"2024-01-01T12:00:00Z"}`
+	systemEvent := events.Event{
+		Type:      MessageTypeSystem,
+		Data:      map[string]interface{}{"subtype": "init", "session_id": "test-session-123"},
+		Raw:       systemEventJSON,
+		Timestamp: time.Now(),
+	}
+	messages, _, _ := accumulator.AddEvent(systemEvent)
+	assert.Len(t, messages, 1, "should have 1 message")
+	assert.Equal(t, MessageTypeSystem, messages[0].GetType())
+	assert.Equal(t, "test-session-123", accumulator.GetSessionID())
+
+	// Test assistant message with text content
+	assistantEventJSON := `{"type":"assistant","message":{"model":"claude-sonnet-4-6","id":"msg-123","type":"message","role":"assistant","content":[{"type":"text","text":"Hello, world!"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":5}},"session_id":"test-session-123","uuid":"msg-uuid-456","timestamp":"2024-01-01T12:00:00Z"}`
+	assistantEvent := events.Event{
+		Type:      MessageTypeAssistant,
+		Raw:       assistantEventJSON,
+		Timestamp: time.Now(),
+	}
+	messages, _, _ = accumulator.AddEvent(assistantEvent)
+	assert.Len(t, messages, 1, "should have 1 new message")
+	assert.Equal(t, MessageTypeAssistant, messages[0].GetType())
+
+	assistantMsg, ok := messages[0].(*AssistantMessage)
+	require.True(t, ok, "should be AssistantMessage")
+	assert.Equal(t, "claude-sonnet-4-6", assistantMsg.Message.Model)
+	assert.Len(t, assistantMsg.Message.Content, 1)
+
+	// Test result message
+	resultEventJSON := `{"type":"result","subtype":"success","result":"Done!","total_cost_usd":0.001,"duration_ms":1000,"session_id":"test-session-123","timestamp":"2024-01-01T12:00:00Z"}`
+	resultEvent := events.Event{
+		Type:      MessageTypeResult,
+		Raw:       resultEventJSON,
+		Timestamp: time.Now(),
+	}
+	messages, hasResult, resultSuccess := accumulator.AddEvent(resultEvent)
+	assert.Len(t, messages, 1, "should have 1 new message")
+	assert.True(t, hasResult, "should have result")
+	assert.True(t, resultSuccess, "should be successful")
+
+	resultMsg, ok := messages[0].(*ResultMessage)
+	require.True(t, ok, "should be ResultMessage")
+	assert.True(t, resultMsg.IsSuccess())
+	assert.Equal(t, "success", resultMsg.SubType)
+
+	// Test GetMessagesByType
+	assistantMessages := accumulator.GetMessagesByType(MessageTypeAssistant)
+	assert.Len(t, assistantMessages, 1, "should have 1 assistant message")
+
+	// Test GetAssistantMessages
+	assistantMsgs := accumulator.GetAssistantMessages()
+	assert.Len(t, assistantMsgs, 1, "should have 1 assistant message")
+	assert.Equal(t, "Hello, world!", extractTextFromAssistant(assistantMsgs[0]))
+
+	// Test Reset
+	accumulator.Reset()
+	assert.Empty(t, accumulator.GetMessages(), "should have no messages after reset")
+	assert.Empty(t, accumulator.GetSessionID(), "should have no session ID after reset")
+}
+
+// TestResultCollector tests the result collector
+func TestResultCollector(t *testing.T) {
+	collector := NewResultCollector()
+
+	// Test OnMessage with assistant message
+	assistantMsg := &AssistantMessage{
+		Type: MessageTypeAssistant,
+		Message: anthropic.Message{
+			Content: []anthropic.ContentBlockUnion{
+				{Type: "text", Text: "Hello from assistant"},
+			},
+		},
+	}
+	err := collector.OnMessage(assistantMsg)
+	assert.NoError(t, err)
+	assert.Contains(t, collector.Result().Output, "Hello from assistant")
+
+	// Test OnMessage with result message
+	resultMsg := &ResultMessage{
+		Type:    MessageTypeResult,
+		SubType: "success",
+		Result:  "Final result",
+	}
+	err = collector.OnMessage(resultMsg)
+	assert.NoError(t, err)
+	assert.True(t, collector.IsComplete())
+
+	// Test Result
+	result := collector.Result()
+	assert.Equal(t, agentboot.OutputFormatStreamJSON, result.Format)
+	assert.Equal(t, 0, result.ExitCode)
+	assert.NotEmpty(t, result.Events)
+
+	// Test GetMessages
+	messages := collector.GetMessages()
+	assert.Len(t, messages, 2)
+
+	// Test BuildTextOutput
+	textOutput := collector.BuildTextOutput()
+	assert.Contains(t, textOutput, "Hello from assistant")
+}
+
+// TestHelperFunctions tests the helper functions
+func TestHelperFunctions(t *testing.T) {
+	// Test getString
+	assert.Equal(t, "value", getString(map[string]interface{}{"key": "value"}, "key"))
+	assert.Equal(t, "", getString(map[string]interface{}{"key": 123}, "key"))
+	assert.Equal(t, "", getString(map[string]interface{}{}, "missing"))
+
+	// Test getStringPtr
+	ptr := getStringPtr(map[string]interface{}{"key": "value"}, "key")
+	assert.NotNil(t, ptr)
+	assert.Equal(t, "value", *ptr)
+	assert.Nil(t, getStringPtr(map[string]interface{}{}, "missing"))
+
+	// Test getMap
+	nested := map[string]interface{}{"nested": "value"}
+	assert.Equal(t, nested, getMap(map[string]interface{}{"key": nested}, "key"))
+	assert.Nil(t, getMap(map[string]interface{}{"key": "string"}, "key"))
+
+	// Test getInt
+	assert.Equal(t, 42, getInt(map[string]interface{}{"key": 42.0}, "key"))
+	assert.Equal(t, 0, getInt(map[string]interface{}{"key": "string"}, "key"))
+
+	// Test getInt64
+	assert.Equal(t, int64(123456), getInt64(map[string]interface{}{"key": 123456.0}, "key"))
+
+	// Test getFloat
+	assert.Equal(t, 3.14, getFloat(map[string]interface{}{"key": 3.14}, "key"))
+
+	// Test getBool
+	assert.True(t, getBool(map[string]interface{}{"key": true}, "key"))
+	assert.False(t, getBool(map[string]interface{}{"key": false}, "key"))
+	assert.False(t, getBool(map[string]interface{}{}, "missing"))
+}
+
+// TestMessageTypes tests message type methods
+func TestMessageTypes(t *testing.T) {
+	// Test SystemMessage
+	sysMsg := &SystemMessage{
+		Type:      MessageTypeSystem,
+		SessionID: "session-123",
+		Timestamp: time.Now(),
+	}
+	assert.Equal(t, MessageTypeSystem, sysMsg.GetType())
+	assert.Equal(t, "session-123", sysMsg.SessionID)
+
+	// Test AssistantMessage
+	assistantMsg := &AssistantMessage{
+		Type:      MessageTypeAssistant,
+		SessionID: "session-123",
+		UUID:      "uuid-456",
+		Message: anthropic.Message{
+			Content: []anthropic.ContentBlockUnion{
+				{Type: "text", Text: "Hello"},
+			},
+		},
+	}
+	assert.Equal(t, MessageTypeAssistant, assistantMsg.GetType())
+
+	// Test ContentBlock types
+	textBlock := &TextBlock{Type: "text", Text: "Hello"}
+	assert.Equal(t, "text", textBlock.GetContentType())
+
+	toolUseBlock := &ToolUseBlock{
+		Type:  "tool_use",
+		ID:    "tool-123",
+		Name:  "Bash",
+		Input: map[string]interface{}{"command": "ls"},
+	}
+	assert.Equal(t, "tool_use", toolUseBlock.GetContentType())
+	assert.Equal(t, "Bash", toolUseBlock.Name)
+
+	// Test ResultMessage
+	resultMsg := &ResultMessage{
+		Type:      MessageTypeResult,
+		SubType:   "success",
+		IsError:   false,
+		SessionID: "session-123",
+	}
+	assert.Equal(t, MessageTypeResult, resultMsg.GetType())
+	assert.True(t, resultMsg.IsSuccess())
+}
+
+// Helper functions
+
+// TestMessageHandler is a test implementation of MessageHandler
+type TestMessageHandler struct {
+	messages  []Message
+	errors    []error
+	completed bool
+	success   bool
+	mu        sync.Mutex
+}
+
+func (h *TestMessageHandler) OnMessage(msg interface{}) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.messages = append(h.messages, msg.(Message))
+	fmt.Printf("TestMessageHandler OnMessage %v\n", msg)
+	return nil
+}
+
+func (h *TestMessageHandler) OnError(err error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.errors = append(h.errors, err)
+	fmt.Printf("TestMessageHandler OnError %v\n", err)
+}
+
+func (h *TestMessageHandler) OnComplete(result *agentboot.CompletionResult) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.completed = true
+	if result != nil {
+		h.success = result.Success
+	}
+}
+
+func (h *TestMessageHandler) OnApproval(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	// Auto-approve all permissions
+	return agentboot.PermissionResult{Approved: true, UpdatedInput: req.Input}, nil
+}
+
+func (h *TestMessageHandler) OnAsk(ctx context.Context, req agentboot.AskRequest) (agentboot.AskResult, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	// Auto-approve all asks
+	return agentboot.AskResult{ID: req.ID, Approved: true}, nil
+}
+
+func extractTextFromAssistant(msg *AssistantMessage) string {
+	var text strings.Builder
+	for _, block := range msg.Message.Content {
+		if block.Type == "text" {
+			text.WriteString(block.Text)
+		}
+	}
+	return text.String()
+}

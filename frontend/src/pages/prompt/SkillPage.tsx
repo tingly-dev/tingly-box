@@ -42,6 +42,7 @@ import { getIdeSourceLabel } from '@/constants/ideSources';
 import { api } from '@/services/api';
 import AddSkillLocationDialog from '@/components/prompt/skill/AddSkillLocationDialog';
 import AutoDiscoveryDialog from '@/components/prompt/skill/AutoDiscoveryDialog';
+import uPath from 'upath';
 
 interface AddSkillLocationData {
     name: string;
@@ -304,7 +305,8 @@ const SkillPage = () => {
 
     const getSkillDisplayName = (skill: Skill, location: SkillLocation): string => {
         const relativePath = getRelativePath(skill, location);
-        const parts = relativePath.split('/');
+        const normalizedPath = uPath.normalize(relativePath);
+        const parts = uPath.split(normalizedPath);
         // If file is in a subdirectory, include parent directory
         if (parts.length > 1) {
             const parentDir = parts[parts.length - 2];
@@ -318,7 +320,8 @@ const SkillPage = () => {
     // Get a two-level display name (last two levels) for flat mode
     const getTwoLevelDisplayName = (skill: Skill, location: SkillLocation): string => {
         const relativePath = getRelativePath(skill, location);
-        const parts = relativePath.split('/');
+        const normalizedPath = uPath.normalize(relativePath);
+        const parts = uPath.split(normalizedPath);
 
         // Get last two levels: file and its parent
         if (parts.length >= 2) {
@@ -337,14 +340,15 @@ const SkillPage = () => {
     const getGroupKeyFromPattern = (pattern: string, pathParts: string[]): { groupKey: string; matched: boolean } => {
         // Build path string and find pattern
         const pathStr = pathParts.join('/');
-        const patternIndex = pathStr.indexOf(pattern);
+        const normalizedPattern = uPath.normalize(pattern);
+        const patternIndex = pathStr.indexOf(normalizedPattern);
 
         if (patternIndex === -1) {
             return { groupKey: '', matched: false };
         }
 
         // Extract prefix: everything before and including the matched pattern
-        const matchEnd = patternIndex + pattern.length;
+        const matchEnd = patternIndex + normalizedPattern.length;
         const prefix = pathStr.substring(0, matchEnd);
 
         // Remove trailing slash if present (except for root)
@@ -382,7 +386,8 @@ const SkillPage = () => {
 
             for (const skill of skills) {
                 const relativePath = getRelativePath(skill, location);
-                const parts = relativePath.split('/');
+                const normalizedPath = uPath.normalize(relativePath);
+                const parts = uPath.split(normalizedPath);
 
                 const { groupKey, matched } = getGroupKeyFromPattern(pattern, parts);
 
@@ -438,7 +443,8 @@ const SkillPage = () => {
 
         for (const skill of skills) {
             const relativePath = getRelativePath(skill, location);
-            const parts = relativePath.split('/');
+            const normalizedPath = uPath.normalize(relativePath);
+            const parts = uPath.split(normalizedPath);
 
             if (parts.length === 1) {
                 rootFiles.push(skill);
@@ -492,7 +498,8 @@ const SkillPage = () => {
         const subGroups: Record<string, Skill[]> = {};
         for (const skill of groupSkills) {
             const relativePath = getRelativePath(skill, location);
-            const parts = relativePath.split('/');
+            const normalizedPath = uPath.normalize(relativePath);
+            const parts = uPath.split(normalizedPath);
             if (parts.length >= 2) {
                 const secondLevelDir = parts[1];
                 if (!subGroups[secondLevelDir]) {
@@ -511,7 +518,8 @@ const SkillPage = () => {
 
         for (const skill of groupSkills) {
             const relativePath = getRelativePath(skill, location);
-            const parts = relativePath.split('/');
+            const normalizedPath = uPath.normalize(relativePath);
+            const parts = uPath.split(normalizedPath);
 
             if (parts.length >= 2) {
                 const secondLevelDir = parts[1];

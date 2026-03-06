@@ -1,0 +1,5 @@
+[TOOL_RESULT] {{.ToolUseID}} [{{if .IsError}}ERROR{{else}}SUCCESS{{end}}]
+{{- if .Output}}
+{{.Output}}
+{{- else if .Content}}{{range .Content}}{{if eq .Type "tool_result"}}{{.Content}}{{end}}{{end}}
+{{- end}}

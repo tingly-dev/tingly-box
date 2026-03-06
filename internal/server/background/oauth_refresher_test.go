@@ -13,7 +13,7 @@ import (
 
 // tokenRefresher is a minimal interface for the refresh functionality
 type tokenRefresher interface {
-	RefreshToken(ctx context.Context, userID string, providerType oauth2.ProviderType, refreshToken string) (*oauth2.Token, error)
+	RefreshToken(ctx context.Context, userID string, providerType oauth2.ProviderType, refreshToken string, opts ...oauth2.Option) (*oauth2.Token, error)
 }
 
 // mockTokenRefresher tracks RefreshToken calls for testing
@@ -24,7 +24,7 @@ type mockTokenRefresher struct {
 	providerType  oauth2.ProviderType
 }
 
-func (m *mockTokenRefresher) RefreshToken(ctx context.Context, userID string, providerType oauth2.ProviderType, refreshToken string) (*oauth2.Token, error) {
+func (m *mockTokenRefresher) RefreshToken(ctx context.Context, userID string, providerType oauth2.ProviderType, refreshToken string, opts ...oauth2.Option) (*oauth2.Token, error) {
 	m.refreshCalled = true
 	m.refreshToken = refreshToken
 	m.userID = userID

@@ -53,8 +53,55 @@ jobs:
             echo "build_gui=false" >> $GITHUB_OUTPUT
           fi
 
-  build-cli:
+  build-frontend:
     needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache pnpm modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pnpm-store
+            frontend/node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Install pnpm
+        run: corepack enable && corepack prepare pnpm@latest --activate
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: ./frontend
+
+      - name: Install openapi-generator-cli
+        run: npm install -g @openapitools/openapi-generator-cli
+
+      - name: Run codegen and build frontend
+        run: |
+          openapi-generator-cli generate -g typescript-axios -i ../swagger.json -o ./src/client
+          pnpm build && mkdir -p ../internal/web/dist && cp -R dist/* ../internal/web/dist/
+        working-directory: ./frontend
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: internal/web/dist/
+          retention-days: 7
+
+  build-cli:
+    needs: [setup, build-frontend]
     runs-on: ${{ matrix.runs-on }}
     strategy:
       matrix:
@@ -85,7 +132,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           submodules: true
 
       - name: Set up tag environment
@@ -103,11 +149,6 @@ jobs:
             echo "TAG_EXISTS=0" >> $GITHUB_ENV
           fi
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -119,31 +160,15 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            ${{ runner.os }}-go-${{ matrix.goarch }}-
             ${{ runner.os }}-go-
 
-      - name: Cache pnpm modules
-        uses: actions/cache@v4
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            ~/.pnpm-store
-            frontend/node_modules
-          key: ${{ runner.os }}-pnpm-${{ matrix.goarch }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-${{ matrix.goarch }}-
-            ${{ runner.os }}-pnpm-
-
-      - name: Install pnpm
-        run: npm install -g pnpm
-
-      - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
-        working-directory: ./frontend
-
-      - name: Install openapi-generator-cli
-        run: npm install -g @openapitools/openapi-generator-cli
+          name: frontend-dist
+          path: internal/web/dist/
 
       - name: Install zig (for cross-compilation)
         if: matrix.cross_compile == true
@@ -151,13 +176,6 @@ jobs:
           wget -q https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz
           tar -xf zig-linux-x86_64-0.13.0.tar.xz
           echo "$PWD/zig-linux-x86_64-0.13.0" >> $GITHUB_PATH
-
-      - name: Run codegen Build frontend
-        shell: bash
-        run: |
-          openapi-generator-cli generate -g typescript-axios -i ../swagger.json -o ./src/client
-          pnpm build && mkdir -p ../internal/web/dist && cp -R dist/* ../internal/web/dist/
-        working-directory: ./frontend
 
       - name: Build Go binary (${{ matrix.suffix }})
         shell: bash
@@ -277,7 +295,7 @@ jobs:
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
 
       - name: Install pnpm
-        run: npm install -g pnpm
+        run: corepack enable && corepack prepare pnpm@latest --activate
 
       - name: Install frontend dependencies
         shell: bash

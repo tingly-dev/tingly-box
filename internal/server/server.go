@@ -20,6 +20,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/obs/otel"
@@ -53,6 +54,7 @@ type Server struct {
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
 	usageAPI        *UsageAPI
+	healthMonitor   *loadbalance.HealthMonitor
 
 	// client pool for caching
 	clientPool *client.ClientPool
@@ -120,6 +122,11 @@ type Server struct {
 
 	// experimental features
 	experimentalFeatures map[string]bool
+
+	// remote control lifecycle management
+	remoteCoderCtx    context.Context
+	remoteCoderCancel context.CancelFunc
+	remoteCoderMu     sync.Mutex
 
 	version string
 }
@@ -444,8 +451,14 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize auth middleware
 	authMW := middleware.NewAuthMiddleware(cfg, jwtManager)
 
+	// Initialize health monitor
+	healthMonitor := loadbalance.NewHealthMonitor(cfg.HealthMonitor)
+
+	// Initialize health filter
+	healthFilter := typ.NewHealthFilter(healthMonitor)
+
 	// Initialize load balancer
-	loadBalancer := NewLoadBalancer(cfg)
+	loadBalancer := NewLoadBalancer(cfg, healthFilter)
 
 	// Initialize load balancer API
 	loadBalancerAPI := NewLoadBalancerAPI(loadBalancer, cfg)
@@ -480,6 +493,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.loadBalancer = loadBalancer
 	server.loadBalancerAPI = loadBalancerAPI
 	server.usageAPI = usageAPI
+	server.healthMonitor = healthMonitor
 	server.oauthManager = oauthManager
 	server.oauthRefresher = tokenRefresher
 
@@ -496,7 +510,10 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.config.SetTemplateManager(templateManager)
 
 	// Initialize tool interceptor (local web_search/web_fetch)
-	server.toolInterceptor = toolinterceptor.NewInterceptor(cfg.GetToolInterceptorConfig())
+	// Pass a config provider function that gets effective config for each provider
+	server.toolInterceptor = toolinterceptor.NewInterceptor(func(providerUUID string) (*typ.ToolInterceptorConfig, bool) {
+		return cfg.GetToolInterceptorConfigForProvider(providerUUID)
+	})
 
 	// Initialize skill manager for skill locations
 	skillManager, err := data.NewSkillManager(cfg.ConfigDir)
@@ -553,6 +570,41 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Initialize dynamic callback servers map
 	server.callbackServers = make(map[string]*oauth2.CallbackServer)
+
+	// Set up health monitor probe function using existing probe infrastructure
+	if server.healthMonitor != nil {
+		server.healthMonitor.SetProbeFunc(func(serviceID string) bool {
+			// Extract provider UUID from serviceID (format: providerUUID:model)
+			parts := strings.Split(serviceID, ":")
+			if len(parts) < 2 {
+				return false
+			}
+			providerUUID := parts[0]
+			modelID := parts[1]
+
+			// Get provider from config
+			provider, err := cfg.GetProviderByUUID(providerUUID)
+			if err != nil || provider == nil {
+				return false
+			}
+
+			// Use adaptive probe to check health
+			adaptiveProbe := NewAdaptiveProbe(server)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			result, err := adaptiveProbe.ProbeModelEndpoints(ctx, ModelProbeRequest{
+				ProviderUUID: providerUUID,
+				ModelID:      modelID,
+			})
+			if err != nil {
+				return false
+			}
+
+			// Service is healthy if chat endpoint is available
+			return result.ChatEndpoint.Available
+		})
+	}
 
 	return server
 }
@@ -753,17 +805,18 @@ func (s *Server) setupRoutes() {
 }
 
 func (s *Server) UseAIEndpoints() {
-	// OpenAI v1 API group
-	openaiV1 := s.engine.Group("/openai/v1")
-	s.SetupOpenAIEndpoints(openaiV1)
-
-	// OpenAI API alias (without version)
-	openai := s.engine.Group("/openai")
-	s.SetupOpenAIEndpoints(openai)
-
-	// Anthropic v1 API group
-	anthropicV1 := s.engine.Group("/anthropic/v1")
-	s.SetupAnthropicEndpoints(anthropicV1)
+	// DEPRECATED: now we only use path with scenario for openai and anthropic
+	//// OpenAI v1 API group
+	//openaiV1 := s.engine.Group("/openai/v1")
+	//s.SetupOpenAIEndpoints(openaiV1)
+	//
+	//// OpenAI API alias (without version)
+	//openai := s.engine.Group("/openai")
+	//s.SetupOpenAIEndpoints(openai)
+	//
+	//// Anthropic v1 API group
+	//anthropicV1 := s.engine.Group("/anthropic/v1")
+	//s.SetupAnthropicEndpoints(anthropicV1)
 
 	// Passthrough endpoints (no request/response transformation, just model replacement)
 	// Non-versioned passthrough routes
@@ -893,17 +946,9 @@ func (s *Server) Start(port int) error {
 	}
 
 	if s.config.GetScenarioFlag(typ.ScenarioGlobal, "enable_remote_coder") {
-		go func() {
-			rcCfg, err := remoteconfig.LoadFromAppConfig(s.config, remoteconfig.Options{})
-			if err != nil {
-				logrus.WithError(err).Warn("Remote-coder not started: invalid config")
-				return
-			}
-			if err := remote_coder.Run(ctx, rcCfg); err != nil {
-				logrus.WithError(err).Warn("Remote-coder stopped")
-			}
-		}()
-		logrus.Info("Remote-coder auto-start enabled")
+		if err := s.StartRemoteCoder(); err != nil {
+			logrus.WithError(err).Warn("Failed to auto-start remote-coder")
+		}
 	}
 
 	// Determine scheme and handle HTTPS setup
@@ -939,8 +984,7 @@ func (s *Server) Start(port int) error {
 		fmt.Printf("OpenAI v1 Chat API endpoint: %s://%s:%d/openai/v1/chat/completions\n", scheme, resolvedHost, port)
 		fmt.Printf("Anthropic v1 Message API endpoint: %s://%s:%d/anthropic/v1/messages\n", scheme, resolvedHost, port)
 		fmt.Printf("Virtual Model API endpoint: %s://%s:%d/virtual/v1/chat/completions\n", scheme, resolvedHost, port)
-		//Fixme:: we should not hardcode it here
-		fmt.Printf("Mode name: %s\n", "tingly")
+		fmt.Printf("Mode name: %s\n", constant.DefaultModeName)
 		fmt.Printf("Model API key: %s\n", s.config.GetModelToken())
 		fmt.Printf("Virtual Model API key: %s\n", s.config.GetVirtualModelToken())
 
@@ -1041,11 +1085,83 @@ func (s *Server) GetPreferredEndpointForModel(provider *typ.Provider, modelID st
 	return adaptiveProbe.GetPreferredEndpoint(provider, modelID)
 }
 
+// HealthMonitor returns the server's health monitor
+func (s *Server) HealthMonitor() *loadbalance.HealthMonitor {
+	return s.healthMonitor
+}
+
+// StartRemoteCoder starts the remote control service if not already running
+func (s *Server) StartRemoteCoder() error {
+	s.remoteCoderMu.Lock()
+	defer s.remoteCoderMu.Unlock()
+
+	// Already running
+	if s.remoteCoderCancel != nil {
+		logrus.Debug("Remote control already running")
+		return nil
+	}
+
+	rcCfg, err := remoteconfig.LoadFromAppConfig(s.config, remoteconfig.Options{})
+	if err != nil {
+		logrus.WithError(err).Warn("Remote-coder not started: invalid config")
+		return fmt.Errorf("invalid remote control config: %w", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	s.remoteCoderCtx = ctx
+	s.remoteCoderCancel = cancel
+
+	go func() {
+		imbotStore := s.config.GetImBotSettingsStore()
+		if err := remote_coder.Run(ctx, rcCfg, imbotStore); err != nil && ctx.Err() == nil {
+			logrus.WithError(err).Warn("Remote-coder stopped with error")
+		}
+	}()
+
+	logrus.Info("Remote-coder started")
+	return nil
+}
+
+// StopRemoteCoder stops the remote control service if running
+func (s *Server) StopRemoteCoder() {
+	s.remoteCoderMu.Lock()
+	defer s.remoteCoderMu.Unlock()
+
+	if s.remoteCoderCancel == nil {
+		logrus.Debug("Remote control not running")
+		return
+	}
+
+	logrus.Info("Stopping remote-coder...")
+	s.remoteCoderCancel()
+	s.remoteCoderCancel = nil
+	s.remoteCoderCtx = nil
+}
+
+// IsRemoteCoderRunning returns whether the remote control service is running
+func (s *Server) IsRemoteCoderRunning() bool {
+	s.remoteCoderMu.Lock()
+	defer s.remoteCoderMu.Unlock()
+	return s.remoteCoderCancel != nil
+}
+
+// SyncRemoteCoderBots syncs bots with the remote control bot manager
+func (s *Server) SyncRemoteCoderBots(ctx context.Context) error {
+	botManager := remote_coder.GetBotManager()
+	if botManager == nil {
+		return fmt.Errorf("bot manager not available")
+	}
+	return botManager.Sync(ctx)
+}
+
 // Stop gracefully stops the HTTP server
 func (s *Server) Stop(ctx context.Context) error {
 	if s.httpServer == nil {
 		return nil
 	}
+
+	// Stop remote control if running
+	s.StopRemoteCoder()
 
 	// Stop token refresher
 	if s.oauthRefresher != nil {

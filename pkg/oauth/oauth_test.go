@@ -638,3 +638,103 @@ func TestListProviders(t *testing.T) {
 		t.Errorf("Expected 2 providers, got %d", len(providers))
 	}
 }
+
+// TestOptions tests the options pattern for OAuth operations
+func TestOptions(t *testing.T) {
+	t.Run("applyOptions", func(t *testing.T) {
+		// Test empty options
+		opts := applyOptions()
+		if opts.ProxyURL != nil {
+			t.Error("Expected nil ProxyURL for empty options")
+		}
+		if opts.HTTPClient != nil {
+			t.Error("Expected nil HTTPClient for empty options")
+		}
+
+		// Test WithProxyURL
+		proxyURL, _ := url.Parse("http://proxy.example.com:8080")
+		opts = applyOptions(WithProxyURL(proxyURL))
+		if opts.ProxyURL == nil {
+			t.Error("Expected ProxyURL to be set")
+		}
+		if opts.ProxyURL.String() != "http://proxy.example.com:8080" {
+			t.Errorf("Unexpected ProxyURL: %s", opts.ProxyURL.String())
+		}
+
+		// Test WithProxyURLString
+		opts = applyOptions(WithProxyURLString("http://proxy2.example.com:9090"))
+		if opts.ProxyURL == nil {
+			t.Error("Expected ProxyURL to be set")
+		}
+		if opts.ProxyURL.String() != "http://proxy2.example.com:9090" {
+			t.Errorf("Unexpected ProxyURL: %s", opts.ProxyURL.String())
+		}
+
+		// Test WithProxyURLString with empty string
+		opts = applyOptions(WithProxyURLString(""))
+		if opts.ProxyURL != nil {
+			t.Error("Expected nil ProxyURL for empty string")
+		}
+
+		// Test WithProxyURLString with invalid URL
+		opts = applyOptions(WithProxyURLString("://invalid"))
+		if opts.ProxyURL != nil {
+			t.Error("Expected nil ProxyURL for invalid URL")
+		}
+
+		// Test WithHTTPClient
+		customClient := &http.Client{}
+		opts = applyOptions(WithHTTPClient(customClient))
+		if opts.HTTPClient == nil {
+			t.Error("Expected HTTPClient to be set")
+		}
+
+		// Test multiple options
+		opts = applyOptions(
+			WithProxyURL(proxyURL),
+			WithHTTPClient(customClient),
+		)
+		if opts.ProxyURL == nil {
+			t.Error("Expected ProxyURL to be set")
+		}
+		if opts.HTTPClient == nil {
+			t.Error("Expected HTTPClient to be set")
+		}
+	})
+
+	t.Run("getHTTPClient", func(t *testing.T) {
+		config := DefaultConfig()
+		manager := NewManager(config, nil)
+
+		// Test with no options (should use config's client)
+		opts := applyOptions()
+		client := manager.getHTTPClient(opts)
+		if client == nil {
+			t.Error("Expected non-nil HTTP client")
+		}
+
+		// Test with proxy URL option
+		proxyURL, _ := url.Parse("http://proxy.example.com:8080")
+		opts = applyOptions(WithProxyURL(proxyURL))
+		client = manager.getHTTPClient(opts)
+		if client == nil {
+			t.Error("Expected non-nil HTTP client")
+		}
+		// Verify transport has proxy
+		transport, ok := client.Transport.(*http.Transport)
+		if !ok {
+			t.Error("Expected http.Transport")
+		}
+		if transport == nil {
+			t.Error("Expected non-nil transport")
+		}
+
+		// Test with custom HTTP client option (should take precedence)
+		customClient := &http.Client{Timeout: 10 * time.Second}
+		opts = applyOptions(WithHTTPClient(customClient))
+		client = manager.getHTTPClient(opts)
+		if client != customClient {
+			t.Error("Expected custom HTTP client to be used")
+		}
+	})
+}

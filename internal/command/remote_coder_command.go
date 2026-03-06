@@ -103,7 +103,9 @@ func RemoteCoderCommand(appManager *AppManager) *cobra.Command {
 				return err
 			}
 
-			return remote_coder.Run(context.Background(), cfg)
+			// For standalone remote-coder command, pass nil for ImBotSettingsStore
+			// This will use the local bot store with the old table name
+			return remote_coder.Run(context.Background(), cfg, nil)
 		},
 	}
 
@@ -138,7 +140,7 @@ func remoteCoderSetupCommand(appManager *AppManager) *cobra.Command {
 
 			reader := bufio.NewReader(os.Stdin)
 
-			fmt.Println("Remote Coder Setup")
+			fmt.Println("Remote Control Setup")
 			fmt.Println("------------------")
 			fmt.Println("Select coder:")
 			fmt.Println("1. Claude Code")
@@ -207,7 +209,7 @@ func remoteCoderSetupCommand(appManager *AppManager) *cobra.Command {
 
 			printApplyResult(settingsResult, "settings.json")
 			printApplyResult(onboardingResult, ".claude.json")
-			fmt.Println("Remote Coder setup completed.")
+			fmt.Println("Remote Control setup completed.")
 			return nil
 		},
 	}

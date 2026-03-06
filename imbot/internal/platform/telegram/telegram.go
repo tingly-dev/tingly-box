@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 type Bot struct {
 	*core.BaseBot
 	api     *tgbotapi.BotAPI
+	adapter *Adapter // Local adapter for message conversion
 	updates tgbotapi.UpdatesChannel
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -104,6 +106,9 @@ func (b *Bot) Connect(ctx context.Context) error {
 	b.UpdateAuthenticated(true)
 	b.EmitConnected()
 	b.Logger().Info("Telegram bot connected: @%s", b.api.Self.UserName)
+
+	// Initialize adapter for message conversion
+	b.adapter = NewAdapter(b.Config(), b.api)
 
 	// Start receiving messages
 	b.wg.Add(1)
@@ -206,6 +211,44 @@ func (b *Bot) EditMessage(ctx context.Context, messageID string, text string) er
 	return nil
 }
 
+// EditMessageWithKeyboard edits a message with text and inline keyboard
+func (b *Bot) EditMessageWithKeyboard(ctx interface{}, chatID string, messageID string, text string, keyboard interface{}) error {
+	if err := b.EnsureReady(); err != nil {
+		return err
+	}
+
+	// Parse chat ID
+	chatIDInt, err := strconv.ParseInt(chatID, 10, 64)
+	if err != nil {
+		return core.NewInvalidTargetError(core.PlatformTelegram, chatID, "invalid chat ID")
+	}
+
+	// Parse message ID
+	msgIDInt, err := strconv.Atoi(messageID)
+	if err != nil {
+		return core.NewInvalidTargetError(core.PlatformTelegram, messageID, "invalid message ID")
+	}
+
+	// Create edit message config
+	editConfig := tgbotapi.NewEditMessageText(chatIDInt, msgIDInt, text)
+	editConfig.ParseMode = tgbotapi.ModeMarkdown
+
+	// Set keyboard if provided
+	if keyboard != nil {
+		if kb, ok := keyboard.(tgbotapi.InlineKeyboardMarkup); ok {
+			editConfig.ReplyMarkup = &kb
+		}
+	}
+
+	_, err = b.api.Send(editConfig)
+	if err != nil {
+		return core.WrapError(err, core.PlatformTelegram, core.ErrPlatformError)
+	}
+
+	b.UpdateLastActivity()
+	return nil
+}
+
 // DeleteMessage deletes a message
 func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 	if err := b.EnsureReady(); err != nil {
@@ -260,132 +303,33 @@ func (b *Bot) receiveUpdates() {
 
 // handleMessage handles an incoming message
 func (b *Bot) handleMessage(msg *tgbotapi.Message) {
-	// Determine chat type
-	chatType := b.getChatType(msg)
-
-	// Create sender
-	sender := core.Sender{
-		ID: strconv.FormatInt(msg.From.ID, 10),
+	// Use adapter to convert platform message to core message
+	coreMessage, err := b.adapter.AdaptMessage(b.ctx, msg)
+	if err != nil {
+		b.Logger().Error("Failed to adapt message: %v", err)
+		return
 	}
 
-	if msg.From.UserName != "" {
-		sender.Username = msg.From.UserName
-	}
-
-	if msg.From.FirstName != "" || msg.From.LastName != "" {
-		sender.DisplayName = fmt.Sprintf("%s %s", msg.From.FirstName, msg.From.LastName)
-	}
-
-	// Create recipient
-	recipient := core.Recipient{
-		ID:   strconv.FormatInt(msg.Chat.ID, 10),
-		Type: string(chatType),
-	}
-
-	if msg.Chat.Title != "" {
-		recipient.DisplayName = msg.Chat.Title
-	}
-
-	// Extract content
-	var content core.Content
-	if msg.Text != "" {
-		content = core.NewTextContent(msg.Text)
-	} else if msg.Photo != nil && len(msg.Photo) > 0 {
-		// Handle photo
-		content = b.handlePhoto(msg)
-	} else if msg.Document != nil {
-		// Handle document
-		content = b.handleDocument(msg)
-	} else if msg.Sticker != nil {
-		// Handle sticker
-		content = b.handleSticker(msg)
-	} else {
-		// Unknown content type
-		content = core.NewSystemContent("unknown", nil)
-	}
-
-	// Create message
-	message := core.Message{
-		ID:        strconv.Itoa(msg.MessageID),
-		Platform:  core.PlatformTelegram,
-		Timestamp: int64(msg.Date),
-		Sender:    sender,
-		Recipient: recipient,
-		Content:   content,
-		ChatType:  chatType,
-		Metadata:  make(map[string]interface{}),
-	}
-
-	// Add thread context if reply
-	if msg.ReplyToMessage != nil {
-		message.ThreadContext = &core.ThreadContext{
-			ID:              strconv.Itoa(msg.ReplyToMessage.MessageID),
-			ParentMessageID: strconv.Itoa(msg.ReplyToMessage.MessageID),
-		}
-	}
-
-	b.EmitMessage(message)
+	b.EmitMessage(*coreMessage)
 }
 
 // handleCallbackQuery handles a callback query (button click)
 func (b *Bot) handleCallbackQuery(query *tgbotapi.CallbackQuery) {
 	b.Logger().Debug("Received callback query from %d: %s", query.From.ID, query.Data)
 
-	// Create sender
-	sender := core.Sender{
-		ID:       strconv.FormatInt(query.From.ID, 10),
-		Username: query.From.UserName,
-	}
-	if query.From.FirstName != "" || query.From.LastName != "" {
-		sender.DisplayName = fmt.Sprintf("%s %s", query.From.FirstName, query.From.LastName)
+	// Use adapter to convert callback to core message
+	coreMessage, err := b.adapter.AdaptCallback(b.ctx, query)
+	if err != nil {
+		b.Logger().Error("Failed to adapt callback: %v", err)
+		return
 	}
 
-	// Create recipient - use the message's chat ID
-	recipient := core.Recipient{
-		ID:   strconv.FormatInt(query.Message.Chat.ID, 10),
-		Type: "direct",
-	}
-
-	// Create callback content as a special reaction type
-	// Format: callback:data
-	callbackContent := fmt.Sprintf("callback:%s", query.Data)
-
-	// Create message for callback
-	message := core.Message{
-		ID:        strconv.Itoa(query.Message.MessageID),
-		Platform:  core.PlatformTelegram,
-		Timestamp: int64(query.Message.Date),
-		Sender:    sender,
-		Recipient: recipient,
-		Content:   core.NewTextContent(callbackContent),
-		ChatType:  core.ChatTypeDirect,
-		Metadata: map[string]interface{}{
-			"callbackQueryID": query.ID,
-			"callbackData":    query.Data,
-			"isCallback":      true,
-		},
-	}
-
-	b.EmitMessage(message)
+	b.EmitMessage(*coreMessage)
 
 	// Answer the callback query to remove loading state
 	callbackCfg := tgbotapi.NewCallback(query.ID, "")
 	if _, err := b.api.Request(callbackCfg); err != nil {
 		b.Logger().Error("Failed to answer callback query: %v", err)
-	}
-}
-
-// getChatType determines the chat type from the message
-func (b *Bot) getChatType(msg *tgbotapi.Message) core.ChatType {
-	switch msg.Chat.Type {
-	case "private":
-		return core.ChatTypeDirect
-	case "group", "supergroup":
-		return core.ChatTypeGroup
-	case "channel":
-		return core.ChatTypeChannel
-	default:
-		return core.ChatTypeDirect
 	}
 }
 
@@ -487,62 +431,97 @@ func (b *Bot) sendMedia(ctx context.Context, chatID int64, opts *core.SendMessag
 	}, nil
 }
 
-// handlePhoto handles a photo message
-func (b *Bot) handlePhoto(msg *tgbotapi.Message) core.Content {
-	photos := msg.Photo
-	if len(photos) == 0 {
-		return core.NewSystemContent("photo", nil)
+// ResolveChatID resolves a chat ID from invite link, username, or direct ID
+// Returns the chat ID if successful
+func (b *Bot) ResolveChatID(input string) (string, error) {
+	if err := b.EnsureReady(); err != nil {
+		return "", err
 	}
 
-	// Get the largest photo
-	largest := photos[len(photos)-1]
+	input = strings.TrimSpace(input)
 
-	media := []core.MediaAttachment{
-		{
-			Type:   "image",
-			URL:    fmt.Sprintf("file://%s", largest.FileID),
-			Width:  largest.Width,
-			Height: largest.Height,
-			Raw:    map[string]interface{}{"fileUniqueId": largest.FileUniqueID},
-		},
+	// Try to parse as direct chat ID (numeric)
+	if chatID, err := strconv.ParseInt(input, 10, 64); err == nil {
+		return strconv.FormatInt(chatID, 10), nil
 	}
 
-	caption := msg.Caption
-	return core.NewMediaContent(media, caption)
-}
-
-// handleDocument handles a document message
-func (b *Bot) handleDocument(msg *tgbotapi.Message) core.Content {
-	doc := msg.Document
-
-	media := []core.MediaAttachment{
-		{
-			Type:     "document",
-			URL:      fmt.Sprintf("file://%s", doc.FileID),
-			MimeType: doc.MimeType,
-			Filename: doc.FileName,
-			Size:     int64(doc.FileSize),
-			Raw:      map[string]interface{}{"fileUniqueId": doc.FileUniqueID},
-		},
+	// Handle @username format
+	if strings.HasPrefix(input, "@") {
+		username := input[1:]
+		chatConfig := tgbotapi.ChatInfoConfig{
+			ChatConfig: tgbotapi.ChatConfig{
+				SuperGroupUsername: username,
+			},
+		}
+		chat, err := b.api.GetChat(chatConfig)
+		if err != nil {
+			return "", fmt.Errorf("failed to get chat by username @%s: %w", username, err)
+		}
+		return strconv.FormatInt(chat.ID, 10), nil
 	}
 
-	caption := msg.Caption
-	return core.NewMediaContent(media, caption)
-}
+	// Handle invite links: https://t.me/+hash or https://t.me/joinchat/hash
+	// Note: Bot must already be a member of the chat to get its info
+	if strings.Contains(input, "t.me/") {
+		// Extract the chat identifier from the link
+		// For public groups: https://t.me/groupname
+		// For private groups: https://t.me/+hash or https://t.me/joinchat/hash
 
-// handleSticker handles a sticker message
-func (b *Bot) handleSticker(msg *tgbotapi.Message) core.Content {
-	sticker := msg.Sticker
+		// Try to extract username from public link
+		if !strings.Contains(input, "+") && !strings.Contains(input, "joinchat") {
+			// Public link format: https://t.me/username
+			parts := strings.Split(input, "t.me/")
+			if len(parts) == 2 {
+				username := strings.TrimSuffix(parts[1], "/")
+				chatConfig := tgbotapi.ChatInfoConfig{
+					ChatConfig: tgbotapi.ChatConfig{
+						SuperGroupUsername: username,
+					},
+				}
+				chat, err := b.api.GetChat(chatConfig)
+				if err != nil {
+					return "", fmt.Errorf("failed to get chat from link %s: %w", input, err)
+				}
+				return strconv.FormatInt(chat.ID, 10), nil
+			}
+		}
 
-	media := []core.MediaAttachment{
-		{
-			Type:   "sticker",
-			URL:    fmt.Sprintf("file://%s", sticker.FileID),
-			Width:  sticker.Width,
-			Height: sticker.Height,
-			Raw:    map[string]interface{}{"fileUniqueId": sticker.FileUniqueID},
-		},
+		// For private invite links, we need to use the raw API
+		// Try to extract the hash and use joinChat API (if bot has permission)
+		inviteHash := ""
+		if strings.Contains(input, "+") {
+			parts := strings.Split(input, "+")
+			if len(parts) == 2 {
+				inviteHash = strings.TrimSuffix(parts[1], "/")
+			}
+		} else if strings.Contains(input, "joinchat/") {
+			parts := strings.Split(input, "joinchat/")
+			if len(parts) == 2 {
+				inviteHash = strings.TrimSuffix(parts[1], "/")
+			}
+		}
+
+		if inviteHash != "" {
+			// Use MakeRequest to call joinChat API
+			params := tgbotapi.Params{}
+			params.AddNonEmpty("chat_id", inviteHash)
+			resp, err := b.api.MakeRequest("joinChat", params)
+			if err != nil {
+				return "", fmt.Errorf("failed to join chat via invite link: %w (bot may not have permission)", err)
+			}
+
+			// Parse the response to get chat ID
+			var chat struct {
+				ID int64 `json:"id"`
+			}
+			if err := json.Unmarshal(resp.Result, &chat); err != nil {
+				return "", fmt.Errorf("failed to parse join response: %w", err)
+			}
+			return strconv.FormatInt(chat.ID, 10), nil
+		}
+
+		return "", fmt.Errorf("could not parse invite link: %s", input)
 	}
 
-	return core.NewMediaContent(media, "")
+	return "", fmt.Errorf("invalid input format: %s (expected chat ID, @username, or invite link)", input)
 }

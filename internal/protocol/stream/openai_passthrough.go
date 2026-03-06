@@ -134,8 +134,8 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Str
 				},
 			}
 
-			// Add usage if present (usually only in the last chunk)
-			if chunk.Usage.PromptTokens != 0 || chunk.Usage.CompletionTokens != 0 {
+			// Add usage if present (usually only in the last chunk) and not disabled
+			if !hc.DisableStreamUsage && (chunk.Usage.PromptTokens != 0 || chunk.Usage.CompletionTokens != 0) {
 				chunkMap["usage"] = chunk.Usage
 			}
 
@@ -208,30 +208,32 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Str
 			chunkID = fmt.Sprintf("chatcmpl-%d", time.Now().Unix())
 		}
 
-		// Send estimated usage as final chunk
-		usageChunk := map[string]interface{}{
-			"id":      chunkID,
-			"object":  "chat.completion.chunk",
-			"created": 0,
-			"model":   hc.ResponseModel,
-			"choices": []map[string]interface{}{
-				{
-					"index":         0,
-					"delta":         map[string]interface{}{},
-					"finish_reason": nil,
+		// Send estimated usage as final chunk (only if not disabled)
+		if !hc.DisableStreamUsage {
+			usageChunk := map[string]interface{}{
+				"id":      chunkID,
+				"object":  "chat.completion.chunk",
+				"created": 0,
+				"model":   hc.ResponseModel,
+				"choices": []map[string]interface{}{
+					{
+						"index":         0,
+						"delta":         map[string]interface{}{},
+						"finish_reason": nil,
+					},
 				},
-			},
-			"usage": map[string]interface{}{
-				"prompt_tokens":     inputTokens,
-				"completion_tokens": outputTokens,
-				"total_tokens":      inputTokens + outputTokens,
-			},
-		}
+				"usage": map[string]interface{}{
+					"prompt_tokens":     inputTokens,
+					"completion_tokens": outputTokens,
+					"total_tokens":      inputTokens + outputTokens,
+				},
+			}
 
-		usageChunkJSON, err := json.Marshal(usageChunk)
-		if err == nil {
-			c.SSEvent("", string(usageChunkJSON))
-			flusher.Flush()
+			usageChunkJSON, err := json.Marshal(usageChunk)
+			if err == nil {
+				c.SSEvent("", string(usageChunkJSON))
+				flusher.Flush()
+			}
 		}
 	}
 

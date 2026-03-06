@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
     Box,
     Grid,
@@ -12,11 +13,8 @@ import {
     InputLabel,
     Select,
     MenuItem,
-    ToggleButton,
-    ToggleButtonGroup,
     Paper,
     Divider,
-    alpha,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CallMadeIcon from '@mui/icons-material/CallMade';
@@ -26,7 +24,7 @@ import StreamIcon from '@mui/icons-material/Stream';
 import SpeedIcon from '@mui/icons-material/Speed';
 import { StatCard, TokenUsageChart, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable } from '@/components/dashboard';
 import type { TimeSeriesData, AggregatedStat } from '@/components/dashboard';
-import { toggleButtonGroupStyle, toggleButtonStyle, switchControlLabelStyle } from '@/styles/toggleStyles';
+import { switchControlLabelStyle } from '@/styles/toggleStyles';
 import api from '../services/api';
 
 interface Provider {
@@ -67,6 +65,15 @@ const getLocalMidnight = (date: Date): Date => {
 };
 
 export default function DashboardPage() {
+    const { timeRange: urlTimeRange } = useParams<{ timeRange: TimeRange }>();
+    const navigate = useNavigate();
+
+    // Validate and set time range from URL
+    const validTimeRanges: TimeRange[] = ['today', 'yesterday', '3d', '7d', '30d', '90d'];
+    const timeRange: TimeRange = validTimeRanges.includes(urlTimeRange as TimeRange)
+        ? (urlTimeRange as TimeRange)
+        : '7d';
+
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [autoRefresh, setAutoRefresh] = useState(true);
@@ -74,7 +81,6 @@ export default function DashboardPage() {
     const [timeSeries, setTimeSeries] = useState<TimeSeriesData[]>([]);
     const [providers, setProviders] = useState<Provider[]>([]);
     const [selectedProvider, setSelectedProvider] = useState<string>('all');
-    const [timeRange, setTimeRange] = useState<TimeRange>('7d');
 
     const loadData = useCallback(async (provider: string, range: TimeRange) => {
         try {
@@ -226,26 +232,16 @@ export default function DashboardPage() {
                     gap: 2,
                 }}
             >
-                <Typography variant="h4" sx={{ fontWeight: 700, fontSize: '1.5rem', letterSpacing: '-0.02em' }}>
-                    Usage Dashboard
-                </Typography>
+                <Box>
+                    <Typography variant="h4" sx={{ fontWeight: 700, fontSize: '1.5rem', letterSpacing: '-0.02em' }}>
+                        Usage Dashboard
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                        {TIME_RANGE_CONFIG[timeRange].label}
+                    </Typography>
+                </Box>
 
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                    {/* Time Range Selector */}
-                    <ToggleButtonGroup
-                        value={timeRange}
-                        exclusive
-                        onChange={(_, value) => value && setTimeRange(value)}
-                        size="small"
-                        sx={toggleButtonGroupStyle}
-                    >
-                        {Object.entries(TIME_RANGE_CONFIG).map(([key, config]) => (
-                            <ToggleButton key={key} value={key} sx={toggleButtonStyle}>
-                                {config.label}
-                            </ToggleButton>
-                        ))}
-                    </ToggleButtonGroup>
-
                     {/* Provider Selector */}
                     <FormControl size="small" sx={{ minWidth: 150 }}>
                         <InputLabel sx={{ fontWeight: 500 }}>Provider</InputLabel>
@@ -343,14 +339,14 @@ export default function DashboardPage() {
 
             {/* Charts */}
             <Grid container spacing={2.5} sx={{ mb: 4 }}>
-                <Grid size={{ xs: 12, md: 6 }}>
+                <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
                     {timeRange === 'today' || timeRange === 'yesterday' ? (
                         <HourlyTokenHistoryChart data={timeSeries} />
                     ) : (
                         <DailyTokenHistoryChart data={timeSeries} />
                     )}
                 </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
+                <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
                     <TokenUsageChart data={tokenChartData} />
                 </Grid>
             </Grid>

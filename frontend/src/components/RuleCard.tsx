@@ -62,7 +62,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     const { configRecord, setConfigRecord } = useRuleCardData({ rule, providers });
 
     // Auto-save functionality
-    const { updateField } = useRuleAutoSave({
+    const { autoSave, updateField } = useRuleAutoSave({
         rule,
         onRuleChange,
         showNotification,
@@ -78,11 +78,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     const { dialogState: smartDialogState, handlers: smartHandlers } = useSmartRoutingHandlers({
         configRecord,
         setConfigRecord,
-        autoSave: async () => {
-            // Minimal auto-save implementation for smart routing handlers
-            // In a future refactor, this could be consolidated
-            return true;
-        },
+        autoSave,
         ruleUuid: rule.uuid,
         onModelSelectOpen,
         showNotification,
@@ -90,6 +86,14 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     // Delete confirmation state
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+    // Handler: Switch routing mode (simple toggle, preserves data)
+    const handleRoutingModeSwitch = useCallback(async () => {
+        if (!configRecord) return;
+
+        // Simply toggle the smartEnabled flag, preserve all data
+        await updateField(configRecord, setConfigRecord, 'smartEnabled', !configRecord.smartEnabled);
+    }, [configRecord, updateField]);
 
     // Handler: Delete provider
     const handleDeleteProvider = useCallback(
@@ -168,14 +172,12 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     // Extra actions menu - shared between RoutingGraph and SmartRoutingGraph
     const extraActions = (
         <GraphSettingsMenu
-            smartEnabled={isSmartMode ?? false}
             canProbe={!!configRecord.providers[0]?.provider && !!configRecord.providers[0]?.model}
             isProbing={probeState.isProbing}
             allowDeleteRule={allowDeleteRule}
             active={configRecord.active}
             allowToggleRule={allowToggleRule}
             saving={saving}
-            onToggleSmartRouting={() => updateField(configRecord, setConfigRecord, 'smartEnabled', !isSmartMode)}
             onProbe={probeState.handleProbe}
             onExport={handleExport}
             onDelete={handleDeleteButtonClick}
@@ -205,6 +207,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                     onAddDefaultProvider={handleAddProviderButtonClick}
                     onDeleteDefaultProvider={smartHandlers.handleDeleteDefaultProvider}
                     onProviderNodeClick={handleProviderNodeClick}
+                    onSwitchRoutingMode={handleRoutingModeSwitch}
                 />
             ) : (
                 <RoutingGraph
@@ -226,6 +229,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                     onDeleteSmartRule={smartHandlers.handleDeleteSmartRule}
                     onAddServiceToSmartRule={handleAddServiceToSmartRuleByUuid}
                     onDeleteServiceFromSmartRule={smartHandlers.handleDeleteServiceFromSmartRule}
+                    onSwitchRoutingMode={handleRoutingModeSwitch}
                 />
             )}
 

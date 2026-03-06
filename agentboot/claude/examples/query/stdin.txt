@@ -1,0 +1,1 @@
+{"type":"user","message":{"role":"user","content":"Call Bash git add -A"}}

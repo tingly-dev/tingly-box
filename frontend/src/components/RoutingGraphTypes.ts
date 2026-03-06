@@ -14,7 +14,7 @@ export interface ConfigProvider {
 
 export interface SmartOp {
     uuid: string;
-    position: 'model' | 'thinking' | 'system' | 'user' | 'tool_use' | 'token';
+    position: 'model' | 'thinking' | 'context_system' | 'context_user' | 'latest_user' | 'tool_use' | 'token';
     operation: string;
     value: string;
     meta?: {
@@ -32,6 +32,7 @@ export interface SmartRouting {
 
 export interface ConfigRecord {
     uuid: string;
+    scenario?: string;
     requestModel: string;
     responseModel: string;
     active: boolean;

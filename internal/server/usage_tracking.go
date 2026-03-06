@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
@@ -77,6 +79,9 @@ func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens
 
 	// 3. Record detailed usage (for analytics/dashboard)
 	s.recordDetailedUsage(c, rule, provider, model, requestModel, scenario, inputTokens, outputTokens, streamed, status, errorCode, latencyMs)
+
+	// 4. Report to health monitor for service health tracking
+	s.reportHealthStatus(provider, model, err, errorCode)
 }
 
 // sanitizeErrorCode extracts a safe error code from an error.
@@ -153,4 +158,51 @@ func (s *Server) TrackUsage(ctx context.Context, inputTokens, outputTokens int, 
 	if c, ok := ctx.Value("gin_context").(*gin.Context); ok {
 		s.trackUsageFromContext(c, inputTokens, outputTokens, err)
 	}
+}
+
+// reportHealthStatus reports the health status of a service based on request outcome.
+// It uses the health monitor to track service health for load balancing decisions.
+func (s *Server) reportHealthStatus(provider *typ.Provider, model string, err error, errorCode string) {
+	if s.healthMonitor == nil || provider == nil || model == "" {
+		return
+	}
+
+	serviceID := fmt.Sprintf("%s:%s", provider.UUID, model)
+
+	if err == nil {
+		// Success - report to health monitor
+		s.healthMonitor.ReportSuccess(serviceID)
+		return
+	}
+
+	// Error - classify and report appropriately
+	errStr := err.Error()
+
+	// Check for rate limit (429)
+	if strings.Contains(errStr, "429") || strings.Contains(errStr, "rate limit") || strings.Contains(errStr, "RateLimit") {
+		s.healthMonitor.ReportRateLimit(serviceID)
+		return
+	}
+
+	// Check for auth errors (401/403)
+	if strings.Contains(errStr, "401") || strings.Contains(errStr, "403") ||
+		strings.Contains(errStr, "unauthorized") || strings.Contains(errStr, "forbidden") {
+		// Try to determine if it's 401 or 403
+		if strings.Contains(errStr, "401") {
+			s.healthMonitor.ReportAuthError(serviceID, 401)
+		} else {
+			s.healthMonitor.ReportAuthError(serviceID, 403)
+		}
+		return
+	}
+
+	// Check for retryable errors (timeout, connection refused)
+	if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "connection refused") ||
+		strings.Contains(errStr, "no such host") || strings.Contains(errStr, "i/o timeout") {
+		s.healthMonitor.ReportError(serviceID, err)
+		return
+	}
+
+	// For other errors, report as general error
+	s.healthMonitor.ReportError(serviceID, err)
 }

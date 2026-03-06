@@ -7,6 +7,9 @@ import (
 
 // Bot represents the interface for all messaging platform bots
 type Bot interface {
+	// Identity
+	UUID() string
+
 	// Lifecycle
 	Connect(ctx context.Context) error
 	Disconnect(ctx context.Context) error

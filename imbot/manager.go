@@ -6,12 +6,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
 )
 
 // Manager manages multiple bot instances
 type Manager struct {
-	bots     map[Platform][]core.Bot
+	bots     map[string]core.Bot
 	config   *ManagerConfig
 	handlers *eventHandlers
 	mu       sync.RWMutex
@@ -23,8 +24,8 @@ type Manager struct {
 
 // eventHandlers stores global event handlers
 type eventHandlers struct {
-	message      []func(core.Message, Platform)
-	error        []func(error, Platform)
+	message      []func(core.Message, Platform, string) // added botUUID
+	error        []func(error, Platform, string)        // added botUUID
 	connected    []func(Platform)
 	disconnected []func(Platform)
 	ready        []func(Platform)
@@ -66,11 +67,11 @@ func NewManager(opts ...ManagerOption) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	m := &Manager{
-		bots:   make(map[Platform][]core.Bot),
+		bots:   make(map[string]core.Bot),
 		config: core.DefaultManagerConfig(),
 		handlers: &eventHandlers{
-			message:      make([]func(core.Message, Platform), 0),
-			error:        make([]func(error, Platform), 0),
+			message:      make([]func(core.Message, Platform, string), 0),
+			error:        make([]func(error, Platform, string), 0),
 			connected:    make([]func(Platform), 0),
 			disconnected: make([]func(Platform), 0),
 			ready:        make([]func(Platform), 0),
@@ -109,8 +110,12 @@ func (m *Manager) AddBot(config *core.Config) error {
 	// Set up bot event handlers
 	m.setupBotHandlers(bot, config.Platform)
 
-	// Add to bots map
-	m.bots[config.Platform] = append(m.bots[config.Platform], bot)
+	// Add to UUID index
+	if config.UUID != "" {
+		m.bots[config.UUID] = bot
+	} else {
+		logrus.Errorf("missing bot uuid")
+	}
 
 	// Connect if enabled
 	if config.Enabled {
@@ -120,7 +125,7 @@ func (m *Manager) AddBot(config *core.Config) error {
 		}
 	}
 
-	m.logger.Info("Added %s bot", config.Platform)
+	m.logger.Info("Added %s bot (UUID: %s)", config.Platform, config.UUID)
 	return nil
 }
 
@@ -135,66 +140,40 @@ func (m *Manager) AddBots(configs []*core.Config) error {
 }
 
 // RemoveBot removes a bot from the manager
-func (m *Manager) RemoveBot(platform Platform, index int) error {
+func (m *Manager) RemoveBot(uid string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	bots, ok := m.bots[platform]
-	if !ok || index >= len(bots) {
-		return fmt.Errorf("bot not found: %s[%d]", platform, index)
+	bot, ok := m.bots[uid]
+	if !ok {
+		return fmt.Errorf("bot not found: %s", uid)
 	}
 
-	bot := bots[index]
 	if err := bot.Close(); err != nil {
 		m.logger.Error("Error closing bot: %v", err)
 	}
 
-	// Remove from slice
-	m.bots[platform] = append(bots[:index], bots[index+1:]...)
-
-	m.logger.Info("Removed %s bot at index %d", platform, index)
+	// Remove
+	logrus.Infof("remove bot: %s[%s]", bot.PlatformInfo().Name, bot.UUID())
 	return nil
 }
 
-// GetBot returns a bot for the given platform
-func (m *Manager) GetBot(platform Platform) core.Bot {
+// GetBot returns a bot by its UUID and verifies the platform matches
+func (m *Manager) GetBot(uuid string, platform Platform) core.Bot {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	bots, ok := m.bots[platform]
-	if !ok || len(bots) == 0 {
+	bot, ok := m.bots[uuid]
+	if !ok {
 		return nil
 	}
 
-	return bots[0]
-}
-
-// GetBots returns all bots for a platform
-func (m *Manager) GetBots(platform Platform) []core.Bot {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	if bots, ok := m.bots[platform]; ok {
-		result := make([]core.Bot, len(bots))
-		copy(result, bots)
-		return result
+	// Verify platform matches
+	if bot.PlatformInfo().ID != core.Platform(platform) {
+		return nil
 	}
 
-	return nil
-}
-
-// GetAllBots returns all bots across all platforms
-func (m *Manager) GetAllBots() map[Platform][]core.Bot {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	result := make(map[Platform][]core.Bot)
-	for platform, bots := range m.bots {
-		result[platform] = make([]core.Bot, len(bots))
-		copy(result[platform], bots)
-	}
-
-	return result
+	return bot
 }
 
 // Start starts the manager and connects all enabled bots
@@ -206,14 +185,13 @@ func (m *Manager) Start(ctx context.Context) error {
 	m.logger.Info("Starting bot manager...")
 
 	// Connect all bots
-	for platform, bots := range m.bots {
-		for _, bot := range bots {
-			if !bot.IsConnected() {
-				if err := bot.Connect(ctx); err != nil {
-					m.logger.Error("Failed to connect %s bot: %v", platform, err)
-				}
+	for _, bot := range m.bots {
+		if !bot.IsConnected() {
+			if err := bot.Connect(ctx); err != nil {
+				m.logger.Error("Failed to connect %s bot: %v", bot.PlatformInfo().Name, err)
 			}
 		}
+
 	}
 
 	m.logger.Info("Bot manager started")
@@ -228,16 +206,14 @@ func (m *Manager) Stop(ctx context.Context) error {
 
 	// Disconnect all bots
 	var wg sync.WaitGroup
-	for platform, bots := range m.bots {
-		for _, bot := range bots {
-			wg.Add(1)
-			go func(b core.Bot, p Platform) {
-				defer wg.Done()
-				if err := b.Disconnect(ctx); err != nil {
-					m.logger.Error("Error disconnecting %s bot: %v", p, err)
-				}
-			}(bot, platform)
-		}
+	for _, bot := range m.bots {
+		wg.Add(1)
+		go func(b core.Bot) {
+			defer wg.Done()
+			if err := b.Disconnect(ctx); err != nil {
+				m.logger.Error("Error disconnecting %s bot: %s %v", b.PlatformInfo().Name, b.UUID(), err)
+			}
+		}(bot)
 	}
 
 	wg.Wait()
@@ -253,14 +229,14 @@ func (m *Manager) Close() error {
 }
 
 // OnMessage registers a global message handler
-func (m *Manager) OnMessage(handler func(core.Message, Platform)) {
+func (m *Manager) OnMessage(handler func(core.Message, Platform, string)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.handlers.message = append(m.handlers.message, handler)
 }
 
 // OnError registers a global error handler
-func (m *Manager) OnError(handler func(error, Platform)) {
+func (m *Manager) OnError(handler func(error, Platform, string)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.handlers.error = append(m.handlers.error, handler)
@@ -287,32 +263,6 @@ func (m *Manager) OnReady(handler func(Platform)) {
 	m.handlers.ready = append(m.handlers.ready, handler)
 }
 
-// SendTo sends a message to a specific platform and target
-func (m *Manager) SendTo(platform Platform, target string, opts *core.SendMessageOptions) (*core.SendResult, error) {
-	bot := m.GetBot(platform)
-	if bot == nil {
-		return nil, fmt.Errorf("no bot available for platform: %s", platform)
-	}
-
-	return bot.SendMessage(context.Background(), target, opts)
-}
-
-// Broadcast sends a message to multiple targets
-func (m *Manager) Broadcast(targets []Target, opts *core.SendMessageOptions) map[Platform]*core.SendResult {
-	results := make(map[Platform]*core.SendResult)
-
-	for _, target := range targets {
-		result, err := m.SendTo(target.Platform, target.Target, opts)
-		if err != nil {
-			m.logger.Error("Failed to send to %s:%s: %v", target.Platform, target.Target, err)
-			continue
-		}
-		results[target.Platform] = result
-	}
-
-	return results
-}
-
 // GetStatus returns the status of all bots
 func (m *Manager) GetStatus() map[string]*core.BotStatus {
 	m.mu.RLock()
@@ -320,50 +270,49 @@ func (m *Manager) GetStatus() map[string]*core.BotStatus {
 
 	statuses := make(map[string]*core.BotStatus)
 
-	for platform, bots := range m.bots {
-		for i, bot := range bots {
-			key := fmt.Sprintf("%s:%d", platform, i)
-			statuses[key] = bot.Status()
-		}
+	for _, bot := range m.bots {
+		key := fmt.Sprintf("%s:%s", bot.PlatformInfo().Name, bot.UUID())
+		statuses[key] = bot.Status()
 	}
-
 	return statuses
 }
 
 // setupBotHandlers sets up event handlers for a bot
 func (m *Manager) setupBotHandlers(bot core.Bot, platform Platform) {
+	botUUID := bot.UUID()
+
 	bot.OnMessage(func(msg core.Message) {
 		m.mu.RLock()
-		handlers := make([]func(core.Message, Platform), len(m.handlers.message))
+		handlers := make([]func(core.Message, Platform, string), len(m.handlers.message))
 		copy(handlers, m.handlers.message)
 		m.mu.RUnlock()
 
 		for _, handler := range handlers {
-			go func(h func(core.Message, Platform)) {
+			go func(h func(core.Message, Platform, string)) {
 				defer func() {
 					if r := recover(); r != nil {
 						m.logger.Error("panic in message handler: %v", r)
 					}
 				}()
-				h(msg, platform)
+				h(msg, platform, botUUID)
 			}(handler)
 		}
 	})
 
 	bot.OnError(func(err error) {
 		m.mu.RLock()
-		handlers := make([]func(error, Platform), len(m.handlers.error))
+		handlers := make([]func(error, Platform, string), len(m.handlers.error))
 		copy(handlers, m.handlers.error)
 		m.mu.RUnlock()
 
 		for _, handler := range handlers {
-			go func(h func(error, Platform)) {
+			go func(h func(error, Platform, string)) {
 				defer func() {
 					if r := recover(); r != nil {
 						m.logger.Error("panic in error handler: %v", r)
 					}
 				}()
-				h(err, platform)
+				h(err, platform, botUUID)
 			}(handler)
 		}
 	})

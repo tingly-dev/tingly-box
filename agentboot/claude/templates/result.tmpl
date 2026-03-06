@@ -1,0 +1,18 @@
+[RESULT] {{if eq .SubType "error"}}ERROR{{else}}SUCCESS{{end}}
+{{- if .DurationMS}}
+Duration: {{.DurationMS}}ms{{if .DurationAPIMS}} (API: {{.DurationAPIMS}}ms){{end}}
+{{- end}}
+{{- if .TotalCostUSD}}
+Cost: ${{printf "%.4f" .TotalCostUSD}}
+{{- end}}
+{{- if .Usage}}
+Tokens: {{.Usage.InputTokens}} in, {{.Usage.OutputTokens}} out{{if .Usage.CacheReadInputTokens}} (cache: {{.Usage.CacheReadInputTokens}}){{end}}
+{{- end}}
+{{- if .Result}}
+
+{{.Result}}
+{{- end}}
+{{- if .PermissionDenials}}
+Permission Denials:{{range .PermissionDenials}}
+  - {{.RequestID}}: {{.Reason}}{{end}}
+{{- end}}

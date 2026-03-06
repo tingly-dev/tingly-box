@@ -23,6 +23,9 @@ type HandleContext struct {
 	OnStreamEventHooks    []func(event interface{}) error
 	OnStreamCompleteHooks []func()
 	OnStreamErrorHooks    []func(err error)
+
+	// Stream configuration flags
+	DisableStreamUsage bool // Don't include usage in streaming chunks
 }
 
 // NewHandleContext creates a new HandleContext with required dependencies.

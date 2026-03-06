@@ -2,7 +2,7 @@ import {Delete as DeleteIcon,} from '@mui/icons-material';
 import {Box, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Tooltip, Typography,} from '@mui/material';
 import React, {useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import type {SmartRouting} from '../RoutingGraphTypes.ts';
+import type {SmartRouting, SmartOp} from '../RoutingGraphTypes.ts';
 import {ActionButtonsBox, StyledSmartNodePrimary, StyledSmartNodeWrapper,} from './styles.tsx';
 
 // Smart node internal dimensions
@@ -50,34 +50,61 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
 
     const firstOp = smartRouting.ops?.[0];
 
-    // Format op display: e.g., "model: contains" or "user: regex"
-    const getOpDisplay = () => {
-        if (!firstOp) return t('rule.smart.noOperation');
-        const opLabel = firstOp.operation || 'unknown';
-        return `[${firstOp.position}] [${opLabel}]`;
+    // Format single op display: e.g., "model: contains" or "user: regex"
+    const getOpDisplay = (op: SmartOp | undefined): string => {
+        if (!op) return t('rule.smart.noOperation');
+        const opLabel = op.operation || 'unknown';
+        return `[${op.position}] [${opLabel}]`;
     };
 
     // Get value for second line - truncated if too long
-    const getOpValue = () => {
-        if (!firstOp?.value) return '';
-        return firstOp.value;
+    const getOpValue = (op: SmartOp | undefined): string => {
+        if (!op?.value) return '';
+        return op.value;
     };
 
     // Truncate value for display (max 20 chars)
-    const getTruncatedValue = () => {
-        const value = getOpValue();
+    const getTruncatedValue = (op: SmartOp | undefined): string => {
+        const value = getOpValue(op);
         if (value.length > 20) {
             return value.slice(0, 20) + '...';
         }
         return value;
     };
 
-    // Full display for tooltip (includes operation and value)
-    const getOpDisplayFull = () => {
-        if (!firstOp) return t('rule.smart.noOperation');
-        const opLabel = firstOp.operation || 'unknown';
-        const valueStr = firstOp.value ? `: ${firstOp.value}` : '';
-        return `[${firstOp.position}] [${opLabel}]${valueStr}`;
+    // Full display for single op (includes operation and value)
+    const getOpDisplayFull = (op: SmartOp | undefined): string => {
+        if (!op) return t('rule.smart.noOperation');
+        const opLabel = op.operation || 'unknown';
+        const valueStr = op.value ? `: ${op.value}` : '';
+        return `[${op.position}] [${opLabel}]${valueStr}`;
+    };
+
+    // Summary for multi-op display - shows count and first op
+    const getMultiOpSummary = (): string => {
+        const ops = smartRouting.ops || [];
+        if (ops.length === 0) return t('rule.smart.noOperation');
+
+        if (ops.length === 1) {
+            return getOpDisplay(ops[0]);
+        }
+
+        // For multiple ops, show count and first op
+        return `${ops.length} conditions (AND)`;
+    };
+
+    // Full tooltip for multi-op - shows all ops with AND logic
+    const getMultiOpDisplayFull = (): string => {
+        const ops = smartRouting.ops || [];
+        if (ops.length === 0) return t('rule.smart.noOperation');
+
+        const opStrings = ops.map(op => getOpDisplayFull(op));
+        if (ops.length === 1) {
+            return opStrings[0];
+        }
+
+        // Join with AND
+        return `If ${opStrings.join(' AND ')}`;
     };
 
     return (
@@ -110,7 +137,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                 {/* Content */}
                 <Box sx={{mt: 1, width: '100%'}}>
                     {/* Value display - show truncated with operation details on hover */}
-                    <Tooltip title={getOpDisplayFull()} arrow>
+                    <Tooltip title={getMultiOpDisplayFull()} arrow>
                         <Typography
                             variant="body2"
                             sx={{
@@ -123,7 +150,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                 whiteSpace: 'nowrap',
                             }}
                         >
-                            {getTruncatedValue() || t('rule.smart.noValue')}
+                            {getTruncatedValue(firstOp) || t('rule.smart.noValue')}
                         </Typography>
                     </Tooltip>
 
@@ -133,13 +160,13 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                             width: '100%',
                         }}
                     >
-                        <Tooltip title={getOpDisplayFull()} arrow>
+                        <Tooltip title={getMultiOpDisplayFull()} arrow>
                             <Box
                                 sx={{
                                     width: '100%',
                                     p: 1,
                                     border: '1px solid',
-                                    borderColor: active ? 'primary.main' : 'divider',
+                                    borderColor: 'divider',
                                     borderRadius: 1,
                                     backgroundColor: 'background.paper',
                                     transition: 'all 0.2s',
@@ -152,7 +179,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                     variant="body2"
                                     sx={{
                                         fontSize: '0.8rem',
-                                        color: active ? 'primary.main' : 'text.secondary',
+                                        color: 'text.secondary',
                                         fontWeight: 500,
                                         overflow: 'hidden',
                                         textOverflow: 'ellipsis',
@@ -160,7 +187,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                         width: '100%',
                                     }}
                                 >
-                                    {getOpDisplay()}
+                                    {getMultiOpSummary()}
                                 </Typography>
                             </Box>
                         </Tooltip>
@@ -192,9 +219,9 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
             >
                 <MenuItem onClick={handleDelete} disabled={!active}>
                     <ListItemIcon>
-                        <DeleteIcon color="error"/>
+                        <DeleteIcon />
                     </ListItemIcon>
-                    <ListItemText sx={{color: 'error.main'}}>
+                    <ListItemText>
                         {t('rule.menu.deleteSmartRule')}
                     </ListItemText>
                 </MenuItem>

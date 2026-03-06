@@ -1,3 +1,5 @@
+import { ApiStyleBadge } from '@/components/ApiStyleBadge.tsx';
+import ModelListDialog from '@/components/ModelListDialog';
 import { Cancel, ContentCopy, Delete, Edit, ListAlt, Route, Visibility } from '@mui/icons-material';
 import {
     Box,
@@ -20,8 +22,6 @@ import {
 import { useState } from 'react';
 import api from '../services/api';
 import type { Provider } from '../types/provider';
-import { ApiStyleBadge } from '@/components/ApiStyleBadge.tsx';
-import ModelListDialog from '@/components/ModelListDialog';
 
 interface ApiKeyTableProps {
     providers: Provider[];
@@ -157,10 +157,10 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                 <TableHead>
                     <TableRow>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Status</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Name</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>Name</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>API Style</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>API Base URL</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 180 }}>API Key</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 120, maxWidth: 120 }}>API Base URL</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 120, maxWidth: 120 }}>API Key</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 80 }}>Proxy</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Model List</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Actions</TableCell>
@@ -190,9 +190,20 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                             </TableCell>
                             {/* Name */}
                             <TableCell>
-                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                    {provider.name}
-                                </Typography>
+                                <Tooltip title={provider.name} arrow placement="top">
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
+                                            fontWeight: 500,
+                                            maxWidth: 120,
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                        }}
+                                    >
+                                        {provider.name}
+                                    </Typography>
+                                </Tooltip>
                             </TableCell>
                             {/* API Style */}
                             <TableCell>
@@ -200,7 +211,10 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                             </TableCell>
                             {/* API Base URL */}
                             <TableCell>
-                                <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all', maxWidth: 200 }}>
+                                <Typography variant="body2" sx={{
+                                    maxWidth: 150,
+                                    fontFamily: 'monospace', wordBreak: 'break-all',
+                                }}>
                                     {provider.api_base}
                                 </Typography>
                             </TableCell>
@@ -296,13 +310,15 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                         borderRadius: 2,
                     }}
                 >
-                    <Typography variant="h6" sx={{ mb: 2 }}>API Key - {tokenModal.providerName}</Typography>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                        {tokenModal.token ? `API Key - ${tokenModal.providerName}` : tokenModal.providerName}
+                    </Typography>
 
                     {tokenModal.loading ? (
                         <Box sx={{ mb: 3, textAlign: 'center', py: 4 }}>
                             <Typography variant="body2" color="text.secondary">Loading API key...</Typography>
                         </Box>
-                    ) : (
+                    ) : tokenModal.token ? (
                         <Box sx={{ mb: 3 }}>
                             <Box
                                 sx={{
@@ -316,10 +332,10 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                                     borderColor: 'divider',
                                 }}
                             >
-                                {tokenModal.token || 'Failed to load token'}
+                                {tokenModal.token}
                             </Box>
                         </Box>
-                    )}
+                    ) : null}
 
                     <Stack direction="row" spacing={2} justifyContent="flex-end">
                         <IconButton

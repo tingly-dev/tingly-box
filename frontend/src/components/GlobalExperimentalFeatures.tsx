@@ -1,14 +1,14 @@
+import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
+import { Cloud, Psychology } from '@mui/icons-material';
 import {
     Alert,
     Box,
+    Chip,
     Tooltip,
     Typography,
-    Chip,
 } from '@mui/material';
-import { Psychology, Cloud, Security } from '@mui/icons-material';
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
-import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 
 const SKILL_FEATURES = [
     { key: 'skill_ide', label: 'IDE Skills', description: 'Enable IDE Skills feature for managing code snippets and skills from IDEs' },
@@ -34,13 +34,9 @@ const GlobalExperimentalFeatures: React.FC = () => {
             });
             setFeatures(newFeatures);
 
-            // Load Remote Coder flag
+            // Load Remote Control flag
             const remoteCoderResult = await api.getScenarioFlag('_global', 'enable_remote_coder');
             setRemoteCoderEnabled(remoteCoderResult?.data?.value || false);
-
-            // Load Guardrails flag
-            const guardrailsResult = await api.getScenarioFlag('_global', 'guardrails');
-            setGuardrailsEnabled(guardrailsResult?.data?.value || false);
         } catch (error) {
             console.error('Failed to load global experimental features:', error);
         } finally {
@@ -56,7 +52,7 @@ const GlobalExperimentalFeatures: React.FC = () => {
                 console.log('setScenarioFlag result:', result);
                 if (result.success) {
                     setFeatures(prev => ({ ...prev, [featureKey]: newValue }));
-                    refresh();
+                    refresh()
                 } else {
                     console.error('Failed to set global feature:', result);
                     loadFeatures();
@@ -76,12 +72,12 @@ const GlobalExperimentalFeatures: React.FC = () => {
                     setRemoteCoderEnabled(newValue);
                     refresh();
                 } else {
-                    console.error('Failed to set Remote Coder:', result);
+                    console.error('Failed to set Remote Control:', result);
                     loadFeatures();
                 }
             })
             .catch((err) => {
-                console.error('Failed to set Remote Coder:', err);
+                console.error('Failed to set Remote Control:', err);
                 loadFeatures();
             });
     };
@@ -128,7 +124,7 @@ const GlobalExperimentalFeatures: React.FC = () => {
             {/* Skill Features */}
             <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
                 {/* Label */}
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
                     <Psychology sx={{ fontSize: '1rem', color: 'text.secondary' }} />
                     <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
                         Skills
@@ -143,34 +139,34 @@ const GlobalExperimentalFeatures: React.FC = () => {
                     {SKILL_FEATURES.map((feature) => {
                         const isEnabled = features[feature.key] || false;
                         return (
-                                                    <Tooltip key={feature.key} title={feature.description + (isEnabled ? ' (enabled)' : ' (disabled) - Click to enable')} arrow>
-                            <Chip
-                                label={`${feature.label} · ${isEnabled ? 'On' : 'Off'}`}
-                                onClick={() => toggleFeature(feature.key)}
-                                size="small"
-                                sx={chipStyle(isEnabled)}
-                            />
-                        </Tooltip>
+                            <Tooltip key={feature.key} title={feature.description + (isEnabled ? ' (enabled)' : ' (disabled) - Click to enable')} arrow>
+                                <Chip
+                                    label={`${feature.label} · ${isEnabled ? 'On' : 'Off'}`}
+                                    onClick={() => toggleFeature(feature.key)}
+                                    size="small"
+                                    sx={chipStyle(isEnabled)}
+                                />
+                            </Tooltip>
                         );
                     })}
                 </Box>
             </Box>
 
-            {/* Remote Coder Section */}
+            {/* Remote Control Section */}
             <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
                 {/* Title with Icon */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
                     <Cloud sx={{ fontSize: '1rem', color: 'text.secondary' }} />
                     <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
-                        Remote Coder
+                        Remote Control
                     </Typography>
                 </Box>
 
-                {/* Remote Coder Toggle as clickable chip */}
+                {/* Remote Control Toggle as clickable chip */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-                                        <Tooltip title={"Enable Remote Coder - access sessions remotely through the web UI" + (remoteCoderEnabled ? ' (enabled)' : ' (disabled) - Click to enable')} arrow>
+                    <Tooltip title={"Enable Remote Control - access sessions remotely through the web UI" + (remoteCoderEnabled ? ' (enabled)' : ' (disabled) - Click to enable')} arrow>
                         <Chip
-                            label={`Remote Coder · ${remoteCoderEnabled ? 'On' : 'Off'}`}
+                            label={`Remote Control · ${remoteCoderEnabled ? 'On' : 'Off'}`}
                             onClick={toggleRemoteCoder}
                             size="small"
                             sx={chipStyle(remoteCoderEnabled)}
@@ -208,11 +204,11 @@ const GlobalExperimentalFeatures: React.FC = () => {
                 </Alert>
             )}
 
-            {/* Tip message at the bottom when Remote Coder is enabled */}
+            {/* Tip message at the bottom when Remote Control is enabled */}
             {remoteCoderEnabled && (
                 <Alert severity="info" sx={{ mt: 1 }}>
                     <Typography variant="body2">
-                        Remote Coder is now enabled! A "Remote Coder" menu item has appeared in the sidebar. Click it to access the remote coder interface.
+                        Remote Control is now enabled! A "Remote Control" menu item has appeared in the sidebar. Click it to access the Remote Control interface.
                     </Typography>
                 </Alert>
             )}

@@ -1,35 +1,36 @@
 import react from '@vitejs/plugin-react-swc';
-import wails from "@wailsio/runtime/plugins/vite";
-import {defineConfig} from 'vite';
-import {viteMockServe} from 'vite-plugin-mock';
+import { defineConfig } from 'vite';
+import { viteMockServe } from 'vite-plugin-mock';
+import { visualizer } from 'rollup-plugin-visualizer';
 import path from 'path';
 
-// https://vite.dev/config/
-export default defineConfig(({mode}) => {
+// Web-only Vite configuration
+// For Wails builds, use vite.config.wails.ts instead
+export default defineConfig(({ mode }) => {
     // Check if we should use mock data
     const useMock = process.env.USE_MOCK === 'true'
     console.log("use mock", useMock)
 
-    const isWails = mode === 'development-wails' || mode === 'production-wails'
-    console.log("is wails mode", isWails)
-
     return {
         plugins: [
             react(),
-            // Only include wails plugin when building for GUI mode
-            ...(isWails ? [wails("./src/bindings")] : []),
             ...(useMock ? [viteMockServe({
                 mockPath: 'src/mock',
                 enable: useMock,
                 logger: true,
             })] : []),
+            // Bundle analyzer - generates dist/stats.html for analysis
+            visualizer({
+                open: false,
+                gzipSize: true,
+                brotliSize: true,
+                filename: 'dist/stats.html',
+            }),
         ],
         resolve: {
             alias: {
-                // Provide fallback for bindings in non-GUI builds
-                '@/bindings': isWails ?
-                    '/src/bindings-wails' :
-                    '/src/bindings-web',
+                // Web mode: always use mock bindings
+                '@/bindings': '/src/bindings-web',
                 '@': path.resolve(__dirname, './src'),
             }
         },
@@ -39,23 +40,48 @@ export default defineConfig(({mode}) => {
                     target: 'http://localhost:12580',
                     changeOrigin: true,
                     secure: false,
-                    // Rewrite the path to remove /api prefix if your backend doesn't expect it
-                    // rewrite: (path) => path.replace(/^\/api/, '')
                 }
             },
             port: 3000
         },
+        // Memory optimization for build process
+        optimizeDeps: {
+            // Pre-bundle large dependencies to reduce build memory
+            include: [
+                'react',
+                'react-dom',
+                '@mui/material',
+                '@mui/icons-material',
+            ],
+        },
         build: {
             rollupOptions: {
                 output: {
-                    manualChunks: {
-                        'mui-vendor': ['@mui/material', '@mui/icons-material'],
-                        'router-vendor': ['react-router-dom'],
-                        'react-vendor': ['react', 'react-dom'],
-                    }
-                }
+                    manualChunks: (id) => {
+                        if (id.includes('node_modules')) {
+                            // MUI packages - depend on react
+                            if (id.includes('@mui/material') || id.includes('@mui/system') || id.includes('@mui/utils')) {
+                                return 'mui-vendor';
+                            }
+                            if (id.includes('@mui/icons-material')) {
+                                return 'mui-icons-vendor';
+                            }
+                            // Recharts - depends on react and d3
+                            if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-')) {
+                                return 'recharts-vendor';
+                            }
+                        }
+                        // Let Rollup handle non-node_modules modules automatically
+                        return undefined;
+                    },
+                },
+                maxParallelFileOps: 4,
             },
-            chunkSizeWarningLimit: 600
-        }
+            chunkSizeWarningLimit: 500,
+            // Disable sourcemap in production to reduce memory and output size
+            sourcemap: mode !== 'production',
+            // Use SWC for minification (via @vitejs/plugin-react-swc)
+            minify: 'swc',
+        },
     }
 })
