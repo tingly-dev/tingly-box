@@ -1639,6 +1639,59 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 	return c.Save()
 }
 
+// GetScenarioStringFlag returns a string flag value for a scenario
+func (c *Config) GetScenarioStringFlag(scenario typ.RuleScenario, flagName string) string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	config := c.GetScenarioConfig(scenario)
+	if config == nil {
+		return ""
+	}
+	flags := config.GetDefaultFlags()
+	switch flagName {
+	case "thinking_effort":
+		return string(flags.ThinkingEffort)
+	default:
+		return ""
+	}
+}
+
+// SetScenarioStringFlag sets a string flag value for a scenario
+func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName string, value string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Find or create scenario config
+	var config *typ.ScenarioConfig
+	for i := range c.Scenarios {
+		if c.Scenarios[i].Scenario == scenario {
+			config = &c.Scenarios[i]
+			break
+		}
+	}
+
+	if config == nil {
+		// Create new scenario config
+		newConfig := typ.ScenarioConfig{
+			Scenario:   scenario,
+			Flags:      typ.ScenarioFlags{},
+			Extensions: make(map[string]interface{}),
+		}
+		c.Scenarios = append(c.Scenarios, newConfig)
+		config = &c.Scenarios[len(c.Scenarios)-1]
+	}
+
+	// Set the specific flag
+	switch flagName {
+	case "thinking_effort":
+		config.Flags.ThinkingEffort = typ.ThinkingEffortLevel(value)
+	default:
+		return fmt.Errorf("unknown string flag name: %s", flagName)
+	}
+
+	return c.Save()
+}
+
 // FetchAndSaveProviderModels fetches models from a provider with fallback hierarchy
 func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	c.mu.RLock()

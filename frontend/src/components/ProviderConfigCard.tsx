@@ -12,7 +12,7 @@ import {
 import React, { ReactNode, RefObject } from 'react';
 import { ApiConfigRow } from './ApiConfigRow';
 import { BaseUrlRow } from './BaseUrlRow';
-import ExperimentalFeatures from './ExperimentalFeatures';
+import PluginFeatures from './PluginFeatures';
 
 export interface ConfigSectionProps {
     label: string;
@@ -153,10 +153,10 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
                 </Box>
             )}
 
-            {/* Experimental Features - Optional (when scenario is provided) */}
+            {/* Scenario Features (Thinking Effort + Plugin) - Optional (when scenario is provided) */}
             {scenario && (
                 <Box sx={{ px: 2 }}>
-                    <ExperimentalFeatures scenario={scenario} />
+                    <PluginFeatures scenario={scenario} />
                 </Box>
             )}
         </Box>

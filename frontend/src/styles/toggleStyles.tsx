@@ -19,52 +19,34 @@ import type { SxProps, Theme } from '@mui/material/styles';
  */
 export const toggleButtonGroupStyle: SxProps<Theme> = {
     backgroundColor: 'action.hover',
-    borderRadius: 2,
-    // p: 0.5,
-    // gap: 0.5,
+    borderRadius: 1,
     display: 'flex',
     border: '1px solid',
     borderColor: 'divider',
+    '& .MuiToggleButton-root': {
+        border: '1px solid',
+        borderColor: 'divider',
+        textTransform: 'none',
+        px: 2,
+        py: 1,
+        fontSize: '0.875rem',
+        height: 32,
+    },
+    '& .MuiToggleButton-root.Mui-selected': {
+        bgcolor: 'primary.main',
+        color: 'primary.contrastText',
+        border: 'none',
+        '&:hover': {
+            bgcolor: 'primary.dark',
+        },
+    },
 };
 
 /**
  * Style for individual ToggleButton
- * Selected state: Primary color with subtle shadow
- * Unselected: Transparent with hover effect
  */
 export const toggleButtonStyle: SxProps<Theme> = {
-    borderRadius: 1.5,
-    px: 2,
-    py: 0.75,
-    fontSize: '0.875rem',
     fontWeight: 500,
-    textTransform: 'none',
-    border: 'none',
-    color: 'text.secondary',
-    transition: 'all 0.2s ease-in-out',
-    backgroundColor: 'transparent',
-    boxShadow: 'none',
-    '&:hover': {
-        backgroundColor: 'action.selected',
-        color: 'text.primary',
-    },
-    '&.Mui-selected': {
-        backgroundColor: 'background.paper',
-        color: 'primary.main',
-        fontWeight: 600,
-        border: '1px solid',
-        borderColor: 'primary.light',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.12)',
-        '&:hover': {
-            backgroundColor: 'background.paper',
-            color: 'primary.dark',
-            borderColor: 'primary.main',
-        },
-    },
-    '&.Mui-disabled': {
-        color: 'text.disabled',
-        backgroundColor: 'transparent',
-    },
 };
 
 // ============================================================================

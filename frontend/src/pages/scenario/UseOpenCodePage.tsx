@@ -204,7 +204,7 @@ const UseOpenCodePage: React.FC = () => {
                                 variant="contained"
                                 size="small"
                             >
-                                Config OpenCode
+                                Quick Config
                             </Button>
                         }
                     >
