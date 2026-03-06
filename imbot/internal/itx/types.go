@@ -4,7 +4,9 @@
 package itx
 
 import (
+	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
@@ -107,7 +109,7 @@ type Adapter interface {
 	ParseResponse(msg core.Message) (*InteractionResponse, error)
 
 	// UpdateMessage updates a message (optional, for platforms that support it)
-	UpdateMessage(ctx interface{}, bot core.Bot, chatID, messageID, text string, interactions []Interaction) error
+	UpdateMessage(ctx context.Context, bot core.Bot, chatID, messageID, text string, interactions []Interaction) error
 
 	// CanEditMessages returns true if platform supports message editing
 	CanEditMessages() bool
@@ -138,6 +140,27 @@ func (a *BaseAdapter) CanEditMessages() bool {
 }
 
 // UpdateMessage default implementation returns ErrNotSupported
-func (a *BaseAdapter) UpdateMessage(ctx interface{}, bot core.Bot, chatID, messageID, text string, interactions []Interaction) error {
+func (a *BaseAdapter) UpdateMessage(ctx context.Context, bot core.Bot, chatID, messageID, text string, interactions []Interaction) error {
 	return ErrNotSupported
+}
+
+// BuildFallbackText creates numbered text options for text mode
+// prompt is the text asking user to reply with number (e.g., "Reply with number:" or "请回复数字：")
+// cancelText is the cancel option text (e.g., "Cancel" or "取消")
+func BuildFallbackText(message string, interactions []Interaction, prompt, cancelText string) string {
+	var sb strings.Builder
+	sb.WriteString(message)
+	sb.WriteString("\n\n")
+	sb.WriteString(prompt)
+	sb.WriteString("\n")
+
+	for i, item := range interactions {
+		if item.Type == ActionSelect || item.Type == ActionConfirm {
+			sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, item.Label))
+		}
+	}
+	sb.WriteString("0. ")
+	sb.WriteString(cancelText)
+
+	return sb.String()
 }
