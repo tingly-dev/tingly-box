@@ -17,6 +17,7 @@ const SKILL_FEATURES = [
 const GlobalExperimentalFeatures: React.FC = () => {
     const [features, setFeatures] = useState<Record<string, boolean>>({});
     const [remoteCoderEnabled, setRemoteCoderEnabled] = useState(false);
+    const [guardrailsEnabled, setGuardrailsEnabled] = useState(false);
     const [loading, setLoading] = useState(true);
     const { refresh } = useFeatureFlags();
 
@@ -77,6 +78,24 @@ const GlobalExperimentalFeatures: React.FC = () => {
             })
             .catch((err) => {
                 console.error('Failed to set Remote Control:', err);
+                loadFeatures();
+            });
+    };
+
+    const toggleGuardrails = () => {
+        const newValue = !guardrailsEnabled;
+        api.setScenarioFlag('_global', 'guardrails', newValue)
+            .then((result) => {
+                if (result.success) {
+                    setGuardrailsEnabled(newValue);
+                    refresh();
+                } else {
+                    console.error('Failed to set Guardrails:', result);
+                    loadFeatures();
+                }
+            })
+            .catch((err) => {
+                console.error('Failed to set Guardrails:', err);
                 loadFeatures();
             });
     };
@@ -155,6 +174,35 @@ const GlobalExperimentalFeatures: React.FC = () => {
                     </Tooltip>
                 </Box>
             </Box>
+
+            {/* Guardrails Section */}
+            <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
+                    <Security sx={{ fontSize: '1rem', color: 'text.secondary' }} />
+                    <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
+                        Guardrails
+                    </Typography>
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
+                    <Tooltip title={"Enable Guardrails - block risky tool calls and filter sensitive outputs" + (guardrailsEnabled ? ' (enabled)' : ' (disabled) - Click to enable')} arrow>
+                        <Chip
+                            label={`Guardrails · ${guardrailsEnabled ? 'On' : 'Off'}`}
+                            onClick={toggleGuardrails}
+                            size="small"
+                            sx={chipStyle(guardrailsEnabled)}
+                        />
+                    </Tooltip>
+                </Box>
+            </Box>
+
+            {guardrailsEnabled && (
+                <Alert severity="info" sx={{ mt: 1 }}>
+                    <Typography variant="body2">
+                        Guardrails is enabled. A "Guardrails" page is available in the sidebar for rule management.
+                    </Typography>
+                </Alert>
+            )}
 
             {/* Tip message at the bottom when Remote Control is enabled */}
             {remoteCoderEnabled && (

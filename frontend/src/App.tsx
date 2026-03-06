@@ -25,6 +25,7 @@ const UseOpenCodePage = lazy(() => import('./pages/scenario/UseOpenCodePage'));
 const UseXcodePage = lazy(() => import('./pages/scenario/UseXcodePage'));
 const CredentialPage = lazy(() => import('./pages/CredentialPage'));
 const System = lazy(() => import('./pages/System'));
+const GuardrailsPage = lazy(() => import('./pages/GuardrailsPage'));
 const DashboardPage = lazy(() => import('./pages/./DashboardPage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
 
@@ -308,6 +309,8 @@ function AppContent() {
                                         <Route path="/remote-control" element={<RemoteControlOverviewPage />} />
                                         <Route path="/remote-control/bot" element={<BotPage />} />
                                         <Route path="/remote-control/agent" element={<AgentPage />} />
+                                        {/* Guardrails */}
+                                        <Route path="/guardrails" element={<GuardrailsPage />} />
                                     </Routes>
                                 </Suspense>
                             </Layout>

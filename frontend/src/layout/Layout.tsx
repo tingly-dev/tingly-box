@@ -16,7 +16,8 @@ import {
     Bolt as SkillIcon,
     Settings as SystemIcon,
     Today as TodayIcon,
-    Send as UserPromptIcon
+    Send as UserPromptIcon,
+    Security
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -71,7 +72,7 @@ const Layout = ({ children }: LayoutProps) => {
     const navigate = useNavigate();
     const { hasUpdate, currentVersion, showUpdateDialog } = useAppVersion();
     const { isHealthy, showDisconnectDialog } = useHealth();
-    const { skillUser, skillIde, enableRemoteCoder } = useFeatureFlags();
+    const { skillUser, skillIde, enableRemoteCoder, enableGuardrails } = useFeatureFlags();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
 
