@@ -148,6 +148,18 @@ func (p *PlatformCapabilities) SupportsChatType(chatType ChatType) bool {
 	return false
 }
 
+// SupportsInteraction checks if the platform supports native interactive elements
+// (inline keyboards, cards, components, etc.)
+func (p *PlatformCapabilities) SupportsInteraction() bool {
+	for _, f := range p.Features {
+		switch f {
+		case "inlineKeyboards", "interactiveCards", "components", "blockKit":
+			return true
+		}
+	}
+	return false
+}
+
 // GetPlatformCapabilities returns the capabilities for a given platform
 func GetPlatformCapabilities(platform Platform) *PlatformCapabilities {
 	capabilities := map[Platform]*PlatformCapabilities{
@@ -161,21 +173,21 @@ func GetPlatformCapabilities(platform Platform) *PlatformCapabilities {
 		PlatformTelegram: {
 			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup, ChatTypeChannel, ChatTypeThread},
 			MediaTypes: []string{"image", "video", "audio", "document", "sticker", "gif"},
-			Features:   []string{"reactions", "edit", "delete", "threads", "polls", "nativeCommands"},
+			Features:   []string{"reactions", "edit", "delete", "threads", "polls", "nativeCommands", "inlineKeyboards", "callbackQueries", "messageEditing"},
 			TextLimit:  4096,
 			RateLimit:  30,
 		},
 		PlatformDiscord: {
 			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup, ChatTypeChannel, ChatTypeThread},
 			MediaTypes: []string{"image", "video", "audio", "document", "gif"},
-			Features:   []string{"reactions", "edit", "delete", "threads", "nativeCommands", "mentions"},
+			Features:   []string{"reactions", "edit", "delete", "threads", "nativeCommands", "mentions", "components", "messageEditing"},
 			TextLimit:  2000,
 			RateLimit:  50,
 		},
 		PlatformSlack: {
 			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup, ChatTypeChannel, ChatTypeThread},
 			MediaTypes: []string{"image", "video", "audio", "document"},
-			Features:   []string{"reactions", "edit", "delete", "threads", "mentions"},
+			Features:   []string{"reactions", "edit", "delete", "threads", "mentions", "blockKit", "messageEditing"},
 			TextLimit:  40000,
 			RateLimit:  60,
 		},
@@ -203,14 +215,14 @@ func GetPlatformCapabilities(platform Platform) *PlatformCapabilities {
 		PlatformFeishu: {
 			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup, ChatTypeChannel, ChatTypeThread},
 			MediaTypes: []string{"image", "video", "audio", "document"},
-			Features:   []string{"reactions", "delete", "threads", "nativeCommands", "mentions"},
+			Features:   []string{"reactions", "delete", "threads", "nativeCommands", "mentions", "interactiveCards"},
 			TextLimit:  4000,
 			RateLimit:  50,
 		},
 		PlatformWebChat: {
 			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup},
 			MediaTypes: []string{"image", "video", "audio", "document", "sticker"},
-			Features:   []string{"reactions", "edit", "delete", "threads", "polls"},
+			Features:   []string{"reactions", "edit", "delete", "threads", "polls", "inlineKeyboards", "messageEditing"},
 			TextLimit:  4096,
 			RateLimit:  60,
 		},

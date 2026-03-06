@@ -19,6 +19,7 @@ const (
 	Pass Action = iota
 	Block
 	Replace
+	Stop // Signal to stop processing immediately
 )
 
 // CodecMode defines how messages are encoded/decoded
@@ -212,6 +213,9 @@ func (r *Runner) handleOutputJSON(ctx context.Context) {
 		case Block:
 		case Replace:
 			_ = encoder.Encode(result.NewMsg)
+		case Stop:
+			// Stop processing immediately
+			return
 		}
 
 		// 2️⃣ 再处理注入 child input
@@ -263,6 +267,9 @@ func (r *Runner) handleOutputText(ctx context.Context) {
 			if s, ok := result.NewMsg.(string); ok {
 				fmt.Println(s)
 			}
+		case Stop:
+			// Stop processing immediately
+			return
 		}
 
 		// Inject to child input

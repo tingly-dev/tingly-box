@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -22,16 +23,33 @@ import (
 
 // BotHandler encapsulates all bot message handling logic and dependencies
 type BotHandler struct {
-	ctx              context.Context
-	botSetting       BotSetting
-	chatStore        *ChatStore
-	sessionMgr       *session.Manager
-	agentBoot        *agentboot.AgentBoot
-	summaryEngine    *summarizer.Engine
-	directoryBrowser *DirectoryBrowser
-	manager          *imbot.Manager
-	imPrompter       *IMPrompter
-	fileStore        *FileStore
+	ctx                context.Context
+	botSetting         BotSetting
+	chatStore          *ChatStore
+	sessionMgr         *session.Manager
+	agentBoot          *agentboot.AgentBoot
+	summaryEngine      *summarizer.Engine
+	directoryBrowser   *DirectoryBrowser   // DEPRECATED: Use directoryBrowserV2 instead
+	directoryBrowserV2 *DirectoryBrowserV2 // New interaction-based directory browser
+	manager            *imbot.Manager
+	imPrompter         *IMPrompter
+	fileStore          *FileStore
+	interaction        *imbot.InteractionHandler // New interaction handler
+
+	// runningCancel tracks cancel functions for active executions per chatID
+	runningCancel   map[string]context.CancelFunc
+	runningCancelMu sync.RWMutex
+
+	// pendingBinds tracks bind confirmation requests for unbound chats
+	pendingBinds   map[string]*PendingBind
+	pendingBindsMu sync.RWMutex
+}
+
+// PendingBind represents a pending bind confirmation request
+type PendingBind struct {
+	OriginalMessage string
+	ProposedPath    string
+	ExpiresAt       time.Time
 }
 
 // HandlerContext contains per-message context data
@@ -63,6 +81,9 @@ func NewBotHandler(
 	// Create IM prompter for permission requests
 	imPrompter := NewIMPrompter(manager)
 
+	// Create interaction handler for platform-agnostic interactions
+	interactionHandler := imbot.NewInteractionHandler(manager)
+
 	// Create file store with proxy support
 	fileStore, err := NewFileStoreWithProxy(botSetting.ProxyURL)
 	if err != nil {
@@ -76,16 +97,20 @@ func NewBotHandler(
 	}
 
 	return &BotHandler{
-		ctx:              ctx,
-		botSetting:       botSetting,
-		chatStore:        chatStore,
-		sessionMgr:       sessionMgr,
-		agentBoot:        agentBoot,
-		summaryEngine:    summaryEngine,
-		directoryBrowser: directoryBrowser,
-		manager:          manager,
-		imPrompter:       imPrompter,
-		fileStore:        fileStore,
+		ctx:                ctx,
+		botSetting:         botSetting,
+		chatStore:          chatStore,
+		sessionMgr:         sessionMgr,
+		agentBoot:          agentBoot,
+		summaryEngine:      summaryEngine,
+		directoryBrowser:   directoryBrowser,        // DEPRECATED: Kept for backward compatibility
+		directoryBrowserV2: NewDirectoryBrowserV2(), // New interaction-based browser
+		manager:            manager,
+		imPrompter:         imPrompter,
+		fileStore:          fileStore,
+		interaction:        interactionHandler,
+		runningCancel:      make(map[string]context.CancelFunc),
+		pendingBinds:       make(map[string]*PendingBind),
 	}
 }
 
@@ -101,7 +126,20 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 		return
 	}
 
-	// Check if this is a callback query
+	// NEW: Check if this is an interaction response first
+	// This handles both callback queries (interactive mode) and text replies (text mode)
+	resp, err := h.interaction.HandleMessage(msg)
+	if err == nil && resp != nil {
+		// Message was handled as an interaction response
+		logrus.WithFields(logrus.Fields{
+			"request_id": resp.RequestID,
+			"action":     resp.Action.Type,
+			"chat_id":    chatID,
+		}).Debug("Interaction response handled")
+		return
+	}
+
+	// OLD: Check if this is a legacy callback query (for backward compatibility)
 	if isCallback, _ := msg.Metadata["is_callback"].(bool); isCallback {
 		h.handleCallbackQuery(bot, chatID, msg)
 		return
@@ -139,6 +177,13 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 		return
 	}
 
+	// Check for stop commands FIRST (highest priority)
+	// Supports: /stop, stop, /clear (stop+clear)
+	if isStopCommand(hCtx.Text) {
+		h.handleStopCommand(hCtx, hCtx.Text == "/clear")
+		return
+	}
+
 	// Handle direct chat
 	if hCtx.IsDirect {
 		h.handleDirectMessage(hCtx)
@@ -147,6 +192,43 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 
 	// Handle group chat
 	h.handleGroupMessage(hCtx)
+}
+
+// isStopCommand checks if the text is a stop command
+// Supports: /stop, stop, /clear
+func isStopCommand(text string) bool {
+	trimmed := strings.ToLower(strings.TrimSpace(text))
+	return trimmed == "/stop" || trimmed == "stop" || trimmed == "/clear"
+}
+
+// handleStopCommand handles stop commands (/stop, stop, /clear)
+func (h *BotHandler) handleStopCommand(hCtx HandlerContext, clearSession bool) {
+	h.runningCancelMu.Lock()
+	cancel, exists := h.runningCancel[hCtx.ChatID]
+	h.runningCancelMu.Unlock()
+
+	if !exists {
+		// No running task
+		if clearSession {
+			// /clear always works, even if nothing running
+			h.handleClearCommand(hCtx)
+			return
+		}
+		h.SendText(hCtx, "No running task to stop.")
+		return
+	}
+
+	// Cancel the execution
+	cancel()
+	delete(h.runningCancel, hCtx.ChatID)
+
+	if clearSession {
+		// /clear also clears the session
+		h.handleClearCommand(hCtx)
+		return
+	}
+
+	h.SendText(hCtx, "🛑 Task stopped.")
 }
 
 // handleDirectMessage handles messages from direct chat
@@ -400,7 +482,10 @@ func (h *BotHandler) sendTextWithReply(hCtx HandlerContext, text string, replyTo
 }
 
 // sendTextWithActionKeyboard sends a text message with Clear/Bind action buttons
+// DEPRECATED: Uses old V1 keyboard pattern. New code should use BuildActionInteractionsV2()
+// and send via the interaction handler for multi-platform support.
 func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string, replyTo string) {
+	// TODO: Migrate to v2 interaction system
 	kb := BuildActionKeyboard()
 	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
 
@@ -553,6 +638,12 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		Timestamp: time.Now(),
 	})
 
+	// Check if session is already running (prevent concurrent execution)
+	if sess.Status == session.StatusRunning {
+		h.SendText(hCtx, "⚠️ A task is currently running.\n\nUse `stop` or `/stop` to cancel it first.")
+		return
+	}
+
 	h.sessionMgr.SetRunning(sessionID)
 
 	// Send status message
@@ -560,7 +651,19 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 
 	// Execute with context.Background() to avoid cancellation on reconnect
 	execCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+
+	// Store cancel function for /stop command
+	h.runningCancelMu.Lock()
+	h.runningCancel[hCtx.ChatID] = cancel
+	h.runningCancelMu.Unlock()
+
+	// Clean up cancel function when done
+	defer func() {
+		h.runningCancelMu.Lock()
+		delete(h.runningCancel, hCtx.ChatID)
+		h.runningCancelMu.Unlock()
+		cancel()
+	}()
 
 	agent, err := h.agentBoot.GetDefaultAgent()
 	if err != nil {
@@ -590,7 +693,7 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		SetStreamer(streamHandler).
 		SetApprovalHandler(h.imPrompter).
 		SetAskHandler(h.imPrompter).
-		SetCompletionCallback(&CompletionCallback{hCtx: hCtx})
+		SetCompletionCallback(&CompletionCallback{hCtx: hCtx, sessionID: sessionID, sessionMgr: h.sessionMgr})
 
 	result, err := agent.Execute(execCtx, text, agentboot.ExecutionOptions{
 		ProjectPath:          projectPath,
@@ -649,10 +752,21 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 }
 
 type CompletionCallback struct {
-	hCtx HandlerContext
+	hCtx       HandlerContext
+	sessionID  string
+	sessionMgr *session.Manager
 }
 
 func (c *CompletionCallback) OnComplete(result *agentboot.CompletionResult) {
+	// Update session status based on completion result
+	if c.sessionMgr != nil && c.sessionID != "" {
+		if result.Success {
+			c.sessionMgr.SetCompleted(c.sessionID, "")
+		} else {
+			c.sessionMgr.SetFailed(c.sessionID, result.Error)
+		}
+	}
+
 	// Build action keyboard
 	kb := BuildActionKeyboard()
 	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
@@ -666,6 +780,15 @@ func (c *CompletionCallback) OnComplete(result *agentboot.CompletionResult) {
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to send action keyboard")
 	}
+
+	// Log completion event
+	logrus.WithFields(logrus.Fields{
+		"chatID":    c.hCtx.ChatID,
+		"sessionID": c.sessionID,
+		"success":   result.Success,
+		"duration":  result.DurationMS,
+		"error":     result.Error,
+	}).Info("Agent execution completed via callback")
 }
 
 // handleMockAgentMessage executes a message through the mock agent for testing
@@ -724,6 +847,12 @@ func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, pr
 		Timestamp: time.Now(),
 	})
 
+	// Check if session is already running (prevent concurrent execution)
+	if sess.Status == session.StatusRunning {
+		h.SendText(hCtx, "⚠️ A task is currently running.\n\nUse `stop` or `/stop` to cancel it first.")
+		return
+	}
+
 	h.sessionMgr.SetRunning(sessionID)
 
 	// Send status message
@@ -731,7 +860,19 @@ func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, pr
 
 	// Execute with context
 	execCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+
+	// Store cancel function for /stop command
+	h.runningCancelMu.Lock()
+	h.runningCancel[hCtx.ChatID] = cancel
+	h.runningCancelMu.Unlock()
+
+	// Clean up cancel function when done
+	defer func() {
+		h.runningCancelMu.Lock()
+		delete(h.runningCancel, hCtx.ChatID)
+		h.runningCancelMu.Unlock()
+		cancel()
+	}()
 
 	// Get mock agent
 	mockAgent, err := h.agentBoot.GetAgent(agentboot.AgentTypeMockAgent)
@@ -855,14 +996,13 @@ func (h *BotHandler) showBotHelp(hCtx HandlerContext) {
 
 Bot Commands:
 /help, /h - Show this help
-/bot_help - Show this help
+/stop - Stop current task
+/clear - Clear context, stop task, and create new session
 /bot_bind [path] - Bind a project
 /bot_project - Show & switch projects
 /bot_status - Show session status
-/bot_clear - Clear session context
 /bot_bash <cmd> - Execute allowed bash (cd, ls, pwd)
 /bot_join <group> - Add group to whitelist
-/clear - Clear context and create new session
 /mock <msg> - Test with mock agent (permission flow)
 
 All other messages are sent to Claude Code.`, hCtx.SenderID)
@@ -871,12 +1011,11 @@ All other messages are sent to Claude Code.`, hCtx.SenderID)
 
 Bot Commands:
 /help, /h - Show this help
-/bot_help - Show this help
+/stop - Stop current task
+/clear - Clear context, stop task, and create new session
 /bot bind [path], /bot_bind [path] - Bind a project to this group
 /bot_project - Show current project info
 /bot_status - Show session status
-/bot_clear - Clear session context
-/clear - Clear context and create new session
 /mock <msg> - Test with mock agent (permission flow)
 
 All other messages are sent to Claude Code.`, hCtx.ChatID)
@@ -1012,20 +1151,16 @@ func (h *BotHandler) handleClearCommand(hCtx HandlerContext) {
 	h.SendText(hCtx, fmt.Sprintf("Context cleared. New session: %s\nProject: %s", sess.ID, projectPath))
 }
 
-// showProjectSelectionOrGuidance shows project selection if user has bound projects, otherwise shows bind guidance
+// showProjectSelectionOrGuidance shows project selection if user has bound projects, otherwise shows bind confirmation
 func (h *BotHandler) showProjectSelectionOrGuidance(hCtx HandlerContext) {
 	if h.chatStore == nil {
-		h.SendText(hCtx, "No active session. Use /bot_bind <project_path> to create one.")
+		h.showBindConfirmationPrompt(hCtx, "")
 		return
 	}
 
-	// For group chats, check if there's a project bound
+	// For group chats, show bind confirmation
 	if !hCtx.IsDirect {
-		if projectPath, ok := getProjectPathForGroup(h.chatStore, hCtx.ChatID, string(imbot.PlatformTelegram)); ok {
-			h.SendText(hCtx, fmt.Sprintf("Project bound to this group:\n📁 %s\n\nPlease /clear the session to start fresh.", projectPath))
-			return
-		}
-		h.SendText(hCtx, "No project bound to this group. Use /bot_bind <path> to bind a project.")
+		h.showBindConfirmationPrompt(hCtx, "")
 		return
 	}
 
@@ -1039,7 +1174,87 @@ func (h *BotHandler) showProjectSelectionOrGuidance(hCtx HandlerContext) {
 		return
 	}
 
-	h.SendText(hCtx, "No active session. Use /bot_bind <project_path> to create one.")
+	// No projects, show bind confirmation
+	h.showBindConfirmationPrompt(hCtx, "")
+}
+
+// showBindConfirmationPrompt shows a confirmation prompt for binding to current directory
+func (h *BotHandler) showBindConfirmationPrompt(hCtx HandlerContext, originalMessage string) {
+	// Get current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = "~" // fallback
+	}
+	absPath, err := filepath.Abs(cwd)
+	if err == nil {
+		cwd = absPath
+	}
+
+	// Store pending bind request
+	h.pendingBindsMu.Lock()
+	h.pendingBinds[hCtx.ChatID] = &PendingBind{
+		OriginalMessage: originalMessage,
+		ProposedPath:    cwd,
+		ExpiresAt:       time.Now().Add(5 * time.Minute),
+	}
+	h.pendingBindsMu.Unlock()
+
+	// Send confirmation with inline keyboard
+	kb := BuildBindConfirmKeyboard()
+	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+
+	_, err = hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
+		Text: BuildBindConfirmPrompt(cwd),
+		Metadata: map[string]interface{}{
+			"replyMarkup": tgKeyboard,
+		},
+	})
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to send bind confirmation")
+	}
+}
+
+// handleBindConfirm handles the bind confirmation callback
+func (h *BotHandler) handleBindConfirm(hCtx HandlerContext) {
+	h.pendingBindsMu.RLock()
+	pending, exists := h.pendingBinds[hCtx.ChatID]
+	h.pendingBindsMu.RUnlock()
+
+	if !exists || time.Now().After(pending.ExpiresAt) {
+		h.SendText(hCtx, "Bind request expired. Please try again.")
+		delete(h.pendingBinds, hCtx.ChatID)
+		return
+	}
+
+	// Bind the project
+	err := h.chatStore.BindProject(hCtx.ChatID, string(hCtx.Platform), hCtx.BotUUID, pending.ProposedPath)
+	if err != nil {
+		h.SendText(hCtx, fmt.Sprintf("Failed to bind project: %v", err))
+		delete(h.pendingBinds, hCtx.ChatID)
+		return
+	}
+
+	// Create a new session
+	sess := h.sessionMgr.Create()
+	sessionID := sess.ID
+	h.sessionMgr.SetContext(sessionID, "project_path", pending.ProposedPath)
+	// Clear expiration for direct chat sessions
+	h.sessionMgr.Update(sessionID, func(s *session.Session) {
+		s.ExpiresAt = time.Time{} // Zero value means no expiration
+	})
+
+	if err := h.chatStore.SetSession(hCtx.ChatID, sessionID); err != nil {
+		logrus.WithError(err).Warn("Failed to save session mapping")
+	}
+
+	delete(h.pendingBinds, hCtx.ChatID)
+
+	h.SendText(hCtx, fmt.Sprintf("✅ Bound to: `%s`", pending.ProposedPath))
+
+	// If there was an original message, process it now
+	if pending.OriginalMessage != "" {
+		h.handleAgentMessage(hCtx, agentClaudeCode, pending.OriginalMessage, pending.ProposedPath)
+	}
 }
 
 // handleBotProjectCommand handles /bot project - shows current project and list with keyboard
@@ -1374,6 +1589,8 @@ func (h *BotHandler) handleBashCommand(hCtx HandlerContext, fields []string) {
 }
 
 // handleCallbackQuery handles callback queries from inline keyboards
+// DEPRECATED: Use HandleCallbackQueryV2() for new interaction system
+// This method handles legacy callbacks for backward compatibility
 func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot.Message) {
 	callbackData, _ := msg.Metadata["callback_data"].(string)
 	if callbackData == "" {
@@ -1435,6 +1652,10 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 		}
 		subAction := parts[1]
 		switch subAction {
+		case "confirm":
+			// Confirm bind to current directory
+			h.handleBindConfirm(hCtx)
+
 		case "dir":
 			// Navigate to directory by index
 			if len(parts) < 3 {
@@ -1823,4 +2044,73 @@ func (h *BotHandler) handleCreateConfirm(hCtx HandlerContext, path string) {
 	if err != nil {
 		logrus.WithError(err).Error("Failed to send create confirmation")
 	}
+}
+
+// RequestInteraction sends an interaction request using the new interaction system
+// This is a convenience method for BotHandler to request platform-agnostic interactions
+func (h *BotHandler) RequestInteraction(ctx context.Context, hCtx HandlerContext, req imbot.InteractionRequest) (*imbot.InteractionResponse, error) {
+	// Set the bot and platform info from the handler context
+	req.BotUUID = hCtx.BotUUID
+	req.Platform = hCtx.Platform
+	req.ChatID = hCtx.ChatID
+
+	// Set default timeout if not specified
+	if req.Timeout == 0 {
+		req.Timeout = 5 * time.Minute
+	}
+
+	return h.interaction.RequestInteraction(ctx, req)
+}
+
+// RequestConfirmation requests a yes/no confirmation from the user
+// Uses the new interaction system with platform-agnostic UI
+func (h *BotHandler) RequestConfirmation(ctx context.Context, hCtx HandlerContext, message, requestID string) (bool, error) {
+	builder := imbot.NewInteractionBuilder()
+	builder.AddConfirm(requestID)
+
+	req := imbot.InteractionRequest{
+		ID:           requestID,
+		Message:      message,
+		ParseMode:    imbot.ParseModeMarkdown,
+		Mode:         imbot.ModeAuto,
+		Interactions: builder.Build(),
+		Timeout:      5 * time.Minute,
+	}
+
+	resp, err := h.RequestInteraction(ctx, hCtx, req)
+	if err != nil {
+		return false, err
+	}
+
+	return resp.IsConfirm(), nil
+}
+
+// RequestOptionSelection requests the user to select from a list of options
+// Uses the new interaction system with platform-agnostic UI
+func (h *BotHandler) RequestOptionSelection(ctx context.Context, hCtx HandlerContext, message, requestID string, options []imbot.Option) (int, *imbot.Interaction, error) {
+	builder := imbot.NewInteractionBuilder()
+	builder.AddOptions(requestID, options)
+
+	req := imbot.InteractionRequest{
+		ID:           requestID,
+		Message:      message,
+		ParseMode:    imbot.ParseModeMarkdown,
+		Mode:         imbot.ModeAuto,
+		Interactions: builder.Build(),
+		Timeout:      5 * time.Minute,
+	}
+
+	resp, err := h.RequestInteraction(ctx, hCtx, req)
+	if err != nil {
+		return -1, nil, err
+	}
+
+	// Find the selected index
+	for i, opt := range options {
+		if opt.Value == resp.Action.Value {
+			return i, &resp.Action, nil
+		}
+	}
+
+	return -1, &resp.Action, nil
 }

@@ -202,6 +202,10 @@ func chunkText(text string, limit int) []string {
 }
 
 // convertActionKeyboardToTelegram converts imbot.InlineKeyboardMarkup to tgbotapi.InlineKeyboardMarkup
+// DEPRECATED: This function is for V1 backward compatibility only.
+// New code should use the v2 interaction system (bot_handler_v2.go, bot_bind_flow_v2.go)
+// which uses platform adapters for automatic markup conversion.
+// See: imbot.NewInteractionHandler() and InteractionRequest
 func convertActionKeyboardToTelegram(kb imbot.InlineKeyboardMarkup) tgbotapi.InlineKeyboardMarkup {
 	var rows [][]tgbotapi.InlineKeyboardButton
 	for _, row := range kb.InlineKeyboard {

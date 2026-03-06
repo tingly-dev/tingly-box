@@ -14,6 +14,10 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 )
 
+// DEPRECATED: Use im_prompter_v2.go (IMPrompterV2) instead
+// This file contains the old Telegram-centric implementation
+// Migrate to IMPrompterV2 for platform-agnostic interaction support
+
 // IMPrompter implements ask.Prompter using IM (Telegram, etc.) for user interaction
 type IMPrompter struct {
 	mu sync.RWMutex
