@@ -109,14 +109,11 @@ func (f *streamingMessageHandler) OnAsk(context.Context, agentboot.AskRequest) (
 }
 
 // OnComplete is called when the agent completes its task
-// DEPRECATED: Uses old V1 keyboard pattern. New code should use BuildActionInteractionsV2()
-// and the platform-agnostic interaction system for multi-platform support.
 func (f *streamingMessageHandler) OnComplete(result *agentboot.CompletionResult) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	// Build action keyboard
-	// TODO: Migrate to BuildActionInteractionsV2() and interaction handler
 	kb := BuildActionKeyboard()
 	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
 

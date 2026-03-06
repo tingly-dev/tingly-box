@@ -17,10 +17,6 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 )
 
-// DEPRECATED: Use bot_bind_flow_v2.go instead
-// This file contains the old Telegram-centric implementation
-// Migrate to bot_bind_flow_v2.go for platform-agnostic interaction support
-
 const (
 	defaultPageSize = 8
 	stateExpiry     = 5 * time.Minute
@@ -258,7 +254,6 @@ func (b *DirectoryBrowser) GetCurrentPath(chatID string) string {
 }
 
 // BuildKeyboard builds the inline keyboard for directory browsing
-// DEPRECATED: Use DirectoryBrowserV2.BuildInteractions() instead
 func (b *DirectoryBrowser) BuildKeyboard(chatID string) (*BindFlowState, *imbot.KeyboardBuilder, string, error) {
 	state := b.GetState(chatID)
 	if state == nil {
@@ -343,7 +338,6 @@ func (b *DirectoryBrowser) BuildKeyboard(chatID string) (*BindFlowState, *imbot.
 }
 
 // BuildActionKeyboard builds the inline keyboard for actions (Clear/Bind)
-// DEPRECATED: Use BuildActionInteractionsV2() instead
 func BuildActionKeyboard() *imbot.KeyboardBuilder {
 	return imbot.NewKeyboardBuilder().
 		AddRow(
@@ -365,14 +359,12 @@ func BuildCustomPathPrompt() string {
 }
 
 // BuildCancelKeyboard builds a simple cancel keyboard
-// DEPRECATED: Use BuildCancelInteractionsV2() instead
 func BuildCancelKeyboard() *imbot.KeyboardBuilder {
 	return imbot.NewKeyboardBuilder().
 		AddRow(imbot.CallbackButton("❌ Cancel", imbot.FormatCallbackData("bind", "cancel")))
 }
 
 // BuildCreateConfirmKeyboard builds the confirmation keyboard for creating a directory
-// DEPRECATED: Use BuildCreateConfirmInteractionsV2() instead
 func BuildCreateConfirmKeyboard(path string) (*imbot.KeyboardBuilder, string) {
 	kb := imbot.NewKeyboardBuilder().
 		AddRow(
@@ -385,7 +377,6 @@ func BuildCreateConfirmKeyboard(path string) (*imbot.KeyboardBuilder, string) {
 }
 
 // BuildBindConfirmKeyboard builds the confirmation keyboard for binding to current directory
-// DEPRECATED: Use BuildBindConfirmInteractionsV2() instead
 func BuildBindConfirmKeyboard() *imbot.KeyboardBuilder {
 	return imbot.NewKeyboardBuilder().
 		AddRow(
@@ -398,7 +389,6 @@ func BuildBindConfirmKeyboard() *imbot.KeyboardBuilder {
 }
 
 // BuildBindConfirmPrompt returns the text for bind confirmation prompt
-// DEPRECATED: Use BuildBindConfirmPromptV2() instead
 func BuildBindConfirmPrompt(proposedPath string) string {
 	return fmt.Sprintf("📁 *No project bound.*\n\nBind to current directory?\n\n`%s`", proposedPath)
 }
@@ -451,7 +441,6 @@ func hasParent(path string) bool {
 }
 
 // SendDirectoryBrowser sends or updates the directory browser message
-// DEPRECATED: Use SendDirectoryBrowserV2() instead
 func SendDirectoryBrowser(ctx context.Context, bot imbot.Bot, browser *DirectoryBrowser, chatID string, editMessageID string) (string, error) {
 	state, kb, text, err := browser.BuildKeyboard(chatID)
 	if err != nil {
@@ -493,9 +482,6 @@ func SendDirectoryBrowser(ctx context.Context, bot imbot.Bot, browser *Directory
 }
 
 // convertToTelegramKeyboard converts imbot.InlineKeyboardMarkup to tgbotapi.InlineKeyboardMarkup
-// DEPRECATED: This function is for V1 backward compatibility only.
-// New code should use SendDirectoryBrowserV2() which uses platform adapters
-// for automatic markup conversion.
 func convertToTelegramKeyboard(kb imbot.InlineKeyboardMarkup) tgbotapi.InlineKeyboardMarkup {
 	var rows [][]tgbotapi.InlineKeyboardButton
 	for _, row := range kb.InlineKeyboard {

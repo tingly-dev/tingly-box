@@ -29,8 +29,7 @@ type BotHandler struct {
 	sessionMgr         *session.Manager
 	agentBoot          *agentboot.AgentBoot
 	summaryEngine      *summarizer.Engine
-	directoryBrowser   *DirectoryBrowser   // DEPRECATED: Use directoryBrowserV2 instead
-	directoryBrowserV2 *DirectoryBrowserV2 // New interaction-based directory browser
+	directoryBrowser   *DirectoryBrowser
 	manager            *imbot.Manager
 	imPrompter         *IMPrompter
 	fileStore          *FileStore
@@ -103,8 +102,7 @@ func NewBotHandler(
 		sessionMgr:         sessionMgr,
 		agentBoot:          agentBoot,
 		summaryEngine:      summaryEngine,
-		directoryBrowser:   directoryBrowser,        // DEPRECATED: Kept for backward compatibility
-		directoryBrowserV2: NewDirectoryBrowserV2(), // New interaction-based browser
+		directoryBrowser:   directoryBrowser,
 		manager:            manager,
 		imPrompter:         imPrompter,
 		fileStore:          fileStore,
@@ -405,7 +403,7 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 	case "/bot_help", "/bot_h":
 		h.showBotHelp(hCtx)
 		return
-	case "/bot_bind", "/bot_b":
+	case "/bot_bind", "/bot_b", "/bind", "/cd":
 		if len(fields) < 2 {
 			h.handleBindInteractive(hCtx)
 			return
@@ -438,7 +436,7 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 		mockText := strings.TrimSpace(strings.TrimPrefix(hCtx.Text, "/mock"))
 		h.handleAgentMessage(hCtx, agentMock, mockText, "")
 		return
-	case "/start", "/help", "/h":
+	case "/", "/start", "/help", "/h":
 		h.showBotHelp(hCtx)
 		return
 	}
@@ -482,10 +480,7 @@ func (h *BotHandler) sendTextWithReply(hCtx HandlerContext, text string, replyTo
 }
 
 // sendTextWithActionKeyboard sends a text message with Clear/Bind action buttons
-// DEPRECATED: Uses old V1 keyboard pattern. New code should use BuildActionInteractionsV2()
-// and send via the interaction handler for multi-platform support.
 func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string, replyTo string) {
-	// TODO: Migrate to v2 interaction system
 	kb := BuildActionKeyboard()
 	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
 
@@ -995,10 +990,10 @@ func (h *BotHandler) showBotHelp(hCtx HandlerContext) {
 		helpText = fmt.Sprintf(`Your User ID: %s
 
 Bot Commands:
-/help, /h - Show this help
+/, /help, /h - Show this help
 /stop - Stop current task
 /clear - Clear context, stop task, and create new session
-/bot_bind [path] - Bind a project
+/cd [path] - Bind and cd into a project
 /bot_project - Show & switch projects
 /bot_status - Show session status
 /bot_bash <cmd> - Execute allowed bash (cd, ls, pwd)
@@ -1010,10 +1005,10 @@ All other messages are sent to Claude Code.`, hCtx.SenderID)
 		helpText = fmt.Sprintf(`Group Chat ID: %s
 
 Bot Commands:
-/help, /h - Show this help
+/, /help, /h - Show this help
 /stop - Stop current task
 /clear - Clear context, stop task, and create new session
-/bot bind [path], /bot_bind [path] - Bind a project to this group
+/cd [path] - Bind and cd into a project to this group
 /bot_project - Show current project info
 /bot_status - Show session status
 /mock <msg> - Test with mock agent (permission flow)
@@ -1589,8 +1584,6 @@ func (h *BotHandler) handleBashCommand(hCtx HandlerContext, fields []string) {
 }
 
 // handleCallbackQuery handles callback queries from inline keyboards
-// DEPRECATED: Use HandleCallbackQueryV2() for new interaction system
-// This method handles legacy callbacks for backward compatibility
 func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot.Message) {
 	callbackData, _ := msg.Metadata["callback_data"].(string)
 	if callbackData == "" {

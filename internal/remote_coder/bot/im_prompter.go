@@ -14,10 +14,6 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 )
 
-// DEPRECATED: Use im_prompter_v2.go (IMPrompterV2) instead
-// This file contains the old Telegram-centric implementation
-// Migrate to IMPrompterV2 for platform-agnostic interaction support
-
 // IMPrompter implements ask.Prompter using IM (Telegram, etc.) for user interaction
 type IMPrompter struct {
 	mu sync.RWMutex
@@ -420,7 +416,6 @@ func (p *IMPrompter) OnAsk(ctx context.Context, req agentboot.AskRequest) (agent
 }
 
 // SubmitDecision submits a user's decision for a pending request
-// Deprecated: Use SubmitResult instead
 func (p *IMPrompter) SubmitDecision(requestID string, approved bool, remember bool, reason string) error {
 	result := ask.Result{
 		ID:       requestID,
@@ -432,7 +427,6 @@ func (p *IMPrompter) SubmitDecision(requestID string, approved bool, remember bo
 }
 
 // PromptPermission implements the legacy agentboot.UserPrompter interface
-// Deprecated: Use OnApproval instead
 func (p *IMPrompter) PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
 	return p.OnApproval(ctx, req)
 }
