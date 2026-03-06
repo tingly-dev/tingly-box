@@ -1,6 +1,15 @@
 import CardGrid from "@/components/CardGrid.tsx";
-import UnifiedCard from "@/components/UnifiedCard.tsx";
+import ClaudeCodeConfigModal from '@/components/ClaudeCodeConfigModal';
+import EmptyStateGuide from '@/components/EmptyStateGuide';
+import PageLayout from '@/components/PageLayout';
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
+import TemplatePage from '@/components/TemplatePage.tsx';
+import UnifiedCard from "@/components/UnifiedCard.tsx";
+import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
+import { useHeaderHeight } from '@/hooks/useHeaderHeight';
+import { api, getBaseUrl } from '@/services/api';
+import { toggleButtonGroupStyle, toggleButtonStyle } from "@/styles/toggleStyles";
+import InfoIcon from '@mui/icons-material/Info';
 import {
     Box,
     Button,
@@ -8,25 +17,15 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
+    IconButton,
     ToggleButton,
     ToggleButtonGroup,
     Tooltip,
-    Typography,
-    IconButton
+    Typography
 } from '@mui/material';
-import InfoOutlined from '@mui/icons-material/InfoOutlined';
-import InfoIcon from '@mui/icons-material/Info';
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import ClaudeCodeConfigModal from '@/components/ClaudeCodeConfigModal';
-import EmptyStateGuide from '@/components/EmptyStateGuide';
-import PageLayout from '@/components/PageLayout';
-import TemplatePage from '@/components/TemplatePage.tsx';
-import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
-import { useHeaderHeight } from '@/hooks/useHeaderHeight';
-import { api, getBaseUrl } from '@/services/api';
-import { toggleButtonGroupStyle, toggleButtonStyle } from "@/styles/toggleStyles";
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -34,8 +33,8 @@ const MODEL_VARIANTS = ['default', 'haiku', 'sonnet', 'opus', 'subagent'] as con
 
 // Configuration mode options
 const CONFIG_MODES: { value: ConfigMode; label: string; description: string; enabled: boolean }[] = [
-    { value: 'unified', label: 'Unified', description: 'Single model for all requests', enabled: true },
-    { value: 'separate', label: 'Separate', description: 'Distinct models for each variant', enabled: true },
+    { value: 'unified', label: 'Unified Model', description: 'Config unified model for all claude code requests', enabled: true },
+    { value: 'separate', label: 'Separate Model', description: 'Config different models for claude code scenario, like subagent, summary, default, ...', enabled: true },
     { value: 'smart', label: 'Smart', description: '(WIP) Smart routing according to request field / content / model feature / user intent / ...', enabled: false },
 ];
 
@@ -587,54 +586,6 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
 
     const isLoading = providersLoading || loadingRule;
 
-    // Mode selection component
-    const modeSelection = (
-        <Box sx={{
-            display: 'flex',
-            alignItems: 'center',
-            py: 2,
-            gap: 3,
-        }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
-                <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
-                    Mode
-                </Typography>
-                <Tooltip
-                    title={
-                        <>
-                            Unified: Single model for all requests
-                            <br />
-                            Separate: Distinct models for each variant
-                        </>
-                    }
-                    arrow
-                >
-                    <InfoOutlined sx={{ fontSize: '1rem', color: 'text.secondary', cursor: 'help' }} />
-                </Tooltip>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
-                <ToggleButtonGroup
-                    value={configMode}
-                    exclusive
-                    size="small"
-                    onChange={(_, value) => value && handleConfigModeChange(value)}
-                    sx={toggleButtonGroupStyle}
-                >
-                    {CONFIG_MODES.filter(m => m.enabled).map((mode) => (
-                        <Tooltip key={mode.value} title={mode.description} arrow>
-                            <ToggleButton
-                                value={mode.value}
-                                sx={toggleButtonStyle}
-                            >
-                                {mode.label}
-                            </ToggleButton>
-                        </Tooltip>
-                    ))}
-                </ToggleButtonGroup>
-            </Box>
-        </Box>
-    );
-
     return (
         <PageLayout loading={isLoading} notification={notification}>
             {!providers.length ? (
@@ -659,7 +610,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                 <CardGrid>
                     <UnifiedCard
                         title={
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
                                 <span>Claude Code SDK Configuration</span>
                                 <Tooltip title={`Base URL: ${baseUrl}/tingly/claude_code`}>
                                     <IconButton size="small" sx={{ ml: 0.5 }}>
@@ -670,14 +621,34 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                         }
                         size="full"
                         rightAction={
-                            <Button
-                                onClick={handleShowConfigGuide}
-                                variant="contained"
-                                color="primary"
-                                size="small"
-                            >
-                                {t('claudeCode.configButton')}
-                            </Button>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                <ToggleButtonGroup
+                                    value={configMode}
+                                    exclusive
+                                    size="small"
+                                    onChange={(_, value) => value && handleConfigModeChange(value)}
+                                    sx={toggleButtonGroupStyle}
+                                >
+                                    {CONFIG_MODES.filter(m => m.enabled).map((mode) => (
+                                        <Tooltip key={mode.value} title={mode.description} arrow>
+                                            <ToggleButton
+                                                value={mode.value}
+                                                sx={toggleButtonStyle}
+                                            >
+                                                {mode.label}
+                                            </ToggleButton>
+                                        </Tooltip>
+                                    ))}
+                                </ToggleButtonGroup>
+                                <Button
+                                    onClick={handleShowConfigGuide}
+                                    variant="contained"
+                                    color="primary"
+                                    size="small"
+                                >
+                                    {t('claudeCode.configButton')}
+                                </Button>
+                            </Box>
                         }
                     >
                         <ProviderConfigCard
@@ -689,7 +660,6 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                             token={token}
                             onShowTokenModal={() => setShowTokenModal(true)}
                             scenario="claude_code"
-                            modeSelection={modeSelection}
                             showApiKeyRow={true}
                             showBaseUrlRow={true}
                         />
