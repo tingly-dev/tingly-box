@@ -217,3 +217,48 @@ func (a *AnthropicStreamAssembler) Finish(model string, inputTokens, outputToken
 		Usage:        *usage,
 	}
 }
+
+// HasToolUse returns true if the response contains tool use blocks
+// This can be used to detect if the model made tool calls
+func (a *AnthropicStreamAssembler) HasToolUse() bool {
+	if a == nil {
+		return false
+	}
+
+	// Check stop reason first (fast path)
+	if a.stopReason == "tool_use" {
+		return true
+	}
+
+	// Check content blocks for tool_use type
+	for _, block := range a.blocks {
+		if block.Type == "tool_use" {
+			return true
+		}
+	}
+
+	return false
+}
+
+// StopReason returns the stop reason of the message
+func (a *AnthropicStreamAssembler) StopReason() string {
+	if a == nil {
+		return ""
+	}
+	return a.stopReason
+}
+
+// GetToolUseBlocks returns all tool_use content blocks
+func (a *AnthropicStreamAssembler) GetToolUseBlocks() []anthropic.ContentBlockUnion {
+	if a == nil {
+		return nil
+	}
+
+	var toolBlocks []anthropic.ContentBlockUnion
+	for _, block := range a.blocks {
+		if block.Type == "tool_use" {
+			toolBlocks = append(toolBlocks, block)
+		}
+	}
+	return toolBlocks
+}

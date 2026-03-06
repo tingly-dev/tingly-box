@@ -33,6 +33,8 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 	"github.com/tingly-dev/tingly-box/pkg/network"
+	notify "github.com/tingly-dev/tingly-box/pkg/notify"
+	"github.com/tingly-dev/tingly-box/pkg/notify/provider/system"
 	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
@@ -122,6 +124,9 @@ type Server struct {
 	remoteCoderCtx    context.Context
 	remoteCoderCancel context.CancelFunc
 	remoteCoderMu     sync.Mutex
+
+	// notification multiplexer for stream response notifications
+	notifyMultiplexer *notify.Multiplexer
 
 	version string
 }
@@ -468,6 +473,22 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize virtual model service
 	server.virtualModelService = virtualmodel.NewService()
 	logrus.Debugf("Virtual model service initialized with default models")
+
+	server.notifyMultiplexer = notify.NewMultiplexer(
+		notify.WithMinLevel(notify.LevelInfo),
+		notify.WithDefaultRetry(2), // Retry failed sends up to 2 times
+	)
+
+	// Add system notifications (if supported)
+	if system.IsSupported() {
+		server.notifyMultiplexer.AddProvider(
+			system.New(
+				system.Config{
+					AppName: "Tingly-Box",
+				},
+			),
+		)
+	}
 
 	// Setup middleware
 	server.setupMiddleware()

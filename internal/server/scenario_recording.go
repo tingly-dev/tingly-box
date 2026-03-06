@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/pkg/notify"
 )
 
 // RecordScenarioRequest records the scenario-level request (client -> tingly-box)
@@ -559,4 +561,209 @@ func NewNonStreamRecorderHook(recorder *ScenarioRecorder, provider *typ.Provider
 	return func() {
 		recorder.RecordResponse(provider, model)
 	}
+}
+
+// ===================================================================
+// Notification Hook Builders
+// ===================================================================
+
+// StreamNotifyConfig holds configuration for stream notification hooks
+type StreamNotifyConfig struct {
+	// Notifier is the notification multiplexer to use
+	Notifier *notify.Multiplexer
+	// NotifyOnNoToolUse triggers notification when response has no tool calls
+	NotifyOnNoToolUse bool
+	// NotifyOnToolUse triggers notification when response has tool calls
+	NotifyOnToolUse bool
+	// CustomCondition allows custom notification logic
+	CustomCondition func(hasToolUse bool, stopReason string) bool
+}
+
+// NewStreamNotifyHooks creates hook functions that monitor stream events and send notifications
+// based on the configured conditions (e.g., when there's no tool_use in the response).
+//
+// This uses the OnStreamComplete hook to check the assembled response after streaming finishes.
+//
+// Example usage:
+//
+//	cfg := &StreamNotifyConfig{
+//	    Notifier: myNotifier,
+//	    NotifyOnNoToolUse: true,
+//	}
+//	onEvent, onComplete, onError := NewStreamNotifyHooks(cfg, model, provider)
+//	hc.WithOnStreamEvent(onEvent)
+//	hc.WithOnStreamComplete(onComplete)
+//	hc.WithOnStreamError(onError)
+func NewStreamNotifyHooks(cfg *StreamNotifyConfig, model string, provider *typ.Provider) (onStreamEvent func(event interface{}) error, onStreamComplete func(), onStreamError func(err error)) {
+	if cfg == nil || cfg.Notifier == nil {
+		return nil, nil, nil
+	}
+
+	// Create an assembler to track stream events
+	assembler := stream.NewAnthropicStreamAssembler()
+
+	// OnStreamEvent hook - tracks events in assembler
+	onStreamEvent = func(event interface{}) error {
+		switch evt := event.(type) {
+		case *anthropic.MessageStreamEventUnion:
+			assembler.RecordV1Event(evt)
+		case *anthropic.BetaRawMessageStreamEventUnion:
+			assembler.RecordV1BetaEvent(evt)
+		case map[string]interface{}:
+			// For raw map events (protocol conversion scenarios)
+			if eventType, ok := evt["type"].(string); ok {
+				data, err := json.Marshal(evt)
+				if err == nil {
+					var betaEvent anthropic.BetaRawMessageStreamEventUnion
+					if err := json.Unmarshal(data, &betaEvent); err == nil {
+						betaEvent.Type = eventType
+						assembler.RecordV1BetaEvent(&betaEvent)
+					}
+				}
+			}
+		}
+		return nil
+	}
+
+	// OnStreamComplete hook - checks conditions and sends notification
+	onStreamComplete = func() {
+		hasToolUse := assembler.HasToolUse()
+		stopReason := assembler.StopReason()
+
+		// Determine if we should send notification
+		shouldNotify := false
+		var title, message string
+		var level notify.Level
+
+		if cfg.CustomCondition != nil {
+			shouldNotify = cfg.CustomCondition(hasToolUse, stopReason)
+			if shouldNotify {
+				title = "Stream Response Notification"
+				message = fmt.Sprintf("Model %s completed with stop_reason: %s, has_tool_use: %v", model, stopReason, hasToolUse)
+				level = notify.LevelInfo
+			}
+		} else if cfg.NotifyOnNoToolUse && !hasToolUse {
+			shouldNotify = true
+			title = "No Tool Call Detected"
+			message = fmt.Sprintf("Model %s completed without tool calls (stop_reason: %s)", model, stopReason)
+			level = notify.LevelInfo
+		} else if cfg.NotifyOnToolUse && hasToolUse {
+			shouldNotify = true
+			title = "Tool Call Detected"
+			message = fmt.Sprintf("Model %s made tool calls (stop_reason: %s)", model, stopReason)
+			level = notify.LevelInfo
+		}
+
+		if shouldNotify {
+			// Build notification with metadata
+			notification := &notify.Notification{
+				Title:   title,
+				Message: message,
+				Level:   level,
+				Category: "stream_response",
+				Tags:    []string{"anthropic", "stream"},
+				Metadata: map[string]interface{}{
+					"model":       model,
+					"provider":    provider.Name,
+					"has_tool_use": hasToolUse,
+					"stop_reason": stopReason,
+				},
+			}
+
+			// Send notification asynchronously to avoid blocking
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+
+				results, err := cfg.Notifier.Send(ctx, notification)
+				if err != nil {
+					logrus.Warnf("Failed to send stream notification: %v", err)
+					return
+				}
+
+				// Log results
+				for _, r := range results {
+					if r.Error != nil {
+						logrus.Warnf("Notification provider %s failed: %v", r.Provider, r.Error)
+					} else {
+						logrus.Debugf("Notification sent via %s (latency: %v)", r.Provider, r.Latency)
+					}
+				}
+			}()
+		}
+	}
+
+	// OnStreamError hook - optional error notification
+	onStreamError = func(err error) {
+		// Optionally send error notification
+		if cfg.Notifier != nil {
+			notification := &notify.Notification{
+				Title:   "Stream Error",
+				Message: fmt.Sprintf("Model %s encountered an error: %v", model, err),
+				Level:   notify.LevelError,
+				Category: "stream_error",
+				Tags:    []string{"anthropic", "stream", "error"},
+				Metadata: map[string]interface{}{
+					"model":    model,
+					"provider": provider.Name,
+					"error":    err.Error(),
+				},
+			}
+
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				_, _ = cfg.Notifier.Send(ctx, notification)
+			}()
+		}
+	}
+
+	return onStreamEvent, onStreamComplete, onStreamError
+}
+
+// NewCombinedRecorderNotifyHooks creates combined hooks that handle both recording and notification.
+// This is a convenience function that combines NewRecorderHooksWithModel and NewStreamNotifyHooks.
+func NewCombinedRecorderNotifyHooks(recorder *ScenarioRecorder, notifyConfig *StreamNotifyConfig, model string, provider *typ.Provider) (onStreamEvent func(event interface{}) error, onStreamComplete func(), onStreamError func(err error)) {
+	// Get recorder hooks
+	recEvent, recComplete, recError := NewRecorderHooksWithModel(recorder, model, provider)
+
+	// Get notify hooks
+	notifyEvent, notifyComplete, notifyError := NewStreamNotifyHooks(notifyConfig, model, provider)
+
+	// Combine event hooks
+	onStreamEvent = func(event interface{}) error {
+		if recEvent != nil {
+			if err := recEvent(event); err != nil {
+				return err
+			}
+		}
+		if notifyEvent != nil {
+			if err := notifyEvent(event); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Combine complete hooks
+	onStreamComplete = func() {
+		if recComplete != nil {
+			recComplete()
+		}
+		if notifyComplete != nil {
+			notifyComplete()
+		}
+	}
+
+	// Combine error hooks
+	onStreamError = func(err error) {
+		if recError != nil {
+			recError(err)
+		}
+		if notifyError != nil {
+			notifyError(err)
+		}
+	}
+
+	return onStreamEvent, onStreamComplete, onStreamError
 }

@@ -312,18 +312,24 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel, actualModel string, provider *typ.Provider, recorder *ScenarioRecorder) {
 	hc := protocol.NewHandleContext(c, respModel)
 
-	// Add recorder hooks if recorder is available
-	if recorder != nil {
-		onEvent, onComplete, onError := NewRecorderHooksWithModel(recorder, actualModel, provider)
-		if onEvent != nil {
-			hc.WithOnStreamEvent(onEvent)
-		}
-		if onComplete != nil {
-			hc.WithOnStreamComplete(onComplete)
-		}
-		if onError != nil {
-			hc.WithOnStreamError(onError)
-		}
+	// Add combined recorder and notification hooks
+	onEvent, onComplete, onError := NewCombinedRecorderNotifyHooks(
+		recorder,
+		&StreamNotifyConfig{
+			Notifier:           s.notifyMultiplexer,
+			NotifyOnNoToolUse:  true,
+		},
+		actualModel,
+		provider,
+	)
+	if onEvent != nil {
+		hc.WithOnStreamEvent(onEvent)
+	}
+	if onComplete != nil {
+		hc.WithOnStreamComplete(onComplete)
+	}
+	if onError != nil {
+		hc.WithOnStreamError(onError)
 	}
 
 	usageStat, err := stream.HandleAnthropicV1BetaStream(hc, req, streamResp)
