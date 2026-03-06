@@ -577,6 +577,8 @@ type StreamNotifyConfig struct {
 	NotifyOnToolUse bool
 	// CustomCondition allows custom notification logic
 	CustomCondition func(hasToolUse bool, stopReason string) bool
+	// RequestInfo contains the original request information for notification context
+	RequestInfo map[string]interface{}
 }
 
 // NewStreamNotifyHooks creates hook functions that monitor stream events and send notifications
@@ -630,6 +632,19 @@ func NewStreamNotifyHooks(cfg *StreamNotifyConfig, model string, provider *typ.P
 		hasToolUse := assembler.HasToolUse()
 		stopReason := assembler.StopReason()
 
+		// Check tool_count from RequestInfo
+		toolCount := 0
+		if cfg.RequestInfo != nil {
+			if tc, ok := cfg.RequestInfo["tool_count"].(int); ok {
+				toolCount = tc
+			} else if tc, ok := cfg.RequestInfo["tool_count"].(float64); ok {
+				toolCount = int(tc)
+			}
+		}
+		if toolCount <= 0 {
+			return
+		}
+
 		// Determine if we should send notification
 		shouldNotify := false
 		var title, message string
@@ -644,29 +659,29 @@ func NewStreamNotifyHooks(cfg *StreamNotifyConfig, model string, provider *typ.P
 			}
 		} else if cfg.NotifyOnNoToolUse && !hasToolUse {
 			shouldNotify = true
-			title = "No Tool Call Detected"
-			message = fmt.Sprintf("Model %s completed without tool calls (stop_reason: %s)", model, stopReason)
+			title = "Task Completed"
+			message = fmt.Sprintf("Model %s (stop_reason: %s)", model, stopReason)
 			level = notify.LevelInfo
 		} else if cfg.NotifyOnToolUse && hasToolUse {
-			shouldNotify = true
-			title = "Tool Call Detected"
-			message = fmt.Sprintf("Model %s made tool calls (stop_reason: %s)", model, stopReason)
-			level = notify.LevelInfo
+			shouldNotify = false
+			// title = "Tool Call Detected"
+			// message = fmt.Sprintf("Model %s made tool calls (stop_reason: %s)", model, stopReason)
+			// level = notify.LevelInfo
 		}
 
 		if shouldNotify {
 			// Build notification with metadata
 			notification := &notify.Notification{
-				Title:   title,
-				Message: message,
-				Level:   level,
+				Title:    title,
+				Message:  message,
+				Level:    level,
 				Category: "stream_response",
-				Tags:    []string{"anthropic", "stream"},
+				Tags:     []string{"anthropic", "stream"},
 				Metadata: map[string]interface{}{
-					"model":       model,
-					"provider":    provider.Name,
+					"model":        model,
+					"provider":     provider.Name,
 					"has_tool_use": hasToolUse,
-					"stop_reason": stopReason,
+					"stop_reason":  stopReason,
 				},
 			}
 
@@ -698,11 +713,11 @@ func NewStreamNotifyHooks(cfg *StreamNotifyConfig, model string, provider *typ.P
 		// Optionally send error notification
 		if cfg.Notifier != nil {
 			notification := &notify.Notification{
-				Title:   "Stream Error",
-				Message: fmt.Sprintf("Model %s encountered an error: %v", model, err),
-				Level:   notify.LevelError,
+				Title:    "Stream Error",
+				Message:  fmt.Sprintf("Model %s encountered an error: %v", model, err),
+				Level:    notify.LevelError,
 				Category: "stream_error",
-				Tags:    []string{"anthropic", "stream", "error"},
+				Tags:     []string{"anthropic", "stream", "error"},
 				Metadata: map[string]interface{}{
 					"model":    model,
 					"provider": provider.Name,

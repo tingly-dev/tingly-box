@@ -330,8 +330,9 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 	onEvent, onComplete, onError := NewCombinedRecorderNotifyHooks(
 		recorder,
 		&StreamNotifyConfig{
-			Notifier:           s.notifyMultiplexer,
-			NotifyOnNoToolUse:  true,
+			Notifier:          s.notifyMultiplexer,
+			NotifyOnNoToolUse: true,
+			RequestInfo:       extractRequestInfoV1(req),
 		},
 		actualModel,
 		provider,
@@ -461,4 +462,13 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req p
 		streamRec.Finish(proxyModel, usage.InputTokens, usage.OutputTokens)
 		streamRec.RecordResponse(provider, actualModel)
 	}
+}
+
+// extractRequestInfoV1 extracts key information from Anthropic v1 request for notification context
+func extractRequestInfoV1(req anthropic.MessageNewParams) map[string]interface{} {
+	info := make(map[string]interface{})
+
+	info["tool_count"] = len(req.Tools)
+
+	return info
 }

@@ -316,8 +316,9 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 	onEvent, onComplete, onError := NewCombinedRecorderNotifyHooks(
 		recorder,
 		&StreamNotifyConfig{
-			Notifier:           s.notifyMultiplexer,
-			NotifyOnNoToolUse:  true,
+			Notifier:          s.notifyMultiplexer,
+			NotifyOnNoToolUse: true,
+			RequestInfo:       extractRequestInfoBeta(req),
 		},
 		actualModel,
 		provider,
@@ -442,4 +443,14 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, r
 
 	// Success - usage tracking is handled inside the stream handler
 	// Note: The handler tracks usage when response.completed event is received
+
+}
+
+// extractRequestInfoBeta extracts key information from Anthropic beta request for notification context
+func extractRequestInfoBeta(req anthropic.BetaMessageNewParams) map[string]interface{} {
+	info := make(map[string]interface{})
+
+	info["tool_count"] = len(req.Tools)
+
+	return info
 }
