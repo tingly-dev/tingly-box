@@ -405,7 +405,7 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 	case "/bot_help", "/bot_h":
 		h.showBotHelp(hCtx)
 		return
-	case "/bot_bind", "/bot_b":
+	case "/bot_bind", "/bot_b", "/bind", "/cd":
 		if len(fields) < 2 {
 			h.handleBindInteractive(hCtx)
 			return
@@ -438,7 +438,7 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 		mockText := strings.TrimSpace(strings.TrimPrefix(hCtx.Text, "/mock"))
 		h.handleAgentMessage(hCtx, agentMock, mockText, "")
 		return
-	case "/start", "/help", "/h":
+	case "/", "/start", "/help", "/h":
 		h.showBotHelp(hCtx)
 		return
 	}
@@ -995,10 +995,10 @@ func (h *BotHandler) showBotHelp(hCtx HandlerContext) {
 		helpText = fmt.Sprintf(`Your User ID: %s
 
 Bot Commands:
-/help, /h - Show this help
+/, /help, /h - Show this help
 /stop - Stop current task
 /clear - Clear context, stop task, and create new session
-/bot_bind [path] - Bind a project
+/bind [path], /cd [path], /bot_bind [path] - Bind a project
 /bot_project - Show & switch projects
 /bot_status - Show session status
 /bot_bash <cmd> - Execute allowed bash (cd, ls, pwd)
@@ -1010,10 +1010,10 @@ All other messages are sent to Claude Code.`, hCtx.SenderID)
 		helpText = fmt.Sprintf(`Group Chat ID: %s
 
 Bot Commands:
-/help, /h - Show this help
+/, /help, /h - Show this help
 /stop - Stop current task
 /clear - Clear context, stop task, and create new session
-/bot bind [path], /bot_bind [path] - Bind a project to this group
+/bind [path], /cd [path], /bot bind [path], /bot_bind [path] - Bind a project to this group
 /bot_project - Show current project info
 /bot_status - Show session status
 /mock <msg> - Test with mock agent (permission flow)
