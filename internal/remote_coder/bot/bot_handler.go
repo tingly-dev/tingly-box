@@ -29,7 +29,7 @@ type BotHandler struct {
 	sessionMgr         *session.Manager
 	agentBoot          *agentboot.AgentBoot
 	summaryEngine      *summarizer.Engine
-	directoryBrowser   *DirectoryBrowser   // DEPRECATED: Use directoryBrowserV2 instead
+	directoryBrowser   *DirectoryBrowser
 	manager            *imbot.Manager
 	imPrompter         *IMPrompter
 	fileStore          *FileStore
@@ -102,7 +102,7 @@ func NewBotHandler(
 		sessionMgr:         sessionMgr,
 		agentBoot:          agentBoot,
 		summaryEngine:      summaryEngine,
-		directoryBrowser:   directoryBrowser,        // DEPRECATED: Kept for backward compatibility
+		directoryBrowser:   directoryBrowser,
 		manager:            manager,
 		imPrompter:         imPrompter,
 		fileStore:          fileStore,
@@ -480,10 +480,7 @@ func (h *BotHandler) sendTextWithReply(hCtx HandlerContext, text string, replyTo
 }
 
 // sendTextWithActionKeyboard sends a text message with Clear/Bind action buttons
-// DEPRECATED: Uses old V1 keyboard pattern. New code should use BuildActionInteractionsV2()
-// and send via the interaction handler for multi-platform support.
 func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string, replyTo string) {
-	// TODO: Migrate to v2 interaction system
 	kb := BuildActionKeyboard()
 	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
 
@@ -1587,8 +1584,6 @@ func (h *BotHandler) handleBashCommand(hCtx HandlerContext, fields []string) {
 }
 
 // handleCallbackQuery handles callback queries from inline keyboards
-// DEPRECATED: Use HandleCallbackQueryV2() for new interaction system
-// This method handles legacy callbacks for backward compatibility
 func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot.Message) {
 	callbackData, _ := msg.Metadata["callback_data"].(string)
 	if callbackData == "" {
