@@ -204,13 +204,29 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 
 	inputSource := mitm.NewChanSource(100)
 
+	// done channel signals the input feeder goroutine to stop
+	done := make(chan struct{})
 	go func() {
-		for m := range inputPrompt {
-			inputSource.Write(m)
+		for {
+			select {
+			case m, ok := <-inputPrompt:
+				if !ok {
+					return
+				}
+				inputSource.Write(m)
+			case <-done:
+				return
+			}
 		}
 	}()
 
 	runner.InputSource = inputSource
+
+	// Ensure cleanup on exit
+	defer func() {
+		close(done)
+		inputSource.Close()
+	}()
 
 	outputHandler := func(ctx context.Context, c *mitm.IOContext) (*mitm.OutputResult, error) {
 		// Try to parse as JSON
@@ -352,11 +368,12 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 				handler.OnComplete(&agentboot.CompletionResult{
 					Success: resultSuccess,
 				})
-				// Got final result, terminate command early
+				// Got final result, stop processing immediately
+				// The process will be cleaned up by deferred close(done) and inputSource.Close()
 				_ = cmd.Process.Kill()
 				_ = cmd.Wait()
 				logrus.Warnf("killed: %d", cmd.Process.Pid)
-				return &mitm.OutputResult{Action: mitm.Pass}, nil
+				return &mitm.OutputResult{Action: mitm.Stop}, nil
 			default:
 				if hErr := handler.OnMessage(msg); hErr != nil {
 					handler.OnError(hErr)
