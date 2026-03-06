@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
@@ -17,6 +18,39 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+// cleanSystemMessages removes billing header messages from system blocks
+// This is used for Claude Code scenario to filter out injected billing headers
+func cleanSystemMessages(blocks []anthropic.TextBlockParam) []anthropic.TextBlockParam {
+	if len(blocks) == 0 {
+		return blocks
+	}
+	result := make([]anthropic.TextBlockParam, 0, len(blocks))
+	for _, block := range blocks {
+		// Skip billing header messages
+		if strings.HasPrefix(strings.TrimSpace(block.Text), "x-anthropic-billing-header:") {
+			continue
+		}
+		result = append(result, block)
+	}
+	return result
+}
+
+// cleanBetaSystemMessages removes billing header messages from beta system blocks
+func cleanBetaSystemMessages(blocks []anthropic.BetaTextBlockParam) []anthropic.BetaTextBlockParam {
+	if len(blocks) == 0 {
+		return blocks
+	}
+	result := make([]anthropic.BetaTextBlockParam, 0, len(blocks))
+	for _, block := range blocks {
+		// Skip billing header messages
+		if strings.HasPrefix(strings.TrimSpace(block.Text), "x-anthropic-billing-header:") {
+			continue
+		}
+		result = append(result, block)
+	}
+	return result
+}
 
 // anthropicMessagesV1 implements standard v1 messages API
 func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, provider *typ.Provider, actualModel string, rule *typ.Rule) {
@@ -71,8 +105,10 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	// Get scenario config for DisableStreamUsage flag
 	scenarioType := rule.GetScenario()
 	disableStreamUsage := false
+	cleanHeader := false
 	if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
 		disableStreamUsage = scenarioConfig.Flags.DisableStreamUsage
+		cleanHeader = scenarioConfig.Flags.CleanHeader
 
 		// Apply thinking effort from scenario config
 		effort := scenarioConfig.Flags.ThinkingEffort
@@ -85,6 +121,11 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// Set thinking with budget_tokens
 			req.Thinking = anthropic.ThinkingConfigParamOfEnabled(budgetTokens)
 		}
+	}
+
+	// Clean system messages if clean_header flag is enabled (for Claude Code scenario)
+	if cleanHeader {
+		req.MessageNewParams.System = cleanSystemMessages(req.MessageNewParams.System)
 	}
 
 	// Check provider's API style to decide which path to take

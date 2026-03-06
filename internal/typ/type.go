@@ -94,6 +94,8 @@ type ScenarioFlags struct {
 
 	// Thinking effort level (empty string = use model default)
 	ThinkingEffort ThinkingEffortLevel `json:"thinking_effort,omitempty" yaml:"thinking_effort,omitempty"`
+
+	CleanHeader        bool `json:"clean_header,omitempty" yaml:"clean_header,omitempty"`                 // Remove billing header from system messages (Claude Code only)
 }
 
 // ScenarioConfig represents configuration for a specific scenario
