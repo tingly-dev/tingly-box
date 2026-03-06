@@ -35,6 +35,7 @@ type Launcher struct {
 		sessionID string
 		chatID    string
 		platform  string
+		botUUID   string
 	}
 }
 
@@ -132,6 +133,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 	l.executionContext.sessionID = opts.SessionID
 	l.executionContext.chatID = opts.ChatID
 	l.executionContext.platform = opts.Platform
+	l.executionContext.botUUID = opts.BotUUID
 	l.mu.Unlock()
 
 	logrus.WithFields(logrus.Fields{
@@ -144,6 +146,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 		l.executionContext.sessionID = ""
 		l.executionContext.chatID = ""
 		l.executionContext.platform = ""
+		l.executionContext.botUUID = ""
 		l.mu.Unlock()
 	}()
 
@@ -639,6 +642,7 @@ func (l *Launcher) parseAskRequestFromControl(controlData map[string]interface{}
 	sessionID := l.executionContext.sessionID
 	chatID := l.executionContext.chatID
 	platform := l.executionContext.platform
+	botUUID := l.executionContext.botUUID
 	l.mu.RUnlock()
 
 	toolName, _ := controlData["tool_name"].(string)
@@ -651,6 +655,7 @@ func (l *Launcher) parseAskRequestFromControl(controlData map[string]interface{}
 
 		Platform:  platform,
 		ChatID:    chatID,
+		BotUUID:   botUUID,
 		SessionID: sessionID,
 
 		ToolName: toolName,
