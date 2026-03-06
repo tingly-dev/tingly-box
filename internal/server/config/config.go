@@ -53,7 +53,7 @@ type Config struct {
 	DefaultMaxTokens int  `json:"default_max_tokens"` // Default max_tokens for anthropic API requests
 	Verbose          bool `json:"verbose"`            // Verbose mode for detailed logging
 	Debug            bool `json:"-"`                  // Debug mode for Gin debug level logging
-	OpenBrowser      bool `yaml:"-" json:"-"` // Auto-open browser in web UI mode (default: true)
+	OpenBrowser      bool `yaml:"-" json:"-"`         // Auto-open browser in web UI mode (default: true)
 
 	// Generic tool configs map for all tool types
 	// Key is tool_type (e.g., "tool_interceptor", "code_execution")
@@ -1887,6 +1887,19 @@ func init() {
 			Description:   "Default proxy rule in tingly-box for general use with OpenAI",
 			Services:      []*loadbalance.Service{}, // Empty services initially
 			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "built-in-codex",
+			Scenario:      typ.ScenarioCodex,
+			RequestModel:  "tingly-codex",
+			ResponseModel: "",
+			Description:   "Default proxy rule for Codex",
+			Services:      []*loadbalance.Service{},
+			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
 				Params: typ.DefaultRoundRobinParams(),
 			},
