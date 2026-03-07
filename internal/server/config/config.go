@@ -1694,18 +1694,10 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 
 // FetchAndSaveProviderModels fetches models from a provider with fallback hierarchy
 func (c *Config) FetchAndSaveProviderModels(uid string) error {
-	c.mu.RLock()
-	var provider *typ.Provider
-	for _, p := range c.Providers {
-		if p.UUID == uid {
-			provider = p
-			break
-		}
-	}
-	c.mu.RUnlock()
-
-	if provider == nil {
-		return fmt.Errorf("provider with UUID %s not found", uid)
+	// Use GetProviderByUUID which queries the database first, then falls back to in-memory providers
+	provider, err := c.GetProviderByUUID(uid)
+	if err != nil {
+		return fmt.Errorf("provider with UUID %s not found: %w", uid, err)
 	}
 
 	// Try provider API first using client layer
