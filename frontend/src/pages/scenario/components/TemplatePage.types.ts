@@ -1,5 +1,5 @@
-import type { Rule } from './RoutingGraphTypes.ts';
-import type { Provider } from '../types/provider';
+import type { Rule } from '@/components/RoutingGraphTypes.ts';
+import type { Provider } from '@/types/provider';
 
 export interface TabTemplatePageProps {
     title?: string | React.ReactNode;

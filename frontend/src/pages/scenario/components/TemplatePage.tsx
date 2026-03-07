@@ -1,17 +1,16 @@
-import React, { useCallback, useState, useEffect } from 'react';
-import { Box, Fab } from '@mui/material';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
-import { useNavigate } from 'react-router-dom';
 import ApiKeyModal from '@/components/ApiKeyModal';
+import EmptyStateGuide from '@/components/EmptyStateGuide';
 import RuleCard from '@/components/RuleCard.tsx';
 import UnifiedCard from '@/components/UnifiedCard';
-import EmptyStateGuide from '@/components/EmptyStateGuide';
-import { TemplatePageActions } from './TemplatePageActions';
-import type { TabTemplatePageProps } from './TemplatePage.types';
-import { SCROLLBOX_SX } from './TemplatePage.constants';
-import { useTemplatePageRules } from './hooks/useTemplatePageRules';
 import { useScrollToNewRule } from '@/components/hooks/useScrollToNewRule';
 import { useModelSelectDialog } from '@/hooks/useModelSelectDialog';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import { Box, Fab } from '@mui/material';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import type { TabTemplatePageProps } from './TemplatePage.types';
+import { TemplatePageActions } from './TemplatePageActions';
+import { useTemplatePageRules } from './hooks/useTemplatePageRules';
 
 const TemplatePage: React.FC<TabTemplatePageProps> = ({
     rules,
@@ -21,7 +20,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     showNotification,
     providers,
     onRulesChange,
-    title="",
+    title = "",
     collapsible = false,
     allowDeleteRule = false,
     onRuleDelete,
@@ -268,7 +267,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                 </Box>
             </UnifiedCard>
 
-            <ModelSelectDialog open={modelSelectDialogOpen} onClose={() => {}} />
+            <ModelSelectDialog open={modelSelectDialogOpen} onClose={() => { }} />
 
             <ApiKeyModal
                 open={showTokenModal}
