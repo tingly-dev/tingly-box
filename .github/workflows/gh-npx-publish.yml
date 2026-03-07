@@ -3,12 +3,12 @@ name: NPX Package Publish from GitHub Release
 on:
   workflow_dispatch:
     inputs:
-      release_tag:
-        description: 'Release tag (auto-detected from ref, optional for override)'
-        required: false
+      source_tag:
+        description: 'Source tag to use for release (e.g., v1.0.0)'
+        required: true
         type: string
-      version_override:
-        description: 'NPX Package version (leave empty to use tag version)'
+      npx_version:
+        description: 'NPX Package version (defaults to tag version without v prefix)'
         required: false
         type: string
         default: ''
@@ -58,63 +58,28 @@ jobs:
           echo "publish_gui=${{ github.event.inputs.publish_gui }}" >> $GITHUB_OUTPUT
           echo "publish_bundle=${{ github.event.inputs.publish_bundle }}" >> $GITHUB_OUTPUT
 
-      - name: Validate trigger source and extract tag
-        id: validate_trigger
-        run: |
-          CURRENT_REF="${{ github.ref }}"
-          CURRENT_REF_TYPE="${{ github.ref_type }}"
-          INPUT_RELEASE_TAG="${{ github.event.inputs.release_tag }}"
-
-          echo "🔍 Validating workflow trigger..."
-          echo "   Current ref: $CURRENT_REF"
-          echo "   Current ref type: $CURRENT_REF_TYPE"
-          [ -n "$INPUT_RELEASE_TAG" ] && echo "   Input release_tag: $INPUT_RELEASE_TAG"
-
-          # Check if triggered from a tag
-          if [ "$CURRENT_REF_TYPE" != "tag" ]; then
-            echo "❌ Error: This workflow can only be triggered from a git tag, not from a branch."
-            echo "   Please select a tag in 'Use workflow from' dropdown, or use:"
-            echo "   gh workflow run gh-npx-publish.yml --ref <tag-name>"
-            exit 1
-          fi
-
-          # Extract current tag name from ref
-          REF_TAG="${CURRENT_REF#refs/tags/}"
-
-          # Determine which tag to use
-          if [ -n "$INPUT_RELEASE_TAG" ] && [ "$INPUT_RELEASE_TAG" != "$REF_TAG" ]; then
-            echo "⚠️  Warning: Input release_tag ($INPUT_RELEASE_TAG) differs from ref tag ($REF_TAG)."
-            echo "   Using input release_tag: $INPUT_RELEASE_TAG"
-            RELEASE_TAG="$INPUT_RELEASE_TAG"
-          else
-            RELEASE_TAG="$REF_TAG"
-            echo "✅ Using tag from ref: $RELEASE_TAG"
-          fi
-
-          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
-
       - name: Validate and extract version
         id: version
         run: |
-          RELEASE_TAG="${{ steps.validate_trigger.outputs.release_tag }}"
-          VERSION_OVERRIDE="${{ github.event.inputs.version_override }}"
+          SOURCE_TAG="${{ github.event.inputs.source_tag }}"
+          NPX_VERSION_INPUT="${{ github.event.inputs.npx_version }}"
 
           # Validate tag format
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+          if [[ ! "$SOURCE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
             echo "Error: Invalid tag format. Expected format: v1.0.0 or v1.0.0-beta"
             exit 1
           fi
 
-          # Extract version from tag or use override
-          if [ -n "$VERSION_OVERRIDE" ]; then
-            NPX_VERSION="$VERSION_OVERRIDE"
+          # Use provided version or extract from tag
+          if [ -n "$NPX_VERSION_INPUT" ]; then
+            NPX_VERSION="$NPX_VERSION_INPUT"
           else
-            NPX_VERSION="${RELEASE_TAG#v}"
+            NPX_VERSION="${SOURCE_TAG#v}"
           fi
 
-          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+          echo "release_tag=$SOURCE_TAG" >> $GITHUB_OUTPUT
           echo "npx_version=$NPX_VERSION" >> $GITHUB_OUTPUT
-          echo "Release tag: $RELEASE_TAG, NPX version: $NPX_VERSION"
+          echo "Source tag: $SOURCE_TAG, NPX version: $NPX_VERSION"
 
       - name: Check if GitHub Release exists
         run: |
