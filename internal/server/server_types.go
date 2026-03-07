@@ -268,6 +268,7 @@ type CreateProviderRequest struct {
 	NoKeyRequired bool   `json:"no_key_required" description:"Whether provider requires no API key" example:"false"`
 	Enabled       bool   `json:"enabled" description:"Whether provider is enabled" example:"true"`
 	ProxyURL      string `json:"proxy_url,omitempty" description:"HTTP or SOCKS proxy URL (e.g., http://127.0.0.1:7890 or socks5://127.0.0.1:1080)" example:"http://127.0.0.1:7890"`
+	AuthType      string `json:"auth_type,omitempty" description:"Auth type: api_key or oauth (default: api_key)" example:"api_key"`
 }
 
 // CreateProviderResponse represents the response for adding a provider
