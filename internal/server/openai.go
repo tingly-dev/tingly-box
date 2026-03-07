@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
@@ -47,30 +49,43 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 			continue
 		}
 
-		ownedBy := "tingly-box"
+		// Get timestamp from provider's LastUpdated field
+		var created int64
 		services := rule.GetServices()
-		if len(services) > 0 {
-			providerDesc := make([]string, 0, len(services))
-			for i := range services {
-				svc := services[i]
-				if svc.Active {
-					provider, err := cfg.GetProviderByUUID(svc.Provider)
-					if err == nil {
-						providerDesc = append(providerDesc, provider.Name)
-					} else {
-						providerDesc = append(providerDesc, svc.Provider)
+		providerDesc := make([]string, 0, len(services))
+		for i := range services {
+			svc := services[i]
+			// Skip nil services (defensive check after DB migration)
+			if svc == nil {
+				logrus.Debugf("Skipping nil service in rule %s during model list", rule.UUID)
+				continue
+			}
+			if svc.Active {
+				provider, err := cfg.GetProviderByUUID(svc.Provider)
+				if err == nil {
+					providerDesc = append(providerDesc, provider.Name)
+					// Parse LastUpdated timestamp if available
+					if provider.LastUpdated != "" {
+						if t, err := time.Parse(time.RFC3339, provider.LastUpdated); err == nil {
+							created = t.Unix()
+						}
 					}
+				} else {
+					providerDesc = append(providerDesc, svc.Provider)
 				}
 			}
-			if len(providerDesc) > 0 {
-				ownedBy += " via " + fmt.Sprintf("%v", providerDesc)
-			}
+		}
+
+		// Build owned_by field
+		ownedBy := "tingly-box"
+		if len(providerDesc) > 0 {
+			ownedBy += " via " + fmt.Sprintf("%v", providerDesc)
 		}
 
 		models = append(models, OpenAIModel{
 			ID:      rule.RequestModel,
 			Object:  "model",
-			Created: 0,
+			Created: created,
 			OwnedBy: ownedBy,
 		})
 	}
