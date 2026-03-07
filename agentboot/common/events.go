@@ -1,4 +1,4 @@
-package events
+package common
 
 import (
 	"encoding/json"

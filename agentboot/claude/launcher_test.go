@@ -11,11 +11,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/agentboot/events"
+	"github.com/tingly-dev/tingly-box/agentboot/common"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/tingly-dev/tingly-box/agentboot"
 )
 
 // TestLauncherTextFormat tests Claude Code execution in text format
@@ -261,7 +260,7 @@ func TestMessageAccumulator(t *testing.T) {
 
 	// Test system message
 	systemEventJSON := `{"type":"system","subtype":"init","session_id":"test-session-123","timestamp":"2024-01-01T12:00:00Z"}`
-	systemEvent := events.Event{
+	systemEvent := common.Event{
 		Type:      SDKSystemMessage,
 		Data:      map[string]interface{}{"subtype": "init", "session_id": "test-session-123"},
 		Raw:       systemEventJSON,
@@ -274,7 +273,7 @@ func TestMessageAccumulator(t *testing.T) {
 
 	// Test assistant message with text content
 	assistantEventJSON := `{"type":"assistant","message":{"model":"claude-sonnet-4-6","id":"msg-123","type":"message","role":"assistant","content":[{"type":"text","text":"Hello, world!"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":5}},"session_id":"test-session-123","uuid":"msg-uuid-456","timestamp":"2024-01-01T12:00:00Z"}`
-	assistantEvent := events.Event{
+	assistantEvent := common.Event{
 		Type:      SDKAssistantMessage,
 		Raw:       assistantEventJSON,
 		Timestamp: time.Now(),
@@ -290,7 +289,7 @@ func TestMessageAccumulator(t *testing.T) {
 
 	// Test result message
 	resultEventJSON := `{"type":"result","subtype":"success","result":"Done!","total_cost_usd":0.001,"duration_ms":1000,"session_id":"test-session-123","timestamp":"2024-01-01T12:00:00Z"}`
-	resultEvent := events.Event{
+	resultEvent := common.Event{
 		Type:      SDKResultMessage,
 		Raw:       resultEventJSON,
 		Timestamp: time.Now(),

@@ -523,7 +523,7 @@ func TestTextFormatter_RealWorldAssistantMessageWithExtraFields(t *testing.T) {
 	formatter.SetShowToolDetails(true)
 
 	// Read test data from file
-	data, err := os.ReadFile("testcase/assistant.json")
+	data, err := os.ReadFile("ref/assistant.json")
 	if err != nil {
 		t.Fatalf("Failed to read test data file: %v", err)
 	}

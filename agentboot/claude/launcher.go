@@ -14,9 +14,9 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/agentboot/common"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/agentboot/events"
 	"github.com/tingly-dev/tingly-box/agentboot/mitm"
 )
 
@@ -240,7 +240,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 		}
 
 		// Create event from parsed data
-		event := events.NewEventFromMap(data)
+		event := common.NewEventFromMap(data)
 
 		logrus.Debugf("[Event] %s", event)
 
