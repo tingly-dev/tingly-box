@@ -122,6 +122,11 @@ func (s *Server) CreateProvider(c *gin.Context) {
 		req.APIStyle = "openai"
 	}
 
+	// Set default auth type if not provided
+	if req.AuthType == "" {
+		req.AuthType = string(typ.AuthTypeAPIKey)
+	}
+
 	uid, err := uuid.NewUUID()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, CreateProviderResponse{
@@ -139,6 +144,7 @@ func (s *Server) CreateProvider(c *gin.Context) {
 		NoKeyRequired: req.NoKeyRequired,
 		Enabled:       req.Enabled,
 		ProxyURL:      req.ProxyURL,
+		AuthType:      typ.AuthType(req.AuthType),
 	}
 
 	err = s.config.AddProvider(provider)
