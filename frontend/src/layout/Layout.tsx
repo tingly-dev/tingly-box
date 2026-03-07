@@ -9,6 +9,7 @@ import {
     DateRange as DateRangeIcon,
     ErrorOutline,
     LaptopMac,
+    ListAlt as LogsIcon,
     Menu as MenuIcon,
     NewReleases,
     Psychology as PromptIcon,
@@ -228,7 +229,18 @@ const Layout = ({ children }: LayoutProps) => {
                 key: 'system',
                 icon: <SystemIcon sx={{ fontSize: 22 }} />,
                 label: 'System',
-                path: '/system',
+                children: [
+                    {
+                        path: '/system',
+                        label: 'Status',
+                        icon: <SystemIcon sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/system/logs',
+                        label: 'Logs',
+                        icon: <LogsIcon sx={{ fontSize: 20 }} />,
+                    },
+                ],
             },
         ];
         return items;

@@ -25,6 +25,7 @@ const UseOpenCodePage = lazy(() => import('./pages/scenario/UseOpenCodePage'));
 const UseXcodePage = lazy(() => import('./pages/scenario/UseXcodePage'));
 const CredentialPage = lazy(() => import('./pages/CredentialPage'));
 const System = lazy(() => import('./pages/System'));
+const LogsPage = lazy(() => import('./pages/system/LogsPage'));
 const DashboardPage = lazy(() => import('./pages/./DashboardPage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
 
@@ -291,7 +292,8 @@ function AppContent() {
                                         <Route path="/oauth" element={<Navigate to="/credentials" replace />} />
                                         {/* Other routes */}
                                         <Route path="/system" element={<System />} />
-                                        <Route path="/logs" element={<Navigate to="/system" replace />} />
+                                        <Route path="/system/logs" element={<LogsPage />} />
+                                        <Route path="/logs" element={<Navigate to="/system/logs" replace />} />
                                         {/* Dashboard routes with time range */}
                                         <Route path="/dashboard" element={<Navigate to="/dashboard/7d" replace />} />
                                         <Route path="/dashboard/:timeRange" element={<DashboardPage />} />
