@@ -38,83 +38,83 @@ func (s *Store) parseSessionFile(filePath string) (*session.SessionMetadata, err
 		return &metadata, nil
 	}
 
-	// Parse first line for session info
-	var firstEvent map[string]interface{}
-	if json.Unmarshal([]byte(nonEmptyLines[0]), &firstEvent) == nil {
-		metadata.SessionID = extractString(firstEvent, "sessionId")
+	// Parse header to find session info and first user message
+	// Skip non-message events (queue-operation, file-history-snapshot, etc.)
+	// Limit header scanning to avoid reading too many lines
+	maxHeaderLines := 10
+	headerScanLimit := min(len(nonEmptyLines), maxHeaderLines)
+
+	for i := 0; i < headerScanLimit; i++ {
+		var event map[string]interface{}
+		if json.Unmarshal([]byte(nonEmptyLines[i]), &event) != nil {
+			continue
+		}
+
+		eventType := extractString(event, "type")
+
+		// Extract session ID from any event that has it
 		if metadata.SessionID == "" {
-			metadata.SessionID = extractString(firstEvent, "session_id")
-		}
-
-		// Parse timestamp
-		if ts := extractString(firstEvent, "timestamp"); ts != "" {
-			if t, err := time.Parse(time.RFC3339Nano, ts); err == nil {
-				metadata.StartTime = t
+			metadata.SessionID = extractString(event, "sessionId")
+			if metadata.SessionID == "" {
+				metadata.SessionID = extractString(event, "session_id")
 			}
 		}
 
-		// Extract first message if it's a user message
-		if eventType := extractString(firstEvent, "type"); eventType == "user" {
-			if msg, ok := firstEvent["message"].(map[string]interface{}); ok {
-				metadata.FirstMessage = extractString(msg, "content")
-			}
-		} else if eventType == "file-history-snapshot" && len(nonEmptyLines) > 1 {
-			// Check second line for user message
-			var secondEvent map[string]interface{}
-			if json.Unmarshal([]byte(nonEmptyLines[1]), &secondEvent) == nil {
-				if extractString(secondEvent, "type") == "user" {
-					if msg, ok := secondEvent["message"].(map[string]interface{}); ok {
-						metadata.FirstMessage = extractString(msg, "content")
-					}
+		// Extract timestamp for start time
+		if metadata.StartTime.IsZero() {
+			if ts := extractString(event, "timestamp"); ts != "" {
+				if t, err := time.Parse(time.RFC3339Nano, ts); err == nil {
+					metadata.StartTime = t
 				}
 			}
+		}
+
+		// Found first user message - extract it
+		if eventType == "user" && metadata.FirstMessage == "" {
+			if msg, ok := event["message"].(map[string]interface{}); ok {
+				metadata.FirstMessage = extractMessageContent(msg)
+			}
+			// Break after finding first user message
+			break
 		}
 	}
 
-	// Parse last line for result/error
-	// Also extract last user and assistant messages for context
-	if len(nonEmptyLines) > 0 {
-		// First, scan backwards to find last user and assistant messages
-		for i := len(nonEmptyLines) - 1; i >= 0; i-- {
-			var event map[string]interface{}
-			if json.Unmarshal([]byte(nonEmptyLines[i]), &event) != nil {
-				continue
-			}
+	// Parse last events for context and result
+	// Scan backwards to find last user/assistant messages and result
+	// Limit backward scan to avoid reading too much
+	maxTailLines := 20
+	tailScanStart := max(0, len(nonEmptyLines)-maxTailLines)
 
-			eventType := extractString(event, "type")
+	for i := len(nonEmptyLines) - 1; i >= tailScanStart; i-- {
+		var event map[string]interface{}
+		if json.Unmarshal([]byte(nonEmptyLines[i]), &event) != nil {
+			continue
+		}
 
-			// Extract last user message
-			if eventType == "user" && metadata.LastUserMessage == "" {
-				if msg, ok := event["message"].(map[string]interface{}); ok {
-					metadata.LastUserMessage = extractString(msg, "content")
-				}
-			}
+		eventType := extractString(event, "type")
 
-			// Extract last assistant message (before the result)
-			if eventType == "assistant" && metadata.LastAssistantMessage == "" {
-				if msg, ok := event["message"].(map[string]interface{}); ok {
-					// Extract text content from assistant message
-					if content, ok := msg["content"].([]interface{}); ok && len(content) > 0 {
-						var textParts []string
-						for _, block := range content {
-							if blockMap, ok := block.(map[string]interface{}); ok {
-								if extractString(blockMap, "type") == "text" {
-									textParts = append(textParts, extractString(blockMap, "text"))
-								}
-							}
-						}
-						metadata.LastAssistantMessage = strings.Join(textParts, " ")
-					}
-				}
-			}
-
-			// Break if we've found both messages (optimization)
-			if metadata.LastUserMessage != "" && metadata.LastAssistantMessage != "" {
-				break
+		// Extract last user message
+		if eventType == "user" && metadata.LastUserMessage == "" {
+			if msg, ok := event["message"].(map[string]interface{}); ok {
+				metadata.LastUserMessage = extractMessageContent(msg)
 			}
 		}
 
-		// Now parse the very last line for result/error
+		// Extract last assistant message (before the result)
+		if eventType == "assistant" && metadata.LastAssistantMessage == "" {
+			if msg, ok := event["message"].(map[string]interface{}); ok {
+				metadata.LastAssistantMessage = extractMessageContent(msg)
+			}
+		}
+
+		// Break if we've found both messages (optimization)
+		if metadata.LastUserMessage != "" && metadata.LastAssistantMessage != "" {
+			break
+		}
+	}
+
+	// Parse the last line for result/error
+	if len(nonEmptyLines) > 0 {
 		lastLine := nonEmptyLines[len(nonEmptyLines)-1]
 		var lastEvent map[string]interface{}
 		if json.Unmarshal([]byte(lastLine), &lastEvent) == nil {
@@ -391,4 +391,37 @@ func (s *Store) decodeProjectPath(sessionFilePath string) string {
 	}
 
 	return projectDir
+}
+
+// extractMessageContent extracts text content from a message object
+// Handles both simple string content and array of content blocks
+func extractMessageContent(msg map[string]interface{}) string {
+	// Try content as array first (newer format)
+	if content, ok := msg["content"].([]interface{}); ok && len(content) > 0 {
+		var textParts []string
+		for _, block := range content {
+			if blockMap, ok := block.(map[string]interface{}); ok {
+				blockType := extractString(blockMap, "type")
+				if blockType == "text" {
+					text := extractString(blockMap, "text")
+					textParts = append(textParts, text)
+				}
+			}
+		}
+		return strings.Join(textParts, "")
+	}
+
+	// Try content as simple string (older format)
+	if contentStr := extractString(msg, "content"); contentStr != "" {
+		return contentStr
+	}
+
+	return ""
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

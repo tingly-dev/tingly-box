@@ -272,6 +272,56 @@ func TestParseSessionFileWithMessages(t *testing.T) {
 	}
 }
 
+func TestParseSessionFileWithRealFormat(t *testing.T) {
+	// Test with the actual Claude Code session format from the user
+	tmpDir := t.TempDir()
+	store, _ := NewStore(tmpDir)
+
+	// Real session format with queue operations and content array
+	sessionContent := `{"type":"queue-operation","operation":"enqueue","timestamp":"2026-03-06T03:22:40.249Z","sessionId":"real-test-1"}
+{"type":"queue-operation","operation":"dequeue","timestamp":"2026-03-06T03:22:40.250Z","sessionId":"real-test-1"}
+{"type":"file-history-snapshot","messageId":"68745f7f-2583-4998-8888-b6eae60f024f","snapshot":{"messageId":"68745f7f-2583-4998-8888-b6eae60f024f","trackedFileBackups":{},"timestamp":"2026-03-06T03:22:40.260Z"},"isSnapshotUpdate":false}
+{"parentUuid":null,"isSidechain":false,"userType":"external","cwd":"/Users/yz/Project/test","sessionId":"real-test-1","version":"2.1.69","gitBranch":"main","type":"user","message":{"role":"user","content":[{"type":"text","text":"Read the bot code and understand the workflow"}]},"uuid":"msg-1","timestamp":"2026-03-06T03:22:40.270Z"}
+{"type":"assistant","message":{"model":"claude-3","id":"resp-1","type":"message","role":"assistant","content":[{"type":"text","text":"I'll analyze the bot code workflow..."}]},"sessionId":"real-test-1","uuid":"resp-1","timestamp":"2026-03-06T03:22:41.000Z"}
+{"type":"user","sessionId":"real-test-1","message":{"role":"user","content":[{"type":"text","text":"Continue with the implementation"}]},"timestamp":"2026-03-06T03:22:42.000Z"}
+{"type":"result","subtype":"success","result":"Workflow analysis complete","total_cost_usd":0.02,"duration_ms":2000,"num_turns":2,"usage":{"input_tokens":150,"output_tokens":80},"sessionId":"real-test-1","timestamp":"2026-03-06T03:22:43.000Z"}
+`
+
+	sessionPath := createTestSessionFile(t, tmpDir, "real-test-1", sessionContent)
+
+	metadata, err := store.parseSessionFile(sessionPath)
+	if err != nil {
+		t.Fatalf("parseSessionFile() error = %v", err)
+	}
+
+	// Verify basic parsing
+	if metadata.SessionID != "real-test-1" {
+		t.Errorf("SessionID = %q, want 'real-test-1'", metadata.SessionID)
+	}
+
+	// Verify message content extraction from array format
+	if metadata.FirstMessage != "Read the bot code and understand the workflow" {
+		t.Errorf("FirstMessage = %q, want 'Read the bot code...'", metadata.FirstMessage)
+	}
+	if metadata.LastUserMessage != "Continue with the implementation" {
+		t.Errorf("LastUserMessage = %q, want 'Continue with...'", metadata.LastUserMessage)
+	}
+	if metadata.LastAssistantMessage != "I'll analyze the bot code workflow..." {
+		t.Errorf("LastAssistantMessage = %q, want 'I'll analyze...'", metadata.LastAssistantMessage)
+	}
+	if metadata.LastResult != "Workflow analysis complete" {
+		t.Errorf("LastResult = %q, want 'Workflow analysis complete'", metadata.LastResult)
+	}
+
+	// Verify metrics
+	if metadata.NumTurns != 2 {
+		t.Errorf("NumTurns = %d, want 2", metadata.NumTurns)
+	}
+	if metadata.TotalCostUSD != 0.02 {
+		t.Errorf("TotalCostUSD = %f, want 0.02", metadata.TotalCostUSD)
+	}
+}
+
 func TestStoreListProjects(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, _ := NewStore(tmpDir)
