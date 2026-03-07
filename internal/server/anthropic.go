@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/smart_compact"
@@ -146,6 +147,10 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 			},
 		})
 		return
+	}
+
+	if provider.Timeout <= 0 {
+		provider.Timeout = constant.DefaultRequestTimeout
 	}
 
 	// Set the rule and provider in context
