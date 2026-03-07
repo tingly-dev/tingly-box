@@ -23,17 +23,17 @@ import (
 
 // BotHandler encapsulates all bot message handling logic and dependencies
 type BotHandler struct {
-	ctx                context.Context
-	botSetting         BotSetting
-	chatStore          *ChatStore
-	sessionMgr         *session.Manager
-	agentBoot          *agentboot.AgentBoot
-	summaryEngine      *summarizer.Engine
-	directoryBrowser   *DirectoryBrowser
-	manager            *imbot.Manager
-	imPrompter         *IMPrompter
-	fileStore          *FileStore
-	interaction        *imbot.InteractionHandler // New interaction handler
+	ctx              context.Context
+	botSetting       BotSetting
+	chatStore        *ChatStore
+	sessionMgr       *session.Manager
+	agentBoot        *agentboot.AgentBoot
+	summaryEngine    *summarizer.Engine
+	directoryBrowser *DirectoryBrowser
+	manager          *imbot.Manager
+	imPrompter       *IMPrompter
+	fileStore        *FileStore
+	interaction      *imbot.InteractionHandler // New interaction handler
 
 	// runningCancel tracks cancel functions for active executions per chatID
 	runningCancel   map[string]context.CancelFunc
@@ -96,19 +96,19 @@ func NewBotHandler(
 	}
 
 	return &BotHandler{
-		ctx:                ctx,
-		botSetting:         botSetting,
-		chatStore:          chatStore,
-		sessionMgr:         sessionMgr,
-		agentBoot:          agentBoot,
-		summaryEngine:      summaryEngine,
-		directoryBrowser:   directoryBrowser,
-		manager:            manager,
-		imPrompter:         imPrompter,
-		fileStore:          fileStore,
-		interaction:        interactionHandler,
-		runningCancel:      make(map[string]context.CancelFunc),
-		pendingBinds:       make(map[string]*PendingBind),
+		ctx:              ctx,
+		botSetting:       botSetting,
+		chatStore:        chatStore,
+		sessionMgr:       sessionMgr,
+		agentBoot:        agentBoot,
+		summaryEngine:    summaryEngine,
+		directoryBrowser: directoryBrowser,
+		manager:          manager,
+		imPrompter:       imPrompter,
+		fileStore:        fileStore,
+		interaction:      interactionHandler,
+		runningCancel:    make(map[string]context.CancelFunc),
+		pendingBinds:     make(map[string]*PendingBind),
 	}
 }
 
@@ -253,6 +253,11 @@ func (h *BotHandler) handleDirectMessage(hCtx HandlerContext) {
 		return
 	}
 
+	// Check if user is selecting a session to resume (numeric response)
+	if h.handleResumeSelection(hCtx, hCtx.Text) {
+		return
+	}
+
 	// Check for active session or show project selection
 	sessionID, ok, err := h.chatStore.GetSession(hCtx.ChatID)
 	if err != nil {
@@ -300,7 +305,7 @@ func (h *BotHandler) handleGroupMessage(hCtx HandlerContext) {
 		return
 	}
 
-	h.SendText(hCtx, "No project bound to this group. Use /bind <path> to bind a project.")
+	h.SendText(hCtx, "No project bound to this group. use /cd <path> to bind a project.")
 }
 
 // handleMediaMessage handles messages with media attachments
@@ -427,6 +432,9 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 		return
 	case "/bot_bash":
 		h.handleBashCommand(hCtx, fields[1:])
+		return
+	case "/resume":
+		h.handleResumeCommand(hCtx)
 		return
 	case "/clear":
 		h.handleClearCommand(hCtx)
@@ -994,6 +1002,7 @@ Bot Commands:
 /stop - Stop current task
 /clear - Clear context, stop task, and create new session
 /cd [path] - Bind and cd into a project
+/resume - Show recent sessions to resume
 /bot_project - Show & switch projects
 /bot_status - Show session status
 /bot_bash <cmd> - Execute allowed bash (cd, ls, pwd)
@@ -1009,6 +1018,7 @@ Bot Commands:
 /stop - Stop current task
 /clear - Clear context, stop task, and create new session
 /cd [path] - Bind and cd into a project to this group
+/resume - Show recent sessions to resume
 /bot_project - Show current project info
 /bot_status - Show session status
 /mock <msg> - Test with mock agent (permission flow)

@@ -210,6 +210,41 @@ func (s *ChatStore) ListChatsByOwner(ownerID, platform string) ([]*Chat, error) 
 	return scanChats(rows)
 }
 
+// ListProjectPathsByChat returns all unique project paths associated with a chat
+func (s *ChatStore) ListProjectPathsByChat(chatID string) ([]string, error) {
+	chat, err := s.GetChat(chatID)
+	if err != nil {
+		return nil, err
+	}
+	if chat == nil {
+		return []string{}, nil
+	}
+
+	// For direct chat, we want to show projects this chat has used before
+	// Get all unique project paths from chats with same owner (for direct chat)
+	// or just this chat's project history
+	rows, err := s.db.Query(`
+		SELECT DISTINCT project_path
+		FROM remote_coder_chats
+		WHERE project_path IS NOT NULL
+		ORDER BY project_path
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var paths []string
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			continue
+		}
+		paths = append(paths, path)
+	}
+	return paths, nil
+}
+
 // ============== Session Mapping ==============
 
 // SetSession sets the session for a chat (creates chat if not exists)
