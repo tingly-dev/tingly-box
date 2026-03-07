@@ -1,15 +1,14 @@
-import { Cancel, CheckCircle, CloudUpload, PlayArrow, Refresh as RefreshIcon, RestartAlt, Stop, NewReleases } from '@mui/icons-material';
-import { Box, Button, CircularProgress, IconButton, Stack, Typography, Link, Tabs, Tab, Alert, AlertTitle } from '@mui/material';
-import { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import CardGrid from '@/components/CardGrid';
+import GlobalExperimentalFeatures from '@/components/GlobalExperimentalFeatures';
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
-import GlobalExperimentalFeatures from '@/components/GlobalExperimentalFeatures';
-import RequestLog from '@/components/RequestLog';
-import { api, getBaseUrl } from '../services/api';
-import { useVersion } from '../contexts/VersionContext';
-import { useHealth } from '../contexts/HealthContext';
+import { Cancel, CheckCircle, CloudUpload, NewReleases, Refresh as RefreshIcon } from '@mui/icons-material';
+import { Alert, AlertTitle, Box, CircularProgress, IconButton, Link, Stack, Typography } from '@mui/material';
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useHealth } from '@/contexts/HealthContext';
+import { useVersion } from '@/contexts/VersionContext';
+import { api, getBaseUrl } from '@/services/api';
 
 const System = () => {
     const { t } = useTranslation();
@@ -23,7 +22,6 @@ const System = () => {
     const [providerModels, setProviderModels] = useState<any>({});
     const [notification, setNotification] = useState<{ open: boolean; message?: string; severity?: 'success' | 'error' | 'info' | 'warning' }>({ open: false });
     const [loading, setLoading] = useState(true);
-    const [currentTab, setCurrentTab] = useState(0);
 
     useEffect(() => {
         loadAllData();
@@ -140,92 +138,126 @@ const System = () => {
 
     return (
         <PageLayout loading={loading} notification={notification}>
-            <Stack spacing={2} sx={{ mb: 2 }}>
-                <Tabs value={currentTab} onChange={(_, newValue) => setCurrentTab(newValue)}>
-                    <Tab label="System Status" />
-                    <Tab label="Request Logs" />
-                </Tabs>
-            </Stack>
-
-            {currentTab === 0 ? (
-                <CardGrid>
-                    {/* Server Status - Minimal Design */}
-                    <UnifiedCard
-                        title="Server Status"
-                        size="full"
-                        rightAction={
-                            <IconButton
-                                onClick={() => { loadServerStatus(); checkHealth(); }}
-                                size="small"
-                                aria-label="Refresh status"
-                            >
-                                {checking ? <CircularProgress size={16} /> : <RefreshIcon />}
-                            </IconButton>
-                        }
-                    >
-                        {serverStatus ? (
-                            <Stack spacing={2}>
-                                {/* Status Row */}
-                                <Stack direction="row" alignItems="center" spacing={2}>
-                                    {serverStatus.server_running ? (
-                                        <CheckCircle color="success" />
-                                    ) : (
-                                        <Cancel color="error" />
-                                    )}
-                                    <Typography variant="h6" fontWeight={500}>
-                                        {serverStatus.server_running ? t('system.status.running') : t('system.status.stopped')}
+            <CardGrid>
+                {/* Server Status - Minimal Design */}
+                <UnifiedCard
+                    title="Server Status"
+                    size="full"
+                    rightAction={
+                        <IconButton
+                            onClick={() => { loadServerStatus(); checkHealth(); }}
+                            size="small"
+                            aria-label="Refresh status"
+                        >
+                            {checking ? <CircularProgress size={16} /> : <RefreshIcon />}
+                        </IconButton>
+                    }
+                >
+                    {serverStatus ? (
+                        <Stack spacing={2}>
+                            {/* Status Row */}
+                            <Stack direction="row" alignItems="center" spacing={2}>
+                                {serverStatus.server_running ? (
+                                    <CheckCircle color="success" />
+                                ) : (
+                                    <Cancel color="error" />
+                                )}
+                                <Typography variant="h6" fontWeight={500}>
+                                    {serverStatus.server_running ? t('system.status.running') : t('system.status.stopped')}
+                                </Typography>
+                                {isHealthy && (
+                                    <Typography variant="body2" color="success.main">
+                                        · Connected
                                     </Typography>
-                                    {isHealthy && (
-                                        <Typography variant="body2" color="success.main">
-                                            · Connected
-                                        </Typography>
-                                    )}
-                                </Stack>
-
-                                {/* Details */}
-                                <Stack spacing={1} pl={5}>
-                                    <Typography variant="body2" color="text.secondary">
-                                        Server: {baseUrl}
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary">
-                                        Keys: {serverStatus.providers_enabled}/{serverStatus.providers_total}
-                                    </Typography>
-                                    {serverStatus.uptime && (
-                                        <Typography variant="body2" color="text.secondary">
-                                            Uptime: {serverStatus.uptime}
-                                        </Typography>
-                                    )}
-                                    {serverStatus.last_updated && (
-                                        <Typography variant="body2" color="text.secondary">
-                                            Last updated: {serverStatus.last_updated}
-                                        </Typography>
-                                    )}
-                                </Stack>
+                                )}
                             </Stack>
-                        ) : (
-                            <Typography color="text.secondary">{t('system.status.loading')}</Typography>
-                        )}
-                    </UnifiedCard>
 
-                    {/* About Card */}
-                    <UnifiedCard
-                        title="About"
-                        size="medium"
-                        width="100%"
-                        rightAction={
-                            <IconButton onClick={() => checkForUpdates(true)} size="small" aria-label="Check for updates" title="Check for updates">
-                                {checkingVersion ? <CircularProgress size={16} /> : <RefreshIcon />}
-                            </IconButton>
-                        }
-                    >
-                        <Stack spacing={1.5}>
-                            {/* Version Update Alert - Clickable, always show in dev mode */}
+                            {/* Details */}
+                            <Stack spacing={1} pl={5}>
+                                <Typography variant="body2" color="text.secondary">
+                                    Server: {baseUrl}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    Keys: {serverStatus.providers_enabled}/{serverStatus.providers_total}
+                                </Typography>
+                                {serverStatus.uptime && (
+                                    <Typography variant="body2" color="text.secondary">
+                                        Uptime: {serverStatus.uptime}
+                                    </Typography>
+                                )}
+                                {serverStatus.last_updated && (
+                                    <Typography variant="body2" color="text.secondary">
+                                        Last updated: {serverStatus.last_updated}
+                                    </Typography>
+                                )}
+                            </Stack>
+                        </Stack>
+                    ) : (
+                        <Typography color="text.secondary">{t('system.status.loading')}</Typography>
+                    )}
+                </UnifiedCard>
+
+                {/* About Card */}
+                <UnifiedCard
+                    title="About"
+                    size="medium"
+                    width="100%"
+                    rightAction={
+                        <IconButton onClick={() => checkForUpdates(true)} size="small" aria-label="Check for updates" title="Check for updates">
+                            {checkingVersion ? <CircularProgress size={16} /> : <RefreshIcon />}
+                        </IconButton>
+                    }
+                >
+                    <Stack spacing={1.5}>
+                        {/* Version Update Alert - Clickable, always show in dev mode */}
+                        {(hasUpdate || import.meta.env.DEV) && (
+                            <Alert
+                                severity={import.meta.env.DEV && !hasUpdate ? "success" : "info"}
+                                icon={<CloudUpload fontSize="inherit" />}
+                                sx={{ mb: 1, cursor: 'pointer', '&:hover': { bgcolor: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main' } }}
+                                onClick={showUpdateDialog}
+                                role="button"
+                                aria-label="View update details"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        showUpdateDialog();
+                                    }
+                                }}
+                            >
+                                <AlertTitle>{import.meta.env.DEV && !hasUpdate ? 'Dev Mode' : 'Update Available'}</AlertTitle>
+                                {hasUpdate
+                                    ? `New version ${latestVersion} is available! You are on ${currentVersion}.`
+                                    : `Dev mode active. Version: ${currentVersion || 'N/A'}`
+                                }
+                                <Typography variant="caption" display="block" sx={{ mt: 0.5, opacity: 0.8 }}>
+                                    Click to view details
+                                </Typography>
+                            </Alert>
+                        )}
+
+                        <Stack direction="row" alignItems="center" justifyContent="space-between">
+                            <Typography variant="body2" color="text.secondary">
+                                <strong>Version:</strong> {currentVersion || 'N/A'}
+                            </Typography>
                             {(hasUpdate || import.meta.env.DEV) && (
-                                <Alert
-                                    severity={import.meta.env.DEV && !hasUpdate ? "success" : "info"}
-                                    icon={<CloudUpload fontSize="inherit" />}
-                                    sx={{ mb: 1, cursor: 'pointer', '&:hover': { bgcolor: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main' } }}
+                                <Box
                                     onClick={showUpdateDialog}
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 0.5,
+                                        color: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main',
+                                        cursor: 'pointer',
+                                        px: 1,
+                                        py: 0.5,
+                                        borderRadius: 1,
+                                        transition: 'all 150ms ease-in-out',
+                                        '&:hover': {
+                                            bgcolor: 'action.hover',
+                                        },
+                                    }}
                                     role="button"
                                     aria-label="View update details"
                                     tabIndex={0}
@@ -236,114 +268,43 @@ const System = () => {
                                         }
                                     }}
                                 >
-                                    <AlertTitle>{import.meta.env.DEV && !hasUpdate ? 'Dev Mode' : 'Update Available'}</AlertTitle>
-                                    {hasUpdate
-                                        ? `New version ${latestVersion} is available! You are on ${currentVersion}.`
-                                        : `Dev mode active. Version: ${currentVersion || 'N/A'}`
-                                    }
-                                    <Typography variant="caption" display="block" sx={{ mt: 0.5, opacity: 0.8 }}>
-                                        Click to view details
+                                    <NewReleases sx={{ fontSize: 16 }} />
+                                    <Typography variant="caption" color={import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main'}>
+                                        {hasUpdate ? `${latestVersion} available` : 'Dev Mode'}
                                     </Typography>
-                                </Alert>
+                                </Box>
                             )}
-
-                            <Stack direction="row" alignItems="center" justifyContent="space-between">
-                                <Typography variant="body2" color="text.secondary">
-                                    <strong>Version:</strong> {currentVersion || 'N/A'}
-                                </Typography>
-                                {(hasUpdate || import.meta.env.DEV) && (
-                                    <Box
-                                        onClick={showUpdateDialog}
-                                        sx={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 0.5,
-                                            color: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main',
-                                            cursor: 'pointer',
-                                            px: 1,
-                                            py: 0.5,
-                                            borderRadius: 1,
-                                            transition: 'all 150ms ease-in-out',
-                                            '&:hover': {
-                                                bgcolor: 'action.hover',
-                                            },
-                                        }}
-                                        role="button"
-                                        aria-label="View update details"
-                                        tabIndex={0}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' || e.key === ' ') {
-                                                e.preventDefault();
-                                                showUpdateDialog();
-                                            }
-                                        }}
-                                    >
-                                        <NewReleases sx={{ fontSize: 16 }} />
-                                        <Typography variant="caption" color={import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main'}>
-                                            {hasUpdate ? `${latestVersion} available` : 'Dev Mode'}
-                                        </Typography>
-                                    </Box>
-                                )}
-                            </Stack>
-                            <Typography variant="body2" color="text.secondary">
-                                <strong>License:</strong> MPL v2.0
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                <strong>GitHub:</strong>{' '}
-                                <Link
-                                    href="https://github.com/tingly-dev/tingly-box"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                >
-                                    tingly-dev/tingly-box
-                                </Link>
-                            </Typography>
                         </Stack>
-                    </UnifiedCard>
-
-                    {/* Global Experimental Features */}
-                    <UnifiedCard
-                        title="Global Experimental Features"
-                        size="full"
-                    >
-                        <Stack spacing={1}>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                                These experimental features apply globally to all scenarios. Individual scenarios can override these settings.
-                            </Typography>
-                            <GlobalExperimentalFeatures />
-                        </Stack>
-                    </UnifiedCard>
-
-                </CardGrid>
-            ) : (
-                <UnifiedCard title="Request Logs" size="full">
-                    <RequestLog
-                        getLogs={async (params) => {
-                            try {
-                                const { logsApi } = await api.instances();
-                                const response = await logsApi.apiV1LogGet();
-                                return {
-                                    total: response.data.total || 0,
-                                    logs: response.data.logs || [],
-                                };
-                            } catch (error: any) {
-                                console.error('Failed to get logs:', error);
-                                return { total: 0, logs: [] };
-                            }
-                        }}
-                        clearLogs={async () => {
-                            try {
-                                const { logsApi } = await api.instances();
-                                await logsApi.apiV1LogDelete();
-                                return { success: true, message: 'Logs cleared' };
-                            } catch (error: any) {
-                                console.error('Failed to clear logs:', error);
-                                return { success: false, message: error.message || 'Failed to clear logs' };
-                            }
-                        }}
-                    />
+                        <Typography variant="body2" color="text.secondary">
+                            <strong>License:</strong> MPL v2.0
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            <strong>GitHub:</strong>{' '}
+                            <Link
+                                href="https://github.com/tingly-dev/tingly-box"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                tingly-dev/tingly-box
+                            </Link>
+                        </Typography>
+                    </Stack>
                 </UnifiedCard>
-            )}
+
+                {/* Global Experimental Features */}
+                <UnifiedCard
+                    title="Global Experimental Features"
+                    size="full"
+                >
+                    <Stack spacing={1}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                            These experimental features apply globally to all scenarios. Individual scenarios can override these settings.
+                        </Typography>
+                        <GlobalExperimentalFeatures />
+                    </Stack>
+                </UnifiedCard>
+
+            </CardGrid>
         </PageLayout>
     );
 };
