@@ -37,13 +37,13 @@ import {
 import type { ReactNode } from 'react';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useHealth } from '../contexts/HealthContext';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
 
 interface LayoutProps {
-    children: ReactNode;
+    children?: ReactNode;
 }
 
 const activityBarWidth = 88;
@@ -808,7 +808,7 @@ const Layout = ({ children }: LayoutProps) => {
                         },
                     }}
                 >
-                    {children}
+                    {children ?? <Outlet />}
                 </Box>
             </Box>
 
