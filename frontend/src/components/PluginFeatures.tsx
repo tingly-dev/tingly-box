@@ -20,6 +20,7 @@ export interface PluginFeaturesProps {
 const PLUGIN_FEATURES = [
     { key: 'smart_compact', label: 'Smart Compact', description: 'Remove thinking blocks from conversation history to reduce context' },
     { key: 'recording', label: 'Recording', description: 'Record scenario-level request/response traffic for debugging' },
+    { key: 'clean_header', label: 'Clean Header', description: 'Remove Claude Code billing header from system messages', scenarios: ['claude_code'] },
 ] as const;
 
 const EFFORT_LEVELS = [
@@ -36,6 +37,9 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState<Record<string, boolean>>({});
 
+    // Filter features based on scenario (if scenarios are specified, only show for those scenarios)
+    const visibleFeatures = PLUGIN_FEATURES.filter(f => !f.scenarios || f.scenarios.includes(scenario as any));
+
     const loadData = async () => {
         try {
             setLoading(true);
@@ -45,12 +49,12 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                 setEffort(effortResult.data.value);
             }
 
-            // Load plugin features
+            // Load plugin features (only visible ones)
             const featureResults = await Promise.all(
-                PLUGIN_FEATURES.map(f => api.getScenarioFlag(scenario, f.key))
+                visibleFeatures.map(f => api.getScenarioFlag(scenario, f.key))
             );
             const newFeatures: Record<string, boolean> = {};
-            PLUGIN_FEATURES.forEach((f, i) => {
+            visibleFeatures.forEach((f, i) => {
                 if (featureResults[i]?.success && featureResults[i]?.data?.value !== undefined) {
                     newFeatures[f.key] = featureResults[i].data.value;
                 } else {
@@ -114,7 +118,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
 
     useEffect(() => {
         loadData();
-    }, [scenario]);
+    }, [scenario, visibleFeatures]);
 
     if (loading) {
         return (
@@ -168,7 +172,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    {PLUGIN_FEATURES.map((feature) => {
+                    {visibleFeatures.map((feature) => {
                         const isEnabled = features[feature.key] || false;
                         const isUpdating = updating[feature.key] || false;
                         return (
