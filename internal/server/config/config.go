@@ -53,7 +53,7 @@ type Config struct {
 	DefaultMaxTokens int  `json:"default_max_tokens"` // Default max_tokens for anthropic API requests
 	Verbose          bool `json:"verbose"`            // Verbose mode for detailed logging
 	Debug            bool `json:"-"`                  // Debug mode for Gin debug level logging
-	OpenBrowser      bool `yaml:"-" json:"-"` // Auto-open browser in web UI mode (default: true)
+	OpenBrowser      bool `yaml:"-" json:"-"`         // Auto-open browser in web UI mode (default: true)
 
 	// Generic tool configs map for all tool types
 	// Key is tool_type (e.g., "tool_interceptor", "code_execution")
@@ -968,26 +968,20 @@ func (c *Config) AddProviderByName(name, apiBase, token string) error {
 	return c.AddProvider(provider)
 }
 
-// GetProviderByUUID returns a provider
+// GetProviderByUUID returns a provider from database
 func (c *Config) GetProviderByUUID(uuid string) (*typ.Provider, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	// Try provider store first
-	if c.providerStore != nil {
-		if provider, err := c.providerStore.GetByUUID(uuid); err == nil {
-			return provider, nil
-		}
+	if c.providerStore == nil {
+		return nil, fmt.Errorf("provider store not initialized")
 	}
 
-	// Fallback to in-memory providers (for migration period)
-	for _, p := range c.Providers {
-		if p.UUID == uuid {
-			return p, nil
-		}
+	provider, err := c.providerStore.GetByUUID(uuid)
+	if err != nil {
+		return nil, fmt.Errorf("provider '%s' not found: %w", uuid, err)
 	}
-
-	return nil, fmt.Errorf("provider '%s' not found", uuid)
+	return provider, nil
 }
 
 func (c *Config) GetProviderByName(name string) (*typ.Provider, error) {
@@ -995,17 +989,12 @@ func (c *Config) GetProviderByName(name string) (*typ.Provider, error) {
 	defer c.mu.RUnlock()
 
 	// Try provider store first
-	if c.providerStore != nil {
-		if provider, err := c.providerStore.GetByName(name); err == nil {
-			return provider, nil
-		}
+	if c.providerStore == nil {
+		panic("[db] Provider store missing")
 	}
 
-	// Fallback to in-memory providers (for migration period)
-	for _, p := range c.Providers {
-		if p.Name == name {
-			return p, nil
-		}
+	if provider, err := c.providerStore.GetByName(name); err == nil {
+		return provider, nil
 	}
 
 	return nil, fmt.Errorf("provider with name '%s' not found", name)
@@ -1016,17 +1005,18 @@ func (c *Config) ListProviders() []*typ.Provider {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	// Try provider store first
-	if c.providerStore != nil {
-		providers, err := c.providerStore.List()
-		if err == nil {
-			return providers
-		}
-		logrus.Warnf("Failed to list providers from store: %v", err)
+	// Try provider store first (database is the source of truth)
+	if c.providerStore == nil {
+		panic("[db] Provider store missing")
 	}
+	providers, err := c.providerStore.List()
+	if err == nil {
+		return providers
+	}
+	// Database error - log warning and fall back to in-memory providers
+	logrus.Warnf("Failed to list providers from database store, falling back to config file: %v", err)
 
-	// Fallback to in-memory providers (for migration period)
-	return c.Providers
+	return nil
 }
 
 // ListOAuthProviders returns all OAuth-enabled providers
@@ -1035,22 +1025,15 @@ func (c *Config) ListOAuthProviders() ([]*typ.Provider, error) {
 	defer c.mu.RUnlock()
 
 	// Try provider store first
-	if c.providerStore != nil {
-		providers, err := c.providerStore.ListOAuth()
-		if err == nil {
-			return providers, nil
-		}
+	if c.providerStore == nil {
+		panic("[db] Provider store missing")
+	}
+	providers, err := c.providerStore.ListOAuth()
+	if err == nil {
+		return providers, nil
 	}
 
-	// Fallback to in-memory providers (for migration period)
-	var oauthProviders []*typ.Provider
-	for _, p := range c.Providers {
-		if p.AuthType == typ.AuthTypeOAuth && p.OAuthDetail != nil {
-			oauthProviders = append(oauthProviders, p)
-		}
-	}
-
-	return oauthProviders, nil
+	return nil, nil
 }
 
 // AddProvider adds a new provider using Provider struct
@@ -1069,13 +1052,7 @@ func (c *Config) AddProvider(provider *typ.Provider) error {
 		}
 		return c.providerStore.Save(provider)
 	}
-
-	// Fallback to in-memory (for migration period)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.Providers = append(c.Providers, provider)
-	return c.Save()
+	return nil
 }
 
 // UpdateProvider updates an existing provider by UUID
@@ -1091,51 +1068,26 @@ func (c *Config) UpdateProvider(uuid string, provider *typ.Provider) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for i, p := range c.Providers {
-		if p.UUID == uuid {
-			provider.UUID = uuid
-			c.Providers[i] = provider
-			return c.Save()
-		}
-	}
-
 	return fmt.Errorf("provider with UUID '%s' not found", uuid)
 }
 
 // DeleteProvider removes a provider by UUID
 func (c *Config) DeleteProvider(uuid string) error {
 	// Use provider store if available
-	if c.providerStore != nil {
+	if c.providerStore == nil {
+		panic("[db] Provider store missing")
+
+	}
 		if err := c.providerStore.Delete(uuid); err != nil {
 			return err
 		}
 
-		// Delete the associated model file
-		if c.modelManager != nil {
-			_ = c.modelManager.RemoveProvider(uuid)
-		}
-
-		return nil
+	// Delete the associated model file
+	if c.modelManager != nil {
+		_ = c.modelManager.RemoveProvider(uuid)
 	}
 
-	// Fallback to in-memory (for migration period)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	for i, p := range c.Providers {
-		if p.UUID == uuid {
-			c.Providers = append(c.Providers[:i], c.Providers[i+1:]...)
-
-			// Delete the associated model file
-			if c.modelManager != nil {
-				_ = c.modelManager.RemoveProvider(uuid)
-			}
-
-			return c.Save()
-		}
-	}
-
-	return fmt.Errorf("provider with UUID '%s' not found", uuid)
+	return nil
 }
 
 // Server configuration methods (merged from AppConfig)
@@ -1694,18 +1646,10 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 
 // FetchAndSaveProviderModels fetches models from a provider with fallback hierarchy
 func (c *Config) FetchAndSaveProviderModels(uid string) error {
-	c.mu.RLock()
-	var provider *typ.Provider
-	for _, p := range c.Providers {
-		if p.UUID == uid {
-			provider = p
-			break
-		}
-	}
-	c.mu.RUnlock()
-
-	if provider == nil {
-		return fmt.Errorf("provider with UUID %s not found", uid)
+	// Use GetProviderByUUID which queries the database first, then falls back to in-memory providers
+	provider, err := c.GetProviderByUUID(uid)
+	if err != nil {
+		return fmt.Errorf("provider with UUID %s not found: %w", uid, err)
 	}
 
 	// Try provider API first using client layer

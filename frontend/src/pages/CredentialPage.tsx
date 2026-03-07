@@ -171,7 +171,9 @@ const CredentialPage = () => {
                     api_style: protocol,
                     token: providerFormData.token,
                     no_key_required: (providerFormData as any).noKeyRequired || false,
+                    enabled: true,
                     proxy_url: (providerFormData as any).proxyUrl ?? '',
+                    auth_type: 'api_key',
                 };
 
                 const result = await api.addProvider(providerData);
@@ -230,7 +232,9 @@ const CredentialPage = () => {
                     api_style: protocol,
                     token: providerFormData.token,
                     no_key_required: (providerFormData as any).noKeyRequired || false,
+                    enabled: true,
                     proxy_url: (providerFormData as any).proxyUrl ?? '',
+                    auth_type: 'api_key',
                 };
 
                 const result = await api.addProvider(providerData, true);
