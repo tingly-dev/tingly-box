@@ -108,9 +108,9 @@ func TestResponsesEventJSON(t *testing.T) {
 			},
 		},
 		{
-			name: "response.done",
+			name: "response.completed",
 			event: map[string]interface{}{
-				"type": "response.done",
+				"type": "response.completed",
 				"response": map[string]interface{}{
 					"id":     "resp_123",
 					"status": "completed",
@@ -129,7 +129,7 @@ func TestResponsesEventJSON(t *testing.T) {
 				},
 			},
 			expected: map[string]interface{}{
-				"type": "response.done",
+				"type": "response.completed",
 			},
 		},
 	}

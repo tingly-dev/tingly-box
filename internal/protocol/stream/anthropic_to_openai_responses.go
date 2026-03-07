@@ -67,6 +67,7 @@ func HandleAnthropicToOpenAIResponsesStream(
 	state := newResponsesConverterState(time.Now().Unix())
 	var inputTokens, outputTokens int
 	var hasUsage bool
+	completedSent := false
 
 	// Process the stream
 	c.Stream(func(w io.Writer) bool {
@@ -74,6 +75,12 @@ func HandleAnthropicToOpenAIResponsesStream(
 		select {
 		case <-c.Request.Context().Done():
 			logrus.Debug("Client disconnected, stopping Anthropic to Responses stream")
+			// Send completion event before returning since client is disconnecting
+			if !completedSent && !state.finished {
+				logrus.Info("Client disconnected, sending completion event before close")
+				sendFinalCompletionEvent(c, state, flusher, inputTokens, outputTokens)
+				completedSent = true
+			}
 			return false
 		default:
 		}
@@ -89,6 +96,7 @@ func HandleAnthropicToOpenAIResponsesStream(
 		switch event.Type {
 		case "message_start":
 			handleMessageStart(c, state, responseModel, flusher)
+			state.hasSentCreated = true
 
 		case "content_block_start":
 			handleContentBlockStart(c, state, event, flusher)
@@ -97,7 +105,11 @@ func HandleAnthropicToOpenAIResponsesStream(
 			handleContentBlockDelta(c, state, event, flusher)
 
 		case "content_block_stop":
-			handleContentBlockStop(c, state, flusher)
+			// Only send completion events for text blocks
+			// Tool calls are handled differently
+			if state.currentBlockType == "text" {
+				handleContentBlockStop(c, state, flusher)
+			}
 
 		case "message_delta":
 			inputTokens, outputTokens, hasUsage = handleMessageDelta(
@@ -106,6 +118,7 @@ func HandleAnthropicToOpenAIResponsesStream(
 
 		case "message_stop":
 			handleMessageStop(c, state, flusher)
+			completedSent = true
 			return false
 		}
 
@@ -114,6 +127,15 @@ func HandleAnthropicToOpenAIResponsesStream(
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
+		// Only send completion event if not already sent
+		if !completedSent && !state.finished {
+			// Send completion event for all errors including context.Canceled
+			// The Stream loop's context check may not have run if stream.Next() was blocking
+			logrus.WithError(err).Warn("Stream error occurred, sending completion event")
+			sendFinalCompletionEvent(c, state, flusher, inputTokens, outputTokens)
+			completedSent = true
+		}
+
 		if errors.Is(err, context.Canceled) {
 			logrus.Debug("Anthropic to Responses stream canceled by client")
 			if hasUsage {
@@ -138,6 +160,17 @@ func HandleAnthropicToOpenAIResponsesStream(
 		return protocol.ZeroUsageStat(), err
 	}
 
+	// Some providers end the stream without emitting message_stop
+	// Ensure clients still receive response.completed and [DONE]
+	if !completedSent && !state.finished {
+		if !state.hasSentCreated {
+			handleMessageStart(c, state, responseModel, flusher)
+			state.hasSentCreated = true
+		}
+		sendFinalCompletionEvent(c, state, flusher, inputTokens, outputTokens)
+		completedSent = true
+	}
+
 	if hasUsage {
 		return protocol.NewUsageStat(inputTokens, outputTokens), nil
 	}
@@ -154,6 +187,10 @@ type responsesConverterState struct {
 	outputTokens     int64
 	finished         bool
 	pendingToolCalls map[int]*pendingResponseToolCall
+	hasSentCreated   bool
+	sequenceNumber   int
+	createdAt        int64
+	currentBlockType string // Track the type of the current block being processed
 }
 
 // pendingResponseToolCall tracks a tool call being assembled from Anthropic stream chunks
@@ -170,7 +207,17 @@ func newResponsesConverterState(timestamp int64) *responsesConverterState {
 		itemID:           fmt.Sprintf("item_%d", timestamp),
 		outputIndex:      0,
 		pendingToolCalls: make(map[int]*pendingResponseToolCall),
+		hasSentCreated:   false,
+		sequenceNumber:   0,
+		createdAt:        timestamp,
 	}
+}
+
+// nextSequenceNumber returns the next sequence number and increments it
+func (s *responsesConverterState) nextSequenceNumber() int {
+	seq := s.sequenceNumber
+	s.sequenceNumber++
+	return seq
 }
 
 // handleMessageStart sends the response.created event
@@ -178,18 +225,33 @@ func handleMessageStart(c *gin.Context, state *responsesConverterState, model st
 	event := map[string]interface{}{
 		"type": "response.created",
 		"response": map[string]interface{}{
-			"id":     state.responseID,
-			"status": "in_progress",
-			"model":  model,
-			"output": []interface{}{},
-			"usage": map[string]interface{}{
-				"input_tokens":  0,
-				"output_tokens": 0,
-				"total_tokens":  0,
-			},
+			"id":         state.responseID,
+			"object":     "response",
+			"created_at": state.createdAt,
+			"status":     "in_progress",
+			"model":      model,
+			"output":     []interface{}{},
+			"usage":      nil,
 		},
+		"sequence_number": state.nextSequenceNumber(),
 	}
 	sendResponsesEvent(c, event, flusher)
+
+	// Also send response.in_progress event as per the real API
+	inProgressEvent := map[string]interface{}{
+		"type": "response.in_progress",
+		"response": map[string]interface{}{
+			"id":         state.responseID,
+			"object":     "response",
+			"created_at": state.createdAt,
+			"status":     "in_progress",
+			"model":      model,
+			"output":     []interface{}{},
+			"usage":      nil,
+		},
+		"sequence_number": state.nextSequenceNumber(),
+	}
+	sendResponsesEvent(c, inProgressEvent, flusher)
 }
 
 // handleContentBlockStart sends the response.output_item.added event
@@ -201,20 +263,38 @@ func handleContentBlockStart(
 ) {
 	index := event.Index
 	blockType := event.ContentBlock.Type
+	state.currentBlockType = blockType
 
 	if blockType == "text" {
-		// Handle text output
+		// Handle text output - send response.output_item.added with message type
 		outputEvent := map[string]interface{}{
 			"type":         "response.output_item.added",
 			"item_id":      state.itemID,
 			"output_index": state.outputIndex,
 			"item": map[string]interface{}{
-				"type":   "output_text",
-				"text":   "",
+				"id":     state.itemID,
+				"type":   "message",
 				"status": "in_progress",
+				"role":   "assistant",
+				"content": []interface{}{},
 			},
+			"sequence_number": state.nextSequenceNumber(),
 		}
 		sendResponsesEvent(c, outputEvent, flusher)
+
+		// Also send response.content_part.added for the text part
+		contentPartEvent := map[string]interface{}{
+			"type":          "response.content_part.added",
+			"item_id":       state.itemID,
+			"output_index":  state.outputIndex,
+			"content_index": 0,
+			"part": map[string]interface{}{
+				"type": "output_text",
+				"text": "",
+			},
+			"sequence_number": state.nextSequenceNumber(),
+		}
+		sendResponsesEvent(c, contentPartEvent, flusher)
 	} else if blockType == "tool_use" {
 		// Handle tool use - create a new pending tool call
 		// The ID and Name are in ContentBlock fields for tool_use type
@@ -239,6 +319,7 @@ func handleContentBlockStart(
 			"output_index": state.outputIndex,
 		}
 		sendResponsesEvent(c, outputEvent, flusher)
+		state.outputIndex++
 	}
 	// Ignore other block types (thinking, etc.)
 }
@@ -259,10 +340,12 @@ func handleContentBlockDelta(
 		state.accumulatedText += text
 
 		deltaEvent := map[string]interface{}{
-			"type":         "response.output_text.delta",
-			"delta":        text,
-			"item_id":      state.itemID,
-			"output_index": state.outputIndex,
+			"type":          "response.output_text.delta",
+			"delta":         text,
+			"item_id":       state.itemID,
+			"output_index":  state.outputIndex,
+			"content_index": 0,
+			"sequence_number": state.nextSequenceNumber(),
 		}
 		sendResponsesEvent(c, deltaEvent, flusher)
 	} else if deltaType == "input_json_delta" {
@@ -281,18 +364,57 @@ func handleContentBlockDelta(
 	}
 }
 
-// handleContentBlockStop sends the response.output_item.done event
+// handleContentBlockStop sends the response.output_text.done, response.content_part.done, and response.output_item.done events
 func handleContentBlockStop(
 	c *gin.Context,
 	state *responsesConverterState,
 	flusher http.Flusher,
 ) {
-	doneEvent := map[string]interface{}{
+	// Send response.output_text.done event
+	textDoneEvent := map[string]interface{}{
+		"type":          "response.output_text.done",
+		"item_id":       state.itemID,
+		"output_index":  state.outputIndex,
+		"content_index": 0,
+		"text":          state.accumulatedText,
+		"sequence_number": state.nextSequenceNumber(),
+	}
+	sendResponsesEvent(c, textDoneEvent, flusher)
+
+	// Send response.content_part.done event
+	contentPartDoneEvent := map[string]interface{}{
+		"type":          "response.content_part.done",
+		"item_id":       state.itemID,
+		"output_index":  state.outputIndex,
+		"content_index": 0,
+		"part": map[string]interface{}{
+			"type": "output_text",
+			"text": state.accumulatedText,
+		},
+		"sequence_number": state.nextSequenceNumber(),
+	}
+	sendResponsesEvent(c, contentPartDoneEvent, flusher)
+
+	// Send response.output_item.done event
+	itemDoneEvent := map[string]interface{}{
 		"type":         "response.output_item.done",
 		"item_id":      state.itemID,
 		"output_index": state.outputIndex,
+		"item": map[string]interface{}{
+			"id":      state.itemID,
+			"type":    "message",
+			"status":  "completed",
+			"role":    "assistant",
+			"content": []map[string]interface{}{
+				{
+					"type": "output_text",
+					"text": state.accumulatedText,
+				},
+			},
+		},
+		"sequence_number": state.nextSequenceNumber(),
 	}
-	sendResponsesEvent(c, doneEvent, flusher)
+	sendResponsesEvent(c, itemDoneEvent, flusher)
 }
 
 // handleMessageDelta updates usage information
@@ -311,7 +433,7 @@ func handleMessageDelta(
 	return inputTokens, outputTokens, false
 }
 
-// handleMessageStop sends the response.done event
+// handleMessageStop sends the response.completed event
 func handleMessageStop(
 	c *gin.Context,
 	state *responsesConverterState,
@@ -319,15 +441,22 @@ func handleMessageStop(
 ) {
 	state.finished = true
 
-	// Build the final output array
+	// Build the final output array with proper message structure
 	var output []map[string]interface{}
 
-	// Add text content if present
+	// Add text content as a message item if present
 	if state.accumulatedText != "" {
 		output = append(output, map[string]interface{}{
-			"type":   "output_text",
-			"text":   state.accumulatedText,
-			"status": "completed",
+			"id":      state.itemID,
+			"type":    "message",
+			"status":  "completed",
+			"role":    "assistant",
+			"content": []map[string]interface{}{
+				{
+					"type": "output_text",
+					"text": state.accumulatedText,
+				},
+			},
 		})
 	}
 
@@ -347,17 +476,22 @@ func handleMessageStop(
 	outputTokens := state.outputTokens
 
 	doneEvent := map[string]interface{}{
-		"type": "response.done",
+		"type": "response.completed",
 		"response": map[string]interface{}{
-			"id":     state.responseID,
-			"status": "completed",
-			"output": output,
+			"id":          state.responseID,
+			"object":      "response",
+			"created_at":  state.createdAt,
+			"status":      "completed",
+			"completed_at": state.createdAt, // Use same timestamp for simplicity
+			"model":       "", // Will be filled by caller if needed
+			"output":      output,
 			"usage": map[string]interface{}{
 				"input_tokens":  inputTokens,
 				"output_tokens": outputTokens,
 				"total_tokens":  inputTokens + outputTokens,
 			},
 		},
+		"sequence_number": state.nextSequenceNumber(),
 	}
 	sendResponsesEvent(c, doneEvent, flusher)
 
@@ -368,6 +502,18 @@ func handleMessageStop(
 
 // sendResponsesEvent sends a single Responses API event as SSE
 func sendResponsesEvent(c *gin.Context, event map[string]interface{}, flusher http.Flusher) {
+	// Check if connection is still valid before writing
+	if c.Writer == nil || flusher == nil {
+		return
+	}
+
+	// Check if context is canceled - don't try to write
+	select {
+	case <-c.Request.Context().Done():
+		return
+	default:
+	}
+
 	eventJSON, err := json.Marshal(event)
 	if err != nil {
 		logrus.Errorf("Failed to marshal Responses event: %v", err)
@@ -392,4 +538,80 @@ func sendResponsesErrorEvent(c *gin.Context, message string, errorType string, f
 		},
 	}
 	sendResponsesEvent(c, errorEvent, f)
+}
+
+// sendFinalCompletionEvent sends the response.completed event with the current state
+// This is used when the stream ends unexpectedly to ensure clients receive a completion event
+func sendFinalCompletionEvent(c *gin.Context, state *responsesConverterState, flusher http.Flusher, inputTokens, outputTokens int) {
+	// Check if connection is still valid before writing
+	if c == nil || c.Writer == nil || flusher == nil {
+		logrus.Warn("Cannot send completion event: connection is nil")
+		return
+	}
+
+	state.finished = true
+
+	// Build the final output array with proper message structure
+	var output []map[string]interface{}
+
+	// Add text content as a message item if present
+	if state.accumulatedText != "" {
+		output = append(output, map[string]interface{}{
+			"id":      state.itemID,
+			"type":    "message",
+			"status":  "completed",
+			"role":    "assistant",
+			"content": []map[string]interface{}{
+				{
+					"type": "output_text",
+					"text": state.accumulatedText,
+				},
+			},
+		})
+	}
+
+	// Add tool calls
+	for _, pending := range state.pendingToolCalls {
+		output = append(output, map[string]interface{}{
+			"type":      "function_call",
+			"id":        pending.itemID,
+			"name":      pending.name,
+			"arguments": pending.arguments.String(),
+			"status":    "completed",
+		})
+	}
+
+	// Build usage info from state - use provided values if state values are zero
+	inputTokensFinal := int(state.inputTokens)
+	outputTokensFinal := int(state.outputTokens)
+	if inputTokensFinal == 0 && inputTokens > 0 {
+		inputTokensFinal = inputTokens
+	}
+	if outputTokensFinal == 0 && outputTokens > 0 {
+		outputTokensFinal = outputTokens
+	}
+
+	doneEvent := map[string]interface{}{
+		"type": "response.completed",
+		"response": map[string]interface{}{
+			"id":           state.responseID,
+			"object":       "response",
+			"created_at":   state.createdAt,
+			"status":       "completed",
+			"completed_at": state.createdAt,
+			"model":        "", // Will be filled by caller if needed
+			"output":       output,
+			"usage": map[string]interface{}{
+				"input_tokens":  inputTokensFinal,
+				"output_tokens": outputTokensFinal,
+				"total_tokens":  inputTokensFinal + outputTokensFinal,
+			},
+		},
+		"sequence_number": state.nextSequenceNumber(),
+	}
+	sendResponsesEvent(c, doneEvent, flusher)
+
+	// Send final [DONE] message
+	c.Writer.WriteString("data: [DONE]\n\n")
+	flusher.Flush()
 }
