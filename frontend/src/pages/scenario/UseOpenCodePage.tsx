@@ -7,7 +7,7 @@ import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ExperimentalFeatures from '@/components/ExperimentalFeatures.tsx';
 import PageLayout from '@/components/PageLayout';
-import TemplatePage from '@/components/TemplatePage.tsx';
+import TemplatePage from './components/TemplatePage.tsx';
 import OpenCodeConfigModal from '@/components/OpenCodeConfigModal';
 import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
 import { useHeaderHeight } from '@/hooks/useHeaderHeight';

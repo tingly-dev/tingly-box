@@ -2,7 +2,7 @@ import CardGrid from "@/components/CardGrid.tsx";
 import ClaudeCodeConfigModal from '@/components/ClaudeCodeConfigModal';
 import PageLayout from '@/components/PageLayout';
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
-import TemplatePage from '@/components/TemplatePage.tsx';
+import TemplatePage from './components/TemplatePage.tsx';
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
 import { useHeaderHeight } from '@/hooks/useHeaderHeight';

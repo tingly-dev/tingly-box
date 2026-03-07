@@ -3,15 +3,15 @@ import { Box, Fab } from '@mui/material';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import { useNavigate } from 'react-router-dom';
 import ApiKeyModal from '@/components/ApiKeyModal';
-import RuleCard from './RuleCard.tsx';
+import RuleCard from '@/components/RuleCard.tsx';
 import UnifiedCard from '@/components/UnifiedCard';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import { TemplatePageActions } from './TemplatePageActions';
 import type { TabTemplatePageProps } from './TemplatePage.types';
 import { SCROLLBOX_SX } from './TemplatePage.constants';
 import { useTemplatePageRules } from './hooks/useTemplatePageRules';
-import { useScrollToNewRule } from './hooks/useScrollToNewRule';
-import { useModelSelectDialog } from '../hooks/useModelSelectDialog';
+import { useScrollToNewRule } from '@/components/hooks/useScrollToNewRule';
+import { useModelSelectDialog } from '@/hooks/useModelSelectDialog';
 
 const TemplatePage: React.FC<TabTemplatePageProps> = ({
     rules,
