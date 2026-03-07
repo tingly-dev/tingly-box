@@ -9,6 +9,7 @@ import {
     DateRange as DateRangeIcon,
     ErrorOutline,
     LaptopMac,
+    ListAlt as LogsIcon,
     Menu as MenuIcon,
     NewReleases,
     Psychology as PromptIcon,
@@ -36,13 +37,13 @@ import {
 import type { ReactNode } from 'react';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useHealth } from '../contexts/HealthContext';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
 
 interface LayoutProps {
-    children: ReactNode;
+    children?: ReactNode;
 }
 
 const activityBarWidth = 88;
@@ -228,7 +229,18 @@ const Layout = ({ children }: LayoutProps) => {
                 key: 'system',
                 icon: <SystemIcon sx={{ fontSize: 22 }} />,
                 label: 'System',
-                path: '/system',
+                children: [
+                    {
+                        path: '/system',
+                        label: 'Status',
+                        icon: <SystemIcon sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/system/logs',
+                        label: 'Logs',
+                        icon: <LogsIcon sx={{ fontSize: 20 }} />,
+                    },
+                ],
             },
         ];
         return items;
@@ -796,7 +808,7 @@ const Layout = ({ children }: LayoutProps) => {
                         },
                     }}
                 >
-                    {children}
+                    {children ?? <Outlet />}
                 </Box>
             </Box>
 

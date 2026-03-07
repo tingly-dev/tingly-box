@@ -1,6 +1,6 @@
-import React from 'react';
-import { Add as AddIcon, Key as KeyIcon, ExpandMore as ExpandMoreIcon, UnfoldMore as UnfoldMoreIcon } from '@mui/icons-material';
+import { Add as AddIcon, ExpandMore as ExpandMoreIcon, Key as KeyIcon, UnfoldMore as UnfoldMoreIcon } from '@mui/icons-material';
 import { Button, Stack, Tooltip } from '@mui/material';
+import React from 'react';
 
 export interface TemplatePageActionsProps {
     collapsible: boolean;

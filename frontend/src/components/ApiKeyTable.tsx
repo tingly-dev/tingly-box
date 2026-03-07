@@ -4,6 +4,7 @@ import { Cancel, ContentCopy, Delete, Edit, ListAlt, Route, Visibility } from '@
 import {
     Box,
     Button,
+    Divider,
     FormControlLabel,
     IconButton,
     Modal,
@@ -162,8 +163,7 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                         <TableCell sx={{ fontWeight: 600, minWidth: 120, maxWidth: 120 }}>API Base URL</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120, maxWidth: 120 }}>API Key</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 80 }}>Proxy</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Model List</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Actions</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 240 }}>Actions</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -253,26 +253,21 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                                     </Typography>
                                 )}
                             </TableCell>
-                            {/* Model List */}
-                            <TableCell>
-                                <Button
-                                    variant="outlined"
-                                    size="small"
-                                    startIcon={<ListAlt />}
-                                    onClick={() => handleModelListClick(provider.uuid)}
-                                    disabled={!provider.enabled}
-                                    sx={{
-                                        textTransform: 'none',
-                                        borderRadius: 1.5,
-                                        fontSize: '0.8rem',
-                                    }}
-                                >
-                                    Models
-                                </Button>
-                            </TableCell>
                             {/* Actions */}
                             <TableCell>
-                                <Stack direction="row" spacing={0.5}>
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 0.5,
+                                        border: 1,
+                                        borderColor: 'divider',
+                                        borderRadius: 1.5,
+                                        p: 0.5,
+                                        pr: 1,
+                                        width: 180,
+                                    }}
+                                >
                                     {onEdit && (
                                         <Tooltip title="Edit">
                                             <IconButton size="small" color="primary" onClick={() => onEdit(provider.uuid)}>
@@ -287,7 +282,24 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                                             </IconButton>
                                         </Tooltip>
                                     )}
-                                </Stack>
+                                    <Divider orientation="vertical" flexItem />
+                                    <Button
+                                        variant="text"
+                                        size="small"
+                                        startIcon={<ListAlt />}
+                                        onClick={() => handleModelListClick(provider.uuid)}
+                                        disabled={!provider.enabled}
+                                        sx={{
+                                            textTransform: 'none',
+                                            fontSize: '0.75rem',
+                                            minWidth: 'auto',
+                                            px: 1,
+                                            color: 'text.primary',
+                                        }}
+                                    >
+                                        Models
+                                    </Button>
+                                </Box>
                             </TableCell>
                         </TableRow>
                     ))}

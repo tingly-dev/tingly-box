@@ -1,8 +1,8 @@
+import type { Rule } from '@/components/RoutingGraphTypes.ts';
+import { api } from '@/services/api';
+import type { ProviderModelsDataByUuid } from '@/types/provider';
 import { useCallback, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { api } from '@/services/api';
-import type { Provider, ProviderModelsDataByUuid } from '@/types/provider';
-import type { Rule } from './RoutingGraphTypes.ts';
 
 export interface UseTemplatePageRulesParams {
     rules: Rule[];
