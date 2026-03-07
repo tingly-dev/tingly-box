@@ -99,6 +99,69 @@ func (s *Store) GetRecentSessions(ctx context.Context, projectPath string, limit
 	return sessions, nil
 }
 
+// ListSessionsFiltered returns sessions that pass the filter, ordered by start time (newest first)
+func (s *Store) ListSessionsFiltered(ctx context.Context, projectPath string, filter SessionFilter) ([]session.SessionMetadata, error) {
+	projectDir := s.resolveProjectPath(projectPath)
+	if projectDir == "" {
+		return nil, session.ErrInvalidPath{Path: projectPath}
+	}
+
+	entries, err := os.ReadDir(projectDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []session.SessionMetadata{}, nil
+		}
+		return nil, err
+	}
+
+	var sessions []session.SessionMetadata
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		// Only process .jsonl files
+		if !strings.HasSuffix(entry.Name(), ".jsonl") {
+			continue
+		}
+
+		sessionPath := filepath.Join(projectDir, entry.Name())
+		metadata, err := s.parseSessionFile(sessionPath)
+		if err != nil {
+			// Log error but continue processing other files
+			continue
+		}
+
+		// Apply filter if provided
+		if filter != nil && !filter(*metadata) {
+			continue
+		}
+
+		sessions = append(sessions, *metadata)
+	}
+
+	// Sort by start time, newest first
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].StartTime.After(sessions[j].StartTime)
+	})
+
+	return sessions, nil
+}
+
+// GetRecentSessionsFiltered returns the N most recent sessions that pass the filter
+func (s *Store) GetRecentSessionsFiltered(ctx context.Context, projectPath string, limit int, filter SessionFilter) ([]session.SessionMetadata, error) {
+	sessions, err := s.ListSessionsFiltered(ctx, projectPath, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(sessions) > limit {
+		sessions = sessions[:limit]
+	}
+
+	return sessions, nil
+}
+
 // GetSessionEvents retrieves events from a session
 func (s *Store) GetSessionEvents(ctx context.Context, sessionID string, offset, limit int) ([]session.SessionEvent, error) {
 	sessionPath := s.findSessionPath(sessionID)
@@ -160,13 +223,6 @@ func (s *Store) findSessionPath(sessionID string) string {
 	}
 
 	return ""
-}
-
-// sortSessionsByTime sorts sessions by start time (newest first)
-func sortSessionsByTime(sessions []session.SessionMetadata) {
-	sort.Slice(sessions, func(i, j int) bool {
-		return sessions[i].StartTime.After(sessions[j].StartTime)
-	})
 }
 
 // GetProjectSessionsDir returns the directory where sessions are stored for a project

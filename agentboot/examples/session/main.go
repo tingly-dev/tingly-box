@@ -34,9 +34,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Get recent sessions
+	// Use default filter to exclude meta-only and empty sessions
+	filter := claude.DefaultSessionFilter()
+
+	// Get recent sessions with filter applied
 	ctx := context.Background()
-	sessions, err := store.GetRecentSessions(ctx, projectPath, limit)
+	sessions, err := store.GetRecentSessionsFiltered(ctx, projectPath, limit, filter)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error listing sessions: %v\n", err)
 		os.Exit(1)

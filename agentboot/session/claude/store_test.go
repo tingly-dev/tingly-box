@@ -362,3 +362,152 @@ func TestStoreListProjects(t *testing.T) {
 		// Don't fail, just log - the exact count may vary due to path encoding
 	}
 }
+
+func TestStoreListSessionsFiltered(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, _ := NewStore(tmpDir)
+
+	// Create test project directory
+	projectDir := filepath.Join(tmpDir, "-test-project")
+	if err := os.MkdirAll(projectDir, 0755); err != nil {
+		t.Fatalf("Failed to create test project directory: %v", err)
+	}
+
+	// Create multiple test sessions with different content
+	testSessions := []struct {
+		sessionID string
+		content   string
+		include   bool
+	}{
+		{
+			sessionID: "valid-1",
+			content: `{"type":"user","sessionId":"valid-1","message":{"role":"user","content":"Help me write a function"},"timestamp":"2026-03-07T12:00:00Z"}
+{"type":"result","subtype":"success","total_cost_usd":0.01,"sessionId":"valid-1","timestamp":"2026-03-07T12:00:01Z"}
+`,
+			include: true,
+		},
+		{
+			sessionID: "meta-1",
+			content: `{"type":"user","sessionId":"meta-1","message":{"role":"user","content":"<local-command-caveat>Warning message"},"timestamp":"2026-03-07T12:00:00Z"}
+{"type":"result","subtype":"success","total_cost_usd":0.01,"sessionId":"meta-1","timestamp":"2026-03-07T12:00:01Z"}
+`,
+			include: false,
+		},
+		{
+			sessionID: "short-1",
+			content: `{"type":"user","sessionId":"short-1","message":{"role":"user","content":"hi"},"timestamp":"2026-03-07T12:00:00Z"}
+{"type":"result","subtype":"success","total_cost_usd":0.01,"sessionId":"short-1","timestamp":"2026-03-07T12:00:01Z"}
+`,
+			include: false,
+		},
+		{
+			sessionID: "valid-2",
+			content: `{"type":"user","sessionId":"valid-2","message":{"role":"user","content":"Another valid request for help"},"timestamp":"2026-03-07T12:00:00Z"}
+{"type":"result","subtype":"success","total_cost_usd":0.01,"sessionId":"valid-2","timestamp":"2026-03-07T12:00:01Z"}
+`,
+			include: true,
+		},
+	}
+
+	for _, sess := range testSessions {
+		sessionPath := filepath.Join(projectDir, sess.sessionID+".jsonl")
+		if err := os.WriteFile(sessionPath, []byte(sess.content), 0644); err != nil {
+			t.Fatalf("Failed to write test session file: %v", err)
+		}
+	}
+
+	// Test ListSessions (no filter)
+	ctx := context.Background()
+	allSessions, err := store.ListSessions(ctx, "/test-project")
+	if err != nil {
+		t.Fatalf("ListSessions() error = %v", err)
+	}
+
+	if len(allSessions) != 4 {
+		t.Errorf("ListSessions() returned %d sessions, want 4", len(allSessions))
+	}
+
+	// Test ListSessionsFiltered with default filter
+	filter := DefaultSessionFilter()
+	filteredSessions, err := store.ListSessionsFiltered(ctx, "/test-project", filter)
+	if err != nil {
+		t.Fatalf("ListSessionsFiltered() error = %v", err)
+	}
+
+	// Should only have 2 valid sessions
+	if len(filteredSessions) != 2 {
+		t.Errorf("ListSessionsFiltered() returned %d sessions, want 2", len(filteredSessions))
+	}
+
+	// Verify the correct sessions are included
+	sessionIDs := make(map[string]bool)
+	for _, sess := range filteredSessions {
+		sessionIDs[sess.SessionID] = true
+	}
+
+	if !sessionIDs["valid-1"] {
+		t.Error("valid-1 should be in filtered results")
+	}
+	if !sessionIDs["valid-2"] {
+		t.Error("valid-2 should be in filtered results")
+	}
+	if sessionIDs["meta-1"] {
+		t.Error("meta-1 should be excluded")
+	}
+	if sessionIDs["short-1"] {
+		t.Error("short-1 should be excluded")
+	}
+}
+
+func TestStoreGetRecentSessionsFiltered(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, _ := NewStore(tmpDir)
+
+	// Create test project directory
+	projectDir := filepath.Join(tmpDir, "-test-project")
+	if err := os.MkdirAll(projectDir, 0755); err != nil {
+		t.Fatalf("Failed to create test project directory: %v", err)
+	}
+
+	// Create 5 test sessions (3 valid, 2 meta/short)
+	for i := 1; i <= 5; i++ {
+		var content string
+		if i%2 == 0 {
+			// Even: meta/short sessions
+			content = `{"type":"user","sessionId":"session-` + string(rune('0'+i)) + `","message":{"role":"user","content":"<test>meta"},"timestamp":"2026-03-07T12:00:00Z"}
+{"type":"result","subtype":"success","total_cost_usd":0.01,"sessionId":"session-` + string(rune('0'+i)) + `","timestamp":"2026-03-07T12:00:01Z"}
+`
+		} else {
+			// Odd: valid sessions
+			content = `{"type":"user","sessionId":"session-` + string(rune('0'+i)) + `","message":{"role":"user","content":"Valid session number ` + string(rune('0'+i)) + ` content"},"timestamp":"2026-03-07T12:00:00Z"}
+{"type":"result","subtype":"success","total_cost_usd":0.01,"sessionId":"session-` + string(rune('0'+i)) + `","timestamp":"2026-03-07T12:00:01Z"}
+`
+		}
+		sessionPath := filepath.Join(projectDir, "session-"+string(rune('0'+i))+".jsonl")
+		if err := os.WriteFile(sessionPath, []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write test session file: %v", err)
+		}
+	}
+
+	// Test GetRecentSessionsFiltered with limit
+	ctx := context.Background()
+	filter := DefaultSessionFilter()
+
+	// Limit to 2, but there are only 3 valid sessions total
+	recentSessions, err := store.GetRecentSessionsFiltered(ctx, "/test-project", 2, filter)
+	if err != nil {
+		t.Fatalf("GetRecentSessionsFiltered() error = %v", err)
+	}
+
+	// Should return 2 valid sessions
+	if len(recentSessions) != 2 {
+		t.Errorf("GetRecentSessionsFiltered(limit=2) returned %d sessions, want 2", len(recentSessions))
+	}
+
+	// Verify all returned sessions are valid
+	for _, sess := range recentSessions {
+		if !filter(sess) {
+			t.Errorf("Session %s should pass filter but was included", sess.SessionID)
+		}
+	}
+}
