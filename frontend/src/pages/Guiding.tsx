@@ -85,14 +85,21 @@ const Guiding = () => {
                 },
                 {
                     title: t('layout.nav.useClaudeCode', { defaultValue: 'Claude Code' }),
-                    description: 'Use Claude Code for AI Coding',
+                    description: 'Use Claude Code for AI coding workflows',
                     path: '/use-claude-code',
                     icon: <Claude size={40} />,
                     color: '#cc785c',
                 },
                 {
+                    title: t('layout.nav.useCodex', { defaultValue: 'Codex' }),
+                    description: 'Use Codex for AI coding workflows',
+                    path: '/use-codex',
+                    icon: <OpenAI size={40} />,
+                    color: '#111827',
+                },
+                {
                     title: t('layout.nav.useOpenCode', { defaultValue: 'OpenCode' }),
-                    description: 'Use OpenCode for development',
+                    description: 'Use OpenCode for AI coding workflows',
                     path: '/use-opencode',
                     icon: <CodeIcon sx={{ fontSize: 40 }} />,
                     color: '#f59e0b',

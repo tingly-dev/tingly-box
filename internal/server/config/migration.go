@@ -15,6 +15,7 @@ const (
 	RuleUUIDTingly            = "tingly"
 	RuleUUIDBuiltinOpenAI     = "built-in-openai"
 	RuleUUIDBuiltinAnthropic  = "built-in-anthropic"
+	RuleUUIDBuiltinCodex      = "built-in-codex"
 	RuleUUIDBuiltinCC         = "built-in-cc"
 	RuleUUIDClaudeCode        = "claude-code"
 	RuleUUIDBuiltinCCHaiku    = "built-in-cc-haiku"
@@ -32,6 +33,7 @@ func Migrate(c *Config) error {
 	migrate20260110(c)
 	migrate20260114(c)
 	migrate20260210(c)
+	migrate20260306(c)
 	return nil
 }
 
@@ -158,6 +160,7 @@ func migrate20260103(c *Config) {
 		RuleUUIDTingly:            typ.ScenarioOpenAI,
 		RuleUUIDBuiltinOpenAI:     typ.ScenarioOpenAI,
 		RuleUUIDBuiltinAnthropic:  typ.ScenarioAnthropic,
+		RuleUUIDBuiltinCodex:      typ.ScenarioCodex,
 		RuleUUIDBuiltinCC:         typ.ScenarioClaudeCode,
 		RuleUUIDClaudeCode:        typ.ScenarioClaudeCode,
 		RuleUUIDBuiltinCCHaiku:    typ.ScenarioClaudeCode,
@@ -319,5 +322,21 @@ func migrate20260210(c *Config) {
 
 	if needsSave {
 		_ = c.Save()
+	}
+}
+
+func migrate20260306(c *Config) {
+	for _, rule := range c.Rules {
+		if rule.UUID == RuleUUIDBuiltinCodex {
+			return
+		}
+	}
+
+	for _, defaultRule := range DefaultRules {
+		if defaultRule.UUID == RuleUUIDBuiltinCodex {
+			c.Rules = append(c.Rules, defaultRule)
+			_ = c.Save()
+			return
+		}
 	}
 }

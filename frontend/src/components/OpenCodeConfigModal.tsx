@@ -2,6 +2,7 @@ import { Box, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitl
 import React from 'react';
 import CodeBlock from './CodeBlock';
 import { useTranslation } from 'react-i18next';
+import { shouldIgnoreDialogClose } from './dialogClose';
 
 interface OpenCodeConfigModalProps {
     open: boolean;
@@ -40,14 +41,13 @@ const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
         <Dialog
             open={open}
             onClose={(event, reason) => {
-                if (reason === 'backdropClick' || reason === 'escapeKeyDown') {
+                if (shouldIgnoreDialogClose(reason)) {
                     return;
                 }
                 onClose();
             }}
             maxWidth="lg"
             fullWidth
-            disableEscapeKeyDown
             PaperProps={{
                 sx: {
                     borderRadius: 3,

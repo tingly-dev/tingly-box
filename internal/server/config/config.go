@@ -1890,6 +1890,19 @@ func init() {
 			Active: true,
 		},
 		{
+			UUID:          "built-in-codex",
+			Scenario:      typ.ScenarioCodex,
+			RequestModel:  "tingly-codex",
+			ResponseModel: "",
+			Description:   "Default proxy rule for Codex",
+			Services:      []*loadbalance.Service{},
+			LBTactic: typ.Tactic{
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
 			UUID:          "built-in-cc",
 			Scenario:      typ.ScenarioClaudeCode,
 			RequestModel:  "tingly/cc",
