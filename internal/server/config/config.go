@@ -1074,13 +1074,13 @@ func (c *Config) UpdateProvider(uuid string, provider *typ.Provider) error {
 // DeleteProvider removes a provider by UUID
 func (c *Config) DeleteProvider(uuid string) error {
 	// Use provider store if available
-	if c.providerStore != nil {
+	if c.providerStore == nil {
 		panic("[db] Provider store missing")
 
 	}
-	if err := c.providerStore.Delete(uuid); err != nil {
-		return err
-	}
+		if err := c.providerStore.Delete(uuid); err != nil {
+			return err
+		}
 
 	// Delete the associated model file
 	if c.modelManager != nil {
