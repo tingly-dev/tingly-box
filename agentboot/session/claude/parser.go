@@ -80,12 +80,17 @@ func (s *Store) parseSessionFile(filePath string) (*session.SessionMetadata, err
 	}
 
 	// Parse last events for context and result
-	// Scan backwards to find last user/assistant messages and result
-	// Limit backward scan to avoid reading too much
-	maxTailLines := 20
-	tailScanStart := max(0, len(nonEmptyLines)-maxTailLines)
+	// Scan backwards from the end to find the last user and assistant messages
+	// This ensures we get the actual last messages even in long sessions
+	foundUser := false
+	foundAssistant := false
 
-	for i := len(nonEmptyLines) - 1; i >= tailScanStart; i-- {
+	for i := len(nonEmptyLines) - 1; i >= 0; i-- {
+		// Stop if we've found both messages
+		if foundUser && foundAssistant {
+			break
+		}
+
 		var event map[string]interface{}
 		if json.Unmarshal([]byte(nonEmptyLines[i]), &event) != nil {
 			continue
@@ -93,23 +98,20 @@ func (s *Store) parseSessionFile(filePath string) (*session.SessionMetadata, err
 
 		eventType := extractString(event, "type")
 
-		// Extract last user message
-		if eventType == "user" && metadata.LastUserMessage == "" {
+		// Extract last user message (only set once we find it going backwards)
+		if eventType == "user" && !foundUser {
 			if msg, ok := event["message"].(map[string]interface{}); ok {
 				metadata.LastUserMessage = extractMessageContent(msg)
+				foundUser = true
 			}
 		}
 
-		// Extract last assistant message (before the result)
-		if eventType == "assistant" && metadata.LastAssistantMessage == "" {
+		// Extract last assistant message (only set once we find it going backwards)
+		if eventType == "assistant" && !foundAssistant {
 			if msg, ok := event["message"].(map[string]interface{}); ok {
 				metadata.LastAssistantMessage = extractMessageContent(msg)
+				foundAssistant = true
 			}
-		}
-
-		// Break if we've found both messages (optimization)
-		if metadata.LastUserMessage != "" && metadata.LastAssistantMessage != "" {
-			break
 		}
 	}
 
@@ -402,13 +404,25 @@ func extractMessageContent(msg map[string]interface{}) string {
 		for _, block := range content {
 			if blockMap, ok := block.(map[string]interface{}); ok {
 				blockType := extractString(blockMap, "type")
+				// Extract text from text blocks
 				if blockType == "text" {
 					text := extractString(blockMap, "text")
-					textParts = append(textParts, text)
+					if text != "" {
+						textParts = append(textParts, text)
+					}
+				}
+				// For tool_result blocks, extract the content field
+				if blockType == "tool_result" {
+					if content := extractString(blockMap, "content"); content != "" {
+						textParts = append(textParts, content)
+					}
 				}
 			}
 		}
-		return strings.Join(textParts, "")
+		result := strings.Join(textParts, "")
+		if result != "" {
+			return result
+		}
 	}
 
 	// Try content as simple string (older format)
