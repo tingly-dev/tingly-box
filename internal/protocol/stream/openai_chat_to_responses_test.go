@@ -169,6 +169,7 @@ func TestSendResponsesCreatedEvent(t *testing.T) {
 
 	state := &chatToResponsesState{
 		responseID: "resp_test_123",
+		createdAt:  1,
 	}
 
 	sendResponsesCreatedEvent(c, state, w)
@@ -184,7 +185,10 @@ func TestSendResponsesOutputTextDelta(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	sendResponsesOutputTextDelta(c, "Hello, World!", 0, w)
+	state := &chatToResponsesState{
+		textItemID: "msg_test_1",
+	}
+	sendResponsesOutputTextDelta(c, state, "Hello, World!", w)
 
 	body := w.Body.String()
 	assert.Contains(t, body, `"type":"response.output_text.delta"`)
@@ -197,7 +201,8 @@ func TestSendResponsesOutputItemAdded(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	sendResponsesOutputItemAdded(c, "fc_123", "get_weather", 1, w)
+	state := &chatToResponsesState{}
+	sendResponsesOutputItemAdded(c, state, "fc_123", "call_123", "get_weather", 1, w)
 
 	body := w.Body.String()
 	assert.Contains(t, body, `"type":"response.output_item.added"`)
@@ -210,7 +215,8 @@ func TestSendResponsesFunctionCallArgumentsDelta(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	sendResponsesFunctionCallArgumentsDelta(c, "fc_123", `{"location":"London"}`, w)
+	state := &chatToResponsesState{}
+	sendResponsesFunctionCallArgumentsDelta(c, state, "fc_123", 1, `{"location":"London"}`, w)
 
 	body := w.Body.String()
 	assert.Contains(t, body, `"type":"response.function_call_arguments.delta"`)
@@ -225,10 +231,14 @@ func TestSendResponsesCompletedEvent(t *testing.T) {
 
 	state := &chatToResponsesState{
 		responseID:      "resp_test_123",
+		createdAt:       1,
+		textItemID:      "msg_test_1",
 		accumulatedText: strings.Builder{},
 		pendingToolCalls: map[int]*pendingToolCallResponse{
 			0: {
 				itemID:    "fc_123",
+				callID:    "call_123",
+				outputIdx: 1,
 				name:      "get_weather",
 				arguments: strings.Builder{},
 			},
