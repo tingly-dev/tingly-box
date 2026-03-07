@@ -464,6 +464,13 @@ func (s *Store) SetSessionForChat(chatID, sessionID string) error {
 	return s.chatStore.SetSession(chatID, sessionID)
 }
 
+func (s *Store) SetSessionWithProject(chatID, sessionID, projectPath string) error {
+	if s == nil || s.chatStore == nil {
+		return nil
+	}
+	return s.chatStore.SetSessionWithProject(chatID, sessionID, projectPath)
+}
+
 func (s *Store) GetBashCwd(chatID string) (string, bool, error) {
 	if s == nil || s.chatStore == nil {
 		return "", false, nil

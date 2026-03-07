@@ -136,8 +136,8 @@ func (h *BotHandler) handleResumeSelection(hCtx HandlerContext, selectionStr str
 
 	selectedSession := sessions[index-1]
 
-	// Set the session for this chat
-	if err := h.chatStore.SetSession(hCtx.ChatID, selectedSession.SessionID); err != nil {
+	// Set the session and project for this chat
+	if err := h.chatStore.SetSessionWithProject(hCtx.ChatID, selectedSession.SessionID, chat.ProjectPath); err != nil {
 		logrus.WithError(err).Error("Failed to set session")
 		return false
 	}

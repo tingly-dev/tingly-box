@@ -281,6 +281,31 @@ func (s *ChatStore) GetSession(chatID string) (string, bool, error) {
 	return chat.SessionID, true, nil
 }
 
+// SetSessionWithProject sets both session and project path for a chat
+// This is useful when resuming a session from a different project
+func (s *ChatStore) SetSessionWithProject(chatID, sessionID, projectPath string) error {
+	chat, err := s.GetChat(chatID)
+	if err != nil {
+		return err
+	}
+	if chat == nil {
+		// Create new chat
+		now := time.Now().UTC()
+		chat = &Chat{
+			ChatID:      chatID,
+			Platform:    "telegram", // default platform
+			SessionID:   sessionID,
+			ProjectPath: projectPath,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+		return s.UpsertChat(chat)
+	}
+	chat.SessionID = sessionID
+	chat.ProjectPath = projectPath
+	return s.UpsertChat(chat)
+}
+
 // ============== Whitelist ==============
 
 // AddToWhitelist adds a chat to the whitelist
