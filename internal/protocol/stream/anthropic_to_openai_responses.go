@@ -105,11 +105,7 @@ func HandleAnthropicToOpenAIResponsesStream(
 			handleContentBlockDelta(c, state, event, flusher)
 
 		case "content_block_stop":
-			// Only send completion events for text blocks
-			// Tool calls are handled differently
-			if state.currentBlockType == "text" {
-				handleContentBlockStop(c, state, flusher)
-			}
+			handleContentBlockStop(c, state, event, flusher)
 
 		case "message_delta":
 			inputTokens, outputTokens, hasUsage = handleMessageDelta(
@@ -310,13 +306,15 @@ func handleContentBlockStart(
 		outputEvent := map[string]interface{}{
 			"type":  "response.output_item.added",
 			"item": map[string]interface{}{
-				"type":   "function_call",
-				"id":     toolID,
-				"name":   toolName,
+				"type":     "function_call",
+				"id":       toolID,
+				"call_id":  toolID,
+				"name":     toolName,
 				"arguments": "",
-				"status": "in_progress",
+				"status":   "in_progress",
 			},
-			"output_index": state.outputIndex,
+			"output_index":    state.outputIndex,
+			"sequence_number": state.nextSequenceNumber(),
 		}
 		sendResponsesEvent(c, outputEvent, flusher)
 		state.outputIndex++
@@ -355,66 +353,104 @@ func handleContentBlockDelta(
 			pending.arguments.WriteString(argsDelta)
 
 			deltaEvent := map[string]interface{}{
-				"type":   "response.function_call_arguments.delta",
-				"item_id": pending.itemID,
-				"delta":  argsDelta,
+				"type":          "response.function_call_arguments.delta",
+				"delta":         argsDelta,
+				"item_id":       pending.itemID,
+				"output_index":  state.outputIndex,
+				"sequence_number": state.nextSequenceNumber(),
 			}
 			sendResponsesEvent(c, deltaEvent, flusher)
 		}
 	}
 }
 
-// handleContentBlockStop sends the response.output_text.done, response.content_part.done, and response.output_item.done events
+// handleContentBlockStop sends the appropriate completion events based on block type
 func handleContentBlockStop(
 	c *gin.Context,
 	state *responsesConverterState,
+	event anthropic.MessageStreamEventUnion,
 	flusher http.Flusher,
 ) {
-	// Send response.output_text.done event
-	textDoneEvent := map[string]interface{}{
-		"type":          "response.output_text.done",
-		"item_id":       state.itemID,
-		"output_index":  state.outputIndex,
-		"content_index": 0,
-		"text":          state.accumulatedText,
-		"sequence_number": state.nextSequenceNumber(),
-	}
-	sendResponsesEvent(c, textDoneEvent, flusher)
+	index := event.Index
+	blockType := state.currentBlockType
 
-	// Send response.content_part.done event
-	contentPartDoneEvent := map[string]interface{}{
-		"type":          "response.content_part.done",
-		"item_id":       state.itemID,
-		"output_index":  state.outputIndex,
-		"content_index": 0,
-		"part": map[string]interface{}{
-			"type": "output_text",
-			"text": state.accumulatedText,
-		},
-		"sequence_number": state.nextSequenceNumber(),
-	}
-	sendResponsesEvent(c, contentPartDoneEvent, flusher)
+	if blockType == "text" {
+		// Send response.output_text.done event
+		textDoneEvent := map[string]interface{}{
+			"type":          "response.output_text.done",
+			"item_id":       state.itemID,
+			"output_index":  state.outputIndex,
+			"content_index": 0,
+			"text":          state.accumulatedText,
+			"sequence_number": state.nextSequenceNumber(),
+		}
+		sendResponsesEvent(c, textDoneEvent, flusher)
 
-	// Send response.output_item.done event
-	itemDoneEvent := map[string]interface{}{
-		"type":         "response.output_item.done",
-		"item_id":      state.itemID,
-		"output_index": state.outputIndex,
-		"item": map[string]interface{}{
-			"id":      state.itemID,
-			"type":    "message",
-			"status":  "completed",
-			"role":    "assistant",
-			"content": []map[string]interface{}{
-				{
-					"type": "output_text",
-					"text": state.accumulatedText,
+		// Send response.content_part.done event
+		contentPartDoneEvent := map[string]interface{}{
+			"type":          "response.content_part.done",
+			"item_id":       state.itemID,
+			"output_index":  state.outputIndex,
+			"content_index": 0,
+			"part": map[string]interface{}{
+				"type": "output_text",
+				"text": state.accumulatedText,
+			},
+			"sequence_number": state.nextSequenceNumber(),
+		}
+		sendResponsesEvent(c, contentPartDoneEvent, flusher)
+
+		// Send response.output_item.done event
+		itemDoneEvent := map[string]interface{}{
+			"type":         "response.output_item.done",
+			"item_id":      state.itemID,
+			"output_index": state.outputIndex,
+			"item": map[string]interface{}{
+				"id":      state.itemID,
+				"type":    "message",
+				"status":  "completed",
+				"role":    "assistant",
+				"content": []map[string]interface{}{
+					{
+						"type": "output_text",
+						"text": state.accumulatedText,
+					},
 				},
 			},
-		},
-		"sequence_number": state.nextSequenceNumber(),
+			"sequence_number": state.nextSequenceNumber(),
+		}
+		sendResponsesEvent(c, itemDoneEvent, flusher)
+	} else if blockType == "tool_use" {
+		// Handle tool call completion
+		if pending, exists := state.pendingToolCalls[int(index)]; exists {
+			// Send response.function_call_arguments.done event
+			argsDoneEvent := map[string]interface{}{
+				"type":          "response.function_call_arguments.done",
+				"item_id":       pending.itemID,
+				"output_index":  state.outputIndex,
+				"arguments":     pending.arguments.String(),
+				"sequence_number": state.nextSequenceNumber(),
+			}
+			sendResponsesEvent(c, argsDoneEvent, flusher)
+
+			// Send response.output_item.done event for the function call
+			itemDoneEvent := map[string]interface{}{
+				"type":         "response.output_item.done",
+				"item_id":      pending.itemID,
+				"output_index": state.outputIndex,
+				"item": map[string]interface{}{
+					"type":      "function_call",
+					"id":        pending.itemID,
+					"call_id":   pending.itemID,
+					"name":      pending.name,
+					"arguments": pending.arguments.String(),
+					"status":    "completed",
+				},
+				"sequence_number": state.nextSequenceNumber(),
+			}
+			sendResponsesEvent(c, itemDoneEvent, flusher)
+		}
 	}
-	sendResponsesEvent(c, itemDoneEvent, flusher)
 }
 
 // handleMessageDelta updates usage information
@@ -460,11 +496,12 @@ func handleMessageStop(
 		})
 	}
 
-	// Add tool calls
+	// Add tool calls with proper structure including call_id
 	for _, pending := range state.pendingToolCalls {
 		output = append(output, map[string]interface{}{
 			"type":      "function_call",
 			"id":        pending.itemID,
+			"call_id":   pending.itemID,
 			"name":      pending.name,
 			"arguments": pending.arguments.String(),
 			"status":    "completed",
@@ -570,11 +607,12 @@ func sendFinalCompletionEvent(c *gin.Context, state *responsesConverterState, fl
 		})
 	}
 
-	// Add tool calls
+	// Add tool calls with proper structure including call_id
 	for _, pending := range state.pendingToolCalls {
 		output = append(output, map[string]interface{}{
 			"type":      "function_call",
 			"id":        pending.itemID,
+			"call_id":   pending.itemID,
 			"name":      pending.name,
 			"arguments": pending.arguments.String(),
 			"status":    "completed",
