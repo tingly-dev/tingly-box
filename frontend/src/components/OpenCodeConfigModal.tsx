@@ -2,6 +2,7 @@ import { Box, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitl
 import React from 'react';
 import CodeBlock from './CodeBlock';
 import { useTranslation } from 'react-i18next';
+import { isFullEdition } from '@/utils/edition';
 
 interface OpenCodeConfigModalProps {
     open: boolean;
@@ -145,7 +146,8 @@ const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
                 <Button onClick={onClose} color="inherit">
                     Cancel
                 </Button>
-                {onApply && (
+                {/* Hide Apply button in lite edition */}
+                {isFullEdition && onApply && (
                     <Button
                         onClick={onApply}
                         variant="contained"
