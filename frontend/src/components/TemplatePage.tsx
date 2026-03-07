@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import ApiKeyModal from '@/components/ApiKeyModal';
 import RuleCard from './RuleCard.tsx';
 import UnifiedCard from '@/components/UnifiedCard';
+import EmptyStateGuide from '@/components/EmptyStateGuide';
 import { TemplatePageActions } from './TemplatePageActions';
 import type { TabTemplatePageProps } from './TemplatePage.types';
 import { SCROLLBOX_SX } from './TemplatePage.constants';
@@ -32,6 +33,11 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     showExpandCollapseButton = true,
     rightAction: customRightAction,
     headerHeight = 0,
+    showEmptyState = true,
+    emptyStateTitle = "No Providers Configured",
+    emptyStateDescription = "Add an API key or OAuth provider to start routing requests",
+    onAddApiKeyClick,
+    onAddOAuthClick,
 }) => {
     const navigate = useNavigate();
     const [allExpanded, setAllExpanded] = useState<boolean>(true);
@@ -199,7 +205,20 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     );
 
     if (!providers.length) {
-        return null;
+        if (!showEmptyState) {
+            return null;
+        }
+
+        return (
+            <UnifiedCard size="full" title={title}>
+                <EmptyStateGuide
+                    title={emptyStateTitle}
+                    description={emptyStateDescription}
+                    onAddApiKeyClick={onAddApiKeyClick || handleAddApiKeyClick}
+                    onAddOAuthClick={onAddOAuthClick}
+                />
+            </UnifiedCard>
+        );
     }
 
     return (

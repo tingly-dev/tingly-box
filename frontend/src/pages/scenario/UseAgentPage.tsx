@@ -4,7 +4,6 @@ import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import { Box } from '@mui/material';
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import EmptyStateGuide from '@/components/EmptyStateGuide';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from '@/components/TemplatePage.tsx';
 import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
@@ -91,55 +90,47 @@ const UseAgentPage: React.FC = () => {
 
     return (
         <PageLayout loading={isLoading} notification={notification}>
-            {!providers.length ? (
-                <CardGrid>
-                    <UnifiedCard title="Claw | Agent Configuration" size="full">
-                        <EmptyStateGuide
-                            title="No Providers Configured"
-                            description="Add an API key or OAuth provider to get started"
-                            onAddApiKeyClick={() => navigate('/api-keys?dialog=add')}
-                            onAddOAuthClick={handleAddOAuthClick}
-                        />
-                    </UnifiedCard>
-                </CardGrid>
-            ) : (
-                <CardGrid>
-                    <UnifiedCard
-                        title={
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <span>Claw | Agent Configuration</span>
-                            </Box>
-                        }
-                        size="full"
-                    >
-                        <ProviderConfigCard
-                            headerRef={headerRef}
-                            title="Claw | Agent Configuration"
-                            baseUrlPath="/tingly/agent"
-                            baseUrl={baseUrl}
-                            onCopy={copyToClipboard}
-                            token={token}
-                            onShowTokenModal={() => setShowTokenModal(true)}
-                        />
-                    </UnifiedCard>
-                    <TemplatePage
-                        title="Models and Forwarding Rules"
-                        scenario={scenario}
-                        rules={rules}
-                        collapsible={true}
-                        showTokenModal={showTokenModal}
-                        setShowTokenModal={setShowTokenModal}
+            <CardGrid>
+                <UnifiedCard
+                    title={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <span>Claw | Agent Configuration</span>
+                        </Box>
+                    }
+                    size="full"
+                >
+                    <ProviderConfigCard
+                        headerRef={headerRef}
+                        title="Claw | Agent Configuration"
+                        baseUrlPath="/tingly/agent"
+                        baseUrl={baseUrl}
+                        onCopy={copyToClipboard}
                         token={token}
-                        showNotification={showNotification}
-                        providers={providers}
-                        onRulesChange={handleRulesChange}
-                        newlyCreatedRuleUuids={newlyCreatedRuleUuids}
-                        allowDeleteRule={true}
-                        onRuleDelete={handleRuleDelete}
-                        headerHeight={headerHeight}
+                        onShowTokenModal={() => setShowTokenModal(true)}
                     />
-                </CardGrid>
-            )}
+                </UnifiedCard>
+
+                <TemplatePage
+                    title="Models and Forwarding Rules"
+                    scenario={scenario}
+                    rules={rules}
+                    collapsible={true}
+                    showTokenModal={showTokenModal}
+                    setShowTokenModal={setShowTokenModal}
+                    token={token}
+                    showNotification={showNotification}
+                    providers={providers}
+                    onRulesChange={handleRulesChange}
+                    newlyCreatedRuleUuids={newlyCreatedRuleUuids}
+                    allowDeleteRule={true}
+                    onRuleDelete={handleRuleDelete}
+                    headerHeight={headerHeight}
+                    emptyStateTitle="No Providers Configured"
+                    emptyStateDescription="Add an API key or OAuth provider to start routing requests"
+                    onAddApiKeyClick={() => navigate('/api-keys?dialog=add')}
+                    onAddOAuthClick={handleAddOAuthClick}
+                />
+            </CardGrid>
         </PageLayout>
     );
 };

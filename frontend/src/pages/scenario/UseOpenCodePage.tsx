@@ -6,7 +6,6 @@ import InfoIcon from '@mui/icons-material/Info';
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ExperimentalFeatures from '@/components/ExperimentalFeatures.tsx';
-import EmptyStateGuide from '@/components/EmptyStateGuide';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from '@/components/TemplatePage.tsx';
 import OpenCodeConfigModal from '@/components/OpenCodeConfigModal';
@@ -165,94 +164,76 @@ const UseOpenCodePage: React.FC = () => {
 
     return (
         <PageLayout loading={isLoading} notification={notification}>
-            {!providers.length ? (
-                <CardGrid>
-                    <UnifiedCard
-                        title={
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <span>OpenCode SDK Configuration</span>
-                            </Box>
-                        }
-                        size="full"
-                    >
-                        <EmptyStateGuide
-                            title="No Providers Configured"
-                            description="Add an API key or OAuth provider to get started"
-                            onAddApiKeyClick={() => navigate('/api-keys?dialog=add')}
-                            onAddOAuthClick={handleAddOAuthClick}
-                        />
-                    </UnifiedCard>
-                </CardGrid>
-            ) : (
-                <CardGrid>
-                    <UnifiedCard
-                        ref={headerRef}
-                        title={
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <span>OpenCode SDK Configuration</span>
-                                <Tooltip title={`Base URL: ${baseUrl}/tingly/opencode`}>
-                                    <IconButton size="small" sx={{ ml: 0.5 }}>
-                                        <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                                    </IconButton>
-                                </Tooltip>
-                            </Box>
-                        }
-                        size="full"
-                        rightAction={
-                            <Button
-                                onClick={handleOpenConfigModal}
-                                variant="contained"
-                                size="small"
-                            >
-                                Quick Config
-                            </Button>
-                        }
-                    >
-                        {/* Use ProviderConfigCard without API key row, then ExperimentalFeatures */}
-                        <ProviderConfigCard
-                            title="OpenCode SDK Configuration"
-                            baseUrlPath="/tingly/opencode"
-                            baseUrl={baseUrl}
-                            onCopy={copyToClipboard}
-                            token={token}
-                            onShowTokenModal={() => setShowTokenModal(true)}
-                            scenario={scenario}
-                            showApiKeyRow={true}
-                        />
-                    </UnifiedCard>
-
-                    <TemplatePage
-                        title="Models and Forwarding Rules"
-                        scenario={scenario}
-                        rules={rules}
-                        collapsible={true}
-                        showTokenModal={showTokenModal}
-                        setShowTokenModal={setShowTokenModal}
+            <CardGrid>
+                <UnifiedCard
+                    ref={headerRef}
+                    title={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <span>OpenCode SDK Configuration</span>
+                            <Tooltip title={`Base URL: ${baseUrl}/tingly/opencode`}>
+                                <IconButton size="small" sx={{ ml: 0.5 }}>
+                                    <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                                </IconButton>
+                            </Tooltip>
+                        </Box>
+                    }
+                    size="full"
+                    rightAction={
+                        <Button
+                            onClick={handleOpenConfigModal}
+                            variant="contained"
+                            size="small"
+                        >
+                            Quick Config
+                        </Button>
+                    }
+                >
+                    <ProviderConfigCard
+                        title="OpenCode SDK Configuration"
+                        baseUrlPath="/tingly/opencode"
+                        baseUrl={baseUrl}
+                        onCopy={copyToClipboard}
                         token={token}
-                        showNotification={showNotification}
-                        providers={providers}
-                        onRulesChange={handleRulesChange}
-                        newlyCreatedRuleUuids={newlyCreatedRuleUuids}
-                        allowDeleteRule={true}
-                        onRuleDelete={handleRuleDelete}
-                        showAddApiKeyButton={false}
-                        headerHeight={headerHeight}
+                        onShowTokenModal={() => setShowTokenModal(true)}
+                        scenario={scenario}
+                        showApiKeyRow={true}
                     />
+                </UnifiedCard>
 
-                    {/* OpenCode Config Modal */}
-                    <OpenCodeConfigModal
-                        open={configModalOpen}
-                        onClose={() => setConfigModalOpen(false)}
-                        generateConfigJson={() => configJson}
-                        generateScriptWindows={() => scriptWindows}
-                        generateScriptUnix={() => scriptUnix}
-                        copyToClipboard={copyToClipboard}
-                        onApply={handleApply}
-                        isApplyLoading={isApplyLoading}
-                        isLoading={isConfigLoading}
-                    />
-                </CardGrid>
-            )}
+                <TemplatePage
+                    title="Models and Forwarding Rules"
+                    scenario={scenario}
+                    rules={rules}
+                    collapsible={true}
+                    showTokenModal={showTokenModal}
+                    setShowTokenModal={setShowTokenModal}
+                    token={token}
+                    showNotification={showNotification}
+                    providers={providers}
+                    onRulesChange={handleRulesChange}
+                    newlyCreatedRuleUuids={newlyCreatedRuleUuids}
+                    allowDeleteRule={true}
+                    onRuleDelete={handleRuleDelete}
+                    showAddApiKeyButton={false}
+                    headerHeight={headerHeight}
+                    emptyStateTitle="No Providers Configured"
+                    emptyStateDescription="Add an API key or OAuth provider to start routing requests"
+                    onAddApiKeyClick={() => navigate('/api-keys?dialog=add')}
+                    onAddOAuthClick={handleAddOAuthClick}
+                />
+
+                <OpenCodeConfigModal
+                    open={configModalOpen}
+                    onClose={() => setConfigModalOpen(false)}
+                    generateConfigJson={() => configJson}
+                    generateScriptWindows={() => scriptWindows}
+                    generateScriptUnix={() => scriptUnix}
+                    copyToClipboard={copyToClipboard}
+                    onApply={handleApply}
+                    isApplyLoading={isApplyLoading}
+                    isLoading={isConfigLoading}
+                />
+            </CardGrid>
         </PageLayout>
     );
 };

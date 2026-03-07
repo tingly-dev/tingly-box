@@ -24,4 +24,10 @@ export interface TabTemplatePageProps {
     rightAction?: React.ReactNode;
     // Header height from parent component for calculating available space
     headerHeight?: number;
+    // Empty state props
+    showEmptyState?: boolean;
+    emptyStateTitle?: string;
+    emptyStateDescription?: string;
+    onAddApiKeyClick?: () => void;
+    onAddOAuthClick?: () => void;
 }
