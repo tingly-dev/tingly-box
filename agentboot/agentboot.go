@@ -1,9 +1,12 @@
 package agentboot
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/agentboot/session"
 )
 
 // Config holds the AgentBoot configuration
@@ -13,6 +16,9 @@ type Config struct {
 	EnableStreamJSON        bool          `json:"enable_stream_json"`
 	StreamBufferSize        int           `json:"stream_buffer_size"`
 	DefaultExecutionTimeout time.Duration `json:"default_execution_timeout"`
+
+	// Session configuration
+	ClaudeProjectsDir string `json:"claude_projects_dir,omitempty"` // Path to Claude projects directory
 }
 
 // AgentBoot manages agent instances
@@ -20,6 +26,9 @@ type AgentBoot struct {
 	mu     sync.RWMutex
 	config Config
 	agents map[AgentType]Agent
+
+	// Session management
+	sessionManager *SessionManager
 }
 
 // New creates a new AgentBoot instance
@@ -34,10 +43,12 @@ func New(config Config) *AgentBoot {
 		config.StreamBufferSize = 100
 	}
 
-	return &AgentBoot{
+	ab := &AgentBoot{
 		config: config,
 		agents: make(map[AgentType]Agent),
 	}
+
+	return ab
 }
 
 // RegisterAgent registers a new agent type
@@ -103,4 +114,59 @@ func (ab *AgentBoot) ListAgents() []AgentType {
 		types = append(types, agentType)
 	}
 	return types
+}
+
+// GetSessionManager returns the session manager (lazy initialization)
+func (ab *AgentBoot) GetSessionManager() *SessionManager {
+	ab.mu.RLock()
+	if ab.sessionManager != nil {
+		manager := ab.sessionManager
+		ab.mu.RUnlock()
+		return manager
+	}
+	ab.mu.RUnlock()
+
+	// Lazy initialization
+	ab.mu.Lock()
+	defer ab.mu.Unlock()
+
+	if ab.sessionManager != nil {
+		return ab.sessionManager
+	}
+
+	// Initialize session manager
+	manager, err := NewSessionManager(ab.config.ClaudeProjectsDir)
+	if err != nil {
+		// Log error but don't fail - session management will be unavailable
+		return nil
+	}
+
+	ab.sessionManager = manager
+	return manager
+}
+
+// ListRecentSessions returns recent sessions for a project
+func (ab *AgentBoot) ListRecentSessions(ctx context.Context, projectPath string, limit int) ([]session.SessionMetadata, error) {
+	manager := ab.GetSessionManager()
+	if manager == nil {
+		return nil, fmt.Errorf("session manager not available")
+	}
+	return manager.ListRecentSessions(ctx, projectPath, limit)
+}
+
+// GetSessionSummary returns a summary of a session
+func (ab *AgentBoot) GetSessionSummary(ctx context.Context, sessionID string, firstN, lastM int) (*session.SessionSummary, error) {
+	manager := ab.GetSessionManager()
+	if manager == nil {
+		return nil, fmt.Errorf("session manager not available")
+	}
+	return manager.GetSessionSummary(ctx, sessionID, firstN, lastM)
+}
+
+// ResumeSession creates ExecutionOptions to resume a session
+func (ab *AgentBoot) ResumeSession(sessionID string) ExecutionOptions {
+	return ExecutionOptions{
+		SessionID: sessionID,
+		Resume:    true,
+	}
 }
