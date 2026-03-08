@@ -1,10 +1,7 @@
 **Announcement:** We have identified a critical bug in protocol and remote control in v0.260306.0. Please update to the latest version to resolve this issue. Thank you for your continued support.
 
 ---
-<p align="center">
 
-[//]: # (  <img src="docs/banner.png" alt="Tingly Box Banner" width="100%" />)
-</p>
 
 ![Tingly Box Web UI Demo](./docs/hero.png)
 
