@@ -1,4 +1,4 @@
-**Announcement:** We have identified a critical connection bug in v0.260306.0. Please update to the latest version to resolve this issue. We apologize for any inconvenience caused.
+**Announcement:** We have identified a critical connectivity bug in v0.260306.0. Please update to the latest version to resolve this issue. Thank you for your continued support.
 
 ---
 <p align="center">
