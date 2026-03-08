@@ -86,13 +86,14 @@ docker run -d \
 
 **Tool Integration**
 
-- Claude Code
-- OpenCode
-- Xcode
-- Gemini
+- Claude Code (support 1-click config)
+- OpenCode (support 1-click config)
+- Xcode (require manual config)
 - ……
 
 Any application is ready to use.
+
+> We've provided detailed config guide in application
 
 **OpenAI SDK**
 
@@ -147,30 +148,22 @@ Requests route through your OAuth-authorized provider, using your existing Claud
 
 This works with any tool that supports OpenAI-compatible endpoints: Cherry Studio, VS Code extensions, or custom AI agents.
 
-
-
-## Web Management UI
-
-```bash
-npx tingly-box@latest
-```
-
 ## Remote Control via IM Bots
 
 Tingly Box now supports remote control through popular IM platforms. Interact with your AI agents remotely without direct server access.
 
 **Supported Platforms**
 
+- ✅ Telegram
+- ✅ DingTalk
+- ✅ Feishu
 - Slack
 - Discord
-- Telegram
-- DingTalk
-- Feishu
 
 **Quick Setup**
 
-1. Open Web UI at `http://localhost:12580`
-2. Navigate to **Remote Control** section
+1. Open Web UI like `http://localhost:12580`
+2. Navigate to **Remote** section
 3. Configure your preferred IM platform bot
 4. Start interacting with your agents remotely
 
@@ -181,6 +174,12 @@ Tingly Box now supports remote control through popular IM platforms. Interact wi
 - Monitor and control agents while away from your workstation
 
 ![Remote Control Demo](./docs/images/5-remote-control.png)
+
+## Web Management UI
+
+```bash
+npx tingly-box@latest
+```
 
 ## Documentation
 
