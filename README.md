@@ -1,3 +1,6 @@
+**Announcement:** We have identified a critical connection bug in v0.260306.0. Please update to the latest version to resolve this issue. We apologize for any inconvenience caused.
+
+---
 <p align="center">
 
 [//]: # (  <img src="docs/banner.png" alt="Tingly Box Banner" width="100%" />)
