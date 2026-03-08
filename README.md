@@ -36,6 +36,7 @@ Tingly Box decides **which model to call, when to compress context, and how to r
 - **Flexible Auth** – Support for both API keys and OAuth (e.g., Claude.ai), so you can use your existing quotas anywhere  
 - **Visual Control Panel** – Intuitive UI to manage providers, routes, aliases, and models at a glance
 - **Client Side Usage Stats** - Track token consumption, latency, cost estimates, and model selection per request—directly from your client
+- **Remote Control** - Control your AI agents remotely via IM bots (Slack, Discord, Telegram, DingTalk, Feishu). Interact with your agents from anywhere without direct server access
 
 ## Quick Start
 
@@ -155,6 +156,32 @@ This works with any tool that supports OpenAI-compatible endpoints: Cherry Studi
 npx tingly-box@latest
 ```
 
+## Remote Control via IM Bots
+
+Tingly Box now supports remote control through popular IM platforms. Interact with your AI agents remotely without direct server access.
+
+**Supported Platforms**
+
+- Slack
+- Discord
+- Telegram
+- DingTalk
+- Feishu
+
+**Quick Setup**
+
+1. Open Web UI at `http://localhost:12580`
+2. Navigate to **Remote Control** section
+3. Configure your preferred IM platform bot
+4. Start interacting with your agents remotely
+
+**Use Cases**
+
+- Execute tasks and queries from your phone or any device
+- Team collaboration with shared agent access
+- Monitor and control agents while away from your workstation
+
+![Remote Control Demo](./docs/images/5-remote-control.png)
 
 ## Documentation
 
