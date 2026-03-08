@@ -1,3 +1,4 @@
+import { isFullEdition } from '@/utils/edition';
 import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 import { Cloud, Psychology } from '@mui/icons-material';
 import {
@@ -102,7 +103,8 @@ const GlobalExperimentalFeatures: React.FC = () => {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {/* Skill Features */}
+            {/* Skill Features - Only in full edition */}
+            {isFullEdition && (
             <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
                 {/* Label */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
@@ -132,8 +134,10 @@ const GlobalExperimentalFeatures: React.FC = () => {
                     })}
                 </Box>
             </Box>
+            )}
 
-            {/* Remote Control Section */}
+            {/* Remote Control Section - Only in full edition */}
+            {isFullEdition && (
             <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
                 {/* Title with Icon */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
@@ -155,6 +159,7 @@ const GlobalExperimentalFeatures: React.FC = () => {
                     </Tooltip>
                 </Box>
             </Box>
+            )}
 
             {/* Tip message at the bottom when Remote Control is enabled */}
             {remoteCoderEnabled && (

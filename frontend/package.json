@@ -9,8 +9,10 @@
     "dev:real": "vite --mode production",
     "build:dev": "vite build --minify false --mode development",
     "build:dev:wails": "vite build --minify false --mode development-wails --config vite.config.wails.ts",
+    "build:dev:wails:lite": "vite build --minify false --mode development-wails-lite --config vite.config.wails.ts",
     "build": "vite build --mode production",
     "build:wails": "vite build --mode production-wails --config vite.config.wails.ts",
+    "build:wails:lite": "vite build --mode production-wails-lite --config vite.config.wails.ts",
     "preview": "vite preview"
   },
   "dependencies": {

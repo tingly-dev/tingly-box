@@ -2,6 +2,7 @@ import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, Di
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import CodeBlock from './CodeBlock';
+import { isFullEdition } from '@/utils/edition';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -317,7 +318,8 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                 <Button onClick={onClose} color="inherit">
                     {t('common.cancel')}
                 </Button>
-                {onApply && (
+                {/* Hide Apply buttons in lite edition */}
+                {isFullEdition && onApply && (
                     <Button
                         onClick={handleApplyClick}
                         variant="contained"
@@ -327,7 +329,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                         {t('claudeCode.quickApply')}
                     </Button>
                 )}
-                {onApplyWithStatusLine && (
+                {isFullEdition && onApplyWithStatusLine && (
                     <Button
                         onClick={handleApplyWithStatusLineClick}
                         variant="contained"

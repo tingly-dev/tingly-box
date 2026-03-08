@@ -41,6 +41,7 @@ import { Link as RouterLink, useLocation, useNavigate, Outlet } from 'react-rout
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useHealth } from '../contexts/HealthContext';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
+import { isFullEdition } from '@/utils/edition';
 
 interface LayoutProps {
     children?: ReactNode;
@@ -191,13 +192,15 @@ const Layout = ({ children }: LayoutProps) => {
                     },
                 ],
             },
-            ...(promptMenuItems.length > 0 ? [{
+            // Only add Prompt menu if full edition
+            ...(isFullEdition && promptMenuItems.length > 0 ? [{
                 key: 'prompt' as const,
                 icon: <PromptIcon sx={{ fontSize: 22 }} />,
                 label: 'Prompt',
                 children: promptMenuItems,
             }] : []),
-            ...(enableRemoteCoder ? [{
+            // Only add Remote menu if full edition
+            ...(isFullEdition && enableRemoteCoder ? [{
                 key: 'remote-control' as const,
                 icon: <RemoteIcon sx={{ fontSize: 22 }} />,
                 label: 'Remote',
