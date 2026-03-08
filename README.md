@@ -21,21 +21,21 @@
   <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Platform" />
 </p>
 
-Tingly Box decides **which model to call, when to compress context, and how to route requests for maximum efficiency**, offering **secure, reliable, and customizable functional extensions**.
+Tingly Box **coordinates AI models, optimizes context, and routes requests** for maximum efficiency — with built-in **remote control and secure, customizable integrations**.
 
 ![Tingly Box Web UI Demo](./docs/images/output.gif)
 
 
 ## Key Features
 
-- **Unified API** – One mixin endpoint to rule them all, use what you like - OpenAI / Anthropic / Google
+- **Unified API** – One mixin endpoint to rule them all, use what you like - OpenAI / Anthropic / Google, seamlessly bridge all of them with auto translation
 - **Smart Routing, Not Just Load Balancing** – Intelligently route requests across models and tokens based on cost, speed, or custom policies, not simple load balancing
 - **Smart Context Compression** – (Coming soon) Automatically distill context to its essential parts: sharper relevance, lower cost, and faster responses
-- **Auto API Translation** – Seamlessly bridge OpenAI, Anthropic, Google, and other API dialects—no code changes needed  
 - **Blazing Fast** – Adds typically **< 1ms** of overhead—so you get flexibility without latency tax  
 - **Flexible Auth** – Support for both API keys and OAuth (e.g., Claude.ai), so you can use your existing quotas anywhere  
-- **Visual Control Panel** – Intuitive UI to manage providers, routes, aliases, and models at a glance
+- **Visual Control Plane** – Intuitive UI to manage providers, routes, aliases, and models at a glance
 - **Client Side Usage Stats** - Track token consumption, latency, cost estimates, and model selection per request—directly from your client
+- **Remote Control** - Control your AI agents remotely via IM bots (Slack, Discord, Telegram, DingTalk, Feishu). Interact with your agents from anywhere without direct server access
 
 ## Quick Start
 
@@ -86,13 +86,14 @@ docker run -d \
 
 **Tool Integration**
 
-- Claude Code
-- OpenCode
-- Xcode
-- Gemini
+- Claude Code (support 1-click config)
+- OpenCode (support 1-click config)
+- Xcode (require manual config)
 - ……
 
 Any application is ready to use.
+
+> We've provided detailed config guide in application
 
 **OpenAI SDK**
 
@@ -147,14 +148,38 @@ Requests route through your OAuth-authorized provider, using your existing Claud
 
 This works with any tool that supports OpenAI-compatible endpoints: Cherry Studio, VS Code extensions, or custom AI agents.
 
+## Remote Control via IM Bots
 
+Tingly Box now supports remote control through popular IM platforms. Interact with your AI agents remotely without direct server access.
+
+**Supported Platforms**
+
+- ✅ Telegram
+- ✅ DingTalk
+- ✅ Feishu
+- Slack
+- Discord
+
+**Quick Setup**
+
+1. Open Web UI like `http://localhost:12580`
+2. Navigate to **Remote** section
+3. Configure your preferred IM platform bot
+4. Start interacting with your agents remotely
+
+**Use Cases**
+
+- Execute tasks and queries from your phone or any device
+- Team collaboration with shared agent access
+- Monitor and control agents while away from your workstation
+
+![Remote Control Demo](./docs/images/5-remote-control.png)
 
 ## Web Management UI
 
 ```bash
 npx tingly-box@latest
 ```
-
 
 ## Documentation
 
