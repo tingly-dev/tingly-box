@@ -124,7 +124,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	}
 
 	// Check if this is the request model name first
-	rule, err = s.determineRuleWithScenario(scenarioType, model)
+	rule, err = s.determineRuleWithScenario(c, scenarioType, model)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{

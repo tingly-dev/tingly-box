@@ -42,9 +42,9 @@ func (s *Server) RegisterUsageRoutes(manager *swagger.RouteManager) {
 			Name:        "group_by",
 			Type:        "string",
 			Required:    false,
-			Description: "Aggregation level: model, provider, scenario, rule, daily, hourly",
+			Description: "Aggregation level: model, provider, scenario, rule, user, daily, hourly",
 			Default:     "model",
-			Enum:        []interface{}{"model", "provider", "scenario", "rule", "daily", "hourly"},
+			Enum:        []interface{}{"model", "provider", "scenario", "rule", "user", "daily", "hourly"},
 		}),
 		swagger.WithQueryConfig("start_time", swagger.QueryParamConfig{
 			Name:        "start_time",
@@ -81,6 +81,12 @@ func (s *Server) RegisterUsageRoutes(manager *swagger.RouteManager) {
 			Type:        "string",
 			Required:    false,
 			Description: "Filter by rule UUID",
+		}),
+		swagger.WithQueryConfig("user_id", swagger.QueryParamConfig{
+			Name:        "user_id",
+			Type:        "string",
+			Required:    false,
+			Description: "Filter by enterprise user ID",
 		}),
 		swagger.WithQueryConfig("status", swagger.QueryParamConfig{
 			Name:        "status",
@@ -264,6 +270,7 @@ func (api *UsageAPI) GetStats(c *gin.Context) {
 		Model:     c.Query("model"),
 		Scenario:  c.Query("scenario"),
 		RuleUUID:  c.Query("rule_uuid"),
+		UserID:    c.Query("user_id"),
 		Status:    c.Query("status"),
 	}
 
@@ -319,6 +326,9 @@ func (api *UsageAPI) GetTimeSeries(c *gin.Context) {
 	}
 	if scenario := c.Query("scenario"); scenario != "" {
 		filters["scenario"] = scenario
+	}
+	if userID := c.Query("user_id"); userID != "" {
+		filters["user_id"] = userID
 	}
 
 	data, err := api.usageStore.GetTimeSeries(interval, startTime, endTime, filters)
@@ -385,6 +395,9 @@ func (api *UsageAPI) GetRecords(c *gin.Context) {
 	if status := c.Query("status"); status != "" {
 		filters["status"] = status
 	}
+	if userID := c.Query("user_id"); userID != "" {
+		filters["user_id"] = userID
+	}
 
 	records, total, err := api.usageStore.GetRecords(startTime, endTime, filters, limit, offset)
 	if err != nil {
@@ -402,6 +415,7 @@ func (api *UsageAPI) GetRecords(c *gin.Context) {
 			Model:        r.Model,
 			Scenario:     r.Scenario,
 			RuleUUID:     r.RuleUUID,
+			UserID:       r.UserID,
 			RequestModel: r.RequestModel,
 			Timestamp:    r.Timestamp.Format(time.RFC3339),
 			InputTokens:  r.InputTokens,

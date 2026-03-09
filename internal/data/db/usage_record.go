@@ -23,6 +23,7 @@ type UsageRecord struct {
 	Model        string    `gorm:"column:model;index:idx_provider_model;not null"`
 	Scenario     string    `gorm:"column:scenario;index:idx_scenario;not null"`
 	RuleUUID     string    `gorm:"column:rule_uuid;index:idx_rule"`
+	UserID       string    `gorm:"column:user_id;index:idx_user;not null;default:''"`
 	RequestModel string    `gorm:"column:request_model"`
 	Timestamp    time.Time `gorm:"column:timestamp;index:idx_timestamp;index:idx_timestamp_scenario;not null"`
 	InputTokens  int       `gorm:"column:input_tokens;not null"`
@@ -78,6 +79,7 @@ func (UsageMonthlyRecord) TableName() string {
 	return "usage_monthly"
 }
 
+
 // UsageStore persists usage records in SQLite using GORM.
 type UsageStore struct {
 	db     *gorm.DB
@@ -112,9 +114,23 @@ func NewUsageStore(baseDir string) (*UsageStore, error) {
 	if err := db.AutoMigrate(&UsageRecord{}, &UsageDailyRecord{}, &UsageMonthlyRecord{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate usage database: %w", err)
 	}
+	if err := ensureUsageRecordSchema(db); err != nil {
+		return nil, fmt.Errorf("failed to align usage schema: %w", err)
+	}
 	logrus.Debugf("Usage store initialization completed")
 
 	return store, nil
+}
+
+
+func ensureUsageRecordSchema(db *gorm.DB) error {
+	// Dev-stage breaking cleanup: remove deprecated department_id dimension.
+	if db.Migrator().HasColumn(&UsageRecord{}, "department_id") {
+		if err := db.Migrator().DropColumn(&UsageRecord{}, "department_id"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // RecordUsage records a single usage event
@@ -139,13 +155,14 @@ func (us *UsageStore) RecordUsage(record *UsageRecord) error {
 
 // GetAggregatedStats returns aggregated usage statistics based on query parameters
 type UsageStatsQuery struct {
-	GroupBy   string // model, provider, scenario, rule, daily, hourly
+	GroupBy   string // model, provider, scenario, rule, user, daily, hourly
 	StartTime time.Time
 	EndTime   time.Time
 	Provider  string
 	Model     string
 	Scenario  string
 	RuleUUID  string
+	UserID    string
 	Status    string
 	Limit     int
 	SortBy    string // total_tokens, request_count, avg_latency
@@ -159,6 +176,7 @@ type AggregatedStat struct {
 	ProviderName    string  `json:"provider_name,omitempty"`
 	Model           string  `json:"model,omitempty"`
 	Scenario        string  `json:"scenario,omitempty"`
+	UserID          string  `json:"user_id,omitempty"`
 	RequestCount    int64   `json:"request_count"`
 	TotalTokens     int64   `json:"total_tokens"`
 	InputTokens     int64   `json:"total_input_tokens"`
@@ -201,6 +219,9 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 	if query.RuleUUID != "" {
 		db = db.Where("rule_uuid = ?", query.RuleUUID)
 	}
+	if query.UserID != "" {
+		db = db.Where("user_id = ?", query.UserID)
+	}
 	if query.Status != "" {
 		db = db.Where("status = ?", query.Status)
 	}
@@ -218,6 +239,9 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 	case "rule":
 		groupBy = "rule_uuid"
 		keyField = "rule_uuid"
+	case "user":
+		groupBy = "user_id"
+		keyField = "user_id"
 	case "daily":
 		groupBy = "date(timestamp)"
 		keyField = "date(timestamp)"
@@ -235,6 +259,7 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 		ProviderName  string
 		Model         string
 		Scenario      string
+		UserID        string
 		RequestCount  int64
 		TotalTokens   int64
 		InputTokens   int64
@@ -251,6 +276,7 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 		COALESCE(provider_name, '') as provider_name,
 		COALESCE(model, '') as model,
 		COALESCE(scenario, '') as scenario,
+		COALESCE(user_id, '') as user_id,
 		COUNT(*) as request_count,
 		COALESCE(SUM(total_tokens), 0) as total_tokens,
 		COALESCE(SUM(input_tokens), 0) as input_tokens,
@@ -278,6 +304,7 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 			ProviderName:    r.ProviderName,
 			Model:           r.Model,
 			Scenario:        r.Scenario,
+			UserID:          r.UserID,
 			RequestCount:    r.RequestCount,
 			TotalTokens:     r.TotalTokens,
 			InputTokens:     r.InputTokens,

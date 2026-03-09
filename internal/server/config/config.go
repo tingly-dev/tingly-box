@@ -2,7 +2,11 @@ package config
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -61,10 +65,13 @@ type Config struct {
 	ToolConfigs map[string]json.RawMessage `json:"tool_configs,omitempty"`
 
 	// Error log settings
-	ErrorLogFilterExpression string `json:"error_log_filter_expression"` // Expression for filtering error log entries (default: "StatusCode >= 400 && Path matches '^/api/'")
+	ErrorLogFilterExpression string `json:"error_log_filter_expression"` // Expression for filtering error log entries (default: "StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')")
 
 	// Health monitor settings
 	HealthMonitor loadbalance.HealthMonitorConfig `json:"health_monitor,omitempty" yaml:"health_monitor,omitempty"`
+
+	// Enterprise context JWT validation settings for TBE->TB proxy calls.
+	EnterpriseContextJWT EnterpriseContextJWTConfig `json:"enterprise_context_jwt,omitempty" yaml:"enterprise_context_jwt,omitempty"`
 
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
@@ -89,6 +96,72 @@ type GUIConfig struct {
 	Port int `json:"port"`
 	// Verbose enables verbose logging for GUI
 	Verbose bool `json:"verbose"`
+}
+
+type EnterpriseContextPublicKey struct {
+	KID string `json:"kid" yaml:"kid"`
+	PEM string `json:"pem" yaml:"pem"`
+}
+
+type EnterpriseContextJWTConfig struct {
+	Enabled          bool                         `json:"enabled" yaml:"enabled"`
+	AllowedIssuers   []string                     `json:"allowed_issuers,omitempty" yaml:"allowed_issuers,omitempty"`
+	AllowedAudiences []string                     `json:"allowed_audiences,omitempty" yaml:"allowed_audiences,omitempty"`
+	AlgAllowlist     []string                     `json:"alg_allowlist,omitempty" yaml:"alg_allowlist,omitempty"`
+	HS256SecretRef   string                       `json:"hs256_secret_ref,omitempty" yaml:"hs256_secret_ref,omitempty"`
+	RS256PublicKeyRef string                      `json:"rs256_public_key_ref,omitempty" yaml:"rs256_public_key_ref,omitempty"`
+	JWKSURL          string                       `json:"jwks_url,omitempty" yaml:"jwks_url,omitempty"`
+	PublicKeys       []EnterpriseContextPublicKey `json:"public_keys,omitempty" yaml:"public_keys,omitempty"`
+	ClockSkewSeconds int                          `json:"clock_skew_seconds,omitempty" yaml:"clock_skew_seconds,omitempty"`
+	RequireJTI       bool                         `json:"require_jti" yaml:"require_jti"`
+}
+
+func enterpriseContextKeyPaths(configDir string) (string, string) {
+	keyDir := filepath.Join(configDir, "keys")
+	return filepath.Join(keyDir, "enterprise_context_rs256_private.pem"),
+		filepath.Join(keyDir, "enterprise_context_rs256_public.pem")
+}
+
+func ensureEnterpriseContextRS256KeyPair(configDir string) (string, string, error) {
+	privatePath, publicPath := enterpriseContextKeyPaths(configDir)
+	privateOK := false
+	publicOK := false
+	if st, err := os.Stat(privatePath); err == nil && !st.IsDir() {
+		privateOK = true
+	}
+	if st, err := os.Stat(publicPath); err == nil && !st.IsDir() {
+		publicOK = true
+	}
+	if privateOK && publicOK {
+		return "file:" + privatePath, "file:" + publicPath, nil
+	}
+
+	if err := os.MkdirAll(filepath.Dir(privatePath), 0700); err != nil {
+		return "", "", fmt.Errorf("create enterprise key dir failed: %w", err)
+	}
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return "", "", fmt.Errorf("generate rsa key failed: %w", err)
+	}
+	privatePEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(key),
+	})
+	pubDer, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		return "", "", fmt.Errorf("marshal rsa public key failed: %w", err)
+	}
+	publicPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: pubDer,
+	})
+	if err := os.WriteFile(privatePath, privatePEM, 0600); err != nil {
+		return "", "", fmt.Errorf("write enterprise private key failed: %w", err)
+	}
+	if err := os.WriteFile(publicPath, publicPEM, 0644); err != nil {
+		return "", "", fmt.Errorf("write enterprise public key failed: %w", err)
+	}
+	return "file:" + privatePath, "file:" + publicPath, nil
 }
 
 // NewConfig creates a new global configuration manager
@@ -219,7 +292,47 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		updated = true
 	}
 	if cfg.ErrorLogFilterExpression == "" {
-		cfg.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
+		cfg.ErrorLogFilterExpression = "StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')"
+		updated = true
+	}
+	_, defaultEnterpriseRS256PublicRef, keyErr := ensureEnterpriseContextRS256KeyPair(configDir)
+	if keyErr != nil {
+		return nil, keyErr
+	}
+	if !cfg.EnterpriseContextJWT.Enabled &&
+		len(cfg.EnterpriseContextJWT.AlgAllowlist) == 0 &&
+		len(cfg.EnterpriseContextJWT.AllowedIssuers) == 0 &&
+		len(cfg.EnterpriseContextJWT.AllowedAudiences) == 0 &&
+		cfg.EnterpriseContextJWT.HS256SecretRef == "" &&
+		cfg.EnterpriseContextJWT.RS256PublicKeyRef == "" &&
+		cfg.EnterpriseContextJWT.ClockSkewSeconds == 0 &&
+		!cfg.EnterpriseContextJWT.RequireJTI {
+		// Enabled by default for fresh configs; preserve explicit false for existing configs.
+		cfg.EnterpriseContextJWT.Enabled = true
+		updated = true
+	}
+	if len(cfg.EnterpriseContextJWT.AlgAllowlist) == 0 {
+		cfg.EnterpriseContextJWT.AlgAllowlist = []string{"RS256"}
+		updated = true
+	}
+	if len(cfg.EnterpriseContextJWT.AllowedIssuers) == 0 {
+		cfg.EnterpriseContextJWT.AllowedIssuers = []string{"tbe"}
+		updated = true
+	}
+	if len(cfg.EnterpriseContextJWT.AllowedAudiences) == 0 {
+		cfg.EnterpriseContextJWT.AllowedAudiences = []string{"tb"}
+		updated = true
+	}
+	if cfg.EnterpriseContextJWT.RS256PublicKeyRef == "" {
+		cfg.EnterpriseContextJWT.RS256PublicKeyRef = defaultEnterpriseRS256PublicRef
+		updated = true
+	}
+	if cfg.EnterpriseContextJWT.ClockSkewSeconds == 0 {
+		cfg.EnterpriseContextJWT.ClockSkewSeconds = 30
+		updated = true
+	}
+	if !cfg.EnterpriseContextJWT.RequireJTI {
+		cfg.EnterpriseContextJWT.RequireJTI = true
 		updated = true
 	}
 	if cfg.applyRemoteCoderDefaults() {
@@ -1823,7 +1936,20 @@ func (c *Config) CreateDefaultConfig() error {
 	c.JWTSecret = generateSecret()
 	// Set default error log filter expression
 	if c.ErrorLogFilterExpression == "" {
-		c.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
+		c.ErrorLogFilterExpression = "StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')"
+	}
+	_, defaultEnterpriseRS256PublicRef, keyErr := ensureEnterpriseContextRS256KeyPair(c.ConfigDir)
+	if keyErr != nil {
+		return keyErr
+	}
+	c.EnterpriseContextJWT = EnterpriseContextJWTConfig{
+		Enabled:           true,
+		AllowedIssuers:    []string{"tbe"},
+		AllowedAudiences:  []string{"tb"},
+		AlgAllowlist:      []string{"RS256"},
+		RS256PublicKeyRef: defaultEnterpriseRS256PublicRef,
+		ClockSkewSeconds:  30,
+		RequireJTI:        true,
 	}
 	c.applyRemoteCoderDefaults()
 	if err := c.Save(); err != nil {

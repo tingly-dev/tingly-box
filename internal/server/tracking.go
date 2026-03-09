@@ -122,6 +122,7 @@ func (t *UsageTracker) recordDetailed(
 		Model:        model,
 		Scenario:     scenario,
 		RequestModel: requestModel,
+		UserID:       c.GetString("enterprise_user_id"),
 		InputTokens:  inputTokens,
 		OutputTokens: outputTokens,
 		TotalTokens:  inputTokens + outputTokens,

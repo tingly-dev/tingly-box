@@ -79,7 +79,7 @@ func (e *SQLiteExporter) processSum(data metricdata.Sum[int64], metricData metri
 		case "llm.token.usage":
 			e.recordTokenUsage(provider, providerUUID, model, ruleUUID, scenario, tokenType, value, status)
 		case "llm.token.total":
-			// Total tokens are already tracked via input + output
+			// OTel token delta export removed.
 		case "llm.request.count":
 			e.recordRequestCount(provider, providerUUID, model, ruleUUID, scenario, status, value)
 		case "llm.request.errors":

@@ -35,4 +35,7 @@ var (
 
 	// AttrLLMProviderUUID identifies the provider UUID
 	AttrLLMProviderUUID = attribute.Key("llm.provider.uuid")
+
+	// AttrLLMUserTier identifies low-cardinality user class for enterprise traffic.
+	AttrLLMUserTier = attribute.Key("llm.user.tier")
 )
