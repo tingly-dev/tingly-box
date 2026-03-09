@@ -1160,7 +1160,7 @@ func (h *BotHandler) showProjectSelectionOrGuidance(hCtx HandlerContext) {
 	}
 
 	// For direct chats, check if user has any bound projects
-	platform := string(imbot.PlatformTelegram)
+	platform := string(hCtx.Platform)
 
 	chats, err := h.chatStore.ListChatsByOwner(hCtx.SenderID, platform)
 	if err == nil && len(chats) > 0 {
@@ -1259,7 +1259,7 @@ func (h *BotHandler) handleBotProjectCommand(hCtx HandlerContext) {
 		return
 	}
 
-	platform := string(imbot.PlatformTelegram)
+	platform := string(hCtx.Platform)
 
 	// Get current project path for this chat
 	currentPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
@@ -1336,7 +1336,7 @@ func (h *BotHandler) handleProjectSwitch(hCtx HandlerContext, projectPath string
 	}
 
 	// Bind the project to this chat
-	if err := h.chatStore.BindProject(hCtx.ChatID, string(imbot.PlatformTelegram), projectPath, hCtx.SenderID); err != nil {
+	if err := h.chatStore.BindProject(hCtx.ChatID, string(hCtx.Platform), projectPath, hCtx.SenderID); err != nil {
 		h.SendText(hCtx, "Failed to switch project")
 		return
 	}
@@ -1393,7 +1393,7 @@ func (h *BotHandler) completeBind(hCtx HandlerContext, projectPath string) {
 		}
 	}
 
-	platform := string(imbot.PlatformTelegram)
+	platform := string(hCtx.Platform)
 
 	// Bind project to chat using ChatStore
 	if err := h.chatStore.BindProject(hCtx.ChatID, platform, expandedPath, hCtx.SenderID); err != nil {
@@ -1455,7 +1455,7 @@ func (h *BotHandler) handleJoinCommand(hCtx HandlerContext, fields []string) {
 	}
 
 	// Add group to whitelist
-	platform := string(imbot.PlatformTelegram)
+	platform := string(hCtx.Platform)
 	if err := h.chatStore.AddToWhitelist(groupID, platform, hCtx.SenderID); err != nil {
 		logrus.WithError(err).Error("Failed to add group to whitelist")
 		h.SendText(hCtx, fmt.Sprintf("Failed to add group to whitelist: %v", err))
