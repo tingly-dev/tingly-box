@@ -26,7 +26,7 @@ const (
 	agentMock       = agentboot.AgentTypeMockAgent
 )
 
-// Bot command constants
+// Bot command subcommand constants (used after /bot prefix)
 const (
 	botCommandHelp    = "help"
 	botCommandBind    = "bind"
@@ -36,6 +36,54 @@ const (
 	botCommandClear   = "clear"
 	botCommandBash    = "bash"
 )
+
+// Slash command constants with aliases
+// Primary command is the recommended one to show in help and error messages
+var (
+	// Help commands
+	cmdHelpPrimary = "/help"
+	cmdHelpAliases = []string{"/h", "/", "/start"}
+
+	// Bind/CD commands - /cd is primary for simplicity
+	cmdBindPrimary = "/cd"
+	cmdBindAliases = []string{"/bind", "/bot_bind", "/bot_b"}
+
+	// Join commands - /join is primary
+	cmdJoinPrimary = "/join"
+	cmdJoinAliases = []string{"/bot_join", "/bot_j"}
+
+	// Project commands - /project is primary
+	cmdProjectPrimary = "/project"
+	cmdProjectAliases = []string{"/bot_project", "/bot_p"}
+
+	// Status commands - /status is primary
+	cmdStatusPrimary = "/status"
+	cmdStatusAliases = []string{"/bot_status", "/bot_s"}
+
+	// Clear commands - /clear is primary
+	cmdClearPrimary = "/clear"
+	cmdClearAliases = []string{"/bot_clear"}
+
+	// Bash commands - /bash is primary
+	cmdBashPrimary = "/bash"
+	cmdBashAliases = []string{"/bot_bash"}
+
+	// Mock command (testing only)
+	cmdMock = "/mock"
+)
+
+// isCommandMatch checks if the given command matches the primary or any alias
+func isCommandMatch(cmd string, primary string, aliases []string) bool {
+	if cmd == primary {
+		return true
+	}
+	for _, alias := range aliases {
+		if cmd == alias {
+			return true
+		}
+	}
+	return false
+}
 
 var defaultBashAllowlist = map[string]struct{}{
 	"cd":  {},

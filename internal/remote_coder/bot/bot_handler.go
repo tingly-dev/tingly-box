@@ -273,7 +273,7 @@ func (h *BotHandler) handleGroupMessage(hCtx HandlerContext) {
 	// Check whitelist first
 	if !h.chatStore.IsWhitelisted(hCtx.ChatID) {
 		logrus.Debugf("Group %s is not whitelisted, ignoring message", hCtx.ChatID)
-		h.SendText(hCtx, fmt.Sprintf("This group is not enabled. Please DM the bot with `/join %s` to enable.", hCtx.ChatID))
+		h.SendText(hCtx, fmt.Sprintf("This group is not enabled. Please DM the bot with `%s %s` to enable.", cmdJoinPrimary, hCtx.ChatID))
 		return
 	}
 
@@ -396,48 +396,42 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 
 	cmd := strings.ToLower(fields[0])
 
-	switch cmd {
-	case "/bot":
+	switch {
+	case cmd == "/bot":
 		h.handleBotCommand(hCtx, fields)
 		return
-	case "/bot_help", "/bot_h":
+	case isCommandMatch(cmd, cmdHelpPrimary, cmdHelpAliases):
 		h.showBotHelp(hCtx)
 		return
-	case "/bot_bind", "/bot_b", "/bind", "/cd":
+	case isCommandMatch(cmd, cmdBindPrimary, cmdBindAliases):
 		if len(fields) < 2 {
 			h.handleBindInteractive(hCtx)
 			return
 		}
 		h.handleBotBindCommand(hCtx, fields[1:])
-	case "/bot_join", "/bot_j":
+	case isCommandMatch(cmd, cmdJoinPrimary, cmdJoinAliases):
 		if !hCtx.IsDirect {
-			h.SendText(hCtx, "/bot_join can only be used in direct chat.")
+			h.SendText(hCtx, cmdJoinPrimary+" can only be used in direct chat.")
 			return
 		}
 		h.handleJoinCommand(hCtx, fields)
 		return
-	case "/bot_project", "/bot_p":
+	case isCommandMatch(cmd, cmdProjectPrimary, cmdProjectAliases):
 		h.handleBotProjectCommand(hCtx)
 		return
-	case "/bot_status", "/bot_s":
+	case isCommandMatch(cmd, cmdStatusPrimary, cmdStatusAliases):
 		h.handleBotStatusCommand(hCtx)
 		return
-	case "/bot_clear":
+	case isCommandMatch(cmd, cmdClearPrimary, cmdClearAliases):
 		h.handleClearCommand(hCtx)
 		return
-	case "/bot_bash":
+	case isCommandMatch(cmd, cmdBashPrimary, cmdBashAliases):
 		h.handleBashCommand(hCtx, fields[1:])
 		return
-	case "/clear":
-		h.handleClearCommand(hCtx)
-		return
-	case "/mock":
+	case cmd == cmdMock:
 		// Mock agent command for testing
-		mockText := strings.TrimSpace(strings.TrimPrefix(hCtx.Text, "/mock"))
+		mockText := strings.TrimSpace(strings.TrimPrefix(hCtx.Text, cmdMock))
 		h.handleAgentMessage(hCtx, agentMock, mockText, "")
-		return
-	case "/", "/start", "/help", "/h":
-		h.showBotHelp(hCtx)
 		return
 	}
 
@@ -594,7 +588,7 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 	}
 
 	if !ok || sessionID == "" {
-		h.SendText(hCtx, "No session mapped. Use /bot_bind <project_path> to create one.")
+		h.SendText(hCtx, "No session mapped. Use "+cmdBindPrimary+" <project_path> to create one.")
 		return
 	}
 
@@ -615,7 +609,7 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		}
 	}
 	if projectPath == "" {
-		h.SendText(hCtx, "Project path is required. Use /bot_bind <project_path> first.")
+		h.SendText(hCtx, "Project path is required. Use "+cmdBindPrimary+" <project_path> first.")
 		return
 	}
 
@@ -990,14 +984,14 @@ func (h *BotHandler) showBotHelp(hCtx HandlerContext) {
 		helpText = fmt.Sprintf(`Your User ID: %s
 
 Bot Commands:
-/, /help, /h - Show this help
+/help - Show this help
 /stop - Stop current task
 /clear - Clear context, stop task, and create new session
 /cd [path] - Bind and cd into a project
-/bot_project - Show & switch projects
-/bot_status - Show session status
-/bot_bash <cmd> - Execute allowed bash (cd, ls, pwd)
-/bot_join <group> - Add group to whitelist
+/project - Show & switch projects
+/status - Show session status
+/bash <cmd> - Execute allowed bash (cd, ls, pwd)
+/join <group> - Add group to whitelist
 /mock <msg> - Test with mock agent (permission flow)
 
 All other messages are sent to Claude Code.`, hCtx.SenderID)
@@ -1005,12 +999,12 @@ All other messages are sent to Claude Code.`, hCtx.SenderID)
 		helpText = fmt.Sprintf(`Group Chat ID: %s
 
 Bot Commands:
-/, /help, /h - Show this help
+/help - Show this help
 /stop - Stop current task
 /clear - Clear context, stop task, and create new session
 /cd [path] - Bind and cd into a project to this group
-/bot_project - Show current project info
-/bot_status - Show session status
+/project - Show current project info
+/status - Show session status
 /mock <msg> - Test with mock agent (permission flow)
 
 All other messages are sent to Claude Code.`, hCtx.ChatID)
@@ -1021,13 +1015,13 @@ All other messages are sent to Claude Code.`, hCtx.ChatID)
 // handleBotBindCommand handles /bot bind <path>
 func (h *BotHandler) handleBotBindCommand(hCtx HandlerContext, fields []string) {
 	if len(fields) < 1 {
-		h.SendText(hCtx, "Usage: /bot_bind <project_path>")
+		h.SendText(hCtx, "Usage: "+cmdBindPrimary+" <project_path>")
 		return
 	}
 
 	projectPath := strings.TrimSpace(strings.Join(fields, " "))
 	if projectPath == "" {
-		h.SendText(hCtx, "Usage: /bot_bind <project_path>")
+		h.SendText(hCtx, "Usage: "+cmdBindPrimary+" <project_path>")
 		return
 	}
 
@@ -1053,7 +1047,7 @@ func (h *BotHandler) handleBotStatusCommand(hCtx HandlerContext) {
 		logrus.WithError(err).Warn("Failed to load session mapping")
 	}
 	if !ok || sessionID == "" {
-		h.SendText(hCtx, "No session mapped. Use /bot_bind <project_path> to create one.")
+		h.SendText(hCtx, "No session mapped. Use "+cmdBindPrimary+" <project_path> to create one.")
 		return
 	}
 	sess, exists := h.sessionMgr.GetOrLoad(sessionID)
@@ -1129,7 +1123,7 @@ func (h *BotHandler) handleClearCommand(hCtx HandlerContext) {
 	}
 
 	if projectPath == "" {
-		h.SendText(hCtx, "No project path found. Use /bot_bind <project_path> to create a session first.")
+		h.SendText(hCtx, "No project path found. Use "+cmdBindPrimary+" <project_path> to create a session first.")
 		return
 	}
 
