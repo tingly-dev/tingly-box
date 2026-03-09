@@ -43,8 +43,10 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	// Get scenario config for DisableStreamUsage flag
 	scenarioType := rule.GetScenario()
 	disableStreamUsage := false
+	cleanHeader := false
 	if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
 		disableStreamUsage = scenarioConfig.Flags.DisableStreamUsage
+		cleanHeader = scenarioConfig.Flags.CleanHeader
 
 		// Apply thinking effort from scenario config
 		effort := scenarioConfig.Flags.ThinkingEffort
@@ -57,6 +59,11 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			// Set thinking with budget_tokens
 			req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budgetTokens)
 		}
+	}
+
+	// Clean system messages if clean_header flag is enabled (for Claude Code scenario)
+	if cleanHeader {
+		req.BetaMessageNewParams.System = cleanBetaSystemMessages(req.BetaMessageNewParams.System)
 	}
 
 	// Ensure max_tokens is set (Anthropic API requires this)

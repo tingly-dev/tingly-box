@@ -1616,6 +1616,10 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 		return flags.SmartCompact
 	case "recording":
 		return flags.Recording
+	case "disable_stream_usage":
+		return flags.DisableStreamUsage
+	case "clean_header":
+		return flags.CleanHeader
 	case "skill_user":
 		if val, ok := config.Extensions["skill_user"].(bool); ok {
 			return val
@@ -1677,6 +1681,10 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 		config.Flags.SmartCompact = value
 	case "recording":
 		config.Flags.Recording = value
+	case "disable_stream_usage":
+		config.Flags.DisableStreamUsage = value
+	case "clean_header":
+		config.Flags.CleanHeader = value
 	case "skill_user":
 		// Store in Extensions
 		if config.Extensions == nil {
