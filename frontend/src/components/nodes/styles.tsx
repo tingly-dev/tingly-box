@@ -1,7 +1,7 @@
 import { Box } from '@mui/material';
 import { styled } from '@mui/material/styles';
 
-// Model Node dimensions
+// Node dimensions constants
 export const MODEL_NODE_STYLES = {
     width: 220,
     height: 90,
@@ -10,21 +10,18 @@ export const MODEL_NODE_STYLES = {
     padding: 8,
 } as const;
 
-// Provider Node dimensions
 export const PROVIDER_NODE_STYLES = {
     width: 220,
     height: 90,
     heightCompact: 60,
     padding: 8,
     widthCompact: 320,
-    // Internal dimensions
     badgeHeight: 5,
     fieldHeight: 5,
     fieldPadding: 2,
     elementMargin: 0.5,
 } as const;
 
-// Smart Node dimensions (used by SmartOpNode and SmartFallbackNode)
 export const SMART_NODE_STYLES = {
     width: 220,
     height: 90,
@@ -37,7 +34,7 @@ export const { modelNode, providerNode, smartNode } = {
     smartNode: SMART_NODE_STYLES,
 };
 
-// Container for graph nodes
+// Common styled components
 export const NodeContainer = styled(Box)(() => ({
     display: 'flex',
     flexDirection: 'column',
@@ -45,15 +42,12 @@ export const NodeContainer = styled(Box)(() => ({
     gap: 8,
 }));
 
-// Connection line between nodes
-export const ConnectionLine = styled(Box)(({ }) => ({
+export const ConnectionLine = styled(Box)(() => ({
     display: 'flex',
     alignItems: 'center',
     color: 'text.secondary',
     fontSize: '1.5rem',
-    '& svg': {
-        fontSize: '2rem',
-    }
+    '& svg': { fontSize: '2rem' },
 }));
 
 // Provider node container
@@ -75,13 +69,13 @@ export const ProviderNodeContainer = styled(Box)(({ theme }) => ({
         borderColor: 'text.secondary',
         boxShadow: theme.shadows[4],
         transform: 'translateY(-2px)',
-    }
+    },
 }));
 
 // Styled model node with unified fixed size
-export const StyledModelNode = styled(Box, {
-    shouldForwardProp: (prop) => prop !== 'compact',
-})<{ compact?: boolean }>(({ compact, theme }) => ({
+export const StyledModelNode = styled(Box, { shouldForwardProp: (prop) => prop !== 'compact' })<{
+    compact?: boolean;
+}>(({ compact, theme }) => ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -102,10 +96,10 @@ export const StyledModelNode = styled(Box, {
         borderColor: 'text.secondary',
         boxShadow: theme.shadows[4],
         transform: 'translateY(-2px)',
-    }
+    },
 }));
 
-// Action button container (shared by SmartOpNode and SmartFallbackNode)
+// Action button container
 export const ActionButtonsBox = styled(Box)(({ theme }) => ({
     position: 'absolute',
     top: 4,
@@ -116,19 +110,14 @@ export const ActionButtonsBox = styled(Box)(({ theme }) => ({
     transition: 'opacity 0.2s',
 }));
 
-// Smart node wrapper (shared by SmartOpNode and SmartFallbackNode)
+// Smart node wrapper
 export const StyledSmartNodeWrapper = styled(Box)(({ theme }) => ({
     position: 'relative',
-    '&:hover .action-buttons': {
-        opacity: 1,
-    }
+    '&:hover .action-buttons': { opacity: 1 },
 }));
 
-// Base smart node styles - simplified without color theming
-const baseSmartNodeStyles = ({ active, theme }: {
-    active: boolean;
-    theme: any;
-}) => ({
+// Base smart node styles
+const baseSmartNodeStyles = ({ active, theme }: { active: boolean; theme: any }) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center',
@@ -150,22 +139,19 @@ const baseSmartNodeStyles = ({ active, theme }: {
         backgroundColor: 'action.hover',
         boxShadow: theme.shadows[4],
         transform: 'translateY(-2px)',
-    }
+    },
 });
 
-// Smart node (used by SmartOpNode)
-export const StyledSmartNodePrimary = styled(Box, {
-    shouldForwardProp: (prop) => prop !== 'active',
-})<{ active: boolean }>(({ active, theme }) => baseSmartNodeStyles({ active, theme }));
+export const StyledSmartNodePrimary = styled(Box, { shouldForwardProp: (prop) => prop !== 'active' })<{
+    active: boolean;
+}>(({ active, theme }) => baseSmartNodeStyles({ active, theme }));
 
-// Smart node (used by SmartFallbackNode)
-export const StyledSmartNodeWarning = styled(Box, {
-    shouldForwardProp: (prop) => prop !== 'active',
-})<{ active: boolean }>(({ active, theme }) => baseSmartNodeStyles({ active, theme }));
+export const StyledSmartNodeWarning = styled(Box, { shouldForwardProp: (prop) => prop !== 'active' })<{
+    active: boolean;
+}>(({ active, theme }) => baseSmartNodeStyles({ active, theme }));
 
-// Shared node layer styles for two-layer layout (ModelNode, ProviderNode)
+// Shared node layer styles for two-layer layout
 export const NODE_LAYER_STYLES = {
-    // Top layer - takes available space
     topLayer: {
         flex: 1,
         display: 'flex',
@@ -173,26 +159,15 @@ export const NODE_LAYER_STYLES = {
         justifyContent: 'center',
         width: '100%',
     } as const,
-    // Divider between layers
-    divider: {
-        width: '80%',
-        my: 0.5,
-    } as const,
-    // Bottom layer - compact height
+    divider: { width: '80%', my: 0.5 } as const,
     bottomLayer: {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         width: '100%',
-        // Match compact toggle button/badge height
         minHeight: 24,
     } as const,
-    // Typography matching ModelNode's model name
-    typography: {
-        fontWeight: 600,
-        fontSize: '0.9rem',
-    } as const,
-    // Toggle button style for bottom layer
+    typography: { fontWeight: 600, fontSize: '0.9rem' } as const,
     toggleButton: {
         height: 24,
         padding: '0 8px',
