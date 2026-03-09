@@ -39,3 +39,20 @@ func encodeProjectPath(projectPath string) string {
 
 	return encoded
 }
+
+// DecodeProjectPath decodes an encoded project path back to the original path
+// -root-tingly-polish -> /root/tingly-polish
+func DecodeProjectPath(encoded string) string {
+	if encoded == "" {
+		return ""
+	}
+
+	// Must start with -
+	if !strings.HasPrefix(encoded, "-") {
+		return encoded
+	}
+
+	// Remove leading - and replace all - with /
+	decoded := strings.ReplaceAll(strings.TrimPrefix(encoded, "-"), "-", "/")
+	return "/" + decoded
+}

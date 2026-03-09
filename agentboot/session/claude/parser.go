@@ -387,12 +387,7 @@ func (s *Store) decodeProjectPath(sessionFilePath string) string {
 
 	// Decode: -root-tingly-polish -> /root/tingly-polish
 	encoded := filepath.Base(projectDir)
-	if strings.HasPrefix(encoded, "-") {
-		decoded := "/" + strings.TrimPrefix(encoded, "-")
-		return decoded
-	}
-
-	return projectDir
+	return DecodeProjectPath(encoded)
 }
 
 // extractMessageContent extracts text content from a message object

@@ -135,10 +135,10 @@ func TestParseEventData(t *testing.T) {
 		{
 			name: "user event",
 			event: map[string]interface{}{
-				"type":       "user",
-				"sessionId":  "test-session",
-				"message":    map[string]interface{}{"content": "hello"},
-				"timestamp":  "2026-03-07T12:00:00Z",
+				"type":      "user",
+				"sessionId": "test-session",
+				"message":   map[string]interface{}{"content": "hello"},
+				"timestamp": "2026-03-07T12:00:00Z",
 			},
 			wantType: "user",
 		},
@@ -147,8 +147,8 @@ func TestParseEventData(t *testing.T) {
 			event: map[string]interface{}{
 				"type": "assistant",
 				"message": map[string]interface{}{
-					"model":  "claude-3",
-					"role":   "assistant",
+					"model":   "claude-3",
+					"role":    "assistant",
 					"content": []interface{}{},
 				},
 			},
@@ -187,7 +187,7 @@ func TestParseEventData(t *testing.T) {
 func createTestSessionMetadata(id string) session.SessionMetadata {
 	return session.SessionMetadata{
 		SessionID:    id,
-		ProjectPath: "/test/project",
+		ProjectPath:  "/test/project",
 		Status:       session.SessionStatusComplete,
 		FirstMessage: "test message",
 		NumTurns:     2,
