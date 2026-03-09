@@ -1,14 +1,14 @@
-import {
-    Box,
-    CircularProgress,
-    Tooltip,
-    Typography,
-    ToggleButton,
-    ToggleButtonGroup,
-    Chip,
-} from '@mui/material';
 import { Science } from '@mui/icons-material';
 import Psychology from '@mui/icons-material/Psychology';
+import {
+    Box,
+    Chip,
+    CircularProgress,
+    ToggleButton,
+    ToggleButtonGroup,
+    Tooltip,
+    Typography,
+} from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { toggleButtonGroupStyle, toggleButtonStyle } from '../styles/toggleStyles';
@@ -118,7 +118,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
 
     useEffect(() => {
         loadData();
-    }, [scenario, visibleFeatures]);
+    }, [scenario]);
 
     if (loading) {
         return (
