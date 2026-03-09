@@ -234,7 +234,6 @@ func startServer(appManager *AppManager, opts options.StartServerOptions) error 
 	// Setup signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	defer signal.Stop(sigChan)
 
 	// Start server in goroutine to keep it non-blocking
 	serverErr := make(chan error, 1)
@@ -263,21 +262,7 @@ func startServer(appManager *AppManager, opts options.StartServerOptions) error 
 		fmt.Println("\nReceived shutdown signal, stopping server...")
 		// Release lock on shutdown
 		fileLock.Unlock()
-		stopDone := make(chan error, 1)
-		go func() {
-			stopDone <- serverManager.Stop()
-		}()
-
-		select {
-		case err := <-stopDone:
-			return err
-		case <-sigChan:
-			fmt.Println("Second shutdown signal received, forcing exit...")
-			return nil
-		case <-time.After(5 * time.Second):
-			fmt.Println("Graceful shutdown timed out, forcing exit...")
-			return nil
-		}
+		return serverManager.Stop()
 	case <-server.GetShutdownChannel():
 		fmt.Println("\nReceived stop request from web UI, stopping server...")
 		// Release lock on shutdown

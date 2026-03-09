@@ -85,7 +85,7 @@ func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens
 	// 2. Record to OTel (primary path for metrics)
 	if s.tokenTracker != nil {
 		userTier := ""
-		if c.GetString("client_id") == "enterprise_access_token" {
+		if strings.TrimSpace(c.GetString("enterprise_user_id")) != "" {
 			userTier = "enterprise"
 		}
 		s.tokenTracker.RecordUsage(c.Request.Context(), otel.UsageOptions{
@@ -112,7 +112,7 @@ func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens
 	s.reportHealthStatus(provider, model, err, errorCode)
 
 	// 5. Enterprise key-level 429 alerting hook (best-effort).
-	if err != nil && isRateLimitError(err) && c.GetString("client_id") == "enterprise_access_token" {
+	if err != nil && isRateLimitError(err) && strings.TrimSpace(c.GetString("enterprise_user_id")) != "" {
 		_ = reportEnterpriseRateLimitEvent(
 			c.Request.Context(),
 			c.GetString("enterprise_key_prefix"),

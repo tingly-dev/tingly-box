@@ -5,11 +5,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/signal"
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -105,12 +103,9 @@ func RemoteCoderCommand(appManager *AppManager) *cobra.Command {
 				return err
 			}
 
-			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-			defer stop()
-
 			// For standalone remote-coder command, pass nil for ImBotSettingsStore
 			// This will use the local bot store with the old table name
-			return remote_coder.Run(ctx, cfg, nil)
+			return remote_coder.Run(context.Background(), cfg, nil)
 		},
 	}
 

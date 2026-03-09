@@ -252,44 +252,8 @@ func (s *Server) determineRule(modelName string) (*typ.Rule, error) {
 	return nil, fmt.Errorf("provider or model not configured for request model '%s'", modelName)
 }
 
-func normalizeEnterprisePolicyValue(value string) string {
-	v := strings.TrimSpace(strings.ToLower(value))
-	v = strings.ReplaceAll(v, "-", "_")
-	v = strings.ReplaceAll(v, " ", "_")
-	switch v {
-	case "claude", "claudecode", "claude_code_sdk":
-		return "claude_code"
-	case "openai_sdk":
-		return "openai"
-	case "anthropic_sdk":
-		return "anthropic"
-	case "open_code":
-		return "opencode"
-	case "claw_agent":
-		return "agent"
-	default:
-		return v
-	}
-}
-
-func enterpriseModelAllowed(c *gin.Context, modelName string, scenario typ.RuleScenario) bool {
-	v, ok := c.Get("enterprise_allowed_models")
-	if !ok {
-		return false
-	}
-	allowedModels, ok := v.([]string)
-	if !ok {
-		return false
-	}
-	targetModel := normalizeEnterprisePolicyValue(modelName)
-	targetScenario := normalizeEnterprisePolicyValue(string(scenario))
-	for _, allowed := range allowedModels {
-		normalized := normalizeEnterprisePolicyValue(allowed)
-		if normalized == targetModel || normalized == targetScenario {
-			return true
-		}
-	}
-	return false
+func isEnterpriseContextPresent(c *gin.Context) bool {
+	return strings.TrimSpace(c.GetString("enterprise_user_id")) != ""
 }
 
 func (s *Server) determineRuleWithScenario(ctx *gin.Context, scenario typ.RuleScenario, modelName string) (*typ.Rule, error) {
@@ -300,15 +264,14 @@ func (s *Server) determineRuleWithScenario(ctx *gin.Context, scenario typ.RuleSc
 		if rule != nil && rule.Active {
 			return rule, nil
 		}
-			// Enterprise access-token requests are department-policy constrained by middleware.
-			// If endpoint scenario has no matching rule, allow lookup by model across scenarios.
-			clientID := ctx.GetString("client_id")
-			if clientID == "enterprise_access_token" {
-				for _, anyRule := range cfg.GetRequestConfigs() {
-					if anyRule.Active && anyRule.RequestModel == modelName && enterpriseModelAllowed(ctx, modelName, anyRule.GetScenario()) {
-						return &anyRule, nil
-					}
+		// Enterprise runtime context is already authorized by TBE.
+		// If endpoint scenario has no matching rule, allow lookup by model across scenarios.
+		if isEnterpriseContextPresent(ctx) {
+			for _, anyRule := range cfg.GetRequestConfigs() {
+				if anyRule.Active && anyRule.RequestModel == modelName {
+					return &anyRule, nil
 				}
+			}
 		}
 	}
 
