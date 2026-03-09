@@ -37,6 +37,37 @@ const (
 	botCommandBash    = "bash"
 )
 
+// Constants for bot help messages
+const (
+	directHelpTemplate = `Your User ID: %s
+
+Bot Commands:
+/help - Show this help
+/stop - Stop current task
+/clear - Clear context, stop task, and create new session
+/cd [path] - Bind and cd into a project
+/project - Show & switch projects
+/status - Show session status
+/bash <cmd> - Execute allowed bash (cd, ls, pwd)
+/join <group> - Add group to whitelist
+/mock <msg> - Test with mock agent (permission flow)
+
+All other messages are sent to Claude Code.`
+
+	groupHelpTemplate = `Group Chat ID: %s
+
+Bot Commands:
+/help - Show this help
+/stop - Stop current task
+/clear - Clear context, stop task, and create new session
+/cd [path] - Bind and cd into a project to this group
+/project - Show current project info
+/status - Show session status
+/mock <msg> - Test with mock agent (permission flow)
+
+All other messages are sent to Claude Code.`
+)
+
 // Slash command constants with aliases
 // Primary command is the recommended one to show in help and error messages
 var (
