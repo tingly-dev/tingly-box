@@ -344,17 +344,17 @@ func (s *ChatStoreJSON) SetCurrentAgent(chatID, agentType string) error {
 }
 
 // GetCurrentAgent retrieves the current agent for a chat
-// Returns "claude" as default if not set
+// Returns "tingly-box" as default (Smart Guide is the entry point)
 func (s *ChatStoreJSON) GetCurrentAgent(chatID string) (string, error) {
 	if s == nil || s.store == nil {
-		return "claude", nil
+		return "tingly-box", nil // Default to Smart Guide
 	}
 	chat := s.store.Get(chatID)
 	if chat == nil {
-		return "claude", nil // Default to Claude Code
+		return "tingly-box", nil // Default to Smart Guide
 	}
 	if chat.CurrentAgent == "" {
-		return "claude", nil // Default to Claude Code
+		return "tingly-box", nil // Default to Smart Guide
 	}
 	return chat.CurrentAgent, nil
 }
