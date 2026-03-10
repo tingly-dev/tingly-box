@@ -311,6 +311,17 @@ func (h *BotHandler) handleHandoff(hCtx HandlerContext, toAgent agentboot.AgentT
 		logrus.WithError(err).Error("Failed to update current agent after handoff")
 	}
 
+	// Also update session context to persist the agent choice
+	if sessionID != "" {
+		h.sessionMgr.SetContext(sessionID, "current_agent", string(toAgent))
+		logrus.WithFields(logrus.Fields{
+			"chatID":    hCtx.ChatID,
+			"sessionID": sessionID,
+			"fromAgent": fromAgent,
+			"toAgent":   toAgent,
+		}).Info("Updated session agent after handoff")
+	}
+
 	// Send handoff confirmation
 	h.SendText(hCtx, result.Message)
 
@@ -497,12 +508,23 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 		// Update session context with new project path
 		if sessionID != "" {
 			h.sessionMgr.SetContext(sessionID, "project_path", newProjectPath)
+		}
+
+		// Persist to chat store so it survives across sessions
+		if err := h.chatStore.UpdateChat(hCtx.ChatID, func(chat *Chat) {
+			chat.ProjectPath = newProjectPath
+		}); err != nil {
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"chatID":  hCtx.ChatID,
+				"newPath": newProjectPath,
+			}).Warn("Failed to persist project path to chat store")
+		} else {
 			logrus.WithFields(logrus.Fields{
 				"chatID":    hCtx.ChatID,
 				"sessionID": sessionID,
 				"oldPath":   projectPath,
 				"newPath":   newProjectPath,
-			}).Info("Updated session project path from smart guide")
+			}).Info("Updated and persisted project path from smart guide")
 		}
 	}
 
