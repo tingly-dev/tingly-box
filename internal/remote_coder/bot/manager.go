@@ -44,7 +44,7 @@ type Manager struct {
 	mu         sync.RWMutex
 	running    map[string]*runningBot // uuid -> runningBot
 	store      SettingsStore
-	dbPath     string // Database path for chat store
+	dataPath   string // Data path for JSON chat store (replaces dbPath)
 	sessionMgr *session.Manager
 	agentBoot  *agentboot.AgentBoot
 	msgHandler agentboot.MessageHandler
@@ -61,11 +61,11 @@ func NewManager(store SettingsStore, sessionMgr *session.Manager, agentBoot *age
 	}
 }
 
-// SetDBPath sets the database path for chat store operations
-func (m *Manager) SetDBPath(dbPath string) {
+// SetDataPath sets the data path for JSON chat store operations
+func (m *Manager) SetDataPath(dataPath string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.dbPath = dbPath
+	m.dataPath = dataPath
 }
 
 // Start starts a bot by UUID
@@ -147,9 +147,9 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	// Start bot in goroutine
 	go func() {
 		m.mu.RLock()
-		dbPath := m.dbPath
+		dataPath := m.dataPath
 		m.mu.RUnlock()
-		if err := runBotWithSettings(ctx, s, dbPath, m.sessionMgr, m.agentBoot); err != nil {
+		if err := runBotWithSettings(ctx, s, dataPath, m.sessionMgr, m.agentBoot); err != nil {
 			logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
 		}
 

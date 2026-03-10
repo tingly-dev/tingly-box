@@ -35,6 +35,7 @@ func TestManagerStartStop(t *testing.T) {
 	// Create manager
 	botStore, err := db.NewImBotSettingsStore(dir)
 	manager := NewManager(botStore, sessionMgr, agentBoot)
+	manager.SetDataPath(filepath.Join(dir, "bot_chats.json"))
 
 	// Test: IsRunning returns false for non-existent bot
 	require.False(t, manager.IsRunning("non-existent-uuid"))
@@ -88,8 +89,8 @@ func TestManagerStartEnabledBots(t *testing.T) {
 	agentBoot := agentboot.New(agentboot.Config{})
 
 	// Create manager
-	// Create manager
 	manager := NewManager(botStore, sessionMgr, agentBoot)
+	manager.SetDataPath(filepath.Join(dir, "bot_chats.json"))
 
 	// Start enabled bots - should not fail
 	ctx := context.Background()
@@ -129,6 +130,7 @@ func TestManagerStopAll(t *testing.T) {
 	// Create manager
 	botStore, err := db.NewImBotSettingsStore(dir)
 	manager := NewManager(botStore, sessionMgr, agentBoot)
+	manager.SetDataPath(filepath.Join(dir, "bot_chats.json"))
 
 	// StopAll should be safe even with no running bots
 	manager.StopAll()

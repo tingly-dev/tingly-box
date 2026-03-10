@@ -27,7 +27,7 @@ import (
 type BotHandler struct {
 	ctx              context.Context
 	botSetting       BotSetting
-	chatStore        *ChatStore
+	chatStore        ChatStoreInterface // Use interface for flexibility
 	sessionMgr       *session.Manager
 	agentBoot        *agentboot.AgentBoot
 	summaryEngine    *summarizer.Engine
@@ -81,7 +81,7 @@ type HandlerContext struct {
 func NewBotHandler(
 	ctx context.Context,
 	botSetting BotSetting,
-	chatStore *ChatStore,
+	chatStore ChatStoreInterface,
 	sessionMgr *session.Manager,
 	agentBoot *agentboot.AgentBoot,
 	summaryEngine *summarizer.Engine,

@@ -34,12 +34,21 @@ type ChatStore struct {
 	db *sql.DB
 }
 
+// Ensure ChatStore implements ChatStoreInterface
+var _ ChatStoreInterface = (*ChatStore)(nil)
+
 // NewChatStore creates a new chat store
 func NewChatStore(db *sql.DB) (*ChatStore, error) {
 	if db == nil {
 		return nil, fmt.Errorf("db is nil")
 	}
 	return &ChatStore{db: db}, nil
+}
+
+// Close closes the chat store (no-op for SQLite as connection is managed externally)
+func (s *ChatStore) Close() error {
+	// SQLite connection is managed externally (by Store), so no-op here
+	return nil
 }
 
 // InitChatSchema initializes the chat schema
@@ -417,6 +426,48 @@ func (s *ChatStore) GetAgentState(chatID string) ([]byte, error) {
 		return nil, nil
 	}
 	return chat.AgentState, nil
+}
+
+// ListWhitelistedGroups returns all whitelisted groups
+func (s *ChatStore) ListWhitelistedGroups() ([]struct {
+	GroupID   string
+	Platform  string
+	AddedBy   string
+	CreatedAt string
+}, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	// Use chatStore to get whitelisted chats
+	chats, err := s.db.Query(`
+		SELECT chat_id, platform, whitelisted_by, created_at
+		FROM remote_coder_chats WHERE is_whitelisted = 1
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer chats.Close()
+
+	var results []struct {
+		GroupID   string
+		Platform  string
+		AddedBy   string
+		CreatedAt string
+	}
+	for chats.Next() {
+		var r struct {
+			GroupID   string
+			Platform  string
+			AddedBy   string
+			CreatedAt string
+		}
+		if err := chats.Scan(&r.GroupID, &r.Platform, &r.AddedBy, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+	return results, nil
 }
 
 // ============== Helpers ==============

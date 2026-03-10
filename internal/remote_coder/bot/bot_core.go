@@ -131,14 +131,14 @@ type ResponseMeta struct {
 	SessionID   string
 }
 
-// runBotWithSettings starts a bot using db.Settings instead of bot.Store
-func runBotWithSettings(ctx context.Context, setting BotSetting, dbPath string, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot) error {
-	// Create a temporary bot.Store for chat state management
-	store, err := NewStoreForChatOnly(dbPath)
+// runBotWithSettings starts a bot using JSON file storage for chat state
+func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot) error {
+	// Create a JSON-based chat store
+	chatStore, err := NewChatStoreJSON(dataPath)
 	if err != nil {
 		return fmt.Errorf("failed to create chat store: %w", err)
 	}
-	defer store.Close()
+	defer chatStore.Close()
 
 	// Create platform-specific auth config
 	authConfig := buildAuthConfig(setting)
@@ -178,7 +178,7 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dbPath string, 
 	// Register unified message handler with platform parameter
 	// Note: TB Client is not available in bot_core, pass nil for now
 	// The smartguide will fall back to environment variables
-	handler := NewBotHandler(ctx, setting, store.ChatStore(), sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager, nil)
+	handler := NewBotHandler(ctx, setting, chatStore, sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager, nil)
 	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {
@@ -241,7 +241,7 @@ func getReplyTarget(msg imbot.Message) string {
 }
 
 // getProjectPathForGroup retrieves the project path bound to a group chat.
-func getProjectPathForGroup(chatStore *ChatStore, chatID string, platform string) (string, bool) {
+func getProjectPathForGroup(chatStore ChatStoreInterface, chatID string, platform string) (string, bool) {
 	if chatStore == nil {
 		return "", false
 	}
