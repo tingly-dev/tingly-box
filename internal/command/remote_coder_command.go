@@ -62,6 +62,7 @@ func botCommand(appManager *AppManager) *cobra.Command {
 
 	cmd.AddCommand(botListCommand(appManager))
 	cmd.AddCommand(botStartCommand(appManager))
+	cmd.AddCommand(botConfigCommand(appManager))
 
 	return cmd
 }
@@ -640,8 +641,11 @@ func botListCommand(appManager *AppManager) *cobra.Command {
 
 // botStartCommand creates the `rc bot start` subcommand
 func botStartCommand(appManager *AppManager) *cobra.Command {
-	var interactive bool
-	var dataPath string
+	var (
+		dataPath string
+		provider string
+		model    string
+	)
 
 	cmd := &cobra.Command{
 		Use:   "start [uuid]",
@@ -663,17 +667,16 @@ func botStartCommand(appManager *AppManager) *cobra.Command {
 				return fmt.Errorf("failed to create bot settings store: %w", err)
 			}
 
-			// Get UUID either from args or interactive selection
+			// Get UUID either from args or interactive selection (default to interactive)
 			var uuid string
 			if len(args) > 0 {
 				uuid = args[0]
-			} else if interactive {
+			} else {
+				// Default to interactive when no UUID provided
 				uuid, err = selectBotInteractively(store)
 				if err != nil {
 					return err
 				}
-			} else {
-				return fmt.Errorf("please provide a bot UUID or use -i for interactive selection")
 			}
 
 			// Get bot settings
@@ -685,6 +688,51 @@ func botStartCommand(appManager *AppManager) *cobra.Command {
 				return fmt.Errorf("bot with UUID %s not found", uuid)
 			}
 
+			// Handle SmartGuide configuration
+			reader := bufio.NewReader(os.Stdin)
+			if provider == "" || model == "" {
+				// Check if current setting has SmartGuide config
+				if setting.SmartGuideProvider == "" || setting.SmartGuideModel == "" {
+					fmt.Println()
+					fmt.Println("SmartGuide (@tb agent) requires model configuration.")
+					fmt.Println("Current bot does not have SmartGuide configured.")
+					fmt.Println()
+
+					// Prompt for provider and model
+					p, m, err := promptForSmartGuideModel(reader, appManager)
+					if err != nil {
+						return fmt.Errorf("failed to configure SmartGuide model: %w", err)
+					}
+					provider = p
+					model = m
+
+					// Update settings
+					setting.SmartGuideProvider = provider
+					setting.SmartGuideModel = model
+					if err := store.UpdateSettings(uuid, setting); err != nil {
+						logrus.WithError(err).Warn("Failed to save SmartGuide configuration to store")
+					}
+				} else {
+					provider = setting.SmartGuideProvider
+					model = setting.SmartGuideModel
+					fmt.Printf("Using configured SmartGuide: provider=%s, model=%s\n", provider, model)
+				}
+			}
+
+			// Validate SmartGuide configuration
+			if provider == "" || model == "" {
+				return fmt.Errorf("smartguide_provider and smartguide_model are required. Use --provider and --model flags")
+			}
+
+			// Validate provider exists
+			prov, err := appManager.GetProvider(provider)
+			if err != nil {
+				return fmt.Errorf("provider %s not found: %w", provider, err)
+			}
+			if prov == nil {
+				return fmt.Errorf("provider %s not found", provider)
+			}
+
 			// Determine data path
 			if dataPath == "" {
 				dataPath = cfg.ConfigDir
@@ -692,6 +740,7 @@ func botStartCommand(appManager *AppManager) *cobra.Command {
 
 			// Start the bot
 			fmt.Printf("Starting bot: %s (%s)\n", setting.Name, setting.Platform)
+			fmt.Printf("SmartGuide: provider=%s, model=%s\n", provider, model)
 			fmt.Println("Press Ctrl+C to stop the bot.")
 			fmt.Println()
 
@@ -699,8 +748,133 @@ func botStartCommand(appManager *AppManager) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "select bot interactively")
 	cmd.Flags().StringVar(&dataPath, "data-path", "", "data directory for bot state (default: config dir)")
+	cmd.Flags().StringVar(&provider, "provider", "", "provider UUID for smartguide (overrides bot setting)")
+	cmd.Flags().StringVar(&model, "model", "", "model name for smartguide (overrides bot setting)")
+
+	return cmd
+}
+
+// botConfigCommand creates the `rc bot config` subcommand
+func botConfigCommand(appManager *AppManager) *cobra.Command {
+	var (
+		provider   string
+		model      string
+		showConfig bool
+	)
+
+	cmd := &cobra.Command{
+		Use:   "config [uuid]",
+		Short: "Configure bot SmartGuide settings",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if appManager == nil || appManager.AppConfig() == nil {
+				return fmt.Errorf("app configuration is not initialized")
+			}
+
+			cfg := appManager.AppConfig().GetGlobalConfig()
+			if cfg == nil {
+				return fmt.Errorf("global config not available")
+			}
+
+			// Create ImBot settings store
+			store, err := db.NewImBotSettingsStore(cfg.ConfigDir)
+			if err != nil {
+				return fmt.Errorf("failed to create bot settings store: %w", err)
+			}
+
+			// Get UUID either from args or interactive selection (default to interactive)
+			var uuid string
+			if len(args) > 0 {
+				uuid = args[0]
+			} else {
+				// Default to interactive when no UUID provided
+				uuid, err = selectBotInteractively(store)
+				if err != nil {
+					return err
+				}
+			}
+
+			// Get bot settings
+			setting, err := store.GetSettingsByUUID(uuid)
+			if err != nil {
+				return fmt.Errorf("failed to get bot settings: %w", err)
+			}
+			if setting.UUID == "" {
+				return fmt.Errorf("bot with UUID %s not found", uuid)
+			}
+
+			// Show current config
+			if showConfig {
+				fmt.Printf("Bot: %s (%s)\n", setting.Name, setting.Platform)
+				fmt.Printf("UUID: %s\n", setting.UUID)
+				fmt.Println()
+				fmt.Println("SmartGuide Configuration:")
+				if setting.SmartGuideProvider != "" {
+					fmt.Printf("  Provider: %s\n", setting.SmartGuideProvider)
+					// Try to get provider name
+					if prov, err := appManager.GetProvider(setting.SmartGuideProvider); err == nil && prov != nil {
+						fmt.Printf("    Name: %s\n", prov.Name)
+					}
+				} else {
+					fmt.Println("  Provider: (not configured)")
+				}
+				if setting.SmartGuideModel != "" {
+					fmt.Printf("  Model: %s\n", setting.SmartGuideModel)
+				} else {
+					fmt.Println("  Model: (not configured)")
+				}
+				return nil
+			}
+
+			// Configure SmartGuide
+			reader := bufio.NewReader(os.Stdin)
+
+			// If provider/model not provided via flags, prompt interactively
+			if provider == "" || model == "" {
+				fmt.Println()
+				fmt.Println("Configure SmartGuide (@tb agent)")
+				fmt.Println("-----------------------------")
+
+				p, m, err := promptForSmartGuideModel(reader, appManager)
+				if err != nil {
+					return fmt.Errorf("failed to configure SmartGuide model: %w", err)
+				}
+				provider = p
+				model = m
+			} else {
+				// Validate provider exists
+				prov, err := appManager.GetProvider(provider)
+				if err != nil || prov == nil {
+					return fmt.Errorf("provider %s not found", provider)
+				}
+			}
+
+			// Update settings
+			setting.SmartGuideProvider = provider
+			setting.SmartGuideModel = model
+
+			if err := store.UpdateSettings(uuid, setting); err != nil {
+				return fmt.Errorf("failed to update bot settings: %w", err)
+			}
+
+			// Get provider name for display
+			providerName := provider
+			if prov, err := appManager.GetProvider(provider); err == nil && prov != nil {
+				providerName = prov.Name
+			}
+
+			fmt.Println()
+			fmt.Println("SmartGuide configuration updated:")
+			fmt.Printf("  Provider: %s (%s)\n", providerName, provider)
+			fmt.Printf("  Model: %s\n", model)
+
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVar(&showConfig, "show", false, "show current configuration")
+	cmd.Flags().StringVar(&provider, "provider", "", "provider UUID for smartguide")
+	cmd.Flags().StringVar(&model, "model", "", "model name for smartguide")
 
 	return cmd
 }
@@ -747,20 +921,67 @@ func selectBotInteractively(store *db.ImBotSettingsStore) (string, error) {
 	return settings[choice-1].UUID, nil
 }
 
+// promptForSmartGuideModel prompts the user to select provider and model for SmartGuide
+func promptForSmartGuideModel(reader *bufio.Reader, appManager *AppManager) (string, string, error) {
+	providers := appManager.ListProviders()
+	if len(providers) == 0 {
+		return "", "", fmt.Errorf("no providers configured. Please add a provider first using 'tingly-box provider add'")
+	}
+
+	// Select provider
+	provider, err := promptForProviderChoice(reader, providers, nil, "SmartGuide")
+	if err != nil {
+		return "", "", fmt.Errorf("failed to select provider: %w", err)
+	}
+
+	// Fetch models for the provider
+	modelManager := appManager.AppConfig().GetGlobalConfig().GetModelManager()
+	if modelManager == nil {
+		return "", "", fmt.Errorf("model manager not available")
+	}
+
+	// Try to fetch models from provider
+	if err := appManager.AppConfig().FetchAndSaveProviderModels(provider.UUID); err != nil {
+		logrus.WithError(err).Warn("Failed to fetch models from provider, using cached list")
+	}
+
+	models := modelManager.GetModels(provider.UUID)
+	if len(models) == 0 {
+		// If no models found, let user enter manually
+		fmt.Println()
+		fmt.Println("No models found for this provider.")
+		model, err := promptForInput(reader, "Enter model name: ", true)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to read model name: %w", err)
+		}
+		return provider.UUID, model, nil
+	}
+
+	// Select model
+	model, err := promptForModelChoice(reader, "SmartGuide model", models)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to select model: %w", err)
+	}
+
+	return provider.UUID, model, nil
+}
+
 // runStandaloneBot runs a single bot in standalone mode
 func runStandaloneBot(ctx context.Context, appManager *AppManager, setting db.Settings, dataPath string) error {
 	botSetting := bot.BotSetting{
-		UUID:          setting.UUID,
-		Name:          setting.Name,
-		Token:         setting.Auth["token"],
-		Platform:      setting.Platform,
-		AuthType:      setting.AuthType,
-		Auth:          setting.Auth,
-		ProxyURL:      setting.ProxyURL,
-		ChatIDLock:    setting.ChatIDLock,
-		BashAllowlist: setting.BashAllowlist,
-		DefaultCwd:    setting.DefaultCwd,
-		Enabled:       setting.Enabled,
+		UUID:               setting.UUID,
+		Name:               setting.Name,
+		Token:              setting.Auth["token"],
+		Platform:           setting.Platform,
+		AuthType:           setting.AuthType,
+		Auth:               setting.Auth,
+		ProxyURL:           setting.ProxyURL,
+		ChatIDLock:         setting.ChatIDLock,
+		BashAllowlist:      setting.BashAllowlist,
+		DefaultCwd:         setting.DefaultCwd,
+		Enabled:            setting.Enabled,
+		SmartGuideProvider: setting.SmartGuideProvider,
+		SmartGuideModel:    setting.SmartGuideModel,
 	}
 
 	// Create session manager (minimal for standalone bot)
