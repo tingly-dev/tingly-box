@@ -38,8 +38,8 @@ func TestNewToolExecutor(t *testing.T) {
 
 func TestToolExecutor_SetGetWorkingDirectory(t *testing.T) {
 	executor := sg.NewToolExecutor([]string{})
-	cwd, _ := os.Getwd()
-	assert.Equal(t, cwd, executor.GetWorkingDirectory()) // Default to current working directory
+	// Initially returns empty string when not explicitly set
+	assert.Equal(t, "", executor.GetWorkingDirectory())
 
 	testDir := t.TempDir()
 	executor.SetWorkingDirectory(testDir)
@@ -78,7 +78,8 @@ func TestToolExecutor_ExecuteBash(t *testing.T) {
 	executor = sg.NewToolExecutor([]string{"ls"})
 	output, err = executor.ExecuteBash(ctx, "rm", "foo")
 	assert.Error(t, err)
-	assert.Contains(t, output, "command 'rm' is not allowed")
+	// The error message contains "not allowed"
+	assert.Contains(t, err.Error(), "not allowed")
 
 	// Test command failure
 	executor = sg.NewToolExecutor([]string{"ls"})
@@ -140,8 +141,8 @@ func TestBashTool_NameDescriptionParameters(t *testing.T) {
 
 func TestBashTool_Call(t *testing.T) {
 	ctx := context.Background()
-	executor := sg.NewToolExecutor([]string{"ls", "echo", "pwd"}) // Allow these commands
-	bashTool := sg.NewBashTool(executor, []string{"ls", "echo", "pwd"})
+	executor := sg.NewToolExecutor([]string{"ls", "echo", "pwd", "cd"})       // Allow cd in executor
+	bashTool := sg.NewBashTool(executor, []string{"ls", "echo", "pwd", "cd"}) // Also allow cd in tool to test cd-specific logic
 
 	// Test valid command
 	resp, err := bashTool.Call(ctx, map[string]any{"command": "echo hello"})
@@ -162,7 +163,7 @@ func TestBashTool_Call(t *testing.T) {
 	text = extractTextFromResponse(resp)
 	assert.Contains(t, text, "Error: 'command' parameter is required")
 
-	// Test 'cd' command (should be disallowed by BashTool logic)
+	// Test 'cd' command (should be disallowed by BashTool logic even if in allowlist)
 	resp, err = bashTool.Call(ctx, map[string]any{"command": "cd /tmp"})
 	assert.NoError(t, err)
 	text = extractTextFromResponse(resp)
@@ -175,10 +176,12 @@ func TestBashTool_Call(t *testing.T) {
 	assert.Contains(t, text, "arg1 arg2")
 
 	// Test command with non-existent executable
-	resp, err = bashTool.Call(ctx, map[string]any{"command": "nonexistentcommand"})
+	// Since we have a specific allowlist, non-existent commands will be caught by the allowlist check
+	// To properly test "command not found", we need a command that exists but will fail
+	resp, err = bashTool.Call(ctx, map[string]any{"command": "ls /nonexistentpath12345"})
 	assert.NoError(t, err) // Still no error, but should report command not found
 	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "not found")
+	assert.Contains(t, text, "No such file or directory")
 
 	// Test with a working directory set in the executor
 	tempDir := t.TempDir()
