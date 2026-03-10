@@ -1069,7 +1069,7 @@ func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, set
 			}
 
 			// Create TBClient with nil router (not needed for GetDefaultService/GetConnectionConfig)
-			tbClient = tbclient.NewTBClient(cfg, providerStore, nil, "localhost", serverPort)
+			tbClient = tbclient.NewTBClient(cfg.GetGlobalConfig(), providerStore, nil, "localhost", serverPort)
 			logrus.WithField("serverPort", serverPort).Info("Created TBClient for smartguide agent")
 		}
 	}

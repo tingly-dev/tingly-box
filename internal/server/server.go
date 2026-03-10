@@ -28,6 +28,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
+	"github.com/tingly-dev/tingly-box/internal/tbclient"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
@@ -1022,13 +1023,25 @@ func (s *Server) StartRemoteCoder() error {
 		return fmt.Errorf("invalid remote control config: %w", err)
 	}
 
+	// Create TBClient for SmartGuide model configuration
+	// The TBClient needs: Config, ProviderStore, Router, server host/port
+	// For bot usage, ProviderUUID and ModelID are provided via bot settings,
+	// so we primarily need Config and ProviderStore
+	tbClient := tbclient.NewTBClient(
+		s.config,
+		s.config.GetProviderStore(),
+		nil, // Router - not needed for bot usage (bots use ProviderUUID directly)
+		s.host,
+		s.config.GetServerPort(),
+	)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	s.remoteCoderCtx = ctx
 	s.remoteCoderCancel = cancel
 
 	go func() {
 		imbotStore := s.config.GetImBotSettingsStore()
-		if err := remote_coder.Run(ctx, rcCfg, imbotStore); err != nil && ctx.Err() == nil {
+		if err := remote_coder.Run(ctx, rcCfg, imbotStore, tbClient); err != nil && ctx.Err() == nil {
 			logrus.WithError(err).Warn("Remote-coder stopped with error")
 		}
 	}()

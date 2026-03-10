@@ -11,6 +11,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
+	"github.com/tingly-dev/tingly-box/internal/tbclient"
 )
 
 const (
@@ -135,7 +136,7 @@ type ResponseMeta struct {
 }
 
 // runBotWithSettings starts a bot using JSON file storage for chat state
-func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot) error {
+func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, tbClient tbclient.TBClient) error {
 	// Create a JSON-based chat store
 	chatStore, err := NewChatStoreJSON(dataPath)
 	if err != nil {
@@ -179,9 +180,7 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 	}
 
 	// Register unified message handler with platform parameter
-	// Note: TB Client is not available in bot_core, pass nil for now
-	// The smartguide will fall back to environment variables
-	handler := NewBotHandler(ctx, setting, chatStore, sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager, nil)
+	handler := NewBotHandler(ctx, setting, chatStore, sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager, tbClient)
 	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {

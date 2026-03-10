@@ -301,7 +301,7 @@ func TestTinglyBoxAgent_GetConfig(t *testing.T) {
 func TestNewAgentFactory(t *testing.T) {
 	cfg := DefaultSmartGuideConfig()
 	mockTBClient := new(MockTBClient)
-	factory := NewAgentFactory(cfg, mockTBClient)
+	factory := NewAgentFactory(cfg, mockTBClient, "test-provider", "test-model")
 	assert.NotNil(t, factory)
 	assert.Same(t, cfg, factory.config)
 	assert.Same(t, mockTBClient, factory.tbClient)
@@ -318,7 +318,7 @@ func TestAgentFactory_CreateAgent(t *testing.T) {
 		RequestModel: "claude-sonnet-4-6",
 	}, nil)
 
-	factory := NewAgentFactory(cfg, mockTBClient)
+	factory := NewAgentFactory(cfg, mockTBClient, "test-provider", "test-model")
 
 	getStatus := func(chatID string) (*StatusInfo, error) { return &StatusInfo{}, nil }
 	getProject := func(chatID string) (string, bool, error) { return "", false, nil }

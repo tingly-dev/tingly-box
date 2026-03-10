@@ -14,6 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/bot"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/config"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
+	"github.com/tingly-dev/tingly-box/internal/tbclient"
 )
 
 // getChatStorePath converts the DB path to a JSON file path for chat storage
@@ -30,7 +31,8 @@ func getChatStorePath(dbPath string) string {
 // Run starts the remote-coder service and blocks until shutdown.
 // imbotStore is the optional ImBot settings store from the main service.
 // If provided, it will be used to load bot credentials instead of the local store.
-func Run(ctx context.Context, cfg *config.Config, imbotStore *db.ImBotSettingsStore) error {
+// tbClient is the TB client for SmartGuide model configuration (required for @tb agent).
+func Run(ctx context.Context, cfg *config.Config, imbotStore *db.ImBotSettingsStore, tbClient tbclient.TBClient) error {
 	if cfg == nil {
 		return fmt.Errorf("remote-coder config is nil")
 	}
@@ -86,6 +88,14 @@ func Run(ctx context.Context, cfg *config.Config, imbotStore *db.ImBotSettingsSt
 
 	// Store bot manager globally for API integration
 	globalBotManager = botManager
+
+	// Set TBClient for SmartGuide model configuration
+	if tbClient != nil {
+		botManager.SetTBClient(tbClient)
+		logrus.Info("TBClient configured for SmartGuide agent")
+	} else {
+		logrus.Warn("TBClient not provided - SmartGuide (@tb) agent will not function properly")
+	}
 
 	// Start enabled bots using the manager
 	if err := botManager.StartEnabled(ctx); err != nil {

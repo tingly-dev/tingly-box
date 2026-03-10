@@ -4,11 +4,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/tingly-dev/tingly-box/internal/config"
+	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 )
 
 func TestNewTBClient(t *testing.T) {
-	cfg := &config.AppConfig{}
+	cfg := &serverconfig.Config{}
 
 	// We can't easily mock the dependencies without interfaces,
 	// so we'll test with nil values and check the constructor works
@@ -22,14 +22,14 @@ func TestNewTBClient(t *testing.T) {
 }
 
 func TestTBClient_DefaultBaseURL(t *testing.T) {
-	cfg := &config.AppConfig{}
+	cfg := &serverconfig.Config{}
 	client := NewTBClient(cfg, nil, nil, "localhost", 8080)
 
 	assert.Equal(t, "http://localhost:12580/tingly/claude_code", client.defaultBaseURL)
 }
 
 func TestTBClient_ServerConfig(t *testing.T) {
-	cfg := &config.AppConfig{}
+	cfg := &serverconfig.Config{}
 	client := NewTBClient(cfg, nil, nil, "example.com", 9090)
 
 	assert.Equal(t, "example.com", client.serverHost)

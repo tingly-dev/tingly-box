@@ -10,6 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
+	"github.com/tingly-dev/tingly-box/internal/tbclient"
 )
 
 // SettingsStore defines the interface for bot settings storage
@@ -48,6 +49,7 @@ type Manager struct {
 	sessionMgr *session.Manager
 	agentBoot  *agentboot.AgentBoot
 	msgHandler agentboot.MessageHandler
+	tbClient   tbclient.TBClient // TB Client for SmartGuide model configuration
 }
 
 // NewManager creates a new bot manager with a settings store
@@ -59,6 +61,13 @@ func NewManager(store SettingsStore, sessionMgr *session.Manager, agentBoot *age
 		sessionMgr: sessionMgr,
 		agentBoot:  agentBoot,
 	}
+}
+
+// SetTBClient sets the TBClient for SmartGuide configuration
+func (m *Manager) SetTBClient(tbClient tbclient.TBClient) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.tbClient = tbClient
 }
 
 // SetDataPath sets the data path for JSON chat store operations
@@ -151,8 +160,9 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	go func() {
 		m.mu.RLock()
 		dataPath := m.dataPath
+		tbClient := m.tbClient
 		m.mu.RUnlock()
-		if err := runBotWithSettings(ctx, s, dataPath, m.sessionMgr, m.agentBoot); err != nil {
+		if err := runBotWithSettings(ctx, s, dataPath, m.sessionMgr, m.agentBoot, tbClient); err != nil {
 			logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
 		}
 

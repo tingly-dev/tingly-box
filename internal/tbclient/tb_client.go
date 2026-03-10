@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
+	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -36,7 +36,7 @@ type TBClient interface {
 
 // TBClientImpl implements TBClient interface
 type TBClientImpl struct {
-	config         *config.AppConfig
+	config         *serverconfig.Config
 	providerDB     *db.ProviderStore
 	router         *smartrouting.Router
 	serverHost     string
@@ -46,7 +46,7 @@ type TBClientImpl struct {
 
 // NewTBClient creates a new TB client instance
 func NewTBClient(
-	cfg *config.AppConfig,
+	cfg *serverconfig.Config,
 	providerDB *db.ProviderStore,
 	router *smartrouting.Router,
 	serverHost string,
@@ -110,8 +110,7 @@ func (c *TBClientImpl) buildBaseURL() string {
 
 // findFirstClaudeCodeRule finds the first active ClaudeCode rule
 func (c *TBClientImpl) findFirstClaudeCodeRule() (*typ.Rule, error) {
-	globalConfig := c.config.GetGlobalConfig()
-	rules := globalConfig.GetRequestConfigs()
+	rules := c.config.GetRequestConfigs()
 	for i, rule := range rules {
 		if rule.GetScenario() == typ.ScenarioClaudeCode && rule.Active {
 			return &rules[i], nil
@@ -125,7 +124,7 @@ func (c *TBClientImpl) GetConnectionConfig(ctx context.Context) (*ConnectionConf
 	// For @tb, we use the ClaudeCode scenario URL as default
 	// API key comes from the default or configured provider
 
-	apiKey := c.config.GetGlobalConfig().GetModelToken()
+	apiKey := c.config.GetModelToken()
 
 	return &ConnectionConfig{
 		BaseURL: c.buildBaseURL(),
