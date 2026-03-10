@@ -207,7 +207,16 @@ func (s *ChatStoreJSON) UpsertChat(chat *Chat) error {
 		chat.CurrentAgent = "tingly-box"
 	}
 
-	return s.store.Set(chat.ChatID, chat)
+	if err := s.store.Set(chat.ChatID, chat); err != nil {
+		return err
+	}
+
+	// Force immediate write to disk
+	if saveErr := s.store.ForceSave(); saveErr != nil {
+		logrus.WithError(saveErr).Error("Failed to force save chat store to disk after upsert")
+	}
+
+	return nil
 }
 
 // UpdateChat updates specific fields of a chat
@@ -235,6 +244,11 @@ func (s *ChatStoreJSON) UpdateChat(chatID string, fn func(*Chat)) error {
 		if chat != nil {
 			if saveErr := s.store.Set(chatID, chat); saveErr != nil {
 				logrus.WithError(saveErr).Error("Failed to mark chat as dirty for save")
+			} else {
+				// Force immediate write to disk
+				if forceSaveErr := s.store.ForceSave(); forceSaveErr != nil {
+					logrus.WithError(forceSaveErr).Error("Failed to force save chat store to disk")
+				}
 			}
 		}
 	}
