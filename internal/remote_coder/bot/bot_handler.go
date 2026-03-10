@@ -321,13 +321,14 @@ func (h *BotHandler) handleHandoff(hCtx HandlerContext, toAgent agentboot.AgentT
 func (h *BotHandler) routeToAgent(hCtx HandlerContext, text string) error {
 	// Check for handoff commands first (supports "@cc help me" format)
 	if toAgent, isHandoff, remainingText := smartguide.DetectHandoffCommand(text); isHandoff {
-		// Determine target agent
+		// Determine target agent by comparing string values
 		var targetAgent agentboot.AgentType
-		if toAgent == agentTinglyBox {
+		switch string(toAgent) {
+		case smartguide.AgentTypeTinglyBox:
 			targetAgent = agentTinglyBox
-		} else if toAgent == agentboot.AgentTypeClaude {
+		case smartguide.AgentTypeClaudeCode:
 			targetAgent = agentClaudeCode
-		} else {
+		default:
 			return fmt.Errorf("unknown target agent: %s", toAgent)
 		}
 
