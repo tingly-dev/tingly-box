@@ -365,9 +365,90 @@ func (h *BotHandler) getProjectPathForChat(hCtx HandlerContext) (string, bool, e
 
 // handleSmartGuideMessage handles a message for the smart guide agent
 func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) error {
-	// For now, send a simple response
-	// TODO: Implement full smart guide agent interaction
-	h.SendText(hCtx, "👋 Smart Guide (@tb) is not fully enabled yet. Use @cc to switch to Claude Code for now.")
+	// Lazy initialization of smart guide agent
+	if h.smartGuideAgent == nil {
+		// Get API key from environment
+		apiKey := os.Getenv("ANTHROPIC_API_KEY")
+		if apiKey == "" {
+			h.SendText(hCtx, "⚠️ Smart Guide is not configured. ANTHROPIC_API_KEY not set.")
+			return nil
+		}
+
+		// Create agent factory
+		factory := smartguide.NewAgentFactory(
+			smartguide.LoadSmartGuideConfig(),
+			apiKey,
+			"", // base URL from env if needed
+		)
+
+		// Create agent with callback functions
+		agent, err := factory.CreateAgent(
+			// getStatusFunc callback
+			func(chatID string) (*smartguide.StatusInfo, error) {
+				sessionID, _, _ := h.chatStore.GetSession(chatID)
+				projectPath, _, _ := h.chatStore.GetProjectPath(chatID)
+				workingDir, hasWD, _ := h.chatStore.GetBashCwd(chatID)
+				if !hasWD {
+					workingDir = ""
+				}
+
+				return &smartguide.StatusInfo{
+					CurrentAgent:   "tingly-box",
+					SessionID:      sessionID,
+					ProjectPath:    projectPath,
+					WorkingDir:     workingDir,
+					HasRunningTask: false, // TODO: track running tasks
+					Whitelisted:    h.chatStore.IsWhitelisted(chatID),
+				}, nil
+			},
+			// getProjectFunc callback
+			func(chatID string) (string, bool, error) {
+				return h.chatStore.GetProjectPath(chatID)
+			},
+		)
+
+		if err != nil {
+			logrus.WithError(err).Error("Failed to create smart guide agent")
+			h.SendText(hCtx, "⚠️ Failed to initialize Smart Guide.")
+			return nil
+		}
+
+		h.smartGuideAgent = agent
+		logrus.Info("Smart guide agent initialized")
+	}
+
+	// Get project path for context
+	projectPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
+
+	// Set working directory if available
+	if projectPath != "" {
+		h.smartGuideAgent.GetExecutor().SetWorkingDirectory(projectPath)
+	}
+
+	// Create tool context
+	toolCtx := &smartguide.ToolContext{
+		ChatID:      hCtx.ChatID,
+		ProjectPath: projectPath,
+		SessionID:   "", // Will be set if needed
+	}
+
+	// Send "thinking" message
+	h.SendText(hCtx, "💭 Thinking...")
+
+	// Get response from agent
+	response, err := h.smartGuideAgent.ReplyWithContext(h.ctx, text, toolCtx)
+	if err != nil {
+		logrus.WithError(err).Error("Smart guide agent failed")
+		h.SendText(hCtx, fmt.Sprintf("❌ Error: %v", err))
+		return nil
+	}
+
+	// Get text content from response
+	responseText := response.GetTextContent()
+
+	// Send the response
+	h.SendText(hCtx, responseText)
+
 	return nil
 }
 

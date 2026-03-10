@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -106,7 +107,7 @@ func initSchema(db *sql.DB) error {
 			updated_at TEXT NOT NULL
 		);
 
-		-- New unified chat table
+		-- New unified chat table (with agent state support)
 		CREATE TABLE IF NOT EXISTS remote_coder_chats (
 			chat_id TEXT PRIMARY KEY,
 			platform TEXT NOT NULL,
@@ -116,6 +117,8 @@ func initSchema(db *sql.DB) error {
 			is_whitelisted INTEGER DEFAULT 0,
 			whitelisted_by TEXT,
 			bash_cwd TEXT,
+			current_agent TEXT DEFAULT 'claude',
+			agent_state BLOB,
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);
@@ -195,6 +198,7 @@ func initSchema(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_chats_platform ON remote_coder_chats(platform)`,
 		`CREATE INDEX IF NOT EXISTS idx_chats_owner ON remote_coder_chats(owner_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_chats_session ON remote_coder_chats(session_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_chats_current_agent ON remote_coder_chats(current_agent)`,
 		`CREATE INDEX IF NOT EXISTS idx_projects_path ON remote_coder_projects(path)`,
 		`CREATE INDEX IF NOT EXISTS idx_projects_owner ON remote_coder_projects(owner_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_group_bindings_group ON remote_coder_group_bindings(group_id, platform)`,
@@ -212,6 +216,11 @@ func initSchema(db *sql.DB) error {
 
 	// Migrate data to new unified chats table
 	if err := migrateToChatsTable(db); err != nil {
+		return err
+	}
+
+	// Migrate to new agent state schema
+	if err := migrateToAgentState(db); err != nil {
 		return err
 	}
 
@@ -358,6 +367,59 @@ func migrateV1ToV2(db *sql.DB) error {
 	`, newUUID, name.String, platform.String, authType.String, authConfig.String, proxyURL.String, chatIDLock.String, bashAllowlist.String, now, now)
 
 	return err
+}
+
+// migrateToAgentState adds agent state columns to existing databases
+func migrateToAgentState(db *sql.DB) error {
+	// Check if current_agent column exists by trying to select it
+	var hasCurrentAgent bool
+	err := db.QueryRow(`SELECT current_agent FROM remote_coder_chats LIMIT 1`).Scan(new(string))
+	if err != nil {
+		// Column doesn't exist yet
+		if strings.Contains(err.Error(), "no such column") {
+			hasCurrentAgent = false
+		} else {
+			return nil // Table might be empty or other issue, skip migration
+		}
+	} else {
+		hasCurrentAgent = true
+	}
+
+	// Add columns if they don't exist
+	if !hasCurrentAgent {
+		_, err = db.Exec(`ALTER TABLE remote_coder_chats ADD COLUMN current_agent TEXT DEFAULT 'claude'`)
+		if err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			return fmt.Errorf("failed to add current_agent column: %w", err)
+		}
+	}
+
+	// Check for agent_state column
+	var hasAgentState bool
+	err = db.QueryRow(`SELECT agent_state FROM remote_coder_chats LIMIT 1`).Scan(new([]byte))
+	if err != nil {
+		if strings.Contains(err.Error(), "no such column") {
+			hasAgentState = false
+		} else {
+			hasAgentState = true // Assume exists for other errors
+		}
+	} else {
+		hasAgentState = true
+	}
+
+	if !hasAgentState {
+		_, err = db.Exec(`ALTER TABLE remote_coder_chats ADD COLUMN agent_state BLOB`)
+		if err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			return fmt.Errorf("failed to add agent_state column: %w", err)
+		}
+	}
+
+	// Create index if it doesn't exist
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_chats_current_agent ON remote_coder_chats(current_agent)`)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to create current_agent index (may already exist)")
+	}
+
+	return nil
 }
 
 // scanSettings is a helper to scan a row into Settings
