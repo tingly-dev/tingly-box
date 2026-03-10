@@ -26,8 +26,8 @@ type ToolContext struct {
 
 // ToolExecutor handles tool execution with proper context
 type ToolExecutor struct {
-	bashAllowlist map[string]struct{}
-	bashCwd       string // Per-execution working directory
+	BashAllowlist map[string]struct{}
+	BashCwd       string // Per-execution working directory
 }
 
 // NewToolExecutor creates a new tool executor
@@ -38,32 +38,38 @@ func NewToolExecutor(allowlist []string) *ToolExecutor {
 	}
 
 	return &ToolExecutor{
-		bashAllowlist: allowlistMap,
-		bashCwd:       "", // Start in current directory
+		BashAllowlist: allowlistMap,
+		BashCwd:       "", // Start in current directory
 	}
 }
 
 // SetWorkingDirectory sets the current working directory
 func (e *ToolExecutor) SetWorkingDirectory(cwd string) {
-	e.bashCwd = cwd
+	e.BashCwd = cwd
 }
 
 // GetWorkingDirectory returns the current working directory
 func (e *ToolExecutor) GetWorkingDirectory() string {
-	if e.bashCwd == "" {
-		if wd, err := os.Getwd(); err == nil {
-			return wd
-		}
-		return "/"
+	if e.BashCwd == "" {
+		return "" // Return empty string if not explicitly set
 	}
-	return e.bashCwd
+	return e.BashCwd
 }
 
 // ResolvePath resolves a path to an absolute path
 // If the path is relative, it's joined with the current working directory
 func (e *ToolExecutor) ResolvePath(path string) string {
 	if !filepath.IsAbs(path) {
-		return filepath.Join(e.GetWorkingDirectory(), path)
+		currentDir := e.GetWorkingDirectory()
+		if currentDir == "" {
+			// If no working directory is set, use os.Getwd() as a fallback for resolution
+			if wd, err := os.Getwd(); err == nil {
+				currentDir = wd
+			} else {
+				currentDir = "/" // Fallback to root if os.Getwd fails
+			}
+		}
+		return filepath.Join(currentDir, path)
 	}
 	return path
 }
@@ -72,7 +78,7 @@ func (e *ToolExecutor) ResolvePath(path string) string {
 func (e *ToolExecutor) ExecuteBash(ctx context.Context, cmd string, args ...string) (string, error) {
 	// Check if command is allowed
 	cmdLower := strings.ToLower(cmd)
-	if _, allowed := e.bashAllowlist[cmdLower]; !allowed {
+	if _, allowed := e.BashAllowlist[cmdLower]; !allowed {
 		return "", fmt.Errorf("command '%s' is not allowed. Allowed commands: %v",
 			cmd, e.GetAllowedCommands())
 	}
@@ -84,8 +90,8 @@ func (e *ToolExecutor) ExecuteBash(ctx context.Context, cmd string, args ...stri
 	execCmd := exec.CommandContext(ctx, fullCmd[0], fullCmd[1:]...)
 
 	// Set working directory
-	if e.bashCwd != "" {
-		execCmd.Dir = e.bashCwd
+	if e.BashCwd != "" {
+		execCmd.Dir = e.BashCwd
 	}
 
 	// Execute and capture output
@@ -99,8 +105,8 @@ func (e *ToolExecutor) ExecuteBash(ctx context.Context, cmd string, args ...stri
 
 // GetAllowedCommands returns the list of allowed commands
 func (e *ToolExecutor) GetAllowedCommands() []string {
-	cmds := make([]string, 0, len(e.bashAllowlist))
-	for cmd := range e.bashAllowlist {
+	cmds := make([]string, 0, len(e.BashAllowlist))
+	for cmd := range e.BashAllowlist {
 		cmds = append(cmds, cmd)
 	}
 	return cmds
@@ -145,8 +151,8 @@ type StatusInfo struct {
 
 // BashTool is a unified bash execution tool
 type BashTool struct {
-	executor        *ToolExecutor
-	allowedCommands map[string]struct{}
+	Executor        *ToolExecutor
+	AllowedCommands map[string]struct{}
 }
 
 // NewBashTool creates a new unified bash tool
@@ -156,8 +162,8 @@ func NewBashTool(executor *ToolExecutor, allowlist []string) *BashTool {
 		allowed[strings.ToLower(cmd)] = struct{}{}
 	}
 	return &BashTool{
-		executor:        executor,
-		allowedCommands: allowed,
+		Executor:        executor,
+		AllowedCommands: allowed,
 	}
 }
 
@@ -211,9 +217,9 @@ func (t *BashTool) Call(ctx context.Context, kwargs map[string]any) (*tool.ToolR
 	baseCmd := strings.ToLower(parts[0])
 
 	// Check if command is allowed
-	if _, allowed := t.allowedCommands[baseCmd]; !allowed {
-		allowedList := make([]string, 0, len(t.allowedCommands))
-		for cmd := range t.allowedCommands {
+	if _, allowed := t.AllowedCommands[baseCmd]; !allowed {
+		allowedList := make([]string, 0, len(t.AllowedCommands))
+		for cmd := range t.AllowedCommands {
 			allowedList = append(allowedList, cmd)
 		}
 		return tool.TextResponse(fmt.Sprintf("Error: command '%s' is not allowed. Allowed commands: %s",
@@ -242,7 +248,7 @@ func (t *BashTool) executeCommand(ctx context.Context, command string) (*tool.To
 
 	// Create command
 	cmd := exec.CommandContext(ctx, cmdName, args...)
-	cmd.Dir = t.executor.GetWorkingDirectory()
+	cmd.Dir = t.Executor.GetWorkingDirectory()
 
 	// Execute and capture output
 	output, err := cmd.CombinedOutput()
@@ -254,7 +260,7 @@ func (t *BashTool) executeCommand(ctx context.Context, command string) (*tool.To
 	}
 
 	// Add working directory context
-	cwd := t.executor.GetWorkingDirectory()
+	cwd := t.Executor.GetWorkingDirectory()
 	if result != "" {
 		result = fmt.Sprintf("(cwd: %s)\n%s", cwd, result)
 	}
