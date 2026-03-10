@@ -99,17 +99,19 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 
 	// Convert db.Settings to the legacy Settings format
 	s := BotSetting{
-		UUID:          record.UUID,
-		Name:          record.Name,
-		Token:         record.Auth["token"],
-		Platform:      record.Platform,
-		AuthType:      record.AuthType,
-		Auth:          record.Auth,
-		ProxyURL:      record.ProxyURL,
-		ChatIDLock:    record.ChatIDLock,
-		BashAllowlist: record.BashAllowlist,
-		DefaultCwd:    record.DefaultCwd,
-		Enabled:       record.Enabled,
+		UUID:               record.UUID,
+		Name:               record.Name,
+		Token:              record.Auth["token"],
+		Platform:           record.Platform,
+		AuthType:           record.AuthType,
+		Auth:               record.Auth,
+		ProxyURL:           record.ProxyURL,
+		ChatIDLock:         record.ChatIDLock,
+		BashAllowlist:      record.BashAllowlist,
+		DefaultCwd:         record.DefaultCwd,
+		Enabled:            record.Enabled,
+		SmartGuideProvider: record.SmartGuideProvider,
+		SmartGuideModel:    record.SmartGuideModel,
 	}
 
 	platform = s.Platform
