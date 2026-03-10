@@ -12,11 +12,14 @@ import (
 
 // TBClient defines the interface for remote control interactions
 type TBClient interface {
+
 	// GetProviders returns all configured providers
 	GetProviders(ctx context.Context) ([]ProviderInfo, error)
 
 	// GetServices returns all services from routing rules
 	GetServices(ctx context.Context) ([]ServiceInfo, error)
+
+	GetDefaultRule(ctx context.Context) (*typ.Rule, error)
 
 	// GetDefaultService returns the default service configuration
 	// This reuses the ClaudeCode scenario's active service
@@ -101,19 +104,7 @@ func (c *TBClientImpl) GetConnectionConfig(ctx context.Context) (*ConnectionConf
 	// For @tb, we use the ClaudeCode scenario URL as default
 	// API key comes from the default or configured provider
 
-	// Try to find an Anthropic provider
-	providers, err := c.providerDB.ListEnabled()
-	if err != nil {
-		return nil, fmt.Errorf("failed to list providers: %w", err)
-	}
-
-	var apiKey string
-	for _, p := range providers {
-		if p.APIStyle == "anthropic" && p.Token != "" {
-			apiKey = p.Token
-			break
-		}
-	}
+	apiKey := c.config.GetGlobalConfig().GetModelToken()
 
 	// Build base URL from server config
 	port := c.serverPort
@@ -126,6 +117,26 @@ func (c *TBClientImpl) GetConnectionConfig(ctx context.Context) (*ConnectionConf
 		BaseURL: baseURL,
 		APIKey:  apiKey,
 	}, nil
+}
+
+func (c *TBClientImpl) GetDefaultRule(ctx context.Context) (*typ.Rule, error) {
+	// Get the first active ClaudeCode rule (same logic as ApplyClaudeConfig)
+	globalConfig := c.config.GetGlobalConfig()
+	rules := globalConfig.GetRequestConfigs()
+	var firstRule *typ.Rule
+
+	for i, rule := range rules {
+		if rule.GetScenario() == typ.ScenarioClaudeCode && rule.Active {
+			firstRule = &rules[i]
+			break
+		}
+	}
+
+	if firstRule == nil {
+		return nil, fmt.Errorf("no active ClaudeCode rules found")
+	}
+
+	return firstRule, nil
 }
 
 // GetDefaultService returns the default service configuration

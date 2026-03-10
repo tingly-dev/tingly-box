@@ -49,59 +49,32 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 
 	// Get model configuration from TB Client
 	var modelConfig *anthropic.Config
-	var err error
 
 	if config.TBClient != nil {
 		// Use TB Client to get default service configuration
 		ctx := context.Background()
-		defaultSvc, err := config.TBClient.GetDefaultService(ctx)
+
+		connection, err := config.TBClient.GetConnectionConfig(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("no connection info")
+		}
+
+		defaultRule, err := config.TBClient.GetDefaultRule(ctx)
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to get default service from TB Client, falling back to config")
-			// Fall back to configuration-based setup
+
 		} else {
 			// Use TB Client configuration
 			modelConfig = &anthropic.Config{
-				ModelName: defaultSvc.ModelID,
-				APIKey:    defaultSvc.APIKey,
-				BaseURL:   defaultSvc.BaseURL,
+				ModelName: defaultRule.RequestModel,
+				APIKey:    connection.APIKey,
+				BaseURL:   connection.BaseURL,
 			}
 			logrus.WithFields(logrus.Fields{
-				"provider": defaultSvc.ProviderName,
-				"model":    defaultSvc.ModelID,
-				"base_url": defaultSvc.BaseURL,
+				"model":    defaultRule.RequestModel,
+				"base_url": connection.BaseURL,
 			}).Info("Using TB Client configuration for smartguide agent")
 		}
-	}
-
-	// Fallback to configuration-based setup if TB Client failed or not provided
-	if modelConfig == nil && err == nil {
-		// Try to get connection config from TB Client
-		if config.TBClient != nil {
-			ctx := context.Background()
-			connCfg, connErr := config.TBClient.GetConnectionConfig(ctx)
-			if connErr == nil {
-				modelConfig = &anthropic.Config{
-					ModelName: config.SmartGuideConfig.Model.Model,
-					APIKey:    connCfg.APIKey,
-					BaseURL:   connCfg.BaseURL,
-				}
-				logrus.WithField("model", config.SmartGuideConfig.Model.Model).
-					Info("Using TB Client connection config for smartguide agent")
-			}
-		}
-	}
-
-	// Final fallback to direct configuration
-	if modelConfig == nil {
-		modelConfig = &anthropic.Config{
-			ModelName: config.SmartGuideConfig.Model.Model,
-			APIKey:    config.SmartGuideConfig.Model.APIKey,
-		}
-		if config.SmartGuideConfig.Model.BaseURL != "" {
-			modelConfig.BaseURL = config.SmartGuideConfig.Model.BaseURL
-		}
-		logrus.WithField("model", config.SmartGuideConfig.Model.Model).
-			Warn("Using direct configuration for smartguide agent (TB Client not available or failed)")
 	}
 
 	// Validate model configuration

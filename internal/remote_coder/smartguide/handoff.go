@@ -46,11 +46,11 @@ func NewHandoffManager() *HandoffManager {
 // ExecuteHandoff performs a handoff from one agent to another
 func (hm *HandoffManager) ExecuteHandoff(ctx context.Context, state *HandoffState) *HandoffResult {
 	logrus.WithFields(logrus.Fields{
-		"from_agent":  state.FromAgent,
-		"to_agent":    state.ToAgent,
-		"chat_id":     state.ChatID,
-		"session_id":  state.SessionID,
-		"project":     state.ProjectPath,
+		"from_agent": state.FromAgent,
+		"to_agent":   state.ToAgent,
+		"chat_id":    state.ChatID,
+		"session_id": state.SessionID,
+		"project":    state.ProjectPath,
 	}).Info("Executing agent handoff")
 
 	// Validate handoff
@@ -60,6 +60,16 @@ func (hm *HandoffManager) ExecuteHandoff(ctx context.Context, state *HandoffStat
 			FromAgent: state.FromAgent,
 			ToAgent:   state.ToAgent,
 			Error:     err.Error(),
+		}
+	}
+
+	if state.FromAgent == state.ToAgent {
+		return &HandoffResult{
+			Success:   true,
+			FromAgent: state.FromAgent,
+			ToAgent:   state.ToAgent,
+			Message:   "",
+			NextHint:  "",
 		}
 	}
 
@@ -101,10 +111,6 @@ func (hm *HandoffManager) validateHandoff(state *HandoffState) error {
 
 	if !validAgents[state.ToAgent] {
 		return fmt.Errorf("invalid to_agent: %s", state.ToAgent)
-	}
-
-	if state.FromAgent == state.ToAgent {
-		return fmt.Errorf("cannot handoff to same agent: %s", state.FromAgent)
 	}
 
 	// Check required fields

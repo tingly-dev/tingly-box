@@ -462,7 +462,7 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 	}
 
 	// Send "thinking" message
-	h.SendText(hCtx, "💭 Thinking...")
+	// h.SendText(hCtx, "💭 Thinking...")
 
 	// Get response from agent
 	response, err := h.smartGuideAgent.ReplyWithContext(h.ctx, text, toolCtx)
