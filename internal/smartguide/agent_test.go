@@ -613,3 +613,28 @@ func TestHandoffToCCTool_Call(t *testing.T) {
 	text := extractTextFromContent(resp.Content)
 	assert.Equal(t, "HANDOFF_TO_CC", text)
 }
+
+func TestBashTool_ComplexCommands(t *testing.T) {
+	executor := NewToolExecutor([]string{"echo", "sh", "cat"})
+	tool := NewBashTool(executor, []string{"echo", "sh", "cat"})
+
+	ctx := context.Background()
+
+	// Test command with quotes
+	resp, err := tool.Call(ctx, map[string]any{"command": "echo 'hello world'"})
+	assert.NoError(t, err)
+	text := extractTextFromContent(resp.Content)
+	assert.Contains(t, text, "hello world")
+
+	// Test command with pipe (if shell supports it)
+	resp, err = tool.Call(ctx, map[string]any{"command": "echo 'test' | cat"})
+	assert.NoError(t, err)
+	text = extractTextFromContent(resp.Content)
+	assert.Contains(t, text, "test")
+
+	// Test command with redirect
+	resp, err = tool.Call(ctx, map[string]any{"command": "echo 'redirect test' > /dev/null && echo 'success'"})
+	assert.NoError(t, err)
+	text = extractTextFromContent(resp.Content)
+	assert.Contains(t, text, "success")
+}

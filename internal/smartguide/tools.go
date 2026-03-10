@@ -208,13 +208,16 @@ func (t *BashTool) Call(ctx context.Context, kwargs map[string]any) (*tool.ToolR
 		return tool.TextResponse("Error: 'command' parameter is required"), nil
 	}
 
-	// Parse the command to get the base command
-	parts := strings.Fields(command)
-	if len(parts) == 0 {
+	// Extract base command for allowlist checking
+	// Trim leading whitespace and get the first word
+	trimmed := strings.TrimSpace(command)
+	if trimmed == "" {
 		return tool.TextResponse("Error: empty command"), nil
 	}
 
-	baseCmd := strings.ToLower(parts[0])
+	// Get the base command (first word, lowercased) for allowlist check
+	// This handles simple commands like "ls -la" as well as quoted strings
+	baseCmd := t.extractBaseCommand(trimmed)
 
 	// Check if command is allowed
 	if _, allowed := t.AllowedCommands[baseCmd]; !allowed {
@@ -231,23 +234,32 @@ func (t *BashTool) Call(ctx context.Context, kwargs map[string]any) (*tool.ToolR
 		return tool.TextResponse("Error: 'cd' is not available in bash. Use the 'change_workdir' tool to change working directory."), nil
 	}
 
-	// Execute command
+	// Execute command using shell for proper bash parsing
 	return t.executeCommand(ctx, command)
 }
 
-// executeCommand executes a general bash command
-func (t *BashTool) executeCommand(ctx context.Context, command string) (*tool.ToolResponse, error) {
-	// Parse command
-	parts := strings.Fields(command)
-	if len(parts) == 0 {
-		return tool.TextResponse("Error: empty command"), nil
+// extractBaseCommand extracts the base command name from a command string.
+// It handles simple cases like "ls -la" as well as quoted strings like "echo 'hello world'".
+func (t *BashTool) extractBaseCommand(command string) string {
+	// Simple approach: find the first word
+	// This works for most cases: "ls -la" -> "ls", "git status" -> "git"
+	// For quoted strings like `echo "hello world"`, we still get "echo"
+	trimmed := strings.TrimSpace(command)
+
+	// Find the first space or end of string
+	for i, r := range trimmed {
+		if r == ' ' || r == '\t' {
+			return strings.ToLower(trimmed[:i])
+		}
 	}
+	return strings.ToLower(trimmed)
+}
 
-	cmdName := parts[0]
-	args := parts[1:]
-
-	// Create command
-	cmd := exec.CommandContext(ctx, cmdName, args...)
+// executeCommand executes a bash command using sh -c for proper parsing
+func (t *BashTool) executeCommand(ctx context.Context, command string) (*tool.ToolResponse, error) {
+	// Use sh -c to execute the command, which allows proper bash parsing
+	// This handles pipes, quotes, variables, redirects, etc.
+	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	cmd.Dir = t.Executor.GetWorkingDirectory()
 
 	// Execute and capture output
