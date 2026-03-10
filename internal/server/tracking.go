@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tingly-dev/tingly-box/internal/data/db"
-	"github.com/tingly-dev/tingly-box/internal/obs/otel"
+	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -66,8 +66,8 @@ func (t *UsageTracker) RecordUsage(
 
 	// 2. Record to OTel if token tracker is available (from server context)
 	if tokenTracker, exists := c.Get("token_tracker"); exists && tokenTracker != nil {
-		if tt, ok := tokenTracker.(*otel.TokenTracker); ok {
-			tt.RecordUsage(c.Request.Context(), otel.UsageOptions{
+		if tt, ok := tokenTracker.(*tracker.TokenTracker); ok {
+			tt.RecordUsage(c.Request.Context(), tracker.UsageOptions{
 				Provider:     provider.Name,
 				ProviderUUID: provider.UUID,
 				Model:        model,
