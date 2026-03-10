@@ -23,17 +23,17 @@ import (
 
 // BotHandler encapsulates all bot message handling logic and dependencies
 type BotHandler struct {
-	ctx                context.Context
-	botSetting         BotSetting
-	chatStore          *ChatStore
-	sessionMgr         *session.Manager
-	agentBoot          *agentboot.AgentBoot
-	summaryEngine      *summarizer.Engine
-	directoryBrowser   *DirectoryBrowser
-	manager            *imbot.Manager
-	imPrompter         *IMPrompter
-	fileStore          *FileStore
-	interaction        *imbot.InteractionHandler // New interaction handler
+	ctx              context.Context
+	botSetting       BotSetting
+	chatStore        *ChatStore
+	sessionMgr       *session.Manager
+	agentBoot        *agentboot.AgentBoot
+	summaryEngine    *summarizer.Engine
+	directoryBrowser *DirectoryBrowser
+	manager          *imbot.Manager
+	imPrompter       *IMPrompter
+	fileStore        *FileStore
+	interaction      *imbot.InteractionHandler // New interaction handler
 
 	// runningCancel tracks cancel functions for active executions per chatID
 	runningCancel   map[string]context.CancelFunc
@@ -42,6 +42,10 @@ type BotHandler struct {
 	// pendingBinds tracks bind confirmation requests for unbound chats
 	pendingBinds   map[string]*PendingBind
 	pendingBindsMu sync.RWMutex
+
+	// actionMenuMessageID tracks the message ID of the action keyboard menu per chatID
+	actionMenuMessageID   map[string]string
+	actionMenuMessageIDMu sync.RWMutex
 }
 
 // PendingBind represents a pending bind confirmation request
@@ -96,19 +100,20 @@ func NewBotHandler(
 	}
 
 	return &BotHandler{
-		ctx:                ctx,
-		botSetting:         botSetting,
-		chatStore:          chatStore,
-		sessionMgr:         sessionMgr,
-		agentBoot:          agentBoot,
-		summaryEngine:      summaryEngine,
-		directoryBrowser:   directoryBrowser,
-		manager:            manager,
-		imPrompter:         imPrompter,
-		fileStore:          fileStore,
-		interaction:        interactionHandler,
-		runningCancel:      make(map[string]context.CancelFunc),
-		pendingBinds:       make(map[string]*PendingBind),
+		ctx:                 ctx,
+		botSetting:          botSetting,
+		chatStore:           chatStore,
+		sessionMgr:          sessionMgr,
+		agentBoot:           agentBoot,
+		summaryEngine:       summaryEngine,
+		directoryBrowser:    directoryBrowser,
+		manager:             manager,
+		imPrompter:          imPrompter,
+		fileStore:           fileStore,
+		interaction:         interactionHandler,
+		runningCancel:       make(map[string]context.CancelFunc),
+		pendingBinds:        make(map[string]*PendingBind),
+		actionMenuMessageID: make(map[string]string),
 	}
 }
 
@@ -273,7 +278,7 @@ func (h *BotHandler) handleGroupMessage(hCtx HandlerContext) {
 	// Check whitelist first
 	if !h.chatStore.IsWhitelisted(hCtx.ChatID) {
 		logrus.Debugf("Group %s is not whitelisted, ignoring message", hCtx.ChatID)
-		h.SendText(hCtx, fmt.Sprintf("This group is not enabled. Please DM the bot with `/join %s` to enable.", hCtx.ChatID))
+		h.SendText(hCtx, fmt.Sprintf("This group is not enabled. Please DM the bot with `%s %s` to enable.", cmdJoinPrimary, hCtx.ChatID))
 		return
 	}
 
@@ -348,6 +353,7 @@ func (h *BotHandler) handleMediaMessage(hCtx HandlerContext) {
 		if err != nil {
 			h.SendText(hCtx, fmt.Sprintf("Failed to download file: %v", err))
 			return
+
 		}
 
 		// Add file tag to message
@@ -396,48 +402,42 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 
 	cmd := strings.ToLower(fields[0])
 
-	switch cmd {
-	case "/bot":
+	switch {
+	case cmd == "/bot":
 		h.handleBotCommand(hCtx, fields)
 		return
-	case "/bot_help", "/bot_h":
+	case isCommandMatch(cmd, cmdHelpPrimary, cmdHelpAliases):
 		h.showBotHelp(hCtx)
 		return
-	case "/bot_bind", "/bot_b", "/bind", "/cd":
+	case isCommandMatch(cmd, cmdBindPrimary, cmdBindAliases):
 		if len(fields) < 2 {
 			h.handleBindInteractive(hCtx)
 			return
 		}
 		h.handleBotBindCommand(hCtx, fields[1:])
-	case "/bot_join", "/bot_j":
+	case isCommandMatch(cmd, cmdJoinPrimary, cmdJoinAliases):
 		if !hCtx.IsDirect {
-			h.SendText(hCtx, "/bot_join can only be used in direct chat.")
+			h.SendText(hCtx, cmdJoinPrimary+" can only be used in direct chat.")
 			return
 		}
 		h.handleJoinCommand(hCtx, fields)
 		return
-	case "/bot_project", "/bot_p":
+	case isCommandMatch(cmd, cmdProjectPrimary, cmdProjectAliases):
 		h.handleBotProjectCommand(hCtx)
 		return
-	case "/bot_status", "/bot_s":
+	case isCommandMatch(cmd, cmdStatusPrimary, cmdStatusAliases):
 		h.handleBotStatusCommand(hCtx)
 		return
-	case "/bot_clear":
+	case isCommandMatch(cmd, cmdClearPrimary, cmdClearAliases):
 		h.handleClearCommand(hCtx)
 		return
-	case "/bot_bash":
+	case isCommandMatch(cmd, cmdBashPrimary, cmdBashAliases):
 		h.handleBashCommand(hCtx, fields[1:])
 		return
-	case "/clear":
-		h.handleClearCommand(hCtx)
-		return
-	case "/mock":
+	case cmd == cmdMock:
 		// Mock agent command for testing
-		mockText := strings.TrimSpace(strings.TrimPrefix(hCtx.Text, "/mock"))
+		mockText := strings.TrimSpace(strings.TrimPrefix(hCtx.Text, cmdMock))
 		h.handleAgentMessage(hCtx, agentMock, mockText, "")
-		return
-	case "/", "/start", "/help", "/h":
-		h.showBotHelp(hCtx)
 		return
 	}
 
@@ -449,6 +449,7 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 	if ok && sessionID != "" {
 		h.handleAgentMessage(hCtx, agentClaudeCode, hCtx.Text, "")
 		return
+
 	}
 
 	h.showProjectSelectionOrGuidance(hCtx)
@@ -461,6 +462,7 @@ func (h *BotHandler) SendText(hCtx HandlerContext, text string) {
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to send message")
 			return
+
 		}
 	}
 }
@@ -494,14 +496,22 @@ func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string
 		}
 		if i == len(chunks)-1 {
 			opts.Metadata = map[string]interface{}{
-				"replyMarkup": tgKeyboard,
+				"replyMarkup":        tgKeyboard,
+				"_trackActionMenuID": true,
 			}
 		}
 
-		_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, opts)
+		result, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, opts)
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to send message")
 			return
+		}
+
+		// Track the action menu message ID for later removal
+		if i == len(chunks)-1 && result != nil {
+			h.actionMenuMessageIDMu.Lock()
+			h.actionMenuMessageID[hCtx.ChatID] = result.MessageID
+			h.actionMenuMessageIDMu.Unlock()
 		}
 	}
 }
@@ -594,8 +604,9 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 	}
 
 	if !ok || sessionID == "" {
-		h.SendText(hCtx, "No session mapped. Use /bot_bind <project_path> to create one.")
+		h.SendText(hCtx, "No session mapped. Use "+cmdBindPrimary+" <project_path> to create one.")
 		return
+
 	}
 
 	// Refresh session activity for group chats
@@ -615,7 +626,7 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		}
 	}
 	if projectPath == "" {
-		h.SendText(hCtx, "Project path is required. Use /bot_bind <project_path> first.")
+		h.SendText(hCtx, "Project path is required. Use "+cmdBindPrimary+" <project_path> first.")
 		return
 	}
 
@@ -665,6 +676,7 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		h.sessionMgr.SetFailed(sessionID, "agent not available: "+err.Error())
 		h.sendTextWithReply(hCtx, "Agent not available", hCtx.MessageID)
 		return
+
 	}
 
 	// Determine if we should resume
@@ -769,7 +781,8 @@ func (c *CompletionCallback) OnComplete(result *agentboot.CompletionResult) {
 	_, err := c.hCtx.Bot.SendMessage(context.Background(), c.hCtx.ChatID, &imbot.SendMessageOptions{
 		Text: "✅ Task done. \nContinue to chat with this session or /help.",
 		Metadata: map[string]interface{}{
-			"replyMarkup": tgKeyboard,
+			"replyMarkup":        tgKeyboard,
+			"_trackActionMenuID": true,
 		},
 	})
 	if err != nil {
@@ -791,6 +804,7 @@ func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, pr
 	if strings.TrimSpace(text) == "" {
 		h.SendText(hCtx, "Please provide a message for the mock agent.")
 		return
+
 	}
 
 	// Get or create a session for mock agent (simpler than claude code)
@@ -935,6 +949,7 @@ func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, pr
 		}
 		h.sendTextWithReply(hCtx, response, hCtx.MessageID)
 		return
+
 	}
 
 	h.sessionMgr.SetCompleted(sessionID, response)
@@ -987,33 +1002,9 @@ func (h *BotHandler) handleBotCommand(hCtx HandlerContext, fields []string) {
 func (h *BotHandler) showBotHelp(hCtx HandlerContext) {
 	var helpText string
 	if hCtx.IsDirect {
-		helpText = fmt.Sprintf(`Your User ID: %s
-
-Bot Commands:
-/, /help, /h - Show this help
-/stop - Stop current task
-/clear - Clear context, stop task, and create new session
-/cd [path] - Bind and cd into a project
-/bot_project - Show & switch projects
-/bot_status - Show session status
-/bot_bash <cmd> - Execute allowed bash (cd, ls, pwd)
-/bot_join <group> - Add group to whitelist
-/mock <msg> - Test with mock agent (permission flow)
-
-All other messages are sent to Claude Code.`, hCtx.SenderID)
+		helpText = fmt.Sprintf(directHelpTemplate, hCtx.SenderID)
 	} else {
-		helpText = fmt.Sprintf(`Group Chat ID: %s
-
-Bot Commands:
-/, /help, /h - Show this help
-/stop - Stop current task
-/clear - Clear context, stop task, and create new session
-/cd [path] - Bind and cd into a project to this group
-/bot_project - Show current project info
-/bot_status - Show session status
-/mock <msg> - Test with mock agent (permission flow)
-
-All other messages are sent to Claude Code.`, hCtx.ChatID)
+		helpText = fmt.Sprintf(groupHelpTemplate, hCtx.ChatID)
 	}
 	h.SendText(hCtx, helpText)
 }
@@ -1021,13 +1012,13 @@ All other messages are sent to Claude Code.`, hCtx.ChatID)
 // handleBotBindCommand handles /bot bind <path>
 func (h *BotHandler) handleBotBindCommand(hCtx HandlerContext, fields []string) {
 	if len(fields) < 1 {
-		h.SendText(hCtx, "Usage: /bot_bind <project_path>")
+		h.SendText(hCtx, "Usage: "+cmdBindPrimary+" <project_path>")
 		return
 	}
 
 	projectPath := strings.TrimSpace(strings.Join(fields, " "))
 	if projectPath == "" {
-		h.SendText(hCtx, "Usage: /bot_bind <project_path>")
+		h.SendText(hCtx, "Usage: "+cmdBindPrimary+" <project_path>")
 		return
 	}
 
@@ -1036,6 +1027,7 @@ func (h *BotHandler) handleBotBindCommand(hCtx HandlerContext, fields []string) 
 	if err != nil {
 		h.SendText(hCtx, fmt.Sprintf("Invalid path: %v", err))
 		return
+
 	}
 
 	if err := ValidateProjectPath(expandedPath); err != nil {
@@ -1053,8 +1045,9 @@ func (h *BotHandler) handleBotStatusCommand(hCtx HandlerContext) {
 		logrus.WithError(err).Warn("Failed to load session mapping")
 	}
 	if !ok || sessionID == "" {
-		h.SendText(hCtx, "No session mapped. Use /bot_bind <project_path> to create one.")
+		h.SendText(hCtx, "No session mapped. Use "+cmdBindPrimary+" <project_path> to create one.")
 		return
+
 	}
 	sess, exists := h.sessionMgr.GetOrLoad(sessionID)
 	if !exists {
@@ -1129,8 +1122,9 @@ func (h *BotHandler) handleClearCommand(hCtx HandlerContext) {
 	}
 
 	if projectPath == "" {
-		h.SendText(hCtx, "No project path found. Use /bot_bind <project_path> to create a session first.")
+		h.SendText(hCtx, "No project path found. Use "+cmdBindPrimary+" <project_path> to create a session first.")
 		return
+
 	}
 
 	// Create new session with same project path
@@ -1160,7 +1154,7 @@ func (h *BotHandler) showProjectSelectionOrGuidance(hCtx HandlerContext) {
 	}
 
 	// For direct chats, check if user has any bound projects
-	platform := string(imbot.PlatformTelegram)
+	platform := string(hCtx.Platform)
 
 	chats, err := h.chatStore.ListChatsByOwner(hCtx.SenderID, platform)
 	if err == nil && len(chats) > 0 {
@@ -1201,7 +1195,8 @@ func (h *BotHandler) showBindConfirmationPrompt(hCtx HandlerContext, originalMes
 	_, err = hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
 		Text: BuildBindConfirmPrompt(cwd),
 		Metadata: map[string]interface{}{
-			"replyMarkup": tgKeyboard,
+			"replyMarkup":        tgKeyboard,
+			"_trackActionMenuID": true,
 		},
 	})
 	if err != nil {
@@ -1219,6 +1214,7 @@ func (h *BotHandler) handleBindConfirm(hCtx HandlerContext) {
 		h.SendText(hCtx, "Bind request expired. Please try again.")
 		delete(h.pendingBinds, hCtx.ChatID)
 		return
+
 	}
 
 	// Bind the project
@@ -1227,6 +1223,7 @@ func (h *BotHandler) handleBindConfirm(hCtx HandlerContext) {
 		h.SendText(hCtx, fmt.Sprintf("Failed to bind project: %v", err))
 		delete(h.pendingBinds, hCtx.ChatID)
 		return
+
 	}
 
 	// Create a new session
@@ -1259,7 +1256,7 @@ func (h *BotHandler) handleBotProjectCommand(hCtx HandlerContext) {
 		return
 	}
 
-	platform := string(imbot.PlatformTelegram)
+	platform := string(hCtx.Platform)
 
 	// Get current project path for this chat
 	currentPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
@@ -1320,7 +1317,8 @@ func (h *BotHandler) handleBotProjectCommand(hCtx HandlerContext) {
 		Text:      buf.String(),
 		ParseMode: imbot.ParseModeMarkdown,
 		Metadata: map[string]interface{}{
-			"replyMarkup": tgKeyboard,
+			"replyMarkup":        tgKeyboard,
+			"_trackActionMenuID": true,
 		},
 	})
 	if err != nil {
@@ -1333,10 +1331,11 @@ func (h *BotHandler) handleProjectSwitch(hCtx HandlerContext, projectPath string
 	if h.chatStore == nil {
 		h.SendText(hCtx, "Store not available")
 		return
+
 	}
 
 	// Bind the project to this chat
-	if err := h.chatStore.BindProject(hCtx.ChatID, string(imbot.PlatformTelegram), projectPath, hCtx.SenderID); err != nil {
+	if err := h.chatStore.BindProject(hCtx.ChatID, string(hCtx.Platform), projectPath, hCtx.SenderID); err != nil {
 		h.SendText(hCtx, "Failed to switch project")
 		return
 	}
@@ -1363,6 +1362,7 @@ func (h *BotHandler) handleBindInteractive(hCtx HandlerContext) {
 		logrus.WithError(err).Error("Failed to start directory browser")
 		h.SendText(hCtx, fmt.Sprintf("Failed to start directory browser: %v", err))
 		return
+
 	}
 
 	logrus.Infof("Bind flow started for chat %s", hCtx.ChatID)
@@ -1373,6 +1373,7 @@ func (h *BotHandler) handleBindInteractive(hCtx HandlerContext) {
 		logrus.WithError(err).Error("Failed to send directory browser")
 		h.SendText(hCtx, fmt.Sprintf("Failed to send directory browser: %v", err))
 		return
+
 	}
 }
 
@@ -1383,6 +1384,7 @@ func (h *BotHandler) completeBind(hCtx HandlerContext, projectPath string) {
 	if err != nil {
 		h.SendText(hCtx, fmt.Sprintf("Invalid path: %v", err))
 		return
+
 	}
 
 	// Only validate if the path should already exist
@@ -1393,7 +1395,7 @@ func (h *BotHandler) completeBind(hCtx HandlerContext, projectPath string) {
 		}
 	}
 
-	platform := string(imbot.PlatformTelegram)
+	platform := string(hCtx.Platform)
 
 	// Bind project to chat using ChatStore
 	if err := h.chatStore.BindProject(hCtx.ChatID, platform, expandedPath, hCtx.SenderID); err != nil {
@@ -1446,6 +1448,7 @@ func (h *BotHandler) handleJoinCommand(hCtx HandlerContext, fields []string) {
 		logrus.WithError(err).Error("Failed to resolve chat ID")
 		h.SendText(hCtx, fmt.Sprintf("Failed to resolve chat ID: %v\n\nNote: Bot must already be a member of the group to add it to whitelist.", err))
 		return
+
 	}
 
 	// Check if already whitelisted
@@ -1455,7 +1458,7 @@ func (h *BotHandler) handleJoinCommand(hCtx HandlerContext, fields []string) {
 	}
 
 	// Add group to whitelist
-	platform := string(imbot.PlatformTelegram)
+	platform := string(hCtx.Platform)
 	if err := h.chatStore.AddToWhitelist(groupID, platform, hCtx.SenderID); err != nil {
 		logrus.WithError(err).Error("Failed to add group to whitelist")
 		h.SendText(hCtx, fmt.Sprintf("Failed to add group to whitelist: %v", err))
@@ -1516,6 +1519,7 @@ func (h *BotHandler) handleBashCommand(hCtx HandlerContext, fields []string) {
 			if err != nil {
 				h.SendText(hCtx, "Unable to resolve working directory.")
 				return
+
 			}
 			h.SendText(hCtx, cwd)
 			return
@@ -1537,6 +1541,7 @@ func (h *BotHandler) handleBashCommand(hCtx HandlerContext, fields []string) {
 			if err != nil {
 				h.SendText(hCtx, "Unable to resolve working directory.")
 				return
+
 			}
 			cdBase = cwd
 		}
@@ -1561,6 +1566,7 @@ func (h *BotHandler) handleBashCommand(hCtx HandlerContext, fields []string) {
 			if err != nil {
 				h.SendText(hCtx, "Unable to resolve working directory.")
 				return
+
 			}
 			baseDir = cwd
 		}
@@ -1576,6 +1582,7 @@ func (h *BotHandler) handleBashCommand(hCtx HandlerContext, fields []string) {
 		if err != nil && len(output) == 0 {
 			h.SendText(hCtx, fmt.Sprintf("Command failed: %v", err))
 			return
+
 		}
 		h.SendText(hCtx, strings.TrimSpace(string(output)))
 	default:
@@ -1619,16 +1626,27 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 		subAction := parts[1]
 		switch subAction {
 		case "clear":
+			// Remove the action keyboard before handling
+			h.removeActionKeyboard(bot, chatID)
 			h.handleClearCommand(hCtx)
 		case "bind":
+			// Remove the action keyboard before handling
+			h.removeActionKeyboard(bot, chatID)
+			// Start interactive bind
 			// Start interactive bind
 			h.handleBindInteractive(hCtx)
 		case "project":
+			// Remove the action keyboard before handling
+			h.removeActionKeyboard(bot, chatID)
+			// Start interactive bind
 			// Start interactive bind
 			h.handleBotProjectCommand(hCtx)
 		}
 
 	case "project":
+		// Remove the action keyboard before handling
+		h.removeActionKeyboard(bot, chatID)
+		// Start interactive bind
 		if len(parts) < 3 {
 			return
 		}
@@ -1640,6 +1658,9 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 		}
 
 	case "bind":
+		// Remove the action keyboard before handling
+		h.removeActionKeyboard(bot, chatID)
+		// Start interactive bind
 		if len(parts) < 2 {
 			return
 		}
@@ -1712,9 +1733,17 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 				logrus.Warn("No current path in bind flow")
 				return
 			}
-			// Complete the bind
+			// Get message ID from state before clearing
+			msgID := ""
+			if state := h.directoryBrowser.GetState(chatID); state != nil {
+				msgID = state.MessageID
+			}
 			h.completeBind(hCtx, currentPath)
 			h.directoryBrowser.Clear(chatID)
+			// Edit message to show success and remove keyboard
+			if msgID != "" {
+				editDirectoryBrowserMessage(h.ctx, bot, chatID, msgID, fmt.Sprintf("✅ Bound to: `%s`", currentPath))
+			}
 
 		case "custom":
 			// Start custom path input mode
@@ -1733,12 +1762,16 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 				h.SendText(hCtx, fmt.Sprintf("Failed to create directory: %v", err))
 				return
 			}
-			// Complete the bind
-			h.completeBind(hCtx, path)
-			h.directoryBrowser.Clear(chatID)
 
 		case "cancel":
 			h.directoryBrowser.Clear(chatID)
+			// Get message ID from metadata for editing
+			msgID, _ := msg.Metadata["message_id"].(string)
+			if msgID == "" {
+				msgID = msg.ID
+			}
+			// Edit message to show cancel and remove keyboard
+			editDirectoryBrowserMessage(h.ctx, bot, chatID, msgID, "❌ Bind cancelled.")
 			h.SendText(hCtx, "Bind cancelled.")
 		}
 	}
@@ -1755,6 +1788,7 @@ func (h *BotHandler) handleCustomPathPrompt(hCtx HandlerContext) {
 		if err != nil {
 			h.SendText(hCtx, fmt.Sprintf("Failed to start bind flow: %v", err))
 			return
+
 		}
 	}
 
@@ -1769,12 +1803,14 @@ func (h *BotHandler) handleCustomPathPrompt(hCtx HandlerContext) {
 		Text:      BuildCustomPathPrompt(),
 		ParseMode: imbot.ParseModeMarkdown,
 		Metadata: map[string]interface{}{
-			"replyMarkup": tgKeyboard,
+			"replyMarkup":        tgKeyboard,
+			"_trackActionMenuID": true,
 		},
 	})
 	if err != nil {
 		logrus.WithError(err).Error("Failed to send custom path prompt")
 		return
+
 	}
 
 	// Store prompt message ID
@@ -1799,6 +1835,7 @@ func (h *BotHandler) handleCustomPathInput(hCtx HandlerContext) {
 		if err != nil {
 			h.SendText(hCtx, fmt.Sprintf("Invalid path: %v", err))
 			return
+
 		}
 	} else if currentPath != "" {
 		// Relative path - expand relative to current directory
@@ -1810,6 +1847,7 @@ func (h *BotHandler) handleCustomPathInput(hCtx HandlerContext) {
 		if err != nil {
 			h.SendText(hCtx, fmt.Sprintf("Invalid path: %v", err))
 			return
+
 		}
 	}
 
@@ -1823,6 +1861,7 @@ func (h *BotHandler) handleCustomPathInput(hCtx HandlerContext) {
 			// Path doesn't exist, ask for confirmation to create
 			h.handleCreateConfirm(hCtx, expandedPath)
 			return
+
 		}
 		h.SendText(hCtx, fmt.Sprintf("Cannot access path: %v", err))
 		return
@@ -2031,7 +2070,8 @@ func (h *BotHandler) handleCreateConfirm(hCtx HandlerContext, path string) {
 		Text:      text,
 		ParseMode: imbot.ParseModeMarkdown,
 		Metadata: map[string]interface{}{
-			"replyMarkup": tgKeyboard,
+			"replyMarkup":        tgKeyboard,
+			"_trackActionMenuID": true,
 		},
 	})
 	if err != nil {
@@ -2106,4 +2146,44 @@ func (h *BotHandler) RequestOptionSelection(ctx context.Context, hCtx HandlerCon
 	}
 
 	return -1, &resp.Action, nil
+}
+
+// removeActionKeyboard removes the action keyboard menu from the chat
+func (h *BotHandler) removeActionKeyboard(bot imbot.Bot, chatID string) {
+	h.actionMenuMessageIDMu.RLock()
+	msgID, ok := h.actionMenuMessageID[chatID]
+	h.actionMenuMessageIDMu.RUnlock()
+
+	if !ok || msgID == "" {
+		return
+	}
+
+	// Try to cast to TelegramBot and remove the keyboard
+	if tgBot, ok := imbot.AsTelegramBot(bot); ok {
+		if err := tgBot.RemoveMessageKeyboard(context.Background(), chatID, msgID); err != nil {
+			logrus.WithError(err).WithField("chatID", chatID).WithField("messageID", msgID).Debug("Failed to remove action keyboard")
+		} else {
+			// Successfully removed, clear the tracking
+			h.actionMenuMessageIDMu.Lock()
+			delete(h.actionMenuMessageID, chatID)
+			h.actionMenuMessageIDMu.Unlock()
+		}
+	}
+}
+
+// editDirectoryBrowserMessage edits the directory browser message to show status and remove keyboard
+
+// editDirectoryBrowserMessage edits the directory browser message to show status and remove keyboard
+func editDirectoryBrowserMessage(ctx context.Context, bot imbot.Bot, chatID string, msgID string, text string) {
+	if tgBot, ok := imbot.AsTelegramBot(bot); ok {
+		// Remove the keyboard first
+		if err := tgBot.RemoveMessageKeyboard(ctx, chatID, msgID); err != nil {
+			logrus.WithError(err).WithField("chatID", chatID).WithField("messageID", msgID).Debug("Failed to remove directory browser keyboard")
+		} else {
+			// Successfully removed keyboard, now edit the text
+			if err := tgBot.EditMessageWithKeyboard(ctx, chatID, msgID, text, nil); err != nil {
+				logrus.WithError(err).WithField("chatID", chatID).WithField("messageID", msgID).Debug("Failed to edit directory browser text")
+			}
+		}
+	}
 }

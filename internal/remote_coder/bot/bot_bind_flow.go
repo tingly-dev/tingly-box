@@ -13,25 +13,12 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/tingly-dev/tingly-box/imbot"
 )
 
 const (
 	defaultPageSize = 8
 	stateExpiry     = 5 * time.Minute
-)
-
-// Callback action constants
-const (
-	callbackActionClear   = "action:clear"
-	callbackActionBind    = "action:bind"
-	callbackProjectSwitch = "project:switch"
-	callbackBindNav       = "bind:nav"
-	callbackBindPrev      = "bind:prev"
-	callbackBindNext      = "bind:next"
-	callbackBindSelect    = "bind:select"
-	callbackBindCancel    = "bind:cancel"
 )
 
 // BindFlowState represents the state of an ongoing bind flow
@@ -342,14 +329,14 @@ func BuildActionKeyboard() *imbot.KeyboardBuilder {
 	return imbot.NewKeyboardBuilder().
 		AddRow(
 			imbot.CallbackButton("🗑 Clear", imbot.FormatCallbackData("action", "clear")),
-			imbot.CallbackButton("📁 Bind", imbot.FormatCallbackData("action", "bind")),
-			imbot.CallbackButton("📁 Project", imbot.FormatCallbackData("action", "project")),
+			imbot.CallbackButton("📁 CD", imbot.FormatCallbackData("action", "bind")),
+			imbot.CallbackButton("🔧 Project", imbot.FormatCallbackData("action", "project")),
 		)
 }
 
 // BuildCustomPathPrompt returns the text for custom path input prompt
 func BuildCustomPathPrompt() string {
-	return "✏️ *Please type the path you want to bind:*\n\n" +
+	return "✏️ *Please type the path you want to /cd:*\n\n" +
 		"Examples:\n" +
 		"• my-project (relative to current)\n" +
 		"• ~/workspace/new-project\n" +
@@ -451,7 +438,7 @@ func SendDirectoryBrowser(ctx context.Context, bot imbot.Bot, browser *Directory
 	tgBot, ok := imbot.AsTelegramBot(bot)
 	if ok && editMessageID != "" && state.MessageID != "" {
 		// Edit existing message
-		tgKeyboard := convertToTelegramKeyboard(kb.Build())
+		tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
 		if err := tgBot.EditMessageWithKeyboard(ctx, chatID, editMessageID, text, tgKeyboard); err != nil {
 			logrus.WithError(err).Warn("Failed to edit message, sending new one")
 			// Fall through to send new message
@@ -461,7 +448,7 @@ func SendDirectoryBrowser(ctx context.Context, bot imbot.Bot, browser *Directory
 	}
 
 	// Convert keyboard for Telegram
-	tgKeyboard := convertToTelegramKeyboard(kb.Build())
+	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
 
 	// Send new message with keyboard
 	result, err := bot.SendMessage(ctx, chatID, &imbot.SendMessageOptions{
@@ -479,28 +466,6 @@ func SendDirectoryBrowser(ctx context.Context, bot imbot.Bot, browser *Directory
 	browser.SetMessageID(chatID, result.MessageID)
 
 	return result.MessageID, nil
-}
-
-// convertToTelegramKeyboard converts imbot.InlineKeyboardMarkup to tgbotapi.InlineKeyboardMarkup
-func convertToTelegramKeyboard(kb imbot.InlineKeyboardMarkup) tgbotapi.InlineKeyboardMarkup {
-	var rows [][]tgbotapi.InlineKeyboardButton
-	for _, row := range kb.InlineKeyboard {
-		var buttons []tgbotapi.InlineKeyboardButton
-		for _, btn := range row {
-			tgBtn := tgbotapi.InlineKeyboardButton{
-				Text: btn.Text,
-			}
-			if btn.CallbackData != "" {
-				tgBtn.CallbackData = &btn.CallbackData
-			}
-			if btn.URL != "" {
-				tgBtn.URL = &btn.URL
-			}
-			buttons = append(buttons, tgBtn)
-		}
-		rows = append(rows, buttons)
-	}
-	return tgbotapi.InlineKeyboardMarkup{InlineKeyboard: rows}
 }
 
 // ValidateProjectPath checks if the path exists and is accessible

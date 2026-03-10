@@ -15,6 +15,8 @@ type TelegramBot interface {
 	ResolveChatID(input string) (string, error)
 	// EditMessageWithKeyboard edits a message text and keyboard
 	EditMessageWithKeyboard(ctx interface{}, chatID string, messageID string, text string, keyboard interface{}) error
+	// RemoveMessageKeyboard removes the inline keyboard from a message
+	RemoveMessageKeyboard(ctx interface{}, chatID string, messageID string) error
 }
 
 // AsTelegramBot attempts to cast a Bot to TelegramBot interface
