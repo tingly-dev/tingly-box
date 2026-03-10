@@ -40,13 +40,10 @@ func ConvertAnthropicV1ToResponsesRequest(anthropicReq *anthropic.MessageNewPara
 	}
 
 	// Convert messages to Input items (Responses API format)
-	if len(anthropicReq.Messages) > 0 {
-		inputItems := convertV1MessagesToResponsesInput(anthropicReq.Messages)
-		if len(inputItems) > 0 {
-			params.Input = responses.ResponseNewParamsInputUnion{
-				OfInputItemList: responses.ResponseInputParam(inputItems),
-			}
-		}
+	// Always set Input field, even if empty, as Responses API requires it
+	inputItems := convertV1MessagesToResponsesInput(anthropicReq.Messages)
+	params.Input = responses.ResponseNewParamsInputUnion{
+		OfInputItemList: responses.ResponseInputParam(inputItems),
 	}
 
 	// Convert max_tokens to max_output_tokens

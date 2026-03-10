@@ -19,6 +19,7 @@ const Login = lazy(() => import('./pages/Login'));
 const Guiding = lazy(() => import('./pages/./Guiding'));
 const UseOpenAIPage = lazy(() => import('./pages/scenario/UseOpenAIPage'));
 const UseAnthropicPage = lazy(() => import('./pages/scenario/UseAnthropicPage'));
+const UseCodexPage = lazy(() => import('./pages/scenario/UseCodexPage'));
 const UseClaudeCodePage = lazy(() => import('./pages/scenario/UseClaudeCodePage'));
 const UseAgentPage = lazy(() => import('./pages/scenario/UseAgentPage'));
 const UseOpenCodePage = lazy(() => import('./pages/scenario/UseOpenCodePage'));
@@ -282,6 +283,7 @@ function AppContent() {
                     {/* Function panel routes */}
                     <Route path="/use-openai" element={<UseOpenAIPage />} />
                     <Route path="/use-anthropic" element={<UseAnthropicPage />} />
+                    <Route path="/use-codex" element={<UseCodexPage />} />
                     <Route path="/use-claude-code" element={<UseClaudeCodePage />} />
                     <Route path="/use-agent" element={<UseAgentPage />} />
                     <Route path="/use-opencode" element={<UseOpenCodePage />} />

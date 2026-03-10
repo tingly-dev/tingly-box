@@ -53,6 +53,7 @@ const (
 	ScenarioOpenAI     RuleScenario = "openai"
 	ScenarioAnthropic  RuleScenario = "anthropic"
 	ScenarioAgent      RuleScenario = "agent"
+	ScenarioCodex      RuleScenario = "codex"
 	ScenarioClaudeCode RuleScenario = "claude_code"
 	ScenarioOpenCode   RuleScenario = "opencode"
 	ScenarioXcode      RuleScenario = "xcode"
@@ -135,9 +136,9 @@ type OAuthDetail struct {
 // ToolInterceptorConfig contains configuration for tool interceptor (search & fetch)
 type ToolInterceptorConfig struct {
 	PreferLocalSearch FlexibleBool `json:"prefer_local_search,omitempty"` // Prefer local tool interception even if provider has built-in search
-	SearchAPI         string `json:"search_api,omitempty"`          // "brave" or "google"
-	SearchKey         string `json:"search_key,omitempty"`          // API key for search service
-	MaxResults        int    `json:"max_results,omitempty"`         // Max search results to return (default: 10)
+	SearchAPI         string       `json:"search_api,omitempty"`          // "brave" or "google"
+	SearchKey         string       `json:"search_key,omitempty"`          // API key for search service
+	MaxResults        int          `json:"max_results,omitempty"`         // Max search results to return (default: 10)
 
 	// Proxy configuration
 	ProxyURL string `json:"proxy_url,omitempty"` // HTTP proxy URL (e.g., "http://127.0.0.1:7897")
@@ -205,9 +206,9 @@ type Provider struct {
 	Models        []string          `json:"models,omitempty"`       // Available models for this provider (cached)
 	LastUpdated   string            `json:"last_updated,omitempty"` // Last update timestamp
 
-// Auth configuration
-	AuthType                AuthType                 `json:"auth_type"`                           // api_key or oauth
-	OAuthDetail             *OAuthDetail             `json:"oauth_detail,omitempty"`              // OAuth credentials (only for oauth auth type)
+	// Auth configuration
+	AuthType    AuthType     `json:"auth_type"`              // api_key or oauth
+	OAuthDetail *OAuthDetail `json:"oauth_detail,omitempty"` // OAuth credentials (only for oauth auth type)
 }
 
 // GetAccessToken returns the access token based on auth type

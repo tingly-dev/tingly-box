@@ -181,6 +181,11 @@ const Layout = ({ children }: LayoutProps) => {
                         icon: <Claude size={20} />,
                     },
                     {
+                        path: '/use-codex',
+                        label: t('layout.nav.useCodex', { defaultValue: 'Codex' }),
+                        icon: <OpenAI size={20} />,
+                    },
+                    {
                         path: '/use-opencode',
                         label: t('layout.nav.useOpenCode', { defaultValue: 'OpenCode' }),
                         icon: <CodeIcon sx={{ fontSize: 20 }} />,

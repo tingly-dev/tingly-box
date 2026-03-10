@@ -144,6 +144,9 @@ func extractScenarioFromPath(path string) string {
 	if strings.Contains(path, "/openai/") {
 		return "openai"
 	}
+	if strings.Contains(path, "/codex/") {
+		return "codex"
+	}
 	if strings.Contains(path, "/anthropic/") {
 		return "anthropic"
 	}

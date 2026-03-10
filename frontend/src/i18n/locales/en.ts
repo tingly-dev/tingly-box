@@ -30,6 +30,7 @@ export default {
       "settings": "Settings",
       "useOpenAI": "OpenAI SDK",
       "useAnthropic": "Anthropic SDK",
+      "useCodex": "Codex",
       "useClaudeCode": "Claude Code",
       "useOpenCode": "OpenCode",
       "apiKeys": "API Keys",

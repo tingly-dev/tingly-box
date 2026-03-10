@@ -113,6 +113,7 @@ func TestExtractScenarioFromPath(t *testing.T) {
 		expected string
 	}{
 		{"OpenAI path", "/v1/openai/chat/completions", "openai"},
+		{"Codex path", "/v1/codex/responses", "codex"},
 		{"Anthropic path", "/v1/anthropic/messages", "anthropic"},
 		{"Claude Code path", "/v1/claude_code/messages", "claude_code"},
 		{"Claude Code with dash path", "/v1/claude-code/messages", "claude_code"},
