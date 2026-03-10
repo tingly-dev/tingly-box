@@ -319,8 +319,8 @@ func (h *BotHandler) handleHandoff(hCtx HandlerContext, toAgent agentboot.AgentT
 
 // routeToAgent routes a message to the appropriate agent based on current_agent
 func (h *BotHandler) routeToAgent(hCtx HandlerContext, text string) error {
-	// Check for handoff commands first
-	if toAgent, isHandoff := smartguide.DetectHandoffCommand(text); isHandoff {
+	// Check for handoff commands first (supports "@cc help me" format)
+	if toAgent, isHandoff, remainingText := smartguide.DetectHandoffCommand(text); isHandoff {
 		// Determine target agent
 		var targetAgent agentboot.AgentType
 		if toAgent == agentTinglyBox {
@@ -332,7 +332,30 @@ func (h *BotHandler) routeToAgent(hCtx HandlerContext, text string) error {
 		}
 
 		// Perform handoff
-		return h.handleHandoff(hCtx, targetAgent)
+		if err := h.handleHandoff(hCtx, targetAgent); err != nil {
+			return err
+		}
+
+		// If there's remaining text, process it immediately with the new agent
+		if remainingText != "" {
+			logrus.WithFields(logrus.Fields{
+				"chatID":       hCtx.ChatID,
+				"targetAgent":  targetAgent,
+				"remainingText": remainingText,
+			}).Info("Processing remaining text after handoff")
+
+			// Route the remaining text to the new agent
+			switch targetAgent {
+			case agentTinglyBox:
+				return h.handleSmartGuideMessage(hCtx, remainingText)
+			case agentClaudeCode:
+				projectPath, _, _ := h.getProjectPathForChat(hCtx)
+				h.handleAgentMessage(hCtx, agentClaudeCode, remainingText, projectPath)
+				return nil
+			}
+		}
+
+		return nil
 	}
 
 	// Get current agent
@@ -812,6 +835,23 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		return
 	}
 
+	// Determine project path FIRST: priority is override > bound project > default cwd
+	projectPath := projectPathOverride
+	if projectPath == "" {
+		boundPath, hasBound, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
+		if hasBound && boundPath != "" {
+			projectPath = boundPath
+		}
+	}
+	// Use default cwd if no project bound
+	if projectPath == "" {
+		projectPath = h.getDefaultProjectPath()
+		logrus.WithFields(logrus.Fields{
+			"chatID":     hCtx.ChatID,
+			"defaultCwd": projectPath,
+		}).Info("Using default cwd for Claude Code")
+	}
+
 	sessionID, ok, err := h.chatStore.GetSession(hCtx.ChatID)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to load session mapping")
@@ -824,12 +864,12 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		}
 	}
 
-	// Auto-create session for group chats with project override (persistent, no expiration)
-	if (sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed) && projectPathOverride != "" {
+	// Auto-create session if none exists (now always creates with project path or default cwd)
+	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed {
 		sess = h.sessionMgr.Create()
 		sessionID = sess.ID
-		h.sessionMgr.SetContext(sessionID, "project_path", projectPathOverride)
-		// Clear expiration for group sessions
+		h.sessionMgr.SetContext(sessionID, "project_path", projectPath)
+		// Clear expiration for persistent sessions
 		h.sessionMgr.Update(sessionID, func(s *session.Session) {
 			s.ExpiresAt = time.Time{} // Zero value means no expiration
 		})
@@ -837,33 +877,18 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 			logrus.WithError(err).Warn("Failed to save session mapping")
 		}
 		ok = true
+		logrus.WithFields(logrus.Fields{
+			"chatID":     hCtx.ChatID,
+			"sessionID":  sessionID,
+			"projectDir": projectPath,
+		}).Info("Auto-created session for Claude Code")
 	}
 
-	if !ok || sessionID == "" {
-		h.SendText(hCtx, "No session mapped. Use "+cmdBindPrimary+" <project_path> to create one.")
-		return
-
-	}
-
-	// Refresh session activity for group chats
-	if projectPathOverride != "" && sess != nil {
+	// Refresh session activity
+	if sess != nil {
 		h.sessionMgr.Update(sessionID, func(s *session.Session) {
 			s.LastActivity = time.Now()
 		})
-	}
-
-	// Get project path
-	projectPath := projectPathOverride
-	if projectPath == "" && sess != nil && sess.Context != nil {
-		if v, ok := sess.Context["project_path"]; ok {
-			if pv, ok := v.(string); ok {
-				projectPath = strings.TrimSpace(pv)
-			}
-		}
-	}
-	// Use default project path if not bound
-	if projectPath == "" {
-		projectPath = h.getDefaultProjectPath()
 	}
 
 	// Build meta

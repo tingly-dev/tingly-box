@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -129,26 +130,42 @@ func DeserializeState(data []byte) (*HandoffState, error) {
 	return &state, nil
 }
 
-// DetectHandoffCommand detects if text is a handoff command
-func DetectHandoffCommand(text string) (agentboot.AgentType, bool) {
-	// Normalize text
-	normalized := toLowerTrim(text)
+// DetectHandoffCommand detects if text is a handoff command.
+// Returns the target agent type, whether it's a handoff, and any remaining text after the command.
+// Examples:
+//   - "@cc" -> (AgentTypeClaudeCode, true, "")
+//   - "@cc help me" -> (AgentTypeClaudeCode, true, "help me")
+//   - "hello" -> ("", false, "")
+func DetectHandoffCommand(text string) (agentboot.AgentType, bool, string) {
+	// Trim leading/trailing whitespace
+	trimmed := strings.TrimSpace(text)
 
-	// Check for handoff to @cc
-	switch normalized {
-	case "@cc", "/cc", "handoff", "switch to cc", "switch to claude", "cc":
-		return AgentTypeClaudeCode, true
-	case "@tb", "/tb", "guide", "switch to tb", "switch to guide", "tb":
-		return AgentTypeTinglyBox, true
+	// Check for handoff commands with possible trailing text
+	if strings.HasPrefix(trimmed, "@cc ") || strings.HasPrefix(trimmed, "/cc ") {
+		remaining := strings.TrimSpace(trimmed[4:])
+		return AgentTypeClaudeCode, true, remaining
+	}
+	if strings.HasPrefix(trimmed, "@tb ") || strings.HasPrefix(trimmed, "/tb ") {
+		remaining := strings.TrimSpace(trimmed[4:])
+		return AgentTypeTinglyBox, true, remaining
 	}
 
-	return "", false
+	// Check for exact match commands (no trailing text)
+	switch trimmed {
+	case "@cc", "/cc", "handoff", "switch to cc", "switch to claude", "cc":
+		return AgentTypeClaudeCode, true, ""
+	case "@tb", "/tb", "guide", "switch to tb", "switch to guide", "tb":
+		return AgentTypeTinglyBox, true, ""
+	}
+
+	return "", false, ""
 }
 
-// toLowerTrim normalizes text for comparison
-func toLowerTrim(s string) string {
-	// Simple implementation - could be enhanced
-	return s
+// DetectHandoffCommandLegacy is the old version for backward compatibility
+// Deprecated: Use DetectHandoffCommand instead
+func DetectHandoffCommandLegacy(text string) (agentboot.AgentType, bool) {
+	agentType, isHandoff, _ := DetectHandoffCommand(text)
+	return agentType, isHandoff
 }
 
 // GetAgentTypeString returns the string representation of an agent type
