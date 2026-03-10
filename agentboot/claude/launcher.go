@@ -35,6 +35,7 @@ type Launcher struct {
 		sessionID string
 		chatID    string
 		platform  string
+		botUUID   string
 	}
 }
 
@@ -132,6 +133,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 	l.executionContext.sessionID = opts.SessionID
 	l.executionContext.chatID = opts.ChatID
 	l.executionContext.platform = opts.Platform
+	l.executionContext.botUUID = opts.BotUUID
 	l.mu.Unlock()
 
 	logrus.WithFields(logrus.Fields{
@@ -144,6 +146,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 		l.executionContext.sessionID = ""
 		l.executionContext.chatID = ""
 		l.executionContext.platform = ""
+		l.executionContext.botUUID = ""
 		l.mu.Unlock()
 	}()
 
@@ -201,13 +204,29 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 
 	inputSource := mitm.NewChanSource(100)
 
+	// done channel signals the input feeder goroutine to stop
+	done := make(chan struct{})
 	go func() {
-		for m := range inputPrompt {
-			inputSource.Write(m)
+		for {
+			select {
+			case m, ok := <-inputPrompt:
+				if !ok {
+					return
+				}
+				inputSource.Write(m)
+			case <-done:
+				return
+			}
 		}
 	}()
 
 	runner.InputSource = inputSource
+
+	// Ensure cleanup on exit
+	defer func() {
+		close(done)
+		inputSource.Close()
+	}()
 
 	outputHandler := func(ctx context.Context, c *mitm.IOContext) (*mitm.OutputResult, error) {
 		// Try to parse as JSON
@@ -229,7 +248,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 
 		logrus.Debugf("[Event] %s", event)
 
-		messages, hasResult, resultSuccess := accumulator.AddEvent(event)
+		messages, _, resultSuccess := accumulator.AddEvent(event)
 
 		for _, msg := range messages {
 			logrus.WithFields(logrus.Fields{
@@ -345,19 +364,21 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 
 				}
 
+			case event.Type == EventTypeResult:
+				handler.OnComplete(&agentboot.CompletionResult{
+					Success: resultSuccess,
+				})
+				// Got final result, stop processing immediately
+				// The process will be cleaned up by deferred close(done) and inputSource.Close()
+				_ = cmd.Process.Kill()
+				_ = cmd.Wait()
+				logrus.Warnf("killed: %d", cmd.Process.Pid)
+				return &mitm.OutputResult{Action: mitm.Stop}, nil
 			default:
 				if hErr := handler.OnMessage(msg); hErr != nil {
 					handler.OnError(hErr)
 				}
 			}
-		}
-
-		if hasResult {
-			handler.OnComplete(&agentboot.CompletionResult{
-				Success: resultSuccess,
-			})
-			// Got final result, terminate command early
-			_ = cmd.Process.Kill()
 		}
 
 		return &mitm.OutputResult{Action: mitm.Pass}, nil
@@ -638,6 +659,7 @@ func (l *Launcher) parseAskRequestFromControl(controlData map[string]interface{}
 	sessionID := l.executionContext.sessionID
 	chatID := l.executionContext.chatID
 	platform := l.executionContext.platform
+	botUUID := l.executionContext.botUUID
 	l.mu.RUnlock()
 
 	toolName, _ := controlData["tool_name"].(string)
@@ -650,6 +672,7 @@ func (l *Launcher) parseAskRequestFromControl(controlData map[string]interface{}
 
 		Platform:  platform,
 		ChatID:    chatID,
+		BotUUID:   botUUID,
 		SessionID: sessionID,
 
 		ToolName: toolName,

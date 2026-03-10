@@ -2,7 +2,7 @@ import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, Di
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import CodeBlock from './CodeBlock';
-import { shouldIgnoreDialogClose } from './dialogClose';
+import { isFullEdition } from '@/utils/edition';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -70,13 +70,15 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
         <Dialog
             open={open}
             onClose={(event, reason) => {
-                if (shouldIgnoreDialogClose(reason)) {
+                // Only allow closing via the confirm button, not backdrop click or ESC
+                if (reason === 'backdropClick' || reason === 'escapeKeyDown') {
                     return;
                 }
                 onClose();
             }}
             maxWidth="lg"
             fullWidth
+            disableEscapeKeyDown
             PaperProps={{
                 sx: {
                     borderRadius: 3,
@@ -316,7 +318,8 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                 <Button onClick={onClose} color="inherit">
                     {t('common.cancel')}
                 </Button>
-                {onApply && (
+                {/* Hide Apply buttons in lite edition */}
+                {isFullEdition && onApply && (
                     <Button
                         onClick={handleApplyClick}
                         variant="contained"
@@ -326,7 +329,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                         {t('claudeCode.quickApply')}
                     </Button>
                 )}
-                {onApplyWithStatusLine && (
+                {isFullEdition && onApplyWithStatusLine && (
                     <Button
                         onClick={handleApplyWithStatusLineClick}
                         variant="contained"

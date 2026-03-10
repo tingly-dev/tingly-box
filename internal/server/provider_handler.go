@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -122,6 +123,11 @@ func (s *Server) CreateProvider(c *gin.Context) {
 		req.APIStyle = "openai"
 	}
 
+	// Set default auth type if not provided
+	if req.AuthType == "" {
+		req.AuthType = string(typ.AuthTypeAPIKey)
+	}
+
 	uid, err := uuid.NewUUID()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, CreateProviderResponse{
@@ -137,8 +143,10 @@ func (s *Server) CreateProvider(c *gin.Context) {
 		APIStyle:      protocol.APIStyle(req.APIStyle),
 		Token:         req.Token,
 		NoKeyRequired: req.NoKeyRequired,
-		Enabled:       req.Enabled,
+		Enabled:       true, // always make new provider enabled
 		ProxyURL:      req.ProxyURL,
+		AuthType:      typ.AuthType(req.AuthType),
+		Timeout:       constant.DefaultRequestTimeout,
 	}
 
 	err = s.config.AddProvider(provider)

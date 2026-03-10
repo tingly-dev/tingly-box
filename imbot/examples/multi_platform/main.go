@@ -219,7 +219,7 @@ func handleMessage(ctx context.Context, manager *imbot.Manager, msg imbot.Messag
 
 	// 获取 Bot 实例 by UUID (preferred) or fallback to platform
 	var bot imbot.Bot
-		bot = manager.GetBot(botUUID, platform)
+	bot = manager.GetBot(botUUID, platform)
 	if bot == nil {
 		log.Printf("[%-10s] Bot 未找到, UUID: %s", platform, botUUID)
 		return

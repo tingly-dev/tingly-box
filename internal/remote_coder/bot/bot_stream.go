@@ -108,6 +108,7 @@ func (f *streamingMessageHandler) OnAsk(context.Context, agentboot.AskRequest) (
 	return agentboot.AskResult{Approved: true}, nil
 }
 
+// OnComplete is called when the agent completes its task
 func (f *streamingMessageHandler) OnComplete(result *agentboot.CompletionResult) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

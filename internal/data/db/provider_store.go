@@ -90,6 +90,7 @@ func (r *ProviderRecord) toProvider() *typ.Provider {
 		}
 	case typ.AuthTypeAPIKey, "":
 		provider.Token = r.Token
+		provider.AuthType = typ.AuthTypeAPIKey
 	}
 
 	return provider

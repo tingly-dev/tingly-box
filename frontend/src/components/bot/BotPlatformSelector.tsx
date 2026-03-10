@@ -40,7 +40,7 @@ export const BotPlatformSelector: React.FC<BotPlatformSelectorProps> = ({
         return (
             <Box sx={{ p: 1 }}>
                 <Typography variant="body2" color="text.secondary">
-                    No platforms available. Make sure the remote-coder service is running.
+                    No platforms available. Make sure the remote-control service is running.
                 </Typography>
             </Box>
         );

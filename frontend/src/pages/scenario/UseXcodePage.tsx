@@ -5,9 +5,8 @@ import { Box, Button, Tooltip, IconButton } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import EmptyStateGuide from '@/components/EmptyStateGuide';
 import PageLayout from '@/components/PageLayout';
-import TemplatePage from '@/components/TemplatePage.tsx';
+import TemplatePage from './components/TemplatePage.tsx';
 import XcodeConfigModal from '@/components/XcodeConfigModal';
 import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
 import { useHeaderHeight } from '@/hooks/useHeaderHeight';
@@ -99,90 +98,72 @@ const UseXcodePage: React.FC = () => {
 
     return (
         <PageLayout loading={isLoading} notification={notification}>
-            {!providers.length ? (
-                <CardGrid>
-                    <UnifiedCard
-                        title={
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <span>Xcode SDK Configuration</span>
-                            </Box>
-                        }
-                        size="full"
-                    >
-                        <EmptyStateGuide
-                            title="No Providers Configured"
-                            description="Add an API key or OAuth provider to get started"
-                            onAddApiKeyClick={() => navigate('/api-keys?dialog=add')}
-                            onAddOAuthClick={handleAddOAuthClick}
-                        />
-                    </UnifiedCard>
-                </CardGrid>
-            ) : (
-                <CardGrid>
-                    <UnifiedCard
-                        ref={headerRef}
-                        title={
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <span>Xcode SDK Configuration</span>
-                                <Tooltip title={`Base URL: ${baseUrl}/tingly/xcode`}>
-                                    <IconButton size="small" sx={{ ml: 0.5 }}>
-                                        <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                                    </IconButton>
-                                </Tooltip>
-                            </Box>
-                        }
-                        size="full"
-                        rightAction={
-                            <Button
-                                onClick={handleOpenConfigModal}
-                                variant="contained"
-                                size="small"
-                            >
-                                Config Guide
-                            </Button>
-                        }
-                    >
-                        {/* Use ProviderConfigCard without API key row, then ExperimentalFeatures */}
-                        <ProviderConfigCard
-                            title="Xcode SDK Configuration"
-                            baseUrlPath="/tingly/xcode"
-                            baseUrl={baseUrl}
-                            onCopy={copyToClipboard}
-                            token={token}
-                            onShowTokenModal={() => setShowTokenModal(true)}
-                            scenario={scenario}
-                            showApiKeyRow={true}
-                        />
-                    </UnifiedCard>
-
-                    <TemplatePage
-                        title="Models and Forwarding Rules"
-                        scenario={scenario}
-                        rules={rules}
-                        collapsible={true}
-                        showTokenModal={showTokenModal}
-                        setShowTokenModal={setShowTokenModal}
-                        token={token}
-                        showNotification={showNotification}
-                        providers={providers}
-                        onRulesChange={handleRulesChange}
-                        newlyCreatedRuleUuids={newlyCreatedRuleUuids}
-                        allowDeleteRule={true}
-                        onRuleDelete={handleRuleDelete}
-                        showAddApiKeyButton={false}
-                        headerHeight={headerHeight}
-                    />
-
-                    {/* Xcode Config Modal */}
-                    <XcodeConfigModal
-                        open={configModalOpen}
-                        onClose={() => setConfigModalOpen(false)}
+            <CardGrid>
+                <UnifiedCard
+                    ref={headerRef}
+                    title={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <span>Xcode SDK Configuration</span>
+                            <Tooltip title={`Base URL: ${baseUrl}/tingly/xcode`}>
+                                <IconButton size="small" sx={{ ml: 0.5 }}>
+                                    <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                                </IconButton>
+                            </Tooltip>
+                        </Box>
+                    }
+                    size="full"
+                    rightAction={
+                        <Button
+                            onClick={handleOpenConfigModal}
+                            variant="contained"
+                            size="small"
+                        >
+                            Config Guide
+                        </Button>
+                    }
+                >
+                    <ProviderConfigCard
+                        title="Xcode SDK Configuration"
+                        baseUrlPath="/tingly/xcode"
                         baseUrl={baseUrl}
+                        onCopy={copyToClipboard}
                         token={token}
-                        copyToClipboard={copyToClipboard}
+                        onShowTokenModal={() => setShowTokenModal(true)}
+                        scenario={scenario}
+                        showApiKeyRow={true}
                     />
-                </CardGrid>
-            )}
+                </UnifiedCard>
+
+                <TemplatePage
+                    title="Models and Forwarding Rules"
+                    scenario={scenario}
+                    rules={rules}
+                    collapsible={true}
+                    showTokenModal={showTokenModal}
+                    setShowTokenModal={setShowTokenModal}
+                    token={token}
+                    showNotification={showNotification}
+                    providers={providers}
+                    onRulesChange={handleRulesChange}
+                    newlyCreatedRuleUuids={newlyCreatedRuleUuids}
+                    allowDeleteRule={true}
+                    onRuleDelete={handleRuleDelete}
+                    showAddApiKeyButton={false}
+                    headerHeight={headerHeight}
+                    emptyStateTitle="No Providers Configured"
+                    emptyStateDescription="Add an API key or OAuth provider to start routing requests"
+                    onAddApiKeyClick={() => navigate('/api-keys?dialog=add')}
+                    onAddOAuthClick={handleAddOAuthClick}
+                />
+
+                <XcodeConfigModal
+                    open={configModalOpen}
+                    onClose={() => setConfigModalOpen(false)}
+                    baseUrl={baseUrl}
+                    token={token}
+                    copyToClipboard={copyToClipboard}
+                />
+            </CardGrid>
         </PageLayout>
     );
 };

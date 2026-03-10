@@ -2,7 +2,11 @@ package config
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -61,10 +65,13 @@ type Config struct {
 	ToolConfigs map[string]json.RawMessage `json:"tool_configs,omitempty"`
 
 	// Error log settings
-	ErrorLogFilterExpression string `json:"error_log_filter_expression"` // Expression for filtering error log entries (default: "StatusCode >= 400 && Path matches '^/api/'")
+	ErrorLogFilterExpression string `json:"error_log_filter_expression"` // Expression for filtering error log entries (default: "StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')")
 
 	// Health monitor settings
 	HealthMonitor loadbalance.HealthMonitorConfig `json:"health_monitor,omitempty" yaml:"health_monitor,omitempty"`
+
+	// Enterprise context JWT validation settings for TBE->TB proxy calls.
+	EnterpriseContextJWT EnterpriseContextJWTConfig `json:"enterprise_context_jwt,omitempty" yaml:"enterprise_context_jwt,omitempty"`
 
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
@@ -89,6 +96,72 @@ type GUIConfig struct {
 	Port int `json:"port"`
 	// Verbose enables verbose logging for GUI
 	Verbose bool `json:"verbose"`
+}
+
+type EnterpriseContextPublicKey struct {
+	KID string `json:"kid" yaml:"kid"`
+	PEM string `json:"pem" yaml:"pem"`
+}
+
+type EnterpriseContextJWTConfig struct {
+	Enabled          bool                         `json:"enabled" yaml:"enabled"`
+	AllowedIssuers   []string                     `json:"allowed_issuers,omitempty" yaml:"allowed_issuers,omitempty"`
+	AllowedAudiences []string                     `json:"allowed_audiences,omitempty" yaml:"allowed_audiences,omitempty"`
+	AlgAllowlist     []string                     `json:"alg_allowlist,omitempty" yaml:"alg_allowlist,omitempty"`
+	HS256SecretRef   string                       `json:"hs256_secret_ref,omitempty" yaml:"hs256_secret_ref,omitempty"`
+	RS256PublicKeyRef string                      `json:"rs256_public_key_ref,omitempty" yaml:"rs256_public_key_ref,omitempty"`
+	JWKSURL          string                       `json:"jwks_url,omitempty" yaml:"jwks_url,omitempty"`
+	PublicKeys       []EnterpriseContextPublicKey `json:"public_keys,omitempty" yaml:"public_keys,omitempty"`
+	ClockSkewSeconds int                          `json:"clock_skew_seconds,omitempty" yaml:"clock_skew_seconds,omitempty"`
+	RequireJTI       bool                         `json:"require_jti" yaml:"require_jti"`
+}
+
+func enterpriseContextKeyPaths(configDir string) (string, string) {
+	keyDir := filepath.Join(configDir, "keys")
+	return filepath.Join(keyDir, "enterprise_context_rs256_private.pem"),
+		filepath.Join(keyDir, "enterprise_context_rs256_public.pem")
+}
+
+func ensureEnterpriseContextRS256KeyPair(configDir string) (string, string, error) {
+	privatePath, publicPath := enterpriseContextKeyPaths(configDir)
+	privateOK := false
+	publicOK := false
+	if st, err := os.Stat(privatePath); err == nil && !st.IsDir() {
+		privateOK = true
+	}
+	if st, err := os.Stat(publicPath); err == nil && !st.IsDir() {
+		publicOK = true
+	}
+	if privateOK && publicOK {
+		return "file:" + privatePath, "file:" + publicPath, nil
+	}
+
+	if err := os.MkdirAll(filepath.Dir(privatePath), 0700); err != nil {
+		return "", "", fmt.Errorf("create enterprise key dir failed: %w", err)
+	}
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return "", "", fmt.Errorf("generate rsa key failed: %w", err)
+	}
+	privatePEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(key),
+	})
+	pubDer, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		return "", "", fmt.Errorf("marshal rsa public key failed: %w", err)
+	}
+	publicPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: pubDer,
+	})
+	if err := os.WriteFile(privatePath, privatePEM, 0600); err != nil {
+		return "", "", fmt.Errorf("write enterprise private key failed: %w", err)
+	}
+	if err := os.WriteFile(publicPath, publicPEM, 0644); err != nil {
+		return "", "", fmt.Errorf("write enterprise public key failed: %w", err)
+	}
+	return "file:" + privatePath, "file:" + publicPath, nil
 }
 
 // NewConfig creates a new global configuration manager
@@ -219,7 +292,47 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		updated = true
 	}
 	if cfg.ErrorLogFilterExpression == "" {
-		cfg.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
+		cfg.ErrorLogFilterExpression = "StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')"
+		updated = true
+	}
+	_, defaultEnterpriseRS256PublicRef, keyErr := ensureEnterpriseContextRS256KeyPair(configDir)
+	if keyErr != nil {
+		return nil, keyErr
+	}
+	if !cfg.EnterpriseContextJWT.Enabled &&
+		len(cfg.EnterpriseContextJWT.AlgAllowlist) == 0 &&
+		len(cfg.EnterpriseContextJWT.AllowedIssuers) == 0 &&
+		len(cfg.EnterpriseContextJWT.AllowedAudiences) == 0 &&
+		cfg.EnterpriseContextJWT.HS256SecretRef == "" &&
+		cfg.EnterpriseContextJWT.RS256PublicKeyRef == "" &&
+		cfg.EnterpriseContextJWT.ClockSkewSeconds == 0 &&
+		!cfg.EnterpriseContextJWT.RequireJTI {
+		// Enabled by default for fresh configs; preserve explicit false for existing configs.
+		cfg.EnterpriseContextJWT.Enabled = true
+		updated = true
+	}
+	if len(cfg.EnterpriseContextJWT.AlgAllowlist) == 0 {
+		cfg.EnterpriseContextJWT.AlgAllowlist = []string{"RS256"}
+		updated = true
+	}
+	if len(cfg.EnterpriseContextJWT.AllowedIssuers) == 0 {
+		cfg.EnterpriseContextJWT.AllowedIssuers = []string{"tbe"}
+		updated = true
+	}
+	if len(cfg.EnterpriseContextJWT.AllowedAudiences) == 0 {
+		cfg.EnterpriseContextJWT.AllowedAudiences = []string{"tb"}
+		updated = true
+	}
+	if cfg.EnterpriseContextJWT.RS256PublicKeyRef == "" {
+		cfg.EnterpriseContextJWT.RS256PublicKeyRef = defaultEnterpriseRS256PublicRef
+		updated = true
+	}
+	if cfg.EnterpriseContextJWT.ClockSkewSeconds == 0 {
+		cfg.EnterpriseContextJWT.ClockSkewSeconds = 30
+		updated = true
+	}
+	if !cfg.EnterpriseContextJWT.RequireJTI {
+		cfg.EnterpriseContextJWT.RequireJTI = true
 		updated = true
 	}
 	if cfg.applyRemoteCoderDefaults() {
@@ -968,26 +1081,20 @@ func (c *Config) AddProviderByName(name, apiBase, token string) error {
 	return c.AddProvider(provider)
 }
 
-// GetProviderByUUID returns a provider
+// GetProviderByUUID returns a provider from database
 func (c *Config) GetProviderByUUID(uuid string) (*typ.Provider, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	// Try provider store first
-	if c.providerStore != nil {
-		if provider, err := c.providerStore.GetByUUID(uuid); err == nil {
-			return provider, nil
-		}
+	if c.providerStore == nil {
+		return nil, fmt.Errorf("provider store not initialized")
 	}
 
-	// Fallback to in-memory providers (for migration period)
-	for _, p := range c.Providers {
-		if p.UUID == uuid {
-			return p, nil
-		}
+	provider, err := c.providerStore.GetByUUID(uuid)
+	if err != nil {
+		return nil, fmt.Errorf("provider '%s' not found: %w", uuid, err)
 	}
-
-	return nil, fmt.Errorf("provider '%s' not found", uuid)
+	return provider, nil
 }
 
 func (c *Config) GetProviderByName(name string) (*typ.Provider, error) {
@@ -995,17 +1102,12 @@ func (c *Config) GetProviderByName(name string) (*typ.Provider, error) {
 	defer c.mu.RUnlock()
 
 	// Try provider store first
-	if c.providerStore != nil {
-		if provider, err := c.providerStore.GetByName(name); err == nil {
-			return provider, nil
-		}
+	if c.providerStore == nil {
+		panic("[db] Provider store missing")
 	}
 
-	// Fallback to in-memory providers (for migration period)
-	for _, p := range c.Providers {
-		if p.Name == name {
-			return p, nil
-		}
+	if provider, err := c.providerStore.GetByName(name); err == nil {
+		return provider, nil
 	}
 
 	return nil, fmt.Errorf("provider with name '%s' not found", name)
@@ -1016,17 +1118,18 @@ func (c *Config) ListProviders() []*typ.Provider {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	// Try provider store first
-	if c.providerStore != nil {
-		providers, err := c.providerStore.List()
-		if err == nil {
-			return providers
-		}
-		logrus.Warnf("Failed to list providers from store: %v", err)
+	// Try provider store first (database is the source of truth)
+	if c.providerStore == nil {
+		panic("[db] Provider store missing")
 	}
+	providers, err := c.providerStore.List()
+	if err == nil {
+		return providers
+	}
+	// Database error - log warning and fall back to in-memory providers
+	logrus.Warnf("Failed to list providers from database store, falling back to config file: %v", err)
 
-	// Fallback to in-memory providers (for migration period)
-	return c.Providers
+	return nil
 }
 
 // ListOAuthProviders returns all OAuth-enabled providers
@@ -1035,22 +1138,15 @@ func (c *Config) ListOAuthProviders() ([]*typ.Provider, error) {
 	defer c.mu.RUnlock()
 
 	// Try provider store first
-	if c.providerStore != nil {
-		providers, err := c.providerStore.ListOAuth()
-		if err == nil {
-			return providers, nil
-		}
+	if c.providerStore == nil {
+		panic("[db] Provider store missing")
+	}
+	providers, err := c.providerStore.ListOAuth()
+	if err == nil {
+		return providers, nil
 	}
 
-	// Fallback to in-memory providers (for migration period)
-	var oauthProviders []*typ.Provider
-	for _, p := range c.Providers {
-		if p.AuthType == typ.AuthTypeOAuth && p.OAuthDetail != nil {
-			oauthProviders = append(oauthProviders, p)
-		}
-	}
-
-	return oauthProviders, nil
+	return nil, nil
 }
 
 // AddProvider adds a new provider using Provider struct
@@ -1069,13 +1165,7 @@ func (c *Config) AddProvider(provider *typ.Provider) error {
 		}
 		return c.providerStore.Save(provider)
 	}
-
-	// Fallback to in-memory (for migration period)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.Providers = append(c.Providers, provider)
-	return c.Save()
+	return nil
 }
 
 // UpdateProvider updates an existing provider by UUID
@@ -1091,51 +1181,26 @@ func (c *Config) UpdateProvider(uuid string, provider *typ.Provider) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for i, p := range c.Providers {
-		if p.UUID == uuid {
-			provider.UUID = uuid
-			c.Providers[i] = provider
-			return c.Save()
-		}
-	}
-
 	return fmt.Errorf("provider with UUID '%s' not found", uuid)
 }
 
 // DeleteProvider removes a provider by UUID
 func (c *Config) DeleteProvider(uuid string) error {
 	// Use provider store if available
-	if c.providerStore != nil {
+	if c.providerStore == nil {
+		panic("[db] Provider store missing")
+
+	}
 		if err := c.providerStore.Delete(uuid); err != nil {
 			return err
 		}
 
-		// Delete the associated model file
-		if c.modelManager != nil {
-			_ = c.modelManager.RemoveProvider(uuid)
-		}
-
-		return nil
+	// Delete the associated model file
+	if c.modelManager != nil {
+		_ = c.modelManager.RemoveProvider(uuid)
 	}
 
-	// Fallback to in-memory (for migration period)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	for i, p := range c.Providers {
-		if p.UUID == uuid {
-			c.Providers = append(c.Providers[:i], c.Providers[i+1:]...)
-
-			// Delete the associated model file
-			if c.modelManager != nil {
-				_ = c.modelManager.RemoveProvider(uuid)
-			}
-
-			return c.Save()
-		}
-	}
-
-	return fmt.Errorf("provider with UUID '%s' not found", uuid)
+	return nil
 }
 
 // Server configuration methods (merged from AppConfig)
@@ -1551,6 +1616,10 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 		return flags.SmartCompact
 	case "recording":
 		return flags.Recording
+	case "disable_stream_usage":
+		return flags.DisableStreamUsage
+	case "clean_header":
+		return flags.CleanHeader
 	case "skill_user":
 		if val, ok := config.Extensions["skill_user"].(bool); ok {
 			return val
@@ -1612,6 +1681,10 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 		config.Flags.SmartCompact = value
 	case "recording":
 		config.Flags.Recording = value
+	case "disable_stream_usage":
+		config.Flags.DisableStreamUsage = value
+	case "clean_header":
+		config.Flags.CleanHeader = value
 	case "skill_user":
 		// Store in Extensions
 		if config.Extensions == nil {
@@ -1639,20 +1712,65 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 	return c.Save()
 }
 
-// FetchAndSaveProviderModels fetches models from a provider with fallback hierarchy
-func (c *Config) FetchAndSaveProviderModels(uid string) error {
+// GetScenarioStringFlag returns a string flag value for a scenario
+func (c *Config) GetScenarioStringFlag(scenario typ.RuleScenario, flagName string) string {
 	c.mu.RLock()
-	var provider *typ.Provider
-	for _, p := range c.Providers {
-		if p.UUID == uid {
-			provider = p
+	defer c.mu.RUnlock()
+	config := c.GetScenarioConfig(scenario)
+	if config == nil {
+		return ""
+	}
+	flags := config.GetDefaultFlags()
+	switch flagName {
+	case "thinking_effort":
+		return string(flags.ThinkingEffort)
+	default:
+		return ""
+	}
+}
+
+// SetScenarioStringFlag sets a string flag value for a scenario
+func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName string, value string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Find or create scenario config
+	var config *typ.ScenarioConfig
+	for i := range c.Scenarios {
+		if c.Scenarios[i].Scenario == scenario {
+			config = &c.Scenarios[i]
 			break
 		}
 	}
-	c.mu.RUnlock()
 
-	if provider == nil {
-		return fmt.Errorf("provider with UUID %s not found", uid)
+	if config == nil {
+		// Create new scenario config
+		newConfig := typ.ScenarioConfig{
+			Scenario:   scenario,
+			Flags:      typ.ScenarioFlags{},
+			Extensions: make(map[string]interface{}),
+		}
+		c.Scenarios = append(c.Scenarios, newConfig)
+		config = &c.Scenarios[len(c.Scenarios)-1]
+	}
+
+	// Set the specific flag
+	switch flagName {
+	case "thinking_effort":
+		config.Flags.ThinkingEffort = typ.ThinkingEffortLevel(value)
+	default:
+		return fmt.Errorf("unknown string flag name: %s", flagName)
+	}
+
+	return c.Save()
+}
+
+// FetchAndSaveProviderModels fetches models from a provider with fallback hierarchy
+func (c *Config) FetchAndSaveProviderModels(uid string) error {
+	// Use GetProviderByUUID which queries the database first, then falls back to in-memory providers
+	provider, err := c.GetProviderByUUID(uid)
+	if err != nil {
+		return fmt.Errorf("provider with UUID %s not found: %w", uid, err)
 	}
 
 	// Try provider API first using client layer
@@ -1826,7 +1944,20 @@ func (c *Config) CreateDefaultConfig() error {
 	c.JWTSecret = generateSecret()
 	// Set default error log filter expression
 	if c.ErrorLogFilterExpression == "" {
-		c.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
+		c.ErrorLogFilterExpression = "StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')"
+	}
+	_, defaultEnterpriseRS256PublicRef, keyErr := ensureEnterpriseContextRS256KeyPair(c.ConfigDir)
+	if keyErr != nil {
+		return keyErr
+	}
+	c.EnterpriseContextJWT = EnterpriseContextJWTConfig{
+		Enabled:           true,
+		AllowedIssuers:    []string{"tbe"},
+		AllowedAudiences:  []string{"tb"},
+		AlgAllowlist:      []string{"RS256"},
+		RS256PublicKeyRef: defaultEnterpriseRS256PublicRef,
+		ClockSkewSeconds:  30,
+		RequireJTI:        true,
 	}
 	c.applyRemoteCoderDefaults()
 	if err := c.Save(); err != nil {

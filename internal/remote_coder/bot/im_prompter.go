@@ -416,7 +416,6 @@ func (p *IMPrompter) OnAsk(ctx context.Context, req agentboot.AskRequest) (agent
 }
 
 // SubmitDecision submits a user's decision for a pending request
-// Deprecated: Use SubmitResult instead
 func (p *IMPrompter) SubmitDecision(requestID string, approved bool, remember bool, reason string) error {
 	result := ask.Result{
 		ID:       requestID,
@@ -428,7 +427,6 @@ func (p *IMPrompter) SubmitDecision(requestID string, approved bool, remember bo
 }
 
 // PromptPermission implements the legacy agentboot.UserPrompter interface
-// Deprecated: Use OnApproval instead
 func (p *IMPrompter) PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
 	return p.OnApproval(ctx, req)
 }

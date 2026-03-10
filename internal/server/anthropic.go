@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/smart_compact"
@@ -123,7 +124,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	}
 
 	// Check if this is the request model name first
-	rule, err = s.determineRuleWithScenario(scenarioType, model)
+	rule, err = s.determineRuleWithScenario(c, scenarioType, model)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -146,6 +147,10 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 			},
 		})
 		return
+	}
+
+	if provider.Timeout <= 0 {
+		provider.Timeout = constant.DefaultRequestTimeout
 	}
 
 	// Set the rule and provider in context

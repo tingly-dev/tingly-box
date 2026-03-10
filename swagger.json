@@ -1280,6 +1280,93 @@
         }
       }
     },
+    "/api/v1/scenario/{scenario}/string-flag/{flag}": {
+      "get": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Get a specific string flag value for a scenario",
+        "description": "Get a specific string flag value for a scenario",
+        "operationId": "apiV1ScenarioScenarioString-flagFlagGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "flag",
+            "in": "path",
+            "description": "Path parameter 'flag'",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ScenarioFlagResponse"
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Set a specific string flag value for a scenario",
+        "description": "Set a specific string flag value for a scenario",
+        "operationId": "apiV1ScenarioScenarioString-flagFlagPut",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "flag",
+            "in": "path",
+            "description": "Path parameter 'flag'",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ScenarioStringFlagUpdateRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ScenarioFlagResponse"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/scenarios": {
       "get": {
         "tags": [
@@ -2594,6 +2681,11 @@
           "type": "string",
           "description": "API style",
           "example": "openai"
+        },
+        "auth_type": {
+          "type": "string",
+          "description": "Auth type: api_key or oauth (default: api_key)",
+          "example": "api_key"
         },
         "enabled": {
           "type": "boolean",
@@ -4703,6 +4795,10 @@
     "ScenarioFlags": {
       "type": "object",
       "properties": {
+        "disable_stream_usage": {
+          "type": "boolean",
+          "description": "Field disable_stream_usage"
+        },
         "recording": {
           "type": "boolean",
           "description": "Field recording"
@@ -4718,6 +4814,10 @@
         "smart_compact": {
           "type": "boolean",
           "description": "Field smart_compact"
+        },
+        "thinking_effort": {
+          "type": "string",
+          "description": "Field thinking_effort"
         },
         "unified": {
           "type": "boolean",
@@ -4746,6 +4846,18 @@
       "required": [
         "success",
         "data"
+      ]
+    },
+    "ScenarioStringFlagUpdateRequest": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "description": "Field value"
+        }
+      },
+      "required": [
+        "value"
       ]
     },
     "ScenarioUpdateRequest": {
@@ -5952,6 +6064,38 @@
   },
   "tags": [
     {
+      "name": "info",
+      "description": "Operations related to info"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
+      "name": "imbot-settings",
+      "description": "Operations related to imbot-settings"
+    },
+    {
+      "name": "auth",
+      "description": "Operations related to auth"
+    },
+    {
+      "name": "server",
+      "description": "Operations related to server"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "models",
+      "description": "Operations related to models"
+    },
+    {
+      "name": "usage",
+      "description": "Operations related to usage"
+    },
+    {
       "name": "logs",
       "description": "Operations related to logs"
     },
@@ -5960,56 +6104,24 @@
       "description": "Operations related to scenarios"
     },
     {
-      "name": "server",
-      "description": "Operations related to server"
-    },
-    {
-      "name": "models",
-      "description": "Operations related to models"
+      "name": "history",
+      "description": "Operations related to history"
     },
     {
       "name": "testing",
       "description": "Operations related to testing"
     },
     {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
-      "name": "oauth",
-      "description": "Operations related to oauth"
-    },
-    {
-      "name": "usage",
-      "description": "Operations related to usage"
-    },
-    {
-      "name": "auth",
-      "description": "Operations related to auth"
-    },
-    {
-      "name": "info",
-      "description": "Operations related to info"
-    },
-    {
       "name": "token",
       "description": "Operations related to token"
     },
     {
+      "name": "providers",
+      "description": "Operations related to providers"
+    },
+    {
       "name": "skills",
       "description": "Operations related to skills"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
-      "name": "imbot-settings",
-      "description": "Operations related to imbot-settings"
     }
   ]
 }

@@ -268,6 +268,7 @@ type CreateProviderRequest struct {
 	NoKeyRequired bool   `json:"no_key_required" description:"Whether provider requires no API key" example:"false"`
 	Enabled       bool   `json:"enabled" description:"Whether provider is enabled" example:"true"`
 	ProxyURL      string `json:"proxy_url,omitempty" description:"HTTP or SOCKS proxy URL (e.g., http://127.0.0.1:7890 or socks5://127.0.0.1:1080)" example:"http://127.0.0.1:7890"`
+	AuthType      string `json:"auth_type,omitempty" description:"Auth type: api_key or oauth (default: api_key)" example:"api_key"`
 }
 
 // CreateProviderResponse represents the response for adding a provider
@@ -464,13 +465,14 @@ type ProbeResponse struct {
 
 // UsageStatsQuery represents query parameters for usage statistics
 type UsageStatsQuery struct {
-	GroupBy   string `json:"group_by" form:"group_by" description:"Aggregation level: model, provider, scenario, rule, daily, hourly" example:"model"`
+	GroupBy   string `json:"group_by" form:"group_by" description:"Aggregation level: model, provider, scenario, rule, user, daily, hourly" example:"model"`
 	StartTime string `json:"start_time" form:"start_time" description:"ISO 8601 start time" example:"2025-01-10T00:00:00Z"`
 	EndTime   string `json:"end_time" form:"end_time" description:"ISO 8601 end time" example:"2025-01-11T00:00:00Z"`
 	Provider  string `json:"provider" form:"provider" description:"Filter by provider UUID"`
 	Model     string `json:"model" form:"model" description:"Filter by model name"`
 	Scenario  string `json:"scenario" form:"scenario" description:"Filter by scenario"`
 	RuleUUID  string `json:"rule_uuid" form:"rule_uuid" description:"Filter by rule UUID"`
+	UserID    string `json:"user_id" form:"user_id" description:"Filter by enterprise user ID"`
 	Status    string `json:"status" form:"status" description:"Filter by status: success, error, partial" example:"success"`
 	Limit     int    `json:"limit" form:"limit" description:"Max results to return" example:"100"`
 	SortBy    string `json:"sort_by" form:"sort_by" description:"Sort field: total_tokens, request_count, avg_latency" example:"total_tokens"`
@@ -484,6 +486,7 @@ type AggregatedStat struct {
 	ProviderName    string  `json:"provider_name,omitempty" example:"openai"`
 	Model           string  `json:"model,omitempty" example:"gpt-4"`
 	Scenario        string  `json:"scenario,omitempty" example:"openai"`
+	UserID          string  `json:"user_id,omitempty" example:"usr_123"`
 	RequestCount    int64   `json:"request_count" example:"5420"`
 	TotalTokens     int64   `json:"total_tokens" example:"2140000"`
 	InputTokens     int64   `json:"total_input_tokens" example:"1250000"`
@@ -565,6 +568,7 @@ type UsageRecordResponse struct {
 	Model        string `json:"model" example:"gpt-4"`
 	Scenario     string `json:"scenario" example:"openai"`
 	RuleUUID     string `json:"rule_uuid,omitempty" example:"rule-uuid"`
+	UserID       string `json:"user_id,omitempty" example:"usr_123"`
 	RequestModel string `json:"request_model,omitempty" example:"gpt-4"`
 	Timestamp    string `json:"timestamp" example:"2025-01-10T12:00:00Z"`
 	InputTokens  int    `json:"input_tokens" example:"1000"`

@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -251,13 +252,26 @@ func (s *Server) determineRule(modelName string) (*typ.Rule, error) {
 	return nil, fmt.Errorf("provider or model not configured for request model '%s'", modelName)
 }
 
-func (s *Server) determineRuleWithScenario(scenario typ.RuleScenario, modelName string) (*typ.Rule, error) {
-	c := s.config
-	if c != nil {
+func isEnterpriseContextPresent(c *gin.Context) bool {
+	return strings.TrimSpace(c.GetString("enterprise_user_id")) != ""
+}
+
+func (s *Server) determineRuleWithScenario(ctx *gin.Context, scenario typ.RuleScenario, modelName string) (*typ.Rule, error) {
+	cfg := s.config
+	if cfg != nil {
 		// Use the new MatchRuleByModelAndScenario which supports wildcard matching
-		rule := c.MatchRuleByModelAndScenario(modelName, scenario)
+		rule := cfg.MatchRuleByModelAndScenario(modelName, scenario)
 		if rule != nil && rule.Active {
 			return rule, nil
+		}
+		// Enterprise runtime context is already authorized by TBE.
+		// If endpoint scenario has no matching rule, allow lookup by model across scenarios.
+		if isEnterpriseContextPresent(ctx) {
+			for _, anyRule := range cfg.GetRequestConfigs() {
+				if anyRule.Active && anyRule.RequestModel == modelName {
+					return &anyRule, nil
+				}
+			}
 		}
 	}
 

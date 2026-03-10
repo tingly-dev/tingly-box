@@ -554,6 +554,17 @@ export const api = {
         });
     },
 
+    getScenarioStringFlag: async (scenario: string, flag: string): Promise<any> => {
+        return fetchUIAPI(`/scenario/${scenario}/string-flag/${flag}`);
+    },
+
+    setScenarioStringFlag: async (scenario: string, flag: string, value: string): Promise<any> => {
+        return fetchUIAPI(`/scenario/${scenario}/string-flag/${flag}`, {
+            method: 'PUT',
+            body: JSON.stringify({ value }),
+        });
+    },
+
     probeModel: async (uuid: string, model: string): Promise<ProbeResponse> => {
         try {
             const apiInstances = await getApiInstances();

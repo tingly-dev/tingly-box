@@ -15,20 +15,24 @@ export interface ExperimentalFeaturesProps {
 const FEATURES = [
     { key: 'smart_compact', label: 'Smart Compact', description: 'Remove thinking blocks from conversation history to reduce context' },
     { key: 'recording', label: 'Recording', description: 'Record scenario-level request/response traffic for debugging' },
+    { key: 'clean_header', label: 'Clean Header', description: 'Remove Claude Code billing header from system messages (Claude Code only)', scenarios: ['claude_code'] },
 ] as const;
 
 const ExperimentalFeatures: React.FC<ExperimentalFeaturesProps> = ({ scenario }) => {
     const [features, setFeatures] = useState<Record<string, boolean>>({});
     const [loading, setLoading] = useState(true);
 
+    // Filter features based on scenario (if scenarios are specified, only show for those scenarios)
+    const visibleFeatures = FEATURES.filter(f => !f.scenarios || f.scenarios.includes(scenario as any));
+
     const loadFeatures = async () => {
         try {
             setLoading(true);
             const results = await Promise.all(
-                FEATURES.map(f => api.getScenarioFlag(scenario, f.key))
+                visibleFeatures.map(f => api.getScenarioFlag(scenario, f.key))
             );
             const newFeatures: Record<string, boolean> = {};
-            FEATURES.forEach((f, i) => {
+            visibleFeatures.forEach((f, i) => {
                 newFeatures[f.key] = results[i]?.data?.value || false;
             });
             setFeatures(newFeatures);
@@ -62,7 +66,7 @@ const ExperimentalFeatures: React.FC<ExperimentalFeaturesProps> = ({ scenario })
         loadFeatures();
     }, [scenario]);
 
-    if (loading) {
+    if (loading || visibleFeatures.length === 0) {
         return null;
     }
 
@@ -80,7 +84,7 @@ const ExperimentalFeatures: React.FC<ExperimentalFeaturesProps> = ({ scenario })
 
             {/* Feature toggles as clickable chips */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-                {FEATURES.map((feature) => {
+                {visibleFeatures.map((feature) => {
                     const isEnabled = features[feature.key] || false;
                     return (
                                                 <Tooltip key={feature.key} title={feature.description + (isEnabled ? ' (enabled)' : ' (disabled) - Click to enable')} arrow>

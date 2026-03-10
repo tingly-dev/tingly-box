@@ -1,16 +1,16 @@
-import React, { useCallback, useState, useEffect } from 'react';
-import { Box, Fab } from '@mui/material';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
-import { useNavigate } from 'react-router-dom';
 import ApiKeyModal from '@/components/ApiKeyModal';
-import RuleCard from './RuleCard.tsx';
+import EmptyStateGuide from '@/components/EmptyStateGuide';
+import RuleCard from '@/components/RuleCard.tsx';
 import UnifiedCard from '@/components/UnifiedCard';
-import { TemplatePageActions } from './TemplatePageActions';
+import { useScrollToNewRule } from '@/components/hooks/useScrollToNewRule';
+import { useModelSelectDialog } from '@/hooks/useModelSelectDialog';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import { Box, Fab } from '@mui/material';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { TabTemplatePageProps } from './TemplatePage.types';
-import { SCROLLBOX_SX } from './TemplatePage.constants';
+import { TemplatePageActions } from './TemplatePageActions';
 import { useTemplatePageRules } from './hooks/useTemplatePageRules';
-import { useScrollToNewRule } from './hooks/useScrollToNewRule';
-import { useModelSelectDialog } from '../hooks/useModelSelectDialog';
 
 const TemplatePage: React.FC<TabTemplatePageProps> = ({
     rules,
@@ -20,7 +20,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     showNotification,
     providers,
     onRulesChange,
-    title="",
+    title = "",
     collapsible = false,
     allowDeleteRule = false,
     onRuleDelete,
@@ -32,6 +32,11 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     showExpandCollapseButton = true,
     rightAction: customRightAction,
     headerHeight = 0,
+    showEmptyState = true,
+    emptyStateTitle = "No Providers Configured",
+    emptyStateDescription = "Add an API key or OAuth provider to start routing requests",
+    onAddApiKeyClick,
+    onAddOAuthClick,
 }) => {
     const navigate = useNavigate();
     const [allExpanded, setAllExpanded] = useState<boolean>(true);
@@ -199,7 +204,20 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     );
 
     if (!providers.length) {
-        return null;
+        if (!showEmptyState) {
+            return null;
+        }
+
+        return (
+            <UnifiedCard size="full" title={title}>
+                <EmptyStateGuide
+                    title={emptyStateTitle}
+                    description={emptyStateDescription}
+                    onAddApiKeyClick={onAddApiKeyClick || handleAddApiKeyClick}
+                    onAddOAuthClick={onAddOAuthClick}
+                />
+            </UnifiedCard>
+        );
     }
 
     return (
@@ -249,7 +267,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                 </Box>
             </UnifiedCard>
 
-            <ModelSelectDialog open={modelSelectDialogOpen} onClose={() => {}} />
+            <ModelSelectDialog open={modelSelectDialogOpen} onClose={() => { }} />
 
             <ApiKeyModal
                 open={showTokenModal}

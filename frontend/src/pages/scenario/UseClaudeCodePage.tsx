@@ -1,6 +1,14 @@
 import CardGrid from "@/components/CardGrid.tsx";
-import UnifiedCard from "@/components/UnifiedCard.tsx";
+import ClaudeCodeConfigModal from '@/components/ClaudeCodeConfigModal';
+import PageLayout from '@/components/PageLayout';
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
+import TemplatePage from './components/TemplatePage.tsx';
+import UnifiedCard from "@/components/UnifiedCard.tsx";
+import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
+import { useHeaderHeight } from '@/hooks/useHeaderHeight';
+import { api, getBaseUrl } from '@/services/api';
+import { toggleButtonGroupStyle, toggleButtonStyle } from "@/styles/toggleStyles";
+import InfoIcon from '@mui/icons-material/Info';
 import {
     Box,
     Button,
@@ -8,25 +16,15 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
+    IconButton,
     ToggleButton,
     ToggleButtonGroup,
     Tooltip,
-    Typography,
-    IconButton
+    Typography
 } from '@mui/material';
-import InfoOutlined from '@mui/icons-material/InfoOutlined';
-import InfoIcon from '@mui/icons-material/Info';
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import ClaudeCodeConfigModal from '@/components/ClaudeCodeConfigModal';
-import EmptyStateGuide from '@/components/EmptyStateGuide';
-import PageLayout from '@/components/PageLayout';
-import TemplatePage from '@/components/TemplatePage.tsx';
-import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
-import { useHeaderHeight } from '@/hooks/useHeaderHeight';
-import { api, getBaseUrl } from '@/services/api';
-import { toggleButtonGroupStyle, toggleButtonStyle } from "@/styles/toggleStyles";
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -34,8 +32,8 @@ const MODEL_VARIANTS = ['default', 'haiku', 'sonnet', 'opus', 'subagent'] as con
 
 // Configuration mode options
 const CONFIG_MODES: { value: ConfigMode; label: string; description: string; enabled: boolean }[] = [
-    { value: 'unified', label: 'Unified', description: 'Single model for all requests', enabled: true },
-    { value: 'separate', label: 'Separate', description: 'Distinct models for each variant', enabled: true },
+    { value: 'unified', label: 'Unified Model', description: 'Config unified model for all claude code requests', enabled: true },
+    { value: 'separate', label: 'Separate Model', description: 'Config different models for claude code scenario, like subagent, summary, default, ...', enabled: true },
     { value: 'smart', label: 'Smart', description: '(WIP) Smart routing according to request field / content / model feature / user intent / ...', enabled: false },
 ];
 
@@ -587,89 +585,41 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
 
     const isLoading = providersLoading || loadingRule;
 
-    // Mode selection component
-    const modeSelection = (
-        <Box sx={{
-            display: 'flex',
-            alignItems: 'center',
-            py: 2,
-            gap: 3,
-        }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
-                <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
-                    Mode
-                </Typography>
-                <Tooltip
-                    title={
-                        <>
-                            Unified: Single model for all requests
-                            <br />
-                            Separate: Distinct models for each variant
-                        </>
-                    }
-                    arrow
-                >
-                    <InfoOutlined sx={{ fontSize: '1rem', color: 'text.secondary', cursor: 'help' }} />
-                </Tooltip>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
-                <ToggleButtonGroup
-                    value={configMode}
-                    exclusive
-                    size="small"
-                    onChange={(_, value) => value && handleConfigModeChange(value)}
-                    sx={toggleButtonGroupStyle}
-                >
-                    {CONFIG_MODES.filter(m => m.enabled).map((mode) => (
-                        <Tooltip key={mode.value} title={mode.description} arrow>
-                            <ToggleButton
-                                value={mode.value}
-                                sx={toggleButtonStyle}
-                            >
-                                {mode.label}
-                            </ToggleButton>
-                        </Tooltip>
-                    ))}
-                </ToggleButtonGroup>
-            </Box>
-        </Box>
-    );
-
     return (
         <PageLayout loading={isLoading} notification={notification}>
-            {!providers.length ? (
-                <CardGrid>
-                    <UnifiedCard
-                        title={
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <span>Claude Code SDK Configuration</span>
-                            </Box>
-                        }
-                        size="full"
-                    >
-                        <EmptyStateGuide
-                            title="No Providers Configured"
-                            description="Add an API key or OAuth provider to get started"
-                            onAddApiKeyClick={handleAddApiKeyClick}
-                            onAddOAuthClick={handleAddOAuthClick}
-                        />
-                    </UnifiedCard>
-                </CardGrid>
-            ) : (
-                <CardGrid>
-                    <UnifiedCard
-                        title={
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <span>Claude Code SDK Configuration</span>
-                                <Tooltip title={`Base URL: ${baseUrl}/tingly/claude_code`}>
-                                    <IconButton size="small" sx={{ ml: 0.5 }}>
-                                        <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                                    </IconButton>
-                                </Tooltip>
-                            </Box>
-                        }
-                        size="full"
-                        rightAction={
+            <CardGrid>
+                <UnifiedCard
+                    title={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
+                            <span>Claude Code SDK Configuration</span>
+                            <Tooltip title={`Base URL: ${baseUrl}/tingly/claude_code`}>
+                                <IconButton size="small" sx={{ ml: 0.5 }}>
+                                    <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                                </IconButton>
+                            </Tooltip>
+                        </Box>
+                    }
+                    size="full"
+                    rightAction={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <ToggleButtonGroup
+                                value={configMode}
+                                exclusive
+                                size="small"
+                                onChange={(_, value) => value && handleConfigModeChange(value)}
+                                sx={toggleButtonGroupStyle}
+                            >
+                                {CONFIG_MODES.filter(m => m.enabled).map((mode) => (
+                                    <Tooltip key={mode.value} title={mode.description} arrow>
+                                        <ToggleButton
+                                            value={mode.value}
+                                            sx={toggleButtonStyle}
+                                        >
+                                            {mode.label}
+                                        </ToggleButton>
+                                    </Tooltip>
+                                ))}
+                            </ToggleButtonGroup>
                             <Button
                                 onClick={handleShowConfigGuide}
                                 variant="contained"
@@ -678,89 +628,90 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                             >
                                 {t('claudeCode.configButton')}
                             </Button>
-                        }
-                    >
-                        <ProviderConfigCard
-                            headerRef={headerRef}
-                            title="Claude Code SDK Configuration"
-                            baseUrlPath="/tingly/claude_code"
-                            baseUrl={baseUrl}
-                            onCopy={copyToClipboard}
-                            token={token}
-                            onShowTokenModal={() => setShowTokenModal(true)}
-                            scenario="claude_code"
-                            modeSelection={modeSelection}
-                            showApiKeyRow={true}
-                            showBaseUrlRow={true}
-                        />
-                    </UnifiedCard>
-
-                    <TemplatePage
-                        title="Models and Forwarding Rules"
-                        scenario="claude_code"
-                        rules={rules}
-                        showTokenModal={showTokenModal}
-                        setShowTokenModal={setShowTokenModal}
+                        </Box>
+                    }
+                >
+                    <ProviderConfigCard
+                        headerRef={headerRef}
+                        title="Claude Code SDK Configuration"
+                        baseUrlPath="/tingly/claude_code"
+                        baseUrl={baseUrl}
+                        onCopy={copyToClipboard}
                         token={token}
-                        showNotification={showNotification}
-                        providers={providers}
-                        onRulesChange={setRules}
-                        allowToggleRule={false}
-                        collapsible={true}
-                        showAddApiKeyButton={false}
-                        showCreateRuleButton={false}
-                        headerHeight={headerHeight}
+                        onShowTokenModal={() => setShowTokenModal(true)}
+                        scenario="claude_code"
+                        showApiKeyRow={true}
+                        showBaseUrlRow={true}
                     />
+                </UnifiedCard>
 
-                    {/* Confirmation dialog for mode change */}
-                    <Dialog
-                        open={confirmDialogOpen}
-                        onClose={cancelModeChange}
-                        maxWidth="sm"
-                        fullWidth
-                    >
-                        <DialogTitle>Change Configuration Mode?</DialogTitle>
-                        <DialogContent>
-                            <Typography variant="body1" sx={{ mb: 1 }}>
-                                You are about to switch from <strong>{configMode}</strong> to <strong>{pendingMode}</strong> mode.
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                After changing the mode, you will need to reapply the configuration to Claude Code for the changes to take effect.
-                            </Typography>
-                        </DialogContent>
-                        <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
-                            <Button onClick={cancelModeChange} color="inherit">
-                                Cancel
-                            </Button>
-                            <Button onClick={confirmModeChange} variant="contained">
-                                Confirm
-                            </Button>
-                        </DialogActions>
-                    </Dialog>
+                <TemplatePage
+                    title="Models and Forwarding Rules"
+                    scenario="claude_code"
+                    rules={rules}
+                    showTokenModal={showTokenModal}
+                    setShowTokenModal={setShowTokenModal}
+                    token={token}
+                    showNotification={showNotification}
+                    providers={providers}
+                    onRulesChange={setRules}
+                    allowToggleRule={false}
+                    collapsible={true}
+                    showAddApiKeyButton={false}
+                    showCreateRuleButton={false}
+                    headerHeight={headerHeight}
+                    emptyStateTitle="No Providers Configured"
+                    emptyStateDescription="Add an API key or OAuth provider to start routing requests"
+                    onAddApiKeyClick={handleAddApiKeyClick}
+                    onAddOAuthClick={handleAddOAuthClick}
+                />
 
-                    {/* Claude Code Config Modal */}
-                    <ClaudeCodeConfigModal
-                        open={configModalOpen}
-                        onClose={() => {
-                            setConfigModalOpen(false);
-                        }}
-                        configMode={configMode}
-                        generateSettingsConfig={generateSettingsConfig}
-                        generateSettingsScriptWindows={generateSettingsScriptWindows}
-                        generateSettingsScriptUnix={generateSettingsScriptUnix}
-                        generateClaudeJsonConfig={generateClaudeJsonConfig}
-                        generateScriptWindows={generateScriptWindows}
-                        generateScriptUnix={generateScriptUnix}
-                        generateStatusLineConfig={generateStatusLineConfig}
-                        generateStatusLineScriptWindows={generateStatusLineScriptWindows}
-                        generateStatusLineScriptUnix={generateStatusLineScriptUnix}
-                        copyToClipboard={copyToClipboard}
-                        onApply={handleApply}
-                        onApplyWithStatusLine={handleApplyWithStatusLine}
-                        isApplyLoading={isApplyLoading}
-                    />
-                </CardGrid>
-            )}
+                <Dialog
+                    open={confirmDialogOpen}
+                    onClose={cancelModeChange}
+                    maxWidth="sm"
+                    fullWidth
+                >
+                    <DialogTitle>Change Configuration Mode?</DialogTitle>
+                    <DialogContent>
+                        <Typography variant="body1" sx={{ mb: 1 }}>
+                            You are about to switch from <strong>{configMode}</strong> to <strong>{pendingMode}</strong> mode.
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            After changing the mode, you will need to reapply the configuration to Claude Code for the changes to take effect.
+                        </Typography>
+                    </DialogContent>
+                    <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
+                        <Button onClick={cancelModeChange} color="inherit">
+                            Cancel
+                        </Button>
+                        <Button onClick={confirmModeChange} variant="contained">
+                            Confirm
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+
+                <ClaudeCodeConfigModal
+                    open={configModalOpen}
+                    onClose={() => {
+                        setConfigModalOpen(false);
+                    }}
+                    configMode={configMode}
+                    generateSettingsConfig={generateSettingsConfig}
+                    generateSettingsScriptWindows={generateSettingsScriptWindows}
+                    generateSettingsScriptUnix={generateSettingsScriptUnix}
+                    generateClaudeJsonConfig={generateClaudeJsonConfig}
+                    generateScriptWindows={generateScriptWindows}
+                    generateScriptUnix={generateScriptUnix}
+                    generateStatusLineConfig={generateStatusLineConfig}
+                    generateStatusLineScriptWindows={generateStatusLineScriptWindows}
+                    generateStatusLineScriptUnix={generateStatusLineScriptUnix}
+                    copyToClipboard={copyToClipboard}
+                    onApply={handleApply}
+                    onApplyWithStatusLine={handleApplyWithStatusLine}
+                    isApplyLoading={isApplyLoading}
+                />
+            </CardGrid>
         </PageLayout>
     );
 };

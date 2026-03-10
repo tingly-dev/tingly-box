@@ -6,6 +6,7 @@ import {
     Button,
     Chip,
     CircularProgress,
+    Divider,
     FormControlLabel,
     IconButton,
     Modal,
@@ -176,8 +177,7 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                         <TableCell sx={{ fontWeight: 600, minWidth: 180 }}>Provider</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 180 }}>Expires At</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 80 }}>Proxy</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Model List</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Actions</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 220 }}>Actions</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -248,26 +248,21 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                                         </Typography>
                                     )}
                                 </TableCell>
-                                {/* Model List */}
-                                <TableCell>
-                                    <Button
-                                        variant="outlined"
-                                        size="small"
-                                        startIcon={<ListAlt />}
-                                        onClick={() => handleModelListClick(provider.uuid)}
-                                        disabled={!provider.enabled}
+                                {/* Actions */}
+                                <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                                    <Box
                                         sx={{
-                                            textTransform: 'none',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 0.5,
+                                            border: 1,
+                                            borderColor: 'divider',
                                             borderRadius: 1.5,
-                                            fontSize: '0.8rem',
+                                            p: 0.5,
+                                            pr: 1,
+                                            width: 200,
                                         }}
                                     >
-                                        Models
-                                    </Button>
-                                </TableCell>
-                                {/* Actions */}
-                                <TableCell>
-                                    <Stack direction="row" spacing={0.5}>
                                         {onEdit && (
                                             <Tooltip title="View Details">
                                                 <IconButton size="small" color="primary" onClick={() => onEdit(provider.uuid)}>
@@ -309,7 +304,24 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                                                 </IconButton>
                                             </Tooltip>
                                         )}
-                                    </Stack>
+                                        <Divider orientation="vertical" flexItem />
+                                        <Button
+                                            variant="text"
+                                            size="small"
+                                            startIcon={<ListAlt />}
+                                            onClick={() => handleModelListClick(provider.uuid)}
+                                            disabled={!provider.enabled}
+                                            sx={{
+                                                textTransform: 'none',
+                                                fontSize: '0.75rem',
+                                                minWidth: 'auto',
+                                                px: 1,
+                                                color: 'text.primary',
+                                            }}
+                                        >
+                                            Models
+                                        </Button>
+                                    </Box>
                                 </TableCell>
                             </TableRow>
                         );

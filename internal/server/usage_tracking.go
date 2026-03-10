@@ -5,12 +5,35 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/obs/otel"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+var enterpriseRateLimitHook struct {
+	mu       sync.RWMutex
+	reporter func(context.Context, string, string, string, string) error
+}
+
+// SetEnterpriseRateLimitReporter sets callback for enterprise 429 events.
+func SetEnterpriseRateLimitReporter(reporter func(context.Context, string, string, string, string) error) {
+	enterpriseRateLimitHook.mu.Lock()
+	defer enterpriseRateLimitHook.mu.Unlock()
+	enterpriseRateLimitHook.reporter = reporter
+}
+
+func reportEnterpriseRateLimitEvent(ctx context.Context, keyPrefix, providerID, scenario, userID string) error {
+	enterpriseRateLimitHook.mu.RLock()
+	reporter := enterpriseRateLimitHook.reporter
+	enterpriseRateLimitHook.mu.RUnlock()
+	if reporter == nil {
+		return nil
+	}
+	return reporter(ctx, keyPrefix, providerID, scenario, userID)
+}
 
 // trackUsage records token usage using the UsageTracker.
 // It will also record to OTel if the token tracker is available in the gin context.
@@ -61,6 +84,10 @@ func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens
 
 	// 2. Record to OTel (primary path for metrics)
 	if s.tokenTracker != nil {
+		userTier := ""
+		if strings.TrimSpace(c.GetString("enterprise_user_id")) != "" {
+			userTier = "enterprise"
+		}
 		s.tokenTracker.RecordUsage(c.Request.Context(), otel.UsageOptions{
 			Provider:     provider.Name,
 			ProviderUUID: provider.UUID,
@@ -74,6 +101,7 @@ func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens
 			Status:       status,
 			ErrorCode:    errorCode,
 			LatencyMs:    latencyMs,
+			UserTier:     userTier,
 		})
 	}
 
@@ -82,6 +110,17 @@ func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens
 
 	// 4. Report to health monitor for service health tracking
 	s.reportHealthStatus(provider, model, err, errorCode)
+
+	// 5. Enterprise key-level 429 alerting hook (best-effort).
+	if err != nil && isRateLimitError(err) && strings.TrimSpace(c.GetString("enterprise_user_id")) != "" {
+		_ = reportEnterpriseRateLimitEvent(
+			c.Request.Context(),
+			c.GetString("enterprise_key_prefix"),
+			provider.UUID,
+			scenario,
+			c.GetString("enterprise_user_id"),
+		)
+	}
 }
 
 // sanitizeErrorCode extracts a safe error code from an error.
@@ -91,6 +130,16 @@ func sanitizeErrorCode(err error) string {
 	}
 	// Use error type name as code, avoid exposing sensitive info
 	return err.Error()
+}
+
+func isRateLimitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := strings.ToLower(err.Error())
+	return strings.Contains(errStr, "429") ||
+		strings.Contains(errStr, "rate limit") ||
+		strings.Contains(errStr, "ratelimit")
 }
 
 // recordDetailedUsage writes a detailed usage record to the database.
@@ -111,6 +160,7 @@ func (s *Server) recordDetailedUsage(c *gin.Context, rule *typ.Rule, provider *t
 		Model:        model,
 		Scenario:     scenario,
 		RequestModel: requestModel,
+		UserID:       c.GetString("enterprise_user_id"),
 		InputTokens:  inputTokens,
 		OutputTokens: outputTokens,
 		TotalTokens:  inputTokens + outputTokens,
