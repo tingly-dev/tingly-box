@@ -306,7 +306,7 @@ const BotPage = () => {
                     ) : (
                         <EmptyStateGuide
                             title="No Bots Configured"
-                            description="Configure bots to enable remote-coder chat integration."
+                            description="Configure bots to enable remote-control chat integration."
                             showOAuthButton={false}
                             showHeroIcon={false}
                             primaryButtonLabel="Add Bot"
