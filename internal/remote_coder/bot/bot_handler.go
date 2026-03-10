@@ -409,13 +409,20 @@ func (h *BotHandler) getProjectPathForChat(hCtx HandlerContext) (string, bool, e
 func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) error {
 	logrus.WithFields(logrus.Fields{
 		"chatID": hCtx.ChatID,
-		"text":   text[:min(len(text), 50)],
+		"text":   text[:minInt(len(text), 50)],
 	}).Debug("Creating new smart guide agent instance")
 
 	// Get current project path from chat store
-	projectPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
+	projectPath, hasPath, err := h.chatStore.GetProjectPath(hCtx.ChatID)
+	logrus.WithFields(logrus.Fields{
+		"chatID":      hCtx.ChatID,
+		"projectPath": projectPath,
+		"hasPath":     hasPath,
+	}).Info("Loaded project path from chat store")
+
 	if projectPath == "" {
 		projectPath = h.getDefaultProjectPath()
+		logrus.WithField("defaultPath", projectPath).Info("Using default project path")
 	}
 
 	// Get session ID for meta
@@ -453,8 +460,14 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 		},
 		// updateProjectFunc callback - updates project path in chat store
 		func(chatID string, newProjectPath string) error {
+			logrus.WithFields(logrus.Fields{
+				"chatID":  chatID,
+				"oldPath": projectPath,
+				"newPath": newProjectPath,
+			}).Info("updateProjectFunc called - persisting to chat store")
 			return h.chatStore.UpdateChat(chatID, func(chat *Chat) {
 				chat.ProjectPath = newProjectPath
+				chat.BashCwd = newProjectPath // Also update bash_cwd for consistency
 			})
 		},
 	)
@@ -467,6 +480,7 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 
 	// Set working directory from stored project path
 	agent.GetExecutor().SetWorkingDirectory(projectPath)
+	logrus.WithField("workingDir", projectPath).Debug("Set executor working directory")
 
 	// Create tool context
 	toolCtx := &smartguide2.ToolContext{
@@ -503,15 +517,50 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 
 	// Check if working directory was changed by change_workdir tool
 	newProjectPath := agent.GetExecutor().GetWorkingDirectory()
-	if newProjectPath != projectPath {
-		// Persist to chat store
-		if err := h.chatStore.UpdateChat(hCtx.ChatID, func(chat *Chat) {
-			chat.ProjectPath = newProjectPath
+	logrus.WithFields(logrus.Fields{
+		"chatID":         hCtx.ChatID,
+		"oldProjectPath": projectPath,
+		"newProjectPath": newProjectPath,
+	}).Info("Checking if project path changed")
+
+	// Get existing chat to update, or create new one
+	chat, err := h.chatStore.GetChat(hCtx.ChatID)
+	if err != nil {
+		logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("Failed to get chat for update, creating new")
+	}
+
+	if chat == nil {
+		// Create new chat with the project path
+		now := time.Now().UTC()
+		chat = &Chat{
+			ChatID:      hCtx.ChatID,
+			Platform:    string(hCtx.Platform),
+			ProjectPath: newProjectPath,
+			BashCwd:     newProjectPath,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+		if err := h.chatStore.UpsertChat(chat); err != nil {
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"chatID":  hCtx.ChatID,
+				"newPath": newProjectPath,
+			}).Warn("Failed to create chat with project path")
+		} else {
+			logrus.WithFields(logrus.Fields{
+				"chatID":  hCtx.ChatID,
+				"newPath": newProjectPath,
+			}).Info("Created chat with project path from change_workdir")
+		}
+	} else {
+		// Update existing chat
+		if err := h.chatStore.UpdateChat(hCtx.ChatID, func(c *Chat) {
+			c.ProjectPath = newProjectPath
+			c.BashCwd = newProjectPath
 		}); err != nil {
 			logrus.WithError(err).WithFields(logrus.Fields{
 				"chatID":  hCtx.ChatID,
 				"newPath": newProjectPath,
-			}).Warn("Failed to persist project path to chat store")
+			}).Warn("Failed to update project path to chat store")
 		} else {
 			logrus.WithFields(logrus.Fields{
 				"chatID":  hCtx.ChatID,
