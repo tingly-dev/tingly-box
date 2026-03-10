@@ -54,6 +54,15 @@ func (e *ToolExecutor) GetWorkingDirectory() string {
 	return e.bashCwd
 }
 
+// ResolvePath resolves a path to an absolute path
+// If the path is relative, it's joined with the current working directory
+func (e *ToolExecutor) ResolvePath(path string) string {
+	if !filepath.IsAbs(path) {
+		return filepath.Join(e.GetWorkingDirectory(), path)
+	}
+	return path
+}
+
 // ExecuteBash executes a bash command with allowlist checking
 func (e *ToolExecutor) ExecuteBash(ctx context.Context, cmd string, args ...string) (string, error) {
 	// Check if command is allowed
@@ -212,9 +221,7 @@ func (t *BashCDTool) Call(ctx context.Context, kwargs map[string]any) (*tool.Too
 	chatID, _ := kwargs["chat_id"].(string)
 
 	// Resolve path
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(t.executor.GetWorkingDirectory(), path)
-	}
+	path = t.executor.ResolvePath(path)
 
 	// Check if directory exists
 	info, err := os.Stat(path)
@@ -252,10 +259,7 @@ func NewBashLSTool(executor *ToolExecutor) *BashLSTool {
 func (t *BashLSTool) Call(ctx context.Context, kwargs map[string]any) (*tool.ToolResponse, error) {
 	path := t.executor.GetWorkingDirectory()
 	if p, ok := kwargs["path"].(string); ok && p != "" {
-		path = p
-		if !filepath.IsAbs(path) {
-			path = filepath.Join(t.executor.GetWorkingDirectory(), path)
-		}
+		path = t.executor.ResolvePath(p)
 	}
 
 	// Execute ls
@@ -308,9 +312,7 @@ func (t *GitCloneTool) Call(ctx context.Context, kwargs map[string]any) (*tool.T
 	}
 
 	// Resolve destination path
-	if !filepath.IsAbs(dest) {
-		dest = filepath.Join(t.executor.GetWorkingDirectory(), dest)
-	}
+	dest = t.executor.ResolvePath(dest)
 
 	// Check if destination already exists
 	if _, err := os.Stat(dest); err == nil {

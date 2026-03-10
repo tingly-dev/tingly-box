@@ -46,9 +46,9 @@ type Model interface {
 // StoreData represents the JSON file structure.
 // Version allows for future schema migrations.
 type StoreData[T any] struct {
-	Version int                `json:"version"`
-	Items   map[string]*T      `json:"items"` // Key: string, Value: pointer to model
-	Updated time.Time          `json:"updated"`
+	Version int           `json:"version"`
+	Items   map[string]*T `json:"items"` // Key: string, Value: pointer to model
+	Updated time.Time     `json:"updated"`
 }
 
 // Store manages JSON file-based storage with generic type support.
@@ -204,8 +204,8 @@ func (s *Store[T]) Get(key string) *T {
 		return nil
 	}
 
-	// Return a copy to avoid race conditions
-	// Note: This is a shallow copy. For deep copies, implement your own cloning.
+	// Return the pointer directly - callers should not modify the returned value
+	// If modification is needed, callers should make their own copy
 	return value
 }
 

@@ -3,6 +3,7 @@ package bot
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -117,28 +118,9 @@ func isDuplicateColumnError(err error) bool {
 		return false
 	}
 	// SQLite duplicate column error message
-	errStr := err.Error()
-	return contains(errStr, "duplicate column") ||
-		contains(errStr, "already exists")
-}
-
-// contains checks if a string contains a substring (case-insensitive)
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) &&
-		(s == substr ||
-		 len(s) > len(substr) && (
-			s[:len(substr)] == substr ||
-			s[len(s)-len(substr):] == substr ||
-			containsMiddle(s, substr)))
-}
-
-func containsMiddle(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	errStr := strings.ToLower(err.Error())
+	return strings.Contains(errStr, "duplicate column") ||
+		strings.Contains(errStr, "already exists")
 }
 
 // GetChat retrieves a chat by ID

@@ -99,6 +99,27 @@ func (c *TBClientImpl) GetServices(ctx context.Context) ([]ServiceInfo, error) {
 	return result, nil
 }
 
+// buildBaseURL constructs the base URL from server config
+func (c *TBClientImpl) buildBaseURL() string {
+	port := c.serverPort
+	if port == 0 {
+		port = 12580
+	}
+	return fmt.Sprintf("http://%s:%d/tingly/claude_code", c.serverHost, port)
+}
+
+// findFirstClaudeCodeRule finds the first active ClaudeCode rule
+func (c *TBClientImpl) findFirstClaudeCodeRule() (*typ.Rule, error) {
+	globalConfig := c.config.GetGlobalConfig()
+	rules := globalConfig.GetRequestConfigs()
+	for i, rule := range rules {
+		if rule.GetScenario() == typ.ScenarioClaudeCode && rule.Active {
+			return &rules[i], nil
+		}
+	}
+	return nil, fmt.Errorf("no active ClaudeCode rules found")
+}
+
 // GetConnectionConfig returns base URL and API key
 func (c *TBClientImpl) GetConnectionConfig(ctx context.Context) (*ConnectionConfig, error) {
 	// For @tb, we use the ClaudeCode scenario URL as default
@@ -106,56 +127,22 @@ func (c *TBClientImpl) GetConnectionConfig(ctx context.Context) (*ConnectionConf
 
 	apiKey := c.config.GetGlobalConfig().GetModelToken()
 
-	// Build base URL from server config
-	port := c.serverPort
-	if port == 0 {
-		port = 12580
-	}
-	baseURL := fmt.Sprintf("http://%s:%d/tingly/claude_code", c.serverHost, port)
-
 	return &ConnectionConfig{
-		BaseURL: baseURL,
+		BaseURL: c.buildBaseURL(),
 		APIKey:  apiKey,
 	}, nil
 }
 
 func (c *TBClientImpl) GetDefaultRule(ctx context.Context) (*typ.Rule, error) {
-	// Get the first active ClaudeCode rule (same logic as ApplyClaudeConfig)
-	globalConfig := c.config.GetGlobalConfig()
-	rules := globalConfig.GetRequestConfigs()
-	var firstRule *typ.Rule
-
-	for i, rule := range rules {
-		if rule.GetScenario() == typ.ScenarioClaudeCode && rule.Active {
-			firstRule = &rules[i]
-			break
-		}
-	}
-
-	if firstRule == nil {
-		return nil, fmt.Errorf("no active ClaudeCode rules found")
-	}
-
-	return firstRule, nil
+	return c.findFirstClaudeCodeRule()
 }
 
 // GetDefaultService returns the default service configuration
 // This reuses the ClaudeCode scenario's active service
 func (c *TBClientImpl) GetDefaultService(ctx context.Context) (*DefaultServiceConfig, error) {
-	// Get the first active ClaudeCode rule (same logic as ApplyClaudeConfig)
-	globalConfig := c.config.GetGlobalConfig()
-	rules := globalConfig.GetRequestConfigs()
-	var firstRule *typ.Rule
-
-	for i, rule := range rules {
-		if rule.GetScenario() == typ.ScenarioClaudeCode && rule.Active {
-			firstRule = &rules[i]
-			break
-		}
-	}
-
-	if firstRule == nil {
-		return nil, fmt.Errorf("no active ClaudeCode rules found")
+	firstRule, err := c.findFirstClaudeCodeRule()
+	if err != nil {
+		return nil, err
 	}
 
 	services := firstRule.GetServices()
@@ -169,18 +156,11 @@ func (c *TBClientImpl) GetDefaultService(ctx context.Context) (*DefaultServiceCo
 		return nil, fmt.Errorf("provider not found for ClaudeCode rule: %s", firstService.Provider)
 	}
 
-	// Build base URL from server config
-	port := c.serverPort
-	if port == 0 {
-		port = 12580
-	}
-	baseURL := fmt.Sprintf("http://%s:%d/tingly/claude_code", c.serverHost, port)
-
 	return &DefaultServiceConfig{
 		ProviderUUID: provider.UUID,
 		ProviderName: provider.Name,
 		ModelID:      firstService.Model,
-		BaseURL:      baseURL,
+		BaseURL:      c.buildBaseURL(),
 		APIKey:       provider.GetAccessToken(),
 		APIStyle:     string(provider.APIStyle),
 	}, nil

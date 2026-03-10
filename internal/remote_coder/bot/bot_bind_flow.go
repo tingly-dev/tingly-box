@@ -14,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/pkg/fs"
 )
 
 const (
@@ -501,26 +502,11 @@ func ValidateProjectPath(path string) error {
 }
 
 // ExpandPath expands ~ to home directory and returns absolute path
+// This is a wrapper around pkg/fs.ExpandConfigDir for convenience
 func ExpandPath(path string) (string, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return "", fmt.Errorf("path cannot be empty")
 	}
-
-	// Expand ~ to home directory
-	if strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("cannot get home directory: %w", err)
-		}
-		path = filepath.Join(home, path[2:])
-	}
-
-	// Get absolute path
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return "", fmt.Errorf("cannot get absolute path: %w", err)
-	}
-
-	return absPath, nil
+	return fs.ExpandConfigDir(path)
 }

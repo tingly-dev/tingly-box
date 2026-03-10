@@ -158,7 +158,7 @@ func (s *ChatStoreJSON) UpsertChat(chat *Chat) error {
 
 	// Set default agent if not specified
 	if chat.CurrentAgent == "" {
-		chat.CurrentAgent = "claude"
+		chat.CurrentAgent = "tingly-box"
 	}
 
 	return s.store.Set(chat.ChatID, chat)

@@ -11,6 +11,13 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot"
 )
 
+// validAgents is the set of valid agent types for handoff
+var validAgents = map[string]bool{
+	AgentTypeTinglyBox:  true,
+	AgentTypeClaudeCode: true,
+	AgentTypeMock:       true,
+}
+
 // HandoffState represents the state during a handoff
 type HandoffState struct {
 	FromAgent        string    `json:"from_agent"`
@@ -99,12 +106,6 @@ func (hm *HandoffManager) ExecuteHandoff(ctx context.Context, state *HandoffStat
 // validateHandoff validates that a handoff can proceed
 func (hm *HandoffManager) validateHandoff(state *HandoffState) error {
 	// Check agent types
-	validAgents := map[string]bool{
-		AgentTypeTinglyBox:  true,
-		AgentTypeClaudeCode: true,
-		AgentTypeMock:       true,
-	}
-
 	if !validAgents[state.FromAgent] {
 		return fmt.Errorf("invalid from_agent: %s", state.FromAgent)
 	}
@@ -165,13 +166,6 @@ func DetectHandoffCommand(text string) (agentboot.AgentType, bool, string) {
 	}
 
 	return "", false, ""
-}
-
-// DetectHandoffCommandLegacy is the old version for backward compatibility
-// Deprecated: Use DetectHandoffCommand instead
-func DetectHandoffCommandLegacy(text string) (agentboot.AgentType, bool) {
-	agentType, isHandoff, _ := DetectHandoffCommand(text)
-	return agentType, isHandoff
 }
 
 // GetAgentTypeString returns the string representation of an agent type
