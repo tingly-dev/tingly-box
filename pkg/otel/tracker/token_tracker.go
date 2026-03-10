@@ -8,12 +8,13 @@ import (
 )
 
 // Attribute keys for token usage tracking
+// Note: Attribute names follow the original internal/obs/otel convention for compatibility
 var (
 	attrLLMProvider       = attribute.Key("llm.provider")
 	attrLLMProviderUUID   = attribute.Key("llm.provider.uuid")
 	attrLLMModel          = attribute.Key("llm.model")
 	attrLLMRequestModel   = attribute.Key("llm.request.model")
-	attrLLMTokenType      = attribute.Key("llm.token.type")
+	attrLLMTokenType      = attribute.Key("llm.token_type") // Underscore for backward compatibility
 	attrLLMScenario       = attribute.Key("llm.scenario")
 	attrLLMStreaming      = attribute.Key("llm.streaming")
 	attrLLMResponseStatus = attribute.Key("llm.response.status")

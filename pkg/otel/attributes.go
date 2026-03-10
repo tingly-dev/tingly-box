@@ -18,7 +18,8 @@ var (
 	AttrLLMRequestModel = attribute.Key("llm.request.model")
 
 	// AttrLLMTokenType identifies the type of token (input/output)
-	AttrLLMTokenType = attribute.Key("llm.token.type")
+	// Note: Uses underscore (llm.token_type) for backward compatibility with internal/obs/otel
+	AttrLLMTokenType = attribute.Key("llm.token_type")
 
 	// AttrLLMScenario identifies the API scenario (e.g., "openai", "anthropic", "claude_code")
 	AttrLLMScenario = attribute.Key("llm.scenario")

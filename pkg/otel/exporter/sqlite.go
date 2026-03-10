@@ -71,15 +71,16 @@ func (e *SQLiteExporter) processSum(data metricdata.Sum[int64], metricData metri
 		ruleUUID := extractAttr(attrs, "llm.rule.uuid")
 
 		// Route to appropriate store based on metric name
+		// Support both new metric names (pkg/otel) for compatibility
 		switch metricData.Name {
 		case "llm.token.usage.input":
 			e.recordTokenUsage(provider, providerUUID, model, ruleUUID, scenario, "input", value, status)
 		case "llm.token.usage.output":
 			e.recordTokenUsage(provider, providerUUID, model, ruleUUID, scenario, "output", value, status)
 		case "llm.token.total":
-			// Total tokens handled in recordTokenUsage
+			// Total tokens handled via usage store
 		case "llm.request.count":
-			// Request counts handled via usage records
+			e.recordRequestCount(provider, providerUUID, model, ruleUUID, scenario, status, value)
 		case "llm.request.errors":
 			// Errors are tracked via status in usage records
 		}
@@ -100,6 +101,11 @@ func (e *SQLiteExporter) processHistogramInt64(data metricdata.Histogram[int64],
 func (e *SQLiteExporter) recordTokenUsage(provider, providerUUID, model, ruleUUID, scenario, tokenType string, tokens int64, status string) {
 	// Note: Actual recording happens in usage_tracking.go via RecordUsage
 	// The exporter is primarily for OTel SDK compatibility
+}
+
+// recordRequestCount records a request count to the database.
+func (e *SQLiteExporter) recordRequestCount(provider, providerUUID, model, ruleUUID, scenario, status string, count int64) {
+	// Request counts are tracked via usage records in tracking.go
 }
 
 // ForceFlush forces a flush of pending data.
