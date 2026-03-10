@@ -461,22 +461,37 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 		SessionID:   "", // Will be set if needed
 	}
 
-	// Send "thinking" message
-	// h.SendText(hCtx, "💭 Thinking...")
+	// Get session ID for meta
+	sessionID, _, _ := h.chatStore.GetSession(hCtx.ChatID)
+
+	// Build meta for response header
+	behavior := h.getOutputBehavior()
+	meta := ResponseMeta{
+		ProjectPath: projectPath,
+		ChatID:      hCtx.ChatID,
+		UserID:      hCtx.SenderID,
+		SessionID:   sessionID,
+		AgentType:   AgentNameTinglyBox,
+	}
+
+	// Send processing message (respects verbose mode)
+	if behavior.Verbose {
+		h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, IconProcess+" "+MsgProcessing, behavior), hCtx.MessageID)
+	}
 
 	// Get response from agent
 	response, err := h.smartGuideAgent.ReplyWithContext(h.ctx, text, toolCtx)
 	if err != nil {
 		logrus.WithError(err).Error("Smart guide agent failed")
-		h.SendText(hCtx, fmt.Sprintf("❌ Error: %v", err))
+		h.SendText(hCtx, fmt.Sprintf("%s Error: %v", IconError, err))
 		return nil
 	}
 
 	// Get text content from response
 	responseText := response.GetTextContent()
 
-	// Send the response
-	h.SendText(hCtx, responseText)
+	// Send the response with meta header
+	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, responseText, behavior), hCtx.MessageID)
 
 	return nil
 }
@@ -781,14 +796,14 @@ func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string
 func (h *BotHandler) formatResponseWithMeta(meta ResponseMeta, response string, behavior OutputBehavior) string {
 	var buf strings.Builder
 
-	// Always show project path (shortened)
-	if meta.ProjectPath != "" {
-		buf.WriteString(fmt.Sprintf(FormatProjectLine, IconProject, ShortenPath(meta.ProjectPath)))
-	}
-
 	// Show agent indicator
 	if meta.AgentType != "" {
 		buf.WriteString(fmt.Sprintf(FormatAgentLine, GetAgentIcon(meta.AgentType), GetAgentDisplayName(meta.AgentType)))
+	}
+
+	// Always show project path (shortened)
+	if meta.ProjectPath != "" {
+		buf.WriteString(fmt.Sprintf(FormatProjectLine, IconProject, ShortenPath(meta.ProjectPath)))
 	}
 
 	// Always show IDs for transparency
