@@ -375,6 +375,17 @@ func RegisterTools(toolkit *tool.Toolkit, executor *ToolExecutor,
 	getProjectFunc func(chatID string) (string, bool, error),
 	updateProjectFunc func(chatID string, projectPath string) error) error {
 
+	// Create tool groups first
+	if err := toolkit.CreateToolGroup("internal", "Internal tools for bot status and project management", true, ""); err != nil {
+		return fmt.Errorf("failed to create internal tool group: %w", err)
+	}
+	if err := toolkit.CreateToolGroup("bash", "Bash command tools for file system operations", true, ""); err != nil {
+		return fmt.Errorf("failed to create bash tool group: %w", err)
+	}
+	if err := toolkit.CreateToolGroup("git", "Git version control tools", true, ""); err != nil {
+		return fmt.Errorf("failed to create git tool group: %w", err)
+	}
+
 	// Internal tools
 	getStatusTool := NewGetStatusTool(executor, getStatusFunc)
 	if err := toolkit.Register(getStatusTool, &tool.RegisterOptions{
