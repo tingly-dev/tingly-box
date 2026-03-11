@@ -1553,32 +1553,53 @@ func (h *BotHandler) handleClearCommand(hCtx HandlerContext) {
 	// Get current agent and close the matching session
 	currentAgent, _ := h.getCurrentAgent(hCtx.ChatID)
 	agentType := string(currentAgent)
-	if agentType == "tingly-box" {
-		// Smart Guide has no sessions, nothing to clear
-		h.SendText(hCtx, "Smart Guide (@tb) is stateless. Use `/clear` with Claude Code (@cc) to clear sessions.")
+	switch currentAgent {
+	case agentTinglyBox:
+		// Smart Guide uses file-based session store
+		if h.tbSessionStore != nil {
+			// Clear the SmartGuide session file
+			if err := h.tbSessionStore.ClearMessages(hCtx.ChatID); err != nil {
+				logrus.WithError(err).Error("Failed to clear SmartGuide session")
+				h.SendText(hCtx, "⚠️ Failed to clear SmartGuide session.")
+				return
+			}
+			h.SendText(hCtx, "✅ Smart Guide (@tb) conversation history cleared.")
+			logrus.WithField("chatID", hCtx.ChatID).Info("Cleared SmartGuide session")
+		} else {
+			h.SendText(hCtx, "Smart Guide (@tb) session store is not available.")
+		}
 		return
+
+	case agentClaudeCode:
+		// Claude Code uses Session Manager (existing logic)
+		projectPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
+		if projectPath == "" {
+			if path, found := getProjectPathForGroup(h.chatStore, hCtx.ChatID, string(hCtx.Platform)); found {
+				projectPath = path
+			}
+		}
+
+		if projectPath == "" {
+			h.SendText(hCtx, "No project path found. Use "+cmdBindPrimary+" <project_path> to create a session first.")
+			return
+		}
+
+		oldSess := h.sessionMgr.FindBy(hCtx.ChatID, agentType, projectPath)
+		if oldSess != nil {
+			h.sessionMgr.Close(oldSess.ID)
+		}
+
+		sess := h.sessionMgr.CreateWith(hCtx.ChatID, agentType, projectPath)
+		h.sessionMgr.Update(sess.ID, func(s *session.Session) {
+			s.ExpiresAt = time.Time{}
+		})
+
+		h.SendText(hCtx, fmt.Sprintf("✅ Claude Code (@cc) session cleared.\n\nNew session: %s\nProject: %s", sess.ID, projectPath))
+		return
+
+	default:
+		h.SendText(hCtx, "Unknown agent type: "+agentType)
 	}
-
-	// Find and close the current session for this (chat, agent, project)
-	oldSess := h.sessionMgr.FindBy(hCtx.ChatID, agentType, projectPath)
-	if oldSess != nil {
-		h.sessionMgr.Close(oldSess.ID)
-		logrus.WithFields(logrus.Fields{
-			"chatID":    hCtx.ChatID,
-			"sessionID": oldSess.ID,
-			"agent":     agentType,
-			"project":   projectPath,
-		}).Info("Closed session on /clear")
-	}
-
-	// Create new session with same project path
-	sess := h.sessionMgr.CreateWith(hCtx.ChatID, agentType, projectPath)
-	// Clear expiration for persistent sessions
-	h.sessionMgr.Update(sess.ID, func(s *session.Session) {
-		s.ExpiresAt = time.Time{} // Zero value means no expiration
-	})
-
-	h.SendText(hCtx, fmt.Sprintf("Context cleared. New session: %s\nProject: %s", sess.ID, projectPath))
 }
 
 // showProjectSelectionOrGuidance shows project selection if user has bound projects, otherwise shows bind confirmation
