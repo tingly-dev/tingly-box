@@ -38,6 +38,7 @@ const UseAnthropicPage: React.FC = () => {
                         onCopy={copyToClipboard}
                         token={token}
                         onShowTokenModal={() => setShowTokenModal(true)}
+                        scenario={scenario}
                     />
                 </UnifiedCard>
                 <TemplatePage
