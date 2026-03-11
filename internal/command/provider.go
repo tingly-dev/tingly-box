@@ -152,19 +152,13 @@ func providerListCommand(appManager *AppManager) *cobra.Command {
 // providerDeleteCommand creates the delete subcommand
 func providerDeleteCommand(appManager *AppManager) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "delete [name]",
+		Use:   "delete",
 		Short: "Delete a provider",
-		Long: `Delete an AI provider by name.
+		Long: `Delete an AI provider in interactive mode.
 
-If no name is provided, enters interactive mode to select a provider.
-
-Example: provider delete openai`,
-		Args: cobra.MaximumNArgs(1),
+You will be prompted to select which provider to delete.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return runProviderDeleteInteractive(appManager, bufio.NewReader(os.Stdin))
-			}
-			return runProviderDelete(appManager, args[0])
+			return runProviderDeleteInteractive(appManager, bufio.NewReader(os.Stdin))
 		},
 	}
 	return cmd
@@ -173,19 +167,13 @@ Example: provider delete openai`,
 // providerUpdateCommand creates the update subcommand
 func providerUpdateCommand(appManager *AppManager) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "update [name] [baseurl] [token] [api_style]",
+		Use:   "update",
 		Short: "Update a provider",
-		Long: `Update an existing AI provider configuration.
+		Long: `Update an AI provider in interactive mode.
 
-If no arguments are provided, enters interactive mode to select and update a provider.
-
-Example: provider update openai https://new-url.com new-token openai`,
-		Args: cobra.MaximumNArgs(4),
+You will be prompted to select which provider to update and what to change.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return runProviderUpdateInteractive(appManager, bufio.NewReader(os.Stdin))
-			}
-			return runProviderUpdate(appManager, args)
+			return runProviderUpdateInteractive(appManager, bufio.NewReader(os.Stdin))
 		},
 	}
 	return cmd
@@ -251,7 +239,7 @@ func runProviderUpdateInteractive(appManager *AppManager, reader *bufio.Reader) 
 	providers := appManager.ListProviders()
 
 	if len(providers) == 0 {
-		fmt.Println("❌ No providers configured. Use 'provider add' to add a provider first.")
+		fmt.Println("No providers configured. Use 'provider add' to add a provider first.")
 		return nil
 	}
 
@@ -259,9 +247,9 @@ func runProviderUpdateInteractive(appManager *AppManager, reader *bufio.Reader) 
 	fmt.Println("\nSelect a provider to update:")
 
 	for i, provider := range providers {
-		status := "✅"
+		status := "[Enabled]"
 		if !provider.Enabled {
-			status = "❌"
+			status = "[Disabled]"
 		}
 		fmt.Printf("%d. %s %s\n", i+1, status, provider.Name)
 	}
@@ -276,6 +264,7 @@ func runProviderUpdateInteractive(appManager *AppManager, reader *bufio.Reader) 
 	}
 
 	provider := providers[num-1]
+	providerUUID := provider.UUID // Save UUID for update
 
 	fmt.Printf("\nUpdating provider: %s\n", provider.Name)
 	fmt.Printf("Current values:\n")
@@ -337,56 +326,17 @@ func runProviderUpdateInteractive(appManager *AppManager, reader *bufio.Reader) 
 		return nil
 	}
 
-	// Update the provider
+	// Update the provider fields
 	provider.APIBase = apiBase
 	provider.Token = token
 	provider.APIStyle = apiStyle
 
-	if err := appManager.SaveConfig(); err != nil {
+	// Save to database using UUID
+	if err := appManager.UpdateProviderByUUID(providerUUID, provider); err != nil {
 		return fmt.Errorf("failed to save updated provider: %w", err)
 	}
 
-	fmt.Printf("✅ Provider '%s' updated successfully!\n", provider.Name)
-	return nil
-}
-
-// runProviderUpdate updates a provider with command-line arguments
-func runProviderUpdate(appManager *AppManager, args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("provider name is required")
-	}
-
-	name := args[0]
-
-	// Get existing provider
-	provider, err := appManager.GetProvider(name)
-	if err != nil {
-		return fmt.Errorf("provider not found: %s", name)
-	}
-
-	// Update fields from arguments
-	if len(args) > 1 {
-		provider.APIBase = args[1]
-	}
-	if len(args) > 2 {
-		provider.Token = args[2]
-	}
-	if len(args) > 3 {
-		switch strings.ToLower(args[3]) {
-		case "openai":
-			provider.APIStyle = protocol.APIStyleOpenAI
-		case "anthropic":
-			provider.APIStyle = protocol.APIStyleAnthropic
-		default:
-			return fmt.Errorf("invalid API style '%s'. Supported values: openai, anthropic", args[3])
-		}
-	}
-
-	if err := appManager.SaveConfig(); err != nil {
-		return fmt.Errorf("failed to save updated provider: %w", err)
-	}
-
-	fmt.Printf("Successfully updated provider '%s'\n", name)
+	fmt.Printf("Provider '%s' updated successfully!\n", provider.Name)
 	return nil
 }
 
@@ -395,7 +345,7 @@ func runProviderDeleteInteractive(appManager *AppManager, reader *bufio.Reader) 
 	providers := appManager.ListProviders()
 
 	if len(providers) == 0 {
-		fmt.Println("❌ No providers configured.")
+		fmt.Println("No providers configured.")
 		return nil
 	}
 
@@ -403,30 +353,31 @@ func runProviderDeleteInteractive(appManager *AppManager, reader *bufio.Reader) 
 	fmt.Println("\nSelect a provider to delete:")
 
 	for i, provider := range providers {
-		status := "✅"
+		status := "[Enabled]"
 		if !provider.Enabled {
-			status = "❌"
+			status = "[Disabled]"
 		}
 		fmt.Printf("%d. %s %s\n", i+1, status, provider.Name)
 	}
 
-	fmt.Print("\nEnter provider number or name: ")
+	fmt.Print("\nEnter provider number: ")
 	input, _ := reader.ReadString('\n')
 	choice := strings.TrimSpace(strings.TrimSuffix(input, "\n"))
 
-	var nameToDelete string
 	var num int
-	if _, err := fmt.Sscanf(choice, "%d", &num); err == nil && num > 0 && num <= len(providers) {
-		nameToDelete = providers[num-1].Name
-	} else {
-		nameToDelete = choice
+	if _, err := fmt.Sscanf(choice, "%d", &num); err != nil || num < 1 || num > len(providers) {
+		return fmt.Errorf("invalid selection")
 	}
 
-	return runProviderDelete(appManager, nameToDelete)
+	provider := providers[num-1]
+	providerUUID := provider.UUID // Use UUID for deletion
+	providerName := provider.Name
+
+	return runProviderDeleteByUUID(appManager, providerUUID, providerName)
 }
 
-// runProviderDelete deletes a provider by name
-func runProviderDelete(appManager *AppManager, name string) error {
+// runProviderDeleteByUUID deletes a provider by UUID (with confirmation)
+func runProviderDeleteByUUID(appManager *AppManager, uuid, name string) error {
 	// Confirm deletion
 	fmt.Printf("Are you sure you want to delete provider '%s'? (y/N): ", name)
 	reader := bufio.NewReader(os.Stdin)
@@ -434,15 +385,15 @@ func runProviderDelete(appManager *AppManager, name string) error {
 	input = strings.TrimSpace(strings.TrimSuffix(input, "\n"))
 
 	if strings.ToLower(input) != "y" && strings.ToLower(input) != "yes" {
-		fmt.Println("❌ Deletion cancelled.")
+		fmt.Println("Deletion cancelled.")
 		return nil
 	}
 
-	if err := appManager.DeleteProvider(name); err != nil {
+	if err := appManager.DeleteProviderByUUID(uuid); err != nil {
 		return fmt.Errorf("failed to delete provider: %w", err)
 	}
 
-	fmt.Printf("✅ Provider '%s' deleted successfully!\n", name)
+	fmt.Printf("Provider '%s' deleted successfully!\n", name)
 	return nil
 }
 
