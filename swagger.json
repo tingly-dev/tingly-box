@@ -44,6 +44,78 @@
         }
       }
     },
+    "/api/v1/config/apply/claude": {
+      "post": {
+        "tags": [
+          "config"
+        ],
+        "summary": "Generate and apply Claude Code configuration from system state",
+        "description": "Generate and apply Claude Code configuration from system state",
+        "operationId": "apiV1ConfigApplyClaudePost",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ApplyConfigResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/apply/opencode": {
+      "post": {
+        "tags": [
+          "config"
+        ],
+        "summary": "Generate and apply OpenCode configuration from system state",
+        "description": "Generate and apply OpenCode configuration from system state",
+        "operationId": "apiV1ConfigApplyOpencodePost",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ApplyOpenCodeConfigResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/preview/opencode": {
+      "get": {
+        "tags": [
+          "config"
+        ],
+        "summary": "Generate OpenCode configuration preview from system state",
+        "description": "Generate OpenCode configuration preview from system state",
+        "operationId": "apiV1ConfigPreviewOpencodeGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/OpenCodeConfigPreviewResponse"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/history": {
       "get": {
         "tags": [
@@ -95,7 +167,7 @@
           "200": {
             "description": "Successful response",
             "schema": {
-              "$ref": "#/definitions/ImBotPlatformConfigResponse"
+              "$ref": "#/definitions/PlatformConfigResponse"
             }
           },
           "400": {
@@ -131,7 +203,7 @@
           "200": {
             "description": "Successful response",
             "schema": {
-              "$ref": "#/definitions/ImBotPlatformsResponse"
+              "$ref": "#/definitions/PlatformsResponse"
             }
           }
         }
@@ -155,7 +227,7 @@
           "200": {
             "description": "Successful response",
             "schema": {
-              "$ref": "#/definitions/ImBotSettingsListResponse"
+              "$ref": "#/definitions/ListResponse"
             }
           },
           "503": {
@@ -186,7 +258,7 @@
             "description": "Request body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/ImBotSettingsCreateRequest"
+              "$ref": "#/definitions/CreateRequest"
             }
           }
         ],
@@ -194,7 +266,7 @@
           "200": {
             "description": "Successful response",
             "schema": {
-              "$ref": "#/definitions/ImBotSettingsResponse"
+              "$ref": "#/definitions/SettingsResponse"
             }
           },
           "400": {
@@ -233,7 +305,7 @@
           "200": {
             "description": "Successful response",
             "schema": {
-              "$ref": "#/definitions/ImBotSettingsResponse"
+              "$ref": "#/definitions/SettingsResponse"
             }
           },
           "404": {
@@ -271,7 +343,7 @@
             "description": "Request body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/ImBotSettingsUpdateRequest"
+              "$ref": "#/definitions/UpdateRequest"
             }
           }
         ],
@@ -279,7 +351,7 @@
           "200": {
             "description": "Successful response",
             "schema": {
-              "$ref": "#/definitions/ImBotSettingsResponse"
+              "$ref": "#/definitions/SettingsResponse"
             }
           },
           "404": {
@@ -355,7 +427,7 @@
           "200": {
             "description": "Successful response",
             "schema": {
-              "$ref": "#/definitions/ImBotSettingsToggleResponse"
+              "$ref": "#/definitions/ToggleResponse"
             }
           },
           "404": {
@@ -601,6 +673,134 @@
         }
       }
     },
+    "/api/v1/oauth/providers": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "List all available OAuth providers",
+        "description": "List all available OAuth providers",
+        "operationId": "apiV1OauthProvidersGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/OAuthProvidersResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/oauth/providers/{type}": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Get specific OAuth provider configuration",
+        "description": "Get specific OAuth provider configuration",
+        "operationId": "apiV1OauthProvidersTypeGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "description": "Path parameter 'type'",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/OAuthProviderDataResponse"
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Update OAuth provider configuration",
+        "description": "Update OAuth provider configuration",
+        "operationId": "apiV1OauthProvidersTypePut",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "description": "Path parameter 'type'",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/OAuthUpdateProviderRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/OAuthUpdateProviderResponse"
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Delete OAuth provider configuration (clears credentials)",
+        "description": "Delete OAuth provider configuration (clears credentials)",
+        "operationId": "apiV1OauthProvidersTypeDelete",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "description": "Path parameter 'type'",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/OAuthUpdateProviderResponse"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/oauth/refresh": {
       "post": {
         "tags": [
@@ -654,7 +854,7 @@
           {
             "name": "session_id",
             "in": "query",
-            "description": "session id to check oauth status",
+            "description": "OAuth session ID from authorize response",
             "required": true,
             "type": "string"
           }
@@ -1700,7 +1900,7 @@
           {
             "name": "group_by",
             "in": "query",
-            "description": "Aggregation level: model, provider, scenario, rule, daily, hourly",
+            "description": "Aggregation level: model, provider, scenario, rule, user, daily, hourly",
             "required": false,
             "type": "string",
             "default": "model",
@@ -1709,6 +1909,7 @@
               "provider",
               "scenario",
               "rule",
+              "user",
               "daily",
               "hourly"
             ]
@@ -1752,6 +1953,13 @@
             "name": "rule_uuid",
             "in": "query",
             "description": "Filter by rule UUID",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "description": "Filter by enterprise user ID",
             "required": false,
             "type": "string"
           },
@@ -2615,6 +2823,11 @@
           "format": "int64",
           "description": "Field total_tokens",
           "example": 2140000
+        },
+        "user_id": {
+          "type": "string",
+          "description": "Field user_id",
+          "example": "usr_123"
         }
       },
       "required": [
@@ -2630,6 +2843,93 @@
         "error_rate",
         "streamed_count",
         "streamed_rate"
+      ]
+    },
+    "ApplyConfigResponse": {
+      "type": "object",
+      "properties": {
+        "backupPaths": {
+          "type": "array",
+          "description": "Field backupPaths",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdFiles": {
+          "type": "array",
+          "description": "Field createdFiles",
+          "items": {
+            "type": "string"
+          }
+        },
+        "onboardingResult": {
+          "description": "Field onboardingResult",
+          "$ref": "#/definitions/ApplyResult"
+        },
+        "settingsResult": {
+          "description": "Field settingsResult",
+          "$ref": "#/definitions/ApplyResult"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        },
+        "updatedFiles": {
+          "type": "array",
+          "description": "Field updatedFiles",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "success",
+        "settingsResult",
+        "onboardingResult",
+        "createdFiles",
+        "updatedFiles",
+        "backupPaths"
+      ]
+    },
+    "ApplyOpenCodeConfigResponse": {
+      "type": "object",
+      "properties": {
+        "ApplyResult": {
+          "description": "Field ApplyResult",
+          "$ref": "#/definitions/ApplyResult"
+        }
+      },
+      "required": [
+        "ApplyResult"
+      ]
+    },
+    "ApplyResult": {
+      "type": "object",
+      "properties": {
+        "backupPath": {
+          "type": "string",
+          "description": "Field backupPath"
+        },
+        "created": {
+          "type": "boolean",
+          "description": "Field created"
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        },
+        "updated": {
+          "type": "boolean",
+          "description": "Field updated"
+        }
+      },
+      "required": [
+        "success",
+        "message"
       ]
     },
     "ConfigInfo": {
@@ -2744,6 +3044,71 @@
         "success",
         "message",
         "data"
+      ]
+    },
+    "CreateRequest": {
+      "type": "object",
+      "properties": {
+        "auth": {
+          "type": "object",
+          "description": "Field auth",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "auth_type": {
+          "type": "string",
+          "description": "Field auth_type"
+        },
+        "bash_allowlist": {
+          "type": "array",
+          "description": "Field bash_allowlist",
+          "items": {
+            "type": "string"
+          }
+        },
+        "chat_id": {
+          "type": "string",
+          "description": "Field chat_id"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Field enabled"
+        },
+        "name": {
+          "type": "string",
+          "description": "Field name"
+        },
+        "platform": {
+          "type": "string",
+          "description": "Field platform"
+        },
+        "proxy_url": {
+          "type": "string",
+          "description": "Field proxy_url"
+        },
+        "smartguide_model": {
+          "type": "string",
+          "description": "Field smartguide_model"
+        },
+        "smartguide_provider": {
+          "type": "string",
+          "description": "Field smartguide_provider"
+        },
+        "token": {
+          "type": "string",
+          "description": "Field token"
+        },
+        "uuid": {
+          "type": "string",
+          "description": "Field uuid"
+        }
+      },
+      "required": [
+        "platform",
+        "auth_type",
+        "auth",
+        "enabled"
       ]
     },
     "CreateRuleRequest": {
@@ -3132,209 +3497,6 @@
         "data"
       ]
     },
-    "ImBotPlatformConfigResponse": {
-      "type": "object",
-      "properties": {
-        "platform": {
-          "description": "Field platform",
-          "$ref": "#/definitions/PlatformConfig"
-        },
-        "success": {
-          "type": "boolean",
-          "description": "Field success"
-        }
-      },
-      "required": [
-        "success",
-        "platform"
-      ]
-    },
-    "ImBotPlatformsResponse": {
-      "type": "object",
-      "properties": {
-        "categories": {
-          "type": "object",
-          "description": "Field categories",
-          "additionalProperties": {
-            "type": "object"
-          }
-        },
-        "platforms": {
-          "type": "array",
-          "description": "Field platforms",
-          "items": {
-            "$ref": "#/definitions/PlatformConfig"
-          }
-        },
-        "success": {
-          "type": "boolean",
-          "description": "Field success"
-        }
-      },
-      "required": [
-        "success",
-        "platforms",
-        "categories"
-      ]
-    },
-    "ImBotSettingsCreateRequest": {
-      "type": "object",
-      "properties": {
-        "auth": {
-          "type": "object",
-          "description": "Field auth",
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "auth_type": {
-          "type": "string",
-          "description": "Field auth_type"
-        },
-        "bash_allowlist": {
-          "type": "array",
-          "description": "Field bash_allowlist",
-          "items": {
-            "type": "string"
-          }
-        },
-        "chat_id": {
-          "type": "string",
-          "description": "Field chat_id"
-        },
-        "enabled": {
-          "type": "boolean",
-          "description": "Field enabled"
-        },
-        "name": {
-          "type": "string",
-          "description": "Field name"
-        },
-        "platform": {
-          "type": "string",
-          "description": "Field platform"
-        },
-        "proxy_url": {
-          "type": "string",
-          "description": "Field proxy_url"
-        },
-        "token": {
-          "type": "string",
-          "description": "Field token"
-        },
-        "uuid": {
-          "type": "string",
-          "description": "Field uuid"
-        }
-      },
-      "required": [
-        "platform",
-        "auth_type",
-        "auth",
-        "enabled"
-      ]
-    },
-    "ImBotSettingsListResponse": {
-      "type": "object",
-      "properties": {
-        "settings": {
-          "type": "array",
-          "description": "Field settings",
-          "items": {
-            "$ref": "#/definitions/Settings"
-          }
-        },
-        "success": {
-          "type": "boolean",
-          "description": "Field success"
-        }
-      },
-      "required": [
-        "success",
-        "settings"
-      ]
-    },
-    "ImBotSettingsResponse": {
-      "type": "object",
-      "properties": {
-        "settings": {
-          "description": "Field settings",
-          "$ref": "#/definitions/Settings"
-        },
-        "success": {
-          "type": "boolean",
-          "description": "Field success"
-        }
-      },
-      "required": [
-        "success",
-        "settings"
-      ]
-    },
-    "ImBotSettingsToggleResponse": {
-      "type": "object",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Field enabled"
-        },
-        "success": {
-          "type": "boolean",
-          "description": "Field success"
-        }
-      },
-      "required": [
-        "success",
-        "enabled"
-      ]
-    },
-    "ImBotSettingsUpdateRequest": {
-      "type": "object",
-      "properties": {
-        "auth": {
-          "type": "object",
-          "description": "Field auth",
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "auth_type": {
-          "type": "string",
-          "description": "Field auth_type"
-        },
-        "bash_allowlist": {
-          "type": "array",
-          "description": "Field bash_allowlist",
-          "items": {
-            "type": "string"
-          }
-        },
-        "chat_id": {
-          "type": "string",
-          "description": "Field chat_id"
-        },
-        "enabled": {
-          "type": "boolean",
-          "description": "Field enabled"
-        },
-        "name": {
-          "type": "string",
-          "description": "Field name"
-        },
-        "platform": {
-          "type": "string",
-          "description": "Field platform"
-        },
-        "proxy_url": {
-          "type": "string",
-          "description": "Field proxy_url"
-        },
-        "token": {
-          "type": "string",
-          "description": "Field token"
-        }
-      }
-    },
     "ImportSkillLocationsRequest": {
       "type": "object",
       "properties": {
@@ -3431,6 +3593,26 @@
       },
       "required": [
         "success"
+      ]
+    },
+    "ListResponse": {
+      "type": "object",
+      "properties": {
+        "settings": {
+          "type": "array",
+          "description": "Field settings",
+          "items": {
+            "$ref": "#/definitions/Settings"
+          }
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        }
+      },
+      "required": [
+        "success",
+        "settings"
       ]
     },
     "LogEntry": {
@@ -3759,6 +3941,85 @@
         "message"
       ]
     },
+    "OAuthProviderDataResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/OAuthProviderInfo"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
+    "OAuthProviderInfo": {
+      "type": "object",
+      "properties": {
+        "auth_url": {
+          "type": "string",
+          "description": "Field auth_url",
+          "example": "https://claude.ai/oauth/authorize"
+        },
+        "configured": {
+          "type": "boolean",
+          "description": "Field configured",
+          "example": true
+        },
+        "display_name": {
+          "type": "string",
+          "description": "Field display_name",
+          "example": "Anthropic Claude"
+        },
+        "scopes": {
+          "type": "array",
+          "description": "Field scopes",
+          "items": {
+            "type": "string"
+          },
+          "example": [
+            "api"
+          ]
+        },
+        "type": {
+          "type": "string",
+          "description": "Field type",
+          "example": "anthropic"
+        }
+      },
+      "required": [
+        "type",
+        "display_name",
+        "configured"
+      ]
+    },
+    "OAuthProvidersResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "description": "Field data",
+          "items": {
+            "$ref": "#/definitions/OAuthProviderInfo"
+          }
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
     "OAuthRefreshTokenRequest": {
       "type": "object",
       "properties": {
@@ -3938,6 +4199,86 @@
         "data"
       ]
     },
+    "OAuthUpdateProviderRequest": {
+      "type": "object",
+      "properties": {
+        "client_id": {
+          "type": "string",
+          "description": "OAuth client ID",
+          "example": "your_client_id"
+        },
+        "client_secret": {
+          "type": "string",
+          "description": "OAuth client secret",
+          "example": "your_client_secret"
+        },
+        "redirect_url": {
+          "type": "string",
+          "description": "OAuth redirect URI",
+          "example": "http://localhost:12580/oauth/callback"
+        }
+      },
+      "required": [
+        "client_id",
+        "client_secret",
+        "redirect_url"
+      ]
+    },
+    "OAuthUpdateProviderResponse": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Provider configuration updated"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        },
+        "type": {
+          "type": "string",
+          "description": "Field type",
+          "example": "anthropic"
+        }
+      },
+      "required": [
+        "success",
+        "message"
+      ]
+    },
+    "OpenCodeConfigPreviewResponse": {
+      "type": "object",
+      "properties": {
+        "configJson": {
+          "type": "string",
+          "description": "Field configJson"
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message"
+        },
+        "scriptUnix": {
+          "type": "string",
+          "description": "Field scriptUnix"
+        },
+        "scriptWindows": {
+          "type": "string",
+          "description": "Field scriptWindows"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        }
+      },
+      "required": [
+        "success",
+        "configJson",
+        "scriptWindows",
+        "scriptUnix"
+      ]
+    },
     "PlatformConfig": {
       "type": "object",
       "properties": {
@@ -3971,6 +4312,51 @@
         "auth_type",
         "category",
         "fields"
+      ]
+    },
+    "PlatformConfigResponse": {
+      "type": "object",
+      "properties": {
+        "platform": {
+          "description": "Field platform",
+          "$ref": "#/definitions/PlatformConfig"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        }
+      },
+      "required": [
+        "success",
+        "platform"
+      ]
+    },
+    "PlatformsResponse": {
+      "type": "object",
+      "properties": {
+        "categories": {
+          "type": "object",
+          "description": "Field categories",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "platforms": {
+          "type": "array",
+          "description": "Field platforms",
+          "items": {
+            "$ref": "#/definitions/PlatformConfig"
+          }
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        }
+      },
+      "required": [
+        "success",
+        "platforms",
+        "categories"
       ]
     },
     "ProbeProviderRequest": {
@@ -4795,6 +5181,10 @@
     "ScenarioFlags": {
       "type": "object",
       "properties": {
+        "clean_header": {
+          "type": "boolean",
+          "description": "Field clean_header"
+        },
         "disable_stream_usage": {
           "type": "boolean",
           "description": "Field disable_stream_usage"
@@ -5071,6 +5461,10 @@
           "format": "date-time",
           "description": "Field created_at"
         },
+        "default_cwd": {
+          "type": "string",
+          "description": "Field default_cwd"
+        },
         "enabled": {
           "type": "boolean",
           "description": "Field enabled"
@@ -5086,6 +5480,14 @@
         "proxy_url": {
           "type": "string",
           "description": "Field proxy_url"
+        },
+        "smartguide_model": {
+          "type": "string",
+          "description": "Field smartguide_model"
+        },
+        "smartguide_provider": {
+          "type": "string",
+          "description": "Field smartguide_provider"
         },
         "token": {
           "type": "string",
@@ -5106,6 +5508,23 @@
         "auth_type",
         "auth",
         "enabled"
+      ]
+    },
+    "SettingsResponse": {
+      "type": "object",
+      "properties": {
+        "settings": {
+          "description": "Field settings",
+          "$ref": "#/definitions/Settings"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        }
+      },
+      "required": [
+        "success",
+        "settings"
       ]
     },
     "Skill": {
@@ -5576,6 +5995,23 @@
         "data"
       ]
     },
+    "ToggleResponse": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Field enabled"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        }
+      },
+      "required": [
+        "success",
+        "enabled"
+      ]
+    },
     "TokenInfo": {
       "type": "object",
       "properties": {
@@ -5675,6 +6111,61 @@
         "message",
         "data"
       ]
+    },
+    "UpdateRequest": {
+      "type": "object",
+      "properties": {
+        "auth": {
+          "type": "object",
+          "description": "Field auth",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "auth_type": {
+          "type": "string",
+          "description": "Field auth_type"
+        },
+        "bash_allowlist": {
+          "type": "array",
+          "description": "Field bash_allowlist",
+          "items": {
+            "type": "string"
+          }
+        },
+        "chat_id": {
+          "type": "string",
+          "description": "Field chat_id"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Field enabled"
+        },
+        "name": {
+          "type": "string",
+          "description": "Field name"
+        },
+        "platform": {
+          "type": "string",
+          "description": "Field platform"
+        },
+        "proxy_url": {
+          "type": "string",
+          "description": "Field proxy_url"
+        },
+        "smartguide_model": {
+          "type": "string",
+          "description": "Field smartguide_model"
+        },
+        "smartguide_provider": {
+          "type": "string",
+          "description": "Field smartguide_provider"
+        },
+        "token": {
+          "type": "string",
+          "description": "Field token"
+        }
+      }
     },
     "UpdateRuleRequest": {
       "type": "object",
@@ -5899,6 +6390,11 @@
           "format": "int64",
           "description": "Field total_tokens",
           "example": 1500
+        },
+        "user_id": {
+          "type": "string",
+          "description": "Field user_id",
+          "example": "usr_123"
         }
       },
       "required": [
@@ -6064,16 +6560,40 @@
   },
   "tags": [
     {
-      "name": "info",
-      "description": "Operations related to info"
+      "name": "history",
+      "description": "Operations related to history"
     },
     {
-      "name": "oauth",
-      "description": "Operations related to oauth"
+      "name": "skills",
+      "description": "Operations related to skills"
+    },
+    {
+      "name": "config",
+      "description": "Operations related to config"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
     },
     {
       "name": "imbot-settings",
       "description": "Operations related to imbot-settings"
+    },
+    {
+      "name": "usage",
+      "description": "Operations related to usage"
+    },
+    {
+      "name": "models",
+      "description": "Operations related to models"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
     },
     {
       "name": "auth",
@@ -6084,16 +6604,16 @@
       "description": "Operations related to server"
     },
     {
-      "name": "rules",
-      "description": "Operations related to rules"
+      "name": "testing",
+      "description": "Operations related to testing"
     },
     {
-      "name": "models",
-      "description": "Operations related to models"
+      "name": "providers",
+      "description": "Operations related to providers"
     },
     {
-      "name": "usage",
-      "description": "Operations related to usage"
+      "name": "info",
+      "description": "Operations related to info"
     },
     {
       "name": "logs",
@@ -6102,26 +6622,6 @@
     {
       "name": "scenarios",
       "description": "Operations related to scenarios"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
-      "name": "testing",
-      "description": "Operations related to testing"
-    },
-    {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
-      "name": "skills",
-      "description": "Operations related to skills"
     }
   ]
 }
