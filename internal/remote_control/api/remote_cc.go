@@ -11,10 +11,10 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/audit"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/config"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/audit"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/config"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/summarizer"
 )
 
 // RemoteCCHandler handles remote Claude Code requests

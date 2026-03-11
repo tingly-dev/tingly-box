@@ -22,8 +22,8 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/obs/otel"
-	remote_coder "github.com/tingly-dev/tingly-box/internal/remote_coder"
-	remoteconfig "github.com/tingly-dev/tingly-box/internal/remote_coder/config"
+	remote_control "github.com/tingly-dev/tingly-box/internal/remote_control"
+	remoteconfig "github.com/tingly-dev/tingly-box/internal/remote_control/config"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
@@ -1035,7 +1035,7 @@ func (s *Server) StartRemoteCoder() error {
 
 	go func() {
 		imbotStore := s.config.GetImBotSettingsStore()
-		if err := remote_coder.Run(ctx, rcCfg, imbotStore, tbClient); err != nil && ctx.Err() == nil {
+		if err := remote_control.Run(ctx, rcCfg, imbotStore, tbClient); err != nil && ctx.Err() == nil {
 			logrus.WithError(err).Warn("Remote-coder stopped with error")
 		}
 	}()
@@ -1069,7 +1069,7 @@ func (s *Server) IsRemoteCoderRunning() bool {
 
 // SyncRemoteCoderBots syncs bots with the remote control bot manager
 func (s *Server) SyncRemoteCoderBots(ctx context.Context) error {
-	botManager := remote_coder.GetBotManager()
+	botManager := remote_control.GetBotManager()
 	if botManager == nil {
 		return fmt.Errorf("bot manager not available")
 	}

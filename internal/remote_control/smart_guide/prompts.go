@@ -1,4 +1,4 @@
-package smartguide
+package smart_guide
 
 const (
 	// DefaultSystemPrompt is the default system prompt for @tb

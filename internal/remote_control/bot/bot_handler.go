@@ -11,15 +11,14 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	smartguide2 "github.com/tingly-dev/tingly-box/internal/smartguide"
-
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/ask"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	mock "github.com/tingly-dev/tingly-box/agentboot/mockagent"
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/smart_guide"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/summarizer"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 )
 
@@ -39,10 +38,10 @@ type BotHandler struct {
 	tbClient         tbclient.TBClient         // TB Client for model configuration
 
 	// Handoff manager for agent switching
-	handoffManager *smartguide2.HandoffManager
+	handoffManager *smart_guide.HandoffManager
 
 	// SmartGuide session store for conversation history
-	tbSessionStore *smartguide2.SessionStore
+	tbSessionStore *smart_guide.SessionStore
 
 	// runningCancel tracks cancel functions for active executions per chatID
 	runningCancel   map[string]context.CancelFunc
@@ -110,15 +109,15 @@ func NewBotHandler(
 	}
 
 	// Initialize handoff manager
-	handoffMgr := smartguide2.NewHandoffManager()
+	handoffMgr := smart_guide.NewHandoffManager()
 
 	// Create SmartGuide session store using data directory from tbClient
-	var tbSessionStore *smartguide2.SessionStore
+	var tbSessionStore *smart_guide.SessionStore
 	if tbClient != nil {
 		dataDir := tbClient.GetDataDir()
 		if dataDir != "" {
 			sessionsDir := filepath.Join(dataDir, "sessions")
-			tbSessionStore, err = smartguide2.NewSessionStore(sessionsDir)
+			tbSessionStore, err = smart_guide.NewSessionStore(sessionsDir)
 			if err != nil {
 				logrus.WithError(err).WithField("sessionsDir", sessionsDir).Warn("Failed to create SmartGuide session store")
 			} else {
@@ -306,7 +305,7 @@ func (h *BotHandler) handleHandoff(hCtx HandlerContext, toAgent agentboot.AgentT
 	}
 
 	// Create handoff state (no sessionID needed - sessions are managed per-agent)
-	handoffState := &smartguide2.HandoffState{
+	handoffState := &smart_guide.HandoffState{
 		FromAgent:   string(fromAgent),
 		ToAgent:     string(toAgent),
 		Timestamp:   time.Now(),
@@ -344,13 +343,13 @@ func (h *BotHandler) handleHandoff(hCtx HandlerContext, toAgent agentboot.AgentT
 // routeToAgent routes a message to the appropriate agent based on current_agent
 func (h *BotHandler) routeToAgent(hCtx HandlerContext, text string) error {
 	// Check for handoff commands first (supports "@cc help me" format)
-	if toAgent, isHandoff, remainingText := smartguide2.DetectHandoffCommand(text); isHandoff {
+	if toAgent, isHandoff, remainingText := smart_guide.DetectHandoffCommand(text); isHandoff {
 		// Determine target agent by comparing string values
 		var targetAgent agentboot.AgentType
 		switch string(toAgent) {
-		case smartguide2.AgentTypeTinglyBox:
+		case smart_guide.AgentTypeTinglyBox:
 			targetAgent = agentTinglyBox
-		case smartguide2.AgentTypeClaudeCode:
+		case smart_guide.AgentTypeClaudeCode:
 			targetAgent = agentClaudeCode
 		default:
 			return fmt.Errorf("unknown target agent: %s", toAgent)
@@ -435,16 +434,16 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 	}
 
 	// 1. Load session from file (or create new one)
-	var sess *smartguide2.SmartGuideSession
+	var sess *smart_guide.SmartGuideSession
 	if h.tbSessionStore != nil {
 		sess, err = h.tbSessionStore.Load(hCtx.ChatID)
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to load session, creating new one")
-			sess = &smartguide2.SmartGuideSession{
+			sess = &smart_guide.SmartGuideSession{
 				ChatID:    hCtx.ChatID,
 				Platform:  string(hCtx.Platform),
 				CreatedAt: time.Now(),
-				Messages:  []smartguide2.SessionMessage{},
+				Messages:  []smart_guide.SessionMessage{},
 			}
 		}
 
@@ -457,26 +456,26 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 		}).Info("Loaded SmartGuide session")
 	} else {
 		// No session store, create empty session
-		sess = &smartguide2.SmartGuideSession{
+		sess = &smart_guide.SmartGuideSession{
 			ChatID:   hCtx.ChatID,
-			Messages: []smartguide2.SessionMessage{},
+			Messages: []smart_guide.SessionMessage{},
 		}
 	}
 
 	// 2. Create agent config
-	agentConfig := &smartguide2.AgentConfig{
-		SmartGuideConfig:   smartguide2.LoadSmartGuideConfig(),
+	agentConfig := &smart_guide.AgentConfig{
+		SmartGuideConfig:   smart_guide.LoadSmartGuideConfig(),
 		TBClient:           h.tbClient,
 		SmartGuideProvider: h.botSetting.SmartGuideProvider,
 		SmartGuideModel:    h.botSetting.SmartGuideModel,
-		GetStatusFunc: func(chatID string) (*smartguide2.StatusInfo, error) {
+		GetStatusFunc: func(chatID string) (*smart_guide.StatusInfo, error) {
 			projectPath, _, _ := h.chatStore.GetProjectPath(chatID)
 			workingDir, hasWD, _ := h.chatStore.GetBashCwd(chatID)
 			if !hasWD {
 				workingDir = projectPath
 			}
 
-			return &smartguide2.StatusInfo{
+			return &smart_guide.StatusInfo{
 				CurrentAgent:   "tingly-box",
 				SessionID:      hCtx.ChatID, // Use chatID as session identifier
 				ProjectPath:    projectPath,
@@ -502,7 +501,7 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 	}
 
 	// 3. Create agent with history
-	agent, err := smartguide2.NewTinglyBoxAgentWithSession(agentConfig, sess)
+	agent, err := smart_guide.NewTinglyBoxAgentWithSession(agentConfig, sess)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to create smart guide agent")
 		h.SendText(hCtx, "⚠️ Failed to initialize Smart Guide.")
@@ -514,7 +513,7 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 	logrus.WithField("workingDir", projectPath).Debug("Set executor working directory")
 
 	// 4. Create tool context
-	toolCtx := &smartguide2.ToolContext{
+	toolCtx := &smart_guide.ToolContext{
 		ChatID:      hCtx.ChatID,
 		ProjectPath: projectPath,
 		SessionID:   hCtx.ChatID, // Use chatID as session identifier
@@ -549,7 +548,7 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 	// 9. Save messages to session file
 	if h.tbSessionStore != nil {
 		// Save user message
-		userMsg := smartguide2.SessionMessage{
+		userMsg := smart_guide.SessionMessage{
 			Role:      "user",
 			Content:   text,
 			Timestamp: time.Now(),
@@ -569,7 +568,7 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 		}
 
 		// Save assistant response
-		assistantMsg := smartguide2.SessionMessage{
+		assistantMsg := smart_guide.SessionMessage{
 			Role:      "assistant",
 			Content:   responseText,
 			Timestamp: time.Now(),
