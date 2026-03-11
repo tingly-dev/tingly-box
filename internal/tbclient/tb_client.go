@@ -3,6 +3,7 @@ package tbclient
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
@@ -28,6 +29,9 @@ type TBClient interface {
 
 	// SelectModel returns model configuration for @tb execution
 	SelectModel(ctx context.Context, req ModelSelectionRequest) (*ModelConfig, error)
+
+	// GetDataDir returns the data directory path for storing sessions and other data
+	GetDataDir() string
 }
 
 // TBClientImpl implements TBClient interface
@@ -196,4 +200,20 @@ func (c *TBClientImpl) SelectModel(ctx context.Context, req ModelSelectionReques
 		APIKey:       provider.GetAccessToken(),
 		APIStyle:     string(provider.APIStyle),
 	}, nil
+}
+
+// GetDataDir returns the data directory path for storing sessions and other data
+func (c *TBClientImpl) GetDataDir() string {
+	if c.config == nil {
+		return ""
+	}
+
+	// Use ConfigDir as base, return data subdirectory
+	configDir := c.config.ConfigDir
+	if configDir == "" {
+		// Fallback to default data directory
+		return filepath.Join(".", "data")
+	}
+
+	return filepath.Join(configDir, "data")
 }

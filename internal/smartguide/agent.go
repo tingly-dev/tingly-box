@@ -128,6 +128,37 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 	}, nil
 }
 
+// NewTinglyBoxAgentWithSession creates a new smart guide agent with conversation history from session
+func NewTinglyBoxAgentWithSession(config *AgentConfig, sess *SmartGuideSession) (*TinglyBoxAgent, error) {
+	// Create agent normally
+	tbAgent, err := NewTinglyBoxAgent(config)
+	if err != nil {
+		return nil, err
+	}
+
+	// Load conversation history into agent's memory
+	if sess != nil && len(sess.Messages) > 0 {
+		mem := tbAgent.ReActAgent.GetMemory()
+		if mem != nil {
+			ctx := context.Background()
+			for _, msg := range sess.Messages {
+				// Convert session message to agent message format
+				// message.NewMsg takes (role, content, id)
+				agentMsg := message.NewMsg(msg.Role, msg.Content, "")
+				if err := mem.Add(ctx, agentMsg); err != nil {
+					logrus.WithError(err).WithField("role", msg.Role).Warn("Failed to add message to memory")
+				}
+			}
+			logrus.WithFields(logrus.Fields{
+				"chatID":   sess.ChatID,
+				"msgCount": len(sess.Messages),
+			}).Info("Loaded conversation history into agent memory")
+		}
+	}
+
+	return tbAgent, nil
+}
+
 // ReplyWithContext handles a user message with additional context
 func (a *TinglyBoxAgent) ReplyWithContext(ctx context.Context, text string, toolCtx *ToolContext) (*message.Msg, error) {
 	// Update executor working directory if project path is provided
