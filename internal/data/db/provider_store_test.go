@@ -450,56 +450,6 @@ func TestProviderUpdateOAuthCredential(t *testing.T) {
 	}
 }
 
-func TestProviderToolInterceptor(t *testing.T) {
-	store, _ := setupTestProviderStore(t)
-	defer store.Close()
-
-	// Create a provider with tool interceptor config
-	provider := &typ.Provider{
-		UUID:     "tool-interceptor-uuid",
-		Name:     "tool-interceptor-test",
-		APIBase:  "https://api.openai.com/v1",
-		APIStyle: protocol.APIStyleOpenAI,
-		AuthType: typ.AuthTypeAPIKey,
-		Token:    "test-token",
-		Enabled:  true,
-		ToolInterceptor: &typ.ToolInterceptorConfig{
-			PreferLocalSearch: true,
-			SearchAPI:         "brave",
-			SearchKey:         "brave-api-key",
-			MaxResults:        20,
-			ProxyURL:          "http://localhost:8888",
-			MaxFetchSize:      2 * 1024 * 1024,
-			FetchTimeout:      60,
-			MaxURLLength:      3000,
-		},
-	}
-
-	if err := store.Save(provider); err != nil {
-		t.Fatalf("Failed to save provider: %v", err)
-	}
-
-	// Retrieve and verify
-	retrieved, err := store.GetByUUID("tool-interceptor-uuid")
-	if err != nil {
-		t.Fatalf("Failed to get provider: %v", err)
-	}
-
-	if retrieved.ToolInterceptor == nil {
-		t.Fatal("ToolInterceptor is nil")
-	}
-
-	if retrieved.ToolInterceptor.SearchAPI != "brave" {
-		t.Errorf("SearchAPI mismatch: got %s, want %s", retrieved.ToolInterceptor.SearchAPI, "brave")
-	}
-	if retrieved.ToolInterceptor.SearchKey != "brave-api-key" {
-		t.Errorf("SearchKey mismatch: got %s, want %s", retrieved.ToolInterceptor.SearchKey, "brave-api-key")
-	}
-	if retrieved.ToolInterceptor.MaxResults != 20 {
-		t.Errorf("MaxResults mismatch: got %d, want %d", retrieved.ToolInterceptor.MaxResults, 20)
-	}
-}
-
 func TestProviderIsOAuthExpired(t *testing.T) {
 	store, _ := setupTestProviderStore(t)
 	defer store.Close()

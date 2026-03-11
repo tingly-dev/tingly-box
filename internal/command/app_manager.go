@@ -128,6 +128,24 @@ func (am *AppManager) DeleteProvider(name string) error {
 	return nil
 }
 
+// DeleteProviderByUUID removes an AI provider by UUID.
+func (am *AppManager) DeleteProviderByUUID(uuid string) error {
+	globalConfig := am.appConfig.GetGlobalConfig()
+	if err := globalConfig.DeleteProvider(uuid); err != nil {
+		return fmt.Errorf("failed to delete provider: %w", err)
+	}
+	return nil
+}
+
+// UpdateProviderByUUID updates an existing provider by UUID.
+func (am *AppManager) UpdateProviderByUUID(uuid string, provider *typ.Provider) error {
+	globalConfig := am.appConfig.GetGlobalConfig()
+	if err := globalConfig.UpdateProvider(uuid, provider); err != nil {
+		return fmt.Errorf("failed to update provider: %w", err)
+	}
+	return nil
+}
+
 // ListProviders returns all configured providers.
 func (am *AppManager) ListProviders() []*typ.Provider {
 	return am.appConfig.ListProviders()
