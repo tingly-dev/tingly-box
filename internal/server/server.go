@@ -14,7 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/browser"
 	"github.com/sirupsen/logrus"
-
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/data"
@@ -73,9 +72,6 @@ type Server struct {
 
 	// template manager for provider templates
 	templateManager *data.TemplateManager
-
-	// skill manager for skill locations
-	skillManager *data.SkillManager
 
 	// probe cache for model endpoint capabilities
 	probeCache *ProbeCache
@@ -433,16 +429,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.toolInterceptor = toolinterceptor.NewInterceptor(func(providerUUID string) (*typ.ToolInterceptorConfig, bool) {
 		return cfg.GetToolInterceptorConfigForProvider(providerUUID)
 	})
-
-	// Initialize skill manager for skill locations
-	skillManager, err := data.NewSkillManager(cfg.ConfigDir)
-	if err != nil {
-		log.Printf("Failed to initialize skill manager: %v", err)
-		// Continue without skill manager - skill features will be disabled
-	} else {
-		server.skillManager = skillManager
-		log.Printf("Skill manager initialized")
-	}
 
 	// Initialize probe cache with 24-hour TTL
 	server.probeCache = NewProbeCache(24 * time.Hour)

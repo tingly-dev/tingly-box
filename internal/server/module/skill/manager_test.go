@@ -1,4 +1,4 @@
-package data
+package skill
 
 import (
 	"os"
@@ -897,23 +897,23 @@ func TestScanLocation_WithDescription(t *testing.T) {
 
 	// Create test skill files with descriptions
 	testSkills := []struct {
-		path        string
-		content     string
+		path         string
+		content      string
 		expectedDesc string
 	}{
 		{
-			path:        filepath.Join(skillsPath, "commit.md"),
-			content:     "# Commit Skill\n\nThis skill helps with commits.",
+			path:         filepath.Join(skillsPath, "commit.md"),
+			content:      "# Commit Skill\n\nThis skill helps with commits.",
 			expectedDesc: "Commit Skill",
 		},
 		{
-			path:        filepath.Join(skillsPath, "review.md"),
-			content:     "## Code Review\n\nThis skill helps with code reviews.",
+			path:         filepath.Join(skillsPath, "review.md"),
+			content:      "## Code Review\n\nThis skill helps with code reviews.",
 			expectedDesc: "Code Review",
 		},
 		{
-			path:        filepath.Join(skillDir, "SKILL.md"),
-			content:     "No heading here, just a description.",
+			path:         filepath.Join(skillDir, "SKILL.md"),
+			content:      "No heading here, just a description.",
 			expectedDesc: "No heading here, just a description.",
 		},
 	}

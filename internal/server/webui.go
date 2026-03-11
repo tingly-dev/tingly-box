@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-
 	assets "github.com/tingly-dev/tingly-box/internal"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	skill "github.com/tingly-dev/tingly-box/internal/server/module/skill"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/swagger"
 )
@@ -530,7 +530,19 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	//)
 
 	useV2Provider(s, apiV2)
-	useV2Skill(s, apiV2)
+
+	// Create skill handler with skill manager
+	// Initialize skill manager for skill locations
+	skillManager, err := skill.NewSkillManager(s.config.ConfigDir)
+	if err != nil {
+		log.Printf("Failed to add skill api: %v", err)
+		// Continue without skill manager - skill features will be disabled
+	} else {
+		handler := skill.NewHandler(skillManager)
+		// Register routes from skill module
+		skill.RegisterRoutes(apiV2, handler)
+		log.Printf("Skill api initialized")
+	}
 
 	// Server Management
 	apiV1.GET("/status", s.GetStatus,
@@ -765,66 +777,6 @@ func useV2Provider(s *Server, api *swagger.RouteGroup) {
 	api.GET("/provider-templates/version", s.GetProviderTemplateVersion,
 		swagger.WithDescription("Get current provider template registry version"),
 		swagger.WithTags("providers"),
-	)
-}
-
-// Skill management endpoints
-func useV2Skill(s *Server, api *swagger.RouteGroup) {
-	api.GET("/skill-locations", s.GetSkillLocations,
-		swagger.WithDescription("Get all skill locations"),
-		swagger.WithTags("skills"),
-		swagger.WithResponseModel(SkillLocationsResponse{}),
-	)
-
-	api.POST("/skill-locations", s.AddSkillLocation,
-		swagger.WithDescription("Add a new skill location"),
-		swagger.WithTags("skills"),
-		swagger.WithRequestModel(AddSkillLocationRequest{}),
-		swagger.WithResponseModel(AddSkillLocationResponse{}),
-	)
-
-	api.GET("/skill-locations/:id", s.GetSkillLocation,
-		swagger.WithDescription("Get a specific skill location"),
-		swagger.WithTags("skills"),
-		swagger.WithResponseModel(SkillLocationResponse{}),
-	)
-
-	api.DELETE("/skill-locations/:id", s.RemoveSkillLocation,
-		swagger.WithDescription("Remove a skill location"),
-		swagger.WithTags("skills"),
-		swagger.WithResponseModel(RemoveSkillLocationResponse{}),
-	)
-
-	api.POST("/skill-locations/:id/refresh", s.RefreshSkillLocation,
-		swagger.WithDescription("Refresh/scan a skill location for updated skills"),
-		swagger.WithTags("skills"),
-		swagger.WithResponseModel(RefreshSkillLocationResponse{}),
-	)
-
-	// Scan all IDE locations for skills (comprehensive scan)
-	api.POST("/skill-locations/scan", s.ScanIdes,
-		swagger.WithDescription("Scan all IDE locations and return discovered skills"),
-		swagger.WithTags("skills"),
-		swagger.WithResponseModel(ScanIdesResponse{}),
-	)
-
-	api.GET("/skill-locations/discover", s.DiscoverIdes,
-		swagger.WithDescription("Discover IDEs with skills in home directory"),
-		swagger.WithTags("skills"),
-		swagger.WithResponseModel(DiscoverIdesResponse{}),
-	)
-
-	api.POST("/skill-locations/import", s.ImportSkillLocations,
-		swagger.WithDescription("Import discovered skill locations"),
-		swagger.WithTags("skills"),
-		swagger.WithRequestModel(ImportSkillLocationsRequest{}),
-		swagger.WithResponseModel(ImportSkillLocationsResponse{}),
-	)
-
-	api.GET("/skill-content", s.GetSkillContent,
-		swagger.WithDescription("Get skill file content"),
-		swagger.WithTags("skills"),
-		swagger.WithResponseModel(SkillContentResponse{}),
 	)
 }
 
