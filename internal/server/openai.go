@@ -168,9 +168,36 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		return
 	}
 
+	// Start scenario-level recording (client -> tingly-box traffic) only if enabled
+	var recorder *ScenarioRecorder
+	if s.ApplyRecording(scenarioType) {
+		recorder = s.RecordScenarioRequest(c, scenario)
+		if recorder != nil {
+			// Store recorder in context for use in handlers
+			c.Set("scenario_recorder", recorder)
+		}
+	}
+
+	// Track whether we've successfully recorded a response or error
+	requestFailed := false
+	defer func() {
+		if recorder != nil {
+			if requestFailed {
+				// Error was already recorded at the error location
+				return
+			}
+			// Record successful response
+			recorder.RecordResponse(provider, req.Model)
+		}
+	}()
+
 	// Check if this is the request model name first
 	rule, err = s.determineRuleWithScenario(c, scenarioType, req.Model)
 	if err != nil {
+		requestFailed = true
+		if recorder != nil {
+			recorder.RecordError(err)
+		}
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
@@ -181,6 +208,10 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 	}
 	provider, selectedService, err = s.DetermineProviderAndModelWithScenario(scenarioType, rule, &req.ChatCompletionNewParams)
 	if err != nil {
+		requestFailed = true
+		if recorder != nil {
+			recorder.RecordError(err)
+		}
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
