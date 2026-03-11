@@ -1,4 +1,4 @@
-package remote_coder
+package remote_control
 
 import (
 	"context"
@@ -11,9 +11,9 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/bot"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/config"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/config"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 )
 

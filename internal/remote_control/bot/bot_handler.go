@@ -18,8 +18,8 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	mock "github.com/tingly-dev/tingly-box/agentboot/mockagent"
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/summarizer"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 )
 

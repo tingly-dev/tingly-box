@@ -27,15 +27,15 @@ var AllowedMIMETypes = map[string]string{
 	"image/gif":  "image",
 	"image/webp": "image",
 	// Documents
-	"application/pdf":                                      "document",
-	"text/plain":                                          "document",
-	"text/markdown":                                       "document",
-	"text/csv":                                            "document",
+	"application/pdf": "document",
+	"text/plain":      "document",
+	"text/markdown":   "document",
+	"text/csv":        "document",
 	// Word
-	"application/msword":                                  "document",
+	"application/msword": "document",
 	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": "document",
 	// Excel
-	"application/vnd.ms-excel":                            "document",
+	"application/vnd.ms-excel": "document",
 	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "document",
 }
 
