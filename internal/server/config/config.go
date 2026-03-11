@@ -957,6 +957,13 @@ func (c *Config) GetProviderByUUID(uuid string) (*typ.Provider, error) {
 	return provider, nil
 }
 
+// GetProviderStore returns the provider store instance
+func (c *Config) GetProviderStore() *db.ProviderStore {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.providerStore
+}
+
 func (c *Config) GetProviderByName(name string) (*typ.Provider, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

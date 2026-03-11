@@ -29,6 +29,9 @@ type Config struct {
 // Session represents an execution session
 type Session struct {
 	ID           string                 // Unique session identifier
+	ChatID       string                 // NEW: Bound chat ID
+	Agent        string                 // NEW: Bound agent type ("claude", "tingly-box")
+	Project      string                 // NEW: Bound project path
 	Status       Status                 // Current session status
 	Request      string                 // User's request payload
 	Response     string                 // Claude Code response summary
@@ -56,11 +59,11 @@ type Manager struct {
 	stopCh    chan struct{}
 	wg        sync.WaitGroup
 	startTime time.Time
-	store     *MessageStore
+	store     SessionStore // Use interface instead of *MessageStore
 }
 
 // NewManager creates a new session manager
-func NewManager(cfg Config, store *MessageStore) *Manager {
+func NewManager(cfg Config, store SessionStore) *Manager {
 	mgr := &Manager{
 		sessions:  make(map[string]*Session),
 		config:    cfg,
@@ -70,14 +73,12 @@ func NewManager(cfg Config, store *MessageStore) *Manager {
 	}
 
 	if store != nil {
-		if sessions, err := store.LoadSessions(); err == nil {
-			for _, s := range sessions {
-				mgr.sessions[s.ID] = s
-			}
-			logrus.Debugf("Loaded %d remote-coder sessions from DB", len(sessions))
-		} else {
-			logrus.Warnf("Failed to load remote-coder sessions from DB: %v", err)
+		// Load all sessions from store
+		sessions := store.List()
+		for _, s := range sessions {
+			mgr.sessions[s.ID] = s
 		}
+		logrus.Debugf("Loaded %d sessions from store", len(sessions))
 	}
 
 	// Start cleanup goroutine
@@ -91,12 +92,20 @@ func NewManager(cfg Config, store *MessageStore) *Manager {
 
 // Create creates a new session and returns it
 func (m *Manager) Create() *Session {
+	return m.CreateWith("", "", "")
+}
+
+// CreateWith creates a new session with binding information
+func (m *Manager) CreateWith(chatID, agent, project string) *Session {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	now := time.Now()
 	session := &Session{
 		ID:           uuid.New().String(),
+		ChatID:       chatID,
+		Agent:        agent,
+		Project:      project,
 		Status:       StatusPending,
 		CreatedAt:    now,
 		LastActivity: now,
@@ -104,10 +113,20 @@ func (m *Manager) Create() *Session {
 		Context:      make(map[string]interface{}),
 	}
 
+	// Store project_path in context for backward compatibility
+	if project != "" {
+		session.Context["project_path"] = project
+	}
+
 	m.sessions[session.ID] = session
-	logrus.Debugf("Session created: %s (expires at %s)", session.ID, session.ExpiresAt.Format(time.RFC3339))
+	logrus.Debugf("Session created: %s (chat=%s, agent=%s, project=%s, expires at %s)",
+		session.ID, chatID, agent, project, session.ExpiresAt.Format(time.RFC3339))
 	if m.store != nil {
-		_ = m.store.UpsertSession(session)
+		_ = m.store.Set(session.ID, session)
+		// Force immediate write to disk
+		if jsonStore, ok := m.store.(*SessionStoreJSON); ok {
+			_ = jsonStore.ForceSave()
+		}
 	}
 
 	return session
@@ -133,7 +152,7 @@ func (m *Manager) GetOrLoad(id string) (*Session, bool) {
 	if m.store == nil {
 		return nil, false
 	}
-	sess, err := m.store.GetSession(id)
+	sess, err := m.store.Get(id)
 	if err != nil || sess == nil {
 		return nil, false
 	}
@@ -141,6 +160,67 @@ func (m *Manager) GetOrLoad(id string) (*Session, bool) {
 	m.sessions[id] = sess
 	m.mu.Unlock()
 	return sess, true
+}
+
+// FindBy finds a session by (chatID, agent, project) tuple.
+// Returns the session if found and not closed/expired, otherwise nil.
+func (m *Manager) FindBy(chatID, agent, project string) *Session {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// First check in-memory sessions
+	for _, sess := range m.sessions {
+		if sess.ChatID == chatID && sess.Agent == agent && sess.Project == project {
+			if sess.Status != StatusClosed && sess.Status != StatusExpired {
+				return sess
+			}
+		}
+	}
+
+	// If not in memory, check the store
+	if m.store != nil {
+		if sess, err := m.store.FindByChatAgentProject(chatID, agent, project); err == nil && sess != nil {
+			if sess.Status != StatusClosed && sess.Status != StatusExpired {
+				// Load into memory
+				m.sessions[sess.ID] = sess
+				return sess
+			}
+		}
+	}
+
+	return nil
+}
+
+// ListByChat lists all sessions for a given chat ID.
+// Useful for debugging and management.
+func (m *Manager) ListByChat(chatID string) []*Session {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []*Session
+	seen := make(map[string]bool) // Deduplicate by session ID
+
+	// Collect from memory
+	for _, sess := range m.sessions {
+		if sess.ChatID == chatID && !seen[sess.ID] {
+			result = append(result, sess)
+			seen[sess.ID] = true
+		}
+	}
+
+	// Also check store for sessions not in memory
+	if m.store != nil {
+		if stored, err := m.store.ListByChat(chatID); err == nil {
+			for _, sess := range stored {
+				if !seen[sess.ID] {
+					result = append(result, sess)
+					seen[sess.ID] = true
+				}
+			}
+		}
+	}
+
+	return result
 }
 
 // Update updates a session
@@ -156,7 +236,7 @@ func (m *Manager) Update(id string, fn func(*Session)) bool {
 	fn(session)
 	session.LastActivity = time.Now()
 	if m.store != nil {
-		_ = m.store.UpsertSession(session)
+		_ = m.store.Set(id, session)
 	}
 
 	return true
@@ -175,8 +255,7 @@ func (m *Manager) Delete(id string) bool {
 	delete(m.sessions, id)
 	logrus.Debugf("Session deleted: %s", id)
 	if m.store != nil {
-		_ = m.store.DeleteMessagesForSession(id)
-		_ = m.store.DeleteSession(id)
+		_ = m.store.Delete(id)
 	}
 
 	return true
@@ -197,9 +276,9 @@ func (m *Manager) Close(id string) bool {
 
 	delete(m.sessions, id)
 	logrus.Debugf("Session closed: %s", id)
+
 	if m.store != nil {
-		_ = m.store.DeleteMessagesForSession(id)
-		_ = m.store.DeleteSession(id)
+		_ = m.store.Set(id, session)
 	}
 
 	return true
@@ -257,15 +336,9 @@ func (m *Manager) SetContext(id string, key string, value interface{}) bool {
 
 // AppendMessage adds a message to a session
 func (m *Manager) AppendMessage(id string, msg Message) bool {
-	ok := m.Update(id, func(s *Session) {
-		if m.store == nil {
-			s.Messages = append(s.Messages, msg)
-		}
+	return m.Update(id, func(s *Session) {
+		s.Messages = append(s.Messages, msg)
 	})
-	if ok && m.store != nil {
-		_ = m.store.InsertMessage(id, msg)
-	}
-	return ok
 }
 
 // GetMessages retrieves messages for a session
@@ -278,11 +351,7 @@ func (m *Manager) GetMessages(id string) ([]Message, bool) {
 		return nil, false
 	}
 
-	if m.store != nil {
-		if msgs, err := m.store.GetMessages(id); err == nil {
-			return msgs, true
-		}
-	}
+	// Return copy of messages slice
 	return append([]Message{}, session.Messages...), true
 }
 
@@ -334,8 +403,7 @@ func (m *Manager) cleanupExpired() {
 			delete(m.sessions, id)
 			logrus.Debugf("Session expired and cleaned up: %s", id)
 			if m.store != nil {
-				_ = m.store.DeleteMessagesForSession(id)
-				_ = m.store.DeleteSession(id)
+				_ = m.store.Delete(id)
 			}
 		}
 	}
@@ -418,10 +486,7 @@ func (m *Manager) Clear() int {
 	count := len(m.sessions)
 	m.sessions = make(map[string]*Session)
 	logrus.Debugf("Cleared %d sessions", count)
-	if m.store != nil {
-		_ = m.store.ClearAllMessages()
-		_ = m.store.ClearAllSessions()
-	}
+	// Note: Not clearing store, as it may be shared
 	return count
 }
 
@@ -441,11 +506,6 @@ func (m *Manager) retentionLoop() {
 			return
 		case <-ticker.C:
 			cutoff := time.Now().Add(-m.config.MessageRetention)
-			if m.store != nil {
-				_ = m.store.PurgeOlderThan(cutoff)
-				// Note: PurgeSessionsOlderThan is not called here to preserve persistent sessions
-				// Sessions are managed by cleanupExpired which respects ExpiresAt == zero
-			}
 			m.mu.Lock()
 			for id, session := range m.sessions {
 				if session.Status == StatusRunning {
@@ -457,6 +517,10 @@ func (m *Manager) retentionLoop() {
 				}
 				if session.LastActivity.Before(cutoff) {
 					delete(m.sessions, id)
+					// Also delete from store
+					if m.store != nil {
+						_ = m.store.Delete(id)
+					}
 				}
 			}
 			m.mu.Unlock()

@@ -235,11 +235,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 		if data, ok = c.Msg.(map[string]any); !ok {
 
 			// Parser finished (EOF reached)
-			// Now wait for command to complete
-			if err := cmd.Wait(); err != nil {
-				return nil, l.handleExecutionError(err, "runtime error", handler)
-			}
-
+			// The Runner.Run() will call cmd.Wait() for us, don't call it here
 			return nil, fmt.Errorf("invalid event data")
 		}
 

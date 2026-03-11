@@ -28,6 +28,9 @@ export interface BotSettings {
     bash_allowlist?: string[];
     enabled?: boolean;
     token?: string; // Legacy field for backward compatibility
+    // SmartGuide model configuration
+    smartguide_provider?: string; // Provider UUID
+    smartguide_model?: string; // Model identifier
     created_at?: string;
     updated_at?: string;
 }
