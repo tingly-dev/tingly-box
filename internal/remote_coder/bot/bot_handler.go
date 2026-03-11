@@ -549,20 +549,42 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 	// 9. Save messages to session file
 	if h.tbSessionStore != nil {
 		// Save user message
-		if err := h.tbSessionStore.AddMessage(hCtx.ChatID, smartguide2.SessionMessage{
+		userMsg := smartguide2.SessionMessage{
 			Role:      "user",
 			Content:   text,
 			Timestamp: time.Now(),
-		}); err != nil {
+		}
+		userContentPreview := userMsg.Content
+		if len(userContentPreview) > 50 {
+			userContentPreview = userContentPreview[:50] + "..."
+		}
+		logrus.WithFields(logrus.Fields{
+			"chatID":  hCtx.ChatID,
+			"role":    userMsg.Role,
+			"content": userContentPreview,
+		}).Debug("Saving user message to session")
+
+		if err := h.tbSessionStore.AddMessage(hCtx.ChatID, userMsg); err != nil {
 			logrus.WithError(err).Warn("Failed to save user message to session")
 		}
 
 		// Save assistant response
-		if err := h.tbSessionStore.AddMessage(hCtx.ChatID, smartguide2.SessionMessage{
+		assistantMsg := smartguide2.SessionMessage{
 			Role:      "assistant",
 			Content:   responseText,
 			Timestamp: time.Now(),
-		}); err != nil {
+		}
+		assistantContentPreview := assistantMsg.Content
+		if len(assistantContentPreview) > 50 {
+			assistantContentPreview = assistantContentPreview[:50] + "..."
+		}
+		logrus.WithFields(logrus.Fields{
+			"chatID":  hCtx.ChatID,
+			"role":    assistantMsg.Role,
+			"content": assistantContentPreview,
+		}).Debug("Saving assistant message to session")
+
+		if err := h.tbSessionStore.AddMessage(hCtx.ChatID, assistantMsg); err != nil {
 			logrus.WithError(err).Warn("Failed to save assistant message to session")
 		}
 
