@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react';
 import { api } from '../services/api';
 
 interface HealthContextType {
@@ -30,6 +30,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({ children }) => {
     const [lastCheck, setLastCheck] = useState<Date | null>(null);
     const [checking, setChecking] = useState(false);
     const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
+    const disconnectDialogOpenRef = useRef(false);
 
     const checkHealth = useCallback(async () => {
         setChecking(true);
@@ -38,7 +39,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({ children }) => {
             setIsHealthy(healthy);
             setLastCheck(new Date());
             // Auto close disconnect dialog if health is restored
-            if (healthy && disconnectDialogOpen) {
+            if (healthy && disconnectDialogOpenRef.current) {
                 setDisconnectDialogOpen(false);
             }
         } catch (error) {
@@ -48,6 +49,11 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({ children }) => {
         } finally {
             setChecking(false);
         }
+    }, []); // Empty deps - checkHealth never needs to be recreated
+
+    // Keep ref in sync with state
+    useEffect(() => {
+        disconnectDialogOpenRef.current = disconnectDialogOpen;
     }, [disconnectDialogOpen]);
 
     const showDisconnectDialog = useCallback(() => {
