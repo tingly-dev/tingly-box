@@ -54,7 +54,7 @@ func runProviderInteractiveMode(appManager *AppManager) error {
 
 	for {
 		showProviderMenu()
-		fmt.Print("Select an option (1-6): ")
+		fmt.Print("Select an option (1-5, 0 to exit): ")
 
 		input, err := reader.ReadString('\n')
 		if err != nil {
@@ -89,11 +89,11 @@ func runProviderInteractiveMode(appManager *AppManager) error {
 			if err := runProviderGetInteractive(appManager, reader); err != nil {
 				fmt.Printf("Error: %v\n", err)
 			}
-		case "6":
-			fmt.Println("👋 Exiting provider management...")
+		case "0":
+			fmt.Println("Exiting provider management...")
 			return nil
 		default:
-			fmt.Println("❌ Invalid choice. Please select 1-6.")
+			fmt.Println("Invalid choice. Please select 1-5 or 0 to exit.")
 		}
 
 		fmt.Println("\nPress Enter to continue...")
@@ -104,14 +104,15 @@ func runProviderInteractiveMode(appManager *AppManager) error {
 // showProviderMenu displays the provider management menu
 func showProviderMenu() {
 	fmt.Println("\n" + strings.Repeat("=", 60))
-	fmt.Println("👥 Provider Management")
+	fmt.Println("Provider Management")
 	fmt.Println(strings.Repeat("=", 60))
-	fmt.Println("1. ➕ Add a new provider")
-	fmt.Println("2. 📋 List all providers")
-	fmt.Println("3. ✏️  Update a provider")
-	fmt.Println("4. 🗑️  Delete a provider")
-	fmt.Println("5. 🔍 View provider details")
-	fmt.Println("6. 🚪 Exit")
+	fmt.Println("1. Add a new provider")
+	fmt.Println("2. List all providers")
+	fmt.Println("3. Update a provider")
+	fmt.Println("4. Delete a provider")
+	fmt.Println("5. View provider details")
+	fmt.Println()
+	fmt.Println("0. Exit")
 	fmt.Println(strings.Repeat("=", 60))
 }
 
@@ -220,7 +221,7 @@ func runProviderList(appManager *AppManager) error {
 		return nil
 	}
 
-	fmt.Println("\n📋 All Configured Providers")
+	fmt.Println("\nAll Configured Providers")
 	fmt.Println(strings.Repeat("-", 80))
 
 	for i, provider := range providers {
@@ -240,7 +241,7 @@ func runProviderList(appManager *AppManager) error {
 
 // runProviderAddInteractive runs interactive add mode
 func runProviderAddInteractive(appManager *AppManager, reader *bufio.Reader) error {
-	fmt.Println("\n➕ Add New Provider")
+	fmt.Println("\nAdd New Provider")
 
 	return runAdd(appManager, []string{})
 }
@@ -254,7 +255,7 @@ func runProviderUpdateInteractive(appManager *AppManager, reader *bufio.Reader) 
 		return nil
 	}
 
-	fmt.Println("\n✏️  Update Provider")
+	fmt.Println("\nUpdate Provider")
 	fmt.Println("\nSelect a provider to update:")
 
 	for i, provider := range providers {
@@ -398,7 +399,7 @@ func runProviderDeleteInteractive(appManager *AppManager, reader *bufio.Reader) 
 		return nil
 	}
 
-	fmt.Println("\n🗑️  Delete Provider")
+	fmt.Println("\nDelete Provider")
 	fmt.Println("\nSelect a provider to delete:")
 
 	for i, provider := range providers {
@@ -454,7 +455,7 @@ func runProviderGetInteractive(appManager *AppManager, reader *bufio.Reader) err
 		return nil
 	}
 
-	fmt.Println("\n🔍 View Provider Details")
+	fmt.Println("\nView Provider Details")
 	fmt.Println("\nSelect a provider:")
 
 	for i, provider := range providers {
