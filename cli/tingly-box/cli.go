@@ -110,7 +110,6 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 
 	// Add subcommands with initialized appManager
-	rootCmd.AddCommand(command.ProviderCommand(appManager))
 	rootCmd.AddCommand(command.AddCommand(appManager))
 	rootCmd.AddCommand(command.ListCommand(appManager))
 	rootCmd.AddCommand(command.DeleteCommand(appManager))
