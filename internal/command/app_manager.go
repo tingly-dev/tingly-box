@@ -151,9 +151,9 @@ func (am *AppManager) ListProviders() []*typ.Provider {
 	return am.appConfig.ListProviders()
 }
 
-// GetProvider returns a provider by name, or nil if not found.
-func (am *AppManager) GetProvider(name string) (*typ.Provider, error) {
-	return am.appConfig.GetProviderByName(name)
+// GetProvider returns a provider by UUID, or nil if not found.
+func (am *AppManager) GetProvider(uuid string) (*typ.Provider, error) {
+	return am.appConfig.GetProviderByUUID(uuid)
 }
 
 // ============
