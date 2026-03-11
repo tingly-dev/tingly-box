@@ -175,7 +175,6 @@ func TestSearchHandler_Cache(t *testing.T) {
 	defer mockServer.Close()
 
 	config := &Config{
-		Enabled:    true,
 		SearchAPI:  "brave",
 		SearchKey:  "test-key",
 		MaxResults: 10,
