@@ -75,7 +75,10 @@ type Config struct {
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
 
-	modelManager       *data.ModelListManager
+	modelManager *data.ModelListManager
+	storeManager *db.StoreManager // Unified store manager for all database stores
+
+	// Individual store references (kept for backward compatibility)
 	statsStore         *db.StatsStore
 	usageStore         *db.UsageStore
 	ruleStateStore     *db.RuleStateStore     // Persists current_service_index to SQLite
@@ -194,47 +197,21 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		ConfigDir:  configDir,
 	}
 
-	// Initialize stats store before loading config so load can hydrate runtime stats
-	statsStore, err := db.NewStatsStore(configDir)
+	// Initialize unified store manager (initializes all stores in one call)
+	storeManager, err := db.NewStoreManager(configDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize stats store: %w", err)
+		return nil, fmt.Errorf("failed to initialize store manager: %w", err)
 	}
-	cfg.statsStore = statsStore
+	cfg.storeManager = storeManager
 
-	// Initialize usage store
-	usageStore, err := db.NewUsageStore(configDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize usage store: %w", err)
-	}
-	cfg.usageStore = usageStore
-
-	// Initialize rule state store (for persisting current_service_index)
-	ruleStateStore, err := db.NewRuleStateStore(configDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize rule state store: %w", err)
-	}
-	cfg.ruleStateStore = ruleStateStore
-
-	// Initialize provider store (for persisting provider configurations and credentials)
-	providerStore, err := db.NewProviderStore(configDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize provider store: %w", err)
-	}
-	cfg.providerStore = providerStore
-
-	// Initialize tool config store (for persisting provider-specific tool configurations)
-	toolConfigStore, err := db.NewToolConfigStore(configDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize tool config store: %w", err)
-	}
-	cfg.toolConfigStore = toolConfigStore
-
-	// Initialize ImBot settings store
-	imbotSettingsStore, err := db.NewImBotSettingsStore(configDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize imbot settings store: %w", err)
-	}
-	cfg.imbotSettingsStore = imbotSettingsStore
+	// For backward compatibility, also set individual store references
+	// These can be removed in Phase 4 once all consumers are migrated
+	cfg.statsStore = storeManager.Stats()
+	cfg.usageStore = storeManager.Usage()
+	cfg.ruleStateStore = storeManager.RuleState()
+	cfg.providerStore = storeManager.Provider()
+	cfg.toolConfigStore = storeManager.ToolConfig()
+	cfg.imbotSettingsStore = storeManager.ImBotSettings()
 
 	// Load existing cfg if exists
 	if err := cfg.load(); err != nil {
@@ -824,6 +801,15 @@ func (c *Config) GetImBotSettingsStore() *db.ImBotSettingsStore {
 	defer c.mu.RUnlock()
 
 	return c.imbotSettingsStore
+}
+
+// StoreManager returns the unified store manager (may be nil in tests).
+// This provides access to all database stores through a single interface.
+func (c *Config) StoreManager() *db.StoreManager {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.storeManager
 }
 
 // HasModelToken checks if a model token is configured

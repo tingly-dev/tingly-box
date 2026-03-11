@@ -1106,6 +1106,13 @@ func (s *Server) Stop(ctx context.Context) error {
 		}
 	}
 
+	// Close all database stores via StoreManager
+	if s.config.StoreManager() != nil {
+		if err := s.config.StoreManager().Close(); err != nil {
+			logrus.Errorf("Error closing stores: %v", err)
+		}
+	}
+
 	fmt.Println("Shutting down server...")
 	return s.httpServer.Shutdown(ctx)
 }
