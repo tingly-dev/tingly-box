@@ -832,6 +832,30 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithTags("guardrails"),
 	)
 
+	// Recordings Management
+	apiV1.GET("/recordings", s.ListRecordings,
+		swagger.WithDescription("List all recording files with optional filtering"),
+		swagger.WithTags("recordings"),
+		swagger.WithResponseModel(RecordingListResponse{}),
+	)
+
+	apiV1.GET("/recordings/:scenario/:provider/:date/:hour", s.GetRecordingDetails,
+		swagger.WithDescription("Get details about a specific recording file"),
+		swagger.WithTags("recordings"),
+		swagger.WithResponseModel(RecordingDetailResponse{}),
+	)
+
+	apiV1.GET("/recordings/:scenario/:provider/:date/:hour/entries", s.GetRecordingEntries,
+		swagger.WithDescription("Get entries from a specific recording file"),
+		swagger.WithTags("recordings"),
+		swagger.WithResponseModel(RecordingEntriesResponse{}),
+	)
+
+	apiV1.DELETE("/recordings/:scenario/:provider/:date/:hour", s.DeleteRecording,
+		swagger.WithDescription("Delete a specific recording file"),
+		swagger.WithTags("recordings"),
+	)
+
 	// History
 	apiV1.GET("/history", s.GetHistory,
 		swagger.WithDescription("Get request history"),

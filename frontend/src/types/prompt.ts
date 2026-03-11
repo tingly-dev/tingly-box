@@ -96,3 +96,42 @@ export interface RecordingFilter {
   projectFilter?: string;
   typeFilter?: RecordingType;
 }
+
+// Scenario Recording Types (for HTTP traffic recording)
+export interface ScenarioRecordingFile {
+  scenario: string;
+  provider: string;
+  date: string;      // YYYY-MM-DD
+  hour: string;      // HH
+  path: string;      // Full relative path
+  size: number;      // File size in bytes
+  count: number;     // Estimated number of records
+  created_at: Date;  // File creation time
+}
+
+export interface ScenarioRecordingEntry {
+  timestamp: string;
+  request_id: string;
+  provider: string;
+  scenario?: string;
+  model: string;
+  request?: ScenarioRecordingRequest;
+  response?: ScenarioRecordingResponse;
+  duration_ms: number;
+  error?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface ScenarioRecordingRequest {
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  body?: Record<string, any>;
+}
+
+export interface ScenarioRecordingResponse {
+  status_code: number;
+  headers: Record<string, string>;
+  body?: Record<string, any>;
+  is_streaming?: boolean;
+}
