@@ -98,12 +98,18 @@ func (e *SQLiteExporter) processHistogramInt64(data metricdata.Histogram[int64],
 }
 
 // recordTokenUsage records token usage to the usage store.
+// Note: This is a placeholder for OTel SDK compatibility. Actual recording happens
+// in internal/server/usage_tracking.go via the TokenTracker, which writes to the
+// UsageStore directly. The SQLite exporter is primarily for metric collection,
+// while the detailed records are written through the tracking layer.
 func (e *SQLiteExporter) recordTokenUsage(provider, providerUUID, model, ruleUUID, scenario, tokenType string, tokens int64, status string) {
-	// Note: Actual recording happens in usage_tracking.go via RecordUsage
-	// The exporter is primarily for OTel SDK compatibility
+	// Actual recording happens in usage_tracking.go via RecordUsage
+	// This exporter is primarily for OTel SDK compatibility
 }
 
 // recordRequestCount records a request count to the database.
+// Note: This is a placeholder for OTel SDK compatibility. Request counts are
+// tracked via usage records in internal/server/tracking.go.
 func (e *SQLiteExporter) recordRequestCount(provider, providerUUID, model, ruleUUID, scenario, status string, count int64) {
 	// Request counts are tracked via usage records in tracking.go
 }

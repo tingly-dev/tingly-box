@@ -20,11 +20,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/obs"
-	"github.com/tingly-dev/tingly-box/internal/obs/otel"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
-	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -33,6 +31,7 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/network"
 	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
 	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
+	pkgotel "github.com/tingly-dev/tingly-box/pkg/otel"
 )
 
 // Server represents the HTTP server
@@ -463,7 +462,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	if sm == nil {
 		logrus.Warnf("StoreManager not available, skipping OTel meter setup")
 	} else {
-		meterSetup, err := otel.NewMeterSetup(context.Background(), otel.DefaultConfig(), &otel.StoreRefs{
+		meterSetup, err := pkgotel.NewMeterSetup(context.Background(), pkgotel.DefaultConfig(), &pkgotel.StoreRefs{
 			StatsStore: sm.Stats(),
 			UsageStore: sm.Usage(),
 			Sink:       server.recordSink,
