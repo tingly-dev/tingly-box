@@ -21,9 +21,13 @@ type UsageTracker struct {
 
 // NewUsageTracker creates a new UsageTracker
 func (s *Server) NewUsageTracker() *UsageTracker {
+	sm := s.config.StoreManager()
+	if sm == nil {
+		return &UsageTracker{}
+	}
 	return &UsageTracker{
-		statsStore: s.config.GetStatsStore(),
-		usageStore: s.config.GetUsageStore(),
+		statsStore: sm.Stats(),
+		usageStore: sm.Usage(),
 	}
 }
 

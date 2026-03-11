@@ -149,7 +149,11 @@ func (s *Server) recordDetailedUsage(c *gin.Context, rule *typ.Rule, provider *t
 		return
 	}
 
-	usageStore := s.config.GetUsageStore()
+	sm := s.config.StoreManager()
+	if sm == nil {
+		return
+	}
+	usageStore := sm.Usage()
 	if usageStore == nil {
 		return
 	}
@@ -191,8 +195,11 @@ func (s *Server) updateServiceStats(rule *typ.Rule, provider *typ.Provider, mode
 			service.RecordUsage(inputTokens, outputTokens)
 
 			// Persist to stats store
-			if statsStore := s.config.GetStatsStore(); statsStore != nil {
-				_ = statsStore.UpdateFromService(service)
+			sm := s.config.StoreManager()
+			if sm != nil {
+				if statsStore := sm.Stats(); statsStore != nil {
+					_ = statsStore.UpdateFromService(service)
+				}
 			}
 			return
 		}

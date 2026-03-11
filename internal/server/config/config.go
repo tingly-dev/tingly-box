@@ -78,13 +78,14 @@ type Config struct {
 	modelManager *data.ModelListManager
 	storeManager *db.StoreManager // Unified store manager for all database stores
 
-	// Individual store references (kept for backward compatibility)
+	// Store references for internal Config methods (RefreshStatsFromStore, etc.)
+	// External consumers should use StoreManager() instead
 	statsStore         *db.StatsStore
 	usageStore         *db.UsageStore
-	ruleStateStore     *db.RuleStateStore     // Persists current_service_index to SQLite
-	imbotSettingsStore *db.ImBotSettingsStore // Persists ImBot credentials
-	providerStore      *db.ProviderStore      // Persists provider configurations and credentials
-	toolConfigStore    *db.ToolConfigStore    // Persists provider-specific tool configurations
+	ruleStateStore     *db.RuleStateStore
+	providerStore      *db.ProviderStore
+	toolConfigStore    *db.ToolConfigStore
+	imbotSettingsStore *db.ImBotSettingsStore
 	templateManager    *data.TemplateManager
 
 	mu sync.RWMutex
@@ -204,8 +205,7 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	}
 	cfg.storeManager = storeManager
 
-	// For backward compatibility, also set individual store references
-	// These can be removed in Phase 4 once all consumers are migrated
+	// Cache store references for internal Config methods
 	cfg.statsStore = storeManager.Stats()
 	cfg.usageStore = storeManager.Usage()
 	cfg.ruleStateStore = storeManager.RuleState()
@@ -779,32 +779,9 @@ func (c *Config) GetModelToken() string {
 	return c.ModelToken
 }
 
-// GetStatsStore returns the dedicated stats store (may be nil in tests).
-func (c *Config) GetStatsStore() *db.StatsStore {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	return c.statsStore
-}
-
-// GetUsageStore returns the usage store (may be nil in tests).
-func (c *Config) GetUsageStore() *db.UsageStore {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	return c.usageStore
-}
-
-// GetImBotSettingsStore returns the ImBot settings store (may be nil in tests).
-func (c *Config) GetImBotSettingsStore() *db.ImBotSettingsStore {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	return c.imbotSettingsStore
-}
-
 // StoreManager returns the unified store manager (may be nil in tests).
 // This provides access to all database stores through a single interface.
+// External consumers should use this method instead of the individual GetXxxStore() methods.
 func (c *Config) StoreManager() *db.StoreManager {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

@@ -23,9 +23,10 @@ type ImBotSettingsAPI struct {
 
 // NewImBotSettingsAPI creates a new ImBot settings API
 func NewImBotSettingsAPI(cfg *config.Config) *ImBotSettingsAPI {
+	sm := cfg.StoreManager()
 	return &ImBotSettingsAPI{
 		config: cfg,
-		store:  cfg.GetImBotSettingsStore(),
+		store:  sm.ImBotSettings(),
 	}
 }
 

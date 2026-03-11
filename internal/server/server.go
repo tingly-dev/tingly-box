@@ -128,7 +128,11 @@ func (s *Server) UsageStore() *db.UsageStore {
 	if s == nil || s.config == nil {
 		return nil
 	}
-	return s.config.GetUsageStore()
+	sm := s.config.StoreManager()
+	if sm == nil {
+		return nil
+	}
+	return sm.Usage()
 }
 
 // ServerOption defines a functional option for Server configuration
@@ -447,9 +451,10 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	}
 
 	// Initialize OTel meter setup for token tracking
+	sm := cfg.StoreManager()
 	meterSetup, err := otel.NewMeterSetup(context.Background(), otel.DefaultConfig(), &otel.StoreRefs{
-		StatsStore: cfg.GetStatsStore(),
-		UsageStore: cfg.GetUsageStore(),
+		StatsStore: sm.Stats(),
+		UsageStore: sm.Usage(),
 		Sink:       server.recordSink,
 	})
 	if err != nil {
@@ -1010,9 +1015,10 @@ func (s *Server) StartRemoteCoder() error {
 	}
 
 	// Create TBClient for SmartGuide model configuration
+	sm := s.config.StoreManager()
 	tbClient := tbclient.NewTBClient(
 		s.config,
-		s.config.GetProviderStore(),
+		sm.Provider(),
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1020,7 +1026,7 @@ func (s *Server) StartRemoteCoder() error {
 	s.remoteCoderCancel = cancel
 
 	go func() {
-		imbotStore := s.config.GetImBotSettingsStore()
+		imbotStore := sm.ImBotSettings()
 		if err := remote_control.Run(ctx, rcCfg, imbotStore, tbClient); err != nil && ctx.Err() == nil {
 			logrus.WithError(err).Warn("Remote-coder stopped with error")
 		}

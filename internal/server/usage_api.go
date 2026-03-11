@@ -20,9 +20,10 @@ type UsageAPI struct {
 
 // NewUsageAPI creates a new usage API
 func NewUsageAPI(cfg *config.Config) *UsageAPI {
+	sm := cfg.StoreManager()
 	return &UsageAPI{
 		config:     cfg,
-		usageStore: cfg.GetUsageStore(),
+		usageStore: sm.Usage(),
 	}
 }
 
