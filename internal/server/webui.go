@@ -21,6 +21,7 @@ import (
 	rulemodule "github.com/tingly-dev/tingly-box/internal/server/module/rule"
 	"github.com/tingly-dev/tingly-box/internal/server/module/scenario"
 	"github.com/tingly-dev/tingly-box/internal/server/module/skill"
+	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/swagger"
@@ -61,11 +62,10 @@ func (s *Server) UseUIEndpoints() {
 	// Exclude API routes from SPA catch-all by registering them first
 	// The routes registered below (manager APIs, OAuth, usage, etc.) will take precedence
 
-	// Claude Code status line endpoints (no auth required)
+	// Claude Code status line endpoints (no auth required) - register from claudecode module
 	// These must be registered before the /tingly/:scenario routes
-	ccGroup := s.engine.Group("/tingly/:scenario")
-	ccGroup.POST("/status", s.GetClaudeCodeStatus)
-	ccGroup.POST("/statusline", s.GetClaudeCodeStatusLine)
+	statusHandler := statusline.NewHandler(s.config, s.loadBalancer, statusline.NewCache())
+	statusline.RegisterRoutes(s.engine, statusHandler)
 
 	// Create route manager
 	manager := swagger.NewRouteManager(s.engine)

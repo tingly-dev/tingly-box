@@ -1,74 +1,57 @@
-package server
+package statusline
 
 import (
 	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// tbModelMappingResult contains the result of model mapping lookup
-type tbModelMappingResult struct {
-	providerName string
-	providerUUID string
-	model        string
-	scenario     string
+// LoadBalancer interface defines the load balancer operations we need
+type LoadBalancer interface {
+	SelectService(rule *typ.Rule) (*loadbalance.Service, error)
 }
 
-// getTBModelMapping looks up the model mapping from Tingly Box configuration
-// It queries the routing rules to find which provider/model would be used for the given model and scenario
-func (s *Server) getTBModelMapping(modelID string, scenario typ.RuleScenario) *tbModelMappingResult {
-	if s.config == nil || modelID == "" {
-		return nil
-	}
+// Handler handles Claude Code status HTTP requests
+type Handler struct {
+	config       *config.Config
+	loadBalancer LoadBalancer
+	cache        *Cache
+}
 
-	rule := s.config.MatchRuleByModelAndScenario(modelID, scenario)
-	if rule == nil {
-		return nil
-	}
-
-	// Get the service that would be selected
-	service, err := s.loadBalancer.SelectService(rule)
-	if err != nil || service == nil {
-		return nil
-	}
-
-	// Find the provider (service.Provider stores the provider UUID)
-	provider, err := s.config.GetProviderByUUID(service.Provider)
-	if err != nil || provider == nil {
-		return nil
-	}
-
-	return &tbModelMappingResult{
-		providerName: provider.Name,
-		providerUUID: provider.UUID,
-		model:        service.Model,
-		scenario:     string(scenario),
+// NewHandler creates a new Claude Code handler
+func NewHandler(cfg *config.Config, lb LoadBalancer, cache *Cache) *Handler {
+	return &Handler{
+		config:       cfg,
+		loadBalancer: lb,
+		cache:        cache,
 	}
 }
 
 // GetClaudeCodeStatus returns combined status from Claude Code input and Tingly Box
 // This endpoint receives Claude Code status JSON and combines it with Tingly Box model mapping
-// POST /tingly/claude_code/status
-func (s *Server) GetClaudeCodeStatus(c *gin.Context) {
+// POST /tingly/:scenario/status
+func (h *Handler) GetClaudeCodeStatus(c *gin.Context) {
 	scenario := c.Param("scenario")
 
-	var input ClaudeCodeStatusInput
+	var input StatusInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		// If no body provided, use empty defaults
-		input = ClaudeCodeStatusInput{}
+		input = StatusInput{}
 	}
 
 	// Get cache and merge with cached values for zero/empty fields
-	cache := GetGlobalClaudeCodeStatusCache()
-	merged := cache.Get(&input)
+	merged := h.cache.Get(&input)
 
 	// Update cache with new input (even if partial)
-	cache.Update(&input)
+	h.cache.Update(&input)
 
 	// Build response
-	resp := &ClaudeCodeCombinedStatusData{
+	resp := &CombinedStatusData{
 		CCModel:             merged.Model.DisplayName,
 		CCUsedPct:           int(merged.ContextWindow.UsedPercentage),
 		CCUsedTokens:        merged.ContextWindow.TotalInputTokens + merged.ContextWindow.TotalOutputTokens,
@@ -83,7 +66,7 @@ func (s *Server) GetClaudeCodeStatus(c *gin.Context) {
 	}
 
 	// Query Tingly Box model mapping
-	if mapping := s.getTBModelMapping(merged.Model.ID, typ.RuleScenario(scenario)); mapping != nil {
+	if mapping := h.getTBModelMapping(merged.Model.ID, typ.RuleScenario(scenario)); mapping != nil {
 		resp.TBProviderName = mapping.providerName
 		resp.TBProviderUUID = mapping.providerUUID
 		resp.TBModel = mapping.model
@@ -91,7 +74,7 @@ func (s *Server) GetClaudeCodeStatus(c *gin.Context) {
 		resp.TBScenario = mapping.scenario
 	}
 
-	c.JSON(http.StatusOK, ClaudeCodeCombinedStatus{
+	c.JSON(http.StatusOK, CombinedStatus{
 		Success: true,
 		Data:    resp,
 	})
@@ -100,21 +83,20 @@ func (s *Server) GetClaudeCodeStatus(c *gin.Context) {
 // GetClaudeCodeStatusLine returns rendered status line text for Claude Code
 // This endpoint receives Claude Code status JSON and returns a pre-rendered status line string
 // POST /tingly/:scenario/statusline
-func (s *Server) GetClaudeCodeStatusLine(c *gin.Context) {
+func (h *Handler) GetClaudeCodeStatusLine(c *gin.Context) {
 	scenario := c.Param("scenario")
 
-	var input ClaudeCodeStatusInput
+	var input StatusInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		// If no body provided, use empty defaults
-		input = ClaudeCodeStatusInput{}
+		input = StatusInput{}
 	}
 
 	// Get cache and merge with cached values for zero/empty fields
-	cache := GetGlobalClaudeCodeStatusCache()
-	merged := cache.Get(&input)
+	merged := h.cache.Get(&input)
 
 	// Update cache with new input (even if partial)
-	cache.Update(&input)
+	h.cache.Update(&input)
 
 	// Build status line
 	// Format: [CC Model] → TB Model@Provider | ▓▓▓░░░░░ 7% | $0.05
@@ -142,7 +124,7 @@ func (s *Server) GetClaudeCodeStatusLine(c *gin.Context) {
 	output := fmt.Sprintf("[%s]", ccModel)
 
 	// Query Tingly Box model mapping and add info if available
-	if mapping := s.getTBModelMapping(merged.Model.ID, typ.RuleScenario(scenario)); mapping != nil && mapping.model != "" {
+	if mapping := h.getTBModelMapping(merged.Model.ID, typ.RuleScenario(scenario)); mapping != nil && mapping.model != "" {
 		output += fmt.Sprintf(" → %s @ %s", mapping.model, mapping.providerName)
 	}
 
@@ -150,4 +132,44 @@ func (s *Server) GetClaudeCodeStatusLine(c *gin.Context) {
 	output += fmt.Sprintf(" | %s %d%% | $%.2f", bar, usedPct, cost)
 
 	c.String(http.StatusOK, output)
+}
+
+// tbModelMappingResult contains the result of model mapping lookup
+type tbModelMappingResult struct {
+	providerName string
+	providerUUID string
+	model        string
+	scenario     string
+}
+
+// getTBModelMapping looks up the model mapping from Tingly Box configuration
+// It queries the routing rules to find which provider/model would be used for the given model and scenario
+func (h *Handler) getTBModelMapping(modelID string, scenario typ.RuleScenario) *tbModelMappingResult {
+	if h.config == nil || modelID == "" {
+		return nil
+	}
+
+	rule := h.config.MatchRuleByModelAndScenario(modelID, scenario)
+	if rule == nil {
+		return nil
+	}
+
+	// Get the service that would be selected
+	service, err := h.loadBalancer.SelectService(rule)
+	if err != nil || service == nil {
+		return nil
+	}
+
+	// Find the provider
+	provider, err := h.config.GetProviderByUUID(service.Provider)
+	if err != nil || provider == nil {
+		return nil
+	}
+
+	return &tbModelMappingResult{
+		providerName: provider.Name,
+		providerUUID: provider.UUID,
+		model:        service.Model,
+		scenario:     string(scenario),
+	}
 }
