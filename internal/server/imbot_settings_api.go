@@ -10,7 +10,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder"
+	"github.com/tingly-dev/tingly-box/internal/remote_control"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/pkg/swagger"
 )
@@ -240,7 +240,7 @@ func (api *ImBotSettingsAPI) CreateSettings(c *gin.Context) {
 
 	// Start the bot if enabled
 	if created.Enabled {
-		if botManager := remote_coder.GetBotManager(); botManager != nil {
+		if botManager := remote_control.GetBotManager(); botManager != nil {
 			ctx := context.Background()
 			if err := botManager.Start(ctx, created.UUID); err != nil {
 				logrus.WithError(err).WithField("uuid", created.UUID).Warn("Failed to start bot after creation")
@@ -348,7 +348,7 @@ func (api *ImBotSettingsAPI) UpdateSettings(c *gin.Context) {
 
 	// Handle bot lifecycle if enabled status changed
 	if currentSettings.Enabled != newEnabled {
-		if botManager := remote_coder.GetBotManager(); botManager != nil {
+		if botManager := remote_control.GetBotManager(); botManager != nil {
 			ctx := context.Background()
 			if newEnabled {
 				// Enable -> start the bot
@@ -391,7 +391,7 @@ func (api *ImBotSettingsAPI) DeleteSettings(c *gin.Context) {
 	}
 
 	// Stop the bot if it's running
-	if botManager := remote_coder.GetBotManager(); botManager != nil {
+	if botManager := remote_control.GetBotManager(); botManager != nil {
 		botManager.Stop(uuid)
 	}
 
@@ -432,7 +432,7 @@ func (api *ImBotSettingsAPI) ToggleSettings(c *gin.Context) {
 	logrus.WithField("uuid", uuid).WithField("enabled", newStatus).Info("ImBot settings toggled")
 
 	// Notify bot manager to start or stop the bot
-	if botManager := remote_coder.GetBotManager(); botManager != nil {
+	if botManager := remote_control.GetBotManager(); botManager != nil {
 		ctx := context.Background()
 		if newStatus {
 			// Start the bot

@@ -9,8 +9,8 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/summarizer"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 )
 
