@@ -6,7 +6,6 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
-	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -15,9 +14,6 @@ type TBClient interface {
 
 	// GetProviders returns all configured providers
 	GetProviders(ctx context.Context) ([]ProviderInfo, error)
-
-	// GetServices returns all services from routing rules
-	GetServices(ctx context.Context) ([]ServiceInfo, error)
 
 	GetDefaultRule(ctx context.Context) (*typ.Rule, error)
 
@@ -36,29 +32,18 @@ type TBClient interface {
 
 // TBClientImpl implements TBClient interface
 type TBClientImpl struct {
-	config         *serverconfig.Config
-	providerDB     *db.ProviderStore
-	router         *smartrouting.Router
-	serverHost     string
-	serverPort     int
-	defaultBaseURL string
+	config     *serverconfig.Config
+	providerDB *db.ProviderStore
 }
 
 // NewTBClient creates a new TB client instance
 func NewTBClient(
 	cfg *serverconfig.Config,
 	providerDB *db.ProviderStore,
-	router *smartrouting.Router,
-	serverHost string,
-	serverPort int,
 ) *TBClientImpl {
 	return &TBClientImpl{
-		config:         cfg,
-		providerDB:     providerDB,
-		router:         router,
-		serverHost:     serverHost,
-		serverPort:     serverPort,
-		defaultBaseURL: "http://localhost:12580/tingly/claude_code",
+		config:     cfg,
+		providerDB: providerDB,
 	}
 }
 
@@ -81,31 +66,13 @@ func (c *TBClientImpl) GetProviders(ctx context.Context) ([]ProviderInfo, error)
 	return result, nil
 }
 
-// GetServices returns all services from routing rules
-func (c *TBClientImpl) GetServices(ctx context.Context) ([]ServiceInfo, error) {
-	// Access router's rules and extract services
-	rules := c.router.GetRules()
-	result := make([]ServiceInfo, 0)
-
-	for _, rule := range rules {
-		for _, svc := range rule.Services {
-			result = append(result, ServiceInfo{
-				ProviderID: svc.Provider,
-				Model:      svc.Model,
-			})
-		}
-	}
-
-	return result, nil
-}
-
 // buildBaseURL constructs the base URL from server config
 func (c *TBClientImpl) buildBaseURL() string {
-	port := c.serverPort
+	port := c.config.GetServerPort()
 	if port == 0 {
 		port = 12580
 	}
-	return fmt.Sprintf("http://%s:%d/tingly/claude_code", c.serverHost, port)
+	return fmt.Sprintf("http://localhost:%d/tingly/claude_code", port)
 }
 
 // findFirstClaudeCodeRule finds the first active ClaudeCode rule
@@ -170,33 +137,8 @@ func (c *TBClientImpl) SelectModel(ctx context.Context, req ModelSelectionReques
 	var provider *typ.Provider
 	var modelID string
 
-	// Strategy 1: Use service name from routing rules
-	if req.ServiceName != "" {
-		// Find service in rules and get its provider/model
-		rules := c.router.GetRules()
-		for _, rule := range rules {
-			if rule.Description == req.ServiceName {
-				if len(rule.Services) > 0 {
-					svc := rule.Services[0]
-					provider, err := c.config.GetProviderByUUID(svc.Provider)
-					if err == nil && provider != nil {
-						modelID = svc.Model
-						return &ModelConfig{
-							ProviderUUID: provider.UUID,
-							ModelID:      modelID,
-							BaseURL:      provider.APIBase,
-							APIKey:       provider.GetAccessToken(),
-							APIStyle:     string(provider.APIStyle),
-						}, nil
-					}
-				}
-			}
-		}
-		return nil, fmt.Errorf("service not found: %s", req.ServiceName)
-	}
-
-	// Strategy 2: Use provider UUID
-	if provider == nil && req.ProviderUUID != "" {
+	// Strategy 1: Use provider UUID (primary for bot usage)
+	if req.ProviderUUID != "" {
 		var err error
 		provider, err = c.config.GetProviderByUUID(req.ProviderUUID)
 		if err != nil || provider == nil {
@@ -212,29 +154,34 @@ func (c *TBClientImpl) SelectModel(ctx context.Context, req ModelSelectionReques
 				modelID = "claude-sonnet-4-6" // Default fallback
 			}
 		}
+		return &ModelConfig{
+			ProviderUUID: provider.UUID,
+			ModelID:      modelID,
+			BaseURL:      provider.APIBase,
+			APIKey:       provider.GetAccessToken(),
+			APIStyle:     string(provider.APIStyle),
+		}, nil
 	}
 
-	// Strategy 3: Use first available Anthropic provider
-	if provider == nil {
-		providers, err := c.providerDB.ListEnabled()
-		if err != nil {
-			return nil, fmt.Errorf("failed to list providers: %w", err)
-		}
+	// Strategy 2: Use first available Anthropic provider (fallback)
+	providers, err := c.providerDB.ListEnabled()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list providers: %w", err)
+	}
 
-		for _, p := range providers {
-			if p.APIStyle == "anthropic" {
-				provider = p
-				modelID = req.ModelID
-				if modelID == "" {
-					// Use first model from provider if available
-					if len(p.Models) > 0 {
-						modelID = p.Models[0]
-					} else {
-						modelID = "claude-sonnet-4-6" // Default fallback
-					}
+	for _, p := range providers {
+		if p.APIStyle == "anthropic" {
+			provider = p
+			modelID = req.ModelID
+			if modelID == "" {
+				// Use first model from provider if available
+				if len(p.Models) > 0 {
+					modelID = p.Models[0]
+				} else {
+					modelID = "claude-sonnet-4-6" // Default fallback
 				}
-				break
 			}
+			break
 		}
 	}
 

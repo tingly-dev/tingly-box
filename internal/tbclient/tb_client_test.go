@@ -12,28 +12,24 @@ func TestNewTBClient(t *testing.T) {
 
 	// We can't easily mock the dependencies without interfaces,
 	// so we'll test with nil values and check the constructor works
-	client := NewTBClient(cfg, nil, nil, "localhost", 8080)
+	client := NewTBClient(cfg, nil)
 
 	assert.NotNil(t, client)
 	assert.Equal(t, cfg, client.config)
-	assert.Equal(t, "localhost", client.serverHost)
-	assert.Equal(t, 8080, client.serverPort)
-	assert.Equal(t, "http://localhost:12580/tingly/claude_code", client.defaultBaseURL)
 }
 
-func TestTBClient_DefaultBaseURL(t *testing.T) {
-	cfg := &serverconfig.Config{}
-	client := NewTBClient(cfg, nil, nil, "localhost", 8080)
+func TestTBClient_BuildBaseURL(t *testing.T) {
+	cfg := &serverconfig.Config{ServerPort: 8080}
+	client := NewTBClient(cfg, nil)
 
-	assert.Equal(t, "http://localhost:12580/tingly/claude_code", client.defaultBaseURL)
+	assert.Equal(t, "http://localhost:8080/tingly/claude_code", client.buildBaseURL())
 }
 
-func TestTBClient_ServerConfig(t *testing.T) {
-	cfg := &serverconfig.Config{}
-	client := NewTBClient(cfg, nil, nil, "example.com", 9090)
+func TestTBClient_BuildBaseURL_DefaultPort(t *testing.T) {
+	cfg := &serverconfig.Config{} // ServerPort = 0
+	client := NewTBClient(cfg, nil)
 
-	assert.Equal(t, "example.com", client.serverHost)
-	assert.Equal(t, 9090, client.serverPort)
+	assert.Equal(t, "http://localhost:12580/tingly/claude_code", client.buildBaseURL())
 }
 
 func TestProviderInfo_Structure(t *testing.T) {
@@ -54,25 +50,13 @@ func TestProviderInfo_Structure(t *testing.T) {
 	assert.Equal(t, []string{"model-1", "model-2"}, info.Models)
 }
 
-func TestServiceInfo_Structure(t *testing.T) {
-	info := ServiceInfo{
-		ProviderID: "prov-1",
-		Model:      "model-1",
-	}
-
-	assert.Equal(t, "prov-1", info.ProviderID)
-	assert.Equal(t, "model-1", info.Model)
-}
-
 func TestModelSelectionRequest_Structure(t *testing.T) {
 	req := ModelSelectionRequest{
 		ProviderUUID: "prov-1",
-		ServiceName:  "test-service",
 		ModelID:      "model-1",
 	}
 
 	assert.Equal(t, "prov-1", req.ProviderUUID)
-	assert.Equal(t, "test-service", req.ServiceName)
 	assert.Equal(t, "model-1", req.ModelID)
 }
 

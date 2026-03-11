@@ -1062,15 +1062,9 @@ func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, set
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to create provider store for TBClient, smartguide will use fallback config")
 		} else {
-			// Get server port
-			serverPort := cfg.GetServerPort()
-			if serverPort == 0 {
-				serverPort = 12580
-			}
-
-			// Create TBClient with nil router (not needed for GetDefaultService/GetConnectionConfig)
-			tbClient = tbclient.NewTBClient(cfg.GetGlobalConfig(), providerStore, nil, "localhost", serverPort)
-			logrus.WithField("serverPort", serverPort).Info("Created TBClient for smartguide agent")
+			// Create TBClient
+			tbClient = tbclient.NewTBClient(cfg.GetGlobalConfig(), providerStore)
+			logrus.Info("Created TBClient for smartguide agent")
 		}
 	}
 

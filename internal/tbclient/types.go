@@ -10,17 +10,9 @@ type ProviderInfo struct {
 	Models   []string `json:"models,omitempty"` // Optional: available models
 }
 
-// ServiceInfo represents a service from routing rules
-type ServiceInfo struct {
-	ProviderID string `json:"provider_id"`
-	Model      string `json:"model"`
-	// Note: Simplified from loadbalance.Service for external consumption
-}
-
 // ModelSelectionRequest for selecting model for @tb
 type ModelSelectionRequest struct {
 	ProviderUUID string `json:"provider_uuid,omitempty"` // Filter by provider
-	ServiceName  string `json:"service_name,omitempty"`  // Use service from rules
 	ModelID      string `json:"model_id,omitempty"`      // Explicit model selection
 }
 

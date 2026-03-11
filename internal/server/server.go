@@ -1024,15 +1024,9 @@ func (s *Server) StartRemoteCoder() error {
 	}
 
 	// Create TBClient for SmartGuide model configuration
-	// The TBClient needs: Config, ProviderStore, Router, server host/port
-	// For bot usage, ProviderUUID and ModelID are provided via bot settings,
-	// so we primarily need Config and ProviderStore
 	tbClient := tbclient.NewTBClient(
 		s.config,
 		s.config.GetProviderStore(),
-		nil, // Router - not needed for bot usage (bots use ProviderUUID directly)
-		s.host,
-		s.config.GetServerPort(),
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
