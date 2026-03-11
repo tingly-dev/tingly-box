@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,7 +18,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/tui/components"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
@@ -94,52 +94,59 @@ func buildOAuthHelp() string {
 	return help.String()
 }
 
-// runInteractiveMode shows provider selection TUI
+// runInteractiveMode shows simple provider selection
 func runInteractiveMode(appConfig *config.AppConfig, customName string, callbackPort int, proxyURL string) error {
 	providers := supportedProviders()
 
-	items := []components.SelectItem[string]{
-		{Title: "Cancel", Description: "Exit OAuth setup", Value: "cancel"},
-	}
+	fmt.Println("\n🔐 OAuth Authentication")
+	fmt.Println(strings.Repeat("=", 60))
+	fmt.Println("\nSelect a provider to authenticate:\n")
 
-	for _, p := range providers {
+	for i, p := range providers {
 		config, _ := getProviderConfig(p.Type)
-		desc := p.Description
-		if config != nil {
-			method := "PKCE"
-			if config.OAuthMethod == "device_code" {
-				method = "Device Code"
-			}
-			desc += fmt.Sprintf(" (%s)", method)
+		method := "PKCE"
+		if config != nil && config.OAuthMethod == "device_code" {
+			method = "Device Code"
 		}
 
-		items = append(items, components.SelectItem[string]{
-			Title:       fmt.Sprintf("%s (%s)", p.DisplayName, p.Type),
-			Description: desc,
-			Value:       p.Type,
-		})
+		fmt.Printf("  [%d] %s (%s)\n", i+1, p.DisplayName, p.Type)
+		fmt.Printf("      %s\n", p.Description)
+		fmt.Printf("      Method: %s\n", method)
+		if config != nil && config.NeedsPort1455 {
+			fmt.Printf("      Note: Requires port 1455\n")
+		}
+		fmt.Println()
 	}
 
-	result, err := components.Select("Select OAuth provider:", items, components.SelectOptions{
-		CanGoBack: false,
-		PageSize:  8,
-	})
+	fmt.Printf("  [0] Cancel\n")
+	fmt.Println(strings.Repeat("=", 60))
 
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("\nEnter choice (0-%d): ", len(providers))
+	input, err := reader.ReadString('\n')
 	if err != nil {
-		if err.Error() == "user cancelled" {
-			fmt.Println("\nOAuth setup cancelled.")
-			return nil
-		}
-		return fmt.Errorf("selection failed: %w", err)
+		return fmt.Errorf("failed to read input: %w", err)
 	}
 
-	if result.Value == "cancel" {
+	choice, err := strconv.Atoi(strings.TrimSpace(input))
+	if err != nil {
+		return fmt.Errorf("invalid input: please enter a number")
+	}
+
+	if choice == 0 {
 		fmt.Println("\nOAuth setup cancelled.")
 		return nil
 	}
 
+	if choice < 1 || choice > len(providers) {
+		return fmt.Errorf("invalid choice: please enter a number between 0 and %d", len(providers))
+	}
+
+	providerType := providers[choice-1].Type
+	fmt.Printf("\n✅ Selected: %s\n", providers[choice-1].DisplayName)
+
 	// Run OAuth flow for selected provider
-	return runOAuthFlow(appConfig, result.Value, customName, callbackPort, proxyURL)
+	return runOAuthFlow(appConfig, providerType, customName, callbackPort, proxyURL)
 }
 
 // runOAuthFlow runs the OAuth authentication flow for a provider
@@ -201,34 +208,8 @@ func runAddFlow(appConfig *config.AppConfig, config *ProviderOAuthConfig, custom
 		providerName = config.Type
 	}
 
-	// Check if provider already exists
-	if existing, err := appConfig.GetProviderByName(providerName); err == nil && existing != nil {
-		fmt.Printf("⚠️  Provider '%s' already exists.\n", providerName)
-		fmt.Printf("Delete it first with: tingly delete %s\n", providerName)
-
-		// Ask for confirmation in interactive mode
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("Do you want to use a different name? (Y/n): ")
-		input, _ := reader.ReadString('\n')
-		input = strings.ToLower(strings.TrimSpace(input))
-
-		if input == "" || input == "y" || input == "yes" {
-			fmt.Print("Enter new provider name: ")
-			newName, _ := reader.ReadString('\n')
-			newName = strings.TrimSpace(newName)
-			if newName == "" {
-				return fmt.Errorf("provider name cannot be empty")
-			}
-			providerName = newName
-		} else {
-			return fmt.Errorf("provider already exists")
-		}
-
-		// Check again with new name
-		if existing, err := appConfig.GetProviderByName(providerName); err == nil && existing != nil {
-			return fmt.Errorf("provider '%s' also exists", providerName)
-		}
-	}
+	// Find unique name if provider already exists
+	providerName = findUniqueProviderName(appConfig, providerName)
 
 	fmt.Printf("\n🔐 OAuth Authentication for %s\n", config.DisplayName)
 	fmt.Println(strings.Repeat("=", 60))
@@ -578,4 +559,27 @@ type ProviderOAuthConfig struct {
 	APIStyle      string
 	OAuthMethod   string // "pkce" or "device_code"
 	NeedsPort1455 bool
+}
+
+// findUniqueProviderName finds a unique provider name by appending a number if needed
+func findUniqueProviderName(appConfig *config.AppConfig, baseName string) string {
+	// Check if base name is available
+	if existing, err := appConfig.GetProviderByName(baseName); err != nil || existing == nil {
+		return baseName
+	}
+
+	// Try adding numeric suffixes
+	for i := 1; i <= 100; i++ {
+		candidateName := fmt.Sprintf("%s-%d", baseName, i)
+		if existing, err := appConfig.GetProviderByName(candidateName); err != nil || existing == nil {
+			fmt.Printf("ℹ️  Provider '%s' exists, using '%s' instead.\n", baseName, candidateName)
+			return candidateName
+		}
+	}
+
+	// Fallback to UUID suffix (very unlikely)
+	suffix := strings.ReplaceAll(uuid.New().String(), "-", "")[:8]
+	candidateName := fmt.Sprintf("%s-%s", baseName, suffix)
+	fmt.Printf("ℹ️  Provider '%s' exists, using '%s' instead.\n", baseName, candidateName)
+	return candidateName
 }
