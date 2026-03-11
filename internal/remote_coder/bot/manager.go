@@ -10,6 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
+	"github.com/tingly-dev/tingly-box/internal/tbclient"
 )
 
 // SettingsStore defines the interface for bot settings storage
@@ -44,10 +45,11 @@ type Manager struct {
 	mu         sync.RWMutex
 	running    map[string]*runningBot // uuid -> runningBot
 	store      SettingsStore
-	dbPath     string // Database path for chat store
+	dataPath   string // Data path for JSON chat store (replaces dbPath)
 	sessionMgr *session.Manager
 	agentBoot  *agentboot.AgentBoot
 	msgHandler agentboot.MessageHandler
+	tbClient   tbclient.TBClient // TB Client for SmartGuide model configuration
 }
 
 // NewManager creates a new bot manager with a settings store
@@ -61,11 +63,18 @@ func NewManager(store SettingsStore, sessionMgr *session.Manager, agentBoot *age
 	}
 }
 
-// SetDBPath sets the database path for chat store operations
-func (m *Manager) SetDBPath(dbPath string) {
+// SetTBClient sets the TBClient for SmartGuide configuration
+func (m *Manager) SetTBClient(tbClient tbclient.TBClient) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.dbPath = dbPath
+	m.tbClient = tbClient
+}
+
+// SetDataPath sets the data path for JSON chat store operations
+func (m *Manager) SetDataPath(dataPath string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.dataPath = dataPath
 }
 
 // Start starts a bot by UUID
@@ -99,16 +108,19 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 
 	// Convert db.Settings to the legacy Settings format
 	s := BotSetting{
-		UUID:          record.UUID,
-		Name:          record.Name,
-		Token:         record.Auth["token"],
-		Platform:      record.Platform,
-		AuthType:      record.AuthType,
-		Auth:          record.Auth,
-		ProxyURL:      record.ProxyURL,
-		ChatIDLock:    record.ChatIDLock,
-		BashAllowlist: record.BashAllowlist,
-		Enabled:       record.Enabled,
+		UUID:               record.UUID,
+		Name:               record.Name,
+		Token:              record.Auth["token"],
+		Platform:           record.Platform,
+		AuthType:           record.AuthType,
+		Auth:               record.Auth,
+		ProxyURL:           record.ProxyURL,
+		ChatIDLock:         record.ChatIDLock,
+		BashAllowlist:      record.BashAllowlist,
+		DefaultCwd:         record.DefaultCwd,
+		Enabled:            record.Enabled,
+		SmartGuideProvider: record.SmartGuideProvider,
+		SmartGuideModel:    record.SmartGuideModel,
 	}
 
 	platform = s.Platform
@@ -147,9 +159,10 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	// Start bot in goroutine
 	go func() {
 		m.mu.RLock()
-		dbPath := m.dbPath
+		dataPath := m.dataPath
+		tbClient := m.tbClient
 		m.mu.RUnlock()
-		if err := runBotWithSettings(ctx, s, dbPath, m.sessionMgr, m.agentBoot); err != nil {
+		if err := runBotWithSettings(ctx, s, dataPath, m.sessionMgr, m.agentBoot, tbClient); err != nil {
 			logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
 		}
 

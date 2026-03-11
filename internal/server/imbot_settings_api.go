@@ -218,14 +218,16 @@ func (api *ImBotSettingsAPI) CreateSettings(c *gin.Context) {
 	}
 
 	settings := db.Settings{
-		Name:          strings.TrimSpace(req.Name),
-		Platform:      platform,
-		AuthType:      authType,
-		Auth:          authMap,
-		ProxyURL:      strings.TrimSpace(req.ProxyURL),
-		ChatIDLock:    strings.TrimSpace(req.ChatID),
-		BashAllowlist: normalizeAllowlist(req.BashAllowlist),
-		Enabled:       req.Enabled,
+		Name:               strings.TrimSpace(req.Name),
+		Platform:           platform,
+		AuthType:           authType,
+		Auth:               authMap,
+		ProxyURL:           strings.TrimSpace(req.ProxyURL),
+		ChatIDLock:         strings.TrimSpace(req.ChatID),
+		BashAllowlist:      normalizeAllowlist(req.BashAllowlist),
+		Enabled:            req.Enabled,
+		SmartGuideProvider: strings.TrimSpace(req.SmartGuideProvider),
+		SmartGuideModel:    strings.TrimSpace(req.SmartGuideModel),
 	}
 
 	created, err := api.store.CreateSettings(settings)
@@ -323,6 +325,18 @@ func (api *ImBotSettingsAPI) UpdateSettings(c *gin.Context) {
 	if req.Enabled != nil {
 		newEnabled = *req.Enabled
 		settings.Enabled = newEnabled
+	}
+
+	// Handle SmartGuide config (partial update)
+	if req.SmartGuideProvider != nil {
+		settings.SmartGuideProvider = strings.TrimSpace(*req.SmartGuideProvider)
+	} else {
+		settings.SmartGuideProvider = currentSettings.SmartGuideProvider
+	}
+	if req.SmartGuideModel != nil {
+		settings.SmartGuideModel = strings.TrimSpace(*req.SmartGuideModel)
+	} else {
+		settings.SmartGuideModel = currentSettings.SmartGuideModel
 	}
 
 	if err := api.store.UpdateSettings(uuid, settings); err != nil {
@@ -538,6 +552,9 @@ type ImBotSettingsCreateRequest struct {
 	BashAllowlist []string          `json:"bash_allowlist,omitempty"`
 	Enabled       bool              `json:"enabled"`
 	Token         string            `json:"token,omitempty"` // Legacy field
+	// SmartGuide model configuration
+	SmartGuideProvider string `json:"smartguide_provider,omitempty"` // Provider UUID
+	SmartGuideModel    string `json:"smartguide_model,omitempty"`    // Model identifier
 }
 
 type ImBotSettingsUpdateRequest struct {
@@ -550,6 +567,9 @@ type ImBotSettingsUpdateRequest struct {
 	BashAllowlist []string          `json:"bash_allowlist,omitempty"`
 	Enabled       *bool             `json:"enabled,omitempty"` // Pointer to allow partial update
 	Token         string            `json:"token,omitempty"`   // Legacy field
+	// SmartGuide model configuration (pointer for partial update)
+	SmartGuideProvider *string `json:"smartguide_provider,omitempty"` // Provider UUID
+	SmartGuideModel    *string `json:"smartguide_model,omitempty"`    // Model identifier
 }
 
 type ImBotSettingsToggleResponse struct {

@@ -11,6 +11,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
+	"github.com/tingly-dev/tingly-box/internal/tbclient"
 )
 
 const (
@@ -22,8 +23,9 @@ const (
 
 // Agent routing constants
 const (
-	agentClaudeCode = agentboot.AgentTypeClaude
-	agentMock       = agentboot.AgentTypeMockAgent
+	agentTinglyBox  agentboot.AgentType = "tingly-box" // @tb - Smart Guide (default)
+	agentClaudeCode agentboot.AgentType = agentboot.AgentTypeClaude
+	agentMock       agentboot.AgentType = agentboot.AgentTypeMockAgent
 )
 
 // Bot command subcommand constants (used after /bot prefix)
@@ -52,7 +54,8 @@ Bot Commands:
 /join <group> - Add group to whitelist
 /mock <msg> - Test with mock agent (permission flow)
 
-All other messages are sent to Claude Code.`
+@cc to handoff control to Claude Code.
+@tb to handoff control to Tingly Box Smart Guide.`
 
 	groupHelpTemplate = `Group Chat ID: %s
 
@@ -65,7 +68,8 @@ Bot Commands:
 /status - Show session status
 /mock <msg> - Test with mock agent (permission flow)
 
-All other messages are sent to Claude Code.`
+@cc to handoff control to Claude Code.
+@tb to handoff control to Tingly Box Smart Guide.`
 )
 
 // Slash command constants with aliases
@@ -128,16 +132,17 @@ type ResponseMeta struct {
 	ChatID      string
 	UserID      string
 	SessionID   string
+	AgentType   string // Current agent identifier (e.g., "tingly-box", "claude")
 }
 
-// runBotWithSettings starts a bot using db.Settings instead of bot.Store
-func runBotWithSettings(ctx context.Context, setting BotSetting, dbPath string, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot) error {
-	// Create a temporary bot.Store for chat state management
-	store, err := NewStoreForChatOnly(dbPath)
+// runBotWithSettings starts a bot using JSON file storage for chat state
+func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, tbClient tbclient.TBClient) error {
+	// Create a JSON-based chat store
+	chatStore, err := NewChatStoreJSON(dataPath)
 	if err != nil {
 		return fmt.Errorf("failed to create chat store: %w", err)
 	}
-	defer store.Close()
+	defer chatStore.Close()
 
 	// Create platform-specific auth config
 	authConfig := buildAuthConfig(setting)
@@ -175,7 +180,7 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dbPath string, 
 	}
 
 	// Register unified message handler with platform parameter
-	handler := NewBotHandler(ctx, setting, store.ChatStore(), sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager)
+	handler := NewBotHandler(ctx, setting, chatStore, sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager, tbClient)
 	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {
@@ -217,17 +222,6 @@ func buildAuthConfig(setting BotSetting) imbot.AuthConfig {
 	}
 }
 
-func sleepWithContext(ctx context.Context, delay time.Duration) bool {
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return false
-	case <-timer.C:
-		return true
-	}
-}
-
 // getReplyTarget returns the reply target ID for the message.
 // Different platforms may use different IDs:
 // - Telegram: Recipient.ID (chat ID)
@@ -238,7 +232,7 @@ func getReplyTarget(msg imbot.Message) string {
 }
 
 // getProjectPathForGroup retrieves the project path bound to a group chat.
-func getProjectPathForGroup(chatStore *ChatStore, chatID string, platform string) (string, bool) {
+func getProjectPathForGroup(chatStore ChatStoreInterface, chatID string, platform string) (string, bool) {
 	if chatStore == nil {
 		return "", false
 	}
@@ -300,13 +294,4 @@ func convertActionKeyboardToTelegram(kb imbot.InlineKeyboardMarkup) tgbotapi.Inl
 		rows = append(rows, buttons)
 	}
 	return tgbotapi.InlineKeyboardMarkup{InlineKeyboard: rows}
-}
-
-// NewStoreForChatOnly creates a minimal bot.Store for chat state management only
-func NewStoreForChatOnly(dbPath string) (*Store, error) {
-	store, err := NewStore(dbPath)
-	if err != nil {
-		return nil, err
-	}
-	return store, nil
 }
