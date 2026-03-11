@@ -15,6 +15,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	imbotsettings2 "github.com/tingly-dev/tingly-box/internal/server/module/imbotsettings"
 	skill "github.com/tingly-dev/tingly-box/internal/server/module/skill"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/swagger"
@@ -72,8 +73,9 @@ func (s *Server) UseUIEndpoints() {
 	// Usage API routes
 	s.RegisterUsageRoutes(manager)
 
-	// ImBot settings API routes
-	s.RegisterImBotSettingsRoutes(manager)
+	// ImBot settings API routes - register from imbotsettings module
+	imbotSettingsHandler := imbotsettings2.NewHandler(s.config)
+	imbotsettings2.RegisterRoutes(apiV1, imbotSettingsHandler)
 
 	// Config apply API routes
 	s.RegisterConfigApplyRoutes(manager)
