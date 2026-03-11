@@ -6,39 +6,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 type APIStyle = protocol.APIStyle
-
-// AddCommand represents the add provider command // Deprecated: Use ProviderCommand instead. This command will be removed in v2.0.
-func AddCommand(appManager *AppManager) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "add [name] [baseurl] [token] [api_style]",
-		Short: "Add a new AI provider configuration [DEPRECATED - use 'provider' command]",
-		Long: `Add a new AI provider with name, API base URL, token, and optional API style.
-
-DEPRECATED: This command is deprecated. Use 'provider add' instead.
-This command will be removed in v2.0.
-
-You can provide the arguments as positional parameters:
-  add openai https://api.openai.com/v1 your-token-here openai
-  add anthropic https://api.anthropic.com your-token-here anthropic
-
-The api_style parameter is optional and defaults to "openai".
-Supported values: openai, anthropic
-
-Or run the command without arguments for interactive mode.`,
-		Args: cobra.MaximumNArgs(4),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("⚠️  Warning: 'add' command is deprecated. Use 'provider add' instead.")
-			return runAdd(appManager, args)
-		},
-	}
-
-	return cmd
-}
 
 // runAdd handles the provider addition process with both positional arguments and interactive mode
 func runAdd(appManager *AppManager, args []string) error {
