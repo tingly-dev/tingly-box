@@ -8,17 +8,23 @@ import (
 )
 
 // ListCommand represents the list providers command
+// Deprecated: Use ProviderCommand instead. This command will be removed in v2.0.
 func ListCommand(appManager *AppManager) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List all configured AI providers",
+		Short: "List all configured AI providers [DEPRECATED - use 'provider list']",
 		Long: `Display all configured AI providers with their details.
+
+DEPRECATED: This command is deprecated. Use 'provider list' instead.
+This command will be removed in v2.0.
+
 Shows the provider name, API base URL, API style, and enabled status.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println("⚠️  Warning: 'list' command is deprecated. Use 'provider list' instead.")
 			providers := appManager.ListProviders()
 
 			if len(providers) == 0 {
-				fmt.Println("No providers configured. Use 'tingly add' to add a provider.")
+				fmt.Println("No providers configured. Use 'tingly provider add' to add a provider.")
 				return nil
 			}
 
