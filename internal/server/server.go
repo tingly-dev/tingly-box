@@ -51,7 +51,6 @@ type Server struct {
 	memoryLogMW     *middleware.MemoryLogMiddleware
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
-	usageAPI        *UsageAPI
 	healthMonitor   *loadbalance.HealthMonitor
 
 	// client pool for caching
@@ -382,9 +381,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize load balancer API
 	loadBalancerAPI := NewLoadBalancerAPI(loadBalancer, cfg)
 
-	// Initialize usage API
-	usageAPI := NewUsageAPI(cfg)
-
 	// Determine protocol for OAuth BaseURL
 	protocol := "http"
 	if server.httpsEnabled {
@@ -411,7 +407,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.memoryLogMW = memoryLogMW
 	server.loadBalancer = loadBalancer
 	server.loadBalancerAPI = loadBalancerAPI
-	server.usageAPI = usageAPI
 	server.healthMonitor = healthMonitor
 	server.oauthManager = oauthManager
 	server.oauthRefresher = tokenRefresher
