@@ -26,6 +26,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
+	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
@@ -58,6 +59,9 @@ type Server struct {
 
 	// OAuth manager
 	oauthManager *oauth2.Manager
+
+	// OAuth handler (module)
+	oauthHandler *oauthmodule.Handler
 
 	// OAuth refresher for OAuth auto-refresh
 	oauthRefresher *background.OAuthRefresher
@@ -411,6 +415,11 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.oauthManager = oauthManager
 	server.oauthRefresher = tokenRefresher
 
+	// Initialize OAuth handler
+	server.oauthHandler = oauthmodule.NewHandler(oauthManager, cfg, server.logger)
+	// Set callback server manager (the server itself implements this interface)
+	server.oauthHandler.SetCallbackServerManager(server)
+
 	// Initialize template manager with GitHub URL for template sync
 	templateManager := data.NewTemplateManager(data.TemplateGitHubURL)
 	if err := templateManager.Initialize(context.Background()); err != nil {
@@ -577,8 +586,8 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 			return
 		}
 
-		// Use createProviderFromToken to create the provider
-		providerUUID, err := s.createProviderFromToken(token, token.Provider, "", token.SessionID)
+		// Use oauth handler to create the provider
+		providerUUID, err := s.oauthHandler.CreateProviderFromToken(token, token.Provider, "", token.SessionID)
 		if err != nil {
 			logrus.Debugf("[OAuth] Failed to create provider: %v", err)
 			w.Header().Set("Content-Type", "text/html")
@@ -670,6 +679,18 @@ func (s *Server) stopDynamicCallbackServer(sessionID string) {
 	s.oauthManager.ResetProxyURL()
 
 	logrus.Debugf("[OAuth] Stopped dynamic callback server for session %s", sessionID)
+}
+
+// StartDynamicCallbackServer starts a temporary callback server for OAuth
+// Implements CallbackServerManager interface for oauth module
+func (s *Server) StartDynamicCallbackServer(sessionID string, port int) error {
+	return s.startDynamicCallbackServer(sessionID, port)
+}
+
+// StopDynamicCallbackServer stops a temporary callback server for OAuth
+// Implements CallbackServerManager interface for oauth module
+func (s *Server) StopDynamicCallbackServer(sessionID string) {
+	s.stopDynamicCallbackServer(sessionID)
 }
 
 // setupMiddleware configures server middleware

@@ -17,6 +17,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbotsettings"
+	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	"github.com/tingly-dev/tingly-box/internal/server/module/providertemplate"
 	rulemodule "github.com/tingly-dev/tingly-box/internal/server/module/rule"
 	"github.com/tingly-dev/tingly-box/internal/server/module/scenario"
@@ -73,11 +74,16 @@ func (s *Server) UseUIEndpoints() {
 	// API routes (for web UI functionality)
 	s.useWebAPIEndpoints(manager)
 
-	s.useOAuthEndpoints(manager)
-
-	// Usage API routes - register from usage module
+	// OAuth API routes - register from oauth module
 	apiV1 := manager.NewGroup("api", "v1", "")
 	apiV1.Router.Use(s.authMW.UserAuthMiddleware())
+	oauthHandler := oauthmodule.NewHandler(s.oauthManager, s.config, s.logger)
+	oauthmodule.RegisterRoutes(apiV1, s.authMW.UserAuthMiddleware(), oauthHandler)
+	// Register callback routes (unauthenticated)
+	oauthmodule.RegisterCallbackRoutes(manager, oauthHandler)
+
+	// Usage API routes - register from usage module
+	// Note: apiV1 is already created above with auth middleware
 	sm := s.config.StoreManager()
 	if sm != nil {
 		usageAPI := usagemodule.NewAPI(sm.Usage())
