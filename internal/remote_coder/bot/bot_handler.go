@@ -1018,12 +1018,13 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 	agentType := "claude" // Claude Code agent type
 	sess := h.sessionMgr.FindBy(hCtx.ChatID, agentType, projectPath)
 
-	// Auto-create session if none exists (now creates with binding info)
-	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed {
+	// Auto-create session if none exists or if session is in pending state (stale)
+	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed || sess.Status == session.StatusPending {
 		sess = h.sessionMgr.CreateWith(hCtx.ChatID, agentType, projectPath)
 		// Clear expiration for persistent sessions
 		h.sessionMgr.Update(sess.ID, func(s *session.Session) {
-			s.ExpiresAt = time.Time{} // Zero value means no expiration
+			s.ExpiresAt = time.Time{}        // Zero value means no expiration
+			s.Status = session.StatusRunning // Mark as running immediately
 		})
 
 		logrus.WithFields(logrus.Fields{
@@ -1038,6 +1039,7 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 			"sessionID": sess.ID,
 			"project":   projectPath,
 			"agent":     agentType,
+			"status":    sess.Status,
 		}).Info("Resumed existing session for Claude Code")
 	}
 
@@ -1065,11 +1067,11 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		Timestamp: time.Now(),
 	})
 
-	// Check if session is already running (prevent concurrent execution)
-	if sess.Status == session.StatusRunning {
-		h.SendText(hCtx, "⚠️ A task is currently running.\n\nUse `stop` or `/stop` to cancel it first.")
-		return
-	}
+	//// Check if session is already running (prevent concurrent execution)
+	//if sess.Status == session.StatusRunning {
+	//	h.SendText(hCtx, "⚠️ A task is currently running.\n\nUse `stop` or `/stop` to cancel it first.")
+	//	return
+	//}
 
 	h.sessionMgr.SetRunning(sessionID)
 
@@ -1245,8 +1247,8 @@ func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, pr
 	agentType := "mock"
 	sess := h.sessionMgr.FindBy(hCtx.ChatID, agentType, projectPath)
 
-	// Create new session if needed
-	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed {
+	// Create new session if needed (including pending state sessions)
+	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed || sess.Status == session.StatusPending {
 		sess = h.sessionMgr.CreateWith(hCtx.ChatID, agentType, projectPath)
 	}
 	sessionID := sess.ID
