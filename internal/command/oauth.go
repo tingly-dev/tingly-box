@@ -1,4 +1,4 @@
-package oauth
+package command
 
 import (
 	"bufio"
@@ -22,8 +22,18 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
+// OAuthCommand returns the oauth command group
+func OAuthCommand(appManager interface{}) interface{} {
+	// Extract the AppConfig from AppManager
+	if am, ok := appManager.(*AppManager); ok {
+		return innerOAuthCommand(am.AppConfig())
+	}
+	// Otherwise assume it's already an AppConfig (shouldn't happen)
+	return innerOAuthCommand(appManager.(*AppManager).AppConfig())
+}
+
 // OAuthCommand represents the oauth command
-func OAuthCommand(appConfig *config.AppConfig) *cobra.Command {
+func innerOAuthCommand(appConfig *config.AppConfig) *cobra.Command {
 	var (
 		providerName string
 		callbackPort int
