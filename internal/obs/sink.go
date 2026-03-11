@@ -260,17 +260,23 @@ func (r *Sink) writeEntry(provider string, entry *RecordEntry) {
 }
 
 // writeEntryWithScenario writes an entry to a scenario-based file
+// Uses hierarchical directory structure: {baseDir}/{provider}/{date}/{hour}.jsonl
 func (r *Sink) writeEntryWithScenario(scenario string, entry *RecordEntry) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	// Get current hour for file rotation (YYYY-MM-DD-HH)
-	currentHour := time.Now().UTC().Format("2006-01-02-15")
+	// Get current date and hour for hierarchical structure
+	currentDate := time.Now().UTC().Format("2006-01-02")
+	currentHour := time.Now().UTC().Format("15")
 
-	// Use scenario as the file key
-	fileKey := fmt.Sprintf("scenario:%s:%s", scenario, entry.Provider)
+	// Build hierarchical path: {provider}/{date}/{hour}.jsonl
+	// Example: anthropic/2025-03-11/10.jsonl
+	relativePath := filepath.Join(entry.Provider, currentDate, currentHour+".jsonl")
 
-	// Get or create file for this scenario
+	// Use full relative path as file key for concurrent provider/date support
+	fileKey := relativePath
+
+	// Get or create file for this path
 	rf, exists := r.fileMap[fileKey]
 	if !exists || rf.currentHour != currentHour {
 		// Close old file if hour changed
@@ -278,11 +284,19 @@ func (r *Sink) writeEntryWithScenario(scenario string, entry *RecordEntry) {
 			r.closeFile(rf)
 		}
 
-		// Create new file with scenario-based naming
-		filename := filepath.Join(r.baseDir, fmt.Sprintf("%s.%s.%s.jsonl", scenario, entry.Provider, currentHour))
-		file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		// Create full path
+		fullPath := filepath.Join(r.baseDir, relativePath)
+
+		// Ensure parent directories exist
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+			logrus.Errorf("Failed to create recording directories: %v", err)
+			return
+		}
+
+		// Create new file
+		file, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
-			logrus.Errorf("Failed to open record file %s: %v", filename, err)
+			logrus.Errorf("Failed to open record file %s: %v", fullPath, err)
 			return
 		}
 

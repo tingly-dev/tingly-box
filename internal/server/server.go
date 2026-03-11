@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -403,6 +404,7 @@ func (s *Server) IsFeatureEnabled(feature string) bool {
 
 // GetOrCreateScenarioSink gets or creates a recording sink for the specified scenario
 // The sink is created on-demand and cached for subsequent use
+// Uses hierarchical directory structure: {baseDir}/{scenario}/{provider}/{date}/{hour}.jsonl
 func (s *Server) GetOrCreateScenarioSink(scenario typ.RuleScenario) *obs.Sink {
 	s.scenarioRecordSinksMu.Lock()
 	defer s.scenarioRecordSinksMu.Unlock()
@@ -412,15 +414,22 @@ func (s *Server) GetOrCreateScenarioSink(scenario typ.RuleScenario) *obs.Sink {
 		return sink
 	}
 
-	// Create new sink for this scenario
-	sink := obs.NewSink(s.recordDir, obs.RecordModeScenario)
+	// Create scenario-specific subdirectory
+	scenarioDir := filepath.Join(s.recordDir, string(scenario))
+	if err := os.MkdirAll(scenarioDir, 0755); err != nil {
+		logrus.Errorf("Failed to create scenario recording directory: %v", err)
+		return nil
+	}
+
+	// Create new sink for this scenario with scenario-specific base directory
+	sink := obs.NewSink(scenarioDir, obs.RecordModeScenario)
 	if sink == nil {
 		logrus.Warnf("Failed to create scenario recording sink for %s", scenario)
 		return nil
 	}
 
 	s.scenarioRecordSinks[scenario] = sink
-	logrus.Debugf("Created scenario recording sink for %s, directory: %s", scenario, s.recordDir)
+	logrus.Debugf("Created scenario recording sink for %s, directory: %s", scenario, scenarioDir)
 	return sink
 }
 
