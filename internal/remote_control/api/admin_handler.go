@@ -7,10 +7,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 
 	"github.com/tingly-dev/tingly-box/internal/remote_control/audit"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/config"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/middleware"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
 )
 

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
@@ -109,124 +108,6 @@ func Run(ctx context.Context, cfg *config.Config, imbotStore *db.ImBotSettingsSt
 	if err := botManager.StartEnabled(ctx); err != nil {
 		logrus.WithError(err).Warn("Failed to start some bots")
 	}
-
-	// TODO: Temporarily disabled HTTP server - only bot functionality is active
-	// To re-enable HTTP server, uncomment the code below and restore imports:
-	// - "net/http", "os", "os/signal", "syscall"
-	// - "github.com/gin-gonic/gin"
-	// - "github.com/tingly-dev/tingly-box/internal/remote_coder/api"
-	// - "github.com/tingly-dev/tingly-box/internal/remote_coder/audit"
-	// - "github.com/tingly-dev/tingly-box/internal/remote_coder/middleware"
-	// - "github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
-	/*
-		logrus.Infof("Starting remote-coder on port %d", cfg.Port)
-
-		summaryEngine := summarizer.NewEngine()
-
-		auditLogger := audit.NewLogger(audit.Config{
-			Console:    true,
-			MaxEntries: 10000,
-		})
-
-		rateLimiter := cfg.NewRateLimiter()
-		go func() {
-			ticker := time.NewTicker(5 * time.Minute)
-			defer ticker.Stop()
-			for range ticker.C {
-				rateLimiter.Cleanup()
-			}
-		}()
-
-		gin.SetMode(gin.ReleaseMode)
-		router := gin.New()
-		router.Use(gin.Recovery())
-		router.Use(gin.Logger())
-		router.Use(CORSMiddleware())
-
-		router.GET("/health", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{
-				"status":    "healthy",
-				"timestamp": time.Now().UTC().Format(time.RFC3339),
-			})
-		})
-
-		router.GET("/remote-coder/available", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{
-				"available": true,
-				"service":   "remote-coder",
-				"timestamp": time.Now().UTC().Format(time.RFC3339),
-			})
-		})
-
-		authRateLimit := middleware.RateLimitMiddleware(rateLimiter, "/remote-coder/handshake", "/remote-coder/execute")
-
-		remoteCCLegacyAPI := router.Group("/remote-coder")
-		remoteCCLegacyAPI.Use(authRateLimit)
-		remoteCCLegacyAPI.Use(config.AuthMiddleware(cfg))
-
-		apiHandler := api.NewHandler(sessionMgr, agentBoot, summaryEngine, auditLogger)
-		remoteCCLegacyAPI.POST("/handshake", apiHandler.Handshake)
-		remoteCCLegacyAPI.POST("/execute", apiHandler.Execute)
-		remoteCCLegacyAPI.GET("/status/:session_id", apiHandler.Status)
-		remoteCCLegacyAPI.POST("/close", apiHandler.Close)
-
-		adminAPI := router.Group("/admin")
-		adminAPI.Use(config.AuthMiddleware(cfg))
-
-		adminHandler := api.NewAdminHandler(sessionMgr, auditLogger, rateLimiter, cfg)
-		adminAPI.GET("/logs", adminHandler.GetAuditLogs)
-		adminAPI.GET("/stats", adminHandler.GetStats)
-		adminAPI.GET("/ratelimit/stats", adminHandler.GetRateLimitStats)
-		adminAPI.POST("/ratelimit/reset", adminHandler.ResetRateLimit)
-		adminAPI.POST("/tokens/generate", adminHandler.GenerateToken)
-		adminAPI.POST("/tokens/validate", adminHandler.ValidateToken)
-		adminAPI.POST("/tokens/revoke", adminHandler.RevokeToken)
-
-		remoteCCAPI := router.Group("/remote-coder")
-		remoteCCAPI.Use(config.AuthMiddleware(cfg))
-
-		remoteCCHandler := api.NewRemoteCCHandler(sessionMgr, agentBoot, summaryEngine, auditLogger, cfg, permHandler)
-		remoteCCAPI.GET("/sessions", remoteCCHandler.GetSessions)
-		remoteCCAPI.GET("/sessions/:id", remoteCCHandler.GetSession)
-		remoteCCAPI.GET("/sessions/:id/state", remoteCCHandler.GetSessionState)
-		remoteCCAPI.PUT("/sessions/:id/state", remoteCCHandler.UpdateSessionState)
-		remoteCCAPI.GET("/sessions/:id/messages", remoteCCHandler.GetSessionMessages)
-		remoteCCAPI.POST("/chat", remoteCCHandler.Chat)
-		remoteCCAPI.POST("/sessions/clear", remoteCCHandler.ClearSessions)
-
-		srv := &http.Server{
-			Addr:         fmt.Sprintf(":%d", cfg.Port),
-			Handler:      router,
-			ReadTimeout:  30 * time.Second,
-			WriteTimeout: 300 * time.Second,
-		}
-
-		errCh := make(chan error, 1)
-		go func() {
-			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				errCh <- err
-			}
-		}()
-
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-
-		select {
-		case <-ctx.Done():
-			logrus.Info("Remote-coder shutting down (context canceled)...")
-		case sig := <-sigCh:
-			logrus.Infof("Remote-coder shutting down (%s)...", sig.String())
-		case err := <-errCh:
-			return fmt.Errorf("remote-coder server error: %w", err)
-		}
-
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		if err := srv.Shutdown(shutdownCtx); err != nil {
-			return fmt.Errorf("remote-coder shutdown failed: %w", err)
-		}
-	*/
 
 	// Wait for context cancellation (bot-only mode)
 	<-ctx.Done()

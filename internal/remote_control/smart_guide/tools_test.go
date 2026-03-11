@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/tingly-dev/tingly-agentscope/pkg/message"
 	"github.com/tingly-dev/tingly-agentscope/pkg/tool"
-	sg "github.com/tingly-dev/tingly-box/internal/smart_guide"
+	sg "github.com/tingly-dev/tingly-box/internal/remote_control/smart_guide"
 )
 
 func extractTextFromResponse(resp *tool.ToolResponse) string {
