@@ -16,6 +16,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	imbotsettings2 "github.com/tingly-dev/tingly-box/internal/server/module/imbotsettings"
+	rule2 "github.com/tingly-dev/tingly-box/internal/server/module/rule"
 	skill "github.com/tingly-dev/tingly-box/internal/server/module/skill"
 	usage2 "github.com/tingly-dev/tingly-box/internal/server/module/usage"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -578,39 +579,9 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(ServerActionResponse{}),
 	)
 
-	// Rule Management
-	apiV1.GET("/rules", s.GetRules,
-		swagger.WithDescription("Get all configured rules"),
-		swagger.WithTags("rules"),
-		swagger.WithQueryRequired("scenario", "string", "Filter by scenario"),
-		swagger.WithResponseModel(RulesResponse{}),
-	)
-
-	apiV1.GET("/rule/:uuid", s.GetRule,
-		swagger.WithDescription("Get specific rule by UUID"),
-		swagger.WithTags("rules"),
-		swagger.WithResponseModel(RuleResponse{}),
-	)
-
-	apiV1.POST("/rule/:uuid", s.UpdateRule,
-		swagger.WithDescription("Create or update a rule configuration"),
-		swagger.WithTags("rules"),
-		swagger.WithRequestModel(UpdateRuleRequest{}),
-		swagger.WithResponseModel(UpdateRuleResponse{}),
-	)
-
-	apiV1.POST("/rule", s.CreateRule,
-		swagger.WithDescription("Create or update a rule configuration"),
-		swagger.WithTags("rules"),
-		swagger.WithRequestModel(CreateRuleRequest{}),
-		swagger.WithResponseModel(UpdateRuleResponse{}),
-	)
-
-	apiV1.DELETE("/rule/:uuid", s.DeleteRule,
-		swagger.WithDescription("Delete a rule configuration"),
-		swagger.WithTags("rules"),
-		swagger.WithResponseModel(DeleteRuleResponse{}),
-	)
+	// Rule Management - register from rule module
+	ruleHandler := rule2.NewHandler(s.config, s.logger)
+	rule2.RegisterRoutes(apiV1, ruleHandler)
 
 	// Scenario Management
 	apiV1.GET("/scenarios", s.GetScenarios,
