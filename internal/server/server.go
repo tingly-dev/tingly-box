@@ -456,17 +456,21 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Initialize OTel meter setup for token tracking
 	sm := cfg.StoreManager()
-	meterSetup, err := otel.NewMeterSetup(context.Background(), otel.DefaultConfig(), &otel.StoreRefs{
-		StatsStore: sm.Stats(),
-		UsageStore: sm.Usage(),
-		Sink:       server.recordSink,
-	})
-	if err != nil {
-		logrus.Warnf("Failed to initialize OTel meter setup: %v", err)
-	} else if meterSetup != nil {
-		server.meterSetup = meterSetup
-		server.tokenTracker = meterSetup.Tracker()
-		logrus.Debugf("OTel meter setup initialized")
+	if sm == nil {
+		logrus.Warnf("StoreManager not available, skipping OTel meter setup")
+	} else {
+		meterSetup, err := otel.NewMeterSetup(context.Background(), otel.DefaultConfig(), &otel.StoreRefs{
+			StatsStore: sm.Stats(),
+			UsageStore: sm.Usage(),
+			Sink:       server.recordSink,
+		})
+		if err != nil {
+			logrus.Warnf("Failed to initialize OTel meter setup: %v", err)
+		} else if meterSetup != nil {
+			server.meterSetup = meterSetup
+			server.tokenTracker = meterSetup.Tracker()
+			logrus.Debugf("OTel meter setup initialized")
+		}
 	}
 
 	// Initialize virtual model service

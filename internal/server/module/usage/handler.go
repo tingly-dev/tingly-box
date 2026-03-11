@@ -10,21 +10,21 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 )
 
-// API provides REST endpoints for usage statistics
-type API struct {
+// Handler provides REST endpoints for usage statistics
+type Handler struct {
 	usageStore *db.UsageStore
 }
 
-// NewAPI creates a new usage API
-func NewAPI(usageStore *db.UsageStore) *API {
-	return &API{
+// NewHandler creates a new usage handler
+func NewHandler(usageStore *db.UsageStore) *Handler {
+	return &Handler{
 		usageStore: usageStore,
 	}
 }
 
 // GetStats returns aggregated usage statistics
-func (api *API) GetStats(c *gin.Context) {
-	if api.usageStore == nil {
+func (h *Handler) GetStats(c *gin.Context) {
+	if h.usageStore == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Usage store not available"})
 		return
 	}
@@ -50,7 +50,7 @@ func (api *API) GetStats(c *gin.Context) {
 		query.Limit = 100
 	}
 
-	stats, err := api.usageStore.GetAggregatedStats(query)
+	stats, err := h.usageStore.GetAggregatedStats(query)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -76,8 +76,8 @@ func (api *API) GetStats(c *gin.Context) {
 }
 
 // GetTimeSeries returns time-series data for usage
-func (api *API) GetTimeSeries(c *gin.Context) {
-	if api.usageStore == nil {
+func (h *Handler) GetTimeSeries(c *gin.Context) {
+	if h.usageStore == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Usage store not available"})
 		return
 	}
@@ -102,7 +102,7 @@ func (api *API) GetTimeSeries(c *gin.Context) {
 		filters["user_id"] = userID
 	}
 
-	data, err := api.usageStore.GetTimeSeries(interval, startTime, endTime, filters)
+	data, err := h.usageStore.GetTimeSeries(interval, startTime, endTime, filters)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -135,8 +135,8 @@ func (api *API) GetTimeSeries(c *gin.Context) {
 }
 
 // GetRecords returns individual usage records
-func (api *API) GetRecords(c *gin.Context) {
-	if api.usageStore == nil {
+func (h *Handler) GetRecords(c *gin.Context) {
+	if h.usageStore == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Usage store not available"})
 		return
 	}
@@ -170,7 +170,7 @@ func (api *API) GetRecords(c *gin.Context) {
 		filters["user_id"] = userID
 	}
 
-	records, total, err := api.usageStore.GetRecords(startTime, endTime, filters, limit, offset)
+	records, total, err := h.usageStore.GetRecords(startTime, endTime, filters, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -212,8 +212,8 @@ func (api *API) GetRecords(c *gin.Context) {
 }
 
 // DeleteOldRecords deletes usage records older than the specified date
-func (api *API) DeleteOldRecords(c *gin.Context) {
-	if api.usageStore == nil {
+func (h *Handler) DeleteOldRecords(c *gin.Context) {
+	if h.usageStore == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Usage store not available"})
 		return
 	}
@@ -225,7 +225,7 @@ func (api *API) DeleteOldRecords(c *gin.Context) {
 	}
 
 	cutoffDate := time.Now().AddDate(0, 0, -req.OlderThanDays)
-	deleted, err := api.usageStore.DeleteOlderThan(cutoffDate)
+	deleted, err := h.usageStore.DeleteOlderThan(cutoffDate)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

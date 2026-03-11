@@ -77,17 +77,16 @@ func (s *Server) UseUIEndpoints() {
 	// OAuth API routes - register from oauth module
 	apiV1 := manager.NewGroup("api", "v1", "")
 	apiV1.Router.Use(s.authMW.UserAuthMiddleware())
-	oauthHandler := oauthmodule.NewHandler(s.oauthManager, s.config, s.logger)
-	oauthmodule.RegisterRoutes(apiV1, s.authMW.UserAuthMiddleware(), oauthHandler)
+	oauthmodule.RegisterRoutes(apiV1, s.authMW.UserAuthMiddleware(), s.oauthHandler)
 	// Register callback routes (unauthenticated)
-	oauthmodule.RegisterCallbackRoutes(manager, oauthHandler)
+	oauthmodule.RegisterCallbackRoutes(manager, s.oauthHandler)
 
 	// Usage API routes - register from usage module
 	// Note: apiV1 is already created above with auth middleware
 	sm := s.config.StoreManager()
 	if sm != nil {
-		usageAPI := usagemodule.NewAPI(sm.Usage())
-		usagemodule.RegisterRoutes(apiV1, usageAPI)
+		usageHandler := usagemodule.NewHandler(sm.Usage())
+		usagemodule.RegisterRoutes(apiV1, usageHandler)
 	}
 
 	// ImBot settings API routes - register from imbotsettings module
