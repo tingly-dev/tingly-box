@@ -72,17 +72,9 @@ func buildOAuthHelp() string {
 	help.WriteString("Supported providers:\n")
 
 	for _, p := range providers {
-		config, _ := getProviderConfig(p.Type)
-		method := "Authorization Code + PKCE"
-		if config != nil && config.OAuthMethod == "device_code" {
-			method = "Device Code Flow"
-		}
-
 		help.WriteString(fmt.Sprintf("  %-12s - %s\n", p.Type, p.DisplayName))
-		help.WriteString(fmt.Sprintf("                %s\n", p.Description))
-		help.WriteString(fmt.Sprintf("                Method: %s\n", method))
-		if config != nil && config.NeedsPort1455 {
-			help.WriteString(fmt.Sprintf("                Note: Requires port 1455 for callback\n"))
+		if p.Description != "" {
+			help.WriteString(fmt.Sprintf("                %s\n", p.Description))
 		}
 		help.WriteString("\n")
 	}
@@ -469,30 +461,60 @@ func printProviderJSONL(provider *typ.Provider) {
 	fmt.Println("   and import it using: tingly import <file.jsonl>")
 }
 
-// supportedProviders returns the list of supported OAuth providers
+// supportedProviders returns the list of supported OAuth providers from registry
 func supportedProviders() []ProviderInfo {
-	return []ProviderInfo{
-		{
-			Type:        "qwen_code",
-			DisplayName: "Qwen",
-			Description: "Qwen AI (Device Code flow - requires manual code entry)",
-		},
-		{
-			Type:        "codex",
-			DisplayName: "Codex",
-			Description: "OpenAI Codex CLI (PKCE flow - requires port 1455)",
-		},
-		{
-			Type:        "claude_code",
-			DisplayName: "Claude Code",
-			Description: "Anthropic Claude Code (PKCE flow)",
-		},
-		{
-			Type:        "antigravity",
-			DisplayName: "Antigravity",
-			Description: "Antigravity AI (Google OAuth with PKCE)",
-		},
+	registry := oauth.DefaultRegistry()
+	infoList := registry.GetProviderInfo()
+
+	// Providers to exclude (testing, internal, etc.)
+	excludedProviders := map[oauth.ProviderType]bool{
+		oauth.ProviderMock:   true,
+		oauth.ProviderIFlow:  true,
+		oauth.ProviderOpenAI: true, // Requires custom client ID
+		oauth.ProviderGoogle: true, // Requires custom client ID
+		oauth.ProviderGitHub: true, // Requires custom client ID
 	}
+
+	result := make([]ProviderInfo, 0, len(infoList))
+	for _, info := range infoList {
+		// Skip excluded providers
+		if excludedProviders[info.Type] {
+			continue
+		}
+
+		// Skip unconfigured providers (no client credentials)
+		if !info.Configured {
+			continue
+		}
+
+		// Build description based on OAuth method
+		providerCfg, _ := registry.Get(info.Type)
+
+		var description string
+		if providerCfg != nil {
+			switch providerCfg.OAuthMethod {
+			case oauth.OAuthMethodDeviceCode, oauth.OAuthMethodDeviceCodePKCE:
+				description = "Device Code flow - requires manual code entry"
+			case oauth.OAuthMethodPKCE:
+				description = "PKCE flow"
+			default:
+				description = "Authorization Code flow"
+			}
+
+			// Add port requirement note
+			if len(providerCfg.CallbackPorts) > 0 {
+				description += fmt.Sprintf(" (requires port %d)", providerCfg.CallbackPorts[0])
+			}
+		}
+
+		result = append(result, ProviderInfo{
+			Type:        string(info.Type),
+			DisplayName: info.DisplayName,
+			Description: description,
+		})
+	}
+
+	return result
 }
 
 // ProviderInfo holds information about an OAuth provider
@@ -502,63 +524,65 @@ type ProviderInfo struct {
 	Description string
 }
 
-// getProviderInfo returns provider info by type
-func getProviderInfo(providerType string) *ProviderInfo {
-	for _, p := range supportedProviders() {
-		if p.Type == providerType {
-			return &p
-		}
-	}
-	return nil
-}
-
 // isProviderSupported checks if a provider is supported
 func isProviderSupported(providerType string) bool {
-	return getProviderInfo(providerType) != nil
+	registry := oauth.DefaultRegistry()
+	return registry.IsRegistered(oauth.ProviderType(providerType))
 }
 
-// getProviderConfig returns OAuth configuration for a provider
+// getProviderConfig returns OAuth configuration for a provider from registry
 func getProviderConfig(providerType string) (*ProviderOAuthConfig, error) {
-	switch providerType {
-	case "qwen_code":
-		return &ProviderOAuthConfig{
-			Type:          "qwen_code",
-			DisplayName:   "Qwen",
-			APIBase:       "https://dashscope.aliyuncs.com/compatible-mode/v1",
-			APIStyle:      "openai",
-			OAuthMethod:   "device_code",
-			NeedsPort1455: false,
-		}, nil
-	case "codex":
-		return &ProviderOAuthConfig{
-			Type:          "codex",
-			DisplayName:   "Codex",
-			APIBase:       "https://api.openai.com/v1",
-			APIStyle:      "openai",
-			OAuthMethod:   "pkce",
-			NeedsPort1455: true,
-		}, nil
-	case "claude_code":
-		return &ProviderOAuthConfig{
-			Type:          "claude_code",
-			DisplayName:   "Claude Code",
-			APIBase:       "https://api.anthropic.com/v1",
-			APIStyle:      "anthropic",
-			OAuthMethod:   "pkce",
-			NeedsPort1455: false,
-		}, nil
-	case "antigravity":
-		return &ProviderOAuthConfig{
-			Type:          "antigravity",
-			DisplayName:   "Antigravity",
-			APIBase:       "https://api.antigravity.com/v1",
-			APIStyle:      "openai",
-			OAuthMethod:   "pkce",
-			NeedsPort1455: false,
-		}, nil
-	default:
+	registry := oauth.DefaultRegistry()
+	providerCfg, ok := registry.Get(oauth.ProviderType(providerType))
+	if !ok {
 		return nil, fmt.Errorf("unsupported provider: %s", providerType)
 	}
+
+	// Map OAuth method to string
+	var oauthMethod string
+	switch providerCfg.OAuthMethod {
+	case oauth.OAuthMethodDeviceCode, oauth.OAuthMethodDeviceCodePKCE:
+		oauthMethod = "device_code"
+	case oauth.OAuthMethodPKCE:
+		oauthMethod = "pkce"
+	default:
+		oauthMethod = "pkce"
+	}
+
+	// Determine API style
+	var apiStyle string
+	// Default to OpenAI style
+	apiStyle = "openai"
+
+	// Map provider type to API base and style
+	var apiBase string
+	switch oauth.ProviderType(providerType) {
+	case oauth.ProviderClaudeCode:
+		apiBase = "https://api.anthropic.com/v1"
+		apiStyle = "anthropic"
+	case oauth.ProviderQwenCode:
+		apiBase = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+		apiStyle = "openai"
+	case oauth.ProviderCodex:
+		apiBase = "https://api.openai.com/v1"
+		apiStyle = "openai"
+	case oauth.ProviderAntigravity:
+		apiBase = "https://api.antigravity.com/v1"
+		apiStyle = "openai"
+	default:
+		// For other providers, use a default
+		apiBase = "https://api.example.com/v1"
+		apiStyle = "openai"
+	}
+
+	return &ProviderOAuthConfig{
+		Type:          providerType,
+		DisplayName:   providerCfg.DisplayName,
+		APIBase:       apiBase,
+		APIStyle:      apiStyle,
+		OAuthMethod:   oauthMethod,
+		NeedsPort1455: len(providerCfg.CallbackPorts) > 0 && providerCfg.CallbackPorts[0] == 1455,
+	}, nil
 }
 
 // ProviderOAuthConfig holds OAuth configuration for a provider
