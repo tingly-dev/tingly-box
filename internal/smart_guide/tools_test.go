@@ -1,4 +1,4 @@
-package smartguide_test
+package smart_guide_test
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/tingly-dev/tingly-agentscope/pkg/message"
 	"github.com/tingly-dev/tingly-agentscope/pkg/tool"
-	sg "github.com/tingly-dev/tingly-box/internal/smartguide"
+	sg "github.com/tingly-dev/tingly-box/internal/smart_guide"
 )
 
 func extractTextFromResponse(resp *tool.ToolResponse) string {

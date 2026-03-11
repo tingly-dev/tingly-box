@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	smartguide2 "github.com/tingly-dev/tingly-box/internal/smartguide"
+	smartguide2 "github.com/tingly-dev/tingly-box/internal/smart_guide"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/ask"
