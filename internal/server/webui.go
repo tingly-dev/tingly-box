@@ -15,10 +15,13 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	imbotsettings2 "github.com/tingly-dev/tingly-box/internal/server/module/imbotsettings"
-	rule2 "github.com/tingly-dev/tingly-box/internal/server/module/rule"
-	skill "github.com/tingly-dev/tingly-box/internal/server/module/skill"
-	usage2 "github.com/tingly-dev/tingly-box/internal/server/module/usage"
+	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
+	"github.com/tingly-dev/tingly-box/internal/server/module/imbotsettings"
+	"github.com/tingly-dev/tingly-box/internal/server/module/providertemplate"
+	rulemodule "github.com/tingly-dev/tingly-box/internal/server/module/rule"
+	"github.com/tingly-dev/tingly-box/internal/server/module/scenario"
+	"github.com/tingly-dev/tingly-box/internal/server/module/skill"
+	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/swagger"
 )
@@ -77,16 +80,17 @@ func (s *Server) UseUIEndpoints() {
 	apiV1.Router.Use(s.authMW.UserAuthMiddleware())
 	sm := s.config.StoreManager()
 	if sm != nil {
-		usageAPI := usage2.NewAPI(sm.Usage())
-		usage2.RegisterRoutes(apiV1, usageAPI)
+		usageAPI := usagemodule.NewAPI(sm.Usage())
+		usagemodule.RegisterRoutes(apiV1, usageAPI)
 	}
 
 	// ImBot settings API routes - register from imbotsettings module
-	imbotSettingsHandler := imbotsettings2.NewHandler(s.config)
-	imbotsettings2.RegisterRoutes(apiV1, imbotSettingsHandler)
+	imbotSettingsHandler := imbotsettings.NewHandler(s.config)
+	imbotsettings.RegisterRoutes(apiV1, imbotSettingsHandler)
 
 	// Config apply API routes
-	s.RegisterConfigApplyRoutes(manager)
+	configapplyHandler := configapply.NewHandler(s.config, s.host)
+	configapply.RegisterRoutes(apiV1, configapplyHandler)
 
 	// Static files and templates - try embedded assets first, fallback to filesystem
 	s.useWebStaticEndpoints(s.engine)
@@ -580,54 +584,12 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	)
 
 	// Rule Management - register from rule module
-	ruleHandler := rule2.NewHandler(s.config, s.logger)
-	rule2.RegisterRoutes(apiV1, ruleHandler)
+	ruleHandler := rulemodule.NewHandler(s.config, s.logger)
+	rulemodule.RegisterRoutes(apiV1, ruleHandler)
 
-	// Scenario Management
-	apiV1.GET("/scenarios", s.GetScenarios,
-		swagger.WithDescription("Get all scenario configurations"),
-		swagger.WithTags("scenarios"),
-		swagger.WithResponseModel(ScenariosResponse{}),
-	)
-
-	apiV1.GET("/scenario/:scenario", s.GetScenarioConfig,
-		swagger.WithDescription("Get configuration for a specific scenario"),
-		swagger.WithTags("scenarios"),
-		swagger.WithResponseModel(ScenarioResponse{}),
-	)
-
-	apiV1.POST("/scenario/:scenario", s.SetScenarioConfig,
-		swagger.WithDescription("Create or update scenario configuration"),
-		swagger.WithTags("scenarios"),
-		swagger.WithRequestModel(ScenarioUpdateRequest{}),
-		swagger.WithResponseModel(ScenarioUpdateResponse{}),
-	)
-
-	apiV1.GET("/scenario/:scenario/flag/:flag", s.GetScenarioFlag,
-		swagger.WithDescription("Get a specific flag value for a scenario"),
-		swagger.WithTags("scenarios"),
-		swagger.WithResponseModel(ScenarioFlagResponse{}),
-	)
-
-	apiV1.PUT("/scenario/:scenario/flag/:flag", s.SetScenarioFlag,
-		swagger.WithDescription("Set a specific flag value for a scenario"),
-		swagger.WithTags("scenarios"),
-		swagger.WithRequestModel(ScenarioFlagUpdateRequest{}),
-		swagger.WithResponseModel(ScenarioFlagResponse{}),
-	)
-
-	apiV1.GET("/scenario/:scenario/string-flag/:flag", s.GetScenarioStringFlag,
-		swagger.WithDescription("Get a specific string flag value for a scenario"),
-		swagger.WithTags("scenarios"),
-		swagger.WithResponseModel(ScenarioFlagResponse{}),
-	)
-
-	apiV1.PUT("/scenario/:scenario/string-flag/:flag", s.SetScenarioStringFlag,
-		swagger.WithDescription("Set a specific string flag value for a scenario"),
-		swagger.WithTags("scenarios"),
-		swagger.WithRequestModel(ScenarioStringFlagUpdateRequest{}),
-		swagger.WithResponseModel(ScenarioFlagResponse{}),
-	)
+	// Scenario Management - register from scenario module
+	scenarioHandler := scenario.NewHandler(s.config, s)
+	scenario.RegisterRoutes(apiV1, scenarioHandler)
 
 	// History
 	apiV1.GET("/history", s.GetHistory,
@@ -737,27 +699,9 @@ func useV2Provider(s *Server, api *swagger.RouteGroup) {
 		swagger.WithResponseModel(DeleteProviderResponse{}),
 	)
 
-	// Provider template endpoints
-	api.GET("/provider-templates", s.GetProviderTemplates,
-		swagger.WithDescription("Get all provider templates"),
-		swagger.WithTags("providers"),
-		swagger.WithResponseModel(TemplateResponse{}),
-	)
-
-	api.GET("/provider-templates/:id", s.GetProviderTemplate,
-		swagger.WithDescription("Get a specific provider template by ID"),
-		swagger.WithTags("providers"),
-	)
-
-	api.POST("/provider-templates/refresh", s.RefreshProviderTemplates,
-		swagger.WithDescription("Refresh provider templates from GitHub"),
-		swagger.WithTags("providers"),
-	)
-
-	api.GET("/provider-templates/version", s.GetProviderTemplateVersion,
-		swagger.WithDescription("Get current provider template registry version"),
-		swagger.WithTags("providers"),
-	)
+	// Provider template endpoints - register from providertemplate module
+	providerTemplateHandler := providertemplate.NewHandler(s.templateManager)
+	providertemplate.RegisterRoutes(api, providerTemplateHandler)
 }
 
 func (s *Server) useWebStaticEndpoints(engine *gin.Engine) {
