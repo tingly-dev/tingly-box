@@ -6,34 +6,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 type APIStyle = protocol.APIStyle
-
-// AddCommand represents the add provider command
-func AddCommand(appManager *AppManager) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "add [name] [baseurl] [token] [api_style]",
-		Short: "Add a new AI provider configuration",
-		Long: `Add a new AI provider with name, API base URL, token, and optional API style.
-You can provide the arguments as positional parameters:
-  add openai https://api.openai.com/v1 your-token-here openai
-  add anthropic https://api.anthropic.com your-token-here anthropic
-
-The api_style parameter is optional and defaults to "openai".
-Supported values: openai, anthropic
-
-Or run the command without arguments for interactive mode.`,
-		Args: cobra.MaximumNArgs(4),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAdd(appManager, args)
-		},
-	}
-
-	return cmd
-}
 
 // runAdd handles the provider addition process with both positional arguments and interactive mode
 func runAdd(appManager *AppManager, args []string) error {
