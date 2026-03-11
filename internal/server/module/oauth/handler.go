@@ -322,21 +322,22 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 	// Create session in our session manager for status tracking
 	sessionID := h.sessionMgr.CreateSession(req.Provider, userID, req.Redirect, req.ResponseType, req.Name, proxyURL)
 
-	// Create OAuth session for token exchange
-	oauthSession, err := h.oauthManager.CreateSession(userID, providerType)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, OAuthErrorResponse{
-			Success: false,
-			Error:   "Failed to create session: " + err.Error(),
-		})
-		return
+	// Create OAuth session for token exchange using the SAME sessionID
+	// This ensures frontend polling and OAuth callback use the same session
+	now := time.Now()
+	oauthSession := &oauth2.SessionState{
+		SessionID: sessionID, // Use the same sessionID for frontend polling
+		Status:    oauth2.SessionStatusPending,
+		Provider:  providerType,
+		UserID:    userID,
+		CreatedAt: now,
+		ExpiresAt: now.Add(10 * time.Minute),
 	}
-
-	// Store proxy URL in session for later retrieval when creating provider
+	// Store proxy URL if provided
 	if proxyURL != "" {
 		oauthSession.ProxyURL = proxyURL
-		h.oauthManager.StoreSession(oauthSession)
 	}
+	h.oauthManager.StoreSession(oauthSession)
 
 	// Start dynamic callback server if provider has port constraints (like Codex)
 	if len(config.CallbackPorts) > 0 && h.callbackServerManager != nil {
@@ -386,7 +387,7 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 	}
 
 	// Handle standard authorization code flow
-	authURL, state, err := h.oauthManager.GetAuthURL(userID, providerType, req.Redirect, req.Name, oauthSession.SessionID)
+	authURL, state, err := h.oauthManager.GetAuthURL(userID, providerType, req.Redirect, req.Name, sessionID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
 			Success: false,
