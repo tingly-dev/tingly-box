@@ -1,4 +1,4 @@
-package server
+package rule
 
 import (
 	"fmt"
@@ -6,15 +6,28 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// GetRules returns all rules, require filtered by scenario
-func (s *Server) GetRules(c *gin.Context) {
-	cfg := s.config
-	if cfg == nil {
+// Handler handles rule HTTP requests
+type Handler struct {
+	config *config.Config
+	logger *obs.MemoryLogger
+}
+
+// NewHandler creates a new rule handler
+func NewHandler(cfg *config.Config, logger *obs.MemoryLogger) *Handler {
+	return &Handler{
+		config: cfg,
+		logger: logger,
+	}
+}
+
+// GetRules returns all rules, filtered by scenario
+func (h *Handler) GetRules(c *gin.Context) {
+	if h.config == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Global config not available",
@@ -22,7 +35,7 @@ func (s *Server) GetRules(c *gin.Context) {
 		return
 	}
 
-	rules := cfg.GetRequestConfigs()
+	rules := h.config.GetRequestConfigs()
 
 	// Filter by scenario if provided
 	scenario := c.Query("scenario")
@@ -50,8 +63,8 @@ func (s *Server) GetRules(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// GetRule returns a specific rule by name
-func (s *Server) GetRule(c *gin.Context) {
+// GetRule returns a specific rule by UUID
+func (h *Handler) GetRule(c *gin.Context) {
 	ruleUUID := c.Param("uuid")
 	if ruleUUID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -61,8 +74,7 @@ func (s *Server) GetRule(c *gin.Context) {
 		return
 	}
 
-	cfg := s.config
-	if cfg == nil {
+	if h.config == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Global config not available",
@@ -70,7 +82,7 @@ func (s *Server) GetRule(c *gin.Context) {
 		return
 	}
 
-	rule := cfg.GetRuleByUUID(ruleUUID)
+	rule := h.config.GetRuleByUUID(ruleUUID)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
@@ -87,7 +99,8 @@ func (s *Server) GetRule(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func (s *Server) CreateRule(c *gin.Context) {
+// CreateRule creates a new rule
+func (h *Handler) CreateRule(c *gin.Context) {
 	var rule typ.Rule
 	if err := c.ShouldBindJSON(&rule); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -105,8 +118,7 @@ func (s *Server) CreateRule(c *gin.Context) {
 	}
 	rule.UUID = uuid.NewString()
 
-	cfg := s.config
-	if cfg == nil {
+	if h.config == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Global config not available",
@@ -114,7 +126,7 @@ func (s *Server) CreateRule(c *gin.Context) {
 		return
 	}
 
-	if err := cfg.AddRule(rule); err != nil {
+	if err := h.config.AddRule(rule); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to save rule: " + err.Error(),
@@ -123,8 +135,8 @@ func (s *Server) CreateRule(c *gin.Context) {
 	}
 
 	// Log the action
-	if s.logger != nil {
-		s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
+	if h.logger != nil {
+		h.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
 			"name": rule.RequestModel,
 		}, true, fmt.Sprintf("Rule %s updated successfully", rule.RequestModel))
 	}
@@ -147,7 +159,7 @@ func (s *Server) CreateRule(c *gin.Context) {
 }
 
 // UpdateRule creates or updates a rule
-func (s *Server) UpdateRule(c *gin.Context) {
+func (h *Handler) UpdateRule(c *gin.Context) {
 	uid := c.Param("uuid")
 	if uid == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -167,8 +179,7 @@ func (s *Server) UpdateRule(c *gin.Context) {
 		return
 	}
 
-	cfg := s.config
-	if cfg == nil {
+	if h.config == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Global config not available",
@@ -177,7 +188,7 @@ func (s *Server) UpdateRule(c *gin.Context) {
 	}
 
 	rule.UUID = uid
-	if err := cfg.UpdateRule(uid, rule); err != nil {
+	if err := h.config.UpdateRule(uid, rule); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to save rule: " + err.Error(),
@@ -186,8 +197,8 @@ func (s *Server) UpdateRule(c *gin.Context) {
 	}
 
 	// Log the action
-	if s.logger != nil {
-		s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
+	if h.logger != nil {
+		h.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
 			"name": uid,
 		}, true, fmt.Sprintf("Rule %s updated successfully", uid))
 	}
@@ -209,7 +220,8 @@ func (s *Server) UpdateRule(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func (s *Server) DeleteRule(c *gin.Context) {
+// DeleteRule deletes a rule
+func (h *Handler) DeleteRule(c *gin.Context) {
 	ruleUUID := c.Param("uuid")
 	if ruleUUID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -219,8 +231,7 @@ func (s *Server) DeleteRule(c *gin.Context) {
 		return
 	}
 
-	cfg := s.config
-	if cfg == nil {
+	if h.config == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Global config not available",
@@ -228,7 +239,7 @@ func (s *Server) DeleteRule(c *gin.Context) {
 		return
 	}
 
-	err := cfg.DeleteRule(ruleUUID)
+	err := h.config.DeleteRule(ruleUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
