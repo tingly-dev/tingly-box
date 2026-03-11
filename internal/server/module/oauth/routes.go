@@ -79,6 +79,7 @@ func RegisterRoutes(router *swagger.RouteGroup, authMiddleware gin.HandlerFunc, 
 	router.GET("/oauth/status", handler.GetOAuthSessionStatus,
 		swagger.WithTags("oauth"),
 		swagger.WithDescription("Get OAuth session status"),
+		swagger.WithQueryRequired("session_id", "string", "OAuth session ID from authorize response"),
 		swagger.WithResponseModel(OAuthSessionStatusResponse{}),
 	)
 
