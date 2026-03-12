@@ -10,7 +10,6 @@ import (
 
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
-	"github.com/tingly-dev/tingly-box/internal/remote_control"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 )
 
@@ -18,15 +17,21 @@ import (
 type Handler struct {
 	config *config.Config
 	store  *db.ImBotSettingsStore
+	botMgr *BotManager // Local bot manager, not global
 }
 
 // NewHandler creates a new ImBot settings handler
-func NewHandler(cfg *config.Config) *Handler {
+func NewHandler(cfg *config.Config) (*Handler, error) {
 	sm := cfg.StoreManager()
+	botMgr, err := NewBotManager(cfg)
+	if err != nil {
+		return nil, err
+	}
 	return &Handler{
 		config: cfg,
 		store:  sm.ImBotSettings(),
-	}
+		botMgr: botMgr,
+	}, nil
 }
 
 // ListSettings returns all ImBot configurations
@@ -144,9 +149,9 @@ func (h *Handler) CreateSettings(c *gin.Context) {
 
 	// Start the bot if enabled
 	if created.Enabled {
-		if botManager := remote_control.GetBotManager(); botManager != nil {
+		if h.botMgr != nil {
 			ctx := context.Background()
-			if err := botManager.Start(ctx, created.UUID); err != nil {
+			if err := h.botMgr.StartBot(ctx, created.UUID); err != nil {
 				logrus.WithError(err).WithField("uuid", created.UUID).Warn("Failed to start bot after creation")
 			}
 		}
@@ -290,16 +295,18 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 
 	// Handle bot lifecycle if enabled status changed
 	if currentSettings.Enabled != settings.Enabled {
-		if botManager := remote_control.GetBotManager(); botManager != nil {
+		if h.botMgr != nil {
 			ctx := context.Background()
 			if settings.Enabled {
 				// Enable -> start the bot
-				if err := botManager.Start(ctx, uuid); err != nil {
+				if err := h.botMgr.StartBot(ctx, uuid); err != nil {
 					logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to start bot after update")
 				}
 			} else {
 				// Disable -> stop the bot
-				botManager.Stop(uuid)
+				if err := h.botMgr.StopBot(uuid); err != nil {
+					logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to stop bot after update")
+				}
 			}
 		}
 	}
@@ -333,8 +340,8 @@ func (h *Handler) DeleteSettings(c *gin.Context) {
 	}
 
 	// Stop the bot if it's running
-	if botManager := remote_control.GetBotManager(); botManager != nil {
-		botManager.Stop(uuid)
+	if h.botMgr != nil {
+		h.botMgr.StopBot(uuid)
 	}
 
 	if err := h.store.DeleteSettings(uuid); err != nil {
@@ -374,16 +381,18 @@ func (h *Handler) ToggleSettings(c *gin.Context) {
 	logrus.WithField("uuid", uuid).WithField("enabled", newStatus).Info("ImBot settings toggled")
 
 	// Notify bot manager to start or stop the bot
-	if botManager := remote_control.GetBotManager(); botManager != nil {
+	if h.botMgr != nil {
 		ctx := context.Background()
 		if newStatus {
 			// Start the bot
-			if err := botManager.Start(ctx, uuid); err != nil {
+			if err := h.botMgr.StartBot(ctx, uuid); err != nil {
 				logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to start bot after toggle")
 			}
 		} else {
 			// Stop the bot
-			botManager.Stop(uuid)
+			if err := h.botMgr.StopBot(uuid); err != nil {
+				logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to stop bot after toggle")
+			}
 		}
 	}
 
@@ -469,4 +478,16 @@ func normalizeAllowlist(values []string) []string {
 		out = append(out, entry)
 	}
 	return out
+}
+
+// BotManager returns the bot manager for server integration
+func (h *Handler) BotManager() *BotManager {
+	return h.botMgr
+}
+
+// Shutdown stops all running bots and cleans up resources
+func (h *Handler) Shutdown() {
+	if h.botMgr != nil {
+		h.botMgr.Shutdown()
+	}
 }

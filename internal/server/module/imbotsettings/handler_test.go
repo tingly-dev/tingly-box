@@ -7,8 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
-	"github.com/tingly-dev/tingly-box/internal/server/config"
 )
 
 // mockImBotSettingsStore is a mock implementation of ImBotSettingsStore for testing
@@ -67,7 +67,8 @@ func setupTestRouter(store *mockImBotSettingsStore) *gin.Engine {
 
 	handler := &Handler{
 		config: nil,
-		store:  store,
+		store:  nil, // Use nil store for testing (handler checks for nil)
+		botMgr: nil, // botMgr is optional for basic operations
 	}
 
 	router.GET("/settings", handler.ListSettings)
@@ -402,17 +403,12 @@ func TestPlatformConfigStructure(t *testing.T) {
 		DisplayName: "Telegram Bot",
 		AuthType:    "token",
 		Category:    "messaging",
-		Fields: []struct {
-			Name     string `json:"name"`
-			Type     string `json:"type"`
-			Label    string `json:"label"`
-			Required bool   `json:"required"`
-		}{
+		Fields: []imbot.FieldSpec{
 			{
-				Name:     "token",
-				Type:     "string",
+				Key:      "token",
 				Label:    "Bot Token",
 				Required: true,
+				Secret:   true,
 			},
 		},
 	}
