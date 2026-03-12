@@ -167,6 +167,32 @@ interface ExportProvider {
     models?: any[];
 }
 
+// Generic export handler
+async function exportData(
+    jsonlContent: string,
+    format: ExportFormat,
+    filename: string,
+    notificationMsg: string,
+    onNotification: (message: string, severity: 'success' | 'error') => void
+): Promise<void> {
+    const content = format === 'jsonl' ? jsonlContent : `${BASE64_PREFIX}:${CURRENT_VERSION}:${btoa(jsonlContent)}`;
+    const extension = format === 'jsonl' ? 'jsonl' : 'txt';
+    const mimeType = format === 'jsonl' ? 'application/jsonl' : 'text/plain';
+
+    downloadFile(content, `${filename}.${extension}`, mimeType);
+    onNotification(notificationMsg, 'success');
+}
+
+// Generic clipboard export handler
+async function exportToClipboard(
+    jsonlContent: string,
+    onNotification: (message: string, severity: 'success' | 'error') => void
+): Promise<void> {
+    const base64Content = `${BASE64_PREFIX}:${CURRENT_VERSION}:${btoa(jsonlContent)}`;
+    await copyToClipboard(base64Content);
+    onNotification('Base64 export copied to clipboard! You can now paste it anywhere.', 'success');
+}
+
 /**
  * Exports a rule with its associated providers to the specified format
  */
@@ -176,20 +202,12 @@ export async function exportRuleWithProviders(
     onNotification: (message: string, severity: 'success' | 'error') => void
 ): Promise<void> {
     try {
-        // Build JSONL content first
         const jsonlContent = await buildJsonlExport(rule);
-
-        if (format === 'jsonl') {
-            // Download as JSONL file
-            downloadJsonlFile(jsonlContent, `${rule.request_model || 'rule'}-${rule.scenario}.jsonl`);
-            onNotification('Rule with API keys exported successfully!', 'success');
-        } else {
-            // Convert to Base64 format
-            const base64Content = encodeBase64Export(jsonlContent);
-            // Download as text file
-            downloadTextFile(base64Content, `${rule.request_model || 'rule'}-${rule.scenario}.txt`);
-            onNotification('Rule exported as Base64! You can copy and share this file.', 'success');
-        }
+        const filename = `${rule.request_model || 'rule'}-${rule.scenario}`;
+        const message = format === 'jsonl'
+            ? 'Rule with API keys exported successfully!'
+            : 'Rule exported as Base64! You can copy and share this file.';
+        await exportData(jsonlContent, format, filename, message, onNotification);
     } catch (error) {
         console.error('Error exporting rule:', error);
         onNotification('Failed to export rule', 'error');
@@ -204,17 +222,47 @@ export async function exportRuleAsBase64ToClipboard(
     onNotification: (message: string, severity: 'success' | 'error') => void
 ): Promise<void> {
     try {
-        // Build JSONL content
         const jsonlContent = await buildJsonlExport(rule);
-
-        // Convert to Base64 format
-        const base64Content = encodeBase64Export(jsonlContent);
-
-        // Copy to clipboard
-        await copyToClipboard(base64Content);
-        onNotification('Base64 export copied to clipboard! You can now paste it anywhere.', 'success');
+        await exportToClipboard(jsonlContent, onNotification);
     } catch (error) {
         console.error('Error exporting rule to clipboard:', error);
+        onNotification('Failed to copy to clipboard', 'error');
+    }
+}
+
+/**
+ * Exports a single provider to the specified format
+ */
+export async function exportProvider(
+    provider: any,
+    format: ExportFormat,
+    onNotification: (message: string, severity: 'success' | 'error') => void
+): Promise<void> {
+    try {
+        const jsonlContent = buildProviderJsonlExport(provider);
+        const filename = `${provider.name || 'provider'}-${provider.api_style}`;
+        const message = format === 'jsonl'
+            ? 'Provider exported successfully!'
+            : 'Provider exported as Base64! You can copy and share this file.';
+        await exportData(jsonlContent, format, filename, message, onNotification);
+    } catch (error) {
+        console.error('Error exporting provider:', error);
+        onNotification('Failed to export provider', 'error');
+    }
+}
+
+/**
+ * Exports a provider as Base64 and copies to clipboard
+ */
+export async function exportProviderAsBase64ToClipboard(
+    provider: any,
+    onNotification: (message: string, severity: 'success' | 'error') => void
+): Promise<void> {
+    try {
+        const jsonlContent = buildProviderJsonlExport(provider);
+        await exportToClipboard(jsonlContent, onNotification);
+    } catch (error) {
+        console.error('Error exporting provider to clipboard:', error);
         onNotification('Failed to copy to clipboard', 'error');
     }
 }
@@ -226,9 +274,7 @@ async function buildJsonlExport(rule: Rule): Promise<string> {
     // Collect unique provider UUIDs from services
     const providerUuids = new Set<string>();
     (rule.services || []).forEach((service: any) => {
-        if (service.provider) {
-            providerUuids.add(service.provider);
-        }
+        if (service.provider) providerUuids.add(service.provider);
     });
 
     // Fetch all providers
@@ -236,27 +282,40 @@ async function buildJsonlExport(rule: Rule): Promise<string> {
     for (const uuid of providerUuids) {
         try {
             const result = await api.getProvider(uuid);
-            if (result.success && result.data) {
-                providersData.push(result.data);
-            }
+            if (result.success && result.data) providersData.push(result.data);
         } catch (error) {
             console.error(`Failed to fetch provider ${uuid}:`, error);
         }
     }
 
-    // Build JSONL export
-    const lines: string[] = [];
+    return buildJsonlLines([
+        createMetadataLine(),
+        createRuleLine(rule),
+        ...providersData.map(createProviderLine)
+    ]);
+}
 
-    // Line 1: Metadata
-    const metadata: ExportMetadata = {
+/**
+ * Builds the JSONL export content for a single provider
+ */
+function buildProviderJsonlExport(provider: any): string {
+    return buildJsonlLines([
+        createMetadataLine(),
+        createProviderLine(provider)
+    ]);
+}
+
+// Helper functions for building export lines
+function createMetadataLine(): string {
+    return JSON.stringify({
         type: 'metadata',
         version: CURRENT_VERSION,
-        exported_at: new Date().toISOString(),
-    };
-    lines.push(JSON.stringify(metadata));
+        exported_at: new Date().toISOString()
+    } as ExportMetadata);
+}
 
-    // Line 2: Rule
-    const ruleExport: ExportRule = {
+function createRuleLine(rule: Rule): string {
+    return JSON.stringify({
         type: 'rule',
         uuid: rule.uuid,
         scenario: rule.scenario,
@@ -267,40 +326,29 @@ async function buildJsonlExport(rule: Rule): Promise<string> {
         active: rule.active,
         smart_enabled: rule.smart_enabled,
         smart_routing: rule.smart_routing || [],
-    };
-    lines.push(JSON.stringify(ruleExport));
-
-    // Subsequent lines: Providers
-    for (const provider of providersData) {
-        const providerExport: ExportProvider = {
-            type: 'provider',
-            uuid: provider.uuid,
-            name: provider.name,
-            api_base: provider.api_base,
-            api_style: provider.api_style,
-            auth_type: provider.auth_type || 'api_key',
-            token: provider.token,
-            oauth_detail: provider.oauth_detail,
-            enabled: provider.enabled,
-            proxy_url: provider.proxy_url,
-            timeout: provider.timeout,
-            tags: provider.tags,
-            models: provider.models,
-        };
-        lines.push(JSON.stringify(providerExport));
-    }
-
-    return lines.join('\n');
+    } as ExportRule);
 }
 
-/**
- * Encodes JSONL content as Base64 export format
- */
-function encodeBase64Export(jsonlContent: string): string {
-    // Convert to Base64
-    const base64 = btoa(jsonlContent);
-    // Add prefix
-    return `${BASE64_PREFIX}:${CURRENT_VERSION}:${base64}`;
+function createProviderLine(provider: any): string {
+    return JSON.stringify({
+        type: 'provider',
+        uuid: provider.uuid,
+        name: provider.name,
+        api_base: provider.api_base,
+        api_style: provider.api_style,
+        auth_type: provider.auth_type || 'api_key',
+        token: provider.token,
+        oauth_detail: provider.oauth_detail,
+        enabled: provider.enabled,
+        proxy_url: provider.proxy_url,
+        timeout: provider.timeout,
+        tags: provider.tags,
+        models: provider.models,
+    } as ExportProvider);
+}
+
+function buildJsonlLines(lines: string[]): string {
+    return lines.join('\n');
 }
 
 /**
@@ -308,7 +356,6 @@ function encodeBase64Export(jsonlContent: string): string {
  */
 export function decodeBase64Export(base64Content: string): string {
     const trimmed = base64Content.trim();
-
     if (!trimmed.startsWith(`${BASE64_PREFIX}:`)) {
         throw new Error('Invalid Base64 export format: missing prefix');
     }
@@ -318,14 +365,11 @@ export function decodeBase64Export(base64Content: string): string {
         throw new Error('Invalid Base64 export format: expected prefix:version:payload');
     }
 
-    const version = parts[1];
-    const payload = parts[2];
-
+    const [version, payload] = [parts[1], parts[2]];
     if (version !== CURRENT_VERSION) {
         throw new Error(`Unsupported version: ${version} (supported: ${CURRENT_VERSION})`);
     }
 
-    // Decode Base64
     return atob(payload);
 }
 
@@ -336,7 +380,6 @@ async function copyToClipboard(text: string): Promise<void> {
     if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(text);
     } else {
-        // Fallback for older browsers
         const textArea = document.createElement('textarea');
         textArea.value = text;
         textArea.style.position = 'fixed';
@@ -353,25 +396,10 @@ async function copyToClipboard(text: string): Promise<void> {
 }
 
 /**
- * Downloads content as a JSONL file
+ * Downloads content as a file
  */
-function downloadJsonlFile(content: string, filename: string): void {
-    const blob = new Blob([content], { type: 'application/jsonl' });
-    downloadBlob(blob, filename);
-}
-
-/**
- * Downloads content as a text file
- */
-function downloadTextFile(content: string, filename: string): void {
-    const blob = new Blob([content], { type: 'text/plain' });
-    downloadBlob(blob, filename);
-}
-
-/**
- * Downloads a blob as a file
- */
-function downloadBlob(blob: Blob, filename: string): void {
+function downloadFile(content: string, filename: string, mimeType: string): void {
+    const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -380,91 +408,4 @@ function downloadBlob(blob: Blob, filename: string): void {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-}
-
-/**
- * Exports a single provider to the specified format
- */
-export async function exportProvider(
-    provider: any,
-    format: ExportFormat,
-    onNotification: (message: string, severity: 'success' | 'error') => void
-): Promise<void> {
-    try {
-        // Build JSONL content for single provider
-        const jsonlContent = buildProviderJsonlExport(provider);
-
-        if (format === 'jsonl') {
-            // Download as JSONL file
-            downloadJsonlFile(jsonlContent, `${provider.name || 'provider'}-${provider.api_style}.jsonl`);
-            onNotification('Provider exported successfully!', 'success');
-        } else {
-            // Convert to Base64 format
-            const base64Content = encodeBase64Export(jsonlContent);
-            // Download as text file
-            downloadTextFile(base64Content, `${provider.name || 'provider'}-${provider.api_style}.txt`);
-            onNotification('Provider exported as Base64! You can copy and share this file.', 'success');
-        }
-    } catch (error) {
-        console.error('Error exporting provider:', error);
-        onNotification('Failed to export provider', 'error');
-    }
-}
-
-/**
- * Exports a provider as Base64 and copies to clipboard
- */
-export async function exportProviderAsBase64ToClipboard(
-    provider: any,
-    onNotification: (message: string, severity: 'success' | 'error') => void
-): Promise<void> {
-    try {
-        // Build JSONL content
-        const jsonlContent = buildProviderJsonlExport(provider);
-
-        // Convert to Base64 format
-        const base64Content = encodeBase64Export(jsonlContent);
-
-        // Copy to clipboard
-        await copyToClipboard(base64Content);
-        onNotification('Base64 export copied to clipboard! You can now paste it anywhere.', 'success');
-    } catch (error) {
-        console.error('Error exporting provider to clipboard:', error);
-        onNotification('Failed to copy to clipboard', 'error');
-    }
-}
-
-/**
- * Builds the JSONL export content for a single provider
- */
-function buildProviderJsonlExport(provider: any): string {
-    const lines: string[] = [];
-
-    // Line 1: Metadata
-    const metadata: ExportMetadata = {
-        type: 'metadata',
-        version: CURRENT_VERSION,
-        exported_at: new Date().toISOString(),
-    };
-    lines.push(JSON.stringify(metadata));
-
-    // Line 2: Provider
-    const providerExport: ExportProvider = {
-        type: 'provider',
-        uuid: provider.uuid,
-        name: provider.name,
-        api_base: provider.api_base,
-        api_style: provider.api_style,
-        auth_type: provider.auth_type,
-        token: provider.token,
-        oauth_detail: provider.oauth_detail,
-        enabled: provider.enabled,
-        proxy_url: provider.proxy_url,
-        timeout: provider.timeout,
-        tags: provider.tags,
-        models: provider.models,
-    };
-    lines.push(JSON.stringify(providerExport));
-
-    return lines.join('\n');
 }

@@ -1,6 +1,7 @@
 package dataexport
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/internal/config"
@@ -269,7 +270,7 @@ func TestEndToEndExportImportBase64(t *testing.T) {
 	if len(base64Content) < len(Base64Prefix)+10 {
 		t.Error("Base64 export content too short")
 	}
-	if !e2eStartsWith(base64Content, Base64Prefix+":1.0:") {
+	if !strings.HasPrefix(base64Content, Base64Prefix+":1.0:") {
 		t.Errorf("Base64 export missing correct prefix, got: %s", base64Content[:20])
 	}
 
@@ -436,9 +437,4 @@ func TestEndToEndMultipleProviders(t *testing.T) {
 	if len(destConfig.Providers) != 3 {
 		t.Errorf("Expected 3 providers in config, got %d", len(destConfig.Providers))
 	}
-}
-
-// Helper function with unique name to avoid conflict with integration_test.go
-func e2eStartsWith(s, prefix string) bool {
-	return len(s) >= len(prefix) && s[0:len(prefix)] == prefix
 }

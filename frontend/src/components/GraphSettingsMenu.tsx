@@ -9,20 +9,17 @@ import {
     Settings as SettingsIcon,
     UnfoldMore as ExportMenuIcon
 } from '@mui/icons-material';
-import {IconButton, Menu, MenuItem, Tooltip} from '@mui/material';
-import React, {useCallback, useState} from 'react';
-import type {ExportFormat} from '@/components/rule-card/utils';
+import { IconButton, Menu, MenuItem, Tooltip } from '@mui/material';
+import { useState } from 'react';
+import type { ExportFormat } from '@/components/rule-card/utils';
 
 export interface GraphSettingsMenuProps {
-    // Common props
     canProbe: boolean;
     isProbing: boolean;
     allowDeleteRule: boolean;
     active: boolean;
     allowToggleRule: boolean;
     saving: boolean;
-
-    // Callbacks
     onProbe: () => void;
     onExport: (format: ExportFormat) => void;
     onExportAsBase64ToClipboard?: () => void;
@@ -30,176 +27,97 @@ export interface GraphSettingsMenuProps {
     onToggleActive: () => void;
 }
 
-export const GraphSettingsMenu: React.FC<GraphSettingsMenuProps> = ({
-                                                                        canProbe,
-                                                                        isProbing,
-                                                                        allowDeleteRule,
-                                                                        active,
-                                                                        allowToggleRule,
-                                                                        saving,
-                                                                        onProbe,
-                                                                        onExport,
-                                                                        onExportAsBase64ToClipboard,
-                                                                        onDelete,
-                                                                        onToggleActive,
-                                                                    }) => {
+export const GraphSettingsMenu = ({
+    canProbe,
+    isProbing,
+    allowDeleteRule,
+    active,
+    allowToggleRule,
+    saving,
+    onProbe,
+    onExport,
+    onExportAsBase64ToClipboard,
+    onDelete,
+    onToggleActive,
+}: GraphSettingsMenuProps) => {
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
     const [exportMenuAnchorEl, setExportMenuAnchorEl] = useState<null | HTMLElement>(null);
-    const menuOpen = Boolean(menuAnchorEl);
-    const exportMenuOpen = Boolean(exportMenuAnchorEl);
 
-    const handleMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>) => {
-        setMenuAnchorEl(event.currentTarget);
-    }, []);
-
-    const handleMenuClose = useCallback(() => {
+    const closeMenu = () => setMenuAnchorEl(null);
+    const closeExportMenu = () => setExportMenuAnchorEl(null);
+    const closeAllMenus = () => {
         setMenuAnchorEl(null);
-    }, []);
-
-    const handleExportMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>) => {
-        setExportMenuAnchorEl(event.currentTarget);
-        handleMenuClose();
-    }, [handleMenuClose]);
-
-    const handleExportMenuClose = useCallback(() => {
         setExportMenuAnchorEl(null);
-    }, []);
-
-    const handleProbe = useCallback(() => {
-        handleMenuClose();
-        onProbe();
-    }, [onProbe]);
-
-    const handleExportAsJsonl = useCallback(() => {
-        handleMenuClose();
-        onExport('jsonl');
-    }, [onExport]);
-
-    const handleExportAsBase64File = useCallback(() => {
-        handleMenuClose();
-        onExport('base64');
-    }, [onExport]);
-
-    const handleExportAsBase64ToClipboard = useCallback(() => {
-        handleMenuClose();
-        onExportAsBase64ToClipboard?.();
-    }, [onExportAsBase64ToClipboard]);
-
-    const handleDelete = useCallback(() => {
-        handleMenuClose();
-        onDelete();
-    }, [onDelete]);
-
-    const handleToggleActive = useCallback(() => {
-        handleMenuClose();
-        onToggleActive();
-    }, [onToggleActive]);
+    };
 
     return (
         <>
             <Tooltip title="Rule actions">
                 <IconButton
                     size="small"
-                    onClick={handleMenuOpen}
-                    sx={{
-                        color: 'text.secondary',
-                        '&:hover': {
-                            backgroundColor: 'action.hover',
-                        },
-                    }}
+                    onClick={(e) => setMenuAnchorEl(e.currentTarget)}
+                    sx={{ color: 'text.secondary', '&:hover': { backgroundColor: 'action.hover' } }}
                 >
-                    <SettingsIcon fontSize="small"/>
+                    <SettingsIcon fontSize="small" />
                 </IconButton>
             </Tooltip>
+
             <Menu
                 anchorEl={menuAnchorEl}
-                open={menuOpen}
-                onClose={handleMenuClose}
-                anchorOrigin={{
-                    vertical: 'bottom',
-                    horizontal: 'right',
-                }}
-                transformOrigin={{
-                    vertical: 'top',
-                    horizontal: 'right',
-                }}
+                open={Boolean(menuAnchorEl)}
+                onClose={closeMenu}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
             >
-                {/* Test Connection */}
-                <MenuItem
-                    onClick={handleProbe}
-                    disabled={!canProbe || isProbing}
-                >
-                    <ProbeIcon fontSize="small" sx={{mr: 1}}/>
-                    Test Connection
+                <MenuItem onClick={() => { closeMenu(); onProbe(); }} disabled={!canProbe || isProbing}>
+                    <ProbeIcon fontSize="small" sx={{ mr: 1 }} />Test Connection
                 </MenuItem>
 
-                {/* Export Submenu */}
-                <MenuItem onClick={handleExportMenuOpen}>
-                    <ExportIcon fontSize="small" sx={{mr: 1}}/>
-                    Export
-                    <ExportMenuIcon fontSize="small" sx={{ml: 1, fontSize: '1rem'}}/>
+                <MenuItem onClick={(e) => { setExportMenuAnchorEl(e.currentTarget); closeMenu(); }}>
+                    <ExportIcon fontSize="small" sx={{ mr: 1 }} />Export
+                    <ExportMenuIcon fontSize="small" sx={{ ml: 1, fontSize: '1rem' }} />
                 </MenuItem>
 
-                {/* Toggle Active/Inactive */}
                 <MenuItem
-                    onClick={handleToggleActive}
+                    onClick={() => { closeMenu(); onToggleActive(); }}
                     disabled={!allowToggleRule || saving}
-                    sx={{
-                        color: active ? 'warning.main' : 'success.main',
-                    }}
+                    sx={{ color: active ? 'warning.main' : 'success.main' }}
                 >
                     {active ? (
                         <>
-                            <InactiveIcon fontSize="small" sx={{mr: 1}}/>
-                            Deactivate Rule
+                            <InactiveIcon fontSize="small" sx={{ mr: 1 }} />Deactivate Rule
                         </>
                     ) : (
                         <>
-                            <ActiveIcon fontSize="small" sx={{mr: 1}}/>
-                            Activate Rule
+                            <ActiveIcon fontSize="small" sx={{ mr: 1 }} />Activate Rule
                         </>
                     )}
                 </MenuItem>
 
-                {/* Delete Rule */}
                 {allowDeleteRule && (
-                    <MenuItem
-                        onClick={handleDelete}
-                        sx={{color: 'error.main'}}
-                    >
-                        <DeleteIcon fontSize="small" sx={{mr: 1}}/>
-                        Delete Rule
+                    <MenuItem onClick={() => { closeMenu(); onDelete(); }} sx={{ color: 'error.main' }}>
+                        <DeleteIcon fontSize="small" sx={{ mr: 1 }} />Delete Rule
                     </MenuItem>
                 )}
             </Menu>
 
-            {/* Export Submenu */}
             <Menu
                 anchorEl={exportMenuAnchorEl}
-                open={exportMenuOpen}
-                onClose={handleExportMenuClose}
-                anchorOrigin={{
-                    vertical: 'bottom',
-                    horizontal: 'right',
-                }}
-                transformOrigin={{
-                    vertical: 'top',
-                    horizontal: 'left',
-                }}
+                open={Boolean(exportMenuAnchorEl)}
+                onClose={closeExportMenu}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'left' }}
             >
                 {onExportAsBase64ToClipboard && (
-                    <MenuItem onClick={handleExportAsBase64ToClipboard}>
-                        <CopyIcon fontSize="small" sx={{ mr: 1 }} />
-                        Copy Base64 to Clipboard
+                    <MenuItem onClick={() => { closeAllMenus(); onExportAsBase64ToClipboard(); }}>
+                        <CopyIcon fontSize="small" sx={{ mr: 1 }} />Copy Base64 to Clipboard
                     </MenuItem>
                 )}
-                <MenuItem onClick={handleExportAsJsonl}>
-                    <DownloadIcon fontSize="small" sx={{mr: 1}}/>
-                    Download as JSONL
+                <MenuItem onClick={() => { closeAllMenus(); onExport('jsonl'); }}>
+                    <DownloadIcon fontSize="small" sx={{ mr: 1 }} />Download as JSONL
                 </MenuItem>
-                <MenuItem onClick={handleExportAsBase64File}>
-                    <DownloadIcon fontSize="small" sx={{mr: 1}}/>
-                    Download as Base64
+                <MenuItem onClick={() => { closeAllMenus(); onExport('base64'); }}>
+                    <DownloadIcon fontSize="small" sx={{ mr: 1 }} />Download as Base64
                 </MenuItem>
             </Menu>
         </>

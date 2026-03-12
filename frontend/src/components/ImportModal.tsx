@@ -12,7 +12,7 @@ import {
     Tab,
     styled,
 } from '@mui/material';
-import React, { useState, useCallback } from 'react';
+import { useState } from 'react';
 
 interface ImportModalProps {
     open: boolean;
@@ -21,77 +21,54 @@ interface ImportModalProps {
     loading?: boolean;
 }
 
-// Styled Tab Panel component
-const TabPanel = styled(Box)<{ value: number; index: number }>(({ theme, value, index }) => ({
-    display: value !== index ? 'none' : 'block',
-    padding: theme.spacing(2),
-}));
+const TabPanel = styled(Box)<{ value: number; index: number }>(
+    ({ theme, value, index }) => ({
+        display: value !== index ? 'none' : 'block',
+        padding: theme.spacing(2),
+    })
+);
 
-export const ImportModal: React.FC<ImportModalProps> = ({
-    open,
-    onClose,
-    onImport,
-    loading = false,
-}) => {
+export const ImportModal = ({ open, onClose, onImport, loading = false }: ImportModalProps) => {
     const [tabValue, setTabValue] = useState(0);
     const [pasteData, setPasteData] = useState('');
     const [fileName, setFileName] = useState<string>('');
 
-    const handleTabChange = useCallback((_: React.SyntheticEvent, newValue: number) => {
-        setTabValue(newValue);
-    }, []);
-
-    const handleFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (file) {
-            setFileName(file.name);
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const content = e.target?.result as string;
-                onImport(content);
-            };
-            reader.readAsText(file);
-        }
-    }, [onImport]);
-
-    const handlePasteImport = useCallback(() => {
-        const trimmed = pasteData.trim();
-        if (trimmed) {
-            onImport(trimmed);
-        }
-    }, [pasteData, onImport]);
-
-    const handleClose = useCallback(() => {
+    const handleClose = () => {
         setPasteData('');
         setFileName('');
         setTabValue(0);
         onClose();
-    }, [onClose]);
+    };
+
+    const handlePasteImport = () => {
+        const trimmed = pasteData.trim();
+        if (trimmed) onImport(trimmed);
+    };
+
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setFileName(file.name);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const content = e.target?.result as string;
+            onImport(content);
+        };
+        reader.readAsText(file);
+    };
 
     return (
-        <Dialog
-            open={open}
-            onClose={handleClose}
-            maxWidth="md"
-            fullWidth
-        >
+        <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
             <DialogTitle>Import Rule</DialogTitle>
             <DialogContent>
                 <Tabs
                     value={tabValue}
-                    onChange={handleTabChange}
+                    onChange={(_, newValue) => setTabValue(newValue)}
                     sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
                 >
-                    <Tab
-                        label="Paste Data"
-                        icon={<PasteIcon />}
-                        disabled={loading}
-                    />
-                    <Tab
-                        label="Upload File"
-                        icon={<UploadIcon />}
-                        disabled={loading}
-                    />
+                    <Tab label="Paste Data" icon={<PasteIcon />} disabled={loading} />
+                    <Tab label="Upload File" icon={<UploadIcon />} disabled={loading} />
                 </Tabs>
 
                 <TabPanel value={tabValue} index={0}>
@@ -106,10 +83,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                         value={pasteData}
                         onChange={(e) => setPasteData(e.target.value)}
                         disabled={loading}
-                        sx={{
-                            fontFamily: 'monospace',
-                            fontSize: '0.85rem',
-                        }}
+                        sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
                     />
                 </TabPanel>
 
