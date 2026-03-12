@@ -48,16 +48,20 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		disableStreamUsage = scenarioConfig.Flags.DisableStreamUsage
 		cleanHeader = scenarioConfig.Flags.CleanHeader
 
-		// Apply thinking effort from scenario config
-		effort := scenarioConfig.Flags.ThinkingEffort
-		if effort != "" && effort != typ.ThinkingEffortDefault {
-			// Map effort level to budget_tokens
-			budgetTokens, ok := typ.ThinkingBudgetMapping[effort]
-			if !ok {
-				budgetTokens = typ.ThinkingBudgetMapping[typ.ThinkingEffortMedium] // fallback
+		// Apply thinking effort from scenario config ONLY when client has explicitly enabled thinking
+		// The scenario config's effort level is used to adjust the budget_tokens, not to enable thinking
+		// If client hasn't enabled thinking, we don't enable it regardless of scenario config
+		if req.Thinking.OfEnabled != nil {
+			effort := scenarioConfig.Flags.ThinkingEffort
+			if effort != typ.ThinkingEffortDefault {
+				// Map effort level to budget_tokens
+				budgetTokens, ok := typ.ThinkingBudgetMapping[effort]
+				if !ok {
+					budgetTokens = typ.ThinkingBudgetMapping[typ.ThinkingEffortMedium] // fallback
+				}
+				// Override thinking with scenario config's budget_tokens
+				req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budgetTokens)
 			}
-			// Set thinking with budget_tokens
-			req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budgetTokens)
 		}
 	}
 
