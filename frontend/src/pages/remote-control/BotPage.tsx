@@ -1,6 +1,6 @@
 import BotAuthForm from '@/components/bot/BotAuthForm';
 import BotPlatformSelector from '@/components/bot/BotPlatformSelector';
-import { BotCard, useSmartGuideDialog } from '@/components/bot';
+import { BotCard, useBotModelDialog } from '@/components/bot';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import { PageLayout } from '@/components/PageLayout';
 import PlatformGuide from '@/components/remote-control/PlatformGuide';
@@ -63,7 +63,7 @@ const BotPage = () => {
 
     // Providers for model selection
     const [providers, setProviders] = useState<Provider[]>([]);
-    const [selectedBotForSmartGuide, setSelectedBotForSmartGuide] = useState<BotSettings | null>(null);
+    const [selectedBot, setSelectedBot] = useState<BotSettings | null>(null);
 
     useEffect(() => {
         loadBotPlatforms();
@@ -268,40 +268,40 @@ const BotPage = () => {
     }, [loadBotSettings]);
 
     // SmartGuide dialog using the same pattern as RuleCard
-    const handleSmartGuideUpdate = useCallback(async (uuid: string, provider: string, model: string) => {
+    const handleBotModelUpdate = useCallback(async (uuid: string, provider: string, model: string) => {
         const response = await api.updateImbotSetting(uuid, {
             smartguide_provider: provider,
             smartguide_model: model,
         });
 
         if (response.success) {
-            showNotification('SmartGuide configuration updated', 'success');
+            showNotification('Bot model configuration updated', 'success');
             await loadBotSettings();
         } else {
-            showNotification(response.error || 'Failed to update SmartGuide configuration', 'error');
-            throw new Error(response.error || 'Failed to update SmartGuide configuration');
+            showNotification(response.error || 'Failed to update bot configuration', 'error');
+            throw new Error(response.error || 'Failed to update bot configuration');
         }
     }, [loadBotSettings, showNotification]);
 
     const {
-        openDialog: openSmartGuideDialog,
-        closeDialog: closeSmartGuideDialog,
-        SmartGuideDialog,
-        isOpen: smartGuideDialogOpen,
-    } = useSmartGuideDialog({
-        bot: selectedBotForSmartGuide,
+        openDialog: openBotModelDialog,
+        closeDialog: closeBotModelDialog,
+        BotModelDialog,
+        isOpen: BotModelDialogOpen,
+    } = useBotModelDialog({
+        bot: selectedBot,
         providers,
-        onUpdate: handleSmartGuideUpdate,
-        onClose: () => setSelectedBotForSmartGuide(null),
+        onUpdate: handleBotModelUpdate,
+        onClose: () => setSelectedBot(null),
     });
 
-    const handleSmartGuideSelect = useCallback((botUuid: string) => {
+    const handleBotModelSelect = useCallback((botUuid: string) => {
         const bot = bots.find(b => b.uuid === botUuid);
         if (bot) {
-            setSelectedBotForSmartGuide(bot);
-            openSmartGuideDialog();
+            setSelectedBot(bot);
+            openBotModelDialog();
         }
-    }, [bots, openSmartGuideDialog]);
+    }, [bots, openBotModelDialog]);
 
     return (
         <PageLayout loading={false}>
@@ -318,14 +318,17 @@ const BotPage = () => {
                     </Typography>
                 </Alert>
                 <Typography variant="body2" color="text.secondary">
-                    The <strong>Remote Control</strong> Bot enables you to interact with <strong>Claude Code</strong> through instant messaging platforms
+                    The <strong>Remote Control</strong> Bot enables you to interact with <strong>Claude
+                    Code</strong> through instant messaging platforms
                     like Telegram.
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                    Make sure you have <strong>Claude Code CLI</strong> installed and configured before using this feature.
+                    Make sure you have <strong>Claude Code CLI</strong> installed and configured before using this
+                    feature.
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                    <strong>Once you enable a bot, the remote control is started with corresponding IM, and vice versa.</strong>
+                    <strong>Once you enable a bot, the remote control is started with corresponding IM, and vice
+                        versa.</strong>
                 </Typography>
             </UnifiedCard>
 
@@ -333,6 +336,7 @@ const BotPage = () => {
                 title="Bots"
                 subtitle={`${bots.length} bot${bots.length !== 1 ? 's' : ''} configured`}
                 size="full"
+                sx={{ mb: 2 }}
                 rightAction={
                     <Button
                         variant="contained"
@@ -366,7 +370,7 @@ const BotPage = () => {
                                 onEdit={() => handleOpenBotTokenDialog(bot.uuid)}
                                 onDelete={() => handleDeleteBot(bot.uuid!)}
                                 onBotToggle={() => handleBotToggle(bot.uuid!, !bot.enabled)}
-                                onModelClick={() => handleSmartGuideSelect(bot.uuid!)}
+                                onModelClick={() => handleBotModelSelect(bot.uuid!)}
                                 onCWDChange={(cwd) => handleCWDChange(bot.uuid!, cwd)}
                                 isToggling={togglingBotUuid === bot.uuid}
                             />
@@ -380,6 +384,7 @@ const BotPage = () => {
             <UnifiedCard
                 title="Platform Configuration Guide"
                 subtitle="How to configure different IM platforms"
+                sx={{ mb: 2 }}
                 size="full"
             >
                 <PlatformGuide
@@ -409,7 +414,8 @@ const BotPage = () => {
                         gap: 2,
                     }}
                 >
-                    <Typography variant="h6">{botDialogMode === 'edit' ? 'Edit Bot Configuration' : 'Add Bot Configuration'}</Typography>
+                    <Typography
+                        variant="h6">{botDialogMode === 'edit' ? 'Edit Bot Configuration' : 'Add Bot Configuration'}</Typography>
                     <Stack spacing={2}>
                         <Stack spacing={1}>
                             <Typography variant="body2" color="text.secondary">
@@ -511,7 +517,7 @@ const BotPage = () => {
             </Modal>
 
             {/* SmartGuide Selector Dialog */}
-            <SmartGuideDialog open={smartGuideDialogOpen} />
+            <BotModelDialog open={BotModelDialogOpen} />
 
             {/* Snackbar for notifications */}
             <Snackbar

@@ -14,4 +14,4 @@ export { default as BotAuthForm } from './BotAuthForm';
 export { default as BotPlatformSelector } from './BotPlatformSelector';
 
 // Dialogs
-export { useSmartGuideDialog } from './SmartGuideDialog';
+export { useBotModelDialog } from './BotModelDialog.tsx';

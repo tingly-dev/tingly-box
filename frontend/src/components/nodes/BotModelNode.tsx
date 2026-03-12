@@ -114,7 +114,7 @@ const BotModelNode: React.FC<BotModelNodeProps> = ({
 
             <Divider sx={NODE_LAYER_STYLES.divider} />
 
-            {/* Bottom Layer - Chip showing "SmartGuide" */}
+            {/* Bottom Layer - Chip showing bot model */}
             <Box sx={NODE_LAYER_STYLES.bottomLayer}>
                 <Chip
                     label="Model"

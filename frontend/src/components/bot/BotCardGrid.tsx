@@ -12,7 +12,7 @@ interface BotCardGridProps {
     onEdit?: (uuid: string) => void;
     onDelete?: (uuid: string) => void;
     onBotToggle?: (uuid: string, enabled: boolean) => void;
-    onSmartGuideSelect?: (botUuid: string) => void;
+    onBotModelSelect?: (botUuid: string) => void;
     onCWDChange?: (botUuid: string, cwd: string) => void;
     loading?: boolean;
     error?: string | null;
@@ -45,7 +45,7 @@ const BotCardGrid: React.FC<BotCardGridProps> = ({
     onEdit,
     onDelete,
     onBotToggle,
-    onSmartGuideSelect,
+    onBotModelSelect,
     onCWDChange,
     loading = false,
     error = null,
@@ -75,9 +75,9 @@ const BotCardGrid: React.FC<BotCardGridProps> = ({
         onBotToggle?.(uuid, enabled);
     }, [onBotToggle]);
 
-    const handleSmartGuideClick = useCallback((uuid: string) => {
-        onSmartGuideSelect?.(uuid);
-    }, [onSmartGuideSelect]);
+    const handleBotModelClick = useCallback((uuid: string) => {
+        onBotModelSelect?.(uuid);
+    }, [onBotModelSelect]);
 
     const handleCWDChange = useCallback((uuid: string, cwd: string) => {
         onCWDChange?.(uuid, cwd);
@@ -133,7 +133,7 @@ const BotCardGrid: React.FC<BotCardGridProps> = ({
                                 onEdit={() => onEdit?.(bot.uuid!)}
                                 onDelete={() => handleDeleteClick(bot.uuid!)}
                                 onBotToggle={(enabled) => handleBotToggle(bot.uuid!, enabled)}
-                                onModelClick={() => handleSmartGuideClick(bot.uuid!)}
+                                onModelClick={() => handleBotModelClick(bot.uuid!)}
                                 onCWDChange={(cwd) => handleCWDChange(bot.uuid!, cwd)}
                                 isToggling={isToggling}
                             />
