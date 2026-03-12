@@ -1460,8 +1460,6 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 			return val
 		}
 		return false
-	case "enable_remote_coder":
-		return true // Enabled by default
 	default:
 		return false
 	}
@@ -1520,14 +1518,6 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 			config.Extensions = make(map[string]interface{})
 		}
 		config.Extensions["skill_ide"] = value
-	case "enable_remote_coder":
-		// Store in Extensions
-		if config.Extensions == nil {
-			config.Extensions = make(map[string]interface{})
-		}
-		config.Extensions["enable_remote_coder"] = value
-		// Backward compatibility
-		config.Extensions["skill_remote_cc"] = value
 	default:
 		return fmt.Errorf("unknown flag name: %s", flagName)
 	}

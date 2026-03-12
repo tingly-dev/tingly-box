@@ -348,6 +348,7 @@ type PermissionRequest struct {
 	Reason    string                 `json:"reason,omitempty"`
 	Timestamp time.Time              `json:"timestamp"`
 	SessionID string                 `json:"session_id,omitempty"`
+	BotUUID   string                 `json:"bot_uuid,omitempty"` // Bot UUID for routing permission requests
 }
 
 // PermissionResponse represents the response to a permission request

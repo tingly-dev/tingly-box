@@ -1159,6 +1159,7 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		Platform:             string(hCtx.Platform),
 		BotUUID:              hCtx.BotUUID,
 		PermissionPromptTool: "stdio",
+		PermissionMode:       string(claude.PermissionModeDefault), // Use constant for permission mode
 	})
 
 	logrus.WithFields(logrus.Fields{

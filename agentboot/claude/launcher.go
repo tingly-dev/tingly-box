@@ -311,7 +311,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 								}
 
 								// Send control response via stdin
-								input := l.sendPermissionResponseNew(requestID, result)
+								input := l.sendPermissionResponseNew(requestID, result, req.Input)
 								inputSource.Write(input)
 							} else {
 								logrus.Warn("Permission handler is nil, cannot process permission request")
@@ -327,7 +327,6 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 				requestID := getString(event.Data, "request_id")
 
 				if assistant, ok := msg.(*AssistantMessage); ok {
-					fmt.Printf("%s", assistant)
 					for _, c := range assistant.Message.Content {
 						if c.Name == "AskUserQuestion" {
 							req := l.parseAskRequest(c)
@@ -768,6 +767,7 @@ func (l *Launcher) parsePermissionRequest(data map[string]interface{}) agentboot
 	sessionID := l.executionContext.sessionID
 	chatID := l.executionContext.chatID
 	platform := l.executionContext.platform
+	botUUID := l.executionContext.botUUID
 	l.mu.RUnlock()
 
 	if chatID != "" {
@@ -786,28 +786,46 @@ func (l *Launcher) parsePermissionRequest(data map[string]interface{}) agentboot
 		Input:     input,
 		Timestamp: time.Now(),
 		SessionID: sessionID,
+		BotUUID:   botUUID, // Include bot UUID for proper routing
 	}
 }
 
 // sendPermissionResponse sends a permission response to Claude Code
-func (l *Launcher) sendPermissionResponseNew(requestID string, result agentboot.PermissionResult) map[string]any {
+func (l *Launcher) sendPermissionResponseNew(requestID string, result agentboot.PermissionResult, originalInput map[string]interface{}) map[string]any {
 	response := map[string]interface{}{
 		"request_id": requestID,
 		"type":       "control_response",
 	}
 
+	innerResponse := map[string]interface{}{
+		"subtype":    "success", // Always use "success" for control_response
+		"request_id": requestID,
+	}
+
 	if result.Approved {
-		response["response"] = map[string]interface{}{
-			"subtype":    "success",
-			"request_id": requestID,
+		// Allow: must include updatedInput (original or modified)
+		updatedInput := result.UpdatedInput
+		if updatedInput == nil {
+			// If no updatedInput provided, use the original input
+			updatedInput = originalInput
+		}
+		innerResponse["response"] = map[string]interface{}{
+			"behavior":     "allow",
+			"updatedInput": updatedInput,
 		}
 	} else {
-		response["response"] = map[string]interface{}{
-			"subtype":    "error",
-			"request_id": requestID,
-			"error":      result.Reason,
+		// Deny: must include message
+		message := result.Reason
+		if message == "" {
+			message = "User denied this request"
+		}
+		innerResponse["response"] = map[string]interface{}{
+			"behavior": "deny",
+			"message":  message,
 		}
 	}
+
+	response["response"] = innerResponse
 
 	return response
 }

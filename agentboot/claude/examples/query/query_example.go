@@ -492,11 +492,11 @@ func exampleResume() {
 	fmt.Println("=== Example 4: Resume Conversation ===")
 
 	result, err := launcher.Execute(ctx, "Continue our conversation about Go", agentboot.ExecutionOptions{
-		Handler:       handler,
-		ProjectPath:   "/tmp",
-		OutputFormat:  agentboot.OutputFormatText,
-		SessionID:     sessionID,
-		Resume:        true,
+		Handler:      handler,
+		ProjectPath:  "/tmp",
+		OutputFormat: agentboot.OutputFormatText,
+		SessionID:    sessionID,
+		Resume:       true,
 	})
 	if err != nil {
 		log.Printf("Execute failed: %v", err)
@@ -591,7 +591,30 @@ func exampleAskUserQuestion() {
 
 	fmt.Println("=== Example 8: AskUserQuestion Handling ===")
 
-	result, err := launcher.Execute(ctx, "Ask me what I want to help with today", agentboot.ExecutionOptions{
+	result, err := launcher.Execute(ctx, "Call AskUserQuestion tool to user to choose from 3 tasks", agentboot.ExecutionOptions{
+		Handler:      handler,
+		ProjectPath:  "/tmp",
+		OutputFormat: agentboot.OutputFormatStreamJSON,
+	})
+	if err != nil {
+		log.Printf("Execute failed: %v", err)
+		return
+	}
+
+	fmt.Printf("Text Output: %s\n", result.TextOutput())
+}
+
+// Example 9: With Approve handling
+func exampleApprovePermission() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	launcher := claude.NewLauncher(claude.Config{})
+	handler := NewStdinHandler()
+
+	fmt.Println("=== Example 9: Approve Handling ===")
+
+	result, err := launcher.Execute(ctx, "Call Bash git add -A", agentboot.ExecutionOptions{
 		Handler:      handler,
 		ProjectPath:  "/tmp",
 		OutputFormat: agentboot.OutputFormatStreamJSON,
@@ -638,6 +661,8 @@ func main() {
 		exampleWithTimeout()
 	case "8":
 		exampleAskUserQuestion()
+	case "9":
+		exampleApprovePermission()
 	default:
 		fmt.Printf("Unknown example: %s\n", example)
 		os.Exit(1)
