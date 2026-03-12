@@ -28,53 +28,6 @@ func extractTextFromContent(content []message.ContentBlock) string {
 	return result
 }
 
-// MockTBClient is a mock implementation of tbclient.TBClient
-type MockTBClient struct {
-	mock.Mock
-}
-
-func (m *MockTBClient) GetProviders(ctx context.Context) ([]tbclient.ProviderInfo, error) {
-	args := m.Called(ctx)
-	return args.Get(0).([]tbclient.ProviderInfo), args.Error(1)
-}
-
-func (m *MockTBClient) GetServices(ctx context.Context) ([]tbclient.ServiceInfo, error) {
-	args := m.Called(ctx)
-	return args.Get(0).([]tbclient.ServiceInfo), args.Error(1)
-}
-
-func (m *MockTBClient) GetDefaultRule(ctx context.Context) (*typ.Rule, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*typ.Rule), args.Error(1)
-}
-
-func (m *MockTBClient) GetDefaultService(ctx context.Context) (*tbclient.DefaultServiceConfig, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*tbclient.DefaultServiceConfig), args.Error(1)
-}
-
-func (m *MockTBClient) GetConnectionConfig(ctx context.Context) (*tbclient.ConnectionConfig, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*tbclient.ConnectionConfig), args.Error(1)
-}
-
-func (m *MockTBClient) SelectModel(ctx context.Context, req tbclient.ModelSelectionRequest) (*tbclient.ModelConfig, error) {
-	args := m.Called(ctx, req)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*tbclient.ModelConfig), args.Error(1)
-}
-
 // MockModelClient wraps mockmodel.MockModel to implement agent.ModelClient
 type MockModelClient struct {
 	*mockmodel.MockModel
@@ -103,7 +56,7 @@ func TestNewTinglyBoxAgent_NilConfig(t *testing.T) {
 }
 
 func TestNewTinglyBoxAgent_DefaultConfig(t *testing.T) {
-	mockTBClient := new(MockTBClient)
+	mockTBClient := new(tbclient.MockTBClient)
 	mockTBClient.On("GetConnectionConfig", mock.Anything).Return(&tbclient.ConnectionConfig{
 		BaseURL: "http://localhost:8080",
 		APIKey:  "test-key",
@@ -134,7 +87,7 @@ func TestNewTinglyBoxAgent_DefaultConfig(t *testing.T) {
 }
 
 func TestNewTinglyBoxAgent_NoTBClientAPIKey(t *testing.T) {
-	mockTBClient := new(MockTBClient)
+	mockTBClient := new(tbclient.MockTBClient)
 	mockTBClient.On("GetConnectionConfig", mock.Anything).Return(&tbclient.ConnectionConfig{
 		BaseURL: "http://localhost:8080",
 		APIKey:  "", // Empty API key
@@ -155,7 +108,7 @@ func TestNewTinglyBoxAgent_NoTBClientAPIKey(t *testing.T) {
 }
 
 func TestNewTinglyBoxAgent_TBClientGetConnectionConfigError(t *testing.T) {
-	mockTBClient := new(MockTBClient)
+	mockTBClient := new(tbclient.MockTBClient)
 	mockTBClient.On("GetConnectionConfig", mock.Anything).Return(nil, errors.New("connection error"))
 
 	cfg := &AgentConfig{
@@ -172,7 +125,7 @@ func TestNewTinglyBoxAgent_TBClientGetConnectionConfigError(t *testing.T) {
 func TestNewTinglyBoxAgent_TBClientGetDefaultRuleError(t *testing.T) {
 	t.Skip("TODO: Agent code has a bug - when GetDefaultRule fails, modelConfig is nil and causes panic at line 81")
 
-	mockTBClient := new(MockTBClient)
+	mockTBClient := new(tbclient.MockTBClient)
 	mockTBClient.On("GetConnectionConfig", mock.Anything).Return(&tbclient.ConnectionConfig{
 		BaseURL: "http://localhost:8080",
 		APIKey:  "test-key",
@@ -193,7 +146,7 @@ func TestNewTinglyBoxAgent_TBClientGetDefaultRuleError(t *testing.T) {
 }
 
 func TestNewTinglyBoxAgent_CustomToolExecutor(t *testing.T) {
-	mockTBClient := new(MockTBClient)
+	mockTBClient := new(tbclient.MockTBClient)
 	mockTBClient.On("GetConnectionConfig", mock.Anything).Return(&tbclient.ConnectionConfig{
 		BaseURL: "http://localhost:8080",
 		APIKey:  "test-key",
@@ -300,7 +253,7 @@ func TestTinglyBoxAgent_GetConfig(t *testing.T) {
 
 func TestNewAgentFactory(t *testing.T) {
 	cfg := DefaultSmartGuideConfig()
-	mockTBClient := new(MockTBClient)
+	mockTBClient := new(tbclient.MockTBClient)
 	factory := NewAgentFactory(cfg, mockTBClient, "test-provider", "test-model")
 	assert.NotNil(t, factory)
 	assert.Same(t, cfg, factory.config)
@@ -309,7 +262,7 @@ func TestNewAgentFactory(t *testing.T) {
 
 func TestAgentFactory_CreateAgent(t *testing.T) {
 	cfg := DefaultSmartGuideConfig()
-	mockTBClient := new(MockTBClient)
+	mockTBClient := new(tbclient.MockTBClient)
 	mockTBClient.On("GetConnectionConfig", mock.Anything).Return(&tbclient.ConnectionConfig{
 		BaseURL: "http://localhost:8080",
 		APIKey:  "test-key",
@@ -637,4 +590,48 @@ func TestBashTool_ComplexCommands(t *testing.T) {
 	assert.NoError(t, err)
 	text = extractTextFromContent(resp.Content)
 	assert.Contains(t, text, "success")
+}
+
+// CanCreateAgent tests
+
+func TestCanCreateAgent_NilTBClient(t *testing.T) {
+	result := CanCreateAgent(nil, "provider-uuid", "model-id")
+	assert.False(t, result, "Should return false when TBClient is nil")
+}
+
+func TestCanCreateAgent_EmptyProvider(t *testing.T) {
+	mockTBClient := new(tbclient.MockTBClient)
+	result := CanCreateAgent(mockTBClient, "", "model-id")
+	assert.False(t, result, "Should return false when provider is empty")
+}
+
+func TestCanCreateAgent_EmptyModel(t *testing.T) {
+	mockTBClient := new(tbclient.MockTBClient)
+	result := CanCreateAgent(mockTBClient, "provider-uuid", "")
+	assert.False(t, result, "Should return false when model is empty")
+}
+
+func TestCanCreateAgent_SelectModelError(t *testing.T) {
+	mockTBClient := new(tbclient.MockTBClient)
+	mockTBClient.On("SelectModel", mock.Anything, mock.Anything).Return(nil, errors.New("provider not found"))
+
+	result := CanCreateAgent(mockTBClient, "invalid-provider", "model-id")
+	assert.False(t, result, "Should return false when SelectModel fails")
+	mockTBClient.AssertExpectations(t)
+}
+
+func TestCanCreateAgent_Success(t *testing.T) {
+	mockTBClient := new(tbclient.MockTBClient)
+	mockTBClient.On("SelectModel", mock.Anything, mock.MatchedBy(func(r tbclient.ModelSelectionRequest) bool {
+		return r.ProviderUUID == "provider-uuid" && r.ModelID == "model-id"
+	})).Return(&tbclient.ModelConfig{
+		ProviderUUID: "provider-uuid",
+		ModelID:      "model-id",
+		APIKey:       "test-key",
+		BaseURL:      "http://localhost:8080",
+	}, nil)
+
+	result := CanCreateAgent(mockTBClient, "provider-uuid", "model-id")
+	assert.True(t, result, "Should return true when all validations pass")
+	mockTBClient.AssertExpectations(t)
 }

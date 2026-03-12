@@ -273,3 +273,33 @@ func (f *AgentFactory) CreateAgent(getStatusFunc func(chatID string) (*StatusInf
 		UpdateProjectFunc:  updateProjectFunc,
 	})
 }
+
+// CanCreateAgent checks if a SmartGuide agent can be created with the given configuration
+// Returns true if all required dependencies are available, false otherwise
+func CanCreateAgent(tbClient tbclient.TBClient, smartGuideProvider, smartGuideModel string) bool {
+	// Check if provider and model are configured
+	if smartGuideProvider == "" || smartGuideModel == "" {
+		return false
+	}
+
+	// Check if TBClient is available
+	if tbClient == nil {
+		return false
+	}
+
+	// Try to validate model configuration by calling SelectModel
+	ctx := context.Background()
+	_, err := tbClient.SelectModel(ctx, tbclient.ModelSelectionRequest{
+		ProviderUUID: smartGuideProvider,
+		ModelID:      smartGuideModel,
+	})
+	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"provider": smartGuideProvider,
+			"model":    smartGuideModel,
+		}).Warn("SmartGuide agent cannot be created: model config validation failed")
+		return false
+	}
+
+	return true
+}
