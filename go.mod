@@ -10,7 +10,7 @@ replace google.golang.org/genai => ./libs/go-genai
 
 replace github.com/tingly-dev/tingly-box/imbot => ./imbot
 
-//replace github.com/tingly-dev/tingly-agentscopt => ./tingly-scope
+//replace github.com/tingly-dev/tingly-agentscope => ./tingly-scope
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.25.0
@@ -32,9 +32,10 @@ require (
 	github.com/otiai10/copy v1.14.1
 	github.com/sirupsen/logrus v1.9.4
 	github.com/spf13/cobra v1.10.2
+	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
 	github.com/tiktoken-go/tokenizer v0.7.0
-	github.com/tingly-dev/tingly-agentscope v0.260310.2330
+	github.com/tingly-dev/tingly-agentscope v0.260312.1530
 	github.com/tingly-dev/tingly-box/imbot v0.1.0
 	go.opentelemetry.io/otel v1.40.0
 	go.opentelemetry.io/otel/metric v1.40.0
@@ -126,7 +127,6 @@ require (
 	github.com/sergeymakinen/go-ico v1.0.0-beta.0 // indirect
 	github.com/sergi/go-diff v1.4.0 // indirect
 	github.com/slack-go/slack v0.17.3 // indirect
-	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/tadvi/systray v0.0.0-20190226123456-11a2b8fa57af // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
