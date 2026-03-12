@@ -505,6 +505,13 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to create Smart Guide agent, falling back to Claude Code")
 
+		// Send warning notification to user before switching
+		h.SendText(hCtx, "⚠️ Smart Guide (@tb) is currently unavailable due to configuration issues.\n"+
+			"Reason: "+err.Error()+"\n"+
+			"Automatically switching to Claude Code (@cc) to continue your work.\n"+
+			"Type '@tb' to return to Smart Guide once the issue is resolved.\n"+
+			"Type '/help' for available commands.")
+
 		// Automatically switch to Claude Code agent
 		if err := h.handleHandoff(hCtx, agentClaudeCode); err != nil {
 			logrus.WithError(err).Error("Failed to fallback to Claude Code")
