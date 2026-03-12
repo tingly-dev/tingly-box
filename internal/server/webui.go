@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	assets "github.com/tingly-dev/tingly-box/internal"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/obs"
@@ -90,8 +91,14 @@ func (s *Server) UseUIEndpoints() {
 	}
 
 	// ImBot settings API routes - register from imbotsettings module
-	imbotSettingsHandler := imbotsettings.NewHandler(s.config)
-	imbotsettings.RegisterRoutes(apiV1, imbotSettingsHandler)
+	imbotSettingsHandler, err := imbotsettings.NewHandler(s.config)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to create imbotsettings handler, imbot settings APIs will not be available")
+	} else {
+		imbotsettings.RegisterRoutes(apiV1, imbotSettingsHandler)
+		// Store handler reference for shutdown
+		s.imbotSettingsHandler = imbotSettingsHandler
+	}
 
 	// Config apply API routes
 	configapplyHandler := configapply.NewHandler(s.config, s.host)

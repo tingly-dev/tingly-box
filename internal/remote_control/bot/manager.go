@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -37,7 +38,9 @@ type BotLifecycle interface {
 
 // runningBot tracks a running bot instance
 type runningBot struct {
-	cancel context.CancelFunc
+	cancel   context.CancelFunc
+	stopped  bool          // marker to indicate if bot is being stopped
+	doneChan chan struct{} // closed when goroutine finishes
 }
 
 // Manager manages the lifecycle of running bot instances
@@ -82,8 +85,13 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Check if already running
-	if _, exists := m.running[uuid]; exists {
+	// Check if already running or stopping
+	if rb, exists := m.running[uuid]; exists {
+		if rb.stopped {
+			// Bot is stopping, wait for it to finish
+			logrus.WithField("uuid", uuid).Debug("Bot is stopping, cannot start yet")
+			return fmt.Errorf("bot is stopping, please try again later")
+		}
 		logrus.WithField("uuid", uuid).Debug("Bot already running")
 		return nil
 	}
@@ -174,10 +182,12 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 
 	// Create cancellable context for this bot
 	ctx, cancel := context.WithCancel(parentCtx)
-	m.running[uuid] = &runningBot{cancel: cancel}
+	doneChan := make(chan struct{})
+	m.running[uuid] = &runningBot{cancel: cancel, doneChan: doneChan}
 
 	// Start bot in goroutine (dataPath and tbClient already captured above)
 	go func() {
+		defer close(doneChan) // Signal that goroutine is done
 		if err := runBotWithSettings(ctx, s, dataPath, m.sessionMgr, m.agentBoot, tbClient); err != nil {
 			logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
 		}
@@ -198,8 +208,33 @@ func (m *Manager) Stop(uuid string) {
 
 	if rb, exists := m.running[uuid]; exists {
 		logrus.WithField("uuid", uuid).Info("Stopping bot")
+		rb.stopped = true // Mark as stopping
 		rb.cancel()
-		delete(m.running, uuid)
+		// Don't delete from map yet - let the goroutine clean up
+	}
+}
+
+// WaitForStop waits for a bot to finish stopping (with timeout)
+func (m *Manager) WaitForStop(uuid string, timeout time.Duration) bool {
+	m.mu.RLock()
+	rb, exists := m.running[uuid]
+	if !exists {
+		m.mu.RUnlock()
+		return true // Already stopped
+	}
+	doneChan := rb.doneChan
+	m.mu.RUnlock()
+
+	if doneChan == nil {
+		return true
+	}
+
+	select {
+	case <-doneChan:
+		return true
+	case <-time.After(timeout):
+		logrus.WithField("uuid", uuid).Warn("Timeout waiting for bot to stop")
+		return false
 	}
 }
 
@@ -252,9 +287,10 @@ func (m *Manager) StopAll() {
 
 	for uuid, rb := range m.running {
 		logrus.WithField("uuid", uuid).Info("Stopping bot")
+		rb.stopped = true // Mark as stopping
 		rb.cancel()
+		// Don't delete from map - let goroutines clean up
 	}
-	m.running = make(map[string]*runningBot)
 }
 
 // Sync ensures the running bots match the enabled settings in the store.
@@ -298,12 +334,10 @@ func (m *Manager) Sync(ctx context.Context) error {
 	for uuid := range m.running {
 		if !enabledUUIDs[uuid] {
 			logrus.WithField("uuid", uuid).Info("Stopping disabled bot during sync")
-			// Need to get cancel func before releasing lock
+			// Mark as stopping and cancel
 			if rb, exists := m.running[uuid]; exists {
-				// Release lock before calling cancel to avoid deadlock
-				m.mu.Unlock()
+				rb.stopped = true
 				rb.cancel()
-				m.mu.Lock()
 			}
 		}
 	}
