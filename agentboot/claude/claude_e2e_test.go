@@ -90,8 +90,8 @@ func TestClaudeCodePermissionAskWithEmptyConfig(t *testing.T) {
 		OutputFormat:         agentboot.OutputFormatStreamJSON,
 		ProjectPath:          tempDir, // Use temp dir as working directory
 		SettingsPath:         emptyConfigPath,
-		PermissionMode:       "default", // Use Claude Code CLI's valid permission mode
-		PermissionPromptTool: "stdio",   // Use stdio for permission prompts
+		PermissionMode:       string(PermissionModeDefault), // Use constant for permission mode
+		PermissionPromptTool: "stdio",                       // Use stdio for permission prompts
 		Handler:              testHandler,
 		SessionID:            uuid.New().String(), // Use valid UUID for session ID
 		ChatID:               "test-chat",
@@ -223,17 +223,17 @@ func TestClaudeCodePermissionModes(t *testing.T) {
 	}{
 		{
 			name:             "DefaultMode",
-			permissionMode:   "default",
+			permissionMode:   string(PermissionModeDefault),
 			expectedBehavior: "Should use default permission behavior (ask for permissions)",
 		},
 		{
 			name:             "AutoMode",
-			permissionMode:   "auto",
+			permissionMode:   string(PermissionModeAuto),
 			expectedBehavior: "Should auto-approve permissions (bypassPermissions equivalent)",
 		},
 		{
 			name:             "DontAskMode",
-			permissionMode:   "dontAsk",
+			permissionMode:   string(PermissionModeDontAsk),
 			expectedBehavior: "Should not ask for permissions",
 		},
 	}
@@ -421,7 +421,7 @@ func TestClaudeCodeWithLocalConfig(t *testing.T) {
 		OutputFormat: agentboot.OutputFormatStreamJSON,
 		ProjectPath:  testDir,
 		// Don't set SettingsPath - use Claude Code's default local config
-		PermissionMode:       "default",
+		PermissionMode:       string(PermissionModeDefault),
 		PermissionPromptTool: "stdio",
 		Handler:              testHandler,
 		SessionID:            uuid.New().String(),
@@ -530,7 +530,7 @@ func TestClaudeCodeWithLocalConfigAutoMode(t *testing.T) {
 	opts := agentboot.ExecutionOptions{
 		OutputFormat:         agentboot.OutputFormatStreamJSON,
 		ProjectPath:          testDir,
-		PermissionMode:       "auto", // Auto-approve permissions
+		PermissionMode:       string(PermissionModeAuto), // Auto-approve permissions
 		PermissionPromptTool: "stdio",
 		SessionID:            uuid.New().String(),
 	}
