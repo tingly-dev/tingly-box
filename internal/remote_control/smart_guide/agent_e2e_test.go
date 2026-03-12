@@ -103,7 +103,9 @@ func TestRealAgentExecution(t *testing.T) {
 			validate: func(t *testing.T, response *message.Msg, err error) {
 				assert.NoError(t, err)
 				assert.NotNil(t, response)
-				t.Logf("Response: %s", response.Content)
+				if response != nil {
+					t.Logf("Response: %s", response.Content)
+				}
 			},
 		},
 		{
@@ -112,7 +114,9 @@ func TestRealAgentExecution(t *testing.T) {
 			validate: func(t *testing.T, response *message.Msg, err error) {
 				assert.NoError(t, err)
 				assert.NotNil(t, response)
-				t.Logf("Response: %s", response.Content)
+				if response != nil {
+					t.Logf("Response: %s", response.Content)
+				}
 			},
 		},
 		{
@@ -121,7 +125,9 @@ func TestRealAgentExecution(t *testing.T) {
 			validate: func(t *testing.T, response *message.Msg, err error) {
 				assert.NoError(t, err)
 				assert.NotNil(t, response)
-				t.Logf("Response: %s", response.Content)
+				if response != nil {
+					t.Logf("Response: %s", response.Content)
+				}
 			},
 		},
 	}

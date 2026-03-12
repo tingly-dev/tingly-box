@@ -130,7 +130,7 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 }
 
 // NewTinglyBoxAgentWithSession creates a new smart guide agent with conversation history from session
-func NewTinglyBoxAgentWithSession(config *AgentConfig, sess *SmartGuideSession) (*TinglyBoxAgent, error) {
+func NewTinglyBoxAgentWithSession(config *AgentConfig, messages []SessionMessage) (*TinglyBoxAgent, error) {
 	// Create agent normally
 	tbAgent, err := NewTinglyBoxAgent(config)
 	if err != nil {
@@ -138,11 +138,11 @@ func NewTinglyBoxAgentWithSession(config *AgentConfig, sess *SmartGuideSession) 
 	}
 
 	// Load conversation history into agent's memory
-	if sess != nil && len(sess.Messages) > 0 {
+	if len(messages) > 0 {
 		mem := tbAgent.ReActAgent.GetMemory()
 		if mem != nil {
 			ctx := context.Background()
-			for i, msg := range sess.Messages {
+			for i, msg := range messages {
 				contentPreview := msg.Content
 				if len(contentPreview) > 50 {
 					contentPreview = contentPreview[:50] + "..."
@@ -182,8 +182,7 @@ func NewTinglyBoxAgentWithSession(config *AgentConfig, sess *SmartGuideSession) 
 				}
 			}
 			logrus.WithFields(logrus.Fields{
-				"chatID":   sess.ChatID,
-				"msgCount": len(sess.Messages),
+				"msgCount": len(messages),
 			}).Info("Loaded conversation history into agent memory")
 		}
 	}
