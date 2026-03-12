@@ -2,6 +2,7 @@ package smart_guide
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-agentscope/pkg/message"
@@ -64,25 +65,36 @@ func (m *messageState) StateDict() map[string]any {
 }
 
 // LoadStateDict loads state from a dictionary
+// Returns nil on error to avoid breaking the flow
 func (m *messageState) LoadStateDict(ctx context.Context, state map[string]any) error {
 	messagesRaw, ok := state["messages"]
 	if !ok {
+		// No messages in state, initialize empty
+		m.messages = nil
 		return nil
 	}
 
 	msgsAny, ok := messagesRaw.([]any)
 	if !ok {
+		// Invalid format, initialize empty
+		logrus.WithField("type", fmt.Sprintf("%T", messagesRaw)).Warn("Session messages format invalid, returning empty")
+		m.messages = nil
 		return nil
 	}
 
 	m.messages = make([]*message.Msg, 0, len(msgsAny))
-	for _, msgAny := range msgsAny {
+	for i, msgAny := range msgsAny {
 		msgMap, ok := msgAny.(map[string]any)
 		if !ok {
+			logrus.WithField("index", i).Warn("Session message entry is not a map, skipping")
 			continue
 		}
 		msg, err := message.FromDict(msgMap)
 		if err != nil {
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"index": i,
+				"data":  fmt.Sprintf("%+v", msgMap),
+			}).Warn("Failed to deserialize session message, skipping")
 			continue
 		}
 		m.messages = append(m.messages, msg)
