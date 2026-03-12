@@ -206,40 +206,12 @@ func (h *Handler) SetScenarioFlag(c *gin.Context) {
 		return
 	}
 
-	// Get the old value before setting
-	oldValue := h.config.GetScenarioFlag(scenario, flag)
-
 	if err := h.config.SetScenarioFlag(scenario, flag, request.Value); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to save scenario flag: " + err.Error(),
 		})
 		return
-	}
-
-	// Handle special flags that require runtime actions
-	if scenario == typ.ScenarioGlobal && flag == "enable_remote_coder" && oldValue != request.Value {
-		if h.rcControl != nil {
-			if request.Value {
-				// Enable remote control: start the service and sync bots
-				logrus.Info("Enabling remote control...")
-				if err := h.rcControl.StartRemoteCoder(); err != nil {
-					logrus.WithError(err).Warn("Failed to start remote control")
-				} else {
-					// Sync bots after a short delay to allow the service to initialize
-					go func() {
-						ctx := context.Background()
-						if err := h.rcControl.SyncRemoteCoderBots(ctx); err != nil {
-							logrus.WithError(err).Warn("Failed to sync bots after enabling remote control")
-						}
-					}()
-				}
-			} else {
-				// Disable remote control: stop the service
-				logrus.Info("Disabling remote control...")
-				h.rcControl.StopRemoteCoder()
-			}
-		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

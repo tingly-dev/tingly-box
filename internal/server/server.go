@@ -872,15 +872,11 @@ func (s *Server) Start(port int) error {
 		}
 	}
 
-	// Start remote coder service
-	if s.config.GetScenarioFlag(typ.ScenarioGlobal, "enable_remote_coder") {
-		if err := s.StartRemoteCoder(); err != nil {
-			logrus.WithError(err).Warn("Failed to auto-start remote-coder")
-		} else {
-			logrus.Info("Remote-coder auto-start initiated")
-		}
+	// Start remote coder service (auto-start by default)
+	if err := s.StartRemoteCoder(); err != nil {
+		logrus.WithError(err).Warn("Failed to auto-start remote-coder")
 	} else {
-		logrus.Debug("Remote-coder auto-start disabled by scenario flag")
+		logrus.Info("Remote-coder auto-start initiated")
 	}
 
 	// Determine scheme and handle HTTPS setup
