@@ -155,6 +155,7 @@ func (bm *BotManager) StartBot(ctx context.Context, uuid string) error {
 
 // StopBot stops a single bot by UUID.
 // If the bot is not running, this is a no-op.
+// Waits up to 5 seconds for the bot to fully stop before returning.
 func (bm *BotManager) StopBot(uuid string) error {
 	if bm == nil {
 		return fmt.Errorf("bot manager is nil")
@@ -179,6 +180,12 @@ func (bm *BotManager) StopBot(uuid string) error {
 
 	// Stop the bot
 	bm.manager.Stop(uuid)
+
+	// Wait for bot to fully stop (with 5 second timeout)
+	// Do this outside the lock to avoid deadlock
+	bm.mu.Unlock()
+	bm.manager.WaitForStop(uuid, 5*time.Second)
+	bm.mu.Lock()
 
 	logrus.WithFields(logrus.Fields{
 		"uuid":     uuid,

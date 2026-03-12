@@ -2,6 +2,7 @@ package imbotsettings
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -483,6 +484,29 @@ func normalizeAllowlist(values []string) []string {
 // BotManager returns the bot manager for server integration
 func (h *Handler) BotManager() *BotManager {
 	return h.botMgr
+}
+
+// StartAllEnabled starts all enabled bots (delegates to BotManager)
+func (h *Handler) StartAllEnabled(ctx context.Context) error {
+	if h.botMgr == nil {
+		return fmt.Errorf("bot manager is nil")
+	}
+	return h.botMgr.StartAllEnabled(ctx)
+}
+
+// StopAll stops all running bots (delegates to BotManager)
+func (h *Handler) StopAll() {
+	if h.botMgr != nil {
+		h.botMgr.StopAll()
+	}
+}
+
+// Sync ensures running bots match enabled settings (delegates to BotManager)
+func (h *Handler) Sync(ctx context.Context) error {
+	if h.botMgr == nil {
+		return fmt.Errorf("bot manager is nil")
+	}
+	return h.botMgr.Sync(ctx)
 }
 
 // Shutdown stops all running bots and cleans up resources
