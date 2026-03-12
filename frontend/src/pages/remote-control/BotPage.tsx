@@ -424,17 +424,6 @@ const BotPage = () => {
                 >
                     <Typography variant="h6">{botDialogMode === 'edit' ? 'Edit Bot Configuration' : 'Add Bot Configuration'}</Typography>
                     <Stack spacing={2}>
-                        <TextField
-                            label="Alias"
-                            placeholder="My Bot"
-                            value={botNameDraft}
-                            onChange={(e) => setBotNameDraft(e.target.value)}
-                            fullWidth
-                            size="small"
-                            helperText="Optional: a friendly name for this bot configuration."
-                            disabled={botSaving}
-                        />
-
                         <Stack spacing={1}>
                             <Typography variant="body2" color="text.secondary">
                                 Platform
@@ -467,6 +456,17 @@ const BotPage = () => {
                                 disabled={botSaving}
                             />
                         )}
+
+                        <TextField
+                            label="Alias"
+                            placeholder="My Bot"
+                            value={botNameDraft}
+                            onChange={(e) => setBotNameDraft(e.target.value)}
+                            fullWidth
+                            size="small"
+                            helperText="Optional: a friendly name for this bot configuration."
+                            disabled={botSaving}
+                        />
 
                         <TextField
                             label="Proxy URL"
