@@ -375,7 +375,7 @@ const BotPage = () => {
                                 providers={providers}
                                 onEdit={() => handleOpenBotTokenDialog(bot.uuid)}
                                 onDelete={() => handleDeleteBot(bot.uuid!)}
-                                onBotToggle={handleBotToggle}
+                                onBotToggle={() => handleBotToggle(bot.uuid!, !bot.enabled)}
                                 onModelClick={() => handleSmartGuideSelect(bot.uuid!)}
                                 onCWDChange={(cwd) => handleCWDChange(bot.uuid!, cwd)}
                                 isToggling={togglingBotUuid === bot.uuid}

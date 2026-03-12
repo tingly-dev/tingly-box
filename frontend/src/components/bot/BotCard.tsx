@@ -96,7 +96,7 @@ interface BotCardProps {
     providers: Provider[];
     onEdit: () => void;
     onDelete: () => void;
-    onBotToggle: (enabled: boolean) => void;
+    onBotToggle: () => void;
     onModelClick: () => void;
     onCWDChange: (cwd: string) => void;
     isToggling?: boolean;
@@ -198,7 +198,7 @@ const BotCard: React.FC<BotCardProps> = ({
                     <Tooltip title={isActive ? 'Disable Bot' : 'Enable Bot'}>
                         <Switch
                             checked={isActive}
-                            onChange={() => onBotToggle(!isActive)}
+                            onChange={() => onBotToggle()}
                             size="small"
                             color="success"
                             disabled={isToggling}
