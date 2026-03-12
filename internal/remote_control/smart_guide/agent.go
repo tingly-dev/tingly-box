@@ -74,7 +74,7 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 		modelConfig = &anthropic.Config{
 			Model:   config.SmartGuideModel,
 			APIKey:  endpoint.APIKey,
-			BaseURL: endpoint.BaseURL, // http://localhost:12580/tingly/_smart_guide/v1
+			BaseURL: endpoint.BaseURL, // http://localhost:12580/tingly/_smart_guide/
 		}
 		logrus.WithFields(logrus.Fields{
 			"provider": config.SmartGuideProvider,

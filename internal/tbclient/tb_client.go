@@ -190,7 +190,7 @@ func (c *TBClientImpl) GetDataDir() string {
 
 // HTTPEndpointConfig represents HTTP endpoint configuration for a scenario
 type HTTPEndpointConfig struct {
-	BaseURL string // e.g., "http://localhost:12580/tingly/_smart_guide/v1"
+	BaseURL string // e.g., "http://localhost:12580/tingly/_smart_guide/"
 	APIKey  string // tingly-box token
 }
 
@@ -236,7 +236,7 @@ func (c *TBClientImpl) GetHTTPEndpointForScenario(ctx context.Context, scenario 
 func (c *TBClientImpl) GetScenarioEndpointPath(scenario typ.RuleScenario) string {
 	switch scenario {
 	case typ.ScenarioSmartGuide:
-		return "/tingly/_smart_guide/v1"
+		return "/tingly/_smart_guide"
 	case typ.ScenarioClaudeCode:
 		return "/tingly/claude_code"
 	case typ.ScenarioOpenCode:
@@ -245,7 +245,7 @@ func (c *TBClientImpl) GetScenarioEndpointPath(scenario typ.RuleScenario) string
 		return "/tingly/xcode"
 	default:
 		// Default to OpenAI scenario path
-		return "/tingly/v1"
+		return "/tingly/openai"
 	}
 }
 
