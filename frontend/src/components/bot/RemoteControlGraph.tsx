@@ -3,7 +3,7 @@ import type {BotSettings} from '@/types/bot.ts';
 import type {Provider} from '@/types/provider.ts';
 import {ArrowNode, NodeContainer} from '../nodes';
 import ImBotNode from '../nodes/ImBotNode.tsx';
-import SmartGuideNode from '../nodes/SmartGuideNode.tsx';
+import BotModelNode from '../nodes/BotModelNode.tsx';
 import CWDNode from '../nodes/ConfigNode.tsx';
 
 const graphRowStyles = (theme: any) => ({
@@ -22,7 +22,7 @@ interface RemoteGraphRowProps {
     isBotEnabled: boolean;
     readOnly?: boolean;
     onCWDChange: (cwd: string) => void;
-    onSmartGuideClick?: () => void;
+    onModelClick?: () => void;
     showAgentNode?: boolean; // Optional prop to show Agent node for future use
 }
 
@@ -40,7 +40,7 @@ const RemoteControlGraph: React.FC<RemoteGraphRowProps> = ({
     isBotEnabled,
     readOnly = false,
     onCWDChange,
-    onSmartGuideClick,
+    onModelClick,
     showAgentNode = false, // Default to false for simplified 3-node layout
 }) => {
     const providerName = getProviderName(imbot.smartguide_provider, providers);
@@ -54,12 +54,12 @@ const RemoteControlGraph: React.FC<RemoteGraphRowProps> = ({
             <ArrowNode direction="forward"/>
 
             <NodeContainer>
-                <SmartGuideNode
+                <BotModelNode
                     provider={imbot.smartguide_provider}
                     providerName={providerName}
                     model={imbot.smartguide_model}
                     active={isBotEnabled}
-                    onClick={readOnly ? undefined : onSmartGuideClick}
+                    onClick={readOnly ? undefined : onModelClick}
                 />
             </NodeContainer>
 

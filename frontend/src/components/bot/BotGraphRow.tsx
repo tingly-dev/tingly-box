@@ -40,7 +40,7 @@ interface BotGraphRowProps {
     isExpanded: boolean;
     onToggleExpand: () => void;
     onCWDChange: (cwd: string) => void;
-    onSmartGuideClick?: () => void;
+    onModelClick?: () => void;
     onBotToggle?: (uuid: string, enabled: boolean) => void;
     onEdit?: () => void;
     onDelete?: () => void;
@@ -54,7 +54,7 @@ const BotGraphRow: React.FC<BotGraphRowProps> = ({
     isExpanded,
     onToggleExpand,
     onCWDChange,
-    onSmartGuideClick,
+    onModelClick,
     onBotToggle,
     onEdit,
     onDelete,
@@ -145,7 +145,7 @@ const BotGraphRow: React.FC<BotGraphRowProps> = ({
                                 isBotEnabled={isBotEnabled}
                                 readOnly={readOnly}
                                 onCWDChange={onCWDChange}
-                                onSmartGuideClick={onSmartGuideClick}
+                                onModelClick={onModelClick}
                             />
                         </Box>
                     </Collapse>

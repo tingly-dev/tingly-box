@@ -17,7 +17,7 @@ import type {BotSettings} from '@/types/bot';
 import type {Provider} from '@/types/provider';
 import {CrossNode, NodeContainer} from '../nodes';
 import ImBotNode from '../nodes/ImBotNode';
-import SmartGuideNode from '../nodes/SmartGuideNode';
+import BotModelNode from '../nodes/BotModelNode';
 import {useCallback, useState} from 'react';
 
 // Use same style constants as RuleGraph for consistency
@@ -97,7 +97,7 @@ interface BotCardProps {
     onEdit: () => void;
     onDelete: () => void;
     onBotToggle: (enabled: boolean) => void;
-    onSmartGuideClick: () => void;
+    onModelClick: () => void;
     onCWDChange: (cwd: string) => void;
     isToggling?: boolean;
 }
@@ -108,7 +108,7 @@ const BotCard: React.FC<BotCardProps> = ({
                                              onEdit,
                                              onDelete,
                                              onBotToggle,
-                                             onSmartGuideClick,
+                                             onModelClick,
                                              onCWDChange,
                                              isToggling = false,
                                          }) => {
@@ -241,12 +241,12 @@ const BotCard: React.FC<BotCardProps> = ({
                                 <CrossNode/>
 
                                 <NodeContainer>
-                                    <SmartGuideNode
+                                    <BotModelNode
                                         provider={bot.smartguide_provider}
                                         providerName={providerName}
                                         model={bot.smartguide_model}
                                         active={isActive}
-                                        onClick={isActive ? onSmartGuideClick : undefined}
+                                        onClick={isActive ? onModelClick : undefined}
                                     />
                                 </NodeContainer>
 

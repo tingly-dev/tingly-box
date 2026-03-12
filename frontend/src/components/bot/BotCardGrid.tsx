@@ -133,7 +133,7 @@ const BotCardGrid: React.FC<BotCardGridProps> = ({
                                 onEdit={() => onEdit?.(bot.uuid!)}
                                 onDelete={() => handleDeleteClick(bot.uuid!)}
                                 onBotToggle={(enabled) => handleBotToggle(bot.uuid!, enabled)}
-                                onSmartGuideClick={() => handleSmartGuideClick(bot.uuid!)}
+                                onModelClick={() => handleSmartGuideClick(bot.uuid!)}
                                 onCWDChange={(cwd) => handleCWDChange(bot.uuid!, cwd)}
                                 isToggling={isToggling}
                             />

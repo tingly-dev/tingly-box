@@ -159,7 +159,7 @@ const BotTable = ({
                                     isExpanded={isExpanded}
                                     onToggleExpand={() => handleToggleExpand(bot.uuid || '')}
                                     onCWDChange={(cwd) => onCWDChange?.(bot.uuid!, cwd)}
-                                    onSmartGuideClick={() => onSmartGuideSelect?.(bot.uuid!)}
+                                    onModelClick={() => onSmartGuideSelect?.(bot.uuid!)}
                                     onBotToggle={onBotToggle}
                                     onEdit={onEdit ? () => onEdit(bot.uuid!) : undefined}
                                     onDelete={() => handleDeleteClick(bot.uuid!)}

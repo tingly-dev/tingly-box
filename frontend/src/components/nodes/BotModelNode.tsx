@@ -2,7 +2,7 @@ import { Box, Typography, styled, Divider, Chip, Tooltip } from '@mui/material';
 import { NODE_LAYER_STYLES } from './styles';
 import { useCallback } from 'react';
 
-const StyledSmartGuideNode = styled(Box, { shouldForwardProp: (prop) => prop !== 'active' && prop !== 'clickable' })<{
+const StyledBotModelNode = styled(Box, { shouldForwardProp: (prop) => prop !== 'active' && prop !== 'clickable' })<{
     active: boolean;
     clickable: boolean;
 }>(({ active, clickable, theme }) => ({
@@ -30,7 +30,7 @@ const StyledSmartGuideNode = styled(Box, { shouldForwardProp: (prop) => prop !==
     } : {},
 }));
 
-interface SmartGuideNodeProps {
+interface BotModelNodeProps {
     provider?: string;
     providerName?: string;  // Display name of the provider
     model?: string;
@@ -38,7 +38,7 @@ interface SmartGuideNodeProps {
     onClick?: () => void;
 }
 
-const SmartGuideNode: React.FC<SmartGuideNodeProps> = ({
+const BotModelNode: React.FC<BotModelNodeProps> = ({
     provider,
     providerName,
     model,
@@ -54,13 +54,13 @@ const SmartGuideNode: React.FC<SmartGuideNodeProps> = ({
     }, [onClick]);
 
     return (
-        <StyledSmartGuideNode active={active} clickable={clickable} onClick={handleClick}>
+        <StyledBotModelNode active={active} clickable={clickable} onClick={handleClick}>
             {/* Top Layer - Provider name and model display (same as ProviderNode) */}
             <Box sx={NODE_LAYER_STYLES.topLayer}>
                 <Tooltip title={
                     hasConfig
                         ? <>Provider: {providerName || provider}<br/>Model: {model}</>
-                        : 'Click to configure SmartGuide model'
+                        : 'Click to configure bot model'
                 } arrow>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
                         <Typography
@@ -70,11 +70,11 @@ const SmartGuideNode: React.FC<SmartGuideNodeProps> = ({
                             sx={{
                                 ...NODE_LAYER_STYLES.typography,
                                 fontStyle: !provider ? 'italic' : 'normal',
-                                width: '80px',
+                                width: '120px',
                                 textAlign: 'center',
                             }}
                         >
-                            {providerName || provider || 'select provider'}
+                            {providerName || provider || 'select model'}
                         </Typography>
 
                         {provider && (
@@ -105,14 +105,14 @@ const SmartGuideNode: React.FC<SmartGuideNodeProps> = ({
             {/* Bottom Layer - Chip showing "SmartGuide" */}
             <Box sx={NODE_LAYER_STYLES.bottomLayer}>
                 <Chip
-                    label="SmartGuide"
+                    label="Model"
                     size="small"
                     color={hasConfig ? 'warning' : 'default'}
                     sx={{ height: 24, fontSize: '0.7rem', fontWeight: 500 }}
                 />
             </Box>
-        </StyledSmartGuideNode>
+        </StyledBotModelNode>
     );
 };
 
-export default SmartGuideNode;
+export default BotModelNode;
