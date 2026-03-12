@@ -311,7 +311,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 								}
 
 								// Send control response via stdin
-								input := l.sendPermissionResponseNew(requestID, result)
+								input := l.sendPermissionResponseNew(requestID, result, req.Input)
 								inputSource.Write(input)
 							} else {
 								logrus.Warn("Permission handler is nil, cannot process permission request")
@@ -791,34 +791,37 @@ func (l *Launcher) parsePermissionRequest(data map[string]interface{}) agentboot
 }
 
 // sendPermissionResponse sends a permission response to Claude Code
-func (l *Launcher) sendPermissionResponseNew(requestID string, result agentboot.PermissionResult) map[string]any {
+func (l *Launcher) sendPermissionResponseNew(requestID string, result agentboot.PermissionResult, originalInput map[string]interface{}) map[string]any {
 	response := map[string]interface{}{
 		"request_id": requestID,
 		"type":       "control_response",
 	}
 
 	innerResponse := map[string]interface{}{
+		"subtype":    "success", // Always use "success" for control_response
 		"request_id": requestID,
 	}
 
 	if result.Approved {
-		innerResponse["subtype"] = "success"
-		// Include behavior field for successful approval
-		if result.UpdatedInput != nil {
-			innerResponse["response"] = map[string]interface{}{
-				"behavior":     "allow",
-				"updatedInput": result.UpdatedInput,
-			}
-		} else {
-			innerResponse["response"] = map[string]interface{}{
-				"behavior": "allow",
-			}
+		// Allow: must include updatedInput (original or modified)
+		updatedInput := result.UpdatedInput
+		if updatedInput == nil {
+			// If no updatedInput provided, use the original input
+			updatedInput = originalInput
+		}
+		innerResponse["response"] = map[string]interface{}{
+			"behavior":     "allow",
+			"updatedInput": updatedInput,
 		}
 	} else {
-		innerResponse["subtype"] = "error"
-		innerResponse["error"] = result.Reason
-		if result.Reason == "" {
-			innerResponse["error"] = "User denied this request"
+		// Deny: must include message
+		message := result.Reason
+		if message == "" {
+			message = "User denied this request"
+		}
+		innerResponse["response"] = map[string]interface{}{
+			"behavior": "deny",
+			"message":  message,
 		}
 	}
 
