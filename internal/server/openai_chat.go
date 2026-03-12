@@ -37,7 +37,7 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	}
 
 	// Forward request to provider
-	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
+	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
 	fc := NewForwardContext(nil, provider)
 	response, err := ForwardOpenAIChat(fc, wrapper, req)
 	if err != nil {
@@ -650,7 +650,13 @@ func (s *Server) convertMessagesToResponseInputItems(messages []openai.ChatCompl
 // isValidRuleScenario checks if the given scenario is a valid RuleScenario
 func isValidRuleScenario(scenario typ.RuleScenario) bool {
 	switch scenario {
-	case typ.ScenarioOpenAI, typ.ScenarioAnthropic, typ.ScenarioAgent, typ.ScenarioCodex, typ.ScenarioClaudeCode, typ.ScenarioOpenCode, typ.ScenarioXcode:
+	case typ.ScenarioOpenAI, typ.ScenarioAnthropic:
+		return true
+	case typ.ScenarioAgent:
+		return true
+	case typ.ScenarioCodex, typ.ScenarioClaudeCode, typ.ScenarioOpenCode, typ.ScenarioXcode:
+		return true
+	case typ.ScenarioSmartGuide:
 		return true
 	default:
 		return false

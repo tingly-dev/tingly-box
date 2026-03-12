@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-agentscope/pkg/message"
+	"github.com/tingly-dev/tingly-agentscope/pkg/types"
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/ask"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
@@ -110,6 +112,27 @@ func NewBotHandler(
 
 	// Initialize handoff manager
 	handoffMgr := smart_guide.NewHandoffManager()
+
+	// Initialize SmartGuide rule if configured
+	if tbClient != nil && botSetting.SmartGuideProvider != "" && botSetting.SmartGuideModel != "" {
+		// Use bot-specific rule creation with bot UUID and name
+		if err := tbClient.EnsureSmartGuideRuleForBot(ctx, botSetting.UUID, botSetting.Name, botSetting.SmartGuideProvider, botSetting.SmartGuideModel); err != nil {
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"bot_uuid": botSetting.UUID,
+				"bot_name": botSetting.Name,
+				"provider": botSetting.SmartGuideProvider,
+				"model":    botSetting.SmartGuideModel,
+			}).Error("Failed to initialize SmartGuide rule, @tb will be unavailable")
+			// Don't block startup, SmartGuide will return errors when used
+		} else {
+			logrus.WithFields(logrus.Fields{
+				"bot_uuid": botSetting.UUID,
+				"bot_name": botSetting.Name,
+				"provider": botSetting.SmartGuideProvider,
+				"model":    botSetting.SmartGuideModel,
+			}).Info("SmartGuide rule initialized successfully")
+		}
+	}
 
 	// Create SmartGuide session store using data directory from tbClient
 	var tbSessionStore *smart_guide.SessionStore
@@ -433,34 +456,21 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 		logrus.WithField("defaultPath", projectPath).Info("Using default project path")
 	}
 
-	// 1. Load session from file (or create new one)
-	var sess *smart_guide.SmartGuideSession
+	// 1. Load messages from session store
+	var messages []*message.Msg
 	if h.tbSessionStore != nil {
-		sess, err = h.tbSessionStore.Load(hCtx.ChatID)
+		messages, err = h.tbSessionStore.Load(hCtx.ChatID)
 		if err != nil {
-			logrus.WithError(err).Warn("Failed to load session, creating new one")
-			sess = &smart_guide.SmartGuideSession{
-				ChatID:    hCtx.ChatID,
-				Platform:  string(hCtx.Platform),
-				CreatedAt: time.Now(),
-				Messages:  []smart_guide.SessionMessage{},
-			}
+			logrus.WithError(err).Warn("Failed to load session, starting with empty history")
+			messages = nil
 		}
-
-		// Update current project in session
-		sess.CurrentProject = projectPath
 
 		logrus.WithFields(logrus.Fields{
 			"chatID":       hCtx.ChatID,
-			"historyCount": len(sess.Messages),
-		}).Info("Loaded SmartGuide session")
-	} else {
-		// No session store, create empty session
-		sess = &smart_guide.SmartGuideSession{
-			ChatID:   hCtx.ChatID,
-			Messages: []smart_guide.SessionMessage{},
-		}
+			"historyCount": len(messages),
+		}).Info("Loaded SmartGuide messages")
 	}
+	// else: messages remains nil, which is fine
 
 	// 2. Create agent config
 	agentConfig := &smart_guide.AgentConfig{
@@ -501,7 +511,7 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 	}
 
 	// 3. Create agent with history
-	agent, err := smart_guide.NewTinglyBoxAgentWithSession(agentConfig, sess)
+	agent, err := smart_guide.NewTinglyBoxAgentWithSession(agentConfig, messages)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to create Smart Guide agent, falling back to Claude Code")
 
@@ -571,19 +581,15 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 	// 9. Save messages to session file
 	if h.tbSessionStore != nil {
 		// Save user message
-		userMsg := smart_guide.SessionMessage{
-			Role:      "user",
-			Content:   text,
-			Timestamp: time.Now(),
-		}
-		userContentPreview := userMsg.Content
-		if len(userContentPreview) > 50 {
-			userContentPreview = userContentPreview[:50] + "..."
+		userMsg := message.NewMsg("user", text, types.RoleUser)
+		contentPreview := text
+		if len(contentPreview) > 50 {
+			contentPreview = contentPreview[:50] + "..."
 		}
 		logrus.WithFields(logrus.Fields{
 			"chatID":  hCtx.ChatID,
 			"role":    userMsg.Role,
-			"content": userContentPreview,
+			"content": contentPreview,
 		}).Debug("Saving user message to session")
 
 		if err := h.tbSessionStore.AddMessage(hCtx.ChatID, userMsg); err != nil {
@@ -591,19 +597,15 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 		}
 
 		// Save assistant response
-		assistantMsg := smart_guide.SessionMessage{
-			Role:      "assistant",
-			Content:   responseText,
-			Timestamp: time.Now(),
-		}
-		assistantContentPreview := assistantMsg.Content
-		if len(assistantContentPreview) > 50 {
-			assistantContentPreview = assistantContentPreview[:50] + "..."
+		assistantMsg := message.NewMsg("assistant", responseText, types.RoleAssistant)
+		assistantPreview := responseText
+		if len(assistantPreview) > 50 {
+			assistantPreview = assistantPreview[:50] + "..."
 		}
 		logrus.WithFields(logrus.Fields{
 			"chatID":  hCtx.ChatID,
 			"role":    assistantMsg.Role,
-			"content": assistantContentPreview,
+			"content": assistantPreview,
 		}).Debug("Saving assistant message to session")
 
 		if err := h.tbSessionStore.AddMessage(hCtx.ChatID, assistantMsg); err != nil {

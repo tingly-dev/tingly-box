@@ -49,6 +49,37 @@ func (m *MockTBClient) GetConnectionConfig(ctx context.Context) (*ConnectionConf
 	return args.Get(0).(*ConnectionConfig), args.Error(1)
 }
 
+// GetDefaultRuleForScenario mocks the GetDefaultRuleForScenario method
+func (m *MockTBClient) GetDefaultRuleForScenario(ctx context.Context, scenario typ.RuleScenario) (*typ.Rule, error) {
+	args := m.Called(ctx, scenario)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*typ.Rule), args.Error(1)
+}
+
+// GetHTTPEndpointForScenario mocks the GetHTTPEndpointForScenario method
+func (m *MockTBClient) GetHTTPEndpointForScenario(ctx context.Context, scenario typ.RuleScenario) (*HTTPEndpointConfig, error) {
+	args := m.Called(ctx, scenario)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*HTTPEndpointConfig), args.Error(1)
+}
+
+// EnsureSmartGuideRule mocks the EnsureSmartGuideRule method
+// Deprecated: Use EnsureSmartGuideRuleForBot for bot-specific rules
+func (m *MockTBClient) EnsureSmartGuideRule(ctx context.Context, providerUUID, modelID string) error {
+	args := m.Called(ctx, providerUUID, modelID)
+	return args.Error(0)
+}
+
+// EnsureSmartGuideRuleForBot mocks the EnsureSmartGuideRuleForBot method
+func (m *MockTBClient) EnsureSmartGuideRuleForBot(ctx context.Context, botUUID, botName, providerUUID, modelID string) error {
+	args := m.Called(ctx, botUUID, botName, providerUUID, modelID)
+	return args.Error(0)
+}
+
 // SelectModel mocks the SelectModel method
 func (m *MockTBClient) SelectModel(ctx context.Context, req ModelSelectionRequest) (*ModelConfig, error) {
 	args := m.Called(ctx, req)

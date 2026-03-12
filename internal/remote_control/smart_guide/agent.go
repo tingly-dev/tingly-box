@@ -10,8 +10,8 @@ import (
 	"github.com/tingly-dev/tingly-agentscope/pkg/message"
 	"github.com/tingly-dev/tingly-agentscope/pkg/model/anthropic"
 	"github.com/tingly-dev/tingly-agentscope/pkg/tool"
-	"github.com/tingly-dev/tingly-agentscope/pkg/types"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // TinglyBoxAgent is the smart guide agent (@tb)
@@ -60,26 +60,27 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 	}
 
 	if config.TBClient != nil {
-		// Get provider configuration via SelectModel
+		// Get HTTP endpoint configuration for SmartGuide scenario
 		ctx := context.Background()
-		modelCfg, err := config.TBClient.SelectModel(ctx, tbclient.ModelSelectionRequest{
-			ProviderUUID: config.SmartGuideProvider,
-			ModelID:      config.SmartGuideModel,
-		})
+		endpoint, err := config.TBClient.GetHTTPEndpointForScenario(
+			ctx,
+			typ.ScenarioSmartGuide,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get model config for provider %s, model %s: %w", config.SmartGuideProvider, config.SmartGuideModel, err)
+			return nil, fmt.Errorf("failed to get smartguide HTTP endpoint: %w", err)
 		}
 
-		// Use bot setting configuration
+		// Use TB HTTP endpoint configuration
 		modelConfig = &anthropic.Config{
-			Model:   modelCfg.ModelID,
-			APIKey:  modelCfg.APIKey,
-			BaseURL: modelCfg.BaseURL,
+			Model:   config.SmartGuideModel,
+			APIKey:  endpoint.APIKey,
+			BaseURL: endpoint.BaseURL, // http://localhost:12580/tingly/_smart_guide/
 		}
 		logrus.WithFields(logrus.Fields{
 			"provider": config.SmartGuideProvider,
 			"model":    config.SmartGuideModel,
-		}).Info("Using bot setting configuration for smartguide agent")
+			"endpoint": endpoint.BaseURL,
+		}).Info("Using TB HTTP endpoint for smartguide agent")
 	}
 
 	if modelConfig == nil {
@@ -130,7 +131,7 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 }
 
 // NewTinglyBoxAgentWithSession creates a new smart guide agent with conversation history from session
-func NewTinglyBoxAgentWithSession(config *AgentConfig, sess *SmartGuideSession) (*TinglyBoxAgent, error) {
+func NewTinglyBoxAgentWithSession(config *AgentConfig, messages []*message.Msg) (*TinglyBoxAgent, error) {
 	// Create agent normally
 	tbAgent, err := NewTinglyBoxAgent(config)
 	if err != nil {
@@ -138,52 +139,34 @@ func NewTinglyBoxAgentWithSession(config *AgentConfig, sess *SmartGuideSession) 
 	}
 
 	// Load conversation history into agent's memory
-	if sess != nil && len(sess.Messages) > 0 {
+	if len(messages) > 0 {
 		mem := tbAgent.ReActAgent.GetMemory()
 		if mem != nil {
 			ctx := context.Background()
-			for i, msg := range sess.Messages {
-				contentPreview := msg.Content
-				if len(contentPreview) > 50 {
-					contentPreview = contentPreview[:50] + "..."
+			for i, msg := range messages {
+				contentStr := ""
+				if s, ok := msg.Content.(string); ok {
+					contentStr = s
+					if len(contentStr) > 50 {
+						contentStr = contentStr[:50] + "..."
+					}
 				}
 
 				logrus.WithFields(logrus.Fields{
 					"index":   i,
 					"role":    msg.Role,
-					"content": contentPreview,
+					"content": contentStr,
 				}).Debug("Loading message from session into agent memory")
 
-				// Convert string role to types.Role
-				var role types.Role
-				if msg.Role == "user" {
-					role = types.RoleUser
-				} else if msg.Role == "assistant" {
-					role = types.RoleAssistant
-				} else {
-					// Skip unknown roles
-					logrus.WithField("role", msg.Role).Warn("Unknown role, skipping message")
-					continue
-				}
-
-				// message.NewMsg takes (name, content, role)
-				// name is typically the role identifier, role is types.Role
-				agentMsg := message.NewMsg(string(role), msg.Content, role)
-				if err := mem.Add(ctx, agentMsg); err != nil {
+				if err := mem.Add(ctx, msg); err != nil {
 					logrus.WithError(err).WithFields(logrus.Fields{
 						"index": i,
 						"role":  msg.Role,
 					}).Warn("Failed to add message to memory")
-				} else {
-					logrus.WithFields(logrus.Fields{
-						"index": i,
-						"role":  msg.Role,
-					}).Debug("Successfully loaded message into memory")
 				}
 			}
 			logrus.WithFields(logrus.Fields{
-				"chatID":   sess.ChatID,
-				"msgCount": len(sess.Messages),
+				"msgCount": len(messages),
 			}).Info("Loaded conversation history into agent memory")
 		}
 	}

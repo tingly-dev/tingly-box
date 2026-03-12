@@ -57,6 +57,7 @@ const (
 	ScenarioClaudeCode RuleScenario = "claude_code"
 	ScenarioOpenCode   RuleScenario = "opencode"
 	ScenarioXcode      RuleScenario = "xcode"
+	ScenarioSmartGuide RuleScenario = "_smart_guide"
 	ScenarioGlobal     RuleScenario = "_global" // Global flags that apply to all scenarios
 )
 
@@ -64,10 +65,10 @@ const (
 type ThinkingEffortLevel string
 
 const (
-	ThinkingEffortLow    ThinkingEffortLevel = "low"
-	ThinkingEffortMedium ThinkingEffortLevel = "medium"
-	ThinkingEffortHigh   ThinkingEffortLevel = "high"
-	ThinkingEffortMax    ThinkingEffortLevel = "max"
+	ThinkingEffortLow     ThinkingEffortLevel = "low"
+	ThinkingEffortMedium  ThinkingEffortLevel = "medium"
+	ThinkingEffortHigh    ThinkingEffortLevel = "high"
+	ThinkingEffortMax     ThinkingEffortLevel = "max"
 	ThinkingEffortDefault ThinkingEffortLevel = "" // Use model default
 )
 
@@ -96,7 +97,7 @@ type ScenarioFlags struct {
 	// Thinking effort level (empty string = use model default)
 	ThinkingEffort ThinkingEffortLevel `json:"thinking_effort,omitempty" yaml:"thinking_effort,omitempty"`
 
-	CleanHeader        bool `json:"clean_header,omitempty" yaml:"clean_header,omitempty"`                 // Remove billing header from system messages (Claude Code only)
+	CleanHeader bool `json:"clean_header,omitempty" yaml:"clean_header,omitempty"` // Remove billing header from system messages (Claude Code only)
 }
 
 // ScenarioConfig represents configuration for a specific scenario
