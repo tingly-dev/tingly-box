@@ -135,6 +135,15 @@ func verifyEnterpriseContextJWT(cfg *config.Config, rawToken string) (*enterpris
 			}
 			return []byte(secret), nil
 		case "RS256":
+			// If no public keys were provided, fall back to RS256PublicKeyRef.
+			if len(jwtCfg.PublicKeys) == 0 && strings.TrimSpace(jwtCfg.RS256PublicKeyRef) != "" {
+				ref, refErr := resolveSecretRef(jwtCfg.RS256PublicKeyRef)
+				if refErr == nil && strings.TrimSpace(ref) != "" {
+					if pub, parseErr := parseRSAPublicKeyFromPEM(ref); parseErr == nil {
+						return pub, nil
+					}
+				}
+			}
 			kid, _ := token.Header["kid"].(string)
 			kid = strings.TrimSpace(kid)
 			for _, item := range jwtCfg.PublicKeys {

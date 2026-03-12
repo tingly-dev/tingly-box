@@ -900,8 +900,12 @@ func (s *Server) Start(port int) error {
 
 	addr := fmt.Sprintf("%s:%d", s.host, port)
 	s.httpServer = &http.Server{
-		Addr:    addr,
-		Handler: s.engine,
+		Addr:              addr,
+		Handler:           s.engine,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      10 * time.Minute,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	resolvedHost := network.ResolveHost(s.host)
