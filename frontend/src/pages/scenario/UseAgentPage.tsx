@@ -21,6 +21,7 @@ const UseAgentPage: React.FC = () => {
         providers,
         loading: providersLoading,
         notification,
+        loadProviders,
     } = useFunctionPanelData();
     const headerRef = useRef<HTMLDivElement>(null);
     const [baseUrl, setBaseUrl] = useState<string>('');
@@ -121,6 +122,7 @@ const UseAgentPage: React.FC = () => {
                     showNotification={showNotification}
                     providers={providers}
                     onRulesChange={handleRulesChange}
+                    onProvidersLoad={loadProviders}
                     newlyCreatedRuleUuids={newlyCreatedRuleUuids}
                     allowDeleteRule={true}
                     onRuleDelete={handleRuleDelete}

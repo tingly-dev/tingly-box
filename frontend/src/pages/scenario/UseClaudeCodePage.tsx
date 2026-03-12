@@ -49,6 +49,7 @@ const UseClaudeCodePage: React.FC = () => {
         providers,
         loading: providersLoading,
         notification,
+        loadProviders,
     } = useFunctionPanelData();
     const [baseUrl, setBaseUrl] = React.useState<string>('');
     const [rules, setRules] = React.useState<any[]>([]);
@@ -655,6 +656,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                     showNotification={showNotification}
                     providers={providers}
                     onRulesChange={setRules}
+                    onProvidersLoad={loadProviders}
                     allowToggleRule={false}
                     collapsible={true}
                     headerHeight={headerHeight}

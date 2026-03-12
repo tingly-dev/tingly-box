@@ -22,6 +22,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                                                           showNotification,
                                                           providers,
                                                           onRulesChange,
+                                                          onProvidersLoad,
                                                           title = "",
                                                           collapsible = false,
                                                           allowDeleteRule = false,
@@ -206,12 +207,11 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         try {
             const result = await api.importRule(data);
             if (result.success) {
-                showNotification(
-                    `Rule imported successfully! ${result.data.rule_created ? 'Created.' : 'Updated.'}`,
-                    'success'
-                );
-                setShowImportModal(false);
-                // Refresh rules by calling parent's onRulesChange
+                // Refresh providers first to ensure newly imported providers are available
+                if (onProvidersLoad) {
+                    await onProvidersLoad();
+                }
+                // Then refresh rules by calling parent's onRulesChange
                 // Only refresh if scenario is available (required by backend API)
                 if (onRulesChange && scenario) {
                     const updatedRules = await api.getRules(scenario);
@@ -222,6 +222,19 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                     // If no scenario, trigger parent to refresh by calling without data
                     onRulesChange([] as any);
                 }
+
+                const createdMsg = result.data?.rule_created ? 'Rule created.' : '';
+                const updatedMsg = result.data?.rule_updated ? 'Rule updated.' : '';
+                const providersMsg = result.data?.providers_created > 0
+                    ? ` ${result.data.providers_created} provider(s) imported.`
+                    : result.data?.providers_used > 0
+                        ? ` ${result.data.providers_used} existing provider(s) used.`
+                        : '';
+                showNotification(
+                    `Rule imported successfully! ${createdMsg}${updatedMsg}${providersMsg}`,
+                    'success'
+                );
+                setShowImportModal(false);
             } else {
                 setImportError({open: true, message: result.error || 'Import failed'});
             }
@@ -230,7 +243,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         } finally {
             setImporting(false);
         }
-    }, [showNotification, scenario, onRulesChange]);
+    }, [showNotification, scenario, onRulesChange, onProvidersLoad]);
 
     // Generate unified rightAction if not provided
     const rightAction = customRightAction ?? (

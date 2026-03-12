@@ -10,6 +10,7 @@ export interface TabTemplatePageProps {
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
     providers: Provider[];
     onRulesChange?: (updatedRules: Rule[]) => void;
+    onProvidersLoad?: () => Promise<void>; // Callback to refresh providers after import
     collapsible?: boolean;
     allowDeleteRule?: boolean;
     onRuleDelete?: (ruleUuid: string) => void;

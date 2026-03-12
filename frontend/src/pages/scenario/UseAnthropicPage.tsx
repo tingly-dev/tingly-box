@@ -21,6 +21,7 @@ const UseAnthropicPage: React.FC = () => {
         providers,
         loading: providersLoading,
         notification,
+        loadProviders,
     } = useFunctionPanelData();
     const headerRef = useRef<HTMLDivElement>(null);
     const [baseUrl, setBaseUrl] = useState<string>('');
@@ -120,6 +121,7 @@ const UseAnthropicPage: React.FC = () => {
                     showNotification={showNotification}
                     providers={providers}
                     onRulesChange={handleRulesChange}
+                    onProvidersLoad={loadProviders}
                     newlyCreatedRuleUuids={newlyCreatedRuleUuids}
                     allowDeleteRule={true}
                     onRuleDelete={handleRuleDelete}
