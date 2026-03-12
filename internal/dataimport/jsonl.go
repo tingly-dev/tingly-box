@@ -69,12 +69,20 @@ type ImportOptions struct {
 	Quiet bool
 }
 
+// ProviderImportInfo contains information about an imported or used provider
+type ProviderImportInfo struct {
+	UUID   string
+	Name   string
+	Action string // "created", "used", "skipped"
+}
+
 // ImportResult contains the results of an import operation
 type ImportResult struct {
 	RuleCreated      bool
 	RuleUpdated      bool
 	ProvidersCreated int
 	ProvidersUsed    int
+	Providers        []ProviderImportInfo
 	ProviderMap      map[string]string // old UUID -> new UUID
 }
 
@@ -161,11 +169,11 @@ func (i *JSONLImporter) Import(data string, globalConfig *config.Config, opts Im
 		return nil, fmt.Errorf("error reading input: %w", err)
 	}
 
-	if ruleData == nil {
-		return nil, fmt.Errorf("no rule data found in export")
+	if ruleData == nil && len(providersData) == 0 {
+		return nil, fmt.Errorf("no rule or provider data found in export")
 	}
 
-	// Import providers
+	// Import providers first (before rule processing, so they're available for the rule)
 	for _, p := range providersData {
 		providerResult, err := i.importProvider(globalConfig, p, opts.OnProviderConflict, result.ProviderMap)
 		if err != nil {
@@ -177,6 +185,46 @@ func (i *JSONLImporter) Import(data string, globalConfig *config.Config, opts Im
 		if providerResult.used {
 			result.ProvidersUsed++
 		}
+		// Add provider info to result
+		if providerResult.info != nil {
+			result.Providers = append(result.Providers, *providerResult.info)
+		}
+	}
+
+	// If we don't have rule data, we're done (provider-only import)
+	if ruleData == nil {
+		return result, nil
+	}
+
+	// Collect unique provider UUIDs from services for validation
+	requiredProviderUUIDs := make(map[string]bool)
+	for _, service := range ruleData.Services {
+		if service.Provider != "" {
+			requiredProviderUUIDs[service.Provider] = true
+		}
+	}
+
+	// Validate that all required providers have been mapped
+	var missingProviders []string
+	for oldUUID := range requiredProviderUUIDs {
+		if _, mapped := result.ProviderMap[oldUUID]; !mapped {
+			// Check if this UUID exists as a provider in the export data
+			found := false
+			for _, p := range providersData {
+				if p.UUID == oldUUID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				missingProviders = append(missingProviders, oldUUID)
+			}
+		}
+	}
+
+	// If there are missing providers that weren't in the export, fail with a clear error
+	if len(missingProviders) > 0 {
+		return nil, fmt.Errorf("rule references providers that were not included in the export: %v. Please ensure all providers referenced by the rule are included in the export data", missingProviders)
 	}
 
 	// Check for existing rule
@@ -231,44 +279,73 @@ func (i *JSONLImporter) Import(data string, globalConfig *config.Config, opts Im
 type providerImportResult struct {
 	created bool
 	used    bool
+	info    *ProviderImportInfo
 }
 
 func (i *JSONLImporter) importProvider(globalConfig *config.Config, p *ImportProviderData, onConflict string, providerMap map[string]string) (*providerImportResult, error) {
 	result := &providerImportResult{}
 
-	// Check if provider with same name exists
-	existingProvider, err := globalConfig.GetProviderByName(p.Name)
+	// Check if provider with same UUID already exists (real conflict)
+	existingProvider, err := globalConfig.GetProviderByUUID(p.UUID)
 	if err == nil && existingProvider != nil {
+		// Real UUID conflict - provider was already imported before
 		switch onConflict {
-		case "use":
-			providerMap[p.UUID] = existingProvider.UUID
-			result.used = true
-			return result, nil
 		case "skip":
-			return result, nil
-		case "suffix":
-			// Create with suffixed name
-			suffix := 2
-			newName := fmt.Sprintf("%s-%d", p.Name, suffix)
-			for {
-				_, err := globalConfig.GetProviderByName(newName)
-				if err != nil {
-					break // Name is available
-				}
-				suffix++
-				newName = fmt.Sprintf("%s-%d", p.Name, suffix)
+			result.info = &ProviderImportInfo{
+				UUID:   p.UUID,
+				Name:   p.Name,
+				Action: "skipped",
 			}
-			p.Name = newName
-		default:
+			return result, nil
+		case "use":
+			// Use the existing provider
 			providerMap[p.UUID] = existingProvider.UUID
 			result.used = true
+			result.info = &ProviderImportInfo{
+				UUID:   existingProvider.UUID,
+				Name:   existingProvider.Name,
+				Action: "used",
+			}
+			return result, nil
+		default:
+			// Default to using existing provider for UUID conflicts
+			providerMap[p.UUID] = existingProvider.UUID
+			result.used = true
+			result.info = &ProviderImportInfo{
+				UUID:   existingProvider.UUID,
+				Name:   existingProvider.Name,
+				Action: "used",
+			}
 			return result, nil
 		}
 	}
 
-	// Create new provider
+	// Check if provider name already exists (need to avoid duplicate names)
+	_, err = globalConfig.GetProviderByName(p.Name)
+	nameExists := err == nil
+
+	// Always create a new UUID for imported providers
+	// This allows the same provider export to be imported multiple times
+	providerUUID := uuid.New().String()
+
+	// If name exists, add suffix to avoid conflicts
+	if nameExists {
+		suffix := 2
+		newName := fmt.Sprintf("%s-%d", p.Name, suffix)
+		for {
+			_, err := globalConfig.GetProviderByName(newName)
+			if err != nil {
+				break // Name is available
+			}
+			suffix++
+			newName = fmt.Sprintf("%s-%d", p.Name, suffix)
+		}
+		p.Name = newName
+	}
+
+	// Create new provider with new UUID
 	newProvider := &typ.Provider{
-		UUID:        uuid.New().String(),
+		UUID:        providerUUID,
 		Name:        p.Name,
 		APIBase:     p.APIBase,
 		APIStyle:    protocol.APIStyle(p.APIStyle),
@@ -286,7 +363,13 @@ func (i *JSONLImporter) importProvider(globalConfig *config.Config, p *ImportPro
 		return nil, fmt.Errorf("failed to add provider: %w", err)
 	}
 
+	// Map old UUID to new UUID
 	providerMap[p.UUID] = newProvider.UUID
 	result.created = true
+	result.info = &ProviderImportInfo{
+		UUID:   newProvider.UUID,
+		Name:   newProvider.Name,
+		Action: "created",
+	}
 	return result, nil
 }

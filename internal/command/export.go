@@ -71,8 +71,14 @@ func runExport(appManager *AppManager, cmd *cobra.Command) error {
 		return fmt.Errorf("rule not found for request-model '%s' and scenario '%s'", requestModel, scenarioStr)
 	}
 
-	// Export the rule
-	content, err := appManager.ExportRule(rule, format)
+	// Collect providers from the rule
+	providers, err := appManager.CollectProvidersFromRule(rule)
+	if err != nil {
+		return fmt.Errorf("failed to collect providers: %w", err)
+	}
+
+	// Export the rule with its providers
+	content, err := appManager.ExportRule(rule, providers, format)
 	if err != nil {
 		return fmt.Errorf("failed to export rule: %w", err)
 	}

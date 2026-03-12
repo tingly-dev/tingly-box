@@ -8,6 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/dataimport"
+	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -250,6 +252,87 @@ func (h *Handler) DeleteRule(c *gin.Context) {
 		Success: true,
 		Message: "Rule deleted successfully",
 	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// ImportRule imports a rule from base64 encoded data
+func (h *Handler) ImportRule(c *gin.Context) {
+	cfg := h.config
+	if cfg == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Global config not available",
+		})
+		return
+	}
+
+	var req ImportRuleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Set default conflict handling
+	// OnProviderConflict: Only matters when the same provider UUID already exists
+	//   - "use": use the existing provider with the same UUID
+	//   - "skip": skip importing this provider
+	// Note: Provider names can be duplicated; if name exists, a suffix is added automatically
+	if req.OnProviderConflict == "" {
+		req.OnProviderConflict = "use" // Use existing if same UUID found
+	}
+	if req.OnRuleConflict == "" {
+		req.OnRuleConflict = "new" // Create new rule with suffixed name if conflict
+	}
+
+	opts := dataimport.ImportOptions{
+		OnProviderConflict: req.OnProviderConflict,
+		OnRuleConflict:     req.OnRuleConflict,
+		Quiet:              true,
+	}
+
+	result, err := dataimport.Import(req.Data, cfg, dataimport.FormatAuto, opts)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Failed to import rule: " + err.Error(),
+		})
+		return
+	}
+
+	response := ImportRuleResponse{
+		Success: true,
+		Message: "Rule imported successfully",
+	}
+	response.Data.RuleCreated = result.RuleCreated
+	response.Data.RuleUpdated = result.RuleUpdated
+	response.Data.ProvidersCreated = result.ProvidersCreated
+	response.Data.ProvidersUsed = result.ProvidersUsed
+
+	// Convert provider import info to response format
+	for _, providerInfo := range result.Providers {
+		response.Data.Providers = append(response.Data.Providers, ProviderInfo{
+			UUID:   providerInfo.UUID,
+			Name:   providerInfo.Name,
+			Action: providerInfo.Action,
+		})
+	}
+
+	// Log the action
+	logrus.WithFields(logrus.Fields{
+		"action":            obs.ActionUpdateProvider,
+		"rule_created":      result.RuleCreated,
+		"rule_updated":      result.RuleUpdated,
+		"providers_created": result.ProvidersCreated,
+	}).Info(
+		fmt.Sprintf(
+			"Rule import completed: created=%v, updated=%v, providers=%d",
+			result.RuleCreated, result.RuleUpdated, result.ProvidersCreated,
+		),
+	)
 
 	c.JSON(http.StatusOK, response)
 }

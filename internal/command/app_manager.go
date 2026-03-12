@@ -8,9 +8,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/tingly-dev/tingly-box/internal/config"
+	exportpkg "github.com/tingly-dev/tingly-box/internal/dataexport"
 	importpkg "github.com/tingly-dev/tingly-box/internal/dataimport"
-	"github.com/tingly-dev/tingly-box/internal/export"
-	exportpkg "github.com/tingly-dev/tingly-box/internal/export"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server"
@@ -359,8 +358,8 @@ func (am *AppManager) ImportRuleFromJSONL(data string, opts ImportOptions) (*Imp
 		return nil, fmt.Errorf("error reading input: %w", err)
 	}
 
-	if ruleData == nil {
-		return nil, fmt.Errorf("no rule data found in export")
+	if ruleData == nil && len(providersData) == 0 {
+		return nil, fmt.Errorf("no rule or provider data found in export")
 	}
 
 	globalConfig := am.appConfig.GetGlobalConfig()
@@ -421,6 +420,11 @@ func (am *AppManager) ImportRuleFromJSONL(data string, opts ImportOptions) (*Imp
 		result.ProvidersCreated++
 	}
 
+	// If we don't have rule data, we're done (provider-only import)
+	if ruleData == nil {
+		return result, nil
+	}
+
 	// Check for existing rule
 	existingRule := globalConfig.GetRuleByRequestModelAndScenario(ruleData.RequestModel, typ.RuleScenario(ruleData.Scenario))
 
@@ -474,15 +478,11 @@ func (am *AppManager) ImportRuleFromJSONL(data string, opts ImportOptions) (*Imp
 // Export
 // ============
 
-// ExportRule exports a rule with its providers in the specified format
-func (am *AppManager) ExportRule(rule *typ.Rule, format export.Format) (string, error) {
-	if rule == nil {
-		return "", fmt.Errorf("rule is required for export")
-	}
-
+// CollectProvidersFromRule collects all providers referenced by the rule's services.
+// This is a helper function for gathering providers to export with a rule.
+func (am *AppManager) CollectProvidersFromRule(rule *typ.Rule) ([]*typ.Provider, error) {
 	globalConfig := am.appConfig.GetGlobalConfig()
 
-	// Collect providers referenced in the rule
 	providerUUIDs := am.getProviderUUIDsFromRule(rule)
 	providers := make([]*typ.Provider, 0, len(providerUUIDs))
 
@@ -491,6 +491,16 @@ func (am *AppManager) ExportRule(rule *typ.Rule, format export.Format) (string, 
 		if err == nil && provider != nil {
 			providers = append(providers, provider)
 		}
+	}
+
+	return providers, nil
+}
+
+// ExportRule exports a rule with its providers, or providers only, in the specified format.
+// At least one of rule or providers must be specified.
+func (am *AppManager) ExportRule(rule *typ.Rule, providers []*typ.Provider, format exportpkg.Format) (string, error) {
+	if rule == nil && len(providers) == 0 {
+		return "", fmt.Errorf("either rule or providers must be specified for export")
 	}
 
 	// Build export request
@@ -502,7 +512,7 @@ func (am *AppManager) ExportRule(rule *typ.Rule, format export.Format) (string, 
 	// Perform export
 	result, err := exportpkg.Export(req, format)
 	if err != nil {
-		return "", fmt.Errorf("failed to export rule: %w", err)
+		return "", fmt.Errorf("failed to export: %w", err)
 	}
 
 	return result.Content, nil

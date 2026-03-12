@@ -24,19 +24,13 @@ func TestFormatConstants(t *testing.T) {
 	}
 }
 
-func TestBase64Prefix(t *testing.T) {
-	if Base64Prefix != "TGB64" {
-		t.Errorf("Base64Prefix = %v, want TGB64", Base64Prefix)
-	}
-}
-
 func TestDetectorDetect(t *testing.T) {
 	detector := NewDetector()
 
 	tests := []struct {
-		name   string
-		data   string
-		want   Format
+		name string
+		data string
+		want Format
 	}{
 		{
 			name: "Base64 format with TGB64 prefix",

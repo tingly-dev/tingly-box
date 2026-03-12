@@ -49,3 +49,34 @@ type DeleteRuleResponse struct {
 	Success bool   `json:"success" example:"true"`
 	Message string `json:"message" example:"Rule deleted successfully"`
 }
+
+// ImportRuleRequest represents request to import a rule from base64 encoded data
+type ImportRuleRequest struct {
+	Data string `json:"data" binding:"required" description:"Base64 encoded rule export data" example:"TGB64:1.0:..."`
+	// OnProviderConflict specifies what to do when a provider already exists.
+	// "use" - use existing provider, "skip" - skip this provider, "suffix" - create with suffixed name
+	OnProviderConflict string `json:"on_provider_conflict" description:"How to handle provider conflicts" example:"use"`
+	// OnRuleConflict specifies what to do when a rule already exists.
+	// "skip" - skip import, "update" - update existing rule, "new" - create with new name
+	OnRuleConflict string `json:"on_rule_conflict" description:"How to handle rule conflicts" example:"new"`
+}
+
+// ImportRuleResponse represents the response for importing a rule
+type ImportRuleResponse struct {
+	Success bool   `json:"success" example:"true"`
+	Message string `json:"message" example:"Rule imported successfully"`
+	Data    struct {
+		RuleCreated      bool           `json:"rule_created" example:"true"`
+		RuleUpdated      bool           `json:"rule_updated" example:"false"`
+		ProvidersCreated int            `json:"providers_created" example:"1"`
+		ProvidersUsed    int            `json:"providers_used" example:"0"`
+		Providers        []ProviderInfo `json:"providers,omitempty"`
+	} `json:"data"`
+}
+
+// ProviderInfo contains basic information about an imported or used provider
+type ProviderInfo struct {
+	UUID   string `json:"uuid" example:"123e4567-e89b-12d3-a456-426614174000"`
+	Name   string `json:"name" example:"openai"`
+	Action string `json:"action" example:"created"` // "created", "used", "skipped"
+}

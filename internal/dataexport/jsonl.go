@@ -68,8 +68,8 @@ func NewJSONLExporter() *JSONLExporter {
 
 // Export performs the export in JSONL format
 func (e *JSONLExporter) Export(req *ExportRequest) (*ExportResult, error) {
-	if req.Rule == nil {
-		return nil, fmt.Errorf("rule is required for export")
+	if req.Rule == nil && len(req.Providers) == 0 {
+		return nil, fmt.Errorf("either rule or providers must be specified for export")
 	}
 
 	lines, err := e.buildJSONLLines(req)
@@ -104,20 +104,29 @@ func (e *JSONLExporter) buildJSONLLines(req *ExportRequest) (string, error) {
 	}
 	lines = append(lines, string(metadataLine))
 
-	// Line 2: Rule
-	ruleData := e.buildRuleData(req.Rule)
-	ruleLine, err := json.Marshal(ruleData)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal rule: %w", err)
+	// Line 2: Rule (if present)
+	if req.Rule != nil {
+		ruleData := e.buildRuleData(req.Rule)
+		ruleLine, err := json.Marshal(ruleData)
+		if err != nil {
+			return "", fmt.Errorf("failed to marshal rule: %w", err)
+		}
+		lines = append(lines, string(ruleLine))
 	}
-	lines = append(lines, string(ruleLine))
 
 	// Subsequent lines: Providers
-	providerUUIDs := e.getProviderUUIDs(req.Rule)
-	for _, provider := range req.Providers {
+	var providerUUIDs []string
+	if req.Rule != nil {
 		// Only export providers that are referenced in the rule
-		if !e.contains(providerUUIDs, provider.UUID) {
-			continue
+		providerUUIDs = e.getProviderUUIDs(req.Rule)
+	}
+	for _, provider := range req.Providers {
+		// If we have a rule, only export providers referenced by it
+		// If we don't have a rule, export all providers
+		if req.Rule != nil {
+			if !e.contains(providerUUIDs, provider.UUID) {
+				continue
+			}
 		}
 
 		providerData := e.buildProviderData(provider)
