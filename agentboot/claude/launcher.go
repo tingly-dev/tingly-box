@@ -797,18 +797,32 @@ func (l *Launcher) sendPermissionResponseNew(requestID string, result agentboot.
 		"type":       "control_response",
 	}
 
+	innerResponse := map[string]interface{}{
+		"request_id": requestID,
+	}
+
 	if result.Approved {
-		response["response"] = map[string]interface{}{
-			"subtype":    "success",
-			"request_id": requestID,
+		innerResponse["subtype"] = "success"
+		// Include behavior field for successful approval
+		if result.UpdatedInput != nil {
+			innerResponse["response"] = map[string]interface{}{
+				"behavior":     "allow",
+				"updatedInput": result.UpdatedInput,
+			}
+		} else {
+			innerResponse["response"] = map[string]interface{}{
+				"behavior": "allow",
+			}
 		}
 	} else {
-		response["response"] = map[string]interface{}{
-			"subtype":    "error",
-			"request_id": requestID,
-			"error":      result.Reason,
+		innerResponse["subtype"] = "error"
+		innerResponse["error"] = result.Reason
+		if result.Reason == "" {
+			innerResponse["error"] = "User denied this request"
 		}
 	}
+
+	response["response"] = innerResponse
 
 	return response
 }
