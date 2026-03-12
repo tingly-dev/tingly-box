@@ -139,63 +139,19 @@ func (c *TBClientImpl) GetDefaultService(ctx context.Context) (*DefaultServiceCo
 // SelectModel returns model configuration for @tb execution
 func (c *TBClientImpl) SelectModel(ctx context.Context, req ModelSelectionRequest) (*ModelConfig, error) {
 	var provider *typ.Provider
-	var modelID string
 
-	// Strategy 1: Use provider UUID (primary for bot usage)
-	if req.ProviderUUID != "" {
-		var err error
-		provider, err = c.config.GetProviderByUUID(req.ProviderUUID)
-		if err != nil || provider == nil {
-			return nil, fmt.Errorf("provider not found: %s", req.ProviderUUID)
-		}
-		if req.ModelID != "" {
-			modelID = req.ModelID
-		} else {
-			// Use first model from provider if available
-			if len(provider.Models) > 0 {
-				modelID = provider.Models[0]
-			} else {
-				modelID = "claude-sonnet-4-6" // Default fallback
-			}
-		}
-		return &ModelConfig{
-			ProviderUUID: provider.UUID,
-			ModelID:      modelID,
-			BaseURL:      provider.APIBase,
-			APIKey:       provider.GetAccessToken(),
-			APIStyle:     string(provider.APIStyle),
-		}, nil
+	if req.ProviderUUID == "" {
+		return nil, fmt.Errorf("no provider found")
 	}
 
-	// Strategy 2: Use first available Anthropic provider (fallback)
-	providers, err := c.providerDB.ListEnabled()
-	if err != nil {
-		return nil, fmt.Errorf("failed to list providers: %w", err)
+	var err error
+	provider, err = c.config.GetProviderByUUID(req.ProviderUUID)
+	if err != nil || provider == nil {
+		return nil, fmt.Errorf("provider not found: %s", req.ProviderUUID)
 	}
-
-	for _, p := range providers {
-		if p.APIStyle == "anthropic" {
-			provider = p
-			modelID = req.ModelID
-			if modelID == "" {
-				// Use first model from provider if available
-				if len(p.Models) > 0 {
-					modelID = p.Models[0]
-				} else {
-					modelID = "claude-sonnet-4-6" // Default fallback
-				}
-			}
-			break
-		}
-	}
-
-	if provider == nil {
-		return nil, fmt.Errorf("no suitable provider found")
-	}
-
 	return &ModelConfig{
 		ProviderUUID: provider.UUID,
-		ModelID:      modelID,
+		ModelID:      req.ModelID,
 		BaseURL:      provider.APIBase,
 		APIKey:       provider.GetAccessToken(),
 		APIStyle:     string(provider.APIStyle),
