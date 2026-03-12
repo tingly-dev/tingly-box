@@ -767,6 +767,7 @@ func (l *Launcher) parsePermissionRequest(data map[string]interface{}) agentboot
 	sessionID := l.executionContext.sessionID
 	chatID := l.executionContext.chatID
 	platform := l.executionContext.platform
+	botUUID := l.executionContext.botUUID
 	l.mu.RUnlock()
 
 	if chatID != "" {
@@ -785,6 +786,7 @@ func (l *Launcher) parsePermissionRequest(data map[string]interface{}) agentboot
 		Input:     input,
 		Timestamp: time.Now(),
 		SessionID: sessionID,
+		BotUUID:   botUUID, // Include bot UUID for proper routing
 	}
 }
 

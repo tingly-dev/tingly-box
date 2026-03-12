@@ -222,6 +222,7 @@ func FromPermissionRequest(pr agentboot.PermissionRequest) *Request {
 		ToolName:  pr.ToolName,
 		Input:     pr.Input,
 		Reason:    pr.Reason,
+		BotUUID:   pr.BotUUID, // Include bot UUID for routing
 		Metadata:  pr.Input,
 	}
 
