@@ -327,7 +327,6 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 				requestID := getString(event.Data, "request_id")
 
 				if assistant, ok := msg.(*AssistantMessage); ok {
-					fmt.Printf("%s", assistant)
 					for _, c := range assistant.Message.Content {
 						if c.Name == "AskUserQuestion" {
 							req := l.parseAskRequest(c)
