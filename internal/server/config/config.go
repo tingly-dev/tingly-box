@@ -1461,14 +1461,7 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 		}
 		return false
 	case "enable_remote_coder":
-		if val, ok := config.Extensions["enable_remote_coder"].(bool); ok {
-			return val
-		}
-		// Backward compatibility
-		if val, ok := config.Extensions["skill_remote_cc"].(bool); ok {
-			return val
-		}
-		return false
+		return true // Enabled by default
 	default:
 		return false
 	}

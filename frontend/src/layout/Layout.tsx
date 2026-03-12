@@ -73,7 +73,7 @@ const Layout = ({ children }: LayoutProps) => {
     const navigate = useNavigate();
     const { hasUpdate, currentVersion, showUpdateDialog } = useAppVersion();
     const { isHealthy, showDisconnectDialog } = useHealth();
-    const { skillUser, skillIde, enableRemoteCoder } = useFeatureFlags();
+    const { skillUser, skillIde } = useFeatureFlags();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
 
@@ -205,25 +205,25 @@ const Layout = ({ children }: LayoutProps) => {
                 children: promptMenuItems,
             }] : []),
             // Only add Remote menu if full edition
-            ...(isFullEdition && enableRemoteCoder ? [{
+            ...(isFullEdition ? [{
                 key: 'remote-control' as const,
-                icon: <RemoteIcon sx={{ fontSize: 22 }} />,
+                icon: <RemoteIcon sx={{fontSize: 22}}/>,
                 label: 'Remote',
                 children: [
                     {
                         path: '/remote-control',
                         label: 'Overview',
-                        icon: <RemoteIcon sx={{ fontSize: 20 }} />,
+                        icon: <RemoteIcon sx={{fontSize: 20}}/>,
                     },
                     {
                         path: '/remote-control/bot',
                         label: 'IM Bot',
-                        icon: <ChatBubble sx={{ fontSize: 20 }} />,
+                        icon: <ChatBubble sx={{fontSize: 20}}/>,
                     },
                     {
                         path: '/remote-control/agent',
                         label: 'Agent Assistant',
-                        icon: <AutoAwesome sx={{ fontSize: 20 }} />,
+                        icon: <AutoAwesome sx={{fontSize: 20}}/>,
                     },
                 ],
             }] : []),
@@ -252,7 +252,7 @@ const Layout = ({ children }: LayoutProps) => {
             },
         ];
         return items;
-    }, [t, promptMenuItems, enableRemoteCoder]);
+    }, [t, promptMenuItems]);
 
     // Find current active activity
     const activeActivity = useMemo(() => {
