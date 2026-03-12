@@ -17,570 +17,36 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
-	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/summarizer"
-	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-const (
-	claudeCodeUnifiedModel   = "tingly/cc"
-	claudeCodeDefaultModel   = "tingly/cc-default"
-	claudeCodeHaikuModel     = "tingly/cc-haiku"
-	claudeCodeOpusModel      = "tingly/cc-opus"
-	claudeCodeSonnetModel    = "tingly/cc-sonnet"
-	claudeCodeSubagentModel  = "tingly/cc-subagent"
-	defaultClaudeProviderURL = "https://api.anthropic.com"
-	defaultClaudeProvider    = "anthropic"
-	defaultClaudeCodeBaseURL = "http://localhost:12580/tingly/claude_code"
-)
+// RemoteCommand creates the `remote` subcommand for bot management.
+func RemoteCommand(appManager *AppManager) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "remote",
+		Short: "Remote bot management commands",
+	}
 
-// RemoteCoderCommand creates the `rc` subcommand for bot management.
+	cmd.AddCommand(remoteListCommand(appManager))
+	cmd.AddCommand(remoteStartCommand(appManager))
+	cmd.AddCommand(remoteConfigCommand(appManager))
+
+	return cmd
+}
+
+// RemoteCoderCommand is deprecated. Use RemoteCommand instead.
 func RemoteCoderCommand(appManager *AppManager) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "rc",
-		Short: "Bot management commands",
-	}
-
-	cmd.AddCommand(remoteCoderSetupCommand(appManager))
-	cmd.AddCommand(botCommand(appManager))
-
-	return cmd
-}
-
-// botCommand creates the `rc bot` subcommand group
-func botCommand(appManager *AppManager) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "bot",
-		Short: "Bot management commands",
-	}
-
-	cmd.AddCommand(botListCommand(appManager))
-	cmd.AddCommand(botStartCommand(appManager))
-	cmd.AddCommand(botConfigCommand(appManager))
-
-	return cmd
-}
-
-func remoteCoderSetupCommand(appManager *AppManager) *cobra.Command {
-	return &cobra.Command{
-		Use:   "setup",
-		Short: "Interactive remote-coder setup wizard",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if appManager == nil || appManager.AppConfig() == nil {
-				return fmt.Errorf("app configuration is not initialized")
-			}
-
-			reader := bufio.NewReader(os.Stdin)
-
-			fmt.Println("Remote Control Setup")
-			fmt.Println("------------------")
-			fmt.Println("Select coder:")
-			fmt.Println("1. Claude Code")
-			fmt.Print("Enter choice (1): ")
-			choice, err := reader.ReadString('\n')
-			if err != nil {
-				return fmt.Errorf("failed to read input: %w", err)
-			}
-			choice = strings.TrimSpace(choice)
-			if choice != "" && choice != "1" && !strings.EqualFold(choice, "claude") && !strings.EqualFold(choice, "claude code") {
-				return fmt.Errorf("unsupported coder selection")
-			}
-
-			claudeBaseURL, err := promptForInput(reader, fmt.Sprintf("Claude Code base URL (%s): ", defaultClaudeCodeBaseURL), false)
-			if err != nil {
-				return err
-			}
-			if claudeBaseURL == "" {
-				claudeBaseURL = defaultClaudeCodeBaseURL
-			}
-
-			tinglyToken, err := promptForToken(reader, appManager.AppConfig().GetGlobalConfig())
-			if err != nil {
-				return err
-			}
-
-			provider, err := ensureClaudeProvider(reader, appManager)
-			if err != nil {
-				return err
-			}
-
-			mode, err := promptForClaudeMode(reader)
-			if err != nil {
-				return err
-			}
-
-			selection, err := configureClaudeRules(reader, appManager, provider, mode)
-			if err != nil {
-				return err
-			}
-
-			env := buildClaudeEnv(mode, claudeBaseURL, tinglyToken)
-
-			if err := applyClaudeScenarioMode(appManager.AppConfig().GetGlobalConfig(), mode); err != nil {
-				return err
-			}
-
-			if err := applyClaudeRuleServices(appManager.AppConfig().GetGlobalConfig(), selection, mode); err != nil {
-				return err
-			}
-
-			if selection.refreshModels {
-				fmt.Println("Model list fetched from provider and saved.")
-			}
-
-			settingsResult, err := serverconfig.ApplyClaudeSettingsFromEnv(env)
-			if err != nil {
-				return err
-			}
-			onboardingResult, err := serverconfig.ApplyClaudeOnboarding(map[string]interface{}{
-				"hasCompletedOnboarding": true,
-			})
-			if err != nil {
-				return err
-			}
-
-			printApplyResult(settingsResult, "settings.json")
-			printApplyResult(onboardingResult, ".claude.json")
-			fmt.Println("Remote Control setup completed.")
-			return nil
-		},
-	}
-}
-
-func promptForClaudeMode(reader *bufio.Reader) (string, error) {
-	fmt.Println()
-	fmt.Println("Select configuration mode:")
-	fmt.Println("1. Unified (single model for all variants)")
-	fmt.Println("2. Separate (distinct models for each variant)")
-	fmt.Print("Enter choice (1): ")
-	modeInput, err := reader.ReadString('\n')
-	if err != nil {
-		return "", fmt.Errorf("failed to read input: %w", err)
-	}
-	modeInput = strings.TrimSpace(modeInput)
-	if modeInput == "" || modeInput == "1" || strings.EqualFold(modeInput, "unified") {
-		return "unified", nil
-	}
-	if modeInput == "2" || strings.EqualFold(modeInput, "separate") {
-		return "separate", nil
-	}
-	return "", fmt.Errorf("invalid mode selection")
-}
-
-type claudeRuleSelection struct {
-	unifiedProvider  *typ.Provider
-	unifiedModel     string
-	defaultProvider  *typ.Provider
-	defaultModel     string
-	haikuProvider    *typ.Provider
-	haikuModel       string
-	opusProvider     *typ.Provider
-	opusModel        string
-	sonnetProvider   *typ.Provider
-	sonnetModel      string
-	subagentProvider *typ.Provider
-	subagentModel    string
-	refreshModels    bool
-}
-
-func buildClaudeEnv(mode, baseURL, token string) map[string]string {
-	env := map[string]string{
-		"DISABLE_TELEMETRY":                        "1",
-		"DISABLE_ERROR_REPORTING":                  "1",
-		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-		"API_TIMEOUT_MS":                           "3000000",
-		"ANTHROPIC_AUTH_TOKEN":                     token,
-		"ANTHROPIC_BASE_URL":                       baseURL,
-	}
-
-	if mode == "unified" {
-		env["ANTHROPIC_MODEL"] = claudeCodeUnifiedModel
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = claudeCodeUnifiedModel
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = claudeCodeUnifiedModel
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = claudeCodeUnifiedModel
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = claudeCodeUnifiedModel
-		return env
-	}
-
-	env["ANTHROPIC_MODEL"] = claudeCodeDefaultModel
-	env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = claudeCodeHaikuModel
-	env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = claudeCodeOpusModel
-	env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = claudeCodeSonnetModel
-	env["CLAUDE_CODE_SUBAGENT_MODEL"] = claudeCodeSubagentModel
-	return env
-}
-
-func printApplyResult(result *serverconfig.ApplyResult, label string) {
-	if result == nil {
-		return
-	}
-	if !result.Success {
-		fmt.Printf("Failed to write %s: %s\n", label, result.Message)
-		return
-	}
-	if result.BackupPath != "" {
-		fmt.Printf("Updated %s (backup: %s)\n", label, result.BackupPath)
-		return
-	}
-	if result.Created {
-		fmt.Printf("Created %s\n", label)
-		return
-	}
-	fmt.Printf("Updated %s\n", label)
-}
-
-func promptForToken(reader *bufio.Reader, cfg *serverconfig.Config) (string, error) {
-	current := ""
-	if cfg != nil {
-		current = cfg.GetModelToken()
-	}
-	prompt := "Tingly-box access token (press Enter to use current): "
-	if current == "" {
-		prompt = "Tingly-box access token: "
-	}
-	input, err := promptForInput(reader, prompt, current == "")
-	if err != nil {
-		return "", err
-	}
-	if input == "" {
-		return current, nil
-	}
-	if cfg != nil && input != current {
-		if err := cfg.SetModelToken(input); err != nil {
-			return "", fmt.Errorf("failed to update model token: %w", err)
-		}
-	}
-	return input, nil
-}
-
-func ensureClaudeProvider(reader *bufio.Reader, appManager *AppManager) (*typ.Provider, error) {
-	defaultName := defaultClaudeProvider
-	name, err := promptForInput(reader, fmt.Sprintf("Provider name (%s): ", defaultName), false)
-	if err != nil {
-		return nil, err
-	}
-	if name == "" {
-		name = defaultName
-	}
-
-	if existing, err := appManager.GetProvider(name); err == nil && existing != nil {
-		confirmed, err := promptForConfirmation(reader, fmt.Sprintf("Provider '%s' already exists. Use it? (Y/n): ", name))
-		if err != nil {
-			return nil, err
-		}
-		if confirmed {
-			return existing, nil
-		}
-		for {
-			name, err = promptForInput(reader, "Enter a new provider name: ", true)
-			if err != nil {
-				return nil, err
-			}
-			if existing, err = appManager.GetProvider(name); err != nil || existing == nil {
-				break
-			}
-			fmt.Printf("Provider '%s' already exists.\n", name)
-		}
-	}
-
-	apiBase, err := promptForInput(reader, fmt.Sprintf("Provider base URL (%s): ", defaultClaudeProviderURL), false)
-	if err != nil {
-		return nil, err
-	}
-	if apiBase == "" {
-		apiBase = defaultClaudeProviderURL
-	}
-
-	token, err := promptForInput(reader, "Provider API key: ", true)
-	if err != nil {
-		return nil, err
-	}
-
-	proxyURL, err := promptForInput(reader, "Provider proxy URL (optional): ", false)
-	if err != nil {
-		return nil, err
-	}
-
-	provider := &typ.Provider{
-		UUID:     serverconfig.GenerateUUID(),
-		Name:     name,
-		APIBase:  apiBase,
-		APIStyle: protocol.APIStyleAnthropic,
-		Token:    token,
-		Enabled:  true,
-		ProxyURL: proxyURL,
-		AuthType: typ.AuthTypeAPIKey,
-	}
-
-	if err := appManager.AppConfig().AddProvider(provider); err != nil {
-		return nil, fmt.Errorf("failed to add provider: %w", err)
-	}
-
-	return provider, nil
-}
-
-func configureClaudeRules(reader *bufio.Reader, appManager *AppManager, defaultProvider *typ.Provider, mode string) (*claudeRuleSelection, error) {
-	selection := &claudeRuleSelection{}
-
-	providers := appManager.ListProviders()
-	if len(providers) == 0 {
-		return nil, fmt.Errorf("no providers configured")
-	}
-
-	if mode == "unified" {
-		provider, model, refreshed, err := promptForProviderAndModel(reader, appManager, providers, defaultProvider, "Unified model")
-		if err != nil {
-			return nil, err
-		}
-		selection.unifiedProvider = provider
-		selection.unifiedModel = model
-		selection.refreshModels = refreshed || selection.refreshModels
-		return selection, nil
-	}
-
-	var err error
-	var refreshed bool
-	selection.defaultProvider, selection.defaultModel, refreshed, err = promptForProviderAndModel(reader, appManager, providers, defaultProvider, "Default model")
-	if err != nil {
-		return nil, err
-	}
-	selection.refreshModels = selection.refreshModels || refreshed
-	selection.haikuProvider, selection.haikuModel, refreshed, err = promptForProviderAndModel(reader, appManager, providers, defaultProvider, "Haiku model")
-	if err != nil {
-		return nil, err
-	}
-	selection.refreshModels = selection.refreshModels || refreshed
-	selection.opusProvider, selection.opusModel, refreshed, err = promptForProviderAndModel(reader, appManager, providers, defaultProvider, "Opus model")
-	if err != nil {
-		return nil, err
-	}
-	selection.refreshModels = selection.refreshModels || refreshed
-	selection.sonnetProvider, selection.sonnetModel, refreshed, err = promptForProviderAndModel(reader, appManager, providers, defaultProvider, "Sonnet model")
-	if err != nil {
-		return nil, err
-	}
-	selection.refreshModels = selection.refreshModels || refreshed
-	selection.subagentProvider, selection.subagentModel, refreshed, err = promptForProviderAndModel(reader, appManager, providers, defaultProvider, "Subagent model")
-	if err != nil {
-		return nil, err
-	}
-	selection.refreshModels = selection.refreshModels || refreshed
-	return selection, nil
-}
-
-func promptForProviderAndModel(reader *bufio.Reader, appManager *AppManager, providers []*typ.Provider, defaultProvider *typ.Provider, label string) (*typ.Provider, string, bool, error) {
-	provider, err := promptForProviderChoice(reader, providers, defaultProvider, label+" provider")
-	if err != nil {
-		return nil, "", false, err
-	}
-
-	refreshed := false
-	if provider != nil {
-		if err := appManager.AppConfig().FetchAndSaveProviderModels(provider.UUID); err == nil {
-			refreshed = true
-		} else {
-			fmt.Printf("Warning: failed to fetch models for provider '%s': %v\n", provider.Name, err)
-		}
-	}
-
-	models := []string{}
-	if provider != nil {
-		modelManager := appManager.AppConfig().GetGlobalConfig().GetModelManager()
-		if modelManager != nil {
-			models = modelManager.GetModels(provider.UUID)
-		}
-	}
-
-	model, err := promptForModelChoice(reader, label, models)
-	if err != nil {
-		return nil, "", refreshed, err
-	}
-
-	return provider, model, refreshed, nil
-}
-
-func promptForProviderChoice(reader *bufio.Reader, providers []*typ.Provider, defaultProvider *typ.Provider, label string) (*typ.Provider, error) {
-	if len(providers) == 1 {
-		return providers[0], nil
-	}
-
-	fmt.Printf("\nSelect %s:\n", label)
-	sort.Slice(providers, func(i, j int) bool {
-		return strings.ToLower(providers[i].Name) < strings.ToLower(providers[j].Name)
-	})
-	defaultIndex := -1
-	for i, provider := range providers {
-		marker := ""
-		if defaultProvider != nil && provider.UUID == defaultProvider.UUID {
-			marker = " (default)"
-			defaultIndex = i + 1
-		}
-		fmt.Printf("%d. %s%s\n", i+1, provider.Name, marker)
-	}
-	prompt := "Enter choice"
-	if defaultIndex > 0 {
-		prompt = fmt.Sprintf("Enter choice (%d): ", defaultIndex)
-	} else {
-		prompt = "Enter choice: "
-	}
-
-	for {
-		input, err := promptForInput(reader, prompt, false)
-		if err != nil {
-			return nil, err
-		}
-		if input == "" && defaultIndex > 0 {
-			return providers[defaultIndex-1], nil
-		}
-
-		choice, err := strconv.Atoi(input)
-		if err == nil && choice >= 1 && choice <= len(providers) {
-			return providers[choice-1], nil
-		}
-
-		for _, provider := range providers {
-			if strings.EqualFold(provider.Name, input) {
-				return provider, nil
-			}
-		}
-
-		fmt.Println("Invalid provider selection. Please try again.")
-	}
-}
-
-func promptForModelChoice(reader *bufio.Reader, label string, models []string) (string, error) {
-	if len(models) == 0 {
-		return promptForInput(reader, fmt.Sprintf("%s (enter model name): ", label), true)
-	}
-
-	fmt.Printf("\nSelect %s:\n", label)
-	for i, model := range models {
-		fmt.Printf("%d. %s\n", i+1, model)
-	}
-	fmt.Printf("0. Enter custom model\n")
-
-	for {
-		input, err := promptForInput(reader, "Enter choice: ", true)
-		if err != nil {
-			return "", err
-		}
-
-		if input == "0" {
-			return promptForInput(reader, fmt.Sprintf("%s (custom): ", label), true)
-		}
-
-		if choice, err := strconv.Atoi(input); err == nil {
-			if choice >= 1 && choice <= len(models) {
-				return models[choice-1], nil
-			}
-			fmt.Println("Invalid selection. Please try again.")
-			continue
-		}
-
-		return input, nil
-	}
-}
-
-func applyClaudeScenarioMode(cfg *serverconfig.Config, mode string) error {
-	if cfg == nil {
-		return fmt.Errorf("global config not available")
-	}
-	flags := typ.ScenarioFlags{
-		Unified:  mode == "unified",
-		Separate: mode == "separate",
-		Smart:    false,
-	}
-	return cfg.SetScenarioConfig(typ.ScenarioConfig{
-		Scenario: typ.ScenarioClaudeCode,
-		Flags:    flags,
-	})
-}
-
-func applyClaudeRuleServices(cfg *serverconfig.Config, selection *claudeRuleSelection, mode string) error {
-	if cfg == nil || selection == nil {
-		return fmt.Errorf("configuration not available")
-	}
-
-	rules := map[string]struct {
-		provider *typ.Provider
-		model    string
-	}{}
-
-	if mode == "separate" {
-		rules[serverconfig.RuleUUIDBuiltinCC] = struct {
-			provider *typ.Provider
-			model    string
-		}{provider: selection.defaultProvider, model: selection.defaultModel}
-		rules[serverconfig.RuleUUIDBuiltinCCDefault] = struct {
-			provider *typ.Provider
-			model    string
-		}{provider: selection.defaultProvider, model: selection.defaultModel}
-		rules[serverconfig.RuleUUIDBuiltinCCHaiku] = struct {
-			provider *typ.Provider
-			model    string
-		}{provider: selection.haikuProvider, model: selection.haikuModel}
-		rules[serverconfig.RuleUUIDBuiltinCCOpus] = struct {
-			provider *typ.Provider
-			model    string
-		}{provider: selection.opusProvider, model: selection.opusModel}
-		rules[serverconfig.RuleUUIDBuiltinCCSonnet] = struct {
-			provider *typ.Provider
-			model    string
-		}{provider: selection.sonnetProvider, model: selection.sonnetModel}
-		rules[serverconfig.RuleUUIDBuiltinCCSubagent] = struct {
-			provider *typ.Provider
-			model    string
-		}{provider: selection.subagentProvider, model: selection.subagentModel}
-	} else {
-		rules[serverconfig.RuleUUIDBuiltinCC] = struct {
-			provider *typ.Provider
-			model    string
-		}{provider: selection.unifiedProvider, model: selection.unifiedModel}
-		rules[serverconfig.RuleUUIDBuiltinCCDefault] = struct {
-			provider *typ.Provider
-			model    string
-		}{provider: selection.unifiedProvider, model: selection.unifiedModel}
-		rules[serverconfig.RuleUUIDBuiltinCCHaiku] = rules[serverconfig.RuleUUIDBuiltinCCDefault]
-		rules[serverconfig.RuleUUIDBuiltinCCOpus] = rules[serverconfig.RuleUUIDBuiltinCCDefault]
-		rules[serverconfig.RuleUUIDBuiltinCCSonnet] = rules[serverconfig.RuleUUIDBuiltinCCDefault]
-		rules[serverconfig.RuleUUIDBuiltinCCSubagent] = rules[serverconfig.RuleUUIDBuiltinCCDefault]
-	}
-
-	for ruleUUID, entry := range rules {
-		if entry.provider == nil || entry.model == "" {
-			continue
-		}
-		rule := cfg.GetRuleByUUID(ruleUUID)
-		if rule == nil {
-			return fmt.Errorf("rule %s not found", ruleUUID)
-		}
-		rule.Services = []*loadbalance.Service{
-			{
-				Provider:   entry.provider.UUID,
-				Model:      entry.model,
-				Weight:     1,
-				Active:     true,
-				TimeWindow: 300,
-			},
-		}
-		rule.Active = true
-		if err := cfg.UpdateRule(ruleUUID, *rule); err != nil {
-			return fmt.Errorf("failed to update rule %s: %w", ruleUUID, err)
-		}
-	}
-
-	return nil
+	return RemoteCommand(appManager)
 }
 
 // ============== Bot Management Commands ==============
 
-// botListCommand creates the `rc bot list` subcommand
-func botListCommand(appManager *AppManager) *cobra.Command {
+// remoteListCommand creates the `remote list` subcommand
+func remoteListCommand(appManager *AppManager) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List all bot settings",
@@ -638,12 +104,13 @@ func botListCommand(appManager *AppManager) *cobra.Command {
 	}
 }
 
-// botStartCommand creates the `rc bot start` subcommand
-func botStartCommand(appManager *AppManager) *cobra.Command {
+// remoteStartCommand creates the `remote start` subcommand
+func remoteStartCommand(appManager *AppManager) *cobra.Command {
 	var (
 		dataPath string
 		provider string
 		model    string
+		force    bool
 	)
 
 	cmd := &cobra.Command{
@@ -692,24 +159,29 @@ func botStartCommand(appManager *AppManager) *cobra.Command {
 			if provider == "" || model == "" {
 				// Check if current setting has SmartGuide config
 				if setting.SmartGuideProvider == "" || setting.SmartGuideModel == "" {
-					fmt.Println()
-					fmt.Println("SmartGuide (@tb agent) requires model configuration.")
-					fmt.Println("Current bot does not have SmartGuide configured.")
-					fmt.Println()
+					if force {
+						// Force mode: skip SmartGuide configuration entirely
+						logrus.Warn("Force mode: skipping SmartGuide configuration, @tb agent may not work")
+					} else {
+						fmt.Println()
+						fmt.Println("SmartGuide (@tb agent) requires model configuration.")
+						fmt.Println("Current bot does not have SmartGuide configured.")
+						fmt.Println()
 
-					// Prompt for provider and model
-					p, m, err := promptForSmartGuideModel(reader, appManager)
-					if err != nil {
-						return fmt.Errorf("failed to configure SmartGuide model: %w", err)
-					}
-					provider = p
-					model = m
+						// Prompt for provider and model
+						p, m, err := promptForSmartGuideModel(reader, appManager)
+						if err != nil {
+							return fmt.Errorf("failed to configure SmartGuide model: %w", err)
+						}
+						provider = p
+						model = m
 
-					// Update settings
-					setting.SmartGuideProvider = provider
-					setting.SmartGuideModel = model
-					if err := store.UpdateSettings(uuid, setting); err != nil {
-						logrus.WithError(err).Warn("Failed to save SmartGuide configuration to store")
+						// Update settings
+						setting.SmartGuideProvider = provider
+						setting.SmartGuideModel = model
+						if err := store.UpdateSettings(uuid, setting); err != nil {
+							logrus.WithError(err).Warn("Failed to save SmartGuide configuration to store")
+						}
 					}
 				} else {
 					provider = setting.SmartGuideProvider
@@ -718,18 +190,20 @@ func botStartCommand(appManager *AppManager) *cobra.Command {
 				}
 			}
 
-			// Validate SmartGuide configuration
-			if provider == "" || model == "" {
-				return fmt.Errorf("smartguide_provider and smartguide_model are required. Use --provider and --model flags")
+			// Validate SmartGuide configuration (skip in force mode)
+			if !force && (provider == "" || model == "") {
+				return fmt.Errorf("smartguide_provider and smartguide_model are required. Use --provider and --model flags, or --force to skip")
 			}
 
-			// Validate provider exists
-			prov, err := appManager.GetProvider(provider)
-			if err != nil {
-				return fmt.Errorf("provider %s not found: %w", provider, err)
-			}
-			if prov == nil {
-				return fmt.Errorf("provider %s not found", provider)
+			// Validate provider exists (skip if force is enabled)
+			if !force && provider != "" {
+				prov, err := appManager.GetProvider(provider)
+				if err != nil {
+					return fmt.Errorf("provider %s not found: %w", provider, err)
+				}
+				if prov == nil {
+					return fmt.Errorf("provider %s not found", provider)
+				}
 			}
 
 			// Determine data path
@@ -739,23 +213,29 @@ func botStartCommand(appManager *AppManager) *cobra.Command {
 
 			// Start the bot
 			fmt.Printf("Starting bot: %s (%s)\n", setting.Name, setting.Platform)
-			fmt.Printf("SmartGuide: provider=%s, model=%s\n", provider, model)
+			if provider != "" && model != "" {
+				fmt.Printf("SmartGuide: provider=%s, model=%s\n", provider, model)
+			}
+			if force {
+				fmt.Println("WARNING: Force mode enabled - validation skipped")
+			}
 			fmt.Println("Press Ctrl+C to stop the bot.")
 			fmt.Println()
 
-			return runStandaloneBot(cmd.Context(), appManager, setting, dataPath)
+			return runStandaloneBot(cmd.Context(), appManager, setting, dataPath, provider, model)
 		},
 	}
 
 	cmd.Flags().StringVar(&dataPath, "data-path", "", "data directory for bot state (default: config dir)")
 	cmd.Flags().StringVar(&provider, "provider", "", "provider UUID for smartguide (overrides bot setting)")
 	cmd.Flags().StringVar(&model, "model", "", "model name for smartguide (overrides bot setting)")
+	cmd.Flags().BoolVar(&force, "force", false, "skip provider validation and force start")
 
 	return cmd
 }
 
-// botConfigCommand creates the `rc bot config` subcommand
-func botConfigCommand(appManager *AppManager) *cobra.Command {
+// remoteConfigCommand creates the `remote config` subcommand
+func remoteConfigCommand(appManager *AppManager) *cobra.Command {
 	var (
 		provider   string
 		model      string
@@ -949,7 +429,7 @@ func promptForSmartGuideModel(reader *bufio.Reader, appManager *AppManager) (str
 		// If no models found, let user enter manually
 		fmt.Println()
 		fmt.Println("No models found for this provider.")
-		model, err := promptForInput(reader, "Enter model name: ", true)
+		model, err := promptForModelInput(reader, "Enter model name: ")
 		if err != nil {
 			return "", "", fmt.Errorf("failed to read model name: %w", err)
 		}
@@ -965,8 +445,103 @@ func promptForSmartGuideModel(reader *bufio.Reader, appManager *AppManager) (str
 	return provider.UUID, model, nil
 }
 
+func promptForProviderChoice(reader *bufio.Reader, providers []*typ.Provider, defaultProvider *typ.Provider, label string) (*typ.Provider, error) {
+	if len(providers) == 1 {
+		return providers[0], nil
+	}
+
+	fmt.Printf("\nSelect %s:\n", label)
+	sort.Slice(providers, func(i, j int) bool {
+		return strings.ToLower(providers[i].Name) < strings.ToLower(providers[j].Name)
+	})
+	defaultIndex := -1
+	for i, provider := range providers {
+		marker := ""
+		if defaultProvider != nil && provider.UUID == defaultProvider.UUID {
+			marker = " (default)"
+			defaultIndex = i + 1
+		}
+		fmt.Printf("%d. %s%s\n", i+1, provider.Name, marker)
+	}
+	promptStr := "Enter choice"
+	if defaultIndex > 0 {
+		promptStr = fmt.Sprintf("Enter choice (%d): ", defaultIndex)
+	} else {
+		promptStr = "Enter choice: "
+	}
+
+	for {
+		input, err := promptForModelInput(reader, promptStr)
+		if err != nil {
+			return nil, err
+		}
+		if input == "" && defaultIndex > 0 {
+			return providers[defaultIndex-1], nil
+		}
+
+		choice, err := strconv.Atoi(input)
+		if err == nil && choice >= 1 && choice <= len(providers) {
+			return providers[choice-1], nil
+		}
+
+		for _, provider := range providers {
+			if strings.EqualFold(provider.Name, input) {
+				return provider, nil
+			}
+		}
+
+		fmt.Println("Invalid provider selection. Please try again.")
+	}
+}
+
+func promptForModelChoice(reader *bufio.Reader, label string, models []string) (string, error) {
+	if len(models) == 0 {
+		return promptForModelInput(reader, fmt.Sprintf("%s (enter model name): ", label))
+	}
+
+	fmt.Printf("\nSelect %s:\n", label)
+	for i, model := range models {
+		fmt.Printf("%d. %s\n", i+1, model)
+	}
+	fmt.Printf("0. Enter custom model\n")
+
+	for {
+		input, err := promptForModelInput(reader, "Enter choice: ")
+		if err != nil {
+			return "", err
+		}
+
+		if input == "0" {
+			return promptForModelInput(reader, fmt.Sprintf("%s (custom): ", label))
+		}
+
+		if choice, err := strconv.Atoi(input); err == nil {
+			if choice >= 1 && choice <= len(models) {
+				return models[choice-1], nil
+			}
+			fmt.Println("Invalid selection. Please try again.")
+			continue
+		}
+
+		return input, nil
+	}
+}
+
+func promptForModelInput(reader *bufio.Reader, prompt string) (string, error) {
+	fmt.Print(prompt)
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("failed to read input: %w", err)
+	}
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return "", fmt.Errorf("input is required")
+	}
+	return input, nil
+}
+
 // runStandaloneBot runs a single bot in standalone mode
-func runStandaloneBot(ctx context.Context, appManager *AppManager, setting db.Settings, dataPath string) error {
+func runStandaloneBot(ctx context.Context, appManager *AppManager, setting db.Settings, dataPath string, provider string, model string) error {
 	botSetting := bot.BotSetting{
 		UUID:               setting.UUID,
 		Name:               setting.Name,
@@ -979,8 +554,8 @@ func runStandaloneBot(ctx context.Context, appManager *AppManager, setting db.Se
 		BashAllowlist:      setting.BashAllowlist,
 		DefaultCwd:         setting.DefaultCwd,
 		Enabled:            setting.Enabled,
-		SmartGuideProvider: setting.SmartGuideProvider,
-		SmartGuideModel:    setting.SmartGuideModel,
+		SmartGuideProvider: provider,
+		SmartGuideModel:    model,
 	}
 
 	// Create session store (minimal for standalone bot)

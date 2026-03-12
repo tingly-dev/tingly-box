@@ -152,6 +152,26 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 		return fmt.Errorf("bot has no valid auth credentials for platform: %s", platform)
 	}
 
+	// Validate SmartGuide configuration if set as default agent
+	// This provides early warning at bot startup rather than at message handling time
+	m.mu.RLock()
+	tbClient := m.tbClient
+	m.mu.RUnlock()
+
+	if s.SmartGuideProvider == "" || s.SmartGuideModel == "" {
+		logrus.WithFields(logrus.Fields{
+			"uuid":     uuid,
+			"name":     name,
+			"platform": platform,
+		}).Warn("SmartGuide provider/model not configured, Claude Code will be used as fallback when SmartGuide is requested")
+	} else if tbClient == nil {
+		logrus.WithFields(logrus.Fields{
+			"uuid":     uuid,
+			"name":     name,
+			"platform": platform,
+		}).Warn("TBClient not configured, SmartGuide will fall back to Claude Code")
+	}
+
 	// Create cancellable context for this bot
 	ctx, cancel := context.WithCancel(parentCtx)
 	m.running[uuid] = &runningBot{cancel: cancel}
