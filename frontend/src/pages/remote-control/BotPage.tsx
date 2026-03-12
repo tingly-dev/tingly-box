@@ -15,6 +15,7 @@ import {
     Button,
     CircularProgress,
     Modal,
+    Snackbar,
     Stack,
     TextField,
     Typography,
@@ -24,6 +25,13 @@ import { useCallback, useEffect, useState } from 'react';
 const BotPage = () => {
     // Bot settings state
     const [bots, setBots] = useState<BotSettings[]>([]);
+
+    // Snackbar notification state
+    const [snackbar, setSnackbar] = useState<{
+        open: boolean;
+        message: string;
+        severity: 'success' | 'error' | 'info' | 'warning';
+    }>({ open: false, message: '', severity: 'success' });
 
     // Bot platforms config state
     const [botPlatforms, setBotPlatforms] = useState<BotPlatformConfig[]>([]);
@@ -42,13 +50,17 @@ const BotPage = () => {
     const [botLoading, setBotLoading] = useState(false);
     const [botSaving, setBotSaving] = useState(false);
     const [botPlatformsLoading, setBotPlatformsLoading] = useState(false);
-    const [botNotice, setBotNotice] = useState<string | null>(null);
     const [botError, setBotError] = useState<string | null>(null);
     const [botTokenDialogOpen, setBotTokenDialogOpen] = useState(false);
     const [guideExpanded, setGuideExpanded] = useState<string | false>(false);
 
     // Toggle loading state
     const [togglingBotUuid, setTogglingBotUuid] = useState<string | null>(null);
+
+    // Notification helper
+    const showNotification = useCallback((message: string, severity: 'success' | 'error' | 'info' | 'warning' = 'success') => {
+        setSnackbar({ open: true, message, severity });
+    }, []);
 
     // Providers for model selection
     const [providers, setProviders] = useState<Provider[]>([]);
@@ -111,7 +123,6 @@ const BotPage = () => {
 
     // Bot handlers
     const handleOpenBotTokenDialog = useCallback((editUuid?: string) => {
-        setBotNotice(null);
         setBotError(null);
 
         if (editUuid) {
@@ -153,7 +164,6 @@ const BotPage = () => {
 
     const handleSaveBotToken = async () => {
         setBotSaving(true);
-        setBotNotice(null);
         setBotError(null);
 
         try {
@@ -205,7 +215,7 @@ const BotPage = () => {
             // Reload bots
             await loadBotSettings();
 
-            setBotNotice(`Bot ${botDialogMode === 'edit' ? 'updated' : 'created'} successfully.`);
+            showNotification(`Bot ${botDialogMode === 'edit' ? 'updated' : 'created'} successfully.`, 'success');
             setBotTokenDialogOpen(false);
         } catch (err) {
             console.error('Failed to save bot settings:', err);
@@ -221,7 +231,7 @@ const BotPage = () => {
         try {
             const result = await api.toggleImBotSetting(uuid);
             if (result?.success) {
-                setBotNotice(enabled ? 'Bot enabled' : 'Bot disabled');
+                showNotification(enabled ? 'Bot enabled' : 'Bot disabled', 'success');
                 await loadBotSettings();
             } else {
                 setBotError(`Failed to toggle bot: ${result?.error || 'Unknown error'}`);
@@ -232,13 +242,13 @@ const BotPage = () => {
         } finally {
             setTogglingBotUuid(null);
         }
-    }, [loadBotSettings]);
+    }, [loadBotSettings, showNotification]);
 
     const handleDeleteBot = useCallback(async (uuid: string) => {
         try {
             const result = await api.deleteImBotSetting(uuid);
             if (result?.success) {
-                setBotNotice('Bot deleted successfully');
+                showNotification('Bot deleted successfully', 'success');
                 await loadBotSettings();
             } else {
                 setBotError(`Failed to delete bot: ${result?.error}`);
@@ -246,7 +256,7 @@ const BotPage = () => {
         } catch (err) {
             setBotError('Failed to delete bot');
         }
-    }, [loadBotSettings]);
+    }, [loadBotSettings, showNotification]);
 
     const handleCWDChange = useCallback(async (botUuid: string, cwd: string) => {
         try {
@@ -272,13 +282,13 @@ const BotPage = () => {
         });
 
         if (response.success) {
-            setBotNotice('SmartGuide configuration updated');
+            showNotification('SmartGuide configuration updated', 'success');
             await loadBotSettings();
         } else {
             setBotError(response.error || 'Failed to update SmartGuide configuration');
             throw new Error(response.error || 'Failed to update SmartGuide configuration');
         }
-    }, [loadBotSettings]);
+    }, [loadBotSettings, showNotification]);
 
     const {
         openDialog: openSmartGuideDialog,
@@ -341,18 +351,11 @@ const BotPage = () => {
                     </Button>
                 }
             >
-                <Stack spacing={2}>
-                    {botNotice && (
-                        <Alert severity="success" onClose={() => setBotNotice(null)}>
-                            {botNotice}
-                        </Alert>
-                    )}
-                    {botError && (
-                        <Alert severity="error" onClose={() => setBotError(null)}>
-                            {botError}
-                        </Alert>
-                    )}
-                </Stack>
+                {botError && (
+                    <Alert severity="error" onClose={() => setBotError(null)} sx={{ mb: 2 }}>
+                        {botError}
+                    </Alert>
+                )}
 
                 {botLoading ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -522,6 +525,22 @@ const BotPage = () => {
 
             {/* SmartGuide Selector Dialog */}
             <SmartGuideDialog open={smartGuideDialogOpen} />
+
+            {/* Snackbar for notifications */}
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={4000}
+                onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            >
+                <Alert
+                    onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+                    severity={snackbar.severity}
+                    sx={{ width: '100%' }}
+                >
+                    {snackbar.message}
+                </Alert>
+            </Snackbar>
         </PageLayout>
     );
 };
