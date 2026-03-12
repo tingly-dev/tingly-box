@@ -211,11 +211,31 @@ func (bm *BotManager) StartAllEnabled(ctx context.Context) error {
 		return fmt.Errorf("failed to list settings: %w", err)
 	}
 
+	// Count enabled bots first for better logging
+	enabledCount := 0
+	for _, s := range settings {
+		if s.Enabled {
+			enabledCount++
+		}
+	}
+
+	if enabledCount == 0 {
+		logrus.Info("No enabled bots found to start")
+		return nil
+	}
+
+	logrus.WithField("count", enabledCount).Info("Starting enabled bots")
+
 	startedCount := 0
 	errorCount := 0
 
 	for _, s := range settings {
 		if s.Enabled {
+			logrus.WithFields(logrus.Fields{
+				"uuid":     s.UUID,
+				"name":     s.Name,
+				"platform": s.Platform,
+			}).Info("Starting bot")
 			if err := bm.manager.Start(ctx, s.UUID); err != nil {
 				logrus.WithError(err).WithField("uuid", s.UUID).Warn("Failed to start bot")
 				errorCount++
