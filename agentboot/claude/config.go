@@ -3,15 +3,22 @@ package claude
 import "time"
 
 // PermissionMode defines how permission requests are handled
+// These values must match Claude Code CLI's --permission-mode options
 type PermissionMode string
 
 const (
-	// PermissionModeAuto automatically approves all permissions
+	// PermissionModeDefault uses the default permission behavior (asks for permissions)
+	PermissionModeDefault PermissionMode = "default"
+	// PermissionModeAuto auto-approves permissions (equivalent to bypassPermissions)
 	PermissionModeAuto PermissionMode = "auto"
-	// PermissionModeManual requires manual approval for each permission
-	PermissionModeManual PermissionMode = "manual"
-	// PermissionModeOnce approves permissions once per session
-	PermissionModeOnce PermissionMode = "once"
+	// PermissionModeDontAsk doesn't ask for permissions
+	PermissionModeDontAsk PermissionMode = "dontAsk"
+	// PermissionModeBypassPermissions bypasses all permission checks
+	PermissionModeBypassPermissions PermissionMode = "bypassPermissions"
+	// PermissionModeAcceptEdits accepts edit operations
+	PermissionModeAcceptEdits PermissionMode = "acceptEdits"
+	// PermissionModePlan enables plan mode
+	PermissionModePlan PermissionMode = "plan"
 )
 
 // Config holds Claude-specific configuration
@@ -78,7 +85,7 @@ func DefaultConfig() *Config {
 		EnableStreamJSON: true,
 		StreamBufferSize: 100,
 		Model:            "", // Empty means use Claude default
-		PermissionMode:   PermissionModeManual,
+		PermissionMode:   PermissionModeDefault,
 	}
 }
 
@@ -98,4 +105,30 @@ func (c *Config) WithResume(sessionID string) *Config {
 func (c *Config) WithContinue() *Config {
 	c.ContinueConversation = true
 	return c
+}
+
+// MapAskModeToPermissionMode maps the internal ask.Mode to Claude CLI permission mode
+// This is used when converting from bot handler's ask mode to Claude CLI permission mode
+func MapAskModeToPermissionMode(askMode string) PermissionMode {
+	switch askMode {
+	case "auto":
+		return PermissionModeAuto
+	case "manual":
+		return PermissionModeDefault // Manual ask mode maps to default (ask for permissions)
+	case "skip":
+		return PermissionModeBypassPermissions // Skip mode bypasses permissions
+	default:
+		return PermissionModeDefault
+	}
+}
+
+// IsValidPermissionMode checks if a permission mode is valid for Claude CLI
+func IsValidPermissionMode(mode string) bool {
+	switch PermissionMode(mode) {
+	case PermissionModeDefault, PermissionModeAuto, PermissionModeDontAsk,
+		PermissionModeBypassPermissions, PermissionModeAcceptEdits, PermissionModePlan:
+		return true
+	default:
+		return false
+	}
 }
