@@ -47,7 +47,7 @@ type Manager struct {
 	tokenStorage   TokenStorage
 	stateStorage   StateStorage
 	sessionStorage SessionStorage
-	Debug         bool
+	Debug          bool
 }
 
 // StateData holds information about an OAuth state
@@ -687,6 +687,11 @@ func (m *Manager) RefreshToken(ctx context.Context, userID string, providerType 
 // RevokeToken removes a token for a user and provider
 func (m *Manager) RevokeToken(userID string, providerType ProviderType) error {
 	return m.config.TokenStorage.DeleteToken(userID, providerType)
+}
+
+// ListProviders returns all providers that have valid tokens for the user
+func (m *Manager) ListProviders(userID string) ([]ProviderType, error) {
+	return m.config.TokenStorage.ListProviders(userID)
 }
 
 // GetRegistry returns the provider registry

@@ -16,6 +16,9 @@ type TokenStorage interface {
 	// DeleteToken removes a token for the given user and provider
 	DeleteToken(userID string, provider ProviderType) error
 
+	// ListProviders returns all providers that have tokens for the user
+	ListProviders(userID string) ([]ProviderType, error)
+
 	// CleanupExpired removes all expired tokens from the storage
 	CleanupExpired() error
 }
@@ -97,6 +100,23 @@ func (s *MemoryTokenStorage) CleanupExpired() error {
 		}
 	}
 	return nil
+}
+
+// ListProviders returns all providers that have tokens for the user
+func (s *MemoryTokenStorage) ListProviders(userID string) ([]ProviderType, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.tokens[userID] == nil {
+		return []ProviderType{}, nil
+	}
+
+	providers := make([]ProviderType, 0, len(s.tokens[userID]))
+	for provider := range s.tokens[userID] {
+		providers = append(providers, provider)
+	}
+
+	return providers, nil
 }
 
 // TokenWithMetadata represents a token with additional metadata
