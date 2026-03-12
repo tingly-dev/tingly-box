@@ -1,11 +1,13 @@
 import { Box, Typography, styled, Divider, Chip, Tooltip } from '@mui/material';
+import { Warning as WarningIcon } from '@mui/icons-material';
 import { NODE_LAYER_STYLES } from './styles';
 import { useCallback } from 'react';
 
-const StyledBotModelNode = styled(Box, { shouldForwardProp: (prop) => prop !== 'active' && prop !== 'clickable' })<{
+const StyledBotModelNode = styled(Box, { shouldForwardProp: (prop) => prop !== 'active' && prop !== 'clickable' && prop !== 'hasConfig' })<{
     active: boolean;
     clickable: boolean;
-}>(({ active, clickable, theme }) => ({
+    hasConfig: boolean;
+}>(({ active, clickable, hasConfig, theme }) => ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -13,8 +15,8 @@ const StyledBotModelNode = styled(Box, { shouldForwardProp: (prop) => prop !== '
     padding: 12,
     borderRadius: theme.shape.borderRadius,
     border: '1px solid',
-    borderColor: active ? 'warning.main' : 'divider',
-    backgroundColor: active ? 'warning.50' : 'background.paper',
+    borderColor: hasConfig ? (active ? 'warning.main' : 'divider') : 'warning.main',
+    backgroundColor: hasConfig ? (active ? 'warning.50' : 'background.paper') : 'warning.50',
     textAlign: 'center',
     width: 220,
     height: 90,
@@ -54,7 +56,7 @@ const BotModelNode: React.FC<BotModelNodeProps> = ({
     }, [onClick]);
 
     return (
-        <StyledBotModelNode active={active} clickable={clickable} onClick={handleClick}>
+        <StyledBotModelNode active={active} clickable={clickable} hasConfig={hasConfig} onClick={handleClick}>
             {/* Top Layer - Provider name and model display (same as ProviderNode) */}
             <Box sx={NODE_LAYER_STYLES.topLayer}>
                 <Tooltip title={
@@ -63,6 +65,16 @@ const BotModelNode: React.FC<BotModelNodeProps> = ({
                         : 'Click to configure bot model'
                 } arrow>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                        {/* Warning icon when model not configured - inline with text */}
+                        {active && !hasConfig && (
+                            <WarningIcon
+                                sx={{
+                                    fontSize: '1rem',
+                                    color: 'warning.main',
+                                }}
+                            />
+                        )}
+
                         <Typography
                             variant="body2"
                             color="text.primary"
@@ -70,7 +82,7 @@ const BotModelNode: React.FC<BotModelNodeProps> = ({
                             sx={{
                                 ...NODE_LAYER_STYLES.typography,
                                 fontStyle: !provider ? 'italic' : 'normal',
-                                width: '120px',
+                                width: '100px',
                                 textAlign: 'center',
                             }}
                         >
@@ -89,7 +101,7 @@ const BotModelNode: React.FC<BotModelNodeProps> = ({
                                 sx={{
                                     ...NODE_LAYER_STYLES.typography,
                                     fontStyle: !model ? 'italic' : 'normal',
-                                    width: '80px',
+                                    width: '70px',
                                     textAlign: 'center',
                                 }}
                             >

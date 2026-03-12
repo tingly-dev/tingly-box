@@ -1,4 +1,4 @@
-import {Delete as DeleteIcon, Edit as EditIcon} from '@mui/icons-material';
+import {Delete as DeleteIcon, Edit as EditIcon, Warning as WarningIcon} from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -162,6 +162,16 @@ const BotCard: React.FC<BotCardProps> = ({
                                 opacity: isActive ? 1 : 0.5,
                             }}
                         />
+                    )}
+                    {isActive && !(bot.smartguide_provider && bot.smartguide_model) && (
+                        <Tooltip title="No model configured - click to select a model">
+                            <WarningIcon
+                                sx={{
+                                    fontSize: '1.1rem',
+                                    color: 'warning.main',
+                                }}
+                            />
+                        </Tooltip>
                     )}
                     {bot.chat_id && (
                         <Tooltip title={`Chat ID: ${bot.chat_id}`}>
