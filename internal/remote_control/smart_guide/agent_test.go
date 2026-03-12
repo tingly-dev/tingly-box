@@ -38,11 +38,6 @@ func (m *MockTBClient) GetProviders(ctx context.Context) ([]tbclient.ProviderInf
 	return args.Get(0).([]tbclient.ProviderInfo), args.Error(1)
 }
 
-func (m *MockTBClient) GetServices(ctx context.Context) ([]tbclient.ServiceInfo, error) {
-	args := m.Called(ctx)
-	return args.Get(0).([]tbclient.ServiceInfo), args.Error(1)
-}
-
 func (m *MockTBClient) GetDefaultRule(ctx context.Context) (*typ.Rule, error) {
 	args := m.Called(ctx)
 	if args.Get(0) == nil {
@@ -73,6 +68,11 @@ func (m *MockTBClient) SelectModel(ctx context.Context, req tbclient.ModelSelect
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*tbclient.ModelConfig), args.Error(1)
+}
+
+func (m *MockTBClient) GetDataDir() string {
+	args := m.Called()
+	return args.String(0)
 }
 
 // MockModelClient wraps mockmodel.MockModel to implement agent.ModelClient
@@ -637,4 +637,48 @@ func TestBashTool_ComplexCommands(t *testing.T) {
 	assert.NoError(t, err)
 	text = extractTextFromContent(resp.Content)
 	assert.Contains(t, text, "success")
+}
+
+// CanCreateAgent tests
+
+func TestCanCreateAgent_NilTBClient(t *testing.T) {
+	result := CanCreateAgent(nil, "provider-uuid", "model-id")
+	assert.False(t, result, "Should return false when TBClient is nil")
+}
+
+func TestCanCreateAgent_EmptyProvider(t *testing.T) {
+	mockTBClient := new(MockTBClient)
+	result := CanCreateAgent(mockTBClient, "", "model-id")
+	assert.False(t, result, "Should return false when provider is empty")
+}
+
+func TestCanCreateAgent_EmptyModel(t *testing.T) {
+	mockTBClient := new(MockTBClient)
+	result := CanCreateAgent(mockTBClient, "provider-uuid", "")
+	assert.False(t, result, "Should return false when model is empty")
+}
+
+func TestCanCreateAgent_SelectModelError(t *testing.T) {
+	mockTBClient := new(MockTBClient)
+	mockTBClient.On("SelectModel", mock.Anything, mock.Anything).Return(nil, errors.New("provider not found"))
+
+	result := CanCreateAgent(mockTBClient, "invalid-provider", "model-id")
+	assert.False(t, result, "Should return false when SelectModel fails")
+	mockTBClient.AssertExpectations(t)
+}
+
+func TestCanCreateAgent_Success(t *testing.T) {
+	mockTBClient := new(MockTBClient)
+	mockTBClient.On("SelectModel", mock.Anything, mock.MatchedBy(func(r tbclient.ModelSelectionRequest) bool {
+		return r.ProviderUUID == "provider-uuid" && r.ModelID == "model-id"
+	})).Return(&tbclient.ModelConfig{
+		ProviderUUID: "provider-uuid",
+		ModelID:      "model-id",
+		APIKey:       "test-key",
+		BaseURL:      "http://localhost:8080",
+	}, nil)
+
+	result := CanCreateAgent(mockTBClient, "provider-uuid", "model-id")
+	assert.True(t, result, "Should return true when all validations pass")
+	mockTBClient.AssertExpectations(t)
 }
