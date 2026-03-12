@@ -503,8 +503,24 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 	// 3. Create agent with history
 	agent, err := smart_guide.NewTinglyBoxAgentWithSession(agentConfig, sess)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to create smart guide agent")
-		h.SendText(hCtx, "⚠️ Failed to initialize Smart Guide.")
+		logrus.WithError(err).Warn("Failed to create Smart Guide agent, falling back to Claude Code")
+
+		// Automatically switch to Claude Code agent
+		if err := h.handleHandoff(hCtx, agentClaudeCode); err != nil {
+			logrus.WithError(err).Error("Failed to fallback to Claude Code")
+			h.SendText(hCtx, "⚠️ Smart Guide unavailable and failed to switch to Claude Code. Please check your configuration.")
+			return fmt.Errorf("smart guide failed and fallback to claude code failed: %w", err)
+		}
+
+		// Route the message to Claude Code with the original text
+		projectPath, _, _ := h.getProjectPathForChat(hCtx)
+		logrus.WithFields(logrus.Fields{
+			"chatID":      hCtx.ChatID,
+			"projectPath": projectPath,
+			"textLength":  len(text),
+		}).Info("Routing message to Claude Code after Smart Guide fallback")
+
+		h.handleAgentMessage(hCtx, agentClaudeCode, text, projectPath)
 		return nil
 	}
 
