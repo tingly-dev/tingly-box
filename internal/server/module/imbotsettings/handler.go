@@ -340,9 +340,14 @@ func (h *Handler) DeleteSettings(c *gin.Context) {
 		return
 	}
 
-	// Stop the bot if it's running
+	// Stop the bot if it's running (async for fast delete)
+	// The bot will be stopped in the background while we delete from database
 	if h.botMgr != nil {
-		h.botMgr.StopBot(uuid)
+		go func() {
+			if err := h.botMgr.StopBot(uuid); err != nil {
+				logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to stop bot during delete (continuing anyway)")
+			}
+		}()
 	}
 
 	if err := h.store.DeleteSettings(uuid); err != nil {
