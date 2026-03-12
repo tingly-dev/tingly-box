@@ -18,6 +18,9 @@ type TBClient interface {
 
 	GetDefaultRule(ctx context.Context) (*typ.Rule, error)
 
+	// GetDefaultRuleForScenario returns the default rule for a specific scenario
+	GetDefaultRuleForScenario(ctx context.Context, scenario typ.RuleScenario) (*typ.Rule, error)
+
 	// GetDefaultService returns the default service configuration
 	// This reuses the ClaudeCode scenario's active service
 	// Returns base URL (ClaudeCode scenario), API key, provider, and model
@@ -26,6 +29,17 @@ type TBClient interface {
 	// GetConnectionConfig returns base URL and API key
 	// Base URL defaults to ClaudeCode scenario URL if not configured
 	GetConnectionConfig(ctx context.Context) (*ConnectionConfig, error)
+
+	// GetHTTPEndpointForScenario returns HTTP endpoint configuration for a scenario
+	GetHTTPEndpointForScenario(ctx context.Context, scenario typ.RuleScenario) (*HTTPEndpointConfig, error)
+
+	// EnsureSmartGuideRule ensures the _smart_guide rule exists and is configured correctly
+	// Deprecated: Use EnsureSmartGuideRuleForBot for bot-specific rules
+	EnsureSmartGuideRule(ctx context.Context, providerUUID, modelID string) error
+
+	// EnsureSmartGuideRuleForBot ensures the _smart_guide rule exists for a specific bot
+	// Each bot gets its own rule with UUID: _internal_smart_guide_{botUUID}
+	EnsureSmartGuideRuleForBot(ctx context.Context, botUUID, botName, providerUUID, modelID string) error
 
 	// SelectModel returns model configuration for @tb execution
 	SelectModel(ctx context.Context, req ModelSelectionRequest) (*ModelConfig, error)
@@ -172,4 +186,77 @@ func (c *TBClientImpl) GetDataDir() string {
 	}
 
 	return filepath.Join(configDir, "data")
+}
+
+// HTTPEndpointConfig represents HTTP endpoint configuration for a scenario
+type HTTPEndpointConfig struct {
+	BaseURL string // e.g., "http://localhost:12580/tingly/_smart_guide/v1"
+	APIKey  string // tingly-box token
+}
+
+// GetDefaultRuleForScenario returns the default rule for a specific scenario
+func (c *TBClientImpl) GetDefaultRuleForScenario(ctx context.Context, scenario typ.RuleScenario) (*typ.Rule, error) {
+	rules := c.config.GetRequestConfigs()
+	for i, rule := range rules {
+		if rule.GetScenario() == scenario && rule.Active {
+			return &rules[i], nil
+		}
+	}
+	return nil, fmt.Errorf("no active rules found for scenario: %s", scenario)
+}
+
+// GetHTTPEndpointForScenario returns HTTP endpoint configuration for a scenario
+func (c *TBClientImpl) GetHTTPEndpointForScenario(ctx context.Context, scenario typ.RuleScenario) (*HTTPEndpointConfig, error) {
+	// Verify that a rule exists for this scenario (don't need to use it, just check existence)
+	_, err := c.GetDefaultRuleForScenario(ctx, scenario)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get rule for scenario %s: %w", scenario, err)
+	}
+
+	// Build the base URL for this scenario
+	port := c.config.GetServerPort()
+	if port == 0 {
+		port = 12580
+	}
+
+	// Build scenario-specific path
+	scenarioPath := c.GetScenarioEndpointPath(scenario)
+	baseURL := fmt.Sprintf("http://localhost:%d%s", port, scenarioPath)
+
+	// Get API key from config
+	apiKey := c.config.GetModelToken()
+
+	return &HTTPEndpointConfig{
+		BaseURL: baseURL,
+		APIKey:  apiKey,
+	}, nil
+}
+
+// GetScenarioEndpointPath returns the endpoint path for a scenario
+func (c *TBClientImpl) GetScenarioEndpointPath(scenario typ.RuleScenario) string {
+	switch scenario {
+	case typ.ScenarioSmartGuide:
+		return "/tingly/_smart_guide/v1"
+	case typ.ScenarioClaudeCode:
+		return "/tingly/claude_code"
+	case typ.ScenarioOpenCode:
+		return "/tingly/opencode"
+	case typ.ScenarioXcode:
+		return "/tingly/xcode"
+	default:
+		// Default to OpenAI scenario path
+		return "/tingly/v1"
+	}
+}
+
+// EnsureSmartGuideRule ensures the _smart_guide rule exists and is configured correctly
+// Deprecated: Use EnsureSmartGuideRuleForBot for bot-specific rules
+func (c *TBClientImpl) EnsureSmartGuideRule(ctx context.Context, providerUUID, modelID string) error {
+	return c.config.EnsureSmartGuideRule(providerUUID, modelID)
+}
+
+// EnsureSmartGuideRuleForBot ensures the _smart_guide rule exists for a specific bot
+// Each bot gets its own rule with UUID: _internal_smart_guide_{botUUID}
+func (c *TBClientImpl) EnsureSmartGuideRuleForBot(ctx context.Context, botUUID, botName, providerUUID, modelID string) error {
+	return c.config.EnsureSmartGuideRuleForBot(botUUID, botName, providerUUID, modelID)
 }

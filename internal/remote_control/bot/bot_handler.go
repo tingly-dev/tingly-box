@@ -113,6 +113,27 @@ func NewBotHandler(
 	// Initialize handoff manager
 	handoffMgr := smart_guide.NewHandoffManager()
 
+	// Initialize SmartGuide rule if configured
+	if tbClient != nil && botSetting.SmartGuideProvider != "" && botSetting.SmartGuideModel != "" {
+		// Use bot-specific rule creation with bot UUID and name
+		if err := tbClient.EnsureSmartGuideRuleForBot(ctx, botSetting.UUID, botSetting.Name, botSetting.SmartGuideProvider, botSetting.SmartGuideModel); err != nil {
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"bot_uuid": botSetting.UUID,
+				"bot_name": botSetting.Name,
+				"provider": botSetting.SmartGuideProvider,
+				"model":    botSetting.SmartGuideModel,
+			}).Error("Failed to initialize SmartGuide rule, @tb will be unavailable")
+			// Don't block startup, SmartGuide will return errors when used
+		} else {
+			logrus.WithFields(logrus.Fields{
+				"bot_uuid": botSetting.UUID,
+				"bot_name": botSetting.Name,
+				"provider": botSetting.SmartGuideProvider,
+				"model":    botSetting.SmartGuideModel,
+			}).Info("SmartGuide rule initialized successfully")
+		}
+	}
+
 	// Create SmartGuide session store using data directory from tbClient
 	var tbSessionStore *smart_guide.SessionStore
 	if tbClient != nil {

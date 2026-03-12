@@ -11,6 +11,7 @@ import (
 	"github.com/tingly-dev/tingly-agentscope/pkg/model/anthropic"
 	"github.com/tingly-dev/tingly-agentscope/pkg/tool"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // TinglyBoxAgent is the smart guide agent (@tb)
@@ -59,26 +60,27 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 	}
 
 	if config.TBClient != nil {
-		// Get provider configuration via SelectModel
+		// Get HTTP endpoint configuration for SmartGuide scenario
 		ctx := context.Background()
-		modelCfg, err := config.TBClient.SelectModel(ctx, tbclient.ModelSelectionRequest{
-			ProviderUUID: config.SmartGuideProvider,
-			ModelID:      config.SmartGuideModel,
-		})
+		endpoint, err := config.TBClient.GetHTTPEndpointForScenario(
+			ctx,
+			typ.ScenarioSmartGuide,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get model config for provider %s, model %s: %w", config.SmartGuideProvider, config.SmartGuideModel, err)
+			return nil, fmt.Errorf("failed to get smartguide HTTP endpoint: %w", err)
 		}
 
-		// Use bot setting configuration
+		// Use TB HTTP endpoint configuration
 		modelConfig = &anthropic.Config{
-			Model:   modelCfg.ModelID,
-			APIKey:  modelCfg.APIKey,
-			BaseURL: modelCfg.BaseURL,
+			Model:   config.SmartGuideModel,
+			APIKey:  endpoint.APIKey,
+			BaseURL: endpoint.BaseURL, // http://localhost:12580/tingly/_smart_guide/v1
 		}
 		logrus.WithFields(logrus.Fields{
 			"provider": config.SmartGuideProvider,
 			"model":    config.SmartGuideModel,
-		}).Info("Using bot setting configuration for smartguide agent")
+			"endpoint": endpoint.BaseURL,
+		}).Info("Using TB HTTP endpoint for smartguide agent")
 	}
 
 	if modelConfig == nil {
