@@ -1,14 +1,12 @@
 package bot
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/smart_guide"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // TestSmartGuideFallback tests the SmartGuide auto-handoff when agent creation fails
@@ -33,7 +31,7 @@ func TestSmartGuideFallback(t *testing.T) {
 			},
 			{
 				name:           "EmptyProvider",
-				tbClient:       &mockTBClientSimple{},
+				tbClient:       new(tbclient.MockTBClient),
 				provider:       "",
 				model:          "test-model",
 				expectedResult: false,
@@ -41,7 +39,7 @@ func TestSmartGuideFallback(t *testing.T) {
 			},
 			{
 				name:           "EmptyModel",
-				tbClient:       &mockTBClientSimple{},
+				tbClient:       new(tbclient.MockTBClient),
 				provider:       "test-provider",
 				model:          "",
 				expectedResult: false,
@@ -58,56 +56,6 @@ func TestSmartGuideFallback(t *testing.T) {
 	})
 }
 
-// mockTBClientSimple is a minimal mock that implements tbclient.TBClient
-type mockTBClientSimple struct {
-	mock.Mock
-}
-
-func (m *mockTBClientSimple) GetProviders(ctx context.Context) ([]tbclient.ProviderInfo, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]tbclient.ProviderInfo), args.Error(1)
-}
-
-func (m *mockTBClientSimple) GetDefaultRule(ctx context.Context) (*typ.Rule, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*typ.Rule), args.Error(1)
-}
-
-func (m *mockTBClientSimple) GetDefaultService(ctx context.Context) (*tbclient.DefaultServiceConfig, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*tbclient.DefaultServiceConfig), args.Error(1)
-}
-
-func (m *mockTBClientSimple) GetConnectionConfig(ctx context.Context) (*tbclient.ConnectionConfig, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*tbclient.ConnectionConfig), args.Error(1)
-}
-
-func (m *mockTBClientSimple) SelectModel(ctx context.Context, req tbclient.ModelSelectionRequest) (*tbclient.ModelConfig, error) {
-	args := m.Called(ctx, req)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*tbclient.ModelConfig), args.Error(1)
-}
-
-func (m *mockTBClientSimple) GetDataDir() string {
-	args := m.Called()
-	return args.String(0)
-}
-
 // TestSmartGuideConfigurationValidation tests various configuration scenarios
 func TestSmartGuideConfigurationValidation(t *testing.T) {
 	t.Run("NilTBClient", func(t *testing.T) {
@@ -116,19 +64,19 @@ func TestSmartGuideConfigurationValidation(t *testing.T) {
 	})
 
 	t.Run("MissingProvider", func(t *testing.T) {
-		mockClient := &mockTBClientSimple{}
+		mockClient := new(tbclient.MockTBClient)
 		result := smart_guide.CanCreateAgent(mockClient, "", "claude-sonnet-4-6")
 		assert.False(t, result, "Should return false when provider is empty")
 	})
 
 	t.Run("MissingModel", func(t *testing.T) {
-		mockClient := &mockTBClientSimple{}
+		mockClient := new(tbclient.MockTBClient)
 		result := smart_guide.CanCreateAgent(mockClient, "provider-123", "")
 		assert.False(t, result, "Should return false when model is empty")
 	})
 
 	t.Run("SelectModelFails", func(t *testing.T) {
-		mockClient := new(mockTBClientSimple)
+		mockClient := new(tbclient.MockTBClient)
 		mockClient.On("SelectModel", mock.Anything, mock.Anything).Return(nil, mockTestError("provider not found"))
 		result := smart_guide.CanCreateAgent(mockClient, "invalid-provider", "test-model")
 		assert.False(t, result, "Should return false when SelectModel fails")
@@ -136,7 +84,7 @@ func TestSmartGuideConfigurationValidation(t *testing.T) {
 	})
 
 	t.Run("ValidConfiguration", func(t *testing.T) {
-		mockClient := new(mockTBClientSimple)
+		mockClient := new(tbclient.MockTBClient)
 		mockClient.On("SelectModel", mock.Anything, mock.Anything).Return(&tbclient.ModelConfig{
 			ProviderUUID: "valid-provider",
 			ModelID:      "valid-model",
