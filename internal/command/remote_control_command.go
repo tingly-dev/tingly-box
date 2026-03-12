@@ -644,6 +644,7 @@ func botStartCommand(appManager *AppManager) *cobra.Command {
 		dataPath string
 		provider string
 		model    string
+		force    bool
 	)
 
 	cmd := &cobra.Command{
@@ -692,24 +693,29 @@ func botStartCommand(appManager *AppManager) *cobra.Command {
 			if provider == "" || model == "" {
 				// Check if current setting has SmartGuide config
 				if setting.SmartGuideProvider == "" || setting.SmartGuideModel == "" {
-					fmt.Println()
-					fmt.Println("SmartGuide (@tb agent) requires model configuration.")
-					fmt.Println("Current bot does not have SmartGuide configured.")
-					fmt.Println()
+					if force {
+						// Force mode: skip SmartGuide configuration entirely
+						logrus.Warn("Force mode: skipping SmartGuide configuration, @tb agent may not work")
+					} else {
+						fmt.Println()
+						fmt.Println("SmartGuide (@tb agent) requires model configuration.")
+						fmt.Println("Current bot does not have SmartGuide configured.")
+						fmt.Println()
 
-					// Prompt for provider and model
-					p, m, err := promptForSmartGuideModel(reader, appManager)
-					if err != nil {
-						return fmt.Errorf("failed to configure SmartGuide model: %w", err)
-					}
-					provider = p
-					model = m
+						// Prompt for provider and model
+						p, m, err := promptForSmartGuideModel(reader, appManager)
+						if err != nil {
+							return fmt.Errorf("failed to configure SmartGuide model: %w", err)
+						}
+						provider = p
+						model = m
 
-					// Update settings
-					setting.SmartGuideProvider = provider
-					setting.SmartGuideModel = model
-					if err := store.UpdateSettings(uuid, setting); err != nil {
-						logrus.WithError(err).Warn("Failed to save SmartGuide configuration to store")
+						// Update settings
+						setting.SmartGuideProvider = provider
+						setting.SmartGuideModel = model
+						if err := store.UpdateSettings(uuid, setting); err != nil {
+							logrus.WithError(err).Warn("Failed to save SmartGuide configuration to store")
+						}
 					}
 				} else {
 					provider = setting.SmartGuideProvider
@@ -718,18 +724,20 @@ func botStartCommand(appManager *AppManager) *cobra.Command {
 				}
 			}
 
-			// Validate SmartGuide configuration
-			if provider == "" || model == "" {
-				return fmt.Errorf("smartguide_provider and smartguide_model are required. Use --provider and --model flags")
+			// Validate SmartGuide configuration (skip in force mode)
+			if !force && (provider == "" || model == "") {
+				return fmt.Errorf("smartguide_provider and smartguide_model are required. Use --provider and --model flags, or --force to skip")
 			}
 
-			// Validate provider exists
-			prov, err := appManager.GetProvider(provider)
-			if err != nil {
-				return fmt.Errorf("provider %s not found: %w", provider, err)
-			}
-			if prov == nil {
-				return fmt.Errorf("provider %s not found", provider)
+			// Validate provider exists (skip if force is enabled)
+			if !force && provider != "" {
+				prov, err := appManager.GetProvider(provider)
+				if err != nil {
+					return fmt.Errorf("provider %s not found: %w", provider, err)
+				}
+				if prov == nil {
+					return fmt.Errorf("provider %s not found", provider)
+				}
 			}
 
 			// Determine data path
@@ -739,17 +747,23 @@ func botStartCommand(appManager *AppManager) *cobra.Command {
 
 			// Start the bot
 			fmt.Printf("Starting bot: %s (%s)\n", setting.Name, setting.Platform)
-			fmt.Printf("SmartGuide: provider=%s, model=%s\n", provider, model)
+			if provider != "" && model != "" {
+				fmt.Printf("SmartGuide: provider=%s, model=%s\n", provider, model)
+			}
+			if force {
+				fmt.Println("WARNING: Force mode enabled - validation skipped")
+			}
 			fmt.Println("Press Ctrl+C to stop the bot.")
 			fmt.Println()
 
-			return runStandaloneBot(cmd.Context(), appManager, setting, dataPath)
+			return runStandaloneBot(cmd.Context(), appManager, setting, dataPath, provider, model)
 		},
 	}
 
 	cmd.Flags().StringVar(&dataPath, "data-path", "", "data directory for bot state (default: config dir)")
 	cmd.Flags().StringVar(&provider, "provider", "", "provider UUID for smartguide (overrides bot setting)")
 	cmd.Flags().StringVar(&model, "model", "", "model name for smartguide (overrides bot setting)")
+	cmd.Flags().BoolVar(&force, "force", false, "skip provider validation and force start")
 
 	return cmd
 }
@@ -966,7 +980,7 @@ func promptForSmartGuideModel(reader *bufio.Reader, appManager *AppManager) (str
 }
 
 // runStandaloneBot runs a single bot in standalone mode
-func runStandaloneBot(ctx context.Context, appManager *AppManager, setting db.Settings, dataPath string) error {
+func runStandaloneBot(ctx context.Context, appManager *AppManager, setting db.Settings, dataPath string, provider string, model string) error {
 	botSetting := bot.BotSetting{
 		UUID:               setting.UUID,
 		Name:               setting.Name,
@@ -979,8 +993,8 @@ func runStandaloneBot(ctx context.Context, appManager *AppManager, setting db.Se
 		BashAllowlist:      setting.BashAllowlist,
 		DefaultCwd:         setting.DefaultCwd,
 		Enabled:            setting.Enabled,
-		SmartGuideProvider: setting.SmartGuideProvider,
-		SmartGuideModel:    setting.SmartGuideModel,
+		SmartGuideProvider: provider,
+		SmartGuideModel:    model,
 	}
 
 	// Create session store (minimal for standalone bot)
