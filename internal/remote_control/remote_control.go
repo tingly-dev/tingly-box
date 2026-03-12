@@ -31,6 +31,9 @@ func getChatStorePath(dbPath string) string {
 // imbotStore is the optional ImBot settings store from the main service.
 // If provided, it will be used to load bot credentials instead of the local store.
 // tbClient is the TB client for SmartGuide model configuration (required for @tb agent).
+//
+// Deprecated: Bot lifecycle management is now handled by the imbotsettings module.
+// This function is kept for backward compatibility with standalone bot-only mode.
 func Run(ctx context.Context, cfg *config.Config, imbotStore *db.ImBotSettingsStore, tbClient tbclient.TBClient) error {
 	if cfg == nil {
 		return fmt.Errorf("remote-coder config is nil")
@@ -73,7 +76,7 @@ func Run(ctx context.Context, cfg *config.Config, imbotStore *db.ImBotSettingsSt
 	claudeAgent := claude.NewAgent(agentBootConfig)
 	agentBoot.RegisterAgent(agentboot.AgentTypeClaude, claudeAgent)
 
-	// Store global instances for bot platform integration
+	// Store global instances for bot platform integration (deprecated)
 	globalAgentBoot = agentBoot
 
 	// Create bot manager for runtime lifecycle control
@@ -93,7 +96,7 @@ func Run(ctx context.Context, cfg *config.Config, imbotStore *db.ImBotSettingsSt
 		logrus.Info("Using local bot store")
 	}
 
-	// Store bot manager globally for API integration
+	// Store bot manager globally for API integration (deprecated)
 	globalBotManager = botManager
 
 	// Set TBClient for SmartGuide model configuration
@@ -122,16 +125,20 @@ func Run(ctx context.Context, cfg *config.Config, imbotStore *db.ImBotSettingsSt
 }
 
 // GetAgentBoot returns the AgentBoot instance (for bot platform integration)
+// Deprecated: Use the imbotsettings module's BotManager instead.
 func GetAgentBoot() *agentboot.AgentBoot {
 	return globalAgentBoot
 }
 
 // GetBotManager returns the bot manager instance (for API integration)
+// Deprecated: Bot lifecycle is now managed by the imbotsettings module.
+// This function returns nil and should not be used in new code.
 func GetBotManager() bot.BotLifecycle {
+	logrus.Warn("GetBotManager is deprecated. Use imbotsettings module's BotManager instead.")
 	return globalBotManager
 }
 
-// Global instances for bot platform integration
+// Global instances for bot platform integration (deprecated, kept for backward compatibility)
 var (
 	globalAgentBoot  *agentboot.AgentBoot
 	globalBotManager bot.BotLifecycle

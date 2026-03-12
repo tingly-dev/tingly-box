@@ -187,7 +187,10 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 		return fmt.Errorf("failed to start bot manager: %w", err)
 	}
 
+	// Wait for context cancellation
+	// The manager will automatically clean up when context is cancelled
 	<-ctx.Done()
+
 	return nil
 }
 
