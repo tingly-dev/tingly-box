@@ -297,13 +297,10 @@ func shouldSkipClientSecret(config *oauth2.ProviderConfig) bool {
 }
 
 func newOAuthConfig(baseURL string) *oauth2.Config {
-	return &oauth2.Config{
-		BaseURL:           baseURL,
-		ProviderConfigs:   make(map[oauth2.ProviderType]*oauth2.ProviderConfig),
-		TokenStorage:      oauth2.NewMemoryTokenStorage(),
-		StateExpiry:       10 * time.Minute,
-		TokenExpiryBuffer: 5 * time.Minute,
-	}
+	cfg := oauth2.DefaultConfig()
+	cfg.BaseURL = baseURL
+	cfg.ProviderConfigs = make(map[oauth2.ProviderType]*oauth2.ProviderConfig)
+	return cfg
 }
 
 func newSignalChan() chan os.Signal {
