@@ -23,6 +23,7 @@ interface RemoteGraphRowProps {
     readOnly?: boolean;
     onCWDChange: (cwd: string) => void;
     onModelClick?: () => void;
+    onBotClick?: () => void;
     showAgentNode?: boolean; // Optional prop to show Agent node for future use
 }
 
@@ -41,6 +42,7 @@ const RemoteControlGraph: React.FC<RemoteGraphRowProps> = ({
     readOnly = false,
     onCWDChange,
     onModelClick,
+    onBotClick,
     showAgentNode = false, // Default to false for simplified 3-node layout
 }) => {
     const providerName = getProviderName(imbot.smartguide_provider, providers);
@@ -48,7 +50,7 @@ const RemoteControlGraph: React.FC<RemoteGraphRowProps> = ({
     return (
         <Box sx={graphRowStyles}>
             <NodeContainer>
-                <ImBotNode imbot={imbot} active={isBotEnabled} />
+                <ImBotNode imbot={imbot} active={isBotEnabled} onClick={readOnly ? undefined : onBotClick}/>
             </NodeContainer>
 
             <ArrowNode direction="forward"/>

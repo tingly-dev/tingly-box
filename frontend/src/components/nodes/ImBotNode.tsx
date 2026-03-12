@@ -3,8 +3,8 @@ import type {BotSettings} from '@/types/bot';
 import {NODE_LAYER_STYLES} from './styles';
 
 const StyledImBotNode = styled(Box, {
-    shouldForwardProp: (prop) => prop !== 'active',
-})<{ active: boolean }>(({active, theme}) => ({
+    shouldForwardProp: (prop) => prop !== 'active' && prop !== 'clickable',
+})<{ active: boolean; clickable: boolean }>(({active, clickable, theme}) => ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -21,20 +21,28 @@ const StyledImBotNode = styled(Box, {
     transition: 'all 0.2s ease-in-out',
     position: 'relative',
     opacity: active ? 1 : 0.6,
-    cursor: 'default',
+    cursor: clickable ? 'pointer' : 'default',
+    ...(clickable && {
+        '&:hover': {
+            boxShadow: theme.shadows[4],
+            transform: 'translateY(-2px)',
+        },
+    }),
 }));
 
 interface ImBotNodeProps {
     imbot: BotSettings;
     active?: boolean;
+    onClick?: () => void;
 }
 
-const ImBotNode: React.FC<ImBotNodeProps> = ({imbot, active = true}) => {
+const ImBotNode: React.FC<ImBotNodeProps> = ({imbot, active = true, onClick}) => {
     const platformType = imbot.platform.toUpperCase();
     const displayName = imbot.name || 'Bot';
+    const clickable = !!onClick && active;
 
     return (
-        <StyledImBotNode active={active}>
+        <StyledImBotNode active={active} clickable={clickable} onClick={onClick}>
             {/* Top Layer - Platform Type | Name (like ProviderNode) */}
             <Box sx={NODE_LAYER_STYLES.topLayer}>
                 <Box sx={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5}}>

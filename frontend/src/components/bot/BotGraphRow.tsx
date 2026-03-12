@@ -146,6 +146,7 @@ const BotGraphRow: React.FC<BotGraphRowProps> = ({
                                 readOnly={readOnly}
                                 onCWDChange={onCWDChange}
                                 onModelClick={onModelClick}
+                                onBotClick={onEdit}
                             />
                         </Box>
                     </Collapse>

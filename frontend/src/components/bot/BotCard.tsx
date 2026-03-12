@@ -179,19 +179,6 @@ const BotCard: React.FC<BotCardProps> = ({
                             </Typography>
                         </Tooltip>
                     )}
-                    {bot.proxy_url && (
-                        <Tooltip title={bot.proxy_url}>
-                            <Chip
-                                label={`Proxy: ${bot.proxy_url}`}
-                                size="small"
-                                sx={{
-                                    fontFamily: 'monospace',
-                                    fontSize: '0.7rem',
-                                    maxWidth: '300px',
-                                }}
-                            />
-                        </Tooltip>
-                    )}
                 </Box>
                 {/* Right side - All buttons expanded */}
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 0.5}}>
@@ -235,7 +222,7 @@ const BotCard: React.FC<BotCardProps> = ({
                         <GraphContainer>
                             <GraphRow>
                                 <NodeContainer>
-                                    <ImBotNode imbot={bot} active={isActive}/>
+                                    <ImBotNode imbot={bot} active={isActive} onClick={isActive ? onEdit : undefined}/>
                                 </NodeContainer>
 
                                 <CrossNode/>
@@ -255,16 +242,23 @@ const BotCard: React.FC<BotCardProps> = ({
                     </Box>
 
                     {/* Metadata row below graph */}
-                    {bot.bash_allowlist && bot.bash_allowlist.length > 0 && (
-                        <Box sx={{mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap'}}>
+                    <Box sx={{mt: 2, display: 'flex', flexDirection: 'column', gap: 1}}>
+                        {bot.proxy_url && (
+                            <Tooltip title={bot.proxy_url}>
+                                <Typography variant="caption" sx={{color: 'text.secondary', fontFamily: 'monospace'}}>
+                                    Proxy: {bot.proxy_url}
+                                </Typography>
+                            </Tooltip>
+                        )}
+                        {bot.bash_allowlist && bot.bash_allowlist.length > 0 && (
                             <Tooltip title={bot.bash_allowlist.join(', ')}>
                                 <Typography variant="caption" sx={{color: 'text.secondary'}}>
                                     Allowlist: <span
                                     style={{fontFamily: 'monospace'}}>{bot.bash_allowlist.join(', ')}</span>
                                 </Typography>
                             </Tooltip>
-                        </Box>
-                    )}
+                        )}
+                    </Box>
                 </CardContent>
             </Collapse>
 
