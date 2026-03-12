@@ -1,9 +1,10 @@
 import { Box, Typography, styled, Chip, Divider } from '@mui/material';
 import { NODE_LAYER_STYLES } from './styles';
 
-const StyledAgentNode = styled(Box, { shouldForwardProp: (prop) => prop !== 'active' })<{
+const StyledAgentNode = styled(Box, { shouldForwardProp: (prop) => prop !== 'active' && prop !== 'clickable' })<{
     active: boolean;
-}>(({ active, theme }) => ({
+    clickable: boolean;
+}>(({ active, clickable, theme }) => ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -20,6 +21,13 @@ const StyledAgentNode = styled(Box, { shouldForwardProp: (prop) => prop !== 'act
     transition: 'all 0.2s ease-in-out',
     position: 'relative',
     opacity: active ? 1 : 0.6,
+    cursor: clickable ? 'pointer' : 'default',
+    ...(clickable && {
+        '&:hover': {
+            boxShadow: theme.shadows[4],
+            transform: 'translateY(-2px)',
+        },
+    }),
 }));
 
 type AgentType = 'claude-code' | 'custom' | 'mock';
@@ -34,18 +42,25 @@ interface AgentNodeProps {
     agentType?: AgentType;
     active?: boolean;
     label?: string;
+    onClick?: () => void;
 }
 
 const AgentNode: React.FC<AgentNodeProps> = ({
     agentType = 'claude-code',
     active = true,
-    label
+    label,
+    onClick,
 }) => {
     const typeInfo = AGENT_TYPE_LABELS[agentType] || { label: 'Unknown', color: 'default' as const };
     const displayLabel = label || typeInfo.label;
+    const clickable = !!onClick;
 
     return (
-        <StyledAgentNode active={active}>
+        <StyledAgentNode
+            active={active}
+            clickable={clickable}
+            onClick={onClick}
+        >
             <Box sx={NODE_LAYER_STYLES.topLayer}>
                 <Typography variant="body2" sx={NODE_LAYER_STYLES.typography}>Agent</Typography>
             </Box>

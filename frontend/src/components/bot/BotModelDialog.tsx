@@ -6,14 +6,14 @@ import ModelSelectDialog from '@/components/ModelSelectDialog';
 import api from '@/services/api';
 import type { BotSettings } from '@/types/bot';
 
-interface SmartGuideDialogOptions {
+interface BotModelDialogOptions {
     bot: BotSettings | null;
     providers: Provider[];
     onUpdate: (uuid: string, provider: string, model: string) => Promise<void>;
     onClose: () => void;
 }
 
-export const useSmartGuideDialog = (options: SmartGuideDialogOptions) => {
+export const useBotModelDialog = (options: BotModelDialogOptions) => {
     const { bot, providers, onUpdate, onClose } = options;
 
     const [open, setOpen] = useState(false);
@@ -57,7 +57,7 @@ export const useSmartGuideDialog = (options: SmartGuideDialogOptions) => {
     const selectedModel = bot?.smartguide_model;
 
     // Dialog component - using the same pattern as useModelSelectDialog
-    const SmartGuideDialogComponent: React.FC<{ open: boolean }> = ({ open: dialogOpen }) => {
+    const BotModelDialog: React.FC<{ open: boolean }> = ({ open: dialogOpen }) => {
         if (!dialogOpen) return null;
 
         return (
@@ -89,7 +89,7 @@ export const useSmartGuideDialog = (options: SmartGuideDialogOptions) => {
     return {
         openDialog,
         closeDialog,
-        SmartGuideDialog: SmartGuideDialogComponent,
+        BotModelDialog,
         isOpen: open,
         isSaving: saving,
     };

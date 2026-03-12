@@ -40,7 +40,7 @@ interface BotGraphRowProps {
     isExpanded: boolean;
     onToggleExpand: () => void;
     onCWDChange: (cwd: string) => void;
-    onSmartGuideClick?: () => void;
+    onModelClick?: () => void;
     onBotToggle?: (uuid: string, enabled: boolean) => void;
     onEdit?: () => void;
     onDelete?: () => void;
@@ -54,7 +54,7 @@ const BotGraphRow: React.FC<BotGraphRowProps> = ({
     isExpanded,
     onToggleExpand,
     onCWDChange,
-    onSmartGuideClick,
+    onModelClick,
     onBotToggle,
     onEdit,
     onDelete,
@@ -141,14 +141,12 @@ const BotGraphRow: React.FC<BotGraphRowProps> = ({
                             <RemoteControlGraph
                                 imbot={bot}
                                 providers={providers}
-                                currentAgentUuid={bot.default_agent || null}
                                 currentCWD={bot.default_cwd || ''}
                                 isBotEnabled={isBotEnabled}
                                 readOnly={readOnly}
-                                onBotToggle={handleBotToggle}
                                 onCWDChange={onCWDChange}
-                                onSmartGuideClick={onSmartGuideClick}
-                                isToggling={isToggling}
+                                onModelClick={onModelClick}
+                                onBotClick={onEdit}
                             />
                         </Box>
                     </Collapse>

@@ -26,7 +26,7 @@ interface BotTableProps {
     onEdit?: (uuid: string) => void;
     onDelete?: (uuid: string) => void;
     onBotToggle?: (uuid: string, enabled: boolean) => void;
-    onSmartGuideSelect?: (botUuid: string) => void;
+    onBotModelSelect?: (botUuid: string) => void;
     onCWDChange?: (botUuid: string, cwd: string) => void;
     defaultExpanded?: string[];
     loading?: boolean;
@@ -51,7 +51,7 @@ const BotTable = ({
     onEdit,
     onDelete,
     onBotToggle,
-    onSmartGuideSelect,
+    onBotModelSelect,
     onCWDChange,
     defaultExpanded = [],
     loading = false,
@@ -159,7 +159,7 @@ const BotTable = ({
                                     isExpanded={isExpanded}
                                     onToggleExpand={() => handleToggleExpand(bot.uuid || '')}
                                     onCWDChange={(cwd) => onCWDChange?.(bot.uuid!, cwd)}
-                                    onSmartGuideClick={() => onSmartGuideSelect?.(bot.uuid!)}
+                                    onModelClick={() => onBotModelSelect?.(bot.uuid!)}
                                     onBotToggle={onBotToggle}
                                     onEdit={onEdit ? () => onEdit(bot.uuid!) : undefined}
                                     onDelete={() => handleDeleteClick(bot.uuid!)}

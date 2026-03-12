@@ -1,7 +1,6 @@
 import BotAuthForm from '@/components/bot/BotAuthForm';
 import BotPlatformSelector from '@/components/bot/BotPlatformSelector';
-import BotTable from '@/components/bot/BotTable';
-import { useSmartGuideDialog } from '@/components/bot/SmartGuideDialog';
+import { BotCard, useBotModelDialog } from '@/components/bot';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import { PageLayout } from '@/components/PageLayout';
 import PlatformGuide from '@/components/remote-control/PlatformGuide';
@@ -12,9 +11,11 @@ import type { Provider } from '@/types/provider';
 import { Add } from '@mui/icons-material';
 import {
     Alert,
+    Box,
     Button,
     CircularProgress,
     Modal,
+    Snackbar,
     Stack,
     TextField,
     Typography,
@@ -42,17 +43,27 @@ const BotPage = () => {
     const [botLoading, setBotLoading] = useState(false);
     const [botSaving, setBotSaving] = useState(false);
     const [botPlatformsLoading, setBotPlatformsLoading] = useState(false);
-    const [botNotice, setBotNotice] = useState<string | null>(null);
-    const [botError, setBotError] = useState<string | null>(null);
     const [botTokenDialogOpen, setBotTokenDialogOpen] = useState(false);
     const [guideExpanded, setGuideExpanded] = useState<string | false>(false);
 
     // Toggle loading state
     const [togglingBotUuid, setTogglingBotUuid] = useState<string | null>(null);
 
+    // Snackbar notification state
+    const [snackbar, setSnackbar] = useState<{
+        open: boolean;
+        message: string;
+        severity: 'success' | 'error' | 'info' | 'warning';
+    }>({ open: false, message: '', severity: 'success' });
+
+    // Notification helper - errors require manual dismissal, others auto-hide
+    const showNotification = useCallback((message: string, severity: 'success' | 'error' | 'info' | 'warning' = 'success') => {
+        setSnackbar({ open: true, message, severity });
+    }, []);
+
     // Providers for model selection
     const [providers, setProviders] = useState<Provider[]>([]);
-    const [selectedBotForSmartGuide, setSelectedBotForSmartGuide] = useState<BotSettings | null>(null);
+    const [selectedBot, setSelectedBot] = useState<BotSettings | null>(null);
 
     useEffect(() => {
         loadBotPlatforms();
@@ -82,11 +93,11 @@ const BotPage = () => {
             if (data?.success && Array.isArray(data.settings)) {
                 setBots(data.settings);
             } else if (data?.success === false) {
-                setBotError(data.error || 'Failed to load bot settings');
+                showNotification(data.error || 'Failed to load bot settings', 'error');
             }
         } catch (err) {
             console.error('Failed to load bot settings:', err);
-            setBotError('Failed to load bot settings');
+            showNotification('Failed to load bot settings', 'error');
         } finally {
             setBotLoading(false);
         }
@@ -111,9 +122,6 @@ const BotPage = () => {
 
     // Bot handlers
     const handleOpenBotTokenDialog = useCallback((editUuid?: string) => {
-        setBotNotice(null);
-        setBotError(null);
-
         if (editUuid) {
             // Edit mode
             const bot = bots.find(b => b.uuid === editUuid);
@@ -153,8 +161,6 @@ const BotPage = () => {
 
     const handleSaveBotToken = async () => {
         setBotSaving(true);
-        setBotNotice(null);
-        setBotError(null);
 
         try {
             const allowlist = botAllowlistDraft
@@ -165,7 +171,7 @@ const BotPage = () => {
             // Get platform config to validate required fields
             const platformConfig = botPlatforms.find(p => p.platform === botPlatformDraft);
             if (!platformConfig) {
-                setBotError(`Unknown platform: ${botPlatformDraft}`);
+                showNotification(`Unknown platform: ${botPlatformDraft}`, 'error');
                 return;
             }
 
@@ -175,7 +181,7 @@ const BotPage = () => {
                 .map(f => f.label);
 
             if (missingFields.length > 0) {
-                setBotError(`Missing required fields: ${missingFields.join(', ')}`);
+                showNotification(`Missing required fields: ${missingFields.join(', ')}`, 'error');
                 return;
             }
 
@@ -198,18 +204,18 @@ const BotPage = () => {
             }
 
             if (result?.success === false) {
-                setBotError(result.error || 'Failed to save bot settings');
+                showNotification(result.error || 'Failed to save bot settings', 'error');
                 return;
             }
 
             // Reload bots
             await loadBotSettings();
 
-            setBotNotice(`Bot ${botDialogMode === 'edit' ? 'updated' : 'created'} successfully.`);
+            showNotification(`Bot ${botDialogMode === 'edit' ? 'updated' : 'created'} successfully.`, 'success');
             setBotTokenDialogOpen(false);
         } catch (err) {
             console.error('Failed to save bot settings:', err);
-            setBotError('Failed to save bot settings');
+            showNotification('Failed to save bot settings', 'error');
         } finally {
             setBotSaving(false);
         }
@@ -217,36 +223,35 @@ const BotPage = () => {
 
     const handleBotToggle = useCallback(async (uuid: string, enabled: boolean) => {
         setTogglingBotUuid(uuid);
-        setBotError(null);
         try {
             const result = await api.toggleImBotSetting(uuid);
             if (result?.success) {
-                setBotNotice(enabled ? 'Bot enabled' : 'Bot disabled');
+                showNotification(enabled ? 'Bot enabled' : 'Bot disabled', 'success');
                 await loadBotSettings();
             } else {
-                setBotError(`Failed to toggle bot: ${result?.error || 'Unknown error'}`);
+                showNotification(`Failed to toggle bot: ${result?.error || 'Unknown error'}`, 'error');
             }
         } catch (err) {
             console.error('Failed to toggle bot:', err);
-            setBotError('Failed to toggle bot');
+            showNotification('Failed to toggle bot', 'error');
         } finally {
             setTogglingBotUuid(null);
         }
-    }, [loadBotSettings]);
+    }, [loadBotSettings, showNotification]);
 
     const handleDeleteBot = useCallback(async (uuid: string) => {
         try {
             const result = await api.deleteImBotSetting(uuid);
             if (result?.success) {
-                setBotNotice('Bot deleted successfully');
+                showNotification('Bot deleted successfully', 'success');
                 await loadBotSettings();
             } else {
-                setBotError(`Failed to delete bot: ${result?.error}`);
+                showNotification(`Failed to delete bot: ${result?.error}`, 'error');
             }
         } catch (err) {
-            setBotError('Failed to delete bot');
+            showNotification('Failed to delete bot', 'error');
         }
-    }, [loadBotSettings]);
+    }, [loadBotSettings, showNotification]);
 
     const handleCWDChange = useCallback(async (botUuid: string, cwd: string) => {
         try {
@@ -255,50 +260,48 @@ const BotPage = () => {
                 // No notification needed for CWD change - it's a minor change
                 await loadBotSettings();
             } else {
-                setBotError(result?.error || 'Failed to update working directory');
+                showNotification(result?.error || 'Failed to update working directory', 'error');
             }
         } catch (err) {
-            setBotError('Failed to update working directory');
+            showNotification('Failed to update working directory', 'error');
         }
     }, [loadBotSettings]);
 
     // SmartGuide dialog using the same pattern as RuleCard
-    const handleSmartGuideUpdate = useCallback(async (uuid: string, provider: string, model: string) => {
-        setBotError(null);
-
+    const handleBotModelUpdate = useCallback(async (uuid: string, provider: string, model: string) => {
         const response = await api.updateImbotSetting(uuid, {
             smartguide_provider: provider,
             smartguide_model: model,
         });
 
         if (response.success) {
-            setBotNotice('SmartGuide configuration updated');
+            showNotification('Bot model configuration updated', 'success');
             await loadBotSettings();
         } else {
-            setBotError(response.error || 'Failed to update SmartGuide configuration');
-            throw new Error(response.error || 'Failed to update SmartGuide configuration');
+            showNotification(response.error || 'Failed to update bot configuration', 'error');
+            throw new Error(response.error || 'Failed to update bot configuration');
         }
-    }, [loadBotSettings]);
+    }, [loadBotSettings, showNotification]);
 
     const {
-        openDialog: openSmartGuideDialog,
-        closeDialog: closeSmartGuideDialog,
-        SmartGuideDialog,
-        isOpen: smartGuideDialogOpen,
-    } = useSmartGuideDialog({
-        bot: selectedBotForSmartGuide,
+        openDialog: openBotModelDialog,
+        closeDialog: closeBotModelDialog,
+        BotModelDialog,
+        isOpen: BotModelDialogOpen,
+    } = useBotModelDialog({
+        bot: selectedBot,
         providers,
-        onUpdate: handleSmartGuideUpdate,
-        onClose: () => setSelectedBotForSmartGuide(null),
+        onUpdate: handleBotModelUpdate,
+        onClose: () => setSelectedBot(null),
     });
 
-    const handleSmartGuideSelect = useCallback((botUuid: string) => {
+    const handleBotModelSelect = useCallback((botUuid: string) => {
         const bot = bots.find(b => b.uuid === botUuid);
         if (bot) {
-            setSelectedBotForSmartGuide(bot);
-            openSmartGuideDialog();
+            setSelectedBot(bot);
+            openBotModelDialog();
         }
-    }, [bots, openSmartGuideDialog]);
+    }, [bots, openBotModelDialog]);
 
     return (
         <PageLayout loading={false}>
@@ -315,14 +318,17 @@ const BotPage = () => {
                     </Typography>
                 </Alert>
                 <Typography variant="body2" color="text.secondary">
-                    The <strong>Remote Control</strong> Bot enables you to interact with <strong>Claude Code</strong> through instant messaging platforms
+                    The <strong>Remote Control</strong> Bot enables you to interact with <strong>Claude
+                    Code</strong> through instant messaging platforms
                     like Telegram.
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                    Make sure you have <strong>Claude Code CLI</strong> installed and configured before using this feature.
+                    Make sure you have <strong>Claude Code CLI</strong> installed and configured before using this
+                    feature.
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                    <strong>Once you enable a bot, the remote control is started with corresponding IM, and vice versa.</strong>
+                    <strong>Once you enable a bot, the remote control is started with corresponding IM, and vice
+                        versa.</strong>
                 </Typography>
             </UnifiedCard>
 
@@ -330,6 +336,7 @@ const BotPage = () => {
                 title="Bots"
                 subtitle={`${bots.length} bot${bots.length !== 1 ? 's' : ''} configured`}
                 size="full"
+                sx={{ mb: 2 }}
                 rightAction={
                     <Button
                         variant="contained"
@@ -340,45 +347,36 @@ const BotPage = () => {
                         Add Bot
                     </Button>
                 }
-                sx={{ mb: 2 }}
             >
-                <Stack spacing={2}>
-                    {botNotice && (
-                        <Alert severity="success" onClose={() => setBotNotice(null)}>
-                            {botNotice}
-                        </Alert>
-                    )}
-                    {botError && (
-                        <Alert severity="error" onClose={() => setBotError(null)}>
-                            {botError}
-                        </Alert>
-                    )}
-                    {bots.length > 0 || botLoading ? (
-                        <BotTable
-                            bots={bots}
-                            platforms={botPlatforms}
-                            providers={providers}
-                            onEdit={handleOpenBotTokenDialog}
-                            onDelete={handleDeleteBot}
-                            onBotToggle={handleBotToggle}
-                            onSmartGuideSelect={handleSmartGuideSelect}
-                            onCWDChange={handleCWDChange}
-                            defaultExpanded={bots.map(b => b.uuid).filter(Boolean) as string[]}
-                            loading={botLoading}
-                            error={botError}
-                            togglingBotUuid={togglingBotUuid}
-                        />
-                    ) : (
-                        <EmptyStateGuide
-                            title="No Bots Configured"
-                            description="Configure bots to enable remote-control chat integration."
-                            showOAuthButton={false}
-                            showHeroIcon={false}
-                            primaryButtonLabel="Add Bot"
-                            onAddApiKeyClick={() => handleOpenBotTokenDialog()}
-                        />
-                    )}
-                </Stack>
+                {botLoading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                        <CircularProgress />
+                    </Box>
+                ) : bots.length === 0 ? (
+                    <EmptyStateGuide
+                        title="No Bots Configured"
+                        description="Configure bots to enable remote-control chat integration."
+                        showOAuthButton={false}
+                        showHeroIcon={false}
+                        primaryButtonLabel="Add Bot"
+                        onAddApiKeyClick={() => handleOpenBotTokenDialog()}
+                    />
+                ) : (
+                    bots.map((bot) => (
+                        <div key={bot.uuid}>
+                            <BotCard
+                                bot={bot}
+                                providers={providers}
+                                onEdit={() => handleOpenBotTokenDialog(bot.uuid)}
+                                onDelete={() => handleDeleteBot(bot.uuid!)}
+                                onBotToggle={() => handleBotToggle(bot.uuid!, !bot.enabled)}
+                                onModelClick={() => handleBotModelSelect(bot.uuid!)}
+                                onCWDChange={(cwd) => handleCWDChange(bot.uuid!, cwd)}
+                                isToggling={togglingBotUuid === bot.uuid}
+                            />
+                        </div>
+                    ))
+                )}
             </UnifiedCard>
 
 
@@ -386,6 +384,7 @@ const BotPage = () => {
             <UnifiedCard
                 title="Platform Configuration Guide"
                 subtitle="How to configure different IM platforms"
+                sx={{ mb: 2 }}
                 size="full"
             >
                 <PlatformGuide
@@ -415,19 +414,9 @@ const BotPage = () => {
                         gap: 2,
                     }}
                 >
-                    <Typography variant="h6">{botDialogMode === 'edit' ? 'Edit Bot Configuration' : 'Add Bot Configuration'}</Typography>
+                    <Typography
+                        variant="h6">{botDialogMode === 'edit' ? 'Edit Bot Configuration' : 'Add Bot Configuration'}</Typography>
                     <Stack spacing={2}>
-                        <TextField
-                            label="Alias"
-                            placeholder="My Bot"
-                            value={botNameDraft}
-                            onChange={(e) => setBotNameDraft(e.target.value)}
-                            fullWidth
-                            size="small"
-                            helperText="Optional: a friendly name for this bot configuration."
-                            disabled={botSaving}
-                        />
-
                         <Stack spacing={1}>
                             <Typography variant="body2" color="text.secondary">
                                 Platform
@@ -460,6 +449,17 @@ const BotPage = () => {
                                 disabled={botSaving}
                             />
                         )}
+
+                        <TextField
+                            label="Alias"
+                            placeholder="My Bot"
+                            value={botNameDraft}
+                            onChange={(e) => setBotNameDraft(e.target.value)}
+                            fullWidth
+                            size="small"
+                            helperText="Optional: a friendly name for this bot configuration."
+                            disabled={botSaving}
+                        />
 
                         <TextField
                             label="Proxy URL"
@@ -517,7 +517,23 @@ const BotPage = () => {
             </Modal>
 
             {/* SmartGuide Selector Dialog */}
-            <SmartGuideDialog open={smartGuideDialogOpen} />
+            <BotModelDialog open={BotModelDialogOpen} />
+
+            {/* Snackbar for notifications */}
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={snackbar.severity === 'error' ? null : 4000}
+                onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            >
+                <Alert
+                    onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+                    severity={snackbar.severity}
+                    sx={{ width: '100%' }}
+                >
+                    {snackbar.message}
+                </Alert>
+            </Snackbar>
         </PageLayout>
     );
 };

@@ -120,6 +120,7 @@ const Layout = ({ children }: LayoutProps) => {
                 key: 'dashboard',
                 icon: <BarChartIcon sx={{ fontSize: 22 }} />,
                 label: 'Dashboard',
+                path: '/dashboard/7d',
                 children: [
                     {
                         path: '/dashboard/today',
@@ -210,11 +211,11 @@ const Layout = ({ children }: LayoutProps) => {
                 icon: <RemoteIcon sx={{fontSize: 22}}/>,
                 label: 'Remote',
                 children: [
-                    {
-                        path: '/remote-control',
-                        label: 'Overview',
-                        icon: <RemoteIcon sx={{fontSize: 20}}/>,
-                    },
+                    // {
+                    //     path: '/remote-control',
+                    //     label: 'Overview',
+                    //     icon: <RemoteIcon sx={{fontSize: 20}}/>,
+                    // },
                     {
                         path: '/remote-control/bot',
                         label: 'IM Bot',
@@ -334,10 +335,12 @@ const Layout = ({ children }: LayoutProps) => {
                 {activityItems.map((item) => {
                     const isActiveItem = activeActivity === item.key;
 
-                    // Handle click: if has children, navigate to first child
+                    // Handle click: if has path, navigate to path; otherwise navigate to first child
                     const handleClick = () => {
                         setMobileOpen(false);
-                        if (item.children && item.children.length > 0) {
+                        if (item.path) {
+                            navigate(item.path);
+                        } else if (item.children && item.children.length > 0) {
                             navigate(item.children[0].path);
                         }
                     };
@@ -348,9 +351,9 @@ const Layout = ({ children }: LayoutProps) => {
                     return (
                         <ListItemButton
                             key={item.key}
-                            component={item.path ? RouterLink : 'div'}
-                            to={item.path}
-                            onClick={item.children ? handleClick : () => setMobileOpen(false)}
+                            component={item.path && !item.children ? RouterLink : 'div'}
+                            to={item.path && !item.children ? item.path : undefined}
+                            onClick={handleClick}
                             sx={{
                                 minHeight: 56,
                                 mx: 0.5,

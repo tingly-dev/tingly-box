@@ -3,8 +3,7 @@ import type {BotSettings} from '@/types/bot.ts';
 import type {Provider} from '@/types/provider.ts';
 import {ArrowNode, NodeContainer} from '../nodes';
 import ImBotNode from '../nodes/ImBotNode.tsx';
-import SmartGuideNode from '../nodes/SmartGuideNode.tsx';
-import AgentNode from '../nodes/AgentNode.tsx';
+import BotModelNode from '../nodes/BotModelNode.tsx';
 import CWDNode from '../nodes/ConfigNode.tsx';
 
 const graphRowStyles = (theme: any) => ({
@@ -19,23 +18,14 @@ const graphRowStyles = (theme: any) => ({
 interface RemoteGraphRowProps {
     imbot: BotSettings;
     providers: Provider[];
-    currentAgentUuid: string | null;
     currentCWD: string;
     isBotEnabled: boolean;
     readOnly?: boolean;
-    onBotToggle?: (enabled: boolean) => void;
     onCWDChange: (cwd: string) => void;
-    onSmartGuideClick?: () => void;
-    isToggling?: boolean;
+    onModelClick?: () => void;
+    onBotClick?: () => void;
+    showAgentNode?: boolean; // Optional prop to show Agent node for future use
 }
-
-// Determine agent type from UUID pattern or default to 'claude-code'
-const getAgentTypeFromUuid = (uuid: string | null): 'claude-code' | 'custom' | 'mock' => {
-    if (!uuid) return 'claude-code';
-    if (uuid.startsWith('custom-')) return 'custom';
-    if (uuid.startsWith('mock-')) return 'mock';
-    return 'claude-code'; // Default for Claude Code agents
-};
 
 // Helper function to get provider name from providersData
 const getProviderName = (providerUuid: string | undefined, providersData: Provider[]): string => {
@@ -45,50 +35,41 @@ const getProviderName = (providerUuid: string | undefined, providersData: Provid
 };
 
 const RemoteControlGraph: React.FC<RemoteGraphRowProps> = ({
-                                                               imbot,
-                                                               providers,
-                                                               currentAgentUuid,
-                                                               currentCWD,
-                                                               isBotEnabled,
-                                                               readOnly = false,
-                                                               onBotToggle,
-                                                               onCWDChange,
-                                                               onSmartGuideClick,
-                                                               isToggling = false,
-                                                           }) => {
-    const currentAgentType = getAgentTypeFromUuid(currentAgentUuid);
-    const agentLabel = 'Claude Code';
+    imbot,
+    providers,
+    currentCWD,
+    isBotEnabled,
+    readOnly = false,
+    onCWDChange,
+    onModelClick,
+    onBotClick,
+    showAgentNode = false, // Default to false for simplified 3-node layout
+}) => {
     const providerName = getProviderName(imbot.smartguide_provider, providers);
 
     return (
         <Box sx={graphRowStyles}>
             <NodeContainer>
-                <ImBotNode imbot={imbot} active={isBotEnabled} onToggle={onBotToggle} isToggling={isToggling}/>
+                <ImBotNode imbot={imbot} active={isBotEnabled} onClick={readOnly ? undefined : onBotClick}/>
             </NodeContainer>
 
             <ArrowNode direction="forward"/>
 
             <NodeContainer>
-                <SmartGuideNode
+                <BotModelNode
                     provider={imbot.smartguide_provider}
                     providerName={providerName}
                     model={imbot.smartguide_model}
                     active={isBotEnabled}
-                    onClick={readOnly ? undefined : onSmartGuideClick}
+                    onClick={readOnly ? undefined : onModelClick}
                 />
             </NodeContainer>
 
             <ArrowNode direction="forward"/>
 
             <NodeContainer>
-                <AgentNode
-                    agentType={currentAgentType}
-                    active={isBotEnabled}
-                    label={agentLabel}
-                />
+                <CWDNode currentPath={currentCWD} onPathChange={onCWDChange} disabled={readOnly || !isBotEnabled}/>
             </NodeContainer>
-
-            <CWDNode currentPath={currentCWD} onPathChange={onCWDChange} disabled={readOnly || !isBotEnabled}/>
         </Box>
     );
 };
