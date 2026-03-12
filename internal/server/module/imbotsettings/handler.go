@@ -127,6 +127,8 @@ func (h *Handler) CreateSettings(c *gin.Context) {
 		ProxyURL:           strings.TrimSpace(req.ProxyURL),
 		ChatIDLock:         strings.TrimSpace(req.ChatID),
 		BashAllowlist:      normalizeAllowlist(req.BashAllowlist),
+		DefaultCwd:         strings.TrimSpace(req.DefaultCwd),
+		DefaultAgent:       strings.TrimSpace(req.DefaultAgent),
 		Enabled:            req.Enabled,
 		SmartGuideProvider: strings.TrimSpace(req.SmartGuideProvider),
 		SmartGuideModel:    strings.TrimSpace(req.SmartGuideModel),
@@ -193,7 +195,7 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 	// Normalize platform
 	platform := strings.TrimSpace(req.Platform)
 	if platform == "" {
-		platform = "telegram"
+		platform = currentSettings.Platform // Keep existing if not provided
 	}
 
 	// Get platform config to determine auth type if not provided
@@ -201,32 +203,51 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 	if authType == "" {
 		if config, exists := imbot.GetPlatformConfig(platform); exists {
 			authType = config.AuthType
+		} else {
+			authType = currentSettings.AuthType // Keep existing if not found
+		}
+	}
+
+	// Build auth map - only update if provided
+	authMap := currentSettings.Auth // Start with existing
+	if req.Auth != nil && len(req.Auth) > 0 {
+		authMap = req.Auth
+	} else {
+		// Ensure we have a map
+		if authMap == nil {
+			authMap = make(map[string]string)
 		}
 	}
 
 	// Handle backward compatibility: if legacy token is provided, populate auth map
-	authMap := req.Auth
-	if authMap == nil {
-		authMap = make(map[string]string)
-	}
-	if req.Token != "" && authType == "token" {
+	if req.Token != "" && (authType == "token" || authType == "") {
 		authMap["token"] = strings.TrimSpace(req.Token)
 	}
 
+	// Build settings struct with partial update support
 	settings := db.Settings{
-		Name:          strings.TrimSpace(req.Name),
-		Platform:      platform,
-		AuthType:      authType,
-		Auth:          authMap,
-		ProxyURL:      strings.TrimSpace(req.ProxyURL),
-		ChatIDLock:    strings.TrimSpace(req.ChatID),
-		BashAllowlist: normalizeAllowlist(req.BashAllowlist),
+		Enabled: currentSettings.Enabled, // Default to current, may be overridden below
 	}
 
-	newEnabled := currentSettings.Enabled
-	if req.Enabled != nil {
-		newEnabled = *req.Enabled
-		settings.Enabled = newEnabled
+	// Only set fields if they are provided in the request
+	if req.Name != "" {
+		settings.Name = strings.TrimSpace(req.Name)
+	}
+
+	settings.Platform = platform
+	settings.AuthType = authType
+	settings.Auth = authMap
+
+	if req.ProxyURL != "" {
+		settings.ProxyURL = strings.TrimSpace(req.ProxyURL)
+	}
+
+	if req.ChatID != "" {
+		settings.ChatIDLock = strings.TrimSpace(req.ChatID)
+	}
+
+	if req.BashAllowlist != nil {
+		settings.BashAllowlist = normalizeAllowlist(req.BashAllowlist)
 	}
 
 	// Handle SmartGuide config (partial update)
@@ -241,6 +262,25 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 		settings.SmartGuideModel = currentSettings.SmartGuideModel
 	}
 
+	// Handle default_cwd config (partial update)
+	if req.DefaultCwd != nil {
+		settings.DefaultCwd = strings.TrimSpace(*req.DefaultCwd)
+	} else {
+		settings.DefaultCwd = currentSettings.DefaultCwd
+	}
+
+	// Handle default_agent config (partial update)
+	if req.DefaultAgent != nil {
+		settings.DefaultAgent = strings.TrimSpace(*req.DefaultAgent)
+	} else {
+		settings.DefaultAgent = currentSettings.DefaultAgent
+	}
+
+	// Handle enabled status
+	if req.Enabled != nil {
+		settings.Enabled = *req.Enabled
+	}
+
 	if err := h.store.UpdateSettings(uuid, settings); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -249,10 +289,10 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 	logrus.WithField("uuid", uuid).Info("ImBot settings updated")
 
 	// Handle bot lifecycle if enabled status changed
-	if currentSettings.Enabled != newEnabled {
+	if currentSettings.Enabled != settings.Enabled {
 		if botManager := remote_control.GetBotManager(); botManager != nil {
 			ctx := context.Background()
-			if newEnabled {
+			if settings.Enabled {
 				// Enable -> start the bot
 				if err := botManager.Start(ctx, uuid); err != nil {
 					logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to start bot after update")

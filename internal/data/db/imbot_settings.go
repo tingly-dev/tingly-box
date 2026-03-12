@@ -15,6 +15,7 @@ type ImBotSettingsRecord struct {
 	ChatIDLock    string `gorm:"column:chat_id_lock"`
 	BashAllowlist string `gorm:"column:bash_allowlist;type:text"` // JSON array string
 	DefaultCwd    string `gorm:"column:default_cwd"`              // Default working directory
+	DefaultAgent  string `gorm:"column:default_agent"`            // Default Agent UUID
 	Enabled       bool   `gorm:"column:enabled;index:idx_enabled"`
 
 	// Output behavior settings

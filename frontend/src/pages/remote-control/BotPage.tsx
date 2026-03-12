@@ -1,12 +1,14 @@
 import BotAuthForm from '@/components/bot/BotAuthForm';
 import BotPlatformSelector from '@/components/bot/BotPlatformSelector';
 import BotTable from '@/components/bot/BotTable';
+import { useSmartGuideDialog } from '@/components/bot/SmartGuideDialog';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import { PageLayout } from '@/components/PageLayout';
 import PlatformGuide from '@/components/remote-control/PlatformGuide';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 import type { BotPlatformConfig, BotSettings } from '@/types/bot';
+import type { Provider } from '@/types/provider';
 import { Add } from '@mui/icons-material';
 import {
     Alert,
@@ -17,10 +19,10 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 const BotPage = () => {
-    // Bot settings state - V2 multi-bot support
+    // Bot settings state
     const [bots, setBots] = useState<BotSettings[]>([]);
 
     // Bot platforms config state
@@ -45,13 +47,21 @@ const BotPage = () => {
     const [botTokenDialogOpen, setBotTokenDialogOpen] = useState(false);
     const [guideExpanded, setGuideExpanded] = useState<string | false>(false);
 
+    // Toggle loading state
+    const [togglingBotUuid, setTogglingBotUuid] = useState<string | null>(null);
+
+    // Providers for model selection
+    const [providers, setProviders] = useState<Provider[]>([]);
+    const [selectedBotForSmartGuide, setSelectedBotForSmartGuide] = useState<BotSettings | null>(null);
+
     useEffect(() => {
         loadBotPlatforms();
         loadBotSettings();
+        loadProviders();
     }, []);
 
     // Load bot platforms configuration
-    const loadBotPlatforms = async () => {
+    const loadBotPlatforms = useCallback(async () => {
         try {
             setBotPlatformsLoading(true);
             const data = await api.getImBotPlatforms();
@@ -63,9 +73,9 @@ const BotPage = () => {
         } finally {
             setBotPlatformsLoading(false);
         }
-    };
+    }, []);
 
-    const loadBotSettings = async () => {
+    const loadBotSettings = useCallback(async () => {
         try {
             setBotLoading(true);
             const data = await api.getImBotSettingsList();
@@ -80,7 +90,14 @@ const BotPage = () => {
         } finally {
             setBotLoading(false);
         }
-    };
+    }, []);
+
+    const loadProviders = useCallback(async () => {
+        const data = await api.getProviders();
+        if (data?.success && data?.data) {
+            setProviders(data.data);
+        }
+    }, []);
 
     // Update current platform config when platform draft changes
     useEffect(() => {
@@ -92,20 +109,8 @@ const BotPage = () => {
         }
     }, [botPlatformDraft, botPlatforms]);
 
-    // Helper to reload bots
-    const reloadBots = async () => {
-        try {
-            const data = await api.getImBotSettingsList();
-            if (data?.success && Array.isArray(data.settings)) {
-                setBots(data.settings);
-            }
-        } catch (err) {
-            console.error('Failed to reload bot settings:', err);
-        }
-    };
-
     // Bot handlers
-    const handleOpenBotTokenDialog = (editUuid?: string) => {
+    const handleOpenBotTokenDialog = useCallback((editUuid?: string) => {
         setBotNotice(null);
         setBotError(null);
 
@@ -144,7 +149,7 @@ const BotPage = () => {
             }
         }
         setBotTokenDialogOpen(true);
-    };
+    }, [bots, botPlatforms]);
 
     const handleSaveBotToken = async () => {
         setBotSaving(true);
@@ -198,7 +203,7 @@ const BotPage = () => {
             }
 
             // Reload bots
-            await reloadBots();
+            await loadBotSettings();
 
             setBotNotice(`Bot ${botDialogMode === 'edit' ? 'updated' : 'created'} successfully.`);
             setBotTokenDialogOpen(false);
@@ -210,37 +215,90 @@ const BotPage = () => {
         }
     };
 
-    const handleEditBot = (uuid: string) => {
-        handleOpenBotTokenDialog(uuid);
-    };
-
-    const handleToggleBot = async (uuid: string) => {
+    const handleBotToggle = useCallback(async (uuid: string, enabled: boolean) => {
+        setTogglingBotUuid(uuid);
+        setBotError(null);
         try {
             const result = await api.toggleImBotSetting(uuid);
             if (result?.success) {
-                setBotNotice(result.enabled ? 'Bot enabled' : 'Bot disabled');
-                await reloadBots();
+                setBotNotice(enabled ? 'Bot enabled' : 'Bot disabled');
+                await loadBotSettings();
             } else {
-                setBotError(`Failed to toggle bot: ${result?.error}`);
+                setBotError(`Failed to toggle bot: ${result?.error || 'Unknown error'}`);
             }
         } catch (err) {
+            console.error('Failed to toggle bot:', err);
             setBotError('Failed to toggle bot');
+        } finally {
+            setTogglingBotUuid(null);
         }
-    };
+    }, [loadBotSettings]);
 
-    const handleDeleteBot = async (uuid: string) => {
+    const handleDeleteBot = useCallback(async (uuid: string) => {
         try {
             const result = await api.deleteImBotSetting(uuid);
             if (result?.success) {
                 setBotNotice('Bot deleted successfully');
-                await reloadBots();
+                await loadBotSettings();
             } else {
                 setBotError(`Failed to delete bot: ${result?.error}`);
             }
         } catch (err) {
             setBotError('Failed to delete bot');
         }
-    };
+    }, [loadBotSettings]);
+
+    const handleCWDChange = useCallback(async (botUuid: string, cwd: string) => {
+        try {
+            const result = await api.updateImbotSetting(botUuid, { default_cwd: cwd });
+            if (result?.success) {
+                // No notification needed for CWD change - it's a minor change
+                await loadBotSettings();
+            } else {
+                setBotError(result?.error || 'Failed to update working directory');
+            }
+        } catch (err) {
+            setBotError('Failed to update working directory');
+        }
+    }, [loadBotSettings]);
+
+    // SmartGuide dialog using the same pattern as RuleCard
+    const handleSmartGuideUpdate = useCallback(async (uuid: string, provider: string, model: string) => {
+        setBotError(null);
+
+        const response = await api.updateImbotSetting(uuid, {
+            smartguide_provider: provider,
+            smartguide_model: model,
+        });
+
+        if (response.success) {
+            setBotNotice('SmartGuide configuration updated');
+            await loadBotSettings();
+        } else {
+            setBotError(response.error || 'Failed to update SmartGuide configuration');
+            throw new Error(response.error || 'Failed to update SmartGuide configuration');
+        }
+    }, [loadBotSettings]);
+
+    const {
+        openDialog: openSmartGuideDialog,
+        closeDialog: closeSmartGuideDialog,
+        SmartGuideDialog,
+        isOpen: smartGuideDialogOpen,
+    } = useSmartGuideDialog({
+        bot: selectedBotForSmartGuide,
+        providers,
+        onUpdate: handleSmartGuideUpdate,
+        onClose: () => setSelectedBotForSmartGuide(null),
+    });
+
+    const handleSmartGuideSelect = useCallback((botUuid: string) => {
+        const bot = bots.find(b => b.uuid === botUuid);
+        if (bot) {
+            setSelectedBotForSmartGuide(bot);
+            openSmartGuideDialog();
+        }
+    }, [bots, openSmartGuideDialog]);
 
     return (
         <PageLayout loading={false}>
@@ -295,13 +353,20 @@ const BotPage = () => {
                             {botError}
                         </Alert>
                     )}
-                    {bots.length > 0 ? (
+                    {bots.length > 0 || botLoading ? (
                         <BotTable
                             bots={bots}
                             platforms={botPlatforms}
-                            onEdit={handleEditBot}
-                            onToggle={handleToggleBot}
+                            providers={providers}
+                            onEdit={handleOpenBotTokenDialog}
                             onDelete={handleDeleteBot}
+                            onBotToggle={handleBotToggle}
+                            onSmartGuideSelect={handleSmartGuideSelect}
+                            onCWDChange={handleCWDChange}
+                            defaultExpanded={bots.map(b => b.uuid).filter(Boolean) as string[]}
+                            loading={botLoading}
+                            error={botError}
+                            togglingBotUuid={togglingBotUuid}
                         />
                     ) : (
                         <EmptyStateGuide
@@ -312,14 +377,6 @@ const BotPage = () => {
                             primaryButtonLabel="Add Bot"
                             onAddApiKeyClick={() => handleOpenBotTokenDialog()}
                         />
-                    )}
-                    {botLoading && (
-                        <Stack direction="row" spacing={1} alignItems="center">
-                            <CircularProgress size={16} />
-                            <Typography variant="body2" color="text.secondary">
-                                Loading bot settings...
-                            </Typography>
-                        </Stack>
                     )}
                 </Stack>
             </UnifiedCard>
@@ -458,6 +515,9 @@ const BotPage = () => {
                     </Stack>
                 </Stack>
             </Modal>
+
+            {/* SmartGuide Selector Dialog */}
+            <SmartGuideDialog open={smartGuideDialogOpen} />
         </PageLayout>
     );
 };

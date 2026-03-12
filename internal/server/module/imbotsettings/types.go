@@ -32,6 +32,8 @@ type CreateRequest struct {
 	ProxyURL           string            `json:"proxy_url,omitempty"`
 	ChatID             string            `json:"chat_id,omitempty"`
 	BashAllowlist      []string          `json:"bash_allowlist,omitempty"`
+	DefaultCwd         string            `json:"default_cwd,omitempty"`   // Default working directory
+	DefaultAgent       string            `json:"default_agent,omitempty"` // Default Agent UUID
 	Enabled            bool              `json:"enabled"`
 	Token              string            `json:"token,omitempty"`               // Legacy field
 	SmartGuideProvider string            `json:"smartguide_provider,omitempty"` // Provider UUID
@@ -47,6 +49,8 @@ type UpdateRequest struct {
 	ProxyURL           string            `json:"proxy_url,omitempty"`
 	ChatID             string            `json:"chat_id,omitempty"`
 	BashAllowlist      []string          `json:"bash_allowlist,omitempty"`
+	DefaultCwd         *string           `json:"default_cwd,omitempty"`         // Pointer for partial update
+	DefaultAgent       *string           `json:"default_agent,omitempty"`       // Pointer for partial update
 	Enabled            *bool             `json:"enabled,omitempty"`             // Pointer to allow partial update
 	Token              string            `json:"token,omitempty"`               // Legacy field
 	SmartGuideProvider *string           `json:"smartguide_provider,omitempty"` // Provider UUID

@@ -104,6 +104,17 @@ tasks:
         cd frontend;
         pnpm dev
 
+  web:mock:
+    cmds:
+      - |
+        echo "This is only for frontend dev, please start your tingly-box server too"
+      - |
+        cd frontend;
+        pnpm install
+      - |
+        cd frontend;
+        pnpm dev:mock
+
   web:build:
     aliases:
       - web:dist

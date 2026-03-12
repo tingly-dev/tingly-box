@@ -6,14 +6,15 @@ import TinglyService from "@/bindings";
 import {
     Configuration,
     HistoryApi,
+    ImbotSettingsApi,
     InfoApi,
     LogsApi,
     ModelsApi,
     OauthApi,
     ProbeProviderRequestApiStyleEnum,
     type ProbeResponse,
-    type ProviderModelsResponse,
     type ProviderResponse,
+    type ProviderModelsResponse,
     ProvidersApi,
     type RuleResponse,
     RulesApi,
@@ -44,6 +45,7 @@ interface ApiInstances {
     oauthApi: OauthApi;
     logsApi: LogsApi;
     usageApi: UsageApi;
+    imbotSettingsApi: ImbotSettingsApi;
 }
 
 
@@ -141,6 +143,7 @@ const createApiInstances = async () => {
         oauthApi: new OauthApi(config),
         logsApi: new LogsApi(config),
         usageApi: new UsageApi(config),
+        imbotSettingsApi: new ImbotSettingsApi(config),
     };
 };
 
@@ -1224,6 +1227,131 @@ export const api = {
 
             return await response.json();
         } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // ========== ImBot Settings API ==========
+
+    // List all ImBot settings
+    listImbotSettings: async (): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsGet();
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
+                return { success: false, error: 'Authentication required' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get a specific ImBot setting
+    getImbotSetting: async (uuid: string): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidGet(uuid);
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
+                return { success: false, error: 'Authentication required' };
+            }
+            if (error.response?.status === 404) {
+                return { success: false, error: 'ImBot setting not found' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Create a new ImBot setting
+    createImbotSetting: async (data: {
+        name?: string;
+        platform: string;
+        auth_type: string;
+        auth?: Record<string, string>;
+        proxy_url?: string;
+        chat_id?: string;
+        bash_allowlist?: string[];
+        default_agent?: string;
+        agent_type?: string;
+        default_cwd?: string;
+    }): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsPost(data);
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
+                return { success: false, error: 'Authentication required' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Update an ImBot setting
+    updateImbotSetting: async (uuid: string, data: {
+        name?: string;
+        auth_type?: string;
+        auth?: Record<string, string>;
+        proxy_url?: string;
+        chat_id?: string;
+        bash_allowlist?: string[];
+        enabled?: boolean;
+        default_agent?: string;
+        default_cwd?: string;
+    }): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidPut(uuid, data);
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
+                return { success: false, error: 'Authentication required' };
+            }
+            if (error.response?.status === 404) {
+                return { success: false, error: 'ImBot setting not found' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Delete an ImBot setting
+    deleteImbotSetting: async (uuid: string): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidDelete(uuid);
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
+                return { success: false, error: 'Authentication required' };
+            }
+            if (error.response?.status === 404) {
+                return { success: false, error: 'ImBot setting not found' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Toggle ImBot enabled status
+    toggleImbotSetting: async (uuid: string): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidTogglePost(uuid);
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
+                return { success: false, error: 'Authentication required' };
+            }
+            if (error.response?.status === 404) {
+                return { success: false, error: 'ImBot setting not found' };
+            }
             return { success: false, error: error.message };
         }
     },

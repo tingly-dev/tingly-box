@@ -154,9 +154,9 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 
 	// Validate SmartGuide configuration if set as default agent
 	// This provides early warning at bot startup rather than at message handling time
-	m.mu.RLock()
+	// We already have the write lock, so we can access these fields directly
 	tbClient := m.tbClient
-	m.mu.RUnlock()
+	dataPath := m.dataPath
 
 	if s.SmartGuideProvider == "" || s.SmartGuideModel == "" {
 		logrus.WithFields(logrus.Fields{
@@ -176,12 +176,8 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	ctx, cancel := context.WithCancel(parentCtx)
 	m.running[uuid] = &runningBot{cancel: cancel}
 
-	// Start bot in goroutine
+	// Start bot in goroutine (dataPath and tbClient already captured above)
 	go func() {
-		m.mu.RLock()
-		dataPath := m.dataPath
-		tbClient := m.tbClient
-		m.mu.RUnlock()
 		if err := runBotWithSettings(ctx, s, dataPath, m.sessionMgr, m.agentBoot, tbClient); err != nil {
 			logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
 		}
