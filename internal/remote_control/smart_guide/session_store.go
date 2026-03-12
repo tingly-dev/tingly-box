@@ -2,64 +2,18 @@ package smart_guide
 
 import (
 	"context"
-	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-agentscope/pkg/message"
 	"github.com/tingly-dev/tingly-agentscope/pkg/module"
 	agentscopeSession "github.com/tingly-dev/tingly-agentscope/pkg/session"
 )
 
-// SessionMessage represents a message in the conversation
-type SessionMessage struct {
-	Role      string    `json:"role"` // "user" or "assistant"
-	Content   string    `json:"content"`
-	Timestamp time.Time `json:"timestamp"`
-}
-
-// messageState implements module.StateModule for storing message history
-type messageState struct {
-	*module.StateModuleBase
-}
-
-// newMessageState creates a new message state
-func newMessageState() *messageState {
-	return &messageState{
-		StateModuleBase: module.NewStateModuleBase(),
-	}
-}
-
-// getMessages returns all stored messages as SessionMessage slice
-func (m *messageState) getMessages() []SessionMessage {
-	if m == nil {
-		return []SessionMessage{}
-	}
-
-	// Get messages from state
-	val, ok := m.Get("messages")
-	if !ok {
-		return []SessionMessage{}
-	}
-
-	// Convert to []SessionMessage
-	if msgs, ok := val.([]SessionMessage); ok {
-		return msgs
-	}
-
-	return []SessionMessage{}
-}
-
-// setMessages stores messages
-func (m *messageState) setMessages(msgs []SessionMessage) {
-	if m == nil {
-		return
-	}
-	m.Set("messages", msgs)
-}
-
 // SessionStore wraps agentscope session for SmartGuide message persistence
+// Uses agentscope.Msg directly for message storage
 type SessionStore struct {
 	session agentscopeSession.Session
-	state   *messageState
+	mgr     *agentscopeSession.SessionManager
 }
 
 // NewSessionStore creates a new session store using agentscope
@@ -74,7 +28,7 @@ func NewSessionStore(dataDir string) (*SessionStore, error) {
 
 	return &SessionStore{
 		session: jsonSession,
-		state:   newMessageState(),
+		mgr:     agentscopeSession.NewSessionManager(jsonSession),
 	}, nil
 }
 
@@ -83,25 +37,96 @@ func (s *SessionStore) getSessionID(chatID string) string {
 	return chatID + "-smartguide"
 }
 
-// Load loads messages for a chatID, returns empty slice on error
-func (s *SessionStore) Load(chatID string) ([]SessionMessage, error) {
+// messageState wraps a slice of messages to implement StateModule
+type messageState struct {
+	*module.StateModuleBase
+	messages []*message.Msg
+}
+
+// newMessageState creates a new message state
+func newMessageState() *messageState {
+	return &messageState{
+		StateModuleBase: module.NewStateModuleBase(),
+		messages:        nil,
+	}
+}
+
+// StateDict returns the state as a dictionary
+func (m *messageState) StateDict() map[string]any {
+	// Convert messages to dict format
+	msgDicts := make([]any, 0, len(m.messages))
+	for _, msg := range m.messages {
+		msgDicts = append(msgDicts, msg.ToDict())
+	}
+	return map[string]any{
+		"messages": msgDicts,
+	}
+}
+
+// LoadStateDict loads state from a dictionary
+func (m *messageState) LoadStateDict(ctx context.Context, state map[string]any) error {
+	messagesRaw, ok := state["messages"]
+	if !ok {
+		return nil
+	}
+
+	msgsAny, ok := messagesRaw.([]any)
+	if !ok {
+		return nil
+	}
+
+	m.messages = make([]*message.Msg, 0, len(msgsAny))
+	for _, msgAny := range msgsAny {
+		msgMap, ok := msgAny.(map[string]any)
+		if !ok {
+			continue
+		}
+		msg, err := message.FromDict(msgMap)
+		if err != nil {
+			continue
+		}
+		m.messages = append(m.messages, msg)
+	}
+
+	return nil
+}
+
+// getMessages returns all messages
+func (m *messageState) getMessages() []*message.Msg {
+	if m == nil {
+		return nil
+	}
+	return m.messages
+}
+
+// setMessages sets all messages
+func (m *messageState) setMessages(msgs []*message.Msg) {
+	if m == nil {
+		return
+	}
+	m.messages = msgs
+}
+
+// Load loads messages for a chatID, returns nil slice on error
+func (s *SessionStore) Load(chatID string) ([]*message.Msg, error) {
 	if s == nil {
-		return []SessionMessage{}, nil
+		return nil, nil
 	}
 
 	ctx := context.Background()
 
-	// Load session state (allow not exist)
+	// Create a new message state for loading
+	msgState := newMessageState()
 	stateModules := map[string]module.StateModule{
-		"messages": s.state,
+		"messages": msgState,
 	}
 
 	if err := s.session.LoadSessionState(ctx, s.getSessionID(chatID), stateModules, true); err != nil {
 		logrus.WithError(err).WithField("chatID", chatID).Debug("Failed to load session, returning empty")
-		return []SessionMessage{}, nil
+		return nil, nil
 	}
 
-	messages := s.state.getMessages()
+	messages := msgState.getMessages()
 
 	logrus.WithFields(logrus.Fields{
 		"chatID":   chatID,
@@ -112,19 +137,19 @@ func (s *SessionStore) Load(chatID string) ([]SessionMessage, error) {
 }
 
 // Save saves messages for a chatID
-func (s *SessionStore) Save(chatID string, messages []SessionMessage) error {
+func (s *SessionStore) Save(chatID string, messages []*message.Msg) error {
 	if s == nil || len(messages) == 0 {
 		return nil
 	}
 
 	ctx := context.Background()
 
-	// Store messages in state
-	s.state.setMessages(messages)
+	// Create message state with messages
+	msgState := newMessageState()
+	msgState.setMessages(messages)
 
-	// Save session
 	stateModules := map[string]module.StateModule{
-		"messages": s.state,
+		"messages": msgState,
 	}
 
 	if err := s.session.SaveSessionState(ctx, s.getSessionID(chatID), stateModules); err != nil {
@@ -140,13 +165,16 @@ func (s *SessionStore) Save(chatID string, messages []SessionMessage) error {
 }
 
 // AddMessage adds a single message to the session
-func (s *SessionStore) AddMessage(chatID string, msg SessionMessage) error {
-	if s == nil {
+func (s *SessionStore) AddMessage(chatID string, msg *message.Msg) error {
+	if s == nil || msg == nil {
 		return nil
 	}
 
 	// Load existing messages
 	messages, _ := s.Load(chatID)
+	if messages == nil {
+		messages = []*message.Msg{}
+	}
 
 	// Add new message
 	messages = append(messages, msg)
@@ -156,13 +184,16 @@ func (s *SessionStore) AddMessage(chatID string, msg SessionMessage) error {
 }
 
 // AddMessages adds multiple messages to the session
-func (s *SessionStore) AddMessages(chatID string, newMessages []SessionMessage) error {
+func (s *SessionStore) AddMessages(chatID string, newMessages []*message.Msg) error {
 	if s == nil || len(newMessages) == 0 {
 		return nil
 	}
 
 	// Load existing messages
 	messages, _ := s.Load(chatID)
+	if messages == nil {
+		messages = []*message.Msg{}
+	}
 
 	// Append new messages
 	messages = append(messages, newMessages...)
@@ -172,9 +203,9 @@ func (s *SessionStore) AddMessages(chatID string, newMessages []SessionMessage) 
 }
 
 // GetMessages retrieves all messages for a chatID
-func (s *SessionStore) GetMessages(chatID string) ([]SessionMessage, error) {
+func (s *SessionStore) GetMessages(chatID string) ([]*message.Msg, error) {
 	if s == nil {
-		return []SessionMessage{}, nil
+		return nil, nil
 	}
 	return s.Load(chatID)
 }
@@ -186,10 +217,10 @@ func (s *SessionStore) ClearMessages(chatID string) error {
 	}
 
 	ctx := context.Background()
-	s.state.Clear()
 
+	msgState := newMessageState()
 	stateModules := map[string]module.StateModule{
-		"messages": s.state,
+		"messages": msgState,
 	}
 
 	if err := s.session.SaveSessionState(ctx, s.getSessionID(chatID), stateModules); err != nil {
@@ -220,13 +251,13 @@ func (s *SessionStore) Delete(chatID string) error {
 // List returns all chat IDs with sessions
 func (s *SessionStore) List() ([]string, error) {
 	if s == nil {
-		return []string{}, nil
+		return nil, nil
 	}
 
 	ctx := context.Background()
 	sessionIDs, err := s.session.ListSessions(ctx)
 	if err != nil {
-		return []string{}, nil
+		return nil, nil
 	}
 
 	// Filter only smartguide sessions

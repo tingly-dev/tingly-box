@@ -10,7 +10,6 @@ import (
 	"github.com/tingly-dev/tingly-agentscope/pkg/message"
 	"github.com/tingly-dev/tingly-agentscope/pkg/model/anthropic"
 	"github.com/tingly-dev/tingly-agentscope/pkg/tool"
-	"github.com/tingly-dev/tingly-agentscope/pkg/types"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 )
 
@@ -130,7 +129,7 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 }
 
 // NewTinglyBoxAgentWithSession creates a new smart guide agent with conversation history from session
-func NewTinglyBoxAgentWithSession(config *AgentConfig, messages []SessionMessage) (*TinglyBoxAgent, error) {
+func NewTinglyBoxAgentWithSession(config *AgentConfig, messages []*message.Msg) (*TinglyBoxAgent, error) {
 	// Create agent normally
 	tbAgent, err := NewTinglyBoxAgent(config)
 	if err != nil {
@@ -143,42 +142,25 @@ func NewTinglyBoxAgentWithSession(config *AgentConfig, messages []SessionMessage
 		if mem != nil {
 			ctx := context.Background()
 			for i, msg := range messages {
-				contentPreview := msg.Content
-				if len(contentPreview) > 50 {
-					contentPreview = contentPreview[:50] + "..."
+				contentStr := ""
+				if s, ok := msg.Content.(string); ok {
+					contentStr = s
+					if len(contentStr) > 50 {
+						contentStr = contentStr[:50] + "..."
+					}
 				}
 
 				logrus.WithFields(logrus.Fields{
 					"index":   i,
 					"role":    msg.Role,
-					"content": contentPreview,
+					"content": contentStr,
 				}).Debug("Loading message from session into agent memory")
 
-				// Convert string role to types.Role
-				var role types.Role
-				if msg.Role == "user" {
-					role = types.RoleUser
-				} else if msg.Role == "assistant" {
-					role = types.RoleAssistant
-				} else {
-					// Skip unknown roles
-					logrus.WithField("role", msg.Role).Warn("Unknown role, skipping message")
-					continue
-				}
-
-				// message.NewMsg takes (name, content, role)
-				// name is typically the role identifier, role is types.Role
-				agentMsg := message.NewMsg(string(role), msg.Content, role)
-				if err := mem.Add(ctx, agentMsg); err != nil {
+				if err := mem.Add(ctx, msg); err != nil {
 					logrus.WithError(err).WithFields(logrus.Fields{
 						"index": i,
 						"role":  msg.Role,
 					}).Warn("Failed to add message to memory")
-				} else {
-					logrus.WithFields(logrus.Fields{
-						"index": i,
-						"role":  msg.Role,
-					}).Debug("Successfully loaded message into memory")
 				}
 			}
 			logrus.WithFields(logrus.Fields{
