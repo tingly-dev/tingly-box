@@ -1,7 +1,6 @@
 import BotAuthForm from '@/components/bot/BotAuthForm';
 import BotPlatformSelector from '@/components/bot/BotPlatformSelector';
-import BotTable from '@/components/bot/BotTable';
-import { useSmartGuideDialog } from '@/components/bot/SmartGuideDialog';
+import { BotCard, useSmartGuideDialog } from '@/components/bot';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import { PageLayout } from '@/components/PageLayout';
 import PlatformGuide from '@/components/remote-control/PlatformGuide';
@@ -12,6 +11,7 @@ import type { Provider } from '@/types/provider';
 import { Add } from '@mui/icons-material';
 import {
     Alert,
+    Box,
     Button,
     CircularProgress,
     Modal,
@@ -340,7 +340,6 @@ const BotPage = () => {
                         Add Bot
                     </Button>
                 }
-                sx={{ mb: 2 }}
             >
                 <Stack spacing={2}>
                     {botNotice && (
@@ -353,32 +352,37 @@ const BotPage = () => {
                             {botError}
                         </Alert>
                     )}
-                    {bots.length > 0 || botLoading ? (
-                        <BotTable
-                            bots={bots}
-                            platforms={botPlatforms}
-                            providers={providers}
-                            onEdit={handleOpenBotTokenDialog}
-                            onDelete={handleDeleteBot}
-                            onBotToggle={handleBotToggle}
-                            onSmartGuideSelect={handleSmartGuideSelect}
-                            onCWDChange={handleCWDChange}
-                            defaultExpanded={bots.map(b => b.uuid).filter(Boolean) as string[]}
-                            loading={botLoading}
-                            error={botError}
-                            togglingBotUuid={togglingBotUuid}
-                        />
-                    ) : (
-                        <EmptyStateGuide
-                            title="No Bots Configured"
-                            description="Configure bots to enable remote-control chat integration."
-                            showOAuthButton={false}
-                            showHeroIcon={false}
-                            primaryButtonLabel="Add Bot"
-                            onAddApiKeyClick={() => handleOpenBotTokenDialog()}
-                        />
-                    )}
                 </Stack>
+
+                {botLoading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                        <CircularProgress />
+                    </Box>
+                ) : bots.length === 0 ? (
+                    <EmptyStateGuide
+                        title="No Bots Configured"
+                        description="Configure bots to enable remote-control chat integration."
+                        showOAuthButton={false}
+                        showHeroIcon={false}
+                        primaryButtonLabel="Add Bot"
+                        onAddApiKeyClick={() => handleOpenBotTokenDialog()}
+                    />
+                ) : (
+                    bots.map((bot) => (
+                        <div key={bot.uuid}>
+                            <BotCard
+                                bot={bot}
+                                providers={providers}
+                                onEdit={() => handleOpenBotTokenDialog(bot.uuid)}
+                                onDelete={() => handleDeleteBot(bot.uuid!)}
+                                onBotToggle={handleBotToggle}
+                                onSmartGuideClick={() => handleSmartGuideSelect(bot.uuid!)}
+                                onCWDChange={(cwd) => handleCWDChange(bot.uuid!, cwd)}
+                                isToggling={togglingBotUuid === bot.uuid}
+                            />
+                        </div>
+                    ))
+                )}
             </UnifiedCard>
 
 

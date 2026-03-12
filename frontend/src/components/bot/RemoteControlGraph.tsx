@@ -4,7 +4,6 @@ import type {Provider} from '@/types/provider.ts';
 import {ArrowNode, NodeContainer} from '../nodes';
 import ImBotNode from '../nodes/ImBotNode.tsx';
 import SmartGuideNode from '../nodes/SmartGuideNode.tsx';
-import AgentNode from '../nodes/AgentNode.tsx';
 import CWDNode from '../nodes/ConfigNode.tsx';
 
 const graphRowStyles = (theme: any) => ({
@@ -19,23 +18,13 @@ const graphRowStyles = (theme: any) => ({
 interface RemoteGraphRowProps {
     imbot: BotSettings;
     providers: Provider[];
-    currentAgentUuid: string | null;
     currentCWD: string;
     isBotEnabled: boolean;
     readOnly?: boolean;
-    onBotToggle?: (enabled: boolean) => void;
     onCWDChange: (cwd: string) => void;
     onSmartGuideClick?: () => void;
-    isToggling?: boolean;
+    showAgentNode?: boolean; // Optional prop to show Agent node for future use
 }
-
-// Determine agent type from UUID pattern or default to 'claude-code'
-const getAgentTypeFromUuid = (uuid: string | null): 'claude-code' | 'custom' | 'mock' => {
-    if (!uuid) return 'claude-code';
-    if (uuid.startsWith('custom-')) return 'custom';
-    if (uuid.startsWith('mock-')) return 'mock';
-    return 'claude-code'; // Default for Claude Code agents
-};
 
 // Helper function to get provider name from providersData
 const getProviderName = (providerUuid: string | undefined, providersData: Provider[]): string => {
@@ -45,25 +34,21 @@ const getProviderName = (providerUuid: string | undefined, providersData: Provid
 };
 
 const RemoteControlGraph: React.FC<RemoteGraphRowProps> = ({
-                                                               imbot,
-                                                               providers,
-                                                               currentAgentUuid,
-                                                               currentCWD,
-                                                               isBotEnabled,
-                                                               readOnly = false,
-                                                               onBotToggle,
-                                                               onCWDChange,
-                                                               onSmartGuideClick,
-                                                               isToggling = false,
-                                                           }) => {
-    const currentAgentType = getAgentTypeFromUuid(currentAgentUuid);
-    const agentLabel = 'Claude Code';
+    imbot,
+    providers,
+    currentCWD,
+    isBotEnabled,
+    readOnly = false,
+    onCWDChange,
+    onSmartGuideClick,
+    showAgentNode = false, // Default to false for simplified 3-node layout
+}) => {
     const providerName = getProviderName(imbot.smartguide_provider, providers);
 
     return (
         <Box sx={graphRowStyles}>
             <NodeContainer>
-                <ImBotNode imbot={imbot} active={isBotEnabled} onToggle={onBotToggle} isToggling={isToggling}/>
+                <ImBotNode imbot={imbot} active={isBotEnabled} />
             </NodeContainer>
 
             <ArrowNode direction="forward"/>
@@ -81,14 +66,8 @@ const RemoteControlGraph: React.FC<RemoteGraphRowProps> = ({
             <ArrowNode direction="forward"/>
 
             <NodeContainer>
-                <AgentNode
-                    agentType={currentAgentType}
-                    active={isBotEnabled}
-                    label={agentLabel}
-                />
+                <CWDNode currentPath={currentCWD} onPathChange={onCWDChange} disabled={readOnly || !isBotEnabled}/>
             </NodeContainer>
-
-            <CWDNode currentPath={currentCWD} onPathChange={onCWDChange} disabled={readOnly || !isBotEnabled}/>
         </Box>
     );
 };

@@ -141,14 +141,11 @@ const BotGraphRow: React.FC<BotGraphRowProps> = ({
                             <RemoteControlGraph
                                 imbot={bot}
                                 providers={providers}
-                                currentAgentUuid={bot.default_agent || null}
                                 currentCWD={bot.default_cwd || ''}
                                 isBotEnabled={isBotEnabled}
                                 readOnly={readOnly}
-                                onBotToggle={handleBotToggle}
                                 onCWDChange={onCWDChange}
                                 onSmartGuideClick={onSmartGuideClick}
-                                isToggling={isToggling}
                             />
                         </Box>
                     </Collapse>

@@ -14,3 +14,4 @@ export { default as AgentConfigNode } from './AgentConfigNode';
 export { default as RoutingModeNode } from './RoutingModeNode';
 export { default as CWDNode } from './ConfigNode';
 export { default as SmartGuideNode } from './SmartGuideNode';
+export { default as CrossNode } from './CrossNode';
