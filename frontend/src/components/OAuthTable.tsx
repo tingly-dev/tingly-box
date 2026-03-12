@@ -1,7 +1,7 @@
 import { ApiStyleBadge } from '@/components/ApiStyleBadge.tsx';
 import ModelListDialog from '@/components/ModelListDialog';
 import ProviderExportMenu from '@/components/ProviderExportMenu';
-import { exportProvider, exportProviderAsBase64ToClipboard } from '@/components/rule-card/utils';
+import { exportProvider, exportProviderAsBase64ToClipboard, exportProviderAsJsonlToClipboard } from '@/components/rule-card/utils';
 import { Delete, Edit, ListAlt, Refresh as RefreshIcon, Route, Schedule, VpnKey } from '@mui/icons-material';
 import {
     Box,
@@ -139,6 +139,12 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
 
     const handleCopyProviderBase64 = useCallback(async (provider: Provider) => {
         await exportProviderAsBase64ToClipboard(provider, (message, severity) => {
+            onNotification?.(message, severity);
+        });
+    }, [onNotification]);
+
+    const handleCopyProviderJsonl = useCallback(async (provider: Provider) => {
+        await exportProviderAsJsonlToClipboard(provider, (message, severity) => {
             onNotification?.(message, severity);
         });
     }, [onNotification]);
@@ -282,6 +288,7 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                                         <ProviderExportMenu
                                             provider={provider}
                                             onExport={handleExportProvider}
+                                            onCopyJsonl={handleCopyProviderJsonl}
                                             onCopyBase64={handleCopyProviderBase64}
                                         />
                                         {onEdit && (

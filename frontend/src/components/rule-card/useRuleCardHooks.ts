@@ -278,11 +278,15 @@ export function useRuleExport({ rule, showNotification }: UseRuleExportProps) {
         await exportRuleWithProviders(rule, format, showNotification);
     }, [rule, showNotification]);
 
+    const handleExportAsJsonlToClipboard = useCallback(async () => {
+        await exportRuleAsJsonlToClipboard(rule, showNotification);
+    }, [rule, showNotification]);
+
     const handleExportAsBase64ToClipboard = useCallback(async () => {
         await exportRuleAsBase64ToClipboard(rule, showNotification);
     }, [rule, showNotification]);
 
-    return { handleExport, handleExportAsBase64ToClipboard };
+    return { handleExport, handleExportAsJsonlToClipboard, handleExportAsBase64ToClipboard };
 }
 
 /**

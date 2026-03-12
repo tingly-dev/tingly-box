@@ -22,6 +22,7 @@ export interface GraphSettingsMenuProps {
     saving: boolean;
     onProbe: () => void;
     onExport: (format: ExportFormat) => void;
+    onExportAsJsonlToClipboard?: () => void;
     onExportAsBase64ToClipboard?: () => void;
     onDelete: () => void;
     onToggleActive: () => void;
@@ -36,6 +37,7 @@ export const GraphSettingsMenu = ({
     saving,
     onProbe,
     onExport,
+    onExportAsJsonlToClipboard,
     onExportAsBase64ToClipboard,
     onDelete,
     onToggleActive,
@@ -108,17 +110,22 @@ export const GraphSettingsMenu = ({
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'left' }}
             >
-                {onExportAsBase64ToClipboard && (
-                    <MenuItem onClick={() => { closeAllMenus(); onExportAsBase64ToClipboard(); }}>
-                        <CopyIcon fontSize="small" sx={{ mr: 1 }} />Copy Base64 to Clipboard
-                    </MenuItem>
-                )}
                 <MenuItem onClick={() => { closeAllMenus(); onExport('jsonl'); }}>
                     <DownloadIcon fontSize="small" sx={{ mr: 1 }} />Download as JSONL
                 </MenuItem>
                 <MenuItem onClick={() => { closeAllMenus(); onExport('base64'); }}>
                     <DownloadIcon fontSize="small" sx={{ mr: 1 }} />Download as Base64
                 </MenuItem>
+                {onExportAsJsonlToClipboard && (
+                    <MenuItem onClick={() => { closeAllMenus(); onExportAsJsonlToClipboard(); }}>
+                        <CopyIcon fontSize="small" sx={{ mr: 1 }} />Copy JSONL to Clipboard
+                    </MenuItem>
+                )}
+                {onExportAsBase64ToClipboard && (
+                    <MenuItem onClick={() => { closeAllMenus(); onExportAsBase64ToClipboard(); }}>
+                        <CopyIcon fontSize="small" sx={{ mr: 1 }} />Copy Base64 to Clipboard
+                    </MenuItem>
+                )}
             </Menu>
         </>
     );

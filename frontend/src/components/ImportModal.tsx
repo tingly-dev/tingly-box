@@ -1,4 +1,4 @@
-import { ContentPaste as PasteIcon, Upload as UploadIcon } from '@mui/icons-material';
+import { ContentPaste as PasteIcon, Upload as UploadIcon, Code as CodeIcon } from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -30,18 +30,25 @@ const TabPanel = styled(Box)<{ value: number; index: number }>(
 
 export const ImportModal = ({ open, onClose, onImport, loading = false }: ImportModalProps) => {
     const [tabValue, setTabValue] = useState(0);
-    const [pasteData, setPasteData] = useState('');
+    const [jsonlData, setJsonlData] = useState('');
+    const [base64Data, setBase64Data] = useState('');
     const [fileName, setFileName] = useState<string>('');
 
     const handleClose = () => {
-        setPasteData('');
+        setJsonlData('');
+        setBase64Data('');
         setFileName('');
         setTabValue(0);
         onClose();
     };
 
-    const handlePasteImport = () => {
-        const trimmed = pasteData.trim();
+    const handleJsonlImport = () => {
+        const trimmed = jsonlData.trim();
+        if (trimmed) onImport(trimmed);
+    };
+
+    const handleBase64Import = () => {
+        const trimmed = base64Data.trim();
         if (trimmed) onImport(trimmed);
     };
 
@@ -67,11 +74,28 @@ export const ImportModal = ({ open, onClose, onImport, loading = false }: Import
                     onChange={(_, newValue) => setTabValue(newValue)}
                     sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
                 >
-                    <Tab label="Paste Data" icon={<PasteIcon />} disabled={loading} />
+                    <Tab label="JSONL" icon={<CodeIcon />} disabled={loading} />
+                    <Tab label="Base64" icon={<PasteIcon />} disabled={loading} />
                     <Tab label="Upload File" icon={<UploadIcon />} disabled={loading} />
                 </Tabs>
 
                 <TabPanel value={tabValue} index={0}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Paste the JSONL formatted rule export data below.
+                    </Typography>
+                    <TextField
+                        fullWidth
+                        multiline
+                        rows={8}
+                        placeholder='{"type":"metadata","version":"1.0",...}\n{"type":"rule",...}'
+                        value={jsonlData}
+                        onChange={(e) => setJsonlData(e.target.value)}
+                        disabled={loading}
+                        sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
+                    />
+                </TabPanel>
+
+                <TabPanel value={tabValue} index={1}>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                         Paste the base64 encoded rule export data below.
                     </Typography>
@@ -80,16 +104,16 @@ export const ImportModal = ({ open, onClose, onImport, loading = false }: Import
                         multiline
                         rows={8}
                         placeholder="TGB64:1.0:..."
-                        value={pasteData}
-                        onChange={(e) => setPasteData(e.target.value)}
+                        value={base64Data}
+                        onChange={(e) => setBase64Data(e.target.value)}
                         disabled={loading}
                         sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
                     />
                 </TabPanel>
 
-                <TabPanel value={tabValue} index={1}>
+                <TabPanel value={tabValue} index={2}>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Upload a file containing base64 encoded rule export data.
+                        Upload a file containing the rule export data (JSONL or Base64 format).
                     </Typography>
                     <Button
                         variant="outlined"
@@ -119,9 +143,18 @@ export const ImportModal = ({ open, onClose, onImport, loading = false }: Import
                 </Button>
                 {tabValue === 0 && (
                     <Button
-                        onClick={handlePasteImport}
+                        onClick={handleJsonlImport}
                         variant="contained"
-                        disabled={!pasteData.trim() || loading}
+                        disabled={!jsonlData.trim() || loading}
+                    >
+                        {loading ? 'Importing...' : 'Import'}
+                    </Button>
+                )}
+                {tabValue === 1 && (
+                    <Button
+                        onClick={handleBase64Import}
+                        variant="contained"
+                        disabled={!base64Data.trim() || loading}
                     >
                         {loading ? 'Importing...' : 'Import'}
                     </Button>

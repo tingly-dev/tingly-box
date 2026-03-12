@@ -193,6 +193,15 @@ async function exportToClipboard(
     onNotification('Base64 export copied to clipboard! You can now paste it anywhere.', 'success');
 }
 
+// Generic JSONL clipboard export handler
+async function exportJsonlToClipboard(
+    jsonlContent: string,
+    onNotification: (message: string, severity: 'success' | 'error') => void
+): Promise<void> {
+    await copyToClipboard(jsonlContent);
+    onNotification('JSONL export copied to clipboard! You can now paste it anywhere.', 'success');
+}
+
 /**
  * Exports a rule with its associated providers to the specified format
  */
@@ -231,6 +240,22 @@ export async function exportRuleAsBase64ToClipboard(
 }
 
 /**
+ * Exports a rule as JSONL and copies to clipboard
+ */
+export async function exportRuleAsJsonlToClipboard(
+    rule: Rule,
+    onNotification: (message: string, severity: 'success' | 'error') => void
+): Promise<void> {
+    try {
+        const jsonlContent = await buildJsonlExport(rule);
+        await exportJsonlToClipboard(jsonlContent, onNotification);
+    } catch (error) {
+        console.error('Error exporting rule to clipboard:', error);
+        onNotification('Failed to copy to clipboard', 'error');
+    }
+}
+
+/**
  * Exports a single provider to the specified format
  */
 export async function exportProvider(
@@ -261,6 +286,22 @@ export async function exportProviderAsBase64ToClipboard(
     try {
         const jsonlContent = buildProviderJsonlExport(provider);
         await exportToClipboard(jsonlContent, onNotification);
+    } catch (error) {
+        console.error('Error exporting provider to clipboard:', error);
+        onNotification('Failed to copy to clipboard', 'error');
+    }
+}
+
+/**
+ * Exports a provider as JSONL and copies to clipboard
+ */
+export async function exportProviderAsJsonlToClipboard(
+    provider: any,
+    onNotification: (message: string, severity: 'success' | 'error') => void
+): Promise<void> {
+    try {
+        const jsonlContent = buildProviderJsonlExport(provider);
+        await exportJsonlToClipboard(jsonlContent, onNotification);
     } catch (error) {
         console.error('Error exporting provider to clipboard:', error);
         onNotification('Failed to copy to clipboard', 'error');

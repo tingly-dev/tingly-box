@@ -1,7 +1,7 @@
 import { ApiStyleBadge } from '@/components/ApiStyleBadge.tsx';
 import ModelListDialog from '@/components/ModelListDialog';
 import ProviderExportMenu from '@/components/ProviderExportMenu';
-import { exportProvider, exportProviderAsBase64ToClipboard } from '@/components/rule-card/utils';
+import { exportProvider, exportProviderAsBase64ToClipboard, exportProviderAsJsonlToClipboard } from '@/components/rule-card/utils';
 import { Cancel, ContentCopy, Delete, Edit, ListAlt, Route, Visibility } from '@mui/icons-material';
 import {
     Box,
@@ -168,6 +168,12 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification }: 
         });
     }, [onNotification]);
 
+    const handleCopyProviderJsonl = useCallback(async (provider: Provider) => {
+        await exportProviderAsJsonlToClipboard(provider, (message, severity) => {
+            onNotification?.(message, severity);
+        });
+    }, [onNotification]);
+
     return (
         <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
             <Table>
@@ -287,6 +293,7 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification }: 
                                     <ProviderExportMenu
                                         provider={provider}
                                         onExport={handleExportProvider}
+                                        onCopyJsonl={handleCopyProviderJsonl}
                                         onCopyBase64={handleCopyProviderBase64}
                                     />
                                     {onEdit && (

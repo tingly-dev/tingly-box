@@ -7,12 +7,14 @@ import type { Provider } from '../types/provider';
 export interface ProviderExportMenuProps {
     provider: Provider;
     onExport: (provider: Provider, format: ExportFormat) => void;
+    onCopyJsonl?: (provider: Provider) => void;
     onCopyBase64?: (provider: Provider) => void;
 }
 
 export const ProviderExportMenu: React.FC<ProviderExportMenuProps> = ({
     provider,
     onExport,
+    onCopyJsonl,
     onCopyBase64,
 }) => {
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -36,6 +38,11 @@ export const ProviderExportMenu: React.FC<ProviderExportMenuProps> = ({
         handleClose();
         onExport(provider, 'base64');
     }, [provider, onExport, handleClose]);
+
+    const handleCopyJsonl = useCallback(() => {
+        handleClose();
+        onCopyJsonl?.(provider);
+    }, [provider, onCopyJsonl, handleClose]);
 
     const handleCopyBase64 = useCallback(() => {
         handleClose();
@@ -72,12 +79,6 @@ export const ProviderExportMenu: React.FC<ProviderExportMenuProps> = ({
                     horizontal: 'right',
                 }}
             >
-                {onCopyBase64 && (
-                    <MenuItem onClick={handleCopyBase64}>
-                        <ContentCopy fontSize="small" sx={{ mr: 1 }} />
-                        Copy Base64 to Clipboard
-                    </MenuItem>
-                )}
                 <MenuItem onClick={handleExportAsJsonl}>
                     <Download fontSize="small" sx={{ mr: 1 }} />
                     Download as JSONL
@@ -86,6 +87,18 @@ export const ProviderExportMenu: React.FC<ProviderExportMenuProps> = ({
                     <Download fontSize="small" sx={{ mr: 1 }} />
                     Download as Base64
                 </MenuItem>
+                {onCopyJsonl && (
+                    <MenuItem onClick={handleCopyJsonl}>
+                        <ContentCopy fontSize="small" sx={{ mr: 1 }} />
+                        Copy JSONL to Clipboard
+                    </MenuItem>
+                )}
+                {onCopyBase64 && (
+                    <MenuItem onClick={handleCopyBase64}>
+                        <ContentCopy fontSize="small" sx={{ mr: 1 }} />
+                        Copy Base64 to Clipboard
+                    </MenuItem>
+                )}
             </Menu>
         </>
     );
