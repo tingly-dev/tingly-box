@@ -1,4 +1,4 @@
-package server
+package imbotsettings
 
 import (
 	"context"
@@ -12,135 +12,37 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_control"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
-	"github.com/tingly-dev/tingly-box/pkg/swagger"
 )
 
-// ImBotSettingsAPI provides REST endpoints for ImBot settings management
-type ImBotSettingsAPI struct {
+// Handler handles ImBot settings HTTP requests
+type Handler struct {
 	config *config.Config
 	store  *db.ImBotSettingsStore
 }
 
-// NewImBotSettingsAPI creates a new ImBot settings API
-func NewImBotSettingsAPI(cfg *config.Config) *ImBotSettingsAPI {
-	return &ImBotSettingsAPI{
+// NewHandler creates a new ImBot settings handler
+func NewHandler(cfg *config.Config) *Handler {
+	sm := cfg.StoreManager()
+	return &Handler{
 		config: cfg,
-		store:  cfg.GetImBotSettingsStore(),
+		store:  sm.ImBotSettings(),
 	}
 }
 
-// RegisterImBotSettingsRoutes registers the ImBot settings API routes with swagger documentation
-func (s *Server) RegisterImBotSettingsRoutes(manager *swagger.RouteManager) {
-	imbotAPI := NewImBotSettingsAPI(s.config)
-
-	apiV1 := manager.NewGroup("api", "v1", "")
-	apiV1.Router.Use(s.authMW.UserAuthMiddleware())
-
-	// GET /api/v1/imbot-settings - List all ImBot configurations
-	apiV1.GET("/imbot-settings", imbotAPI.ListSettings,
-		swagger.WithTags("imbot-settings"),
-		swagger.WithDescription("Returns all ImBot configurations"),
-		swagger.WithResponseModel(ImBotSettingsListResponse{}),
-		swagger.WithErrorResponses(
-			swagger.ErrorResponseConfig{Code: 503, Message: "ImBot settings store not available"},
-		),
-	)
-
-	// GET /api/v1/imbot-settings/:uuid - Get a single ImBot configuration
-	apiV1.GET("/imbot-settings/:uuid", imbotAPI.GetSettings,
-		swagger.WithTags("imbot-settings"),
-		swagger.WithDescription("Returns a single ImBot configuration by UUID"),
-		swagger.WithPathParam("uuid", "string", "ImBot configuration UUID"),
-		swagger.WithResponseModel(ImBotSettingsResponse{}),
-		swagger.WithErrorResponses(
-			swagger.ErrorResponseConfig{Code: 404, Message: "ImBot settings not found"},
-		),
-	)
-
-	// POST /api/v1/imbot-settings - Create a new ImBot configuration
-	apiV1.POST("/imbot-settings", imbotAPI.CreateSettings,
-		swagger.WithTags("imbot-settings"),
-		swagger.WithDescription("Creates a new ImBot configuration"),
-		swagger.WithRequestModel(ImBotSettingsCreateRequest{}),
-		swagger.WithResponseModel(ImBotSettingsResponse{}),
-		swagger.WithErrorResponses(
-			swagger.ErrorResponseConfig{Code: 400, Message: "Invalid request"},
-		),
-	)
-
-	// PUT /api/v1/imbot-settings/:uuid - Update an existing ImBot configuration
-	apiV1.PUT("/imbot-settings/:uuid", imbotAPI.UpdateSettings,
-		swagger.WithTags("imbot-settings"),
-		swagger.WithDescription("Updates an existing ImBot configuration"),
-		swagger.WithPathParam("uuid", "string", "ImBot configuration UUID"),
-		swagger.WithRequestModel(ImBotSettingsUpdateRequest{}),
-		swagger.WithResponseModel(ImBotSettingsResponse{}),
-		swagger.WithErrorResponses(
-			swagger.ErrorResponseConfig{Code: 404, Message: "ImBot settings not found"},
-		),
-	)
-
-	// DELETE /api/v1/imbot-settings/:uuid - Delete an ImBot configuration
-	apiV1.DELETE("/imbot-settings/:uuid", imbotAPI.DeleteSettings,
-		swagger.WithTags("imbot-settings"),
-		swagger.WithDescription("Deletes an ImBot configuration"),
-		swagger.WithPathParam("uuid", "string", "ImBot configuration UUID"),
-		swagger.WithResponseModel(DeleteResponse{}),
-		swagger.WithErrorResponses(
-			swagger.ErrorResponseConfig{Code: 404, Message: "ImBot settings not found"},
-		),
-	)
-
-	// POST /api/v1/imbot-settings/:uuid/toggle - Toggle enabled status
-	apiV1.POST("/imbot-settings/:uuid/toggle", imbotAPI.ToggleSettings,
-		swagger.WithTags("imbot-settings"),
-		swagger.WithDescription("Toggles the enabled status of an ImBot configuration"),
-		swagger.WithPathParam("uuid", "string", "ImBot configuration UUID"),
-		swagger.WithResponseModel(ImBotSettingsToggleResponse{}),
-		swagger.WithErrorResponses(
-			swagger.ErrorResponseConfig{Code: 404, Message: "ImBot settings not found"},
-		),
-	)
-
-	// GET /api/v1/imbot-platforms - Get all supported platforms
-	apiV1.GET("/imbot-platforms", imbotAPI.GetPlatforms,
-		swagger.WithTags("imbot-settings"),
-		swagger.WithDescription("Returns all supported ImBot platforms with their configurations"),
-		swagger.WithResponseModel(ImBotPlatformsResponse{}),
-	)
-
-	// GET /api/v1/imbot-platform-config - Get platform auth configuration
-	apiV1.GET("/imbot-platform-config", imbotAPI.GetPlatformConfig,
-		swagger.WithTags("imbot-settings"),
-		swagger.WithDescription("Returns auth configuration for a specific platform"),
-		swagger.WithQueryConfig("platform", swagger.QueryParamConfig{
-			Name:        "platform",
-			Type:        "string",
-			Required:    true,
-			Description: "Platform identifier (telegram, discord, slack, feishu, dingtalk, whatsapp)",
-		}),
-		swagger.WithResponseModel(ImBotPlatformConfigResponse{}),
-		swagger.WithErrorResponses(
-			swagger.ErrorResponseConfig{Code: 400, Message: "Platform parameter is required"},
-			swagger.ErrorResponseConfig{Code: 404, Message: "Unknown platform"},
-		),
-	)
-}
-
 // ListSettings returns all ImBot configurations
-func (api *ImBotSettingsAPI) ListSettings(c *gin.Context) {
-	if api.store == nil {
+func (h *Handler) ListSettings(c *gin.Context) {
+	if h.store == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ImBot settings store not available"})
 		return
 	}
 
-	settings, err := api.store.ListSettings()
+	settings, err := h.store.ListSettings()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	response := ImBotSettingsListResponse{
+	response := ListResponse{
 		Success:  true,
 		Settings: settings,
 	}
@@ -149,8 +51,8 @@ func (api *ImBotSettingsAPI) ListSettings(c *gin.Context) {
 }
 
 // GetSettings returns a single ImBot configuration by UUID
-func (api *ImBotSettingsAPI) GetSettings(c *gin.Context) {
-	if api.store == nil {
+func (h *Handler) GetSettings(c *gin.Context) {
+	if h.store == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ImBot settings store not available"})
 		return
 	}
@@ -161,7 +63,7 @@ func (api *ImBotSettingsAPI) GetSettings(c *gin.Context) {
 		return
 	}
 
-	settings, err := api.store.GetSettingsByUUID(uuid)
+	settings, err := h.store.GetSettingsByUUID(uuid)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -173,7 +75,7 @@ func (api *ImBotSettingsAPI) GetSettings(c *gin.Context) {
 		return
 	}
 
-	response := ImBotSettingsResponse{
+	response := SettingsResponse{
 		Success:  true,
 		Settings: settings,
 	}
@@ -182,13 +84,13 @@ func (api *ImBotSettingsAPI) GetSettings(c *gin.Context) {
 }
 
 // CreateSettings creates a new ImBot configuration
-func (api *ImBotSettingsAPI) CreateSettings(c *gin.Context) {
-	if api.store == nil {
+func (h *Handler) CreateSettings(c *gin.Context) {
+	if h.store == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ImBot settings store not available"})
 		return
 	}
 
-	var req ImBotSettingsCreateRequest
+	var req CreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body", "details": err.Error()})
 		return
@@ -230,7 +132,7 @@ func (api *ImBotSettingsAPI) CreateSettings(c *gin.Context) {
 		SmartGuideModel:    strings.TrimSpace(req.SmartGuideModel),
 	}
 
-	created, err := api.store.CreateSettings(settings)
+	created, err := h.store.CreateSettings(settings)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -248,7 +150,7 @@ func (api *ImBotSettingsAPI) CreateSettings(c *gin.Context) {
 		}
 	}
 
-	response := ImBotSettingsResponse{
+	response := SettingsResponse{
 		Success:  true,
 		Settings: created,
 	}
@@ -257,8 +159,8 @@ func (api *ImBotSettingsAPI) CreateSettings(c *gin.Context) {
 }
 
 // UpdateSettings updates an existing ImBot configuration
-func (api *ImBotSettingsAPI) UpdateSettings(c *gin.Context) {
-	if api.store == nil {
+func (h *Handler) UpdateSettings(c *gin.Context) {
+	if h.store == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ImBot settings store not available"})
 		return
 	}
@@ -270,7 +172,7 @@ func (api *ImBotSettingsAPI) UpdateSettings(c *gin.Context) {
 	}
 
 	// Get current settings to check if enabled status is changing
-	currentSettings, err := api.store.GetSettingsByUUID(uuid)
+	currentSettings, err := h.store.GetSettingsByUUID(uuid)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -282,7 +184,7 @@ func (api *ImBotSettingsAPI) UpdateSettings(c *gin.Context) {
 		return
 	}
 
-	var req ImBotSettingsUpdateRequest
+	var req UpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body", "details": err.Error()})
 		return
@@ -339,7 +241,7 @@ func (api *ImBotSettingsAPI) UpdateSettings(c *gin.Context) {
 		settings.SmartGuideModel = currentSettings.SmartGuideModel
 	}
 
-	if err := api.store.UpdateSettings(uuid, settings); err != nil {
+	if err := h.store.UpdateSettings(uuid, settings); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -363,13 +265,13 @@ func (api *ImBotSettingsAPI) UpdateSettings(c *gin.Context) {
 	}
 
 	// Fetch updated settings
-	updated, err := api.store.GetSettingsByUUID(uuid)
+	updated, err := h.store.GetSettingsByUUID(uuid)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	response := ImBotSettingsResponse{
+	response := SettingsResponse{
 		Success:  true,
 		Settings: updated,
 	}
@@ -378,8 +280,8 @@ func (api *ImBotSettingsAPI) UpdateSettings(c *gin.Context) {
 }
 
 // DeleteSettings deletes an ImBot configuration
-func (api *ImBotSettingsAPI) DeleteSettings(c *gin.Context) {
-	if api.store == nil {
+func (h *Handler) DeleteSettings(c *gin.Context) {
+	if h.store == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ImBot settings store not available"})
 		return
 	}
@@ -395,7 +297,7 @@ func (api *ImBotSettingsAPI) DeleteSettings(c *gin.Context) {
 		botManager.Stop(uuid)
 	}
 
-	if err := api.store.DeleteSettings(uuid); err != nil {
+	if err := h.store.DeleteSettings(uuid); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -411,8 +313,8 @@ func (api *ImBotSettingsAPI) DeleteSettings(c *gin.Context) {
 }
 
 // ToggleSettings toggles the enabled status of an ImBot configuration
-func (api *ImBotSettingsAPI) ToggleSettings(c *gin.Context) {
-	if api.store == nil {
+func (h *Handler) ToggleSettings(c *gin.Context) {
+	if h.store == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ImBot settings store not available"})
 		return
 	}
@@ -423,7 +325,7 @@ func (api *ImBotSettingsAPI) ToggleSettings(c *gin.Context) {
 		return
 	}
 
-	newStatus, err := api.store.ToggleSettings(uuid)
+	newStatus, err := h.store.ToggleSettings(uuid)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -445,7 +347,7 @@ func (api *ImBotSettingsAPI) ToggleSettings(c *gin.Context) {
 		}
 	}
 
-	response := ImBotSettingsToggleResponse{
+	response := ToggleResponse{
 		Success: true,
 		Enabled: newStatus,
 	}
@@ -454,7 +356,7 @@ func (api *ImBotSettingsAPI) ToggleSettings(c *gin.Context) {
 }
 
 // GetPlatforms returns all supported ImBot platforms with their configurations
-func (api *ImBotSettingsAPI) GetPlatforms(c *gin.Context) {
+func (h *Handler) GetPlatforms(c *gin.Context) {
 	platforms := imbot.GetAllPlatforms()
 	platformResponses := make([]PlatformConfig, 0, len(platforms))
 
@@ -474,7 +376,7 @@ func (api *ImBotSettingsAPI) GetPlatforms(c *gin.Context) {
 		"business":   imbot.CategoryLabels["business"],
 	}
 
-	response := ImBotPlatformsResponse{
+	response := PlatformsResponse{
 		Success:    true,
 		Platforms:  platformResponses,
 		Categories: categories,
@@ -484,7 +386,7 @@ func (api *ImBotSettingsAPI) GetPlatforms(c *gin.Context) {
 }
 
 // GetPlatformConfig returns auth configuration for a specific platform
-func (api *ImBotSettingsAPI) GetPlatformConfig(c *gin.Context) {
+func (h *Handler) GetPlatformConfig(c *gin.Context) {
 	platform := c.Query("platform")
 	if platform == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Platform parameter is required"})
@@ -497,7 +399,7 @@ func (api *ImBotSettingsAPI) GetPlatformConfig(c *gin.Context) {
 		return
 	}
 
-	response := ImBotPlatformConfigResponse{
+	response := PlatformConfigResponse{
 		Success: true,
 		Platform: PlatformConfig{
 			Platform:    config.Platform,
@@ -527,76 +429,4 @@ func normalizeAllowlist(values []string) []string {
 		out = append(out, entry)
 	}
 	return out
-}
-
-// Request/Response types
-
-type ImBotSettingsListResponse struct {
-	Success  bool          `json:"success"`
-	Settings []db.Settings `json:"settings"`
-}
-
-type ImBotSettingsResponse struct {
-	Success  bool        `json:"success"`
-	Settings db.Settings `json:"settings"`
-}
-
-type ImBotSettingsCreateRequest struct {
-	UUID          string            `json:"uuid,omitempty"`
-	Name          string            `json:"name,omitempty"`
-	Platform      string            `json:"platform"`
-	AuthType      string            `json:"auth_type"`
-	Auth          map[string]string `json:"auth"`
-	ProxyURL      string            `json:"proxy_url,omitempty"`
-	ChatID        string            `json:"chat_id,omitempty"`
-	BashAllowlist []string          `json:"bash_allowlist,omitempty"`
-	Enabled       bool              `json:"enabled"`
-	Token         string            `json:"token,omitempty"` // Legacy field
-	// SmartGuide model configuration
-	SmartGuideProvider string `json:"smartguide_provider,omitempty"` // Provider UUID
-	SmartGuideModel    string `json:"smartguide_model,omitempty"`    // Model identifier
-}
-
-type ImBotSettingsUpdateRequest struct {
-	Name          string            `json:"name,omitempty"`
-	Platform      string            `json:"platform,omitempty"`
-	AuthType      string            `json:"auth_type,omitempty"`
-	Auth          map[string]string `json:"auth,omitempty"`
-	ProxyURL      string            `json:"proxy_url,omitempty"`
-	ChatID        string            `json:"chat_id,omitempty"`
-	BashAllowlist []string          `json:"bash_allowlist,omitempty"`
-	Enabled       *bool             `json:"enabled,omitempty"` // Pointer to allow partial update
-	Token         string            `json:"token,omitempty"`   // Legacy field
-	// SmartGuide model configuration (pointer for partial update)
-	SmartGuideProvider *string `json:"smartguide_provider,omitempty"` // Provider UUID
-	SmartGuideModel    *string `json:"smartguide_model,omitempty"`    // Model identifier
-}
-
-type ImBotSettingsToggleResponse struct {
-	Success bool `json:"success"`
-	Enabled bool `json:"enabled"`
-}
-
-type ImBotPlatformsResponse struct {
-	Success    bool             `json:"success"`
-	Platforms  []PlatformConfig `json:"platforms"`
-	Categories gin.H            `json:"categories"`
-}
-
-type ImBotPlatformConfigResponse struct {
-	Success  bool           `json:"success"`
-	Platform PlatformConfig `json:"platform"`
-}
-
-type PlatformConfig struct {
-	Platform    string            `json:"platform"`
-	DisplayName string            `json:"display_name"`
-	AuthType    string            `json:"auth_type"`
-	Category    string            `json:"category"`
-	Fields      []imbot.FieldSpec `json:"fields"`
-}
-
-type DeleteResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
 }

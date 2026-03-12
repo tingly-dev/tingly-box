@@ -188,7 +188,14 @@ func (lb *LoadBalancer) GetAllServiceStats() map[string]*loadbalance.ServiceStat
 				service := rule.Services[i]
 				if service.Active {
 					// Stats are global per provider:model, not per-rule
-					store := lb.config.GetStatsStore()
+					sm := lb.config.StoreManager()
+					if sm == nil {
+						continue
+					}
+					store := sm.Stats()
+					if store == nil {
+						continue
+					}
 					key := store.ServiceKey(service.Provider, service.Model)
 					// Only add if not already present (services across rules may share provider:model)
 					if _, exists := result[key]; !exists {
@@ -221,8 +228,10 @@ func (lb *LoadBalancer) ClearAllStats() {
 
 	// Clear persisted stats from the dedicated stats store
 	if lb.config != nil {
-		if store := lb.config.GetStatsStore(); store != nil {
-			_ = store.ClearAll()
+		if sm := lb.config.StoreManager(); sm != nil {
+			if store := sm.Stats(); store != nil {
+				_ = store.ClearAll()
+			}
 		}
 	}
 

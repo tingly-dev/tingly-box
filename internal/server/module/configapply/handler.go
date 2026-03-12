@@ -1,4 +1,4 @@
-package server
+package configapply
 
 import (
 	"encoding/json"
@@ -12,8 +12,22 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// Handler handles config apply HTTP requests
+type Handler struct {
+	config *config.Config
+	host   string
+}
+
+// NewHandler creates a new configapply handler
+func NewHandler(cfg *config.Config, host string) *Handler {
+	return &Handler{
+		config: cfg,
+		host:   host,
+	}
+}
+
 // ApplyClaudeConfig generates and applies Claude Code configuration from system state
-func (s *Server) ApplyClaudeConfig(c *gin.Context) {
+func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 	var req struct {
 		Mode              string `json:"mode"`              // "unified" or "separate"
 		InstallStatusLine bool   `json:"installStatusLine"` // install status line integration
@@ -23,7 +37,7 @@ func (s *Server) ApplyClaudeConfig(c *gin.Context) {
 		req.InstallStatusLine = false
 	}
 
-	cfg := s.config
+	cfg := h.config
 	if cfg == nil {
 		c.JSON(http.StatusInternalServerError, config.ApplyResult{
 			Success: false,
@@ -71,11 +85,11 @@ func (s *Server) ApplyClaudeConfig(c *gin.Context) {
 	}
 
 	// Get base URL from server config or use default
-	port := s.config.ServerPort
+	port := h.config.ServerPort
 	if port == 0 {
 		port = 12580
 	}
-	baseURL := fmt.Sprintf("http://%s:%d", s.host, port)
+	baseURL := fmt.Sprintf("http://%s:%d", h.host, port)
 
 	// Generate env vars based on mode
 	env := map[string]string{
@@ -84,7 +98,7 @@ func (s *Server) ApplyClaudeConfig(c *gin.Context) {
 		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
 		"API_TIMEOUT_MS":                           "3000000",
 		"ANTHROPIC_BASE_URL":                       baseURL + "/tingly/claude_code",
-		"ANTHROPIC_AUTH_TOKEN":                     s.config.GetModelToken(),
+		"ANTHROPIC_AUTH_TOKEN":                     h.config.GetModelToken(),
 	}
 
 	if req.Mode == "separate" {
@@ -200,8 +214,8 @@ func (s *Server) ApplyClaudeConfig(c *gin.Context) {
 }
 
 // ApplyOpenCodeConfig generates and applies OpenCode configuration from system state
-func (s *Server) ApplyOpenCodeConfigFromState(c *gin.Context) {
-	cfg := s.config
+func (h *Handler) ApplyOpenCodeConfigFromState(c *gin.Context) {
+	cfg := h.config
 	if cfg == nil {
 		c.JSON(http.StatusInternalServerError, config.ApplyResult{
 			Success: false,
@@ -249,15 +263,15 @@ func (s *Server) ApplyOpenCodeConfigFromState(c *gin.Context) {
 	}
 
 	// Get base URL from server config or use default
-	port := s.config.ServerPort
+	port := h.config.ServerPort
 	if port == 0 {
 		port = 12580
 	}
-	baseURL := fmt.Sprintf("http://%s:%d", s.host, port)
+	baseURL := fmt.Sprintf("http://%s:%d", h.host, port)
 	configBaseURL := baseURL + "/tingly/opencode"
 
 	// Use the model token from config (tingly-box- prefixed JWT)
-	apiKey := s.config.GetModelToken()
+	apiKey := h.config.GetModelToken()
 
 	// Collect all models from all active OpenCode rules
 	models := make(map[string]interface{})
@@ -306,34 +320,10 @@ func (s *Server) ApplyOpenCodeConfigFromState(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// ApplyConfigResponse is the response for ApplyClaudeConfig
-type ApplyConfigResponse struct {
-	Success          bool               `json:"success"`
-	SettingsResult   config.ApplyResult `json:"settingsResult"`
-	OnboardingResult config.ApplyResult `json:"onboardingResult"`
-	CreatedFiles     []string           `json:"createdFiles"`
-	UpdatedFiles     []string           `json:"updatedFiles"`
-	BackupPaths      []string           `json:"backupPaths"`
-}
-
-// ApplyOpenCodeConfigResponse is the response for ApplyOpenCodeConfigFromState
-type ApplyOpenCodeConfigResponse struct {
-	config.ApplyResult
-}
-
-// OpenCodeConfigPreviewResponse is the response for GetOpenCodeConfigPreview
-type OpenCodeConfigPreviewResponse struct {
-	Success    bool   `json:"success"`
-	ConfigJSON string `json:"configJson"`
-	ScriptWin  string `json:"scriptWindows"`
-	ScriptUnix string `json:"scriptUnix"`
-	Message    string `json:"message,omitempty"`
-}
-
 // GetOpenCodeConfigPreview generates OpenCode configuration preview from system state
 // This endpoint returns the config JSON for display purposes without applying it
-func (s *Server) GetOpenCodeConfigPreview(c *gin.Context) {
-	cfg := s.config
+func (h *Handler) GetOpenCodeConfigPreview(c *gin.Context) {
+	cfg := h.config
 	if cfg == nil {
 		c.JSON(http.StatusInternalServerError, OpenCodeConfigPreviewResponse{
 			Success: false,
@@ -381,15 +371,15 @@ func (s *Server) GetOpenCodeConfigPreview(c *gin.Context) {
 	}
 
 	// Get base URL from server config or use default
-	port := s.config.ServerPort
+	port := h.config.ServerPort
 	if port == 0 {
 		port = 12580
 	}
-	baseURL := fmt.Sprintf("http://%s:%d", s.host, port)
+	baseURL := fmt.Sprintf("http://%s:%d", h.host, port)
 	configBaseURL := baseURL + "/tingly/opencode"
 
 	// Use the model token from config (tingly-box- prefixed JWT)
-	apiKey := s.config.GetModelToken()
+	apiKey := h.config.GetModelToken()
 
 	// Collect all models from all active OpenCode rules
 	models := make(map[string]interface{})

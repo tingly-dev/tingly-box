@@ -1,4 +1,4 @@
-package server
+package providertemplate
 
 import (
 	"context"
@@ -9,24 +9,21 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/data"
 )
 
-// TemplateResponse represents the response for provider template endpoints
-type TemplateResponse struct {
-	Success bool                              `json:"success"`
-	Data    map[string]*data.ProviderTemplate `json:"data,omitempty"`
-	Message string                            `json:"message,omitempty"`
-	Version string                            `json:"version,omitempty"`
+// Handler handles provider template HTTP requests
+type Handler struct {
+	templateManager *data.TemplateManager
 }
 
-// SingleTemplateResponse represents the response for a single templatwe
-type SingleTemplateResponse struct {
-	Success bool                   `json:"success"`
-	Data    *data.ProviderTemplate `json:"data,omitempty"`
-	Message string                 `json:"message,omitempty"`
+// NewHandler creates a new provider template handler
+func NewHandler(templateManager *data.TemplateManager) *Handler {
+	return &Handler{
+		templateManager: templateManager,
+	}
 }
 
 // GetProviderTemplates returns all provider templates
-func (s *Server) GetProviderTemplates(c *gin.Context) {
-	if s.templateManager == nil {
+func (h *Handler) GetProviderTemplates(c *gin.Context) {
+	if h.templateManager == nil {
 		c.JSON(http.StatusInternalServerError, TemplateResponse{
 			Success: false,
 			Message: "Template manager not initialized",
@@ -34,8 +31,8 @@ func (s *Server) GetProviderTemplates(c *gin.Context) {
 		return
 	}
 
-	templates := s.templateManager.GetAllTemplates()
-	version := s.templateManager.GetVersion()
+	templates := h.templateManager.GetAllTemplates()
+	version := h.templateManager.GetVersion()
 
 	c.JSON(http.StatusOK, TemplateResponse{
 		Success: true,
@@ -45,7 +42,7 @@ func (s *Server) GetProviderTemplates(c *gin.Context) {
 }
 
 // GetProviderTemplate returns a single provider template by ID
-func (s *Server) GetProviderTemplate(c *gin.Context) {
+func (h *Handler) GetProviderTemplate(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.JSON(http.StatusBadRequest, TemplateResponse{
@@ -55,7 +52,7 @@ func (s *Server) GetProviderTemplate(c *gin.Context) {
 		return
 	}
 
-	if s.templateManager == nil {
+	if h.templateManager == nil {
 		c.JSON(http.StatusInternalServerError, TemplateResponse{
 			Success: false,
 			Message: "Template manager not initialized",
@@ -63,7 +60,7 @@ func (s *Server) GetProviderTemplate(c *gin.Context) {
 		return
 	}
 
-	template, err := s.templateManager.GetTemplate(id)
+	template, err := h.templateManager.GetTemplate(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, TemplateResponse{
 			Success: false,
@@ -79,8 +76,8 @@ func (s *Server) GetProviderTemplate(c *gin.Context) {
 }
 
 // RefreshProviderTemplates fetches the latest templates from GitHub
-func (s *Server) RefreshProviderTemplates(c *gin.Context) {
-	if s.templateManager == nil {
+func (h *Handler) RefreshProviderTemplates(c *gin.Context) {
+	if h.templateManager == nil {
 		c.JSON(http.StatusInternalServerError, TemplateResponse{
 			Success: false,
 			Message: "Template manager not initialized",
@@ -88,7 +85,7 @@ func (s *Server) RefreshProviderTemplates(c *gin.Context) {
 		return
 	}
 
-	registry, err := s.templateManager.FetchFromGitHub(context.Background())
+	registry, err := h.templateManager.FetchFromGitHub(context.Background())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, TemplateResponse{
 			Success: false,
@@ -106,8 +103,8 @@ func (s *Server) RefreshProviderTemplates(c *gin.Context) {
 }
 
 // GetProviderTemplateVersion returns the current template registry version
-func (s *Server) GetProviderTemplateVersion(c *gin.Context) {
-	if s.templateManager == nil {
+func (h *Handler) GetProviderTemplateVersion(c *gin.Context) {
+	if h.templateManager == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Template manager not initialized",
@@ -115,7 +112,7 @@ func (s *Server) GetProviderTemplateVersion(c *gin.Context) {
 		return
 	}
 
-	version := s.templateManager.GetVersion()
+	version := h.templateManager.GetVersion()
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

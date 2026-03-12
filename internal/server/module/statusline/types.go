@@ -1,60 +1,60 @@
-package server
+package statusline
 
 // =============================================
 // Claude Code Status Line API Models
 // =============================================
 
-// ClaudeCodeStatusInput represents the input from Claude Code status line
+// StatusInput represents the input from Claude Code status line
 // Ref: https://code.claude.com/docs/en/statusline.md
-type ClaudeCodeStatusInput struct {
-	Model         ClaudeCodeModel         `json:"model"`
-	CWD           string                  `json:"cwd"`
-	Workspace     ClaudeCodeWorkspace     `json:"workspace"`
-	Cost          ClaudeCodeCost          `json:"cost"`
-	ContextWindow ClaudeCodeContextWindow `json:"context_window"`
+type StatusInput struct {
+	Model         Model         `json:"model"`
+	CWD           string        `json:"cwd"`
+	Workspace     Workspace     `json:"workspace"`
+	Cost          Cost          `json:"cost"`
+	ContextWindow ContextWindow `json:"context_window"`
 	// Additional fields
-	Exceeds200kTokens bool                `json:"exceeds_200k_tokens"`
-	SessionID         string              `json:"session_id"`
-	TranscriptPath    string              `json:"transcript_path"`
-	Version           string              `json:"version"`
-	OutputStyle       ClaudeCodeOutputStyle `json:"output_style"`
-	Vim               ClaudeCodeVim        `json:"vim"`
-	Agent             ClaudeCodeAgent      `json:"agent"`
+	Exceeds200kTokens bool        `json:"exceeds_200k_tokens"`
+	SessionID         string      `json:"session_id"`
+	TranscriptPath    string      `json:"transcript_path"`
+	Version           string      `json:"version"`
+	OutputStyle       OutputStyle `json:"output_style"`
+	Vim               Vim         `json:"vim"`
+	Agent             Agent       `json:"agent"`
 }
 
-// ClaudeCodeModel represents model information from Claude Code
-type ClaudeCodeModel struct {
+// Model represents model information from Claude Code
+type Model struct {
 	ID           string `json:"id" example:"claude-sonnet-4-6"`
 	DisplayName  string `json:"display_name" example:"Claude Sonnet 4.6"`
 	ProviderName string `json:"provider_name" example:"anthropic"`
 }
 
-// ClaudeCodeWorkspace represents workspace information
-type ClaudeCodeWorkspace struct {
+// Workspace represents workspace information
+type Workspace struct {
 	CurrentDir string `json:"current_dir" example:"/Users/user/project"`
 	ProjectDir string `json:"project_dir" example:"/Users/user/project"`
 }
 
-// ClaudeCodeContextWindow represents context window information
-type ClaudeCodeContextWindow struct {
-	TotalInputTokens     int                      `json:"total_input_tokens" example:"15000"`
-	TotalOutputTokens    int                      `json:"total_output_tokens" example:"5000"`
-	ContextWindowSize    int                      `json:"context_window_size" example:"200000"`
-	UsedPercentage       float64                  `json:"used_percentage" example:"7.5"`
-	RemainingPercentage  float64                  `json:"remaining_percentage" example:"92.5"`
-	CurrentUsage         ClaudeCodeCurrentUsage   `json:"current_usage"`
+// ContextWindow represents context window information
+type ContextWindow struct {
+	TotalInputTokens    int          `json:"total_input_tokens" example:"15000"`
+	TotalOutputTokens   int          `json:"total_output_tokens" example:"5000"`
+	ContextWindowSize   int          `json:"context_window_size" example:"200000"`
+	UsedPercentage      float64      `json:"used_percentage" example:"7.5"`
+	RemainingPercentage float64      `json:"remaining_percentage" example:"92.5"`
+	CurrentUsage        CurrentUsage `json:"current_usage"`
 }
 
-// ClaudeCodeCurrentUsage represents token counts from the last API call
-type ClaudeCodeCurrentUsage struct {
+// CurrentUsage represents token counts from the last API call
+type CurrentUsage struct {
 	InputTokens  int `json:"input_tokens" example:"1500"`
 	OutputTokens int `json:"output_tokens" example:"500"`
 	CacheRead    int `json:"cache_read" example:"10000"`
 	CacheWrite   int `json:"cache_write" example:"2000"`
 }
 
-// ClaudeCodeCost represents cost information
-type ClaudeCodeCost struct {
+// Cost represents cost information
+type Cost struct {
 	TotalCostUSD       float64 `json:"total_cost_usd" example:"0.05"`
 	TotalDurationMs    int64   `json:"total_duration_ms" example:"120000"`
 	TotalAPIDurationMs int64   `json:"total_api_duration_ms" example:"30000"`
@@ -62,29 +62,29 @@ type ClaudeCodeCost struct {
 	TotalLinesRemoved  int     `json:"total_lines_removed" example:"50"`
 }
 
-// ClaudeCodeOutputStyle represents output style information
-type ClaudeCodeOutputStyle struct {
+// OutputStyle represents output style information
+type OutputStyle struct {
 	Name string `json:"name" example:"default"`
 }
 
-// ClaudeCodeVim represents vim mode information
-type ClaudeCodeVim struct {
+// Vim represents vim mode information
+type Vim struct {
 	Mode string `json:"mode" example:"NORMAL"`
 }
 
-// ClaudeCodeAgent represents agent information
-type ClaudeCodeAgent struct {
+// Agent represents agent information
+type Agent struct {
 	Name string `json:"name" example:"claude-opus-4-6"`
 }
 
-// ClaudeCodeCombinedStatus represents combined status from Claude Code and Tingly Box
-type ClaudeCodeCombinedStatus struct {
-	Success bool                       `json:"success"`
-	Data    *ClaudeCodeCombinedStatusData `json:"data"`
+// CombinedStatus represents combined status from Claude Code and Tingly Box
+type CombinedStatus struct {
+	Success bool                `json:"success"`
+	Data    *CombinedStatusData `json:"data"`
 }
 
-// ClaudeCodeCombinedStatusData represents the combined status data
-type ClaudeCodeCombinedStatusData struct {
+// CombinedStatusData represents the combined status data
+type CombinedStatusData struct {
 	// Claude Code info
 	CCModel             string  `json:"cc_model" example:"Claude Sonnet 4.6"`
 	CCUsedPct           int     `json:"cc_used_pct" example:"7"`

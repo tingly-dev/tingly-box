@@ -1,33 +1,33 @@
-package server
+package statusline
 
 import (
 	"sync"
 	"time"
 )
 
-// sessionCacheEntry holds cached data for a single session
-type sessionCacheEntry struct {
-	lastInput  *ClaudeCodeStatusInput
-	lastUpdate time.Time
-}
-
-// ClaudeCodeStatusCache caches Claude Code status inputs per session
-type ClaudeCodeStatusCache struct {
+// Cache provides session-based caching for Claude Code status inputs
+type Cache struct {
 	mu       sync.RWMutex
 	sessions map[string]*sessionCacheEntry
 	maxAge   time.Duration
 }
 
-// NewClaudeCodeStatusCache creates a new cache
-func NewClaudeCodeStatusCache() *ClaudeCodeStatusCache {
-	return &ClaudeCodeStatusCache{
+// sessionCacheEntry holds cached data for a single session
+type sessionCacheEntry struct {
+	lastInput  *StatusInput
+	lastUpdate time.Time
+}
+
+// NewCache creates a new cache
+func NewCache() *Cache {
+	return &Cache{
 		sessions: make(map[string]*sessionCacheEntry),
 		maxAge:   30 * time.Minute,
 	}
 }
 
 // Update stores input for the session
-func (c *ClaudeCodeStatusCache) Update(input *ClaudeCodeStatusInput) {
+func (c *Cache) Update(input *StatusInput) {
 	if input == nil || input.SessionID == "" {
 		return
 	}
@@ -42,7 +42,7 @@ func (c *ClaudeCodeStatusCache) Update(input *ClaudeCodeStatusInput) {
 }
 
 // Get returns cached input for the session, merging zero values from cache
-func (c *ClaudeCodeStatusCache) Get(input *ClaudeCodeStatusInput) *ClaudeCodeStatusInput {
+func (c *Cache) Get(input *StatusInput) *StatusInput {
 	if input == nil {
 		return nil
 	}
@@ -69,7 +69,7 @@ func (c *ClaudeCodeStatusCache) Get(input *ClaudeCodeStatusInput) *ClaudeCodeSta
 }
 
 // mergeStatusInput merges zero/empty fields from cached into input
-func mergeStatusInput(input, cached *ClaudeCodeStatusInput) *ClaudeCodeStatusInput {
+func mergeStatusInput(input, cached *StatusInput) *StatusInput {
 	merged := *input
 
 	// Model fields
@@ -106,12 +106,4 @@ func mergeIfZero[T int | int64 | float64](target, cached T) T {
 		return cached
 	}
 	return target
-}
-
-// globalClaudeCodeStatusCache is the global cache instance
-var globalClaudeCodeStatusCache = NewClaudeCodeStatusCache()
-
-// GetGlobalClaudeCodeStatusCache returns the global cache instance
-func GetGlobalClaudeCodeStatusCache() *ClaudeCodeStatusCache {
-	return globalClaudeCodeStatusCache
 }

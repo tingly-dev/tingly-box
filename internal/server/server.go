@@ -14,7 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/browser"
 	"github.com/sirupsen/logrus"
-
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/data"
@@ -27,6 +26,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
+	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
@@ -52,7 +52,6 @@ type Server struct {
 	memoryLogMW     *middleware.MemoryLogMiddleware
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
-	usageAPI        *UsageAPI
 	healthMonitor   *loadbalance.HealthMonitor
 
 	// client pool for caching
@@ -60,6 +59,9 @@ type Server struct {
 
 	// OAuth manager
 	oauthManager *oauth2.Manager
+
+	// OAuth handler (module)
+	oauthHandler *oauthmodule.Handler
 
 	// OAuth refresher for OAuth auto-refresh
 	oauthRefresher *background.OAuthRefresher
@@ -73,9 +75,6 @@ type Server struct {
 
 	// template manager for provider templates
 	templateManager *data.TemplateManager
-
-	// skill manager for skill locations
-	skillManager *data.SkillManager
 
 	// probe cache for model endpoint capabilities
 	probeCache *ProbeCache
@@ -132,7 +131,11 @@ func (s *Server) UsageStore() *db.UsageStore {
 	if s == nil || s.config == nil {
 		return nil
 	}
-	return s.config.GetUsageStore()
+	sm := s.config.StoreManager()
+	if sm == nil {
+		return nil
+	}
+	return sm.Usage()
 }
 
 // ServerOption defines a functional option for Server configuration
@@ -382,9 +385,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize load balancer API
 	loadBalancerAPI := NewLoadBalancerAPI(loadBalancer, cfg)
 
-	// Initialize usage API
-	usageAPI := NewUsageAPI(cfg)
-
 	// Determine protocol for OAuth BaseURL
 	protocol := "http"
 	if server.httpsEnabled {
@@ -411,10 +411,14 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.memoryLogMW = memoryLogMW
 	server.loadBalancer = loadBalancer
 	server.loadBalancerAPI = loadBalancerAPI
-	server.usageAPI = usageAPI
 	server.healthMonitor = healthMonitor
 	server.oauthManager = oauthManager
 	server.oauthRefresher = tokenRefresher
+
+	// Initialize OAuth handler
+	server.oauthHandler = oauthmodule.NewHandler(oauthManager, cfg, server.logger)
+	// Set callback server manager (the server itself implements this interface)
+	server.oauthHandler.SetCallbackServerManager(server)
 
 	// Initialize template manager with GitHub URL for template sync
 	templateManager := data.NewTemplateManager(data.TemplateGitHubURL)
@@ -434,16 +438,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		return cfg.GetToolInterceptorConfigForProvider(providerUUID)
 	})
 
-	// Initialize skill manager for skill locations
-	skillManager, err := data.NewSkillManager(cfg.ConfigDir)
-	if err != nil {
-		log.Printf("Failed to initialize skill manager: %v", err)
-		// Continue without skill manager - skill features will be disabled
-	} else {
-		server.skillManager = skillManager
-		log.Printf("Skill manager initialized")
-	}
-
 	// Initialize probe cache with 24-hour TTL
 	server.probeCache = NewProbeCache(24 * time.Hour)
 	// Start background cleanup task for expired cache entries
@@ -461,17 +455,22 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	}
 
 	// Initialize OTel meter setup for token tracking
-	meterSetup, err := otel.NewMeterSetup(context.Background(), otel.DefaultConfig(), &otel.StoreRefs{
-		StatsStore: cfg.GetStatsStore(),
-		UsageStore: cfg.GetUsageStore(),
-		Sink:       server.recordSink,
-	})
-	if err != nil {
-		logrus.Warnf("Failed to initialize OTel meter setup: %v", err)
-	} else if meterSetup != nil {
-		server.meterSetup = meterSetup
-		server.tokenTracker = meterSetup.Tracker()
-		logrus.Debugf("OTel meter setup initialized")
+	sm := cfg.StoreManager()
+	if sm == nil {
+		logrus.Warnf("StoreManager not available, skipping OTel meter setup")
+	} else {
+		meterSetup, err := otel.NewMeterSetup(context.Background(), otel.DefaultConfig(), &otel.StoreRefs{
+			StatsStore: sm.Stats(),
+			UsageStore: sm.Usage(),
+			Sink:       server.recordSink,
+		})
+		if err != nil {
+			logrus.Warnf("Failed to initialize OTel meter setup: %v", err)
+		} else if meterSetup != nil {
+			server.meterSetup = meterSetup
+			server.tokenTracker = meterSetup.Tracker()
+			logrus.Debugf("OTel meter setup initialized")
+		}
 	}
 
 	// Initialize virtual model service
@@ -591,8 +590,8 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 			return
 		}
 
-		// Use createProviderFromToken to create the provider
-		providerUUID, err := s.createProviderFromToken(token, token.Provider, "", token.SessionID)
+		// Use oauth handler to create the provider
+		providerUUID, err := s.oauthHandler.CreateProviderFromToken(token, token.Provider, "", token.SessionID)
 		if err != nil {
 			logrus.Debugf("[OAuth] Failed to create provider: %v", err)
 			w.Header().Set("Content-Type", "text/html")
@@ -684,6 +683,18 @@ func (s *Server) stopDynamicCallbackServer(sessionID string) {
 	s.oauthManager.ResetProxyURL()
 
 	logrus.Debugf("[OAuth] Stopped dynamic callback server for session %s", sessionID)
+}
+
+// StartDynamicCallbackServer starts a temporary callback server for OAuth
+// Implements CallbackServerManager interface for oauth module
+func (s *Server) StartDynamicCallbackServer(sessionID string, port int) error {
+	return s.startDynamicCallbackServer(sessionID, port)
+}
+
+// StopDynamicCallbackServer stops a temporary callback server for OAuth
+// Implements CallbackServerManager interface for oauth module
+func (s *Server) StopDynamicCallbackServer(sessionID string) {
+	s.stopDynamicCallbackServer(sessionID)
 }
 
 // setupMiddleware configures server middleware
@@ -1024,9 +1035,10 @@ func (s *Server) StartRemoteCoder() error {
 	}
 
 	// Create TBClient for SmartGuide model configuration
+	sm := s.config.StoreManager()
 	tbClient := tbclient.NewTBClient(
 		s.config,
-		s.config.GetProviderStore(),
+		sm.Provider(),
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1034,7 +1046,7 @@ func (s *Server) StartRemoteCoder() error {
 	s.remoteCoderCancel = cancel
 
 	go func() {
-		imbotStore := s.config.GetImBotSettingsStore()
+		imbotStore := sm.ImBotSettings()
 		if err := remote_control.Run(ctx, rcCfg, imbotStore, tbClient); err != nil && ctx.Err() == nil {
 			logrus.WithError(err).Warn("Remote-coder stopped with error")
 		}
@@ -1117,6 +1129,13 @@ func (s *Server) Stop(ctx context.Context) error {
 	if s.meterSetup != nil {
 		if err := s.meterSetup.Shutdown(ctx); err != nil {
 			logrus.Errorf("OTel shutdown error: %v", err)
+		}
+	}
+
+	// Close all database stores via StoreManager
+	if s.config.StoreManager() != nil {
+		if err := s.config.StoreManager().Close(); err != nil {
+			logrus.Errorf("Error closing stores: %v", err)
 		}
 	}
 
