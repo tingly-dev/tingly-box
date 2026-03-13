@@ -2,19 +2,15 @@ package smart_guide
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/tingly-dev/tingly-agentscope/pkg/agent"
 	"github.com/tingly-dev/tingly-agentscope/pkg/memory"
 	"github.com/tingly-dev/tingly-agentscope/pkg/message"
 	"github.com/tingly-dev/tingly-agentscope/pkg/model"
 	"github.com/tingly-dev/tingly-agentscope/pkg/model/mockmodel"
 	"github.com/tingly-dev/tingly-agentscope/pkg/tool"
-	"github.com/tingly-dev/tingly-box/internal/tbclient"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // Helper function to extract text from tool response content
@@ -56,18 +52,12 @@ func TestNewTinglyBoxAgent_NilConfig(t *testing.T) {
 }
 
 func TestNewTinglyBoxAgent_DefaultConfig(t *testing.T) {
-	mockTBClient := new(tbclient.MockTBClient)
-	mockTBClient.On("GetConnectionConfig", mock.Anything).Return(&tbclient.ConnectionConfig{
-		BaseURL: "http://localhost:8080",
-		APIKey:  "test-key",
-	}, nil)
-	mockTBClient.On("GetDefaultRule", mock.Anything).Return(&typ.Rule{
-		RequestModel: "claude-sonnet-4-6",
-	}, nil)
-
 	cfg := &AgentConfig{
 		SmartGuideConfig: DefaultSmartGuideConfig(),
-		TBClient:         mockTBClient,
+		BaseURL:          "http://localhost:12580/tingly/_smart_guide",
+		APIKey:           "test-api-key",
+		Provider:         "test-provider",
+		Model:            "claude-sonnet-4-6",
 		GetStatusFunc: func(chatID string) (*StatusInfo, error) {
 			return &StatusInfo{}, nil
 		},
@@ -82,91 +72,50 @@ func TestNewTinglyBoxAgent_DefaultConfig(t *testing.T) {
 	assert.NotNil(t, agent.config)
 	assert.NotNil(t, agent.executor)
 	assert.NotNil(t, agent.toolkit)
-
-	mockTBClient.AssertExpectations(t)
 }
 
-func TestNewTinglyBoxAgent_NoTBClientAPIKey(t *testing.T) {
-	mockTBClient := new(tbclient.MockTBClient)
-	mockTBClient.On("GetConnectionConfig", mock.Anything).Return(&tbclient.ConnectionConfig{
-		BaseURL: "http://localhost:8080",
-		APIKey:  "", // Empty API key
-	}, nil)
-	mockTBClient.On("GetDefaultRule", mock.Anything).Return(&typ.Rule{
-		RequestModel: "claude-sonnet-4-6",
-	}, nil)
-
+func TestNewTinglyBoxAgent_NoAPIKey(t *testing.T) {
 	cfg := &AgentConfig{
 		SmartGuideConfig: DefaultSmartGuideConfig(),
-		TBClient:         mockTBClient,
+		BaseURL:          "http://localhost:12580/tingly/_smart_guide",
+		APIKey:           "", // Empty API key
+		Provider:         "test-provider",
+		Model:            "claude-sonnet-4-6",
 	}
 	agent, err := NewTinglyBoxAgent(cfg)
-	assert.Nil(t, agent)
-	assert.EqualError(t, err, "model configuration failed: no API key available from TB Client or config")
-
-	mockTBClient.AssertExpectations(t)
-}
-
-func TestNewTinglyBoxAgent_TBClientGetConnectionConfigError(t *testing.T) {
-	mockTBClient := new(tbclient.MockTBClient)
-	mockTBClient.On("GetConnectionConfig", mock.Anything).Return(nil, errors.New("connection error"))
-
-	cfg := &AgentConfig{
-		SmartGuideConfig: DefaultSmartGuideConfig(),
-		TBClient:         mockTBClient,
-	}
-	agent, err := NewTinglyBoxAgent(cfg)
-	assert.Nil(t, agent)
-	assert.EqualError(t, err, "no connection info")
-
-	mockTBClient.AssertExpectations(t)
-}
-
-func TestNewTinglyBoxAgent_TBClientGetDefaultRuleError(t *testing.T) {
-	t.Skip("TODO: Agent code has a bug - when GetDefaultRule fails, modelConfig is nil and causes panic at line 81")
-
-	mockTBClient := new(tbclient.MockTBClient)
-	mockTBClient.On("GetConnectionConfig", mock.Anything).Return(&tbclient.ConnectionConfig{
-		BaseURL: "http://localhost:8080",
-		APIKey:  "test-key",
-	}, nil)
-	mockTBClient.On("GetDefaultRule", mock.Anything).Return(nil, errors.New("rule error"))
-
-	cfg := &AgentConfig{
-		SmartGuideConfig: DefaultSmartGuideConfig(),
-		TBClient:         mockTBClient,
-	}
-	agent, err := NewTinglyBoxAgent(cfg)
-	// Current implementation fails when GetDefaultRule returns error and no fallback
-	// This is expected behavior since modelConfig is nil
 	assert.Nil(t, agent)
 	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "required")
+}
 
-	mockTBClient.AssertExpectations(t)
+func TestNewTinglyBoxAgent_NoBaseURL(t *testing.T) {
+	cfg := &AgentConfig{
+		SmartGuideConfig: DefaultSmartGuideConfig(),
+		BaseURL:          "", // Empty BaseURL
+		APIKey:           "test-api-key",
+		Provider:         "test-provider",
+		Model:            "claude-sonnet-4-6",
+	}
+	agent, err := NewTinglyBoxAgent(cfg)
+	assert.Nil(t, agent)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "required")
 }
 
 func TestNewTinglyBoxAgent_CustomToolExecutor(t *testing.T) {
-	mockTBClient := new(tbclient.MockTBClient)
-	mockTBClient.On("GetConnectionConfig", mock.Anything).Return(&tbclient.ConnectionConfig{
-		BaseURL: "http://localhost:8080",
-		APIKey:  "test-key",
-	}, nil)
-	mockTBClient.On("GetDefaultRule", mock.Anything).Return(&typ.Rule{
-		RequestModel: "claude-sonnet-4-6",
-	}, nil)
-
 	customExecutor := NewToolExecutor([]string{"foo", "bar"})
 	cfg := &AgentConfig{
 		SmartGuideConfig: DefaultSmartGuideConfig(),
-		TBClient:         mockTBClient,
+		BaseURL:          "http://localhost:12580/tingly/_smart_guide",
+		APIKey:           "test-api-key",
+		Provider:         "test-provider",
+		Model:            "claude-sonnet-4-6",
 		ToolExecutor:     customExecutor,
 	}
 	agent, err := NewTinglyBoxAgent(cfg)
 	assert.NoError(t, err)
 	assert.NotNil(t, agent)
 	assert.Same(t, customExecutor, agent.executor) // Should use the provided executor
-
-	mockTBClient.AssertExpectations(t)
 }
 
 func TestTinglyBoxAgent_ReplyWithContext(t *testing.T) {
@@ -216,7 +165,7 @@ func TestTinglyBoxAgent_ReplyWithContext(t *testing.T) {
 
 func TestTinglyBoxAgent_GetGreeting(t *testing.T) {
 	agent := &TinglyBoxAgent{}
-	assert.Equal(t, DefaultGreeting, agent.GetGreeting())
+	assert.Equal(t, DefaultGreeting(), agent.GetGreeting())
 }
 
 func TestTinglyBoxAgent_GetExecutor(t *testing.T) {
@@ -253,25 +202,16 @@ func TestTinglyBoxAgent_GetConfig(t *testing.T) {
 
 func TestNewAgentFactory(t *testing.T) {
 	cfg := DefaultSmartGuideConfig()
-	mockTBClient := new(tbclient.MockTBClient)
-	factory := NewAgentFactory(cfg, mockTBClient, "test-provider", "test-model")
+	factory := NewAgentFactory(cfg, "http://localhost:12580/tingly/_smart_guide", "test-api-key", "test-provider", "test-model")
 	assert.NotNil(t, factory)
 	assert.Same(t, cfg, factory.config)
-	assert.Same(t, mockTBClient, factory.tbClient)
+	assert.Equal(t, "http://localhost:12580/tingly/_smart_guide", factory.baseURL)
+	assert.Equal(t, "test-api-key", factory.apiKey)
 }
 
 func TestAgentFactory_CreateAgent(t *testing.T) {
 	cfg := DefaultSmartGuideConfig()
-	mockTBClient := new(tbclient.MockTBClient)
-	mockTBClient.On("GetConnectionConfig", mock.Anything).Return(&tbclient.ConnectionConfig{
-		BaseURL: "http://localhost:8080",
-		APIKey:  "test-key",
-	}, nil)
-	mockTBClient.On("GetDefaultRule", mock.Anything).Return(&typ.Rule{
-		RequestModel: "claude-sonnet-4-6",
-	}, nil)
-
-	factory := NewAgentFactory(cfg, mockTBClient, "test-provider", "test-model")
+	factory := NewAgentFactory(cfg, "http://localhost:12580/tingly/_smart_guide", "test-api-key", "test-provider", "test-model")
 
 	getStatus := func(chatID string) (*StatusInfo, error) { return &StatusInfo{}, nil }
 	getProject := func(chatID string) (string, bool, error) { return "", false, nil }
@@ -284,8 +224,6 @@ func TestAgentFactory_CreateAgent(t *testing.T) {
 	assert.NotNil(t, testAgent.config)
 	assert.NotNil(t, testAgent.executor)
 	assert.NotNil(t, testAgent.toolkit)
-
-	mockTBClient.AssertExpectations(t)
 }
 
 func TestToolExecutor_SetWorkingDirectory(t *testing.T) {
@@ -594,44 +532,27 @@ func TestBashTool_ComplexCommands(t *testing.T) {
 
 // CanCreateAgent tests
 
-func TestCanCreateAgent_NilTBClient(t *testing.T) {
-	result := CanCreateAgent(nil, "provider-uuid", "model-id")
-	assert.False(t, result, "Should return false when TBClient is nil")
+func TestCanCreateAgent_EmptyBaseURL(t *testing.T) {
+	result := CanCreateAgent("", "api-key", "provider-uuid", "model-id")
+	assert.False(t, result, "Should return false when BaseURL is empty")
+}
+
+func TestCanCreateAgent_EmptyAPIKey(t *testing.T) {
+	result := CanCreateAgent("http://localhost:12580/tingly/_smart_guide", "", "provider-uuid", "model-id")
+	assert.False(t, result, "Should return false when APIKey is empty")
 }
 
 func TestCanCreateAgent_EmptyProvider(t *testing.T) {
-	mockTBClient := new(tbclient.MockTBClient)
-	result := CanCreateAgent(mockTBClient, "", "model-id")
+	result := CanCreateAgent("http://localhost:12580/tingly/_smart_guide", "api-key", "", "model-id")
 	assert.False(t, result, "Should return false when provider is empty")
 }
 
 func TestCanCreateAgent_EmptyModel(t *testing.T) {
-	mockTBClient := new(tbclient.MockTBClient)
-	result := CanCreateAgent(mockTBClient, "provider-uuid", "")
+	result := CanCreateAgent("http://localhost:12580/tingly/_smart_guide", "api-key", "provider-uuid", "")
 	assert.False(t, result, "Should return false when model is empty")
 }
 
-func TestCanCreateAgent_SelectModelError(t *testing.T) {
-	mockTBClient := new(tbclient.MockTBClient)
-	mockTBClient.On("SelectModel", mock.Anything, mock.Anything).Return(nil, errors.New("provider not found"))
-
-	result := CanCreateAgent(mockTBClient, "invalid-provider", "model-id")
-	assert.False(t, result, "Should return false when SelectModel fails")
-	mockTBClient.AssertExpectations(t)
-}
-
 func TestCanCreateAgent_Success(t *testing.T) {
-	mockTBClient := new(tbclient.MockTBClient)
-	mockTBClient.On("SelectModel", mock.Anything, mock.MatchedBy(func(r tbclient.ModelSelectionRequest) bool {
-		return r.ProviderUUID == "provider-uuid" && r.ModelID == "model-id"
-	})).Return(&tbclient.ModelConfig{
-		ProviderUUID: "provider-uuid",
-		ModelID:      "model-id",
-		APIKey:       "test-key",
-		BaseURL:      "http://localhost:8080",
-	}, nil)
-
-	result := CanCreateAgent(mockTBClient, "provider-uuid", "model-id")
-	assert.True(t, result, "Should return true when all validations pass")
-	mockTBClient.AssertExpectations(t)
+	result := CanCreateAgent("http://localhost:12580/tingly/_smart_guide", "api-key", "provider-uuid", "model-id")
+	assert.True(t, result, "Should return true when all required values are provided")
 }

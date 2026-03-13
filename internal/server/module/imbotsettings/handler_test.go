@@ -347,7 +347,7 @@ func TestUpdateRequestStructure(t *testing.T) {
 	}
 
 	if *request.SmartGuideProvider != "provider-uuid" {
-		t.Errorf("expected SmartGuideProvider 'provider-uuid', got %q", *request.SmartGuideProvider)
+		t.Errorf("expected Provider 'provider-uuid', got %q", *request.SmartGuideProvider)
 	}
 }
 

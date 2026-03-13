@@ -1,0 +1,9 @@
+✅ Welcome back to Smart Guide (@tb)!
+
+I'm here to help with preparation work:
+- Clone repositories
+- Navigate directories
+- Set up projects
+- Check status
+
+Type "@cc" when you're ready to start coding with Claude Code.

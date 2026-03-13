@@ -77,7 +77,7 @@ func (c *SmartGuideConfig) GetSystemPrompt() string {
 	if c.SystemPrompt != "" {
 		return c.SystemPrompt
 	}
-	return DefaultSystemPrompt
+	return DefaultSystemPrompt()
 }
 
 // IsToolEnabled checks if a tool is enabled

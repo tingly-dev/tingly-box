@@ -10,8 +10,6 @@ import (
 	"github.com/tingly-dev/tingly-agentscope/pkg/message"
 	"github.com/tingly-dev/tingly-agentscope/pkg/model/anthropic"
 	"github.com/tingly-dev/tingly-agentscope/pkg/tool"
-	"github.com/tingly-dev/tingly-box/internal/tbclient"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // TinglyBoxAgent is the smart guide agent (@tb)
@@ -25,11 +23,13 @@ type TinglyBoxAgent struct {
 // AgentConfig holds the configuration for creating a TinglyBoxAgent
 type AgentConfig struct {
 	SmartGuideConfig *SmartGuideConfig
-	TBClient         tbclient.TBClient // TB Client for getting model configuration
-	ToolExecutor     *ToolExecutor
+	// HTTP endpoint configuration (resolved from TBClient by caller)
+	BaseURL      string // e.g., "http://localhost:12580/tingly/_smart_guide"
+	APIKey       string // Tingly-box authentication token
+	ToolExecutor *ToolExecutor
 	// SmartGuide model configuration (required from bot setting)
-	SmartGuideProvider string // Provider UUID
-	SmartGuideModel    string // Model identifier
+	Provider string // Provider UUID
+	Model    string // Model identifier
 	// Callback functions for internal tools
 	GetStatusFunc     func(chatID string) (*StatusInfo, error)
 	GetProjectFunc    func(chatID string) (string, bool, error)
@@ -55,41 +55,30 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 	var modelConfig *anthropic.Config
 
 	// Validate that SmartGuide config is provided
-	if config.SmartGuideProvider == "" || config.SmartGuideModel == "" {
+	if config.Provider == "" || config.Model == "" {
 		return nil, fmt.Errorf("smartguide_provider and smartguide_model are required in bot setting")
 	}
 
-	if config.TBClient != nil {
-		// Get HTTP endpoint configuration for SmartGuide scenario
-		ctx := context.Background()
-		endpoint, err := config.TBClient.GetHTTPEndpointForScenario(
-			ctx,
-			typ.ScenarioSmartGuide,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get smartguide HTTP endpoint: %w", err)
-		}
-
-		// Use TB HTTP endpoint configuration
-		modelConfig = &anthropic.Config{
-			Model:   config.SmartGuideModel,
-			APIKey:  endpoint.APIKey,
-			BaseURL: endpoint.BaseURL, // http://localhost:12580/tingly/_smart_guide/
-		}
-		logrus.WithFields(logrus.Fields{
-			"provider": config.SmartGuideProvider,
-			"model":    config.SmartGuideModel,
-			"endpoint": endpoint.BaseURL,
-		}).Info("Using TB HTTP endpoint for smartguide agent")
+	// Validate HTTP endpoint configuration
+	if config.BaseURL == "" || config.APIKey == "" {
+		return nil, fmt.Errorf("BaseURL and APIKey are required in config")
 	}
 
-	if modelConfig == nil {
-		return nil, fmt.Errorf("failed to create model config: TBClient not available")
+	// Create model config using provided endpoint configuration
+	modelConfig = &anthropic.Config{
+		Model:   config.Model,
+		APIKey:  config.APIKey,
+		BaseURL: config.BaseURL,
 	}
+	logrus.WithFields(logrus.Fields{
+		"provider": config.Provider,
+		"model":    config.Model,
+		"endpoint": config.BaseURL,
+	}).Info("Using HTTP endpoint for smartguide agent")
 
 	// Validate model configuration
 	if modelConfig.APIKey == "" {
-		return nil, fmt.Errorf("model configuration failed: no API key available from TB Client or config")
+		return nil, fmt.Errorf("model configuration failed: no API key available")
 	}
 
 	modelClient, err := anthropic.NewClient(modelConfig)
@@ -200,7 +189,7 @@ func (a *TinglyBoxAgent) ReplyWithContext(ctx context.Context, text string, tool
 
 // GetGreeting returns the default greeting for new users
 func (a *TinglyBoxAgent) GetGreeting() string {
-	return DefaultGreeting
+	return DefaultGreeting()
 }
 
 // GetExecutor returns the tool executor
@@ -226,16 +215,18 @@ func (a *TinglyBoxAgent) GetConfig() *SmartGuideConfig {
 // AgentFactory creates TinglyBoxAgent instances
 type AgentFactory struct {
 	config             *SmartGuideConfig
-	tbClient           tbclient.TBClient
+	baseURL            string // HTTP endpoint URL
+	apiKey             string // Authentication token
 	smartGuideProvider string // Provider UUID
 	smartGuideModel    string // Model identifier
 }
 
 // NewAgentFactory creates a new agent factory
-func NewAgentFactory(config *SmartGuideConfig, tbClient tbclient.TBClient, smartGuideProvider, smartGuideModel string) *AgentFactory {
+func NewAgentFactory(config *SmartGuideConfig, baseURL, apiKey string, smartGuideProvider, smartGuideModel string) *AgentFactory {
 	return &AgentFactory{
 		config:             config,
-		tbClient:           tbClient,
+		baseURL:            baseURL,
+		apiKey:             apiKey,
 		smartGuideProvider: smartGuideProvider,
 		smartGuideModel:    smartGuideModel,
 	}
@@ -247,40 +238,28 @@ func (f *AgentFactory) CreateAgent(getStatusFunc func(chatID string) (*StatusInf
 	updateProjectFunc func(chatID string, projectPath string) error) (*TinglyBoxAgent, error) {
 
 	return NewTinglyBoxAgent(&AgentConfig{
-		SmartGuideConfig:   f.config,
-		TBClient:           f.tbClient,
-		SmartGuideProvider: f.smartGuideProvider,
-		SmartGuideModel:    f.smartGuideModel,
-		GetStatusFunc:      getStatusFunc,
-		GetProjectFunc:     getProjectFunc,
-		UpdateProjectFunc:  updateProjectFunc,
+		SmartGuideConfig:  f.config,
+		BaseURL:           f.baseURL,
+		APIKey:            f.apiKey,
+		Provider:          f.smartGuideProvider,
+		Model:             f.smartGuideModel,
+		GetStatusFunc:     getStatusFunc,
+		GetProjectFunc:    getProjectFunc,
+		UpdateProjectFunc: updateProjectFunc,
 	})
 }
 
 // CanCreateAgent checks if a SmartGuide agent can be created with the given configuration
 // Returns true if all required dependencies are available, false otherwise
-func CanCreateAgent(tbClient tbclient.TBClient, smartGuideProvider, smartGuideModel string) bool {
+// Note: Model validation should be done by the caller (e.g., BotHandler using TBClient)
+func CanCreateAgent(baseURL, apiKey, smartGuideProvider, smartGuideModel string) bool {
 	// Check if provider and model are configured
 	if smartGuideProvider == "" || smartGuideModel == "" {
 		return false
 	}
 
-	// Check if TBClient is available
-	if tbClient == nil {
-		return false
-	}
-
-	// Try to validate model configuration by calling SelectModel
-	ctx := context.Background()
-	_, err := tbClient.SelectModel(ctx, tbclient.ModelSelectionRequest{
-		ProviderUUID: smartGuideProvider,
-		ModelID:      smartGuideModel,
-	})
-	if err != nil {
-		logrus.WithError(err).WithFields(logrus.Fields{
-			"provider": smartGuideProvider,
-			"model":    smartGuideModel,
-		}).Warn("SmartGuide agent cannot be created: model config validation failed")
+	// Check if endpoint configuration is provided
+	if baseURL == "" || apiKey == "" {
 		return false
 	}
 
