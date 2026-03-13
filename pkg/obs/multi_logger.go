@@ -453,17 +453,6 @@ func (s *ScopedLogger) ClearMemory() {
 	}
 }
 
-// LogAction logs a user action with structured data
-// This is a convenience method for LogSourceAction scoped loggers
-func (s *ScopedLogger) LogAction(action string, details interface{}, success bool, message string) {
-	logger := s.GetLogrusLogger()
-	logger.WithFields(logrus.Fields{
-		"action":  action,
-		"details": details,
-		"success": success,
-	}).Info(message)
-}
-
 // readLogEntriesBackwards reads log entries from the end of the file for efficiency
 // Returns entries in reverse chronological order (newest first)
 func readLogEntriesBackwards(filePath string, limit int) ([]LogEntry, error) {

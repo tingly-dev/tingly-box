@@ -339,8 +339,9 @@ func (s *Server) GetHistory(c *gin.Context) {
 		Success: true,
 	}
 
-	if s.actionLogger != nil {
-		history := s.actionLogger.GetMemoryLatest(50)
+	if s.multiLogger != nil {
+		actionLogger := s.multiLogger.WithSource(pkgobs.LogSourceAction)
+		history := actionLogger.GetMemoryLatest(50)
 		response.Data = history
 	} else {
 		response.Data = []interface{}{}
@@ -401,11 +402,10 @@ func (s *Server) StopServer(c *gin.Context) {
 	}
 
 	// Log the action
-	if s.actionLogger != nil {
-		s.actionLogger.LogAction(obs.ActionStopServer, map[string]interface{}{
-			"source": "web_ui",
-		}, true, "Server stopped via web interface")
-	}
+	logrus.WithFields(logrus.Fields{
+		"action": obs.ActionStopServer,
+		"source": "web_ui",
+	}).Info("Server stopped via web interface")
 
 	// Send shutdown signal to main process
 	select {
@@ -627,8 +627,7 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	)
 
 	// Rule Management - register from rule module
-	actionLogger := s.multiLogger.WithSource(pkgobs.LogSourceAction)
-	ruleHandler := rulemodule.NewHandler(s.config, actionLogger)
+	ruleHandler := rulemodule.NewHandler(s.config)
 	rulemodule.RegisterRoutes(apiV1, ruleHandler)
 
 	// Scenario Management - register from scenario module

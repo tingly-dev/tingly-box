@@ -13,7 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/tingly-dev/tingly-box/pkg/obs"
+	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
@@ -32,17 +32,15 @@ type Handler struct {
 	oauthManager          *oauth2.Manager
 	config                *config.Config
 	sessionMgr            *SessionManager
-	actionLogger          *obs.ScopedLogger
 	callbackServerManager CallbackServerManager
 }
 
 // NewHandler creates a new OAuth handler
-func NewHandler(oauthManager *oauth2.Manager, cfg *config.Config, actionLogger *obs.ScopedLogger) *Handler {
+func NewHandler(oauthManager *oauth2.Manager, cfg *config.Config) *Handler {
 	return &Handler{
 		oauthManager: oauthManager,
 		config:       cfg,
 		sessionMgr:   NewSessionManager(),
-		actionLogger: actionLogger,
 	}
 }
 
@@ -152,9 +150,10 @@ func (h *Handler) UpdateOAuthProvider(c *gin.Context) {
 	h.oauthManager.GetRegistry().Register(newConfig)
 
 	// Log the action
-	h.actionLogger.LogAction("update_oauth_provider", map[string]interface{}{
+	logrus.WithFields(logrus.Fields{
+		"action":   "update_oauth_provider",
 		"provider": providerType,
-	}, true, "OAuth provider updated")
+	}).Info("OAuth provider updated")
 
 	c.JSON(http.StatusOK, OAuthUpdateProviderResponse{
 		Success: true,
@@ -193,9 +192,10 @@ func (h *Handler) DeleteOAuthProvider(c *gin.Context) {
 	})
 
 	// Log the action
-	h.actionLogger.LogAction("delete_oauth_provider", map[string]interface{}{
+	logrus.WithFields(logrus.Fields{
+		"action":   "delete_oauth_provider",
 		"provider": providerType,
-	}, true, "OAuth provider deleted")
+	}).Info("OAuth provider deleted")
 
 	c.JSON(http.StatusOK, OAuthUpdateProviderResponse{
 		Success: true,
@@ -673,9 +673,10 @@ func (h *Handler) RevokeOAuthToken(c *gin.Context) {
 	}
 
 	// Log the action
-	h.actionLogger.LogAction("revoke_oauth_token", map[string]interface{}{
+	logrus.WithFields(logrus.Fields{
+		"action":   "revoke_oauth_token",
 		"provider": providerType,
-	}, true, "OAuth token revoked")
+	}).Info("OAuth token revoked")
 
 	c.JSON(http.StatusOK, OAuthMessageResponse{
 		Success: true,
@@ -990,11 +991,12 @@ func (h *Handler) createProviderFromToken(token *oauth2.Token, providerType oaut
 	}
 
 	// Log the successful provider creation
-	h.actionLogger.LogAction("oauth_provider_created", map[string]interface{}{
+	logrus.WithFields(logrus.Fields{
+		"action":        "oauth_provider_created",
 		"provider_name": providerName,
 		"provider_type": string(token.Provider),
 		"uuid":          providerUUID.String(),
-	}, true, "OAuth provider created successfully")
+	}).Info("OAuth provider created successfully")
 
 	return providerUUID.String(), nil
 }
