@@ -22,6 +22,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/remote_control/smart_guide"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/summarizer"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // BotHandler encapsulates all bot message handling logic and dependencies
@@ -472,12 +473,25 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 	}
 	// else: messages remains nil, which is fine
 
-	// 2. Create agent config
+	// 2. Resolve HTTP endpoint configuration for SmartGuide
+	var baseURL, apiKey string
+	if h.tbClient != nil {
+		endpoint, err := h.tbClient.GetHTTPEndpointForScenario(h.ctx, typ.ScenarioSmartGuide)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to get SmartGuide HTTP endpoint")
+		} else {
+			baseURL = endpoint.BaseURL
+			apiKey = endpoint.APIKey
+		}
+	}
+
+	// 3. Create agent config
 	agentConfig := &smart_guide.AgentConfig{
-		SmartGuideConfig:   smart_guide.LoadSmartGuideConfig(),
-		TBClient:           h.tbClient,
-		SmartGuideProvider: h.botSetting.SmartGuideProvider,
-		SmartGuideModel:    h.botSetting.SmartGuideModel,
+		SmartGuideConfig: smart_guide.LoadSmartGuideConfig(),
+		BaseURL:          baseURL,
+		APIKey:           apiKey,
+		Provider:         h.botSetting.SmartGuideProvider,
+		Model:            h.botSetting.SmartGuideModel,
 		GetStatusFunc: func(chatID string) (*smart_guide.StatusInfo, error) {
 			projectPath, _, _ := h.chatStore.GetProjectPath(chatID)
 			workingDir, hasWD, _ := h.chatStore.GetBashCwd(chatID)
@@ -510,7 +524,7 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 		},
 	}
 
-	// 3. Create agent with history
+	// 4. Create agent with history
 	agent, err := smart_guide.NewTinglyBoxAgentWithSession(agentConfig, messages)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to create Smart Guide agent, falling back to Claude Code")
@@ -545,7 +559,7 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 	agent.GetExecutor().SetWorkingDirectory(projectPath)
 	logrus.WithField("workingDir", projectPath).Debug("Set executor working directory")
 
-	// 4. Create tool context
+	// 5. Create tool context
 	toolCtx := &smart_guide.ToolContext{
 		ChatID:      hCtx.ChatID,
 		ProjectPath: projectPath,

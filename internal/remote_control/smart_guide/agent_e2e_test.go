@@ -5,10 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/tingly-dev/tingly-agentscope/pkg/message"
-	"github.com/tingly-dev/tingly-box/internal/tbclient"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // TestRealAgentExecution tests the agent with real model calls.
@@ -41,28 +38,13 @@ func TestRealAgentExecution(t *testing.T) {
 		t.Fatal("Please fill in REAL_APIKey with your actual API key")
 	}
 
-	// Implement the required methods
-	mockTBClient := new(tbclient.MockTBClient)
-	mockTBClient.On("SelectModel", mock.Anything, mock.Anything).Return(&tbclient.ModelConfig{
-		ProviderUUID: REAL_ProviderUUID,
-		ModelID:      REAL_Model,
-		APIKey:       REAL_APIKey,
-		BaseURL:      REAL_BaseURL,
-	}, nil)
-	mockTBClient.On("GetConnectionConfig", mock.Anything).Return(&tbclient.ConnectionConfig{
-		BaseURL: REAL_BaseURL,
-		APIKey:  REAL_APIKey,
-	}, nil)
-	mockTBClient.On("GetDefaultRule", mock.Anything).Return(&typ.Rule{
-		RequestModel: REAL_Model,
-	}, nil)
-
 	// Create agent config
 	cfg := &AgentConfig{
-		SmartGuideConfig:   DefaultSmartGuideConfig(),
-		TBClient:           mockTBClient,
-		SmartGuideProvider: REAL_ProviderUUID,
-		SmartGuideModel:    REAL_Model,
+		SmartGuideConfig: DefaultSmartGuideConfig(),
+		BaseURL:          REAL_BaseURL,
+		APIKey:           REAL_APIKey,
+		Provider:         REAL_ProviderUUID,
+		Model:            REAL_Model,
 		GetStatusFunc: func(chatID string) (*StatusInfo, error) {
 			return &StatusInfo{
 				CurrentAgent:   "@tb",
@@ -139,6 +121,4 @@ func TestRealAgentExecution(t *testing.T) {
 			tc.validate(t, response, err)
 		})
 	}
-
-	mockTBClient.AssertExpectations(t)
 }
