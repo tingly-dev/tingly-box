@@ -23,15 +23,17 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
+	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 	"github.com/tingly-dev/tingly-box/pkg/network"
-	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
+	pkgoauth "github.com/tingly-dev/tingly-box/pkg/oauth"
 	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 	pkgotel "github.com/tingly-dev/tingly-box/pkg/otel"
+	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
 )
 
 // Server represents the HTTP server
@@ -57,7 +59,7 @@ type Server struct {
 	clientPool *client.ClientPool
 
 	// OAuth manager
-	oauthManager *oauth2.Manager
+	oauthManager *pkgoauth.Manager
 
 	// OAuth handler (module)
 	oauthHandler *oauthmodule.Handler
@@ -72,7 +74,7 @@ type Server struct {
 	oauthCallbackServer *http.Server
 
 	// Dynamic callback servers (one per active OAuth flow)
-	callbackServers   map[string]*oauth2.CallbackServer
+	callbackServers   map[string]*pkgoauth.CallbackServer
 	callbackServersMu sync.RWMutex
 
 	// template manager for provider templates
@@ -95,8 +97,8 @@ type Server struct {
 	scenarioRecordSinksMu sync.RWMutex
 
 	// OTel meter setup for unified token tracking
-	meterSetup   *otel.MeterSetup
-	tokenTracker *otel.TokenTracker
+	meterSetup   *pkgotel.MeterSetup
+	tokenTracker *tracker.TokenTracker
 
 	// virtual model service for testing
 	virtualModelService *virtualmodel.Service
@@ -396,15 +398,15 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Initialize OAuth manager and handler
 	// Note: BaseURL will be dynamically updated for providers with port constraints
-	registry := oauth2.DefaultRegistry()
-	oauthConfig := &oauth2.Config{
+	registry := pkgoauth.DefaultRegistry()
+	oauthConfig := &pkgoauth.Config{
 		BaseURL:           fmt.Sprintf("%s://localhost:%d", protocol, cfg.GetServerPort()),
-		ProviderConfigs:   make(map[oauth2.ProviderType]*oauth2.ProviderConfig),
-		TokenStorage:      oauth2.NewMemoryTokenStorage(),
+		ProviderConfigs:   make(map[pkgoauth.ProviderType]*pkgoauth.ProviderConfig),
+		TokenStorage:      pkgoauth.NewMemoryTokenStorage(),
 		StateExpiry:       10 * time.Minute,
 		TokenExpiryBuffer: 5 * time.Minute,
 	}
-	oauthManager := oauth2.NewManager(oauthConfig, registry)
+	oauthManager := pkgoauth.NewManager(oauthConfig, registry)
 
 	// Initialize token refresher for OAuth auto-refresh
 	tokenRefresher := background.NewTokenRefresher(oauthManager, cfg)
@@ -490,7 +492,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.setupConfigWatcher()
 
 	// Initialize dynamic callback servers map
-	server.callbackServers = make(map[string]*oauth2.CallbackServer)
+	server.callbackServers = make(map[string]*pkgoauth.CallbackServer)
 
 	// Set up health monitor probe function using existing probe infrastructure
 	if server.healthMonitor != nil {
@@ -605,7 +607,7 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 
 		// Update session status to success if session ID exists
 		if token.SessionID != "" {
-			_ = s.oauthManager.UpdateSessionStatus(token.SessionID, oauth2.SessionStatusSuccess, providerUUID, "")
+			_ = s.oauthManager.UpdateSessionStatus(token.SessionID, pkgoauth.SessionStatusSuccess, providerUUID, "")
 		}
 
 		logrus.Debugf("[OAuth] Callback successful for provider %s, created provider %s", token.Provider, providerUUID)
@@ -640,7 +642,7 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 	}
 
 	// Create a new callback server with the handler
-	callbackServer := oauth2.NewCallbackServer(handlerFunc)
+	callbackServer := pkgoauth.NewCallbackServer(handlerFunc)
 
 	// Start the callback server on the specified port
 	if err := callbackServer.Start(port); err != nil {
