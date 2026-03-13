@@ -26,6 +26,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 	"github.com/tingly-dev/tingly-box/pkg/swagger"
 )
 
@@ -338,8 +339,9 @@ func (s *Server) GetHistory(c *gin.Context) {
 		Success: true,
 	}
 
-	if s.logger != nil {
-		history := s.logger.GetHistory(50)
+	if s.multiLogger != nil {
+		actionLogger := s.multiLogger.WithSource(pkgobs.LogSourceAction)
+		history := actionLogger.GetMemoryLatest(50)
 		response.Data = history
 	} else {
 		response.Data = []interface{}{}
@@ -400,11 +402,10 @@ func (s *Server) StopServer(c *gin.Context) {
 	}
 
 	// Log the action
-	if s.logger != nil {
-		s.logger.LogAction(obs.ActionStopServer, map[string]interface{}{
-			"source": "web_ui",
-		}, true, "Server stopped via web interface")
-	}
+	logrus.WithFields(logrus.Fields{
+		"action": obs.ActionStopServer,
+		"source": "web_ui",
+	}).Info("Server stopped via web interface")
 
 	// Send shutdown signal to main process
 	select {
@@ -507,19 +508,49 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(LatestVersionResponse{}),
 	)
 
-	// Log API routes
+	// Log API routes (HTTP request logs from memory)
 	apiV1.GET("/log", s.GetLogs,
-		swagger.WithDescription("Get logs with optional filtering"),
+		swagger.WithDescription("Get HTTP request logs with optional filtering"),
 		swagger.WithTags("logs"),
 		swagger.WithResponseModel(LogsResponse{}),
 	)
 	apiV1.GET("/log/stats", s.GetLogStats,
-		swagger.WithDescription("Get log statistics"),
+		swagger.WithDescription("Get HTTP request log statistics"),
 		swagger.WithTags("logs"),
 	)
 	apiV1.DELETE("/log", s.ClearLogs,
-		swagger.WithDescription("Clear all logs"),
+		swagger.WithDescription("Clear all HTTP request logs"),
 		swagger.WithTags("logs"),
+	)
+
+	// System Log API routes (application logs from JSON file)
+	apiV1.GET("/system/logs", s.GetSystemLogs,
+		swagger.WithDescription("Get recent system logs with optional filtering (from JSON log file). Use 'limit' parameter to control how many recent entries to return."),
+		swagger.WithTags("system-logs"),
+		swagger.WithResponseModel(SystemLogsResponse{}),
+	)
+	apiV1.GET("/system/logs/stats", s.GetSystemLogStats,
+		swagger.WithDescription("Get system log statistics"),
+		swagger.WithTags("system-logs"),
+	)
+	apiV1.GET("/system/logs/level", s.GetSystemLogLevel,
+		swagger.WithDescription("Get the current system log level"),
+		swagger.WithTags("system-logs"),
+	)
+	apiV1.POST("/system/logs/level", s.SetSystemLogLevel,
+		swagger.WithDescription("Set the minimum log level for system logs"),
+		swagger.WithTags("system-logs"),
+	)
+
+	// Action History API routes (user operations/audit log)
+	apiV1.GET("/actions/history", s.GetActionHistory,
+		swagger.WithDescription("Get user action history from memory (recent operations)"),
+		swagger.WithTags("actions"),
+		swagger.WithResponseModel(ActionHistoryResponse{}),
+	)
+	apiV1.GET("/actions/stats", s.GetActionStats,
+		swagger.WithDescription("Get statistics about user actions"),
+		swagger.WithTags("actions"),
 	)
 
 	// Provider Management
@@ -596,7 +627,7 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	)
 
 	// Rule Management - register from rule module
-	ruleHandler := rulemodule.NewHandler(s.config, s.logger)
+	ruleHandler := rulemodule.NewHandler(s.config)
 	rulemodule.RegisterRoutes(apiV1, ruleHandler)
 
 	// Scenario Management - register from scenario module

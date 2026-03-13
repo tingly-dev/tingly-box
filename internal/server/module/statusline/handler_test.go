@@ -7,7 +7,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // mockLoadBalancer is a mock implementation of LoadBalancer for testing
@@ -15,18 +17,25 @@ type mockLoadBalancer struct {
 	selectServiceErr error
 }
 
-func (m *mockLoadBalancer) SelectService(rule *interface{}) (interface{}, error) {
+func (m *mockLoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, error) {
 	if m.selectServiceErr != nil {
 		return nil, m.selectServiceErr
 	}
-	return struct{}{}, nil
+	return &loadbalance.Service{
+		Provider:   "",
+		Model:      "",
+		Weight:     0,
+		Active:     false,
+		TimeWindow: 0,
+		Stats:      loadbalance.ServiceStats{},
+	}, nil
 }
 
 func setupTestRouter(cfg *config.Config) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 
-	cache := NewCache(100)
+	cache := NewCache()
 	handler := NewHandler(cfg, &mockLoadBalancer{}, cache)
 
 	router.POST("/status/:scenario", handler.GetClaudeCodeStatus)
@@ -36,8 +45,8 @@ func setupTestRouter(cfg *config.Config) *gin.Engine {
 }
 
 func TestNewHandler(t *testing.T) {
-	cfg, _ := config.NewTestConfig()
-	cache := NewCache(100)
+	cfg, _ := config.NewConfig()
+	cache := NewCache()
 	lb := &mockLoadBalancer{}
 
 	handler := NewHandler(cfg, lb, cache)
@@ -57,10 +66,10 @@ func TestNewHandler(t *testing.T) {
 }
 
 func TestGetClaudeCodeStatus_Success(t *testing.T) {
-	cfg, _ := config.NewTestConfig()
+	cfg, _ := config.NewConfig()
 	router := setupTestRouter(cfg)
 
-	reqBody := `{
+	_ = `{
 		"model": {
 			"id": "claude-sonnet-4-6",
 			"display_name": "Claude Sonnet 4.6",
@@ -98,7 +107,7 @@ func TestGetClaudeCodeStatus_Success(t *testing.T) {
 }
 
 func TestGetClaudeCodeStatus_EmptyBody(t *testing.T) {
-	cfg, _ := config.NewTestConfig()
+	cfg, _ := config.NewConfig()
 	router := setupTestRouter(cfg)
 
 	req, _ := http.NewRequest("POST", "/status/claude_code", nil)
@@ -114,7 +123,7 @@ func TestGetClaudeCodeStatus_EmptyBody(t *testing.T) {
 }
 
 func TestGetClaudeCodeStatusLine_Success(t *testing.T) {
-	cfg, _ := config.NewTestConfig()
+	cfg, _ := config.NewConfig()
 	router := setupTestRouter(cfg)
 
 	req, _ := http.NewRequest("POST", "/statusline/claude_code", nil)
@@ -131,7 +140,7 @@ func TestGetClaudeCodeStatusLine_Success(t *testing.T) {
 }
 
 func TestCacheOperations(t *testing.T) {
-	cache := NewCache(10)
+	cache := NewCache()
 
 	// Test empty cache
 	input1 := &StatusInput{

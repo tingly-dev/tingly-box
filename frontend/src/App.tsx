@@ -297,6 +297,9 @@ function AppContent() {
                     {/* Other routes */}
                     <Route path="/system" element={<System />} />
                     <Route path="/system/logs" element={<LogsPage />} />
+                    {/* Legacy redirects for backward compatibility */}
+                    <Route path="/system/http-logs" element={<Navigate to="/system/logs" replace />} />
+                    <Route path="/system/system-logs" element={<Navigate to="/system/logs" replace />} />
                     <Route path="/logs" element={<Navigate to="/system/logs" replace />} />
                     {/* Dashboard routes with time range */}
                     <Route path="/dashboard" element={<Navigate to="/dashboard/7d" replace />} />

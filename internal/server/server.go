@@ -32,6 +32,7 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
+	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
 // Server represents the HTTP server
@@ -41,12 +42,14 @@ type Server struct {
 	engine     *gin.Engine
 	httpServer *http.Server
 	watcher    *config.Watcher
-	logger     *obs.MemoryLogger
+
+	// multi-mode logger for text + JSON + memory output
+	multiLogger *pkgobs.MultiLogger
 
 	// middleware
 	errorMW         *middleware.ErrorLogMiddleware
 	authMW          *middleware.AuthMiddleware
-	memoryLogMW     *middleware.MemoryLogMiddleware
+	memoryLogMW     *middleware.MultiModeMemoryLogMiddleware
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
 	healthMonitor   *loadbalance.HealthMonitor
@@ -234,6 +237,13 @@ func WithDebug(enabled bool) ServerOption {
 	}
 }
 
+// WithMultiLogger sets the multi-mode logger for the server
+func WithMultiLogger(logger *pkgobs.MultiLogger) ServerOption {
+	return func(s *Server) {
+		s.multiLogger = logger
+	}
+}
+
 // IsFeatureEnabled checks if a specific feature is enabled
 func (s *Server) IsFeatureEnabled(feature string) bool {
 	return s.experimentalFeatures[feature]
@@ -320,14 +330,8 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		logrus.Debugf("Using existing model token from global config")
 	}
 
-	// Initialize memory logger
-	memoryLogger, err := obs.NewMemoryLogger()
-	if err != nil {
-		logrus.Debugf("Warning: Failed to initialize memory logger: %v", err)
-		memoryLogger = nil
-	}
-
-	// Initialize debug middleware (only if debug mode is enabled)
+	// Create server struct first with applied options
+	server.jwtManager = jwtManager
 	var errorMW *middleware.ErrorLogMiddleware
 	errorLogPath := filepath.Join(cfg.ConfigDir, constant.LogDirName, constant.DebugLogFileName)
 	errorMW = middleware.NewErrorLogMiddleware(errorLogPath, 10)
@@ -347,7 +351,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Create server struct first with applied options
 	server.jwtManager = jwtManager
 	server.engine = gin.New()
-	server.logger = memoryLogger
 	server.clientPool = client.NewClientPool() // Initialize client pool
 	server.errorMW = errorMW
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
@@ -367,8 +370,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		log.Panicf("Unknown recording mode %s", server.recordMode)
 	}
 
-	// Initialize memory log middleware for HTTP request logging
-	memoryLogMW := middleware.NewMemoryLogMiddleware(1000) // Store up to 1000 entries
+	// Initialize multi-mode memory log middleware for HTTP request logging
+	// Logs are written to both multi-mode logger (persistence) and memory (quick access)
+	memoryLogMW := middleware.NewMultiModeMemoryLogMiddleware(server.multiLogger)
 
 	// Initialize auth middleware
 	authMW := middleware.NewAuthMiddleware(cfg, jwtManager)
@@ -416,7 +420,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.oauthRefresher = tokenRefresher
 
 	// Initialize OAuth handler
-	server.oauthHandler = oauthmodule.NewHandler(oauthManager, cfg, server.logger)
+	server.oauthHandler = oauthmodule.NewHandler(oauthManager, cfg)
 	// Set callback server manager (the server itself implements this interface)
 	server.oauthHandler.SetCallbackServerManager(server)
 
@@ -1011,10 +1015,10 @@ func (s *Server) GetPreferredEndpointForModel(provider *typ.Provider, modelID st
 	if strings.Contains(strings.ToLower(modelID), "codex") {
 		return string(db.EndpointTypeResponses)
 	}
-	return "chat"
 	// TODO: we use chat as default unless the model do not support chat, e.g. codex
-	adaptiveProbe := NewAdaptiveProbe(s)
-	return adaptiveProbe.GetPreferredEndpoint(provider, modelID)
+	// In the future, we can use adaptiveProbe := NewAdaptiveProbe(s)
+	// return adaptiveProbe.GetPreferredEndpoint(provider, modelID)
+	return "chat"
 }
 
 // HealthMonitor returns the server's health monitor

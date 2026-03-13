@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
@@ -151,12 +152,12 @@ func (s *Server) CreateProvider(c *gin.Context) {
 
 	err = s.config.AddProvider(provider)
 	if err != nil {
-		if s.logger != nil {
-			s.logger.LogAction(obs.ActionAddProvider, map[string]interface{}{
-				"name":     req.Name,
-				"api_base": req.APIBase,
-			}, false, err.Error())
-		}
+		logrus.WithFields(logrus.Fields{
+			"action":   obs.ActionAddProvider,
+			"success":  false,
+			"name":     req.Name,
+			"api_base": req.APIBase,
+		}).Error(err.Error())
 
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -168,12 +169,12 @@ func (s *Server) CreateProvider(c *gin.Context) {
 	// update models for current provider here too, try once and ignore error
 	s.config.FetchAndSaveProviderModels(provider.UUID)
 
-	if s.logger != nil {
-		s.logger.LogAction(obs.ActionAddProvider, map[string]interface{}{
-			"name":     req.Name,
-			"api_base": req.APIBase,
-		}, true, fmt.Sprintf("Provider %s added successfully", req.Name))
-	}
+	logrus.WithFields(logrus.Fields{
+		"action":   obs.ActionAddProvider,
+		"success":  true,
+		"name":     req.Name,
+		"api_base": req.APIBase,
+	}).Info(fmt.Sprintf("Provider %s added successfully", req.Name))
 
 	response := CreateProviderResponse{
 		Success: true,
@@ -197,11 +198,11 @@ func (s *Server) DeleteProvider(c *gin.Context) {
 
 	err := s.config.DeleteProvider(uid)
 	if err != nil {
-		if s.logger != nil {
-			s.logger.LogAction(obs.ActionDeleteProvider, map[string]interface{}{
-				"name": uid,
-			}, false, err.Error())
-		}
+		logrus.WithFields(logrus.Fields{
+			"action":  obs.ActionDeleteProvider,
+			"success": false,
+			"name":    uid,
+		}).Error(err.Error())
 
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -210,11 +211,11 @@ func (s *Server) DeleteProvider(c *gin.Context) {
 		return
 	}
 
-	if s.logger != nil {
-		s.logger.LogAction(obs.ActionDeleteProvider, map[string]interface{}{
-			"name": uid,
-		}, true, fmt.Sprintf("Provider %s deleted successfully", uid))
-	}
+	logrus.WithFields(logrus.Fields{
+		"action":  obs.ActionDeleteProvider,
+		"success": true,
+		"name":    uid,
+	}).Info(fmt.Sprintf("Provider %s deleted successfully", uid))
 
 	response := DeleteProviderResponse{
 		Success: true,
@@ -294,12 +295,12 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 
 	err = s.config.UpdateProvider(uid, provider)
 	if err != nil {
-		if s.logger != nil {
-			s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
-				"name":    uid,
-				"updates": req,
-			}, false, err.Error())
-		}
+		logrus.WithFields(logrus.Fields{
+			"action":  obs.ActionUpdateProvider,
+			"success": false,
+			"name":    uid,
+			"updates": req,
+		}).Error(err.Error())
 
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -308,11 +309,11 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 		return
 	}
 
-	if s.logger != nil {
-		s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
-			"name": uid,
-		}, true, fmt.Sprintf("Provider %s updated successfully", uid))
-	}
+	logrus.WithFields(logrus.Fields{
+		"action":  obs.ActionUpdateProvider,
+		"success": true,
+		"name":    uid,
+	}).Info(fmt.Sprintf("Provider %s updated successfully", uid))
 
 	// Return masked provider data
 	responseProvider := maskProviderForResponse(provider)
@@ -385,12 +386,12 @@ func (s *Server) ToggleProvider(c *gin.Context) {
 
 	err = s.config.UpdateProvider(uid, provider)
 	if err != nil {
-		if s.logger != nil {
-			s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
-				"name":    uid,
-				"enabled": provider.Enabled,
-			}, false, err.Error())
-		}
+		logrus.WithFields(logrus.Fields{
+			"action":  obs.ActionUpdateProvider,
+			"success": false,
+			"name":    uid,
+			"enabled": provider.Enabled,
+		}).Error(err.Error())
 
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -404,12 +405,12 @@ func (s *Server) ToggleProvider(c *gin.Context) {
 		action = "enabled"
 	}
 
-	if s.logger != nil {
-		s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
-			"name":    uid,
-			"enabled": provider.Enabled,
-		}, true, fmt.Sprintf("Provider %s %s successfully", uid, action))
-	}
+	logrus.WithFields(logrus.Fields{
+		"action":  obs.ActionUpdateProvider,
+		"success": true,
+		"name":    uid,
+		"enabled": provider.Enabled,
+	}).Info(fmt.Sprintf("Provider %s %s successfully", uid, action))
 
 	response := ToggleProviderResponse{
 		Success: true,
@@ -434,11 +435,11 @@ func (s *Server) UpdateProviderModelsByUUID(c *gin.Context) {
 	// Fetch and save models
 	err := s.config.FetchAndSaveProviderModels(uid)
 	if err != nil {
-		if s.logger != nil {
-			s.logger.LogAction(obs.ActionFetchModels, map[string]interface{}{
-				"provider": uid,
-			}, false, err.Error())
-		}
+		logrus.WithFields(logrus.Fields{
+			"action":   obs.ActionFetchModels,
+			"success":  false,
+			"provider": uid,
+		}).Error(err.Error())
 
 		c.JSON(http.StatusInternalServerError, FetchProviderModelsResponse{
 			Success: false,
@@ -452,12 +453,12 @@ func (s *Server) UpdateProviderModelsByUUID(c *gin.Context) {
 	modelManager := s.config.GetModelManager()
 	models := modelManager.GetModels(uid)
 
-	if s.logger != nil {
-		s.logger.LogAction(obs.ActionFetchModels, map[string]interface{}{
-			"provider":     uid,
-			"models_count": len(models),
-		}, true, fmt.Sprintf("Successfully fetched %d models for provider %s", len(models), uid))
-	}
+	logrus.WithFields(logrus.Fields{
+		"action":       obs.ActionFetchModels,
+		"success":      true,
+		"provider":     uid,
+		"models_count": len(models),
+	}).Info(fmt.Sprintf("Successfully fetched %d models for provider %s", len(models), uid))
 
 	providerModels := ProviderModelInfo{
 		Models: models,

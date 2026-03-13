@@ -6,7 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/sirupsen/logrus"
+
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -14,14 +15,12 @@ import (
 // Handler handles rule HTTP requests
 type Handler struct {
 	config *config.Config
-	logger *obs.MemoryLogger
 }
 
 // NewHandler creates a new rule handler
-func NewHandler(cfg *config.Config, logger *obs.MemoryLogger) *Handler {
+func NewHandler(cfg *config.Config) *Handler {
 	return &Handler{
 		config: cfg,
-		logger: logger,
 	}
 }
 
@@ -135,11 +134,11 @@ func (h *Handler) CreateRule(c *gin.Context) {
 	}
 
 	// Log the action
-	if h.logger != nil {
-		h.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
-			"name": rule.RequestModel,
-		}, true, fmt.Sprintf("Rule %s updated successfully", rule.RequestModel))
-	}
+	logrus.WithFields(logrus.Fields{
+		"action":        "update_rule",
+		"uuid":          rule.UUID,
+		"request_model": rule.RequestModel,
+	}).Info(fmt.Sprintf("Rule %s created successfully", rule.UUID))
 
 	response := UpdateRuleResponse{
 		Success: true,
@@ -197,11 +196,10 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 	}
 
 	// Log the action
-	if h.logger != nil {
-		h.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
-			"name": uid,
-		}, true, fmt.Sprintf("Rule %s updated successfully", uid))
-	}
+	logrus.WithFields(logrus.Fields{
+		"action": "update_rule",
+		"uuid":   uid,
+	}).Info(fmt.Sprintf("Rule %s updated successfully", uid))
 
 	response := UpdateRuleResponse{
 		Success: true,

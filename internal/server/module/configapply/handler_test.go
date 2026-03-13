@@ -8,18 +8,17 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 func setupTestRouter(cfg *config.Config) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	handler := NewHandler(cfg, "localhost")
+	_ = NewHandler(cfg, "localhost")
 	return router
 }
 
 func TestNewHandler(t *testing.T) {
-	cfg, _ := config.NewTestConfig()
+	cfg, _ := config.NewConfig()
 	handler := NewHandler(cfg, "localhost")
 
 	if handler == nil {
@@ -54,7 +53,7 @@ func TestApplyClaudeConfig_NilConfig(t *testing.T) {
 }
 
 func TestApplyClaudeConfig_NoActiveRules(t *testing.T) {
-	cfg, _ := config.NewTestConfig()
+	cfg, _ := config.NewConfig()
 	handler := NewHandler(cfg, "localhost")
 
 	gin.SetMode(gin.TestMode)
@@ -95,7 +94,7 @@ func TestApplyOpenCodeConfig_NilConfig(t *testing.T) {
 }
 
 func TestApplyOpenCodeConfig_NoActiveRules(t *testing.T) {
-	cfg, _ := config.NewTestConfig()
+	cfg, _ := config.NewConfig()
 	handler := NewHandler(cfg, "localhost")
 
 	gin.SetMode(gin.TestMode)
@@ -136,7 +135,7 @@ func TestGetOpenCodeConfigPreview_NilConfig(t *testing.T) {
 }
 
 func TestGetOpenCodeConfigPreview_NoActiveRules(t *testing.T) {
-	cfg, _ := config.NewTestConfig()
+	cfg, _ := config.NewConfig()
 	handler := NewHandler(cfg, "localhost")
 
 	gin.SetMode(gin.TestMode)
@@ -158,19 +157,17 @@ func TestGetOpenCodeConfigPreview_NoActiveRules(t *testing.T) {
 
 func TestApplyConfigResponseStructure(t *testing.T) {
 	settingsResult := config.ApplyResult{
-		Success:     true,
-		Created:     true,
-		BackupPath:  "/backup/settings.json.backup",
-		Message:     "Settings applied successfully",
-		AppliedPath: "~/.claude/settings.json",
+		Success:    true,
+		Created:    true,
+		BackupPath: "/backup/settings.json.backup",
+		Message:    "Settings applied successfully",
 	}
 
 	onboardingResult := config.ApplyResult{
-		Success:     true,
-		Created:     false,
-		BackupPath:  "/backup/claude.json.backup",
-		Message:     "Onboarding applied successfully",
-		AppliedPath: "~/.claude.json",
+		Success:    true,
+		Created:    false,
+		BackupPath: "/backup/claude.json.backup",
+		Message:    "Onboarding applied successfully",
 	}
 
 	response := ApplyConfigResponse{
@@ -209,11 +206,10 @@ func TestApplyConfigResponseStructure(t *testing.T) {
 
 func TestApplyOpenCodeConfigResponseStructure(t *testing.T) {
 	applyResult := config.ApplyResult{
-		Success:     true,
-		Created:     true,
-		BackupPath:  "/backup/opencode.json.backup",
-		Message:     "OpenCode config applied successfully",
-		AppliedPath: "~/.config/opencode/opencode.json",
+		Success:    true,
+		Created:    true,
+		BackupPath: "/backup/opencode.json.backup",
+		Message:    "OpenCode config applied successfully",
 	}
 
 	response := ApplyOpenCodeConfigResponse{
@@ -226,10 +222,6 @@ func TestApplyOpenCodeConfigResponseStructure(t *testing.T) {
 
 	if response.BackupPath != "/backup/opencode.json.backup" {
 		t.Errorf("expected BackupPath '/backup/opencode.json.backup', got %q", response.BackupPath)
-	}
-
-	if response.AppliedPath != "~/.config/opencode/opencode.json" {
-		t.Errorf("expected AppliedPath '~/.config/opencode/opencode.json', got %q", response.AppliedPath)
 	}
 }
 
@@ -333,53 +325,4 @@ func indexOf(s, substr string) int {
 		}
 	}
 	return -1
-}
-
-func TestApplyClaudeConfig_WithInvalidMode(t *testing.T) {
-	// Test that mode defaults to unified when not specified
-	cfg, _ := config.NewTestConfig()
-	handler := NewHandler(cfg, "localhost")
-
-	// Add a test rule
-	testRule := &typ.Rule{
-		UUID:         "test-uuid",
-		RequestModel: "gpt-4",
-		Scenario:     typ.ScenarioClaudeCode,
-		Active:       true,
-	}
-	cfg.AddOrUpdateRule(testRule)
-
-	// Add a provider for the rule
-	testProvider := &typ.Provider{
-		UUID:   "provider-uuid",
-		Name:   "Test Provider",
-		Type:   "openai",
-		APIKey: "test-key",
-	}
-	cfg.AddOrUpdateProvider(testProvider)
-
-	// Update rule to use provider
-	testRule.Services = []typ.RuleService{
-		{
-			Provider: "provider-uuid",
-			Weight:   1,
-		},
-	}
-	cfg.AddOrUpdateRule(testRule)
-
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	router.POST("/apply/claude", handler.ApplyClaudeConfig)
-
-	// Send request without mode (should default to unified)
-	req, _ := http.NewRequest("POST", "/apply/claude", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	// The request may fail due to file system operations, but we can check
-	// that the handler processes the request
-	if w.Code != http.StatusOK && w.Code != http.StatusInternalServerError {
-		// This is acceptable since we're not actually writing files
-		// Just verify the handler is working
-	}
 }

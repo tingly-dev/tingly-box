@@ -22,70 +22,60 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ClearIcon from '@mui/icons-material/Clear';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
-interface LogEntry {
+export interface SystemLogEntry {
     time: string;
     level: string;
     message: string;
-    data?: Record<string, any>;
     fields?: Record<string, any>;
 }
 
-interface LogsResponse {
+export interface SystemLogsResponse {
     total: number;
-    logs: LogEntry[];
+    logs: SystemLogEntry[];
 }
 
-interface RequestLogProps {
-    // API methods will be implemented by user
-    getLogs: (params?: { limit?: number; level?: string; since?: string }) => Promise<LogsResponse>;
-    clearLogs: () => Promise<{ success: boolean; message?: string }>;
+interface SystemLogViewerProps {
+    getLogs: (params?: { limit?: number; level?: string; since?: string }) => Promise<SystemLogsResponse>;
 }
 
-const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
+const LOG_LEVELS = ['debug', 'info', 'warn', 'error', 'fatal', 'panic'];
+
+const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
     const { t } = useTranslation();
-    const [logs, setLogs] = useState<LogEntry[]>([]);
-    const [allLogs, setAllLogs] = useState<LogEntry[]>([]); // Store all logs
+    const [logs, setLogs] = useState<SystemLogEntry[]>([]);
+    const [allLogs, setAllLogs] = useState<SystemLogEntry[]>([]);
     const [loading, setLoading] = useState(false);
     const [filterLevel, setFilterLevel] = useState<string | null>(null);
-    const [filterStatus, setFilterStatus] = useState<number | null>(null);
     const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
     const [autoRefresh, setAutoRefresh] = useState(false);
     const tableContainerRef = useRef<HTMLDivElement>(null);
 
     // Menu anchor elements
     const [levelMenuAnchor, setLevelMenuAnchor] = useState<null | HTMLElement>(null);
-    const [statusMenuAnchor, setStatusMenuAnchor] = useState<null | HTMLElement>(null);
 
     const loadLogs = async () => {
         setLoading(true);
         try {
-            const response = await getLogs({ limit: 100 });
+            const response = await getLogs({ limit: 200 });
             if (response && response.logs) {
-                setAllLogs(response.logs);
+                // Sort logs by time ascending (oldest first)
+                const sortedLogs = [...response.logs].sort((a, b) =>
+                    new Date(a.time).getTime() - new Date(b.time).getTime()
+                );
+                setAllLogs(sortedLogs);
                 // Apply current filter to newly loaded logs
-                if (filterLevel === 'all') {
-                    setLogs(response.logs);
+                if (filterLevel === null) {
+                    setLogs(sortedLogs);
                 } else {
-                    setLogs(response.logs.filter(log => log.level.toLowerCase() === filterLevel.toLowerCase()));
+                    setLogs(sortedLogs.filter(log => log.level?.toLowerCase() === filterLevel?.toLowerCase()));
                 }
             }
         } catch (error) {
-            console.error('Failed to load logs:', error);
+            console.error('Failed to load system logs:', error);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const handleClearLogs = async () => {
-        if (confirm('Are you sure you want to clear all logs?')) {
-            try {
-                await clearLogs();
-                setAllLogs([]);
-                setLogs([]);
-            } catch (error) {
-                console.error('Failed to clear logs:', error);
-            }
         }
     };
 
@@ -101,6 +91,10 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
 
     const getLevelColor = (level: string): string => {
         switch (level.toLowerCase()) {
+            case 'panic':
+                return '#991b1b';
+            case 'fatal':
+                return '#dc2626';
             case 'error':
                 return '#ef4444';
             case 'warning':
@@ -133,22 +127,14 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
         }
     };
 
-    // Client-side filter when filterLevel or filterStatus changes
+    // Client-side filter when filterLevel changes
     useEffect(() => {
         let filtered = allLogs;
-        if (filterLevel) {
-            filtered = filtered.filter(log => log.level.toLowerCase() === filterLevel.toLowerCase());
-        }
-        if (filterStatus !== null) {
-            filtered = filtered.filter(log => log.fields?.status === filterStatus);
+        if (filterLevel !== null) {
+            filtered = filtered.filter(log => log.level?.toLowerCase() === filterLevel?.toLowerCase());
         }
         setLogs(filtered);
-    }, [filterLevel, filterStatus, allLogs]);
-
-    // Get unique status codes from all logs
-    const uniqueStatusCodes = Array.from(
-        new Set(allLogs.map(log => log.fields?.status).filter(Boolean))
-    ).sort((a, b) => (a as number) - (b as number)) as number[];
+    }, [filterLevel, allLogs]);
 
     useEffect(() => {
         loadLogs();
@@ -161,7 +147,7 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
         }
     }, [autoRefresh]);
 
-    // Scroll to bottom when logs change
+    // Scroll to bottom when logs change (show newest)
     useEffect(() => {
         if (tableContainerRef.current && logs.length > 0) {
             tableContainerRef.current.scrollTop = tableContainerRef.current.scrollHeight;
@@ -185,30 +171,22 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
                         size="small"
                         onClick={loadLogs}
                         disabled={loading}
+                        startIcon={<RefreshIcon />}
                     >
                         Refresh
                     </Button>
-                    {(filterLevel || filterStatus !== null) && (
+                    {filterLevel !== null && (
                         <Button
                             variant="outlined"
                             size="small"
                             startIcon={<ClearIcon />}
                             onClick={() => {
                                 setFilterLevel(null);
-                                setFilterStatus(null);
                             }}
                         >
                             Clear Filter
                         </Button>
                     )}
-                    <Button
-                        variant="outlined"
-                        size="small"
-                        color="error"
-                        onClick={handleClearLogs}
-                    >
-                        Clear
-                    </Button>
                 </Stack>
                 <Typography variant="body2" color="text.secondary">
                     Total: {logs.length}{allLogs.length !== logs.length && ` / ${allLogs.length}`}
@@ -216,7 +194,7 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
             </Stack>
 
             {/* Logs Table */}
-            <TableContainer component={Paper} sx={{ maxHeight: 600 }} ref={tableContainerRef}>
+            <TableContainer component={Paper} sx={{ height: 600 }} ref={tableContainerRef}>
                 <Table stickyHeader size="small">
                     <TableHead>
                         <TableRow>
@@ -229,25 +207,13 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
                                         size="small"
                                         onClick={(e) => setLevelMenuAnchor(e.currentTarget)}
                                         sx={{ padding: 0.5 }}
-                                        color={filterLevel ? 'primary' : 'default'}
+                                        color={filterLevel !== null ? 'primary' : 'default'}
                                     >
                                         <FilterListIcon fontSize="small" />
                                     </IconButton>
                                 </Stack>
                             </TableCell>
-                            <TableCell sx={{ width: 80 }}>
-                                <Stack direction="row" alignItems="center" spacing={0.5}>
-                                    <span>Status</span>
-                                    <IconButton
-                                        size="small"
-                                        onClick={(e) => setStatusMenuAnchor(e.currentTarget)}
-                                        sx={{ padding: 0.5 }}
-                                        color={filterStatus !== null ? 'primary' : 'default'}
-                                    >
-                                        <FilterListIcon fontSize="small" />
-                                    </IconButton>
-                                </Stack>
-                            </TableCell>
+                            <TableCell sx={{ width: 80 }}>Status</TableCell>
                             <TableCell>Message</TableCell>
                         </TableRow>
                     </TableHead>
@@ -283,13 +249,14 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
                                         </TableCell>
                                         <TableCell>
                                             <Chip
-                                                label={log.level}
+                                                label={log.level.toUpperCase()}
                                                 size="small"
                                                 sx={{
                                                     backgroundColor: getLevelColor(log.level),
                                                     color: 'white',
                                                     fontSize: '0.7rem',
                                                     height: 20,
+                                                    fontWeight: 'bold',
                                                 }}
                                             />
                                         </TableCell>
@@ -314,7 +281,7 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
                                             {log.message}
                                         </TableCell>
                                     </TableRow>
-                                    <TableRow>
+                                    <TableRow key={`${index}-expanded`}>
                                         <TableCell
                                             colSpan={5}
                                             sx={{ pb: 0, pt: 0, border: 'none' }}
@@ -341,21 +308,10 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
                                                             ))}
                                                         </Stack>
                                                     )}
-                                                    {log.data && Object.keys(log.data).length > 0 && (
-                                                        <Stack spacing={1} sx={{ mt: 2 }}>
-                                                            <Typography variant="subtitle2" color="text.secondary">
-                                                                Data:
-                                                            </Typography>
-                                                            {Object.entries(log.data).map(([key, value]) => (
-                                                                <Typography
-                                                                    key={key}
-                                                                    variant="body2"
-                                                                    sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
-                                                                >
-                                                                    <strong>{key}:</strong> {String(value)}
-                                                                </Typography>
-                                                            ))}
-                                                        </Stack>
+                                                    {!log.fields || Object.keys(log.fields).length === 0 && (
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            No additional fields
+                                                        </Typography>
                                                     )}
                                                 </Box>
                                             </Collapse>
@@ -383,82 +339,17 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
                 >
                     All Levels
                 </MenuItem>
-                <MenuItem
-                    selected={filterLevel === 'error'}
-                    onClick={() => {
-                        setFilterLevel('error');
-                        setLevelMenuAnchor(null);
-                    }}
-                >
-                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#ef4444', mr: 1 }} />
-                    Error
-                </MenuItem>
-                <MenuItem
-                    selected={filterLevel === 'warning'}
-                    onClick={() => {
-                        setFilterLevel('warning');
-                        setLevelMenuAnchor(null);
-                    }}
-                >
-                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#f59e0b', mr: 1 }} />
-                    Warning
-                </MenuItem>
-                <MenuItem
-                    selected={filterLevel === 'info'}
-                    onClick={() => {
-                        setFilterLevel('info');
-                        setLevelMenuAnchor(null);
-                    }}
-                >
-                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#3b82f6', mr: 1 }} />
-                    Info
-                </MenuItem>
-                <MenuItem
-                    selected={filterLevel === 'debug'}
-                    onClick={() => {
-                        setFilterLevel('debug');
-                        setLevelMenuAnchor(null);
-                    }}
-                >
-                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#6b7280', mr: 1 }} />
-                    Debug
-                </MenuItem>
-            </Menu>
-
-            {/* Status Filter Menu */}
-            <Menu
-                anchorEl={statusMenuAnchor}
-                open={Boolean(statusMenuAnchor)}
-                onClose={() => setStatusMenuAnchor(null)}
-            >
-                <MenuItem
-                    selected={filterStatus === null}
-                    onClick={() => {
-                        setFilterStatus(null);
-                        setStatusMenuAnchor(null);
-                    }}
-                >
-                    All Status
-                </MenuItem>
-                {uniqueStatusCodes.map((code) => (
+                {LOG_LEVELS.map((level) => (
                     <MenuItem
-                        key={code}
-                        selected={filterStatus === code}
+                        key={level}
+                        selected={filterLevel === level}
                         onClick={() => {
-                            setFilterStatus(code);
-                            setStatusMenuAnchor(null);
+                            setFilterLevel(level);
+                            setLevelMenuAnchor(null);
                         }}
                     >
-                        <Box
-                            sx={{
-                                width: 12,
-                                height: 12,
-                                borderRadius: '50%',
-                                backgroundColor: getStatusCodeColor(code),
-                                mr: 1,
-                            }}
-                        />
-                        {code}
+                        <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: getLevelColor(level), mr: 1 }} />
+                        {level.charAt(0).toUpperCase() + level.slice(1)}
                     </MenuItem>
                 ))}
             </Menu>
@@ -466,4 +357,4 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
     );
 };
 
-export default RequestLog;
+export default SystemLogViewer;

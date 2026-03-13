@@ -35,7 +35,7 @@ func (m *mockUsageStore) GetTimeSeries(startTime, endTime time.Time, interval st
 	return m.timeSeriesData, nil
 }
 
-func (m *mockUsageStore) GetUsageRecords(query db.UsageRecordsQuery) ([]db.UsageRecord, int64, error) {
+func (m *mockUsageStore) GetUsageRecords(query UsageRecordsQuery) ([]db.UsageRecord, int64, error) {
 	if m.recordsErr != nil {
 		return nil, 0, m.recordsErr
 	}
@@ -51,7 +51,7 @@ func setupTestRouter(store *mockUsageStore) *gin.Engine {
 	router := gin.New()
 
 	usageStore := &db.UsageStore{} // We'll use mock pattern in handler
-	handler := NewHandler(usageStore)
+	_ = NewHandler(usageStore)
 	// Override the store for testing (in real scenario, use interface)
 	router.GET("/usage/stats", func(c *gin.Context) {
 		if store == nil {

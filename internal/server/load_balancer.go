@@ -241,7 +241,7 @@ func (lb *LoadBalancer) ClearAllStats() {
 		for ruleIdx, rule := range rules {
 			modified := false
 			for i := range rule.Services {
-				stats := rule.Services[i].Stats
+				stats := &rule.Services[i].Stats
 				if stats.RequestCount > 0 || stats.WindowRequestCount > 0 {
 					stats.RequestCount = 0
 					stats.WindowRequestCount = 0

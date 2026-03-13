@@ -114,7 +114,7 @@ func (s *Server) GetLogs(c *gin.Context) {
 		entries = s.memoryLogMW.GetEntriesSince(since)
 	} else {
 		// Get latest entries
-		entries = s.memoryLogMW.GetLatest(limit)
+		entries = s.memoryLogMW.GetLatestEntries(limit)
 	}
 
 	// Convert entries and apply limit
