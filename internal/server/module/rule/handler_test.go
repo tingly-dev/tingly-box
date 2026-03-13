@@ -13,10 +13,8 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func setupTestRouter(cfg *config.Config) *gin.Engine {
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	// Create a minimal multiLogger for testing
+// setupTestActionLogger creates a test action logger for use in tests
+func setupTestActionLogger() *obs.ScopedLogger {
 	multiLogger, _ := obs.NewMultiLogger(&obs.MultiLoggerConfig{
 		TextLogPath: "/tmp/test.log",
 		JSONLogPath: "/tmp/test.jsonl",
@@ -24,20 +22,18 @@ func setupTestRouter(cfg *config.Config) *gin.Engine {
 			obs.LogSourceAction: {MaxEntries: 10},
 		},
 	})
-	actionLogger := multiLogger.WithSource(obs.LogSourceAction)
-	_ = NewHandler(cfg, actionLogger)
+	return multiLogger.WithSource(obs.LogSourceAction)
+}
+
+func setupTestRouter(cfg *config.Config) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	_ = NewHandler(cfg, setupTestActionLogger())
 	return router
 }
 
 func TestNewHandler(t *testing.T) {
-	multiLogger, _ := obs.NewMultiLogger(&obs.MultiLoggerConfig{
-		TextLogPath: "/tmp/test.log",
-		JSONLogPath: "/tmp/test.jsonl",
-		MemorySinkConfig: map[obs.LogSource]obs.MemorySinkConfig{
-			obs.LogSourceAction: {MaxEntries: 10},
-		},
-	})
-	actionLogger := multiLogger.WithSource(obs.LogSourceAction)
+	actionLogger := setupTestActionLogger()
 	handler := NewHandler(nil, actionLogger)
 
 	cfg, _ := config.NewConfig()
@@ -67,14 +63,7 @@ func TestGetRules_WithScenario(t *testing.T) {
 	cfg, _ := config.NewConfig()
 	router := setupTestRouter(cfg)
 
-	multiLogger, _ := obs.NewMultiLogger(&obs.MultiLoggerConfig{
-		TextLogPath: "/tmp/test.log",
-		JSONLogPath: "/tmp/test.jsonl",
-		MemorySinkConfig: map[obs.LogSource]obs.MemorySinkConfig{
-			obs.LogSourceAction: {MaxEntries: 10},
-		},
-	})
-	actionLogger := multiLogger.WithSource(obs.LogSourceAction)
+	actionLogger := setupTestActionLogger()
 	handler := NewHandler(cfg, actionLogger)
 
 	router.GET("/rules", handler.GetRules)
@@ -114,14 +103,7 @@ func TestGetRules_WithScenario(t *testing.T) {
 func TestGetRules_NilConfig(t *testing.T) {
 	router := setupTestRouter(nil)
 
-	multiLogger, _ := obs.NewMultiLogger(&obs.MultiLoggerConfig{
-		TextLogPath: "/tmp/test.log",
-		JSONLogPath: "/tmp/test.jsonl",
-		MemorySinkConfig: map[obs.LogSource]obs.MemorySinkConfig{
-			obs.LogSourceAction: {MaxEntries: 10},
-		},
-	})
-	actionLogger := multiLogger.WithSource(obs.LogSourceAction)
+	actionLogger := setupTestActionLogger()
 	handler := NewHandler(nil, actionLogger)
 
 	router.GET("/rules", handler.GetRules)
@@ -139,14 +121,7 @@ func TestGetRule_Success(t *testing.T) {
 	cfg, _ := config.NewConfig()
 	router := setupTestRouter(cfg)
 
-	multiLogger, _ := obs.NewMultiLogger(&obs.MultiLoggerConfig{
-		TextLogPath: "/tmp/test.log",
-		JSONLogPath: "/tmp/test.jsonl",
-		MemorySinkConfig: map[obs.LogSource]obs.MemorySinkConfig{
-			obs.LogSourceAction: {MaxEntries: 10},
-		},
-	})
-	actionLogger := multiLogger.WithSource(obs.LogSourceAction)
+	actionLogger := setupTestActionLogger()
 	handler := NewHandler(cfg, actionLogger)
 
 	router.GET("/rules/:uuid", handler.GetRule)
@@ -173,14 +148,7 @@ func TestGetRule_NotFound(t *testing.T) {
 	cfg, _ := config.NewConfig()
 	router := setupTestRouter(cfg)
 
-	multiLogger, _ := obs.NewMultiLogger(&obs.MultiLoggerConfig{
-		TextLogPath: "/tmp/test.log",
-		JSONLogPath: "/tmp/test.jsonl",
-		MemorySinkConfig: map[obs.LogSource]obs.MemorySinkConfig{
-			obs.LogSourceAction: {MaxEntries: 10},
-		},
-	})
-	actionLogger := multiLogger.WithSource(obs.LogSourceAction)
+	actionLogger := setupTestActionLogger()
 	handler := NewHandler(cfg, actionLogger)
 
 	router.GET("/rules/:uuid", handler.GetRule)
@@ -198,14 +166,7 @@ func TestGetRule_EmptyUUID(t *testing.T) {
 	cfg, _ := config.NewConfig()
 	router := setupTestRouter(cfg)
 
-	multiLogger, _ := obs.NewMultiLogger(&obs.MultiLoggerConfig{
-		TextLogPath: "/tmp/test.log",
-		JSONLogPath: "/tmp/test.jsonl",
-		MemorySinkConfig: map[obs.LogSource]obs.MemorySinkConfig{
-			obs.LogSourceAction: {MaxEntries: 10},
-		},
-	})
-	actionLogger := multiLogger.WithSource(obs.LogSourceAction)
+	actionLogger := setupTestActionLogger()
 	handler := NewHandler(cfg, actionLogger)
 
 	router.GET("/rules/:uuid", handler.GetRule)
@@ -222,14 +183,7 @@ func TestGetRule_EmptyUUID(t *testing.T) {
 func TestGetRule_NilConfig(t *testing.T) {
 	router := setupTestRouter(nil)
 
-	multiLogger, _ := obs.NewMultiLogger(&obs.MultiLoggerConfig{
-		TextLogPath: "/tmp/test.log",
-		JSONLogPath: "/tmp/test.jsonl",
-		MemorySinkConfig: map[obs.LogSource]obs.MemorySinkConfig{
-			obs.LogSourceAction: {MaxEntries: 10},
-		},
-	})
-	actionLogger := multiLogger.WithSource(obs.LogSourceAction)
+	actionLogger := setupTestActionLogger()
 	handler := NewHandler(nil, actionLogger)
 
 	router.GET("/rules/:uuid", handler.GetRule)
