@@ -13,6 +13,11 @@ import (
 	"github.com/tingly-dev/tingly-agentscope/pkg/tool"
 )
 
+// Summary prompt template
+const summaryPrompt = `Analyze the conversation and provide a clear summary to the user after completing tasks or running commands to user.
+Keep users informed - they should always understand what's happening and why.
+`
+
 // TinglyBoxAgent is the smart guide agent (@tb)
 type TinglyBoxAgent struct {
 	*agent.ReActAgent
@@ -193,7 +198,6 @@ func (a *TinglyBoxAgent) ReplyWithContext(ctx context.Context, text string, tool
 	// In that case, we should generate a summary for the user
 	var summaryText string
 	var hist *memory.History
-	responseText := response.GetTextContent()
 
 	if mem != nil {
 		var ok bool
@@ -219,9 +223,8 @@ func (a *TinglyBoxAgent) ReplyWithContext(ctx context.Context, text string, tool
 						logrus.WithError(err).Warn("Failed to add summary to memory")
 					}
 
-					// Append summary to response
-					responseText += "\n\n---\n\n" + summaryText
-					response.Content = responseText
+					// Use summary to response
+					response.Content = summaryMsg
 				}
 			}
 		}
@@ -339,7 +342,7 @@ func (a *TinglyBoxAgent) generateSummary(ctx context.Context, mem *memory.Histor
 
 	// Build conversation history for summary generation
 	var historyBuilder strings.Builder
-	historyBuilder.WriteString("Below is the conversation history. Please generate a concise summary (2-3 bullet points max) of what was accomplished:\n\n")
+	historyBuilder.WriteString("Conversation history:\n\n")
 
 	for i, msg := range messages {
 		// Skip summary messages themselves
@@ -352,10 +355,8 @@ func (a *TinglyBoxAgent) generateSummary(ctx context.Context, mem *memory.Histor
 
 		// Handle different content types
 		if contentStr, ok := msg.Content.(string); ok {
-			// Simple text content
 			historyBuilder.WriteString(contentStr)
 		} else if contentBlocks, ok := msg.Content.([]interface{}); ok {
-			// Anthropic-style content blocks
 			for _, block := range contentBlocks {
 				if blockMap, ok := block.(map[string]interface{}); ok {
 					if blockType, ok := blockMap["type"].(string); ok {
@@ -366,16 +367,10 @@ func (a *TinglyBoxAgent) generateSummary(ctx context.Context, mem *memory.Histor
 							}
 						case "tool_use":
 							if name, ok := blockMap["name"].(string); ok {
-								historyBuilder.WriteString(fmt.Sprintf("[Tool: %s]", name))
+								historyBuilder.WriteString(fmt.Sprintf("[used tool: %s]", name))
 							}
 						case "tool_result":
-							if content, ok := blockMap["content"].(string); ok {
-								// Truncate long tool results
-								if len(content) > 100 {
-									content = content[:100] + "..."
-								}
-								historyBuilder.WriteString(fmt.Sprintf("[Result: %s]", content))
-							}
+							historyBuilder.WriteString("[tool result]")
 						}
 					}
 				}
@@ -384,30 +379,27 @@ func (a *TinglyBoxAgent) generateSummary(ctx context.Context, mem *memory.Histor
 
 		historyBuilder.WriteString("\n")
 
-		// Limit history length for summary (last 20 messages)
+		// Limit history length (last 20 messages)
 		if i > len(messages)-20 {
 			break
 		}
 	}
 
-	historyBuilder.WriteString("\nPlease provide a brief summary in the following format:\n")
-	historyBuilder.WriteString("**Summary**\n\n• [what was done]\n• [key result]\n• [tools used]\n")
+	// Build the full prompt
+	fullPrompt := fmt.Sprintf("%s\n\n%s", summaryPrompt, historyBuilder.String())
 
-	// Create summary request message
-	summaryPrompt := message.NewMsg("user", historyBuilder.String(), "user")
+	// Create a user message with the summary prompt
+	summaryMsg := message.NewMsg("user", fullPrompt, "user")
 
-	// Call LLM to generate summary (use a separate call to avoid affecting main conversation)
-	// We use the ReActAgent's underlying model client
-	summaryResponse, err := a.ReActAgent.Reply(ctx, summaryPrompt)
+	// Call agent internally to generate summary
+	// This is an internal call that doesn't affect the user-visible conversation
+	summaryResponse, err := a.ReActAgent.Reply(ctx, summaryMsg)
 	if err != nil {
-		logrus.WithError(err).Warn("Failed to generate summary with LLM, using fallback")
+		logrus.WithError(err).Warn("Failed to generate summary, using fallback")
 		return a.generateFallbackSummary(messages)
 	}
 
-	// Extract the summary text
-	summaryText := summaryResponse.GetTextContent()
-
-	return summaryText
+	return summaryResponse.GetTextContent()
 }
 
 // generateFallbackSummary generates a simple summary when LLM call fails
