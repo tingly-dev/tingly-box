@@ -100,9 +100,9 @@ func buildOAuthHelp() string {
 func runInteractiveMode(appConfig *config.AppConfig, customName string, callbackPort int, proxyURL string) error {
 	providers := supportedProviders()
 
-	fmt.Println("\n🔐 OAuth Authentication")
+	fmt.Println("🔐 OAuth Authentication")
 	fmt.Println(strings.Repeat("=", 60))
-	fmt.Println("\nSelect a provider to authenticate:\n")
+	fmt.Printf("\nSelect a provider to authenticate:\n")
 
 	for i, p := range providers {
 		config, _ := getProviderConfig(p.Type)
@@ -124,7 +124,7 @@ func runInteractiveMode(appConfig *config.AppConfig, customName string, callback
 	fmt.Println(strings.Repeat("=", 60))
 
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("\nEnter choice (0-%d): ", len(providers))
+	fmt.Printf("\nEnter choice (0-%d): ", len(providers))
 	input, err := reader.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("failed to read input: %w", err)

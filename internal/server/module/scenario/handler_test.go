@@ -38,12 +38,12 @@ func (m *mockRemoteControlController) SyncRemoteCoderBots(ctx context.Context) e
 func setupTestRouter(cfg *config.Config, rcCtrl RemoteControlController) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	handler := NewHandler(cfg, rcCtrl)
+	_ = NewHandler(cfg, rcCtrl)
 	return router
 }
 
 func TestNewHandler(t *testing.T) {
-	cfg, _ := config.NewTestConfig()
+	cfg, _ := config.NewConfig()
 	mockRC := &mockRemoteControlController{}
 
 	handler := NewHandler(cfg, mockRC)
@@ -60,7 +60,7 @@ func TestNewHandler(t *testing.T) {
 }
 
 func TestGetScenarios_Success(t *testing.T) {
-	cfg, _ := config.NewTestConfig()
+	cfg, _ := config.NewConfig()
 	mockRC := &mockRemoteControlController{}
 	router := setupTestRouter(cfg, mockRC)
 	handler := NewHandler(cfg, mockRC)
@@ -100,7 +100,7 @@ func TestGetScenarios_NilConfig(t *testing.T) {
 }
 
 func TestGetScenarioConfig_Success(t *testing.T) {
-	cfg, _ := config.NewTestConfig()
+	cfg, _ := config.NewConfig()
 	mockRC := &mockRemoteControlController{}
 	router := setupTestRouter(cfg, mockRC)
 	handler := NewHandler(cfg, mockRC)
@@ -109,13 +109,13 @@ func TestGetScenarioConfig_Success(t *testing.T) {
 
 	// Add a test scenario
 	testScenario := typ.RuleScenario("test_scenario")
-	testConfig := &typ.ScenarioConfig{
+	testConfig := typ.ScenarioConfig{
 		Scenario: testScenario,
 		Flags: typ.ScenarioFlags{
 			Unified: true,
 		},
 	}
-	cfg.SetScenarioConfig(testScenario, testConfig)
+	cfg.SetScenarioConfig(testConfig)
 
 	req, _ := http.NewRequest("GET", "/scenarios/test_scenario", nil)
 	w := httptest.NewRecorder()
@@ -131,7 +131,7 @@ func TestGetScenarioConfig_Success(t *testing.T) {
 }
 
 func TestGetScenarioConfig_NotFound(t *testing.T) {
-	cfg, _ := config.NewTestConfig()
+	cfg, _ := config.NewConfig()
 	mockRC := &mockRemoteControlController{}
 	router := setupTestRouter(cfg, mockRC)
 	handler := NewHandler(cfg, mockRC)
@@ -152,7 +152,7 @@ func TestGetScenarioConfig_NotFound(t *testing.T) {
 }
 
 func TestGetScenarioConfig_EmptyScenario(t *testing.T) {
-	cfg, _ := config.NewTestConfig()
+	cfg, _ := config.NewConfig()
 	mockRC := &mockRemoteControlController{}
 	router := setupTestRouter(cfg, mockRC)
 	handler := NewHandler(cfg, mockRC)
