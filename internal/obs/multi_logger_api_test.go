@@ -183,7 +183,7 @@ func TestMultiLoggerSourceFiltering(t *testing.T) {
 		httpLogger.GetLogrusLogger().WithField("path", "/test").Info("HTTP request")
 
 		// Read only action logs
-		actionLogs, err := multiLogger.ReadJSONLogs(100, logrus.DebugLevel, time.Time{}, LogSourceAction)
+		actionLogs, err := multiLogger.ReadJSONLogs(100)
 		require.NoError(t, err)
 
 		// All should have source="action"

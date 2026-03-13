@@ -353,12 +353,12 @@ func (m *MultiLogger) GetJSONLogPath() string {
 }
 
 // ReadJSONLogs reads log entries from the JSON log file with optional filtering
-func (m *MultiLogger) ReadJSONLogs(limit int, minLevel logrus.Level, since time.Time, source LogSource) ([]LogEntry, error) {
+func (m *MultiLogger) ReadJSONLogs(limit int) ([]LogEntry, error) {
 	m.mu.RLock()
 	logPath := m.jsonLogger.Filename
 	m.mu.RUnlock()
 
-	return readLogEntriesBackwards(logPath, limit, minLevel, since, source)
+	return readLogEntriesBackwards(logPath, limit)
 }
 
 // Close closes the logger
@@ -459,7 +459,8 @@ func (s *ScopedLogger) LogAction(action string, details interface{}, success boo
 }
 
 // readLogEntriesBackwards reads log entries from the end of the file for efficiency
-func readLogEntriesBackwards(filePath string, limit int, minLevel logrus.Level, since time.Time, source LogSource) ([]LogEntry, error) {
+// Returns entries in reverse chronological order (newest first)
+func readLogEntriesBackwards(filePath string, limit int) ([]LogEntry, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -517,19 +518,10 @@ func readLogEntriesBackwards(filePath string, limit int, minLevel logrus.Level, 
 			if len(partialLine) > 0 {
 				var entry LogEntry
 				if err := json.Unmarshal(partialLine, &entry); err == nil {
-					if source != LogSourceUnknown && entry.Source != string(source) {
-						partialLine = nil
-						continue
-					}
-
-					entryLevel, parseErr := logrus.ParseLevel(entry.Level)
-					if parseErr == nil && entryLevel <= minLevel {
-						if since.IsZero() || entry.Time.After(since) {
-							entries = append([]LogEntry{entry}, entries...)
-							if limit > 0 && len(entries) >= limit {
-								return entries, nil
-							}
-						}
+					// Append entries in order found (newest first since we're reading backwards)
+					entries = append(entries, entry)
+					if limit > 0 && len(entries) >= limit {
+						return entries, nil
 					}
 				}
 				partialLine = nil
@@ -537,17 +529,11 @@ func readLogEntriesBackwards(filePath string, limit int, minLevel logrus.Level, 
 		}
 	}
 
+	// Handle last line (if file doesn't end with newline)
 	if len(partialLine) > 0 {
 		var entry LogEntry
 		if err := json.Unmarshal(partialLine, &entry); err == nil {
-			if source == LogSourceUnknown || entry.Source == string(source) {
-				entryLevel, parseErr := logrus.ParseLevel(entry.Level)
-				if parseErr == nil && entryLevel <= minLevel {
-					if since.IsZero() || entry.Time.After(since) {
-						entries = append([]LogEntry{entry}, entries...)
-					}
-				}
-			}
+			entries = append(entries, entry)
 		}
 	}
 

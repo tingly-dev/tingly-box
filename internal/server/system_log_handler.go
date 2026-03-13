@@ -28,8 +28,6 @@ type SystemLogsResponse struct {
 // GetSystemLogs retrieves system logs with optional filtering
 // Query parameters:
 //   - limit: maximum number of recent entries to return (default: 100, max: 1000)
-//   - level: minimum log level to include (debug, info, warn, error, fatal, panic)
-//   - since: RFC3339 timestamp to filter entries after this time
 func (s *Server) GetSystemLogs(c *gin.Context) {
 	if s.multiLogger == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
@@ -49,29 +47,8 @@ func (s *Server) GetSystemLogs(c *gin.Context) {
 		limit = 1000 // Max limit
 	}
 
-	levelStr := c.DefaultQuery("level", "debug")
-	minLevel, err := logrus.ParseLevel(levelStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid log level, use: debug, info, warn, error, fatal, panic",
-		})
-		return
-	}
-
-	var since time.Time
-	sinceStr := c.Query("since")
-	if sinceStr != "" {
-		since, err = time.Parse(time.RFC3339, sinceStr)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "Invalid since timestamp, use RFC3339 format",
-			})
-			return
-		}
-	}
-
 	// Read logs from JSON log file (only recent entries, system source only)
-	entries, err := s.multiLogger.ReadJSONLogs(limit, minLevel, since, obs.LogSourceSystem)
+	entries, err := s.multiLogger.ReadJSONLogs(limit)
 	if err != nil {
 		logrus.Errorf("Failed to read system logs: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -110,7 +87,7 @@ func (s *Server) GetSystemLogStats(c *gin.Context) {
 	logPath := s.multiLogger.GetJSONLogPath()
 
 	// Read all logs to calculate stats (with a reasonable limit, system source only)
-	entries, err := s.multiLogger.ReadJSONLogs(10000, logrus.DebugLevel, time.Time{}, obs.LogSourceSystem)
+	entries, err := s.multiLogger.ReadJSONLogs(10000)
 	if err != nil {
 		logrus.Errorf("Failed to read system logs for stats: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{

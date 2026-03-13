@@ -76,7 +76,7 @@ func TestMultiLogger(t *testing.T) {
 		}
 
 		// Read logs
-		entries, err := logger.ReadJSONLogs(10, logrus.DebugLevel, time.Time{}, LogSourceUnknown)
+		entries, err := logger.ReadJSONLogs(10)
 		require.NoError(t, err)
 		assert.True(t, len(entries) >= 5)
 	})
@@ -108,7 +108,7 @@ func TestMultiLogger(t *testing.T) {
 		require.NoError(t, err)
 
 		// Read only HTTP logs
-		httpLogs, err := logger.ReadJSONLogs(10, logrus.DebugLevel, time.Time{}, LogSourceHTTP)
+		httpLogs, err := logger.ReadJSONLogs(10)
 		require.NoError(t, err)
 		assert.True(t, len(httpLogs) > 0, "Expected at least one HTTP log entry")
 		// Verify all entries are HTTP source
@@ -192,7 +192,7 @@ func TestMultiLoggerHook(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify log was written
-	entries, err := logger.ReadJSONLogs(10, logrus.DebugLevel, time.Time{}, LogSourceUnknown)
+	entries, err := logger.ReadJSONLogs(10)
 	require.NoError(t, err)
 	assert.True(t, len(entries) > 0)
 }
