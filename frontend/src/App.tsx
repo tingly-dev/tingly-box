@@ -26,6 +26,8 @@ const UseOpenCodePage = lazy(() => import('./pages/scenario/UseOpenCodePage'));
 const UseXcodePage = lazy(() => import('./pages/scenario/UseXcodePage'));
 const CredentialPage = lazy(() => import('./pages/CredentialPage'));
 const System = lazy(() => import('./pages/System'));
+const HttpLogsPage = lazy(() => import('./pages/system/HttpLogsPage'));
+const SystemLogsPage = lazy(() => import('./pages/system/SystemLogsPage'));
 const LogsPage = lazy(() => import('./pages/system/LogsPage'));
 const DashboardPage = lazy(() => import('./pages/./DashboardPage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
@@ -297,6 +299,9 @@ function AppContent() {
                     {/* Other routes */}
                     <Route path="/system" element={<System />} />
                     <Route path="/system/logs" element={<LogsPage />} />
+                    {/* Legacy redirects for backward compatibility */}
+                    <Route path="/system/http-logs" element={<Navigate to="/system/logs" replace />} />
+                    <Route path="/system/system-logs" element={<Navigate to="/system/logs" replace />} />
                     <Route path="/logs" element={<Navigate to="/system/logs" replace />} />
                     {/* Dashboard routes with time range */}
                     <Route path="/dashboard" element={<Navigate to="/dashboard/7d" replace />} />
