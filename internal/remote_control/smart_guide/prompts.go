@@ -34,7 +34,7 @@ func MustLoadPrompt(name string) string {
 
 // DefaultSystemPrompt returns the default system prompt for @tb
 func DefaultSystemPrompt() string {
-	return MustLoadPrompt("default_system_prompt.v2")
+	return MustLoadPrompt("default_system_prompt.v3")
 }
 
 // HandoffToCCPrompt returns the handoff prompt when switching to Claude Code
