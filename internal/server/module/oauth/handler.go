@@ -32,17 +32,17 @@ type Handler struct {
 	oauthManager          *oauth2.Manager
 	config                *config.Config
 	sessionMgr            *SessionManager
-	logger                *obs.MemoryLogger
+	actionLogger          *obs.ScopedLogger
 	callbackServerManager CallbackServerManager
 }
 
 // NewHandler creates a new OAuth handler
-func NewHandler(oauthManager *oauth2.Manager, cfg *config.Config, logger *obs.MemoryLogger) *Handler {
+func NewHandler(oauthManager *oauth2.Manager, cfg *config.Config, actionLogger *obs.ScopedLogger) *Handler {
 	return &Handler{
 		oauthManager: oauthManager,
 		config:       cfg,
 		sessionMgr:   NewSessionManager(),
-		logger:       logger,
+		actionLogger: actionLogger,
 	}
 }
 
@@ -151,11 +151,10 @@ func (h *Handler) UpdateOAuthProvider(c *gin.Context) {
 
 	h.oauthManager.GetRegistry().Register(newConfig)
 
-	if h.logger != nil {
-		h.logger.LogAction("update_oauth_provider", map[string]interface{}{
-			"provider": providerType,
-		}, true, "OAuth provider updated")
-	}
+	// Log the action
+	h.actionLogger.LogAction("update_oauth_provider", map[string]interface{}{
+		"provider": providerType,
+	}, true, "OAuth provider updated")
 
 	c.JSON(http.StatusOK, OAuthUpdateProviderResponse{
 		Success: true,
@@ -193,11 +192,10 @@ func (h *Handler) DeleteOAuthProvider(c *gin.Context) {
 		ConsoleURL:   config.ConsoleURL,
 	})
 
-	if h.logger != nil {
-		h.logger.LogAction("delete_oauth_provider", map[string]interface{}{
-			"provider": providerType,
-		}, true, "OAuth provider deleted")
-	}
+	// Log the action
+	h.actionLogger.LogAction("delete_oauth_provider", map[string]interface{}{
+		"provider": providerType,
+	}, true, "OAuth provider deleted")
 
 	c.JSON(http.StatusOK, OAuthUpdateProviderResponse{
 		Success: true,
@@ -674,11 +672,10 @@ func (h *Handler) RevokeOAuthToken(c *gin.Context) {
 		return
 	}
 
-	if h.logger != nil {
-		h.logger.LogAction("revoke_oauth_token", map[string]interface{}{
-			"provider": providerType,
-		}, true, "OAuth token revoked")
-	}
+	// Log the action
+	h.actionLogger.LogAction("revoke_oauth_token", map[string]interface{}{
+		"provider": providerType,
+	}, true, "OAuth token revoked")
 
 	c.JSON(http.StatusOK, OAuthMessageResponse{
 		Success: true,
@@ -993,13 +990,11 @@ func (h *Handler) createProviderFromToken(token *oauth2.Token, providerType oaut
 	}
 
 	// Log the successful provider creation
-	if h.logger != nil {
-		h.logger.LogAction("oauth_provider_created", map[string]interface{}{
-			"provider_name": providerName,
-			"provider_type": string(token.Provider),
-			"uuid":          providerUUID.String(),
-		}, true, "OAuth provider created successfully")
-	}
+	h.actionLogger.LogAction("oauth_provider_created", map[string]interface{}{
+		"provider_name": providerName,
+		"provider_type": string(token.Provider),
+		"uuid":          providerUUID.String(),
+	}, true, "OAuth provider created successfully")
 
 	return providerUUID.String(), nil
 }

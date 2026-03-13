@@ -151,8 +151,8 @@ func (s *Server) CreateProvider(c *gin.Context) {
 
 	err = s.config.AddProvider(provider)
 	if err != nil {
-		if s.logger != nil {
-			s.logger.LogAction(obs.ActionAddProvider, map[string]interface{}{
+		if s.actionLogger != nil {
+			s.actionLogger.LogAction(obs.ActionAddProvider, map[string]interface{}{
 				"name":     req.Name,
 				"api_base": req.APIBase,
 			}, false, err.Error())
@@ -168,8 +168,8 @@ func (s *Server) CreateProvider(c *gin.Context) {
 	// update models for current provider here too, try once and ignore error
 	s.config.FetchAndSaveProviderModels(provider.UUID)
 
-	if s.logger != nil {
-		s.logger.LogAction(obs.ActionAddProvider, map[string]interface{}{
+	if s.actionLogger != nil {
+		s.actionLogger.LogAction(obs.ActionAddProvider, map[string]interface{}{
 			"name":     req.Name,
 			"api_base": req.APIBase,
 		}, true, fmt.Sprintf("Provider %s added successfully", req.Name))
@@ -197,8 +197,8 @@ func (s *Server) DeleteProvider(c *gin.Context) {
 
 	err := s.config.DeleteProvider(uid)
 	if err != nil {
-		if s.logger != nil {
-			s.logger.LogAction(obs.ActionDeleteProvider, map[string]interface{}{
+		if s.actionLogger != nil {
+			s.actionLogger.LogAction(obs.ActionDeleteProvider, map[string]interface{}{
 				"name": uid,
 			}, false, err.Error())
 		}
@@ -210,8 +210,8 @@ func (s *Server) DeleteProvider(c *gin.Context) {
 		return
 	}
 
-	if s.logger != nil {
-		s.logger.LogAction(obs.ActionDeleteProvider, map[string]interface{}{
+	if s.actionLogger != nil {
+		s.actionLogger.LogAction(obs.ActionDeleteProvider, map[string]interface{}{
 			"name": uid,
 		}, true, fmt.Sprintf("Provider %s deleted successfully", uid))
 	}
@@ -294,8 +294,8 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 
 	err = s.config.UpdateProvider(uid, provider)
 	if err != nil {
-		if s.logger != nil {
-			s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
+		if s.actionLogger != nil {
+			s.actionLogger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
 				"name":    uid,
 				"updates": req,
 			}, false, err.Error())
@@ -308,8 +308,8 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 		return
 	}
 
-	if s.logger != nil {
-		s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
+	if s.actionLogger != nil {
+		s.actionLogger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
 			"name": uid,
 		}, true, fmt.Sprintf("Provider %s updated successfully", uid))
 	}
@@ -385,8 +385,8 @@ func (s *Server) ToggleProvider(c *gin.Context) {
 
 	err = s.config.UpdateProvider(uid, provider)
 	if err != nil {
-		if s.logger != nil {
-			s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
+		if s.actionLogger != nil {
+			s.actionLogger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
 				"name":    uid,
 				"enabled": provider.Enabled,
 			}, false, err.Error())
@@ -404,8 +404,8 @@ func (s *Server) ToggleProvider(c *gin.Context) {
 		action = "enabled"
 	}
 
-	if s.logger != nil {
-		s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
+	if s.actionLogger != nil {
+		s.actionLogger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
 			"name":    uid,
 			"enabled": provider.Enabled,
 		}, true, fmt.Sprintf("Provider %s %s successfully", uid, action))
@@ -434,8 +434,8 @@ func (s *Server) UpdateProviderModelsByUUID(c *gin.Context) {
 	// Fetch and save models
 	err := s.config.FetchAndSaveProviderModels(uid)
 	if err != nil {
-		if s.logger != nil {
-			s.logger.LogAction(obs.ActionFetchModels, map[string]interface{}{
+		if s.actionLogger != nil {
+			s.actionLogger.LogAction(obs.ActionFetchModels, map[string]interface{}{
 				"provider": uid,
 			}, false, err.Error())
 		}
@@ -452,8 +452,8 @@ func (s *Server) UpdateProviderModelsByUUID(c *gin.Context) {
 	modelManager := s.config.GetModelManager()
 	models := modelManager.GetModels(uid)
 
-	if s.logger != nil {
-		s.logger.LogAction(obs.ActionFetchModels, map[string]interface{}{
+	if s.actionLogger != nil {
+		s.actionLogger.LogAction(obs.ActionFetchModels, map[string]interface{}{
 			"provider":     uid,
 			"models_count": len(models),
 		}, true, fmt.Sprintf("Successfully fetched %d models for provider %s", len(models), uid))

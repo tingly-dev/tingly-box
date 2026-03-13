@@ -13,15 +13,15 @@ import (
 
 // Handler handles rule HTTP requests
 type Handler struct {
-	config *config.Config
-	logger *obs.MemoryLogger
+	config       *config.Config
+	actionLogger *obs.ScopedLogger
 }
 
 // NewHandler creates a new rule handler
-func NewHandler(cfg *config.Config, logger *obs.MemoryLogger) *Handler {
+func NewHandler(cfg *config.Config, actionLogger *obs.ScopedLogger) *Handler {
 	return &Handler{
-		config: cfg,
-		logger: logger,
+		config:       cfg,
+		actionLogger: actionLogger,
 	}
 }
 
@@ -135,10 +135,11 @@ func (h *Handler) CreateRule(c *gin.Context) {
 	}
 
 	// Log the action
-	if h.logger != nil {
-		h.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
-			"name": rule.RequestModel,
-		}, true, fmt.Sprintf("Rule %s updated successfully", rule.RequestModel))
+	if h.actionLogger != nil {
+		h.actionLogger.LogAction("update_rule", map[string]interface{}{
+			"uuid":          rule.UUID,
+			"request_model": rule.RequestModel,
+		}, true, fmt.Sprintf("Rule %s created successfully", rule.UUID))
 	}
 
 	response := UpdateRuleResponse{
@@ -197,9 +198,9 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 	}
 
 	// Log the action
-	if h.logger != nil {
-		h.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
-			"name": uid,
+	if h.actionLogger != nil {
+		h.actionLogger.LogAction("update_rule", map[string]interface{}{
+			"uuid": uid,
 		}, true, fmt.Sprintf("Rule %s updated successfully", uid))
 	}
 

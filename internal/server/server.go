@@ -41,10 +41,10 @@ type Server struct {
 	engine     *gin.Engine
 	httpServer *http.Server
 	watcher    *config.Watcher
-	logger     *obs.MemoryLogger
 
 	// multi-mode logger for text + JSON + memory output
-	multiLogger *obs.MultiLogger
+	multiLogger  *obs.MultiLogger
+	actionLogger *obs.ScopedLogger
 
 	// middleware
 	errorMW         *middleware.ErrorLogMiddleware
@@ -241,6 +241,7 @@ func WithDebug(enabled bool) ServerOption {
 func WithMultiLogger(logger *obs.MultiLogger) ServerOption {
 	return func(s *Server) {
 		s.multiLogger = logger
+		s.actionLogger = logger.WithSource(obs.LogSourceAction)
 	}
 }
 
@@ -330,14 +331,8 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		logrus.Debugf("Using existing model token from global config")
 	}
 
-	// Initialize memory logger
-	memoryLogger, err := obs.NewMemoryLogger()
-	if err != nil {
-		logrus.Debugf("Warning: Failed to initialize memory logger: %v", err)
-		memoryLogger = nil
-	}
-
-	// Initialize debug middleware (only if debug mode is enabled)
+	// Create server struct first with applied options
+	server.jwtManager = jwtManager
 	var errorMW *middleware.ErrorLogMiddleware
 	errorLogPath := filepath.Join(cfg.ConfigDir, constant.LogDirName, constant.DebugLogFileName)
 	errorMW = middleware.NewErrorLogMiddleware(errorLogPath, 10)
@@ -357,7 +352,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Create server struct first with applied options
 	server.jwtManager = jwtManager
 	server.engine = gin.New()
-	server.logger = memoryLogger
 	server.clientPool = client.NewClientPool() // Initialize client pool
 	server.errorMW = errorMW
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
@@ -427,7 +421,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.oauthRefresher = tokenRefresher
 
 	// Initialize OAuth handler
-	server.oauthHandler = oauthmodule.NewHandler(oauthManager, cfg, server.logger)
+	// Get action logger for OAuth handler
+	actionLogger := server.multiLogger.WithSource(obs.LogSourceAction)
+	server.oauthHandler = oauthmodule.NewHandler(oauthManager, cfg, actionLogger)
 	// Set callback server manager (the server itself implements this interface)
 	server.oauthHandler.SetCallbackServerManager(server)
 

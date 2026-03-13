@@ -338,8 +338,8 @@ func (s *Server) GetHistory(c *gin.Context) {
 		Success: true,
 	}
 
-	if s.logger != nil {
-		history := s.logger.GetHistory(50)
+	if s.actionLogger != nil {
+		history := s.actionLogger.GetMemoryLatest(50)
 		response.Data = history
 	} else {
 		response.Data = []interface{}{}
@@ -400,8 +400,8 @@ func (s *Server) StopServer(c *gin.Context) {
 	}
 
 	// Log the action
-	if s.logger != nil {
-		s.logger.LogAction(obs.ActionStopServer, map[string]interface{}{
+	if s.actionLogger != nil {
+		s.actionLogger.LogAction(obs.ActionStopServer, map[string]interface{}{
 			"source": "web_ui",
 		}, true, "Server stopped via web interface")
 	}
@@ -622,7 +622,8 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	)
 
 	// Rule Management - register from rule module
-	ruleHandler := rulemodule.NewHandler(s.config, s.logger)
+	actionLogger := s.multiLogger.WithSource(obs.LogSourceAction)
+	ruleHandler := rulemodule.NewHandler(s.config, actionLogger)
 	rulemodule.RegisterRoutes(apiV1, ruleHandler)
 
 	// Scenario Management - register from scenario module

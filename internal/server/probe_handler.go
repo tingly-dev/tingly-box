@@ -48,8 +48,8 @@ func (s *Server) HandleProbeProvider(c *gin.Context) {
 	responseTime := time.Since(startTime).Milliseconds()
 
 	if err != nil {
-		if s.logger != nil {
-			s.logger.LogAction(obs.ActionFetchModels, map[string]interface{}{
+		if s.actionLogger != nil {
+			s.actionLogger.LogAction(obs.ActionFetchModels, map[string]interface{}{
 				"provider": req.Name,
 				"api_base": req.APIBase,
 			}, false, err.Error())
@@ -66,8 +66,8 @@ func (s *Server) HandleProbeProvider(c *gin.Context) {
 	}
 
 	// Log successful test
-	if s.logger != nil {
-		s.logger.LogAction(obs.ActionFetchModels, map[string]interface{}{
+	if s.actionLogger != nil {
+		s.actionLogger.LogAction(obs.ActionFetchModels, map[string]interface{}{
 			"provider":      req.Name,
 			"api_base":      req.APIBase,
 			"valid":         valid,
