@@ -109,6 +109,21 @@ func (s *Server) GetSystemLogStats(c *gin.Context) {
 	})
 }
 
+// GetSystemLogLevel returns the current system log level
+func (s *Server) GetSystemLogLevel(c *gin.Context) {
+	if s.multiLogger == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "System logger not available",
+		})
+		return
+	}
+
+	level := s.multiLogger.GetLevel()
+	c.JSON(http.StatusOK, gin.H{
+		"level": level.String(),
+	})
+}
+
 // SystemLogLevelRequest represents a request to set the log level
 type SystemLogLevelRequest struct {
 	Level string `json:"level" binding:"required"`

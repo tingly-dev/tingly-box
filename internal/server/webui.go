@@ -532,6 +532,10 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithDescription("Get system log statistics"),
 		swagger.WithTags("system-logs"),
 	)
+	apiV1.GET("/system/logs/level", s.GetSystemLogLevel,
+		swagger.WithDescription("Get the current system log level"),
+		swagger.WithTags("system-logs"),
+	)
 	apiV1.POST("/system/logs/level", s.SetSystemLogLevel,
 		swagger.WithDescription("Set the minimum log level for system logs"),
 		swagger.WithTags("system-logs"),
