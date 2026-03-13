@@ -118,6 +118,11 @@ func startServer(appManager *AppManager, opts options.StartServerOptions) error 
 		return fmt.Errorf("failed to initialize multi-mode logger: %w", err)
 	}
 
+	// Sync multiLogger level with logrus level based on debug flag
+	if opts.EnableDebug {
+		multiLogger.SetLevel(logrus.DebugLevel)
+	}
+
 	// Set up logrus to write to both stdout and file with rotation
 	if opts.Daemon {
 		// In daemon mode, only write to file

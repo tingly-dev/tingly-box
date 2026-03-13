@@ -280,6 +280,13 @@ func (m *MultiLogger) SetLevel(level logrus.Level) {
 	}
 }
 
+// GetLevel returns the current minimum log level
+func (m *MultiLogger) GetLevel() logrus.Level {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.level
+}
+
 // Write implements io.Writer for text output
 func (m *MultiLogger) Write(p []byte) (n int, err error) {
 	m.mu.RLock()
@@ -301,8 +308,8 @@ func (m *MultiLogger) WriteEntry(entry *logrus.Entry) error {
 		return nil
 	}
 
-	// Extract source from fields if present
-	source := LogSourceUnknown
+	// Extract source from fields, default to system if not present
+	source := LogSourceSystem
 	if src, ok := entry.Data["source"].(string); ok {
 		source = LogSource(src)
 	}
