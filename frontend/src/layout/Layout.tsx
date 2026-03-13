@@ -17,7 +17,9 @@ import {
     Settings as SystemIcon,
     Today as TodayIcon,
     Send as UserPromptIcon,
-    Security
+    Security,
+    Rule,
+    Storefront
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -223,7 +225,23 @@ const Layout = ({ children }: LayoutProps) => {
                 key: 'guardrails',
                 icon: <Security sx={{ fontSize: 22 }} />,
                 label: 'Guardrails',
-                path: '/guardrails',
+                children: [
+                    {
+                        path: '/guardrails',
+                        label: 'Overview',
+                        icon: <Security sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/guardrails/rules',
+                        label: 'Rules',
+                        icon: <Rule sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/guardrails/market',
+                        label: 'Rule Market',
+                        icon: <Storefront sx={{ fontSize: 20 }} />,
+                    },
+                ],
             }] : []),
             {
                 key: 'credential',

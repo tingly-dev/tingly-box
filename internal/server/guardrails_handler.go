@@ -64,6 +64,12 @@ type guardrailsRuleUpdateResponse struct {
 	RuleID  string `json:"rule_id"`
 }
 
+type guardrailsRuleDeleteResponse struct {
+	Success bool   `json:"success"`
+	Path    string `json:"path"`
+	RuleID  string `json:"rule_id"`
+}
+
 type guardrailsRuleCreateRequest struct {
 	ID      string                 `json:"id" binding:"required"`
 	Name    string                 `json:"name" binding:"required"`
@@ -370,6 +376,79 @@ func (s *Server) CreateGuardrailsRule(c *gin.Context) {
 		Success: true,
 		Path:    path,
 		RuleID:  req.ID,
+	})
+}
+
+// DeleteGuardrailsRule deletes a guardrails rule and reloads the engine.
+func (s *Server) DeleteGuardrailsRule(c *gin.Context) {
+	if s.config == nil || s.config.ConfigDir == "" {
+		c.JSON(500, gin.H{"success": false, "error": "config directory not set"})
+		return
+	}
+
+	ruleID := c.Param("id")
+	if strings.TrimSpace(ruleID) == "" {
+		c.JSON(400, gin.H{"success": false, "error": "rule id is required"})
+		return
+	}
+
+	path, err := ensureGuardrailsPath(s.config.ConfigDir)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	cfg, err := decodeGuardrailsConfig(data)
+	if err != nil {
+		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	nextRules := make([]guardrails.RuleConfig, 0, len(cfg.Rules))
+	found := false
+	for _, rule := range cfg.Rules {
+		if rule.ID == ruleID {
+			found = true
+			continue
+		}
+		nextRules = append(nextRules, rule)
+	}
+	if !found {
+		c.JSON(404, gin.H{"success": false, "error": "rule not found"})
+		return
+	}
+
+	cfg.Rules = nextRules
+	updated, err := yaml.Marshal(cfg)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	engine, err := guardrails.BuildEngine(cfg, guardrails.Dependencies{})
+	if err != nil {
+		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	if err := writeFileAtomic(path, updated); err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	s.guardrailsEngine = engine
+	logrus.Infof("Guardrails rule deleted: %s", ruleID)
+
+	c.JSON(200, guardrailsRuleDeleteResponse{
+		Success: true,
+		Path:    path,
+		RuleID:  ruleID,
 	})
 }
 

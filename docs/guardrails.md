@@ -35,21 +35,23 @@ rules:
       verdict: "block"
 ```
 
-For Claude Code integrations, you can combine a **pre-execution** command block
-with a **post-execution** tool_result filter:
+For Claude Code integrations, you can combine a semantic **pre-execution**
+command policy with a **post-execution** tool_result filter:
 
 ```yaml
   - id: "block-ssh-access"
     name: "Block SSH directory access"
-    type: "text_match"
+    type: "command_policy"
     enabled: true
     scope:
       scenarios: ["anthropic"]
       directions: ["response"]
       content_types: ["command"]
     params:
-      patterns: ["~/.ssh", "/.ssh", "id_rsa", "authorized_keys"]
-      targets: ["command"]
+      kinds: ["shell"]
+      actions: ["read"]
+      resources: ["~/.ssh", "/.ssh"]
+      resource_match: "prefix"
       verdict: "block"
       reason: "ssh access command blocked"
 
@@ -80,6 +82,22 @@ Common params:
 - `targets` (optional): `text`, `messages`, `command`
 - `use_regex` (optional)
 - `case_sensitive` (optional)
+- `verdict` (optional)
+- `reason` (optional)
+
+### command_policy
+
+Matches normalized command semantics instead of raw argument strings. This is
+better for rules like "do not read `~/.ssh`" because the rule can target
+`actions + resources` directly.
+
+Common params:
+
+- `kinds` (optional): e.g. `shell`
+- `actions` (optional): e.g. `read`, `write`, `delete`, `execute`, `transfer`
+- `resources` (optional): paths or other extracted resources
+- `resource_match` (optional): `prefix`, `contains`, `exact`
+- `terms` (optional): fallback term matching against normalized command terms
 - `verdict` (optional)
 - `reason` (optional)
 

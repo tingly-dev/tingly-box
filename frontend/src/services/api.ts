@@ -579,6 +579,12 @@ export const api = {
         });
     },
 
+    deleteGuardrailsRule: async (id: string): Promise<any> => {
+        return fetchUIAPI(`/guardrails/rule/${id}`, {
+            method: 'DELETE',
+        });
+    },
+
     createGuardrailsRule: async (payload: any): Promise<any> => {
         return fetchUIAPI('/guardrails/rule', {
             method: 'POST',

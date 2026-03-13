@@ -129,3 +129,43 @@ func TestTextMatchRuleTargetsCommand(t *testing.T) {
 		t.Fatalf("expected block verdict, got %s", res.Verdict)
 	}
 }
+
+func TestTextMatchRuleTargetsCommandIgnoresDescriptionNoise(t *testing.T) {
+	cfg := RuleConfig{
+		ID:      "cmd-shell-only",
+		Name:    "Command Shell Only",
+		Type:    RuleTypeTextMatch,
+		Enabled: true,
+		Params: map[string]interface{}{
+			"patterns": []string{"ssh directory"},
+			"targets":  []string{"command"},
+			"verdict":  "block",
+		},
+	}
+
+	rule, err := NewTextMatchRuleFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("new rule: %v", err)
+	}
+
+	res, err := rule.Evaluate(context.Background(), Input{
+		Scenario:  "anthropic",
+		Model:     "claude-3.7-sonnet",
+		Direction: DirectionResponse,
+		Content: Content{
+			Command: &Command{
+				Name: "bash",
+				Arguments: map[string]interface{}{
+					"command":     "ls -la ~/.ssh",
+					"description": "Inspect the ssh directory contents",
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if res.Verdict != VerdictAllow {
+		t.Fatalf("expected allow verdict, got %s", res.Verdict)
+	}
+}

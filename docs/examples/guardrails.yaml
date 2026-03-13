@@ -45,15 +45,17 @@ rules:
   # Pre-execution blocking (tool_use): stop risky commands before they run
   - id: "block-ssh-access"
     name: "Block SSH directory access"
-    type: "text_match"
+    type: "command_policy"
     enabled: true
     scope:
       scenarios: ["anthropic"]
       directions: ["response"]
       content_types: ["command"]
     params:
-      patterns: ["~/.ssh", "/.ssh", "id_rsa", "authorized_keys"]
-      targets: ["command"]
+      kinds: ["shell"]
+      actions: ["read"]
+      resources: ["~/.ssh", "/.ssh"]
+      resource_match: "prefix"
       verdict: "block"
       reason: "ssh access command blocked"
 

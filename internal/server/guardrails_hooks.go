@@ -422,10 +422,15 @@ func (a *guardrailsAccumulator) ingestContentBlock(index int, block map[string]i
 		a.commandFound = true
 	}
 	if input, ok := block["input"].(map[string]interface{}); ok {
-		payload, err := json.Marshal(input)
-		if err == nil {
-			if state := a.getOrCreateToolUse(index); state != nil {
-				state.args = string(payload)
+		if len(input) > 0 {
+			// Anthropic may send an empty object at block start and stream the real
+			// JSON via input_json_delta afterwards. Ignore the empty placeholder so
+			// we do not end up concatenating "{}" with the later partial JSON.
+			payload, err := json.Marshal(input)
+			if err == nil {
+				if state := a.getOrCreateToolUse(index); state != nil {
+					state.args = string(payload)
+				}
 			}
 		}
 	}
@@ -585,6 +590,29 @@ func guardrailsBlockMessageForCommand(result guardrails.Result, name string, arg
 func formatGuardrailsCommand(name string, args map[string]interface{}) string {
 	if name == "" {
 		return "<unknown>"
+	}
+	cmd := &guardrails.Command{
+		Name:      name,
+		Arguments: args,
+	}
+	cmd.AttachDerivedFields()
+	if cmd.Normalized != nil {
+		parts := []string{name}
+		if len(cmd.Normalized.Actions) > 0 {
+			parts = append(parts, "actions="+strings.Join(cmd.Normalized.Actions, ","))
+		}
+		if len(cmd.Normalized.Resources) > 0 {
+			parts = append(parts, "resources="+strings.Join(cmd.Normalized.Resources, ","))
+		}
+		if cmd.Normalized.Raw != "" {
+			raw := cmd.Normalized.Raw
+			const maxRawLen = 180
+			if len(raw) > maxRawLen {
+				raw = raw[:maxRawLen] + "..."
+			}
+			parts = append(parts, "raw="+raw)
+		}
+		return strings.Join(parts, " ")
 	}
 	if len(args) == 0 {
 		return name + " {}"

@@ -637,6 +637,10 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithDescription("Update a guardrails rule and reload engine"),
 		swagger.WithTags("guardrails"),
 	)
+	apiV1.DELETE("/guardrails/rule/:id", s.DeleteGuardrailsRule,
+		swagger.WithDescription("Delete a guardrails rule and reload engine"),
+		swagger.WithTags("guardrails"),
+	)
 	apiV1.POST("/guardrails/rule", s.CreateGuardrailsRule,
 		swagger.WithDescription("Create a new guardrails rule and reload engine"),
 		swagger.WithTags("guardrails"),
