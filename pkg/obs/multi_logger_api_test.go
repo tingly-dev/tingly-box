@@ -113,7 +113,7 @@ func TestScopedLoggerLogAction(t *testing.T) {
 		assert.NotNil(t, latest.Data["details"])
 	})
 
-	t.Run("GetMemoryLatest returns correct number of entries", func(t *testing.T) {
+	t.Run("GetLatestEntries returns correct number of entries", func(t *testing.T) {
 		actionLogger := multiLogger.WithSource(LogSourceAction)
 
 		// Clear first
@@ -129,7 +129,7 @@ func TestScopedLoggerLogAction(t *testing.T) {
 		assert.Equal(t, 3, len(latest))
 	})
 
-	t.Run("ClearMemory clears all entries", func(t *testing.T) {
+	t.Run("Clear clears all entries", func(t *testing.T) {
 		actionLogger := multiLogger.WithSource(LogSourceAction)
 
 		// Add some entries

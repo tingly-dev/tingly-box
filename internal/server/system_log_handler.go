@@ -155,9 +155,6 @@ func (s *Server) SetSystemLogLevel(c *gin.Context) {
 
 	s.multiLogger.SetLevel(level)
 	logrus.SetLevel(level)
-	if s.multiLogger != nil {
-		s.multiLogger.SetLevel(level)
-	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Log level updated",

@@ -83,32 +83,22 @@ func getLogLevel(statusCode int) logrus.Level {
 	return logrus.InfoLevel
 }
 
-// GetMemoryEntries returns all log entries from memory in chronological order
-func (m *MultiModeMemoryLogMiddleware) GetMemoryEntries() []*logrus.Entry {
+// GetEntries returns all log entries from memory in chronological order
+func (m *MultiModeMemoryLogMiddleware) GetEntries() []*logrus.Entry {
 	// Get the HTTP scoped memory sink from MultiLogger
 	httpLogger := m.multiLogger.WithSource(obs.LogSourceHTTP)
 	return httpLogger.GetMemoryEntries()
 }
 
-// GetEntries returns all log entries from memory in chronological order (alias for compatibility)
-func (m *MultiModeMemoryLogMiddleware) GetEntries() []*logrus.Entry {
-	return m.GetMemoryEntries()
-}
-
-// GetMemoryLatest returns the newest N log entries from memory
-func (m *MultiModeMemoryLogMiddleware) GetMemoryLatest(n int) []*logrus.Entry {
+// GetLatestEntries returns the newest N log entries from memory
+func (m *MultiModeMemoryLogMiddleware) GetLatestEntries(n int) []*logrus.Entry {
 	// Get the HTTP scoped memory sink from MultiLogger
 	httpLogger := m.multiLogger.WithSource(obs.LogSourceHTTP)
 	return httpLogger.GetMemoryLatest(n)
 }
 
-// GetLatest returns the newest N log entries from memory (alias for compatibility)
-func (m *MultiModeMemoryLogMiddleware) GetLatest(n int) []*logrus.Entry {
-	return m.GetMemoryLatest(n)
-}
-
-// GetMemoryEntriesSince returns log entries from memory after the specified time
-func (m *MultiModeMemoryLogMiddleware) GetMemoryEntriesSince(since time.Time) []*logrus.Entry {
+// GetEntriesSince returns log entries from memory after the specified time
+func (m *MultiModeMemoryLogMiddleware) GetEntriesSince(since time.Time) []*logrus.Entry {
 	// Get the HTTP scoped memory sink from MultiLogger
 	memorySink := m.multiLogger.GetMemorySink(obs.LogSourceHTTP)
 	if memorySink == nil {
@@ -117,13 +107,8 @@ func (m *MultiModeMemoryLogMiddleware) GetMemoryEntriesSince(since time.Time) []
 	return memorySink.GetEntriesSince(since)
 }
 
-// GetEntriesSince returns log entries from memory after the specified time (alias for compatibility)
-func (m *MultiModeMemoryLogMiddleware) GetEntriesSince(since time.Time) []*logrus.Entry {
-	return m.GetMemoryEntriesSince(since)
-}
-
-// GetMemoryEntriesByLevel returns log entries from memory matching the specified level
-func (m *MultiModeMemoryLogMiddleware) GetMemoryEntriesByLevel(level logrus.Level) []*logrus.Entry {
+// GetEntriesByLevel returns log entries from memory matching the specified level
+func (m *MultiModeMemoryLogMiddleware) GetEntriesByLevel(level logrus.Level) []*logrus.Entry {
 	// Get the HTTP scoped memory sink from MultiLogger
 	memorySink := m.multiLogger.GetMemorySink(obs.LogSourceHTTP)
 	if memorySink == nil {
@@ -132,34 +117,19 @@ func (m *MultiModeMemoryLogMiddleware) GetMemoryEntriesByLevel(level logrus.Leve
 	return memorySink.GetEntriesByLevel(level)
 }
 
-// GetEntriesByLevel returns log entries from memory matching the specified level (alias for compatibility)
-func (m *MultiModeMemoryLogMiddleware) GetEntriesByLevel(level logrus.Level) []*logrus.Entry {
-	return m.GetMemoryEntriesByLevel(level)
-}
-
-// ClearMemory removes all log entries from memory
-func (m *MultiModeMemoryLogMiddleware) ClearMemory() {
+// Clear removes all log entries from memory
+func (m *MultiModeMemoryLogMiddleware) Clear() {
 	// Get the HTTP scoped memory sink from MultiLogger and clear it
 	httpLogger := m.multiLogger.WithSource(obs.LogSourceHTTP)
 	httpLogger.ClearMemory()
 }
 
-// Clear removes all log entries from memory (alias for compatibility)
-func (m *MultiModeMemoryLogMiddleware) Clear() {
-	m.ClearMemory()
-}
-
-// MemorySize returns the current number of stored log entries in memory
-func (m *MultiModeMemoryLogMiddleware) MemorySize() int {
+// Size returns the current number of stored log entries in memory
+func (m *MultiModeMemoryLogMiddleware) Size() int {
 	// Get the HTTP scoped memory sink from MultiLogger and return its size
 	memorySink := m.multiLogger.GetMemorySink(obs.LogSourceHTTP)
 	if memorySink == nil {
 		return 0
 	}
 	return memorySink.Size()
-}
-
-// Size returns the current number of stored log entries in memory (alias for compatibility)
-func (m *MultiModeMemoryLogMiddleware) Size() int {
-	return m.MemorySize()
 }
