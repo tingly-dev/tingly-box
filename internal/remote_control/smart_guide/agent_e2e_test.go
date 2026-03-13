@@ -24,10 +24,11 @@ func TestRealAgentExecution(t *testing.T) {
 		REAL_APIKey = "tingly-box-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiJ0ZXN0LWNsaWVudCIsImV4cCI6MTc2NjQwMzQwNSwiaWF0IjoxNzY2MzE3MDA1fQ.AHtmsHxGGJ0jtzvrTZMHC3kfl3Os94HOhMA-zXFtHXQ"
 
 		// REAL_BaseURL is the base URL for the model API (leave empty for official API)
-		REAL_BaseURL = "http://localhost:12580/tingly/openai"
+		// MENTION: we only use anthropic since tingly-box can serve translation.
+		REAL_BaseURL = "http://localhost:12580/tingly/anthropic"
 
 		// REAL_Model is the model identifier (e.g., "claude-sonnet-4-6")
-		REAL_Model = "tingly-ds"
+		REAL_Model = "tingly-box"
 
 		// REAL_ProviderUUID is a fake UUID for testing (only used internally)
 		REAL_ProviderUUID = "bfd637ca-e9d6-11f0-b967-aaf5c138276e"
@@ -66,6 +67,7 @@ func TestRealAgentExecution(t *testing.T) {
 	assert.NotNil(t, testAgent)
 
 	t.Logf("Agent created successfully with model: %s", REAL_Model)
+	t.Logf("Agent Tools: %s", testAgent.GetToolkit().GetSchemas())
 
 	// Test a simple conversation
 	ctx := context.Background()
