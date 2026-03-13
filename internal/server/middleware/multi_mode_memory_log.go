@@ -16,7 +16,8 @@ import (
 // 1. Multi-mode logger (text + JSON files for persistence)
 // 2. Memory (circular buffer for quick API access)
 type MultiModeMemoryLogMiddleware struct {
-	logger *logrus.Logger
+	logger      *logrus.Logger
+	multiLogger *obs.MultiLogger
 }
 
 // NewMultiModeMemoryLogMiddleware creates a new middleware with both persistent and memory logging
@@ -25,7 +26,8 @@ func NewMultiModeMemoryLogMiddleware(multiLogger *obs.MultiLogger) *MultiModeMem
 	httpLogger := multiLogger.GetLogrusLogger(obs.LogSourceHTTP)
 
 	return &MultiModeMemoryLogMiddleware{
-		logger: httpLogger,
+		logger:      httpLogger,
+		multiLogger: multiLogger,
 	}
 }
 
@@ -84,9 +86,9 @@ func getLogLevel(statusCode int) logrus.Level {
 
 // GetMemoryEntries returns all log entries from memory in chronological order
 func (m *MultiModeMemoryLogMiddleware) GetMemoryEntries() []*logrus.Entry {
-	// This method is kept for API compatibility but is no longer used
-	// The memory sink is managed internally by MultiLogger
-	return []*logrus.Entry{}
+	// Get the HTTP scoped memory sink from MultiLogger
+	httpLogger := m.multiLogger.WithSource(obs.LogSourceHTTP)
+	return httpLogger.GetMemoryEntries()
 }
 
 // GetEntries returns all log entries from memory in chronological order (alias for compatibility)
@@ -96,8 +98,9 @@ func (m *MultiModeMemoryLogMiddleware) GetEntries() []*logrus.Entry {
 
 // GetMemoryLatest returns the newest N log entries from memory
 func (m *MultiModeMemoryLogMiddleware) GetMemoryLatest(n int) []*logrus.Entry {
-	// This method is kept for API compatibility but is no longer used
-	return []*logrus.Entry{}
+	// Get the HTTP scoped memory sink from MultiLogger
+	httpLogger := m.multiLogger.WithSource(obs.LogSourceHTTP)
+	return httpLogger.GetMemoryLatest(n)
 }
 
 // GetLatest returns the newest N log entries from memory (alias for compatibility)
@@ -107,7 +110,12 @@ func (m *MultiModeMemoryLogMiddleware) GetLatest(n int) []*logrus.Entry {
 
 // GetMemoryEntriesSince returns log entries from memory after the specified time
 func (m *MultiModeMemoryLogMiddleware) GetMemoryEntriesSince(since time.Time) []*logrus.Entry {
-	return []*logrus.Entry{}
+	// Get the HTTP scoped memory sink from MultiLogger
+	memorySink := m.multiLogger.GetMemorySink(obs.LogSourceHTTP)
+	if memorySink == nil {
+		return []*logrus.Entry{}
+	}
+	return memorySink.GetEntriesSince(since)
 }
 
 // GetEntriesSince returns log entries from memory after the specified time (alias for compatibility)
@@ -117,7 +125,12 @@ func (m *MultiModeMemoryLogMiddleware) GetEntriesSince(since time.Time) []*logru
 
 // GetMemoryEntriesByLevel returns log entries from memory matching the specified level
 func (m *MultiModeMemoryLogMiddleware) GetMemoryEntriesByLevel(level logrus.Level) []*logrus.Entry {
-	return []*logrus.Entry{}
+	// Get the HTTP scoped memory sink from MultiLogger
+	memorySink := m.multiLogger.GetMemorySink(obs.LogSourceHTTP)
+	if memorySink == nil {
+		return []*logrus.Entry{}
+	}
+	return memorySink.GetEntriesByLevel(level)
 }
 
 // GetEntriesByLevel returns log entries from memory matching the specified level (alias for compatibility)
@@ -127,7 +140,9 @@ func (m *MultiModeMemoryLogMiddleware) GetEntriesByLevel(level logrus.Level) []*
 
 // ClearMemory removes all log entries from memory
 func (m *MultiModeMemoryLogMiddleware) ClearMemory() {
-	// No-op - memory is managed by MultiLogger
+	// Get the HTTP scoped memory sink from MultiLogger and clear it
+	httpLogger := m.multiLogger.WithSource(obs.LogSourceHTTP)
+	httpLogger.ClearMemory()
 }
 
 // Clear removes all log entries from memory (alias for compatibility)
@@ -137,8 +152,12 @@ func (m *MultiModeMemoryLogMiddleware) Clear() {
 
 // MemorySize returns the current number of stored log entries in memory
 func (m *MultiModeMemoryLogMiddleware) MemorySize() int {
-	// Return 0 - memory is managed by MultiLogger
-	return 0
+	// Get the HTTP scoped memory sink from MultiLogger and return its size
+	memorySink := m.multiLogger.GetMemorySink(obs.LogSourceHTTP)
+	if memorySink == nil {
+		return 0
+	}
+	return memorySink.Size()
 }
 
 // Size returns the current number of stored log entries in memory (alias for compatibility)
