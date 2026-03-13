@@ -110,20 +110,29 @@ func startServer(appManager *AppManager, opts options.StartServerOptions) error 
 		logFile = appConfig.ConfigDir() + "/log/tingly-box.log"
 	}
 
-	// Create rotating log writer
-	logWriter := daemon.NewLogger(daemon.DefaultLogRotationConfig(logFile))
+	// Create multi-mode logger (text + JSON)
+	multiLoggerCfg := obs.DefaultMultiLoggerConfig(appConfig.ConfigDir())
+	multiLoggerCfg.TextLogPath = logFile
+	multiLogger, err := obs.NewMultiLogger(multiLoggerCfg)
+	if err != nil {
+		return fmt.Errorf("failed to initialize multi-mode logger: %w", err)
+	}
 
 	// Set up logrus to write to both stdout and file with rotation
 	if opts.Daemon {
-		// In daemon mode, only write to file ba
-		logrus.SetOutput(logWriter)
+		// In daemon mode, only write to file
+		logrus.SetOutput(multiLogger)
 	} else {
 		// In non-daemon mode, write to both stdout and file
-		multiWriter := io.MultiWriter(os.Stdout, logWriter)
+		multiWriter := io.MultiWriter(os.Stdout, multiLogger)
 		logrus.SetOutput(multiWriter)
 	}
 
+	// Add hook for JSON logging
+	logrus.AddHook(obs.NewMultiLoggerHook(multiLogger, nil))
+
 	logrus.Infof("Logging to file: %s (with rotation)", logFile)
+	logrus.Infof("JSON logging to: %s (for frontend/API)", multiLoggerCfg.JSONLogPath)
 
 	// Handle daemon mode
 	if opts.Daemon {
@@ -229,6 +238,7 @@ func startServer(appManager *AppManager, opts options.StartServerOptions) error 
 		server.WithRecordMode(obs.RecordMode(opts.RecordMode)),
 		server.WithRecordDir(opts.RecordDir),
 		server.WithExperimentalFeatures(opts.ExperimentalFeatures),
+		server.WithMultiLogger(multiLogger),
 	)
 
 	// Setup signal handling for graceful shutdown

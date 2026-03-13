@@ -43,10 +43,13 @@ type Server struct {
 	watcher    *config.Watcher
 	logger     *obs.MemoryLogger
 
+	// multi-mode logger for text + JSON + memory output
+	multiLogger *obs.MultiLogger
+
 	// middleware
 	errorMW         *middleware.ErrorLogMiddleware
 	authMW          *middleware.AuthMiddleware
-	memoryLogMW     *middleware.MemoryLogMiddleware
+	memoryLogMW     *middleware.MultiModeMemoryLogMiddleware
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
 	healthMonitor   *loadbalance.HealthMonitor
@@ -234,6 +237,13 @@ func WithDebug(enabled bool) ServerOption {
 	}
 }
 
+// WithMultiLogger sets the multi-mode logger for the server
+func WithMultiLogger(logger *obs.MultiLogger) ServerOption {
+	return func(s *Server) {
+		s.multiLogger = logger
+	}
+}
+
 // IsFeatureEnabled checks if a specific feature is enabled
 func (s *Server) IsFeatureEnabled(feature string) bool {
 	return s.experimentalFeatures[feature]
@@ -367,8 +377,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		log.Panicf("Unknown recording mode %s", server.recordMode)
 	}
 
-	// Initialize memory log middleware for HTTP request logging
-	memoryLogMW := middleware.NewMemoryLogMiddleware(1000) // Store up to 1000 entries
+	// Initialize multi-mode memory log middleware for HTTP request logging
+	// Logs are written to both multi-mode logger (persistence) and memory (quick access)
+	memoryLogMW := middleware.NewMultiModeMemoryLogMiddleware(server.multiLogger)
 
 	// Initialize auth middleware
 	authMW := middleware.NewAuthMiddleware(cfg, jwtManager)
