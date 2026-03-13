@@ -44,6 +44,7 @@ func (m *MultiExporter) Export(ctx context.Context, res *metricdata.ResourceMetr
 	var firstErr error
 	for _, e := range m.exporters {
 		if err := e.Export(ctx, res); err != nil {
+			// Log error but continue with other exporters
 			if firstErr == nil {
 				firstErr = err
 			}

@@ -1,10 +1,27 @@
-package otel
+package tracker
 
 import (
 	"context"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+)
+
+// Attribute keys for token usage tracking
+// Note: Attribute names follow the original internal/obs/otel convention for compatibility
+var (
+	attrLLMProvider       = attribute.Key("llm.provider")
+	attrLLMProviderUUID   = attribute.Key("llm.provider.uuid")
+	attrLLMModel          = attribute.Key("llm.model")
+	attrLLMRequestModel   = attribute.Key("llm.request.model")
+	attrLLMTokenType      = attribute.Key("llm.token_type") // Underscore for backward compatibility
+	attrLLMScenario       = attribute.Key("llm.scenario")
+	attrLLMStreaming      = attribute.Key("llm.streaming")
+	attrLLMResponseStatus = attribute.Key("llm.response.status")
+	attrLLMErrorCode      = attribute.Key("llm.error.code")
+	attrLLMRuleUUID       = attribute.Key("llm.rule.uuid")
+	attrLLMUserTier       = attribute.Key("llm.user.tier")
+	attrLLMLatencyMs      = attribute.Key("llm.latency.ms")
 )
 
 // UsageOptions contains the options for recording token usage.
@@ -66,25 +83,27 @@ func NewTokenTracker(meter metric.Meter) (*TokenTracker, error) {
 
 	var err error
 
-	// Token usage counters
+	// Token usage counters - input tokens
 	tt.inputTokens, err = meter.Int64Counter(
-		"llm.token.usage",
-		metric.WithDescription("LLM token usage by type (input/output)"),
+		"llm.token.usage.input",
+		metric.WithDescription("LLM input/prompt token usage"),
 		metric.WithUnit("{token}"),
 	)
 	if err != nil {
 		return nil, err
 	}
 
+	// Token usage counters - output tokens
 	tt.outputTokens, err = meter.Int64Counter(
-		"llm.token.usage",
-		metric.WithDescription("LLM token usage by type (input/output)"),
+		"llm.token.usage.output",
+		metric.WithDescription("LLM output/completion token usage"),
 		metric.WithUnit("{token}"),
 	)
 	if err != nil {
 		return nil, err
 	}
 
+	// Total tokens counter
 	tt.totalTokens, err = meter.Int64Counter(
 		"llm.token.total",
 		metric.WithDescription("Total LLM tokens consumed (input + output)"),
@@ -131,36 +150,36 @@ func NewTokenTracker(meter metric.Meter) (*TokenTracker, error) {
 func (tt *TokenTracker) RecordUsage(ctx context.Context, opts UsageOptions) {
 	// Build common attributes
 	commonAttrs := []attribute.KeyValue{
-		AttrLLMProvider.String(opts.Provider),
-		AttrLLMProviderUUID.String(opts.ProviderUUID),
-		AttrLLMModel.String(opts.Model),
-		AttrLLMRequestModel.String(opts.RequestModel),
-		AttrLLMScenario.String(opts.Scenario),
-		AttrLLMStreaming.Bool(opts.Streamed),
-		AttrLLMResponseStatus.String(opts.Status),
+		attrLLMProvider.String(opts.Provider),
+		attrLLMProviderUUID.String(opts.ProviderUUID),
+		attrLLMModel.String(opts.Model),
+		attrLLMRequestModel.String(opts.RequestModel),
+		attrLLMScenario.String(opts.Scenario),
+		attrLLMStreaming.Bool(opts.Streamed),
+		attrLLMResponseStatus.String(opts.Status),
 	}
 
 	if opts.RuleUUID != "" {
-		commonAttrs = append(commonAttrs, AttrLLMRuleUUID.String(opts.RuleUUID))
+		commonAttrs = append(commonAttrs, attrLLMRuleUUID.String(opts.RuleUUID))
 	}
 	if opts.UserTier != "" {
-		commonAttrs = append(commonAttrs, AttrLLMUserTier.String(opts.UserTier))
+		commonAttrs = append(commonAttrs, attrLLMUserTier.String(opts.UserTier))
 	}
-
 	if opts.ErrorCode != "" {
-		commonAttrs = append(commonAttrs, AttrLLMErrorCode.String(opts.ErrorCode))
+		commonAttrs = append(commonAttrs, attrLLMErrorCode.String(opts.ErrorCode))
+	}
+	if opts.LatencyMs > 0 {
+		commonAttrs = append(commonAttrs, attrLLMLatencyMs.Int(opts.LatencyMs))
 	}
 
 	// Record input tokens
 	if opts.InputTokens > 0 {
-		inputAttrs := append(commonAttrs, AttrLLMTokenType.String("input"))
-		tt.inputTokens.Add(ctx, int64(opts.InputTokens), metric.WithAttributes(inputAttrs...))
+		tt.inputTokens.Add(ctx, int64(opts.InputTokens), metric.WithAttributes(commonAttrs...))
 	}
 
 	// Record output tokens
 	if opts.OutputTokens > 0 {
-		outputAttrs := append(commonAttrs, AttrLLMTokenType.String("output"))
-		tt.outputTokens.Add(ctx, int64(opts.OutputTokens), metric.WithAttributes(outputAttrs...))
+		tt.outputTokens.Add(ctx, int64(opts.OutputTokens), metric.WithAttributes(commonAttrs...))
 	}
 
 	// Record total tokens
@@ -177,7 +196,7 @@ func (tt *TokenTracker) RecordUsage(ctx context.Context, opts UsageOptions) {
 		tt.requestDuration.Record(ctx, float64(opts.LatencyMs), metric.WithAttributes(commonAttrs...))
 	}
 
-	// Record error if status is not success
+	// Record error if status is "error"
 	if opts.Status == "error" {
 		tt.requestError.Add(ctx, 1, metric.WithAttributes(commonAttrs...))
 	}

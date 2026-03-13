@@ -3,7 +3,6 @@ package exporter
 import (
 	"context"
 
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
@@ -12,14 +11,12 @@ import (
 
 // SQLiteExporter exports metrics to the existing SQLite database.
 // It maintains compatibility with the existing UsageRecord schema.
-// Note: Service stats are updated directly in the tracking.go recordOnService method.
 type SQLiteExporter struct {
 	usageStore *db.UsageStore
 }
 
 // NewSQLiteExporter creates a new SQLiteExporter.
-func NewSQLiteExporter(statsStore *db.StatsStore, usageStore *db.UsageStore) *SQLiteExporter {
-	// statsStore is not used directly as service stats are updated in tracking.go
+func NewSQLiteExporter(usageStore *db.UsageStore) *SQLiteExporter {
 	return &SQLiteExporter{
 		usageStore: usageStore,
 	}
@@ -68,18 +65,20 @@ func (e *SQLiteExporter) processSum(data metricdata.Sum[int64], metricData metri
 		// Extract attributes
 		provider := extractAttr(attrs, "llm.provider")
 		model := extractAttr(attrs, "llm.model")
-		tokenType := extractAttr(attrs, "llm.token_type")
 		scenario := extractAttr(attrs, "llm.scenario")
 		status := extractAttr(attrs, "llm.response.status")
 		providerUUID := extractAttr(attrs, "llm.provider.uuid")
 		ruleUUID := extractAttr(attrs, "llm.rule.uuid")
 
 		// Route to appropriate store based on metric name
+		// Support both new metric names (pkg/otel) for compatibility
 		switch metricData.Name {
-		case "llm.token.usage":
-			e.recordTokenUsage(provider, providerUUID, model, ruleUUID, scenario, tokenType, value, status)
+		case "llm.token.usage.input":
+			e.recordTokenUsage(provider, providerUUID, model, ruleUUID, scenario, "input", value, status)
+		case "llm.token.usage.output":
+			e.recordTokenUsage(provider, providerUUID, model, ruleUUID, scenario, "output", value, status)
 		case "llm.token.total":
-			// OTel token delta export removed.
+			// Total tokens handled via usage store
 		case "llm.request.count":
 			e.recordRequestCount(provider, providerUUID, model, ruleUUID, scenario, status, value)
 		case "llm.request.errors":
@@ -91,35 +90,26 @@ func (e *SQLiteExporter) processSum(data metricdata.Sum[int64], metricData metri
 // processHistogram processes a histogram metric (e.g., request duration).
 func (e *SQLiteExporter) processHistogram(data metricdata.Histogram[float64], metricData metricdata.Metrics) {
 	// Request duration is tracked via usage records, no separate histogram storage
-	for _, dp := range data.DataPoints {
-		attrs := dp.Attributes
-		_ = attrs
-		_ = dp
-	}
 }
 
 // processHistogramInt64 processes an int64 histogram metric.
 func (e *SQLiteExporter) processHistogramInt64(data metricdata.Histogram[int64], metricData metricdata.Metrics) {
 	// Request duration is tracked via usage records, no separate histogram storage
-	for _, dp := range data.DataPoints {
-		attrs := dp.Attributes
-		_ = attrs
-		_ = dp
-	}
 }
 
 // recordTokenUsage records token usage to the usage store.
+// Note: This is a placeholder for OTel SDK compatibility. Actual recording happens
+// in internal/server/usage_tracking.go via the TokenTracker, which writes to the
+// UsageStore directly. The SQLite exporter is primarily for metric collection,
+// while the detailed records are written through the tracking layer.
 func (e *SQLiteExporter) recordTokenUsage(provider, providerUUID, model, ruleUUID, scenario, tokenType string, tokens int64, status string) {
-	if e.usageStore == nil {
-		return
-	}
-
-	// The usage store handles detailed usage records
-	// Note: This is called for each metric data point (input/output separately)
-	// We'll aggregate these in the actual record writing
+	// Actual recording happens in usage_tracking.go via RecordUsage
+	// This exporter is primarily for OTel SDK compatibility
 }
 
 // recordRequestCount records a request count to the database.
+// Note: This is a placeholder for OTel SDK compatibility. Request counts are
+// tracked via usage records in internal/server/tracking.go.
 func (e *SQLiteExporter) recordRequestCount(provider, providerUUID, model, ruleUUID, scenario, status string, count int64) {
 	// Request counts are tracked via usage records in tracking.go
 }
@@ -133,13 +123,4 @@ func (e *SQLiteExporter) ForceFlush(ctx context.Context) error {
 // Shutdown shuts down the exporter.
 func (e *SQLiteExporter) Shutdown(ctx context.Context) error {
 	return nil
-}
-
-// extractAttr extracts an attribute value from the attribute set.
-func extractAttr(attrs attribute.Set, key string) string {
-	val, ok := attrs.Value(attribute.Key(key))
-	if !ok {
-		return ""
-	}
-	return val.AsString()
 }

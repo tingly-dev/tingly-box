@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
@@ -54,8 +53,6 @@ func (e *SinkExporter) Export(ctx context.Context, res *metricdata.ResourceMetri
 
 // convertToRecordEntry converts a metric to a RecordEntry and writes to the sink.
 func (e *SinkExporter) convertToRecordEntry(metricData metricdata.Metrics) {
-	// The sink records full request/response pairs, metrics are summary data
-	// We create a summary record entry for metric exports
 	switch data := metricData.Data.(type) {
 	case metricdata.Sum[int64]:
 		e.processSumForSink(data, metricData)
@@ -117,15 +114,4 @@ func (e *SinkExporter) ForceFlush(ctx context.Context) error {
 // Shutdown shuts down the exporter.
 func (e *SinkExporter) Shutdown(ctx context.Context) error {
 	return nil
-}
-
-// attrsToMap converts an attribute set to a map.
-func attrsToMap(attrs attribute.Set) map[string]string {
-	result := make(map[string]string)
-	iter := attrs.Iter()
-	for iter.Next() {
-		kv := iter.Attribute()
-		result[string(kv.Key)] = kv.Value.Emit()
-	}
-	return result
 }

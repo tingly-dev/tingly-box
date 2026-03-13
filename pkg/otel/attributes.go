@@ -1,10 +1,12 @@
+// Package otel provides OpenTelemetry-based observability for LLM token usage.
+// It implements metrics, traces, and logs collection with a collector/exporter
+// architecture for efficient batch processing.
 package otel
 
 import "go.opentelemetry.io/otel/attribute"
 
 // Semantic convention attributes following OpenLLMetry and OpenTelemetry standards
 // These attributes are used to annotate metrics with consistent, meaningful labels.
-
 var (
 	// AttrLLMProvider identifies the LLM provider (e.g., "openai", "anthropic", "google")
 	AttrLLMProvider = attribute.Key("llm.provider")
@@ -16,6 +18,7 @@ var (
 	AttrLLMRequestModel = attribute.Key("llm.request.model")
 
 	// AttrLLMTokenType identifies the type of token (input/output)
+	// Note: Uses underscore (llm.token_type) for backward compatibility with internal/obs/otel
 	AttrLLMTokenType = attribute.Key("llm.token_type")
 
 	// AttrLLMScenario identifies the API scenario (e.g., "openai", "anthropic", "claude_code")
@@ -38,4 +41,7 @@ var (
 
 	// AttrLLMUserTier identifies low-cardinality user class for enterprise traffic.
 	AttrLLMUserTier = attribute.Key("llm.user.tier")
+
+	// AttrLLMLatencyMs identifies the request latency in milliseconds
+	AttrLLMLatencyMs = attribute.Key("llm.latency.ms")
 )

@@ -9,7 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
-	"github.com/tingly-dev/tingly-box/internal/obs/otel"
+	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -88,7 +88,7 @@ func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens
 		if strings.TrimSpace(c.GetString("enterprise_user_id")) != "" {
 			userTier = "enterprise"
 		}
-		s.tokenTracker.RecordUsage(c.Request.Context(), otel.UsageOptions{
+		s.tokenTracker.RecordUsage(c.Request.Context(), tracker.UsageOptions{
 			Provider:     provider.Name,
 			ProviderUUID: provider.UUID,
 			Model:        model,
