@@ -200,7 +200,7 @@ func (a *TinglyBoxAgent) ReplyWithContext(ctx context.Context, text string, tool
 
 // GetGreeting returns the default greeting for new users
 func (a *TinglyBoxAgent) GetGreeting() string {
-	return DefaultGreeting
+	return DefaultGreeting()
 }
 
 // GetExecutor returns the tool executor

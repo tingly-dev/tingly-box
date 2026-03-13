@@ -84,10 +84,10 @@ func (hm *HandoffManager) ExecuteHandoff(ctx context.Context, state *HandoffStat
 	var message, nextHint string
 	switch state.ToAgent {
 	case AgentTypeClaudeCode:
-		message = HandoffToCCPrompt
+		message = HandoffToCCPrompt()
 		nextHint = "You can now use all Claude Code features. Type '@tb' to return to Smart Guide."
 	case AgentTypeTinglyBox:
-		message = HandoffToTBPrompt
+		message = HandoffToTBPrompt()
 		nextHint = "I'm here to help with setup. Type '@cc' when ready to code."
 	default:
 		message = fmt.Sprintf("Switched to %s", state.ToAgent)

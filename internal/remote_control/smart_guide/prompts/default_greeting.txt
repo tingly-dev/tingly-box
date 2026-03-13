@@ -1,0 +1,11 @@
+👋 Hi! I'm @tb (Tingly-Box Smart Guide)!
+
+I help you get set up before coding:
+• **Clone** repositories
+• **Navigate** directories
+• **Set up** your workspace
+• **Check** project status
+
+**What would you like to work on today?**
+
+When you're ready to start coding, type @cc to switch to Claude Code.

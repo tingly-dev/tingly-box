@@ -216,7 +216,7 @@ func TestTinglyBoxAgent_ReplyWithContext(t *testing.T) {
 
 func TestTinglyBoxAgent_GetGreeting(t *testing.T) {
 	agent := &TinglyBoxAgent{}
-	assert.Equal(t, DefaultGreeting, agent.GetGreeting())
+	assert.Equal(t, DefaultGreeting(), agent.GetGreeting())
 }
 
 func TestTinglyBoxAgent_GetExecutor(t *testing.T) {

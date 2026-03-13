@@ -1,0 +1,12 @@
+✅ Handoff complete!
+
+Switched from Smart Guide (@tb) to Claude Code (@cc)
+
+You can now use all code editing features:
+- Read and write files
+- Run tests
+- Edit code
+- Use bash commands
+- And much more!
+
+Type "@tb" anytime to return to Smart Guide.
