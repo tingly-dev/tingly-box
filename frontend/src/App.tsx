@@ -26,8 +26,6 @@ const UseOpenCodePage = lazy(() => import('./pages/scenario/UseOpenCodePage'));
 const UseXcodePage = lazy(() => import('./pages/scenario/UseXcodePage'));
 const CredentialPage = lazy(() => import('./pages/CredentialPage'));
 const System = lazy(() => import('./pages/System'));
-const HttpLogsPage = lazy(() => import('./pages/system/HttpLogsPage'));
-const SystemLogsPage = lazy(() => import('./pages/system/SystemLogsPage'));
 const LogsPage = lazy(() => import('./pages/system/LogsPage'));
 const DashboardPage = lazy(() => import('./pages/./DashboardPage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
