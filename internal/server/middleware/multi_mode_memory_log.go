@@ -7,8 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
 // MultiModeMemoryLogMiddleware provides Gin middleware with both persistent and memory log storage

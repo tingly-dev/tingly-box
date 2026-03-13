@@ -32,6 +32,7 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
+	obs2 "github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
 // Server represents the HTTP server
@@ -43,8 +44,8 @@ type Server struct {
 	watcher    *config.Watcher
 
 	// multi-mode logger for text + JSON + memory output
-	multiLogger  *obs.MultiLogger
-	actionLogger *obs.ScopedLogger
+	multiLogger  *obs2.MultiLogger
+	actionLogger *obs2.ScopedLogger
 
 	// middleware
 	errorMW         *middleware.ErrorLogMiddleware
@@ -238,10 +239,10 @@ func WithDebug(enabled bool) ServerOption {
 }
 
 // WithMultiLogger sets the multi-mode logger for the server
-func WithMultiLogger(logger *obs.MultiLogger) ServerOption {
+func WithMultiLogger(logger *obs2.MultiLogger) ServerOption {
 	return func(s *Server) {
 		s.multiLogger = logger
-		s.actionLogger = logger.WithSource(obs.LogSourceAction)
+		s.actionLogger = logger.WithSource(obs2.LogSourceAction)
 	}
 }
 
@@ -422,7 +423,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Initialize OAuth handler
 	// Get action logger for OAuth handler
-	actionLogger := server.multiLogger.WithSource(obs.LogSourceAction)
+	actionLogger := server.multiLogger.WithSource(obs2.LogSourceAction)
 	server.oauthHandler = oauthmodule.NewHandler(oauthManager, cfg, actionLogger)
 	// Set callback server manager (the server itself implements this interface)
 	server.oauthHandler.SetCallbackServerManager(server)

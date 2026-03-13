@@ -11,6 +11,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	obs2 "github.com/tingly-dev/tingly-box/pkg/obs"
 
 	"github.com/tingly-dev/tingly-box/internal/command/options"
 	"github.com/tingly-dev/tingly-box/internal/obs"
@@ -111,9 +112,9 @@ func startServer(appManager *AppManager, opts options.StartServerOptions) error 
 	}
 
 	// Create multi-mode logger (text + JSON)
-	multiLoggerCfg := obs.DefaultMultiLoggerConfig(appConfig.ConfigDir())
+	multiLoggerCfg := obs2.DefaultMultiLoggerConfig(appConfig.ConfigDir())
 	multiLoggerCfg.TextLogPath = logFile
-	multiLogger, err := obs.NewMultiLogger(multiLoggerCfg)
+	multiLogger, err := obs2.NewMultiLogger(multiLoggerCfg)
 	if err != nil {
 		return fmt.Errorf("failed to initialize multi-mode logger: %w", err)
 	}
@@ -134,7 +135,7 @@ func startServer(appManager *AppManager, opts options.StartServerOptions) error 
 	}
 
 	// Add hook for JSON logging
-	logrus.AddHook(obs.NewMultiLoggerHook(multiLogger, nil))
+	logrus.AddHook(obs2.NewMultiLoggerHook(multiLogger, nil))
 
 	logrus.Infof("Logging to file: %s (with rotation)", logFile)
 	logrus.Infof("JSON logging to: %s (for frontend/API)", multiLoggerCfg.JSONLogPath)

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -64,7 +63,7 @@ type MultiLogger struct {
 	level      logrus.Level
 
 	// Memory sinks by source - lazy initialization
-	memorySinks   map[LogSource]*pkgobs.MemoryLogHook
+	memorySinks   map[LogSource]*MemoryLogHook
 	memorySinksMu sync.RWMutex
 
 	// logrus loggers by source - cached for performance
@@ -159,7 +158,7 @@ func NewMultiLogger(cfg *MultiLoggerConfig) (*MultiLogger, error) {
 		textWriter:  textLogger,
 		jsonLogger:  jsonLogger,
 		level:       logrus.InfoLevel,
-		memorySinks: make(map[LogSource]*pkgobs.MemoryLogHook),
+		memorySinks: make(map[LogSource]*MemoryLogHook),
 		loggers:     make(map[LogSource]*logrus.Logger),
 	}
 
@@ -223,7 +222,7 @@ func (m *MultiLogger) GetLogrusLogger(source LogSource) *logrus.Logger {
 
 // GetMemorySink returns the memory sink for the specified source, creating it if necessary.
 // Returns nil if the source has no memory sink configured.
-func (m *MultiLogger) GetMemorySink(source LogSource) *pkgobs.MemoryLogHook {
+func (m *MultiLogger) GetMemorySink(source LogSource) *MemoryLogHook {
 	m.memorySinksMu.RLock()
 	sink, exists := m.memorySinks[source]
 	m.memorySinksMu.RUnlock()
@@ -238,7 +237,7 @@ func (m *MultiLogger) GetMemorySink(source LogSource) *pkgobs.MemoryLogHook {
 }
 
 // getOrCreateMemorySink creates or returns an existing memory sink
-func (m *MultiLogger) getOrCreateMemorySink(source LogSource, maxEntries int) *pkgobs.MemoryLogHook {
+func (m *MultiLogger) getOrCreateMemorySink(source LogSource, maxEntries int) *MemoryLogHook {
 	m.memorySinksMu.Lock()
 	defer m.memorySinksMu.Unlock()
 
@@ -247,7 +246,7 @@ func (m *MultiLogger) getOrCreateMemorySink(source LogSource, maxEntries int) *p
 		return sink
 	}
 
-	sink := pkgobs.NewMemoryLogHook(maxEntries)
+	sink := NewMemoryLogHook(maxEntries)
 	m.memorySinks[source] = sink
 	return sink
 }
@@ -424,7 +423,7 @@ func (s *ScopedLogger) GetLogrusLogger() *logrus.Logger {
 }
 
 // GetMemorySink returns the memory sink for this scope
-func (s *ScopedLogger) GetMemorySink() *pkgobs.MemoryLogHook {
+func (s *ScopedLogger) GetMemorySink() *MemoryLogHook {
 	return s.multiLogger.GetMemorySink(s.source)
 }
 

@@ -7,8 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
 // SystemLogEntry represents a system log entry for API response

@@ -26,6 +26,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 	"github.com/tingly-dev/tingly-box/pkg/swagger"
 )
 
@@ -626,7 +627,7 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	)
 
 	// Rule Management - register from rule module
-	actionLogger := s.multiLogger.WithSource(obs.LogSourceAction)
+	actionLogger := s.multiLogger.WithSource(pkgobs.LogSourceAction)
 	ruleHandler := rulemodule.NewHandler(s.config, actionLogger)
 	rulemodule.RegisterRoutes(apiV1, ruleHandler)
 
