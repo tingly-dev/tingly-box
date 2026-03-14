@@ -5,8 +5,6 @@ import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import { Box, Button, IconButton, Tooltip } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import EmptyStateGuide from '@/components/EmptyStateGuide';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
@@ -32,17 +30,12 @@ const UseCodexPage: React.FC = () => {
     const [loadingRule, setLoadingRule] = useState(true);
     const [newlyCreatedRuleUuids, setNewlyCreatedRuleUuids] = useState<Set<string>>(new Set());
     const [configModalOpen, setConfigModalOpen] = useState(false);
-    const navigate = useNavigate();
 
     const headerHeight = useHeaderHeight(
         headerRef,
         providers.length > 0,
         []
     );
-
-    const handleAddOAuthClick = () => {
-        navigate('/oauth?dialog=add');
-    };
 
     const copyToClipboard = async (text: string, label: string) => {
         try {
@@ -97,83 +90,66 @@ const UseCodexPage: React.FC = () => {
 
     return (
         <PageLayout loading={isLoading} notification={notification}>
-            {!providers.length ? (
-                <CardGrid>
-                    <UnifiedCard title="Codex SDK Configuration" size="full">
-                        <EmptyStateGuide
-                            title="No Providers Configured"
-                            description="Add an API key or OAuth provider to get started"
-                            onAddApiKeyClick={() => navigate('/api-keys?dialog=add')}
-                            onAddOAuthClick={handleAddOAuthClick}
-                        />
-                    </UnifiedCard>
-                </CardGrid>
-            ) : (
-                <CardGrid>
-                    <UnifiedCard
-                        title={
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <span>Codex SDK Configuration</span>
-                                <Tooltip title={`Base URL: ${baseUrl}/tingly/codex`}>
-                                    <IconButton size="small" sx={{ ml: 0.5 }}>
-                                        <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                                    </IconButton>
-                                </Tooltip>
-                            </Box>
-                        }
-                        size="full"
-                        rightAction={
-                            <Button
-                                onClick={handleOpenConfigModal}
-                                variant="contained"
-                                size="small"
-                            >
-                                Config Codex
-                            </Button>
-                        }
-                    >
-                        <ProviderConfigCard
-                            headerRef={headerRef}
-                            title="Codex SDK Configuration"
-                            baseUrlPath="/tingly/codex"
-                            baseUrl={baseUrl}
-                            onCopy={copyToClipboard}
-                            token={token}
-                            onShowTokenModal={() => setShowTokenModal(true)}
-                            scenario={scenario}
-                        />
-                    </UnifiedCard>
-                    <TemplatePage
-                        title="Models and Forwarding Rules"
-                        scenario={scenario}
-                        rules={rules}
-                        collapsible={true}
-                        showTokenModal={showTokenModal}
-                        setShowTokenModal={setShowTokenModal}
-                        token={token}
-                        showNotification={showNotification}
-                        providers={providers}
-                        onRulesChange={handleRulesChange}
-                        onProvidersLoad={loadProviders}
-                        newlyCreatedRuleUuids={newlyCreatedRuleUuids}
-                        allowDeleteRule={true}
-                        onRuleDelete={handleRuleDelete}
-                        headerHeight={headerHeight}
-                        emptyStateTitle="No Providers Configured"
-                        emptyStateDescription="Add an API key or OAuth provider to start routing requests"
-                        onAddApiKeyClick={() => navigate('/api-keys?dialog=add')}
-                        onAddOAuthClick={handleAddOAuthClick}
-                    />
-
-                    <CodexConfigModal
-                        open={configModalOpen}
-                        onClose={() => setConfigModalOpen(false)}
+            <CardGrid>
+                <UnifiedCard
+                    title={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <span>Codex SDK Configuration</span>
+                            <Tooltip title={`Base URL: ${baseUrl}/tingly/codex`}>
+                                <IconButton size="small" sx={{ ml: 0.5 }}>
+                                    <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                                </IconButton>
+                            </Tooltip>
+                        </Box>
+                    }
+                    size="full"
+                    rightAction={
+                        <Button
+                            onClick={handleOpenConfigModal}
+                            variant="contained"
+                            size="small"
+                        >
+                            Config Codex
+                        </Button>
+                    }
+                >
+                    <ProviderConfigCard
+                        headerRef={headerRef}
+                        title="Codex SDK Configuration"
+                        baseUrlPath="/tingly/codex"
                         baseUrl={baseUrl}
+                        onCopy={copyToClipboard}
                         token={token}
-                        copyToClipboard={copyToClipboard}
+                        onShowTokenModal={() => setShowTokenModal(true)}
+                        scenario={scenario}
                     />
-                </CardGrid>
-            )}
+                </UnifiedCard>
+                <TemplatePage
+                    title="Models and Forwarding Rules"
+                    scenario={scenario}
+                    rules={rules}
+                    collapsible={true}
+                    showTokenModal={showTokenModal}
+                    setShowTokenModal={setShowTokenModal}
+                    token={token}
+                    showNotification={showNotification}
+                    providers={providers}
+                    onRulesChange={handleRulesChange}
+                    onProvidersLoad={loadProviders}
+                    newlyCreatedRuleUuids={newlyCreatedRuleUuids}
+                    allowDeleteRule={true}
+                    onRuleDelete={handleRuleDelete}
+                    headerHeight={headerHeight}
+                />
+
+                <CodexConfigModal
+                    open={configModalOpen}
+                    onClose={() => setConfigModalOpen(false)}
+                    baseUrl={baseUrl}
+                    token={token}
+                    copyToClipboard={copyToClipboard}
+                />
+            </CardGrid>
         </PageLayout>
     );
 };

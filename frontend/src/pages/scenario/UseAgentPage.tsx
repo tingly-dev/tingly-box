@@ -3,7 +3,6 @@ import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import { Box } from '@mui/material';
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
@@ -28,7 +27,6 @@ const UseAgentPage: React.FC = () => {
     const [rules, setRules] = useState<any[]>([]);
     const [loadingRule, setLoadingRule] = useState(true);
     const [newlyCreatedRuleUuids, setNewlyCreatedRuleUuids] = useState<Set<string>>(new Set());
-    const navigate = useNavigate();
 
     // Use shared hook for header height measurement
     const headerHeight = useHeaderHeight(
@@ -36,10 +34,6 @@ const UseAgentPage: React.FC = () => {
         providers.length > 0,
         []
     );
-
-    const handleAddOAuthClick = () => {
-        navigate('/oauth?dialog=add');
-    };
 
     const copyToClipboard = async (text: string, label: string) => {
         try {
@@ -127,10 +121,6 @@ const UseAgentPage: React.FC = () => {
                     allowDeleteRule={true}
                     onRuleDelete={handleRuleDelete}
                     headerHeight={headerHeight}
-                    emptyStateTitle="No Providers Configured"
-                    emptyStateDescription="Add an API key or OAuth provider to start routing requests"
-                    onAddApiKeyClick={() => navigate('/api-keys?dialog=add')}
-                    onAddOAuthClick={handleAddOAuthClick}
                 />
             </CardGrid>
         </PageLayout>

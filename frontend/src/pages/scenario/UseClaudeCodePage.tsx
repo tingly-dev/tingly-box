@@ -24,7 +24,6 @@ import {
 } from '@mui/material';
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -39,7 +38,6 @@ const CONFIG_MODES: { value: ConfigMode; label: string; description: string; ena
 
 const UseClaudeCodePage: React.FC = () => {
     const { t } = useTranslation();
-    const navigate = useNavigate();
     const headerRef = useRef<HTMLDivElement>(null);
     const {
         showTokenModal,
@@ -68,14 +66,6 @@ const UseClaudeCodePage: React.FC = () => {
         providers.length > 0,
         [configMode]
     );
-
-    const handleAddApiKeyClick = () => {
-        navigate('/api-keys?dialog=add');
-    };
-
-    const handleAddOAuthClick = () => {
-        navigate('/oauth?dialog=add');
-    };
 
     // Load scenario config to get config mode
     const loadScenarioConfig = async () => {
@@ -660,10 +650,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                     allowToggleRule={false}
                     collapsible={true}
                     headerHeight={headerHeight}
-                    emptyStateTitle="No Providers Configured"
-                    emptyStateDescription="Add an API key or OAuth provider to start routing requests"
-                    onAddApiKeyClick={handleAddApiKeyClick}
-                    onAddOAuthClick={handleAddOAuthClick}
+                    allowAddRule={false}
                 />
 
                 <Dialog

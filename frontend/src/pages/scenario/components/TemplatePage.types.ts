@@ -15,6 +15,7 @@ export interface TabTemplatePageProps {
     allowDeleteRule?: boolean;
     onRuleDelete?: (ruleUuid: string) => void;
     allowToggleRule?: boolean;
+    allowAddRule?: boolean;
     newlyCreatedRuleUuids?: Set<string>; // @deprecated - not used, kept for API compatibility
     // Unified action buttons props
     scenario?: string;

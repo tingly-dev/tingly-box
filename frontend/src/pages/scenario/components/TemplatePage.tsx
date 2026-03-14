@@ -28,17 +28,12 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                                                           allowDeleteRule = false,
                                                           onRuleDelete,
                                                           allowToggleRule = true,
-                                                          newlyCreatedRuleUuids: _newlyCreatedRuleUuids,
+                                                          allowAddRule = true,
                                                           scenario,
                                                           showAddApiKeyButton = true,
-                                                          showAddOAuthButton = true,
-                                                          showCreateRuleButton = true,
                                                           showExpandCollapseButton = true,
-                                                          rightAction: customRightAction,
-                                                          headerHeight = 0,
                                                           showEmptyState = true,
-                                                          emptyStateTitle = "No Providers Configured",
-                                                          emptyStateDescription = "Add an API key or OAuth provider to start routing requests",
+                                                          rightAction: customRightAction,
                                                           onAddApiKeyClick,
                                                           onAddOAuthClick,
                                                       }) => {
@@ -93,6 +88,10 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     // Unified action handlers
     const handleAddApiKeyClick = useCallback(() => {
         navigate('/api-keys?dialog=add');
+    }, [navigate]);
+
+    const handleAddOAuthClickDefault = useCallback(() => {
+        navigate('/oauth?dialog=add');
     }, [navigate]);
 
     const handleCreateRule = useCallback(async () => {
@@ -253,8 +252,8 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
             onToggleExpandAll={handleToggleExpandAll}
             showAddApiKeyButton={showAddApiKeyButton}
             onAddApiKeyClick={handleAddApiKeyClick}
-            onAddOAuthClick={onAddOAuthClick}
-            showCreateRuleButton={showCreateRuleButton}
+            onAddOAuthClick={onAddOAuthClick || handleAddOAuthClickDefault}
+            allowAddRule={allowAddRule}
             onCreateRule={handleCreateRule}
             showExpandCollapseButton={showExpandCollapseButton}
             showImportButton={true}
@@ -270,10 +269,10 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         return (
             <UnifiedCard size="full" title={title}>
                 <EmptyStateGuide
-                    title={emptyStateTitle}
-                    description={emptyStateDescription}
+                    title={"No Providers Configured"}
+                    description={"Add an API key or OAuth provider to start routing requests"}
                     onAddApiKeyClick={onAddApiKeyClick || handleAddApiKeyClick}
-                    onAddOAuthClick={onAddOAuthClick}
+                    onAddOAuthClick={onAddOAuthClick || handleAddOAuthClickDefault}
                 />
             </UnifiedCard>
         );

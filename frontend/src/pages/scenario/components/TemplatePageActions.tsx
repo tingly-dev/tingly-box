@@ -16,7 +16,7 @@ export interface TemplatePageActionsProps {
     onAddApiKeyClick: () => void;
     showAddOAuthButton: boolean;
     onAddOAuthClick?: () => void;
-    showCreateRuleButton: boolean;
+    allowAddRule: boolean;
     onCreateRule: () => void;
     showExpandCollapseButton: boolean;
     showImportButton: boolean;
@@ -28,10 +28,9 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
                                                                             allExpanded,
                                                                             onToggleExpandAll,
                                                                             onAddApiKeyClick,
-                                                                            showCreateRuleButton,
+                                                                            allowAddRule,
                                                                             onCreateRule,
                                                                             showExpandCollapseButton,
-                                                                            showImportButton,
                                                                             onImportFromClipboard,
                                                                         }) => {
     return (
@@ -68,7 +67,7 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
                     Import
                 </Button>
             </Tooltip>
-            {showCreateRuleButton && (
+            {allowAddRule && (
                 <Tooltip title="Create new routing rule">
                     <Button
                         variant="contained"

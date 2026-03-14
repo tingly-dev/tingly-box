@@ -4,7 +4,6 @@ import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import { Box, Button, Tooltip, IconButton } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import XcodeConfigModal from '@/components/XcodeConfigModal';
@@ -31,7 +30,6 @@ const UseXcodePage: React.FC = () => {
     const [loadingRule, setLoadingRule] = useState(true);
     const [newlyCreatedRuleUuids, setNewlyCreatedRuleUuids] = useState<Set<string>>(new Set());
     const [configModalOpen, setConfigModalOpen] = useState(false);
-    const navigate = useNavigate();
 
     // Use shared hook for header height measurement
     const headerHeight = useHeaderHeight(
@@ -39,10 +37,6 @@ const UseXcodePage: React.FC = () => {
         providers.length > 0,
         []
     );
-
-    const handleAddOAuthClick = () => {
-        navigate('/oauth?dialog=add');
-    };
 
     const copyToClipboard = async (text: string, label: string) => {
         try {
@@ -151,10 +145,6 @@ const UseXcodePage: React.FC = () => {
                     allowDeleteRule={true}
                     onRuleDelete={handleRuleDelete}
                     headerHeight={headerHeight}
-                    emptyStateTitle="No Providers Configured"
-                    emptyStateDescription="Add an API key or OAuth provider to start routing requests"
-                    onAddApiKeyClick={() => navigate('/api-keys?dialog=add')}
-                    onAddOAuthClick={handleAddOAuthClick}
                 />
 
                 <XcodeConfigModal
