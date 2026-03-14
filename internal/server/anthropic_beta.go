@@ -163,7 +163,9 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			// Track usage from response
 			inputTokens := int(anthropicResp.Usage.InputTokens)
 			outputTokens := int(anthropicResp.Usage.OutputTokens)
-			s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
+			cacheTokens := int(anthropicResp.Usage.CacheReadInputTokens)
+			usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
+			s.trackUsageWithTokenUsage(c, usage, nil)
 
 			// FIXME: now we use req model as resp model
 			anthropicResp.Model = anthropic.Model(proxyModel)
@@ -200,7 +202,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			// Handle the streaming response
 			usage, err := stream.HandleGoogleToAnthropicBetaStreamResponse(c, streamResp, proxyModel)
 			if err != nil {
-				s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
+				s.trackUsageWithTokenUsage(c, usage, err)
 				stream.SendInternalError(c, err.Error())
 				if recorder != nil {
 					recorder.RecordError(err)
@@ -209,7 +211,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			}
 
 			// Track usage from stream handler
-			s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, nil)
+			s.trackUsageWithTokenUsage(c, usage, nil)
 
 		} else {
 			// Handle non-streaming request
@@ -230,11 +232,14 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			// Track usage from response
 			inputTokens := 0
 			outputTokens := 0
+			cacheTokens := 0
 			if resp.UsageMetadata != nil {
 				inputTokens = int(resp.UsageMetadata.PromptTokenCount)
 				outputTokens = int(resp.UsageMetadata.CandidatesTokenCount)
+				cacheTokens = int(resp.UsageMetadata.CachedContentTokenCount)
 			}
-			s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
+			usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
+			s.trackUsageWithTokenUsage(c, usage, nil)
 
 			// Record response if scenario recording is enabled
 			if recorder != nil {
@@ -310,7 +315,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				// Handle the streaming response
 				usage, err := stream.HandleOpenAIToAnthropicBetaStream(c, transformedReq, streamResp, proxyModel)
 				if err != nil {
-					s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
+					s.trackUsageWithTokenUsage(c, usage, err)
 					stream.SendInternalError(c, err.Error())
 					if streamRec != nil {
 						streamRec.RecordError(err)
@@ -319,7 +324,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				}
 
 				// Track usage from stream handler
-				s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, nil)
+				s.trackUsageWithTokenUsage(c, usage, nil)
 
 				// Finish recording and assemble response
 				if streamRec != nil {
@@ -344,7 +349,9 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				// Track usage from response
 				inputTokens := int(resp.Usage.PromptTokens)
 				outputTokens := int(resp.Usage.CompletionTokens)
-				s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
+				cacheTokens := int(resp.Usage.PromptTokensDetails.CachedTokens)
+				usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
+				s.trackUsageWithTokenUsage(c, usage, nil)
 
 				// Record response if scenario recording is enabled
 				if recorder != nil {
@@ -381,7 +388,7 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 	}
 
 	usageStat, err := stream.HandleAnthropicV1BetaStream(hc, req, streamResp)
-	s.trackUsageFromContext(c, usageStat.InputTokens, usageStat.OutputTokens, err)
+	s.trackUsageWithTokenUsage(c, usageStat, err)
 }
 
 // handleAnthropicV1BetaViaResponsesAPINonStreaming handles non-streaming Responses API request
@@ -418,9 +425,11 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context
 	// Extract usage from response
 	inputTokens := int(response.Usage.InputTokens)
 	outputTokens := int(response.Usage.OutputTokens)
+	cacheTokens := int(response.Usage.InputTokensDetails.CachedTokens)
+	usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
 
 	// Track usage
-	s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
+	s.trackUsageWithTokenUsage(c, usage, nil)
 
 	// Convert Responses API response back to Anthropic beta format
 	anthropicResp := nonstream.ConvertResponsesToAnthropicBetaResponse(response, proxyModel)
@@ -475,14 +484,14 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, r
 
 	// Track usage from stream handler
 	if err != nil {
-		s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
+		s.trackUsageWithTokenUsage(c, usage, err)
 		if streamRec != nil {
 			streamRec.RecordError(err)
 		}
 		return
 	}
 
-	s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, nil)
+	s.trackUsageWithTokenUsage(c, usage, nil)
 
 	// Finish recording and assemble response
 	if streamRec != nil {

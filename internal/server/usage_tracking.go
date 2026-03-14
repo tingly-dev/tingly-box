@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -140,6 +141,20 @@ func (s *Server) trackUsageWithTokenUsage(c *gin.Context, usage *protocol.TokenU
 			errorCode = sanitizeErrorCode(err)
 		}
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"provider":      provider.Name,
+		"model":         model,
+		"scenario":      scenario,
+		"input_tokens":  usage.InputTokens,
+		"output_tokens": usage.OutputTokens,
+		"cache_tokens":  usage.CacheInputTokens,
+		"system_tokens": usage.SystemTokens,
+		"total_tokens":  usage.TotalTokens(),
+		"status":        status,
+		"streamed":      streamed,
+		"latency_ms":    latencyMs,
+	}).Trace("trackUsageWithTokenUsage: recording token usage")
 
 	// 1. Update service stats (using total tokens)
 	s.updateServiceStats(rule, provider, model, usage.InputTokens, usage.OutputTokens)

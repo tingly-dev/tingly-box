@@ -41,7 +41,8 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	response, _, err := ForwardOpenAIChat(fc, wrapper, req)
 	if err != nil {
 		// Track error with no usage
-		s.trackUsageFromContext(c, 0, 0, err)
+		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
+		s.trackUsageWithTokenUsage(c, usage, err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to forward request: " + err.Error(),
@@ -69,7 +70,8 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 				// Execute intercepted tool calls locally and get final response
 				finalResponse, err := s.handleInterceptedToolCalls(provider, originalReq, response)
 				if err != nil {
-					s.trackUsageFromContext(c, 0, 0, err)
+					usage := protocol.NewTokenUsageWithCache(0, 0, 0)
+					s.trackUsageWithTokenUsage(c, usage, err)
 					c.JSON(http.StatusInternalServerError, ErrorResponse{
 						Error: ErrorDetail{
 							Message: "Failed to handle tool calls: " + err.Error(),
@@ -82,7 +84,9 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 				// Extract usage from final response
 				inputTokens := int(finalResponse.Usage.PromptTokens)
 				outputTokens := int(finalResponse.Usage.CompletionTokens)
-				s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
+				cacheTokens := int(finalResponse.Usage.PromptTokensDetails.CachedTokens)
+				usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
+				s.trackUsageWithTokenUsage(c, usage, nil)
 
 				// Convert to JSON and return
 				responseJSON, _ := json.Marshal(finalResponse)
@@ -98,9 +102,11 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	// Extract usage from response
 	inputTokens := int(response.Usage.PromptTokens)
 	outputTokens := int(response.Usage.CompletionTokens)
+	cacheTokens := int(response.Usage.PromptTokensDetails.CachedTokens)
 
 	// Track usage
-	s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
+	usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
+	s.trackUsageWithTokenUsage(c, usage, nil)
 
 	// Convert response to JSON map for modification
 	responseJSON, err := json.Marshal(response)
@@ -221,7 +227,8 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 	}
 	if err != nil {
 		// Track error with no usage
-		s.trackUsageFromContext(c, 0, 0, err)
+		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
+		s.trackUsageWithTokenUsage(c, usage, err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to create streaming request: " + err.Error(),
@@ -237,7 +244,7 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 	usage, err := stream.HandleOpenAIChatStream(hc, streamResp, req)
 
 	// Track usage from stream handler
-	s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
+	s.trackUsageWithTokenUsage(c, usage, err)
 }
 
 // handleOpenAIStreamResponse processes the streaming response and sends it to the client
@@ -253,7 +260,8 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestrea
 			logrus.Errorf("Panic in streaming handler: %v", r)
 			// Track panic as error with any usage we accumulated
 			if hasUsage {
-				s.trackUsageFromContext(c, inputTokens, outputTokens, fmt.Errorf("panic: %v", r))
+				usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
+				s.trackUsageWithTokenUsage(c, usage, fmt.Errorf("panic: %v", r))
 			}
 			// Try to send an error event if possible
 			if c.Writer != nil {
@@ -441,7 +449,8 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestrea
 				inputTokens, _ = token.EstimateInputTokens(req)
 				outputTokens = token.EstimateOutputTokens(contentBuilder.String())
 			}
-			s.trackUsageFromContext(c, inputTokens, outputTokens, err)
+			usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
+			s.trackUsageWithTokenUsage(c, usage, err)
 			return
 		}
 
@@ -454,7 +463,8 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestrea
 		}
 
 		// Track usage with error status
-		s.trackUsageFromContext(c, inputTokens, outputTokens, err)
+		usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
+		s.trackUsageWithTokenUsage(c, usage, err)
 
 		// Send error event
 		errorChunk := map[string]interface{}{
@@ -521,7 +531,8 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestrea
 		}
 	}
 
-	s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
+	usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
+	s.trackUsageWithTokenUsage(c, usage, nil)
 
 	// Send the final [DONE] message
 	// MENTION: must keep extra space
