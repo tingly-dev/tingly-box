@@ -10,7 +10,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -286,9 +285,9 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
 
 			// Use provider-aware conversion for provider-specific handling
-			openaiResp := nonstream.ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
-			if nonstream.ShouldRoundtripResponse(c, "anthropic") {
-				roundtripped, err := nonstream.RoundtripOpenAIMapViaAnthropic(openaiResp, responseModel, provider, actualModel)
+			openaiResp := ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
+			if ShouldRoundtripResponse(c, "anthropic") {
+				roundtripped, err := RoundtripOpenAIMapViaAnthropic(openaiResp, responseModel, provider, actualModel)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, ErrorResponse{
 						Error: ErrorDetail{

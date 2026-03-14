@@ -18,7 +18,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
@@ -129,8 +128,8 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	// Update response model if configured
 	responseMap["model"] = responseModel
 
-	if nonstream.ShouldRoundtripResponse(c, "anthropic") {
-		roundtripped, err := nonstream.RoundtripOpenAIResponseViaAnthropic(response, responseModel, provider, req.Model)
+	if ShouldRoundtripResponse(c, "anthropic") {
+		roundtripped, err := RoundtripOpenAIResponseViaAnthropic(response, responseModel, provider, req.Model)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, ErrorResponse{
 				Error: ErrorDetail{
