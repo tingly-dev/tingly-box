@@ -1537,6 +1537,8 @@ func (c *Config) GetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 	switch flagName {
 	case "thinking_effort":
 		return string(flags.ThinkingEffort)
+	case "thinking_mode":
+		return flags.ThinkingMode
 	default:
 		return ""
 	}
@@ -1571,6 +1573,8 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 	switch flagName {
 	case "thinking_effort":
 		config.Flags.ThinkingEffort = typ.ThinkingEffortLevel(value)
+	case "thinking_mode":
+		config.Flags.ThinkingMode = value
 	default:
 		return fmt.Errorf("unknown string flag name: %s", flagName)
 	}
