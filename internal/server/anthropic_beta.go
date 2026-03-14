@@ -48,32 +48,41 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		disableStreamUsage = scenarioConfig.Flags.DisableStreamUsage
 		cleanHeader = scenarioConfig.Flags.CleanHeader
 
-		// Apply thinking effort from scenario config ONLY when client has explicitly enabled thinking
-		// The scenario config's effort level is used to adjust the budget_tokens, not to enable thinking
-		// If client hasn't enabled thinking, we don't enable it regardless of scenario config
-		effort := typ.ThinkingEffortLevel(req.OutputConfig.Effort)
-		pluginEffort := scenarioConfig.Flags.ThinkingEffort
-		if pluginEffort != typ.ThinkingEffortDefault {
-			effort = pluginEffort
-		}
-
-		// Map effort level to budget_tokens
-		budgetTokens, ok := typ.ThinkingBudgetMapping[effort]
-		if !ok {
-			budgetTokens = typ.ThinkingBudgetMapping[typ.ThinkingEffortMedium] // fallback
-		}
-
-		switch {
-		case req.Thinking.OfEnabled != nil:
-			// Override thinking with scenario config's budget_tokens
-			if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
-				req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budgetTokens)
-			} else {
-				req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budgetTokens)
+		// Apply thinking mode from scenario config
+		// The thinking mode controls how extended thinking is enabled
+		thinkingMode := scenarioConfig.Flags.ThinkingMode
+		if thinkingMode != "" {
+			// Map effort level to budget_tokens
+			effort := scenarioConfig.Flags.ThinkingEffort
+			if effort == typ.ThinkingEffortDefault {
+				effort = typ.ThinkingEffortMedium // fallback to medium
 			}
-		case req.Thinking.OfAdaptive != nil:
-			// Override thinking with scenario config's budget_tokens
-			req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budgetTokens)
+			budgetTokens, ok := typ.ThinkingBudgetMapping[effort]
+			if !ok {
+				budgetTokens = typ.ThinkingBudgetMapping[typ.ThinkingEffortMedium]
+			}
+			if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
+				budgetTokens = *thinkBudget
+			}
+
+			switch typ.ThinkingMode(thinkingMode) {
+			case typ.ThinkingModeForce:
+				// Force mode: always enable thinking regardless of client config
+				req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budgetTokens)
+			case typ.ThinkingModeAdaptive:
+				// Adaptive mode: convert any existing thinking config to OfEnabled
+				switch {
+				case req.Thinking.OfEnabled != nil:
+					req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budgetTokens)
+				case req.Thinking.OfAdaptive != nil:
+					req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budgetTokens)
+				}
+			case typ.ThinkingModeDefault:
+				// Default mode: only handle OfEnabled, don't touch OfAdaptive
+				if req.Thinking.OfEnabled != nil {
+					req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budgetTokens)
+				}
+			}
 		}
 	}
 
