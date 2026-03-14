@@ -193,3 +193,234 @@ func TestService_PreferCompletions(t *testing.T) {
 		})
 	}
 }
+
+func TestServiceStats_RecordLatency(t *testing.T) {
+	stats := &ServiceStats{
+		ServiceID:   "test:provider",
+		TimeWindow:  60,
+		WindowStart: time.Now(),
+	}
+
+	// Record some latency samples
+	samples := []int64{100, 150, 200, 120, 180}
+	for _, sample := range samples {
+		stats.RecordLatency(sample, 10) // max 10 samples
+	}
+
+	// Check that stats were calculated
+	avg, p50, p95, p99, count := stats.GetLatencyStats()
+
+	if count != 5 {
+		t.Errorf("Expected sample count = 5, got %d", count)
+	}
+
+	// Average should be around 150
+	if avg < 140 || avg > 160 {
+		t.Errorf("Expected avg around 150, got %f", avg)
+	}
+
+	// P50 (median) should be around 150
+	if p50 < 140 || p50 > 160 {
+		t.Errorf("Expected p50 around 150, got %f", p50)
+	}
+
+	// P95 and P99 should be higher
+	if p95 < 190 {
+		t.Errorf("Expected p95 >= 190, got %f", p95)
+	}
+	if p99 < 195 {
+		t.Errorf("Expected p99 >= 195, got %f", p99)
+	}
+}
+
+func TestServiceStats_RecordLatency_RollingWindow(t *testing.T) {
+	stats := &ServiceStats{
+		ServiceID:   "test:provider",
+		TimeWindow:  60,
+		WindowStart: time.Now(),
+	}
+
+	// Record more samples than the window size
+	for i := 0; i < 15; i++ {
+		stats.RecordLatency(int64(100+i*10), 10) // max 10 samples
+	}
+
+	// Check that only the last 10 samples are kept
+	avg, _, _, _, count := stats.GetLatencyStats()
+
+	if count != 10 {
+		t.Errorf("Expected sample count = 10 (window size), got %d", count)
+	}
+
+	// Average should be based on the last 10 samples: 150-240
+	// (150+160+170+180+190+200+210+220+230+240) / 10 = 195
+	if avg < 190 || avg > 200 {
+		t.Errorf("Expected avg around 195, got %f", avg)
+	}
+}
+
+func TestServiceStats_RecordLatency_Empty(t *testing.T) {
+	stats := &ServiceStats{
+		ServiceID:   "test:provider",
+		TimeWindow:  60,
+		WindowStart: time.Now(),
+	}
+
+	// Don't record any samples
+	avg, p50, p95, p99, count := stats.GetLatencyStats()
+
+	if count != 0 {
+		t.Errorf("Expected sample count = 0, got %d", count)
+	}
+	if avg != 0 {
+		t.Errorf("Expected avg = 0 for empty samples, got %f", avg)
+	}
+	if p50 != 0 {
+		t.Errorf("Expected p50 = 0 for empty samples, got %f", p50)
+	}
+	if p95 != 0 {
+		t.Errorf("Expected p95 = 0 for empty samples, got %f", p95)
+	}
+	if p99 != 0 {
+		t.Errorf("Expected p99 = 0 for empty samples, got %f", p99)
+	}
+}
+
+func TestParseTacticType_LatencyBased(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected TacticType
+	}{
+		{"latency_based", TacticLatencyBased},
+		{"LATENCY_BASED", TacticRoundRobin}, // Case sensitive, falls back to default
+		{"invalid", TacticRoundRobin},       // Default fallback
+	}
+
+	for _, test := range tests {
+		if got := ParseTacticType(test.input); got != test.expected {
+			t.Errorf("ParseTacticType(%s) = %v, want %v", test.input, got, test.expected)
+		}
+	}
+}
+
+func TestTacticType_String_LatencyBased(t *testing.T) {
+	if got := TacticLatencyBased.String(); got != "latency_based" {
+		t.Errorf("TacticLatencyBased.String() = %v, want %v", got, "latency_based")
+	}
+}
+
+func TestServiceStats_RecordTokenSpeed(t *testing.T) {
+	stats := &ServiceStats{
+		ServiceID:   "test:provider",
+		TimeWindow:  60,
+		WindowStart: time.Now(),
+	}
+
+	// Record some speed samples
+	samples := []float64{50.0, 75.0, 100.0, 60.0, 80.0}
+	for _, sample := range samples {
+		stats.RecordTokenSpeed(sample, 10) // max 10 samples
+	}
+
+	// Check that stats were calculated
+	avg, count := stats.GetTokenSpeedStats()
+
+	if count != 5 {
+		t.Errorf("Expected sample count = 5, got %d", count)
+	}
+
+	// Average should be around 73
+	if avg < 70 || avg > 80 {
+		t.Errorf("Expected avg around 73, got %f", avg)
+	}
+}
+
+func TestServiceStats_RecordTokenSpeed_RollingWindow(t *testing.T) {
+	stats := &ServiceStats{
+		ServiceID:   "test:provider",
+		TimeWindow:  60,
+		WindowStart: time.Now(),
+	}
+
+	// Record more samples than the window size
+	for i := 0; i < 15; i++ {
+		stats.RecordTokenSpeed(float64(50+i*10), 10) // max 10 samples
+	}
+
+	// Check that only the last 10 samples are kept
+	avg, count := stats.GetTokenSpeedStats()
+
+	if count != 10 {
+		t.Errorf("Expected sample count = 10 (window size), got %d", count)
+	}
+
+	// Average should be based on the last 10 samples: 100-190
+	// (100+110+120+130+140+150+160+170+180+190) / 10 = 145
+	if avg < 140 || avg > 150 {
+		t.Errorf("Expected avg around 145, got %f", avg)
+	}
+}
+
+func TestServiceStats_RecordTokenSpeed_Empty(t *testing.T) {
+	stats := &ServiceStats{
+		ServiceID:   "test:provider",
+		TimeWindow:  60,
+		WindowStart: time.Now(),
+	}
+
+	// Don't record any samples
+	avg, count := stats.GetTokenSpeedStats()
+
+	if count != 0 {
+		t.Errorf("Expected sample count = 0, got %d", count)
+	}
+	if avg != 0 {
+		t.Errorf("Expected avg = 0 for empty samples, got %f", avg)
+	}
+}
+
+func TestParseTacticType_SpeedBased(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected TacticType
+	}{
+		{"speed_based", TacticSpeedBased},
+		{"SPEED_BASED", TacticRoundRobin}, // Case sensitive, falls back to default
+		{"invalid", TacticRoundRobin},     // Default fallback
+	}
+
+	for _, test := range tests {
+		if got := ParseTacticType(test.input); got != test.expected {
+			t.Errorf("ParseTacticType(%s) = %v, want %v", test.input, got, test.expected)
+		}
+	}
+}
+
+func TestTacticType_String_SpeedBased(t *testing.T) {
+	if got := TacticSpeedBased.String(); got != "speed_based" {
+		t.Errorf("TacticSpeedBased.String() = %v, want %v", got, "speed_based")
+	}
+}
+
+func TestParseTacticType_Adaptive(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected TacticType
+	}{
+		{"adaptive", TacticAdaptive},
+		{"ADAPTIVE", TacticRoundRobin}, // Case sensitive, falls back to default
+		{"invalid", TacticRoundRobin},  // Default fallback
+	}
+
+	for _, test := range tests {
+		if got := ParseTacticType(test.input); got != test.expected {
+			t.Errorf("ParseTacticType(%s) = %v, want %v", test.input, got, test.expected)
+		}
+	}
+}
+
+func TestTacticType_String_Adaptive(t *testing.T) {
+	if got := TacticAdaptive.String(); got != "adaptive" {
+		t.Errorf("TacticAdaptive.String() = %v, want %v", got, "adaptive")
+	}
+}
