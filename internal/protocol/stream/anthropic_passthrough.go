@@ -36,7 +36,10 @@ func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNe
 		},
 		func(event interface{}) error {
 			evt := event.(*anthropic.MessageStreamEventUnion)
-			evt.Message.Model = anthropic.Model(hc.ResponseModel)
+			// Only set model for message_start events, as other events don't have a message field
+			if evt.Type == "message_start" {
+				evt.Message.Model = anthropic.Model(hc.ResponseModel)
+			}
 
 			if evt.Usage.InputTokens > 0 {
 				inputTokens = int(evt.Usage.InputTokens)
@@ -98,7 +101,10 @@ func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaM
 		},
 		func(event interface{}) error {
 			evt := event.(*anthropic.BetaRawMessageStreamEventUnion)
-			evt.Message.Model = anthropic.Model(hc.ResponseModel)
+			// Only set model for message_start events, as other events don't have a message field
+			if evt.Type == "message_start" {
+				evt.Message.Model = anthropic.Model(hc.ResponseModel)
+			}
 
 			if evt.Usage.InputTokens > 0 {
 				inputTokens = int(evt.Usage.InputTokens)
