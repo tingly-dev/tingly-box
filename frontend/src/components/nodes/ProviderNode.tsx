@@ -1,5 +1,6 @@
 import {
-    Delete as DeleteIcon
+    Delete as DeleteIcon,
+    Warning as WarningIcon
 } from '@mui/icons-material';
 import {
     Box,
@@ -38,10 +39,14 @@ const ProviderNodeWrapper = styled(Box)(({ theme }) => ({
     }
 }));
 
-// Helper function to get provider name from providersData
-const getProviderName = (providerUuid: string, providersData: Provider[]): string => {
+// Helper function to get provider info from providersData
+const getProviderInfo = (providerUuid: string, providersData: Provider[]) => {
     const provider = providersData.find(p => p.uuid === providerUuid);
-    return provider?.name || 'Unknown Provider';
+    return {
+        name: provider?.name || 'Unknown Provider',
+        exists: !!provider,
+        provider
+    };
 };
 
 // Provider Node Component Props
@@ -81,7 +86,8 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
         onDelete();
     };
 
-    const providerName = getProviderName(provider.provider, providersData);
+    const providerInfo = getProviderInfo(provider.provider, providersData);
+    const isProviderMissing = provider.provider && !providerInfo.exists;
 
     return (
         <ProviderNodeWrapper>
@@ -108,15 +114,20 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                 <Box sx={NODE_LAYER_STYLES.topLayer}>
                     <Tooltip title={
                         provider.provider && provider.model
-                            ? <>Provider: {providerName}<br/>Model: {provider.model}</>
+                            ? <>Provider: {providerInfo.name}<br/>Model: {provider.model}</>
                             : provider.provider
-                                ? <>Provider: {providerName}<br/>Model: (select model)</>
+                                ? <>Provider: {providerInfo.name}<br/>Model: (select model)</>
                                 : t('rule.graph.selectProvider')
                     } arrow>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                            {isProviderMissing && (
+                                <Tooltip title="Provider not found. Please refresh the page or re-import the provider." arrow>
+                                    <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main' }} />
+                                </Tooltip>
+                            )}
                             <Typography
                                 variant="body2"
-                                color="text.primary"
+                                color={isProviderMissing ? 'warning.main' : 'text.primary'}
                                 noWrap
                                 sx={{
                                     ...NODE_LAYER_STYLES.typography,
@@ -125,7 +136,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                                     textAlign: 'center',
                                 }}
                             >
-                                {providerName || t('rule.graph.selectProvider')}
+                                {providerInfo.name || t('rule.graph.selectProvider')}
                             </Typography>
 
                             {provider.provider && (

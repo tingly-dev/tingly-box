@@ -1,6 +1,7 @@
 package dataexport
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -190,14 +191,12 @@ func TestBase64WithComplexCharacters(t *testing.T) {
 
 	for _, tt := range testStrings {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a simple JSONL with the test string
 			jsonl := `{"type":"metadata","version":"1.0","note":"` + tt.input + `"}`
 
-			// For now, we just verify the JSONL is valid
 			if jsonl == "" {
 				t.Error("JSONL should not be empty")
 			}
-			if !contains(jsonl, `"note":"`) {
+			if !strings.Contains(jsonl, `"note":"`) {
 				t.Error("JSONL should contain note field")
 			}
 		})
@@ -207,26 +206,13 @@ func TestBase64WithComplexCharacters(t *testing.T) {
 // Helper functions
 func containsAll(s string, substrs []string) bool {
 	for _, substr := range substrs {
-		if !contains(s, substr) {
+		if !strings.Contains(s, substr) {
 			return false
 		}
 	}
 	return true
 }
 
-func contains(s, substr string) bool {
-	return indexOf(s, substr) >= 0
-}
-
 func startsWith(s, prefix string) bool {
-	return len(s) >= len(prefix) && s[0:len(prefix)] == prefix
-}
-
-func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
+	return strings.HasPrefix(s, prefix)
 }

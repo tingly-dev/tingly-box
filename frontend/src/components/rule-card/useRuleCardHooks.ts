@@ -8,6 +8,8 @@ import {
     cloneSmartRouting,
     createEmptySmartRouting,
     exportRuleWithProviders,
+    exportRuleAsBase64ToClipboard,
+    type ExportFormat,
 } from './utils';
 
 // ============================================================================
@@ -272,11 +274,19 @@ export function useRuleProbe(configRecord: ConfigRecord | null) {
  * Handles rule export functionality with providers
  */
 export function useRuleExport({ rule, showNotification }: UseRuleExportProps) {
-    const handleExport = useCallback(async () => {
-        await exportRuleWithProviders(rule, showNotification);
+    const handleExport = useCallback(async (format: ExportFormat = 'jsonl') => {
+        await exportRuleWithProviders(rule, format, showNotification);
     }, [rule, showNotification]);
 
-    return { handleExport };
+    const handleExportAsJsonlToClipboard = useCallback(async () => {
+        await exportRuleAsJsonlToClipboard(rule, showNotification);
+    }, [rule, showNotification]);
+
+    const handleExportAsBase64ToClipboard = useCallback(async () => {
+        await exportRuleAsBase64ToClipboard(rule, showNotification);
+    }, [rule, showNotification]);
+
+    return { handleExport, handleExportAsJsonlToClipboard, handleExportAsBase64ToClipboard };
 }
 
 /**

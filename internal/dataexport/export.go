@@ -2,6 +2,7 @@ package dataexport
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -39,12 +40,5 @@ func timestamp() string {
 
 // joinLines joins strings with newline separators
 func joinLines(lines []string) string {
-	if len(lines) == 0 {
-		return ""
-	}
-	result := lines[0]
-	for i := 1; i < len(lines); i++ {
-		result += "\n" + lines[i]
-	}
-	return result
+	return strings.Join(lines, "\n")
 }
