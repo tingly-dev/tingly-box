@@ -129,30 +129,45 @@ export const formatTooltipValue = (value: number): string => {
 
 // Shared Tooltip Component
 export const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-        const data = payload[0].payload;
-        return (
-            <Box
-                sx={{
-                    backgroundColor: 'white',
-                    padding: 2,
-                    borderRadius: 2,
-                    border: '1px solid #e0e0e0',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                }}
-            >
-                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-                    {data.timeFull}
-                </Typography>
-                {payload.map((entry: any, index: number) => (
-                    <Typography key={index} variant="body2" sx={{ color: entry.color }}>
+    if (!active || !payload || !payload.length) return null;
+
+    const data = payload[0].payload;
+    return (
+        <Box sx={tooltipStyle}>
+            <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, fontSize: '0.875rem' }}>
+                {data.timeFull}
+            </Typography>
+            {payload.map((entry: any, index: number) => (
+                <Box
+                    key={index}
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        mb: 0.5,
+                        fontSize: '0.75rem',
+                    }}
+                >
+                    <Box
+                        sx={{
+                            width: 12,
+                            height: 12,
+                            borderRadius: 2,
+                            backgroundColor: entry.color,
+                        }}
+                    />
+                    <Typography variant="body2" sx={{ color: 'text.primary' }}>
                         {entry.name}: {formatTooltipValue(entry.value)}
                     </Typography>
-                ))}
+                </Box>
+            ))}
+            <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid #e2e8f0', fontSize: '0.75rem' }}>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    Total: {formatTooltipValue(data.inputTokens + data.outputTokens + data.cacheTokens)}
+                </Typography>
             </Box>
-        );
-    }
-    return null;
+        </Box>
+    );
 };
 
 // Shared wrapper component
@@ -243,35 +258,120 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
     const labelInterval = calculateLabelInterval(chartData.length);
 
     return (
-        <ChartWrapper
-            title="Token Usage Over Time (Daily)"
-            chartData={chartData}
+        <Paper
+            elevation={0}
+            sx={{
+                p: 3,
+                borderRadius: 2.5,
+                border: '1px solid',
+                borderColor: 'divider',
+                flexGrow: 1,
+                backgroundColor: 'background.paper',
+                boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
+                display: 'flex',
+                flexDirection: 'column',
+            }}
         >
-            <BarChart data={chartData} barCategoryGap={8}>
-                <CartesianGrid strokeDasharray="4 4" stroke={gridStyle.stroke} strokeOpacity={gridStyle.strokeOpacity} />
-                <XAxis
-                    dataKey="time"
-                    tick={{ fontSize: 11, fill: '#64748b' }}
-                    tickLine={false}
-                    axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
-                    interval={labelInterval}
-                />
-                <YAxis
-                    tickFormatter={formatYAxis}
-                    tick={{ fontSize: 11, fill: '#64748b' }}
-                    tickLine={false}
-                    axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="cacheTokens" name="Cache Tokens" fill={TOKEN_COLORS.cache.main} stackId="tokens" radius={barRadius}>
-                    {chartData.map((entry, index) => (
-                        <Cell key={`cache-${index}`} fill={entry.cacheTokens > 0 ? TOKEN_COLORS.cache.gradient : 'transparent'} />
-                    ))}
-                </Bar>
-                <Bar dataKey="outputTokens" name="Output Tokens" fill={TOKEN_COLORS.output.gradient} stackId="tokens" radius={barRadius} />
-                <Bar dataKey="inputTokens" name="Input Tokens" fill={TOKEN_COLORS.input.gradient} stackId="tokens" radius={barRadius} />
-            </BarChart>
-        </ChartWrapper>
+            <Box sx={{ mb: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1rem' }}>
+                    Token Usage Over Time (Daily)
+                </Typography>
+            </Box>
+            {chartData.length === 0 ? (
+                <Box
+                    sx={{
+                        flex: 1,
+                        minHeight: 280,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'text.secondary',
+                    }}
+                >
+                    <Box
+                        sx={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 2,
+                            backgroundColor: alpha('#64748b', 0.1),
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            mb: 2,
+                        }}
+                    >
+                        <Box
+                            sx={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: '50%',
+                                backgroundColor: 'text.disabled',
+                                opacity: 0.3,
+                            }}
+                        />
+                    </Box>
+                    <Typography variant="body1" color="text.secondary">
+                        No data available
+                    </Typography>
+                    <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5 }}>
+                        Select a different time range or check back later
+                    </Typography>
+                </Box>
+            ) : (
+                <>
+                    <Box sx={{ flex: 1, minHeight: 280 }}>
+                        <ResponsiveContainer width="100%" height={280}>
+                            <BarChart data={chartData} barCategoryGap={8}>
+                                <CartesianGrid strokeDasharray="4 4" stroke={gridStyle.stroke} strokeOpacity={gridStyle.strokeOpacity} />
+                                <XAxis
+                                    dataKey="time"
+                                    tick={{ fontSize: 11, fill: '#64748b' }}
+                                    tickLine={false}
+                                    axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
+                                    interval={labelInterval}
+                                />
+                                <YAxis
+                                    tickFormatter={formatYAxis}
+                                    tick={{ fontSize: 11, fill: '#64748b' }}
+                                    tickLine={false}
+                                    axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
+                                />
+                                <Tooltip content={<CustomTooltip />} />
+                                <Bar dataKey="cacheTokens" name="Cache Tokens" fill={TOKEN_COLORS.cache.main} stackId="tokens" radius={barRadius}>
+                                    {chartData.map((entry, index) => (
+                                        <Cell key={`cache-${index}`} fill={entry.cacheTokens > 0 ? TOKEN_COLORS.cache.gradient : 'transparent'} />
+                                    ))}
+                                </Bar>
+                                <Bar dataKey="inputTokens" name="Input Tokens" fill={TOKEN_COLORS.input.gradient} stackId="tokens" radius={barRadius} />
+                                <Bar dataKey="outputTokens" name="Output Tokens" fill={TOKEN_COLORS.output.gradient} stackId="tokens" radius={barRadius} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </Box>
+                    {/* Legend replacement - inline indicator */}
+                    <Box sx={{ mt: 2, display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.cache.main }} />
+                            <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                                Cache
+                            </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.input.main }} />
+                            <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                                Input
+                            </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.output.main }} />
+                            <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                                Output
+                            </Typography>
+                        </Box>
+                    </Box>
+                </>
+            )}
+        </Paper>
     );
 }
 
@@ -285,52 +385,137 @@ export function HourlyTokenHistoryChart({ data }: HourlyTokenHistoryChartProps) 
     const labelInterval = calculateLabelInterval(chartData.length);
 
     return (
-        <ChartWrapper
-            title="Token Usage Over Time (Hourly)"
-            chartData={chartData}
+        <Paper
+            elevation={0}
+            sx={{
+                p: 3,
+                borderRadius: 2.5,
+                border: '1px solid',
+                borderColor: 'divider',
+                flexGrow: 1,
+                backgroundColor: 'background.paper',
+                boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
+                display: 'flex',
+                flexDirection: 'column',
+            }}
         >
-            <ComposedChart data={chartData}>
-                <CartesianGrid strokeDasharray="4 4" stroke={gridStyle.stroke} strokeOpacity={gridStyle.strokeOpacity} vertical={false} />
-                <XAxis
-                    dataKey="time"
-                    tick={{ fontSize: 11, fill: '#64748b' }}
-                    tickLine={false}
-                    axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
-                    interval={labelInterval}
-                />
-                <YAxis
-                    tickFormatter={formatYAxis}
-                    tick={{ fontSize: 11, fill: '#64748b' }}
-                    tickLine={false}
-                    axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Area
-                    type="monotone"
-                    dataKey="inputTokens"
-                    name="Input Tokens"
-                    stackId="1"
-                    stroke={TOKEN_COLORS.input.main}
-                    fill={TOKEN_COLORS.input.gradient}
-                />
-                <Area
-                    type="monotone"
-                    dataKey="cacheTokens"
-                    name="Cache Tokens"
-                    stackId="1"
-                    stroke={TOKEN_COLORS.cache.main}
-                    fill={TOKEN_COLORS.cache.gradient}
-                />
-                <Area
-                    type="monotone"
-                    dataKey="outputTokens"
-                    name="Output Tokens"
-                    stackId="1"
-                    stroke={TOKEN_COLORS.output.main}
-                    fill={TOKEN_COLORS.output.gradient}
-                />
-            </ComposedChart>
-        </ChartWrapper>
+            <Box sx={{ mb: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1rem' }}>
+                    Token Usage Over Time (Hourly)
+                </Typography>
+            </Box>
+            {chartData.length === 0 ? (
+                <Box
+                    sx={{
+                        flex: 1,
+                        minHeight: 280,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'text.secondary',
+                    }}
+                >
+                    <Box
+                        sx={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 2,
+                            backgroundColor: alpha('#64748b', 0.1),
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            mb: 2,
+                        }}
+                    >
+                        <Box
+                            sx={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: '50%',
+                                backgroundColor: 'text.disabled',
+                                opacity: 0.3,
+                            }}
+                        />
+                    </Box>
+                    <Typography variant="body1" color="text.secondary">
+                        No data available
+                    </Typography>
+                    <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5 }}>
+                        Select a different time range or check back later
+                    </Typography>
+                </Box>
+            ) : (
+                <>
+                    <Box sx={{ flex: 1, minHeight: 280 }}>
+                        <ResponsiveContainer width="100%" height={280}>
+                            <ComposedChart data={chartData}>
+                                <CartesianGrid strokeDasharray="4 4" stroke={gridStyle.stroke} strokeOpacity={gridStyle.strokeOpacity} vertical={false} />
+                                <XAxis
+                                    dataKey="time"
+                                    tick={{ fontSize: 11, fill: '#64748b' }}
+                                    tickLine={false}
+                                    axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
+                                    interval={labelInterval}
+                                />
+                                <YAxis
+                                    tickFormatter={formatYAxis}
+                                    tick={{ fontSize: 11, fill: '#64748b' }}
+                                    tickLine={false}
+                                    axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
+                                />
+                                <Tooltip content={<CustomTooltip />} />
+                                <Area
+                                    type="monotone"
+                                    dataKey="cacheTokens"
+                                    name="Cache Tokens"
+                                    stackId="1"
+                                    stroke={TOKEN_COLORS.cache.main}
+                                    fill={TOKEN_COLORS.cache.gradient}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey="inputTokens"
+                                    name="Input Tokens"
+                                    stackId="1"
+                                    stroke={TOKEN_COLORS.input.main}
+                                    fill={TOKEN_COLORS.input.gradient}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey="outputTokens"
+                                    name="Output Tokens"
+                                    stackId="1"
+                                    stroke={TOKEN_COLORS.output.main}
+                                    fill={TOKEN_COLORS.output.gradient}
+                                />
+                            </ComposedChart>
+                        </ResponsiveContainer>
+                    </Box>
+                    {/* Legend replacement - inline indicator */}
+                    <Box sx={{ mt: 2, display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.cache.main }} />
+                            <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                                Cache
+                            </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.input.main }} />
+                            <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                                Input
+                            </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.output.main }} />
+                            <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                                Output
+                            </Typography>
+                        </Box>
+                    </Box>
+                </>
+            )}
+        </Paper>
     );
 }
 
