@@ -31,6 +31,7 @@ type chatToResponsesState struct {
 	accumulatedText  strings.Builder
 	inputTokens      int64
 	outputTokens     int64
+	cacheTokens      int64 // Cached tokens from prompt
 	hasSentCreated   bool
 }
 
@@ -129,6 +130,11 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 			state.outputTokens = int64(chunk.Usage.CompletionTokens)
 			hasUsage = true
 		}
+		// Track cache tokens from prompt tokens details if available
+		if chunk.Usage.PromptTokensDetails.CachedTokens != 0 {
+			state.cacheTokens = int64(chunk.Usage.PromptTokensDetails.CachedTokens)
+			hasUsage = true
+		}
 
 		// Skip empty chunks
 		if len(chunk.Choices) == 0 {
@@ -223,7 +229,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		// Check if it was a client cancellation
 		if errors.Is(err, context.Canceled) {
 			logrus.Debug("Chat to Responses stream canceled by client")
-			return protocol.NewTokenUsage(int(state.inputTokens), int(state.outputTokens)), nil
+			return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
 		}
 		logrus.Errorf("Chat to Responses stream error: %v", err)
 
@@ -237,7 +243,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", string(errorJSON)))
 		flusher.Flush()
 
-		return protocol.NewTokenUsage(int(state.inputTokens), int(state.outputTokens)), err
+		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), err
 	}
 
 	// Some providers end the stream without emitting a final chunk with finish_reason.
@@ -257,7 +263,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		flusher.Flush()
 	}
 
-	return protocol.NewTokenUsage(int(state.inputTokens), int(state.outputTokens)), nil
+	return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
 }
 
 // sendResponsesCreatedEvent sends the response.created event
@@ -272,11 +278,11 @@ func sendResponsesCreatedEvent(c *gin.Context, state *chatToResponsesState, flus
 			"status":     "in_progress",
 			"output":     []interface{}{},
 			"usage": map[string]interface{}{
-				"input_tokens":  0,
-				"output_tokens": 0,
-				"total_tokens":  0,
+				"input_tokens":  state.inputTokens,
+				"output_tokens": state.outputTokens,
+				"total_tokens":  state.inputTokens + state.outputTokens,
 				"input_tokens_details": map[string]interface{}{
-					"cached_tokens": 0,
+					"cached_tokens": state.cacheTokens,
 				},
 				"output_tokens_details": map[string]interface{}{
 					"reasoning_tokens": 0,
@@ -483,7 +489,7 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 				"output_tokens": state.outputTokens,
 				"total_tokens":  state.inputTokens + state.outputTokens,
 				"input_tokens_details": map[string]interface{}{
-					"cached_tokens": 0,
+					"cached_tokens": state.cacheTokens,
 				},
 				"output_tokens_details": map[string]interface{}{
 					"reasoning_tokens": 0,

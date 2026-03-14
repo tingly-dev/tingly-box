@@ -313,7 +313,7 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 		// Check if it was a client cancellation
 		if errors.Is(err, context.Canceled) {
 			logrus.Debug("OpenAI to Anthropic beta stream canceled by client")
-			return protocol.NewTokenUsage(int(state.inputTokens), int(state.outputTokens)), nil
+			return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
 		}
 		logrus.Errorf("OpenAI stream error: %v", err)
 		errorEvent := map[string]interface{}{
@@ -325,9 +325,9 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 			},
 		}
 		sendAnthropicBetaStreamEvent(c, "error", errorEvent, flusher)
-		return protocol.NewTokenUsage(int(state.inputTokens), int(state.outputTokens)), err
+		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), err
 	}
-	return protocol.NewTokenUsage(int(state.inputTokens), int(state.outputTokens)), nil
+	return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
 }
 
 // HandleResponsesToAnthropicBetaStream processes OpenAI Responses API streaming events and converts them to Anthropic beta format.

@@ -32,10 +32,11 @@ func TestHandleMessageDelta(t *testing.T) {
 	eventStr := `{"type": "message_delta", "delta": {"stop_reason": "end_turn", "stop_sequence": ""}, "usage": {"input_tokens": 100, "output_tokens": 50}}`
 	event := parseTestEvent(eventStr)
 
-	inputTokens, outputTokens, hasUsage := handleMessageDelta(state, event, 0, 0)
+	inputTokens, outputTokens, cacheTokens, hasUsage := handleMessageDelta(state, event, 0, 0)
 
 	assert.Equal(t, 100, inputTokens)
 	assert.Equal(t, 50, outputTokens)
+	assert.Equal(t, 0, cacheTokens)
 	assert.True(t, hasUsage)
 	assert.Equal(t, int64(100), state.inputTokens)
 	assert.Equal(t, int64(50), state.outputTokens)
@@ -48,11 +49,30 @@ func TestHandleMessageDelta_NoUsage(t *testing.T) {
 	eventStr := `{"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {}}`
 	event := parseTestEvent(eventStr)
 
-	inputTokens, outputTokens, hasUsage := handleMessageDelta(state, event, 0, 0)
+	inputTokens, outputTokens, cacheTokens, hasUsage := handleMessageDelta(state, event, 0, 0)
 
 	assert.Equal(t, 0, inputTokens)
 	assert.Equal(t, 0, outputTokens)
+	assert.Equal(t, 0, cacheTokens)
 	assert.False(t, hasUsage)
+}
+
+// TestHandleMessageDelta_WithCache tests delta with cache tokens
+func TestHandleMessageDelta_WithCache(t *testing.T) {
+	state := newResponsesConverterState(time.Now().Unix())
+
+	eventStr := `{"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"input_tokens": 100, "output_tokens": 50, "cache_read_input_tokens": 200}}`
+	event := parseTestEvent(eventStr)
+
+	inputTokens, outputTokens, cacheTokens, hasUsage := handleMessageDelta(state, event, 0, 0)
+
+	assert.Equal(t, 100, inputTokens)
+	assert.Equal(t, 50, outputTokens)
+	assert.Equal(t, 200, cacheTokens)
+	assert.True(t, hasUsage)
+	assert.Equal(t, int64(100), state.inputTokens)
+	assert.Equal(t, int64(50), state.outputTokens)
+	assert.Equal(t, int64(200), state.cacheTokens)
 }
 
 // TestResponsesConverterState_AccumulatedText tests text accumulation
