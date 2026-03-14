@@ -8,6 +8,7 @@ import (
 	"github.com/openai/openai-go/v3/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -44,7 +45,7 @@ func TestApplyGeminiTransform(t *testing.T) {
 		req.SetExtraFields(extraFields)
 
 		provider := &typ.Provider{Name: "google"}
-		config := &OpenAIConfig{}
+		config := &protocol.OpenAIConfig{}
 
 		result := applyGeminiTransform(req, provider, "gemini-2.5-flash", config)
 
@@ -70,7 +71,7 @@ func TestApplyGeminiTransform(t *testing.T) {
 		}
 
 		provider := &typ.Provider{Name: "google"}
-		config := &OpenAIConfig{}
+		config := &protocol.OpenAIConfig{}
 
 		result := applyGeminiTransform(req, provider, "gemini-pro", config)
 
@@ -407,7 +408,7 @@ func TestApplyGeminiOpenRouterTransform(t *testing.T) {
 		}
 
 		provider := &typ.Provider{Name: "openrouter"}
-		config := &OpenAIConfig{}
+		config := &protocol.OpenAIConfig{}
 
 		result := applyGeminiOpenRouterTransform(req, provider, "openrouter:google/gemini-pro", config)
 

@@ -11,7 +11,8 @@ import (
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/protocol/transformer"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/transformer"
 	"google.golang.org/genai"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
@@ -184,8 +185,8 @@ func ForwardGoogleStream(fc *ForwardContext, wrapper *client.GoogleClient, model
 // ===================================================================
 
 // buildOpenAIConfig builds the OpenAIConfig for provider transformations.
-func buildOpenAIConfig(req *openai.ChatCompletionNewParams) *transformer.OpenAIConfig {
-	config := &transformer.OpenAIConfig{
+func buildOpenAIConfig(req *openai.ChatCompletionNewParams) *protocol.OpenAIConfig {
+	config := &protocol.OpenAIConfig{
 		HasThinking:     false,
 		ReasoningEffort: "",
 	}

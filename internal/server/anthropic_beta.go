@@ -8,7 +8,7 @@ import (
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3/responses"
-	"github.com/tingly-dev/tingly-box/internal/protocol/transformer"
+	"github.com/tingly-dev/tingly-box/internal/transformer"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"

@@ -8,12 +8,12 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/shared"
-	"github.com/tingly-dev/tingly-box/internal/protocol/transformer"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 // ConvertAnthropicBetaToOpenAIRequest converts Anthropic beta request to OpenAI format
 // Returns the OpenAI request and a config object with metadata for provider transforms
-func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewParams, compatible bool, isStreaming bool, disableStreamUsage bool) (*openai.ChatCompletionNewParams, *transformer.OpenAIConfig) {
+func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewParams, compatible bool, isStreaming bool, disableStreamUsage bool) (*openai.ChatCompletionNewParams, *protocol.OpenAIConfig) {
 	openaiReq := &openai.ChatCompletionNewParams{
 		Model: openai.ChatModel(anthropicReq.Model),
 	}
@@ -55,7 +55,7 @@ func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewP
 		openaiReq.ToolChoice = ConvertAnthropicBetaToolChoiceToOpenAI(&anthropicReq.ToolChoice)
 	}
 
-	config := &transformer.OpenAIConfig{
+	config := &protocol.OpenAIConfig{
 		HasThinking:     isThinking,
 		ReasoningEffort: "low", // Default to "low" for OpenAI-compatible APIs
 	}

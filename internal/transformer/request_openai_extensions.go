@@ -4,27 +4,13 @@ import (
 	"strings"
 
 	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/shared"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// OpenAIConfig contains additional metadata that may be used by provider transforms
-type OpenAIConfig struct {
-	// HasThinking indicates whether the request contains thinking content
-	// This can be used by providers like DeepSeek to handle reasoning_content
-	HasThinking bool
-
-	// ReasoningEffort specifies the reasoning effort level for OpenAI-compatible APIs
-	// Valid values: "none", "minimal", "low", "medium", "high", "xhigh"
-	// Defaults to "low" when HasThinking is true
-	ReasoningEffort shared.ReasoningEffort
-
-	// Future fields can be added here as needed for provider-specific transformations
-}
-
 // ProviderTransform applies provider-specific transformations to OpenAI requests
-type ProviderTransform func(*openai.ChatCompletionNewParams, *typ.Provider, string, *OpenAIConfig) *openai.ChatCompletionNewParams
+type ProviderTransform func(*openai.ChatCompletionNewParams, *typ.Provider, string, *protocol.OpenAIConfig) *openai.ChatCompletionNewParams
 
 // providerConfig maps APIBase patterns to their transforms
 type providerConfig struct {
@@ -103,7 +89,7 @@ func GetProviderTransform(provider *typ.Provider, model string) ProviderTransfor
 
 // applyDefaultTransform applies default transformations for OpenAI-compatible requests
 // This handles standard fields like reasoning_effort that are widely supported
-func applyDefaultTransform(req *openai.ChatCompletionNewParams, config *OpenAIConfig) *openai.ChatCompletionNewParams {
+func applyDefaultTransform(req *openai.ChatCompletionNewParams, config *protocol.OpenAIConfig) *openai.ChatCompletionNewParams {
 	if config.HasThinking && config.ReasoningEffort != "" {
 		// Set reasoning_effort from config for OpenAI-compatible APIs
 		// This is widely supported by many providers (OpenAI, Azure, etc.)
@@ -128,7 +114,7 @@ func applyDefaultTransform(req *openai.ChatCompletionNewParams, config *OpenAICo
 
 // ApplyProviderTransforms applies provider-specific transformations
 // Falls back to default handling if no specific transform found
-func ApplyProviderTransforms(req *openai.ChatCompletionNewParams, provider *typ.Provider, model string, config *OpenAIConfig) *openai.ChatCompletionNewParams {
+func ApplyProviderTransforms(req *openai.ChatCompletionNewParams, provider *typ.Provider, model string, config *protocol.OpenAIConfig) *openai.ChatCompletionNewParams {
 	if transform := GetProviderTransform(provider, model); transform != nil {
 		return transform(req, provider, model, config)
 	}
