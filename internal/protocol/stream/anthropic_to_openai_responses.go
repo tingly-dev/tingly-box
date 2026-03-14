@@ -25,7 +25,7 @@ func HandleAnthropicToOpenAIResponsesStream(
 	hc *protocol.HandleContext,
 	stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion],
 	responseModel string,
-) (protocol.UsageStat, error) {
+) (*protocol.TokenUsage, error) {
 	logrus.Info("Starting Anthropic to OpenAI Responses streaming converter")
 	defer func() {
 		if r := recover(); r != nil {
@@ -60,7 +60,7 @@ func HandleAnthropicToOpenAIResponsesStream(
 				Code:    "streaming_unsupported",
 			},
 		})
-		return protocol.ZeroUsageStat(), fmt.Errorf("streaming not supported")
+		return protocol.ZeroTokenUsage(), fmt.Errorf("streaming not supported")
 	}
 
 	// Initialize converter state
@@ -135,25 +135,25 @@ func HandleAnthropicToOpenAIResponsesStream(
 		if errors.Is(err, context.Canceled) {
 			logrus.Debug("Anthropic to Responses stream canceled by client")
 			if hasUsage {
-				return protocol.NewUsageStat(inputTokens, outputTokens), nil
+				return protocol.NewTokenUsage(inputTokens, outputTokens), nil
 			}
-			return protocol.ZeroUsageStat(), nil
+			return protocol.ZeroTokenUsage(), nil
 		}
 
 		if errors.Is(err, io.EOF) {
 			logrus.Info("Anthropic stream ended normally (EOF)")
 			if hasUsage {
-				return protocol.NewUsageStat(inputTokens, outputTokens), nil
+				return protocol.NewTokenUsage(inputTokens, outputTokens), nil
 			}
-			return protocol.ZeroUsageStat(), nil
+			return protocol.ZeroTokenUsage(), nil
 		}
 
 		logrus.Errorf("Anthropic stream error: %v", err)
 		sendResponsesErrorEvent(c, err.Error(), "stream_error", flusher)
 		if hasUsage {
-			return protocol.NewUsageStat(inputTokens, outputTokens), err
+			return protocol.NewTokenUsage(inputTokens, outputTokens), err
 		}
-		return protocol.ZeroUsageStat(), err
+		return protocol.ZeroTokenUsage(), err
 	}
 
 	// Some providers end the stream without emitting message_stop
@@ -168,9 +168,9 @@ func HandleAnthropicToOpenAIResponsesStream(
 	}
 
 	if hasUsage {
-		return protocol.NewUsageStat(inputTokens, outputTokens), nil
+		return protocol.NewTokenUsage(inputTokens, outputTokens), nil
 	}
-	return protocol.ZeroUsageStat(), nil
+	return protocol.ZeroTokenUsage(), nil
 }
 
 // responsesConverterState maintains the state during stream conversion
@@ -268,10 +268,10 @@ func handleContentBlockStart(
 			"item_id":      state.itemID,
 			"output_index": state.outputIndex,
 			"item": map[string]interface{}{
-				"id":     state.itemID,
-				"type":   "message",
-				"status": "in_progress",
-				"role":   "assistant",
+				"id":      state.itemID,
+				"type":    "message",
+				"status":  "in_progress",
+				"role":    "assistant",
 				"content": []interface{}{},
 			},
 			"sequence_number": state.nextSequenceNumber(),
@@ -304,14 +304,14 @@ func handleContentBlockStart(
 		}
 
 		outputEvent := map[string]interface{}{
-			"type":  "response.output_item.added",
+			"type": "response.output_item.added",
 			"item": map[string]interface{}{
-				"type":     "function_call",
-				"id":       toolID,
-				"call_id":  toolID,
-				"name":     toolName,
+				"type":      "function_call",
+				"id":        toolID,
+				"call_id":   toolID,
+				"name":      toolName,
 				"arguments": "",
-				"status":   "in_progress",
+				"status":    "in_progress",
 			},
 			"output_index":    state.outputIndex,
 			"sequence_number": state.nextSequenceNumber(),
@@ -338,11 +338,11 @@ func handleContentBlockDelta(
 		state.accumulatedText += text
 
 		deltaEvent := map[string]interface{}{
-			"type":          "response.output_text.delta",
-			"delta":         text,
-			"item_id":       state.itemID,
-			"output_index":  state.outputIndex,
-			"content_index": 0,
+			"type":            "response.output_text.delta",
+			"delta":           text,
+			"item_id":         state.itemID,
+			"output_index":    state.outputIndex,
+			"content_index":   0,
 			"sequence_number": state.nextSequenceNumber(),
 		}
 		sendResponsesEvent(c, deltaEvent, flusher)
@@ -353,10 +353,10 @@ func handleContentBlockDelta(
 			pending.arguments.WriteString(argsDelta)
 
 			deltaEvent := map[string]interface{}{
-				"type":          "response.function_call_arguments.delta",
-				"delta":         argsDelta,
-				"item_id":       pending.itemID,
-				"output_index":  state.outputIndex,
+				"type":            "response.function_call_arguments.delta",
+				"delta":           argsDelta,
+				"item_id":         pending.itemID,
+				"output_index":    state.outputIndex,
 				"sequence_number": state.nextSequenceNumber(),
 			}
 			sendResponsesEvent(c, deltaEvent, flusher)
@@ -377,11 +377,11 @@ func handleContentBlockStop(
 	if blockType == "text" {
 		// Send response.output_text.done event
 		textDoneEvent := map[string]interface{}{
-			"type":          "response.output_text.done",
-			"item_id":       state.itemID,
-			"output_index":  state.outputIndex,
-			"content_index": 0,
-			"text":          state.accumulatedText,
+			"type":            "response.output_text.done",
+			"item_id":         state.itemID,
+			"output_index":    state.outputIndex,
+			"content_index":   0,
+			"text":            state.accumulatedText,
 			"sequence_number": state.nextSequenceNumber(),
 		}
 		sendResponsesEvent(c, textDoneEvent, flusher)
@@ -406,10 +406,10 @@ func handleContentBlockStop(
 			"item_id":      state.itemID,
 			"output_index": state.outputIndex,
 			"item": map[string]interface{}{
-				"id":      state.itemID,
-				"type":    "message",
-				"status":  "completed",
-				"role":    "assistant",
+				"id":     state.itemID,
+				"type":   "message",
+				"status": "completed",
+				"role":   "assistant",
 				"content": []map[string]interface{}{
 					{
 						"type": "output_text",
@@ -425,10 +425,10 @@ func handleContentBlockStop(
 		if pending, exists := state.pendingToolCalls[int(index)]; exists {
 			// Send response.function_call_arguments.done event
 			argsDoneEvent := map[string]interface{}{
-				"type":          "response.function_call_arguments.done",
-				"item_id":       pending.itemID,
-				"output_index":  state.outputIndex,
-				"arguments":     pending.arguments.String(),
+				"type":            "response.function_call_arguments.done",
+				"item_id":         pending.itemID,
+				"output_index":    state.outputIndex,
+				"arguments":       pending.arguments.String(),
 				"sequence_number": state.nextSequenceNumber(),
 			}
 			sendResponsesEvent(c, argsDoneEvent, flusher)
@@ -483,10 +483,10 @@ func handleMessageStop(
 	// Add text content as a message item if present
 	if state.accumulatedText != "" {
 		output = append(output, map[string]interface{}{
-			"id":      state.itemID,
-			"type":    "message",
-			"status":  "completed",
-			"role":    "assistant",
+			"id":     state.itemID,
+			"type":   "message",
+			"status": "completed",
+			"role":   "assistant",
 			"content": []map[string]interface{}{
 				{
 					"type": "output_text",
@@ -515,13 +515,13 @@ func handleMessageStop(
 	doneEvent := map[string]interface{}{
 		"type": "response.completed",
 		"response": map[string]interface{}{
-			"id":          state.responseID,
-			"object":      "response",
-			"created_at":  state.createdAt,
-			"status":      "completed",
+			"id":           state.responseID,
+			"object":       "response",
+			"created_at":   state.createdAt,
+			"status":       "completed",
 			"completed_at": state.createdAt, // Use same timestamp for simplicity
-			"model":       "", // Will be filled by caller if needed
-			"output":      output,
+			"model":        "",              // Will be filled by caller if needed
+			"output":       output,
 			"usage": map[string]interface{}{
 				"input_tokens":  inputTokens,
 				"output_tokens": outputTokens,
@@ -594,10 +594,10 @@ func sendFinalCompletionEvent(c *gin.Context, state *responsesConverterState, fl
 	// Add text content as a message item if present
 	if state.accumulatedText != "" {
 		output = append(output, map[string]interface{}{
-			"id":      state.itemID,
-			"type":    "message",
-			"status":  "completed",
-			"role":    "assistant",
+			"id":     state.itemID,
+			"type":   "message",
+			"status": "completed",
+			"role":   "assistant",
 			"content": []map[string]interface{}{
 				{
 					"type": "output_text",

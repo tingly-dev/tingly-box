@@ -226,7 +226,7 @@ func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *
 
 	// Process the SSE stream using the proper handler based on original request format
 	var streamErr error
-	var usage protocol.UsageStat
+	var usage *protocol.TokenUsage
 	if originalFormat == "v1" {
 		// Original request was v1 format, send response in v1 format
 		usage, streamErr = streamhandler.HandleResponsesToAnthropicV1Stream(c, sseStream, responseModel)

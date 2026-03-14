@@ -17,12 +17,12 @@ import (
 
 // HandleAnthropicV1Stream handles Anthropic v1 streaming response.
 // Returns (UsageStat, error)
-func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNewParams, streamResp *anthropicstream.Stream[anthropic.MessageStreamEventUnion]) (protocol.UsageStat, error) {
+func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNewParams, streamResp *anthropicstream.Stream[anthropic.MessageStreamEventUnion]) (*protocol.TokenUsage, error) {
 	defer streamResp.Close()
 
 	hc.SetupSSEHeaders()
 
-	var inputTokens, outputTokens int
+	var inputTokens, outputTokens, cacheTokens int
 	var hasUsage bool
 
 	err := hc.ProcessStream(
@@ -49,6 +49,10 @@ func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNe
 				outputTokens = int(evt.Usage.OutputTokens)
 				hasUsage = true
 			}
+			if evt.Usage.CacheReadInputTokens > 0 {
+				cacheTokens = int(evt.Usage.CacheReadInputTokens)
+				hasUsage = true
+			}
 
 			// Send SSE event
 			eventJSON, err := json.Marshal(evt)
@@ -66,28 +70,28 @@ func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNe
 		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
 			logrus.Debug("Anthropic v1 stream canceled by client")
 			if !hasUsage {
-				return protocol.ZeroUsageStat(), nil
+				return protocol.ZeroTokenUsage(), nil
 			}
-			return protocol.NewUsageStat(inputTokens, outputTokens), nil
+			return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 		}
 
 		MarshalAndSendErrorEvent(hc.GinContext, err.Error(), "stream_error", "stream_failed")
-		return protocol.NewUsageStat(inputTokens, outputTokens), err
+		return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), err
 	}
 
 	SendFinishEvent(hc.GinContext)
 
-	return protocol.NewUsageStat(inputTokens, outputTokens), nil
+	return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 }
 
 // HandleAnthropicV1BetaStream handles Anthropic v1 beta streaming response.
 // Returns (UsageStat, error)
-func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion]) (protocol.UsageStat, error) {
+func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion]) (*protocol.TokenUsage, error) {
 	defer streamResp.Close()
 
 	hc.SetupSSEHeaders()
 
-	var inputTokens, outputTokens int
+	var inputTokens, outputTokens, cacheTokens int
 	var hasUsage bool
 
 	err := hc.ProcessStream(
@@ -114,6 +118,10 @@ func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaM
 				outputTokens = int(evt.Usage.OutputTokens)
 				hasUsage = true
 			}
+			if evt.Usage.CacheReadInputTokens > 0 {
+				cacheTokens = int(evt.Usage.CacheReadInputTokens)
+				hasUsage = true
+			}
 
 			// Send SSE event
 			eventJSON, err := json.Marshal(evt)
@@ -131,18 +139,18 @@ func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaM
 		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
 			logrus.Debug("Anthropic v1 beta stream canceled by client")
 			if !hasUsage {
-				return protocol.ZeroUsageStat(), nil
+				return protocol.ZeroTokenUsage(), nil
 			}
-			return protocol.NewUsageStat(inputTokens, outputTokens), nil
+			return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 		}
 
 		MarshalAndSendErrorEvent(hc.GinContext, err.Error(), "stream_error", "stream_failed")
-		return protocol.NewUsageStat(inputTokens, outputTokens), err
+		return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), err
 	}
 
 	SendFinishEvent(hc.GinContext)
 
-	return protocol.NewUsageStat(inputTokens, outputTokens), nil
+	return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 }
 
 // ===================================================================

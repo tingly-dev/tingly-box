@@ -11,7 +11,7 @@ import (
 
 // HandleOpenAIChatNonStream handles OpenAI chat non-streaming response.
 // Returns (UsageStat, error)
-func HandleOpenAIChatNonStream(hc *protocol.HandleContext, resp *openai.ChatCompletion) (protocol.UsageStat, error) {
+func HandleOpenAIChatNonStream(hc *protocol.HandleContext, resp *openai.ChatCompletion) (*protocol.TokenUsage, error) {
 	inputTokens := int(resp.Usage.PromptTokens)
 	outputTokens := int(resp.Usage.CompletionTokens)
 
@@ -19,28 +19,28 @@ func HandleOpenAIChatNonStream(hc *protocol.HandleContext, resp *openai.ChatComp
 	responseJSON, err := json.Marshal(resp)
 	if err != nil {
 		hc.SendError(err, "api_error", "marshal_failed")
-		return protocol.ZeroUsageStat(), err
+		return protocol.ZeroTokenUsage(), err
 	}
 
 	var responseMap map[string]interface{}
 	if err := json.Unmarshal(responseJSON, &responseMap); err != nil {
 		hc.SendError(err, "api_error", "unmarshal_failed")
-		return protocol.ZeroUsageStat(), err
+		return protocol.ZeroTokenUsage(), err
 	}
 
 	// Update response model
 	responseMap["model"] = hc.ResponseModel
 
 	hc.GinContext.JSON(http.StatusOK, responseMap)
-	return protocol.NewUsageStat(inputTokens, outputTokens), nil
+	return protocol.NewTokenUsage(inputTokens, outputTokens), nil
 }
 
 // HandleOpenAIResponsesNonStream handles OpenAI Responses API non-streaming response.
 // Returns (UsageStat, error)
-func HandleOpenAIResponsesNonStream(hc *protocol.HandleContext, resp *responses.Response) (protocol.UsageStat, error) {
+func HandleOpenAIResponsesNonStream(hc *protocol.HandleContext, resp *responses.Response) (*protocol.TokenUsage, error) {
 	inputTokens := int(resp.Usage.InputTokens)
 	outputTokens := int(resp.Usage.OutputTokens)
 
 	hc.GinContext.JSON(http.StatusOK, resp)
-	return protocol.NewUsageStat(inputTokens, outputTokens), nil
+	return protocol.NewTokenUsage(inputTokens, outputTokens), nil
 }

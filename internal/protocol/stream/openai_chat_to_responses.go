@@ -45,7 +45,7 @@ type pendingToolCallResponse struct {
 
 // HandleOpenAIChatToResponsesStream converts OpenAI Chat Completions streaming to Responses API format.
 // Returns UsageStat containing token usage information for tracking.
-func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (protocol.UsageStat, error) {
+func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (*protocol.TokenUsage, error) {
 	logrus.Info("Starting OpenAI Chat to Responses streaming conversion handler")
 	defer func() {
 		if r := recover(); r != nil {
@@ -75,7 +75,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		return protocol.ZeroUsageStat(), errors.New("streaming not supported by this connection")
+		return protocol.ZeroTokenUsage(), errors.New("streaming not supported by this connection")
 	}
 
 	// Initialize conversion state
@@ -223,7 +223,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		// Check if it was a client cancellation
 		if errors.Is(err, context.Canceled) {
 			logrus.Debug("Chat to Responses stream canceled by client")
-			return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), nil
+			return protocol.NewTokenUsage(int(state.inputTokens), int(state.outputTokens)), nil
 		}
 		logrus.Errorf("Chat to Responses stream error: %v", err)
 
@@ -237,7 +237,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", string(errorJSON)))
 		flusher.Flush()
 
-		return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), err
+		return protocol.NewTokenUsage(int(state.inputTokens), int(state.outputTokens)), err
 	}
 
 	// Some providers end the stream without emitting a final chunk with finish_reason.
@@ -257,7 +257,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		flusher.Flush()
 	}
 
-	return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), nil
+	return protocol.NewTokenUsage(int(state.inputTokens), int(state.outputTokens)), nil
 }
 
 // sendResponsesCreatedEvent sends the response.created event

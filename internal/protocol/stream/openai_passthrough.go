@@ -24,7 +24,7 @@ import (
 
 // HandleOpenAIChatStream handles OpenAI chat streaming response.
 // Returns (UsageStat, error)
-func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams) (protocol.UsageStat, error) {
+func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams) (*protocol.TokenUsage, error) {
 	defer stream.Close()
 
 	// Set SSE headers (mimicking OpenAI response headers)
@@ -50,7 +50,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Str
 				Code:    "streaming_unsupported",
 			},
 		})
-		return protocol.ZeroUsageStat(), fmt.Errorf("streaming not supported")
+		return protocol.ZeroTokenUsage(), fmt.Errorf("streaming not supported")
 	}
 
 	err := hc.ProcessStream(
@@ -195,7 +195,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Str
 		errorJSON, _ := json.Marshal(errorChunk)
 		c.SSEvent("", string(errorJSON))
 		flusher.Flush()
-		return protocol.NewUsageStat(inputTokens, outputTokens), err
+		return protocol.NewTokenUsage(inputTokens, outputTokens), err
 	}
 
 	if !hasUsage {
@@ -242,12 +242,12 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Str
 	c.SSEvent("", " [DONE]")
 	flusher.Flush()
 
-	return protocol.NewUsageStat(inputTokens, outputTokens), nil
+	return protocol.NewTokenUsage(inputTokens, outputTokens), nil
 }
 
 // HandleOpenAIResponsesStream handles OpenAI Responses API streaming response.
 // Returns (UsageStat, error)
-func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (protocol.UsageStat, error) {
+func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {
 	defer stream.Close()
 
 	// Set SSE headers for Responses API (different from Chat Completions)
@@ -289,7 +289,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 				Code:    "streaming_unsupported",
 			},
 		})
-		return protocol.ZeroUsageStat(), fmt.Errorf("streaming not supported")
+		return protocol.ZeroTokenUsage(), fmt.Errorf("streaming not supported")
 	}
 
 	// Process the stream with context cancellation checking
@@ -351,14 +351,14 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
 			logrus.Debug("Responses stream canceled by client")
 			if hasUsage {
-				return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), nil
+				return protocol.NewTokenUsage(int(inputTokens), int(outputTokens)), nil
 			}
-			return protocol.ZeroUsageStat(), nil
+			return protocol.ZeroTokenUsage(), nil
 		}
 
 		logrus.Errorf("Responses stream error: %v", err)
 		if hasUsage {
-			return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), err
+			return protocol.NewTokenUsage(int(inputTokens), int(outputTokens)), err
 		}
 
 		// Send error chunk
@@ -373,7 +373,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		errorJSON, _ := json.Marshal(errorChunk)
 		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", string(errorJSON)))
 		flusher.Flush()
-		return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), err
+		return protocol.NewTokenUsage(int(inputTokens), int(outputTokens)), err
 	}
 
 	// Send final [DONE] message
@@ -382,10 +382,10 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 
 	// Track successful streaming completion
 	if hasUsage {
-		return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), nil
+		return protocol.NewTokenUsage(int(inputTokens), int(outputTokens)), nil
 	}
 
-	return protocol.ZeroUsageStat(), nil
+	return protocol.ZeroTokenUsage(), nil
 }
 
 // ===================================================================
