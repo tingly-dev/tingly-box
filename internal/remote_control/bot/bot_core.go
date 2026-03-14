@@ -10,7 +10,6 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/summarizer"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 )
 
@@ -152,7 +151,6 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 		return fmt.Errorf("session manager is nil")
 	}
 
-	summaryEngine := summarizer.NewEngine()
 	directoryBrowser := NewDirectoryBrowser()
 
 	manager := imbot.NewManager(
@@ -180,7 +178,7 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 	}
 
 	// Register unified message handler with platform parameter
-	handler := NewBotHandler(ctx, setting, chatStore, sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager, tbClient)
+	handler := NewBotHandler(ctx, setting, chatStore, sessionMgr, agentBoot, directoryBrowser, manager, tbClient)
 	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {

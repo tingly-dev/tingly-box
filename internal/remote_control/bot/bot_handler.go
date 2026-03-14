@@ -20,7 +20,6 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/smart_guide"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/summarizer"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -32,7 +31,6 @@ type BotHandler struct {
 	chatStore        ChatStoreInterface // Use interface for flexibility
 	sessionMgr       *session.Manager
 	agentBoot        *agentboot.AgentBoot
-	summaryEngine    *summarizer.Engine
 	directoryBrowser *DirectoryBrowser
 	manager          *imbot.Manager
 	imPrompter       *IMPrompter
@@ -88,7 +86,6 @@ func NewBotHandler(
 	chatStore ChatStoreInterface,
 	sessionMgr *session.Manager,
 	agentBoot *agentboot.AgentBoot,
-	summaryEngine *summarizer.Engine,
 	directoryBrowser *DirectoryBrowser,
 	manager *imbot.Manager,
 	tbClient tbclient.TBClient,
@@ -156,7 +153,6 @@ func NewBotHandler(
 		chatStore:           chatStore,
 		sessionMgr:          sessionMgr,
 		agentBoot:           agentBoot,
-		summaryEngine:       summaryEngine,
 		directoryBrowser:    directoryBrowser,
 		manager:             manager,
 		imPrompter:          imPrompter,
@@ -1210,11 +1206,9 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 
 	h.sessionMgr.SetCompleted(sessionID, response)
 
-	summary := h.summaryEngine.Summarize(response)
 	h.sessionMgr.AppendMessage(sessionID, session.Message{
 		Role:      "assistant",
 		Content:   response,
-		Summary:   summary,
 		Timestamp: time.Now(),
 	})
 

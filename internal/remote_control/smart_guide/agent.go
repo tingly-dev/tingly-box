@@ -3,6 +3,7 @@ package smart_guide
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-agentscope/pkg/agent"
@@ -11,6 +12,11 @@ import (
 	"github.com/tingly-dev/tingly-agentscope/pkg/model/anthropic"
 	"github.com/tingly-dev/tingly-agentscope/pkg/tool"
 )
+
+// Summary prompt template
+const summaryPrompt = `Analyze the conversation and provide a clear summary to the user after completing tasks or running commands to user.
+Keep users informed - they should always understand what's happening and why.
+`
 
 // TinglyBoxAgent is the smart guide agent (@tb)
 type TinglyBoxAgent struct {
@@ -184,6 +190,46 @@ func (a *TinglyBoxAgent) ReplyWithContext(ctx context.Context, text string, tool
 		return nil, fmt.Errorf("failed to get response: %w", err)
 	}
 
+	// Get memory for summary generation
+	mem := a.ReActAgent.GetMemory()
+
+	// Check if we need to generate summary by looking at the last message
+	// If the last message contains tool_use blocks, it means agent is still requesting tools
+	// In that case, we should generate a summary for the user
+	var summaryText string
+	var hist *memory.History
+
+	if mem != nil {
+		var ok bool
+		hist, ok = mem.(*memory.History)
+		if hist != nil && ok {
+			messages := hist.GetMessages()
+			if len(messages) > 0 {
+				lastMsg := messages[len(messages)-1]
+				// Generate summary UNLESS last message is assistant without tool_use
+				// (meaning agent returned text directly without requesting more tools)
+				if !(lastMsg.Role == "assistant" && !a.hasToolUseBlocks(lastMsg)) {
+					summaryText = a.generateSummary(ctx, hist)
+
+					// Generate summary if tools were called
+
+					// Add summary to memory as a special message
+					summaryMsg := message.NewMsg(
+						"summary",
+						summaryText,
+						"system",
+					)
+					if err := mem.Add(ctx, summaryMsg); err != nil {
+						logrus.WithError(err).Warn("Failed to add summary to memory")
+					}
+
+					// Use summary to response
+					response.Content = summaryMsg
+				}
+			}
+		}
+	}
+
 	return response, nil
 }
 
@@ -264,4 +310,178 @@ func CanCreateAgent(baseURL, apiKey, smartGuideProvider, smartGuideModel string)
 	}
 
 	return true
+}
+
+// hasToolUseBlocks checks if a message contains tool_use blocks
+func (a *TinglyBoxAgent) hasToolUseBlocks(msg *message.Msg) bool {
+	if msg.Role != "assistant" {
+		return false
+	}
+
+	// Check if content is a slice of blocks (Anthropic message format)
+	if content, ok := msg.Content.([]interface{}); ok {
+		for _, block := range content {
+			if blockMap, ok := block.(map[string]interface{}); ok {
+				if blockType, ok := blockMap["type"].(string); ok && blockType == "tool_use" {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+// generateSummary generates a summary using the LLM with full conversation history
+func (a *TinglyBoxAgent) generateSummary(ctx context.Context, mem *memory.History) string {
+	// Get all messages from memory
+	messages := mem.GetMessages()
+	if len(messages) == 0 {
+		return ""
+	}
+
+	// Build conversation history for summary generation
+	var historyBuilder strings.Builder
+	historyBuilder.WriteString("Conversation history:\n\n")
+
+	for i, msg := range messages {
+		// Skip summary messages themselves
+		if msg.Role == "summary" {
+			continue
+		}
+
+		// Format message for summary prompt
+		historyBuilder.WriteString(fmt.Sprintf("[%s] ", msg.Role))
+
+		// Handle different content types
+		if contentStr, ok := msg.Content.(string); ok {
+			historyBuilder.WriteString(contentStr)
+		} else if contentBlocks, ok := msg.Content.([]interface{}); ok {
+			for _, block := range contentBlocks {
+				if blockMap, ok := block.(map[string]interface{}); ok {
+					if blockType, ok := blockMap["type"].(string); ok {
+						switch blockType {
+						case "text":
+							if text, ok := blockMap["text"].(string); ok {
+								historyBuilder.WriteString(text)
+							}
+						case "tool_use":
+							if name, ok := blockMap["name"].(string); ok {
+								historyBuilder.WriteString(fmt.Sprintf("[used tool: %s]", name))
+							}
+						case "tool_result":
+							historyBuilder.WriteString("[tool result]")
+						}
+					}
+				}
+			}
+		}
+
+		historyBuilder.WriteString("\n")
+
+		// Limit history length (last 20 messages)
+		if i > len(messages)-20 {
+			break
+		}
+	}
+
+	// Build the full prompt
+	fullPrompt := fmt.Sprintf("%s\n\n%s", summaryPrompt, historyBuilder.String())
+
+	// Create a user message with the summary prompt
+	summaryMsg := message.NewMsg("user", fullPrompt, "user")
+
+	// Call agent internally to generate summary
+	// This is an internal call that doesn't affect the user-visible conversation
+	summaryResponse, err := a.ReActAgent.Reply(ctx, summaryMsg)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to generate summary, using fallback")
+		return a.generateFallbackSummary(messages)
+	}
+
+	return summaryResponse.GetTextContent()
+}
+
+// generateFallbackSummary generates a simple summary when LLM call fails
+func (a *TinglyBoxAgent) generateFallbackSummary(messages []*message.Msg) string {
+	var summary strings.Builder
+	summary.WriteString("**Summary**\n\n")
+
+	// Count tool calls
+	toolCalls := make(map[string]int)
+	for _, msg := range messages {
+		if msg.Role == "assistant" {
+			if contentBlocks, ok := msg.Content.([]interface{}); ok {
+				for _, block := range contentBlocks {
+					if blockMap, ok := block.(map[string]interface{}); ok {
+						if blockType, ok := blockMap["type"].(string); ok && blockType == "tool_use" {
+							if name, ok := blockMap["name"].(string); ok {
+								toolCalls[name]++
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Build summary from tool calls
+	if len(toolCalls) > 0 {
+		var actions []string
+		for tool := range toolCalls {
+			actions = append(actions, formatToolAction(tool))
+		}
+		summary.WriteString("• ")
+		summary.WriteString(strings.Join(actions, ", "))
+		summary.WriteString("\n\n")
+
+		summary.WriteString("**Tools used:** ")
+		var tools []string
+		for tool := range toolCalls {
+			tools = append(tools, tool)
+		}
+		summary.WriteString(strings.Join(tools, ", "))
+		summary.WriteString("\n")
+	} else {
+		summary.WriteString("• Task completed\n")
+	}
+
+	return summary.String()
+}
+
+// formatToolAction formats a tool name as a human-readable action
+func formatToolAction(toolName string) string {
+	switch toolName {
+	case "bash_cd":
+		return "changed directory"
+	case "bash_ls":
+		return "listed directory contents"
+	case "bash_pwd":
+		return "showed current directory"
+	case "git_clone":
+		return "cloned repository"
+	case "git_status":
+		return "checked git status"
+	case "get_status":
+		return "retrieved status"
+	case "get_project":
+		return "retrieved project info"
+	default:
+		// Convert tool_name to "tool name"
+		parts := strings.Split(toolName, "_")
+		return strings.Join(parts, " ")
+	}
+}
+
+// uniqueStrings returns unique strings from a slice
+func uniqueStrings(slice []string) []string {
+	seen := make(map[string]bool)
+	result := []string{}
+	for _, item := range slice {
+		if !seen[item] {
+			seen[item] = true
+			result = append(result, item)
+		}
+	}
+	return result
 }

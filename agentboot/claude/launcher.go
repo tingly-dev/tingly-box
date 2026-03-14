@@ -366,7 +366,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 				// Got final result, stop processing immediately
 				// The process will be cleaned up by deferred close(done) and inputSource.Close()
 				_ = cmd.Process.Kill()
-				_ = cmd.Wait()
+				//_ = cmd.Wait()
 				logrus.Warnf("killed: %d", cmd.Process.Pid)
 				return &mitm.OutputResult{Action: mitm.Stop}, nil
 			default:
