@@ -110,6 +110,7 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 
 	// Add subcommands with initialized appManager
+	rootCmd.AddCommand(command.ExportCommand(appManager))
 	rootCmd.AddCommand(command.ProviderCommand(appManager))
 	rootCmd.AddCommand(command.ImportCommand(appManager))
 	rootCmd.AddCommand(command.OAuthCommand(appManager).(*cobra.Command))
