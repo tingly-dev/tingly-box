@@ -44,11 +44,17 @@ type UsageOptions struct {
 	// Scenario is the API scenario (e.g., "openai", "anthropic", "claude_code")
 	Scenario string
 
-	// InputTokens is the number of input/prompt tokens consumed
+	// InputTokens is the number of input/prompt tokens consumed (excluding cache)
 	InputTokens int
 
 	// OutputTokens is the number of output/completion tokens consumed
 	OutputTokens int
+
+	// CacheInputTokens is the number of cache-related tokens consumed
+	CacheInputTokens int
+
+	// SystemTokens represents tokens consumed by system-level operations
+	SystemTokens int
 
 	// Streamed indicates whether this was a streaming request
 	Streamed bool
@@ -69,12 +75,14 @@ type UsageOptions struct {
 // TokenTracker provides a unified interface for tracking token usage
 // using OpenTelemetry metrics.
 type TokenTracker struct {
-	inputTokens     metric.Int64Counter
-	outputTokens    metric.Int64Counter
-	totalTokens     metric.Int64Counter
-	requestCount    metric.Int64Counter
-	requestDuration metric.Float64Histogram
-	requestError    metric.Int64Counter
+	inputTokens      metric.Int64Counter
+	outputTokens     metric.Int64Counter
+	totalTokens      metric.Int64Counter
+	cacheInputTokens metric.Int64Counter
+	systemTokens     metric.Int64Counter
+	requestCount     metric.Int64Counter
+	requestDuration  metric.Float64Histogram
+	requestError     metric.Int64Counter
 }
 
 // NewTokenTracker creates a new TokenTracker with the provided meter.
@@ -107,6 +115,26 @@ func NewTokenTracker(meter metric.Meter) (*TokenTracker, error) {
 	tt.totalTokens, err = meter.Int64Counter(
 		"llm.token.total",
 		metric.WithDescription("Total LLM tokens consumed (input + output)"),
+		metric.WithUnit("{token}"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Cache token counters
+	tt.cacheInputTokens, err = meter.Int64Counter(
+		"llm.token.cache.input",
+		metric.WithDescription("LLM cache-related input token usage"),
+		metric.WithUnit("{token}"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// System tokens counter
+	tt.systemTokens, err = meter.Int64Counter(
+		"llm.token.system",
+		metric.WithDescription("LLM tokens consumed by system operations"),
 		metric.WithUnit("{token}"),
 	)
 	if err != nil {
@@ -186,6 +214,18 @@ func (tt *TokenTracker) RecordUsage(ctx context.Context, opts UsageOptions) {
 	totalTokens := opts.InputTokens + opts.OutputTokens
 	if totalTokens > 0 {
 		tt.totalTokens.Add(ctx, int64(totalTokens), metric.WithAttributes(commonAttrs...))
+	}
+
+	// Record cache tokens
+	if opts.CacheInputTokens > 0 {
+		cacheAttrs := append(commonAttrs, attrLLMTokenType.String("cache"))
+		tt.cacheInputTokens.Add(ctx, int64(opts.CacheInputTokens), metric.WithAttributes(cacheAttrs...))
+	}
+
+	// Record system tokens
+	if opts.SystemTokens > 0 {
+		systemAttrs := append(commonAttrs, attrLLMTokenType.String("system"))
+		tt.systemTokens.Add(ctx, int64(opts.SystemTokens), metric.WithAttributes(systemAttrs...))
 	}
 
 	// Record request count

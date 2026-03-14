@@ -50,15 +50,76 @@ type OpenAIConfig struct {
 	// Future fields can be added here as needed for provider-specific transformations
 }
 
+// TokenUsage represents comprehensive token usage statistics.
+// This structure provides a unified interface for tracking token usage
+// across all supported protocols (OpenAI, Anthropic, Google).
+type TokenUsage struct {
+	// InputTokens is the number of input/prompt tokens consumed (excluding cache)
+	InputTokens int `json:"input_tokens"`
+
+	// OutputTokens is the number of output/completion tokens consumed
+	OutputTokens int `json:"output_tokens"`
+
+	// CacheInputTokens is the number of cache-related tokens consumed
+	// (includes both cache creation and cache read operations)
+	CacheInputTokens int `json:"cache_input_tokens,omitempty"`
+
+	// SystemTokens represents tokens consumed by system-level operations
+	// such as prompt templates, system instructions, or framework overhead
+	SystemTokens int `json:"system_tokens,omitempty"`
+}
+
+// TotalTokens returns the total tokens consumed (input + output, excluding cache).
+// Cache tokens are tracked separately for cost calculation purposes.
+func (u *TokenUsage) TotalTokens() int {
+	return u.InputTokens + u.OutputTokens
+}
+
+// HasUsage returns true if any token count is non-zero.
+func (u *TokenUsage) HasUsage() bool {
+	return u.InputTokens > 0 || u.OutputTokens > 0 ||
+		u.CacheInputTokens > 0 || u.SystemTokens > 0
+}
+
+// HasCacheUsage returns true if cache tokens are present.
+func (u *TokenUsage) HasCacheUsage() bool {
+	return u.CacheInputTokens > 0
+}
+
+// NewTokenUsage creates a new TokenUsage with the given token counts.
+func NewTokenUsage(inputTokens, outputTokens int) *TokenUsage {
+	return &TokenUsage{
+		InputTokens:  inputTokens,
+		OutputTokens: outputTokens,
+	}
+}
+
+// NewTokenUsageWithCache creates a new TokenUsage with cache token count.
+func NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens int) *TokenUsage {
+	return &TokenUsage{
+		InputTokens:      inputTokens,
+		OutputTokens:     outputTokens,
+		CacheInputTokens: cacheTokens,
+	}
+}
+
+// ZeroTokenUsage returns a TokenUsage with zero values.
+func ZeroTokenUsage() *TokenUsage {
+	return &TokenUsage{}
+}
+
 // UsageStat represents token usage statistics returned by stream handlers.
 // This is used to propagate usage information from protocol conversion
 // handlers back to the server layer for tracking.
+//
+// Deprecated: Use TokenUsage instead. UsageStat is kept for backward compatibility
+// and will be removed in a future version.
 type UsageStat struct {
 	// InputTokens is the number of input/prompt tokens consumed
-	InputTokens int
+	InputTokens int `json:"input_tokens"`
 
 	// OutputTokens is the number of output/completion tokens consumed
-	OutputTokens int
+	OutputTokens int `json:"output_tokens"`
 }
 
 // TotalTokens returns the sum of input and output tokens.
@@ -69,6 +130,14 @@ func (u *UsageStat) TotalTokens() int {
 // HasUsage returns true if either input or output tokens are non-zero.
 func (u *UsageStat) HasUsage() bool {
 	return u.InputTokens > 0 || u.OutputTokens > 0
+}
+
+// ToTokenUsage converts UsageStat to TokenUsage.
+func (u *UsageStat) ToTokenUsage() *TokenUsage {
+	return &TokenUsage{
+		InputTokens:  u.InputTokens,
+		OutputTokens: u.OutputTokens,
+	}
 }
 
 // NewUsageStat creates a new UsageStat with the given token counts.

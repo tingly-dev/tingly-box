@@ -9,8 +9,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
-	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
 )
 
 var enterpriseRateLimitHook struct {
@@ -110,6 +111,64 @@ func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens
 
 	// 4. Report to health monitor for service health tracking
 	s.reportHealthStatus(provider, model, err, errorCode)
+}
+
+// trackUsageWithTokenUsage records comprehensive token usage using the TokenUsage structure.
+// This method supports cache tokens and system tokens for complete usage tracking.
+//
+// Parameters:
+//   - c: Gin context containing all tracking metadata
+//   - usage: Comprehensive token usage including cache and system tokens
+//   - err: Error if request failed, nil for success
+func (s *Server) trackUsageWithTokenUsage(c *gin.Context, usage *protocol.TokenUsage, err error) {
+	rule, provider, model, requestModel, scenario, streamed, startTime := GetTrackingContext(c)
+
+	if rule == nil || provider == nil || model == "" || usage == nil {
+		return
+	}
+
+	latencyMs := calculateLatencyFromStart(startTime)
+
+	// Determine status and error code from error
+	status, errorCode := "success", ""
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			status = "canceled"
+			errorCode = "client_disconnected"
+		} else {
+			status = "error"
+			errorCode = sanitizeErrorCode(err)
+		}
+	}
+
+	// 1. Update service stats (using total tokens)
+	s.updateServiceStats(rule, provider, model, usage.InputTokens, usage.OutputTokens)
+
+	// 2. Record to OTel with comprehensive usage data
+	if s.tokenTracker != nil {
+		s.tokenTracker.RecordUsage(c.Request.Context(), tracker.UsageOptions{
+			Provider:         provider.Name,
+			ProviderUUID:     provider.UUID,
+			Model:            model,
+			RequestModel:     requestModel,
+			RuleUUID:         rule.UUID,
+			Scenario:         scenario,
+			InputTokens:      usage.InputTokens,
+			OutputTokens:     usage.OutputTokens,
+			CacheInputTokens: usage.CacheInputTokens,
+			SystemTokens:     usage.SystemTokens,
+			Streamed:         streamed,
+			Status:           status,
+			ErrorCode:        errorCode,
+			LatencyMs:        latencyMs,
+		})
+	}
+
+	// 3. Record detailed usage with comprehensive token data
+	s.recordDetailedUsageWithTokenUsage(c, rule, provider, model, requestModel, scenario, usage, streamed, status, errorCode, latencyMs)
+
+	// 4. Report to health monitor for service health tracking
+	s.reportHealthStatus(provider, model, err, errorCode)
 
 	// 5. Enterprise key-level 429 alerting hook (best-effort).
 	if err != nil && isRateLimitError(err) && strings.TrimSpace(c.GetString("enterprise_user_id")) != "" {
@@ -172,6 +231,45 @@ func (s *Server) recordDetailedUsage(c *gin.Context, rule *typ.Rule, provider *t
 		ErrorCode:    errorCode,
 		LatencyMs:    latencyMs,
 		Streamed:     streamed,
+	}
+
+	if rule != nil {
+		record.RuleUUID = rule.UUID
+	}
+
+	_ = usageStore.RecordUsage(record)
+}
+
+// recordDetailedUsageWithTokenUsage writes a detailed usage record with comprehensive token data.
+func (s *Server) recordDetailedUsageWithTokenUsage(c *gin.Context, rule *typ.Rule, provider *typ.Provider, model, requestModel, scenario string, usage *protocol.TokenUsage, streamed bool, status, errorCode string, latencyMs int) {
+	if s.config == nil || usage == nil {
+		return
+	}
+
+	sm := s.config.StoreManager()
+	if sm == nil {
+		return
+	}
+	usageStore := sm.Usage()
+	if usageStore == nil {
+		return
+	}
+
+	record := &db.UsageRecord{
+		ProviderUUID:     provider.UUID,
+		ProviderName:     provider.Name,
+		Model:            model,
+		Scenario:         scenario,
+		RequestModel:     requestModel,
+		InputTokens:      usage.InputTokens,
+		OutputTokens:     usage.OutputTokens,
+		CacheInputTokens: usage.CacheInputTokens,
+		SystemTokens:     usage.SystemTokens,
+		TotalTokens:      usage.TotalTokens(),
+		Status:           status,
+		ErrorCode:        errorCode,
+		LatencyMs:        latencyMs,
+		Streamed:         streamed,
 	}
 
 	if rule != nil {
