@@ -8,6 +8,7 @@ import {
     Code as CodeIcon,
     DateRange as DateRangeIcon,
     ErrorOutline,
+    GridOn as GridOnIcon,
     LaptopMac,
     ListAlt as LogsIcon,
     Menu as MenuIcon,
@@ -123,6 +124,12 @@ const Layout = ({ children }: LayoutProps) => {
                 path: '/dashboard/7d',
                 children: [
                     {
+                        path: '/overview/90d',
+                        label: 'Heatmap',
+                        icon: <GridOnIcon sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        divider: true,
                         path: '/dashboard/today',
                         label: 'Today',
                         icon: <TodayIcon sx={{ fontSize: 20 }} />,
@@ -794,7 +801,7 @@ const Layout = ({ children }: LayoutProps) => {
                     height: '100vh',
                     display: 'flex',
                     flexDirection: 'column',
-                    overflow: 'visible',
+                    overflowX: 'hidden',
                 }}
             >
                 <Box
