@@ -51,17 +51,29 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		// Apply thinking effort from scenario config ONLY when client has explicitly enabled thinking
 		// The scenario config's effort level is used to adjust the budget_tokens, not to enable thinking
 		// If client hasn't enabled thinking, we don't enable it regardless of scenario config
-		if req.Thinking.OfEnabled != nil {
-			effort := scenarioConfig.Flags.ThinkingEffort
-			if effort != typ.ThinkingEffortDefault {
-				// Map effort level to budget_tokens
-				budgetTokens, ok := typ.ThinkingBudgetMapping[effort]
-				if !ok {
-					budgetTokens = typ.ThinkingBudgetMapping[typ.ThinkingEffortMedium] // fallback
-				}
-				// Override thinking with scenario config's budget_tokens
+		effort := typ.ThinkingEffortLevel(req.OutputConfig.Effort)
+		pluginEffort := scenarioConfig.Flags.ThinkingEffort
+		if pluginEffort != typ.ThinkingEffortDefault {
+			effort = pluginEffort
+		}
+
+		// Map effort level to budget_tokens
+		budgetTokens, ok := typ.ThinkingBudgetMapping[effort]
+		if !ok {
+			budgetTokens = typ.ThinkingBudgetMapping[typ.ThinkingEffortMedium] // fallback
+		}
+
+		switch {
+		case req.Thinking.OfEnabled != nil:
+			// Override thinking with scenario config's budget_tokens
+			if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
+				req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budgetTokens)
+			} else {
 				req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budgetTokens)
 			}
+		case req.Thinking.OfAdaptive != nil:
+			// Override thinking with scenario config's budget_tokens
+			req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budgetTokens)
 		}
 	}
 
@@ -73,7 +85,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	// Ensure max_tokens is set (Anthropic API requires this)
 	// and cap it at the model's maximum allowed value
 	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
-
+		// for thinking, max tokens should be larger than thinking budget
 	} else {
 		if req.MaxTokens == 0 {
 			req.MaxTokens = int64(s.config.GetDefaultMaxTokens())

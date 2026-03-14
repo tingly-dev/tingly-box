@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
@@ -15,16 +16,25 @@ import (
 var rawBody []byte
 
 func TestAnthropicBetaMessagesRequest_UnmarshalJSON(t *testing.T) {
-	jsonString := "{\"stream\":true}"
+	dict := map[string]interface{}{
+		"stream": true,
+		"thinking": map[string]any{
+			"type": "adaptive",
+		},
+	}
+
+	jsonString, _ := json.Marshal(dict)
 
 	var req protocol.AnthropicBetaMessagesRequest
-	if err := json.Unmarshal([]byte(jsonString), &req); err != nil {
+	if err := json.Unmarshal(jsonString, &req); err != nil {
 		t.Fatalf("Failed to deserialize rawBody into BetaMessageNewParams: %v", err)
 	}
 
 	if req.Stream != true {
 		t.Fatal("Failed to deserialize rawBody into BetaMessageNewParams")
 	}
+
+	assert.NotNil(t, req.Thinking.OfAdaptive, "Failed to deserialize thinking into BetaMessageNewParams")
 }
 
 func TestBetaDecode(t *testing.T) {
