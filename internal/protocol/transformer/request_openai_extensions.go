@@ -43,6 +43,22 @@ var ProviderConfigs = []providerConfig{
 		Transform:      applyDeepSeekTransform,
 	},
 
+	// Moonshot - official API (CN)
+	// Moonshot requires reasoning_content in assistant messages with tool_calls when thinking is enabled
+	// Similar to DeepSeek, we reuse applyDeepSeekTransform to handle x_thinking -> reasoning_content conversion
+	{
+		APIBasePattern: "api.moonshot.cn",
+		ModelPattern:   "*",
+		Transform:      applyDeepSeekTransform,
+	},
+
+	// Moonshot - official API (International)
+	{
+		APIBasePattern: "api.moonshot.ai",
+		ModelPattern:   "*",
+		Transform:      applyDeepSeekTransform,
+	},
+
 	// Gemini - official Google API
 	{
 		APIBasePattern: "generativelanguage.googleapis.com",

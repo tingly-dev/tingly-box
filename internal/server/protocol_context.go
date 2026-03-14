@@ -2,9 +2,9 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -70,7 +70,7 @@ func (fc *ForwardContext) WithAfterRequest(hook func(context.Context, interface{
 // The order of operations matches the original implementation:
 // 1. Apply BeforeRequest hooks
 // 2. Add timeout
-func (fc *ForwardContext) PrepareContext(req interface{}) (context.Context, context.CancelFunc, error) {
+func (fc *ForwardContext) PrepareContext(req interface{}) (context.Context, context.CancelFunc) {
 	ctx := fc.BaseCtx
 	if ctx == nil {
 		ctx = context.Background()
@@ -81,14 +81,11 @@ func (fc *ForwardContext) PrepareContext(req interface{}) (context.Context, cont
 		var err error
 		ctx, err = hook(ctx, req)
 		if err != nil {
-			return nil, nil, fmt.Errorf("BeforeRequest hook failed: %w", err)
+			logrus.Errorf("Request hook error: %s", err)
 		}
 	}
 
-	// Add timeout FIRST (matching old code order for stream)
-	ctx, cancel := context.WithTimeout(ctx, fc.Timeout)
-
-	return ctx, cancel, nil
+	return context.WithTimeout(ctx, fc.Timeout)
 }
 
 // Complete calls all AfterRequest hooks (if set) with the response and error.

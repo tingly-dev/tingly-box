@@ -62,7 +62,7 @@ const (
 )
 
 // ThinkingEffortLevel represents the thinking effort level for extended thinking
-type ThinkingEffortLevel string
+type ThinkingEffortLevel = string
 
 const (
 	ThinkingEffortLow     ThinkingEffortLevel = "low"
@@ -75,10 +75,11 @@ const (
 // ThinkingBudgetMapping defines budget_tokens for each effort level
 // Note: Default max is 31,999 tokens per Claude Code documentation
 var ThinkingBudgetMapping = map[ThinkingEffortLevel]int64{
-	ThinkingEffortLow:    1024,  // ~1K tokens - minimal reasoning (minimum allowed)
-	ThinkingEffortMedium: 5120,  // ~5K tokens - balanced
-	ThinkingEffortHigh:   20480, // ~20K tokens - deep reasoning
-	ThinkingEffortMax:    31999, // ~32K tokens - maximum (default)
+	ThinkingEffortDefault: 31999,
+	ThinkingEffortLow:     1024,  // ~1K tokens - minimal reasoning (minimum allowed)
+	ThinkingEffortMedium:  5120,  // ~5K tokens - balanced
+	ThinkingEffortHigh:    20480, // ~20K tokens - deep reasoning
+	ThinkingEffortMax:     31999, // ~32K tokens - maximum (default)
 }
 
 // ThinkingMode represents the thinking mode for extended thinking

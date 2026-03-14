@@ -26,7 +26,7 @@ const PLUGIN_FEATURES = [
 ] as const;
 
 const EFFORT_LEVELS = [
-    { value: '', label: 'Default', description: 'Use model default' },
+    { value: '', label: 'By Client', description: 'Use model default' },
     { value: 'low', label: 'Low', description: '~1K tokens - Fast' },
     { value: 'medium', label: 'Medium', description: '~5K tokens - Balanced' },
     { value: 'high', label: 'High', description: '~20K tokens - Deep' },
@@ -34,9 +34,9 @@ const EFFORT_LEVELS = [
 ] as const;
 
 const THINKING_MODES = [
-    { value: 'default', label: 'Default', description: 'Use client default config', icon: SettingsSuggest },
-    { value: 'adaptive', label: 'Adaptive', description: 'Model decides when to use extended thinking', icon: AutoMode },
-    { value: 'force', label: 'Force', description: 'Always use extended thinking if possible', icon: FlashOn },
+    { value: 'default', label: 'By Client', description: 'Use client request config', icon: SettingsSuggest },
+    { value: 'adaptive', label: 'Adaptive', description: 'Adapter to use extended thinking (enable / adaptive)', icon: AutoMode },
+    { value: 'force', label: 'Force', description: 'Force to use extended thinking', icon: FlashOn },
 ] as const;
 
 const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {

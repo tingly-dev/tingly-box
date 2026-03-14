@@ -75,10 +75,61 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	// === Tool Interceptor: Check if enabled and should be used ===
 	shouldIntercept, shouldStripTools, _ := s.resolveToolInterceptor(provider, hasBuiltInWebSearch)
 
+	// Get scenario config for DisableStreamUsage flag
+	scenarioType := rule.GetScenario()
+	disableStreamUsage := false
+	cleanHeader := false
+	if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
+		disableStreamUsage = scenarioConfig.Flags.DisableStreamUsage
+		cleanHeader = scenarioConfig.Flags.CleanHeader
+
+		// Apply thinking mode from scenario config
+		// The thinking mode controls how extended thinking is enabled
+		thinkingMode := scenarioConfig.Flags.ThinkingMode
+		if thinkingMode != "" {
+			// Map effort level to budget_tokens
+			effort := scenarioConfig.Flags.ThinkingEffort
+			if effort == typ.ThinkingEffortDefault {
+				effort = typ.ThinkingEffortMedium // fallback to medium
+			}
+			budgetTokens, ok := typ.ThinkingBudgetMapping[effort]
+			if !ok {
+				budgetTokens = typ.ThinkingBudgetMapping[typ.ThinkingEffortMedium]
+			}
+			if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
+				budgetTokens = *thinkBudget
+			}
+
+			switch typ.ThinkingMode(thinkingMode) {
+			case typ.ThinkingModeForce:
+				// Force mode: always enable thinking regardless of client config
+				req.Thinking = anthropic.ThinkingConfigParamOfEnabled(budgetTokens)
+			case typ.ThinkingModeAdaptive:
+				// Adaptive mode: convert any existing thinking config to OfEnabled
+				switch {
+				case req.Thinking.OfEnabled != nil:
+					req.Thinking = anthropic.ThinkingConfigParamOfEnabled(budgetTokens)
+				case req.Thinking.OfAdaptive != nil:
+					req.Thinking = anthropic.ThinkingConfigParamOfEnabled(budgetTokens)
+				}
+			case typ.ThinkingModeDefault:
+				// Default mode: only handle OfEnabled, don't touch OfAdaptive
+				if req.Thinking.OfEnabled != nil {
+					req.Thinking = anthropic.ThinkingConfigParamOfEnabled(budgetTokens)
+				}
+			}
+		}
+	}
+
+	// Clean system messages if clean_header flag is enabled (for Claude Code scenario)
+	if cleanHeader {
+		req.MessageNewParams.System = cleanSystemMessages(req.MessageNewParams.System)
+	}
+
 	// Ensure max_tokens is set (Anthropic API requires this)
 	// and cap it at the model's maximum allowed value
 	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
-
+		// for thinking, max tokens should be larger than thinking budget
 	} else {
 		if req.MaxTokens == 0 {
 			req.MaxTokens = int64(s.config.GetDefaultMaxTokens())
@@ -102,32 +153,6 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		req.MessageNewParams.Tools = toolinterceptor.StripSearchFetchToolsAnthropic(req.MessageNewParams.Tools)
 	}
 
-	// Get scenario config for DisableStreamUsage flag
-	scenarioType := rule.GetScenario()
-	disableStreamUsage := false
-	cleanHeader := false
-	if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
-		disableStreamUsage = scenarioConfig.Flags.DisableStreamUsage
-		cleanHeader = scenarioConfig.Flags.CleanHeader
-
-		// Apply thinking effort from scenario config
-		effort := scenarioConfig.Flags.ThinkingEffort
-		if effort != "" && effort != typ.ThinkingEffortDefault {
-			// Map effort level to budget_tokens
-			budgetTokens, ok := typ.ThinkingBudgetMapping[effort]
-			if !ok {
-				budgetTokens = typ.ThinkingBudgetMapping[typ.ThinkingEffortMedium] // fallback
-			}
-			// Set thinking with budget_tokens
-			req.Thinking = anthropic.ThinkingConfigParamOfEnabled(budgetTokens)
-		}
-	}
-
-	// Clean system messages if clean_header flag is enabled (for Claude Code scenario)
-	if cleanHeader {
-		req.MessageNewParams.System = cleanSystemMessages(req.MessageNewParams.System)
-	}
-
 	// Check provider's API style to decide which path to take
 	apiStyle := provider.APIStyle
 
@@ -139,6 +164,9 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(req.MessageNewParams.Model))
 			fc := NewForwardContext(c.Request.Context(), provider)
 			streamResp, cancel, err := ForwardAnthropicV1Stream(fc, wrapper, req.MessageNewParams)
+			if cancel != nil {
+				defer cancel()
+			}
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
 				stream.SendStreamingError(c, err)
@@ -147,7 +175,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 				}
 				return
 			}
-			defer cancel()
+
 			// Handle the streaming response
 			s.handleAnthropicStreamResponseV1(c, req.MessageNewParams, streamResp, proxyModel, actualModel, provider, recorder)
 		} else {
@@ -155,6 +183,9 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(req.MessageNewParams.Model))
 			fc := NewForwardContext(nil, provider)
 			anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, req.MessageNewParams)
+			if cancel != nil {
+				defer cancel()
+			}
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
 				stream.SendForwardingError(c, err)
@@ -163,7 +194,6 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 				}
 				return
 			}
-			defer cancel()
 
 			// Track usage from response
 			inputTokens := int(anthropicResp.Usage.InputTokens)
@@ -199,7 +229,10 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// Create streaming request with request context for proper cancellation
 			wrapper := s.clientPool.GetGoogleClient(provider, model)
 			fc := NewForwardContext(c.Request.Context(), provider)
-			streamResp, _, err := ForwardGoogleStream(fc, wrapper, model, googleReq, cfg)
+			streamResp, cancel, err := ForwardGoogleStream(fc, wrapper, model, googleReq, cfg)
+			if cancel != nil {
+				defer cancel()
+			}
 			if err != nil {
 				stream.SendStreamingError(c, err)
 				if recorder != nil {
@@ -226,7 +259,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// Handle non-streaming request
 			wrapper := s.clientPool.GetGoogleClient(provider, model)
 			fc := NewForwardContext(nil, provider)
-			response, err := ForwardGoogle(fc, wrapper, model, googleReq, cfg)
+			response, _, err := ForwardGoogle(fc, wrapper, model, googleReq, cfg)
 			if err != nil {
 				stream.SendForwardingError(c, err)
 				if recorder != nil {
@@ -307,7 +340,10 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// Create streaming request with request context for proper cancellation
 			wrapper := s.clientPool.GetOpenAIClient(provider, string(openaiReq.Model))
 			fc := NewForwardContext(c.Request.Context(), provider)
-			streamResp, _, err := ForwardOpenAIChatStream(fc, wrapper, openaiReq)
+			streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, openaiReq)
+			if cancel != nil {
+				defer cancel()
+			}
 			if err != nil {
 				stream.SendStreamingError(c, err)
 				if recorder != nil {
@@ -336,7 +372,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			openaiReq := request.ConvertAnthropicToOpenAIRequestWithProvider(&req.MessageNewParams, true, provider, actualModel, isStreaming, disableStreamUsage)
 			wrapper := s.clientPool.GetOpenAIClient(provider, string(openaiReq.Model))
 			fc := NewForwardContext(nil, provider)
-			response, err := ForwardOpenAIChat(fc, wrapper, openaiReq)
+			response, _, err := ForwardOpenAIChat(fc, wrapper, openaiReq)
 			if err != nil {
 				stream.SendForwardingError(c, err)
 				if recorder != nil {
@@ -417,7 +453,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, re
 		// Use standard OpenAI Responses API
 		wrapper := s.clientPool.GetOpenAIClient(provider, string(responsesReq.Model))
 		fc := NewForwardContext(nil, provider)
-		response, err = ForwardOpenAIResponses(fc, wrapper, responsesReq)
+		response, _, err = ForwardOpenAIResponses(fc, wrapper, responsesReq)
 	}
 
 	if err != nil {
@@ -478,6 +514,9 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req p
 	wrapper := s.clientPool.GetOpenAIClient(provider, string(responsesReq.Model))
 	fc := NewForwardContext(c.Request.Context(), provider)
 	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
+	if cancel != nil {
+		defer cancel()
+	}
 	if err != nil {
 		s.trackUsageFromContext(c, 0, 0, err)
 		stream.SendStreamingError(c, err)
@@ -486,7 +525,6 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req p
 		}
 		return
 	}
-	defer cancel()
 
 	// Handle the streaming response
 	// Use the dedicated stream handler to convert Responses API to Anthropic v1 format

@@ -183,6 +183,9 @@ func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Prov
 			wrapper := s.clientPool.GetOpenAIClient(provider, string(chatReq.Model))
 			fc := NewForwardContext(c.Request.Context(), provider)
 			chatStream, cancel, err := ForwardOpenAIChatStream(fc, wrapper, chatReq)
+			if cancel != nil {
+				defer cancel()
+			}
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
@@ -190,7 +193,6 @@ func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Prov
 				})
 				return
 			}
-			defer cancel()
 			usage, err := HandleOpenAIChatToResponsesStream(c, chatStream, responseModel)
 			s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
 			return
@@ -198,7 +200,7 @@ func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Prov
 
 		wrapper := s.clientPool.GetOpenAIClient(provider, string(chatReq.Model))
 		fc := NewForwardContext(nil, provider)
-		chatResp, err := ForwardOpenAIChat(fc, wrapper, chatReq)
+		chatResp, _, err := ForwardOpenAIChat(fc, wrapper, chatReq)
 		if err != nil {
 			s.trackUsageFromContext(c, 0, 0, err)
 			c.JSON(http.StatusInternalServerError, ErrorResponse{
@@ -219,6 +221,9 @@ func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Prov
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
 			fc := NewForwardContext(c.Request.Context(), provider)
 			anthropicStream, cancel, err := ForwardAnthropicV1Stream(fc, wrapper, anthropicReq)
+			if cancel != nil {
+				defer cancel()
+			}
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
@@ -226,7 +231,6 @@ func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Prov
 				})
 				return
 			}
-			defer cancel()
 
 			hc := protocol.NewHandleContext(c, responseModel)
 			usage, err := HandleAnthropicToOpenAIResponsesStream(hc, anthropicStream, responseModel)
@@ -361,7 +365,7 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 	} else {
 		wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model))
 		fc := NewForwardContext(nil, provider)
-		response, err = ForwardOpenAIResponses(fc, wrapper, params)
+		response, _, err = ForwardOpenAIResponses(fc, wrapper, params)
 	}
 
 	if err != nil {
@@ -421,6 +425,9 @@ func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.P
 	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
 	stream, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, params)
+	if cancel != nil {
+		defer cancel()
+	}
 	if err != nil {
 		// Track error with no usage
 		s.trackUsageFromContext(c, 0, 0, err)
@@ -432,7 +439,6 @@ func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.P
 		})
 		return
 	}
-	defer cancel()
 
 	// Handle the streaming response
 	hc := protocol.NewHandleContext(c, responseModel)
