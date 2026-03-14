@@ -83,6 +83,7 @@ func (h *Handler) GetClaudeCodeStatus(c *gin.Context) {
 // GetClaudeCodeStatusLine returns rendered status line text for Claude Code
 // This endpoint receives Claude Code status JSON and returns a pre-rendered status line string
 // POST /tingly/:scenario/statusline
+// ref: https://code.claude.com/docs/en/statusline
 func (h *Handler) GetClaudeCodeStatusLine(c *gin.Context) {
 	scenario := c.Param("scenario")
 
