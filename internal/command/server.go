@@ -93,6 +93,11 @@ func doStopServer(appManager *AppManager) error {
 
 // startServer handles the server starting logic
 func startServer(appManager *AppManager, opts options.StartServerOptions) error {
+	return startServerWithHook(appManager, opts, nil)
+}
+
+// startServerWithHook handles the server starting logic with an optional setup hook.
+func startServerWithHook(appManager *AppManager, opts options.StartServerOptions, hook func(*ServerManager) error) error {
 	appConfig := appManager.AppConfig()
 
 	// Set logrus level based on debug flag
@@ -247,6 +252,13 @@ func startServer(appManager *AppManager, opts options.StartServerOptions) error 
 		server.WithMultiLogger(multiLogger),
 	)
 
+	if hook != nil {
+		if err := hook(serverManager); err != nil {
+			fileLock.Unlock()
+			return err
+		}
+	}
+
 	// Setup signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -289,6 +301,12 @@ func startServer(appManager *AppManager, opts options.StartServerOptions) error 
 
 // StartCommand represents the start server command
 func StartCommand(appManager *AppManager) *cobra.Command {
+	return StartCommandWithHook(appManager, nil)
+}
+
+// StartCommandWithHook represents the start server command with a setup hook
+// that runs after the server manager is created and before the server starts.
+func StartCommandWithHook(appManager *AppManager, hook func(*ServerManager) error) *cobra.Command {
 	var flags options.StartFlags
 
 	cmd := &cobra.Command{
@@ -298,7 +316,7 @@ func StartCommand(appManager *AppManager) *cobra.Command {
 The server will handle request routing to configured AI providers.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts := options.ResolveStartOptions(cmd, flags, appManager.AppConfig())
-			return startServer(appManager, opts)
+			return startServerWithHook(appManager, opts, hook)
 		},
 	}
 
