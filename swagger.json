@@ -20,6 +20,54 @@
     "https"
   ],
   "paths": {
+    "/api/v1/actions/history": {
+      "get": {
+        "tags": [
+          "actions"
+        ],
+        "summary": "Get user action history from memory (recent operations)",
+        "description": "Get user action history from memory (recent operations)",
+        "operationId": "apiV1ActionsHistoryGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ActionHistoryResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/actions/stats": {
+      "get": {
+        "tags": [
+          "actions"
+        ],
+        "summary": "Get statistics about user actions",
+        "description": "Get statistics about user actions",
+        "operationId": "apiV1ActionsStatsGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/validate": {
       "get": {
         "tags": [
@@ -538,8 +586,8 @@
         "tags": [
           "logs"
         ],
-        "summary": "Get logs with optional filtering",
-        "description": "Get logs with optional filtering",
+        "summary": "Get HTTP request logs with optional filtering",
+        "description": "Get HTTP request logs with optional filtering",
         "operationId": "apiV1LogGet",
         "consumes": [
           "application/json"
@@ -560,8 +608,8 @@
         "tags": [
           "logs"
         ],
-        "summary": "Clear all logs",
-        "description": "Clear all logs",
+        "summary": "Clear all HTTP request logs",
+        "description": "Clear all HTTP request logs",
         "operationId": "apiV1LogDelete",
         "consumes": [
           "application/json"
@@ -584,8 +632,8 @@
         "tags": [
           "logs"
         ],
-        "summary": "Get log statistics",
-        "description": "Get log statistics",
+        "summary": "Get HTTP request log statistics",
+        "description": "Get HTTP request log statistics",
         "operationId": "apiV1LogStatsGet",
         "consumes": [
           "application/json"
@@ -1180,6 +1228,41 @@
         }
       }
     },
+    "/api/v1/rule/import": {
+      "post": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Import a rule from base64 encoded data",
+        "description": "Import a rule from base64 encoded data",
+        "operationId": "apiV1RuleImportPost",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ImportRuleRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ImportRuleResponse"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/rule/{uuid}": {
       "get": {
         "tags": [
@@ -1682,6 +1765,100 @@
             "description": "Successful response",
             "schema": {
               "$ref": "#/definitions/StatusResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/logs": {
+      "get": {
+        "tags": [
+          "system-logs"
+        ],
+        "summary": "Get recent system logs with optional filtering (from JSON log file). Use 'limit' parameter to control how many recent entries to return.",
+        "description": "Get recent system logs with optional filtering (from JSON log file). Use 'limit' parameter to control how many recent entries to return.",
+        "operationId": "apiV1SystemLogsGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/SystemLogsResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/logs/level": {
+      "get": {
+        "tags": [
+          "system-logs"
+        ],
+        "summary": "Get the current system log level",
+        "description": "Get the current system log level",
+        "operationId": "apiV1SystemLogsLevelGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "system-logs"
+        ],
+        "summary": "Set the minimum log level for system logs",
+        "description": "Set the minimum log level for system logs",
+        "operationId": "apiV1SystemLogsLevelPost",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/logs/stats": {
+      "get": {
+        "tags": [
+          "system-logs"
+        ],
+        "summary": "Get system log statistics",
+        "description": "Get system log statistics",
+        "operationId": "apiV1SystemLogsStatsGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
             }
           }
         }
@@ -2682,6 +2859,69 @@
     }
   },
   "definitions": {
+    "ActionHistoryEntry": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "description": "Field action"
+        },
+        "details": {
+          "type": "object",
+          "description": "Field details"
+        },
+        "fields": {
+          "type": "object",
+          "description": "Field fields",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "level": {
+          "type": "string",
+          "description": "Field level"
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        },
+        "time": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Field time"
+        }
+      },
+      "required": [
+        "time",
+        "level",
+        "message"
+      ]
+    },
+    "ActionHistoryResponse": {
+      "type": "object",
+      "properties": {
+        "actions": {
+          "type": "array",
+          "description": "Field actions",
+          "items": {
+            "$ref": "#/definitions/ActionHistoryEntry"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field total"
+        }
+      },
+      "required": [
+        "total",
+        "actions"
+      ]
+    },
     "AddSkillLocationRequest": {
       "type": "object",
       "properties": {
@@ -2750,6 +2990,12 @@
           "format": "double",
           "description": "Field avg_output_tokens",
           "example": 164.2
+        },
+        "cache_input_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field cache_input_tokens",
+          "example": 500000
         },
         "error_count": {
           "type": "integer",
@@ -2842,7 +3088,8 @@
         "error_count",
         "error_rate",
         "streamed_count",
-        "streamed_rate"
+        "streamed_rate",
+        "cache_input_tokens"
       ]
     },
     "ApplyConfigResponse": {
@@ -3070,6 +3317,14 @@
         "chat_id": {
           "type": "string",
           "description": "Field chat_id"
+        },
+        "default_agent": {
+          "type": "string",
+          "description": "Field default_agent"
+        },
+        "default_cwd": {
+          "type": "string",
+          "description": "Field default_cwd"
         },
         "enabled": {
           "type": "boolean",
@@ -3494,6 +3749,88 @@
       },
       "required": [
         "success",
+        "data"
+      ]
+    },
+    "ImportRuleRequest": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "string",
+          "description": "Base64 encoded rule export data",
+          "example": "TGB64:1.0:..."
+        },
+        "on_provider_conflict": {
+          "type": "string",
+          "description": "How to handle provider conflicts",
+          "example": "use"
+        },
+        "on_rule_conflict": {
+          "type": "string",
+          "description": "How to handle rule conflicts",
+          "example": "new"
+        }
+      },
+      "required": [
+        "data",
+        "on_provider_conflict",
+        "on_rule_conflict"
+      ]
+    },
+    "ImportRuleResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data",
+          "properties": {
+            "providers": {
+              "type": "array",
+              "description": "Field providers",
+              "items": {
+                "type": "object"
+              }
+            },
+            "providers_created": {
+              "type": "integer",
+              "format": "int64",
+              "description": "Field providers_created"
+            },
+            "providers_used": {
+              "type": "integer",
+              "format": "int64",
+              "description": "Field providers_used"
+            },
+            "rule_created": {
+              "type": "boolean",
+              "description": "Field rule_created"
+            },
+            "rule_updated": {
+              "type": "boolean",
+              "description": "Field rule_updated"
+            }
+          },
+          "required": [
+            "rule_created",
+            "rule_updated",
+            "providers_created",
+            "providers_used"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Rule imported successfully"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "message",
         "data"
       ]
     },
@@ -5181,6 +5518,10 @@
     "ScenarioFlags": {
       "type": "object",
       "properties": {
+        "anthropic_beta": {
+          "type": "boolean",
+          "description": "Field anthropic_beta"
+        },
         "clean_header": {
           "type": "boolean",
           "description": "Field clean_header"
@@ -5208,6 +5549,10 @@
         "thinking_effort": {
           "type": "string",
           "description": "Field thinking_effort"
+        },
+        "thinking_mode": {
+          "type": "string",
+          "description": "Field thinking_mode"
         },
         "unified": {
           "type": "boolean",
@@ -5460,6 +5805,10 @@
           "type": "string",
           "format": "date-time",
           "description": "Field created_at"
+        },
+        "default_agent": {
+          "type": "string",
+          "description": "Field default_agent"
         },
         "default_cwd": {
           "type": "string",
@@ -5817,6 +6166,57 @@
         "data"
       ]
     },
+    "SystemLogEntry": {
+      "type": "object",
+      "properties": {
+        "fields": {
+          "type": "object",
+          "description": "Field fields",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "level": {
+          "type": "string",
+          "description": "Field level"
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message"
+        },
+        "time": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Field time"
+        }
+      },
+      "required": [
+        "time",
+        "level",
+        "message"
+      ]
+    },
+    "SystemLogsResponse": {
+      "type": "object",
+      "properties": {
+        "logs": {
+          "type": "array",
+          "description": "Field logs",
+          "items": {
+            "$ref": "#/definitions/SystemLogEntry"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field total"
+        }
+      },
+      "required": [
+        "total",
+        "logs"
+      ]
+    },
     "Tactic": {
       "type": "object",
       "properties": {
@@ -5871,6 +6271,12 @@
           "description": "Field avg_latency_ms",
           "example": 1100
         },
+        "cache_input_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field cache_input_tokens",
+          "example": 10000
+        },
         "error_count": {
           "type": "integer",
           "format": "int64",
@@ -5913,6 +6319,7 @@
         "total_tokens",
         "input_tokens",
         "output_tokens",
+        "cache_input_tokens",
         "error_count",
         "avg_latency_ms"
       ]
@@ -6137,6 +6544,14 @@
           "type": "string",
           "description": "Field chat_id"
         },
+        "default_agent": {
+          "type": "string",
+          "description": "Field default_agent"
+        },
+        "default_cwd": {
+          "type": "string",
+          "description": "Field default_cwd"
+        },
         "enabled": {
           "type": "boolean",
           "description": "Field enabled"
@@ -6312,6 +6727,12 @@
     "UsageRecordResponse": {
       "type": "object",
       "properties": {
+        "cache_input_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field cache_input_tokens",
+          "example": 2000
+        },
         "error_code": {
           "type": "string",
           "description": "Field error_code"
@@ -6407,6 +6828,7 @@
         "input_tokens",
         "output_tokens",
         "total_tokens",
+        "cache_input_tokens",
         "status",
         "latency_ms",
         "streamed"
@@ -6560,30 +6982,6 @@
   },
   "tags": [
     {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
-      "name": "skills",
-      "description": "Operations related to skills"
-    },
-    {
-      "name": "config",
-      "description": "Operations related to config"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "imbot-settings",
-      "description": "Operations related to imbot-settings"
-    },
-    {
-      "name": "usage",
-      "description": "Operations related to usage"
-    },
-    {
       "name": "models",
       "description": "Operations related to models"
     },
@@ -6592,36 +6990,68 @@
       "description": "Operations related to token"
     },
     {
-      "name": "oauth",
-      "description": "Operations related to oauth"
+      "name": "skills",
+      "description": "Operations related to skills"
+    },
+    {
+      "name": "imbot-settings",
+      "description": "Operations related to imbot-settings"
+    },
+    {
+      "name": "config",
+      "description": "Operations related to config"
     },
     {
       "name": "auth",
       "description": "Operations related to auth"
     },
     {
-      "name": "server",
-      "description": "Operations related to server"
+      "name": "info",
+      "description": "Operations related to info"
     },
     {
-      "name": "testing",
-      "description": "Operations related to testing"
+      "name": "server",
+      "description": "Operations related to server"
     },
     {
       "name": "providers",
       "description": "Operations related to providers"
     },
     {
-      "name": "info",
-      "description": "Operations related to info"
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
+      "name": "actions",
+      "description": "Operations related to actions"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "scenarios",
+      "description": "Operations related to scenarios"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
+    },
+    {
+      "name": "usage",
+      "description": "Operations related to usage"
+    },
+    {
+      "name": "system-logs",
+      "description": "Operations related to system-logs"
     },
     {
       "name": "logs",
       "description": "Operations related to logs"
     },
     {
-      "name": "scenarios",
-      "description": "Operations related to scenarios"
+      "name": "history",
+      "description": "Operations related to history"
     }
   ]
 }
