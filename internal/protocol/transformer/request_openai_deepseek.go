@@ -8,8 +8,8 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// applyDeepSeekTransform converts x_thinking field to reasoning_content for DeepSeek
-// This is required by DeepSeek's reasoning models (e.g., deepseek-reasoner)
+// applyDeepSeekTransform converts x_thinking field to reasoning_content for DeepSeek/Moonshot
+// This is required by DeepSeek's and Moonshot's reasoning models
 // The base conversion preserves thinking content in "x_thinking" field
 func applyDeepSeekTransform(req *openai.ChatCompletionNewParams, provider *typ.Provider, model string, config *OpenAIConfig) *openai.ChatCompletionNewParams {
 	// if has thinking, we should confirm each assistant contains `reasoning_content`
@@ -32,7 +32,9 @@ func applyDeepSeekTransform(req *openai.ChatCompletionNewParams, provider *typ.P
 					delete(msgMap, "x_thinking")
 				} else {
 					// Ensure reasoning_content field exists even if no thinking content
-					msgMap["reasoning_content"] = ""
+					// Use a placeholder (empty pointer) instead of empty string to ensure it's included in JSON
+					var emptyStr string
+					msgMap["reasoning_content"] = &emptyStr
 				}
 
 				// Convert back to message param
