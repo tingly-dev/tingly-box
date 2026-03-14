@@ -12,6 +12,7 @@ import {
     alpha,
 } from '@mui/material';
 import { useState } from 'react';
+import type { AggregatedStat as ApiAggregatedStat } from '@/client/api';
 
 export interface AggregatedStat {
     key: string;
@@ -24,9 +25,9 @@ export interface AggregatedStat {
     total_input_tokens: number;
     total_output_tokens: number;
     cache_input_tokens?: number;
-    avg_latency_ms: number;
-    error_count: number;
-    error_rate: number;
+    avg_latency_ms?: number;
+    error_count?: number;
+    error_rate?: number;
     streamed_count?: number;
 }
 
