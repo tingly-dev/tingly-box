@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/tingly-dev/tingly-box/internal/protocol/transformer"
+	"github.com/tingly-dev/tingly-box/internal/transformer"
 
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )

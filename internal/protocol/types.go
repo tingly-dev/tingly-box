@@ -1,6 +1,9 @@
 package protocol
 
-import "github.com/anthropics/anthropic-sdk-go"
+import (
+	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/openai/openai-go/v3/shared"
+)
 
 // APIStyle represents the API style/version for a provider
 type APIStyle string
@@ -31,6 +34,20 @@ type Transformer interface {
 
 	// HandleV1Beta handles compacting for Anthropic v1beta requests.
 	HandleV1Beta(req *anthropic.BetaMessageNewParams) error
+}
+
+// OpenAIConfig contains additional metadata that may be used by provider transforms
+type OpenAIConfig struct {
+	// HasThinking indicates whether the request contains thinking content
+	// This can be used by providers like DeepSeek to handle reasoning_content
+	HasThinking bool
+
+	// ReasoningEffort specifies the reasoning effort level for OpenAI-compatible APIs
+	// Valid values: "none", "minimal", "low", "medium", "high", "xhigh"
+	// Defaults to "low" when HasThinking is true
+	ReasoningEffort shared.ReasoningEffort
+
+	// Future fields can be added here as needed for provider-specific transformations
 }
 
 // UsageStat represents token usage statistics returned by stream handlers.
