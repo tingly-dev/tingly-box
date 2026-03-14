@@ -200,7 +200,7 @@ func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Prov
 
 		wrapper := s.clientPool.GetOpenAIClient(provider, string(chatReq.Model))
 		fc := NewForwardContext(nil, provider)
-		chatResp, err := ForwardOpenAIChat(fc, wrapper, chatReq)
+		chatResp, _, err := ForwardOpenAIChat(fc, wrapper, chatReq)
 		if err != nil {
 			s.trackUsageFromContext(c, 0, 0, err)
 			c.JSON(http.StatusInternalServerError, ErrorResponse{
@@ -365,7 +365,7 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 	} else {
 		wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model))
 		fc := NewForwardContext(nil, provider)
-		response, err = ForwardOpenAIResponses(fc, wrapper, params)
+		response, _, err = ForwardOpenAIResponses(fc, wrapper, params)
 	}
 
 	if err != nil {

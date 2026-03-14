@@ -250,7 +250,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// Handle non-streaming request
 			wrapper := s.clientPool.GetGoogleClient(provider, model)
 			fc := NewForwardContext(nil, provider)
-			response, err := ForwardGoogle(fc, wrapper, model, googleReq, cfg)
+			response, _, err := ForwardGoogle(fc, wrapper, model, googleReq, cfg)
 			if err != nil {
 				stream.SendForwardingError(c, err)
 				if recorder != nil {
@@ -363,7 +363,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			openaiReq := request.ConvertAnthropicToOpenAIRequestWithProvider(&req.MessageNewParams, true, provider, actualModel, isStreaming, disableStreamUsage)
 			wrapper := s.clientPool.GetOpenAIClient(provider, string(openaiReq.Model))
 			fc := NewForwardContext(nil, provider)
-			response, err := ForwardOpenAIChat(fc, wrapper, openaiReq)
+			response, _, err := ForwardOpenAIChat(fc, wrapper, openaiReq)
 			if err != nil {
 				stream.SendForwardingError(c, err)
 				if recorder != nil {
@@ -444,7 +444,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, re
 		// Use standard OpenAI Responses API
 		wrapper := s.clientPool.GetOpenAIClient(provider, string(responsesReq.Model))
 		fc := NewForwardContext(nil, provider)
-		response, err = ForwardOpenAIResponses(fc, wrapper, responsesReq)
+		response, _, err = ForwardOpenAIResponses(fc, wrapper, responsesReq)
 	}
 
 	if err != nil {
@@ -505,6 +505,9 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req p
 	wrapper := s.clientPool.GetOpenAIClient(provider, string(responsesReq.Model))
 	fc := NewForwardContext(c.Request.Context(), provider)
 	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
+	if cancel != nil {
+		defer cancel()
+	}
 	if err != nil {
 		s.trackUsageFromContext(c, 0, 0, err)
 		stream.SendStreamingError(c, err)
@@ -513,7 +516,6 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req p
 		}
 		return
 	}
-	defer cancel()
 
 	// Handle the streaming response
 	// Use the dedicated stream handler to convert Responses API to Anthropic v1 format

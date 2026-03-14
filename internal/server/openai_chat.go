@@ -39,7 +39,7 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	// Forward request to provider
 	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
 	fc := NewForwardContext(nil, provider)
-	response, err := ForwardOpenAIChat(fc, wrapper, req)
+	response, _, err := ForwardOpenAIChat(fc, wrapper, req)
 	if err != nil {
 		// Track error with no usage
 		s.trackUsageFromContext(c, 0, 0, err)
@@ -195,7 +195,7 @@ func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq 
 	// Forward to provider for final response (may contain more tool calls or final answer)
 	wrapper := s.clientPool.GetOpenAIClient(provider, string(followUpReq.Model))
 	fc := NewForwardContext(nil, provider)
-	finalResponse, err := ForwardOpenAIChat(fc, wrapper, &followUpReq)
+	finalResponse, _, err := ForwardOpenAIChat(fc, wrapper, &followUpReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get final response after tool execution: %w", err)
 	}
@@ -216,7 +216,10 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 
 	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
 	fc := NewForwardContext(c.Request.Context(), provider)
-	streamResp, _, err := ForwardOpenAIChatStream(fc, wrapper, req)
+	streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, req)
+	if cancel != nil {
+		defer cancel()
+	}
 	if err != nil {
 		// Track error with no usage
 		s.trackUsageFromContext(c, 0, 0, err)
