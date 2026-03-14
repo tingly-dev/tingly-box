@@ -174,23 +174,23 @@ export default function TokenUsageChart({ data }: TokenUsageChartProps) {
                                     />
                                 ))}
                             </Bar>
-                            <Bar dataKey="outputTokens" name="Output Tokens" fill={TOKEN_COLORS.output.gradient} stackId="tokens" radius={barRadius} />
                             <Bar dataKey="inputTokens" name="Input Tokens" fill={TOKEN_COLORS.input.gradient} stackId="tokens" radius={barRadius} />
+                            <Bar dataKey="outputTokens" name="Output Tokens" fill={TOKEN_COLORS.output.gradient} stackId="tokens" radius={barRadius} />
                         </BarChart>
                     </ResponsiveContainer>
                 </Box>
                 {/* Legend replacement - inline indicator */}
                 <Box sx={{ mt: 2, display: 'flex', gap: 3, flexWrap: 'wrap' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.input.main }} />
-                        <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                            Input
-                        </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.cache.main }} />
                         <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
                             Cache
+                        </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.input.main }} />
+                        <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                            Input
                         </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

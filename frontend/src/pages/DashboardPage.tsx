@@ -22,6 +22,7 @@ import PaidIcon from '@mui/icons-material/Paid';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import StreamIcon from '@mui/icons-material/Stream';
 import SpeedIcon from '@mui/icons-material/Speed';
+import CachedIcon from '@mui/icons-material/Cached';
 import { StatCard, TokenUsageChart, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable } from '@/components/dashboard';
 import type { TimeSeriesData, AggregatedStat } from '@/components/dashboard';
 import { switchControlLabelStyle } from '@/styles/toggleStyles';
@@ -179,6 +180,11 @@ export default function DashboardPage() {
     const totalStreamed = stats.reduce((sum, s) => sum + (s.streamed_count || 0), 0);
     const streamedRate = totalRequests > 0 ? (totalStreamed / totalRequests) * 100 : 0;
 
+    // Calculate cache hit rate: cache / (cache + input)
+    const cacheHitRate = (totalCacheTokens + totalInputTokens) > 0
+        ? (totalCacheTokens / (totalCacheTokens + totalInputTokens)) * 100
+        : 0;
+
     // Prepare chart data - include provider name to distinguish same model from different providers
     const tokenChartData = stats.slice(0, 10).map((stat) => {
         const provider = stat.provider_name || 'Unknown';
@@ -301,7 +307,7 @@ export default function DashboardPage() {
 
             {/* Stats Cards - Row 1 */}
             <Grid container spacing={2.5} sx={{ mb: 4 }}>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
                     <StatCard
                         title="Total Requests"
                         value={totalRequests.toLocaleString()}
@@ -310,7 +316,7 @@ export default function DashboardPage() {
                         color="primary"
                     />
                 </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
                     <StatCard
                         title="Total Tokens"
                         value={formatNumber(totalTokens)}
@@ -319,7 +325,16 @@ export default function DashboardPage() {
                         color="success"
                     />
                 </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+                    <StatCard
+                        title="Cache Hit Rate"
+                        value={`${cacheHitRate.toFixed(1)}%`}
+                        subtitle={`${formatNumber(totalCacheTokens)} cached`}
+                        icon={<CachedIcon />}
+                        color="warning"
+                    />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
                     <StatCard
                         title="Error Rate"
                         value={`${errorRate.toFixed(2)}%`}
@@ -328,7 +343,7 @@ export default function DashboardPage() {
                         color={errorRate > 5 ? 'error' : 'success'}
                     />
                 </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
                     <StatCard
                         title="Streamed Rate"
                         value={`${streamedRate.toFixed(1)}%`}
