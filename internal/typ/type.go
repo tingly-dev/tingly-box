@@ -81,6 +81,15 @@ var ThinkingBudgetMapping = map[ThinkingEffortLevel]int64{
 	ThinkingEffortMax:    31999, // ~32K tokens - maximum (default)
 }
 
+// ThinkingMode represents the thinking mode for extended thinking
+type ThinkingMode string
+
+const (
+	ThinkingModeDefault  ThinkingMode = "default"  // Use model default
+	ThinkingModeAdaptive ThinkingMode = "adaptive" // Model decides when to use
+	ThinkingModeForce    ThinkingMode = "force"    // Force for all requests
+)
+
 // ScenarioFlags represents configuration flags for a scenario
 type ScenarioFlags struct {
 	Unified  bool `json:"unified" yaml:"unified"`   // Single configuration for all models
@@ -88,14 +97,19 @@ type ScenarioFlags struct {
 	Smart    bool `json:"smart" yaml:"smart"`       // Smart mode with automatic optimization
 
 	// Experimental feature flags (scenario-based opt-in)
-	SmartCompact bool `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"` // Enable smart compact (remove thinking blocks)
-	Recording    bool `json:"recording,omitempty" yaml:"recording,omitempty"`         // Enable scenario recording
+	SmartCompact bool `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"`   // Enable smart compact (remove thinking blocks)
+	Recording    bool `json:"recording,omitempty" yaml:"recording,omitempty"`           // Enable scenario recording
+	Beta         bool `json:"anthropic_beta,omitempty" yaml:"anthropic_beta,omitempty"` // Enable Anthropic beta features (e.g. extended thinking)
 
 	// Stream configuration flags
 	DisableStreamUsage bool `json:"disable_stream_usage,omitempty" yaml:"disable_stream_usage,omitempty"` // Don't include usage in streaming chunks (for incompatible clients like xcode)
 
 	// Thinking effort level (empty string = use model default)
 	ThinkingEffort ThinkingEffortLevel `json:"thinking_effort,omitempty" yaml:"thinking_effort,omitempty"`
+
+	// Thinking mode for claude_code scenario (default/adaptive/force)
+	// Using string directly instead of ThinkingMode type to avoid naming conflicts
+	ThinkingMode string `json:"thinking_mode,omitempty" yaml:"thinking_mode,omitempty"`
 
 	CleanHeader bool `json:"clean_header,omitempty" yaml:"clean_header,omitempty"` // Remove billing header from system messages (Claude Code only)
 }
