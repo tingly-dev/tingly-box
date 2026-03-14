@@ -23,16 +23,25 @@ func TestSmartGuideFallback(t *testing.T) {
 			{
 				name:           "EmptyBaseURL",
 				baseURL:        "",
-				apiKey:         "",
+				apiKey:         "test-key",
 				provider:       "test-provider",
 				model:          "test-model",
 				expectedResult: false,
 				description:    "Should return false when baseURL is empty",
 			},
 			{
-				name:           "EmptyProvider",
-				baseURL:        "http://localhost:8080",
+				name:           "EmptyAPIKey",
+				baseURL:        "http://localhost:12580",
 				apiKey:         "",
+				provider:       "test-provider",
+				model:          "test-model",
+				expectedResult: false,
+				description:    "Should return false when apiKey is empty",
+			},
+			{
+				name:           "EmptyProvider",
+				baseURL:        "http://localhost:12580",
+				apiKey:         "test-key",
 				provider:       "",
 				model:          "test-model",
 				expectedResult: false,
@@ -40,18 +49,27 @@ func TestSmartGuideFallback(t *testing.T) {
 			},
 			{
 				name:           "EmptyModel",
-				baseURL:        "http://localhost:8080",
-				apiKey:         "",
+				baseURL:        "http://localhost:12580",
+				apiKey:         "test-key",
 				provider:       "test-provider",
 				model:          "",
 				expectedResult: false,
 				description:    "Should return false when model is empty",
 			},
+			{
+				name:           "ValidConfiguration",
+				baseURL:        "http://localhost:12580",
+				apiKey:         "test-key",
+				provider:       "test-provider",
+				model:          "test-model",
+				expectedResult: true,
+				description:    "Should return true when all parameters are valid",
+			},
 		}
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				result := smart_guide.CanCreateAgent("", "", tc.provider, tc.model)
+				result := smart_guide.CanCreateAgent(tc.baseURL, tc.apiKey, tc.provider, tc.model)
 				assert.Equal(t, tc.expectedResult, result, tc.description)
 			})
 		}
@@ -60,23 +78,35 @@ func TestSmartGuideFallback(t *testing.T) {
 
 // TestSmartGuideConfigurationValidation tests various configuration scenarios
 func TestSmartGuideConfigurationValidation(t *testing.T) {
-	t.Run("NilBaseURL", func(t *testing.T) {
-		result := smart_guide.CanCreateAgent("", "", "provider-123", "claude-sonnet-4-6")
+	t.Run("EmptyBaseURL", func(t *testing.T) {
+		result := smart_guide.CanCreateAgent("", "test-key", "provider-123", "claude-sonnet-4-6")
 		assert.False(t, result, "Should return false when baseURL is empty")
 	})
 
+	t.Run("EmptyAPIKey", func(t *testing.T) {
+		result := smart_guide.CanCreateAgent("http://localhost:12580", "", "provider-123", "claude-sonnet-4-6")
+		assert.False(t, result, "Should return false when apiKey is empty")
+	})
+
 	t.Run("MissingProvider", func(t *testing.T) {
-		result := smart_guide.CanCreateAgent("http://localhost:8080", "", "", "claude-sonnet-4-6")
+		result := smart_guide.CanCreateAgent("http://localhost:12580", "test-key", "", "claude-sonnet-4-6")
 		assert.False(t, result, "Should return false when provider is empty")
 	})
 
 	t.Run("MissingModel", func(t *testing.T) {
-		result := smart_guide.CanCreateAgent("http://localhost:8080", "", "provider-123", "")
+		result := smart_guide.CanCreateAgent("http://localhost:12580", "test-key", "provider-123", "")
 		assert.False(t, result, "Should return false when model is empty")
 	})
 
 	t.Run("ValidConfiguration", func(t *testing.T) {
-		result := smart_guide.CanCreateAgent("http://localhost:8080", "", "valid-provider", "valid-model")
+		result := smart_guide.CanCreateAgent("http://localhost:12580", "test-key", "valid-provider", "valid-model")
 		assert.True(t, result, "Should return true when all validations pass")
 	})
+}
+
+// mockTestError is a simple error type for testing
+type mockTestError string
+
+func (e mockTestError) Error() string {
+	return string(e)
 }

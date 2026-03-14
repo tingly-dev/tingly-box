@@ -1,3 +1,6 @@
+//go:build e2e
+// +build e2e
+
 package smart_guide
 
 import (
@@ -104,13 +107,58 @@ func TestRealAgentExecution(t *testing.T) {
 			},
 		},
 		{
-			name:    "Tool use - bash command",
-			message: "Can you run 'pwd' to show the current directory?",
+			name:    "No summary - simple question without tool use",
+			message: "What is the capital of France?",
 			validate: func(t *testing.T, response *message.Msg, err error) {
 				assert.NoError(t, err)
 				assert.NotNil(t, response)
 				if response != nil {
-					t.Logf("Response: %s", response.Content)
+					responseText := response.GetTextContent()
+					t.Logf("Response: %s", responseText)
+
+					// Simple question should NOT trigger summary (no tool calls)
+					assert.NotContains(t, responseText, "**Summary**", "Simple question should not generate summary")
+					assert.NotContains(t, responseText, "---", "Should not have summary separator")
+
+					t.Logf("✓ No summary generated for simple question (as expected)")
+				}
+			},
+		},
+		{
+			name:    "Summary generation - tool use triggers summary",
+			message: "Please list the files in current directory with ls command",
+			validate: func(t *testing.T, response *message.Msg, err error) {
+				assert.NoError(t, err)
+				assert.NotNil(t, response)
+				if response != nil {
+					responseText := response.GetTextContent()
+					t.Logf("Response: %s", responseText)
+
+					// Tool use (bash_ls) should trigger summary
+					assert.Contains(t, responseText, "**Summary**", "Tool use should generate summary section")
+					assert.Contains(t, responseText, "**Tools used:**", "Summary should list tools used")
+					assert.Contains(t, responseText, "---", "Response should have separator before summary")
+					assert.Contains(t, responseText, "bash_ls", "Summary should mention bash_ls tool")
+
+					t.Logf("✓ Summary was generated and appended to response after tool use")
+				}
+			},
+		},
+		{
+			name:    "Multiple tools - summary shows all tools used",
+			message: "Show current directory with pwd, then list files with ls",
+			validate: func(t *testing.T, response *message.Msg, err error) {
+				assert.NoError(t, err)
+				assert.NotNil(t, response)
+				if response != nil {
+					responseText := response.GetTextContent()
+					t.Logf("Response: %s", responseText)
+
+					// Multiple tool uses should be listed in summary
+					assert.Contains(t, responseText, "**Summary**", "Multiple tool uses should generate summary")
+					assert.Contains(t, responseText, "**Tools used:**", "Summary should list all tools")
+
+					t.Logf("✓ Summary generated for multiple tool uses")
 				}
 			},
 		},

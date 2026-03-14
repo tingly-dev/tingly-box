@@ -19,7 +19,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/summarizer"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -599,7 +598,6 @@ func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, set
 	authConfig := buildAuthConfigInternal(setting)
 	platform := imbot.Platform(setting.Platform)
 
-	summaryEngine := summarizer.NewEngine()
 	directoryBrowser := bot.NewDirectoryBrowser()
 
 	manager := imbot.NewManager(
@@ -644,7 +642,7 @@ func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, set
 	}
 
 	// Register unified message handler
-	handler := bot.NewBotHandler(ctx, setting, chatStore, sessionMgr, agentBoot, summaryEngine, directoryBrowser, manager, tbClient)
+	handler := bot.NewBotHandler(ctx, setting, chatStore, sessionMgr, agentBoot, directoryBrowser, manager, tbClient)
 	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {
