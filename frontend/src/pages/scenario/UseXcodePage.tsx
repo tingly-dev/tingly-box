@@ -3,13 +3,13 @@ import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import { Box, Button, Tooltip, IconButton } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
-import React, { useCallback, useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import XcodeConfigModal from '@/components/XcodeConfigModal';
 import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
-import { useHeaderHeight } from '@/hooks/useHeaderHeight';
-import { api, getBaseUrl } from '@/services/api';
+import { useRuleManagement } from '@/pages/scenario/hooks/useRuleManagement.ts';
+import { useScenarioPageData } from '@/pages/scenario/hooks/useScenarioPageData.ts';
 
 const scenario = "xcode";
 
@@ -23,71 +23,29 @@ const UseXcodePage: React.FC = () => {
         loading: providersLoading,
         notification,
         loadProviders,
+        copyToClipboard,
     } = useFunctionPanelData();
-    const headerRef = useRef<HTMLDivElement>(null);
-    const [baseUrl, setBaseUrl] = useState<string>('');
-    const [rules, setRules] = useState<any[]>([]);
-    const [loadingRule, setLoadingRule] = useState(true);
-    const [newlyCreatedRuleUuids, setNewlyCreatedRuleUuids] = useState<Set<string>>(new Set());
+
+    const {
+        rules,
+        loadingRule,
+        newlyCreatedRuleUuids,
+        handleRuleDelete,
+        handleRulesChange,
+        loadRules,
+    } = useRuleManagement();
+
     const [configModalOpen, setConfigModalOpen] = useState(false);
 
-    // Use shared hook for header height measurement
-    const headerHeight = useHeaderHeight(
-        headerRef,
-        providers.length > 0,
-        []
-    );
+    const { headerRef, baseUrl, headerHeight } = useScenarioPageData(providers);
 
-    const copyToClipboard = async (text: string, label: string) => {
-        try {
-            await navigator.clipboard.writeText(text);
-            showNotification(`${label} copied to clipboard!`, 'success');
-        } catch (err) {
-            showNotification('Failed to copy to clipboard', 'error');
-        }
-    };
-
-    const handleRuleDelete = useCallback((deletedRuleUuid: string) => {
-        setRules((prevRules) => prevRules.filter(r => r.uuid !== deletedRuleUuid));
-    }, []);
-
-    const handleRulesChange = useCallback((updatedRules: any[]) => {
-        setRules(updatedRules);
-        // If a new rule was added (length increased), add it to newlyCreatedRuleUuids
-        if (updatedRules.length > rules.length) {
-            const newRule = updatedRules[updatedRules.length - 1];
-            setNewlyCreatedRuleUuids(prev => new Set(prev).add(newRule.uuid));
-        }
-    }, [rules.length]);
-
-    // Handle opening config modal
     const handleOpenConfigModal = () => {
         setConfigModalOpen(true);
     };
 
     useEffect(() => {
-        let isMounted = true;
-
-        const loadDataAsync = async () => {
-            const url = await getBaseUrl();
-            if (isMounted) setBaseUrl(url);
-
-            const result = await api.getRules(scenario);
-            if (isMounted) {
-                if (result.success) {
-                    const ruleData = result.data;
-                    setRules(ruleData);
-                }
-                setLoadingRule(false);
-            }
-        };
-
-        loadDataAsync();
-
-        return () => {
-            isMounted = false;
-        };
-    }, []);
+        loadRules(scenario);
+    }, [scenario, loadRules]);
 
     const isLoading = providersLoading || loadingRule;
 

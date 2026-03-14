@@ -6,7 +6,8 @@ import TemplatePage from './components/TemplatePage.tsx';
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
 import { useHeaderHeight } from '@/hooks/useHeaderHeight';
-import { api, getBaseUrl } from '@/services/api';
+import { useScenarioPageData } from '@/pages/scenario/hooks/useScenarioPageData.ts';
+import { api } from '@/services/api';
 import { toggleButtonGroupStyle, toggleButtonStyle } from "@/styles/toggleStyles";
 import InfoIcon from '@mui/icons-material/Info';
 import {
@@ -22,7 +23,7 @@ import {
     Tooltip,
     Typography
 } from '@mui/material';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
@@ -48,24 +49,19 @@ const UseClaudeCodePage: React.FC = () => {
         loading: providersLoading,
         notification,
         loadProviders,
+        copyToClipboard,
     } = useFunctionPanelData();
-    const [baseUrl, setBaseUrl] = React.useState<string>('');
-    const [rules, setRules] = React.useState<any[]>([]);
-    const [loadingRule, setLoadingRule] = React.useState(true);
-    const [configMode, setConfigMode] = React.useState<ConfigMode>('unified');
-    const [pendingMode, setPendingMode] = React.useState<ConfigMode | null>(null);
-    const [confirmDialogOpen, setConfirmDialogOpen] = React.useState(false);
+    const [rules, setRules] = useState<any[]>([]);
+    const [loadingRule, setLoadingRule] = useState(true);
+    const [configMode, setConfigMode] = useState<ConfigMode>('unified');
+    const [pendingMode, setPendingMode] = useState<ConfigMode | null>(null);
+    const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
 
     // Claude Code config modal state
-    const [configModalOpen, setConfigModalOpen] = React.useState(false);
-    const [isApplyLoading, setIsApplyLoading] = React.useState(false);
+    const [configModalOpen, setConfigModalOpen] = useState(false);
+    const [isApplyLoading, setIsApplyLoading] = useState(false);
 
-    // Use shared hook for header height measurement
-    const headerHeight = useHeaderHeight(
-        headerRef,
-        providers.length > 0,
-        [configMode]
-    );
+    const { headerHeight, baseUrl } = useScenarioPageData(providers, [configMode]);
 
     // Load scenario config to get config mode
     const loadScenarioConfig = async () => {
@@ -137,22 +133,10 @@ const UseClaudeCodePage: React.FC = () => {
         setConfigModalOpen(true);
     };
 
-    const copyToClipboard = async (text: string, label: string) => {
-        try {
-            await navigator.clipboard.writeText(text);
-            showNotification(`${label} copied to clipboard!`, 'success');
-        } catch (err) {
-            showNotification('Failed to copy to clipboard', 'error');
-        }
-    };
-
     useEffect(() => {
         let isMounted = true;
 
         const loadDataAsync = async () => {
-            const url = await getBaseUrl();
-            if (isMounted) setBaseUrl(url);
-
             setLoadingRule(true);
             if (configMode === 'unified') {
                 const result = await api.getRule("built-in-cc");

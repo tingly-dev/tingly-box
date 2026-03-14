@@ -9,7 +9,7 @@ import ImportModal from '@/components/ImportModal';
 import UnifiedCard from '@/components/UnifiedCard';
 import type {TabTemplatePageProps} from './TemplatePage.types';
 import {TemplatePageActions} from './TemplatePageActions';
-import {useTemplatePageRules} from './hooks/useTemplatePageRules';
+import {useTemplatePageRules} from '@/pages/scenario/hooks/useTemplatePageRules';
 import {useScrollToNewRule} from '@/components/hooks/useScrollToNewRule';
 import {useModelSelectDialog} from '@/hooks/useModelSelectDialog';
 import api from '@/services/api';

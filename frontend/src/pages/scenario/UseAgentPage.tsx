@@ -2,12 +2,12 @@ import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import { Box } from '@mui/material';
-import React, { useCallback, useEffect, useState, useRef } from 'react';
+import { useEffect } from 'react';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
-import { useHeaderHeight } from '@/hooks/useHeaderHeight';
-import { api, getBaseUrl } from '@/services/api';
+import { useRuleManagement } from '@/pages/scenario/hooks/useRuleManagement.ts';
+import { useScenarioPageData } from '@/pages/scenario/hooks/useScenarioPageData.ts';
 
 const scenario = "agent";
 
@@ -21,65 +21,23 @@ const UseAgentPage: React.FC = () => {
         loading: providersLoading,
         notification,
         loadProviders,
+        copyToClipboard,
     } = useFunctionPanelData();
-    const headerRef = useRef<HTMLDivElement>(null);
-    const [baseUrl, setBaseUrl] = useState<string>('');
-    const [rules, setRules] = useState<any[]>([]);
-    const [loadingRule, setLoadingRule] = useState(true);
-    const [newlyCreatedRuleUuids, setNewlyCreatedRuleUuids] = useState<Set<string>>(new Set());
 
-    // Use shared hook for header height measurement
-    const headerHeight = useHeaderHeight(
-        headerRef,
-        providers.length > 0,
-        []
-    );
+    const {
+        rules,
+        loadingRule,
+        newlyCreatedRuleUuids,
+        handleRuleDelete,
+        handleRulesChange,
+        loadRules,
+    } = useRuleManagement();
 
-    const copyToClipboard = async (text: string, label: string) => {
-        try {
-            await navigator.clipboard.writeText(text);
-            showNotification(`${label} copied to clipboard!`, 'success');
-        } catch (err) {
-            showNotification('Failed to copy to clipboard', 'error');
-        }
-    };
-
-    const handleRuleDelete = useCallback((deletedRuleUuid: string) => {
-        setRules((prevRules) => prevRules.filter(r => r.uuid !== deletedRuleUuid));
-    }, []);
-
-    const handleRulesChange = useCallback((updatedRules: any[]) => {
-        setRules(updatedRules);
-        // If a new rule was added (length increased), add it to newlyCreatedRuleUuids
-        if (updatedRules.length > rules.length) {
-            const newRule = updatedRules[updatedRules.length - 1];
-            setNewlyCreatedRuleUuids(prev => new Set(prev).add(newRule.uuid));
-        }
-    }, [rules.length]);
+    const { headerRef, baseUrl, headerHeight } = useScenarioPageData(providers);
 
     useEffect(() => {
-        let isMounted = true;
-
-        const loadDataAsync = async () => {
-            const url = await getBaseUrl();
-            if (isMounted) setBaseUrl(url);
-
-            const result = await api.getRules(scenario);
-            if (isMounted) {
-                if (result.success) {
-                    const ruleData = Array.isArray(result.data) ? result.data : [];
-                    setRules(ruleData);
-                }
-                setLoadingRule(false);
-            }
-        };
-
-        loadDataAsync();
-
-        return () => {
-            isMounted = false;
-        };
-    }, []);
+        loadRules(scenario);
+    }, [scenario, loadRules]);
 
     const isLoading = providersLoading || loadingRule;
 

@@ -1,6 +1,6 @@
 import type { Rule } from '@/components/RoutingGraphTypes.ts';
-import { api } from '@/services/api';
-import type { ProviderModelsDataByUuid } from '@/types/provider';
+import { api } from '@/services/api.ts';
+import type { ProviderModelsDataByUuid } from '@/types/provider.ts';
 import { useCallback, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
