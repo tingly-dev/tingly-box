@@ -1,4 +1,5 @@
 import { Paper, Typography, Box, alpha } from '@mui/material';
+import { useState } from 'react';
 import {
     BarChart,
     Bar,
@@ -22,11 +23,55 @@ interface TokenUsageChartProps {
     data: UsageData[];
 }
 
+type SeriesKey = 'cache' | 'input' | 'output';
+interface SeriesVisibility {
+    cache: boolean;
+    input: boolean;
+    output: boolean;
+}
+
+// Shared legend item component with click handler
+interface LegendItemProps {
+    label: string;
+    color: string;
+    visible: boolean;
+    onToggle: () => void;
+}
+
+const LegendItem = ({ label, color, visible, onToggle }: LegendItemProps) => (
+    <Box
+        onClick={onToggle}
+        sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            cursor: 'pointer',
+            userSelect: 'none',
+            opacity: visible ? 1 : 0.4,
+            transition: 'opacity 0.2s ease',
+            '&:hover': {
+                opacity: visible ? 0.8 : 0.5,
+            },
+        }}
+    >
+        <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: color }} />
+        <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+            {label}
+        </Typography>
+    </Box>
+);
+
 export default function TokenUsageChart({ data }: TokenUsageChartProps) {
     // Sort by total tokens (input + output) and take top 5
     const top5Data = [...data]
         .sort((a, b) => (b.inputTokens + b.outputTokens) - (a.inputTokens + a.outputTokens))
         .slice(0, 5);
+
+    const [visibleSeries, setVisibleSeries] = useState<SeriesVisibility>({ cache: true, input: true, output: true });
+
+    const toggleSeries = (key: SeriesKey) => {
+        setVisibleSeries(prev => ({ ...prev, [key]: !prev[key] }));
+    };
 
     const formatYAxis = (value: number) => {
         if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
@@ -166,7 +211,7 @@ export default function TokenUsageChart({ data }: TokenUsageChartProps) {
                                 width={160}
                             />
                             <Tooltip content={<CustomTooltip />} />
-                            <Bar dataKey="cacheTokens" name="Cache Tokens" fill={TOKEN_COLORS.cache.main} stackId="tokens" radius={barRadius}>
+                            <Bar dataKey="cacheTokens" name="Cache Tokens" fill={TOKEN_COLORS.cache.main} stackId="tokens" radius={barRadius} hide={!visibleSeries.cache}>
                                 {top5Data.map((entry, index) => (
                                     <Cell
                                         key={`cache-${index}`}
@@ -174,31 +219,31 @@ export default function TokenUsageChart({ data }: TokenUsageChartProps) {
                                     />
                                 ))}
                             </Bar>
-                            <Bar dataKey="inputTokens" name="Input Tokens" fill={TOKEN_COLORS.input.gradient} stackId="tokens" radius={barRadius} />
-                            <Bar dataKey="outputTokens" name="Output Tokens" fill={TOKEN_COLORS.output.gradient} stackId="tokens" radius={barRadius} />
+                            <Bar dataKey="inputTokens" name="Input Tokens" fill={TOKEN_COLORS.input.gradient} stackId="tokens" radius={barRadius} hide={!visibleSeries.input} />
+                            <Bar dataKey="outputTokens" name="Output Tokens" fill={TOKEN_COLORS.output.gradient} stackId="tokens" radius={barRadius} hide={!visibleSeries.output} />
                         </BarChart>
                     </ResponsiveContainer>
                 </Box>
                 {/* Legend replacement - inline indicator */}
                 <Box sx={{ mt: 2, display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.cache.main }} />
-                        <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                            Cache
-                        </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.input.main }} />
-                        <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                            Input
-                        </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.output.main }} />
-                        <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                            Output
-                        </Typography>
-                    </Box>
+                    <LegendItem
+                        label="Cache"
+                        color={TOKEN_COLORS.cache.main}
+                        visible={visibleSeries.cache}
+                        onToggle={() => toggleSeries('cache')}
+                    />
+                    <LegendItem
+                        label="Input"
+                        color={TOKEN_COLORS.input.main}
+                        visible={visibleSeries.input}
+                        onToggle={() => toggleSeries('input')}
+                    />
+                    <LegendItem
+                        label="Output"
+                        color={TOKEN_COLORS.output.main}
+                        visible={visibleSeries.output}
+                        onToggle={() => toggleSeries('output')}
+                    />
                 </Box>
                 </>
             )}

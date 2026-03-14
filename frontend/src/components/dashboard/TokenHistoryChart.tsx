@@ -1,4 +1,5 @@
 import { Paper, Typography, Box, alpha } from '@mui/material';
+import { useState } from 'react';
 import {
     ComposedChart,
     BarChart,
@@ -29,6 +30,45 @@ interface TokenHistoryChartProps {
     data: TimeSeriesData[];
     interval?: string;
 }
+
+// Series visibility state type
+type SeriesKey = 'cache' | 'input' | 'output';
+interface SeriesVisibility {
+    cache: boolean;
+    input: boolean;
+    output: boolean;
+}
+
+// Shared legend item component with click handler
+interface LegendItemProps {
+    label: string;
+    color: string;
+    visible: boolean;
+    onToggle: () => void;
+}
+
+const LegendItem = ({ label, color, visible, onToggle }: LegendItemProps) => (
+    <Box
+        onClick={onToggle}
+        sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            cursor: 'pointer',
+            userSelect: 'none',
+            opacity: visible ? 1 : 0.4,
+            transition: 'opacity 0.2s ease',
+            '&:hover': {
+                opacity: visible ? 0.8 : 0.5,
+            },
+        }}
+    >
+        <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: color }} />
+        <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+            {label}
+        </Typography>
+    </Box>
+);
 
 // Shared types
 export interface ChartDataPoint {
@@ -257,6 +297,12 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
     const chartData = formatChartData(data, true);
     const labelInterval = calculateLabelInterval(chartData.length);
 
+    const [visibleSeries, setVisibleSeries] = useState<SeriesVisibility>({ cache: true, input: true, output: true });
+
+    const toggleSeries = (key: SeriesKey) => {
+        setVisibleSeries(prev => ({ ...prev, [key]: !prev[key] }));
+    };
+
     return (
         <Paper
             elevation={0}
@@ -338,36 +384,37 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
                                     axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
                                 />
                                 <Tooltip content={<CustomTooltip />} />
-                                <Bar dataKey="cacheTokens" name="Cache Tokens" fill={TOKEN_COLORS.cache.main} stackId="tokens" radius={barRadius}>
+                                <Bar dataKey="cacheTokens" name="Cache Tokens" fill={TOKEN_COLORS.cache.main} stackId="tokens" radius={barRadius} hide={!visibleSeries.cache}>
                                     {chartData.map((entry, index) => (
                                         <Cell key={`cache-${index}`} fill={entry.cacheTokens > 0 ? TOKEN_COLORS.cache.gradient : 'transparent'} />
                                     ))}
                                 </Bar>
-                                <Bar dataKey="inputTokens" name="Input Tokens" fill={TOKEN_COLORS.input.gradient} stackId="tokens" radius={barRadius} />
-                                <Bar dataKey="outputTokens" name="Output Tokens" fill={TOKEN_COLORS.output.gradient} stackId="tokens" radius={barRadius} />
+                                <Bar dataKey="inputTokens" name="Input Tokens" fill={TOKEN_COLORS.input.gradient} stackId="tokens" radius={barRadius} hide={!visibleSeries.input} />
+                                <Bar dataKey="outputTokens" name="Output Tokens" fill={TOKEN_COLORS.output.gradient} stackId="tokens" radius={barRadius} hide={!visibleSeries.output} />
+
                             </BarChart>
                         </ResponsiveContainer>
                     </Box>
                     {/* Legend replacement - inline indicator */}
                     <Box sx={{ mt: 2, display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.cache.main }} />
-                            <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                                Cache
-                            </Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.input.main }} />
-                            <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                                Input
-                            </Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.output.main }} />
-                            <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                                Output
-                            </Typography>
-                        </Box>
+                        <LegendItem
+                            label="Cache"
+                            color={TOKEN_COLORS.cache.main}
+                            visible={visibleSeries.cache}
+                            onToggle={() => toggleSeries('cache')}
+                        />
+                        <LegendItem
+                            label="Input"
+                            color={TOKEN_COLORS.input.main}
+                            visible={visibleSeries.input}
+                            onToggle={() => toggleSeries('input')}
+                        />
+                        <LegendItem
+                            label="Output"
+                            color={TOKEN_COLORS.output.main}
+                            visible={visibleSeries.output}
+                            onToggle={() => toggleSeries('output')}
+                        />
                     </Box>
                 </>
             )}
@@ -383,6 +430,12 @@ interface HourlyTokenHistoryChartProps {
 export function HourlyTokenHistoryChart({ data }: HourlyTokenHistoryChartProps) {
     const chartData = formatChartData(data, false);
     const labelInterval = calculateLabelInterval(chartData.length);
+
+    const [visibleSeries, setVisibleSeries] = useState<SeriesVisibility>({ cache: true, input: true, output: true });
+
+    const toggleSeries = (key: SeriesKey) => {
+        setVisibleSeries(prev => ({ ...prev, [key]: !prev[key] }));
+    };
 
     return (
         <Paper
@@ -472,6 +525,7 @@ export function HourlyTokenHistoryChart({ data }: HourlyTokenHistoryChartProps) 
                                     stackId="1"
                                     stroke={TOKEN_COLORS.cache.main}
                                     fill={TOKEN_COLORS.cache.gradient}
+                                    hide={!visibleSeries.cache}
                                 />
                                 <Area
                                     type="monotone"
@@ -480,6 +534,7 @@ export function HourlyTokenHistoryChart({ data }: HourlyTokenHistoryChartProps) 
                                     stackId="1"
                                     stroke={TOKEN_COLORS.input.main}
                                     fill={TOKEN_COLORS.input.gradient}
+                                    hide={!visibleSeries.input}
                                 />
                                 <Area
                                     type="monotone"
@@ -488,30 +543,31 @@ export function HourlyTokenHistoryChart({ data }: HourlyTokenHistoryChartProps) 
                                     stackId="1"
                                     stroke={TOKEN_COLORS.output.main}
                                     fill={TOKEN_COLORS.output.gradient}
+                                    hide={!visibleSeries.output}
                                 />
                             </ComposedChart>
                         </ResponsiveContainer>
                     </Box>
                     {/* Legend replacement - inline indicator */}
                     <Box sx={{ mt: 2, display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.cache.main }} />
-                            <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                                Cache
-                            </Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.input.main }} />
-                            <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                                Input
-                            </Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.output.main }} />
-                            <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                                Output
-                            </Typography>
-                        </Box>
+                        <LegendItem
+                            label="Cache"
+                            color={TOKEN_COLORS.cache.main}
+                            visible={visibleSeries.cache}
+                            onToggle={() => toggleSeries('cache')}
+                        />
+                        <LegendItem
+                            label="Input"
+                            color={TOKEN_COLORS.input.main}
+                            visible={visibleSeries.input}
+                            onToggle={() => toggleSeries('input')}
+                        />
+                        <LegendItem
+                            label="Output"
+                            color={TOKEN_COLORS.output.main}
+                            visible={visibleSeries.output}
+                            onToggle={() => toggleSeries('output')}
+                        />
                     </Box>
                 </>
             )}
@@ -742,9 +798,9 @@ export default function TokenHistoryChart({ data, interval = 'hour' }: TokenHist
                                 />
                                 <Tooltip content={<CustomTooltip />} />
                                 <Legend />
+                                <Bar dataKey="cacheTokens" name="Cache Tokens" fill="#ed6c02" />
                                 <Bar dataKey="inputTokens" name="Input Tokens" fill="#1976d2" stackId="stack" />
                                 <Bar dataKey="outputTokens" name="Output Tokens" fill="#2e7d32" stackId="stack" />
-                                <Bar dataKey="cacheTokens" name="Cache Tokens" fill="#ed6c02" />
                             </BarChart>
                         ) : (
                             // Area chart for hour/minute mode
