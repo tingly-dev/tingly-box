@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transformer"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
@@ -306,7 +307,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		if useResponsesAPI {
 			// Use Responses API path with direct v1 conversion (no beta intermediate)
 			// Convert Anthropic v1 request to Responses API format directly
-			responsesReq := request.ConvertAnthropicV1ToResponsesRequestWithProvider(&req.MessageNewParams, provider, actualModel)
+			responsesReq := request.ConvertAnthropicV1ToResponsesRequest(&req.MessageNewParams)
 
 			// Set the rule and provider in context so middleware can use the same rule
 			if rule != nil {
@@ -331,16 +332,23 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			return
 		}
 
+		// Convert Anthropic request to OpenAI format for streaming
+		openaiReq, config := request.ConvertAnthropicToOpenAIRequest(&req.MessageNewParams, true, isStreaming, disableStreamUsage)
+
+		// Apply provider-specific transforms
+		transformedReq := transformer.ApplyProviderTransforms(openaiReq, provider, actualModel, config)
+
+		// Clean up temporary fields (e.g., x_thinking)
+		request.CleanupOpenaiFields(transformedReq)
+
 		logrus.Debugf("[AnthropicV1] Using Chat Completions API for model=%s", actualModel)
 		// Use OpenAI conversion path (default behavior)
 		if isStreaming {
-			// Convert Anthropic request to OpenAI format for streaming
-			openaiReq := request.ConvertAnthropicToOpenAIRequestWithProvider(&req.MessageNewParams, true, provider, actualModel, isStreaming, disableStreamUsage)
 
 			// Create streaming request with request context for proper cancellation
-			wrapper := s.clientPool.GetOpenAIClient(provider, string(openaiReq.Model))
+			wrapper := s.clientPool.GetOpenAIClient(provider, transformedReq.Model)
 			fc := NewForwardContext(c.Request.Context(), provider)
-			streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, openaiReq)
+			streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, transformedReq)
 			if cancel != nil {
 				defer cancel()
 			}
@@ -353,7 +361,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			}
 
 			// Handle the streaming response
-			usage, err := stream.HandleOpenAIToAnthropicStreamResponse(c, openaiReq, streamResp, proxyModel)
+			usage, err := stream.HandleOpenAIToAnthropicStreamResponse(c, transformedReq, streamResp, proxyModel)
 			if err != nil {
 				s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
 				stream.SendInternalError(c, err.Error())
@@ -368,11 +376,9 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 
 		} else {
 			// Handle non-streaming request
-			// Convert Anthropic request to OpenAI format with provider transforms
-			openaiReq := request.ConvertAnthropicToOpenAIRequestWithProvider(&req.MessageNewParams, true, provider, actualModel, isStreaming, disableStreamUsage)
-			wrapper := s.clientPool.GetOpenAIClient(provider, string(openaiReq.Model))
+			wrapper := s.clientPool.GetOpenAIClient(provider, transformedReq.Model)
 			fc := NewForwardContext(nil, provider)
-			response, _, err := ForwardOpenAIChat(fc, wrapper, openaiReq)
+			response, _, err := ForwardOpenAIChat(fc, wrapper, transformedReq)
 			if err != nil {
 				stream.SendForwardingError(c, err)
 				if recorder != nil {

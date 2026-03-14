@@ -6,20 +6,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-// ConvertAnthropicV1ToResponsesRequestWithProvider converts Anthropic v1 request to OpenAI Responses API format
-// and applies provider-specific transformations
-func ConvertAnthropicV1ToResponsesRequestWithProvider(
-	anthropicReq *anthropic.MessageNewParams,
-	provider *typ.Provider,
-	model string,
-) responses.ResponseNewParams {
-	responsesReq := ConvertAnthropicV1ToResponsesRequest(anthropicReq)
-	responsesReq.Model = model
-	return responsesReq
-}
 
 // ConvertAnthropicV1ToResponsesRequest converts Anthropic v1 request to OpenAI Responses API format
 // The Responses API has a different structure than Chat Completions

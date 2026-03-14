@@ -180,7 +180,7 @@ func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Prov
 	case protocol.APIStyleOpenAI:
 		chatReq := request.ConvertOpenAIResponsesToChat(params, int64(maxAllowed))
 		if isStreaming {
-			wrapper := s.clientPool.GetOpenAIClient(provider, string(chatReq.Model))
+			wrapper := s.clientPool.GetOpenAIClient(provider, chatReq.Model)
 			fc := NewForwardContext(c.Request.Context(), provider)
 			chatStream, cancel, err := ForwardOpenAIChatStream(fc, wrapper, chatReq)
 			if cancel != nil {

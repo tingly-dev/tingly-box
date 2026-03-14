@@ -8,6 +8,7 @@ import (
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transformer"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
@@ -251,7 +252,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		if useResponsesAPI {
 			// Use Responses API path (for Codex and other models that prefer it)
 			// Convert Anthropic beta request to Responses API format
-			responsesReq := request.ConvertAnthropicBetaToResponsesRequestWithProvider(&req.BetaMessageNewParams, provider, actualModel)
+			responsesReq := request.ConvertAnthropicBetaToResponsesRequest(&req.BetaMessageNewParams)
 
 			// Set the rule and provider in context so middleware can use the same rule
 			if rule != nil {
@@ -268,10 +269,6 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				s.handleAnthropicV1BetaViaResponsesAPINonStreaming(c, req, proxyModel, actualModel, provider, responsesReq)
 			}
 		} else {
-			// Use Chat Completions path (fallback)
-			// Note: isStreaming is determined after conversion, so we need to re-evaluate
-			openaiReq := request.ConvertAnthropicBetaToOpenAIRequestWithProvider(&req.BetaMessageNewParams, true, provider, actualModel, isStreaming, disableStreamUsage)
-
 			// Set the rule and provider in context so middleware can use the same rule
 			if rule != nil {
 				c.Set("rule", rule)
@@ -281,10 +278,14 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			c.Set("provider", provider.UUID)
 			c.Set("model", actualModel)
 
+			openaiReq, config := request.ConvertAnthropicBetaToOpenAIRequest(&req.BetaMessageNewParams, true, isStreaming, disableStreamUsage)
+			// Apply provider-specific transforms
+			transformedReq := transformer.ApplyProviderTransforms(openaiReq, provider, actualModel, config)
+			// Clean up temporary fields (e.g., x_thinking)
+			request.CleanupOpenaiFields(transformedReq)
+
 			// Use OpenAI Chat Completions path
 			if isStreaming {
-				// Re-convert with streaming enabled since we're now in streaming mode
-				openaiReq = request.ConvertAnthropicBetaToOpenAIRequestWithProvider(&req.BetaMessageNewParams, true, provider, actualModel, isStreaming, disableStreamUsage)
 				// Set up stream recorder
 				streamRec := newStreamRecorder(recorder)
 				if streamRec != nil {
@@ -292,9 +293,9 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				}
 
 				// Create streaming request with request context for proper cancellation
-				wrapper := s.clientPool.GetOpenAIClient(provider, string(openaiReq.Model))
+				wrapper := s.clientPool.GetOpenAIClient(provider, transformedReq.Model)
 				fc := NewForwardContext(c.Request.Context(), provider)
-				streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, openaiReq)
+				streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, transformedReq)
 				if cancel != nil {
 					defer cancel()
 				}
@@ -307,7 +308,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				}
 
 				// Handle the streaming response
-				usage, err := stream.HandleOpenAIToAnthropicBetaStream(c, openaiReq, streamResp, proxyModel)
+				usage, err := stream.HandleOpenAIToAnthropicBetaStream(c, transformedReq, streamResp, proxyModel)
 				if err != nil {
 					s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
 					stream.SendInternalError(c, err.Error())
@@ -327,9 +328,9 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				}
 
 			} else {
-				wrapper := s.clientPool.GetOpenAIClient(provider, string(openaiReq.Model))
+				wrapper := s.clientPool.GetOpenAIClient(provider, transformedReq.Model)
 				fc := NewForwardContext(nil, provider)
-				resp, _, err := ForwardOpenAIChat(fc, wrapper, openaiReq)
+				resp, _, err := ForwardOpenAIChat(fc, wrapper, transformedReq)
 				if err != nil {
 					stream.SendForwardingError(c, err)
 					if recorder != nil {

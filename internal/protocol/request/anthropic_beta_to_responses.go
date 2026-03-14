@@ -5,21 +5,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3/responses"
-
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-// ConvertAnthropicBetaToResponsesRequestWithProvider converts Anthropic beta request to OpenAI Responses API format
-// and applies provider-specific transformations
-func ConvertAnthropicBetaToResponsesRequestWithProvider(
-	anthropicReq *anthropic.BetaMessageNewParams,
-	provider *typ.Provider,
-	model string,
-) responses.ResponseNewParams {
-	responsesReq := ConvertAnthropicBetaToResponsesRequest(anthropicReq)
-	responsesReq.Model = model
-	return responsesReq
-}
 
 // ConvertAnthropicBetaToResponsesRequest converts Anthropic beta request to OpenAI Responses API format
 // The Responses API has a different structure than Chat Completions

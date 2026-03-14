@@ -214,7 +214,7 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 		req = toolinterceptor.StripSearchFetchToolsOpenAI(originalReq)
 	}
 
-	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
+	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
 	streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, req)
 	if cancel != nil {
