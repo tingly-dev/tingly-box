@@ -155,6 +155,9 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(req.MessageNewParams.Model))
 			fc := NewForwardContext(c.Request.Context(), provider)
 			streamResp, cancel, err := ForwardAnthropicV1Stream(fc, wrapper, req.MessageNewParams)
+			if cancel != nil {
+				defer cancel()
+			}
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
 				stream.SendStreamingError(c, err)
@@ -163,7 +166,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 				}
 				return
 			}
-			defer cancel()
+
 			// Handle the streaming response
 			s.handleAnthropicStreamResponseV1(c, req.MessageNewParams, streamResp, proxyModel, actualModel, provider, recorder)
 		} else {
@@ -171,6 +174,9 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(req.MessageNewParams.Model))
 			fc := NewForwardContext(nil, provider)
 			anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, req.MessageNewParams)
+			if cancel != nil {
+				defer cancel()
+			}
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
 				stream.SendForwardingError(c, err)
@@ -179,7 +185,6 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 				}
 				return
 			}
-			defer cancel()
 
 			// Track usage from response
 			inputTokens := int(anthropicResp.Usage.InputTokens)
@@ -215,7 +220,10 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// Create streaming request with request context for proper cancellation
 			wrapper := s.clientPool.GetGoogleClient(provider, model)
 			fc := NewForwardContext(c.Request.Context(), provider)
-			streamResp, _, err := ForwardGoogleStream(fc, wrapper, model, googleReq, cfg)
+			streamResp, cancel, err := ForwardGoogleStream(fc, wrapper, model, googleReq, cfg)
+			if cancel != nil {
+				defer cancel()
+			}
 			if err != nil {
 				stream.SendStreamingError(c, err)
 				if recorder != nil {
@@ -323,7 +331,10 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// Create streaming request with request context for proper cancellation
 			wrapper := s.clientPool.GetOpenAIClient(provider, string(openaiReq.Model))
 			fc := NewForwardContext(c.Request.Context(), provider)
-			streamResp, _, err := ForwardOpenAIChatStream(fc, wrapper, openaiReq)
+			streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, openaiReq)
+			if cancel != nil {
+				defer cancel()
+			}
 			if err != nil {
 				stream.SendStreamingError(c, err)
 				if recorder != nil {

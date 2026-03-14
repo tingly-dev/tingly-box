@@ -220,6 +220,9 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
 			fc := NewForwardContext(c.Request.Context(), provider)
 			streamResp, cancel, err := ForwardAnthropicV1Stream(fc, wrapper, anthropicReq)
+			if cancel != nil {
+				defer cancel()
+			}
 			if err != nil {
 				// Track error with no usage
 				s.trackUsageFromContext(c, 0, 0, err)
@@ -231,7 +234,6 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				})
 				return
 			}
-			defer cancel()
 
 			// Get scenario config for DisableStreamUsage flag
 			disableStreamUsage := false
@@ -263,6 +265,9 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
 			fc := NewForwardContext(nil, provider)
 			anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, anthropicReq)
+			if cancel != nil {
+				defer cancel()
+			}
 			if err != nil {
 				// Track error with no usage
 				s.trackUsageFromContext(c, 0, 0, err)
@@ -274,7 +279,6 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				})
 				return
 			}
-			defer cancel()
 
 			// Track usage from response
 			inputTokens := int(anthropicResp.Usage.InputTokens)

@@ -94,7 +94,7 @@ func ForwardAnthropicV1BetaStream(fc *ForwardContext, wrapper *client.AnthropicC
 	}
 
 	if wrapper == nil {
-		cancel()
+		defer cancel()
 		return nil, nil, fmt.Errorf("failed to get Anthropic client for provider: %s", fc.Provider.Name)
 	}
 
@@ -142,6 +142,9 @@ func ForwardOpenAIChat(fc *ForwardContext, wrapper *client.OpenAIClient, req *op
 func ForwardOpenAIChatStream(fc *ForwardContext, wrapper *client.OpenAIClient, req *openai.ChatCompletionNewParams) (*openaistream.Stream[openai.ChatCompletionChunk], context.CancelFunc, error) {
 	ctx, cancel, err := fc.PrepareContext(req)
 	if err != nil {
+		if cancel != nil {
+			cancel()
+		}
 		return nil, nil, err
 	}
 

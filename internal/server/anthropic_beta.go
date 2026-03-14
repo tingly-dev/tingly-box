@@ -120,6 +120,9 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(req.BetaMessageNewParams.Model))
 			fc := NewForwardContext(c.Request.Context(), provider)
 			streamResp, cancel, err := ForwardAnthropicV1BetaStream(fc, wrapper, req.BetaMessageNewParams)
+			if cancel != nil {
+				defer cancel()
+			}
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
 				stream.SendStreamingError(c, err)
@@ -128,7 +131,6 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				}
 				return
 			}
-			defer cancel()
 			// Handle the streaming response
 			s.handleAnthropicStreamResponseV1Beta(c, req.BetaMessageNewParams, streamResp, proxyModel, actualModel, provider, recorder)
 		} else {
@@ -136,6 +138,9 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(req.BetaMessageNewParams.Model))
 			fc := NewForwardContext(nil, provider)
 			anthropicResp, cancel, err := ForwardAnthropicV1Beta(fc, wrapper, req.BetaMessageNewParams)
+			if cancel != nil {
+				defer cancel()
+			}
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
 				stream.SendForwardingError(c, err)
@@ -144,7 +149,6 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				}
 				return
 			}
-			defer cancel()
 
 			// Track usage from response
 			inputTokens := int(anthropicResp.Usage.InputTokens)
@@ -172,6 +176,9 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			wrapper := s.clientPool.GetGoogleClient(provider, model)
 			fc := NewForwardContext(c.Request.Context(), provider)
 			streamResp, cancel, err := ForwardGoogleStream(fc, wrapper, model, googleReq, cfg)
+			if cancel != nil {
+				defer cancel()
+			}
 			if err != nil {
 				stream.SendStreamingError(c, err)
 				if recorder != nil {
@@ -179,7 +186,6 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				}
 				return
 			}
-			defer cancel()
 
 			// Handle the streaming response
 			usage, err := stream.HandleGoogleToAnthropicBetaStreamResponse(c, streamResp, proxyModel)
@@ -279,7 +285,10 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				// Create streaming request with request context for proper cancellation
 				wrapper := s.clientPool.GetOpenAIClient(provider, string(openaiReq.Model))
 				fc := NewForwardContext(c.Request.Context(), provider)
-				streamResp, _, err := ForwardOpenAIChatStream(fc, wrapper, openaiReq)
+				streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, openaiReq)
+				if cancel != nil {
+					defer cancel()
+				}
 				if err != nil {
 					stream.SendStreamingError(c, err)
 					if streamRec != nil {
