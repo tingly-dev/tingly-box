@@ -14,6 +14,7 @@ interface UsageData {
     name: string;
     inputTokens: number;
     outputTokens: number;
+    cacheTokens?: number;
 }
 
 interface TokenUsageChartProps {
@@ -130,6 +131,7 @@ export default function TokenUsageChart({ data }: TokenUsageChartProps) {
                             <Legend />
                             <Bar dataKey="inputTokens" name="Input Tokens" fill="#1976d2" stackId="stack" />
                             <Bar dataKey="outputTokens" name="Output Tokens" fill="#2e7d32" stackId="stack" />
+                            <Bar dataKey="cacheTokens" name="Cache Tokens" fill="#ed6c02" stackId="cache" />
                         </BarChart>
                     </ResponsiveContainer>
                 </Box>

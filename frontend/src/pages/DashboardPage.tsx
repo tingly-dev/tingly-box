@@ -164,7 +164,8 @@ export default function DashboardPage() {
     const totalRequests = stats.reduce((sum, s) => sum + (s.request_count || 0), 0);
     const totalInputTokens = stats.reduce((sum, s) => sum + (s.total_input_tokens || 0), 0);
     const totalOutputTokens = stats.reduce((sum, s) => sum + (s.total_output_tokens || 0), 0);
-    const totalTokens = totalInputTokens + totalOutputTokens;
+    const totalCacheTokens = stats.reduce((sum, s) => sum + (s.cache_input_tokens || 0), 0);
+    const totalTokens = totalInputTokens + totalOutputTokens + totalCacheTokens;
 
     // Calculate average latency (weighted by request count)
     const totalLatencyWeight = stats.reduce((sum, s) => sum + (s.avg_latency_ms || 0) * (s.request_count || 0), 0);
@@ -187,6 +188,7 @@ export default function DashboardPage() {
             name: label.length > 30 ? label.substring(0, 30) + '...' : label,
             inputTokens: stat.total_input_tokens || 0,
             outputTokens: stat.total_output_tokens || 0,
+            cacheTokens: stat.cache_input_tokens || 0,
         };
     });
 
@@ -312,7 +314,7 @@ export default function DashboardPage() {
                     <StatCard
                         title="Total Tokens"
                         value={formatNumber(totalTokens)}
-                        subtitle={`${formatNumber(totalInputTokens)} in / ${formatNumber(totalOutputTokens)} out`}
+                        subtitle={`${formatNumber(totalInputTokens)} in / ${formatNumber(totalOutputTokens)} out${totalCacheTokens > 0 ? ` / ${formatNumber(totalCacheTokens)} cache` : ''}`}
                         icon={<PaidIcon />}
                         color="success"
                     />

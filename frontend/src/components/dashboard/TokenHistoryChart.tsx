@@ -18,6 +18,7 @@ export interface TimeSeriesData {
     total_tokens?: number;
     input_tokens: number;
     output_tokens: number;
+    cache_input_tokens?: number;
     error_count?: number;
     avg_latency_ms?: number;
 }
@@ -34,6 +35,7 @@ export interface ChartDataPoint {
     timeFull: string;
     inputTokens: number;
     outputTokens: number;
+    cacheTokens: number;
 }
 
 // Shared utilities
@@ -100,6 +102,7 @@ export const formatChartData = (data: TimeSeriesData[], isDayMode: boolean): Cha
         timeFull: formatTooltipTime(item.timestamp, isDayMode),
         inputTokens: item.input_tokens,
         outputTokens: item.output_tokens,
+        cacheTokens: item.cache_input_tokens || 0,
     }));
 };
 
@@ -261,6 +264,7 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
                 <Legend />
                 <Bar dataKey="inputTokens" name="Input Tokens" fill="#1976d2" stackId="stack" />
                 <Bar dataKey="outputTokens" name="Output Tokens" fill="#2e7d32" stackId="stack" />
+                <Bar dataKey="cacheTokens" name="Cache Tokens" fill="#ed6c02" />
             </BarChart>
         </ChartWrapper>
     );
@@ -312,6 +316,13 @@ export function HourlyTokenHistoryChart({ data }: HourlyTokenHistoryChartProps) 
                     stackId="1"
                     stroke="#2e7d32"
                     fill="#c8e6c9"
+                />
+                <Area
+                    type="monotone"
+                    dataKey="cacheTokens"
+                    name="Cache Tokens"
+                    stroke="#ed6c02"
+                    fill="#ffe0b2"
                 />
             </ComposedChart>
         </ChartWrapper>
@@ -404,6 +415,7 @@ export default function TokenHistoryChart({ data, interval = 'hour' }: TokenHist
         timeFull: formatTooltipTime(item.timestamp),
         inputTokens: item.input_tokens,
         outputTokens: item.output_tokens,
+        cacheTokens: item.cache_input_tokens || 0,
     }));
 
     // Calculate smart interval for X-axis labels
@@ -542,6 +554,7 @@ export default function TokenHistoryChart({ data, interval = 'hour' }: TokenHist
                                 <Legend />
                                 <Bar dataKey="inputTokens" name="Input Tokens" fill="#1976d2" stackId="stack" />
                                 <Bar dataKey="outputTokens" name="Output Tokens" fill="#2e7d32" stackId="stack" />
+                                <Bar dataKey="cacheTokens" name="Cache Tokens" fill="#ed6c02" />
                             </BarChart>
                         ) : (
                             // Area chart for hour/minute mode
@@ -577,6 +590,13 @@ export default function TokenHistoryChart({ data, interval = 'hour' }: TokenHist
                                     stackId="1"
                                     stroke="#2e7d32"
                                     fill="#c8e6c9"
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey="cacheTokens"
+                                    name="Cache Tokens"
+                                    stroke="#ed6c02"
+                                    fill="#ffe0b2"
                                 />
                             </ComposedChart>
                         )}

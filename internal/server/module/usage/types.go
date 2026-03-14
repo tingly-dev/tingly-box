@@ -22,23 +22,24 @@ type UsageStatsQuery struct {
 
 // AggregatedStat represents aggregated usage statistics
 type AggregatedStat struct {
-	Key             string  `json:"key" example:"gpt-4"`
-	ProviderUUID    string  `json:"provider_uuid,omitempty" example:"uuid-123"`
-	ProviderName    string  `json:"provider_name,omitempty" example:"openai"`
-	Model           string  `json:"model,omitempty" example:"gpt-4"`
-	Scenario        string  `json:"scenario,omitempty" example:"openai"`
-	UserID          string  `json:"user_id,omitempty" example:"usr_123"`
-	RequestCount    int64   `json:"request_count" example:"5420"`
-	TotalTokens     int64   `json:"total_tokens" example:"2140000"`
-	InputTokens     int64   `json:"total_input_tokens" example:"1250000"`
-	OutputTokens    int64   `json:"total_output_tokens" example:"890000"`
-	AvgInputTokens  float64 `json:"avg_input_tokens" example:"230.6"`
-	AvgOutputTokens float64 `json:"avg_output_tokens" example:"164.2"`
-	AvgLatencyMs    float64 `json:"avg_latency_ms" example:"1250"`
-	ErrorCount      int64   `json:"error_count" example:"12"`
-	ErrorRate       float64 `json:"error_rate" example:"0.0022"`
-	StreamedCount   int64   `json:"streamed_count" example:"4800"`
-	StreamedRate    float64 `json:"streamed_rate" example:"0.885"`
+	Key              string  `json:"key" example:"gpt-4"`
+	ProviderUUID     string  `json:"provider_uuid,omitempty" example:"uuid-123"`
+	ProviderName     string  `json:"provider_name,omitempty" example:"openai"`
+	Model            string  `json:"model,omitempty" example:"gpt-4"`
+	Scenario         string  `json:"scenario,omitempty" example:"openai"`
+	UserID           string  `json:"user_id,omitempty" example:"usr_123"`
+	RequestCount     int64   `json:"request_count" example:"5420"`
+	TotalTokens      int64   `json:"total_tokens" example:"2140000"`
+	InputTokens      int64   `json:"total_input_tokens" example:"1250000"`
+	OutputTokens     int64   `json:"total_output_tokens" example:"890000"`
+	AvgInputTokens   float64 `json:"avg_input_tokens" example:"230.6"`
+	AvgOutputTokens  float64 `json:"avg_output_tokens" example:"164.2"`
+	AvgLatencyMs     float64 `json:"avg_latency_ms" example:"1250"`
+	ErrorCount       int64   `json:"error_count" example:"12"`
+	ErrorRate        float64 `json:"error_rate" example:"0.0022"`
+	StreamedCount    int64   `json:"streamed_count" example:"4800"`
+	StreamedRate     float64 `json:"streamed_rate" example:"0.885"`
+	CacheInputTokens int64   `json:"cache_input_tokens" example:"500000"`
 }
 
 // UsageStatsResponse represents the response for usage statistics
@@ -67,13 +68,14 @@ type TimeSeriesQuery struct {
 
 // TimeSeriesData represents a single time bucket in time series data
 type TimeSeriesData struct {
-	Timestamp    string  `json:"timestamp" example:"2025-01-10T00:00:00Z"`
-	RequestCount int64   `json:"request_count" example:"245"`
-	TotalTokens  int64   `json:"total_tokens" example:"52000"`
-	InputTokens  int64   `json:"input_tokens" example:"32000"`
-	OutputTokens int64   `json:"output_tokens" example:"20000"`
-	ErrorCount   int64   `json:"error_count" example:"0"`
-	AvgLatencyMs float64 `json:"avg_latency_ms" example:"1100"`
+	Timestamp        string  `json:"timestamp" example:"2025-01-10T00:00:00Z"`
+	RequestCount     int64   `json:"request_count" example:"245"`
+	TotalTokens      int64   `json:"total_tokens" example:"52000"`
+	InputTokens      int64   `json:"input_tokens" example:"32000"`
+	OutputTokens     int64   `json:"output_tokens" example:"20000"`
+	CacheInputTokens int64   `json:"cache_input_tokens" example:"10000"`
+	ErrorCount       int64   `json:"error_count" example:"0"`
+	AvgLatencyMs     float64 `json:"avg_latency_ms" example:"1100"`
 }
 
 // TimeSeriesResponse represents the response for time-series data
@@ -103,22 +105,23 @@ type UsageRecordsQuery struct {
 
 // UsageRecordResponse represents a single usage record
 type UsageRecordResponse struct {
-	ID           uint   `json:"id" example:"1"`
-	ProviderUUID string `json:"provider_uuid" example:"uuid-123"`
-	ProviderName string `json:"provider_name" example:"openai"`
-	Model        string `json:"model" example:"gpt-4"`
-	Scenario     string `json:"scenario" example:"openai"`
-	RuleUUID     string `json:"rule_uuid,omitempty" example:"rule-uuid"`
-	UserID       string `json:"user_id,omitempty" example:"usr_123"`
-	RequestModel string `json:"request_model,omitempty" example:"gpt-4"`
-	Timestamp    string `json:"timestamp" example:"2025-01-10T12:00:00Z"`
-	InputTokens  int    `json:"input_tokens" example:"1000"`
-	OutputTokens int    `json:"output_tokens" example:"500"`
-	TotalTokens  int    `json:"total_tokens" example:"1500"`
-	Status       string `json:"status" example:"success"`
-	ErrorCode    string `json:"error_code,omitempty"`
-	LatencyMs    int    `json:"latency_ms" example:"1200"`
-	Streamed     bool   `json:"streamed" example:"true"`
+	ID               uint   `json:"id" example:"1"`
+	ProviderUUID     string `json:"provider_uuid" example:"uuid-123"`
+	ProviderName     string `json:"provider_name" example:"openai"`
+	Model            string `json:"model" example:"gpt-4"`
+	Scenario         string `json:"scenario" example:"openai"`
+	RuleUUID         string `json:"rule_uuid,omitempty" example:"rule-uuid"`
+	UserID           string `json:"user_id,omitempty" example:"usr_123"`
+	RequestModel     string `json:"request_model,omitempty" example:"gpt-4"`
+	Timestamp        string `json:"timestamp" example:"2025-01-10T12:00:00Z"`
+	InputTokens      int    `json:"input_tokens" example:"1000"`
+	OutputTokens     int    `json:"output_tokens" example:"500"`
+	TotalTokens      int    `json:"total_tokens" example:"1500"`
+	CacheInputTokens int    `json:"cache_input_tokens" example:"2000"`
+	Status           string `json:"status" example:"success"`
+	ErrorCode        string `json:"error_code,omitempty"`
+	LatencyMs        int    `json:"latency_ms" example:"1200"`
+	Streamed         bool   `json:"streamed" example:"true"`
 }
 
 // UsageRecordsResponse represents the response for usage records
