@@ -2,13 +2,12 @@ import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import { Box } from '@mui/material';
-import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
-import { useHeaderHeight } from '@/hooks/useHeaderHeight';
-import { api, getBaseUrl } from '@/services/api';
+import { useRuleManagement } from '@/pages/scenario/hooks/useRuleManagement.ts';
+import { useScenarioPageData } from '@/pages/scenario/hooks/useScenarioPageData.ts';
 
 const scenario = "openai";
 
@@ -21,70 +20,24 @@ const UseOpenAIPage: React.FC = () => {
         providers,
         loading: providersLoading,
         notification,
+        loadProviders,
+        copyToClipboard,
     } = useFunctionPanelData();
-    const headerRef = useRef<HTMLDivElement>(null);
-    const [baseUrl, setBaseUrl] = useState<string>('');
-    const [rules, setRules] = useState<any[]>([]);
-    const [loadingRule, setLoadingRule] = useState(true);
-    const [newlyCreatedRuleUuids, setNewlyCreatedRuleUuids] = useState<Set<string>>(new Set());
-    const navigate = useNavigate();
 
-    // Use shared hook for header height measurement
-    const headerHeight = useHeaderHeight(
-        headerRef,
-        providers.length > 0,
-        []
-    );
+    const {
+        rules,
+        loadingRule,
+        newlyCreatedRuleUuids,
+        handleRuleDelete,
+        handleRulesChange,
+        loadRules,
+    } = useRuleManagement();
 
-    const handleAddOAuthClick = () => {
-        navigate('/oauth?dialog=add');
-    };
-
-    const copyToClipboard = async (text: string, label: string) => {
-        try {
-            await navigator.clipboard.writeText(text);
-            showNotification(`${label} copied to clipboard!`, 'success');
-        } catch (err) {
-            showNotification('Failed to copy to clipboard', 'error');
-        }
-    };
-
-    const handleRuleDelete = useCallback((deletedRuleUuid: string) => {
-        setRules((prevRules) => prevRules.filter(r => r.uuid !== deletedRuleUuid));
-    }, []);
-
-    const handleRulesChange = useCallback((updatedRules: any[]) => {
-        setRules(updatedRules);
-        // If a new rule was added (length increased), add it to newlyCreatedRuleUuids
-        if (updatedRules.length > rules.length) {
-            const newRule = updatedRules[updatedRules.length - 1];
-            setNewlyCreatedRuleUuids(prev => new Set(prev).add(newRule.uuid));
-        }
-    }, [rules.length]);
+    const { headerRef, baseUrl, headerHeight } = useScenarioPageData(providers);
 
     useEffect(() => {
-        let isMounted = true;
-
-        const loadDataAsync = async () => {
-            const url = await getBaseUrl();
-            if (isMounted) setBaseUrl(url);
-
-            const result = await api.getRules(scenario);
-            if (isMounted) {
-                if (result.success) {
-                    const ruleData = Array.isArray(result.data) ? result.data : [];
-                    setRules(ruleData);
-                }
-                setLoadingRule(false);
-            }
-        };
-
-        loadDataAsync();
-
-        return () => {
-            isMounted = false;
-        };
-    }, []);
+        loadRules(scenario);
+    }, [scenario, loadRules]);
 
     const isLoading = providersLoading || loadingRule;
 
@@ -120,14 +73,11 @@ const UseOpenAIPage: React.FC = () => {
                     showNotification={showNotification}
                     providers={providers}
                     onRulesChange={handleRulesChange}
+                    onProvidersLoad={loadProviders}
                     newlyCreatedRuleUuids={newlyCreatedRuleUuids}
                     allowDeleteRule={true}
                     onRuleDelete={handleRuleDelete}
                     headerHeight={headerHeight}
-                    emptyStateTitle="No Providers Configured"
-                    emptyStateDescription="Add an API key or OAuth provider to start routing requests"
-                    onAddApiKeyClick={() => navigate('/api-keys?dialog=add')}
-                    onAddOAuthClick={handleAddOAuthClick}
                 />
             </CardGrid>
         </PageLayout>

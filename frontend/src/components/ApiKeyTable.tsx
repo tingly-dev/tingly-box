@@ -1,5 +1,7 @@
 import { ApiStyleBadge } from '@/components/ApiStyleBadge.tsx';
 import ModelListDialog from '@/components/ModelListDialog';
+import ProviderExportMenu from '@/components/ProviderExportMenu';
+import { exportProvider, exportProviderAsBase64ToClipboard, exportProviderAsJsonlToClipboard } from '@/components/rule-card/utils';
 import { Cancel, ContentCopy, Delete, Edit, ListAlt, Route, Visibility } from '@mui/icons-material';
 import {
     Box,
@@ -20,7 +22,8 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import { useState } from 'react';
+import type { ExportFormat } from '@/components/rule-card/utils';
+import {useCallback, useState} from 'react';
 import api from '../services/api';
 import type { Provider } from '../types/provider';
 
@@ -29,6 +32,7 @@ interface ApiKeyTableProps {
     onEdit?: (providerUuid: string) => void;
     onToggle?: (providerUuid: string) => void;
     onDelete?: (providerUuid: string) => void;
+    onNotification?: (message: string, severity: 'success' | 'error') => void;
 }
 
 interface TokenModalState {
@@ -49,7 +53,7 @@ interface ModelListDialogState {
     provider: Provider | null;
 }
 
-const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps) => {
+const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification }: ApiKeyTableProps) => {
     const [tokenModal, setTokenModal] = useState<TokenModalState>({
         open: false,
         providerName: '',
@@ -151,6 +155,24 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
     const handleCloseModelListDialog = () => {
         setModelListDialog({ open: false, provider: null });
     };
+
+    const handleExportProvider = useCallback(async (provider: Provider, format: ExportFormat) => {
+        await exportProvider(provider, format, (message, severity) => {
+            onNotification?.(message, severity);
+        });
+    }, [onNotification]);
+
+    const handleCopyProviderBase64 = useCallback(async (provider: Provider) => {
+        await exportProviderAsBase64ToClipboard(provider, (message, severity) => {
+            onNotification?.(message, severity);
+        });
+    }, [onNotification]);
+
+    const handleCopyProviderJsonl = useCallback(async (provider: Provider) => {
+        await exportProviderAsJsonlToClipboard(provider, (message, severity) => {
+            onNotification?.(message, severity);
+        });
+    }, [onNotification]);
 
     return (
         <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
@@ -265,9 +287,15 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                                         borderRadius: 1.5,
                                         p: 0.5,
                                         pr: 1,
-                                        width: 180,
+                                        width: 240,
                                     }}
                                 >
+                                    <ProviderExportMenu
+                                        provider={provider}
+                                        onExport={handleExportProvider}
+                                        onCopyJsonl={handleCopyProviderJsonl}
+                                        onCopyBase64={handleCopyProviderBase64}
+                                    />
                                     {onEdit && (
                                         <Tooltip title="Edit">
                                             <IconButton size="small" color="primary" onClick={() => onEdit(provider.uuid)}>

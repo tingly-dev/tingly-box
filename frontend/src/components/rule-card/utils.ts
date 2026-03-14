@@ -127,6 +127,11 @@ export function isConfigRecordReadyForSave(configRecord: ConfigRecord): boolean 
 // Export Functions
 // ============================================================================
 
+export type ExportFormat = 'jsonl' | 'base64';
+
+const BASE64_PREFIX = 'TGB64';
+const CURRENT_VERSION = '1.0';
+
 interface ExportMetadata {
     type: 'metadata';
     version: string;
@@ -162,92 +167,280 @@ interface ExportProvider {
     models?: any[];
 }
 
+// Generic export handler
+async function exportData(
+    jsonlContent: string,
+    format: ExportFormat,
+    filename: string,
+    notificationMsg: string,
+    onNotification: (message: string, severity: 'success' | 'error') => void
+): Promise<void> {
+    const content = format === 'jsonl' ? jsonlContent : `${BASE64_PREFIX}:${CURRENT_VERSION}:${btoa(jsonlContent)}`;
+    const extension = format === 'jsonl' ? 'jsonl' : 'txt';
+    const mimeType = format === 'jsonl' ? 'application/jsonl' : 'text/plain';
+
+    downloadFile(content, `${filename}.${extension}`, mimeType);
+    onNotification(notificationMsg, 'success');
+}
+
+// Generic clipboard export handler
+async function exportToClipboard(
+    jsonlContent: string,
+    onNotification: (message: string, severity: 'success' | 'error') => void
+): Promise<void> {
+    const base64Content = `${BASE64_PREFIX}:${CURRENT_VERSION}:${btoa(jsonlContent)}`;
+    await copyToClipboard(base64Content);
+    onNotification('Base64 export copied to clipboard! You can now paste it anywhere.', 'success');
+}
+
+// Generic JSONL clipboard export handler
+async function exportJsonlToClipboard(
+    jsonlContent: string,
+    onNotification: (message: string, severity: 'success' | 'error') => void
+): Promise<void> {
+    await copyToClipboard(jsonlContent);
+    onNotification('JSONL export copied to clipboard! You can now paste it anywhere.', 'success');
+}
+
 /**
- * Exports a rule with its associated providers to a JSONL file
+ * Exports a rule with its associated providers to the specified format
  */
 export async function exportRuleWithProviders(
     rule: Rule,
+    format: ExportFormat,
     onNotification: (message: string, severity: 'success' | 'error') => void
 ): Promise<void> {
     try {
-        // Collect unique provider UUIDs from services
-        const providerUuids = new Set<string>();
-        (rule.services || []).forEach((service: any) => {
-            if (service.provider) {
-                providerUuids.add(service.provider);
-            }
-        });
-
-        // Fetch all providers
-        const providersData: any[] = [];
-        for (const uuid of providerUuids) {
-            try {
-                const result = await api.getProvider(uuid);
-                if (result.success && result.data) {
-                    providersData.push(result.data);
-                }
-            } catch (error) {
-                console.error(`Failed to fetch provider ${uuid}:`, error);
-            }
-        }
-
-        // Build JSONL export
-        const lines: string[] = [];
-
-        // Line 1: Metadata
-        const metadata: ExportMetadata = {
-            type: 'metadata',
-            version: '1.0',
-            exported_at: new Date().toISOString(),
-        };
-        lines.push(JSON.stringify(metadata));
-
-        // Line 2: Rule
-        const ruleExport: ExportRule = {
-            type: 'rule',
-            uuid: rule.uuid,
-            scenario: rule.scenario,
-            request_model: rule.request_model,
-            response_model: rule.response_model,
-            description: rule.description,
-            services: rule.services || [],
-            active: rule.active,
-            smart_enabled: rule.smart_enabled,
-            smart_routing: rule.smart_routing || [],
-        };
-        lines.push(JSON.stringify(ruleExport));
-
-        // Subsequent lines: Providers
-        for (const provider of providersData) {
-            const providerExport: ExportProvider = {
-                type: 'provider',
-                uuid: provider.uuid,
-                name: provider.name,
-                api_base: provider.api_base,
-                api_style: provider.api_style,
-                auth_type: provider.auth_type || 'api_key',
-                token: provider.token,
-                oauth_detail: provider.oauth_detail,
-                enabled: provider.enabled,
-                proxy_url: provider.proxy_url,
-                timeout: provider.timeout,
-                tags: provider.tags,
-                models: provider.models,
-            };
-            lines.push(JSON.stringify(providerExport));
-        }
-
-        // Create download
-        downloadJsonlFile(lines.join('\n'), `${rule.request_model || 'rule'}-${rule.scenario}.jsonl`);
-        onNotification('Rule with API keys exported successfully!', 'success');
+        const jsonlContent = await buildJsonlExport(rule);
+        const filename = `${rule.request_model || 'rule'}-${rule.scenario}`;
+        const message = format === 'jsonl'
+            ? 'Rule with API keys exported successfully!'
+            : 'Rule exported as Base64! You can copy and share this file.';
+        await exportData(jsonlContent, format, filename, message, onNotification);
     } catch (error) {
         console.error('Error exporting rule:', error);
         onNotification('Failed to export rule', 'error');
     }
 }
 
-function downloadJsonlFile(content: string, filename: string): void {
-    const blob = new Blob([content], { type: 'application/jsonl' });
+/**
+ * Exports a rule as Base64 and copies to clipboard
+ */
+export async function exportRuleAsBase64ToClipboard(
+    rule: Rule,
+    onNotification: (message: string, severity: 'success' | 'error') => void
+): Promise<void> {
+    try {
+        const jsonlContent = await buildJsonlExport(rule);
+        await exportToClipboard(jsonlContent, onNotification);
+    } catch (error) {
+        console.error('Error exporting rule to clipboard:', error);
+        onNotification('Failed to copy to clipboard', 'error');
+    }
+}
+
+/**
+ * Exports a rule as JSONL and copies to clipboard
+ */
+export async function exportRuleAsJsonlToClipboard(
+    rule: Rule,
+    onNotification: (message: string, severity: 'success' | 'error') => void
+): Promise<void> {
+    try {
+        const jsonlContent = await buildJsonlExport(rule);
+        await exportJsonlToClipboard(jsonlContent, onNotification);
+    } catch (error) {
+        console.error('Error exporting rule to clipboard:', error);
+        onNotification('Failed to copy to clipboard', 'error');
+    }
+}
+
+/**
+ * Exports a single provider to the specified format
+ */
+export async function exportProvider(
+    provider: any,
+    format: ExportFormat,
+    onNotification: (message: string, severity: 'success' | 'error') => void
+): Promise<void> {
+    try {
+        const jsonlContent = buildProviderJsonlExport(provider);
+        const filename = `${provider.name || 'provider'}-${provider.api_style}`;
+        const message = format === 'jsonl'
+            ? 'Provider exported successfully!'
+            : 'Provider exported as Base64! You can copy and share this file.';
+        await exportData(jsonlContent, format, filename, message, onNotification);
+    } catch (error) {
+        console.error('Error exporting provider:', error);
+        onNotification('Failed to export provider', 'error');
+    }
+}
+
+/**
+ * Exports a provider as Base64 and copies to clipboard
+ */
+export async function exportProviderAsBase64ToClipboard(
+    provider: any,
+    onNotification: (message: string, severity: 'success' | 'error') => void
+): Promise<void> {
+    try {
+        const jsonlContent = buildProviderJsonlExport(provider);
+        await exportToClipboard(jsonlContent, onNotification);
+    } catch (error) {
+        console.error('Error exporting provider to clipboard:', error);
+        onNotification('Failed to copy to clipboard', 'error');
+    }
+}
+
+/**
+ * Exports a provider as JSONL and copies to clipboard
+ */
+export async function exportProviderAsJsonlToClipboard(
+    provider: any,
+    onNotification: (message: string, severity: 'success' | 'error') => void
+): Promise<void> {
+    try {
+        const jsonlContent = buildProviderJsonlExport(provider);
+        await exportJsonlToClipboard(jsonlContent, onNotification);
+    } catch (error) {
+        console.error('Error exporting provider to clipboard:', error);
+        onNotification('Failed to copy to clipboard', 'error');
+    }
+}
+
+/**
+ * Builds the JSONL export content for a rule
+ */
+async function buildJsonlExport(rule: Rule): Promise<string> {
+    // Collect unique provider UUIDs from services
+    const providerUuids = new Set<string>();
+    (rule.services || []).forEach((service: any) => {
+        if (service.provider) providerUuids.add(service.provider);
+    });
+
+    // Fetch all providers
+    const providersData: any[] = [];
+    for (const uuid of providerUuids) {
+        try {
+            const result = await api.getProvider(uuid);
+            if (result.success && result.data) providersData.push(result.data);
+        } catch (error) {
+            console.error(`Failed to fetch provider ${uuid}:`, error);
+        }
+    }
+
+    return buildJsonlLines([
+        createMetadataLine(),
+        createRuleLine(rule),
+        ...providersData.map(createProviderLine)
+    ]);
+}
+
+/**
+ * Builds the JSONL export content for a single provider
+ */
+function buildProviderJsonlExport(provider: any): string {
+    return buildJsonlLines([
+        createMetadataLine(),
+        createProviderLine(provider)
+    ]);
+}
+
+// Helper functions for building export lines
+function createMetadataLine(): string {
+    return JSON.stringify({
+        type: 'metadata',
+        version: CURRENT_VERSION,
+        exported_at: new Date().toISOString()
+    } as ExportMetadata);
+}
+
+function createRuleLine(rule: Rule): string {
+    return JSON.stringify({
+        type: 'rule',
+        uuid: rule.uuid,
+        scenario: rule.scenario,
+        request_model: rule.request_model,
+        response_model: rule.response_model,
+        description: rule.description,
+        services: rule.services || [],
+        active: rule.active,
+        smart_enabled: rule.smart_enabled,
+        smart_routing: rule.smart_routing || [],
+    } as ExportRule);
+}
+
+function createProviderLine(provider: any): string {
+    return JSON.stringify({
+        type: 'provider',
+        uuid: provider.uuid,
+        name: provider.name,
+        api_base: provider.api_base,
+        api_style: provider.api_style,
+        auth_type: provider.auth_type || 'api_key',
+        token: provider.token,
+        oauth_detail: provider.oauth_detail,
+        enabled: provider.enabled,
+        proxy_url: provider.proxy_url,
+        timeout: provider.timeout,
+        tags: provider.tags,
+        models: provider.models,
+    } as ExportProvider);
+}
+
+function buildJsonlLines(lines: string[]): string {
+    return lines.join('\n');
+}
+
+/**
+ * Decodes Base64 export content back to JSONL
+ */
+export function decodeBase64Export(base64Content: string): string {
+    const trimmed = base64Content.trim();
+    if (!trimmed.startsWith(`${BASE64_PREFIX}:`)) {
+        throw new Error('Invalid Base64 export format: missing prefix');
+    }
+
+    const parts = trimmed.split(':');
+    if (parts.length !== 3) {
+        throw new Error('Invalid Base64 export format: expected prefix:version:payload');
+    }
+
+    const [version, payload] = [parts[1], parts[2]];
+    if (version !== CURRENT_VERSION) {
+        throw new Error(`Unsupported version: ${version} (supported: ${CURRENT_VERSION})`);
+    }
+
+    return atob(payload);
+}
+
+/**
+ * Copies text to clipboard
+ */
+async function copyToClipboard(text: string): Promise<void> {
+    if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+    } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+        } finally {
+            document.body.removeChild(textArea);
+        }
+    }
+}
+
+/**
+ * Downloads content as a file
+ */
+function downloadFile(content: string, filename: string, mimeType: string): void {
+    const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

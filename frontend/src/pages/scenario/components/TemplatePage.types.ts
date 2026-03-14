@@ -10,16 +10,19 @@ export interface TabTemplatePageProps {
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
     providers: Provider[];
     onRulesChange?: (updatedRules: Rule[]) => void;
+    onProvidersLoad?: () => Promise<void>; // Callback to refresh providers after import
     collapsible?: boolean;
     allowDeleteRule?: boolean;
     onRuleDelete?: (ruleUuid: string) => void;
     allowToggleRule?: boolean;
+    allowAddRule?: boolean;
     newlyCreatedRuleUuids?: Set<string>; // @deprecated - not used, kept for API compatibility
     // Unified action buttons props
     scenario?: string;
     showAddApiKeyButton?: boolean;
     showCreateRuleButton?: boolean;
     showExpandCollapseButton?: boolean;
+    showImportButton?: boolean;
     // Allow custom rightAction for backward compatibility
     rightAction?: React.ReactNode;
     // Header height from parent component for calculating available space
