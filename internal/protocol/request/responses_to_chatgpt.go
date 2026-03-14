@@ -7,8 +7,6 @@ import (
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // ChatGPTBackendRequest represents a request to the ChatGPT backend API.
@@ -25,77 +23,6 @@ type ChatGPTBackendRequest struct {
 	MaxCompletion int           `json:"max_completion_tokens,omitempty"`
 	Temperature   float64       `json:"temperature,omitempty"`
 	TopP          float64       `json:"top_p,omitempty"`
-}
-
-// ConvertResponsesToChatGPTFormat converts OpenAI Responses API params to ChatGPT backend API format.
-func ConvertResponsesToChatGPTFormat(params responses.ResponseNewParams, provider *typ.Provider) *ChatGPTBackendRequest {
-	req := &ChatGPTBackendRequest{
-		Model:      string(params.Model),
-		Stream:     true,
-		Tools:      []interface{}{},
-		ToolChoice: "auto",
-		Store:      false,
-		Include:    []string{},
-	}
-
-	// Add instructions if present, otherwise use default
-	// ChatGPT backend API requires instructions to be present
-	if !param.IsOmitted(params.Instructions) {
-		req.Instructions = params.Instructions.Value
-	} else {
-		req.Instructions = "You are a helpful AI assistant."
-	}
-
-	// Convert input to ChatGPT backend API format
-	if !param.IsOmitted(params.Input.OfInputItemList) {
-		req.Input = ConvertResponseInputToChatGPTFormat(params.Input.OfInputItemList)
-	}
-
-	// Convert tools to ChatGPT backend API format
-	if !param.IsOmitted(params.Tools) && len(params.Tools) > 0 {
-		req.Tools = ConvertResponseToolsToChatGPTFormat(params.Tools)
-	}
-
-	// Convert tool_choice if present
-	if !param.IsOmitted(params.ToolChoice) {
-		req.ToolChoice = ConvertResponseToolChoiceToChatGPTFormat(params.ToolChoice)
-	}
-
-	// Copy other fields if present
-	// Note: Codex OAuth providers do not support max_tokens, max_completion_tokens, temperature, or top_p
-	if !param.IsOmitted(params.MaxOutputTokens) {
-		// Skip for Codex OAuth providers
-		if !IsCodexOAuthProvider(provider) {
-			if RequiresMaxCompletionTokens(string(params.Model)) {
-				req.MaxCompletion = int(params.MaxOutputTokens.Value)
-			} else {
-				req.MaxTokens = int(params.MaxOutputTokens.Value)
-			}
-		}
-	}
-	if !param.IsOmitted(params.Temperature) {
-		// Skip for Codex OAuth providers
-		if !IsCodexOAuthProvider(provider) {
-			req.Temperature = params.Temperature.Value
-		}
-	}
-	if !param.IsOmitted(params.TopP) {
-		// Skip for Codex OAuth providers
-		if !IsCodexOAuthProvider(provider) {
-			req.TopP = params.TopP.Value
-		}
-	}
-
-	return req
-}
-
-// IsCodexOAuthProvider checks if the provider is a Codex OAuth provider.
-// Codex OAuth providers do not support max_tokens or max_completion_tokens parameters.
-func IsCodexOAuthProvider(provider *typ.Provider) bool {
-	if provider == nil || provider.OAuthDetail == nil {
-		return false
-	}
-	return provider.OAuthDetail.ProviderType == "codex"
 }
 
 // RequiresMaxCompletionTokens checks if the model requires max_completion_tokens instead of max_tokens.
