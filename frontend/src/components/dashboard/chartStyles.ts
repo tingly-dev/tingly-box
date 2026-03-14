@@ -12,12 +12,12 @@ export const TOKEN_COLORS = {
         gradientEnd: 'rgba(59, 130, 246, 0.6)',
     },
     cache: {
-        main: '#F59E0B',   // Amber 500
-        light: '#FBBF24',  // Amber 400
-        dark: '#D97706',   // Amber 600
-        gradient: 'rgba(245, 158, 11, 0.85)',
-        gradientStart: 'rgba(245, 158, 11, 0.95)',
-        gradientEnd: 'rgba(245, 158, 11, 0.75)',
+        main: '#fdba74',   // Lighter orange
+        light: '#fed7aa',  // Even lighter orange
+        dark: '#fb923c',   // Darker orange
+        gradient: 'rgba(253, 186, 116, 0.85)',
+        gradientStart: 'rgba(253, 186, 116, 0.95)',
+        gradientEnd: 'rgba(253, 186, 116, 0.75)',
     },
     output: {
         main: '#10B981',  // Emerald 500
@@ -52,7 +52,7 @@ export const tooltipStyle = {
 };
 
 // Bar radius for rounded corners
-export const barRadius = [0, 4, 4, 0];
+export const barRadius = [0, 0, 0, 0];
 
 // Animation duration for chart transitions
 export const ANIMATION_DURATION = 600;

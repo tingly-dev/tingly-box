@@ -384,13 +384,13 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
                                     axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
                                 />
                                 <Tooltip content={<CustomTooltip />} />
-                                <Bar dataKey="cacheTokens" name="Cache Tokens" fill={TOKEN_COLORS.cache.main} stackId="tokens" radius={barRadius} hide={!visibleSeries.cache}>
+                                <Bar dataKey="cacheTokens" name="Cache Tokens" fill={TOKEN_COLORS.cache.main} stackId="tokens" hide={!visibleSeries.cache}>
                                     {chartData.map((entry, index) => (
                                         <Cell key={`cache-${index}`} fill={entry.cacheTokens > 0 ? TOKEN_COLORS.cache.gradient : 'transparent'} />
                                     ))}
                                 </Bar>
-                                <Bar dataKey="inputTokens" name="Input Tokens" fill={TOKEN_COLORS.input.gradient} stackId="tokens" radius={barRadius} hide={!visibleSeries.input} />
-                                <Bar dataKey="outputTokens" name="Output Tokens" fill={TOKEN_COLORS.output.gradient} stackId="tokens" radius={barRadius} hide={!visibleSeries.output} />
+                                <Bar dataKey="inputTokens" name="Input Tokens" fill={TOKEN_COLORS.input.gradient} stackId="tokens" hide={!visibleSeries.input} />
+                                <Bar dataKey="outputTokens" name="Output Tokens" fill={TOKEN_COLORS.output.gradient} stackId="tokens" hide={!visibleSeries.output} />
 
                             </BarChart>
                         </ResponsiveContainer>

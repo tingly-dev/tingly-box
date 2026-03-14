@@ -309,7 +309,7 @@ export default function DashboardPage() {
             <Grid container spacing={2.5} sx={{ mb: 4 }}>
                 <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
                     <StatCard
-                        title="Total Requests"
+                        title={'Total\nRequests'}
                         value={totalRequests.toLocaleString()}
                         subtitle={TIME_RANGE_CONFIG[timeRange].label}
                         icon={<CallMadeIcon />}
@@ -318,16 +318,16 @@ export default function DashboardPage() {
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
                     <StatCard
-                        title="Total Tokens"
+                        title={'Total\nTokens'}
                         value={formatNumber(totalTokens)}
-                        subtitle={`${formatNumber(totalInputTokens)} in / ${formatNumber(totalOutputTokens)} out${totalCacheTokens > 0 ? ` / ${formatNumber(totalCacheTokens)} cache` : ''}`}
+                        subtitle={`Input: ${formatNumber(totalInputTokens)}\nOutput: ${formatNumber(totalOutputTokens)}${totalCacheTokens > 0 ? `\nCache: ${formatNumber(totalCacheTokens)}` : ''}`}
                         icon={<PaidIcon />}
                         color="success"
                     />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
                     <StatCard
-                        title="Cache Hit Rate"
+                        title={'Cache Hit\nRate'}
                         value={`${cacheHitRate.toFixed(1)}%`}
                         subtitle={`${formatNumber(totalCacheTokens)} cached`}
                         icon={<CachedIcon />}
@@ -336,7 +336,7 @@ export default function DashboardPage() {
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
                     <StatCard
-                        title="Error Rate"
+                        title={'Error\nRate'}
                         value={`${errorRate.toFixed(2)}%`}
                         subtitle={`${totalErrors} errors`}
                         icon={<ErrorOutlineIcon />}
@@ -345,7 +345,7 @@ export default function DashboardPage() {
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
                     <StatCard
-                        title="Streamed Rate"
+                        title={'Streamed\nRate'}
                         value={`${streamedRate.toFixed(1)}%`}
                         subtitle={`${totalStreamed} streamed`}
                         icon={<StreamIcon />}
