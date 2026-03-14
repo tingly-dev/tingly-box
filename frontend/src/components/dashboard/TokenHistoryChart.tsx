@@ -10,7 +10,9 @@ import {
     Tooltip,
     ResponsiveContainer,
     Legend,
+    Cell,
 } from 'recharts';
+import { TOKEN_COLORS, gridStyle, tooltipStyle, barRadius } from './chartStyles';
 
 export interface TimeSeriesData {
     timestamp: string;
@@ -245,26 +247,29 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
             title="Token Usage Over Time (Daily)"
             chartData={chartData}
         >
-            <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <BarChart data={chartData} barCategoryGap={8}>
+                <CartesianGrid strokeDasharray="4 4" stroke={gridStyle.stroke} strokeOpacity={gridStyle.strokeOpacity} />
                 <XAxis
                     dataKey="time"
-                    tick={{ fontSize: 11 }}
+                    tick={{ fontSize: 11, fill: '#64748b' }}
                     tickLine={false}
-                    axisLine={{ stroke: '#e0e0e0' }}
+                    axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
                     interval={labelInterval}
                 />
                 <YAxis
                     tickFormatter={formatYAxis}
-                    tick={{ fontSize: 11 }}
+                    tick={{ fontSize: 11, fill: '#64748b' }}
                     tickLine={false}
-                    axisLine={{ stroke: '#e0e0e0' }}
+                    axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
                 />
                 <Tooltip content={<CustomTooltip />} />
-                <Legend />
-                <Bar dataKey="inputTokens" name="Input Tokens" fill="#1976d2" stackId="stack" />
-                <Bar dataKey="outputTokens" name="Output Tokens" fill="#2e7d32" stackId="stack" />
-                <Bar dataKey="cacheTokens" name="Cache Tokens" fill="#ed6c02" />
+                <Bar dataKey="cacheTokens" name="Cache Tokens" fill={TOKEN_COLORS.cache.main} stackId="tokens" radius={barRadius}>
+                    {chartData.map((entry, index) => (
+                        <Cell key={`cache-${index}`} fill={entry.cacheTokens > 0 ? TOKEN_COLORS.cache.gradient : 'transparent'} />
+                    ))}
+                </Bar>
+                <Bar dataKey="outputTokens" name="Output Tokens" fill={TOKEN_COLORS.output.gradient} stackId="tokens" radius={barRadius} />
+                <Bar dataKey="inputTokens" name="Input Tokens" fill={TOKEN_COLORS.input.gradient} stackId="tokens" radius={barRadius} />
             </BarChart>
         </ChartWrapper>
     );
@@ -285,44 +290,44 @@ export function HourlyTokenHistoryChart({ data }: HourlyTokenHistoryChartProps) 
             chartData={chartData}
         >
             <ComposedChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <CartesianGrid strokeDasharray="4 4" stroke={gridStyle.stroke} strokeOpacity={gridStyle.strokeOpacity} vertical={false} />
                 <XAxis
                     dataKey="time"
-                    tick={{ fontSize: 11 }}
+                    tick={{ fontSize: 11, fill: '#64748b' }}
                     tickLine={false}
-                    axisLine={{ stroke: '#e0e0e0' }}
+                    axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
                     interval={labelInterval}
                 />
                 <YAxis
                     tickFormatter={formatYAxis}
-                    tick={{ fontSize: 11 }}
+                    tick={{ fontSize: 11, fill: '#64748b' }}
                     tickLine={false}
-                    axisLine={{ stroke: '#e0e0e0' }}
+                    axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
                 />
                 <Tooltip content={<CustomTooltip />} />
-                <Legend />
                 <Area
                     type="monotone"
                     dataKey="inputTokens"
                     name="Input Tokens"
                     stackId="1"
-                    stroke="#1976d2"
-                    fill="#bbdefb"
+                    stroke={TOKEN_COLORS.input.main}
+                    fill={TOKEN_COLORS.input.gradient}
+                />
+                <Area
+                    type="monotone"
+                    dataKey="cacheTokens"
+                    name="Cache Tokens"
+                    stackId="1"
+                    stroke={TOKEN_COLORS.cache.main}
+                    fill={TOKEN_COLORS.cache.gradient}
                 />
                 <Area
                     type="monotone"
                     dataKey="outputTokens"
                     name="Output Tokens"
                     stackId="1"
-                    stroke="#2e7d32"
-                    fill="#c8e6c9"
-                />
-                <Area
-                    type="monotone"
-                    dataKey="cacheTokens"
-                    name="Cache Tokens"
-                    stroke="#ed6c02"
-                    fill="#ffe0b2"
+                    stroke={TOKEN_COLORS.output.main}
+                    fill={TOKEN_COLORS.output.gradient}
                 />
             </ComposedChart>
         </ChartWrapper>

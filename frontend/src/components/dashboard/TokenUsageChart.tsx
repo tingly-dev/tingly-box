@@ -7,8 +7,9 @@ import {
     CartesianGrid,
     Tooltip,
     ResponsiveContainer,
-    Legend,
+    Cell,
 } from 'recharts';
+import { TOKEN_COLORS, gridStyle, tooltipStyle, barRadius } from './chartStyles';
 
 interface UsageData {
     name: string;
@@ -39,6 +40,49 @@ export default function TokenUsageChart({ data }: TokenUsageChartProps) {
         return value.toLocaleString();
     };
 
+    // Custom tooltip with better styling
+    const CustomTooltip = ({ active, payload }: any) => {
+        if (!active || !payload || !payload.length) return null;
+
+        const data = payload[0].payload;
+        return (
+            <Box sx={tooltipStyle}>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, fontSize: '0.875rem' }}>
+                    {data.name}
+                </Typography>
+                {payload.map((entry: any, index: number) => (
+                    <Box
+                        key={index}
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            mb: 0.5,
+                            fontSize: '0.75rem',
+                        }}
+                    >
+                        <Box
+                            sx={{
+                                width: 12,
+                                height: 12,
+                                borderRadius: 2,
+                                backgroundColor: entry.color,
+                            }}
+                        />
+                        <Typography variant="body2" sx={{ color: 'text.primary' }}>
+                            {entry.name}: {formatTooltipValue(entry.value)}
+                        </Typography>
+                    </Box>
+                ))}
+                <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid #e2e8f0', fontSize: '0.75rem' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        Total: {formatTooltipValue(data.inputTokens + data.outputTokens + (data.cacheTokens || 0))}
+                    </Typography>
+                </Box>
+            </Box>
+        );
+    };
+
     return (
         <Paper
             elevation={0}
@@ -54,7 +98,7 @@ export default function TokenUsageChart({ data }: TokenUsageChartProps) {
                 flexDirection: 'column',
             }}
         >
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1rem' }}>
                     Token Usage by Top 5 Models
                 </Typography>
@@ -101,40 +145,62 @@ export default function TokenUsageChart({ data }: TokenUsageChartProps) {
                     </Typography>
                 </Box>
             ) : (
+                <>
                 <Box sx={{ flex: 1, minHeight: 280 }}>
                     <ResponsiveContainer width="100%" height={280}>
-                        <BarChart data={top5Data} layout="vertical">
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <BarChart data={top5Data} layout="vertical" barCategoryGap={12}>
+                            <CartesianGrid strokeDasharray="4 4" stroke={gridStyle.stroke} strokeOpacity={gridStyle.strokeOpacity} />
                             <XAxis
                                 type="number"
                                 tickFormatter={formatYAxis}
-                                tick={{ fontSize: 12 }}
+                                tick={{ fontSize: 11, fill: '#64748b' }}
                                 tickLine={false}
-                                axisLine={{ stroke: '#e0e0e0' }}
+                                axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
                             />
                             <YAxis
                                 dataKey="name"
                                 type="category"
-                                tick={{ fontSize: 11 }}
+                                tick={{ fontSize: 11, fill: '#64748b' }}
                                 tickLine={false}
-                                axisLine={{ stroke: '#e0e0e0' }}
+                                axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
                                 width={160}
                             />
-                            <Tooltip
-                                formatter={(value: number, name: string) => [formatTooltipValue(value), name]}
-                                contentStyle={{
-                                    borderRadius: 8,
-                                    border: '1px solid #e0e0e0',
-                                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                                }}
-                            />
-                            <Legend />
-                            <Bar dataKey="inputTokens" name="Input Tokens" fill="#1976d2" stackId="stack" />
-                            <Bar dataKey="outputTokens" name="Output Tokens" fill="#2e7d32" stackId="stack" />
-                            <Bar dataKey="cacheTokens" name="Cache Tokens" fill="#ed6c02" stackId="cache" />
+                            <Tooltip content={<CustomTooltip />} />
+                            <Bar dataKey="cacheTokens" name="Cache Tokens" fill={TOKEN_COLORS.cache.main} stackId="tokens" radius={barRadius}>
+                                {top5Data.map((entry, index) => (
+                                    <Cell
+                                        key={`cache-${index}`}
+                                        fill={entry.cacheTokens > 0 ? TOKEN_COLORS.cache.gradient : 'transparent'}
+                                    />
+                                ))}
+                            </Bar>
+                            <Bar dataKey="outputTokens" name="Output Tokens" fill={TOKEN_COLORS.output.gradient} stackId="tokens" radius={barRadius} />
+                            <Bar dataKey="inputTokens" name="Input Tokens" fill={TOKEN_COLORS.input.gradient} stackId="tokens" radius={barRadius} />
                         </BarChart>
                     </ResponsiveContainer>
                 </Box>
+                {/* Legend replacement - inline indicator */}
+                <Box sx={{ mt: 2, display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.input.main }} />
+                        <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                            Input
+                        </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.cache.main }} />
+                        <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                            Cache
+                        </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: TOKEN_COLORS.output.main }} />
+                        <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                            Output
+                        </Typography>
+                    </Box>
+                </Box>
+                </>
             )}
         </Paper>
     );
