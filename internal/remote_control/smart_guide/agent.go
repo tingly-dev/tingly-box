@@ -576,26 +576,16 @@ func (a *TinglyBoxAgent) ExecuteWithHandler(
 
 		// Send message callback with the response
 		if handler != nil {
-			handler.OnMessage(map[string]interface{}{
-				"type":    "assistant",
-				"role":    "assistant",
-				"message": responseText,
-				"content": response.Content,
+			handler.OnComplete(&agentboot.CompletionResult{
+				Success:    true,
+				DurationMS: duration.Milliseconds(),
+				SessionID:  toolCtx.SessionID,
 			})
 		}
 	}
 
 	result.ExitCode = 0
 	result.Duration = duration
-
-	// Send completion callback
-	if handler != nil {
-		handler.OnComplete(&agentboot.CompletionResult{
-			Success:    true,
-			DurationMS: duration.Milliseconds(),
-			SessionID:  toolCtx.SessionID,
-		})
-	}
 
 	logrus.WithFields(logrus.Fields{
 		"duration_ms": duration.Milliseconds(),
