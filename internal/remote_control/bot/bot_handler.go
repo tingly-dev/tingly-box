@@ -174,18 +174,40 @@ func NewBotHandler(
 	}
 }
 
-// GetVerbose returns the current verbose mode setting
-func (h *BotHandler) GetVerbose() bool {
+// GetVerbose returns the current verbose mode setting for a chat
+// Checks session first, falls back to default (true)
+func (h *BotHandler) GetVerbose(chatID string) bool {
+	// Try to get verbose from any session for this chat
+	if h.sessionMgr != nil {
+		sessions := h.sessionMgr.ListByChat(chatID)
+		for _, sess := range sessions {
+			if sess.ChatID == chatID {
+				return sess.Verbose
+			}
+		}
+	}
+
+	// Fallback to default
 	h.verboseMu.RLock()
 	defer h.verboseMu.RUnlock()
 	return h.verbose
 }
 
-// SetVerbose sets the verbose mode
-func (h *BotHandler) SetVerbose(verbose bool) {
+// SetVerbose sets the verbose mode for all sessions in a chat
+func (h *BotHandler) SetVerbose(chatID string, verbose bool) {
 	h.verboseMu.Lock()
-	defer h.verboseMu.Unlock()
+	h.verboseMu.Unlock()
 	h.verbose = verbose
+
+	// Update all sessions for this chat
+	if h.sessionMgr != nil {
+		sessions := h.sessionMgr.ListByChat(chatID)
+		for _, sess := range sessions {
+			h.sessionMgr.Update(sess.ID, func(s *session.Session) {
+				s.Verbose = verbose
+			})
+		}
+	}
 }
 
 // HandleMessage is the main entry point for handling bot messages
@@ -885,12 +907,12 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 		return
 	case cmd == cmdVerbosePrimary:
 		// Verbose mode - show all messages
-		h.SetVerbose(true)
+		h.SetVerbose(hCtx.ChatID, true)
 		h.SendText(hCtx, "✅ Verbose mode enabled\n\nAll message details will be shown.")
 		return
 	case cmd == cmdNoVerbosePrimary:
 		// NoVerbose mode - hide intermediate messages
-		h.SetVerbose(false)
+		h.SetVerbose(hCtx.ChatID, false)
 		h.SendText(hCtx, "🔇 Quiet mode enabled\n\nOnly final results will be shown. Use /verbose to show all details.")
 		return
 	}
@@ -1000,7 +1022,7 @@ func (h *BotHandler) getOutputBehavior() OutputBehavior {
 
 // newStreamingMessageHandler creates a new streaming message handler
 func (h *BotHandler) newStreamingMessageHandler(hCtx HandlerContext) *streamingMessageHandler {
-	return newStreamingMessageHandler(hCtx.Bot, hCtx.ChatID, hCtx.MessageID, h.GetVerbose())
+	return newStreamingMessageHandler(hCtx.Bot, hCtx.ChatID, hCtx.MessageID, h.GetVerbose(hCtx.ChatID))
 }
 
 // handleAgentMessage routes message to the appropriate agent handler
