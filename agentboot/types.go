@@ -10,8 +10,9 @@ import (
 type AgentType string
 
 const (
-	AgentTypeClaude    AgentType = "claude"
-	AgentTypeMockAgent AgentType = "mock" // Mock agent for testing
+	AgentTypeClaude     AgentType = "claude"
+	AgentTypeMockAgent  AgentType = "mock"       // Mock agent for testing
+	AgentTypeSmartGuide AgentType = "smartguide" // SmartGuide agent (@tb)
 	// AgentTypeCodex  AgentType = "codex"  // Future
 	// AgentTypeGemini AgentType = "gemini" // Future
 	// AgentTypeCursor AgentType = "cursor" // Future

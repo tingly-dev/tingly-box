@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-agentscope/pkg/memory"
 	"github.com/tingly-dev/tingly-agentscope/pkg/message"
 	"github.com/tingly-dev/tingly-agentscope/pkg/types"
 	"github.com/tingly-dev/tingly-box/agentboot"
@@ -562,7 +563,7 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 		SessionID:   hCtx.ChatID, // Use chatID as session identifier
 	}
 
-	// 5. Build meta for response header
+	// 6. Build meta for response header
 	behavior := h.getOutputBehavior()
 	meta := ResponseMeta{
 		ProjectPath: projectPath,
@@ -572,98 +573,66 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 		AgentType:   AgentNameTinglyBox,
 	}
 
-	// 6. Send processing message (respects verbose mode)
+	// 7. Send processing message (respects verbose mode)
 	if behavior.Verbose {
 		h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, IconProcess+" "+MsgProcessing, behavior), hCtx.MessageID)
 	}
 
-	// 7. Get response from agent
-	response, err := agent.ReplyWithContext(h.ctx, text, toolCtx)
+	// 8. Create streaming handler for message output
+	streamHandler := h.newStreamingMessageHandler(hCtx)
+
+	// 9. Create composite handler that combines streaming + completion callback
+	compositeHandler := agentboot.NewCompositeHandler().
+		SetStreamer(streamHandler).
+		SetCompletionCallback(&SmartGuideCompletionCallback{
+			hCtx:           hCtx,
+			sessionID:      hCtx.ChatID,
+			chatStore:      h.chatStore,
+			tbSessionStore: h.tbSessionStore,
+			agent:          agent,
+			projectPath:    projectPath,
+			meta:           meta,
+			behavior:       behavior,
+		})
+
+	// 10. Execute with callback support
+	execCtx, cancel := context.WithCancel(context.Background())
+
+	// Store cancel function for /stop command
+	h.runningCancelMu.Lock()
+	h.runningCancel[hCtx.ChatID] = cancel
+	h.runningCancelMu.Unlock()
+
+	// Clean up cancel function when done
+	defer func() {
+		h.runningCancelMu.Lock()
+		delete(h.runningCancel, hCtx.ChatID)
+		h.runningCancelMu.Unlock()
+		cancel()
+	}()
+
+	// Save user message to session before execution
+	if h.tbSessionStore != nil {
+		userMsg := message.NewMsg("user", text, types.RoleUser)
+		if err := h.tbSessionStore.AddMessage(hCtx.ChatID, userMsg); err != nil {
+			logrus.WithError(err).Warn("Failed to save user message to session")
+		}
+	}
+
+	// Execute with handler
+	result, err := agent.ExecuteWithHandler(execCtx, text, toolCtx, compositeHandler)
 	if err != nil {
 		logrus.WithError(err).Error("Smart guide agent failed")
 		h.SendText(hCtx, fmt.Sprintf("%s Error: %v", IconError, err))
 		return nil
 	}
 
-	// 8. Get text content from response
-	responseText := response.GetTextContent()
-
-	// 9. Save messages to session file
-	if h.tbSessionStore != nil {
-		// Save user message
-		userMsg := message.NewMsg("user", text, types.RoleUser)
-		contentPreview := text
-		if len(contentPreview) > 50 {
-			contentPreview = contentPreview[:50] + "..."
-		}
-		logrus.WithFields(logrus.Fields{
-			"chatID":  hCtx.ChatID,
-			"role":    userMsg.Role,
-			"content": contentPreview,
-		}).Debug("Saving user message to session")
-
-		if err := h.tbSessionStore.AddMessage(hCtx.ChatID, userMsg); err != nil {
-			logrus.WithError(err).Warn("Failed to save user message to session")
-		}
-
-		// Save assistant response
-		assistantMsg := message.NewMsg("assistant", responseText, types.RoleAssistant)
-		assistantPreview := responseText
-		if len(assistantPreview) > 50 {
-			assistantPreview = assistantPreview[:50] + "..."
-		}
-		logrus.WithFields(logrus.Fields{
-			"chatID":  hCtx.ChatID,
-			"role":    assistantMsg.Role,
-			"content": assistantPreview,
-		}).Debug("Saving assistant message to session")
-
-		if err := h.tbSessionStore.AddMessage(hCtx.ChatID, assistantMsg); err != nil {
-			logrus.WithError(err).Warn("Failed to save assistant message to session")
-		}
-
-		logrus.WithField("chatID", hCtx.ChatID).Debug("Saved messages to session file")
+	// Send the final response with meta header
+	responseText := result.Output
+	if responseText == "" {
+		responseText = streamHandler.GetOutput()
 	}
 
-	// 10. Check if working directory was changed by change_workdir tool
-	newProjectPath := agent.GetExecutor().GetWorkingDirectory()
-	if newProjectPath != projectPath {
-		logrus.WithFields(logrus.Fields{
-			"chatID":         hCtx.ChatID,
-			"oldProjectPath": projectPath,
-			"newProjectPath": newProjectPath,
-		}).Info("Project path changed, updating chat store")
-
-		// Update chat store with new project path
-		chat, err := h.chatStore.GetChat(hCtx.ChatID)
-		if err != nil {
-			logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("Failed to get chat for update")
-		}
-
-		if chat == nil {
-			now := time.Now().UTC()
-			chat = &Chat{
-				ChatID:      hCtx.ChatID,
-				Platform:    string(hCtx.Platform),
-				ProjectPath: newProjectPath,
-				BashCwd:     newProjectPath,
-				CreatedAt:   now,
-				UpdatedAt:   now,
-			}
-			if err := h.chatStore.UpsertChat(chat); err != nil {
-				logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("Failed to create chat")
-			}
-		} else {
-			if err := h.chatStore.UpdateChat(hCtx.ChatID, func(c *Chat) {
-				c.ProjectPath = newProjectPath
-				c.BashCwd = newProjectPath
-			}); err != nil {
-				logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("Failed to update chat")
-			}
-		}
-	}
-
-	// 11. Send the response with meta header
 	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, responseText, behavior), hCtx.MessageID)
 
 	return nil
@@ -1254,6 +1223,108 @@ func (c *CompletionCallback) OnComplete(result *agentboot.CompletionResult) {
 		"duration":  result.DurationMS,
 		"error":     result.Error,
 	}).Info("Agent execution completed via callback")
+}
+
+// SmartGuideCompletionCallback handles completion events for SmartGuide agent
+// It saves messages to session, updates project path if changed, and sends action keyboard
+type SmartGuideCompletionCallback struct {
+	hCtx           HandlerContext
+	sessionID      string
+	chatStore      ChatStoreInterface
+	tbSessionStore *smart_guide.SessionStore
+	agent          *smart_guide.TinglyBoxAgent
+	projectPath    string
+	meta           ResponseMeta
+	behavior       OutputBehavior
+}
+
+// OnComplete implements agentboot.CompletionCallback
+func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionResult) {
+	// Get response text from the agent's memory or use the result output
+	responseText := ""
+	if result.Success {
+		// Try to get the last assistant message from agent memory
+		if mem := c.agent.GetMemory(); mem != nil {
+			if hist, ok := mem.(*memory.History); ok {
+				messages := hist.GetMessages()
+				for i := len(messages) - 1; i >= 0; i-- {
+					if messages[i].Role == "assistant" {
+						responseText = messages[i].GetTextContent()
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// Save assistant message to session
+	if c.tbSessionStore != nil && responseText != "" {
+		assistantMsg := message.NewMsg("assistant", responseText, types.RoleAssistant)
+		if err := c.tbSessionStore.AddMessage(c.hCtx.ChatID, assistantMsg); err != nil {
+			logrus.WithError(err).Warn("Failed to save assistant message to session")
+		}
+	}
+
+	// Check if working directory was changed by change_workdir tool
+	newProjectPath := c.agent.GetExecutor().GetWorkingDirectory()
+	if newProjectPath != c.projectPath {
+		logrus.WithFields(logrus.Fields{
+			"chatID":         c.hCtx.ChatID,
+			"oldProjectPath": c.projectPath,
+			"newProjectPath": newProjectPath,
+		}).Info("Project path changed, updating chat store")
+
+		// Update chat store with new project path
+		chat, err := c.chatStore.GetChat(c.hCtx.ChatID)
+		if err != nil {
+			logrus.WithError(err).WithField("chatID", c.hCtx.ChatID).Warn("Failed to get chat for update")
+		}
+
+		if chat == nil {
+			now := time.Now().UTC()
+			chat = &Chat{
+				ChatID:      c.hCtx.ChatID,
+				Platform:    string(c.hCtx.Platform),
+				ProjectPath: newProjectPath,
+				BashCwd:     newProjectPath,
+				CreatedAt:   now,
+				UpdatedAt:   now,
+			}
+			if err := c.chatStore.UpsertChat(chat); err != nil {
+				logrus.WithError(err).WithField("chatID", c.hCtx.ChatID).Warn("Failed to create chat")
+			}
+		} else {
+			if err := c.chatStore.UpdateChat(c.hCtx.ChatID, func(ch *Chat) {
+				ch.ProjectPath = newProjectPath
+				ch.BashCwd = newProjectPath
+			}); err != nil {
+				logrus.WithError(err).WithField("chatID", c.hCtx.ChatID).Warn("Failed to update chat")
+			}
+		}
+	}
+
+	// Send action keyboard on completion
+	kb := BuildActionKeyboard()
+	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+
+	_, err := c.hCtx.Bot.SendMessage(context.Background(), c.hCtx.ChatID, &imbot.SendMessageOptions{
+		Text: "✅ Task done. \nContinue to chat with this session or /help.",
+		Metadata: map[string]interface{}{
+			"replyMarkup":        tgKeyboard,
+			"_trackActionMenuID": true,
+		},
+	})
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to send action keyboard for SmartGuide")
+	}
+
+	// Log completion event
+	logrus.WithFields(logrus.Fields{
+		"chatID":    c.hCtx.ChatID,
+		"sessionID": c.sessionID,
+		"success":   result.Success,
+		"duration":  result.DurationMS,
+	}).Info("SmartGuide execution completed via callback")
 }
 
 // handleMockAgentMessage executes a message through the mock agent for testing
