@@ -1747,21 +1747,6 @@ func (h *BotHandler) handleBotStatusCommand(hCtx HandlerContext) {
 
 // handleClearCommand clears the current session context and creates a new one
 func (h *BotHandler) handleClearCommand(hCtx HandlerContext) {
-	// Get current project path
-	projectPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
-	if projectPath == "" {
-		// For group chats, also check group binding
-		if path, found := getProjectPathForGroup(h.chatStore, hCtx.ChatID, string(hCtx.Platform)); found {
-			projectPath = path
-		}
-	}
-
-	if projectPath == "" {
-		h.SendText(hCtx, "No project path found. Use "+cmdBindPrimary+" <project_path> to create a session first.")
-		return
-
-	}
-
 	// Get current agent and close the matching session
 	currentAgent, _ := h.getCurrentAgent(hCtx.ChatID)
 	agentType := string(currentAgent)
@@ -1775,58 +1760,44 @@ func (h *BotHandler) handleClearCommand(hCtx HandlerContext) {
 				h.SendText(hCtx, "⚠️ Failed to clear SmartGuide session.")
 				return
 			}
-			h.SendText(hCtx, "✅ Smart Guide (@tb) conversation history cleared.")
+			h.SendText(hCtx, "✅ Smart Guide (@tb) conversation history cleared.\n\nSend a message to start a new session.")
 			logrus.WithField("chatID", hCtx.ChatID).Info("Cleared SmartGuide session")
 		} else {
 			h.SendText(hCtx, "Smart Guide (@tb) session store is not available.")
 		}
 		return
 
-	case agentClaudeCode:
-		// Claude Code uses Session Manager
+	case agentClaudeCode, agentMock:
+		// Get project path
 		projectPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
 		if projectPath == "" {
+			// For group chats, also check group binding
 			if path, found := getProjectPathForGroup(h.chatStore, hCtx.ChatID, string(hCtx.Platform)); found {
 				projectPath = path
 			}
 		}
 
+		// Use default path if no project bound
+		defaultPath := h.getDefaultProjectPath()
 		if projectPath == "" {
-			h.SendText(hCtx, "No project path found. Use "+cmdBindPrimary+" <project_path> to create a session first.")
-			return
+			projectPath = defaultPath
 		}
 
 		// Close the existing session if found
 		oldSess := h.sessionMgr.FindBy(hCtx.ChatID, agentType, projectPath)
 		if oldSess != nil {
 			h.sessionMgr.Close(oldSess.ID)
-			h.SendText(hCtx, "✅ Claude Code (@cc) session cleared.\n\nSend a message to start a new session.")
-		} else {
-			h.SendText(hCtx, "No active session found.\n\nSend a message to start a new session.")
-		}
-		return
-
-	case agentMock:
-		// Mock agent uses same session manager as Claude Code
-		projectPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
-		if projectPath == "" {
-			if path, found := getProjectPathForGroup(h.chatStore, hCtx.ChatID, string(hCtx.Platform)); found {
-				projectPath = path
+			agentName := "Claude Code (@cc)"
+			if currentAgent == agentMock {
+				agentName = "Mock Agent (@mock)"
 			}
-		}
-
-		if projectPath == "" {
-			h.SendText(hCtx, "No project path found. Use "+cmdBindPrimary+" <project_path> to create a session first.")
-			return
-		}
-
-		// Close the existing session if found
-		oldSess := h.sessionMgr.FindBy(hCtx.ChatID, agentType, projectPath)
-		if oldSess != nil {
-			h.sessionMgr.Close(oldSess.ID)
-			h.SendText(hCtx, "✅ Mock Agent (@mock) session cleared.\n\nSend a message to start a new session.")
+			h.SendText(hCtx, fmt.Sprintf("✅ %s session cleared.\n\nSend a message to start a new session.\nDefault path: %s", agentName, ShortenPath(defaultPath)))
 		} else {
-			h.SendText(hCtx, "No active session found.\n\nSend a message to start a new session.")
+			agentName := "Claude Code (@cc)"
+			if currentAgent == agentMock {
+				agentName = "Mock Agent (@mock)"
+			}
+			h.SendText(hCtx, fmt.Sprintf("No active %s session found.\n\nSend a message to start a new session.\nDefault path: %s", agentName, ShortenPath(defaultPath)))
 		}
 		return
 
