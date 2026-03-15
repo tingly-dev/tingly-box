@@ -412,6 +412,8 @@ func (h *BotHandler) routeToAgent(hCtx HandlerContext, text string) error {
 			targetAgent = agentTinglyBox
 		case smart_guide.AgentTypeClaudeCode:
 			targetAgent = agentClaudeCode
+		case smart_guide.AgentTypeMock:
+			targetAgent = agentMock
 		default:
 			return fmt.Errorf("unknown target agent: %s", toAgent)
 		}
@@ -438,6 +440,10 @@ func (h *BotHandler) routeToAgent(hCtx HandlerContext, text string) error {
 				projectPath, _, _ := h.getProjectPathForChat(hCtx)
 				h.handleAgentMessage(hCtx, agentClaudeCode, remainingText, projectPath)
 				return nil
+			case agentMock:
+				projectPath, _, _ := h.getProjectPathForChat(hCtx)
+				h.handleAgentMessage(hCtx, agentMock, remainingText, projectPath)
+				return nil
 			}
 		}
 
@@ -459,6 +465,11 @@ func (h *BotHandler) routeToAgent(hCtx HandlerContext, text string) error {
 		// Get project path
 		projectPath, _, _ := h.getProjectPathForChat(hCtx)
 		h.handleAgentMessage(hCtx, agentClaudeCode, text, projectPath)
+		return nil
+	case agentMock:
+		// Get project path
+		projectPath, _, _ := h.getProjectPathForChat(hCtx)
+		h.handleAgentMessage(hCtx, agentMock, text, projectPath)
 		return nil
 	default:
 		return fmt.Errorf("unknown agent type: %s", currentAgent)
