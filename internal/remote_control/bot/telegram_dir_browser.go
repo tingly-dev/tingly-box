@@ -363,7 +363,7 @@ func SendDirectoryBrowser(ctx context.Context, bot imbot.Bot, browser *Directory
 	tgBot, ok := imbot.AsTelegramBot(bot)
 	if ok && editMessageID != "" && state.MessageID != "" {
 		// Edit existing message
-		tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+		tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 		if err := tgBot.EditMessageWithKeyboard(ctx, chatID, editMessageID, text, tgKeyboard); err != nil {
 			logrus.WithError(err).Warn("Failed to edit message, sending new one")
 			// Fall through to send new message
@@ -373,7 +373,7 @@ func SendDirectoryBrowser(ctx context.Context, bot imbot.Bot, browser *Directory
 	}
 
 	// Convert keyboard for Telegram
-	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
 	// Send new message with keyboard
 	result, err := bot.SendMessage(ctx, chatID, &imbot.SendMessageOptions{

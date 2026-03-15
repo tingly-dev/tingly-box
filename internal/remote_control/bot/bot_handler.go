@@ -965,7 +965,7 @@ func (h *BotHandler) sendTextWithReply(hCtx HandlerContext, text string, replyTo
 // sendTextWithActionKeyboard sends a text message with Clear/Bind action buttons
 func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string, replyTo string) {
 	kb := BuildActionKeyboard()
-	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
 	chunks := chunkText(text, imbot.DefaultMessageLimit)
 	for i, chunk := range chunks {
@@ -1290,7 +1290,7 @@ func (c *CompletionCallback) OnComplete(result *agentboot.CompletionResult) {
 
 	// Build action keyboard
 	kb := BuildActionKeyboard()
-	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
 	_, err := c.hCtx.Bot.SendMessage(context.Background(), c.hCtx.ChatID, &imbot.SendMessageOptions{
 		Text: "✅ Task done. \nContinue to chat with this session or /help.",
@@ -1399,7 +1399,7 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 
 	// Send action keyboard on completion
 	kb := BuildActionKeyboard()
-	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
 	_, err := c.hCtx.Bot.SendMessage(context.Background(), c.hCtx.ChatID, &imbot.SendMessageOptions{
 		Text: "✅ Task done. \nContinue to chat with this session or /help.",
@@ -1919,7 +1919,7 @@ func (h *BotHandler) showBindConfirmationPrompt(hCtx HandlerContext, originalMes
 
 	// Send confirmation with inline keyboard
 	kb := BuildBindConfirmKeyboard()
-	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
 	_, err = hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
 		Text: BuildBindConfirmPrompt(cwd),
@@ -2045,7 +2045,7 @@ func (h *BotHandler) handleBotProjectCommand(hCtx HandlerContext) {
 	}})
 
 	keyboard := imbot.InlineKeyboardMarkup{InlineKeyboard: rows}
-	tgKeyboard := convertActionKeyboardToTelegram(keyboard)
+	tgKeyboard := imbot.BuildTelegramActionKeyboard(keyboard)
 
 	_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
 		Text:      buf.String(),
@@ -2514,7 +2514,7 @@ func (h *BotHandler) handleCustomPathPrompt(hCtx HandlerContext) {
 
 	// Send prompt with cancel keyboard
 	kb := BuildCancelKeyboard()
-	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
 	result, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
 		Text:      BuildCustomPathPrompt(),
@@ -2781,7 +2781,7 @@ func (h *BotHandler) handleCreateConfirm(hCtx HandlerContext, path string) {
 	h.directoryBrowser.SetWaitingInput(hCtx.ChatID, false, "")
 
 	kb, text := BuildCreateConfirmKeyboard(path)
-	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
 	_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
 		Text:      text,

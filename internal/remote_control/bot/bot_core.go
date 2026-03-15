@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
@@ -286,26 +285,4 @@ func chunkText(text string, limit int) []string {
 		remaining = remaining[limit:]
 	}
 	return chunks
-}
-
-// convertActionKeyboardToTelegram converts imbot.InlineKeyboardMarkup to tgbotapi.InlineKeyboardMarkup
-func convertActionKeyboardToTelegram(kb imbot.InlineKeyboardMarkup) tgbotapi.InlineKeyboardMarkup {
-	var rows [][]tgbotapi.InlineKeyboardButton
-	for _, row := range kb.InlineKeyboard {
-		var buttons []tgbotapi.InlineKeyboardButton
-		for _, btn := range row {
-			tgBtn := tgbotapi.InlineKeyboardButton{
-				Text: btn.Text,
-			}
-			if btn.CallbackData != "" {
-				tgBtn.CallbackData = &btn.CallbackData
-			}
-			if btn.URL != "" {
-				tgBtn.URL = &btn.URL
-			}
-			buttons = append(buttons, tgBtn)
-		}
-		rows = append(rows, buttons)
-	}
-	return tgbotapi.InlineKeyboardMarkup{InlineKeyboard: rows}
 }

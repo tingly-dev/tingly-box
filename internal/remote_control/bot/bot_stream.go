@@ -117,7 +117,7 @@ func (f *streamingMessageHandler) OnComplete(result *agentboot.CompletionResult)
 
 	// Build action keyboard
 	kb := BuildActionKeyboard()
-	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
 	// Prepare completion message based on verbose mode
 	completionText := "✅ Task done. \nContinue to chat with this session or /help."

@@ -90,7 +90,7 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 		if p.whitelist[req.ToolName] {
 			p.mu.RUnlock()
 			logrus.WithFields(logrus.Fields{
-				"tool_name": req.ToolName,
+				"tool_name":  req.ToolName,
 				"request_id": req.ID,
 			}).Info("Tool is whitelisted, auto-approving")
 			return ask.Result{
@@ -145,7 +145,7 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 		Text:      promptText,
 		ParseMode: imbot.ParseModeMarkdown,
 		Metadata: map[string]interface{}{
-			"replyMarkup": convertActionKeyboardToTelegram(keyboard),
+			"replyMarkup": imbot.BuildTelegramActionKeyboard(keyboard),
 		},
 	})
 	if err != nil {
