@@ -31,6 +31,7 @@ type chatToResponsesState struct {
 	accumulatedText  strings.Builder
 	inputTokens      int64
 	outputTokens     int64
+	cacheTokens      int64 // Cached tokens from prompt
 	hasSentCreated   bool
 }
 
@@ -45,7 +46,7 @@ type pendingToolCallResponse struct {
 
 // HandleOpenAIChatToResponsesStream converts OpenAI Chat Completions streaming to Responses API format.
 // Returns UsageStat containing token usage information for tracking.
-func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (protocol.UsageStat, error) {
+func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (*protocol.TokenUsage, error) {
 	logrus.Info("Starting OpenAI Chat to Responses streaming conversion handler")
 	defer func() {
 		if r := recover(); r != nil {
@@ -75,7 +76,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		return protocol.ZeroUsageStat(), errors.New("streaming not supported by this connection")
+		return protocol.ZeroTokenUsage(), errors.New("streaming not supported by this connection")
 	}
 
 	// Initialize conversion state
@@ -127,6 +128,11 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		}
 		if chunk.Usage.CompletionTokens != 0 {
 			state.outputTokens = int64(chunk.Usage.CompletionTokens)
+			hasUsage = true
+		}
+		// Track cache tokens from prompt tokens details if available
+		if chunk.Usage.PromptTokensDetails.CachedTokens != 0 {
+			state.cacheTokens = int64(chunk.Usage.PromptTokensDetails.CachedTokens)
 			hasUsage = true
 		}
 
@@ -223,7 +229,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		// Check if it was a client cancellation
 		if errors.Is(err, context.Canceled) {
 			logrus.Debug("Chat to Responses stream canceled by client")
-			return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), nil
+			return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
 		}
 		logrus.Errorf("Chat to Responses stream error: %v", err)
 
@@ -237,7 +243,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", string(errorJSON)))
 		flusher.Flush()
 
-		return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), err
+		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), err
 	}
 
 	// Some providers end the stream without emitting a final chunk with finish_reason.
@@ -257,7 +263,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		flusher.Flush()
 	}
 
-	return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), nil
+	return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
 }
 
 // sendResponsesCreatedEvent sends the response.created event
@@ -272,11 +278,11 @@ func sendResponsesCreatedEvent(c *gin.Context, state *chatToResponsesState, flus
 			"status":     "in_progress",
 			"output":     []interface{}{},
 			"usage": map[string]interface{}{
-				"input_tokens":  0,
-				"output_tokens": 0,
-				"total_tokens":  0,
+				"input_tokens":  state.inputTokens,
+				"output_tokens": state.outputTokens,
+				"total_tokens":  state.inputTokens + state.outputTokens,
 				"input_tokens_details": map[string]interface{}{
-					"cached_tokens": 0,
+					"cached_tokens": state.cacheTokens,
 				},
 				"output_tokens_details": map[string]interface{}{
 					"reasoning_tokens": 0,
@@ -483,7 +489,7 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 				"output_tokens": state.outputTokens,
 				"total_tokens":  state.inputTokens + state.outputTokens,
 				"input_tokens_details": map[string]interface{}{
-					"cached_tokens": 0,
+					"cached_tokens": state.cacheTokens,
 				},
 				"output_tokens_details": map[string]interface{}{
 					"reasoning_tokens": 0,

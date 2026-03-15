@@ -244,7 +244,8 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			if err != nil {
 				// Track usage with error status
 				if inputTokens > 0 || outputTokens > 0 {
-					s.trackUsageFromContext(c, inputTokens, outputTokens, err)
+					tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
+					s.trackUsageWithTokenUsage(c, tokenUsage, err)
 				}
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
@@ -257,7 +258,8 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 
 			// Track successful streaming completion
 			if inputTokens > 0 || outputTokens > 0 {
-				s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
+				tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
+				s.trackUsageWithTokenUsage(c, tokenUsage, nil)
 			}
 			return
 		} else {
@@ -282,7 +284,9 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			// Track usage from response
 			inputTokens := int(anthropicResp.Usage.InputTokens)
 			outputTokens := int(anthropicResp.Usage.OutputTokens)
-			s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
+			cacheTokens := int(anthropicResp.Usage.CacheReadInputTokens + anthropicResp.Usage.CacheCreationInputTokens)
+			tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
+			s.trackUsageWithTokenUsage(c, tokenUsage, nil)
 
 			// Use provider-aware conversion for provider-specific handling
 			openaiResp := ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)

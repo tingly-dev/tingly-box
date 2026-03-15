@@ -732,6 +732,7 @@ export const api = {
                 params.model,
                 params.scenario,
                 undefined, // rule_uuid
+                undefined, // user_id
                 undefined, // status
                 params.limit,
                 undefined, // sort_by

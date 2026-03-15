@@ -59,7 +59,26 @@ func (h *Handler) GetStats(c *gin.Context) {
 	// Convert db.AggregatedStat to usage.AggregatedStat
 	data := make([]AggregatedStat, len(stats))
 	for i, s := range stats {
-		data[i] = AggregatedStat(s)
+		data[i] = AggregatedStat{
+			Key:              s.Key,
+			ProviderUUID:     s.ProviderUUID,
+			ProviderName:     s.ProviderName,
+			Model:            s.Model,
+			Scenario:         s.Scenario,
+			UserID:           s.UserID,
+			RequestCount:     s.RequestCount,
+			TotalTokens:      s.TotalTokens,
+			InputTokens:      s.InputTokens,
+			OutputTokens:     s.OutputTokens,
+			AvgInputTokens:   s.AvgInputTokens,
+			AvgOutputTokens:  s.AvgOutputTokens,
+			AvgLatencyMs:     s.AvgLatencyMs,
+			ErrorCount:       s.ErrorCount,
+			ErrorRate:        s.ErrorRate,
+			StreamedCount:    s.StreamedCount,
+			StreamedRate:     s.StreamedRate,
+			CacheInputTokens: s.CacheInputTokens,
+		}
 	}
 
 	response := UsageStatsResponse{
@@ -112,13 +131,14 @@ func (h *Handler) GetTimeSeries(c *gin.Context) {
 	result := make([]TimeSeriesData, len(data))
 	for i, d := range data {
 		result[i] = TimeSeriesData{
-			Timestamp:    d.Timestamp,
-			RequestCount: d.RequestCount,
-			TotalTokens:  d.TotalTokens,
-			InputTokens:  d.InputTokens,
-			OutputTokens: d.OutputTokens,
-			ErrorCount:   d.ErrorCount,
-			AvgLatencyMs: d.AvgLatencyMs,
+			Timestamp:        d.Timestamp,
+			RequestCount:     d.RequestCount,
+			TotalTokens:      d.TotalTokens,
+			InputTokens:      d.InputTokens,
+			OutputTokens:     d.OutputTokens,
+			CacheInputTokens: d.CacheInputTokens,
+			ErrorCount:       d.ErrorCount,
+			AvgLatencyMs:     d.AvgLatencyMs,
 		}
 	}
 
@@ -180,22 +200,23 @@ func (h *Handler) GetRecords(c *gin.Context) {
 	data := make([]UsageRecordResponse, len(records))
 	for i, r := range records {
 		data[i] = UsageRecordResponse{
-			ID:           r.ID,
-			ProviderUUID: r.ProviderUUID,
-			ProviderName: r.ProviderName,
-			Model:        r.Model,
-			Scenario:     r.Scenario,
-			RuleUUID:     r.RuleUUID,
-			UserID:       r.UserID,
-			RequestModel: r.RequestModel,
-			Timestamp:    r.Timestamp.Format(time.RFC3339),
-			InputTokens:  r.InputTokens,
-			OutputTokens: r.OutputTokens,
-			TotalTokens:  r.TotalTokens,
-			Status:       r.Status,
-			ErrorCode:    r.ErrorCode,
-			LatencyMs:    r.LatencyMs,
-			Streamed:     r.Streamed,
+			ID:               r.ID,
+			ProviderUUID:     r.ProviderUUID,
+			ProviderName:     r.ProviderName,
+			Model:            r.Model,
+			Scenario:         r.Scenario,
+			RuleUUID:         r.RuleUUID,
+			UserID:           r.UserID,
+			RequestModel:     r.RequestModel,
+			Timestamp:        r.Timestamp.Format(time.RFC3339),
+			InputTokens:      r.InputTokens,
+			OutputTokens:     r.OutputTokens,
+			TotalTokens:      r.TotalTokens,
+			CacheInputTokens: r.CacheInputTokens,
+			Status:           r.Status,
+			ErrorCode:        r.ErrorCode,
+			LatencyMs:        r.LatencyMs,
+			Streamed:         r.Streamed,
 		}
 	}
 

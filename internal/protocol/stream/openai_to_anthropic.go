@@ -20,7 +20,7 @@ import (
 
 // HandleOpenAIToAnthropicStreamResponse processes OpenAI streaming events and converts them to Anthropic format.
 // Returns UsageStat containing token usage information for tracking.
-func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (protocol.UsageStat, error) {
+func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (*protocol.TokenUsage, error) {
 	logrus.Info("Starting OpenAI to Anthropic streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
@@ -50,7 +50,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		return protocol.ZeroUsageStat(), errors.New("streaming not supported by this connection")
+		return protocol.ZeroTokenUsage(), errors.New("streaming not supported by this connection")
 	}
 
 	// Generate message ID for Anthropic format
@@ -316,7 +316,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 		// Check if it was a client cancellation
 		if errors.Is(err, context.Canceled) {
 			logrus.Debug("OpenAI to Anthropic stream canceled by client")
-			return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), nil
+			return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
 		}
 		logrus.Errorf("OpenAI stream error: %v", err)
 		errorEvent := map[string]interface{}{
@@ -328,15 +328,15 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 			},
 		}
 		sendAnthropicStreamEvent(c, "error", errorEvent, flusher)
-		return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), err
+		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), err
 	}
-	return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), nil
+	return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
 }
 
 // HandleResponsesToAnthropicV1Stream processes OpenAI Responses API streaming events and converts them to Anthropic v1 format.
 // This is a thin wrapper that uses the shared core logic with v1 event senders.
 // Returns UsageStat containing token usage information for tracking.
-func HandleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (protocol.UsageStat, error) {
+func HandleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {
 	return handleResponsesToAnthropicV1Stream(c, stream, responseModel, responsesAPIEventSenders{
 		SendMessageStart: func(event map[string]interface{}, flusher http.Flusher) {
 			sendAnthropicStreamEvent(c, eventTypeMessageStart, event, flusher)
@@ -368,7 +368,7 @@ func HandleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Str
 // handleResponsesToAnthropicV1Stream is the shared core logic for processing OpenAI Responses API streams
 // and converting them to Anthropic format (v1 or beta depending on the senders provided).
 // Returns UsageStat containing token usage information for tracking.
-func handleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string, senders responsesAPIEventSenders) (protocol.UsageStat, error) {
+func handleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string, senders responsesAPIEventSenders) (*protocol.TokenUsage, error) {
 	logrus.Debugf("[ResponsesAPI] Starting Responses API to Anthropic streaming response handler, model=%s", responseModel)
 	defer func() {
 		if r := recover(); r != nil {
@@ -397,7 +397,7 @@ func handleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Str
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		return protocol.ZeroUsageStat(), fmt.Errorf("streaming not supported by this connection")
+		return protocol.ZeroTokenUsage(), fmt.Errorf("streaming not supported by this connection")
 	}
 
 	// Generate message ID
@@ -712,7 +712,7 @@ func handleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Str
 			senders.SendMessageStop(messageID, responseModel, state, stopReason, flusher)
 
 			logrus.Debugf("[ResponsesAPI] Sent message_stop event with stop_reason=%s, finishing stream", stopReason)
-			return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), nil
+			return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
 
 		case "error", "response.failed", "response.incomplete":
 			logrus.Errorf("Responses API error event: %v", currentEvent)
@@ -724,7 +724,7 @@ func handleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Str
 				},
 			}
 			senders.SendErrorEvent(errorEvent, flusher)
-			return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), fmt.Errorf("Responses API error: %v", currentEvent)
+			return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), fmt.Errorf("Responses API error: %v", currentEvent)
 
 		default:
 			logrus.Debugf("Unhandled Responses API event type: %s", currentEvent.Type)
@@ -742,10 +742,10 @@ func handleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Str
 			},
 		}
 		senders.SendErrorEvent(errorEvent, flusher)
-		return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), err
+		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), err
 	}
 
-	return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), nil
+	return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
 }
 
 // mapOpenAIFinishReasonToAnthropic converts OpenAI finish_reason to Anthropic stop_reason

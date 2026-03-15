@@ -21,7 +21,7 @@ import (
 
 // HandleOpenAIToAnthropicBetaStream processes OpenAI streaming events and converts them to Anthropic beta format.
 // Returns UsageStat containing token usage information for tracking.
-func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (protocol.UsageStat, error) {
+func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (*protocol.TokenUsage, error) {
 	logrus.Info("Starting OpenAI to Anthropic beta streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
@@ -51,7 +51,7 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		return protocol.ZeroUsageStat(), errors.New("streaming not supported by this connection")
+		return protocol.ZeroTokenUsage(), errors.New("streaming not supported by this connection")
 	}
 
 	// Generate message ID for Anthropic beta format
@@ -313,7 +313,7 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 		// Check if it was a client cancellation
 		if errors.Is(err, context.Canceled) {
 			logrus.Debug("OpenAI to Anthropic beta stream canceled by client")
-			return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), nil
+			return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
 		}
 		logrus.Errorf("OpenAI stream error: %v", err)
 		errorEvent := map[string]interface{}{
@@ -325,15 +325,15 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 			},
 		}
 		sendAnthropicBetaStreamEvent(c, "error", errorEvent, flusher)
-		return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), err
+		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), err
 	}
-	return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), nil
+	return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
 }
 
 // HandleResponsesToAnthropicBetaStream processes OpenAI Responses API streaming events and converts them to Anthropic beta format.
 // This is a thin wrapper that uses the shared core logic with beta event senders.
 // Returns UsageStat containing token usage information for tracking.
-func HandleResponsesToAnthropicBetaStream(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (protocol.UsageStat, error) {
+func HandleResponsesToAnthropicBetaStream(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {
 	return handleResponsesToAnthropicV1Stream(c, stream, responseModel, responsesAPIEventSenders{
 		SendMessageStart: func(event map[string]interface{}, flusher http.Flusher) {
 			sendAnthropicBetaStreamEvent(c, eventTypeMessageStart, event, flusher)

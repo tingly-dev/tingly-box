@@ -12,6 +12,7 @@ import {
     alpha,
 } from '@mui/material';
 import { useState } from 'react';
+import type { AggregatedStat as ApiAggregatedStat } from '@/client/api';
 
 export interface AggregatedStat {
     key: string;
@@ -23,9 +24,10 @@ export interface AggregatedStat {
     total_tokens?: number;
     total_input_tokens: number;
     total_output_tokens: number;
-    avg_latency_ms: number;
-    error_count: number;
-    error_rate: number;
+    cache_input_tokens?: number;
+    avg_latency_ms?: number;
+    error_count?: number;
+    error_rate?: number;
     streamed_count?: number;
 }
 
@@ -116,6 +118,9 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                             <TableCell align="right" sx={{ fontWeight: 600 }}>
                                 Output Tokens
                             </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 600 }}>
+                                Cache Tokens
+                            </TableCell>
                             {/* <TableCell align="right" sx={{ fontWeight: 600 }}>Avg Latency</TableCell> */}
                             <TableCell align="right" sx={{ fontWeight: 600 }}>
                                 Error Rate
@@ -125,7 +130,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                     <TableBody>
                         {stats.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={6} align="center" sx={{ py: 8 }}>
+                                <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
                                     <Box sx={{ textAlign: 'center' }}>
                                         <Box
                                             sx={{
@@ -195,6 +200,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                         <TableCell align="right">{formatRequests(stat.request_count)}</TableCell>
                                         <TableCell align="right">{formatTokens(stat.total_input_tokens)}</TableCell>
                                         <TableCell align="right">{formatTokens(stat.total_output_tokens)}</TableCell>
+                                        <TableCell align="right">{formatTokens(stat.cache_input_tokens || 0)}</TableCell>
                                         {/* <TableCell align="right">
                                             {stat.avg_latency_ms > 0 ? `${stat.avg_latency_ms.toFixed(0)}ms` : '-'}
                                         </TableCell> */}
@@ -212,7 +218,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                 ))}
                                 {emptyRows > 0 && (
                                     <TableRow style={{ height: 53 * emptyRows }}>
-                                        <TableCell colSpan={6} />
+                                        <TableCell colSpan={7} />
                                     </TableRow>
                                 )}
                             </>

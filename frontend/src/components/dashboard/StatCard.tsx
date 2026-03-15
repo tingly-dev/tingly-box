@@ -64,6 +64,11 @@ export default function StatCard({ title, value, subtitle, icon, color = 'primar
                             textTransform: 'uppercase',
                             letterSpacing: '0.05em',
                             fontSize: '0.75rem',
+                            minHeight: '2.4em',
+                            lineHeight: 1.2,
+                            whiteSpace: 'pre-line',
+                            display: 'flex',
+                            alignItems: 'center',
                         }}
                     >
                         {title}

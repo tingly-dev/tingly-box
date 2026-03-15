@@ -25,7 +25,7 @@ func HandleAnthropicToOpenAIResponsesStream(
 	hc *protocol.HandleContext,
 	stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion],
 	responseModel string,
-) (protocol.UsageStat, error) {
+) (*protocol.TokenUsage, error) {
 	logrus.Info("Starting Anthropic to OpenAI Responses streaming converter")
 	defer func() {
 		if r := recover(); r != nil {
@@ -60,12 +60,12 @@ func HandleAnthropicToOpenAIResponsesStream(
 				Code:    "streaming_unsupported",
 			},
 		})
-		return protocol.ZeroUsageStat(), fmt.Errorf("streaming not supported")
+		return protocol.ZeroTokenUsage(), fmt.Errorf("streaming not supported")
 	}
 
 	// Initialize converter state
 	state := newResponsesConverterState(time.Now().Unix())
-	var inputTokens, outputTokens int
+	var inputTokens, outputTokens, cacheTokens int
 	var hasUsage bool
 	completedSent := false
 
@@ -78,7 +78,7 @@ func HandleAnthropicToOpenAIResponsesStream(
 			// Send completion event before returning since client is disconnecting
 			if !completedSent && !state.finished {
 				logrus.Info("Client disconnected, sending completion event before close")
-				sendFinalCompletionEvent(c, state, flusher, inputTokens, outputTokens)
+				sendFinalCompletionEvent(c, state, flusher, inputTokens, outputTokens, cacheTokens)
 				completedSent = true
 			}
 			return false
@@ -108,7 +108,7 @@ func HandleAnthropicToOpenAIResponsesStream(
 			handleContentBlockStop(c, state, event, flusher)
 
 		case "message_delta":
-			inputTokens, outputTokens, hasUsage = handleMessageDelta(
+			inputTokens, outputTokens, cacheTokens, hasUsage = handleMessageDelta(
 				state, event, inputTokens, outputTokens,
 			)
 
@@ -128,32 +128,32 @@ func HandleAnthropicToOpenAIResponsesStream(
 			// Send completion event for all errors including context.Canceled
 			// The Stream loop's context check may not have run if stream.Next() was blocking
 			logrus.WithError(err).Warn("Stream error occurred, sending completion event")
-			sendFinalCompletionEvent(c, state, flusher, inputTokens, outputTokens)
+			sendFinalCompletionEvent(c, state, flusher, inputTokens, outputTokens, cacheTokens)
 			completedSent = true
 		}
 
 		if errors.Is(err, context.Canceled) {
 			logrus.Debug("Anthropic to Responses stream canceled by client")
 			if hasUsage {
-				return protocol.NewUsageStat(inputTokens, outputTokens), nil
+				return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 			}
-			return protocol.ZeroUsageStat(), nil
+			return protocol.ZeroTokenUsage(), nil
 		}
 
 		if errors.Is(err, io.EOF) {
 			logrus.Info("Anthropic stream ended normally (EOF)")
 			if hasUsage {
-				return protocol.NewUsageStat(inputTokens, outputTokens), nil
+				return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 			}
-			return protocol.ZeroUsageStat(), nil
+			return protocol.ZeroTokenUsage(), nil
 		}
 
 		logrus.Errorf("Anthropic stream error: %v", err)
 		sendResponsesErrorEvent(c, err.Error(), "stream_error", flusher)
 		if hasUsage {
-			return protocol.NewUsageStat(inputTokens, outputTokens), err
+			return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), err
 		}
-		return protocol.ZeroUsageStat(), err
+		return protocol.ZeroTokenUsage(), err
 	}
 
 	// Some providers end the stream without emitting message_stop
@@ -163,14 +163,14 @@ func HandleAnthropicToOpenAIResponsesStream(
 			handleMessageStart(c, state, responseModel, flusher)
 			state.hasSentCreated = true
 		}
-		sendFinalCompletionEvent(c, state, flusher, inputTokens, outputTokens)
+		sendFinalCompletionEvent(c, state, flusher, inputTokens, outputTokens, cacheTokens)
 		completedSent = true
 	}
 
 	if hasUsage {
-		return protocol.NewUsageStat(inputTokens, outputTokens), nil
+		return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 	}
-	return protocol.ZeroUsageStat(), nil
+	return protocol.ZeroTokenUsage(), nil
 }
 
 // responsesConverterState maintains the state during stream conversion
@@ -181,6 +181,7 @@ type responsesConverterState struct {
 	accumulatedText  string
 	inputTokens      int64
 	outputTokens     int64
+	cacheTokens      int64 // Cache read tokens from Anthropic
 	finished         bool
 	pendingToolCalls map[int]*pendingResponseToolCall
 	hasSentCreated   bool
@@ -268,10 +269,10 @@ func handleContentBlockStart(
 			"item_id":      state.itemID,
 			"output_index": state.outputIndex,
 			"item": map[string]interface{}{
-				"id":     state.itemID,
-				"type":   "message",
-				"status": "in_progress",
-				"role":   "assistant",
+				"id":      state.itemID,
+				"type":    "message",
+				"status":  "in_progress",
+				"role":    "assistant",
 				"content": []interface{}{},
 			},
 			"sequence_number": state.nextSequenceNumber(),
@@ -304,14 +305,14 @@ func handleContentBlockStart(
 		}
 
 		outputEvent := map[string]interface{}{
-			"type":  "response.output_item.added",
+			"type": "response.output_item.added",
 			"item": map[string]interface{}{
-				"type":     "function_call",
-				"id":       toolID,
-				"call_id":  toolID,
-				"name":     toolName,
+				"type":      "function_call",
+				"id":        toolID,
+				"call_id":   toolID,
+				"name":      toolName,
 				"arguments": "",
-				"status":   "in_progress",
+				"status":    "in_progress",
 			},
 			"output_index":    state.outputIndex,
 			"sequence_number": state.nextSequenceNumber(),
@@ -338,11 +339,11 @@ func handleContentBlockDelta(
 		state.accumulatedText += text
 
 		deltaEvent := map[string]interface{}{
-			"type":          "response.output_text.delta",
-			"delta":         text,
-			"item_id":       state.itemID,
-			"output_index":  state.outputIndex,
-			"content_index": 0,
+			"type":            "response.output_text.delta",
+			"delta":           text,
+			"item_id":         state.itemID,
+			"output_index":    state.outputIndex,
+			"content_index":   0,
 			"sequence_number": state.nextSequenceNumber(),
 		}
 		sendResponsesEvent(c, deltaEvent, flusher)
@@ -353,10 +354,10 @@ func handleContentBlockDelta(
 			pending.arguments.WriteString(argsDelta)
 
 			deltaEvent := map[string]interface{}{
-				"type":          "response.function_call_arguments.delta",
-				"delta":         argsDelta,
-				"item_id":       pending.itemID,
-				"output_index":  state.outputIndex,
+				"type":            "response.function_call_arguments.delta",
+				"delta":           argsDelta,
+				"item_id":         pending.itemID,
+				"output_index":    state.outputIndex,
 				"sequence_number": state.nextSequenceNumber(),
 			}
 			sendResponsesEvent(c, deltaEvent, flusher)
@@ -377,11 +378,11 @@ func handleContentBlockStop(
 	if blockType == "text" {
 		// Send response.output_text.done event
 		textDoneEvent := map[string]interface{}{
-			"type":          "response.output_text.done",
-			"item_id":       state.itemID,
-			"output_index":  state.outputIndex,
-			"content_index": 0,
-			"text":          state.accumulatedText,
+			"type":            "response.output_text.done",
+			"item_id":         state.itemID,
+			"output_index":    state.outputIndex,
+			"content_index":   0,
+			"text":            state.accumulatedText,
 			"sequence_number": state.nextSequenceNumber(),
 		}
 		sendResponsesEvent(c, textDoneEvent, flusher)
@@ -406,10 +407,10 @@ func handleContentBlockStop(
 			"item_id":      state.itemID,
 			"output_index": state.outputIndex,
 			"item": map[string]interface{}{
-				"id":      state.itemID,
-				"type":    "message",
-				"status":  "completed",
-				"role":    "assistant",
+				"id":     state.itemID,
+				"type":   "message",
+				"status": "completed",
+				"role":   "assistant",
 				"content": []map[string]interface{}{
 					{
 						"type": "output_text",
@@ -425,10 +426,10 @@ func handleContentBlockStop(
 		if pending, exists := state.pendingToolCalls[int(index)]; exists {
 			// Send response.function_call_arguments.done event
 			argsDoneEvent := map[string]interface{}{
-				"type":          "response.function_call_arguments.done",
-				"item_id":       pending.itemID,
-				"output_index":  state.outputIndex,
-				"arguments":     pending.arguments.String(),
+				"type":            "response.function_call_arguments.done",
+				"item_id":         pending.itemID,
+				"output_index":    state.outputIndex,
+				"arguments":       pending.arguments.String(),
 				"sequence_number": state.nextSequenceNumber(),
 			}
 			sendResponsesEvent(c, argsDoneEvent, flusher)
@@ -458,15 +459,17 @@ func handleMessageDelta(
 	state *responsesConverterState,
 	event anthropic.MessageStreamEventUnion,
 	inputTokens, outputTokens int,
-) (int, int, bool) {
-	if event.Usage.InputTokens != 0 || event.Usage.OutputTokens != 0 {
+) (int, int, int, bool) {
+	if event.Usage.InputTokens != 0 || event.Usage.OutputTokens != 0 || event.Usage.CacheReadInputTokens != 0 {
 		state.inputTokens = event.Usage.InputTokens
 		state.outputTokens = event.Usage.OutputTokens
+		state.cacheTokens = event.Usage.CacheReadInputTokens
 		inputTokens = int(event.Usage.InputTokens)
 		outputTokens = int(event.Usage.OutputTokens)
-		return inputTokens, outputTokens, true
+		cacheTokens := int(event.Usage.CacheReadInputTokens)
+		return inputTokens, outputTokens, cacheTokens, true
 	}
-	return inputTokens, outputTokens, false
+	return inputTokens, outputTokens, int(state.cacheTokens), false
 }
 
 // handleMessageStop sends the response.completed event
@@ -483,10 +486,10 @@ func handleMessageStop(
 	// Add text content as a message item if present
 	if state.accumulatedText != "" {
 		output = append(output, map[string]interface{}{
-			"id":      state.itemID,
-			"type":    "message",
-			"status":  "completed",
-			"role":    "assistant",
+			"id":     state.itemID,
+			"type":   "message",
+			"status": "completed",
+			"role":   "assistant",
 			"content": []map[string]interface{}{
 				{
 					"type": "output_text",
@@ -511,21 +514,25 @@ func handleMessageStop(
 	// Build usage info from state
 	inputTokens := state.inputTokens
 	outputTokens := state.outputTokens
+	cacheTokens := state.cacheTokens
 
 	doneEvent := map[string]interface{}{
 		"type": "response.completed",
 		"response": map[string]interface{}{
-			"id":          state.responseID,
-			"object":      "response",
-			"created_at":  state.createdAt,
-			"status":      "completed",
+			"id":           state.responseID,
+			"object":       "response",
+			"created_at":   state.createdAt,
+			"status":       "completed",
 			"completed_at": state.createdAt, // Use same timestamp for simplicity
-			"model":       "", // Will be filled by caller if needed
-			"output":      output,
+			"model":        "",              // Will be filled by caller if needed
+			"output":       output,
 			"usage": map[string]interface{}{
 				"input_tokens":  inputTokens,
 				"output_tokens": outputTokens,
 				"total_tokens":  inputTokens + outputTokens,
+				"input_tokens_details": map[string]interface{}{
+					"cached_tokens": cacheTokens,
+				},
 			},
 		},
 		"sequence_number": state.nextSequenceNumber(),
@@ -579,7 +586,7 @@ func sendResponsesErrorEvent(c *gin.Context, message string, errorType string, f
 
 // sendFinalCompletionEvent sends the response.completed event with the current state
 // This is used when the stream ends unexpectedly to ensure clients receive a completion event
-func sendFinalCompletionEvent(c *gin.Context, state *responsesConverterState, flusher http.Flusher, inputTokens, outputTokens int) {
+func sendFinalCompletionEvent(c *gin.Context, state *responsesConverterState, flusher http.Flusher, inputTokens, outputTokens, cacheTokens int) {
 	// Check if connection is still valid before writing
 	if c == nil || c.Writer == nil || flusher == nil {
 		logrus.Warn("Cannot send completion event: connection is nil")
@@ -594,10 +601,10 @@ func sendFinalCompletionEvent(c *gin.Context, state *responsesConverterState, fl
 	// Add text content as a message item if present
 	if state.accumulatedText != "" {
 		output = append(output, map[string]interface{}{
-			"id":      state.itemID,
-			"type":    "message",
-			"status":  "completed",
-			"role":    "assistant",
+			"id":     state.itemID,
+			"type":   "message",
+			"status": "completed",
+			"role":   "assistant",
 			"content": []map[string]interface{}{
 				{
 					"type": "output_text",
@@ -622,11 +629,15 @@ func sendFinalCompletionEvent(c *gin.Context, state *responsesConverterState, fl
 	// Build usage info from state - use provided values if state values are zero
 	inputTokensFinal := int(state.inputTokens)
 	outputTokensFinal := int(state.outputTokens)
+	cacheTokensFinal := int(state.cacheTokens)
 	if inputTokensFinal == 0 && inputTokens > 0 {
 		inputTokensFinal = inputTokens
 	}
 	if outputTokensFinal == 0 && outputTokens > 0 {
 		outputTokensFinal = outputTokens
+	}
+	if cacheTokensFinal == 0 && cacheTokens > 0 {
+		cacheTokensFinal = cacheTokens
 	}
 
 	doneEvent := map[string]interface{}{
@@ -643,6 +654,9 @@ func sendFinalCompletionEvent(c *gin.Context, state *responsesConverterState, fl
 				"input_tokens":  inputTokensFinal,
 				"output_tokens": outputTokensFinal,
 				"total_tokens":  inputTokensFinal + outputTokensFinal,
+				"input_tokens_details": map[string]interface{}{
+					"cached_tokens": cacheTokensFinal,
+				},
 			},
 		},
 		"sequence_number": state.nextSequenceNumber(),

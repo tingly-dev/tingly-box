@@ -24,7 +24,7 @@ import (
 
 // HandleOpenAIChatStream handles OpenAI chat streaming response.
 // Returns (UsageStat, error)
-func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams) (protocol.UsageStat, error) {
+func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams) (*protocol.TokenUsage, error) {
 	defer stream.Close()
 
 	// Set SSE headers (mimicking OpenAI response headers)
@@ -36,7 +36,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Str
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 
-	var inputTokens, outputTokens int
+	var inputTokens, outputTokens, cacheTokens int
 	var hasUsage bool
 	var contentBuilder strings.Builder
 	var firstChunkID string
@@ -50,7 +50,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Str
 				Code:    "streaming_unsupported",
 			},
 		})
-		return protocol.ZeroUsageStat(), fmt.Errorf("streaming not supported")
+		return protocol.ZeroTokenUsage(), fmt.Errorf("streaming not supported")
 	}
 
 	err := hc.ProcessStream(
@@ -76,6 +76,11 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Str
 			}
 			if chunk.Usage.CompletionTokens != 0 {
 				outputTokens = int(chunk.Usage.CompletionTokens)
+				hasUsage = true
+			}
+			// Track cache tokens from prompt tokens details if available
+			if chunk.Usage.PromptTokensDetails.CachedTokens != 0 {
+				cacheTokens = int(chunk.Usage.PromptTokensDetails.CachedTokens)
 				hasUsage = true
 			}
 
@@ -195,7 +200,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Str
 		errorJSON, _ := json.Marshal(errorChunk)
 		c.SSEvent("", string(errorJSON))
 		flusher.Flush()
-		return protocol.NewUsageStat(inputTokens, outputTokens), err
+		return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), err
 	}
 
 	if !hasUsage {
@@ -242,12 +247,12 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Str
 	c.SSEvent("", " [DONE]")
 	flusher.Flush()
 
-	return protocol.NewUsageStat(inputTokens, outputTokens), nil
+	return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 }
 
 // HandleOpenAIResponsesStream handles OpenAI Responses API streaming response.
 // Returns (UsageStat, error)
-func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (protocol.UsageStat, error) {
+func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {
 	defer stream.Close()
 
 	// Set SSE headers for Responses API (different from Chat Completions)
@@ -258,7 +263,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 	c.Header("Access-Control-Allow-Origin", "*")
 	c.Header("Access-Control-Allow-Headers", "Cache-Control")
 
-	var inputTokens, outputTokens int64
+	var inputTokens, outputTokens, cacheTokens int64
 	var hasUsage bool
 
 	// Panic recovery
@@ -289,7 +294,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 				Code:    "streaming_unsupported",
 			},
 		})
-		return protocol.ZeroUsageStat(), fmt.Errorf("streaming not supported")
+		return protocol.ZeroTokenUsage(), fmt.Errorf("streaming not supported")
 	}
 
 	// Process the stream with context cancellation checking
@@ -317,6 +322,20 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		}
 		if evt.Response.Usage.OutputTokens > 0 {
 			outputTokens = evt.Response.Usage.OutputTokens
+		}
+		// Note: Responses API may include cache tokens in usage details
+		// Check if available in the raw JSON
+		var evtParsed map[string]interface{}
+		if err := json.Unmarshal([]byte(evt.RawJSON()), &evtParsed); err == nil {
+			if response, ok := evtParsed["response"].(map[string]interface{}); ok {
+				if usage, ok := response["usage"].(map[string]interface{}); ok {
+					if details, ok := usage["input_tokens_details"].(map[string]interface{}); ok {
+						if cached, ok := details["cached_tokens"].(float64); ok {
+							cacheTokens = int64(cached)
+						}
+					}
+				}
+			}
 		}
 
 		// Marshal event using RawJSON() to avoid serializing empty union fields
@@ -351,14 +370,14 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
 			logrus.Debug("Responses stream canceled by client")
 			if hasUsage {
-				return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), nil
+				return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
 			}
-			return protocol.ZeroUsageStat(), nil
+			return protocol.ZeroTokenUsage(), nil
 		}
 
 		logrus.Errorf("Responses stream error: %v", err)
 		if hasUsage {
-			return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), err
+			return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), err
 		}
 
 		// Send error chunk
@@ -373,7 +392,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		errorJSON, _ := json.Marshal(errorChunk)
 		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", string(errorJSON)))
 		flusher.Flush()
-		return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), err
+		return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), err
 	}
 
 	// Send final [DONE] message
@@ -382,10 +401,10 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 
 	// Track successful streaming completion
 	if hasUsage {
-		return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), nil
+		return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
 	}
 
-	return protocol.ZeroUsageStat(), nil
+	return protocol.ZeroTokenUsage(), nil
 }
 
 // ===================================================================

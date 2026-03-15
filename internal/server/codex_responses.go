@@ -141,7 +141,7 @@ func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *
 
 	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
 	if wrapper == nil {
-		s.trackUsageFromContext(c, 0, 0, fmt.Errorf("no_client"))
+		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), fmt.Errorf("no_client"))
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to get OpenAI client",
@@ -160,7 +160,7 @@ func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		s.trackUsageFromContext(c, 0, 0, fmt.Errorf("streaming_unsupported"))
+		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), fmt.Errorf("streaming_unsupported"))
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Streaming not supported by this connection",
@@ -173,7 +173,7 @@ func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *
 	// Make HTTP request to ChatGPT backend API for streaming
 	resp, cancel, err := s.makeChatGPTBackendRequest(wrapper, provider, params)
 	if err != nil {
-		s.trackUsageFromContext(c, 0, 0, err)
+		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
 		logrus.Errorf("[ChatGPT] Streaming request failed: %v", err)
 		errorChunk := map[string]any{
 			"error": map[string]any{
@@ -193,7 +193,7 @@ func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
 		logrus.Errorf("[ChatGPT] API error: %s", string(respBody))
-		s.trackUsageFromContext(c, 0, 0, err)
+		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
 		errorChunk := map[string]any{
 			"error": map[string]any{
 				"message": fmt.Sprintf("API error (%d): %s", resp.StatusCode, string(respBody)),
@@ -226,7 +226,7 @@ func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *
 
 	// Process the SSE stream using the proper handler based on original request format
 	var streamErr error
-	var usage protocol.UsageStat
+	var usage *protocol.TokenUsage
 	if originalFormat == "v1" {
 		// Original request was v1 format, send response in v1 format
 		usage, streamErr = streamhandler.HandleResponsesToAnthropicV1Stream(c, sseStream, responseModel)
@@ -236,7 +236,7 @@ func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *
 	}
 
 	if streamErr != nil {
-		s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, streamErr)
+		s.trackUsageWithTokenUsage(c, usage, streamErr)
 		logrus.Errorf("[ChatGPT] Stream handler error: %v", streamErr)
 		if streamRec != nil {
 			streamRec.RecordError(streamErr)
@@ -245,7 +245,7 @@ func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *
 	}
 
 	// Track usage from stream handler
-	s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, nil)
+	s.trackUsageWithTokenUsage(c, usage, nil)
 
 	// Finish recording and assemble response
 	if streamRec != nil {

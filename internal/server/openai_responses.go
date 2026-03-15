@@ -187,14 +187,14 @@ func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Prov
 				defer cancel()
 			}
 			if err != nil {
-				s.trackUsageFromContext(c, 0, 0, err)
+				s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{Message: "Failed to create streaming request: " + err.Error(), Type: "api_error"},
 				})
 				return
 			}
 			usage, err := HandleOpenAIChatToResponsesStream(c, chatStream, responseModel)
-			s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
+			s.trackUsageWithTokenUsage(c, usage, err)
 			return
 		}
 
@@ -202,7 +202,7 @@ func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Prov
 		fc := NewForwardContext(nil, provider)
 		chatResp, _, err := ForwardOpenAIChat(fc, wrapper, chatReq)
 		if err != nil {
-			s.trackUsageFromContext(c, 0, 0, err)
+			s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
 			c.JSON(http.StatusInternalServerError, ErrorResponse{
 				Error: ErrorDetail{Message: "Failed to forward request: " + err.Error(), Type: "api_error"},
 			})
@@ -211,7 +211,8 @@ func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Prov
 
 		inputTokens := int64(chatResp.Usage.PromptTokens)
 		outputTokens := int64(chatResp.Usage.CompletionTokens)
-		s.trackUsageFromContext(c, int(inputTokens), int(outputTokens), nil)
+		cacheTokens := int64(0) // Chat API doesn't provide cache information
+		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil)
 		c.JSON(http.StatusOK, buildResponsesPayloadFromChat(chatResp, responseModel, actualModel))
 		return
 
@@ -225,7 +226,7 @@ func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Prov
 				defer cancel()
 			}
 			if err != nil {
-				s.trackUsageFromContext(c, 0, 0, err)
+				s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{Message: "Failed to create streaming request: " + err.Error(), Type: "api_error"},
 				})
@@ -234,7 +235,7 @@ func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Prov
 
 			hc := protocol.NewHandleContext(c, responseModel)
 			usage, err := HandleAnthropicToOpenAIResponsesStream(hc, anthropicStream, responseModel)
-			s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
+			s.trackUsageWithTokenUsage(c, usage, err)
 			return
 		}
 
@@ -245,14 +246,15 @@ func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Prov
 			defer cancel()
 		}
 		if err != nil {
-			s.trackUsageFromContext(c, 0, 0, err)
+			s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
 			c.JSON(http.StatusInternalServerError, ErrorResponse{
 				Error: ErrorDetail{Message: "Failed to forward request: " + err.Error(), Type: "api_error"},
 			})
 			return
 		}
 
-		s.trackUsageFromContext(c, int(anthropicResp.Usage.InputTokens), int(anthropicResp.Usage.OutputTokens), nil)
+		cacheTokens := int(anthropicResp.Usage.CacheReadInputTokens)
+		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(anthropicResp.Usage.InputTokens), int(anthropicResp.Usage.OutputTokens), cacheTokens), nil)
 		c.JSON(http.StatusOK, buildResponsesPayloadFromAnthropic(anthropicResp, responseModel, actualModel))
 		return
 
@@ -370,7 +372,7 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 
 	if err != nil {
 		// Track error with no usage
-		s.trackUsageFromContext(c, 0, 0, err)
+		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to forward request: " + err.Error(),
@@ -383,9 +385,10 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 	// Extract usage from response
 	inputTokens := int64(response.Usage.InputTokens)
 	outputTokens := int64(response.Usage.OutputTokens)
+	cacheTokens := int64(response.Usage.InputTokensDetails.CachedTokens)
 
 	// Track usage
-	s.trackUsageFromContext(c, int(inputTokens), int(outputTokens), nil)
+	s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil)
 
 	// Check if this is a ChatGPT backend API provider (Codex OAuth)
 	// These providers return responses in a different format that needs conversion
@@ -445,7 +448,7 @@ func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.P
 	usage, err := HandleOpenAIResponsesStream(hc, stream, responseModel)
 
 	// Track usage from stream handler
-	s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
+	s.trackUsageWithTokenUsage(c, usage, err)
 }
 
 // handleResponsesStreamResponse processes the streaming response and sends it to the client
@@ -458,7 +461,7 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 		if r := recover(); r != nil {
 			logrus.Errorf("Panic in streaming handler: %v", r)
 			if hasUsage {
-				s.trackUsageFromContext(c, int(inputTokens), int(outputTokens), fmt.Errorf("panic: %v", r))
+				s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), 0), fmt.Errorf("panic: %v", r))
 			}
 			if c.Writer != nil {
 				c.Writer.WriteHeader(http.StatusInternalServerError)
@@ -533,14 +536,14 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 		if errors.Is(err, context.Canceled) {
 			logrus.Debug("Responses stream canceled by client")
 			if hasUsage {
-				s.trackUsageFromContext(c, int(inputTokens), int(outputTokens), err)
+				s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), 0), err)
 			}
 			return
 		}
 
 		logrus.Errorf("Stream error: %v", err)
 		if hasUsage {
-			s.trackUsageFromContext(c, int(inputTokens), int(outputTokens), err)
+			s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), 0), err)
 		}
 
 		errorChunk := map[string]any{
@@ -564,7 +567,7 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 
 	// Track successful streaming completion
 	if hasUsage {
-		s.trackUsageFromContext(c, int(inputTokens), int(outputTokens), nil)
+		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), 0), nil)
 	}
 
 	// Send the final [DONE] message
