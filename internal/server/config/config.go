@@ -373,15 +373,29 @@ func (c *Config) Save() error {
 	if c.ConfigFile == "" {
 		return fmt.Errorf("ConfigFile is empty")
 	}
-	data, err := json.MarshalIndent(c, "", "    ")
+	data, err := json.Marshal(c)
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(c.ConfigFile, data, 0644)
+	var next map[string]interface{}
+	if err := json.Unmarshal(data, &next); err != nil {
+		return err
+	}
+	if raw, err := os.ReadFile(c.ConfigFile); err == nil && len(raw) > 0 {
+		var existing map[string]interface{}
+		if err := json.Unmarshal(raw, &existing); err == nil {
+			for k, v := range existing {
+				if _, ok := next[k]; !ok {
+					next[k] = v
+				}
+			}
+		}
+	}
+	out, err := json.MarshalIndent(next, "", "    ")
 	if err != nil {
 		return err
 	}
-	return nil
+	return os.WriteFile(c.ConfigFile, out, 0644)
 }
 
 // RefreshStatsFromStore hydrates service stats and rule state from the SQLite store.
