@@ -34,6 +34,10 @@ type IMPrompter struct {
 
 	// defaultTimeout is the default timeout for requests
 	defaultTimeout time.Duration
+
+	// whitelist stores tools that have been approved with "Always Allow"
+	// key: toolName, value: true
+	whitelist map[string]bool
 }
 
 // pendingIMRequest stores a pending request with its context
@@ -53,6 +57,7 @@ func NewIMPrompter(manager *imbot.Manager) *IMPrompter {
 		pendingRequests:  make(map[string]*pendingIMRequest),
 		responseChannels: make(map[string]chan ask.Result),
 		defaultTimeout:   5 * time.Minute,
+		whitelist:        make(map[string]bool),
 	}
 }
 
@@ -77,6 +82,25 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 			Approved:     true,
 			UpdatedInput: req.Input,
 		}, nil
+	}
+
+	// Check whitelist for permission requests
+	if req.Type == ask.TypePermission && req.ToolName != "" {
+		p.mu.RLock()
+		if p.whitelist[req.ToolName] {
+			p.mu.RUnlock()
+			logrus.WithFields(logrus.Fields{
+				"tool_name": req.ToolName,
+				"request_id": req.ID,
+			}).Info("Tool is whitelisted, auto-approving")
+			return ask.Result{
+				ID:           req.ID,
+				Approved:     true,
+				UpdatedInput: req.Input,
+				Reason:       "Tool is whitelisted (Always Allow)",
+			}, nil
+		}
+		p.mu.RUnlock()
 	}
 
 	// Use UUID to get bot (preferred) or fall back to platform lookup
@@ -174,6 +198,19 @@ func (p *IMPrompter) SubmitResult(requestID string, result ask.Result) error {
 		p.mu.Unlock()
 		return fmt.Errorf("request not found or expired: %s", requestID)
 	}
+
+	// Get pending request for tool name (needed for whitelist)
+	pending, hasPending := p.pendingRequests[requestID]
+
+	// If remember is true and approved, add tool to whitelist
+	if result.Remember && result.Approved && hasPending && pending.request.ToolName != "" {
+		p.whitelist[pending.request.ToolName] = true
+		logrus.WithFields(logrus.Fields{
+			"tool_name":  pending.request.ToolName,
+			"request_id": requestID,
+		}).Info("Tool added to whitelist (Always Allow)")
+	}
+
 	// Keep lock held while sending to prevent race with cleanup
 	select {
 	case responseChan <- result:
@@ -181,6 +218,7 @@ func (p *IMPrompter) SubmitResult(requestID string, result ask.Result) error {
 		logrus.WithFields(logrus.Fields{
 			"request_id": requestID,
 			"approved":   result.Approved,
+			"remember":   result.Remember,
 		}).Info("Result submitted")
 		return nil
 	default:
@@ -364,6 +402,53 @@ func (p *IMPrompter) cleanup(requestID string) {
 // Returns: (approved, remember, isValid)
 func ParseTextResponse(text string) (approved bool, remember bool, isValid bool) {
 	return ask.ParseTextResponse(text)
+}
+
+// GetWhitelist returns the list of whitelisted tools
+func (p *IMPrompter) GetWhitelist() []string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	tools := make([]string, 0, len(p.whitelist))
+	for tool := range p.whitelist {
+		tools = append(tools, tool)
+	}
+	return tools
+}
+
+// AddToWhitelist adds a tool to the whitelist
+func (p *IMPrompter) AddToWhitelist(toolName string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.whitelist[toolName] = true
+	logrus.WithField("tool_name", toolName).Info("Tool added to whitelist")
+}
+
+// RemoveFromWhitelist removes a tool from the whitelist
+func (p *IMPrompter) RemoveFromWhitelist(toolName string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	delete(p.whitelist, toolName)
+	logrus.WithField("tool_name", toolName).Info("Tool removed from whitelist")
+}
+
+// ClearWhitelist clears all tools from the whitelist
+func (p *IMPrompter) ClearWhitelist() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.whitelist = make(map[string]bool)
+	logrus.Info("Whitelist cleared")
+}
+
+// IsWhitelisted checks if a tool is in the whitelist
+func (p *IMPrompter) IsWhitelisted(toolName string) bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	return p.whitelist[toolName]
 }
 
 // Legacy compatibility methods

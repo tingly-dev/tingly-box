@@ -1,5 +1,7 @@
 package imbot
 
+import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+
 // Platform message limits
 const (
 	TelegramMessageLimit = 4096
@@ -23,4 +25,26 @@ func GetMessageLimit(platform Platform) int {
 	default:
 		return DefaultMessageLimit
 	}
+}
+
+// BuildTelegramActionKeyboard converts imbot.InlineKeyboardMarkup to tgbotapi.InlineKeyboardMarkup
+func BuildTelegramActionKeyboard(kb InlineKeyboardMarkup) tgbotapi.InlineKeyboardMarkup {
+	var rows [][]tgbotapi.InlineKeyboardButton
+	for _, row := range kb.InlineKeyboard {
+		var buttons []tgbotapi.InlineKeyboardButton
+		for _, btn := range row {
+			tgBtn := tgbotapi.InlineKeyboardButton{
+				Text: btn.Text,
+			}
+			if btn.CallbackData != "" {
+				tgBtn.CallbackData = &btn.CallbackData
+			}
+			if btn.URL != "" {
+				tgBtn.URL = &btn.URL
+			}
+			buttons = append(buttons, tgBtn)
+		}
+		rows = append(rows, buttons)
+	}
+	return tgbotapi.InlineKeyboardMarkup{InlineKeyboard: rows}
 }

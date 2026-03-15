@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-agentscope/pkg/memory"
 	"github.com/tingly-dev/tingly-agentscope/pkg/message"
 	"github.com/tingly-dev/tingly-agentscope/pkg/types"
 	"github.com/tingly-dev/tingly-box/agentboot"
@@ -55,6 +56,11 @@ type BotHandler struct {
 	// actionMenuMessageID tracks the message ID of the action keyboard menu per chatID
 	actionMenuMessageID   map[string]string
 	actionMenuMessageIDMu sync.RWMutex
+
+	// verbose controls whether to show intermediate messages (onMessage details)
+	// true = show all messages (default), false = show only final results
+	verbose   bool
+	verboseMu sync.RWMutex
 }
 
 // PendingBind represents a pending bind confirmation request
@@ -164,7 +170,42 @@ func NewBotHandler(
 		runningCancel:       make(map[string]context.CancelFunc),
 		pendingBinds:        make(map[string]*PendingBind),
 		actionMenuMessageID: make(map[string]string),
+		verbose:             true, // Default to verbose mode
 	}
+}
+
+// GetVerbose returns the current verbose mode setting for a chat
+// Checks chat store first, then bot setting default
+func (h *BotHandler) GetVerbose(chatID string) bool {
+	// Try to get verbose from chat store
+	if h.chatStore != nil {
+		chat, err := h.chatStore.GetChat(chatID)
+		if err == nil && chat != nil && chat.Verbose != nil {
+			return *chat.Verbose
+		}
+	}
+
+	// Fallback to bot setting default
+	botSetting := h.botSetting.GetOutputBehavior()
+	return botSetting.Verbose
+}
+
+// SetVerbose sets the verbose mode for a chat
+func (h *BotHandler) SetVerbose(chatID string, verbose bool) {
+	// Update in chat store
+	if h.chatStore != nil {
+		err := h.chatStore.UpdateChat(chatID, func(c *Chat) {
+			c.Verbose = &verbose
+		})
+		if err != nil {
+			logrus.WithError(err).WithField("chatID", chatID).Warn("Failed to update verbose in chat store")
+		}
+	}
+
+	// Also update in-memory default (fallback)
+	h.verboseMu.Lock()
+	h.verboseMu.Unlock()
+	h.verbose = verbose
 }
 
 // HandleMessage is the main entry point for handling bot messages
@@ -298,8 +339,11 @@ func (h *BotHandler) getCurrentAgent(chatID string) (agentboot.AgentType, error)
 	if currentAgent == string(agentTinglyBox) {
 		return agentTinglyBox, nil
 	}
-	if currentAgent == string(agentClaudeCode) || currentAgent == "claude" {
+	if currentAgent == string(agentClaudeCode) {
 		return agentClaudeCode, nil
+	}
+	if currentAgent == string(agentMock) {
+		return agentMock, nil
 	}
 
 	return agentTinglyBox, nil
@@ -371,6 +415,8 @@ func (h *BotHandler) routeToAgent(hCtx HandlerContext, text string) error {
 			targetAgent = agentTinglyBox
 		case smart_guide.AgentTypeClaudeCode:
 			targetAgent = agentClaudeCode
+		case smart_guide.AgentTypeMock:
+			targetAgent = agentMock
 		default:
 			return fmt.Errorf("unknown target agent: %s", toAgent)
 		}
@@ -397,6 +443,10 @@ func (h *BotHandler) routeToAgent(hCtx HandlerContext, text string) error {
 				projectPath, _, _ := h.getProjectPathForChat(hCtx)
 				h.handleAgentMessage(hCtx, agentClaudeCode, remainingText, projectPath)
 				return nil
+			case agentMock:
+				projectPath, _, _ := h.getProjectPathForChat(hCtx)
+				h.handleAgentMessage(hCtx, agentMock, remainingText, projectPath)
+				return nil
 			}
 		}
 
@@ -418,6 +468,11 @@ func (h *BotHandler) routeToAgent(hCtx HandlerContext, text string) error {
 		// Get project path
 		projectPath, _, _ := h.getProjectPathForChat(hCtx)
 		h.handleAgentMessage(hCtx, agentClaudeCode, text, projectPath)
+		return nil
+	case agentMock:
+		// Get project path
+		projectPath, _, _ := h.getProjectPathForChat(hCtx)
+		h.handleAgentMessage(hCtx, agentMock, text, projectPath)
 		return nil
 	default:
 		return fmt.Errorf("unknown agent type: %s", currentAgent)
@@ -562,7 +617,7 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 		SessionID:   hCtx.ChatID, // Use chatID as session identifier
 	}
 
-	// 5. Build meta for response header
+	// 6. Build meta for response header
 	behavior := h.getOutputBehavior()
 	meta := ResponseMeta{
 		ProjectPath: projectPath,
@@ -572,99 +627,67 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 		AgentType:   AgentNameTinglyBox,
 	}
 
-	// 6. Send processing message (respects verbose mode)
+	// 7. Send processing message (respects verbose mode)
 	if behavior.Verbose {
 		h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, IconProcess+" "+MsgProcessing, behavior), hCtx.MessageID)
 	}
 
-	// 7. Get response from agent
-	response, err := agent.ReplyWithContext(h.ctx, text, toolCtx)
+	// 8. Create streaming handler for message output
+	streamHandler := h.newStreamingMessageHandler(hCtx)
+
+	// 9. Create composite handler that combines streaming + completion callback
+	compositeHandler := agentboot.NewCompositeHandler().
+		SetStreamer(streamHandler).
+		SetCompletionCallback(&SmartGuideCompletionCallback{
+			hCtx:           hCtx,
+			sessionID:      hCtx.ChatID,
+			chatStore:      h.chatStore,
+			tbSessionStore: h.tbSessionStore,
+			agent:          agent,
+			projectPath:    projectPath,
+			meta:           meta,
+			behavior:       behavior,
+			botHandler:     h,
+		})
+
+	// 10. Execute with callback support
+	execCtx, cancel := context.WithCancel(context.Background())
+
+	// Store cancel function for /stop command
+	h.runningCancelMu.Lock()
+	h.runningCancel[hCtx.ChatID] = cancel
+	h.runningCancelMu.Unlock()
+
+	// Clean up cancel function when done
+	defer func() {
+		h.runningCancelMu.Lock()
+		delete(h.runningCancel, hCtx.ChatID)
+		h.runningCancelMu.Unlock()
+		cancel()
+	}()
+
+	// Save user message to session before execution
+	if h.tbSessionStore != nil {
+		userMsg := message.NewMsg("user", text, types.RoleUser)
+		if err := h.tbSessionStore.AddMessage(hCtx.ChatID, userMsg); err != nil {
+			logrus.WithError(err).Warn("Failed to save user message to session")
+		}
+	}
+
+	// Execute with handler
+	result, err := agent.ExecuteWithHandler(execCtx, text, toolCtx, compositeHandler)
 	if err != nil {
 		logrus.WithError(err).Error("Smart guide agent failed")
 		h.SendText(hCtx, fmt.Sprintf("%s Error: %v", IconError, err))
 		return nil
 	}
 
-	// 8. Get text content from response
-	responseText := response.GetTextContent()
-
-	// 9. Save messages to session file
-	if h.tbSessionStore != nil {
-		// Save user message
-		userMsg := message.NewMsg("user", text, types.RoleUser)
-		contentPreview := text
-		if len(contentPreview) > 50 {
-			contentPreview = contentPreview[:50] + "..."
-		}
-		logrus.WithFields(logrus.Fields{
-			"chatID":  hCtx.ChatID,
-			"role":    userMsg.Role,
-			"content": contentPreview,
-		}).Debug("Saving user message to session")
-
-		if err := h.tbSessionStore.AddMessage(hCtx.ChatID, userMsg); err != nil {
-			logrus.WithError(err).Warn("Failed to save user message to session")
-		}
-
-		// Save assistant response
-		assistantMsg := message.NewMsg("assistant", responseText, types.RoleAssistant)
-		assistantPreview := responseText
-		if len(assistantPreview) > 50 {
-			assistantPreview = assistantPreview[:50] + "..."
-		}
-		logrus.WithFields(logrus.Fields{
-			"chatID":  hCtx.ChatID,
-			"role":    assistantMsg.Role,
-			"content": assistantPreview,
-		}).Debug("Saving assistant message to session")
-
-		if err := h.tbSessionStore.AddMessage(hCtx.ChatID, assistantMsg); err != nil {
-			logrus.WithError(err).Warn("Failed to save assistant message to session")
-		}
-
-		logrus.WithField("chatID", hCtx.ChatID).Debug("Saved messages to session file")
-	}
-
-	// 10. Check if working directory was changed by change_workdir tool
-	newProjectPath := agent.GetExecutor().GetWorkingDirectory()
-	if newProjectPath != projectPath {
-		logrus.WithFields(logrus.Fields{
-			"chatID":         hCtx.ChatID,
-			"oldProjectPath": projectPath,
-			"newProjectPath": newProjectPath,
-		}).Info("Project path changed, updating chat store")
-
-		// Update chat store with new project path
-		chat, err := h.chatStore.GetChat(hCtx.ChatID)
-		if err != nil {
-			logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("Failed to get chat for update")
-		}
-
-		if chat == nil {
-			now := time.Now().UTC()
-			chat = &Chat{
-				ChatID:      hCtx.ChatID,
-				Platform:    string(hCtx.Platform),
-				ProjectPath: newProjectPath,
-				BashCwd:     newProjectPath,
-				CreatedAt:   now,
-				UpdatedAt:   now,
-			}
-			if err := h.chatStore.UpsertChat(chat); err != nil {
-				logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("Failed to create chat")
-			}
-		} else {
-			if err := h.chatStore.UpdateChat(hCtx.ChatID, func(c *Chat) {
-				c.ProjectPath = newProjectPath
-				c.BashCwd = newProjectPath
-			}); err != nil {
-				logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("Failed to update chat")
-			}
-		}
-	}
-
-	// 11. Send the response with meta header
-	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, responseText, behavior), hCtx.MessageID)
+	// Note: Response is sent by the CompletionCallback to ensure proper order
+	// The callback sends both the response and the action keyboard together
+	logrus.WithFields(logrus.Fields{
+		"chatID":  hCtx.ChatID,
+		"success": result != nil,
+	}).Info("SmartGuide execution completed")
 
 	return nil
 }
@@ -890,6 +913,20 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 		mockText := strings.TrimSpace(strings.TrimPrefix(hCtx.Text, cmdMock))
 		h.handleAgentMessage(hCtx, agentMock, mockText, "")
 		return
+	case cmd == cmdYoloPrimary:
+		// Yolo mode toggle command
+		h.handleYoloCommand(hCtx)
+		return
+	case cmd == cmdVerbosePrimary:
+		// Verbose mode - show all messages
+		h.SetVerbose(hCtx.ChatID, true)
+		h.SendText(hCtx, "✅ Verbose mode enabled\n\nAll message details will be shown.")
+		return
+	case cmd == cmdNoVerbosePrimary:
+		// NoVerbose mode - hide intermediate messages
+		h.SetVerbose(hCtx.ChatID, false)
+		h.SendText(hCtx, "🔇 Quiet mode enabled\n\nOnly final results will be shown. Use /verbose to show all details.")
+		return
 	}
 
 	// All other slash commands go to agent router (defaults to @tb)
@@ -997,12 +1034,7 @@ func (h *BotHandler) getOutputBehavior() OutputBehavior {
 
 // newStreamingMessageHandler creates a new streaming message handler
 func (h *BotHandler) newStreamingMessageHandler(hCtx HandlerContext) *streamingMessageHandler {
-	return &streamingMessageHandler{
-		bot:       hCtx.Bot,
-		chatID:    hCtx.ChatID,
-		replyTo:   hCtx.MessageID,
-		formatter: claude.NewTextFormatter(),
-	}
+	return newStreamingMessageHandler(hCtx.Bot, hCtx.ChatID, hCtx.MessageID, h.GetVerbose(hCtx.ChatID))
 }
 
 // handleAgentMessage routes message to the appropriate agent handler
@@ -1052,6 +1084,9 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 	agentType := "claude" // Claude Code agent type
 	sess := h.sessionMgr.FindBy(hCtx.ChatID, agentType, projectPath)
 
+	// Track if this is a new session or resuming an existing one
+	isNewSession := false
+
 	// Auto-create session if none exists or if session is in pending state (stale)
 	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed || sess.Status == session.StatusPending {
 		sess = h.sessionMgr.CreateWith(hCtx.ChatID, agentType, projectPath)
@@ -1060,6 +1095,7 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 			s.ExpiresAt = time.Time{}        // Zero value means no expiration
 			s.Status = session.StatusRunning // Mark as running immediately
 		})
+		isNewSession = true
 
 		logrus.WithFields(logrus.Fields{
 			"chatID":    hCtx.ChatID,
@@ -1068,6 +1104,10 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 			"agent":     agentType,
 		}).Info("Created new session for Claude Code")
 	} else {
+		// Reset status to running for reused sessions (e.g., completed/failed sessions)
+		h.sessionMgr.Update(sess.ID, func(s *session.Session) {
+			s.Status = session.StatusRunning
+		})
 		logrus.WithFields(logrus.Fields{
 			"chatID":    hCtx.ChatID,
 			"sessionID": sess.ID,
@@ -1109,9 +1149,15 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 
 	h.sessionMgr.SetRunning(sessionID)
 
-	// Send status message
+	// Send status message - differentiate between new and resumed sessions
 	behavior := h.getOutputBehavior()
-	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, "⏳ Processing...", behavior), hCtx.MessageID)
+	var statusMsg string
+	if isNewSession {
+		statusMsg = "⏳ CC: Processing new session..."
+	} else {
+		statusMsg = "⏳ CC: Resuming session..."
+	}
+	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, statusMsg, behavior), hCtx.MessageID)
 
 	// Execute with context.Background() to avoid cancellation on reconnect
 	execCtx, cancel := context.WithCancel(context.Background())
@@ -1153,12 +1199,23 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 	// Create streaming handler for message output
 	streamHandler := h.newStreamingMessageHandler(hCtx)
 
+	// Check permission mode for this session
+	permissionMode := sess.PermissionMode
+	if permissionMode == "" {
+		permissionMode = string(claude.PermissionModeDefault)
+	}
+
 	// Create composite handler that combines streaming + approval + ask handling
+	// In auto mode (yolo), skip approval handler to auto-approve all permissions
 	compositeHandler := agentboot.NewCompositeHandler().
 		SetStreamer(streamHandler).
-		SetApprovalHandler(h.imPrompter).
-		SetAskHandler(h.imPrompter).
 		SetCompletionCallback(&CompletionCallback{hCtx: hCtx, sessionID: sessionID, sessionMgr: h.sessionMgr})
+
+	if permissionMode != string(claude.PermissionModeAuto) {
+		// Normal mode: use approval handler
+		compositeHandler.SetApprovalHandler(h.imPrompter).
+			SetAskHandler(h.imPrompter)
+	}
 
 	result, err := agent.Execute(execCtx, text, agentboot.ExecutionOptions{
 		ProjectPath:          projectPath,
@@ -1169,7 +1226,7 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		Platform:             string(hCtx.Platform),
 		BotUUID:              hCtx.BotUUID,
 		PermissionPromptTool: "stdio",
-		PermissionMode:       string(claude.PermissionModeDefault), // Use constant for permission mode
+		PermissionMode:       permissionMode,
 	})
 
 	logrus.WithFields(logrus.Fields{
@@ -1256,6 +1313,114 @@ func (c *CompletionCallback) OnComplete(result *agentboot.CompletionResult) {
 	}).Info("Agent execution completed via callback")
 }
 
+// SmartGuideCompletionCallback handles completion events for SmartGuide agent
+// It saves messages to session, updates project path if changed, and sends response + action keyboard
+type SmartGuideCompletionCallback struct {
+	hCtx           HandlerContext
+	sessionID      string
+	chatStore      ChatStoreInterface
+	tbSessionStore *smart_guide.SessionStore
+	agent          *smart_guide.TinglyBoxAgent
+	projectPath    string
+	meta           ResponseMeta
+	behavior       OutputBehavior
+	botHandler     *BotHandler // Add reference to bot handler for formatting
+}
+
+// OnComplete implements agentboot.CompletionCallback
+func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionResult) {
+	// Get response text from the agent's memory
+	responseText := ""
+	if result.Success {
+		// Try to get the last assistant message from agent memory
+		if mem := c.agent.GetMemory(); mem != nil {
+			if hist, ok := mem.(*memory.History); ok {
+				messages := hist.GetMessages()
+				for i := len(messages) - 1; i >= 0; i-- {
+					if messages[i].Role == "assistant" {
+						responseText = messages[i].GetTextContent()
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// Save assistant message to session
+	if c.tbSessionStore != nil && responseText != "" {
+		assistantMsg := message.NewMsg("assistant", responseText, types.RoleAssistant)
+		if err := c.tbSessionStore.AddMessage(c.hCtx.ChatID, assistantMsg); err != nil {
+			logrus.WithError(err).Warn("Failed to save assistant message to session")
+		}
+	}
+
+	// Check if working directory was changed by change_workdir tool
+	newProjectPath := c.agent.GetExecutor().GetWorkingDirectory()
+	if newProjectPath != c.projectPath {
+		logrus.WithFields(logrus.Fields{
+			"chatID":         c.hCtx.ChatID,
+			"oldProjectPath": c.projectPath,
+			"newProjectPath": newProjectPath,
+		}).Info("Project path changed, updating chat store")
+
+		// Update chat store with new project path
+		chat, err := c.chatStore.GetChat(c.hCtx.ChatID)
+		if err != nil {
+			logrus.WithError(err).WithField("chatID", c.hCtx.ChatID).Warn("Failed to get chat for update")
+		}
+
+		if chat == nil {
+			now := time.Now().UTC()
+			chat = &Chat{
+				ChatID:      c.hCtx.ChatID,
+				Platform:    string(c.hCtx.Platform),
+				ProjectPath: newProjectPath,
+				BashCwd:     newProjectPath,
+				CreatedAt:   now,
+				UpdatedAt:   now,
+			}
+			if err := c.chatStore.UpsertChat(chat); err != nil {
+				logrus.WithError(err).WithField("chatID", c.hCtx.ChatID).Warn("Failed to create chat")
+			}
+		} else {
+			if err := c.chatStore.UpdateChat(c.hCtx.ChatID, func(ch *Chat) {
+				ch.ProjectPath = newProjectPath
+				ch.BashCwd = newProjectPath
+			}); err != nil {
+				logrus.WithError(err).WithField("chatID", c.hCtx.ChatID).Warn("Failed to update chat")
+			}
+		}
+	}
+
+	// Send the final response with meta header, then action keyboard
+	if responseText != "" {
+		c.botHandler.sendTextWithReply(c.hCtx, c.botHandler.formatResponseWithMeta(c.meta, responseText, c.behavior), c.hCtx.MessageID)
+	}
+
+	// Send action keyboard on completion
+	kb := BuildActionKeyboard()
+	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+
+	_, err := c.hCtx.Bot.SendMessage(context.Background(), c.hCtx.ChatID, &imbot.SendMessageOptions{
+		Text: "✅ Task done. \nContinue to chat with this session or /help.",
+		Metadata: map[string]interface{}{
+			"replyMarkup":        tgKeyboard,
+			"_trackActionMenuID": true,
+		},
+	})
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to send action keyboard for SmartGuide")
+	}
+
+	// Log completion event
+	logrus.WithFields(logrus.Fields{
+		"chatID":    c.hCtx.ChatID,
+		"sessionID": c.sessionID,
+		"success":   result.Success,
+		"duration":  result.DurationMS,
+	}).Info("SmartGuide execution completed via callback")
+}
+
 // handleMockAgentMessage executes a message through the mock agent for testing
 func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, projectPathOverride string) {
 	if strings.TrimSpace(text) == "" {
@@ -1280,9 +1445,23 @@ func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, pr
 	agentType := "mock"
 	sess := h.sessionMgr.FindBy(hCtx.ChatID, agentType, projectPath)
 
+	// Track if this is a new session or resuming an existing one
+	isNewSession := false
+
 	// Create new session if needed (including pending state sessions)
 	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed || sess.Status == session.StatusPending {
 		sess = h.sessionMgr.CreateWith(hCtx.ChatID, agentType, projectPath)
+		// Clear expiration for persistent sessions
+		h.sessionMgr.Update(sess.ID, func(s *session.Session) {
+			s.ExpiresAt = time.Time{}
+			s.Status = session.StatusRunning
+		})
+		isNewSession = true
+	} else {
+		// Reset status to running for reused sessions
+		h.sessionMgr.Update(sess.ID, func(s *session.Session) {
+			s.Status = session.StatusRunning
+		})
 	}
 	sessionID := sess.ID
 
@@ -1309,9 +1488,15 @@ func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, pr
 
 	h.sessionMgr.SetRunning(sessionID)
 
-	// Send status message
+	// Send status message - differentiate between new and resumed sessions
 	behavior := h.getOutputBehavior()
-	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, "🧪 Mock agent processing...", behavior), hCtx.MessageID)
+	var statusMsg string
+	if isNewSession {
+		statusMsg = "🧪 Mock: Processing new session..."
+	} else {
+		statusMsg = "🧪 Mock: Resuming session..."
+	}
+	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, statusMsg, behavior), hCtx.MessageID)
 
 	// Execute with context
 	execCtx, cancel := context.WithCancel(context.Background())
@@ -1568,21 +1753,6 @@ func (h *BotHandler) handleBotStatusCommand(hCtx HandlerContext) {
 
 // handleClearCommand clears the current session context and creates a new one
 func (h *BotHandler) handleClearCommand(hCtx HandlerContext) {
-	// Get current project path
-	projectPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
-	if projectPath == "" {
-		// For group chats, also check group binding
-		if path, found := getProjectPathForGroup(h.chatStore, hCtx.ChatID, string(hCtx.Platform)); found {
-			projectPath = path
-		}
-	}
-
-	if projectPath == "" {
-		h.SendText(hCtx, "No project path found. Use "+cmdBindPrimary+" <project_path> to create a session first.")
-		return
-
-	}
-
 	// Get current agent and close the matching session
 	currentAgent, _ := h.getCurrentAgent(hCtx.ChatID)
 	agentType := string(currentAgent)
@@ -1596,43 +1766,107 @@ func (h *BotHandler) handleClearCommand(hCtx HandlerContext) {
 				h.SendText(hCtx, "⚠️ Failed to clear SmartGuide session.")
 				return
 			}
-			h.SendText(hCtx, "✅ Smart Guide (@tb) conversation history cleared.")
+			h.SendText(hCtx, "✅ Smart Guide (@tb) conversation history cleared.\n\nSend a message to start a new session.")
 			logrus.WithField("chatID", hCtx.ChatID).Info("Cleared SmartGuide session")
 		} else {
 			h.SendText(hCtx, "Smart Guide (@tb) session store is not available.")
 		}
 		return
 
-	case agentClaudeCode:
-		// Claude Code uses Session Manager (existing logic)
+	case agentClaudeCode, agentMock:
+		// Get project path
 		projectPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
 		if projectPath == "" {
+			// For group chats, also check group binding
 			if path, found := getProjectPathForGroup(h.chatStore, hCtx.ChatID, string(hCtx.Platform)); found {
 				projectPath = path
 			}
 		}
 
+		// Use default path if no project bound
+		defaultPath := h.getDefaultProjectPath()
 		if projectPath == "" {
-			h.SendText(hCtx, "No project path found. Use "+cmdBindPrimary+" <project_path> to create a session first.")
-			return
+			projectPath = defaultPath
 		}
 
+		// Close the existing session if found
 		oldSess := h.sessionMgr.FindBy(hCtx.ChatID, agentType, projectPath)
 		if oldSess != nil {
 			h.sessionMgr.Close(oldSess.ID)
+			agentName := "Claude Code (@cc)"
+			if currentAgent == agentMock {
+				agentName = "Mock Agent (@mock)"
+			}
+			h.SendText(hCtx, fmt.Sprintf("✅ %s session cleared.\n\nSend a message to start a new session.\nDefault path: %s", agentName, ShortenPath(defaultPath)))
+		} else {
+			agentName := "Claude Code (@cc)"
+			if currentAgent == agentMock {
+				agentName = "Mock Agent (@mock)"
+			}
+			h.SendText(hCtx, fmt.Sprintf("No active %s session found.\n\nSend a message to start a new session.\nDefault path: %s", agentName, ShortenPath(defaultPath)))
 		}
-
-		sess := h.sessionMgr.CreateWith(hCtx.ChatID, agentType, projectPath)
-		h.sessionMgr.Update(sess.ID, func(s *session.Session) {
-			s.ExpiresAt = time.Time{}
-		})
-
-		h.SendText(hCtx, fmt.Sprintf("✅ Claude Code (@cc) session cleared.\n\nNew session: %s\nProject: %s", sess.ID, projectPath))
 		return
 
 	default:
 		h.SendText(hCtx, "Unknown agent type: "+agentType)
 	}
+}
+
+// handleYoloCommand toggles auto permission mode for the current Claude Code session
+// In auto mode, all permission requests are auto-approved for the current session only
+func (h *BotHandler) handleYoloCommand(hCtx HandlerContext) {
+	// Auto mode only applies to Claude Code agent
+	currentAgent, _ := h.getCurrentAgent(hCtx.ChatID)
+	if currentAgent != agentClaudeCode {
+		h.SendText(hCtx, "⚠️ Auto-approve mode is only available for Claude Code (@cc).\n\nSwitch to Claude Code first with: @cc")
+		return
+	}
+
+	// Get project path
+	projectPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
+	if projectPath == "" {
+		if path, found := getProjectPathForGroup(h.chatStore, hCtx.ChatID, string(hCtx.Platform)); found {
+			projectPath = path
+		}
+	}
+
+	if projectPath == "" {
+		h.SendText(hCtx, "No project path found. Use "+cmdBindPrimary+" <project_path> to create a session first.")
+		return
+	}
+
+	// Find existing session for Claude Code
+	sess := h.sessionMgr.FindBy(hCtx.ChatID, "claude", projectPath)
+	if sess == nil {
+		// Create a new session if none exists
+		sess = h.sessionMgr.CreateWith(hCtx.ChatID, "claude", projectPath)
+		h.sessionMgr.Update(sess.ID, func(s *session.Session) {
+			s.ExpiresAt = time.Time{} // Persistent session
+		})
+	}
+
+	// Toggle permission mode between "auto" and "manual"
+	newMode := "auto"
+	if sess.PermissionMode == "auto" {
+		newMode = "manual"
+	}
+	h.sessionMgr.Update(sess.ID, func(s *session.Session) {
+		s.PermissionMode = newMode
+	})
+
+	// Send confirmation message
+	if newMode == "auto" {
+		h.SendText(hCtx, "🚀 **YOLO MODE ENABLED**\n\nAll permissions will be auto-approved for this session.\n⚠️ Use with caution!\n\nSession: "+sess.ID+"\nProject: "+projectPath)
+	} else {
+		h.SendText(hCtx, "🔒 **YOLO MODE DISABLED**\n\nBack to normal approval mode.\nAll permission requests will require confirmation.\n\nSession: "+sess.ID+"\nProject: "+projectPath)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"chatID":         hCtx.ChatID,
+		"sessionID":      sess.ID,
+		"projectPath":    projectPath,
+		"permissionMode": newMode,
+	}).Info("Permission mode toggled")
 }
 
 // showProjectSelectionOrGuidance shows project selection if user has bound projects, otherwise shows bind confirmation

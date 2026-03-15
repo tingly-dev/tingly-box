@@ -28,19 +28,20 @@ type Config struct {
 
 // Session represents an execution session
 type Session struct {
-	ID           string                 // Unique session identifier
-	ChatID       string                 // NEW: Bound chat ID
-	Agent        string                 // NEW: Bound agent type ("claude", "tingly-box")
-	Project      string                 // NEW: Bound project path
-	Status       Status                 // Current session status
-	Request      string                 // User's request payload
-	Response     string                 // Claude Code response summary
-	Error        string                 // Error message if failed
-	CreatedAt    time.Time              // Session creation timestamp
-	LastActivity time.Time              // Last activity timestamp
-	ExpiresAt    time.Time              // Session expiration timestamp
-	Context      map[string]interface{} // Request context for continued communication
-	Messages     []Message              // Chat message history
+	ID             string                 // Unique session identifier
+	ChatID         string                 // NEW: Bound chat ID
+	Agent          string                 // NEW: Bound agent type ("claude", "tingly-box")
+	Project        string                 // NEW: Bound project path
+	Status         Status                 // Current session status
+	Request        string                 // User's request payload
+	Response       string                 // Claude Code response summary
+	Error          string                 // Error message if failed
+	CreatedAt      time.Time              // Session creation timestamp
+	LastActivity   time.Time              // Last activity timestamp
+	ExpiresAt      time.Time              // Session expiration timestamp
+	Context        map[string]interface{} // Request context for continued communication
+	Messages       []Message              // Chat message history
+	PermissionMode string                 // Permission mode: "auto" (yolo), "manual", "skip"
 }
 
 // Message represents a chat message within a session

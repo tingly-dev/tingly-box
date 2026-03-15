@@ -200,6 +200,9 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 		nil,
 	)
 
+	// Track if we intentionally killed the process (expected termination)
+	var processIntentionallyKilled bool
+
 	runner.Codec = mitm.CodecJSON
 
 	inputSource := mitm.NewChanSource(100)
@@ -365,6 +368,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 				})
 				// Got final result, stop processing immediately
 				// The process will be cleaned up by deferred close(done) and inputSource.Close()
+				processIntentionallyKilled = true
 				_ = cmd.Process.Kill()
 				//_ = cmd.Wait()
 				logrus.Warnf("killed: %d", cmd.Process.Pid)
@@ -381,7 +385,25 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 
 	runner.OutputHandler = outputHandler
 
-	return runner.Run(ctx)
+	err = runner.Run(ctx)
+
+	// Check if the error is due to the process being killed
+	// If we intentionally killed it (after getting result), this is expected and not an error
+	if err != nil && processIntentionallyKilled {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			// Process was killed by signal - this is expected if we killed it
+			// Check if process exited with a signal (not normal exit)
+			if exitErr.ProcessState != nil && !exitErr.ProcessState.Success() {
+				logrus.WithFields(logrus.Fields{
+					"exit_code": exitErr.ProcessState.ExitCode(),
+					"state":     exitErr.ProcessState.String(),
+				}).Debug("Process terminated after intentional kill - this is expected")
+				return nil
+			}
+		}
+	}
+
+	return err
 }
 
 // buildCommandArgs constructs CLI arguments based on format, prompt, and config options

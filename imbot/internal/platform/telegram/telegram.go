@@ -375,21 +375,26 @@ func (b *Bot) sendText(ctx context.Context, chatID int64, opts *core.SendMessage
 		return nil, err
 	}
 
-	chunks := b.ChunkText(opts.Text)
+	var parseMode string
+	var text string = opts.Text
+	// Set parse mode
+	if opts.ParseMode != "" {
+		switch opts.ParseMode {
+		case core.ParseModeMarkdown:
+			parseMode = tgbotapi.ModeMarkdown
+			text = tgbotapi.EscapeText(parseMode, text)
+		case core.ParseModeHTML:
+			parseMode = tgbotapi.ModeHTML
+			text = tgbotapi.EscapeText(parseMode, text)
+		}
+	}
+
+	chunks := b.ChunkText(text)
 
 	var lastResult *core.SendResult
 	for _, chunk := range chunks {
 		msg := tgbotapi.NewMessage(chatID, chunk)
-
-		// Set parse mode
-		if opts.ParseMode != "" {
-			switch opts.ParseMode {
-			case core.ParseModeMarkdown:
-				msg.ParseMode = tgbotapi.ModeMarkdown
-			case core.ParseModeHTML:
-				msg.ParseMode = tgbotapi.ModeHTML
-			}
-		}
+		msg.ParseMode = parseMode
 
 		// Set reply to
 		if opts.ReplyTo != "" {
