@@ -91,6 +91,7 @@ export default function StatCard({ title, value, subtitle, icon, color = 'primar
                             sx={{
                                 color: 'text.secondary',
                                 fontSize: '0.75rem',
+                                whiteSpace: 'pre-line',
                             }}
                         >
                             {subtitle}
