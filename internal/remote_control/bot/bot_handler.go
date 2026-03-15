@@ -1086,6 +1086,10 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 			"agent":     agentType,
 		}).Info("Created new session for Claude Code")
 	} else {
+		// Reset status to running for reused sessions (e.g., completed/failed sessions)
+		h.sessionMgr.Update(sess.ID, func(s *session.Session) {
+			s.Status = session.StatusRunning
+		})
 		logrus.WithFields(logrus.Fields{
 			"chatID":    hCtx.ChatID,
 			"sessionID": sess.ID,
@@ -1414,6 +1418,16 @@ func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, pr
 	// Create new session if needed (including pending state sessions)
 	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed || sess.Status == session.StatusPending {
 		sess = h.sessionMgr.CreateWith(hCtx.ChatID, agentType, projectPath)
+		// Clear expiration for persistent sessions
+		h.sessionMgr.Update(sess.ID, func(s *session.Session) {
+			s.ExpiresAt = time.Time{}
+			s.Status = session.StatusRunning
+		})
+	} else {
+		// Reset status to running for reused sessions
+		h.sessionMgr.Update(sess.ID, func(s *session.Session) {
+			s.Status = session.StatusRunning
+		})
 	}
 	sessionID := sess.ID
 
