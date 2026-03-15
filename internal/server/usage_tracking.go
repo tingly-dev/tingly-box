@@ -37,21 +37,6 @@ func reportEnterpriseRateLimitEvent(ctx context.Context, keyPrefix, providerID, 
 	return reporter(ctx, keyPrefix, providerID, scenario, userID)
 }
 
-// trackUsage records token usage using the UsageTracker.
-// It will also record to OTel if the token tracker is available in the gin context.
-//
-// Deprecated: Use trackUsageFromContext instead. This method is kept for backward compatibility
-// during the migration period and will be removed in Phase 2.5.
-func (s *Server) trackUsage(c *gin.Context, rule *typ.Rule, provider *typ.Provider, model, requestModel string, inputTokens, outputTokens int, streamed bool, status, errorCode string) {
-	// Set token tracker in context for RecordUsage to use
-	if s.tokenTracker != nil {
-		c.Set("token_tracker", s.tokenTracker)
-	}
-
-	tracker := s.NewUsageTracker()
-	tracker.RecordUsage(c, rule, provider, model, requestModel, inputTokens, outputTokens, streamed, status, errorCode)
-}
-
 // trackUsageFromContext records token usage by extracting all metadata from the gin context.
 // This is the new preferred method that eliminates explicit parameter passing.
 //
