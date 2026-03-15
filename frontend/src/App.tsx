@@ -28,6 +28,7 @@ const CredentialPage = lazy(() => import('./pages/CredentialPage'));
 const System = lazy(() => import('./pages/System'));
 const LogsPage = lazy(() => import('./pages/system/LogsPage'));
 const DashboardPage = lazy(() => import('./pages/./DashboardPage'));
+const OverviewPage = lazy(() => import('./pages/overview/OverviewPage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
 
 // Prompt pages
@@ -304,6 +305,9 @@ function AppContent() {
                     {/* Dashboard routes with time range */}
                     <Route path="/dashboard" element={<Navigate to="/dashboard/7d" replace />} />
                     <Route path="/dashboard/:timeRange" element={<DashboardPage />} />
+                    {/* Overview / Token Heatmap routes */}
+                    <Route path="/overview" element={<Navigate to="/overview/90d" replace />} />
+                    <Route path="/overview/:timeRange" element={<OverviewPage />} />
                     <Route path="/model-test/:providerUuid" element={<ModelTestPage />} />
                     {/* Prompt routes */}
                     <Route path="/prompt/user" element={<UserPage />} />

@@ -5,3 +5,5 @@ export { default as TokenUsageChart } from './TokenUsageChart';
 export { default as ServiceStatsTable } from './ServiceStatsTable';
 export type { AggregatedStat } from './ServiceStatsTable';
 export { default as RequestErrorChart } from './RequestErrorChart';
+export { default as TokenHeatmap } from './TokenHeatmap';
+export type { DailyUsage, HeatmapMetrics } from './TokenHeatmap';

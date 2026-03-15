@@ -320,7 +320,7 @@ export default function DashboardPage() {
                     <StatCard
                         title={'Total\nTokens'}
                         value={formatNumber(totalTokens)}
-                        subtitle={`Input: ${formatNumber(totalInputTokens)}\nOutput: ${formatNumber(totalOutputTokens)}${totalCacheTokens > 0 ? `\nCache: ${formatNumber(totalCacheTokens)}` : ''}`}
+                        subtitle={`Input: ${formatNumber(totalInputTokens)}\nOutput: ${formatNumber(totalOutputTokens)}\nCache: ${formatNumber(totalCacheTokens)}`}
                         icon={<PaidIcon />}
                         color="success"
                     />
