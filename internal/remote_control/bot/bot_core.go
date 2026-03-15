@@ -52,6 +52,7 @@ Bot Commands:
 /bash <cmd> - Execute allowed bash (cd, ls, pwd)
 /join <group> - Add group to whitelist
 /mock <msg> - Test with mock agent (permission flow)
+/yolo - Toggle auto-approve mode for current session (Claude Code only)
 
 @cc to handoff control to Claude Code.
 @tb to handoff control to Tingly Box Smart Guide.`
@@ -66,6 +67,7 @@ Bot Commands:
 /project - Show current project info
 /status - Show session status
 /mock <msg> - Test with mock agent (permission flow)
+/yolo - Toggle auto-approve mode for current session (Claude Code only)
 
 @cc to handoff control to Claude Code.
 @tb to handoff control to Tingly Box Smart Guide.`
@@ -104,6 +106,9 @@ var (
 
 	// Mock command (testing only)
 	cmdMock = "/mock"
+
+	// Yolo command - toggle auto-approve mode for current session
+	cmdYoloPrimary = "/yolo"
 )
 
 // isCommandMatch checks if the given command matches the primary or any alias

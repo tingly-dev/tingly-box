@@ -39,8 +39,9 @@ type Session struct {
 	CreatedAt    time.Time              // Session creation timestamp
 	LastActivity time.Time              // Last activity timestamp
 	ExpiresAt    time.Time              // Session expiration timestamp
-	Context      map[string]interface{} // Request context for continued communication
-	Messages     []Message              // Chat message history
+	Context        map[string]interface{} // Request context for continued communication
+	Messages       []Message              // Chat message history
+	PermissionMode string                 // Permission mode: "auto" (yolo), "manual", "skip"
 }
 
 // Message represents a chat message within a session

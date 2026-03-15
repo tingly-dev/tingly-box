@@ -859,6 +859,10 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 		mockText := strings.TrimSpace(strings.TrimPrefix(hCtx.Text, cmdMock))
 		h.handleAgentMessage(hCtx, agentMock, mockText, "")
 		return
+	case cmd == cmdYoloPrimary:
+		// Yolo mode toggle command
+		h.handleYoloCommand(hCtx)
+		return
 	}
 
 	// All other slash commands go to agent router (defaults to @tb)
@@ -1122,12 +1126,23 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 	// Create streaming handler for message output
 	streamHandler := h.newStreamingMessageHandler(hCtx)
 
+	// Check permission mode for this session
+	permissionMode := sess.PermissionMode
+	if permissionMode == "" {
+		permissionMode = string(claude.PermissionModeDefault)
+	}
+
 	// Create composite handler that combines streaming + approval + ask handling
+	// In auto mode (yolo), skip approval handler to auto-approve all permissions
 	compositeHandler := agentboot.NewCompositeHandler().
 		SetStreamer(streamHandler).
-		SetApprovalHandler(h.imPrompter).
-		SetAskHandler(h.imPrompter).
 		SetCompletionCallback(&CompletionCallback{hCtx: hCtx, sessionID: sessionID, sessionMgr: h.sessionMgr})
+
+	if permissionMode != string(claude.PermissionModeAuto) {
+		// Normal mode: use approval handler
+		compositeHandler.SetApprovalHandler(h.imPrompter).
+			SetAskHandler(h.imPrompter)
+	}
 
 	result, err := agent.Execute(execCtx, text, agentboot.ExecutionOptions{
 		ProjectPath:          projectPath,
@@ -1138,7 +1153,7 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 		Platform:             string(hCtx.Platform),
 		BotUUID:              hCtx.BotUUID,
 		PermissionPromptTool: "stdio",
-		PermissionMode:       string(claude.PermissionModeDefault), // Use constant for permission mode
+		PermissionMode:       permissionMode,
 	})
 
 	logrus.WithFields(logrus.Fields{
@@ -1704,6 +1719,63 @@ func (h *BotHandler) handleClearCommand(hCtx HandlerContext) {
 	default:
 		h.SendText(hCtx, "Unknown agent type: "+agentType)
 	}
+}
+
+// handleYoloCommand toggles auto permission mode for the current Claude Code session
+// In auto mode, all permission requests are auto-approved for the current session only
+func (h *BotHandler) handleYoloCommand(hCtx HandlerContext) {
+	// Auto mode only applies to Claude Code agent
+	currentAgent, _ := h.getCurrentAgent(hCtx.ChatID)
+	if currentAgent != agentClaudeCode {
+		h.SendText(hCtx, "⚠️ Auto-approve mode is only available for Claude Code (@cc).\n\nSwitch to Claude Code first with: @cc")
+		return
+	}
+
+	// Get project path
+	projectPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
+	if projectPath == "" {
+		if path, found := getProjectPathForGroup(h.chatStore, hCtx.ChatID, string(hCtx.Platform)); found {
+			projectPath = path
+		}
+	}
+
+	if projectPath == "" {
+		h.SendText(hCtx, "No project path found. Use "+cmdBindPrimary+" <project_path> to create a session first.")
+		return
+	}
+
+	// Find existing session for Claude Code
+	sess := h.sessionMgr.FindBy(hCtx.ChatID, "claude", projectPath)
+	if sess == nil {
+		// Create a new session if none exists
+		sess = h.sessionMgr.CreateWith(hCtx.ChatID, "claude", projectPath)
+		h.sessionMgr.Update(sess.ID, func(s *session.Session) {
+			s.ExpiresAt = time.Time{} // Persistent session
+		})
+	}
+
+	// Toggle permission mode between "auto" and "manual"
+	newMode := "auto"
+	if sess.PermissionMode == "auto" {
+		newMode = "manual"
+	}
+	h.sessionMgr.Update(sess.ID, func(s *session.Session) {
+		s.PermissionMode = newMode
+	})
+
+	// Send confirmation message
+	if newMode == "auto" {
+		h.SendText(hCtx, "🚀 **YOLO MODE ENABLED**\n\nAll permissions will be auto-approved for this session.\n⚠️ Use with caution!\n\nSession: "+sess.ID+"\nProject: "+projectPath)
+	} else {
+		h.SendText(hCtx, "🔒 **YOLO MODE DISABLED**\n\nBack to normal approval mode.\nAll permission requests will require confirmation.\n\nSession: "+sess.ID+"\nProject: "+projectPath)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"chatID":         hCtx.ChatID,
+		"sessionID":      sess.ID,
+		"projectPath":    projectPath,
+		"permissionMode": newMode,
+	}).Info("Permission mode toggled")
 }
 
 // showProjectSelectionOrGuidance shows project selection if user has bound projects, otherwise shows bind confirmation
