@@ -133,7 +133,7 @@ func GetAgentBoot() *agentboot.AgentBoot {
 // GetBotManager returns the bot manager instance (for API integration)
 // Deprecated: Bot lifecycle is now managed by the imbotsettings module.
 // This function returns nil and should not be used in new code.
-func GetBotManager() bot.BotLifecycle {
+func GetBotManager() bot.Lifecycle {
 	logrus.Warn("GetBotManager is deprecated. Use imbotsettings module's BotManager instead.")
 	return globalBotManager
 }
@@ -141,5 +141,5 @@ func GetBotManager() bot.BotLifecycle {
 // Global instances for bot platform integration (deprecated, kept for backward compatibility)
 var (
 	globalAgentBoot  *agentboot.AgentBoot
-	globalBotManager bot.BotLifecycle
+	globalBotManager bot.Lifecycle
 )

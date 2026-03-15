@@ -7,13 +7,6 @@ import (
 //go:embed prompts/*.txt
 var PromptFS embed.FS
 
-// AgentType constants
-const (
-	AgentTypeTinglyBox  = "tingly-box" // @tb
-	AgentTypeClaudeCode = "claude"     // @cc
-	AgentTypeMock       = "mock"
-)
-
 // LoadPrompt reads a prompt file from the embedded filesystem
 func LoadPrompt(name string) (string, error) {
 	content, err := PromptFS.ReadFile("prompts/" + name + ".txt")

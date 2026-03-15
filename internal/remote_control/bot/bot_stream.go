@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/sirupsen/logrus"
+	"modernc.org/mathutil"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
@@ -326,17 +327,10 @@ func (h *streamingMessageHandler) sendMessage(text string) {
 				"chatID":  h.chatID,
 				"replyTo": h.replyTo,
 				"error":   err,
-				"chunk":   chunk[:minInt(100, len(chunk))],
+				"chunk":   chunk[:mathutil.Min(100, len(chunk))],
 			}).Error("Failed to send streaming message")
 			continue
 		}
 		logrus.WithField("chatID", h.chatID).WithField("chunkLen", len(chunk)).Debug("Sent streaming message chunk")
 	}
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

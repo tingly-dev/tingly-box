@@ -7,11 +7,6 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 )
 
-const (
-	defaultPageSize = 8
-	stateExpiry     = 5 * time.Minute
-)
-
 // BindFlowState represents the state of an ongoing bind flow
 type BindFlowState struct {
 	ChatID       string

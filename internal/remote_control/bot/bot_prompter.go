@@ -3,7 +3,6 @@ package bot
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -514,19 +513,4 @@ func (p *IMPrompter) SubmitDecision(requestID string, approved bool, remember bo
 // PromptPermission implements the legacy agentboot.UserPrompter interface
 func (p *IMPrompter) PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
 	return p.OnApproval(ctx, req)
-}
-
-// normalizeText normalizes user input for comparison
-func normalizeText(text string) string {
-	text = strings.TrimSpace(text)
-	text = strings.ToLower(text)
-	return text
-}
-
-// truncateText truncates text to maxLen with ellipsis
-func truncateText(text string, maxLen int) string {
-	if len(text) <= maxLen {
-		return text
-	}
-	return text[:maxLen-3] + "..."
 }
