@@ -306,24 +306,17 @@ export const TokenHeatmap = ({
             {/* Heatmap Grid */}
             <Box
                 sx={{
-                    overflowX: 'auto',
+                    overflowX: 'hidden',
                     overflowY: 'hidden',
                 }}
             >
                 <Box
-                    ref={(el) => {
-                        if (el) {
-                            // Auto scroll to right (latest data)
-                            setTimeout(() => {
-                                el.scrollLeft = el.scrollWidth;
-                            }, 0);
-                        }
-                    }}
                     sx={{
                         display: 'grid',
                         gap,
                         gridTemplateColumns: `max-content repeat(${weeks.length}, ${cellSize}px)`,
                         gridTemplateRows: `repeat(8, ${cellSize}px)`,
+                        margin: '0 auto',
                     }}
                 >
                     {/* Day of week labels */}
@@ -438,7 +431,7 @@ export const TokenHeatmap = ({
                                                     }}
                                                 >
                                                     Input: {formatTokenTotal(dayData.inputTokens)} | Cache:{' '}
-                                                    {formatTokenTotal(dayData.cacheTokens || 0)} | Output:{' '}
+                                                    {formatTokenTotal(dayData.cacheTokens ?? 0)} | Output:{' '}
                                                     {formatTokenTotal(dayData.outputTokens)}
                                                 </Typography>
                                             )}
