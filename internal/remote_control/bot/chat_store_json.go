@@ -54,6 +54,9 @@ type Chat struct {
 	CurrentAgent string `json:"current_agent,omitempty"` // "tingly-box" or "claude"
 	AgentState   []byte `json:"agent_state,omitempty"`   // JSON-encoded agent-specific state
 
+	// Chat-level settings
+	Verbose *bool `json:"verbose,omitempty"` // Verbose mode: nil=use bot default, true=verbose, false=quiet
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

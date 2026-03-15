@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-agentscope/pkg/agent"
@@ -11,7 +12,12 @@ import (
 	"github.com/tingly-dev/tingly-agentscope/pkg/message"
 	"github.com/tingly-dev/tingly-agentscope/pkg/model/anthropic"
 	"github.com/tingly-dev/tingly-agentscope/pkg/tool"
+	"github.com/tingly-dev/tingly-box/agentboot"
 )
+
+// AgentTypeSmartGuide is the agent type identifier for SmartGuide (TB) agent
+// Defined here to allow external extension without modifying agentboot core types
+const AgentTypeSmartGuide agentboot.AgentType = "smartguide"
 
 // Summary prompt template
 const summaryPrompt = `Analyze the conversation and provide a clear summary to the user after completing tasks or running commands to user.
@@ -484,4 +490,128 @@ func uniqueStrings(slice []string) []string {
 		}
 	}
 	return result
+}
+
+// Execute implements agentboot.Agent interface for TinglyBoxAgent
+// This allows SmartGuide to be used with the same callback mechanism as Claude Code and Mock Agent
+func (a *TinglyBoxAgent) Execute(
+	ctx context.Context,
+	prompt string,
+	opts agentboot.ExecutionOptions,
+) (*agentboot.Result, error) {
+	// Build ToolContext from execution options
+	toolCtx := &ToolContext{
+		ProjectPath: opts.ProjectPath,
+		ChatID:      opts.ChatID,
+		SessionID:   opts.SessionID,
+	}
+
+	// Call ExecuteWithHandler with the handler from options
+	return a.ExecuteWithHandler(ctx, prompt, toolCtx, opts.Handler)
+}
+
+// ExecuteWithHandler executes the agent with callback support
+// This enables streaming messages, completion callbacks, and error handling
+func (a *TinglyBoxAgent) ExecuteWithHandler(
+	ctx context.Context,
+	prompt string,
+	toolCtx *ToolContext,
+	handler agentboot.MessageHandler,
+) (*agentboot.Result, error) {
+	startTime := time.Now()
+	result := &agentboot.Result{
+		Format:   agentboot.OutputFormatText,
+		Metadata: make(map[string]interface{}),
+	}
+
+	// Update executor working directory if project path is provided
+	if toolCtx != nil && toolCtx.ProjectPath != "" {
+		a.executor.SetWorkingDirectory(toolCtx.ProjectPath)
+	}
+
+	// Send initial message callback if handler is provided
+	if handler != nil {
+		// Send a processing message
+		handler.OnMessage(map[string]interface{}{
+			"type":    "status",
+			"status":  "processing",
+			"message": "Smart Guide is thinking...",
+		})
+	}
+
+	// Execute the agent
+	response, err := a.ReplyWithContext(ctx, prompt, toolCtx)
+	duration := time.Since(startTime)
+
+	// Handle errors
+	if err != nil {
+		result.ExitCode = 1
+		result.Error = err.Error()
+		result.Duration = duration
+
+		// Send error callback
+		if handler != nil {
+			handler.OnError(err)
+			handler.OnComplete(&agentboot.CompletionResult{
+				Success:    false,
+				DurationMS: duration.Milliseconds(),
+				Error:      err.Error(),
+				SessionID:  toolCtx.SessionID,
+			})
+		}
+
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"duration_ms": duration.Milliseconds(),
+			"session_id":  toolCtx.SessionID,
+		}).Error("SmartGuide execution failed")
+
+		return result, err
+	}
+
+	// Extract response content
+	var responseText string
+	if response != nil {
+		responseText = response.GetTextContent()
+		result.Output = responseText
+
+		// Send message callback with the response
+		if handler != nil {
+			handler.OnComplete(&agentboot.CompletionResult{
+				Success:    true,
+				DurationMS: duration.Milliseconds(),
+				SessionID:  toolCtx.SessionID,
+			})
+		}
+	}
+
+	result.ExitCode = 0
+	result.Duration = duration
+
+	logrus.WithFields(logrus.Fields{
+		"duration_ms": duration.Milliseconds(),
+		"session_id":  toolCtx.SessionID,
+		"success":     true,
+	}).Info("SmartGuide execution completed")
+
+	return result, nil
+}
+
+// IsAvailable returns true if the agent is available for execution
+func (a *TinglyBoxAgent) IsAvailable() bool {
+	return a.IsEnabled()
+}
+
+// Type returns the agent type for agentboot.Agent interface
+func (a *TinglyBoxAgent) Type() agentboot.AgentType {
+	return AgentTypeSmartGuide
+}
+
+// SetDefaultFormat sets the default output format (no-op for SmartGuide)
+func (a *TinglyBoxAgent) SetDefaultFormat(format agentboot.OutputFormat) {
+	// SmartGuide always uses text format
+}
+
+// GetDefaultFormat returns the current default format
+func (a *TinglyBoxAgent) GetDefaultFormat() agentboot.OutputFormat {
+	return agentboot.OutputFormatText
 }

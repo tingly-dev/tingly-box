@@ -36,7 +36,7 @@ func (h *AskUserQuestionHandler) BuildPrompt(req Request) string {
 	if !ok || len(questions) == 0 {
 		text.WriteString("_No questions provided_\n")
 		logrus.WithFields(map[string]interface{}{
-			"has_questions": ok,
+			"has_questions":  ok,
 			"questions_type": fmt.Sprintf("%T", req.Input["questions"]),
 		}).Debug("BuildPrompt: questions parsing result")
 		return text.String()
@@ -221,16 +221,21 @@ func BuildDefaultPrompt(req Request) string {
 	text += "Tool: `" + req.ToolName + "`\n"
 
 	// Show relevant input details
-	if cmd, ok := req.Input["command"].(string); ok && cmd != "" {
-		text += "Command: `" + truncateText(cmd, 200) + "`\n"
-	} else if filePath, ok := req.Input["file_path"].(string); ok && filePath != "" {
-		text += "File: `" + filePath + "`\n"
+	text += "Args: \n"
+	for key, value := range req.Input {
+		if s, ok := value.(string); ok && s != "" {
+			if len(s) > 20 {
+				s = s[:20] + "..."
+			}
+			text += fmt.Sprintf("%s: `%s`\n", key, value)
+		}
 	}
 
 	if req.Reason != "" {
 		text += "\nReason: " + req.Reason + "\n"
 	}
 
+	logrus.Infof("prompt: %s", text)
 	return text
 }
 
@@ -297,4 +302,18 @@ func truncateText(text string, maxLen int) string {
 		return text
 	}
 	return text[:maxLen-3] + "..."
+}
+
+// escapeMarkdown escapes special characters for Telegram Markdown format
+// Based on practical escaping scheme that covers common cases
+func escapeMarkdown(text string) string {
+	// Order matters for some replacements
+	text = strings.ReplaceAll(text, "_", "\\_")
+	text = strings.ReplaceAll(text, "-", "\\-")
+	text = strings.ReplaceAll(text, "~", "\\~")
+	text = strings.ReplaceAll(text, "`", "\\`")
+	text = strings.ReplaceAll(text, ".", "\\.")
+	text = strings.ReplaceAll(text, "<", "\\<")
+	text = strings.ReplaceAll(text, ">", "\\>")
+	return text
 }
