@@ -56,6 +56,11 @@ type BotHandler struct {
 	// actionMenuMessageID tracks the message ID of the action keyboard menu per chatID
 	actionMenuMessageID   map[string]string
 	actionMenuMessageIDMu sync.RWMutex
+
+	// verbose controls whether to show intermediate messages (onMessage details)
+	// true = show all messages (default), false = show only final results
+	verbose   bool
+	verboseMu sync.RWMutex
 }
 
 // PendingBind represents a pending bind confirmation request
@@ -165,7 +170,22 @@ func NewBotHandler(
 		runningCancel:       make(map[string]context.CancelFunc),
 		pendingBinds:        make(map[string]*PendingBind),
 		actionMenuMessageID: make(map[string]string),
+		verbose:             true, // Default to verbose mode
 	}
+}
+
+// GetVerbose returns the current verbose mode setting
+func (h *BotHandler) GetVerbose() bool {
+	h.verboseMu.RLock()
+	defer h.verboseMu.RUnlock()
+	return h.verbose
+}
+
+// SetVerbose sets the verbose mode
+func (h *BotHandler) SetVerbose(verbose bool) {
+	h.verboseMu.Lock()
+	defer h.verboseMu.Unlock()
+	h.verbose = verbose
 }
 
 // HandleMessage is the main entry point for handling bot messages
@@ -863,6 +883,16 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 		// Yolo mode toggle command
 		h.handleYoloCommand(hCtx)
 		return
+	case cmd == cmdVerbosePrimary:
+		// Verbose mode - show all messages
+		h.SetVerbose(true)
+		h.SendText(hCtx, "✅ Verbose mode enabled\n\nAll message details will be shown.")
+		return
+	case cmd == cmdNoVerbosePrimary:
+		// NoVerbose mode - hide intermediate messages
+		h.SetVerbose(false)
+		h.SendText(hCtx, "🔇 Quiet mode enabled\n\nOnly final results will be shown. Use /verbose to show all details.")
+		return
 	}
 
 	// All other slash commands go to agent router (defaults to @tb)
@@ -970,12 +1000,7 @@ func (h *BotHandler) getOutputBehavior() OutputBehavior {
 
 // newStreamingMessageHandler creates a new streaming message handler
 func (h *BotHandler) newStreamingMessageHandler(hCtx HandlerContext) *streamingMessageHandler {
-	return &streamingMessageHandler{
-		bot:       hCtx.Bot,
-		chatID:    hCtx.ChatID,
-		replyTo:   hCtx.MessageID,
-		formatter: claude.NewTextFormatter(),
-	}
+	return newStreamingMessageHandler(hCtx.Bot, hCtx.ChatID, hCtx.MessageID, h.GetVerbose())
 }
 
 // handleAgentMessage routes message to the appropriate agent handler

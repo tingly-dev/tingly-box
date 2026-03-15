@@ -53,6 +53,8 @@ Bot Commands:
 /join <group> - Add group to whitelist
 /mock <msg> - Test with mock agent (permission flow)
 /yolo - Toggle auto-approve mode for current session (Claude Code only)
+/verbose - Show all message details (default)
+/noverbose - Hide intermediate messages, show only final results
 
 @cc to handoff control to Claude Code.
 @tb to handoff control to Tingly Box Smart Guide.`
@@ -68,6 +70,8 @@ Bot Commands:
 /status - Show session status
 /mock <msg> - Test with mock agent (permission flow)
 /yolo - Toggle auto-approve mode for current session (Claude Code only)
+/verbose - Show all message details (default)
+/noverbose - Hide intermediate messages, show only final results
 
 @cc to handoff control to Claude Code.
 @tb to handoff control to Tingly Box Smart Guide.`
@@ -109,6 +113,10 @@ var (
 
 	// Yolo command - toggle auto-approve mode for current session
 	cmdYoloPrimary = "/yolo"
+
+	// Verbose commands - control message verbosity
+	cmdVerbosePrimary   = "/verbose"
+	cmdNoVerbosePrimary = "/noverbose"
 )
 
 // isCommandMatch checks if the given command matches the primary or any alias
