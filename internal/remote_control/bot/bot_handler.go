@@ -1070,6 +1070,9 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 	agentType := "claude" // Claude Code agent type
 	sess := h.sessionMgr.FindBy(hCtx.ChatID, agentType, projectPath)
 
+	// Track if this is a new session or resuming an existing one
+	isNewSession := false
+
 	// Auto-create session if none exists or if session is in pending state (stale)
 	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed || sess.Status == session.StatusPending {
 		sess = h.sessionMgr.CreateWith(hCtx.ChatID, agentType, projectPath)
@@ -1078,6 +1081,7 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 			s.ExpiresAt = time.Time{}        // Zero value means no expiration
 			s.Status = session.StatusRunning // Mark as running immediately
 		})
+		isNewSession = true
 
 		logrus.WithFields(logrus.Fields{
 			"chatID":    hCtx.ChatID,
@@ -1131,9 +1135,15 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 
 	h.sessionMgr.SetRunning(sessionID)
 
-	// Send status message
+	// Send status message - differentiate between new and resumed sessions
 	behavior := h.getOutputBehavior()
-	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, "⏳ Processing...", behavior), hCtx.MessageID)
+	var statusMsg string
+	if isNewSession {
+		statusMsg = "⏳ CC: Processing new session..."
+	} else {
+		statusMsg = "⏳ CC: Resuming session..."
+	}
+	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, statusMsg, behavior), hCtx.MessageID)
 
 	// Execute with context.Background() to avoid cancellation on reconnect
 	execCtx, cancel := context.WithCancel(context.Background())
@@ -1415,6 +1425,9 @@ func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, pr
 	agentType := "mock"
 	sess := h.sessionMgr.FindBy(hCtx.ChatID, agentType, projectPath)
 
+	// Track if this is a new session or resuming an existing one
+	isNewSession := false
+
 	// Create new session if needed (including pending state sessions)
 	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed || sess.Status == session.StatusPending {
 		sess = h.sessionMgr.CreateWith(hCtx.ChatID, agentType, projectPath)
@@ -1423,6 +1436,7 @@ func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, pr
 			s.ExpiresAt = time.Time{}
 			s.Status = session.StatusRunning
 		})
+		isNewSession = true
 	} else {
 		// Reset status to running for reused sessions
 		h.sessionMgr.Update(sess.ID, func(s *session.Session) {
@@ -1454,9 +1468,15 @@ func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, pr
 
 	h.sessionMgr.SetRunning(sessionID)
 
-	// Send status message
+	// Send status message - differentiate between new and resumed sessions
 	behavior := h.getOutputBehavior()
-	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, "🧪 Mock agent processing...", behavior), hCtx.MessageID)
+	var statusMsg string
+	if isNewSession {
+		statusMsg = "🧪 Mock: Processing new session..."
+	} else {
+		statusMsg = "🧪 Mock: Resuming session..."
+	}
+	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, statusMsg, behavior), hCtx.MessageID)
 
 	// Execute with context
 	execCtx, cancel := context.WithCancel(context.Background())
