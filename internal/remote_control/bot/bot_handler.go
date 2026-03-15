@@ -414,37 +414,36 @@ func (h *BotHandler) handleMediaMessage(hCtx HandlerContext) {
 }
 
 // SendText sends a plain text message
+// Note: Platform handles chunking internally via BaseBot.ChunkText()
 func (h *BotHandler) SendText(hCtx HandlerContext, text string) {
-	for _, chunk := range chunkText(text, imbot.DefaultMessageLimit) {
-		_, err := hCtx.Bot.SendText(context.Background(), hCtx.ChatID, chunk)
-		if err != nil {
-			logrus.WithError(err).Warn("Failed to send message")
-			return
-
-		}
+	_, err := hCtx.Bot.SendText(context.Background(), hCtx.ChatID, text)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to send message")
 	}
 }
 
 // sendTextWithReply sends a text message as a reply to another message
+// Note: Platform handles chunking internally via BaseBot.ChunkText()
 func (h *BotHandler) sendTextWithReply(hCtx HandlerContext, text string, replyTo string) {
-	for _, chunk := range chunkText(text, imbot.DefaultMessageLimit) {
-		_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
-			Text:    chunk,
-			ReplyTo: replyTo,
-		})
-		if err != nil {
-			logrus.WithError(err).Warn("Failed to send message")
-			return
-		}
+	_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
+		Text:    text,
+		ReplyTo: replyTo,
+	})
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to send message")
 	}
 }
 
 // sendTextWithActionKeyboard sends a text message with Clear/Bind action buttons
+// Note: Manual chunking is kept here because the keyboard should only be attached to the LAST chunk.
+// The platform's BaseBot.ChunkText() doesn't support "last chunk only" metadata yet.
+// TODO: Add platform support for metadata that only applies to the last chunk.
 func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string, replyTo string) {
 	kb := BuildActionKeyboard()
 	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
-	chunks := chunkText(text, imbot.DefaultMessageLimit)
+	// Use public ChunkText API with smart break-point detection
+	chunks := hCtx.Bot.ChunkText(text)
 	for i, chunk := range chunks {
 		opts := &imbot.SendMessageOptions{
 			Text: chunk,
@@ -452,6 +451,7 @@ func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string
 		if replyTo != "" {
 			opts.ReplyTo = replyTo
 		}
+		// Only attach keyboard to the last chunk
 		if i == len(chunks)-1 {
 			opts.Metadata = map[string]interface{}{
 				"replyMarkup":        tgKeyboard,

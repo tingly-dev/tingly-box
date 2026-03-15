@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/sirupsen/logrus"
-	"modernc.org/mathutil"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
@@ -316,21 +315,20 @@ func (h *streamingMessageHandler) GetOutput() string {
 }
 
 // sendMessage sends a message to the bot
+// Note: Platform handles chunking internally via BaseBot.ChunkText()
 func (h *streamingMessageHandler) sendMessage(text string) {
-	for _, chunk := range chunkText(text, imbot.DefaultMessageLimit) {
-		_, err := h.bot.SendMessage(context.Background(), h.chatID, &imbot.SendMessageOptions{
-			Text:    chunk,
-			ReplyTo: h.replyTo,
-		})
-		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"chatID":  h.chatID,
-				"replyTo": h.replyTo,
-				"error":   err,
-				"chunk":   chunk[:mathutil.Min(100, len(chunk))],
-			}).Error("Failed to send streaming message")
-			continue
-		}
-		logrus.WithField("chatID", h.chatID).WithField("chunkLen", len(chunk)).Debug("Sent streaming message chunk")
+	_, err := h.bot.SendMessage(context.Background(), h.chatID, &imbot.SendMessageOptions{
+		Text:    text,
+		ReplyTo: h.replyTo,
+	})
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"chatID":  h.chatID,
+			"replyTo": h.replyTo,
+			"error":   err,
+			"textLen": len(text),
+		}).Error("Failed to send streaming message")
+		return
 	}
+	logrus.WithField("chatID", h.chatID).WithField("textLen", len(text)).Debug("Sent streaming message")
 }

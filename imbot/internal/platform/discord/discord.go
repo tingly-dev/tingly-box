@@ -256,43 +256,50 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 
 // sendText sends a text message
 func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessageOptions) (*core.SendResult, error) {
-	// Validate text length
+	// Validate and chunk text if needed
 	if err := b.ValidateTextLength(opts.Text); err != nil {
 		return nil, err
 	}
 
-	// Prepare send data
-	sendData := &discordgo.MessageSend{
-		Content: opts.Text,
-	}
+	chunks := b.ChunkText(opts.Text)
+	var lastResult *core.SendResult
 
-	// Set parse mode (Discord doesn't use parse mode like Telegram, markdown is default)
-	if opts.ParseMode == core.ParseModeNone {
-		// Disable markdown
-		// Discord has no way to disable markdown entirely, so we send as is
-	}
+	for _, chunk := range chunks {
+		// Prepare send data
+		sendData := &discordgo.MessageSend{
+			Content: chunk,
+		}
 
-	// Add reply
-	if opts.ReplyTo != "" {
-		parts := parseDiscordMessageReference(opts.ReplyTo)
-		if len(parts) == 2 {
-			sendData.Reference = &discordgo.MessageReference{
-				MessageID: parts[1],
+		// Set parse mode (Discord doesn't use parse mode like Telegram, markdown is default)
+		if opts.ParseMode == core.ParseModeNone {
+			// Disable markdown
+			// Discord has no way to disable markdown entirely, so we send as is
+		}
+
+		// Add reply (only to first chunk)
+		if opts.ReplyTo != "" && chunk == chunks[0] {
+			parts := parseDiscordMessageReference(opts.ReplyTo)
+			if len(parts) == 2 {
+				sendData.Reference = &discordgo.MessageReference{
+					MessageID: parts[1],
+				}
 			}
+		}
+
+		// Send message - ChannelMessageSendComplex for MessageSend struct
+		m, err := b.session.ChannelMessageSendComplex(target, sendData)
+		if err != nil {
+			return nil, core.WrapError(err, core.PlatformDiscord, core.ErrPlatformError)
+		}
+
+		lastResult = &core.SendResult{
+			MessageID: m.ID,
+			Timestamp: m.Timestamp.Unix(),
 		}
 	}
 
-	// Send message - ChannelMessageSendComplex for MessageSend struct
-	m, err := b.session.ChannelMessageSendComplex(target, sendData)
-	if err != nil {
-		return nil, core.WrapError(err, core.PlatformDiscord, core.ErrPlatformError)
-	}
-
 	b.UpdateLastActivity()
-	return &core.SendResult{
-		MessageID: m.ID,
-		Timestamp: m.Timestamp.Unix(),
-	}, nil
+	return lastResult, nil
 }
 
 // sendMedia sends media

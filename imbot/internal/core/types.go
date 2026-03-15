@@ -216,7 +216,7 @@ func GetPlatformCapabilities(platform Platform) *PlatformCapabilities {
 			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup, ChatTypeChannel, ChatTypeThread},
 			MediaTypes: []string{"image", "video", "audio", "document"},
 			Features:   []string{"reactions", "delete", "threads", "nativeCommands", "mentions", "interactiveCards"},
-			TextLimit:  4000,
+			TextLimit:  40000, // ~150KB request body limit, practical character limit
 			RateLimit:  50,
 		},
 		PlatformWebChat: {

@@ -715,3 +715,15 @@ func (h *BotHandler) handleBashCommand(hCtx HandlerContext, fields []string) {
 		h.SendText(hCtx, "Command not allowed.")
 	}
 }
+
+// normalizeAllowlistToMap converts a string slice to a map for O(1) lookups
+func normalizeAllowlistToMap(values []string) map[string]struct{} {
+	result := make(map[string]struct{})
+	for _, v := range values {
+		normalized := strings.ToLower(strings.TrimSpace(v))
+		if normalized != "" {
+			result[normalized] = struct{}{}
+		}
+	}
+	return result
+}
