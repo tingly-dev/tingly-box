@@ -647,6 +647,7 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 			projectPath:    projectPath,
 			meta:           meta,
 			behavior:       behavior,
+			botHandler:     h,
 		})
 
 	// 10. Execute with callback support
@@ -681,13 +682,12 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 		return nil
 	}
 
-	// Send the final response with meta header
-	responseText := result.Output
-	if responseText == "" {
-		responseText = streamHandler.GetOutput()
-	}
-
-	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, responseText, behavior), hCtx.MessageID)
+	// Note: Response is sent by the CompletionCallback to ensure proper order
+	// The callback sends both the response and the action keyboard together
+	logrus.WithFields(logrus.Fields{
+		"chatID":  hCtx.ChatID,
+		"success": result != nil,
+	}).Info("SmartGuide execution completed")
 
 	return nil
 }
@@ -1314,7 +1314,7 @@ func (c *CompletionCallback) OnComplete(result *agentboot.CompletionResult) {
 }
 
 // SmartGuideCompletionCallback handles completion events for SmartGuide agent
-// It saves messages to session, updates project path if changed, and sends action keyboard
+// It saves messages to session, updates project path if changed, and sends response + action keyboard
 type SmartGuideCompletionCallback struct {
 	hCtx           HandlerContext
 	sessionID      string
@@ -1324,11 +1324,12 @@ type SmartGuideCompletionCallback struct {
 	projectPath    string
 	meta           ResponseMeta
 	behavior       OutputBehavior
+	botHandler     *BotHandler // Add reference to bot handler for formatting
 }
 
 // OnComplete implements agentboot.CompletionCallback
 func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionResult) {
-	// Get response text from the agent's memory or use the result output
+	// Get response text from the agent's memory
 	responseText := ""
 	if result.Success {
 		// Try to get the last assistant message from agent memory
@@ -1389,6 +1390,11 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 				logrus.WithError(err).WithField("chatID", c.hCtx.ChatID).Warn("Failed to update chat")
 			}
 		}
+	}
+
+	// Send the final response with meta header, then action keyboard
+	if responseText != "" {
+		c.botHandler.sendTextWithReply(c.hCtx, c.botHandler.formatResponseWithMeta(c.meta, responseText, c.behavior), c.hCtx.MessageID)
 	}
 
 	// Send action keyboard on completion
