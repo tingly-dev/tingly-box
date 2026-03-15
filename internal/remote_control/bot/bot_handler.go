@@ -208,7 +208,7 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 		return
 	}
 
-	chatID := getReplyTarget(msg)
+	chatID := msg.GetReplyTarget()
 	if chatID == "" {
 		return
 	}
