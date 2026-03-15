@@ -42,7 +42,6 @@ type Session struct {
 	Context        map[string]interface{} // Request context for continued communication
 	Messages       []Message              // Chat message history
 	PermissionMode string                 // Permission mode: "auto" (yolo), "manual", "skip"
-	Verbose        bool                   // Verbose mode: true=show all messages, false=quiet mode
 }
 
 // Message represents a chat message within a session

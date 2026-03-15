@@ -175,39 +175,37 @@ func NewBotHandler(
 }
 
 // GetVerbose returns the current verbose mode setting for a chat
-// Checks session first, falls back to default (true)
+// Checks chat store first, then bot setting default
 func (h *BotHandler) GetVerbose(chatID string) bool {
-	// Try to get verbose from any session for this chat
-	if h.sessionMgr != nil {
-		sessions := h.sessionMgr.ListByChat(chatID)
-		for _, sess := range sessions {
-			if sess.ChatID == chatID {
-				return sess.Verbose
-			}
+	// Try to get verbose from chat store
+	if h.chatStore != nil {
+		chat, err := h.chatStore.GetChat(chatID)
+		if err == nil && chat != nil && chat.Verbose != nil {
+			return *chat.Verbose
 		}
 	}
 
-	// Fallback to default
-	h.verboseMu.RLock()
-	defer h.verboseMu.RUnlock()
-	return h.verbose
+	// Fallback to bot setting default
+	botSetting := h.botSetting.GetOutputBehavior()
+	return botSetting.Verbose
 }
 
-// SetVerbose sets the verbose mode for all sessions in a chat
+// SetVerbose sets the verbose mode for a chat
 func (h *BotHandler) SetVerbose(chatID string, verbose bool) {
+	// Update in chat store
+	if h.chatStore != nil {
+		err := h.chatStore.UpdateChat(chatID, func(c *Chat) {
+			c.Verbose = &verbose
+		})
+		if err != nil {
+			logrus.WithError(err).WithField("chatID", chatID).Warn("Failed to update verbose in chat store")
+		}
+	}
+
+	// Also update in-memory default (fallback)
 	h.verboseMu.Lock()
 	h.verboseMu.Unlock()
 	h.verbose = verbose
-
-	// Update all sessions for this chat
-	if h.sessionMgr != nil {
-		sessions := h.sessionMgr.ListByChat(chatID)
-		for _, sess := range sessions {
-			h.sessionMgr.Update(sess.ID, func(s *session.Session) {
-				s.Verbose = verbose
-			})
-		}
-	}
 }
 
 // HandleMessage is the main entry point for handling bot messages
