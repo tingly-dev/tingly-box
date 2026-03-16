@@ -121,6 +121,7 @@ func init() {
 	rootCmd.AddCommand(command.OpenCommand(appManager))
 	rootCmd.AddCommand(command.RemoteCommand(appManager))
 	rootCmd.AddCommand(command.QuickstartCommand(appManager))
+	rootCmd.AddCommand(command.TokenCommand(appManager))
 }
 
 func main() {

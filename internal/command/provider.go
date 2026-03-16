@@ -316,7 +316,7 @@ func runProviderUpdateInteractive(appManager *AppManager, reader *bufio.Reader) 
 	fmt.Printf("API Style: %s\n", apiStyle)
 	fmt.Println("---------------------")
 
-	confirmed, err := promptForConfirmation(reader, "Apply these changes? (Y/n): ")
+	confirmed, err := promptForConfirmation(reader, "Apply these changes? (Y/n): ", true)
 	if err != nil {
 		return err
 	}
