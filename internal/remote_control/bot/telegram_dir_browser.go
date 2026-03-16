@@ -16,6 +16,11 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/fs"
 )
 
+const (
+	defaultPageSize = 8
+	stateExpiry     = 5 * time.Minute
+)
+
 // DirectoryBrowser manages directory navigation for bind flow
 type DirectoryBrowser struct {
 	states   map[string]*BindFlowState
