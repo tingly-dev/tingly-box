@@ -443,6 +443,33 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		return cfg.GetToolInterceptorConfigForProvider(providerUUID)
 	})
 
+	// Set global config for soft/hard open mode
+	// If no config is set, use default config to enable tool interception by default
+	globalConfig := cfg.GetToolInterceptorConfig()
+	if globalConfig == nil {
+		// Enable tool interceptor by default with soft-open mode
+		logrus.Infof("No tool_interceptor config found, using default config (enabled, soft-open mode)")
+		globalConfig = &typ.ToolInterceptorConfig{
+			PreferLocalSearch: false, // soft open by default
+			SearchAPI:         "duckduckgo",
+			ProxyURL:          "",
+			MaxResults:        5,
+			MaxFetchSize:      1 * 1024 * 1024,
+			FetchTimeout:      30,
+			MaxURLLength:      2000,
+		}
+		typ.ApplyToolInterceptorDefaults(globalConfig)
+
+		// Write default config to config file
+		cfg.ToolInterceptorConfig = globalConfig
+		if err := cfg.Save(); err != nil {
+			logrus.Warnf("Failed to save default tool_interceptor config: %v", err)
+		} else {
+			logrus.Infof("Default tool_interceptor config written to config file")
+		}
+	}
+	server.toolInterceptor.SetGlobalConfig(globalConfig)
+
 	// Initialize probe cache with 24-hour TTL
 	server.probeCache = NewProbeCache(24 * time.Hour)
 	// Start background cleanup task for expired cache entries

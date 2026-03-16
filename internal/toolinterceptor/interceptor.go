@@ -67,6 +67,16 @@ func (i *Interceptor) GetConfigForProvider(provider *typ.Provider) *typ.ToolInte
 	return config
 }
 
+// SetGlobalConfig sets the global tool interceptor config
+func (i *Interceptor) SetGlobalConfig(config *typ.ToolInterceptorConfig) {
+	i.globalConfig = config
+}
+
+// GetGlobalConfig returns the global tool interceptor config
+func (i *Interceptor) GetGlobalConfig() *typ.ToolInterceptorConfig {
+	return i.globalConfig
+}
+
 // InterceptOpenAIRequest intercepts tool calls in an OpenAI request
 // Returns:
 // - intercepted: true if any tools were intercepted
@@ -76,6 +86,17 @@ func (i *Interceptor) InterceptOpenAIRequest(provider *typ.Provider, req *openai
 	// Check if enabled for this provider
 	if !i.IsEnabledForProvider(provider) || len(req.Tools) == 0 {
 		return false, nil, req.Tools
+	}
+
+	// Get global config for soft/hard open mode (default: soft open)
+	preferLocal := i.globalConfig != nil && bool(i.globalConfig.PreferLocalSearch)
+
+	// Extract model's native tool names for soft open check
+	modelToolNames := make([]string, 0, len(req.Tools))
+	for _, toolUnion := range req.Tools {
+		if fn := toolUnion.GetFunction(); fn != nil {
+			modelToolNames = append(modelToolNames, fn.Name)
+		}
 	}
 
 	results = []ToolResult{}
@@ -91,7 +112,7 @@ func (i *Interceptor) InterceptOpenAIRequest(provider *typ.Provider, req *openai
 		}
 
 		// Check if this tool should be intercepted
-		if !ShouldInterceptTool(fn.Name) {
+		if !i.shouldInterceptToolWithMode(fn.Name, preferLocal, modelToolNames) {
 			toolsToForward = append(toolsToForward, toolUnion)
 			continue
 		}
@@ -133,7 +154,7 @@ func (i *Interceptor) InterceptOpenAIRequest(provider *typ.Provider, req *openai
 			arguments, _ := fnMap["arguments"].(string)
 
 			// Check if this tool should be intercepted
-			if !ShouldInterceptTool(name) {
+			if !i.shouldInterceptToolWithMode(name, preferLocal, modelToolNames) {
 				continue
 			}
 
@@ -160,6 +181,17 @@ func (i *Interceptor) InterceptAnthropicRequest(provider *typ.Provider, req *ant
 		return false, nil, req.Tools
 	}
 
+	// Get global config for soft/hard open mode (default: soft open)
+	preferLocal := i.globalConfig != nil && bool(i.globalConfig.PreferLocalSearch)
+
+	// Extract model's native tool names for soft open check
+	modelToolNames := make([]string, 0, len(req.Tools))
+	for _, toolUnion := range req.Tools {
+		if tool := toolUnion.OfTool; tool != nil {
+			modelToolNames = append(modelToolNames, tool.Name)
+		}
+	}
+
 	results = []ToolResult{}
 	toolsToForward := []anthropic.ToolUnionParam{}
 
@@ -172,7 +204,7 @@ func (i *Interceptor) InterceptAnthropicRequest(provider *typ.Provider, req *ant
 		}
 
 		// Check if this tool should be intercepted
-		if !ShouldInterceptTool(tool.Name) {
+		if !i.shouldInterceptToolWithMode(tool.Name, preferLocal, modelToolNames) {
 			toolsToForward = append(toolsToForward, toolUnion)
 			continue
 		}
@@ -219,7 +251,7 @@ func (i *Interceptor) InterceptAnthropicRequest(provider *typ.Provider, req *ant
 			}
 
 			// Check if this tool should be intercepted
-			if !ShouldInterceptTool(name) {
+			if !i.shouldInterceptToolWithMode(name, preferLocal, modelToolNames) {
 				continue
 			}
 
@@ -246,6 +278,17 @@ func (i *Interceptor) InterceptAnthropicBetaRequest(provider *typ.Provider, req 
 		return false, nil, req.Tools
 	}
 
+	// Get global config for soft/hard open mode (default: soft open)
+	preferLocal := i.globalConfig != nil && bool(i.globalConfig.PreferLocalSearch)
+
+	// Extract model's native tool names for soft open check
+	modelToolNames := make([]string, 0, len(req.Tools))
+	for _, toolUnion := range req.Tools {
+		if tool := toolUnion.OfTool; tool != nil {
+			modelToolNames = append(modelToolNames, tool.Name)
+		}
+	}
+
 	results = []ToolResult{}
 	toolsToForward := []anthropic.BetaToolUnionParam{}
 
@@ -258,7 +301,7 @@ func (i *Interceptor) InterceptAnthropicBetaRequest(provider *typ.Provider, req 
 		}
 
 		// Check if this tool should be intercepted
-		if !ShouldInterceptTool(tool.Name) {
+		if !i.shouldInterceptToolWithMode(tool.Name, preferLocal, modelToolNames) {
 			toolsToForward = append(toolsToForward, toolUnion)
 			continue
 		}
@@ -277,7 +320,7 @@ func (i *Interceptor) InterceptAnthropicBetaRequest(provider *typ.Provider, req 
 			}
 
 			name := block.OfToolUse.Name
-			if !ShouldInterceptTool(name) {
+			if !i.shouldInterceptToolWithMode(name, preferLocal, modelToolNames) {
 				continue
 			}
 
@@ -342,9 +385,9 @@ func (i *Interceptor) PrepareOpenAIRequest(provider *typ.Provider, originalReq *
 	}
 
 	// Strip tool_choice if all tools were intercepted
-	if len(modifiedTools) == 0 && ShouldStripToolChoice(originalReq) {
-		// Reset tool_choice to default (empty/zero value)
-		// The empty ToolChoice will default to "auto" behavior
+	if len(modifiedTools) == 0 {
+		// Clear tool_choice when all tools are intercepted to prevent provider errors
+		// e.g., qwen returns "When using `tool_choice`, `tools` must be set"
 		modifiedReq.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{}
 	}
 
@@ -424,6 +467,30 @@ func (i *Interceptor) PrepareAnthropicBetaRequest(provider *typ.Provider, origin
 	return modifiedReq, false
 }
 
+// shouldInterceptToolWithMode determines if a tool should be intercepted based on mode and native tools
+// preferLocal: true = hard open (always intercept), false = soft open (skip if model has native)
+func (i *Interceptor) shouldInterceptToolWithMode(toolName string, preferLocal bool, modelToolNames []string) bool {
+	handlerType, matched := MatchToolAlias(toolName)
+	if !matched {
+		return false
+	}
+
+	if preferLocal {
+		// Hard open: always intercept
+		return true
+	}
+
+	// Soft open: check if model has native tool
+	switch handlerType {
+	case HandlerTypeSearch:
+		return !HasNativeSearchTool(modelToolNames)
+	case HandlerTypeFetch:
+		return !HasNativeFetchTool(modelToolNames)
+	default:
+		return false
+	}
+}
+
 // executeTool executes a tool by name with JSON arguments
 func (i *Interceptor) executeTool(provider *typ.Provider, toolName string, argsJSON string) ToolResult {
 	// Determine handler type based on tool name
@@ -465,12 +532,16 @@ func previewString(s string, max int) string {
 
 // executeSearch executes a search tool
 func (i *Interceptor) executeSearch(provider *typ.Provider, argsJSON string) ToolResult {
-	// Get provider-specific config
+	// Get provider-specific config first, then fall back to global config
 	providerConfig := i.GetConfigForProvider(provider)
+	if providerConfig == nil {
+		// Use global config as fallback
+		providerConfig = i.globalConfig
+	}
 	if providerConfig == nil {
 		return ToolResult{
 			Content: "",
-			Error:   "Search is not enabled for this provider",
+			Error:   "Search is not configured for this provider",
 			IsError: true,
 		}
 	}
@@ -521,6 +592,12 @@ func (i *Interceptor) executeSearch(provider *typ.Provider, argsJSON string) Too
 
 // executeFetch executes a fetch tool
 func (i *Interceptor) executeFetch(provider *typ.Provider, argsJSON string) ToolResult {
+	// Get provider-specific config first, then fall back to global config
+	providerConfig := i.GetConfigForProvider(provider)
+	if providerConfig == nil {
+		providerConfig = i.globalConfig
+	}
+
 	// Parse fetch arguments
 	var fetchReq FetchRequest
 	if err := json.Unmarshal([]byte(argsJSON), &fetchReq); err != nil {
@@ -539,8 +616,22 @@ func (i *Interceptor) executeFetch(provider *typ.Provider, argsJSON string) Tool
 		}
 	}
 
-	// Execute fetch
-	content, err := i.fetchHandler.FetchAndExtract(fetchReq.URL)
+	// Execute fetch with correct config (for proxy support)
+	var content string
+	var err error
+
+	// If we have a config with proxy, create a new handler with that config
+	if providerConfig != nil && providerConfig.ProxyURL != "" {
+		tempHandler := NewFetchHandlerWithConfig(i.cache, &Config{
+			ProxyURL:     providerConfig.ProxyURL,
+			MaxFetchSize: providerConfig.MaxFetchSize,
+			FetchTimeout: providerConfig.FetchTimeout,
+			MaxURLLength: providerConfig.MaxURLLength,
+		})
+		content, err = tempHandler.FetchAndExtract(fetchReq.URL)
+	} else {
+		content, err = i.fetchHandler.FetchAndExtract(fetchReq.URL)
+	}
 	if err != nil {
 		return ToolResult{
 			Content: "",
@@ -687,7 +778,7 @@ func StripSearchFetchToolsOpenAI(req *openai.ChatCompletionNewParams) *openai.Ch
 	}
 
 	req.Tools = filtered
-	if len(filtered) == 0 && ShouldStripToolChoice(req) {
+	if len(filtered) == 0 {
 		req.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{}
 	}
 
