@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pkg/browser"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	obs2 "github.com/tingly-dev/tingly-box/pkg/obs"
@@ -67,6 +68,11 @@ func printBanner(cfg BannerConfig) {
 	if cfg.IsDaemon {
 		fmt.Println("\nServer is running in background. Use 'tingly-box stop' to stop.")
 	}
+}
+
+// openBrowserURL opens the given URL in the default browser
+func openBrowserURL(url string) error {
+	return browser.OpenURL(url)
 }
 
 // resolveStartOptions is implemented in platform-specific files:
@@ -446,6 +452,56 @@ The restart is graceful - ongoing requests will be completed before shutdown.`,
 			}
 
 			// Start new server
+			return startServer(appManager, opts)
+		},
+	}
+
+	options.AddStartFlags(cmd, &flags)
+	return cmd
+}
+
+// OpenCommand represents the open web UI command
+func OpenCommand(appManager *AppManager) *cobra.Command {
+	var flags options.StartFlags
+
+	cmd := &cobra.Command{
+		Use:   "open",
+		Short: "Open the Tingly Box web UI",
+		Long: `Open the Tingly Box web UI in your default browser.
+If the server is not running, it will be started first.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			opts := options.ResolveStartOptions(cmd, flags, appManager.AppConfig())
+			appConfig := appManager.AppConfig()
+			fileLock := lock.NewFileLock(appConfig.ConfigDir())
+
+			if fileLock.IsLocked() {
+				// Server is running, just open the browser
+				port := appConfig.GetServerPort()
+				globalConfig := appConfig.GetGlobalConfig()
+				scheme := "http"
+				if opts.HTTPS.Enabled {
+					scheme = "https"
+				}
+
+				// Resolve host for display
+				host := opts.Host
+				if host == "" {
+					host = "localhost"
+				}
+				resolvedHost := network.ResolveHost(host)
+
+				// Build web UI URL
+				webUIURL := fmt.Sprintf("%s://%s:%d/", scheme, resolvedHost, port)
+				if globalConfig.HasUserToken() {
+					webUIURL = fmt.Sprintf("%s://localhost:%d/?user_auth_token=%s", scheme, port, globalConfig.GetUserToken())
+				}
+
+				fmt.Printf("Opening web UI: %s\n", webUIURL)
+				return openBrowserURL(webUIURL)
+			}
+
+			// Server is not running, start it
+			fmt.Println("Server is not running, starting it...")
 			return startServer(appManager, opts)
 		},
 	}
