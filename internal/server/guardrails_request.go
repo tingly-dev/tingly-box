@@ -14,13 +14,8 @@ import (
 
 // applyGuardrailsToToolResultV1 evaluates tool_result content and replaces it when blocked.
 func (s *Server) applyGuardrailsToToolResultV1(c *gin.Context, req *anthropic.MessageNewParams, actualModel string, provider *typ.Provider) {
-	if s.guardrailsEngine == nil {
-		return
-	}
-	_, _, _, requestModel, scenario, _, _ := GetTrackingContext(c)
-	enabled := s.config.GetScenarioFlag(typ.RuleScenario(scenario), "guardrails") ||
-		s.config.GetScenarioFlag(typ.ScenarioGlobal, "guardrails")
-	if !enabled || scenario != string(typ.ScenarioClaudeCode) {
+	session := s.guardrailsSessionFromContext(c, actualModel, provider)
+	if !s.guardrailsEnabledForSession(session) {
 		return
 	}
 
@@ -33,22 +28,13 @@ func (s *Server) applyGuardrailsToToolResultV1(c *gin.Context, req *anthropic.Me
 		return
 	}
 
-	input := guardrails.Input{
-		Scenario:  scenario,
-		Model:     actualModel,
-		Direction: guardrails.DirectionRequest,
-		Content: guardrails.Content{
-			Text:     toolResultText,
-			Messages: filterGuardrailsMessages(guardrailsMessagesFromAnthropicV1(req.System, req.Messages)),
-		},
-		Metadata: map[string]interface{}{
-			"provider":      provider.Name,
-			"request_model": requestModel,
-		},
-	}
-
-	result, err := s.guardrailsEngine.Evaluate(c.Request.Context(), input)
-	if err != nil {
+	result, ok := s.evaluateGuardrailsToolResult(
+		c,
+		session,
+		toolResultText,
+		guardrailsMessagesFromAnthropicV1(req.System, req.Messages),
+	)
+	if !ok {
 		return
 	}
 	if result.Verdict == guardrails.VerdictBlock {
@@ -63,13 +49,8 @@ func (s *Server) applyGuardrailsToToolResultV1(c *gin.Context, req *anthropic.Me
 
 // applyGuardrailsToToolResultV1Beta evaluates tool_result content and replaces it when blocked.
 func (s *Server) applyGuardrailsToToolResultV1Beta(c *gin.Context, req *anthropic.BetaMessageNewParams, actualModel string, provider *typ.Provider) {
-	if s.guardrailsEngine == nil {
-		return
-	}
-	_, _, _, requestModel, scenario, _, _ := GetTrackingContext(c)
-	enabled := s.config.GetScenarioFlag(typ.RuleScenario(scenario), "guardrails") ||
-		s.config.GetScenarioFlag(typ.ScenarioGlobal, "guardrails")
-	if !enabled || scenario != string(typ.ScenarioClaudeCode) {
+	session := s.guardrailsSessionFromContext(c, actualModel, provider)
+	if !s.guardrailsEnabledForSession(session) {
 		return
 	}
 
@@ -82,22 +63,13 @@ func (s *Server) applyGuardrailsToToolResultV1Beta(c *gin.Context, req *anthropi
 		return
 	}
 
-	input := guardrails.Input{
-		Scenario:  scenario,
-		Model:     actualModel,
-		Direction: guardrails.DirectionRequest,
-		Content: guardrails.Content{
-			Text:     toolResultText,
-			Messages: filterGuardrailsMessages(guardrailsMessagesFromAnthropicV1Beta(req.System, req.Messages)),
-		},
-		Metadata: map[string]interface{}{
-			"provider":      provider.Name,
-			"request_model": requestModel,
-		},
-	}
-
-	result, err := s.guardrailsEngine.Evaluate(c.Request.Context(), input)
-	if err != nil {
+	result, ok := s.evaluateGuardrailsToolResult(
+		c,
+		session,
+		toolResultText,
+		guardrailsMessagesFromAnthropicV1Beta(req.System, req.Messages),
+	)
+	if !ok {
 		return
 	}
 	if result.Verdict == guardrails.VerdictBlock {

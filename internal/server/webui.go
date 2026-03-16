@@ -649,6 +649,14 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithDescription("Reload guardrails config from disk"),
 		swagger.WithTags("guardrails"),
 	)
+	apiV1.GET("/guardrails/history", s.GetGuardrailsHistory,
+		swagger.WithDescription("Get recent guardrails interception history"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.DELETE("/guardrails/history", s.ClearGuardrailsHistory,
+		swagger.WithDescription("Clear guardrails interception history"),
+		swagger.WithTags("guardrails"),
+	)
 
 	// History
 	apiV1.GET("/history", s.GetHistory,

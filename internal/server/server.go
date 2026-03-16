@@ -89,6 +89,7 @@ type Server struct {
 
 	// guardrails engine (optional)
 	guardrailsEngine guardrails.Guardrails
+	guardrailsHistory *guardrailsHistoryStore
 
 	// recording sinks
 	recordSink *obs.Sink
@@ -426,6 +427,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.clientPool = client.NewClientPool() // Initialize client pool
 	server.errorMW = errorMW
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
+	server.guardrailsHistory = newGuardrailsHistoryStore(200)
 
 	// Auto-load guardrails if enabled and not injected explicitly.
 	server.initGuardrailsEngine()

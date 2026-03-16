@@ -19,7 +19,8 @@ import {
     Send as UserPromptIcon,
     Security,
     Rule,
-    Storefront
+    Storefront,
+    History as HistoryIcon,
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -240,6 +241,11 @@ const Layout = ({ children }: LayoutProps) => {
                         path: '/guardrails/market',
                         label: 'Rule Market',
                         icon: <Storefront sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/guardrails/history',
+                        label: 'History',
+                        icon: <HistoryIcon sx={{ fontSize: 20 }} />,
                     },
                 ],
             }] : []),

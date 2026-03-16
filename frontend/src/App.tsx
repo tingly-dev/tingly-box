@@ -28,6 +28,7 @@ const System = lazy(() => import('./pages/System'));
 const GuardrailsPage = lazy(() => import('./pages/GuardrailsPage'));
 const GuardrailsRulesPage = lazy(() => import('./pages/guardrails/RulesPage'));
 const GuardrailsMarketPage = lazy(() => import('./pages/guardrails/MarketPage'));
+const GuardrailsHistoryPage = lazy(() => import('./pages/guardrails/HistoryPage'));
 const DashboardPage = lazy(() => import('./pages/./DashboardPage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
 
@@ -315,6 +316,7 @@ function AppContent() {
                                         <Route path="/guardrails" element={<GuardrailsPage />} />
                                         <Route path="/guardrails/rules" element={<GuardrailsRulesPage />} />
                                         <Route path="/guardrails/market" element={<GuardrailsMarketPage />} />
+                                        <Route path="/guardrails/history" element={<GuardrailsHistoryPage />} />
                                     </Routes>
                                 </Suspense>
                             </Layout>
