@@ -29,7 +29,6 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 		SenderID:  msg.Sender.ID,
 		MessageID: msg.ID,
 		Platform:  msg.Platform,
-		Metadata:  msg.Metadata,
 	}
 
 	action := parts[0]

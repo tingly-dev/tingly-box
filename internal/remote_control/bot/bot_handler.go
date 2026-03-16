@@ -71,8 +71,6 @@ type HandlerContext struct {
 	SenderID  string
 	MessageID string
 	Platform  imbot.Platform
-	Media     []imbot.MediaAttachment
-	Metadata  map[string]interface{}
 	Message   imbot.Message
 }
 
@@ -243,7 +241,6 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	}
 
 	// Create handler context
-	mediaAttachments := msg.GetMedia()
 	hCtx := HandlerContext{
 		Bot:       bot,
 		BotUUID:   botUUID,
@@ -252,8 +249,6 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 		MessageID: msg.ID,
 		Platform:  platform,
 		Message:   msg,
-		Media:     mediaAttachments,
-		Metadata:  msg.Metadata,
 	}
 
 	switch {
@@ -278,8 +273,13 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	}
 
 	// Handle media content (with or without text)
-	if msg.IsMediaContent() && len(hCtx.Media) > 0 {
-		h.handleMediaMessage(hCtx)
+	if msg.IsMediaContent() {
+		media := msg.GetMedia()
+		if len(media) > 0 {
+			h.handleMediaMessage(hCtx, media)
+		} else {
+			h.SendText(hCtx, fmt.Sprintf("Empty media from %s %s.", msg.ChatType, chatID))
+		}
 		return
 	}
 
@@ -326,7 +326,7 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 }
 
 // handleMediaMessage handles messages with media attachments
-func (h *BotHandler) handleMediaMessage(hCtx HandlerContext) {
+func (h *BotHandler) handleMediaMessage(hCtx HandlerContext, media []imbot.MediaAttachment) {
 	// Get project path for storage, use default if not bound
 	projectPath, ok := h.getProjectPath(hCtx)
 	if !ok {
@@ -334,7 +334,7 @@ func (h *BotHandler) handleMediaMessage(hCtx HandlerContext) {
 	}
 
 	// Set platform-specific token on FileStore if needed
-	if len(hCtx.Media) > 0 && strings.HasPrefix(hCtx.Media[0].URL, "tgfile://") {
+	if len(media) > 0 && strings.HasPrefix(media[0].URL, "tgfile://") {
 		// Get token from bot settings (check both Auth map and legacy Token field)
 		token := h.botSetting.Token
 		if token == "" && len(h.botSetting.Auth) > 0 {
@@ -347,7 +347,7 @@ func (h *BotHandler) handleMediaMessage(hCtx HandlerContext) {
 
 	// 1. Download and store media files
 	var fileTags []string
-	for _, attachment := range hCtx.Media {
+	for _, attachment := range media {
 		// Check file type
 		if !h.fileStore.IsAllowedType(attachment.MimeType) {
 			h.SendText(hCtx, fmt.Sprintf("File type not supported: %s", attachment.MimeType))
