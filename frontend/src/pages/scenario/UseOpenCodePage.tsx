@@ -124,7 +124,7 @@ const UseOpenCodePage: React.FC = () => {
                     ref={headerRef}
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <span>OpenCode SDK Configuration</span>
+                            <span>OpenCode Configuration</span>
                             <Tooltip title={`Base URL: ${baseUrl}/tingly/opencode`}>
                                 <IconButton size="small" sx={{ ml: 0.5 }}>
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
@@ -144,7 +144,7 @@ const UseOpenCodePage: React.FC = () => {
                     }
                 >
                     <ProviderConfigCard
-                        title="OpenCode SDK Configuration"
+                        title="OpenCode Configuration"
                         baseUrlPath="/tingly/opencode"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}

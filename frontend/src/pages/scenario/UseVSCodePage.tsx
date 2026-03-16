@@ -1,19 +1,19 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
-import { Box, Button, Tooltip, IconButton } from '@mui/material';
+import { Box, Button, Tooltip, IconButton, Typography, Link } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
 import { useEffect, useState } from 'react';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
-import XcodeConfigModal from '@/components/XcodeConfigModal';
+import VSCodeConfigModal from '@/components/VSCodeConfigModal';
 import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
 import { useRuleManagement } from '@/pages/scenario/hooks/useRuleManagement.ts';
 import { useScenarioPageData } from '@/pages/scenario/hooks/useScenarioPageData.ts';
 
-const scenario = "xcode";
+const scenario = "vscode";
 
-const UseXcodePage: React.FC = () => {
+const UseVSCodePage: React.FC = () => {
     const {
         showTokenModal,
         setShowTokenModal,
@@ -56,8 +56,8 @@ const UseXcodePage: React.FC = () => {
                     ref={headerRef}
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <span>Xcode Configuration</span>
-                            <Tooltip title={`Base URL: ${baseUrl}/tingly/xcode`}>
+                            <span>VS Code Copilot</span>
+                            <Tooltip title={`Base URL: ${baseUrl}/tingly/vscode`}>
                                 <IconButton size="small" sx={{ ml: 0.5 }}>
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                 </IconButton>
@@ -75,9 +75,29 @@ const UseXcodePage: React.FC = () => {
                         </Button>
                     }
                 >
+                    {/* Tingly Box For VS Code subtitle */}
+                    <Box sx={{ mb: 2 }}>
+                        <Typography variant="body2" color="text.secondary">
+                            Tingly Box For VS Code ·{' '}
+                            <Link
+                                href="https://marketplace.visualstudio.com/items?itemName=Tingly-Dev.vscode-tingly-box"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                Marketplace
+                            </Link>
+                            {' '}·{' '}
+                            <Link
+                                href="vscode:extension/Tingly-Dev.vscode-tingly-box"
+                            >
+                                Install Now
+                            </Link>
+                        </Typography>
+                    </Box>
+
                     <ProviderConfigCard
-                        title="Xcode Configuration"
-                        baseUrlPath="/tingly/xcode"
+                        title="VSCode Copliot Chat"
+                        baseUrlPath="/tingly/vscode"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
                         token={token}
@@ -105,7 +125,7 @@ const UseXcodePage: React.FC = () => {
                     headerHeight={headerHeight}
                 />
 
-                <XcodeConfigModal
+                <VSCodeConfigModal
                     open={configModalOpen}
                     onClose={() => setConfigModalOpen(false)}
                     baseUrl={baseUrl}
@@ -117,4 +137,4 @@ const UseXcodePage: React.FC = () => {
     );
 };
 
-export default UseXcodePage;
+export default UseVSCodePage;

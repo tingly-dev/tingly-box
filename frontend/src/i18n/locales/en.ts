@@ -33,6 +33,8 @@ export default {
       "useCodex": "Codex",
       "useClaudeCode": "Claude Code",
       "useOpenCode": "OpenCode",
+      "useXcode": "Xcode",
+      "useVSCode": "VS Code",
       "apiKeys": "API Keys",
       "oauth": "OAuth",
       "credential": "Credential",
