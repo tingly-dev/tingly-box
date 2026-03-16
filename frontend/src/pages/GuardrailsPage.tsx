@@ -15,6 +15,7 @@ import {
     Policy,
     Rule,
     Security,
+    History as HistoryIcon,
     Refresh as RefreshIcon,
     FileDownload,
     FileUpload,
@@ -156,6 +157,9 @@ const GuardrailsPage = () => {
                             </Button>
                             <Button variant="outlined" startIcon={<Security />} onClick={() => navigate('/guardrails/market')}>
                                 Browse Rule Market
+                            </Button>
+                            <Button variant="outlined" startIcon={<HistoryIcon />} onClick={() => navigate('/guardrails/history')}>
+                                View History
                             </Button>
                             <input
                                 ref={fileInputRef}

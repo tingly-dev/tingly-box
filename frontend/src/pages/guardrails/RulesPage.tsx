@@ -46,7 +46,6 @@ type GuardrailsRule = {
     enabled: boolean;
 };
 
-const defaultScenarioOptions = ['anthropic', 'claude_code', 'openai'];
 const defaultDirectionOptions = ['request', 'response'];
 const defaultContentTypeOptions = ['command', 'text', 'messages'];
 const defaultCommandKindOptions = ['shell'];
@@ -58,6 +57,7 @@ const GuardrailsRulesPage = () => {
     const [loading, setLoading] = useState(true);
     const [rules, setRules] = useState<GuardrailsRule[]>([]);
     const [rawRules, setRawRules] = useState<any[]>([]);
+    const [supportedScenarios, setSupportedScenarios] = useState<string[]>([]);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [pendingRuleId, setPendingRuleId] = useState<string | null>(null);
@@ -74,7 +74,7 @@ const GuardrailsRulesPage = () => {
         type: 'text_match',
         verdict: 'block',
         enabled: true,
-        scenarios: defaultScenarioOptions,
+        scenarios: [],
         directions: defaultDirectionOptions,
         contentTypes: defaultContentTypeOptions,
         patterns: '',
@@ -95,9 +95,8 @@ const GuardrailsRulesPage = () => {
     }, [editorState, editorSnapshot]);
 
     const scenarioOptions = useMemo(() => {
-        const fromRules = rawRules.flatMap((rule) => rule?.scope?.scenarios ?? []);
-        return Array.from(new Set([...defaultScenarioOptions, ...fromRules])).filter(Boolean);
-    }, [rawRules]);
+        return supportedScenarios.filter((value) => value && value !== '_global');
+    }, [supportedScenarios]);
 
     const directionOptions = useMemo(() => {
         const fromRules = rawRules.flatMap((rule) => rule?.scope?.directions ?? []);
@@ -165,11 +164,19 @@ const GuardrailsRulesPage = () => {
                     setRules([]);
                     setRawRules([]);
                 }
+                if (Array.isArray(guardrailsConfig?.supported_scenarios)) {
+                    const scenarios = guardrailsConfig.supported_scenarios
+                        .filter((value: string) => value && value !== '_global');
+                    if (scenarios.length > 0) {
+                        setSupportedScenarios(Array.from(new Set(scenarios)));
+                    }
+                }
                 setLoadError(null);
             } catch (error) {
                 console.error('Failed to load guardrails flags:', error);
                 setRules([]);
                 setRawRules([]);
+                setSupportedScenarios([]);
                 setLoadError('Failed to load guardrails config');
             } finally {
                 setLoading(false);
@@ -232,13 +239,16 @@ const GuardrailsRulesPage = () => {
         const patterns = Array.isArray(params.patterns) ? params.patterns.join('\n') : '';
         const resources = Array.isArray(params.resources) ? params.resources.join('\n') : '';
         const terms = Array.isArray(params.terms) ? params.terms.join('\n') : '';
+        const filteredScenarios = Array.isArray(scope.scenarios)
+            ? scope.scenarios.filter((scenario: string) => supportedScenarios.includes(scenario))
+            : [];
         const nextState = {
             id: rule.id,
             name: rawRule.name || rule.id,
             type: rawRule.type || rule.type || 'text_match',
             verdict: params.verdict || 'block',
             enabled: rule.enabled,
-            scenarios: Array.isArray(scope.scenarios) ? scope.scenarios : [],
+            scenarios: filteredScenarios,
             directions: Array.isArray(scope.directions) ? scope.directions : [],
             contentTypes: Array.isArray(scope.content_types) ? scope.content_types : [],
             targets: Array.isArray(params.targets) ? params.targets : [],
@@ -952,7 +962,7 @@ const GuardrailsRulesPage = () => {
                                                                             ))}
                                                                         </FormGroup>
                                                                         <FormHelperText>
-                                                                            Leave empty to apply to all scenarios.
+                                                                            Synced from the Guardrails-supported scenario list. Leave empty to apply to all supported scenarios.
                                                                         </FormHelperText>
                                                                     </FormControl>
 

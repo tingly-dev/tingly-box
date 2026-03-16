@@ -16,10 +16,11 @@ import (
 )
 
 type guardrailsConfigResponse struct {
-	Path    string            `json:"path"`
-	Exists  bool              `json:"exists"`
-	Content string            `json:"content"`
-	Config  guardrails.Config `json:"config"`
+	Path               string            `json:"path"`
+	Exists             bool              `json:"exists"`
+	Content            string            `json:"content"`
+	Config             guardrails.Config `json:"config"`
+	SupportedScenarios []string          `json:"supported_scenarios"`
 }
 
 type guardrailsConfigUpdateRequest struct {
@@ -79,6 +80,28 @@ type guardrailsRuleCreateRequest struct {
 	Params  map[string]interface{} `json:"params"`
 }
 
+func normalizeGuardrailsScope(scope guardrails.Scope, supportedScenarios []string) guardrails.Scope {
+	scope.Scenarios = filterSupportedGuardrailsScenarios(scope.Scenarios, supportedScenarios)
+	return scope
+}
+
+func filterSupportedGuardrailsScenarios(values []string, supportedScenarios []string) []string {
+	if len(values) == 0 {
+		return values
+	}
+	supported := make(map[string]struct{}, len(supportedScenarios))
+	for _, scenario := range supportedScenarios {
+		supported[scenario] = struct{}{}
+	}
+	filtered := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, ok := supported[value]; ok {
+			filtered = append(filtered, value)
+		}
+	}
+	return filtered
+}
+
 // GetGuardrailsConfig returns the current guardrails config file content and parsed config.
 func (s *Server) GetGuardrailsConfig(c *gin.Context) {
 	if s.config == nil || s.config.ConfigDir == "" {
@@ -91,10 +114,11 @@ func (s *Server) GetGuardrailsConfig(c *gin.Context) {
 		if errors.Is(err, os.ErrNotExist) || strings.Contains(err.Error(), "no guardrails config") {
 			defaultPath := filepath.Join(s.config.ConfigDir, "guardrails.yaml")
 			c.JSON(200, guardrailsConfigResponse{
-				Path:    defaultPath,
-				Exists:  false,
-				Content: "",
-				Config:  guardrails.Config{},
+				Path:               defaultPath,
+				Exists:             false,
+				Content:            "",
+				Config:             guardrails.Config{},
+				SupportedScenarios: s.getGuardrailsSupportedScenarios(),
 			})
 			return
 		}
@@ -115,10 +139,11 @@ func (s *Server) GetGuardrailsConfig(c *gin.Context) {
 	}
 
 	c.JSON(200, guardrailsConfigResponse{
-		Path:    path,
-		Exists:  true,
-		Content: string(data),
-		Config:  cfg,
+		Path:               path,
+		Exists:             true,
+		Content:            string(data),
+		Config:             cfg,
+		SupportedScenarios: s.getGuardrailsSupportedScenarios(),
 	})
 }
 
@@ -245,6 +270,7 @@ func (s *Server) UpdateGuardrailsRule(c *gin.Context) {
 	}
 
 	found := false
+	supportedScenarios := s.getGuardrailsSupportedScenarios()
 	for i := range cfg.Rules {
 		if cfg.Rules[i].ID == ruleID {
 			if req.Name != nil {
@@ -257,7 +283,7 @@ func (s *Server) UpdateGuardrailsRule(c *gin.Context) {
 				cfg.Rules[i].Enabled = *req.Enabled
 			}
 			if req.Scope != nil {
-				cfg.Rules[i].Scope = *req.Scope
+				cfg.Rules[i].Scope = normalizeGuardrailsScope(*req.Scope, supportedScenarios)
 			}
 			if req.Params != nil {
 				cfg.Rules[i].Params = req.Params
@@ -348,7 +374,7 @@ func (s *Server) CreateGuardrailsRule(c *gin.Context) {
 		Name:    req.Name,
 		Type:    guardrails.RuleType(req.Type),
 		Enabled: req.Enabled,
-		Scope:   req.Scope,
+		Scope:   normalizeGuardrailsScope(req.Scope, s.getGuardrailsSupportedScenarios()),
 		Params:  req.Params,
 	})
 
