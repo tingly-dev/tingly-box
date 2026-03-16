@@ -11,7 +11,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/agentboot"
-	mock "github.com/tingly-dev/tingly-box/agentboot/mockagent"
+	"github.com/tingly-dev/tingly-box/agentboot/ask"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/smart_guide"
@@ -413,6 +413,74 @@ func (h *BotHandler) handleMediaMessage(hCtx HandlerContext) {
 	h.handleAgentMessage(hCtx, agentClaudeCode, message, projectPath)
 }
 
+// handlePermissionTextResponse handles text-based permission responses
+// Returns true if the message was a valid permission response, false otherwise
+func (h *BotHandler) handlePermissionTextResponse(hCtx HandlerContext) bool {
+	// Check if there are pending permission requests for this chat
+	pendingReqs := h.imPrompter.GetPendingRequestsForChat(hCtx.ChatID)
+	if len(pendingReqs) == 0 {
+		return false
+	}
+
+	// Get the most recent pending request for this chat
+	// (usually there's only one at a time)
+	latestReq := pendingReqs[0]
+
+	// For AskUserQuestion, try to parse as option selection first
+	if latestReq.ToolName == "AskUserQuestion" {
+		// Try to submit as a text selection
+		if err := h.imPrompter.SubmitUserResponse(latestReq.ID, ask.Response{
+			Type: "text",
+			Data: hCtx.Text,
+		}); err == nil {
+			h.SendText(hCtx, fmt.Sprintf("✅ Selected: %s", hCtx.Text))
+			logrus.WithFields(logrus.Fields{
+				"request_id": latestReq.ID,
+				"tool_name":  latestReq.ToolName,
+				"user_id":    hCtx.SenderID,
+				"selection":  hCtx.Text,
+			}).Info("User selected option via text")
+			return true
+		}
+	}
+
+	// Try to parse the text as a standard permission response
+	approved, remember, isValid := ask.ParseTextResponse(hCtx.Text)
+	if !isValid {
+		// Not a valid permission response, let other handlers process it
+		return false
+	}
+
+	// Submit the decision
+	if err := h.imPrompter.SubmitDecision(latestReq.ID, approved, remember, ""); err != nil {
+		logrus.WithError(err).WithField("request_id", latestReq.ID).Error("Failed to submit permission decision")
+		h.SendText(hCtx, fmt.Sprintf("Failed to process permission response: %v", err))
+		return true
+	}
+
+	// Send feedback to user
+	var resultText string
+	if remember {
+		resultText = "🔄 Always allowed"
+	} else if approved {
+		resultText = "✅ Permission granted"
+	} else {
+		resultText = "❌ Permission denied"
+	}
+
+	h.SendText(hCtx, fmt.Sprintf("%s for tool: `%s`", resultText, latestReq.ToolName))
+
+	logrus.WithFields(logrus.Fields{
+		"request_id": latestReq.ID,
+		"tool_name":  latestReq.ToolName,
+		"user_id":    hCtx.SenderID,
+		"approved":   approved,
+		"remember":   remember,
+	}).Info("User responded to permission request via text")
+
+	return true
+}
+
 // SendText sends a plain text message
 // Note: Platform handles chunking internally via BaseBot.ChunkText()
 func (h *BotHandler) SendText(hCtx HandlerContext, text string) {
@@ -512,243 +580,6 @@ func (h *BotHandler) getOutputBehavior() OutputBehavior {
 // newStreamingMessageHandler creates a new streaming message handler
 func (h *BotHandler) newStreamingMessageHandler(hCtx HandlerContext) *streamingMessageHandler {
 	return newStreamingMessageHandler(hCtx.Bot, hCtx.ChatID, hCtx.MessageID, h.GetVerbose(hCtx.ChatID))
-}
-
-// handleMockAgentMessage executes a message through the mock agent for testing
-func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, projectPathOverride string) {
-	if strings.TrimSpace(text) == "" {
-		h.SendText(hCtx, "Please provide a message for the mock agent.")
-		return
-
-	}
-
-	// Get project path
-	projectPath := projectPathOverride
-	if projectPath == "" {
-		boundPath, hasBound, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
-		if hasBound && boundPath != "" {
-			projectPath = boundPath
-		}
-	}
-	if projectPath == "" {
-		projectPath = h.getDefaultProjectPath()
-	}
-
-	// Find or create session for mock agent
-	agentType := "mock"
-	sess := h.sessionMgr.FindBy(hCtx.ChatID, agentType, projectPath)
-
-	// Track if this is a new session or resuming an existing one
-	isNewSession := false
-
-	// Create new session if needed (including pending state sessions)
-	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed || sess.Status == session.StatusPending {
-		sess = h.sessionMgr.CreateWith(hCtx.ChatID, agentType, projectPath)
-		// Clear expiration for persistent sessions
-		h.sessionMgr.Update(sess.ID, func(s *session.Session) {
-			s.ExpiresAt = time.Time{}
-			s.Status = session.StatusRunning
-		})
-		isNewSession = true
-	} else {
-		// Reset status to running for reused sessions
-		h.sessionMgr.Update(sess.ID, func(s *session.Session) {
-			s.Status = session.StatusRunning
-		})
-	}
-	sessionID := sess.ID
-
-	// Build meta
-	meta := ResponseMeta{
-		ProjectPath: projectPath,
-		AgentType:   string(agentboot.AgentTypeMockAgent),
-		SessionID:   sessionID,
-		ChatID:      hCtx.ChatID,
-		UserID:      hCtx.SenderID,
-	}
-
-	h.sessionMgr.AppendMessage(sessionID, session.Message{
-		Role:      "user",
-		Content:   text,
-		Timestamp: time.Now(),
-	})
-
-	// Check if session is already running (prevent concurrent execution)
-	if sess.Status == session.StatusRunning {
-		h.SendText(hCtx, "⚠️ A task is currently running.\n\nUse `stop` or `/stop` to cancel it first.")
-		return
-	}
-
-	h.sessionMgr.SetRunning(sessionID)
-
-	// Send status message - differentiate between new and resumed sessions
-	behavior := h.getOutputBehavior()
-	var statusMsg string
-	if isNewSession {
-		statusMsg = "🧪 Mock: Processing new session..."
-	} else {
-		statusMsg = "🧪 Mock: Resuming session..."
-	}
-	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, statusMsg, behavior), hCtx.MessageID)
-
-	// Execute with context
-	execCtx, cancel := context.WithCancel(context.Background())
-
-	// Store cancel function for /stop command
-	h.runningCancelMu.Lock()
-	h.runningCancel[hCtx.ChatID] = cancel
-	h.runningCancelMu.Unlock()
-
-	// Clean up cancel function when done
-	defer func() {
-		h.runningCancelMu.Lock()
-		delete(h.runningCancel, hCtx.ChatID)
-		h.runningCancelMu.Unlock()
-		cancel()
-	}()
-
-	// Get mock agent
-	mockAgent, err := h.agentBoot.GetAgent(agentboot.AgentTypeMockAgent)
-	if err != nil {
-		// Register mock agent if not exists
-		newMockAgent := mock.NewAgent(mock.Config{
-			MaxIterations: 3,
-			StepDelay:     2 * time.Second,
-		})
-		h.agentBoot.RegisterAgent(agentboot.AgentTypeMockAgent, newMockAgent)
-		mockAgent = newMockAgent
-	}
-
-	logrus.WithFields(logrus.Fields{
-		"chatID":    hCtx.ChatID,
-		"sessionID": sessionID,
-		"agent":     "mock",
-	}).Info("Starting mock agent execution")
-
-	// Create streaming handler for message output
-	streamHandler := h.newStreamingMessageHandler(hCtx)
-
-	// Create composite handler that combines streaming + approval + ask handling
-	compositeHandler := agentboot.NewCompositeHandler().
-		SetStreamer(streamHandler).
-		SetApprovalHandler(h.imPrompter).
-		SetAskHandler(h.imPrompter)
-
-	result, err := mockAgent.Execute(execCtx, text, agentboot.ExecutionOptions{
-		ProjectPath: projectPath,
-		Handler:     compositeHandler,
-		SessionID:   sessionID,
-		ChatID:      hCtx.ChatID,
-		Platform:    string(hCtx.Platform),
-		BotUUID:     hCtx.BotUUID,
-	})
-
-	logrus.WithFields(logrus.Fields{
-		"chatID":    hCtx.ChatID,
-		"sessionID": sessionID,
-		"hasError":  err != nil,
-		"hasResult": result != nil,
-	}).Info("Mock agent execution completed")
-
-	response := streamHandler.GetOutput()
-	if response == "" {
-		if result != nil {
-			response = result.TextOutput()
-		}
-		if err != nil && response == "" {
-			response = fmt.Sprintf("Execution failed: %v", err)
-		}
-	}
-
-	if err != nil {
-		h.sessionMgr.SetFailed(sessionID, response)
-		logrus.WithError(err).WithFields(logrus.Fields{
-			"chatID":    hCtx.ChatID,
-			"sessionID": sessionID,
-			"response":  response,
-		}).Warn("Mock agent execution failed")
-
-		if response == "" {
-			response = fmt.Sprintf("Execution failed: %v", err)
-		}
-		h.sendTextWithReply(hCtx, response, hCtx.MessageID)
-		return
-
-	}
-
-	h.sessionMgr.SetCompleted(sessionID, response)
-
-	h.sessionMgr.AppendMessage(sessionID, session.Message{
-		Role:      "assistant",
-		Content:   response,
-		Timestamp: time.Now(),
-	})
-
-	h.sendTextWithActionKeyboard(hCtx, response, hCtx.MessageID)
-}
-
-// showProjectSelectionOrGuidance shows project selection if user has bound projects, otherwise shows bind confirmation
-func (h *BotHandler) showProjectSelectionOrGuidance(hCtx HandlerContext) {
-	if h.chatStore == nil {
-		h.showBindConfirmationPrompt(hCtx, "")
-		return
-	}
-
-	// For group chats, show bind confirmation
-	if !hCtx.IsDirect {
-		h.showBindConfirmationPrompt(hCtx, "")
-		return
-	}
-
-	// For direct chats, check if user has any bound projects
-	platform := string(hCtx.Platform)
-
-	chats, err := h.chatStore.ListChatsByOwner(hCtx.SenderID, platform)
-	if err == nil && len(chats) > 0 {
-		// User has projects, show project selection
-		h.handleBotProjectCommand(hCtx)
-		return
-	}
-
-	// No projects, show bind confirmation
-	h.showBindConfirmationPrompt(hCtx, "")
-}
-
-// showBindConfirmationPrompt shows a confirmation prompt for binding to current directory
-func (h *BotHandler) showBindConfirmationPrompt(hCtx HandlerContext, originalMessage string) {
-	// Get current working directory
-	cwd, err := os.Getwd()
-	if err != nil {
-		cwd = "~" // fallback
-	}
-	absPath, err := filepath.Abs(cwd)
-	if err == nil {
-		cwd = absPath
-	}
-
-	// Store pending bind request
-	h.pendingBindsMu.Lock()
-	h.pendingBinds[hCtx.ChatID] = &PendingBind{
-		OriginalMessage: originalMessage,
-		ProposedPath:    cwd,
-		ExpiresAt:       time.Now().Add(5 * time.Minute),
-	}
-	h.pendingBindsMu.Unlock()
-
-	// Send confirmation with inline keyboard
-	kb := BuildBindConfirmKeyboard()
-	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
-
-	_, err = hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
-		Text: BuildBindConfirmPrompt(cwd),
-		Metadata: map[string]interface{}{
-			"replyMarkup":        tgKeyboard,
-			"_trackActionMenuID": true,
-		},
-	})
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to send bind confirmation")
-	}
 }
 
 // handleBindConfirm handles the bind confirmation callback
@@ -954,4 +785,20 @@ func (h *BotHandler) handleCustomPathInput(hCtx HandlerContext) {
 	// Path exists and is a directory, complete the bind
 	h.completeBind(hCtx, expandedPath)
 	h.directoryBrowser.Clear(hCtx.ChatID)
+}
+
+// BuildBindConfirmPrompt returns the text for bind confirmation prompt
+func BuildBindConfirmPrompt(proposedPath string) string {
+	return fmt.Sprintf("📁 *No project bound.*\n\nBind to current directory?\n\n`%s`", proposedPath)
+}
+
+// BuildCustomPathPrompt returns the text for custom path input prompt
+func BuildCustomPathPrompt() string {
+	return "✏️ *Please type the path you want to /cd:*\n\n" +
+		"Examples:\n" +
+		"• my-project (relative to current)\n" +
+		"• ~/workspace/new-project\n" +
+		"• /home/user/my-project\n\n" +
+		"The directory will be created if it doesn't exist.\n\n" +
+		"Type your path or click Cancel below."
 }

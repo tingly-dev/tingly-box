@@ -8,14 +8,166 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-agentscope/pkg/memory"
 	"github.com/tingly-dev/tingly-agentscope/pkg/message"
 	"github.com/tingly-dev/tingly-agentscope/pkg/types"
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
+	mock "github.com/tingly-dev/tingly-box/agentboot/mockagent"
+	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/smart_guide"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+type CompletionCallback struct {
+	hCtx       HandlerContext
+	sessionID  string
+	sessionMgr *session.Manager
+}
+
+func (c *CompletionCallback) OnComplete(result *agentboot.CompletionResult) {
+	// Update session status based on completion result
+	if c.sessionMgr != nil && c.sessionID != "" {
+		if result.Success {
+			c.sessionMgr.SetCompleted(c.sessionID, "")
+		} else {
+			c.sessionMgr.SetFailed(c.sessionID, result.Error)
+		}
+	}
+
+	// Build action keyboard
+	kb := BuildActionKeyboard()
+	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
+
+	_, err := c.hCtx.Bot.SendMessage(context.Background(), c.hCtx.ChatID, &imbot.SendMessageOptions{
+		Text: "✅ Task done. \nContinue to chat with this session or /help.",
+		Metadata: map[string]interface{}{
+			"replyMarkup":        tgKeyboard,
+			"_trackActionMenuID": true,
+		},
+	})
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to send action keyboard")
+	}
+
+	// Log completion event
+	logrus.WithFields(logrus.Fields{
+		"chatID":    c.hCtx.ChatID,
+		"sessionID": c.sessionID,
+		"success":   result.Success,
+		"duration":  result.DurationMS,
+		"error":     result.Error,
+	}).Info("Agent execution completed via callback")
+}
+
+// SmartGuideCompletionCallback handles completion events for SmartGuide agent
+// It saves messages to session, updates project path if changed, and sends response + action keyboard
+type SmartGuideCompletionCallback struct {
+	hCtx           HandlerContext
+	sessionID      string
+	chatStore      ChatStoreInterface
+	tbSessionStore *smart_guide.SessionStore
+	agent          *smart_guide.TinglyBoxAgent
+	projectPath    string
+	meta           ResponseMeta
+	behavior       OutputBehavior
+	botHandler     *BotHandler // Add reference to bot handler for formatting
+}
+
+// OnComplete implements agentboot.CompletionCallback
+func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionResult) {
+	// Get response text from the agent's memory
+	responseText := ""
+	if result.Success {
+		// Try to get the last assistant message from agent memory
+		if mem := c.agent.GetMemory(); mem != nil {
+			if hist, ok := mem.(*memory.History); ok {
+				messages := hist.GetMessages()
+				for i := len(messages) - 1; i >= 0; i-- {
+					if messages[i].Role == "assistant" {
+						responseText = messages[i].GetTextContent()
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// Save assistant message to session
+	if c.tbSessionStore != nil && responseText != "" {
+		assistantMsg := message.NewMsg("assistant", responseText, types.RoleAssistant)
+		if err := c.tbSessionStore.AddMessage(c.hCtx.ChatID, assistantMsg); err != nil {
+			logrus.WithError(err).Warn("Failed to save assistant message to session")
+		}
+	}
+
+	// Check if working directory was changed by change_workdir tool
+	newProjectPath := c.agent.GetExecutor().GetWorkingDirectory()
+	if newProjectPath != c.projectPath {
+		logrus.WithFields(logrus.Fields{
+			"chatID":         c.hCtx.ChatID,
+			"oldProjectPath": c.projectPath,
+			"newProjectPath": newProjectPath,
+		}).Info("Project path changed, updating chat store")
+
+		// Update chat store with new project path
+		chat, err := c.chatStore.GetChat(c.hCtx.ChatID)
+		if err != nil {
+			logrus.WithError(err).WithField("chatID", c.hCtx.ChatID).Warn("Failed to get chat for update")
+		}
+
+		if chat == nil {
+			now := time.Now().UTC()
+			chat = &Chat{
+				ChatID:      c.hCtx.ChatID,
+				Platform:    string(c.hCtx.Platform),
+				ProjectPath: newProjectPath,
+				BashCwd:     newProjectPath,
+				CreatedAt:   now,
+				UpdatedAt:   now,
+			}
+			if err := c.chatStore.UpsertChat(chat); err != nil {
+				logrus.WithError(err).WithField("chatID", c.hCtx.ChatID).Warn("Failed to create chat")
+			}
+		} else {
+			if err := c.chatStore.UpdateChat(c.hCtx.ChatID, func(ch *Chat) {
+				ch.ProjectPath = newProjectPath
+				ch.BashCwd = newProjectPath
+			}); err != nil {
+				logrus.WithError(err).WithField("chatID", c.hCtx.ChatID).Warn("Failed to update chat")
+			}
+		}
+	}
+
+	// Send the final response with meta header, then action keyboard
+	if responseText != "" {
+		c.botHandler.sendTextWithReply(c.hCtx, c.botHandler.formatResponseWithMeta(c.meta, responseText, c.behavior), c.hCtx.MessageID)
+	}
+
+	// Send action keyboard on completion
+	kb := BuildActionKeyboard()
+	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
+
+	_, err := c.hCtx.Bot.SendMessage(context.Background(), c.hCtx.ChatID, &imbot.SendMessageOptions{
+		Text: "✅ Task done. \nContinue to chat with this session or /help.",
+		Metadata: map[string]interface{}{
+			"replyMarkup":        tgKeyboard,
+			"_trackActionMenuID": true,
+		},
+	})
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to send action keyboard for SmartGuide")
+	}
+
+	// Log completion event
+	logrus.WithFields(logrus.Fields{
+		"chatID":    c.hCtx.ChatID,
+		"sessionID": c.sessionID,
+		"success":   result.Success,
+		"duration":  result.DurationMS,
+	}).Info("SmartGuide execution completed via callback")
+}
 
 // handleAgentMessage routes message to the appropriate agent handler
 func (h *BotHandler) handleAgentMessage(hCtx HandlerContext, agent agentboot.AgentType, text string, projectPathOverride string) {
@@ -450,6 +602,179 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 	}).Info("SmartGuide execution completed")
 
 	return nil
+}
+
+// handleMockAgentMessage executes a message through the mock agent for testing
+func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, projectPathOverride string) {
+	if strings.TrimSpace(text) == "" {
+		h.SendText(hCtx, "Please provide a message for the mock agent.")
+		return
+
+	}
+
+	// Get project path
+	projectPath := projectPathOverride
+	if projectPath == "" {
+		boundPath, hasBound, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
+		if hasBound && boundPath != "" {
+			projectPath = boundPath
+		}
+	}
+	if projectPath == "" {
+		projectPath = h.getDefaultProjectPath()
+	}
+
+	// Find or create session for mock agent
+	agentType := "mock"
+	sess := h.sessionMgr.FindBy(hCtx.ChatID, agentType, projectPath)
+
+	// Track if this is a new session or resuming an existing one
+	isNewSession := false
+
+	// Create new session if needed (including pending state sessions)
+	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed || sess.Status == session.StatusPending {
+		sess = h.sessionMgr.CreateWith(hCtx.ChatID, agentType, projectPath)
+		// Clear expiration for persistent sessions
+		h.sessionMgr.Update(sess.ID, func(s *session.Session) {
+			s.ExpiresAt = time.Time{}
+			s.Status = session.StatusRunning
+		})
+		isNewSession = true
+	} else {
+		// Reset status to running for reused sessions
+		h.sessionMgr.Update(sess.ID, func(s *session.Session) {
+			s.Status = session.StatusRunning
+		})
+	}
+	sessionID := sess.ID
+
+	// Build meta
+	meta := ResponseMeta{
+		ProjectPath: projectPath,
+		AgentType:   string(agentboot.AgentTypeMockAgent),
+		SessionID:   sessionID,
+		ChatID:      hCtx.ChatID,
+		UserID:      hCtx.SenderID,
+	}
+
+	h.sessionMgr.AppendMessage(sessionID, session.Message{
+		Role:      "user",
+		Content:   text,
+		Timestamp: time.Now(),
+	})
+
+	// Check if session is already running (prevent concurrent execution)
+	if sess.Status == session.StatusRunning {
+		h.SendText(hCtx, "⚠️ A task is currently running.\n\nUse `stop` or `/stop` to cancel it first.")
+		return
+	}
+
+	h.sessionMgr.SetRunning(sessionID)
+
+	// Send status message - differentiate between new and resumed sessions
+	behavior := h.getOutputBehavior()
+	var statusMsg string
+	if isNewSession {
+		statusMsg = "🧪 Mock: Processing new session..."
+	} else {
+		statusMsg = "🧪 Mock: Resuming session..."
+	}
+	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, statusMsg, behavior), hCtx.MessageID)
+
+	// Execute with context
+	execCtx, cancel := context.WithCancel(context.Background())
+
+	// Store cancel function for /stop command
+	h.runningCancelMu.Lock()
+	h.runningCancel[hCtx.ChatID] = cancel
+	h.runningCancelMu.Unlock()
+
+	// Clean up cancel function when done
+	defer func() {
+		h.runningCancelMu.Lock()
+		delete(h.runningCancel, hCtx.ChatID)
+		h.runningCancelMu.Unlock()
+		cancel()
+	}()
+
+	// Get mock agent
+	mockAgent, err := h.agentBoot.GetAgent(agentboot.AgentTypeMockAgent)
+	if err != nil {
+		// Register mock agent if not exists
+		newMockAgent := mock.NewAgent(mock.Config{
+			MaxIterations: 3,
+			StepDelay:     2 * time.Second,
+		})
+		h.agentBoot.RegisterAgent(agentboot.AgentTypeMockAgent, newMockAgent)
+		mockAgent = newMockAgent
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"chatID":    hCtx.ChatID,
+		"sessionID": sessionID,
+		"agent":     "mock",
+	}).Info("Starting mock agent execution")
+
+	// Create streaming handler for message output
+	streamHandler := h.newStreamingMessageHandler(hCtx)
+
+	// Create composite handler that combines streaming + approval + ask handling
+	compositeHandler := agentboot.NewCompositeHandler().
+		SetStreamer(streamHandler).
+		SetApprovalHandler(h.imPrompter).
+		SetAskHandler(h.imPrompter)
+
+	result, err := mockAgent.Execute(execCtx, text, agentboot.ExecutionOptions{
+		ProjectPath: projectPath,
+		Handler:     compositeHandler,
+		SessionID:   sessionID,
+		ChatID:      hCtx.ChatID,
+		Platform:    string(hCtx.Platform),
+		BotUUID:     hCtx.BotUUID,
+	})
+
+	logrus.WithFields(logrus.Fields{
+		"chatID":    hCtx.ChatID,
+		"sessionID": sessionID,
+		"hasError":  err != nil,
+		"hasResult": result != nil,
+	}).Info("Mock agent execution completed")
+
+	response := streamHandler.GetOutput()
+	if response == "" {
+		if result != nil {
+			response = result.TextOutput()
+		}
+		if err != nil && response == "" {
+			response = fmt.Sprintf("Execution failed: %v", err)
+		}
+	}
+
+	if err != nil {
+		h.sessionMgr.SetFailed(sessionID, response)
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"chatID":    hCtx.ChatID,
+			"sessionID": sessionID,
+			"response":  response,
+		}).Warn("Mock agent execution failed")
+
+		if response == "" {
+			response = fmt.Sprintf("Execution failed: %v", err)
+		}
+		h.sendTextWithReply(hCtx, response, hCtx.MessageID)
+		return
+
+	}
+
+	h.sessionMgr.SetCompleted(sessionID, response)
+
+	h.sessionMgr.AppendMessage(sessionID, session.Message{
+		Role:      "assistant",
+		Content:   response,
+		Timestamp: time.Now(),
+	})
+
+	h.sendTextWithActionKeyboard(hCtx, response, hCtx.MessageID)
 }
 
 // getCurrentAgent retrieves the current agent for a chat

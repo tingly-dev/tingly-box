@@ -31,17 +31,6 @@ func BuildActionKeyboard() *imbot.KeyboardBuilder {
 		)
 }
 
-// BuildCustomPathPrompt returns the text for custom path input prompt
-func BuildCustomPathPrompt() string {
-	return "✏️ *Please type the path you want to /cd:*\n\n" +
-		"Examples:\n" +
-		"• my-project (relative to current)\n" +
-		"• ~/workspace/new-project\n" +
-		"• /home/user/my-project\n\n" +
-		"The directory will be created if it doesn't exist.\n\n" +
-		"Type your path or click Cancel below."
-}
-
 // BuildCancelKeyboard builds a simple cancel keyboard
 func BuildCancelKeyboard() *imbot.KeyboardBuilder {
 	return imbot.NewKeyboardBuilder().
@@ -70,9 +59,4 @@ func BuildBindConfirmKeyboard() *imbot.KeyboardBuilder {
 		AddRow(
 			imbot.CallbackButton("❌ Cancel", imbot.FormatCallbackData("bind", "cancel")),
 		)
-}
-
-// BuildBindConfirmPrompt returns the text for bind confirmation prompt
-func BuildBindConfirmPrompt(proposedPath string) string {
-	return fmt.Sprintf("📁 *No project bound.*\n\nBind to current directory?\n\n`%s`", proposedPath)
 }
