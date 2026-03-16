@@ -566,7 +566,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                 <UnifiedCard
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-                            <span>Claude Code SDK Configuration</span>
+                            <span>Claude Code Configuration</span>
                             <Tooltip title={`Base URL: ${baseUrl}/tingly/claude_code`}>
                                 <IconButton size="small" sx={{ ml: 0.5 }}>
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
@@ -608,7 +608,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                 >
                     <ProviderConfigCard
                         headerRef={headerRef}
-                        title="Claude Code SDK Configuration"
+                        title="Claude Code Configuration"
                         baseUrlPath="/tingly/claude_code"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}

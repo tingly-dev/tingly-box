@@ -18,7 +18,8 @@ import {
     Bolt as SkillIcon,
     Settings as SystemIcon,
     Today as TodayIcon,
-    Send as UserPromptIcon
+    Send as UserPromptIcon,
+    Extension as VSCodeIcon
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -202,6 +203,11 @@ const Layout = ({ children }: LayoutProps) => {
                         path: '/use-xcode',
                         label: t('layout.nav.useXcode', { defaultValue: 'Xcode' }),
                         icon: <LaptopMac sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/use-vscode',
+                        label: t('layout.nav.useVSCode', { defaultValue: 'VS Code' }),
+                        icon: <VSCodeIcon sx={{ fontSize: 20 }} />,
                     },
                 ],
             },
