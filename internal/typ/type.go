@@ -57,6 +57,7 @@ const (
 	ScenarioClaudeCode RuleScenario = "claude_code"
 	ScenarioOpenCode   RuleScenario = "opencode"
 	ScenarioXcode      RuleScenario = "xcode"
+	ScenarioVSCode     RuleScenario = "vscode"
 	ScenarioSmartGuide RuleScenario = "_smart_guide"
 	ScenarioGlobal     RuleScenario = "_global" // Global flags that apply to all scenarios
 )

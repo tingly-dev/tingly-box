@@ -55,7 +55,7 @@ const UseCodexPage: React.FC = () => {
                 <UnifiedCard
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <span>Codex SDK Configuration</span>
+                            <span>Codex Configuration</span>
                             <Tooltip title={`Base URL: ${baseUrl}/tingly/codex`}>
                                 <IconButton size="small" sx={{ ml: 0.5 }}>
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
@@ -76,7 +76,7 @@ const UseCodexPage: React.FC = () => {
                 >
                     <ProviderConfigCard
                         headerRef={headerRef}
-                        title="Codex SDK Configuration"
+                        title="Codex Configuration"
                         baseUrlPath="/tingly/codex"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}

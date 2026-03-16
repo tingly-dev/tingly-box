@@ -667,7 +667,7 @@ func isValidRuleScenario(scenario typ.RuleScenario) bool {
 		return true
 	case typ.ScenarioAgent:
 		return true
-	case typ.ScenarioCodex, typ.ScenarioClaudeCode, typ.ScenarioOpenCode, typ.ScenarioXcode:
+	case typ.ScenarioCodex, typ.ScenarioClaudeCode, typ.ScenarioOpenCode, typ.ScenarioXcode, typ.ScenarioVSCode:
 		return true
 	case typ.ScenarioSmartGuide:
 		return true
