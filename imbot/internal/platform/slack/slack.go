@@ -368,51 +368,58 @@ func (b *Bot) getChatType(event *slack.MessageEvent) core.ChatType {
 
 // sendText sends a text message
 func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessageOptions) (*core.SendResult, error) {
-	// Validate text length
+	// Validate and chunk text if needed
 	if err := b.ValidateTextLength(opts.Text); err != nil {
 		return nil, err
 	}
 
-	// Build message options
-	msgOpts := []slack.MsgOption{slack.MsgOptionText(opts.Text, false)}
+	chunks := b.ChunkText(opts.Text)
+	var lastResult *core.SendResult
 
-	// Add parse mode (Slack supports markdown)
-	if opts.ParseMode == core.ParseModeMarkdown {
-		// Slack uses markdown by default
-	} else if opts.ParseMode == core.ParseModeNone {
-		// Disable markdown (send as plain text)
-		msgOpts = []slack.MsgOption{slack.MsgOptionText(opts.Text, true)}
-	}
+	for i, chunk := range chunks {
+		// Build message options
+		msgOpts := []slack.MsgOption{slack.MsgOptionText(chunk, false)}
 
-	// Add reply
-	threadTS := ""
-	if opts.ReplyTo != "" {
-		parts := parseSlackMessageReference(opts.ReplyTo)
-		if len(parts) == 2 {
-			threadTS = parts[1]
+		// Add parse mode (Slack supports markdown)
+		if opts.ParseMode == core.ParseModeMarkdown {
+			// Slack uses markdown by default
+		} else if opts.ParseMode == core.ParseModeNone {
+			// Disable markdown (send as plain text)
+			msgOpts = []slack.MsgOption{slack.MsgOptionText(chunk, true)}
+		}
+
+		// Add reply (only to first chunk)
+		threadTS := ""
+		if opts.ReplyTo != "" && i == 0 {
+			parts := parseSlackMessageReference(opts.ReplyTo)
+			if len(parts) == 2 {
+				threadTS = parts[1]
+			}
+		}
+
+		if threadTS != "" {
+			msgOpts = append(msgOpts, slack.MsgOptionTS(threadTS))
+		}
+
+		// Add thread ID if specified (only to first chunk)
+		if opts.ThreadID != "" && i == 0 {
+			msgOpts = append(msgOpts, slack.MsgOptionTS(opts.ThreadID))
+		}
+
+		// Send message
+		channel, timestamp, err := b.client.PostMessage(target, msgOpts...)
+		if err != nil {
+			return nil, core.WrapError(err, core.PlatformSlack, core.ErrPlatformError)
+		}
+
+		lastResult = &core.SendResult{
+			MessageID: channel + ":" + timestamp,
+			Timestamp: parseSlackTimestamp(timestamp),
 		}
 	}
 
-	if threadTS != "" {
-		msgOpts = append(msgOpts, slack.MsgOptionTS(threadTS))
-	}
-
-	// Add thread ID if specified
-	if opts.ThreadID != "" {
-		msgOpts = append(msgOpts, slack.MsgOptionTS(opts.ThreadID))
-	}
-
-	// Send message
-	channel, timestamp, err := b.client.PostMessage(target, msgOpts...)
-	if err != nil {
-		return nil, core.WrapError(err, core.PlatformSlack, core.ErrPlatformError)
-	}
-
 	b.UpdateLastActivity()
-	return &core.SendResult{
-		MessageID: channel + ":" + timestamp,
-		Timestamp: parseSlackTimestamp(timestamp),
-	}, nil
+	return lastResult, nil
 }
 
 // sendMedia sends media

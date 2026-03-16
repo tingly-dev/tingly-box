@@ -3,7 +3,6 @@ package bot
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -90,7 +89,7 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 		if p.whitelist[req.ToolName] {
 			p.mu.RUnlock()
 			logrus.WithFields(logrus.Fields{
-				"tool_name": req.ToolName,
+				"tool_name":  req.ToolName,
 				"request_id": req.ID,
 			}).Info("Tool is whitelisted, auto-approving")
 			return ask.Result{
@@ -145,7 +144,7 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 		Text:      promptText,
 		ParseMode: imbot.ParseModeMarkdown,
 		Metadata: map[string]interface{}{
-			"replyMarkup": convertActionKeyboardToTelegram(keyboard),
+			"replyMarkup": imbot.BuildTelegramActionKeyboard(keyboard),
 		},
 	})
 	if err != nil {
@@ -514,19 +513,4 @@ func (p *IMPrompter) SubmitDecision(requestID string, approved bool, remember bo
 // PromptPermission implements the legacy agentboot.UserPrompter interface
 func (p *IMPrompter) PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
 	return p.OnApproval(ctx, req)
-}
-
-// normalizeText normalizes user input for comparison
-func normalizeText(text string) string {
-	text = strings.TrimSpace(text)
-	text = strings.ToLower(text)
-	return text
-}
-
-// truncateText truncates text to maxLen with ellipsis
-func truncateText(text string, maxLen int) string {
-	if len(text) <= maxLen {
-		return text
-	}
-	return text[:maxLen-3] + "..."
 }

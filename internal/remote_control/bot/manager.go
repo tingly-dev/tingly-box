@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/imbot"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
@@ -14,33 +15,105 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 )
 
-// SettingsStore defines the interface for bot settings storage
-// This allows both the legacy bot.Store and the new db.ImBotSettingsStore to be used
-type SettingsStore interface {
-	// GetSettingsByUUIDInterface returns settings by UUID as interface{}
-	GetSettingsByUUIDInterface(uuid string) (interface{}, error)
-	// ListEnabledSettingsInterface returns all enabled settings as interface{}
-	ListEnabledSettingsInterface() (interface{}, error)
+// runBotWithSettings starts a bot using JSON file storage for chat state
+func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, tbClient tbclient.TBClient) error {
+	// Create a JSON-based chat store
+	chatStore, err := NewChatStoreJSON(dataPath)
+	if err != nil {
+		return fmt.Errorf("failed to create chat store: %w", err)
+	}
+	defer chatStore.Close()
+
+	// Create platform-specific auth config
+	authConfig := buildAuthConfig(setting)
+	platform := imbot.Platform(setting.Platform)
+
+	if sessionMgr == nil {
+		return fmt.Errorf("session manager is nil")
+	}
+
+	directoryBrowser := NewDirectoryBrowser()
+
+	manager := imbot.NewManager(
+		imbot.WithAutoReconnect(true),
+		imbot.WithMaxReconnectAttempts(5),
+		imbot.WithReconnectDelay(3000),
+	)
+
+	options := map[string]interface{}{
+		"updateTimeout": 30,
+	}
+	if setting.ProxyURL != "" {
+		options["proxy"] = setting.ProxyURL
+	}
+
+	err = manager.AddBot(&imbot.Config{
+		UUID:     setting.UUID,
+		Platform: platform,
+		Enabled:  true,
+		Auth:     authConfig,
+		Options:  options,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to start %s bot: %w", setting.Platform, err)
+	}
+
+	// Register unified message handler with platform parameter
+	handler := NewBotHandler(ctx, setting, chatStore, sessionMgr, agentBoot, directoryBrowser, manager, tbClient)
+	manager.OnMessage(handler.HandleMessage)
+
+	if err := manager.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start bot manager: %w", err)
+	}
+
+	// Wait for context cancellation
+	// The manager will automatically clean up when context is cancelled
+	<-ctx.Done()
+
+	return nil
 }
 
-// BotLifecycle defines the interface for controlling bot lifecycle
-// This allows the API layer to control bot startup/shutdown without direct dependency on the Manager type
-type BotLifecycle interface {
-	// Start starts a bot by UUID
-	Start(ctx context.Context, uuid string) error
-	// Stop stops a bot by UUID
-	Stop(uuid string)
-	// IsRunning checks if a bot is running
-	IsRunning(uuid string) bool
-	// Sync ensures running bots match the enabled settings
-	Sync(ctx context.Context) error
+// buildAuthConfig creates auth config based on platform
+func buildAuthConfig(setting BotSetting) imbot.AuthConfig {
+	platform := setting.Platform
+	auth := setting.Auth
+
+	switch platform {
+	case "telegram", "discord", "slack":
+		return imbot.AuthConfig{
+			Type:  "token",
+			Token: auth["token"],
+		}
+	case "dingtalk", "feishu":
+		return imbot.AuthConfig{
+			Type:         "oauth",
+			ClientID:     auth["clientId"],
+			ClientSecret: auth["clientSecret"],
+		}
+	case "whatsapp":
+		return imbot.AuthConfig{
+			Type:      "token",
+			Token:     auth["token"],
+			AccountID: auth["phoneNumberId"],
+		}
+	default:
+		return imbot.AuthConfig{
+			Type:  "token",
+			Token: auth["token"],
+		}
+	}
 }
 
-// runningBot tracks a running bot instance
-type runningBot struct {
-	cancel   context.CancelFunc
-	stopped  bool          // marker to indicate if bot is being stopped
-	doneChan chan struct{} // closed when goroutine finishes
+// getProjectPathForGroup retrieves the project path bound to a group chat.
+func getProjectPathForGroup(chatStore ChatStoreInterface, chatID string, platform string) (string, bool) {
+	if chatStore == nil {
+		return "", false
+	}
+	path, ok, err := chatStore.GetProjectPath(chatID)
+	if err != nil {
+		return "", false
+	}
+	return path, ok
 }
 
 // Manager manages the lifecycle of running bot instances
