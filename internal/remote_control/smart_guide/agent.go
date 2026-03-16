@@ -15,9 +15,14 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot"
 )
 
-// AgentTypeSmartGuide is the agent type identifier for SmartGuide (TB) agent
+// AgentType constants
+// AgentTypeTinglyBox is the agent type identifier for SmartGuide (TB) agent
 // Defined here to allow external extension without modifying agentboot core types
-const AgentTypeSmartGuide agentboot.AgentType = "smartguide"
+const (
+	AgentTypeTinglyBox  = "tingly-box" // @tb
+	AgentTypeClaudeCode = "claude"     // @cc
+	AgentTypeMock       = "mock"
+)
 
 // Summary prompt template
 const summaryPrompt = `Analyze the conversation and provide a clear summary to the user after completing tasks or running commands to user.
@@ -603,7 +608,7 @@ func (a *TinglyBoxAgent) IsAvailable() bool {
 
 // Type returns the agent type for agentboot.Agent interface
 func (a *TinglyBoxAgent) Type() agentboot.AgentType {
-	return AgentTypeSmartGuide
+	return AgentTypeTinglyBox
 }
 
 // SetDefaultFormat sets the default output format (no-op for SmartGuide)

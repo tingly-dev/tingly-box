@@ -390,100 +390,107 @@ func (b *Bot) receiveEvents() {
 
 // sendText sends a text message
 func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessageOptions) (*core.SendResult, error) {
-	// Validate text length
+	// Validate and chunk text if needed
 	if err := b.ValidateTextLength(opts.Text); err != nil {
 		return nil, err
 	}
 
+	chunks := b.ChunkText(opts.Text)
 	url := fmt.Sprintf("%s/v1/im/v1/messages", b.apiURL)
 
-	// Build content based on parse mode
-	var content interface{}
-	if opts.ParseMode == core.ParseModeMarkdown {
-		content = map[string]interface{}{
-			"post": map[string]interface{}{
-				"zh_cn": map[string]interface{}{
-					"title": "",
-					"content": [][]map[string]interface{}{
-						{
+	var lastResult *core.SendResult
+
+	for i, chunk := range chunks {
+		// Build content based on parse mode
+		var content interface{}
+		if opts.ParseMode == core.ParseModeMarkdown {
+			content = map[string]interface{}{
+				"post": map[string]interface{}{
+					"zh_cn": map[string]interface{}{
+						"title": "",
+						"content": [][]map[string]interface{}{
 							{
-								"tag":  "text",
-								"text": opts.Text,
+								{
+									"tag":  "text",
+									"text": chunk,
+								},
 							},
 						},
 					},
 				},
-			},
+			}
+		} else {
+			content = map[string]string{
+				"text": chunk,
+			}
 		}
-	} else {
-		content = map[string]string{
-			"text": opts.Text,
+
+		msgType := "text"
+		if opts.ParseMode == core.ParseModeMarkdown {
+			msgType = "post"
 		}
-	}
 
-	msgType := "text"
-	if opts.ParseMode == core.ParseModeMarkdown {
-		msgType = "post"
-	}
+		reqBody := SendMessageRequest{
+			ReceiveIDType: "chat_id",
+			ReceiveID:     target,
+			MsgType:       msgType,
+			Content:       content,
+		}
 
-	reqBody := SendMessageRequest{
-		ReceiveIDType: "chat_id",
-		ReceiveID:     target,
-		MsgType:       msgType,
-		Content:       content,
-	}
-
-	// Add reply if specified
-	if opts.ReplyTo != "" {
-		reqBody.Content = map[string]interface{}{
-			"post": map[string]interface{}{
-				"zh_cn": map[string]interface{}{
-					"title": "",
-					"content": [][]map[string]interface{}{
-						{
+		// Add reply if specified (only to first chunk)
+		if opts.ReplyTo != "" && i == 0 {
+			reqBody.Content = map[string]interface{}{
+				"post": map[string]interface{}{
+					"zh_cn": map[string]interface{}{
+						"title": "",
+						"content": [][]map[string]interface{}{
 							{
-								"tag":  "a",
-								"text": opts.Text,
-								"href": "",
+								{
+									"tag":  "a",
+									"text": chunk,
+									"href": "",
+								},
 							},
 						},
 					},
+					"replyInReply": true,
 				},
-				"replyInReply": true,
-			},
+			}
 		}
-	}
 
-	token, err := b.getTenantAccessToken()
-	if err != nil {
-		return nil, err
-	}
+		token, err := b.getTenantAccessToken()
+		if err != nil {
+			return nil, err
+		}
 
-	resp, err := b.doRequest(ctx, "POST", url, reqBody, token)
-	if err != nil {
-		return nil, core.WrapError(err, core.PlatformFeishu, core.ErrPlatformError)
-	}
-	defer resp.Body.Close()
+		resp, err := b.doRequest(ctx, "POST", url, reqBody, token)
+		if err != nil {
+			return nil, core.WrapError(err, core.PlatformFeishu, core.ErrPlatformError)
+		}
+		defer resp.Body.Close()
 
-	var result struct {
-		Code      int    `json:"code"`
-		Msg       string `json:"msg"`
-		MessageID string `json:"msg_id"`
-	}
+		var result struct {
+			Code      int    `json:"code"`
+			Msg       string `json:"msg"`
+			MessageID string `json:"msg_id"`
+		}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return nil, err
+		}
 
-	if result.Code != 0 {
-		return nil, core.NewPlatformError(core.PlatformFeishu, result.Msg, nil, false)
+		if result.Code != 0 {
+			return nil, core.NewPlatformError(core.PlatformFeishu, result.Msg, nil, false)
+		}
+
+		lastResult = &core.SendResult{
+			MessageID: result.MessageID,
+			Timestamp: time.Now().Unix(),
+		}
 	}
 
 	b.UpdateLastActivity()
-	return &core.SendResult{
-		MessageID: result.MessageID,
-		Timestamp: time.Now().Unix(),
-	}, nil
+	return lastResult, nil
 }
 
 // sendMedia sends media

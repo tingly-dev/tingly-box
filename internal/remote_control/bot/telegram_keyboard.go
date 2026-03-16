@@ -7,11 +7,6 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 )
 
-const (
-	defaultPageSize = 8
-	stateExpiry     = 5 * time.Minute
-)
-
 // BindFlowState represents the state of an ongoing bind flow
 type BindFlowState struct {
 	ChatID       string
@@ -34,17 +29,6 @@ func BuildActionKeyboard() *imbot.KeyboardBuilder {
 			imbot.CallbackButton("📁 CD", imbot.FormatCallbackData("action", "bind")),
 			imbot.CallbackButton("🔧 Project", imbot.FormatCallbackData("action", "project")),
 		)
-}
-
-// BuildCustomPathPrompt returns the text for custom path input prompt
-func BuildCustomPathPrompt() string {
-	return "✏️ *Please type the path you want to /cd:*\n\n" +
-		"Examples:\n" +
-		"• my-project (relative to current)\n" +
-		"• ~/workspace/new-project\n" +
-		"• /home/user/my-project\n\n" +
-		"The directory will be created if it doesn't exist.\n\n" +
-		"Type your path or click Cancel below."
 }
 
 // BuildCancelKeyboard builds a simple cancel keyboard
@@ -75,9 +59,4 @@ func BuildBindConfirmKeyboard() *imbot.KeyboardBuilder {
 		AddRow(
 			imbot.CallbackButton("❌ Cancel", imbot.FormatCallbackData("bind", "cancel")),
 		)
-}
-
-// BuildBindConfirmPrompt returns the text for bind confirmation prompt
-func BuildBindConfirmPrompt(proposedPath string) string {
-	return fmt.Sprintf("📁 *No project bound.*\n\nBind to current directory?\n\n`%s`", proposedPath)
 }

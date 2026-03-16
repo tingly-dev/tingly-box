@@ -117,7 +117,7 @@ func (f *streamingMessageHandler) OnComplete(result *agentboot.CompletionResult)
 
 	// Build action keyboard
 	kb := BuildActionKeyboard()
-	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
 	// Prepare completion message based on verbose mode
 	completionText := "✅ Task done. \nContinue to chat with this session or /help."
@@ -315,28 +315,20 @@ func (h *streamingMessageHandler) GetOutput() string {
 }
 
 // sendMessage sends a message to the bot
+// Note: Platform handles chunking internally via BaseBot.ChunkText()
 func (h *streamingMessageHandler) sendMessage(text string) {
-	for _, chunk := range chunkText(text, imbot.DefaultMessageLimit) {
-		_, err := h.bot.SendMessage(context.Background(), h.chatID, &imbot.SendMessageOptions{
-			Text:    chunk,
-			ReplyTo: h.replyTo,
-		})
-		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"chatID":  h.chatID,
-				"replyTo": h.replyTo,
-				"error":   err,
-				"chunk":   chunk[:minInt(100, len(chunk))],
-			}).Error("Failed to send streaming message")
-			continue
-		}
-		logrus.WithField("chatID", h.chatID).WithField("chunkLen", len(chunk)).Debug("Sent streaming message chunk")
+	_, err := h.bot.SendMessage(context.Background(), h.chatID, &imbot.SendMessageOptions{
+		Text:    text,
+		ReplyTo: h.replyTo,
+	})
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"chatID":  h.chatID,
+			"replyTo": h.replyTo,
+			"error":   err,
+			"textLen": len(text),
+		}).Error("Failed to send streaming message")
+		return
 	}
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
+	logrus.WithField("chatID", h.chatID).WithField("textLen", len(text)).Debug("Sent streaming message")
 }
