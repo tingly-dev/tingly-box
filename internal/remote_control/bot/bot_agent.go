@@ -932,7 +932,7 @@ func (h *BotHandler) routeToAgent(hCtx HandlerContext, text string) error {
 // getProjectPathForChat gets the project path for a chat
 func (h *BotHandler) getProjectPathForChat(hCtx HandlerContext) (string, bool, error) {
 	// Try direct chat first
-	if hCtx.IsDirect {
+	if hCtx.IsDirect() {
 		projectPath, ok, err := h.chatStore.GetProjectPath(hCtx.ChatID)
 		return projectPath, ok, err
 	}
@@ -944,7 +944,7 @@ func (h *BotHandler) getProjectPathForChat(hCtx HandlerContext) (string, bool, e
 
 // getProjectPath returns the project path for the current chat
 func (h *BotHandler) getProjectPath(hCtx HandlerContext) (string, bool) {
-	if hCtx.IsDirect {
+	if hCtx.IsDirect() {
 		// Direct chat: get project path from Chat store
 		projectPath, hasBound, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
 		if hasBound && projectPath != "" {

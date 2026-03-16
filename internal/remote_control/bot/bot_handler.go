@@ -71,11 +71,21 @@ type HandlerContext struct {
 	SenderID  string
 	MessageID string
 	Platform  imbot.Platform
-	IsDirect  bool
-	IsGroup   bool
-	Text      string
 	Media     []imbot.MediaAttachment
 	Metadata  map[string]interface{}
+	Message   imbot.Message
+}
+
+func (c *HandlerContext) IsDirect() bool {
+	return c.Message.IsDirectMessage()
+}
+
+func (c *HandlerContext) IsGroup() bool {
+	return c.Message.IsGroupMessage()
+}
+
+func (c *HandlerContext) Text() string {
+	return strings.TrimSpace(c.Message.GetText())
 }
 
 // NewBotHandler creates a new bot handler with all dependencies
@@ -241,11 +251,30 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 		SenderID:  msg.Sender.ID,
 		MessageID: msg.ID,
 		Platform:  platform,
-		IsDirect:  msg.IsDirectMessage(),
-		IsGroup:   msg.IsGroupMessage(),
-		Text:      strings.TrimSpace(msg.GetText()),
+		Message:   msg,
 		Media:     mediaAttachments,
 		Metadata:  msg.Metadata,
+	}
+
+	switch {
+	case msg.IsDirectMessage():
+		logrus.Infof("Chat ID: %s", chatID)
+		// Check chat ID lock
+		if h.botSetting.ChatIDLock != "" && chatID != h.botSetting.ChatIDLock {
+			return
+		}
+	case msg.IsGroupMessage():
+		logrus.Infof("Group chat ID: %s", chatID)
+		// Check whitelist first
+		if !h.chatStore.IsWhitelisted(chatID) {
+			logrus.Debugf("Group %s is not whitelisted, ignoring message", chatID)
+			h.SendText(hCtx, fmt.Sprintf("This group is not enabled. Please DM the bot with `%s %s` to enable.", cmdJoinPrimary, chatID))
+			return
+		}
+	default:
+		logrus.Errorf("Unsupported message from upstream: %v", msg)
+		h.SendText(hCtx, fmt.Sprintf("Unsupported message from upstream %s %s.", msg.ChatType, chatID))
+		return
 	}
 
 	// Handle media content (with or without text)
@@ -260,36 +289,19 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 		return
 	}
 
-	if hCtx.Text == "" {
+	if hCtx.Text() == "" {
 		return
 	}
 
 	// Check for stop commands FIRST (highest priority)
 	// Supports: /stop, stop, /clear (stop+clear)
-	if isStopCommand(hCtx.Text) {
-		h.handleStopCommand(hCtx, hCtx.Text == "/clear")
-		return
-	}
-
-	// Handle direct chat
-	if hCtx.IsDirect {
-		h.handleDirectMessage(hCtx)
-		return
-	}
-
-	// Handle group chat
-	h.handleGroupMessage(hCtx)
-}
-
-// handleDirectMessage handles messages from direct chat
-func (h *BotHandler) handleDirectMessage(hCtx HandlerContext) {
-	// Check chat ID lock
-	if h.botSetting.ChatIDLock != "" && hCtx.ChatID != h.botSetting.ChatIDLock {
+	if isStopCommand(hCtx.Text()) {
+		h.handleStopCommand(hCtx, hCtx.Text() == "/clear")
 		return
 	}
 
 	// Handle commands
-	if strings.HasPrefix(hCtx.Text, "/") {
+	if strings.HasPrefix(hCtx.Text(), "/") {
 		h.handleSlashCommands(hCtx)
 		return
 	}
@@ -308,42 +320,7 @@ func (h *BotHandler) handleDirectMessage(hCtx HandlerContext) {
 	// NEW: Route all messages through agent router
 	// The router now defaults to @tb (Smart Guide) for new users
 	// Smart Guide can help with navigation, project setup, and handoff to @cc
-	if routeErr := h.routeToAgent(hCtx, hCtx.Text); routeErr != nil {
-		logrus.WithError(routeErr).Error("Failed to route to agent")
-	}
-}
-
-// handleGroupMessage handles messages from group chat
-func (h *BotHandler) handleGroupMessage(hCtx HandlerContext) {
-	logrus.Infof("Group chat ID: %s", hCtx.ChatID)
-
-	// Check whitelist first
-	if !h.chatStore.IsWhitelisted(hCtx.ChatID) {
-		logrus.Debugf("Group %s is not whitelisted, ignoring message", hCtx.ChatID)
-		h.SendText(hCtx, fmt.Sprintf("This group is not enabled. Please DM the bot with `%s %s` to enable.", cmdJoinPrimary, hCtx.ChatID))
-		return
-	}
-
-	// Handle commands
-	if strings.HasPrefix(hCtx.Text, "/") {
-		h.handleSlashCommands(hCtx)
-		return
-	}
-
-	// Check if waiting for custom path input
-	if h.directoryBrowser.IsWaitingInput(hCtx.ChatID) {
-		h.handleCustomPathInput(hCtx)
-		return
-	}
-
-	// Check if there's a pending permission request and user is responding
-	if h.handlePermissionTextResponse(hCtx) {
-		return
-	}
-
-	// NEW: Route all messages through agent router (defaults to @tb)
-	// Smart Guide can help groups with navigation, project setup, and handoff to @cc
-	if routeErr := h.routeToAgent(hCtx, hCtx.Text); routeErr != nil {
+	if routeErr := h.routeToAgent(hCtx, hCtx.Text()); routeErr != nil {
 		logrus.WithError(routeErr).Error("Failed to route to agent")
 	}
 }
@@ -400,7 +377,7 @@ func (h *BotHandler) handleMediaMessage(hCtx HandlerContext) {
 	}
 
 	// 2. Construct message with file tags
-	message := hCtx.Text
+	message := hCtx.Text()
 	if len(fileTags) > 0 {
 		if message == "" {
 			message = strings.Join(fileTags, " ")
@@ -426,26 +403,28 @@ func (h *BotHandler) handlePermissionTextResponse(hCtx HandlerContext) bool {
 	// (usually there's only one at a time)
 	latestReq := pendingReqs[0]
 
+	input := hCtx.Text()
+
 	// For AskUserQuestion, try to parse as option selection first
 	if latestReq.ToolName == "AskUserQuestion" {
 		// Try to submit as a text selection
 		if err := h.imPrompter.SubmitUserResponse(latestReq.ID, ask.Response{
 			Type: "text",
-			Data: hCtx.Text,
+			Data: input,
 		}); err == nil {
-			h.SendText(hCtx, fmt.Sprintf("✅ Selected: %s", hCtx.Text))
+			h.SendText(hCtx, fmt.Sprintf("✅ Selected: %s", input))
 			logrus.WithFields(logrus.Fields{
 				"request_id": latestReq.ID,
 				"tool_name":  latestReq.ToolName,
 				"user_id":    hCtx.SenderID,
-				"selection":  hCtx.Text,
+				"selection":  input,
 			}).Info("User selected option via text")
 			return true
 		}
 	}
 
 	// Try to parse the text as a standard permission response
-	approved, remember, isValid := ask.ParseTextResponse(hCtx.Text)
+	approved, remember, isValid := ask.ParseTextResponse(input)
 	if !isValid {
 		// Not a valid permission response, let other handlers process it
 		return false
@@ -720,7 +699,7 @@ func (h *BotHandler) completeBind(hCtx HandlerContext, projectPath string) {
 
 	logrus.Infof("Project bound: chat=%s path=%s", hCtx.ChatID, expandedPath)
 
-	if hCtx.IsDirect {
+	if hCtx.IsDirect() {
 		h.SendText(hCtx, fmt.Sprintf("✅ Project bound: %s\n\nYou can now send messages directly.", expandedPath))
 	} else {
 		h.SendText(hCtx, fmt.Sprintf("✅ Group bound to project: %s", expandedPath))
@@ -738,10 +717,11 @@ func (h *BotHandler) handleCustomPathInput(hCtx HandlerContext) {
 
 	// Expand path relative to current directory
 	var expandedPath string
-	if filepath.IsAbs(hCtx.Text) || strings.HasPrefix(hCtx.Text, "~") {
+	input := hCtx.Text()
+	if filepath.IsAbs(hCtx.Text()) || strings.HasPrefix(input, "~") {
 		// Absolute path or home-relative path
 		var err error
-		expandedPath, err = ExpandPath(hCtx.Text)
+		expandedPath, err = ExpandPath(input)
 		if err != nil {
 			h.SendText(hCtx, fmt.Sprintf("Invalid path: %v", err))
 			return
@@ -749,11 +729,11 @@ func (h *BotHandler) handleCustomPathInput(hCtx HandlerContext) {
 		}
 	} else if currentPath != "" {
 		// Relative path - expand relative to current directory
-		expandedPath = filepath.Join(currentPath, hCtx.Text)
+		expandedPath = filepath.Join(currentPath, input)
 	} else {
 		// No current path, use ExpandPath
 		var err error
-		expandedPath, err = ExpandPath(hCtx.Text)
+		expandedPath, err = ExpandPath(hCtx.Text())
 		if err != nil {
 			h.SendText(hCtx, fmt.Sprintf("Invalid path: %v", err))
 			return

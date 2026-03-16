@@ -115,11 +115,13 @@ func (h *BotHandler) handleBotCommand(hCtx HandlerContext, fields []string) {
 		}
 		h.handleBotBindCommand(hCtx, fields[2:])
 	case botCommandJoin:
-		if !hCtx.IsDirect {
-			h.SendText(hCtx, "/bot join can only be used in direct chat.")
+		if hCtx.IsDirect() {
+			h.handleJoinCommand(hCtx, fields)
+			return
+		} else {
+			h.SendText(hCtx, "/bot join can only be used in general chat.")
 			return
 		}
-		h.handleJoinCommand(hCtx, fields)
 	case botCommandProject:
 		h.handleBotProjectCommand(hCtx)
 	case botCommandStatus:
@@ -149,7 +151,7 @@ func isCommandMatch(cmd string, primary string, aliases []string) bool {
 // handleBotHelpCommand displays the bot help message
 func (h *BotHandler) handleBotHelpCommand(hCtx HandlerContext) {
 	var helpText string
-	if hCtx.IsDirect {
+	if hCtx.IsDirect() {
 		helpText = fmt.Sprintf(directHelpTemplate, hCtx.SenderID)
 	} else {
 		helpText = fmt.Sprintf(groupHelpTemplate, hCtx.ChatID)
@@ -196,7 +198,8 @@ func (h *BotHandler) handleStopCommand(hCtx HandlerContext, clearSession bool) {
 
 // handleSlashCommands handles slash commands
 func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
-	fields := strings.Fields(hCtx.Text)
+	input := hCtx.Text()
+	fields := strings.Fields(input)
 	if len(fields) == 0 {
 		return
 	}
@@ -217,12 +220,14 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 		}
 		h.handleBotBindCommand(hCtx, fields[1:])
 	case cmd == cmdJoinPrimary:
-		if !hCtx.IsDirect {
-			h.SendText(hCtx, cmdJoinPrimary+" can only be used in direct chat.")
+		if hCtx.IsDirect() {
+			h.handleJoinCommand(hCtx, fields)
+			return
+		} else {
+			h.SendText(hCtx, cmdJoinPrimary+" can only be used in general chat.")
 			return
 		}
-		h.handleJoinCommand(hCtx, fields)
-		return
+
 	case cmd == cmdProjectPrimary:
 		h.handleBotProjectCommand(hCtx)
 		return
@@ -253,7 +258,7 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 
 	// All other slash commands go to agent router (defaults to @tb)
 	// The agent router will handle the command or route to appropriate agent
-	if routeErr := h.routeToAgent(hCtx, hCtx.Text); routeErr != nil {
+	if routeErr := h.routeToAgent(hCtx, input); routeErr != nil {
 		logrus.WithError(routeErr).Error("Failed to route command to agent")
 	}
 }
@@ -509,7 +514,7 @@ func (h *BotHandler) handleBotProjectCommand(hCtx HandlerContext) {
 
 	// Get all projects for user
 	var projectPaths []string
-	if hCtx.IsDirect {
+	if hCtx.IsDirect() {
 		chats, err := h.chatStore.ListChatsByOwner(hCtx.SenderID, platform)
 		if err == nil {
 			seen := make(map[string]bool)
