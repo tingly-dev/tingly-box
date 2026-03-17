@@ -39,10 +39,22 @@ import (
 //
 // Interactive commands (after bot starts):
 //
-//	/status     - Show bot status
-//	/send <msg> - Send a message to test chat (requires FEISHU_TEST_CHAT_ID)
-//	/stats      - Show message statistics
-//	/quit or q  - Exit the test
+//	/status         - Show bot status
+//	/stats          - Show message statistics
+//	/text <msg>     - Send plain text message (requires FEISHU_TEST_CHAT_ID)
+//	/md <msg>       - Send markdown message (requires FEISHU_TEST_CHAT_ID)
+//	/card <msg>     - Send interactive card with buttons (requires FEISHU_TEST_CHAT_ID)
+//	/keyboard       - Send keyboard with multiple buttons (requires FEISHU_TEST_CHAT_ID)
+//	/approve        - Send approval card (bash tool approval simulation)
+//	/echo on/off    - Enable/disable auto-echo
+//	/help           - Show all available commands
+//	/quit or q      - Exit the test
+//
+// To get chat ID:
+// 1. Add the bot to a chat group
+// 2. Send a message from the bot to the chat
+// 3. The bot will log the incoming message with the chat ID
+// 4. Use that chat ID as FEISHU_TEST_CHAT_ID
 func TestE2E_FeishuBot_RealBot(t *testing.T) {
 	appID := os.Getenv("FEISHU_APP_ID")
 	appSecret := os.Getenv("FEISHU_APP_SECRET")
@@ -124,6 +136,7 @@ func TestE2E_FeishuBot_RealBot(t *testing.T) {
 		t.Logf("Content:   %T", msg.Content)
 
 		var echoText string
+		var shouldSkipEcho bool
 
 		switch content := msg.Content.(type) {
 		case *core.TextContent:
@@ -133,8 +146,165 @@ func TestE2E_FeishuBot_RealBot(t *testing.T) {
 			if len(content.Entities) > 0 {
 				t.Logf("Entities: %d", len(content.Entities))
 			}
-			// Echo back the text
-			echoText = fmt.Sprintf("🔁 Echo: %s", content.Text)
+
+			// Check for commands in the message
+			input := strings.TrimSpace(content.Text)
+
+			// Determine target chat for test commands (test chat or current chat)
+			targetChat := testChatID
+			if targetChat == "" {
+				// No test chat set, use current chat
+				targetChat = msg.Recipient.ID
+			}
+
+			// Process commands from Feishu/Lark
+			switch {
+			case input == "/status":
+				status := bot.Status()
+				echoText = fmt.Sprintf("📊 **Bot Status**\n\nConnected: %v\nAuthenticated: %v\nReady: %v\nLast Activity: %s",
+					status.Connected, status.Authenticated, status.Ready,
+					time.Unix(status.LastActivity, 0).Format("15:04:05"))
+				shouldSkipEcho = true // We'll send our own response
+
+			case input == "/stats":
+				echoText = fmt.Sprintf("📈 **Message Statistics**\n\nTotal Received: %d\nAuto-Echo: %v",
+					receivedMessages, echoEnabled)
+				shouldSkipEcho = true
+
+			case input == "/echo on":
+				echoEnabled = true
+				echoText = "✅ Auto-echo enabled"
+				shouldSkipEcho = true
+
+			case input == "/echo off":
+				echoEnabled = false
+				echoText = "❌ Auto-echo disabled"
+				shouldSkipEcho = true
+
+			case input == "/help":
+				helpMsg := "📖 **Available Commands**\n\n" +
+					"/status - Show bot status\n" +
+					"/stats - Show message statistics\n" +
+					"/text <msg> - Send plain text message\n" +
+					"/md <msg> - Send markdown message\n" +
+					"/card <msg> - Send card with buttons\n" +
+					"/keyboard - Send keyboard with buttons\n" +
+					"/approve - Send approval card (bash tool)\n" +
+					"/echo on/off - Toggle auto-echo\n" +
+					"/help - Show this help\n\n" +
+					"Any other text will be echoed back."
+				echoText = helpMsg
+				shouldSkipEcho = true
+
+			case strings.HasPrefix(input, "/text "):
+				// For messages sent to the test chat, forward them
+				msgText := strings.TrimPrefix(input, "/text ")
+				t.Logf("📤 Sending text to %s: %s", targetChat, msgText)
+				result, err := bot.SendText(ctx, targetChat, msgText)
+				if err != nil {
+					echoText = fmt.Sprintf("❌ Failed: %v", err)
+				} else {
+					echoText = fmt.Sprintf("✅ Sent to %s: ID=%s", targetChat, result.MessageID)
+				}
+				shouldSkipEcho = true
+
+			case strings.HasPrefix(input, "/md "):
+				msgText := strings.TrimPrefix(input, "/md ")
+				t.Logf("📤 Sending markdown to %s: %s", targetChat, msgText)
+				result, err := bot.SendMessage(ctx, targetChat, &core.SendMessageOptions{
+					Text:      msgText,
+					ParseMode: core.ParseModeMarkdown,
+				})
+				if err != nil {
+					echoText = fmt.Sprintf("❌ Failed: %v", err)
+				} else {
+					echoText = fmt.Sprintf("✅ Sent to %s: ID=%s", targetChat, result.MessageID)
+				}
+				shouldSkipEcho = true
+
+			case strings.HasPrefix(input, "/card "):
+				msgText := strings.TrimPrefix(input, "/card ")
+				kb := builder.NewKeyboardBuilder()
+				kb.AddRow(
+					builder.CallbackButton("👍 Like", builder.FormatCallbackData("reaction", "like")),
+					builder.CallbackButton("❤️ Love", builder.FormatCallbackData("reaction", "love")),
+				)
+				kb.AddRow(
+					builder.CallbackButton("👎 Dislike", builder.FormatCallbackData("reaction", "dislike")),
+				)
+
+				t.Logf("📤 Sending card to %s: %s", targetChat, msgText)
+				result, err := bot.SendMessage(ctx, targetChat, &core.SendMessageOptions{
+					Text: msgText,
+					Metadata: map[string]interface{}{
+						"replyMarkup": kb.Build(),
+					},
+				})
+				if err != nil {
+					echoText = fmt.Sprintf("❌ Failed: %v", err)
+				} else {
+					echoText = fmt.Sprintf("✅ Sent to %s: ID=%s", targetChat, result.MessageID)
+				}
+				shouldSkipEcho = true
+
+			case input == "/keyboard":
+				kb := builder.NewKeyboardBuilder()
+				kb.AddRow(
+					builder.CallbackButton("🔴 Red", builder.FormatCallbackData("color", "red")),
+					builder.CallbackButton("🟢 Green", builder.FormatCallbackData("color", "green")),
+					builder.CallbackButton("🔵 Blue", builder.FormatCallbackData("color", "blue")),
+				)
+				kb.AddRow(
+					builder.CallbackButton("⬜ White", builder.FormatCallbackData("color", "white")),
+					builder.CallbackButton("⬛ Black", builder.FormatCallbackData("color", "black")),
+				)
+				kb.AddRow(
+					builder.CallbackButton("🟡 Yellow", builder.FormatCallbackData("color", "yellow")),
+				)
+
+				t.Logf("📤 Sending keyboard to %s", targetChat)
+				result, err := bot.SendMessage(ctx, targetChat, &core.SendMessageOptions{
+					Text: "🎨 **Select a Color**\n\nClick a button below:",
+					Metadata: map[string]interface{}{
+						"replyMarkup": kb.Build(),
+					},
+				})
+				if err != nil {
+					echoText = fmt.Sprintf("❌ Failed: %v", err)
+				} else {
+					echoText = fmt.Sprintf("✅ Keyboard sent to %s: ID=%s", targetChat, result.MessageID)
+				}
+				shouldSkipEcho = true
+
+			case input == "/approve":
+				kb := builder.NewKeyboardBuilder()
+				kb.AddRow(
+					builder.CallbackButton("✅ Approve", builder.FormatCallbackData("bash", "approve", "ls -la")),
+					builder.CallbackButton("❌ Reject", builder.FormatCallbackData("bash", "reject", "ls -la")),
+				)
+
+				t.Logf("📤 Sending approval card to %s", targetChat)
+				result, err := bot.SendMessage(ctx, targetChat, &core.SendMessageOptions{
+					Text: "🔐 **Approval Request**\n\n" +
+						"**Tool:** `Bash`\n" +
+						"**Command:** `ls -la`\n\n" +
+						"This command is not in the allowlist.\n" +
+						"Do you approve this action?",
+					Metadata: map[string]interface{}{
+						"replyMarkup": kb.Build(),
+					},
+				})
+				if err != nil {
+					echoText = fmt.Sprintf("❌ Failed: %v", err)
+				} else {
+					echoText = fmt.Sprintf("✅ Approval card sent to %s: ID=%s", targetChat, result.MessageID)
+				}
+				shouldSkipEcho = true
+
+			default:
+				// Echo back regular text
+				echoText = fmt.Sprintf("🔁 Echo: %s", content.Text)
+			}
 
 		case *core.MediaContent:
 			t.Logf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -177,14 +347,29 @@ func TestE2E_FeishuBot_RealBot(t *testing.T) {
 
 		t.Logf("════════════════════════════════════════════════════════════\n")
 
-		// Echo the message back to the sender (if echo is enabled)
+		// Send response back to the sender
 		if echoText != "" && echoEnabled {
-			t.Logf("📤 Echoing message back to %s...", msg.Recipient.ID)
-			result, err := bot.SendText(ctx, msg.Recipient.ID, echoText)
-			if err != nil {
-				t.Logf("❌ Echo failed: %v", err)
+			t.Logf("📤 Sending response to %s...", msg.Recipient.ID)
+
+			// Use SendMessage for commands (with markdown support)
+			if shouldSkipEcho {
+				result, err := bot.SendMessage(ctx, msg.Recipient.ID, &core.SendMessageOptions{
+					Text:      echoText,
+					ParseMode: core.ParseModeMarkdown,
+				})
+				if err != nil {
+					t.Logf("❌ Response failed: %v", err)
+				} else {
+					t.Logf("✅ Response sent: ID=%s", result.MessageID)
+				}
 			} else {
-				t.Logf("✅ Echo sent: ID=%s", result.MessageID)
+				// Regular echo
+				result, err := bot.SendText(ctx, msg.Recipient.ID, echoText)
+				if err != nil {
+					t.Logf("❌ Echo failed: %v", err)
+				} else {
+					t.Logf("✅ Echo sent: ID=%s", result.MessageID)
+				}
 			}
 		}
 	})
@@ -291,10 +476,15 @@ func TestE2E_FeishuBot_RealBot(t *testing.T) {
 		"║                                                               ║\n"+
 		"║  Available commands (type and press Enter):                 ║\n"+
 		"║    /status     - Show bot status                             ║\n"+
-		"║    /send <msg> - Send a message to test chat                ║\n"+
 		"║    /stats      - Show message statistics                     ║\n"+
+		"║    /text <msg> - Send plain text message (needs chat ID)     ║\n"+
+		"║    /md <msg>   - Send markdown message (needs chat ID)       ║\n"+
+		"║    /card <msg> - Send card with buttons (needs chat ID)      ║\n"+
+		"║    /keyboard   - Send keyboard with buttons (needs chat ID)  ║\n"+
+		"║    /approve    - Send approval card (needs chat ID)          ║\n"+
 		"║    /echo on    - Enable auto-echo (default: ON)             ║\n"+
 		"║    /echo off   - Disable auto-echo                          ║\n"+
+		"║    /help       - Show this help message                      ║\n"+
 		"║    /quit or q  - Exit the test                              ║\n"+
 		"║                                                               ║\n"+
 		"║  Or send messages directly from %s!                 ║\n"+
@@ -339,13 +529,131 @@ func TestE2E_FeishuBot_RealBot(t *testing.T) {
 				echoEnabled = false
 				t.Logf("❌ Auto-echo disabled")
 
-			case strings.HasPrefix(input, "/send "):
+			case input == "/help":
+				t.Logf("\n📖 Available Commands:")
+				t.Logf("  /status         - Show bot status")
+				t.Logf("  /stats          - Show message statistics")
+				t.Logf("  /text <msg>     - Send plain text message")
+				t.Logf("  /md <msg>       - Send markdown message")
+				t.Logf("  /card <msg>     - Send card with buttons")
+				t.Logf("  /keyboard       - Send keyboard with buttons")
+				t.Logf("  /approve        - Send approval card (bash tool)")
+				t.Logf("  /echo on/off    - Toggle auto-echo")
+				t.Logf("  /help           - Show this help")
+				t.Logf("  /quit           - Exit test")
+
+			case input == "/keyboard":
 				if testChatID == "" {
 					t.Logf("❌ FEISHU_TEST_CHAT_ID not set - cannot send messages")
 				} else {
-					msgText := strings.TrimPrefix(input, "/send ")
-					t.Logf("📤 Sending: %s", msgText)
+					// Send keyboard with multiple buttons
+					kb := builder.NewKeyboardBuilder()
+					kb.AddRow(
+						builder.CallbackButton("🔴 Red", builder.FormatCallbackData("color", "red")),
+						builder.CallbackButton("🟢 Green", builder.FormatCallbackData("color", "green")),
+						builder.CallbackButton("🔵 Blue", builder.FormatCallbackData("color", "blue")),
+					)
+					kb.AddRow(
+						builder.CallbackButton("⬜ White", builder.FormatCallbackData("color", "white")),
+						builder.CallbackButton("⬛ Black", builder.FormatCallbackData("color", "black")),
+					)
+					kb.AddRow(
+						builder.CallbackButton("🟡 Yellow", builder.FormatCallbackData("color", "yellow")),
+					)
+
+					result, err := bot.SendMessage(ctx, testChatID, &core.SendMessageOptions{
+						Text: "🎨 **Select a Color**\n\nClick a button below:",
+						Metadata: map[string]interface{}{
+							"replyMarkup": kb.Build(),
+						},
+					})
+					if err != nil {
+						t.Logf("❌ Failed: %v", err)
+					} else {
+						t.Logf("✅ Keyboard sent: ID=%s", result.MessageID)
+					}
+				}
+
+			case input == "/approve":
+				if testChatID == "" {
+					t.Logf("❌ FEISHU_TEST_CHAT_ID not set - cannot send messages")
+				} else {
+					// Simulate bash tool approval request
+					kb := builder.NewKeyboardBuilder()
+					kb.AddRow(
+						builder.CallbackButton("✅ Approve", builder.FormatCallbackData("bash", "approve", "ls -la")),
+						builder.CallbackButton("❌ Reject", builder.FormatCallbackData("bash", "reject", "ls -la")),
+					)
+
+					result, err := bot.SendMessage(ctx, testChatID, &core.SendMessageOptions{
+						Text: "🔐 **Approval Request**\n\n" +
+							"**Tool:** `Bash`\n" +
+							"**Command:** `ls -la`\n\n" +
+							"This command is not in the allowlist.\n" +
+							"Do you approve this action?",
+						Metadata: map[string]interface{}{
+							"replyMarkup": kb.Build(),
+						},
+					})
+					if err != nil {
+						t.Logf("❌ Failed: %v", err)
+					} else {
+						t.Logf("✅ Approval card sent: ID=%s", result.MessageID)
+					}
+				}
+
+			case strings.HasPrefix(input, "/text "):
+				if testChatID == "" {
+					t.Logf("❌ FEISHU_TEST_CHAT_ID not set - cannot send messages")
+				} else {
+					msgText := strings.TrimPrefix(input, "/text ")
+					t.Logf("📤 Sending plain text: %s", msgText)
 					result, err := bot.SendText(ctx, testChatID, msgText)
+					if err != nil {
+						t.Logf("❌ Failed: %v", err)
+					} else {
+						t.Logf("✅ Sent: ID=%s", result.MessageID)
+					}
+				}
+
+			case strings.HasPrefix(input, "/md "):
+				if testChatID == "" {
+					t.Logf("❌ FEISHU_TEST_CHAT_ID not set - cannot send messages")
+				} else {
+					msgText := strings.TrimPrefix(input, "/md ")
+					t.Logf("📤 Sending markdown: %s", msgText)
+					result, err := bot.SendMessage(ctx, testChatID, &core.SendMessageOptions{
+						Text:      msgText,
+						ParseMode: core.ParseModeMarkdown,
+					})
+					if err != nil {
+						t.Logf("❌ Failed: %v", err)
+					} else {
+						t.Logf("✅ Sent: ID=%s", result.MessageID)
+					}
+				}
+
+			case strings.HasPrefix(input, "/card "):
+				if testChatID == "" {
+					t.Logf("❌ FEISHU_TEST_CHAT_ID not set - cannot send messages")
+				} else {
+					msgText := strings.TrimPrefix(input, "/card ")
+					kb := builder.NewKeyboardBuilder()
+					kb.AddRow(
+						builder.CallbackButton("👍 Like", builder.FormatCallbackData("reaction", "like")),
+						builder.CallbackButton("❤️ Love", builder.FormatCallbackData("reaction", "love")),
+					)
+					kb.AddRow(
+						builder.CallbackButton("👎 Dislike", builder.FormatCallbackData("reaction", "dislike")),
+					)
+
+					t.Logf("📤 Sending card: %s", msgText)
+					result, err := bot.SendMessage(ctx, testChatID, &core.SendMessageOptions{
+						Text: msgText,
+						Metadata: map[string]interface{}{
+							"replyMarkup": kb.Build(),
+						},
+					})
 					if err != nil {
 						t.Logf("❌ Failed: %v", err)
 					} else {
@@ -355,7 +663,7 @@ func TestE2E_FeishuBot_RealBot(t *testing.T) {
 
 			default:
 				t.Logf("❓ Unknown command: %s", input)
-				t.Logf("   Available: /status, /send <msg>, /stats, /quit")
+				t.Logf("   Type /help for available commands")
 			}
 		}
 	}()

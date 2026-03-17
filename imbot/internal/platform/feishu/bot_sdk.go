@@ -26,6 +26,30 @@ const (
 	DomainLark   Domain = "lark"
 )
 
+// getReceiveIdType determines the receive_id_type based on the target ID format
+// - "open_id": for user IDs (P2P/direct chat)
+// - "chat_id": for group/chat IDs
+//
+// Feishu/Lark ID patterns:
+// - oc_xxxxxx: user's open_id (for P2P chat)
+// - ou_xxxxxx: user's open_id (another format)
+// - cli_xxxxxx: group chat ID
+//
+// However, the most reliable way is to use chat_id for groups and open_id for users.
+// Since we only have the ID string, we'll infer from the prefix.
+func getReceiveIdType(targetID string) string {
+	// Check if it's a group/chat ID pattern
+	if len(targetID) >= 4 {
+		prefix := targetID[:4]
+		if prefix == "cli_" {
+			return "chat_id"
+		}
+	}
+	// Default to open_id for users (P2P chat)
+	// This handles oc_*, ou_*, and other open_id patterns
+	return "open_id"
+}
+
 // Bot is the Lark SDK-based bot implementation
 // Supports both Feishu and Lark platforms via domain configuration
 // Supports both WebSocket (long connection) and webhook modes
@@ -79,7 +103,7 @@ func NewFeishuBot(config *core.Config) (*Bot, error) {
 	return NewBot(config, DomainFeishu)
 }
 
-// Connect connects to Feishu/Lark using Lark SDK (authentication only)
+// Connect connects to Feishu/Lark using Lark SDK (authentication + start receiving)
 func (b *Bot) Connect(ctx context.Context) error {
 	// Initialize adapter for message conversion
 	b.adapter = NewAdapter(b.Config())
@@ -98,7 +122,13 @@ func (b *Bot) Connect(ctx context.Context) error {
 	b.EmitConnected()
 	b.Logger().Info("%s bot connected (authenticated): domain=%s", b.domain, b.domain)
 
-	// Note: Not ready yet - need to call StartReceiving to establish WebSocket
+	// Auto-start receiving messages via WebSocket
+	// This makes Connect() fully ready to receive messages, matching the behavior of other platforms
+	if err := b.StartReceiving(ctx); err != nil {
+		b.Logger().Error("%s failed to start receiving: %v", b.domain, err)
+		return core.NewConnectionFailedError(core.Platform(b.domain), "failed to start receiving", false)
+	}
+
 	return nil
 }
 
@@ -106,7 +136,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 func (b *Bot) Disconnect(ctx context.Context) error {
 	// Stop receiving first if running
 	if b.wsClient != nil {
-		b.StopReceiving(ctx)
+		_ = b.StopReceiving(ctx)
 	}
 
 	b.UpdateConnected(false)
@@ -357,13 +387,15 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 
 	// Use the direct client Post method for sending
 	req := larkim.NewCreateMessageReqBuilder().
-		ReceiveIdType("chat_id").
+		ReceiveIdType(getReceiveIdType(target)).
 		Body(larkim.NewCreateMessageReqBodyBuilder().
 			ReceiveId(target).
 			MsgType(msgType).
 			Content(content).
 			Build()).
 		Build()
+
+	b.Logger().Debug("Sending message request: target=%s, msgType=%s, receiveIdType=%s", target, msgType, getReceiveIdType(target))
 	resp, err := b.client.Im.Message.Create(context.Background(), req)
 
 	if err != nil {
@@ -371,12 +403,24 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 		return nil, core.WrapError(err, core.Platform(b.domain), core.ErrPlatformError)
 	}
 
+	// Log response details
+	b.Logger().Debug("Response received: resp=%p, resp.Data=%p, code=%d, msg=%s",
+		resp, resp.Data, resp.Code, resp.Msg)
+
 	b.UpdateLastActivity()
 	messageID := ""
-	if resp.Data != nil && resp.Data.MessageId != nil {
-		messageID = *resp.Data.MessageId
+	if resp.Data != nil {
+		b.Logger().Debug("Response.Data is not nil, MessageId=%p", resp.Data.MessageId)
+		if resp.Data.MessageId != nil {
+			messageID = *resp.Data.MessageId
+			b.Logger().Debug("Extracted message ID: %s", messageID)
+		} else {
+			b.Logger().Warn("Response.Data.MessageId is nil")
+		}
+	} else {
+		b.Logger().Warn("Response.Data is nil")
 	}
-	b.Logger().Debug("Message sent successfully: ID=%s", messageID)
+	b.Logger().Info("Message sent successfully: ID=%s", messageID)
 	return &core.SendResult{
 		MessageID: messageID,
 		Timestamp: 0,
@@ -406,7 +450,7 @@ func (b *Bot) sendInteractiveCard(ctx context.Context, target string, opts *core
 
 	// Use SDK builder pattern
 	req := larkim.NewCreateMessageReqBuilder().
-		ReceiveIdType("chat_id").
+		ReceiveIdType(getReceiveIdType(target)).
 		Body(larkim.NewCreateMessageReqBodyBuilder().
 			ReceiveId(target).
 			MsgType(msgType).
@@ -414,17 +458,31 @@ func (b *Bot) sendInteractiveCard(ctx context.Context, target string, opts *core
 			Build()).
 		Build()
 
+	b.Logger().Debug("Sending card request: target=%s, receiveIdType=%s", target, getReceiveIdType(target))
 	resp, err := b.client.Im.Message.Create(ctx, req)
 	if err != nil {
 		b.Logger().Error("Failed to send card: %v", err)
 		return nil, core.WrapError(err, core.Platform(b.domain), core.ErrPlatformError)
 	}
 
+	// Log response details
+	b.Logger().Debug("Card response received: resp=%p, resp.Data=%p, code=%d, msg=%s",
+		resp, resp.Data, resp.Code, resp.Msg)
+
 	b.UpdateLastActivity()
 	messageID := ""
-	if resp.Data != nil && resp.Data.MessageId != nil {
-		messageID = *resp.Data.MessageId
+	if resp.Data != nil {
+		b.Logger().Debug("Response.Data is not nil, MessageId=%p", resp.Data.MessageId)
+		if resp.Data.MessageId != nil {
+			messageID = *resp.Data.MessageId
+			b.Logger().Debug("Extracted message ID: %s", messageID)
+		} else {
+			b.Logger().Warn("Response.Data.MessageId is nil")
+		}
+	} else {
+		b.Logger().Warn("Response.Data is nil")
 	}
+	b.Logger().Info("Card sent successfully: ID=%s", messageID)
 	return &core.SendResult{
 		MessageID: messageID,
 		Timestamp: 0,
