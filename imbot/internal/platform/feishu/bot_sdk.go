@@ -327,26 +327,28 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 		return b.sendInteractiveCard(ctx, target, opts, replyMarkup)
 	}
 
-	// Regular text message
+	// Regular text message using SDK builder
 	var msgType string
 	var content string
 
 	if opts.ParseMode == core.ParseModeMarkdown {
-		msgType = "post"
-		content = fmt.Sprintf(`{
-			"post": {
-				"zh_cn": {
-					"title": "",
-					"content": [[{"tag": "text", "text": %q}]]
-				}
-			}
-		}`, opts.Text)
+		// Use Lark card builder for markdown/post content
+		msgType = "interactive"
+		cardJson, err := larkcard.NewMessageCard().
+			Elements([]larkcard.MessageCardElement{
+				larkcard.NewMessageCardLarkMd().Content(opts.Text),
+			}).
+			String()
+		if err != nil {
+			return nil, fmt.Errorf("failed to build card: %w", err)
+		}
+		content = cardJson
 	} else {
 		msgType = "text"
 		content = fmt.Sprintf(`{"text":%q}`, opts.Text)
 	}
 
-	b.Logger().Debug("Sending message: msgType=%s, content=%s, target=%s", msgType, content, target)
+	b.Logger().Debug("Sending message: msgType=%s, target=%s", msgType, target)
 
 	// Check if Im service is available
 	if b.client.Im == nil {
@@ -396,19 +398,23 @@ func (b *Bot) sendInteractiveCard(ctx context.Context, target string, opts *core
 	card := b.buildInteractiveCard(opts.Text, replyMarkup)
 	cardJson, err := card.String()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to serialize card: %w", err)
 	}
 
 	msgType := "interactive"
-	b.Logger().Debug("Sending card: type=%s, content=%s", msgType, cardJson)
+	b.Logger().Debug("Sending card: type=%s", msgType)
 
-	resp, err := b.client.Im.Message.Create(ctx, &larkim.CreateMessageReq{
-		Body: &larkim.CreateMessageReqBody{
-			ReceiveId: &target,
-			MsgType:   &msgType,
-			Content:   &cardJson,
-		},
-	})
+	// Use SDK builder pattern
+	req := larkim.NewCreateMessageReqBuilder().
+		ReceiveIdType("chat_id").
+		Body(larkim.NewCreateMessageReqBodyBuilder().
+			ReceiveId(target).
+			MsgType(msgType).
+			Content(cardJson).
+			Build()).
+		Build()
+
+	resp, err := b.client.Im.Message.Create(ctx, req)
 	if err != nil {
 		b.Logger().Error("Failed to send card: %v", err)
 		return nil, core.WrapError(err, core.Platform(b.domain), core.ErrPlatformError)
