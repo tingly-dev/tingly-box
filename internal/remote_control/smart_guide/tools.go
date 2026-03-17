@@ -26,10 +26,23 @@ type ToolContext struct {
 	SessionID   string
 }
 
+// ApprovalRequest represents a request for user approval
+type ApprovalRequest struct {
+	Command string   // Command to execute
+	Args    []string // Command arguments
+	Reason  string   // Reason for approval request
+}
+
+// ApprovalCallback is called when a command requires user approval
+// Returns (approved, error) - if error is non-nil, the approval process failed
+type ApprovalCallback func(ctx context.Context, req ApprovalRequest) (approved bool, err error)
+
 // ToolExecutor handles tool execution with proper context
 type ToolExecutor struct {
-	BashAllowlist map[string]struct{}
-	BashCwd       string // Per-execution working directory
+	BashAllowlist   map[string]struct{}
+	BashCwd         string           // Per-execution working directory
+	onApproval      ApprovalCallback // Approval callback for non-allowlisted commands
+	approvalTimeout time.Duration    // Timeout for approval requests
 }
 
 // NewToolExecutor creates a new tool executor
@@ -40,9 +53,20 @@ func NewToolExecutor(allowlist []string) *ToolExecutor {
 	}
 
 	return &ToolExecutor{
-		BashAllowlist: allowlistMap,
-		BashCwd:       "", // Start in current directory
+		BashAllowlist:   allowlistMap,
+		BashCwd:         "",              // Start in current directory
+		approvalTimeout: 5 * time.Minute, // Default 5 minute timeout
 	}
+}
+
+// SetApprovalCallback sets the approval callback for non-allowlisted commands
+func (e *ToolExecutor) SetApprovalCallback(callback ApprovalCallback) {
+	e.onApproval = callback
+}
+
+// SetApprovalTimeout sets the timeout for approval requests
+func (e *ToolExecutor) SetApprovalTimeout(timeout time.Duration) {
+	e.approvalTimeout = timeout
 }
 
 // SetWorkingDirectory sets the current working directory
@@ -78,11 +102,33 @@ func (e *ToolExecutor) ResolvePath(path string) string {
 
 // ExecuteBash executes a bash command with allowlist checking
 func (e *ToolExecutor) ExecuteBash(ctx context.Context, cmd string, args ...string) (string, error) {
-	// Check if command is allowed
+	// Check if command is in allowlist
 	cmdLower := strings.ToLower(cmd)
 	if _, allowed := e.BashAllowlist[cmdLower]; !allowed {
-		return "", fmt.Errorf("command '%s' is not allowed. Allowed commands: %v",
-			cmd, e.GetAllowedCommands())
+		// Command not in allowlist - request approval if callback is available
+		if e.onApproval != nil {
+			logrus.WithFields(logrus.Fields{
+				"command": cmd,
+				"args":    args,
+			}).Info("Command not in allowlist, requesting approval")
+
+			approved, err := e.onApproval(ctx, ApprovalRequest{
+				Command: cmd,
+				Args:    args,
+				Reason:  fmt.Sprintf("Command '%s' is not in the allowlist", cmd),
+			})
+			if err != nil {
+				return "", fmt.Errorf("approval request failed: %w", err)
+			}
+			if !approved {
+				return "", fmt.Errorf("command '%s' was not approved by user", cmd)
+			}
+			logrus.WithField("command", cmd).Info("Command approved by user")
+		} else {
+			// No approval callback available - deny with error
+			return "", fmt.Errorf("command '%s' is not allowed. Allowed commands: %v",
+				cmd, e.GetAllowedCommands())
+		}
 	}
 
 	// Build full command
@@ -202,16 +248,64 @@ func (t *BashTool) Call(ctx context.Context, params BashParams) (*tool.ToolRespo
 	// Extract base command for allowlist checking
 	baseCmd := t.extractBaseCommand(command)
 
-	// Check if command is allowed
-	if t.isCommandAllowed(baseCmd) {
-		allowedList := strings.Join(t.AllowedCommands, ", ")
-		return tool.TextResponse(fmt.Sprintf("Error: command '%s' is not allowed. Allowed commands: %s", baseCmd, allowedList)), nil
+	// Check if command is in allowlist
+	// Note: isCommandAllowed returns true when command should be BLOCKED (not in allowlist)
+	if !t.isCommandAllowed(baseCmd) {
+		// Command is in allowlist - execute directly
+		return t.executeCommand(ctx, command, false)
 	}
 
+	// Command is NOT in allowlist - request approval
+	if t.Executor.onApproval != nil {
+		logrus.WithFields(logrus.Fields{
+			"command": baseCmd,
+			"full":    command,
+		}).Info("Command not in allowlist, requesting approval")
+
+		// Parse command into base command and args
+		parts := strings.Fields(command)
+		var cmd string
+		var args []string
+		if len(parts) > 0 {
+			cmd = parts[0]
+			args = parts[1:]
+		}
+
+		approved, err := t.Executor.onApproval(ctx, ApprovalRequest{
+			Command: cmd,
+			Args:    args,
+			Reason:  fmt.Sprintf("Command '%s' is not in the allowlist", baseCmd),
+		})
+		if err != nil {
+			return tool.TextResponse(fmt.Sprintf("Error: approval request failed: %v", err)), nil
+		}
+		if !approved {
+			return tool.TextResponse(fmt.Sprintf("Error: command '%s' was not approved by user", baseCmd)), nil
+		}
+		logrus.WithField("command", baseCmd).Info("Command approved by user")
+		// Execute approved command without allowlist restriction
+		return t.executeCommand(ctx, command, true)
+	}
+
+	// No approval callback - deny with error
+	allowedList := strings.Join(t.AllowedCommands, ", ")
+	return tool.TextResponse(fmt.Sprintf("Error: command '%s' is not allowed. Allowed commands: %s", baseCmd, allowedList)), nil
+}
+
+// executeCommand executes a bash command using the extension tool
+// If skipAllowlist is true, the command is executed without allowlist restriction
+func (t *BashTool) executeCommand(ctx context.Context, command string, skipAllowlist bool) (*tool.ToolResponse, error) {
 	// Create extension bash tool with current working directory
 	cwd := t.Executor.GetWorkingDirectory()
+
+	// For approved commands not in allowlist, use empty allowlist to allow execution
+	allowedCommands := t.AllowedCommands
+	if skipAllowlist {
+		allowedCommands = []string{} // Empty allowlist means allow all
+	}
+
 	extBash := extTools.NewBashTool(
-		extTools.BashOptions(t.AllowedCommands, nil, 120*time.Second, cwd),
+		extTools.BashOptions(allowedCommands, nil, 120*time.Second, cwd),
 		extTools.BashAllowChaining(true), // Allow command chaining
 	)
 

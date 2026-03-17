@@ -288,3 +288,59 @@ func TestRegisterTools(t *testing.T) {
 	assert.Contains(t, toolNames, "get_status")
 	assert.Contains(t, toolNames, "change_workdir")
 }
+
+func TestToolExecutor_ApprovalCallback(t *testing.T) {
+	ctx := context.Background()
+	executor := NewToolExecutor([]string{"ls", "echo"}) // Limited allowlist
+	bashTool := NewBashTool(executor, []string{"ls", "echo"})
+
+	// Test 1: Command in allowlist - no approval needed
+	resp, err := bashTool.Call(ctx, BashParams{Command: "ls ."})
+	assert.NoError(t, err)
+	text := extractTextFromResponse(resp)
+	assert.Contains(t, text, "tools_test.go")
+
+	// Test 2: Command not in allowlist, no callback - should error
+	resp, err = bashTool.Call(ctx, BashParams{Command: "cat /etc/hosts"})
+	assert.NoError(t, err) // Call doesn't return error, error is in response text
+	text = extractTextFromResponse(resp)
+	assert.Contains(t, text, "Error: command 'cat' is not allowed")
+
+	// Test 3: Command not in allowlist, with approval callback - approved
+	approvalCalled := false
+	approvedCommand := ""
+	executor.SetApprovalCallback(func(ctx context.Context, req ApprovalRequest) (bool, error) {
+		approvalCalled = true
+		approvedCommand = req.Command
+		return true, nil // Approve
+	})
+
+	// Use 'pwd' which is NOT in the allowlist but should work everywhere
+	resp, err = bashTool.Call(ctx, BashParams{Command: "pwd"})
+	assert.NoError(t, err)
+	assert.True(t, approvalCalled, "Approval callback should have been called")
+	assert.Equal(t, "pwd", approvedCommand)
+	// The command should execute successfully after approval
+	text = extractTextFromResponse(resp)
+	assert.NotContains(t, text, "Error: command 'pwd' was not approved")
+
+	// Test 4: Command not in allowlist, with approval callback - denied
+	executor.SetApprovalCallback(func(ctx context.Context, req ApprovalRequest) (bool, error) {
+		return false, nil // Deny
+	})
+
+	resp, err = bashTool.Call(ctx, BashParams{Command: "date"})
+	assert.NoError(t, err) // Call doesn't return error, error is in response text
+	text = extractTextFromResponse(resp)
+	assert.Contains(t, text, "Error: command 'date' was not approved")
+
+	// Test 5: Approval callback returns error
+	executor.SetApprovalCallback(func(ctx context.Context, req ApprovalRequest) (bool, error) {
+		return false, errors.New("approval service unavailable")
+	})
+
+	resp, err = bashTool.Call(ctx, BashParams{Command: "whoami"})
+	assert.NoError(t, err) // Call doesn't return error, error is in response text
+	text = extractTextFromResponse(resp)
+	assert.Contains(t, text, "Error: approval request failed")
+}
