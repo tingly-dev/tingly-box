@@ -6,12 +6,14 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/openai/openai-go/v3/shared"
 )
 
 // ConvertAnthropicV1ToResponsesRequest converts Anthropic v1 request to OpenAI Responses API format
 // The Responses API has a different structure than Chat Completions
 func ConvertAnthropicV1ToResponsesRequest(anthropicReq *anthropic.MessageNewParams) responses.ResponseNewParams {
 	params := responses.ResponseNewParams{}
+	params.Model = shared.ResponsesModel(anthropicReq.Model)
 
 	// Convert system messages to Instructions (system role in v1)
 	// In v1, system messages are passed via the System param
