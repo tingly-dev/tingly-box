@@ -3,12 +3,15 @@ package feishu
 import (
 	"context"
 	"fmt"
+	"time"
 
 	lark "github.com/larksuite/oapi-sdk-go/v3"
 	larkcard "github.com/larksuite/oapi-sdk-go/v3/card"
 	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
 	larkevent "github.com/larksuite/oapi-sdk-go/v3/event"
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
+	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
 
 	"github.com/tingly-dev/tingly-box/imbot/internal/builder"
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
@@ -24,11 +27,15 @@ const (
 
 // Bot is the Lark SDK-based bot implementation
 // Supports both Feishu and Lark platforms via domain configuration
+// Supports both WebSocket (long connection) and webhook modes
 type Bot struct {
 	*core.BaseBot
-	client  *lark.Client
-	domain  Domain
-	adapter *Adapter
+	client   *lark.Client           // HTTP client for sending messages
+	wsClient *larkws.Client         // WebSocket client for receiving events
+	domain   Domain
+	adapter  *Adapter
+	eventCtx context.Context
+	eventCancel context.CancelFunc
 }
 
 // NewBot creates a new Feishu/Lark bot using Lark SDK
@@ -51,7 +58,7 @@ func NewBot(config *core.Config, domain Domain) (*Bot, error) {
 		baseURL = lark.LarkBaseUrl
 	}
 
-	// Create Lark SDK client with domain-specific base URL
+	// Create Lark SDK HTTP client with domain-specific base URL
 	client := lark.NewClient(
 		config.Auth.ClientID,
 		config.Auth.ClientSecret,
@@ -71,7 +78,7 @@ func NewFeishuBot(config *core.Config) (*Bot, error) {
 	return NewBot(config, DomainFeishu)
 }
 
-// Connect connects to Feishu/Lark using Lark SDK
+// Connect connects to Feishu/Lark using Lark SDK (authentication only)
 func (b *Bot) Connect(ctx context.Context) error {
 	// Initialize adapter for message conversion
 	b.adapter = NewAdapter(b.Config())
@@ -88,22 +95,145 @@ func (b *Bot) Connect(ctx context.Context) error {
 	b.UpdateConnected(true)
 	b.UpdateAuthenticated(true)
 	b.EmitConnected()
-	b.Logger().Info("%s bot connected: domain=%s", b.domain, b.domain)
+	b.Logger().Info("%s bot connected (authenticated): domain=%s", b.domain, b.domain)
 
-	// Mark ready for receiving events
-	b.UpdateReady(true)
-	b.EmitReady()
-
+	// Note: Not ready yet - need to call StartReceiving to establish WebSocket
 	return nil
 }
 
 // Disconnect disconnects from Feishu/Lark
 func (b *Bot) Disconnect(ctx context.Context) error {
+	// Stop receiving first if running
+	if b.wsClient != nil {
+		b.StopReceiving(ctx)
+	}
+
 	b.UpdateConnected(false)
 	b.UpdateReady(false)
 	b.EmitDisconnected()
 	b.Logger().Info("%s bot disconnected", b.domain)
 	return nil
+}
+
+// StartReceiving starts receiving events via WebSocket long connection
+// This is the main method for establishing real-time event listening
+func (b *Bot) StartReceiving(ctx context.Context) error {
+	// Create event handler that converts Lark events to core.Message
+	// OnP2MessageReceiveV1 handles both v1.0 and v2.0 message receive events
+	eventHandler := dispatcher.NewEventDispatcher("", "").
+		OnP2MessageReceiveV1(b.handleP2MessageReceiveV1)
+
+	// Determine base URL for WebSocket
+	wsDomain := lark.FeishuBaseUrl
+	if b.domain == DomainLark {
+		wsDomain = lark.LarkBaseUrl
+	}
+
+	// Create WebSocket client
+	wsClient := larkws.NewClient(
+		b.Config().Auth.ClientID,
+		b.Config().Auth.ClientSecret,
+		larkws.WithEventHandler(eventHandler),
+		larkws.WithDomain(wsDomain),
+		larkws.WithLogLevel(larkcore.LogLevelInfo),
+	)
+
+	b.wsClient = wsClient
+
+	// Start WebSocket connection in background
+	b.eventCtx, b.eventCancel = context.WithCancel(context.Background())
+
+	go func() {
+		b.Logger().Info("%s WebSocket connecting...", b.domain)
+		if err := wsClient.Start(b.eventCtx); err != nil {
+			b.Logger().Error("%s WebSocket error: %v", b.domain, err)
+			b.UpdateReady(false)
+		}
+	}()
+
+	// Wait a moment for connection to establish
+	time.Sleep(2 * time.Second)
+
+	b.UpdateReady(true)
+	b.EmitReady()
+	b.Logger().Info("%s WebSocket connected and receiving events", b.domain)
+
+	return nil
+}
+
+// StopReceiving stops receiving events via WebSocket
+func (b *Bot) StopReceiving(ctx context.Context) error {
+	if b.eventCancel != nil {
+		b.eventCancel()
+		b.eventCancel = nil
+	}
+	if b.wsClient != nil {
+		// Note: larkws.Client doesn't have explicit Close method
+		// The context cancellation handles cleanup
+		b.wsClient = nil
+	}
+	b.UpdateReady(false)
+	b.Logger().Info("%s WebSocket stopped", b.domain)
+	return nil
+}
+
+// handleP2MessageReceiveV1 handles P2 message events (v2.0)
+func (b *Bot) handleP2MessageReceiveV1(ctx context.Context, event *larkim.P2MessageReceiveV1) error {
+	b.Logger().Info("%s received P2 message: %+v", b.domain, event)
+
+	// Convert Lark event to core.Message
+	coreMsg := b.convertLarkMessageToCore(event)
+
+	// Emit the message
+	b.EmitMessage(*coreMsg)
+
+	return nil
+}
+
+// convertLarkMessageToCore converts a Lark P2MessageReceiveV1 event to core.Message
+func (b *Bot) convertLarkMessageToCore(event *larkim.P2MessageReceiveV1) *core.Message {
+	// Extract basic information
+	var messageID string
+	if event.Event != nil && event.Event.Message != nil && event.Event.Message.MessageId != nil {
+		messageID = *event.Event.Message.MessageId
+	}
+
+	var chatID string
+	if event.Event != nil && event.Event.Message != nil && event.Event.Message.ChatId != nil {
+		chatID = *event.Event.Message.ChatId
+	}
+
+	var senderID string
+	if event.Event != nil && event.Event.Sender != nil && event.Event.Sender.SenderId != nil {
+		if event.Event.Sender.SenderId.UserId != nil {
+			senderID = *event.Event.Sender.SenderId.UserId
+		} else if event.Event.Sender.SenderId.OpenId != nil {
+			senderID = *event.Event.Sender.SenderId.OpenId
+		}
+	}
+
+	// Extract message content
+	var textContent string
+	if event.Event != nil && event.Event.Message != nil && event.Event.Message.Content != nil {
+		// Lark message content is JSON string, need to parse
+		contentStr := *event.Event.Message.Content
+		// For now, just use the raw content
+		// In production, parse the JSON to extract text, images, etc.
+		textContent = contentStr
+	}
+
+	// Build core.Message using the builder
+	messageBuilder := builder.NewMessageBuilder(core.Platform(b.domain)).
+		WithID(messageID).
+		WithTimestamp(time.Now().Unix()).
+		WithSender(senderID, "", "").
+		WithRecipient(chatID, string(core.ChatTypeDirect), "").
+		WithContent(core.NewTextContent(textContent))
+
+	// Add metadata for raw event access
+	messageBuilder.WithMetadata("raw_lark_event", event)
+
+	return messageBuilder.Build()
 }
 
 // SendMessage sends a message using Lark SDK
@@ -310,7 +440,7 @@ func (b *Bot) HandleCardAction(ctx context.Context, eventReq *larkevent.EventReq
 	return nil, fmt.Errorf("card action handling not implemented")
 }
 
-// HandleWebhook handles an incoming webhook event
+// HandleWebhook handles an incoming webhook event (for webhook mode, alternative to WebSocket)
 func (b *Bot) HandleWebhook(body []byte) error {
 	coreMessage, err := b.adapter.AdaptWebhook(context.Background(), body)
 	if err != nil {
@@ -355,14 +485,4 @@ func (b *Bot) EditMessage(ctx context.Context, messageID string, text string) er
 // DeleteMessage deletes a message
 func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 	return fmt.Errorf("delete message not implemented")
-}
-
-// StartReceiving starts receiving events (no-op for webhook mode)
-func (b *Bot) StartReceiving(ctx context.Context) error {
-	return nil
-}
-
-// StopReceiving stops receiving events (no-op for webhook mode)
-func (b *Bot) StopReceiving(ctx context.Context) error {
-	return nil
 }
