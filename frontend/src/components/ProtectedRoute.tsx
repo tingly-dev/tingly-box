@@ -30,6 +30,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
   if (!isAuthenticated) {
     // Save the original location for redirect after login
+    // Use both router state and sessionStorage for persistence across refreshes
+    const currentPath = location.pathname + location.search + location.hash;
+    sessionStorage.setItem('redirectAfterLogin', currentPath);
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

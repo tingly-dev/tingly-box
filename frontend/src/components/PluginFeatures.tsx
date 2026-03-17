@@ -319,7 +319,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                         const anchorEl = menuAnchor[feature.key];
                         return (
                             <Box key={feature.key}>
-                                <Tooltip title={`${feature.label}: ${isEnabled ? 'On' : 'Off'}`} placement="right" arrow>
+                                <Tooltip title={`${feature.label}: ${feature.description} (${isEnabled ? 'On' : 'Off'})`} placement="right" arrow>
                                     <Button
                                         size="small"
                                         variant="outlined"
@@ -350,26 +350,32 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                                     anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
                                     transformOrigin={{ vertical: 'top', horizontal: 'left' }}
                                 >
-                                    <MenuItem
-                                        selected={isEnabled}
-                                        onClick={() => {
-                                            setFeature(feature.key, true);
-                                            handleMenuClose(feature.key);
-                                        }}
-                                    >
-                                        <ListItemText>On</ListItemText>
-                                        {isEnabled && <CheckIcon />}
-                                    </MenuItem>
-                                    <MenuItem
-                                        selected={!isEnabled}
-                                        onClick={() => {
-                                            setFeature(feature.key, false);
-                                            handleMenuClose(feature.key);
-                                        }}
-                                    >
-                                        <ListItemText>Off</ListItemText>
-                                        {!isEnabled && <CheckIcon />}
-                                    </MenuItem>
+                                    <Tooltip title={feature.description} placement="right" arrow>
+                                        <MenuItem
+                                            selected={isEnabled}
+                                            onClick={() => {
+                                                setFeature(feature.key, true);
+                                                handleMenuClose(feature.key);
+                                            }}
+                                            sx={{ width: '100%' }}
+                                        >
+                                            <ListItemText>On</ListItemText>
+                                            {isEnabled && <CheckIcon />}
+                                        </MenuItem>
+                                    </Tooltip>
+                                    <Tooltip title={feature.description} placement="right" arrow>
+                                        <MenuItem
+                                            selected={!isEnabled}
+                                            onClick={() => {
+                                                setFeature(feature.key, false);
+                                                handleMenuClose(feature.key);
+                                            }}
+                                            sx={{ width: '100%' }}
+                                        >
+                                            <ListItemText>Off</ListItemText>
+                                            {!isEnabled && <CheckIcon />}
+                                        </MenuItem>
+                                    </Tooltip>
                                 </Menu>
                             </Box>
                         );
