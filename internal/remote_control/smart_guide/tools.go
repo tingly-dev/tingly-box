@@ -170,8 +170,29 @@ func NewBashTool(executor *ToolExecutor, allowlist []string) *BashTool {
 	}
 }
 
-// Bash executes a bash command with Smart Guide specific enhancements
-func (t *BashTool) Bash(ctx context.Context, params BashParams) (*tool.ToolResponse, error) {
+// Description returns the bash tool description
+func (t *BashTool) Description() string {
+	return `Execute bash commands for file system operations and git.
+
+Allowed commands: ls, pwd, cat, mkdir, rm, cp, mv, git, curl, wget, and more.
+
+Supports command chaining with &&, ||, |, ;, etc.
+
+Examples:
+- List files: ls -la
+- Show current directory: pwd
+- Clone repository: git clone https://github.com/user/repo.git
+- Check git status: git status
+- Change directory temporarily: cd /path/to/dir && ls`
+}
+
+// Name returns the bash tool name
+func (t *BashTool) Name() string {
+	return "bash"
+}
+
+// Call executes a bash command with Smart Guide specific enhancements
+func (t *BashTool) Call(ctx context.Context, params BashParams) (*tool.ToolResponse, error) {
 	command := params.Command
 	if command == "" {
 		return tool.TextResponse("Error: 'command' parameter is required"), nil
@@ -257,8 +278,18 @@ func NewGetStatusTool(executor *ToolExecutor, getStatusFunc func(chatID string) 
 	}
 }
 
-// GetStatus returns the current bot status
-func (t *GetStatusTool) GetStatus(ctx context.Context, params GetStatusParams) (*tool.ToolResponse, error) {
+// Description returns the get_status tool description
+func (t *GetStatusTool) Description() string {
+	return "Get the current bot status including agent, session, project path, and working directory."
+}
+
+// Name returns the get_status tool name
+func (t *GetStatusTool) Name() string {
+	return "get_status"
+}
+
+// Call returns the current bot status
+func (t *GetStatusTool) Call(ctx context.Context, params GetStatusParams) (*tool.ToolResponse, error) {
 	chatID := params.ChatID
 
 	// Add current working directory from executor
@@ -319,8 +350,18 @@ func NewChangeDirTool(executor *ToolExecutor, updateProjectFunc func(chatID stri
 	}
 }
 
-// ChangeDir changes the working directory and persists the change
-func (t *ChangeDirTool) ChangeDir(ctx context.Context, params ChangeDirParams) (*tool.ToolResponse, error) {
+// Description returns the change_workdir tool description
+func (t *ChangeDirTool) Description() string {
+	return "Change the bound project directory. This updates both the current working directory and the persisted project path."
+}
+
+// Name returns the change_workdir tool name
+func (t *ChangeDirTool) Name() string {
+	return "change_workdir"
+}
+
+// Call changes the working directory and persists the change
+func (t *ChangeDirTool) Call(ctx context.Context, params ChangeDirParams) (*tool.ToolResponse, error) {
 	path := params.Path
 	chatID := params.ChatID
 
@@ -426,41 +467,30 @@ func RegisterTools(toolkit *tool.Toolkit, executor *ToolExecutor,
 
 	// Register bash tool (now uses standard pattern with extension wrapper)
 	bashTool := NewBashTool(executor, DefaultBashAllowlist)
-	if err := toolkit.Register(bashTool.Bash, &tool.RegisterOptions{
-		GroupName: "bash",
-		FuncName:  "bash",
-		FuncDescription: `Execute bash commands for file system operations and git.
-
-Allowed commands: ls, pwd, cat, mkdir, rm, cp, mv, git, curl, wget, and more.
-
-Supports command chaining with &&, ||, |, ;, etc.
-
-Examples:
-- List files: ls -la
-- Show current directory: pwd
-- Clone repository: git clone https://github.com/user/repo.git
-- Check git status: git status
-- Change directory temporarily: cd /path/to/dir && ls`,
+	if err := toolkit.Register(bashTool.Call, &tool.RegisterOptions{
+		GroupName:       "bash",
+		FuncName:        bashTool.Name(),
+		FuncDescription: bashTool.Description(),
 	}); err != nil {
 		return fmt.Errorf("failed to register bash tool: %w", err)
 	}
 
 	// Register get_status tool (refactored to use standard pattern)
 	getStatusTool := NewGetStatusTool(executor, getStatusFunc)
-	if err := toolkit.Register(getStatusTool.GetStatus, &tool.RegisterOptions{
+	if err := toolkit.Register(getStatusTool.Call, &tool.RegisterOptions{
 		GroupName:       "project",
-		FuncName:        "get_status",
-		FuncDescription: "Get the current bot status including agent, session, project path, and working directory.",
+		FuncName:        getStatusTool.Name(),
+		FuncDescription: getStatusTool.Description(),
 	}); err != nil {
 		return fmt.Errorf("failed to register get_status tool: %w", err)
 	}
 
 	// Register change_workdir tool (refactored to use standard pattern)
 	changeDirTool := NewChangeDirTool(executor, updateProjectFunc)
-	if err := toolkit.Register(changeDirTool.ChangeDir, &tool.RegisterOptions{
+	if err := toolkit.Register(changeDirTool.Call, &tool.RegisterOptions{
 		GroupName:       "project",
-		FuncName:        "change_workdir",
-		FuncDescription: "Change the bound project directory. This updates both the current working directory and the persisted project path.",
+		FuncName:        changeDirTool.Name(),
+		FuncDescription: changeDirTool.Description(),
 	}); err != nil {
 		return fmt.Errorf("failed to register change_workdir tool: %w", err)
 	}

@@ -162,6 +162,24 @@ func TestRealAgentExecution(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:    "Read",
+			message: "Read go.mod",
+			validate: func(t *testing.T, response *message.Msg, err error) {
+				assert.NoError(t, err)
+				assert.NotNil(t, response)
+				if response != nil {
+					responseText := response.GetTextContent()
+					t.Logf("Response: %s", responseText)
+
+					// Multiple tool uses should be listed in summary
+					assert.Contains(t, responseText, "**Summary**", "Multiple tool uses should generate summary")
+					assert.Contains(t, responseText, "**Tools used:**", "Summary should list all tools")
+
+					t.Logf("✓ Summary generated for multiple tool uses")
+				}
+			},
+		},
 	}
 
 	for _, tc := range testCases {
