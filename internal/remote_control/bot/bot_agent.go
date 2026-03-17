@@ -455,6 +455,11 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 		APIKey:           apiKey,
 		Provider:         h.botSetting.SmartGuideProvider,
 		Model:            h.botSetting.SmartGuideModel,
+		// Approval context
+		Handler:  agentboot.NewCompositeHandler().SetApprovalHandler(h.imPrompter),
+		ChatID:   hCtx.ChatID,
+		Platform: string(hCtx.Platform),
+		BotUUID:  h.botSetting.UUID,
 		GetStatusFunc: func(chatID string) (*smart_guide.StatusInfo, error) {
 			projectPath, _, _ := h.chatStore.GetProjectPath(chatID)
 			workingDir, hasWD, _ := h.chatStore.GetBashCwd(chatID)

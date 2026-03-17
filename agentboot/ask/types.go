@@ -224,13 +224,17 @@ func FromPermissionRequest(pr agentboot.PermissionRequest) *Request {
 		Reason:    pr.Reason,
 		BotUUID:   pr.BotUUID, // Include bot UUID for routing
 		Metadata:  pr.Input,
+		ChatID:    pr.ChatID,   // Use ChatID field directly
+		Platform:  pr.Platform, // Use Platform field directly
 	}
 
-	// Extract chat context from Input (injected by Launcher)
-	if pr.Input != nil {
+	// Fallback: extract chat context from Input (for backward compatibility)
+	if req.ChatID == "" && pr.Input != nil {
 		if chatID, ok := pr.Input["_chat_id"].(string); ok {
 			req.ChatID = chatID
 		}
+	}
+	if req.Platform == "" && pr.Input != nil {
 		if platform, ok := pr.Input["_platform"].(string); ok {
 			req.Platform = platform
 		}
