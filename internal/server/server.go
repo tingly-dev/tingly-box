@@ -103,6 +103,9 @@ type Server struct {
 	// virtual model service for testing
 	virtualModelService *virtualmodel.Service
 
+	// quota manager for provider quota tracking
+	quotaManager interface{}
+
 	// options
 	enableUI      bool
 	enableAdaptor bool
@@ -481,6 +484,11 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize virtual model service
 	server.virtualModelService = virtualmodel.NewService()
 	logrus.Debugf("Virtual model service initialized with default models")
+
+	// Initialize provider quota manager
+	if err := server.initQuotaManager(cfg); err != nil {
+		logrus.WithError(err).Warn("Failed to initialize provider quota manager")
+	}
 
 	// Setup middleware
 	server.setupMiddleware()
@@ -868,6 +876,14 @@ func (s *Server) Start(port int) error {
 		log.Println("OAuth token auto-refresh started")
 	}
 
+	// Start provider quota auto-refresh
+	if s.quotaManager != nil {
+		if qm, ok := s.quotaManager.(interface{StartAutoRefresh(ctx context.Context)}); ok {
+			qm.StartAutoRefresh(ctx)
+			log.Println("Provider quota auto-refresh started")
+		}
+	}
+
 	// Start configuration watcher
 	if s.watcher != nil {
 		if err := s.watcher.Start(); err != nil {
@@ -1137,6 +1153,14 @@ func (s *Server) Stop(ctx context.Context) error {
 	if s.oauthRefresher != nil {
 		s.oauthRefresher.Stop()
 		log.Println("OAuth token auto-refresh stopped")
+	}
+
+	// Stop provider quota auto-refresh
+	if s.quotaManager != nil {
+		if qm, ok := s.quotaManager.(interface{StopAutoRefresh()}); ok {
+			qm.StopAutoRefresh()
+			log.Println("Provider quota auto-refresh stopped")
+		}
 	}
 
 	// Stop debug middleware
