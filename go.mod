@@ -35,8 +35,8 @@ require (
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
 	github.com/tiktoken-go/tokenizer v0.7.0
-	github.com/tingly-dev/tingly-agentscope v0.260317.1800
-	github.com/tingly-dev/tingly-agentscope/extension v0.0.0-20260317101939-de5575bf4e74
+	github.com/tingly-dev/tingly-agentscope v0.260317.1900
+	github.com/tingly-dev/tingly-agentscope/extension v0.0.0-20260317114737-568bdca5a8da
 	github.com/tingly-dev/tingly-box/imbot v0.1.0
 	go.opentelemetry.io/otel v1.42.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.42.0
