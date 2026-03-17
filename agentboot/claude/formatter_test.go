@@ -12,16 +12,17 @@ import (
 func TestTextFormatter_FormatSystemMessage(t *testing.T) {
 	formatter := NewTextFormatter()
 
-	msg := &SystemMessage{
+	// Test "init" subtype - should be rendered
+	initMsg := &SystemMessage{
 		Type:      MessageTypeSystem,
 		SubType:   "init",
 		SessionID: "test-session-123",
 		Timestamp: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC),
 	}
 
-	output := formatter.Format(msg)
+	output := formatter.Format(initMsg)
 	if output == "" {
-		t.Fatal("Expected non-empty output")
+		t.Fatal("Expected non-empty output for 'init' system messages")
 	}
 
 	// Check key components are present
@@ -30,6 +31,19 @@ func TestTextFormatter_FormatSystemMessage(t *testing.T) {
 	}
 	if !contains(output, "test-session-123") {
 		t.Errorf("Expected session ID in output: %s", output)
+	}
+
+	// Test non-"init" subtype - should be hidden
+	otherMsg := &SystemMessage{
+		Type:      MessageTypeSystem,
+		SubType:   "other",
+		SessionID: "test-session-456",
+		Timestamp: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC),
+	}
+
+	otherOutput := formatter.Format(otherMsg)
+	if otherOutput != "" {
+		t.Errorf("Expected empty output for non-'init' system messages, got: %s", otherOutput)
 	}
 }
 

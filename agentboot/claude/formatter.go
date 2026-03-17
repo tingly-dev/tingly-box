@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"text/template"
+
+	"github.com/sirupsen/logrus"
 )
 
 //go:embed templates/*.tmpl
@@ -49,7 +51,12 @@ func (f *TextFormatter) Format(msg Message) string {
 
 	switch m := msg.(type) {
 	case *SystemMessage:
-		return f.formatSystem(m)
+		// Only render system messages with "init" subtype, skip others
+		if m.SubType == "init" {
+			return f.formatSystem(m)
+		}
+		logrus.Debugf("system message, subtype: %s", m.SubType)
+		return ""
 	case *AssistantMessage:
 		return f.formatAssistant(m)
 	case *UserMessage:
