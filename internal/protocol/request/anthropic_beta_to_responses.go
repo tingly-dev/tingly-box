@@ -5,12 +5,14 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/openai/openai-go/v3/shared"
 )
 
 // ConvertAnthropicBetaToResponsesRequest converts Anthropic beta request to OpenAI Responses API format
 // The Responses API has a different structure than Chat Completions
 func ConvertAnthropicBetaToResponsesRequest(anthropicReq *anthropic.BetaMessageNewParams) responses.ResponseNewParams {
 	params := responses.ResponseNewParams{}
+	params.Model = shared.ResponsesModel(anthropicReq.Model)
 
 	// Convert system messages to Instructions (system/developer role)
 	if len(anthropicReq.System) > 0 {
