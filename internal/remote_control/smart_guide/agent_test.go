@@ -305,24 +305,15 @@ func TestBashTool_Description(t *testing.T) {
 	assert.Contains(t, desc, "Allowed commands")
 }
 
-func TestBashTool_Parameters(t *testing.T) {
-	executor := NewToolExecutor([]string{})
-	tool := NewBashTool(executor, []string{})
-	params := tool.Parameters()
-
-	assert.NotNil(t, params)
-	assert.Equal(t, "object", params["type"])
-	assert.NotNil(t, params["properties"])
-	assert.Contains(t, params["properties"], "command")
-	assert.Contains(t, params["required"], "command")
-}
+// Parameters() method removed in tool refactoring - tools now use typed params
+// See RegisterTools() for the new registration pattern
 
 func TestBashTool_Call_AllowedCommand(t *testing.T) {
 	executor := NewToolExecutor([]string{"echo"})
 	tool := NewBashTool(executor, []string{"echo"})
 
 	ctx := context.Background()
-	resp, err := tool.Call(ctx, map[string]any{"command": "echo hello"})
+	resp, err := tool.Call(ctx, BashParams{Command: "echo hello"})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
@@ -335,7 +326,7 @@ func TestBashTool_Call_NotAllowedCommand(t *testing.T) {
 	tool := NewBashTool(executor, []string{"echo"})
 
 	ctx := context.Background()
-	resp, err := tool.Call(ctx, map[string]any{"command": "rm -rf /"})
+	resp, err := tool.Call(ctx, BashParams{Command: "rm -rf /"})
 
 	assert.NoError(t, err) // Tool doesn't return error, just error message
 	assert.NotNil(t, resp)
@@ -343,17 +334,18 @@ func TestBashTool_Call_NotAllowedCommand(t *testing.T) {
 	assert.Contains(t, text, "not allowed")
 }
 
-func TestBashTool_Call_CDNotAllowed(t *testing.T) {
-	executor := NewToolExecutor([]string{"cd", "ls"})
-	tool := NewBashTool(executor, []string{"cd", "ls"})
+func TestBashTool_Call_CDAllowed(t *testing.T) {
+	executor := NewToolExecutor([]string{"cd", "ls", "pwd"})
+	tool := NewBashTool(executor, []string{"cd", "ls", "pwd"})
 
 	ctx := context.Background()
-	resp, err := tool.Call(ctx, map[string]any{"command": "cd /tmp"})
+	// cd is now allowed in bash (uses shell chaining)
+	resp, err := tool.Call(ctx, BashParams{Command: "cd /tmp && pwd"})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	text := extractTextFromContent(resp.Content)
-	assert.Contains(t, text, "change_workdir")
+	assert.Contains(t, text, "/tmp")
 }
 
 func TestGetStatusTool_Name(t *testing.T) {
@@ -375,7 +367,7 @@ func TestGetStatusTool_Call_NoCallback(t *testing.T) {
 	tool := NewGetStatusTool(executor, nil)
 
 	ctx := context.Background()
-	resp, err := tool.Call(ctx, map[string]any{})
+	resp, err := tool.Call(ctx, GetStatusParams{})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
@@ -400,7 +392,7 @@ func TestGetStatusTool_Call_WithCallback(t *testing.T) {
 	tool := NewGetStatusTool(executor, getStatus)
 
 	ctx := context.Background()
-	resp, err := tool.Call(ctx, map[string]any{"chat_id": "chat-123"})
+	resp, err := tool.Call(ctx, GetStatusParams{ChatID: "chat-123"})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
@@ -428,7 +420,7 @@ func TestChangeDirTool_Call_Success(t *testing.T) {
 	tool := NewChangeDirTool(executor, nil)
 
 	ctx := context.Background()
-	resp, err := tool.Call(ctx, map[string]any{"path": "/tmp"})
+	resp, err := tool.Call(ctx, ChangeDirParams{Path: "/tmp"})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
@@ -444,7 +436,7 @@ func TestChangeDirTool_Call_RelativePath(t *testing.T) {
 	ctx := context.Background()
 	// Use /tmp which exists
 	executor.SetWorkingDirectory("/tmp")
-	resp, err := tool.Call(ctx, map[string]any{"path": ".."})
+	resp, err := tool.Call(ctx, ChangeDirParams{Path: ".."})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
@@ -460,7 +452,7 @@ func TestChangeDirTool_Call_EmptyPath(t *testing.T) {
 	tool := NewChangeDirTool(executor, nil)
 
 	ctx := context.Background()
-	resp, err := tool.Call(ctx, map[string]any{})
+	resp, err := tool.Call(ctx, ChangeDirParams{})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
@@ -474,7 +466,7 @@ func TestChangeDirTool_Call_NotADirectory(t *testing.T) {
 
 	ctx := context.Background()
 	// Use /etc/passwd which exists but is not a directory
-	resp, err := tool.Call(ctx, map[string]any{"path": "/etc/passwd"})
+	resp, err := tool.Call(ctx, ChangeDirParams{Path: "/etc/passwd"})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
@@ -512,19 +504,19 @@ func TestBashTool_ComplexCommands(t *testing.T) {
 	ctx := context.Background()
 
 	// Test command with quotes
-	resp, err := tool.Call(ctx, map[string]any{"command": "echo 'hello world'"})
+	resp, err := tool.Call(ctx, BashParams{Command: "echo 'hello world'"})
 	assert.NoError(t, err)
 	text := extractTextFromContent(resp.Content)
 	assert.Contains(t, text, "hello world")
 
 	// Test command with pipe (if shell supports it)
-	resp, err = tool.Call(ctx, map[string]any{"command": "echo 'test' | cat"})
+	resp, err = tool.Call(ctx, BashParams{Command: "echo 'test' | cat"})
 	assert.NoError(t, err)
 	text = extractTextFromContent(resp.Content)
 	assert.Contains(t, text, "test")
 
 	// Test command with redirect
-	resp, err = tool.Call(ctx, map[string]any{"command": "echo 'redirect test' > /dev/null && echo 'success'"})
+	resp, err = tool.Call(ctx, BashParams{Command: "echo 'redirect test' > /dev/null && echo 'success'"})
 	assert.NoError(t, err)
 	text = extractTextFromContent(resp.Content)
 	assert.Contains(t, text, "success")
