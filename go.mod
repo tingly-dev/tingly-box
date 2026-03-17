@@ -11,6 +11,7 @@ replace google.golang.org/genai => ./libs/go-genai
 replace github.com/tingly-dev/tingly-box/imbot => ./imbot
 
 //replace github.com/tingly-dev/tingly-agentscope => ./tingly-scope
+//replace github.com/tingly-dev/tingly-agentscope/extension => ./tingly-scope/extension
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.26.0
@@ -140,6 +141,7 @@ require (
 	github.com/tidwall/match v1.2.0 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
+	github.com/tingly-dev/tingly-agentscope/extension v0.0.0-20260317023949-ee4547f15be8 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
