@@ -38,10 +38,11 @@ import (
 //   - Get App ID and App Secret from "Credentials & Basic Info"
 //
 // Interactive commands (after bot starts):
-//   /status     - Show bot status
-//   /send <msg> - Send a message to test chat (requires FEISHU_TEST_CHAT_ID)
-//   /stats      - Show message statistics
-//   /quit or q  - Exit the test
+//
+//	/status     - Show bot status
+//	/send <msg> - Send a message to test chat (requires FEISHU_TEST_CHAT_ID)
+//	/stats      - Show message statistics
+//	/quit or q  - Exit the test
 func TestE2E_FeishuBot_RealBot(t *testing.T) {
 	appID := os.Getenv("FEISHU_APP_ID")
 	appSecret := os.Getenv("FEISHU_APP_SECRET")
@@ -81,6 +82,9 @@ func TestE2E_FeishuBot_RealBot(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 	defer cancel()
 
+	// Shared state for echo control (accessible from both message handler and commands)
+	echoEnabled := true // Auto-echo is enabled by default
+
 	bot, err := NewBot(config, domain)
 	if err != nil {
 		t.Fatalf("Failed to create %s bot: %v", platformName, err)
@@ -90,9 +94,17 @@ func TestE2E_FeishuBot_RealBot(t *testing.T) {
 		bot.Disconnect(ctx)
 	}()
 
-	// Set up message handler to log received messages
+	// Set up message handler to log received messages and echo back
 	receivedMessages := 0
+
 	bot.OnMessage(func(msg core.Message) {
+		// Recover from any panics in message handler
+		defer func() {
+			if r := recover(); r != nil {
+				t.Logf("❌ PANIC in message handler recovered: %v", r)
+			}
+		}()
+
 		receivedMessages++
 		now := time.Now().Format("15:04:05")
 
@@ -111,6 +123,8 @@ func TestE2E_FeishuBot_RealBot(t *testing.T) {
 		// Content info
 		t.Logf("Content:   %T", msg.Content)
 
+		var echoText string
+
 		switch content := msg.Content.(type) {
 		case *core.TextContent:
 			t.Logf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -119,6 +133,8 @@ func TestE2E_FeishuBot_RealBot(t *testing.T) {
 			if len(content.Entities) > 0 {
 				t.Logf("Entities: %d", len(content.Entities))
 			}
+			// Echo back the text
+			echoText = fmt.Sprintf("🔁 Echo: %s", content.Text)
 
 		case *core.MediaContent:
 			t.Logf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -130,12 +146,15 @@ func TestE2E_FeishuBot_RealBot(t *testing.T) {
 			if content.Caption != "" {
 				t.Logf("Caption: %s", content.Caption)
 			}
+			// Echo back media info
+			echoText = fmt.Sprintf("🔁 Echo: Received %d media item(s)", len(content.Media))
 
 		case *core.SystemContent:
 			t.Logf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 			t.Logf("⚙️  SYSTEM CONTENT:")
 			t.Logf("EventType: %s", content.EventType)
 			t.Logf("Data: %+v", content.Data)
+			// Don't echo system messages
 
 		default:
 			t.Logf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -144,7 +163,7 @@ func TestE2E_FeishuBot_RealBot(t *testing.T) {
 
 		// Thread context if available
 		if msg.ThreadContext != nil {
-			t.Logf("Thread:    %s (reply to: %s)", msg.ThreadContext.ThreadID, msg.ThreadContext.ReplyToMessageID)
+			t.Logf("Thread:    %s (parent: %s)", msg.ThreadContext.ID, msg.ThreadContext.ParentMessageID)
 		}
 
 		// Metadata
@@ -157,6 +176,17 @@ func TestE2E_FeishuBot_RealBot(t *testing.T) {
 		}
 
 		t.Logf("════════════════════════════════════════════════════════════\n")
+
+		// Echo the message back to the sender (if echo is enabled)
+		if echoText != "" && echoEnabled {
+			t.Logf("📤 Echoing message back to %s...", msg.Recipient.ID)
+			result, err := bot.SendText(ctx, msg.Recipient.ID, echoText)
+			if err != nil {
+				t.Logf("❌ Echo failed: %v", err)
+			} else {
+				t.Logf("✅ Echo sent: ID=%s", result.MessageID)
+			}
+		}
 	})
 
 	// Connect to platform (authentication)
@@ -253,17 +283,21 @@ func TestE2E_FeishuBot_RealBot(t *testing.T) {
 	}
 
 	// Keep bot running to receive events via WebSocket
-	t.Logf("\n" +
-		"╔═══════════════════════════════════════════════════════════════╗\n" +
-		"║  🤖 %s Bot is RUNNING via WebSocket                       ║\n" +
-		"║                                                               ║\n" +
-		"║  Available commands (type and press Enter):                 ║\n" +
-		"║    /status     - Show bot status                             ║\n" +
-		"║    /send <msg> - Send a message to test chat                ║\n" +
-		"║    /stats      - Show message statistics                     ║\n" +
-		"║    /quit or q  - Exit the test                              ║\n" +
-		"║                                                               ║\n" +
-		"║  Or send messages directly from %s!                 ║\n" +
+	t.Logf("\n"+
+		"╔═══════════════════════════════════════════════════════════════╗\n"+
+		"║  🤖 %s Bot is RUNNING via WebSocket                       ║\n"+
+		"║                                                               ║\n"+
+		"║  📬 AUTO-ECHO ENABLED - All messages will be echoed back    ║\n"+
+		"║                                                               ║\n"+
+		"║  Available commands (type and press Enter):                 ║\n"+
+		"║    /status     - Show bot status                             ║\n"+
+		"║    /send <msg> - Send a message to test chat                ║\n"+
+		"║    /stats      - Show message statistics                     ║\n"+
+		"║    /echo on    - Enable auto-echo (default: ON)             ║\n"+
+		"║    /echo off   - Disable auto-echo                          ║\n"+
+		"║    /quit or q  - Exit the test                              ║\n"+
+		"║                                                               ║\n"+
+		"║  Or send messages directly from %s!                 ║\n"+
 		"╚═══════════════════════════════════════════════════════════════╝",
 		platformName, platformName)
 
@@ -295,6 +329,15 @@ func TestE2E_FeishuBot_RealBot(t *testing.T) {
 			case input == "/stats":
 				t.Logf("\n📈 Message Statistics:")
 				t.Logf("  Total Received: %d", receivedMessages)
+				t.Logf("  Auto-Echo:      %v", echoEnabled)
+
+			case input == "/echo on":
+				echoEnabled = true
+				t.Logf("✅ Auto-echo enabled")
+
+			case input == "/echo off":
+				echoEnabled = false
+				t.Logf("❌ Auto-echo disabled")
 
 			case strings.HasPrefix(input, "/send "):
 				if testChatID == "" {

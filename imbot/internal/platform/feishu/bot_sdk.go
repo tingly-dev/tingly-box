@@ -2,6 +2,7 @@ package feishu
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -30,11 +31,11 @@ const (
 // Supports both WebSocket (long connection) and webhook modes
 type Bot struct {
 	*core.BaseBot
-	client   *lark.Client           // HTTP client for sending messages
-	wsClient *larkws.Client         // WebSocket client for receiving events
-	domain   Domain
-	adapter  *Adapter
-	eventCtx context.Context
+	client      *lark.Client   // HTTP client for sending messages
+	wsClient    *larkws.Client // WebSocket client for receiving events
+	domain      Domain
+	adapter     *Adapter
+	eventCtx    context.Context
 	eventCancel context.CancelFunc
 }
 
@@ -192,48 +193,97 @@ func (b *Bot) handleP2MessageReceiveV1(ctx context.Context, event *larkim.P2Mess
 
 // convertLarkMessageToCore converts a Lark P2MessageReceiveV1 event to core.Message
 func (b *Bot) convertLarkMessageToCore(event *larkim.P2MessageReceiveV1) *core.Message {
+	// Safety check
+	if event == nil {
+		b.Logger().Error("convertLarkMessageToCore: event is nil")
+		// Return a dummy error message
+		return builder.NewMessageBuilder(core.Platform(b.domain)).
+			WithID("error").
+			WithTimestamp(time.Now().Unix()).
+			WithSender("system", "", "").
+			WithContent(core.NewSystemContent("error", map[string]interface{}{"error": "nil event"})).
+			Build()
+	}
+
+	b.Logger().Debug("Converting Lark message: event=%p, event.Event=%p", event, event.Event)
+
 	// Extract basic information
 	var messageID string
-	if event.Event != nil && event.Event.Message != nil && event.Event.Message.MessageId != nil {
-		messageID = *event.Event.Message.MessageId
+	if event.Event != nil && event.Event.Message != nil {
+		if event.Event.Message.MessageId != nil {
+			messageID = *event.Event.Message.MessageId
+		}
+		b.Logger().Debug("Message ID: %s", messageID)
 	}
 
 	var chatID string
-	if event.Event != nil && event.Event.Message != nil && event.Event.Message.ChatId != nil {
-		chatID = *event.Event.Message.ChatId
+	var chatType core.ChatType = core.ChatTypeDirect
+
+	if event.Event != nil && event.Event.Message != nil {
+		if event.Event.Message.ChatId != nil {
+			chatID = *event.Event.Message.ChatId
+		}
+		if event.Event.Message.ChatType != nil {
+			switch *event.Event.Message.ChatType {
+			case "group":
+				chatType = core.ChatTypeGroup
+			case "channel":
+				chatType = core.ChatTypeChannel
+			}
+		}
+		b.Logger().Debug("Chat ID: %s, Type: %s", chatID, chatType)
 	}
 
 	var senderID string
-	if event.Event != nil && event.Event.Sender != nil && event.Event.Sender.SenderId != nil {
-		if event.Event.Sender.SenderId.UserId != nil {
-			senderID = *event.Event.Sender.SenderId.UserId
-		} else if event.Event.Sender.SenderId.OpenId != nil {
-			senderID = *event.Event.Sender.SenderId.OpenId
+	if event.Event != nil && event.Event.Sender != nil {
+		if event.Event.Sender.SenderId != nil {
+			if event.Event.Sender.SenderId.UserId != nil {
+				senderID = *event.Event.Sender.SenderId.UserId
+			} else if event.Event.Sender.SenderId.OpenId != nil {
+				senderID = *event.Event.Sender.SenderId.OpenId
+			}
 		}
+		b.Logger().Debug("Sender ID: %s", senderID)
 	}
 
-	// Extract message content
+	// Extract message content - Lark Content is JSON string like {"text":"hello"}
 	var textContent string
 	if event.Event != nil && event.Event.Message != nil && event.Event.Message.Content != nil {
-		// Lark message content is JSON string, need to parse
 		contentStr := *event.Event.Message.Content
-		// For now, just use the raw content
-		// In production, parse the JSON to extract text, images, etc.
-		textContent = contentStr
+		b.Logger().Debug("Raw content: %s", contentStr)
+
+		// Parse the JSON content to extract actual text
+		// Format: {"text":"actual message content"} or more complex for rich text
+		var contentMap map[string]interface{}
+		if err := json.Unmarshal([]byte(contentStr), &contentMap); err == nil {
+			if text, ok := contentMap["text"].(string); ok {
+				textContent = text
+			} else {
+				textContent = contentStr // Fallback to raw string
+			}
+		} else {
+			b.Logger().Warn("Failed to parse content JSON: %v, using raw string", err)
+			textContent = contentStr // Fallback to raw string
+		}
 	}
+	b.Logger().Debug("Parsed text content: %s", textContent)
 
 	// Build core.Message using the builder
 	messageBuilder := builder.NewMessageBuilder(core.Platform(b.domain)).
 		WithID(messageID).
 		WithTimestamp(time.Now().Unix()).
 		WithSender(senderID, "", "").
-		WithRecipient(chatID, string(core.ChatTypeDirect), "").
+		WithRecipient(chatID, string(chatType), "").
 		WithContent(core.NewTextContent(textContent))
 
 	// Add metadata for raw event access
 	messageBuilder.WithMetadata("raw_lark_event", event)
 
-	return messageBuilder.Build()
+	msg := messageBuilder.Build()
+	b.Logger().Debug("Built core message: ID=%s, Sender=%s, Content length=%d",
+		msg.ID, msg.Sender.ID, len(textContent))
+
+	return msg
 }
 
 // SendMessage sends a message using Lark SDK
@@ -257,6 +307,16 @@ func (b *Bot) SendMessage(ctx context.Context, target string, opts *core.SendMes
 
 // sendText sends a text or interactive card message
 func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessageOptions) (*core.SendResult, error) {
+	b.Logger().Debug("sendText called: target=%s, text=%s", target, opts.Text)
+
+	// Safety checks
+	if b == nil {
+		return nil, fmt.Errorf("bot is nil")
+	}
+	if b.client == nil {
+		return nil, fmt.Errorf("bot client is nil")
+	}
+
 	// Validate text length
 	if err := b.ValidateTextLength(opts.Text); err != nil {
 		return nil, err
@@ -286,23 +346,35 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 		content = fmt.Sprintf(`{"text":%q}`, opts.Text)
 	}
 
+	b.Logger().Debug("Sending message: msgType=%s, content=%s, target=%s", msgType, content, target)
+
+	// Check if Im service is available
+	if b.client.Im == nil {
+		return nil, fmt.Errorf("client.Im is nil - SDK not properly initialized")
+	}
+
 	// Use the direct client Post method for sending
-	resp, err := b.client.Im.Message.Create(ctx, &larkim.CreateMessageReq{
-		Body: &larkim.CreateMessageReqBody{
-			ReceiveId: &target,
-			MsgType:   &msgType,
-			Content:   &content,
-		},
-	})
+	req := larkim.NewCreateMessageReqBuilder().
+		ReceiveIdType("chat_id").
+		Body(larkim.NewCreateMessageReqBodyBuilder().
+			ReceiveId(target).
+			MsgType(msgType).
+			Content(content).
+			Build()).
+		Build()
+	resp, err := b.client.Im.Message.Create(context.Background(), req)
+
 	if err != nil {
+		b.Logger().Error("Failed to send message: %v", err)
 		return nil, core.WrapError(err, core.Platform(b.domain), core.ErrPlatformError)
 	}
 
 	b.UpdateLastActivity()
 	messageID := ""
-	if resp.Data.MessageId != nil {
+	if resp.Data != nil && resp.Data.MessageId != nil {
 		messageID = *resp.Data.MessageId
 	}
+	b.Logger().Debug("Message sent successfully: ID=%s", messageID)
 	return &core.SendResult{
 		MessageID: messageID,
 		Timestamp: 0,
@@ -311,6 +383,16 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 
 // sendInteractiveCard sends an interactive card with buttons
 func (b *Bot) sendInteractiveCard(ctx context.Context, target string, opts *core.SendMessageOptions, replyMarkup interface{}) (*core.SendResult, error) {
+	b.Logger().Debug("sendInteractiveCard called: target=%s", target)
+
+	// Safety checks
+	if b.client == nil {
+		return nil, fmt.Errorf("bot client is nil")
+	}
+	if b.client.Im == nil {
+		return nil, fmt.Errorf("client.Im is nil")
+	}
+
 	card := b.buildInteractiveCard(opts.Text, replyMarkup)
 	cardJson, err := card.String()
 	if err != nil {
@@ -318,6 +400,7 @@ func (b *Bot) sendInteractiveCard(ctx context.Context, target string, opts *core
 	}
 
 	msgType := "interactive"
+	b.Logger().Debug("Sending card: type=%s, content=%s", msgType, cardJson)
 
 	resp, err := b.client.Im.Message.Create(ctx, &larkim.CreateMessageReq{
 		Body: &larkim.CreateMessageReqBody{
@@ -327,12 +410,13 @@ func (b *Bot) sendInteractiveCard(ctx context.Context, target string, opts *core
 		},
 	})
 	if err != nil {
+		b.Logger().Error("Failed to send card: %v", err)
 		return nil, core.WrapError(err, core.Platform(b.domain), core.ErrPlatformError)
 	}
 
 	b.UpdateLastActivity()
 	messageID := ""
-	if resp.Data.MessageId != nil {
+	if resp.Data != nil && resp.Data.MessageId != nil {
 		messageID = *resp.Data.MessageId
 	}
 	return &core.SendResult{
