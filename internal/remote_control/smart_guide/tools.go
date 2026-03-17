@@ -158,6 +158,7 @@ type BashParams struct {
 
 // BashTool wraps extension's BashTool with Smart Guide specific behavior
 type BashTool struct {
+	tool.DescriptiveTool
 	Executor        *ToolExecutor
 	AllowedCommands []string
 }
@@ -266,6 +267,7 @@ type GetStatusParams struct {
 
 // GetStatusTool returns current bot status
 type GetStatusTool struct {
+	tool.DescriptiveTool
 	executor      *ToolExecutor
 	getStatusFunc func(chatID string) (*StatusInfo, error)
 }
@@ -338,6 +340,7 @@ type ChangeDirParams struct {
 
 // ChangeDirTool changes the bound project directory
 type ChangeDirTool struct {
+	tool.DescriptiveTool
 	executor          *ToolExecutor
 	updateProjectFunc func(chatID string, projectPath string) error
 }
@@ -407,7 +410,9 @@ func (t *ChangeDirTool) Call(ctx context.Context, params ChangeDirParams) (*tool
 
 // HandoffToCCTool provides handoff to Claude Code
 // Note: Currently not registered, kept for future use
-type HandoffToCCTool struct{}
+type HandoffToCCTool struct {
+	tool.DescriptiveTool
+}
 
 // NewHandoffToCCTool creates a new handoff tool
 func NewHandoffToCCTool() *HandoffToCCTool {
@@ -443,7 +448,7 @@ func (t *HandoffToCCTool) Call(ctx context.Context, kwargs map[string]any) (*too
 
 // ToolWithSchema is an interface for tools that can provide their own schema
 type ToolWithSchema interface {
-	tool.ToolCallable
+	tool.DescriptiveTool
 	Name() string
 	Description() string
 	Parameters() map[string]any
