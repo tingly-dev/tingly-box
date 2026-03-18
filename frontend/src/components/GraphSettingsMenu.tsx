@@ -5,6 +5,7 @@ import {
     Delete as DeleteIcon,
     Download as ExportIcon,
     Download as DownloadIcon,
+    Edit as EditIcon,
     PlayArrow as ProbeIcon,
     Settings as SettingsIcon,
     UnfoldMore as ExportMenuIcon
@@ -30,6 +31,7 @@ export interface GraphSettingsMenuProps {
     onToggleActive: () => void;
     onToggleCursorCompat?: () => void;
     onToggleCursorCompatAuto?: () => void;
+    onEditFlags?: () => void;
 }
 
 export const GraphSettingsMenu = ({
@@ -49,6 +51,7 @@ export const GraphSettingsMenu = ({
     onToggleActive,
     onToggleCursorCompat,
     onToggleCursorCompatAuto,
+    onEditFlags,
 }: GraphSettingsMenuProps) => {
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
     const [exportMenuAnchorEl, setExportMenuAnchorEl] = useState<null | HTMLElement>(null);
@@ -129,6 +132,12 @@ export const GraphSettingsMenu = ({
                                 <InactiveIcon fontSize="small" sx={{ mr: 1 }} />Cursor Auto-Detect: Off
                             </>
                         )}
+                    </MenuItem>
+                )}
+
+                {onEditFlags && (
+                    <MenuItem onClick={() => { closeMenu(); onEditFlags(); }}>
+                        <EditIcon fontSize="small" sx={{ mr: 1 }} />Edit flag
                     </MenuItem>
                 )}
 

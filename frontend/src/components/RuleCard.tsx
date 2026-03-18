@@ -10,11 +10,12 @@ import {
     useRuleExport,
     useSmartRoutingHandlers,
 } from '@/components/rule-card/useRuleCardHooks';
-import { RuleCardProbeDialog, RuleCardDeleteDialog } from '@/components/rule-card/dialogs';
+import { RuleCardProbeDialog, RuleCardDeleteDialog, RuleFlagEditDialog } from '@/components/rule-card/dialogs';
 import RoutingGraph from '@/components/RoutingGraph';
 import SmartRoutingGraph from '@/components/SmartRoutingGraph';
 import SmartRuleEditDialog from '@/components/SmartRuleEditDialog';
 import GraphSettingsMenu from '@/components/GraphSettingsMenu';
+import { formatRuleFlags, parseRuleFlags } from '@/components/rule-card/utils';
 
 export interface RuleCardProps {
     rule: Rule;
@@ -86,6 +87,9 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     // Delete confirmation state
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [flagDialogOpen, setFlagDialogOpen] = useState(false);
+    const [flagInput, setFlagInput] = useState('');
+    const [flagError, setFlagError] = useState<string | undefined>(undefined);
 
     // Handler: Switch routing mode (simple toggle, preserves data)
     const handleRoutingModeSwitch = useCallback(async () => {
@@ -171,6 +175,22 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     const cursorCompatEnabled = configRecord.flags?.cursorCompat || false;
     const cursorCompatAutoEnabled = configRecord.flags?.cursorCompatAuto || false;
 
+    const handleOpenFlagEditor = useCallback(() => {
+        setFlagInput(formatRuleFlags(configRecord.flags));
+        setFlagError(undefined);
+        setFlagDialogOpen(true);
+    }, [configRecord.flags]);
+
+    const handleSaveFlags = useCallback(async () => {
+        const result = parseRuleFlags(flagInput);
+        if (result.error) {
+            setFlagError(result.error);
+            return;
+        }
+        await updateField(configRecord, setConfigRecord, 'flags', result.flags);
+        setFlagDialogOpen(false);
+    }, [configRecord, flagInput, updateField, setConfigRecord]);
+
     // Extra actions menu - shared between RoutingGraph and SmartRoutingGraph
     const extraActions = (
         <GraphSettingsMenu
@@ -196,6 +216,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 ...(configRecord.flags || {}),
                 cursorCompatAuto: !cursorCompatAutoEnabled,
             })}
+            onEditFlags={handleOpenFlagEditor}
         />
     );
 
@@ -262,6 +283,19 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
             {/* Delete Confirmation Dialog */}
             <RuleCardDeleteDialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} onConfirm={confirmDeleteRule} />
+
+            {/* Flag Edit Dialog */}
+            <RuleFlagEditDialog
+                open={flagDialogOpen}
+                value={flagInput}
+                error={flagError}
+                onChange={(value) => {
+                    setFlagInput(value);
+                    if (flagError) setFlagError(undefined);
+                }}
+                onClose={() => setFlagDialogOpen(false)}
+                onSave={handleSaveFlags}
+            />
 
             {/* Smart Rule Edit Dialog */}
             <SmartRuleEditDialog
