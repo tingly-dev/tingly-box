@@ -223,6 +223,11 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		})
 		return
 	case protocol.APIStyleAnthropic:
+		// Apply cursor_compat content normalization before converting to Anthropic format
+		// This ensures rich content is flattened for all providers when cursor_compat is enabled
+		if cursorCompat {
+			transformer.ApplyCursorCompatContentNormalization(&req.ChatCompletionNewParams)
+		}
 		anthropicReq := request.ConvertOpenAIToAnthropicRequest(&req.ChatCompletionNewParams, int64(maxAllowed))
 		if isStreaming {
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))

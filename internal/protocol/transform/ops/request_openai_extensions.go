@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/openai/openai-go/v3"
@@ -85,6 +86,58 @@ func GetProviderTransform(providerURL, model string) ProviderTransform {
 	return nil
 }
 
+// normalizeCursorContent flattens rich content in messages for Cursor compatibility.
+// This should be applied for ALL providers when cursor_compat is enabled.
+func normalizeCursorContent(req *openai.ChatCompletionNewParams) {
+	for i := range req.Messages {
+		msgMap, err := messageToMap(req.Messages[i])
+		if err != nil {
+			continue
+		}
+		content, ok := msgMap["content"]
+		if !ok {
+			continue
+		}
+		contentParts, ok := content.([]interface{})
+		if !ok {
+			continue
+		}
+		flattened, _ := flattenRichContent(contentParts)
+		msgMap["content"] = flattened
+
+		updatedBytes, err := json.Marshal(msgMap)
+		if err != nil {
+			continue
+		}
+		var updated openai.ChatCompletionMessageParamUnion
+		if err := json.Unmarshal(updatedBytes, &updated); err != nil {
+			continue
+		}
+		req.Messages[i] = updated
+	}
+}
+
+// ApplyCursorCompatContentNormalization is the exported version of normalizeCursorContent.
+// It flattens rich content in messages for Cursor compatibility.
+// This should be called for ALL providers when cursor_compat is enabled.
+func ApplyCursorCompatContentNormalization(req *openai.ChatCompletionNewParams) {
+	normalizeCursorContent(req)
+}
+
+// messageToMap converts a ChatCompletionMessageParamUnion to a map for modification
+func messageToMap(msg openai.ChatCompletionMessageParamUnion) (map[string]interface{}, error) {
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(msgBytes, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // applyDefaultTransform applies default transformations for OpenAI-compatible requests
 // This handles standard fields like reasoning_effort that are widely supported
 func applyDefaultTransform(req *openai.ChatCompletionNewParams, config *protocol.OpenAIConfig) *openai.ChatCompletionNewParams {
@@ -113,6 +166,11 @@ func applyDefaultTransform(req *openai.ChatCompletionNewParams, config *protocol
 // ApplyProviderTransforms applies provider-specific transformations
 // Falls back to default handling if no specific transform found
 func ApplyProviderTransforms(req *openai.ChatCompletionNewParams, providerURL, model string, config *protocol.OpenAIConfig) *openai.ChatCompletionNewParams {
+	// When cursor_compat is enabled, ALWAYS flatten content regardless of provider
+	// This ensures Cursor compatibility for all providers
+	if config.CursorCompat {
+		normalizeCursorContent(req)
+	}
 	if transform := GetProviderTransform(providerURL, model); transform != nil {
 		return transform(req, providerURL, model, config)
 	}
