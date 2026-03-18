@@ -2,6 +2,7 @@ package transform
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -58,6 +59,11 @@ func NewTransformChain(transforms []Transform) *TransformChain {
 // in TransformSteps. Returns the final TransformContext or an error if
 // any transform fails with a descriptive error message.
 func (c *TransformChain) Execute(ctx *TransformContext) (*TransformContext, error) {
+	// Validate request type: must be a pointer type for consistency
+	if err := validateRequestPointerType(ctx.Request); err != nil {
+		return nil, fmt.Errorf("invalid request type: %w", err)
+	}
+
 	// Initialize TransformSteps if not already initialized
 	if ctx.TransformSteps == nil {
 		ctx.TransformSteps = []string{}
@@ -104,4 +110,19 @@ func (c *TransformChain) GetTransforms() []Transform {
 	transforms := make([]Transform, len(c.transforms))
 	copy(transforms, c.transforms)
 	return transforms
+}
+
+// validateRequestPointerType ensures the request is a pointer type
+// This is required for consistent behavior across the transform chain
+func validateRequestPointerType(req interface{}) error {
+	if req == nil {
+		return fmt.Errorf("request cannot be nil")
+	}
+
+	reqType := reflect.TypeOf(req)
+	if reqType.Kind() != reflect.Ptr {
+		return fmt.Errorf("request must be a pointer type, got %T (value type)", req)
+	}
+
+	return nil
 }

@@ -279,8 +279,8 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			}
 
 			transformCtx := &transform.TransformContext{
-				OriginalRequest: req.BetaMessageNewParams,
-				Request:         req.BetaMessageNewParams, // Original Anthropic beta request
+				OriginalRequest: &req.BetaMessageNewParams,
+				Request:         &req.BetaMessageNewParams, // Original Anthropic beta request
 				ProviderURL:     provider.APIBase,
 				ScenarioFlags:   scenarioFlags,
 				IsStreaming:     isStreaming,
@@ -329,8 +329,8 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			}
 
 			transformCtx := &transform.TransformContext{
-				OriginalRequest: req.BetaMessageNewParams,
-				Request:         req.BetaMessageNewParams, // Original Anthropic beta request
+				OriginalRequest: &req.BetaMessageNewParams,
+				Request:         &req.BetaMessageNewParams, // Original Anthropic beta request
 				ProviderURL:     provider.APIBase,
 				ScenarioFlags:   scenarioFlags,
 				IsStreaming:     isStreaming,
