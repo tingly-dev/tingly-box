@@ -463,7 +463,10 @@ func (h *BotHandler) handlePermissionTextResponse(hCtx HandlerContext) bool {
 // SendText sends a plain text message
 // Note: Platform handles chunking internally via BaseBot.ChunkText()
 func (h *BotHandler) SendText(hCtx HandlerContext, text string) {
-	_, err := hCtx.Bot.SendText(context.Background(), hCtx.ChatID, text)
+	_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
+		Text:      text,
+		ParseMode: imbot.ParseModeMarkdown,
+	})
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to send message")
 	}
@@ -473,8 +476,9 @@ func (h *BotHandler) SendText(hCtx HandlerContext, text string) {
 // Note: Platform handles chunking internally via BaseBot.ChunkText()
 func (h *BotHandler) sendTextWithReply(hCtx HandlerContext, text string, replyTo string) {
 	_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
-		Text:    text,
-		ReplyTo: replyTo,
+		Text:      text,
+		ParseMode: imbot.ParseModeMarkdown,
+		ReplyTo:   replyTo,
 	})
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to send message")
