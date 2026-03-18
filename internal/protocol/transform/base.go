@@ -33,7 +33,8 @@ func (t *BaseTransform) Name() string {
 // This transform detects the original request type and applies the appropriate conversion.
 // For OpenAI Chat target, it converts Anthropic v1/beta requests to OpenAI Chat format.
 // For OpenAI Responses target, it converts Anthropic v1/beta requests to Responses format.
-// For other targets, it returns an error (not yet implemented).
+// For Anthropic targets, it converts OpenAI requests to Anthropic format.
+// If the input type already matches the target type, no conversion is performed.
 func (t *BaseTransform) Apply(ctx *TransformContext) error {
 	// Initialize Extra map if not already initialized
 	if ctx.Extra == nil {
@@ -46,15 +47,16 @@ func (t *BaseTransform) Apply(ctx *TransformContext) error {
 		disableStreamUsage = ctx.ScenarioFlags.DisableStreamUsage
 	}
 
+	// Determine if conversion is needed by checking BOTH input type AND target type
 	switch t.targetType {
 	case TargetAPIStyleOpenAIChat:
 		return t.convertToOpenAIChat(ctx, disableStreamUsage)
 	case TargetAPIStyleOpenAIResponses:
 		return t.convertToOpenAIResponses(ctx, disableStreamUsage)
 	case TargetAPIStyleAnthropicV1:
-		return fmt.Errorf("target API style 'anthropic_v1' not yet implemented")
+		return t.convertToAnthropicV1(ctx)
 	case TargetAPIStyleAnthropicBeta:
-		return fmt.Errorf("target API style 'anthropic_beta' not yet implemented")
+		return t.convertToAnthropicBeta(ctx)
 	default:
 		return fmt.Errorf("unknown target API style: %s", t.targetType)
 	}
@@ -89,6 +91,17 @@ func (t *BaseTransform) convertToOpenAIChat(ctx *TransformContext, disableStream
 	case *openai.ChatCompletionNewParams:
 		// Already in OpenAI Chat format, no conversion needed
 		// Still create a default config for consistency
+		config := &protocol.OpenAIConfig{
+			HasThinking:     false,
+			ReasoningEffort: "none",
+		}
+		ctx.Extra["openaiConfig"] = config
+
+	case *responses.ResponseNewParams:
+		// OpenAI Responses API request - convert to Chat format
+		chatReq := request.ConvertOpenAIResponsesToChat(*req, 0)
+		ctx.Request = chatReq
+		// Create a default config for consistency
 		config := &protocol.OpenAIConfig{
 			HasThinking:     false,
 			ReasoningEffort: "none",
@@ -148,4 +161,62 @@ func (t *BaseTransform) convertToOpenAIResponses(ctx *TransformContext, disableS
 	}
 
 	return nil
+}
+
+// convertToAnthropicV1 converts the request to Anthropic v1 format
+func (t *BaseTransform) convertToAnthropicV1(ctx *TransformContext) error {
+	// Detect request type and convert accordingly
+	switch ctx.Request.(type) {
+	case *anthropic.MessageNewParams:
+		// Already in Anthropic v1 format, no conversion needed
+		// Consistency transform will handle normalization
+		return nil
+
+	case *anthropic.BetaMessageNewParams:
+		// Anthropic beta to v1 conversion - not directly supported
+		// This should generally not happen as they represent different API versions
+		return fmt.Errorf("cannot convert Anthropic beta to v1 in base transform - they are incompatible API versions")
+
+	case *openai.ChatCompletionNewParams:
+		// OpenAI Chat to Anthropic v1 conversion
+		// This conversion is not yet implemented
+		return fmt.Errorf("OpenAI Chat to Anthropic v1 conversion is not yet implemented")
+
+	case *responses.ResponseNewParams:
+		// OpenAI Responses to Anthropic v1 conversion
+		// This conversion is not yet implemented
+		return fmt.Errorf("OpenAI Responses to Anthropic v1 conversion is not yet implemented")
+
+	default:
+		return fmt.Errorf("unsupported request type for Anthropic v1 conversion: %T", ctx.Request)
+	}
+}
+
+// convertToAnthropicBeta converts the request to Anthropic beta format
+func (t *BaseTransform) convertToAnthropicBeta(ctx *TransformContext) error {
+	// Detect request type and convert accordingly
+	switch ctx.Request.(type) {
+	case *anthropic.BetaMessageNewParams:
+		// Already in Anthropic beta format, no conversion needed
+		// Consistency transform will handle normalization
+		return nil
+
+	case *anthropic.MessageNewParams:
+		// Anthropic v1 to beta conversion - not directly supported
+		// This should generally not happen as they represent different API versions
+		return fmt.Errorf("cannot convert Anthropic v1 to beta in base transform - they are incompatible API versions")
+
+	case *openai.ChatCompletionNewParams:
+		// OpenAI Chat to Anthropic beta conversion
+		// This conversion is not yet implemented
+		return fmt.Errorf("OpenAI Chat to Anthropic beta conversion is not yet implemented")
+
+	case *responses.ResponseNewParams:
+		// OpenAI Responses to Anthropic beta conversion
+		// This conversion is not yet implemented
+		return fmt.Errorf("OpenAI Responses to Anthropic beta conversion is not yet implemented")
+
+	default:
+		return fmt.Errorf("unsupported request type for Anthropic beta conversion: %T", ctx.Request)
+	}
 }
