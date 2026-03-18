@@ -3,6 +3,7 @@ import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import BuildIcon from '@mui/icons-material/Build';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import BugReportIcon from '@mui/icons-material/BugReport';
@@ -12,6 +13,8 @@ import {
     CircularProgress,
     IconButton,
     InputAdornment,
+    Menu,
+    MenuItem,
     Stack,
     TextField,
     Typography,
@@ -63,6 +66,7 @@ export function ModelsPanel({
     const { newModels, clearNewModels } = useNewModels();
     const [toolSupportByModel, setToolSupportByModel] = useState<Record<string, boolean>>({});
     const [toolProbing, setToolProbing] = useState(false);
+    const [probeMenuAnchor, setProbeMenuAnchor] = useState<null | HTMLElement>(null);
 
     // Re-fetch provider models when refresh trigger changes (e.g., after custom model deletion)
     useEffect(() => {
@@ -152,16 +156,29 @@ export function ModelsPanel({
         }
     }, [provider.uuid, selectedModel, toolProbing, showSnackbar]);
 
+    const getProbeToken = useCallback(() => {
+        const tbToken = sessionStorage.getItem('tb_token') || localStorage.getItem('tb_token');
+        if (tbToken) return tbToken;
+        return (
+            sessionStorage.getItem('user_auth_token') ||
+            localStorage.getItem('user_auth_token') ||
+            sessionStorage.getItem('enterprise_access_token') ||
+            localStorage.getItem('enterprise_access_token') ||
+            ''
+        );
+    }, []);
+
     const buildProbeCurl = useCallback(() => {
         if (!selectedModel) return '';
         const baseUrl = `${window.location.origin}/tbe`;
+        const token = getProbeToken() || 'YOUR_TOKEN';
         return [
             `curl -X POST '${baseUrl}/api/v1/probe/model/capability' \\`,
             `  -H 'Content-Type: application/json' \\`,
-            `  -H 'Authorization: Bearer YOUR_TOKEN' \\`,
+            `  -H 'Authorization: Bearer ${token}' \\`,
             `  -d '{\"provider_uuid\":\"${provider.uuid}\",\"model_id\":\"${selectedModel}\",\"force_refresh\":true}'`,
         ].join('\n');
-    }, [provider.uuid, selectedModel]);
+    }, [provider.uuid, selectedModel, getProbeToken]);
 
     const handleCopyProbeCurl = useCallback(async () => {
         if (!selectedModel) return;
@@ -173,6 +190,14 @@ export function ModelsPanel({
             showSnackbar('Failed to copy probe curl', 'error');
         }
     }, [selectedModel, buildProbeCurl, showSnackbar]);
+
+    const handleOpenProbeMenu = useCallback((event: React.MouseEvent<HTMLElement>) => {
+        setProbeMenuAnchor(event.currentTarget);
+    }, []);
+
+    const handleCloseProbeMenu = useCallback(() => {
+        setProbeMenuAnchor(null);
+    }, []);
 
     const toolSupportSet = useMemo(() => toolSupportByModel, [toolSupportByModel]);
 
@@ -274,45 +299,31 @@ export function ModelsPanel({
                         >
                             {toolProbing ? 'Probing...' : 'Probe Tool Parser'}
                         </Button>
+                        <Button
+                            variant="outlined"
+                            startIcon={<ContentCopyIcon />}
+                            onClick={handleOpenProbeMenu}
+                            disabled={!selectedModel}
+                            sx={{ height: 40, minWidth: 140 }}
+                        >
+                            Probe Curl
+                        </Button>
                     </Stack>
                     <Typography variant="caption" color="text.secondary">
                         {pagination.totalItems} models
                     </Typography>
                 </Stack>
-
-                {selectedModel && (
-                    <Box
-                        sx={{
-                            border: 1,
-                            borderColor: 'divider',
-                            borderRadius: 2,
-                            p: 1.5,
-                            bgcolor: 'background.paper',
-                        }}
-                    >
-                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                            <Typography variant="caption" color="text.secondary">
-                                Probe curl for {selectedModel}
-                            </Typography>
-                            <Button size="small" variant="outlined" onClick={handleCopyProbeCurl}>
-                                Copy curl
-                            </Button>
-                        </Stack>
-                        <Box
-                            component="pre"
-                            sx={{
-                                m: 0,
-                                whiteSpace: 'pre-wrap',
-                                wordBreak: 'break-word',
-                                fontSize: '0.75rem',
-                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                                color: 'text.primary',
-                            }}
-                        >
-                            {buildProbeCurl()}
-                        </Box>
-                    </Box>
-                )}
+                <Menu
+                    anchorEl={probeMenuAnchor}
+                    open={Boolean(probeMenuAnchor)}
+                    onClose={handleCloseProbeMenu}
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                    transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                >
+                    <MenuItem onClick={() => { handleCloseProbeMenu(); handleCopyProbeCurl(); }}>
+                        Copy probe curl
+                    </MenuItem>
+                </Menu>
 
                 {/* New Models Section */}
                 {newModels[provider.uuid]?.newModels && newModels[provider.uuid].newModels.length > 0 && (
