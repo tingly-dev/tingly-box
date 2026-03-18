@@ -26,6 +26,10 @@ const (
 	ProviderMock        ProviderType = "mock"
 )
 
+// DefaultSessionExpiry is the default expiration time for OAuth sessions
+// This constant is used by both the OAuth manager and session manager
+const DefaultSessionExpiry = 10 * time.Minute
+
 // ParseProviderType parses a provider type from string, case-insensitive
 func ParseProviderType(s string) (ProviderType, error) {
 	p := ProviderType(s)

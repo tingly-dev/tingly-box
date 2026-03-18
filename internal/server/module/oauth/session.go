@@ -1,10 +1,12 @@
 package oauth
 
 import (
+	"log"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // SessionManager manages OAuth session state
@@ -54,7 +56,7 @@ func (sm *SessionManager) CreateSession(provider, userID, redirect, responseType
 		ProxyURL:     proxyURL,
 		Status:       "pending",
 		CreatedAt:    time.Now(),
-		ExpiresAt:    time.Now().Add(30 * time.Minute),
+		ExpiresAt:    time.Now().Add(oauth.DefaultSessionExpiry),
 	}
 	return sessionID
 }
@@ -78,8 +80,12 @@ func (sm *SessionManager) CompleteSession(sessionID, providerUUID string) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	if session, ok := sm.sessions[sessionID]; ok {
+		log.Printf("[OAuth] Completing session %s: setting status to 'success', providerUUID=%s (previous status=%s)",
+			sessionID, providerUUID, session.Status)
 		session.Status = "success"
 		session.ProviderUUID = providerUUID
+	} else {
+		log.Printf("[OAuth] WARNING: CompleteSession called for non-existent session %s", sessionID)
 	}
 }
 

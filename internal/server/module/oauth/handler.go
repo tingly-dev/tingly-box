@@ -31,7 +31,6 @@ type CallbackServerManager interface {
 type Handler struct {
 	oauthManager          *oauth2.Manager
 	config                *config.Config
-	sessionMgr            *SessionManager
 	callbackServerManager CallbackServerManager
 }
 
@@ -40,18 +39,12 @@ func NewHandler(oauthManager *oauth2.Manager, cfg *config.Config) *Handler {
 	return &Handler{
 		oauthManager: oauthManager,
 		config:       cfg,
-		sessionMgr:   NewSessionManager(),
 	}
 }
 
 // SetCallbackServerManager sets the callback server manager (called by Server)
 func (h *Handler) SetCallbackServerManager(csm CallbackServerManager) {
 	h.callbackServerManager = csm
-}
-
-// GetSessionManager returns the session manager (used for testing)
-func (h *Handler) GetSessionManager() *SessionManager {
-	return h.sessionMgr
 }
 
 // CreateProviderFromToken is exported for use by the server's root OAuth callback
@@ -317,19 +310,19 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 		log.Printf("[OAuth] Proxy URL configured: %s", proxyURL)
 	}
 
-	// Create session in our session manager for status tracking
-	sessionID := h.sessionMgr.CreateSession(req.Provider, userID, req.Redirect, req.ResponseType, req.Name, proxyURL)
+	// Generate session ID for this OAuth flow
+	sessionID := uuid.New().String()
 
-	// Create OAuth session for token exchange using the SAME sessionID
+	// Create OAuth session for token exchange using the generated sessionID
 	// This ensures frontend polling and OAuth callback use the same session
 	now := time.Now()
 	oauthSession := &oauth2.SessionState{
-		SessionID: sessionID, // Use the same sessionID for frontend polling
+		SessionID: sessionID,
 		Status:    oauth2.SessionStatusPending,
 		Provider:  providerType,
 		UserID:    userID,
 		CreatedAt: now,
-		ExpiresAt: now.Add(10 * time.Minute),
+		ExpiresAt: now.Add(oauth2.DefaultSessionExpiry), // Use unified session expiration
 	}
 	// Store proxy URL if provided
 	if proxyURL != "" {
@@ -415,7 +408,7 @@ func (h *Handler) pollForDeviceCodeToken(ctx context.Context, deviceCodeData *oa
 	token, err := h.oauthManager.PollForToken(ctx, deviceCodeData, nil)
 	if err != nil {
 		fmt.Printf("[OAuth] Device code polling failed for %s: %v\n", providerType, err)
-		h.sessionMgr.FailSession(sessionID, err.Error())
+		_ = h.oauthManager.UpdateSessionStatus(sessionID, oauth2.SessionStatusFailed, "", err.Error())
 		return
 	}
 
@@ -423,11 +416,12 @@ func (h *Handler) pollForDeviceCodeToken(ctx context.Context, deviceCodeData *oa
 	providerUUID, err := h.createProviderFromToken(token, providerType, customName, sessionID)
 	if err != nil {
 		fmt.Printf("[OAuth] Failed to create provider for %s: %v\n", providerType, err)
-		h.sessionMgr.FailSession(sessionID, err.Error())
+		_ = h.oauthManager.UpdateSessionStatus(sessionID, oauth2.SessionStatusFailed, "", err.Error())
 		return
 	}
 
-	h.sessionMgr.CompleteSession(sessionID, providerUUID)
+	// Update session status to success
+	_ = h.oauthManager.UpdateSessionStatus(sessionID, oauth2.SessionStatusSuccess, providerUUID, "")
 }
 
 // =============================================
@@ -778,15 +772,41 @@ func (h *Handler) GetOAuthSessionStatus(c *gin.Context) {
 		return
 	}
 
-	status := h.sessionMgr.GetStatus(sessionID)
+	// Use oauth.Manager's session storage (the source of truth for OAuth session status)
+	session, err := h.oauthManager.GetSession(sessionID)
+	if err != nil {
+		// Session not found or expired
+		log.Printf("[OAuth] Session status request: sessionID=%s, not found (err=%v)", sessionID, err)
+		resp := OAuthSessionStatusResponse{
+			Success: true,
+		}
+		resp.Data.SessionID = sessionID
+		resp.Data.Status = "not_found"
+		c.JSON(http.StatusOK, resp)
+		return
+	}
+
+	// Check expiration
+	if !session.ExpiresAt.IsZero() && time.Now().After(session.ExpiresAt) {
+		log.Printf("[OAuth] Session status request: sessionID=%s, expired", sessionID)
+		resp := OAuthSessionStatusResponse{
+			Success: true,
+		}
+		resp.Data.SessionID = sessionID
+		resp.Data.Status = "expired"
+		c.JSON(http.StatusOK, resp)
+		return
+	}
+
+	log.Printf("[OAuth] Session status request: sessionID=%s, status=%s, providerUUID=%s", sessionID, session.Status, session.ProviderUUID)
 
 	resp := OAuthSessionStatusResponse{
 		Success: true,
 	}
-	resp.Data.SessionID = status.SessionID
-	resp.Data.Status = status.Status
-	resp.Data.ProviderUUID = status.ProviderUUID
-	resp.Data.Error = status.Error
+	resp.Data.SessionID = session.SessionID
+	resp.Data.Status = string(session.Status)
+	resp.Data.ProviderUUID = session.ProviderUUID
+	resp.Data.Error = session.Error
 
 	c.JSON(http.StatusOK, resp)
 }
@@ -803,7 +823,12 @@ func (h *Handler) CancelOAuthSession(c *gin.Context) {
 		return
 	}
 
-	if h.sessionMgr.CancelSession(req.SessionID) {
+	// Use oauth.Manager's session storage to mark session as failed
+	// Note: We use "failed" status for cancelled sessions since there's no "cancelled" status in oauth.Manager
+	if err := h.oauthManager.UpdateSessionStatus(req.SessionID, oauth2.SessionStatusFailed, "", "User cancelled"); err != nil {
+		log.Printf("[OAuth] Failed to cancel session %s: %v", req.SessionID, err)
+		// Don't return error - session might not exist, which is fine
+	} else {
 		log.Printf("[OAuth] Cancelled session %s", req.SessionID)
 	}
 
@@ -825,30 +850,52 @@ func (h *Handler) CancelOAuthSession(c *gin.Context) {
 // OAuthCallback handles OAuth callback from providers
 // GET /oauth/callback and /callback
 func (h *Handler) OAuthCallback(c *gin.Context) {
+	// Get state parameter first for error handling
+	state := c.Query("state")
+
+	// Retrieve state data BEFORE calling HandleCallback, because HandleCallback
+	// deletes the state data after validation. We need sessionID for error handling.
+	var sessionID string
+	if stateData, err := h.oauthManager.GetStateData(state); err == nil {
+		sessionID = stateData.SessionID
+	}
+
 	// Delegate to the oauth handler's callback, now returns name in token
 	token, err := h.oauthManager.HandleCallback(c.Request.Context(), c.Request)
 	if err != nil {
-		h.sessionMgr.FailSession(c.Query("state"), err.Error())
+		// Fail the session if we have a sessionID from the state data
+		if sessionID != "" {
+			log.Printf("[OAuth] Callback failed, failing session %s: %v", sessionID, err)
+			_ = h.oauthManager.UpdateSessionStatus(sessionID, oauth2.SessionStatusFailed, "", err.Error())
+		}
 		c.HTML(http.StatusBadRequest, "oauth_error.html", gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
 
+	log.Printf("[OAuth] Callback successful, token.SessionID=%s, state sessionID=%s", token.SessionID, sessionID)
+
 	// Use createProviderFromToken to create the provider
 	// Pass session ID to retrieve proxy URL from the session
 	providerUUID, err := h.createProviderFromToken(token, token.Provider, "", token.SessionID)
 	if err != nil {
-		h.sessionMgr.FailSession(token.SessionID, err.Error())
+		log.Printf("[OAuth] Failed to create provider for token.SessionID %s: %v", token.SessionID, err)
+		_ = h.oauthManager.UpdateSessionStatus(token.SessionID, oauth2.SessionStatusFailed, "", err.Error())
 		c.HTML(http.StatusInternalServerError, "oauth_error.html", gin.H{
 			"error": fmt.Sprintf("Failed to create provider: %v", err),
 		})
 		return
 	}
 
+	log.Printf("[OAuth] Provider created successfully, UUID=%s, token.SessionID=%s", providerUUID, token.SessionID)
+
 	// Update session status to success if session ID exists
 	if token.SessionID != "" {
-		h.sessionMgr.CompleteSession(token.SessionID, providerUUID)
+		log.Printf("[OAuth] Completing session %s with provider UUID %s", token.SessionID, providerUUID)
+		_ = h.oauthManager.UpdateSessionStatus(token.SessionID, oauth2.SessionStatusSuccess, providerUUID, "")
+	} else {
+		log.Printf("[OAuth] WARNING: token.SessionID is empty, cannot complete session!")
 	}
 
 	// Stop the dynamic callback server if this session had one
@@ -892,17 +939,9 @@ func (h *Handler) createProviderFromToken(token *oauth2.Token, providerType oaut
 		}
 	}
 
-	// Generate unique provider name with random suffix
-	pType := string(providerType)
-	var providerName string
-	if customName != "" {
-		// Use custom name from state
-		providerName = customName
-	} else {
-		// Auto-generate name with 6-char random suffix
-		randomSuffix := generateRandomSuffix(6)
-		providerName = fmt.Sprintf("%s-%s", pType, randomSuffix)
-	}
+	// Generate provider name using smart naming strategy
+	// Priority: customName > email username > display name > timestamp
+	providerName := generateProviderName(providerType, token, customName)
 
 	// Generate UUID for the provider
 	providerUUID, err := uuid.NewUUID()
@@ -999,6 +1038,37 @@ func (h *Handler) createProviderFromToken(token *oauth2.Token, providerType oaut
 	}).Info("OAuth provider created successfully")
 
 	return providerUUID.String(), nil
+}
+
+// generateProviderName generates a human-readable provider name from token metadata
+// Priority: customName > email > display name > timestamp
+// Note: Account ID is NOT used for naming (sensitive information)
+func generateProviderName(providerType oauth2.ProviderType, token *oauth2.Token, customName string) string {
+	// Priority 1: Custom name from user
+	if customName != "" {
+		return customName
+	}
+
+	// Extract metadata
+	var email, displayName string
+	if token.Metadata != nil {
+		email, _ = token.Metadata["email"].(string)
+		displayName, _ = token.Metadata["name"].(string)
+	}
+
+	// Priority 2: Use full email
+	if email != "" {
+		return email
+	}
+
+	// Priority 3: Use display name (spaces to hyphens)
+	if displayName != "" {
+		return strings.ReplaceAll(displayName, " ", "-")
+	}
+
+	// Priority 4: Timestamp-based fallback (format: YYYYMMDD-HHMM)
+	timestamp := time.Now().Format("20060102-1504")
+	return fmt.Sprintf("%s-%s", providerType, timestamp)
 }
 
 // generateRandomSuffix generates a random alphanumeric suffix of specified length
