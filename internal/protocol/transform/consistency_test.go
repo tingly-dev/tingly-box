@@ -6,6 +6,7 @@ import (
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -301,7 +302,11 @@ func TestConsistencyTransform_WrongRequestType(t *testing.T) {
 	ctx := &TransformContext{Request: "not a chat completion"}
 
 	err := ct.Apply(ctx)
-	require.NoError(t, err)
+	// Should return a ValidationError for wrong request type
+	require.Error(t, err)
+	validationErr, ok := err.(*ValidationError)
+	require.True(t, ok, "error should be a ValidationError")
+	assert.Equal(t, "request", validationErr.Field)
 }
 
 func TestConsistencyTransform_Placeholders(t *testing.T) {
@@ -310,9 +315,31 @@ func TestConsistencyTransform_Placeholders(t *testing.T) {
 		style TargetAPIStyle
 		req   interface{}
 	}{
-		{"Responses API", TargetAPIStyleOpenAIResponses, &openai.ChatCompletionNewParams{}},
-		{"Anthropic V1", TargetAPIStyleAnthropicV1, &anthropic.MessageNewParams{}},
-		{"Anthropic Beta", TargetAPIStyleAnthropicBeta, &anthropic.BetaMessageNewParams{}},
+		{
+			"Responses API",
+			TargetAPIStyleOpenAIResponses,
+			&responses.ResponseNewParams{
+				Model: "gpt-4o",
+			},
+		},
+		{
+			"Anthropic V1",
+			TargetAPIStyleAnthropicV1,
+			&anthropic.MessageNewParams{
+				Model:     anthropic.Model("claude-3-5-sonnet-20241022"),
+				MaxTokens: int64(1024),
+				Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("test"))},
+			},
+		},
+		{
+			"Anthropic Beta",
+			TargetAPIStyleAnthropicBeta,
+			&anthropic.BetaMessageNewParams{
+				Model:     anthropic.Model("claude-3-5-sonnet-20241022"),
+				MaxTokens: int64(1024),
+				Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("test"))},
+			},
+		},
 	}
 
 	for _, tt := range tests {
