@@ -12,6 +12,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/shared/constant"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/openai/openai-go/v3"
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
@@ -370,14 +371,6 @@ func HandleResponsesToAnthropicBetaAssembly(c *gin.Context, stream *openaistream
 	msg := anthropic.BetaMessage{
 		Type: constant.Message("message"),
 		Role: constant.Assistant("assistant"),
-		Container: anthropic.BetaContainer{
-			ID:        "",
-			ExpiresAt: time.Time{},
-			Skills:    []anthropic.BetaSkill{},
-		},
-		ContextManagement: anthropic.BetaContextManagementResponse{
-			AppliedEdits: []anthropic.BetaContextManagementResponseAppliedEditUnion{},
-		},
 	}
 
 	return handlerResponsesToAnthropicStream(c, stream, responseModel, responsesAPIEventSenders{
@@ -442,8 +435,11 @@ func HandleResponsesToAnthropicBetaAssembly(c *gin.Context, stream *openaistream
 		},
 		SendMessageStop: func(messageID, model string, state *streamState, stopReason string, flusher http.Flusher) {
 			msg.ID = messageID
+			// TODO: the id is special
+			msg.ID = fmt.Sprintf("msg_%s", uuid.New().String())
+
 			msg.Model = anthropic.Model(model)
-			msg.StopReason = anthropic.BetaStopReason(stopReason)
+			msg.StopReason = anthropic.BetaStopReason(mapOpenAIFinishReasonToAnthropicBeta(stopReason))
 
 			// Set usage
 			msg.Usage.InputTokens = state.inputTokens
@@ -452,8 +448,13 @@ func HandleResponsesToAnthropicBetaAssembly(c *gin.Context, stream *openaistream
 				msg.Usage.CacheReadInputTokens = state.cacheTokens
 			}
 
+			bs, _ := json.Marshal(msg)
+			logrus.Debugf("Assemble response: %s", string(bs))
+
 			// Send result
 			c.JSON(200, msg)
+			flusher.Flush()
+			return
 		},
 		SendErrorEvent: func(event map[string]interface{}, flusher http.Flusher) {
 			// For error, still try to send what we have
