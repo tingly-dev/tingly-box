@@ -524,7 +524,9 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, re
 	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
 		// Use the ChatGPT backend API handler
 		response, cancel, err = s.forwardChatGPTBackendRequest(provider, responsesReq)
-		defer cancel()
+		if cancel != nil {
+			defer cancel()
+		}
 	} else {
 		// Use standard OpenAI Responses API
 		wrapper := s.clientPool.GetOpenAIClient(provider, string(responsesReq.Model))

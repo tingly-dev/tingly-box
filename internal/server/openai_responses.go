@@ -403,7 +403,9 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 	// Check if this is a ChatGPT backend API provider
 	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
 		response, cancel, err = s.forwardChatGPTBackendRequest(provider, params)
-		defer cancel()
+		if cancel != nil {
+			defer cancel()
+		}
 	} else {
 		wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model))
 		fc := NewForwardContext(nil, provider)
