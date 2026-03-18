@@ -1,4 +1,4 @@
-package request
+package ops
 
 import (
 	"encoding/json"
@@ -15,6 +15,15 @@ import (
 // ApplyCodexTransform applies Codex-specific transformations to a Responses API request.
 // This converts the standard Responses API format to the Codex backend format.
 // It analyzes the original Anthropic Beta request to apply Codex-specific transformations.
+//
+// This function is called at the server level before forwarding to the Codex backend.
+// It handles:
+//   - Stream configuration (always enabled for Codex)
+//   - Reasoning config (converts Anthropic "thinking" to Codex "reasoning")
+//   - Tool name shortening (64 char limit)
+//   - Tool parameter normalization
+//   - Special tool mappings (web_search_20250305 -> web_search)
+//
 // Reference: ref/anthropic2codex.go.ref
 func ApplyCodexTransform(anthropicReq *anthropic.BetaMessageNewParams, responsesReq *responses.ResponseNewParams) *responses.ResponseNewParams {
 	// Convert responses request to JSON for manipulation
@@ -38,7 +47,29 @@ func ApplyCodexTransform(anthropicReq *anthropic.BetaMessageNewParams, responses
 	// Convert reasoning configuration from Anthropic "thinking" to Codex "reasoning"
 	// Anthropic beta uses: thinking { OfEnabled/OfAdaptive/OfDisabled }
 	// Codex uses: reasoning { effort, summary }
+	template = applyCodexThinkingConfig(template, anthropicReq)
+
+	// Ensure parallel_tool_calls is set
+	template, _ = sjson.Set(template, "parallel_tool_calls", true)
+
+	// Convert tools - apply Codex-specific transformations
+	if len(anthropicReq.Tools) > 0 {
+		template = applyCodexToolTransforms(template, anthropicReq, result)
+	}
+
+	// Parse back to ResponseNewParams
+	var transformed responses.ResponseNewParams
+	if err := json.Unmarshal([]byte(template), &transformed); err != nil {
+		return responsesReq
+	}
+
+	return &transformed
+}
+
+// applyCodexThinkingConfig converts Anthropic thinking to Codex reasoning config.
+func applyCodexThinkingConfig(template string, anthropicReq *anthropic.BetaMessageNewParams) string {
 	thinking := anthropicReq.Thinking
+
 	if !param.IsOmitted(thinking.OfEnabled) {
 		// Type: enabled with budget_tokens
 		budget := thinking.OfEnabled.BudgetTokens
@@ -47,7 +78,6 @@ func ApplyCodexTransform(anthropicReq *anthropic.BetaMessageNewParams, responses
 		template, _ = sjson.Set(template, "reasoning.summary", "auto")
 	} else if !param.IsOmitted(thinking.OfAdaptive) {
 		// Type: adaptive
-		// Check for output_config.effort in Anthropic request
 		reasoningEffort := "high"
 		if !param.IsOmitted(anthropicReq.OutputConfig) {
 			outputConfig := anthropicReq.OutputConfig
@@ -63,66 +93,59 @@ func ApplyCodexTransform(anthropicReq *anthropic.BetaMessageNewParams, responses
 		template, _ = sjson.Set(template, "reasoning.summary", "auto")
 	}
 
-	// Ensure parallel_tool_calls is set
-	template, _ = sjson.Set(template, "parallel_tool_calls", true)
-
-	// Convert tools - apply Codex-specific transformations
-	if len(anthropicReq.Tools) > 0 {
-		// Build short name map from declared tools
-		var names []string
-		for _, toolUnion := range anthropicReq.Tools {
-			if !param.IsOmitted(toolUnion.OfTool) {
-				names = append(names, toolUnion.OfTool.Name)
-			}
-		}
-		shortMap := buildShortNameMap(names)
-
-		// Update tool names and normalize parameters in the transformed request
-		if tools := result.Get("tools"); tools.Exists() && tools.IsArray() {
-			toolsArray := tools.Array()
-			for i := 0; i < len(toolsArray); i++ {
-				toolPath := "tools." + jsonPathIndex(i)
-				toolResult := toolsArray[i]
-
-				// Special handling: map Claude web_search_20250305 tool to Codex web_search
-				if toolResult.Get("type").String() == "web_search_20250305" {
-					template, _ = sjson.SetRaw(template, toolPath, `{"type":"web_search"}`)
-					continue
-				}
-
-				// Apply shortened name if needed
-				originalName := toolResult.Get("name").String()
-				if originalName != "" {
-					if short, ok := shortMap[originalName]; ok {
-						template, _ = sjson.Set(template, toolPath+".name", short)
-					}
-				}
-
-				// Normalize tool parameters
-				if inputSchema := toolResult.Get("input_schema"); inputSchema.Exists() {
-					normalizedParams := normalizeToolParameters(inputSchema.Raw)
-					template, _ = sjson.SetRaw(template, toolPath+".input_schema", normalizedParams)
-				}
-
-				// Clean up tool properties for Codex compatibility
-				template, _ = sjson.Delete(template, toolPath+".input_schema.$schema")
-				template, _ = sjson.Delete(template, toolPath+".cache_control")
-				template, _ = sjson.Delete(template, toolPath+".defer_loading")
-				template, _ = sjson.Set(template, toolPath+".strict", false)
-			}
-		}
-	}
-
-	// Parse back to ResponseNewParams
-	var transformed responses.ResponseNewParams
-	if err := json.Unmarshal([]byte(template), &transformed); err != nil {
-		return responsesReq
-	}
-
-	return &transformed
+	return template
 }
 
-// convertBudgetToEffort converts thinking budget tokens to reasoning effort level
+// applyCodexToolTransforms applies Codex-specific tool transformations.
+func applyCodexToolTransforms(template string, anthropicReq *anthropic.BetaMessageNewParams, result gjson.Result) string {
+	// Build short name map from declared tools
+	var names []string
+	for _, toolUnion := range anthropicReq.Tools {
+		if !param.IsOmitted(toolUnion.OfTool) {
+			names = append(names, toolUnion.OfTool.Name)
+		}
+	}
+	shortMap := buildShortNameMap(names)
+
+	// Update tool names and normalize parameters in the transformed request
+	if tools := result.Get("tools"); tools.Exists() && tools.IsArray() {
+		toolsArray := tools.Array()
+		for i := 0; i < len(toolsArray); i++ {
+			toolPath := "tools." + jsonPathIndex(i)
+			toolResult := toolsArray[i]
+
+			// Special handling: map Claude web_search_20250305 tool to Codex web_search
+			if toolResult.Get("type").String() == "web_search_20250305" {
+				template, _ = sjson.SetRaw(template, toolPath, `{"type":"web_search"}`)
+				continue
+			}
+
+			// Apply shortened name if needed
+			originalName := toolResult.Get("name").String()
+			if originalName != "" {
+				if short, ok := shortMap[originalName]; ok {
+					template, _ = sjson.Set(template, toolPath+".name", short)
+				}
+			}
+
+			// Normalize tool parameters
+			if inputSchema := toolResult.Get("input_schema"); inputSchema.Exists() {
+				normalizedParams := normalizeToolParameters(inputSchema.Raw)
+				template, _ = sjson.SetRaw(template, toolPath+".input_schema", normalizedParams)
+			}
+
+			// Clean up tool properties for Codex compatibility
+			template, _ = sjson.Delete(template, toolPath+".input_schema.$schema")
+			template, _ = sjson.Delete(template, toolPath+".cache_control")
+			template, _ = sjson.Delete(template, toolPath+".defer_loading")
+			template, _ = sjson.Set(template, toolPath+".strict", false)
+		}
+	}
+
+	return template
+}
+
+// convertBudgetToEffort converts thinking budget tokens to reasoning effort level.
 func convertBudgetToEffort(budget int) string {
 	switch {
 	case budget <= 1000:
@@ -155,8 +178,8 @@ func normalizeToolParameters(raw string) string {
 	return schema
 }
 
-// buildShortNameMap creates a mapping of original tool names to shortened names
-// Ensures uniqueness of shortened names within a request (64 char limit for Codex)
+// buildShortNameMap creates a mapping of original tool names to shortened names.
+// Ensures uniqueness of shortened names within a request (64 char limit for Codex).
 func buildShortNameMap(names []string) map[string]string {
 	const limit = 64
 	used := map[string]struct{}{}
@@ -229,7 +252,7 @@ func shortenNameIfNeeded(name string) string {
 	return name[:limit]
 }
 
-// jsonPathIndex converts a numeric index to JSON path format
+// jsonPathIndex converts a numeric index to JSON path format.
 func jsonPathIndex(i int) string {
 	return fmt.Sprintf("%d", i)
 }
