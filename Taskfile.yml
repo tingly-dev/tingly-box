@@ -40,16 +40,11 @@ tasks:
       - http
     cmds:
       - go run ./cli/tingly-box --verbose start --debug --port 12580 --browser=false
+ 
   restart:
-    aliases:
-      - http
     cmds:
       - go run ./cli/tingly-box --verbose restart --debug --port 12580 --browser=false
-  start:https:
-    aliases:
-      - https
-    cmds:
-      - go run ./cli/tingly-box --verbose start --https --port 12581 --browser=false
+ 
   record:
     cmds:
       - go run ./cli/tingly-box --verbose start --port 12580 --record-mode=scenario --debug --browser=false
