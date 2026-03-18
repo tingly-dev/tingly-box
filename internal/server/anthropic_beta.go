@@ -15,7 +15,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -577,14 +576,10 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPIAssembly(c *gin.Context, re
 		streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
 	}
 
-	// Apply Codex-specific transformations to the request
-	// This converts standard Responses API format to Codex backend format
-	codexReq := ops.ApplyCodexTransform(&req.BetaMessageNewParams, &responsesReq)
-
 	// For standard OpenAI providers, use the OpenAI SDK
-	wrapper := s.clientPool.GetOpenAIClient(provider, codexReq.Model)
+	wrapper := s.clientPool.GetOpenAIClient(provider, responsesReq.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
-	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, *codexReq)
+	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
 	if cancel != nil {
 		defer cancel()
 	}

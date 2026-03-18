@@ -13,10 +13,15 @@ import (
 )
 
 // ApplyCodexTransform applies Codex-specific transformations to a Responses API request.
-// This converts the standard Responses API format to the Codex backend format.
-// It analyzes the original Anthropic Beta request to apply Codex-specific transformations.
+// This is a backward-compatible wrapper for the server-level call.
+// Deprecated: Use ApplyCodexResponsesTransform with TransformContext instead.
+func ApplyCodexTransform(anthropicReq *anthropic.BetaMessageNewParams, responsesReq *responses.ResponseNewParams) *responses.ResponseNewParams {
+	return ApplyCodexResponsesTransform(responsesReq, anthropicReq)
+}
+
+// ApplyCodexResponsesTransform applies Codex-specific transformations to a Responses API request.
+// This is called from VendorTransform for Codex backend providers.
 //
-// This function is called at the server level before forwarding to the Codex backend.
 // It handles:
 //   - Stream configuration (always enabled for Codex)
 //   - Reasoning config (converts Anthropic "thinking" to Codex "reasoning")
@@ -25,11 +30,18 @@ import (
 //   - Special tool mappings (web_search_20250305 -> web_search)
 //
 // Reference: ref/anthropic2codex.go.ref
-func ApplyCodexTransform(anthropicReq *anthropic.BetaMessageNewParams, responsesReq *responses.ResponseNewParams) *responses.ResponseNewParams {
+func ApplyCodexResponsesTransform(req *responses.ResponseNewParams, originalRequest interface{}) *responses.ResponseNewParams {
+	// Extract original Anthropic beta request from OriginalRequest
+	anthropicReq, ok := originalRequest.(*anthropic.BetaMessageNewParams)
+	if !ok {
+		// No original Anthropic beta request available, return as-is
+		return req
+	}
+
 	// Convert responses request to JSON for manipulation
-	reqJSON, err := json.Marshal(responsesReq)
+	reqJSON, err := json.Marshal(req)
 	if err != nil {
-		return responsesReq
+		return req
 	}
 
 	result := gjson.ParseBytes(reqJSON)
@@ -60,7 +72,7 @@ func ApplyCodexTransform(anthropicReq *anthropic.BetaMessageNewParams, responses
 	// Parse back to ResponseNewParams
 	var transformed responses.ResponseNewParams
 	if err := json.Unmarshal([]byte(template), &transformed); err != nil {
-		return responsesReq
+		return req
 	}
 
 	return &transformed
