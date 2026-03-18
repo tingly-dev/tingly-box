@@ -133,7 +133,7 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 		return
 	}
 
-	if scenarioType == typ.ScenarioCodex && provider.APIBase != protocol.ChatGPTBackendAPIBase {
+	if scenarioType == typ.ScenarioCodex && provider.APIBase != protocol.CodexAPIBase {
 		preferredEndpoint := NewAdaptiveProbe(s).GetPreferredEndpoint(provider, actualModel)
 		if preferredEndpoint != "responses" {
 			s.handleCodexResponsesFallback(c, provider, params, req.Model, actualModel, maxAllowed, req.Stream)
@@ -154,7 +154,7 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 
 	// For direct /responses requests, verify that the selected provider actually
 	// supports the Responses API unless it's the known ChatGPT backend special case.
-	if provider.APIBase != protocol.ChatGPTBackendAPIBase {
+	if provider.APIBase != protocol.CodexAPIBase {
 		preferredEndpoint := NewAdaptiveProbe(s).GetPreferredEndpoint(provider, actualModel)
 		if preferredEndpoint != "responses" {
 			c.JSON(http.StatusBadRequest, ErrorResponse{

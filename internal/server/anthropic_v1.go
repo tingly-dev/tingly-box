@@ -360,7 +360,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// Get final transformed request
 			transformedReq := finalCtx.Request.(*responses.ResponseNewParams)
 
-			if isStreaming || provider.APIBase == protocol.ChatGPTBackendAPIBase {
+			if isStreaming || provider.APIBase == protocol.CodexAPIBase {
 				req.Stream = true
 				s.handleAnthropicV1ViaResponsesAPIStreaming(c, req, proxyModel, actualModel, provider, *transformedReq)
 			} else {

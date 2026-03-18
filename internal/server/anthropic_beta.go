@@ -305,7 +305,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				req.Stream = true
 				s.handleAnthropicV1BetaViaResponsesAPIStreaming(c, req, proxyModel, actualModel, provider, *transformedReq)
 			} else {
-				if provider.APIBase == protocol.ChatGPTBackendAPIBase {
+				if provider.APIBase == protocol.CodexAPIBase {
 					req.Stream = true
 					s.handleAnthropicV1BetaViaResponsesAPIAssembly(c, req, proxyModel, actualModel, provider, *transformedReq)
 				} else {

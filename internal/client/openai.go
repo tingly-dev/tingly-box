@@ -157,7 +157,7 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]string, error) {
 		}
 	}
 	// Also handle legacy ChatGPT backend API providers
-	if c.provider.APIBase == protocol.ChatGPTBackendAPIBase {
+	if c.provider.APIBase == protocol.CodexAPIBase {
 		return nil, &ErrModelsEndpointNotSupported{
 			Provider: c.provider.Name,
 			Reason:   "ChatGPT backend API does not support /models endpoint",

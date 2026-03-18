@@ -14,8 +14,8 @@ const (
 	APIStyleGoogle    APIStyle = "google"
 )
 
-// ChatGPTBackendAPIBase is the API base URL for ChatGPT/Codex OAuth provider
-const ChatGPTBackendAPIBase = "https://chatgpt.com/backend-api"
+// CodexAPIBase is the API base URL for ChatGPT/Codex OAuth provider
+const CodexAPIBase = "https://chatgpt.com/backend-api"
 
 // Client is the unified interface for AI provider clients
 type Client interface {

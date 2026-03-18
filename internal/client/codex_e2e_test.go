@@ -43,7 +43,7 @@ func TestE2E_CodexRoundTripper(t *testing.T) {
 	provider := &typ.Provider{
 		ProxyURL: "socks5://127.0.0.1:7890",
 		Name:     "codex-e2e-test",
-		APIBase:  protocol.ChatGPTBackendAPIBase,
+		APIBase:  protocol.CodexAPIBase,
 		AuthType: typ.AuthTypeOAuth,
 		Timeout:  int64((60 * time.Second).Seconds()),
 		OAuthDetail: &typ.OAuthDetail{

@@ -103,7 +103,7 @@ func (t *VendorTransform) applyResponsesVendor(ctx *TransformContext, req *respo
 	// Google's thinking_config and tool schema filtering are Chat Completions-specific
 
 	switch {
-	case t.ProviderURL == protocol.ChatGPTBackendAPIBase:
+	case t.ProviderURL == protocol.CodexAPIBase:
 		// Codex backend (ChatGPT) requires specific transformations
 		req = t.applyCodexResponsesTransform(ctx, req, config)
 	case strings.Contains(normalURL, "api.deepseek.com"):
