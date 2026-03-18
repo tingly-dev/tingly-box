@@ -396,7 +396,7 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 		msgType = "interactive"
 		cardJson, err := larkcard.NewMessageCard().
 			Elements([]larkcard.MessageCardElement{
-				larkcard.NewMessageCardLarkMd().Content(opts.Text),
+				larkcard.NewMessageCardMarkdown().Content(opts.Text),
 			}).
 			String()
 		if err != nil {
@@ -504,7 +504,7 @@ func (b *Bot) sendInteractiveCard(ctx context.Context, target string, opts *core
 // buildInteractiveCard builds a Lark interactive card from text and keyboard markup
 func (b *Bot) buildInteractiveCard(text string, replyMarkup interface{}) *larkcard.MessageCard {
 	elements := []larkcard.MessageCardElement{
-		larkcard.NewMessageCardLarkMd().Content(text),
+		larkcard.NewMessageCardMarkdown().Content(text),
 	}
 
 	// Convert keyboard markup to action buttons
