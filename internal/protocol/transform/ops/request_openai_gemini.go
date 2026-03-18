@@ -1,12 +1,10 @@
-package transformer
+package ops
 
 import (
 	"strings"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // Constants and configurations for Gemini API compatibility
@@ -54,7 +52,7 @@ var geminiSchemaFieldTransforms = map[string]string{
 // This includes:
 //   - Thinking configuration mapping to extra_body.google.thinking_config
 //   - Tool schema filtering to supported fields only
-func applyGeminiTransform(req *openai.ChatCompletionNewParams, provider *typ.Provider, model string, config *protocol.OpenAIConfig) *openai.ChatCompletionNewParams {
+func applyGeminiTransform(req *openai.ChatCompletionNewParams, providerURL, model string, config *protocol.OpenAIConfig) *openai.ChatCompletionNewParams {
 	req = applyGeminiThinkingConfig(req, model, config)
 	req = applyGeminiToolSchemaFilter(req)
 	return req
@@ -62,13 +60,13 @@ func applyGeminiTransform(req *openai.ChatCompletionNewParams, provider *typ.Pro
 
 // applyGeminiOpenRouterTransform handles Gemini via OpenRouter.
 // This applies OpenRouter-specific subset conversion.
-func applyGeminiOpenRouterTransform(req *openai.ChatCompletionNewParams, provider *typ.Provider, model string, config *protocol.OpenAIConfig) *openai.ChatCompletionNewParams {
+func applyGeminiOpenRouterTransform(req *openai.ChatCompletionNewParams, providerURL, model string, config *protocol.OpenAIConfig) *openai.ChatCompletionNewParams {
 	return applyGeminiSubsetTransform(req, model)
 }
 
 // applyGeminiPoeTransform handles Gemini via Poe.
 // This applies Poe-specific subset conversion.
-func applyGeminiPoeTransform(req *openai.ChatCompletionNewParams, _ *typ.Provider, _ string, _ *protocol.OpenAIConfig) *openai.ChatCompletionNewParams {
+func applyGeminiPoeTransform(req *openai.ChatCompletionNewParams, providerURL, model string, config *protocol.OpenAIConfig) *openai.ChatCompletionNewParams {
 	res := applyGeminiToolSchemaFilter(req)
 	return res
 }

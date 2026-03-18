@@ -20,6 +20,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -167,11 +168,48 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 		}
 	}
 
+	// Use Transform Chain for request transformation (Consistency + Vendor transforms)
+	// Note: Base transform is not needed since the request is already in Responses API format
+	// Chain: Consistency Transform → Vendor Transform
+	chain := transform.NewTransformChain([]transform.Transform{
+		//transform.NewConsistencyTransform(transform.TargetAPIStyleOpenAIResponses),
+		transform.NewVendorTransform(provider.APIBase),
+	})
+
+	// Create transform context
+	var scenarioFlags *typ.ScenarioFlags
+	if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
+		scenarioFlags = &scenarioConfig.Flags
+	}
+
+	transformCtx := &transform.TransformContext{
+		OriginalRequest: &params,
+		Request:         &params,
+		ProviderURL:     provider.APIBase,
+		ScenarioFlags:   scenarioFlags,
+		IsStreaming:     req.Stream,
+	}
+
+	// Execute transform chain
+	finalCtx, err := chain.Execute(transformCtx)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Transform chain failed: " + err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Get final transformed request
+	transformedParams := finalCtx.Request.(*responses.ResponseNewParams)
+
 	// Handle streaming or non-streaming
 	if req.Stream {
-		s.handleResponsesStreamingRequest(c, provider, params, req.Model, actualModel)
+		s.handleResponsesStreamingRequest(c, provider, *transformedParams, req.Model, actualModel)
 	} else {
-		s.handleResponsesNonStreamingRequest(c, provider, params, req.Model, actualModel)
+		s.handleResponsesNonStreamingRequest(c, provider, *transformedParams, req.Model, actualModel)
 	}
 }
 

@@ -11,11 +11,10 @@ import (
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/transformer"
-	"google.golang.org/genai"
-
 	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
+	"google.golang.org/genai"
 )
 
 // ===================================================================
@@ -97,7 +96,7 @@ func ForwardOpenAIChat(fc *ForwardContext, wrapper *client.OpenAIClient, req *op
 	ctx, cancel := fc.PrepareContext(req)
 	// Apply provider-specific transformations
 	config := buildOpenAIConfig(req)
-	transformedReq := transformer.ApplyProviderTransforms(req, fc.Provider, req.Model, config)
+	transformedReq := ops.ApplyProviderTransforms(req, fc.Provider.APIBase, req.Model, config)
 	*req = *transformedReq
 
 	// Clear empty tools array

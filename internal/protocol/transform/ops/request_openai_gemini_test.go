@@ -1,4 +1,4 @@
-package transformer
+package ops
 
 import (
 	"testing"
@@ -9,8 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // TestApplyGeminiTransform tests the main Gemini transformation entry point
@@ -44,10 +42,9 @@ func TestApplyGeminiTransform(t *testing.T) {
 		}
 		req.SetExtraFields(extraFields)
 
-		provider := &typ.Provider{Name: "google"}
 		config := &protocol.OpenAIConfig{}
 
-		result := applyGeminiTransform(req, provider, "gemini-2.5-flash", config)
+		result := applyGeminiTransform(req, "https://cloud.google.com/vertex-ai", "gemini-2.5-flash", config)
 
 		// Verify thinking was converted to extra_body.google format
 		resultExtraFields := result.ExtraFields()
@@ -70,10 +67,9 @@ func TestApplyGeminiTransform(t *testing.T) {
 			Model: openai.ChatModel("gemini-pro"),
 		}
 
-		provider := &typ.Provider{Name: "google"}
 		config := &protocol.OpenAIConfig{}
 
-		result := applyGeminiTransform(req, provider, "gemini-pro", config)
+		result := applyGeminiTransform(req, "https://cloud.google.com/vertex-ai", "gemini-pro", config)
 
 		// Should not have extra_body if no thinking config
 		resultExtraFields := result.ExtraFields()
@@ -407,10 +403,9 @@ func TestApplyGeminiOpenRouterTransform(t *testing.T) {
 			},
 		}
 
-		provider := &typ.Provider{Name: "openrouter"}
 		config := &protocol.OpenAIConfig{}
 
-		result := applyGeminiOpenRouterTransform(req, provider, "openrouter:google/gemini-pro", config)
+		result := applyGeminiOpenRouterTransform(req, "https://openrouter.ai/", "openrouter:google/gemini-pro", config)
 
 		// Should still have tools after transformation
 		assert.Len(t, result.Tools, 1)
@@ -439,9 +434,7 @@ func TestApplyGeminiPoeTransform(t *testing.T) {
 			},
 		}
 
-		provider := &typ.Provider{Name: "poe"}
-
-		result := applyGeminiPoeTransform(req, provider, "poe:gemini-pro", nil)
+		result := applyGeminiPoeTransform(req, "poe.com", "poe:gemini-pro", nil)
 
 		// Should apply schema filtering
 		fn := result.Tools[0].GetFunction()

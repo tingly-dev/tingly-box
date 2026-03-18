@@ -8,14 +8,15 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
+	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/transformer"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -76,12 +77,10 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	// === Tool Interceptor: Check if enabled and should be used ===
 	shouldIntercept, shouldStripTools, _ := s.resolveToolInterceptor(provider, hasBuiltInWebSearch)
 
-	// Get scenario config for DisableStreamUsage flag
+	// Get scenario config for flags
 	scenarioType := rule.GetScenario()
-	disableStreamUsage := false
 	cleanHeader := false
 	if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
-		disableStreamUsage = scenarioConfig.Flags.DisableStreamUsage
 		cleanHeader = scenarioConfig.Flags.CleanHeader
 
 		// Apply thinking mode from scenario config
@@ -310,10 +309,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		useResponsesAPI := preferredEndpoint == "responses"
 
 		if useResponsesAPI {
-			// Use Responses API path with direct v1 conversion (no beta intermediate)
-			// Convert Anthropic v1 request to Responses API format directly
-			responsesReq := request.ConvertAnthropicV1ToResponsesRequest(&req.MessageNewParams)
-
+			// Use Responses API path with Transform Chain
 			// Set the rule and provider in context so middleware can use the same rule
 			if rule != nil {
 				c.Set("rule", rule)
@@ -327,21 +323,85 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// The ChatGPT backend streaming handler will use this to send responses in v1 format
 			c.Set("original_request_format", "v1")
 
-			logrus.Debugf("[AnthropicV1] Using direct v1->Responses API conversion for model=%s", actualModel)
+			logrus.Debugf("[AnthropicV1] Using Transform Chain for Responses API for model=%s", actualModel)
+
+			// Use Transform Chain for request transformation
+			// Chain: Base Transform → Consistency Transform → Vendor Transform
+			chain := transform.NewTransformChain([]transform.Transform{
+				transform.NewBaseTransform(transform.TargetAPIStyleOpenAIResponses),
+				//transform.NewConsistencyTransform(transform.TargetAPIStyleOpenAIResponses),
+				transform.NewVendorTransform(provider.APIBase),
+			})
+
+			// Create transform context
+			var scenarioFlags *typ.ScenarioFlags
+			if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
+				scenarioFlags = &scenarioConfig.Flags
+			}
+
+			transformCtx := &transform.TransformContext{
+				OriginalRequest: &req.MessageNewParams,
+				Request:         &req.MessageNewParams, // Original Anthropic v1 request
+				ProviderURL:     provider.APIBase,
+				ScenarioFlags:   scenarioFlags,
+				IsStreaming:     isStreaming,
+			}
+
+			// Execute transform chain
+			finalCtx, err := chain.Execute(transformCtx)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				if recorder != nil {
+					recorder.RecordError(err)
+				}
+				return
+			}
+
+			// Get final transformed request
+			transformedReq := finalCtx.Request.(*responses.ResponseNewParams)
 
 			if isStreaming {
-				s.handleAnthropicV1ViaResponsesAPIStreaming(c, req, proxyModel, actualModel, provider, responsesReq)
+				s.handleAnthropicV1ViaResponsesAPIStreaming(c, req, proxyModel, actualModel, provider, *transformedReq)
 			} else {
-				s.handleAnthropicV1ViaResponsesAPINonStreaming(c, req, proxyModel, actualModel, provider, responsesReq)
+				s.handleAnthropicV1ViaResponsesAPINonStreaming(c, req, proxyModel, actualModel, provider, *transformedReq)
 			}
 			return
 		}
 
-		// Convert Anthropic request to OpenAI format for streaming
-		openaiReq, config := request.ConvertAnthropicToOpenAIRequest(&req.MessageNewParams, true, isStreaming, disableStreamUsage)
+		// Use Transform Chain for request transformation
+		// Chain: Base Transform → Consistency Transform → Vendor Transform
+		chain := transform.NewTransformChain([]transform.Transform{
+			transform.NewBaseTransform(transform.TargetAPIStyleOpenAIChat),
+			//transform.NewConsistencyTransform(transform.TargetAPIStyleOpenAIChat),
+			transform.NewVendorTransform(provider.APIBase),
+		})
 
-		// Apply provider-specific transforms
-		transformedReq := transformer.ApplyProviderTransforms(openaiReq, provider, actualModel, config)
+		// Create transform context
+		var scenarioFlags *typ.ScenarioFlags
+		if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
+			scenarioFlags = &scenarioConfig.Flags
+		}
+
+		transformCtx := &transform.TransformContext{
+			OriginalRequest: req.MessageNewParams,
+			Request:         req.MessageNewParams, // Original Anthropic request
+			ProviderURL:     provider.APIBase,
+			ScenarioFlags:   scenarioFlags,
+			IsStreaming:     isStreaming,
+		}
+
+		// Execute transform chain
+		finalCtx, err := chain.Execute(transformCtx)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			if recorder != nil {
+				recorder.RecordError(err)
+			}
+			return
+		}
+
+		// Get final transformed request
+		transformedReq := finalCtx.Request.(*openai.ChatCompletionNewParams)
 
 		// Clean up temporary fields (e.g., x_thinking)
 		request.CleanupOpenaiFields(transformedReq)

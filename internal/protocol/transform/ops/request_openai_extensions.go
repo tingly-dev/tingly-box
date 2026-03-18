@@ -1,16 +1,14 @@
-package transformer
+package ops
 
 import (
 	"strings"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // ProviderTransform applies provider-specific transformations to OpenAI requests
-type ProviderTransform func(*openai.ChatCompletionNewParams, *typ.Provider, string, *protocol.OpenAIConfig) *openai.ChatCompletionNewParams
+type ProviderTransform func(*openai.ChatCompletionNewParams, string, string, *protocol.OpenAIConfig) *openai.ChatCompletionNewParams
 
 // providerConfig maps APIBase patterns to their transforms
 type providerConfig struct {
@@ -63,14 +61,14 @@ var ProviderConfigs = []providerConfig{
 	// {"openrouter.ai", applyGeminiOpenRouterTransform},
 }
 
-// GetProviderTransform identifies provider by APIBase and returns its transform
+// GetProviderTransform identifies provider by APIBase URL string and returns its transform
 // Returns nil if no specific transform is needed (fallback to default)
-func GetProviderTransform(provider *typ.Provider, model string) ProviderTransform {
-	if provider == nil {
+func GetProviderTransform(providerURL, model string) ProviderTransform {
+	if providerURL == "" {
 		return nil
 	}
 
-	apiBase := strings.ToLower(provider.APIBase)
+	apiBase := strings.ToLower(providerURL)
 	modelLower := strings.ToLower(model)
 
 	// Match by APIBase domain and optional ModelPattern
@@ -114,9 +112,9 @@ func applyDefaultTransform(req *openai.ChatCompletionNewParams, config *protocol
 
 // ApplyProviderTransforms applies provider-specific transformations
 // Falls back to default handling if no specific transform found
-func ApplyProviderTransforms(req *openai.ChatCompletionNewParams, provider *typ.Provider, model string, config *protocol.OpenAIConfig) *openai.ChatCompletionNewParams {
-	if transform := GetProviderTransform(provider, model); transform != nil {
-		return transform(req, provider, model, config)
+func ApplyProviderTransforms(req *openai.ChatCompletionNewParams, providerURL, model string, config *protocol.OpenAIConfig) *openai.ChatCompletionNewParams {
+	if transform := GetProviderTransform(providerURL, model); transform != nil {
+		return transform(req, providerURL, model, config)
 	}
 	// Default: apply standard OpenAI-compatible transformations
 	return applyDefaultTransform(req, config)
