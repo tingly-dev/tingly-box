@@ -486,7 +486,7 @@ func CreateHTTPClientForProvider(provider *typ.Provider) *http.Client {
 
 			// For ChatGPT backend API, wrap with response transformer
 			// This transforms the custom ChatGPT backend response format to OpenAI Responses API format
-			baseTransport = &chatGPTBackendRoundTripper{
+			baseTransport = &codexRoundTripper{
 				RoundTripper: baseTransport,
 			}
 			logrus.Infof("Created ChatGPT backend response transformer RoundTripper with proxy=%s", provider.ProxyURL)
