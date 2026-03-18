@@ -88,7 +88,7 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 					},
 				},
 			}
-			sendOpenAIStreamChunk(c, chunk)
+			sendOpenAIStreamChunkForce(c, chunk)
 			hasStarted = true
 		}
 
@@ -117,7 +117,7 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 								},
 							},
 						}
-						sendOpenAIStreamChunk(c, chunk)
+						sendOpenAIStreamChunkForce(c, chunk)
 					}
 
 					// Handle function calls
@@ -151,7 +151,7 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 								},
 							},
 						}
-						sendOpenAIStreamChunk(c, chunk)
+						sendOpenAIStreamChunkForce(c, chunk)
 					}
 				}
 			}
@@ -189,7 +189,7 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 					}
 				}
 
-				sendOpenAIStreamChunk(c, chunk)
+				sendOpenAIStreamChunkForce(c, chunk)
 				// Send final [DONE] message
 				c.Writer.Write([]byte("data: [DONE]\n\n"))
 				flusher.Flush()
