@@ -453,16 +453,47 @@ func (ap *AdaptiveProbe) probeToolParserEndpoint(ctx context.Context, provider *
 
 	latency := int(time.Since(startTime).Milliseconds())
 
+	bodyBytes, _ = readResponseBody(resp.Body)
+
 	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusTooManyRequests {
+		type toolCallProbeResponse struct {
+			Choices []struct {
+				FinishReason string `json:"finish_reason"`
+				Message      struct {
+					ToolCalls []struct{} `json:"tool_calls"`
+				} `json:"message"`
+			} `json:"choices"`
+		}
+
+		var probeResp toolCallProbeResponse
+		if err := json.Unmarshal(bodyBytes, &probeResp); err != nil {
+			return EndpointStatus{
+				Available:    false,
+				LatencyMs:    latency,
+				ErrorMessage: fmt.Sprintf("Tool parser probe failed to parse response: %v", err),
+				LastChecked:  time.Now(),
+			}
+		}
+
+		for _, choice := range probeResp.Choices {
+			if choice.FinishReason == "tool_calls" || len(choice.Message.ToolCalls) > 0 {
+				return EndpointStatus{
+					Available:    true,
+					LatencyMs:    latency,
+					ErrorMessage: "",
+					LastChecked:  time.Now(),
+				}
+			}
+		}
+
 		return EndpointStatus{
-			Available:    true,
+			Available:    false,
 			LatencyMs:    latency,
-			ErrorMessage: "",
+			ErrorMessage: "Tool parser probe returned no tool_calls",
 			LastChecked:  time.Now(),
 		}
 	}
 
-	bodyBytes, _ = readResponseBody(resp.Body)
 	errorMsg := fmt.Sprintf("Tool parser probe failed with status %d: %s", resp.StatusCode, string(bodyBytes))
 	return EndpointStatus{
 		Available:    false,
