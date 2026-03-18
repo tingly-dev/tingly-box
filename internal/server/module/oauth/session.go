@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"log"
 	"sync"
 	"time"
 
@@ -79,8 +80,12 @@ func (sm *SessionManager) CompleteSession(sessionID, providerUUID string) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	if session, ok := sm.sessions[sessionID]; ok {
+		log.Printf("[OAuth] Completing session %s: setting status to 'success', providerUUID=%s (previous status=%s)",
+			sessionID, providerUUID, session.Status)
 		session.Status = "success"
 		session.ProviderUUID = providerUUID
+	} else {
+		log.Printf("[OAuth] WARNING: CompleteSession called for non-existent session %s", sessionID)
 	}
 }
 
