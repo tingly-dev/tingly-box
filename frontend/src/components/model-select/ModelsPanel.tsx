@@ -58,7 +58,7 @@ export function ModelsPanel({
 }: ModelsPanelProps) {
     const { customModels } = useCustomModels();
     const { providerModels, refreshingProviders, refreshModels, fetchModels } = useProviderModels();
-    const { isModelProbing, refreshTrigger } = useModelSelectContext();
+    const { isModelProbing, refreshTrigger, showSnackbar } = useModelSelectContext();
     const { recentModels } = useRecentModels();
     const { newModels, clearNewModels } = useNewModels();
     const [toolSupportByModel, setToolSupportByModel] = useState<Record<string, boolean>>({});
@@ -141,13 +141,16 @@ export function ModelsPanel({
             const supported = result?.data?.tool_parser_endpoint?.available;
             if (supported) {
                 setToolSupportByModel(prev => ({ ...prev, [selectedModel]: true }));
+                showSnackbar('Tool parser supported', 'success');
+            } else {
+                showSnackbar('Tool parser not supported', 'error');
             }
         } catch (err) {
-            // No-op: probe errors are displayed in the probe dialog elsewhere
+            showSnackbar('Tool parser probe failed', 'error');
         } finally {
             setToolProbing(false);
         }
-    }, [provider.uuid, selectedModel, toolProbing]);
+    }, [provider.uuid, selectedModel, toolProbing, showSnackbar]);
 
     const toolSupportSet = useMemo(() => toolSupportByModel, [toolSupportByModel]);
 
@@ -247,7 +250,7 @@ export function ModelsPanel({
                             disabled={!selectedModel || toolProbing}
                             sx={{ height: 40, minWidth: 140 }}
                         >
-                            {toolProbing ? 'Probing...' : 'Probe Tool Support'}
+                            {toolProbing ? 'Probing...' : 'Probe Tool Parser'}
                         </Button>
                     </Stack>
                     <Typography variant="caption" color="text.secondary">
