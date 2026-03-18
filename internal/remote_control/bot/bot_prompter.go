@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -135,9 +136,19 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 	}
 	p.mu.Unlock()
 
-	// Build prompt using tool handler
-	promptText := p.buildPromptText(req)
+	// Check if platform supports inline keyboards
+	supportsKeyboard := imbot.GetPlatformCapabilities(string(platform)).SupportsInteraction()
+
+	// Build prompt using tool handler (pass platform for text fallback)
+	promptText := p.buildPromptText(req, supportsKeyboard)
 	keyboard := p.buildKeyboard(req)
+
+	// For platforms without keyboard support, replace "Click a button" with text instructions
+	if !supportsKeyboard && req.ToolName == "AskUserQuestion" {
+		// Replace the "Click a button" text with text-only instructions
+		promptText = strings.Replace(promptText, "*Click a button below to select*",
+			p.buildTextSelectionInstructions(req), 1)
+	}
 
 	// Send the prompt message
 	msg, err := bot.SendMessage(context.Background(), chatID, &imbot.SendMessageOptions{
@@ -278,7 +289,7 @@ func (p *IMPrompter) GetPendingRequestsForChat(chatID string) []ask.Request {
 }
 
 // buildPromptText builds the prompt message text using tool handlers
-func (p *IMPrompter) buildPromptText(req ask.Request) string {
+func (p *IMPrompter) buildPromptText(req ask.Request, supportsKeyboard bool) string {
 	// Try to use tool-specific prompt builder
 	builder := p.registry.FindPromptBuilder(req.ToolName, req.Input)
 	if builder != nil {
@@ -357,9 +368,46 @@ func (p *IMPrompter) buildAskUserQuestionKeyboard(req ask.Request) imbot.InlineK
 	return kb.Build()
 }
 
+// buildTextSelectionInstructions builds text instructions for platforms without keyboard support
+func (p *IMPrompter) buildTextSelectionInstructions(req ask.Request) string {
+	var text strings.Builder
+
+	text.WriteString("*To select an option, reply with the number:*\n\n")
+
+	questions, ok := req.Input["questions"].([]interface{})
+	if !ok || len(questions) == 0 {
+		// For permission prompts (not AskUserQuestion)
+		text.WriteString("• `1` - Allow\n")
+		text.WriteString("• `0` - Deny\n")
+		text.WriteString("• `a` - Always Allow")
+		return text.String()
+	}
+
+	// For AskUserQuestion - list the options
+	if question, ok := questions[0].(map[string]interface{}); ok {
+		if options, ok := question["options"].([]interface{}); ok {
+			for i, opt := range options {
+				if option, ok := opt.(map[string]interface{}); ok {
+					label, _ := option["label"].(string)
+					desc, hasDesc := option["description"].(string)
+					if hasDesc && desc != "" {
+						text.WriteString(fmt.Sprintf("• `%d` - %s - %s\n", i+1, label, desc))
+					} else {
+						text.WriteString(fmt.Sprintf("• `%d` - %s\n", i+1, label))
+					}
+				}
+			}
+		}
+	}
+
+	text.WriteString("\n_Just type the number to reply_")
+
+	return text.String()
+}
+
 // editPromptToResult edits the prompt message to show the result
 func (p *IMPrompter) editPromptToResult(bot imbot.Bot, chatID, messageID string, req ask.Request, approved bool) {
-	resultText := p.buildPromptText(req)
+	resultText := p.buildPromptText(req, true) // supportsKeyboard doesn't matter for result
 	if approved {
 		resultText += "\n\n✅ *Approved*"
 	} else {
@@ -380,7 +428,7 @@ func (p *IMPrompter) editPromptToResult(bot imbot.Bot, chatID, messageID string,
 
 // editPromptToTimeout edits the prompt message to show timeout
 func (p *IMPrompter) editPromptToTimeout(bot imbot.Bot, chatID, messageID string, req ask.Request) {
-	resultText := p.buildPromptText(req)
+	resultText := p.buildPromptText(req, true) // supportsKeyboard doesn't matter for timeout
 	resultText += "\n\n⏰ *Timed Out*"
 
 	if tgBot, ok := imbot.AsTelegramBot(bot); ok {

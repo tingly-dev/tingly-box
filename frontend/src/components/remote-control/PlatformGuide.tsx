@@ -110,6 +110,45 @@ const platformConfigs: PlatformConfig[] = [
         ),
     },
     {
+        id: 'lark',
+        name: 'Lark',
+        status: 'available',
+        requiredFields: ['App ID', 'App Secret'],
+        steps: (
+            <Stack spacing={2}>
+                <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                        1. Create a Lark bot
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" component="div">
+                        <Box component="ul" sx={{ pl: 2, m: 0 }}>
+                            <li>Visit <Link href="https://open.larksuite.com/" target="_blank">Lark Open Platform <OpenInNew sx={{ fontSize: 10 }} /></Link></li>
+                            <li>Create a new app - Enable Bot capability</li>
+                            <li>Permissions: Add <code>im:message</code> (send messages) and <code>im:message.p2p_msg:readonly</code> (receive messages)</li>
+                            <li>Events: Add <code>im.message.receive_v1</code> (receive messages)</li>
+                            <li>Select <strong>Long Connection</strong> mode (requires running nanobot first to establish connection)</li>
+                            <li>Get App ID and App Secret from "Credentials & Basic Info"</li>
+                            <li>Publish the app</li>
+                        </Box>
+                    </Typography>
+                </Box>
+                <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                        2. Add bot
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        Click "Add Bot" button above and fill in App ID and App Secret to create your bot.
+                    </Typography>
+                </Box>
+                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                    <Typography variant="body2" color="info.dark">
+                        Tip: Lark uses WebSocket - no public IP needed. Configure traffic proxy as needed.
+                    </Typography>
+                </Box>
+            </Stack>
+        ),
+    },
+    {
         id: 'dingtalk',
         name: 'DingTalk (钉钉)',
         status: 'available',
@@ -145,45 +184,6 @@ const platformConfigs: PlatformConfig[] = [
                 <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
                     <Typography variant="body2" color="info.dark">
                         Tip: DingTalk uses Stream Mode - no public IP required. Configure traffic proxy as needed.
-                    </Typography>
-                </Box>
-            </Stack>
-        ),
-    },
-    {
-        id: 'lark',
-        name: 'Lark',
-        status: 'available',
-        requiredFields: ['App ID', 'App Secret'],
-        steps: (
-            <Stack spacing={2}>
-                <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                        1. Create a Lark bot
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" component="div">
-                        <Box component="ul" sx={{ pl: 2, m: 0 }}>
-                            <li>Visit <Link href="https://open.larksuite.com/" target="_blank">Lark Open Platform <OpenInNew sx={{ fontSize: 10 }} /></Link></li>
-                            <li>Create a new app - Enable Bot capability</li>
-                            <li>Permissions: Add <code>im:message</code> (send messages) and <code>im:message.p2p_msg:readonly</code> (receive messages)</li>
-                            <li>Events: Add <code>im.message.receive_v1</code> (receive messages)</li>
-                            <li>Select <strong>Long Connection</strong> mode</li>
-                            <li>Get App ID and App Secret from "Credentials & Basic Info"</li>
-                            <li>Publish the app</li>
-                        </Box>
-                    </Typography>
-                </Box>
-                <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                        2. Add bot
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        Click "Add Bot" button above and fill in App ID and App Secret to create your bot.
-                    </Typography>
-                </Box>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
-                    <Typography variant="body2" color="info.dark">
-                        Tip: Lark uses WebSocket - no webhook or public IP needed. Configure traffic proxy as needed.
                     </Typography>
                 </Box>
             </Stack>

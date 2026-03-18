@@ -89,6 +89,7 @@ const (
 	PlatformSignal      = core.PlatformSignal
 	PlatformBlueBubbles = core.PlatformBlueBubbles
 	PlatformFeishu      = core.PlatformFeishu
+	PlatformLark        = core.PlatformLark
 	PlatformWebChat     = core.PlatformWebChat
 	PlatformDingTalk    = core.PlatformDingTalk
 

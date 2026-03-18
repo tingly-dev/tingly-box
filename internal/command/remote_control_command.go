@@ -78,9 +78,9 @@ func remoteListCommand(appManager *AppManager) *cobra.Command {
 
 			fmt.Println("Bot Settings:")
 			fmt.Println()
-			fmt.Printf("%-36s %-12s %-15s %-8s %s\n", "UUID", "Platform", "Name", "Enabled", "ChatID Lock")
-			fmt.Println(strings.Repeat("-", 90))
-			for _, s := range settings {
+			fmt.Printf("%-6s %-36s %-12s %-15s %-8s %s\n", "ID", "UUID", "Platform", "Name", "Enabled", "ChatID Lock")
+			fmt.Println(strings.Repeat("-", 95))
+			for i, s := range settings {
 				enabled := "No"
 				if s.Enabled {
 					enabled = "Yes"
@@ -93,10 +93,11 @@ func remoteListCommand(appManager *AppManager) *cobra.Command {
 				if chatLock == "" {
 					chatLock = "-"
 				}
-				fmt.Printf("%-36s %-12s %-15s %-8s %s\n", s.UUID, s.Platform, name, enabled, chatLock)
+				fmt.Printf("%-6d %-36s %-12s %-15s %-8s %s\n", i+1, s.UUID, s.Platform, name, enabled, chatLock)
 			}
 			fmt.Println()
 			fmt.Printf("Total: %d bot(s)\n", len(settings))
+			fmt.Println("\nTip: Use the ID number with 'remote start' or 'remote config' commands.")
 
 			return nil
 		},
@@ -379,7 +380,7 @@ func selectBotInteractively(store *db.ImBotSettingsStore) (string, error) {
 		if name == "" {
 			name = "unnamed"
 		}
-		fmt.Printf("%d. %s (%s)%s\n", i+1, name, s.Platform, enabled)
+		fmt.Printf("%d. %s (%s) [%s]%s\n", i+1, name, s.Platform, s.UUID, enabled)
 	}
 	fmt.Println()
 

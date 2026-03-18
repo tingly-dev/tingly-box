@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	larkcard "github.com/larksuite/oapi-sdk-go/v3/card"
+
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
 	itx "github.com/tingly-dev/tingly-box/imbot/internal/interaction"
 )
@@ -37,43 +39,44 @@ func (a *InteractionAdapter) BuildMarkup(interactions []itx.Interaction) (any, e
 
 // buildCard builds a Feishu interactive card
 func (a *InteractionAdapter) buildCard(interactions []itx.Interaction) map[string]interface{} {
-	// Build button elements
-	var elements []map[string]interface{}
+	// Build button elements using Lark SDK builders
+	var buttons []larkcard.MessageCardActionElement
+
 	for _, item := range interactions {
 		if item.Type == itx.ActionSelect || item.Type == itx.ActionConfirm || item.Type == itx.ActionCancel {
-			element := map[string]interface{}{
-				"tag": "button",
-				"text": map[string]interface{}{
-					"tag":     "plain_text",
-					"content": item.Label,
-				},
-				"type": "primary",
-			}
+			button := larkcard.NewMessageCardEmbedButton().
+				Text(larkcard.NewMessageCardPlainText().Content(item.Label)).
+				Type(larkcard.MessageCardButtonTypePrimary)
 			if item.Value != "" {
-				element["url"] = "" // For Feishu, we'd need a callback URL
+				button.Value(map[string]interface{}{"action": item.Value})
 			}
-			elements = append(elements, element)
+			buttons = append(buttons, button)
 		}
 	}
 
-	// Build card structure
-	card := map[string]interface{}{
-		"config": map[string]interface{}{
-			"wide_screen_mode": true,
-		},
-		"elements": []map[string]interface{}{
-			{
-				"tag":    "div",
-				"fields": []map[string]interface{}{},
-			},
-			{
-				"tag":     "action",
-				"actions": elements,
-			},
-		},
+	// Build card structure using Lark SDK builder
+	var elements []larkcard.MessageCardElement
+	wideScreen := true
+	builder := larkcard.NewMessageCard().
+		Config(larkcard.NewMessageCardConfig().WideScreenMode(wideScreen))
+
+	if len(buttons) > 0 {
+		layout := larkcard.MessageCardActionLayoutFlow
+		action := larkcard.NewMessageCardAction().
+			Layout(&layout).
+			Actions(buttons)
+		elements = append(elements, action)
+		builder = builder.Elements(elements)
 	}
 
-	return card
+	// Return JSON string as map for compatibility with existing API
+	// The actual serialization happens when the bot sends the message
+	card := builder.Build()
+	cardStr, _ := card.String()
+
+	return map[string]interface{}{
+		"_card_json": cardStr,
+	}
 }
 
 // BuildFallbackText creates numbered text options
