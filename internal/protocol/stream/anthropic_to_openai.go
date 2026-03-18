@@ -59,6 +59,13 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 		inputTokens  int
 		outputTokens int
 		finished     bool
+		// Track tool call state for proper streaming
+		toolCallID   string
+		toolCallName string
+		toolCallArgs strings.Builder
+		hasToolCalls bool
+		// Track thinking state for extended thinking support
+		thinkingText strings.Builder
 	)
 
 	// Process the stream with context cancellation checking
@@ -98,14 +105,56 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 			sendOpenAIStreamChunk(c, chunk)
 
 		case "content_block_start":
-			// Content block starting (usually text)
+			// Content block starting
 			if event.ContentBlock.Type == "text" {
-				// Reset content builder for new block
+				// Reset content builder for new text block
 				contentText.Reset()
+			} else if event.ContentBlock.Type == "tool_use" {
+				// Tool use block starting - send first tool_call chunk
+				toolCallID = event.ContentBlock.ID
+				toolCallName = event.ContentBlock.Name
+				toolCallArgs.Reset()
+				hasToolCalls = true
+
+				// Send initial tool_call chunk with id, type, and name
+				chunk := map[string]interface{}{
+					"id":      chatID,
+					"object":  "chat.completion.chunk",
+					"created": created,
+					"model":   responseModel,
+					"choices": []map[string]interface{}{
+						{
+							"index": 0,
+							"delta": map[string]interface{}{
+								"tool_calls": []map[string]interface{}{
+									{
+										"index": 0,
+										"id":    toolCallID,
+										"type":  "function",
+										"function": map[string]interface{}{
+											"name":      toolCallName,
+											"arguments": "",
+										},
+									},
+								},
+							},
+							"finish_reason": nil,
+						},
+					},
+				}
+				sendOpenAIStreamChunk(c, chunk)
+			} else if event.ContentBlock.Type == "thinking" {
+				// Thinking block starting - reset thinking builder
+				thinkingText.Reset()
+				// Note: Initial thinking text from ContentBlock.Thinking is handled in first delta
+			} else if event.ContentBlock.Type == "redacted_thinking" {
+				// Redacted thinking - should be included as reasoning_content with placeholder
+				thinkingText.Reset()
+				thinkingText.WriteString("[REDACTED THINKING]")
 			}
 
 		case "content_block_delta":
-			// Text delta - send as OpenAI chunk
+			// Text, tool arguments, or thinking delta - send as OpenAI chunk
 			if event.Delta.Type == "text_delta" && event.Delta.Text != "" {
 				text := event.Delta.Text
 				contentText.WriteString(text)
@@ -124,7 +173,59 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 					},
 				}
 				sendOpenAIStreamChunk(c, chunk)
+			} else if event.Delta.Type == "input_json_delta" && event.Delta.PartialJSON != "" {
+				// Tool call arguments delta
+				args := event.Delta.PartialJSON
+				toolCallArgs.WriteString(args)
+
+				// Send subsequent tool_call chunks with only arguments (no id, no name, no type)
+				chunk := map[string]interface{}{
+					"id":      chatID,
+					"object":  "chat.completion.chunk",
+					"created": created,
+					"model":   responseModel,
+					"choices": []map[string]interface{}{
+						{
+							"index": 0,
+							"delta": map[string]interface{}{
+								"tool_calls": []map[string]interface{}{
+									{
+										"index": 0,
+										"function": map[string]interface{}{
+											"arguments": args,
+										},
+									},
+								},
+							},
+							"finish_reason": nil,
+						},
+					},
+				}
+				sendOpenAIStreamChunk(c, chunk)
+			} else if event.Delta.Type == "thinking_delta" && event.Delta.Thinking != "" {
+				// Thinking content delta - convert to OpenAI's reasoning_content format
+				thinking := event.Delta.Thinking
+				thinkingText.WriteString(thinking)
+
+				// Send as reasoning_content in the delta (OpenAI extended thinking format)
+				chunk := map[string]interface{}{
+					"id":      chatID,
+					"object":  "chat.completion.chunk",
+					"created": created,
+					"model":   responseModel,
+					"choices": []map[string]interface{}{
+						{
+							"index": 0,
+							"delta": map[string]interface{}{
+								"reasoning_content": thinking,
+							},
+							"finish_reason": nil,
+						},
+					},
+				}
+				sendOpenAIStreamChunk(c, chunk)
 			}
+			// Note: signature_delta is intentionally ignored as OpenAI doesn't have an equivalent
 
 		case "content_block_stop":
 			// Content block finished - no specific action needed
@@ -138,7 +239,20 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 			}
 
 		case "message_stop":
+			// Determine the correct finish_reason
+			// "tool_calls" if we had tool use, "stop" otherwise
+			finishReason := "stop"
+			if hasToolCalls {
+				finishReason = "tool_calls"
+			}
+
 			// Send final chunk with finish_reason and usage
+			delta := map[string]interface{}{}
+			if hasToolCalls {
+				// For tool_calls, content should be empty string (matching DeepSeek format)
+				delta["content"] = ""
+			}
+
 			chunk := map[string]interface{}{
 				"id":      chatID,
 				"object":  "chat.completion.chunk",
@@ -147,8 +261,8 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 				"choices": []map[string]interface{}{
 					{
 						"index":         0,
-						"delta":         map[string]interface{}{},
-						"finish_reason": "stop",
+						"delta":         delta,
+						"finish_reason": finishReason,
 					},
 				},
 			}
