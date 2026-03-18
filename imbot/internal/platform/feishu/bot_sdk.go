@@ -392,11 +392,13 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 	var content string
 
 	if opts.ParseMode == core.ParseModeMarkdown {
-		// Use Lark card builder for markdown/post content
+		// For Lark/Feishu, markdown in card needs to be wrapped in div element
+		// MessageCardLarkMd implements MessageCardText interface
 		msgType = "interactive"
 		cardJson, err := larkcard.NewMessageCard().
 			Elements([]larkcard.MessageCardElement{
-				larkcard.NewMessageCardMarkdown().Content(opts.Text),
+				larkcard.NewMessageCardDiv().
+					Text(larkcard.NewMessageCardLarkMd().Content(opts.Text)),
 			}).
 			String()
 		if err != nil {
@@ -504,7 +506,8 @@ func (b *Bot) sendInteractiveCard(ctx context.Context, target string, opts *core
 // buildInteractiveCard builds a Lark interactive card from text and keyboard markup
 func (b *Bot) buildInteractiveCard(text string, replyMarkup interface{}) *larkcard.MessageCard {
 	elements := []larkcard.MessageCardElement{
-		larkcard.NewMessageCardMarkdown().Content(text),
+		larkcard.NewMessageCardDiv().
+			Text(larkcard.NewMessageCardLarkMd().Content(text)),
 	}
 
 	// Convert keyboard markup to action buttons
