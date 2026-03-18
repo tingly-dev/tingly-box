@@ -30,6 +30,10 @@ const oauthHelpLinks: Record<string, { url: string; label: string }> = {
         url: 'https://open.feishu.cn/document/home/introduction-to-feishu-platform/',
         label: 'Feishu Developer Docs',
     },
+    lark: {
+        url: 'https://open.larksuite.com/document/home/introduction-to-lark-platform/',
+        label: 'Lark Developer Docs',
+    },
 };
 
 export const BotAuthForm: React.FC<BotAuthFormProps> = ({
