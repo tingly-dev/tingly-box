@@ -510,17 +510,16 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 
 		case "response.reasoning_summary_text.delta":
 			summaryDelta := currentEvent.AsResponseReasoningSummaryTextDelta()
-			// Reasoning summary is condensed reasoning shown to user as visible text
-			// This is separate from both hidden thinking (reasoning_text) and main output text
+			// Reasoning summary is converted to thinking block (per Claude Code spec)
 			if state.reasoningSummaryBlockIndex == -1 {
 				state.reasoningSummaryBlockIndex = state.nextBlockIndex
 				state.hasTextContent = true
 				state.nextBlockIndex++
-				senders.SendContentBlockStart(state.reasoningSummaryBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
+				senders.SendContentBlockStart(state.reasoningSummaryBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
 			}
 			senders.SendContentBlockDelta(state.reasoningSummaryBlockIndex, map[string]interface{}{
-				"type": deltaTypeTextDelta,
-				"text": summaryDelta.Delta,
+				"type":     deltaTypeThinkingDelta,
+				"thinking": summaryDelta.Delta,
 			}, flusher)
 
 		case "response.reasoning_summary_text.done":
@@ -758,18 +757,22 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 					state.reasoningSummaryBlockIndex = state.nextBlockIndex
 					state.hasTextContent = true
 					state.nextBlockIndex++
-					senders.SendContentBlockStart(state.reasoningSummaryBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
+					// reasoning_summary should be converted to thinking block (per Claude Code spec)
+					senders.SendContentBlockStart(state.reasoningSummaryBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
 				}
 				if summaryPartAdded.Part.Text != "" {
 					senders.SendContentBlockDelta(state.reasoningSummaryBlockIndex, map[string]interface{}{
-						"type": deltaTypeTextDelta,
-						"text": summaryPartAdded.Part.Text,
+						"type":     deltaTypeThinkingDelta,
+						"thinking": summaryPartAdded.Part.Text,
 					}, flusher)
 				}
 			}
 
 		case "response.reasoning_summary_part.done":
-			// Finalize reasoning summary - already handled by reasoning_summary_text.done
+			if state.reasoningSummaryBlockIndex != -1 {
+				senders.SendContentBlockStop(state, state.reasoningSummaryBlockIndex, flusher)
+				state.reasoningSummaryBlockIndex = -1
+			}
 
 		case "response.audio.delta":
 			audioDelta := currentEvent.AsResponseAudioDelta()

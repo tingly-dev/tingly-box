@@ -435,9 +435,8 @@ func HandleResponsesToAnthropicBetaAssembly(c *gin.Context, stream *openaistream
 		},
 		SendMessageStop: func(messageID, model string, state *streamState, stopReason string, flusher http.Flusher) {
 			msg.ID = messageID
-			// TODO: the id is special
-			msg.ID = fmt.Sprintf("msg_%s", uuid.New().String())
-
+			//TODO: the id is special
+			//msg.ID = fmt.Sprintf("msg_%s", uuid.New().String())
 			msg.Model = anthropic.Model(model)
 			msg.StopReason = anthropic.BetaStopReason(mapOpenAIFinishReasonToAnthropicBeta(stopReason))
 

@@ -576,10 +576,14 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPIAssembly(c *gin.Context, re
 		streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
 	}
 
+	// Apply Codex-specific transformations to the request
+	// This converts standard Responses API format to Codex backend format
+	codexReq := request.ApplyCodexTransform(&req.BetaMessageNewParams, &responsesReq)
+
 	// For standard OpenAI providers, use the OpenAI SDK
-	wrapper := s.clientPool.GetOpenAIClient(provider, responsesReq.Model)
+	wrapper := s.clientPool.GetOpenAIClient(provider, codexReq.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
-	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
+	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, *codexReq)
 	if cancel != nil {
 		defer cancel()
 	}
