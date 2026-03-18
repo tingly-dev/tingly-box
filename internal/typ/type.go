@@ -92,6 +92,26 @@ const (
 	ThinkingModeForce    ThinkingMode = "force"    // Force for all requests
 )
 
+// RecordingMode represents the recording mode for scenario recording
+type RecordingMode string
+
+const (
+	RecordingModeDisabled       RecordingMode = ""              // Recording disabled (default)
+	RecordingModeRequest        RecordingMode = "request"       // Record request only
+	RecordingModeResponse       RecordingMode = "response"      // Record response only
+	RecordingModeRequestResponse RecordingMode = "request_response" // Record both request and response
+)
+
+// IsValidRecordingMode checks if the given string is a valid recording mode
+func IsValidRecordingMode(mode string) bool {
+	switch RecordingMode(mode) {
+	case RecordingModeDisabled, RecordingModeRequest, RecordingModeResponse, RecordingModeRequestResponse:
+		return true
+	default:
+		return false
+	}
+}
+
 // ScenarioFlags represents configuration flags for a scenario
 type ScenarioFlags struct {
 	Unified  bool `json:"unified" yaml:"unified"`   // Single configuration for all models
@@ -100,8 +120,9 @@ type ScenarioFlags struct {
 
 	// Experimental feature flags (scenario-based opt-in)
 	SmartCompact bool `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"`   // Enable smart compact (remove thinking blocks)
-	Recording    bool `json:"recording,omitempty" yaml:"recording,omitempty"`           // Enable scenario recording
-	Beta         bool `json:"anthropic_beta,omitempty" yaml:"anthropic_beta,omitempty"` // Enable Anthropic beta features (e.g. extended thinking)
+	Recording    bool `json:"recording,omitempty" yaml:"recording,omitempty"`           // Enable scenario recording (legacy boolean flag)
+	RecordV2     RecordingMode `json:"record_v2,omitempty" yaml:"record_v2,omitempty"` // Enable scenario recording V2 (request/response/request_response)
+	Beta         bool          `json:"anthropic_beta,omitempty" yaml:"anthropic_beta,omitempty"` // Enable Anthropic beta features (e.g. extended thinking)
 
 	// Stream configuration flags
 	DisableStreamUsage bool `json:"disable_stream_usage,omitempty" yaml:"disable_stream_usage,omitempty"` // Don't include usage in streaming chunks (for incompatible clients like xcode)

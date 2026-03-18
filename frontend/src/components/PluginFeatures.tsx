@@ -1,13 +1,16 @@
-import { Check as CheckIcon, Science, SettingsSuggest, AutoMode, FlashOn, KeyboardArrowDown } from '@mui/icons-material';
+import { Check as CheckIcon, Science, SettingsSuggest, AutoMode, FlashOn, KeyboardArrowDown, FiberManualRecord } from '@mui/icons-material';
 import Psychology from '@mui/icons-material/Psychology';
 import {
     Box,
     Button,
     CircularProgress,
+    FormControl,
     ListItemIcon,
     ListItemText,
     Menu,
     MenuItem,
+    Select,
+    SelectChangeEvent,
     Tooltip,
     Typography,
 } from '@mui/material';
@@ -18,12 +21,19 @@ export interface PluginFeaturesProps {
     scenario: string;
 }
 
-const PLUGIN_FEATURES = [
+interface PluginFeatureConfig {
+    key: string;
+    label: string;
+    description: string;
+    scenarios?: readonly string[];
+}
+
+const PLUGIN_FEATURES: PluginFeatureConfig[] = [
     { key: 'smart_compact', label: 'Smart Compact', description: 'Remove thinking blocks from conversation history to reduce context' },
-    { key: 'recording', label: 'Recording', description: 'Record scenario-level request/response traffic for debugging' },
+    { key: 'recording', label: 'Recording (Legacy)', description: 'Record scenario-level request/response traffic for debugging (Legacy - use Record V2)' },
     { key: 'clean_header', label: 'Clean Header', description: 'Remove Claude Code billing header from system messages', scenarios: ['claude_code'] as const },
     { key: 'anthropic_beta', label: 'Beta', description: 'Enable Anthropic beta features (e.g. extended thinking)', scenarios: ['claude_code'] as const },
-] as const;
+];
 
 const EFFORT_LEVELS = [
     { value: '', label: 'By Client', description: 'Use model default' },
@@ -39,10 +49,19 @@ const THINKING_MODES = [
     { value: 'force', label: 'Force', description: 'Force to use extended thinking', icon: FlashOn },
 ] as const;
 
+// Record V2 modes
+const RECORD_V2_MODES = [
+    { value: '', label: 'Off', description: 'Recording disabled' },
+    { value: 'request', label: 'Request', description: 'Record request only' },
+    { value: 'response', label: 'Response', description: 'Record response only' },
+    { value: 'request_response', label: 'Both', description: 'Record both request and response' },
+] as const;
+
 const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
     const [features, setFeatures] = useState<Record<string, boolean>>({});
     const [effort, setEffort] = useState<string>('');
     const [thinkingMode, setThinkingMode] = useState<string>('default');
+    const [recordV2Mode, setRecordV2Mode] = useState<string>('');
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState<Record<string, boolean>>({});
     const [menuAnchor, setMenuAnchor] = useState<Record<string, HTMLElement | null>>({});
@@ -80,6 +99,12 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                 }
             });
             setFeatures(newFeatures);
+
+            // Load Record V2 mode (string flag)
+            const recordV2Result = await api.getScenarioStringFlag(scenario, 'record_v2');
+            if (recordV2Result?.success && recordV2Result?.data?.value !== undefined) {
+                setRecordV2Mode(recordV2Result.data.value);
+            }
         } catch (error) {
             console.error('Failed to load scenario features:', error);
         } finally {
@@ -161,6 +186,30 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
             })
             .finally(() => {
                 setUpdating(prev => ({ ...prev, thinkingMode: false }));
+            });
+    };
+
+    const handleRecordV2Change = (event: SelectChangeEvent<string>) => {
+        const newMode = event.target.value;
+        if (updating.recordV2 || newMode === recordV2Mode) return;
+
+        setUpdating(prev => ({ ...prev, recordV2: true }));
+
+        api.setScenarioStringFlag(scenario, 'record_v2', newMode)
+            .then((result) => {
+                if (result.success) {
+                    setRecordV2Mode(newMode);
+                } else {
+                    console.error('Failed to set record_v2 mode:', result);
+                    loadData();
+                }
+            })
+            .catch((err) => {
+                console.error('Failed to set record_v2 mode:', err);
+                loadData();
+            })
+            .finally(() => {
+                setUpdating(prev => ({ ...prev, recordV2: false }));
             });
     };
 
@@ -380,6 +429,68 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                             </Box>
                         );
                     })}
+
+                    {/* Record V2 Dropdown */}
+                    {(() => {
+                        const currentRecordMode = RECORD_V2_MODES.find(m => m.value === recordV2Mode);
+                        const isRecordV2Enabled = recordV2Mode !== '';
+                        const isUpdatingRecordV2 = updating.recordV2 || false;
+                        return (
+                            <Tooltip
+                                title={`Recording V2: ${currentRecordMode?.description || 'Disabled'}${isRecordV2Enabled ? ' (enabled)' : ' (disabled)'}`}
+                                placement="right"
+                                arrow
+                            >
+                                <Box sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 1,
+                                    bgcolor: isRecordV2Enabled ? 'error.main' : 'transparent',
+                                    color: isRecordV2Enabled ? 'error.contrastText' : 'text.primary',
+                                    borderRadius: 1,
+                                    px: 1,
+                                    py: 0.5,
+                                    border: isRecordV2Enabled ? 'none' : '1px solid',
+                                    borderColor: 'divider',
+                                    opacity: isUpdatingRecordV2 ? 0.6 : 1,
+                                    '&:hover': {
+                                        bgcolor: isRecordV2Enabled ? 'error.dark' : 'action.selected',
+                                    },
+                                }}>
+                                    <FiberManualRecord sx={{ fontSize: '0.875rem' }} />
+                                    <Typography variant="caption" sx={{ fontWeight: isRecordV2Enabled ? 600 : 400, mr: 1 }}>
+                                        Record V2
+                                    </Typography>
+                                    <FormControl size="small" sx={{ minWidth: 90 }}>
+                                        <Select
+                                            value={recordV2Mode}
+                                            onChange={handleRecordV2Change}
+                                            variant="standard"
+                                            disabled={isUpdatingRecordV2}
+                                            disableUnderline
+                                            sx={{
+                                                color: 'inherit',
+                                                fontSize: '0.75rem',
+                                                '& .MuiSelect-select': {
+                                                    py: 0,
+                                                    pr: '20px !important',
+                                                },
+                                                '& .MuiSvgIcon-root': {
+                                                    color: 'inherit',
+                                                },
+                                            }}
+                                        >
+                                            {RECORD_V2_MODES.map((mode) => (
+                                                <MenuItem key={mode.value} value={mode.value} sx={{ fontSize: '0.875rem' }}>
+                                                    {mode.label}
+                                                </MenuItem>
+                                            ))}
+                                        </Select>
+                                    </FormControl>
+                                </Box>
+                            </Tooltip>
+                        );
+                    })()}
                 </Box>
             </Box>
         </Box>
