@@ -3,6 +3,8 @@ package oauth
 import (
 	"testing"
 	"time"
+
+	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 func TestNewSessionManager(t *testing.T) {
@@ -52,8 +54,14 @@ func TestCreateSession(t *testing.T) {
 	if time.Since(session.CreatedAt) > time.Second {
 		t.Error("expected CreatedAt to be recent")
 	}
-	if time.Until(session.ExpiresAt) < 29*time.Minute {
-		t.Error("expected ExpiresAt to be ~30 minutes from now")
+	// Verify session uses unified DefaultSessionExpiry (10 minutes, not the old 30 minutes)
+	expectedExpiry := time.Now().Add(oauth2.DefaultSessionExpiry)
+	diff := session.ExpiresAt.Sub(expectedExpiry)
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > time.Second {
+		t.Errorf("expected ExpiresAt to be ~10 minutes (DefaultSessionExpiry) from now, got %v (diff: %v)", session.ExpiresAt, diff)
 	}
 }
 

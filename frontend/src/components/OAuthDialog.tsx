@@ -590,12 +590,12 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
     const detectProxyFromProviders = async () => {
         try {
             const {providersApi} = await api.instances();
-            const response = await providersApi.apiV1ProvidersGet();
+            const response = await providersApi.apiV2ProvidersGet();
             if (response.data.success && response.data.data) {
                 const providers = response.data.data;
-                // Find OpenAI providers with proxy
+                // Find OpenAI-style providers with proxy
                 const openaiProvider = providers.find((p: any) =>
-                    p.provider_base === 'openai' && p.proxy_url
+                    p.api_style === 'openai' && p.proxy_url
                 );
                 if (openaiProvider?.proxy_url) {
                     setAutoDetectedProxy(openaiProvider.proxy_url);
