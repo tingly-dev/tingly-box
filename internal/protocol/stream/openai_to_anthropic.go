@@ -337,7 +337,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 // This is a thin wrapper that uses the shared core logic with v1 event senders.
 // Returns UsageStat containing token usage information for tracking.
 func HandleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {
-	return handleResponsesToAnthropicV1Stream(c, stream, responseModel, responsesAPIEventSenders{
+	return handlerResponsesToAnthropicStream(c, stream, responseModel, responsesAPIEventSenders{
 		SendMessageStart: func(event map[string]interface{}, flusher http.Flusher) {
 			sendAnthropicStreamEvent(c, eventTypeMessageStart, event, flusher)
 		},
@@ -365,10 +365,10 @@ func HandleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Str
 	})
 }
 
-// handleResponsesToAnthropicV1Stream is the shared core logic for processing OpenAI Responses API streams
+// handlerResponsesToAnthropicStream is the shared core logic for processing OpenAI Responses API streams
 // and converting them to Anthropic format (v1 or beta depending on the senders provided).
 // Returns UsageStat containing token usage information for tracking.
-func handleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string, senders responsesAPIEventSenders) (*protocol.TokenUsage, error) {
+func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string, senders responsesAPIEventSenders) (*protocol.TokenUsage, error) {
 	logrus.Debugf("[ResponsesAPI] Starting Responses API to Anthropic streaming response handler, model=%s", responseModel)
 	defer func() {
 		if r := recover(); r != nil {
@@ -553,18 +553,19 @@ func handleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Str
 			logrus.Debugf("item type: %s", itemAdded.Item.Type)
 			switch itemAdded.Item.Type {
 			case "reasoning":
-				if state.textBlockIndex == -1 {
-					state.textBlockIndex = state.nextBlockIndex
-					state.hasTextContent = true
+				reasoningDelta := currentEvent.AsResponseReasoningTextDelta()
+				if state.thinkingBlockIndex == -1 {
+					state.thinkingBlockIndex = state.nextBlockIndex
 					state.nextBlockIndex++
-					senders.SendContentBlockStart(state.textBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
+					logrus.Debugf("[Thinking][ResponsesAPI] Initializing thinking block at index %d", state.thinkingBlockIndex)
+					senders.SendContentBlockStart(state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
 				}
-				textDelta := currentEvent.AsResponseOutputTextDelta()
-				senders.SendContentBlockDelta(state.textBlockIndex, map[string]interface{}{
-					"type": deltaTypeThinkingDelta,
-					"text": textDelta.Delta,
+				preview := reasoningDelta.Delta
+				logrus.Debugf("[Thinking][ResponsesAPI] Sending thinking_delta: len=%d, preview=%q", len(reasoningDelta.Delta), preview)
+				senders.SendContentBlockDelta(state.thinkingBlockIndex, map[string]interface{}{
+					"type":     deltaTypeThinkingDelta,
+					"thinking": reasoningDelta.Delta,
 				}, flusher)
-				lastOutputItemType = "text"
 			case "message":
 				if state.textBlockIndex == -1 {
 					state.textBlockIndex = state.nextBlockIndex
@@ -577,7 +578,6 @@ func handleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Str
 					"type": deltaTypeTextDelta,
 					"text": textDelta.Delta,
 				}, flusher)
-				lastOutputItemType = "text"
 			case "function_call", "custom_tool_call", "mcp_call":
 				itemID := itemAdded.Item.ID
 				// Truncate tool call ID to meet OpenAI's 40 character limit

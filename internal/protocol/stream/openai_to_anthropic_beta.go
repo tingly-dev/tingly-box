@@ -336,7 +336,7 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 // This is a thin wrapper that uses the shared core logic with beta event senders.
 // Returns UsageStat containing token usage information for tracking.
 func HandleResponsesToAnthropicBetaStream(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {
-	return handleResponsesToAnthropicV1Stream(c, stream, responseModel, responsesAPIEventSenders{
+	return handlerResponsesToAnthropicStream(c, stream, responseModel, responsesAPIEventSenders{
 		SendMessageStart: func(event map[string]interface{}, flusher http.Flusher) {
 			sendAnthropicBetaStreamEvent(c, eventTypeMessageStart, event, flusher)
 		},
@@ -380,7 +380,7 @@ func HandleResponsesToAnthropicBetaAssembly(c *gin.Context, stream *openaistream
 		},
 	}
 
-	return handleResponsesToAnthropicV1Stream(c, stream, responseModel, responsesAPIEventSenders{
+	return handlerResponsesToAnthropicStream(c, stream, responseModel, responsesAPIEventSenders{
 		SendMessageStart: func(event map[string]interface{}, flusher http.Flusher) {
 			if msgData, ok := event["message"].(map[string]interface{}); ok {
 				if id, ok := msgData["id"].(string); ok {
