@@ -27,27 +27,33 @@ const (
 )
 
 // getReceiveIdType determines the receive_id_type based on the target ID format
-// - "open_id": for user IDs (P2P/direct chat)
+// - "user_id": for user's user_id (global across apps, for P2P/direct chat)
+// - "open_id": for user's open_id (app-specific, for P2P/direct chat)
 // - "chat_id": for group/chat IDs
 //
 // Feishu/Lark ID patterns:
-// - oc_xxxxxx: user's open_id (for P2P chat)
-// - ou_xxxxxx: user's open_id (another format)
+// - ou_xxxxxx: user's user_id (global, preferred for cross-app messaging)
+// - oc_xxxxxx: user's open_id (app-specific)
 // - cli_xxxxxx: group chat ID
 //
-// However, the most reliable way is to use chat_id for groups and open_id for users.
-// Since we only have the ID string, we'll infer from the prefix.
+// The most reliable approach is to check ID prefix.
 func getReceiveIdType(targetID string) string {
-	// Check if it's a group/chat ID pattern
-	if len(targetID) >= 4 {
-		prefix := targetID[:4]
-		if prefix == "cli_" {
-			return "chat_id"
-		}
+	if len(targetID) < 4 {
+		return "open_id"
 	}
-	// Default to open_id for users (P2P chat)
-	// This handles oc_*, ou_*, and other open_id patterns
-	return "open_id"
+
+	prefix := targetID[:4]
+	switch prefix {
+	case "cli_":
+		return "chat_id"
+	case "ou_":
+		return "user_id" // Global user_id for cross-app messaging
+	case "oc_":
+		return "open_id" // App-specific open_id
+	default:
+		// Default to open_id for backward compatibility
+		return "open_id"
+	}
 }
 
 // Bot is the Lark SDK-based bot implementation
@@ -247,6 +253,7 @@ func (b *Bot) convertLarkMessageToCore(event *larkim.P2MessageReceiveV1) *core.M
 	}
 
 	var chatID string
+	var replyTarget string // Used for sending replies
 	var chatType core.ChatType = core.ChatTypeDirect
 
 	if event.Event != nil && event.Event.Message != nil {
@@ -265,15 +272,34 @@ func (b *Bot) convertLarkMessageToCore(event *larkim.P2MessageReceiveV1) *core.M
 	}
 
 	var senderID string
+	var senderUserID string // Global user_id for cross-app messaging
 	if event.Event != nil && event.Event.Sender != nil {
 		if event.Event.Sender.SenderId != nil {
+			// Prefer user_id (global) over open_id (app-specific)
 			if event.Event.Sender.SenderId.UserId != nil {
-				senderID = *event.Event.Sender.SenderId.UserId
+				senderUserID = *event.Event.Sender.SenderId.UserId
+				senderID = senderUserID
 			} else if event.Event.Sender.SenderId.OpenId != nil {
 				senderID = *event.Event.Sender.SenderId.OpenId
 			}
 		}
-		b.Logger().Debug("Sender ID: %s", senderID)
+		b.Logger().Debug("Sender ID: %s, Sender UserID: %s", senderID, senderUserID)
+	}
+
+	// For direct messages, use user_id as the reply target to avoid "open_id cross app" error
+	// For group messages, use chat_id
+	if chatType == core.ChatTypeDirect {
+		// Direct message: use the sender's user_id (global) for sending replies
+		// This works across all apps in the same tenant
+		if senderUserID != "" {
+			replyTarget = senderUserID
+		} else {
+			// Fallback to senderID (might be open_id, could fail with cross-app error)
+			replyTarget = senderID
+		}
+	} else {
+		// Group/channel: use chat_id
+		replyTarget = chatID
 	}
 
 	// Extract message content - Lark Content is JSON string like {"text":"hello"}
@@ -299,15 +325,19 @@ func (b *Bot) convertLarkMessageToCore(event *larkim.P2MessageReceiveV1) *core.M
 	b.Logger().Debug("Parsed text content: %s", textContent)
 
 	// Build core.Message using the builder
+	// For direct messages, Recipient.ID should be the user_id (not chat_id) for sending replies
 	messageBuilder := builder.NewMessageBuilder(core.Platform(b.domain)).
 		WithID(messageID).
 		WithTimestamp(time.Now().Unix()).
 		WithSender(senderID, "", "").
-		WithRecipient(chatID, string(chatType), "").
+		WithRecipient(replyTarget, string(chatType), "").
 		WithContent(core.NewTextContent(textContent))
 
-	// Add metadata for raw event access
+	// Add metadata for raw event access and original chat_id
 	messageBuilder.WithMetadata("raw_lark_event", event)
+	messageBuilder.WithMetadata("original_chat_id", chatID)
+	messageBuilder.WithMetadata("chat_type", chatType)
+	messageBuilder.WithMetadata("sender_user_id", senderUserID)
 
 	msg := messageBuilder.Build()
 	b.Logger().Debug("Built core message: ID=%s, Sender=%s, Content length=%d",
@@ -403,23 +433,14 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 		return nil, core.WrapError(err, core.Platform(b.domain), core.ErrPlatformError)
 	}
 
-	// Log response details
-	b.Logger().Debug("Response received: resp=%p, resp.Data=%p, code=%d, msg=%s",
-		resp, resp.Data, resp.Code, resp.Msg)
+	// Check if the API call was successful (code 0)
+	if resp.Code != 0 {
+		b.Logger().Error("API returned error code: %d, msg: %s", resp.Code, resp.Msg)
+		return nil, core.NewBotError(core.ErrPlatformError, fmt.Sprintf("API error: %s", resp.Msg), false)
+	}
 
 	b.UpdateLastActivity()
-	messageID := ""
-	if resp.Data != nil {
-		b.Logger().Debug("Response.Data is not nil, MessageId=%p", resp.Data.MessageId)
-		if resp.Data.MessageId != nil {
-			messageID = *resp.Data.MessageId
-			b.Logger().Debug("Extracted message ID: %s", messageID)
-		} else {
-			b.Logger().Warn("Response.Data.MessageId is nil")
-		}
-	} else {
-		b.Logger().Warn("Response.Data is nil")
-	}
+	messageID := b.extractMessageIDFromResponse(resp)
 	b.Logger().Info("Message sent successfully: ID=%s", messageID)
 	return &core.SendResult{
 		MessageID: messageID,
@@ -465,23 +486,14 @@ func (b *Bot) sendInteractiveCard(ctx context.Context, target string, opts *core
 		return nil, core.WrapError(err, core.Platform(b.domain), core.ErrPlatformError)
 	}
 
-	// Log response details
-	b.Logger().Debug("Card response received: resp=%p, resp.Data=%p, code=%d, msg=%s",
-		resp, resp.Data, resp.Code, resp.Msg)
+	// Check if the API call was successful (code 0)
+	if resp.Code != 0 {
+		b.Logger().Error("API returned error code: %d, msg: %s", resp.Code, resp.Msg)
+		return nil, core.NewBotError(core.ErrPlatformError, fmt.Sprintf("API error: %s", resp.Msg), false)
+	}
 
 	b.UpdateLastActivity()
-	messageID := ""
-	if resp.Data != nil {
-		b.Logger().Debug("Response.Data is not nil, MessageId=%p", resp.Data.MessageId)
-		if resp.Data.MessageId != nil {
-			messageID = *resp.Data.MessageId
-			b.Logger().Debug("Extracted message ID: %s", messageID)
-		} else {
-			b.Logger().Warn("Response.Data.MessageId is nil")
-		}
-	} else {
-		b.Logger().Warn("Response.Data is nil")
-	}
+	messageID := b.extractMessageIDFromResponse(resp)
 	b.Logger().Info("Card sent successfully: ID=%s", messageID)
 	return &core.SendResult{
 		MessageID: messageID,
@@ -557,6 +569,25 @@ func (b *Bot) sendMedia(ctx context.Context, target string, opts *core.SendMessa
 		return nil, core.NewBotError(core.ErrUnknown, "no media to send", false)
 	}
 	return nil, core.NewMediaNotSupportedError(core.Platform(b.domain), opts.Media[0].Type)
+}
+
+// extractMessageIDFromResponse extracts the message ID from a Lark API response
+// Handles the case where resp.Data is nil even when the API call is successful (code=0)
+func (b *Bot) extractMessageIDFromResponse(resp *larkim.CreateMessageResp) string {
+	if resp.Code != 0 {
+		return ""
+	}
+
+	if resp.Data != nil && resp.Data.MessageId != nil {
+		messageID := *resp.Data.MessageId
+		b.Logger().Debug("Extracted message ID: %s", messageID)
+		return messageID
+	}
+
+	// For Lark/Feishu, sometimes Data is nil even on success
+	// Generate a fallback message ID for tracking
+	b.Logger().Warn("Response.Data is nil, but API call succeeded (code=0)")
+	return fmt.Sprintf("msg-%d", time.Now().UnixNano())
 }
 
 // PlatformInfo returns platform information
