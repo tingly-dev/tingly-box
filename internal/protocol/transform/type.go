@@ -15,4 +15,7 @@ const (
 
 	// TargetAPIStyleAnthropicBeta converts requests to Anthropic v1beta Messages API format
 	TargetAPIStyleAnthropicBeta TargetAPIStyle = "anthropic_beta"
+
+	// TargetAPIStyleGoogle converts requests to Google Gemini API format
+	TargetAPIStyleGoogle TargetAPIStyle = "google"
 )
