@@ -7,8 +7,6 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/transformer"
-
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // VendorTransform applies provider-specific adjustments to requests
@@ -63,13 +61,8 @@ func (t *VendorTransform) applyChatCompletionVendor(ctx *TransformContext, req *
 		config = &protocol.OpenAIConfig{} // Use default config if not available
 	}
 
-	// Create minimal Provider struct for transformer
-	provider := &typ.Provider{
-		APIBase: t.ProviderURL,
-	}
-
 	// Apply vendor-specific transforms using existing transformer package
-	transformed := transformer.ApplyProviderTransforms(req, provider, model, config)
+	transformed := transformer.ApplyProviderTransforms(req, t.ProviderURL, model, config)
 
 	// Update context with transformed request
 	ctx.Request = transformed

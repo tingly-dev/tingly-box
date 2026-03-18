@@ -62,5 +62,5 @@ func ConvertAnthropicToOpenAIResponseWithProvider(
 	openaiResp := nonstream.ConvertAnthropicToOpenAIResponse(anthropicResp, responseModel)
 
 	// Apply provider-specific transformations using the transform system
-	return transformer.ApplyResponseTransforms(openaiResp, provider, model)
+	return transformer.ApplyResponseTransforms(openaiResp, provider.APIBase, model)
 }

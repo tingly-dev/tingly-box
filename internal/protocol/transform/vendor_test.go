@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/transformer"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 func TestNewVendorTransform(t *testing.T) {
@@ -132,19 +131,19 @@ func TestNormalizeProviderURL(t *testing.T) {
 
 func TestVendorTransform_TransformerIntegration(t *testing.T) {
 	// Test integration with transformer package
-	provider := &typ.Provider{APIBase: "api.openai.com"}
+	providerURL := "api.openai.com"
 	req := newOpenAIRequest("gpt-4", 1024)
 	config := &protocol.OpenAIConfig{HasThinking: false, ReasoningEffort: "none"}
 
 	// Direct transformer call
-	transformed := transformer.ApplyProviderTransforms(req, provider, "gpt-4", config)
+	transformed := transformer.ApplyProviderTransforms(req, providerURL, "gpt-4", config)
 	assert.NotNil(t, transformed)
 
 	// Through VendorTransform
-	vt := NewVendorTransform("api.openai.com")
+	vt := NewVendorTransform(providerURL)
 	ctx := &TransformContext{
 		Request:     req,
-		ProviderURL: "api.openai.com",
+		ProviderURL: providerURL,
 		Extra:       map[string]interface{}{"openaiConfig": config},
 	}
 

@@ -97,7 +97,7 @@ func ForwardOpenAIChat(fc *ForwardContext, wrapper *client.OpenAIClient, req *op
 	ctx, cancel := fc.PrepareContext(req)
 	// Apply provider-specific transformations
 	config := buildOpenAIConfig(req)
-	transformedReq := transformer.ApplyProviderTransforms(req, fc.Provider, req.Model, config)
+	transformedReq := transformer.ApplyProviderTransforms(req, fc.Provider.APIBase, req.Model, config)
 	*req = *transformedReq
 
 	// Clear empty tools array
