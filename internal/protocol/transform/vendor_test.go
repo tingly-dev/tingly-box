@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/transformer"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
 )
 
 func TestNewVendorTransform(t *testing.T) {
@@ -136,7 +136,7 @@ func TestVendorTransform_TransformerIntegration(t *testing.T) {
 	config := &protocol.OpenAIConfig{HasThinking: false, ReasoningEffort: "none"}
 
 	// Direct transformer call
-	transformed := transformer.ApplyProviderTransforms(req, providerURL, "gpt-4", config)
+	transformed := ops.ApplyProviderTransforms(req, providerURL, "gpt-4", config)
 	assert.NotNil(t, transformed)
 
 	// Through VendorTransform
