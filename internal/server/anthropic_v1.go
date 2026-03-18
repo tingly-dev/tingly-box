@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -517,11 +518,13 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, re
 
 	var response *responses.Response
 	var err error
+	var cancel context.CancelFunc
 
 	// Check if this is a ChatGPT backend API provider
 	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
 		// Use the ChatGPT backend API handler
-		response, err = s.forwardChatGPTBackendRequest(provider, responsesReq)
+		response, cancel, err = s.forwardChatGPTBackendRequest(provider, responsesReq)
+		defer cancel()
 	} else {
 		// Use standard OpenAI Responses API
 		wrapper := s.clientPool.GetOpenAIClient(provider, string(responsesReq.Model))

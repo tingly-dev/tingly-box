@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
@@ -416,3 +417,136 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 // - MarshalAndSendErrorEvent is in anthropic_error.go
 // - SendFinishEvent is in anthropic_error.go
 // - ErrorResponse and ErrorDetail are in server_types.go
+
+// ===================================================================
+// OpenAI Responses to Anthropic Transform Functions
+// ===================================================================
+
+// HandleOpenAIResponsesStreamToAnthropic handles OpenAI Responses API streaming response
+// and transforms it to Anthropic message format.
+// This is used for ChatGPT backend API providers when the original request was in Anthropic format.
+// Returns (TokenUsage, error)
+func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string, useV1Format bool) (*protocol.TokenUsage, error) {
+	defer stream.Close()
+
+	logrus.Info("[ChatGPT] Starting OpenAI Responses to Anthropic streaming handler")
+	defer func() {
+		if r := recover(); r != nil {
+			logrus.Errorf("[ChatGPT] Panic in streaming handler: %v", r)
+			if c.Writer != nil {
+				c.Writer.WriteHeader(http.StatusInternalServerError)
+				c.Writer.Write([]byte("event: error\ndata: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
+				if flusher, ok := c.Writer.(http.Flusher); ok {
+					flusher.Flush()
+				}
+			}
+		}
+		logrus.Info("[ChatGPT] Finished OpenAI Responses to Anthropic streaming handler")
+	}()
+
+	// Set SSE headers
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Allow-Headers", "Cache-Control")
+
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		return protocol.ZeroTokenUsage(), fmt.Errorf("streaming not supported by this connection")
+	}
+
+	var inputTokens, outputTokens int
+
+	// Generate message ID for Anthropic format
+	messageID := fmt.Sprintf("msg_%d", time.Now().Unix())
+
+	// Send message_start event
+	if useV1Format {
+		sendAnthropicV1MessageStart(c, messageID, responseModel, flusher)
+	} else {
+		sendAnthropicBetaMessageStart(c, messageID, responseModel, flusher)
+	}
+
+	// Send content_block_start event
+	if useV1Format {
+		sendAnthropicV1ContentBlockStart(c, flusher)
+	} else {
+		sendAnthropicBetaContentBlockStart(c, flusher)
+	}
+
+	// Process the stream using the SDK
+	chunkCount := 0
+	for stream.Next() {
+		// Check context cancellation
+		select {
+		case <-c.Request.Context().Done():
+			logrus.Debug("[ChatGPT] Client disconnected, stopping stream")
+			return protocol.NewTokenUsage(inputTokens, outputTokens), c.Request.Context().Err()
+		default:
+		}
+
+		evt := stream.Current()
+
+		if chunkCount < 3 {
+			logrus.Debugf("[ChatGPT] SSE chunk #%d: %s", chunkCount+1, evt.RawJSON())
+		}
+
+		chunkCount++
+
+		// Extract content from the response event
+		// The event is already in OpenAI Responses API format (after transformation by chatGPTBackendRoundTripper)
+		for _, item := range evt.Response.Output {
+			if item.Type == "message" {
+				for _, content := range item.Content {
+					// Handle different content types
+					if content.Type == "output_text" || content.Type == "text" {
+						if content.Text != "" {
+							// Send content_block_delta event
+							if useV1Format {
+								sendAnthropicV1ContentBlockDelta(c, content.Text, flusher)
+							} else {
+								sendAnthropicBetaContentBlockDelta(c, content.Text, flusher)
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Extract usage from the event
+		if evt.Response.Usage.InputTokens > 0 {
+			inputTokens = int(evt.Response.Usage.InputTokens)
+		}
+		if evt.Response.Usage.OutputTokens > 0 {
+			outputTokens = int(evt.Response.Usage.OutputTokens)
+		}
+	}
+
+	// Check for stream errors
+	if err := stream.Err(); err != nil {
+		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
+			logrus.Debug("[ChatGPT] Stream canceled by client")
+			return protocol.NewTokenUsage(inputTokens, outputTokens), nil
+		}
+		return protocol.NewTokenUsage(inputTokens, outputTokens), fmt.Errorf("stream error: %w", err)
+	}
+
+	logrus.Infof("[ChatGPT] Finished reading SSE stream: %d chunks, tokens: %d in, %d out", chunkCount, inputTokens, outputTokens)
+
+	// Send content_block_stop event
+	if useV1Format {
+		sendAnthropicV1ContentBlockStop(c, flusher)
+	} else {
+		sendAnthropicBetaContentBlockStop(c, flusher)
+	}
+
+	// Send message_stop event with usage
+	if useV1Format {
+		sendAnthropicV1MessageStop(c, inputTokens, outputTokens, flusher)
+	} else {
+		sendAnthropicBetaMessageStop(c, inputTokens, outputTokens, flusher)
+	}
+
+	return protocol.NewTokenUsage(inputTokens, outputTokens), nil
+}
