@@ -1,6 +1,7 @@
 package transform
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -83,9 +84,19 @@ func TestE2E_ProtocolConversions(t *testing.T) {
 				// Execute the transform
 				finalCtx, err := chain.Execute(ctx)
 				if err != nil {
-					// Some conversions are not supported, that's okay
-					// We just want to ensure they fail gracefully with a clear error
-					// Error could be "unsupported request type", "not yet implemented", or "cannot convert"
+					// Check error type and log appropriately
+					errMsg := err.Error()
+					switch {
+					case strings.Contains(errMsg, "not yet implemented"):
+						t.Log("⚠️  NOT SUPPORTED (not yet implemented)")
+					case strings.Contains(errMsg, "cannot convert"):
+						t.Log("⚠️  NOT SUPPORTED (cannot convert)")
+					case strings.Contains(errMsg, "unsupported request type"):
+						t.Log("⚠️  NOT SUPPORTED (unsupported request type)")
+					default:
+						t.Log("❌ FAILED:", err)
+						t.Fail()
+					}
 					return
 				}
 
@@ -94,22 +105,25 @@ func TestE2E_ProtocolConversions(t *testing.T) {
 				require.NotNil(t, finalCtx.Request)
 
 				// Verify the request was transformed to the correct type
+				var correctType bool
 				switch targetStyle {
 				case TargetAPIStyleAnthropicV1:
-					_, ok := finalCtx.Request.(*anthropic.MessageNewParams)
-					assert.True(t, ok, "expected *anthropic.MessageNewParams")
+					_, correctType = finalCtx.Request.(*anthropic.MessageNewParams)
 				case TargetAPIStyleAnthropicBeta:
-					_, ok := finalCtx.Request.(*anthropic.BetaMessageNewParams)
-					assert.True(t, ok, "expected *anthropic.BetaMessageNewParams")
+					_, correctType = finalCtx.Request.(*anthropic.BetaMessageNewParams)
 				case TargetAPIStyleOpenAIChat:
-					_, ok := finalCtx.Request.(*openai.ChatCompletionNewParams)
-					assert.True(t, ok, "expected *openai.ChatCompletionNewParams")
+					_, correctType = finalCtx.Request.(*openai.ChatCompletionNewParams)
 				case TargetAPIStyleOpenAIResponses:
-					_, ok := finalCtx.Request.(*responses.ResponseNewParams)
-					assert.True(t, ok, "expected *responses.ResponseNewParams")
+					_, correctType = finalCtx.Request.(*responses.ResponseNewParams)
 				case TargetAPIStyleGoogle:
-					_, ok := finalCtx.Request.(*GoogleRequest)
-					assert.True(t, ok, "expected *GoogleRequest")
+					_, correctType = finalCtx.Request.(*GoogleRequest)
+				}
+
+				if correctType {
+					t.Log("✅ SUPPORTED")
+				} else {
+					t.Log("❌ FAILED - wrong type returned")
+					t.Fail()
 				}
 			})
 		}

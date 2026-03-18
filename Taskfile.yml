@@ -35,6 +35,10 @@ tasks:
       - task: web:dist
       - task: start
 
+  e2e:
+    cmds:
+      - go build ./... && go test -v ./internal/protocol/transform -run TestE2E
+  
   start:
     aliases:
       - http
