@@ -818,7 +818,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 
 		case "response.web_search_call.searching":
 			searching := currentEvent.AsResponseWebSearchCallSearching()
-			logrus.Debugf("[ResponsesAPI] Web search searching: query=%s", searching)
+			logrus.Debugf("[ResponsesAPI] Web search searching: %v", searching)
 
 		case "response.web_search_call.completed":
 			logrus.Debugf("[ResponsesAPI] Web search completed")
@@ -828,7 +828,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 
 		case "response.image_generation_call.generating":
 			generating := currentEvent.AsResponseImageGenerationCallGenerating()
-			logrus.Debugf("[ResponsesAPI] Image generation generating: status=%s", generating)
+			logrus.Debugf("[ResponsesAPI] Image generation generating: %v", generating)
 
 		case "response.image_generation_call.partial_image":
 			partial := currentEvent.AsResponseImageGenerationCallPartialImage()
@@ -839,15 +839,15 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 
 		case "response.mcp_call.in_progress":
 			mcpInProgress := currentEvent.AsResponseMcpCallInProgress()
-			logrus.Debugf("[ResponsesAPI] MCP call in progress: name=%s", mcpInProgress)
+			logrus.Debugf("[ResponsesAPI] MCP call in progress: %v", mcpInProgress)
 
 		case "response.mcp_call.completed":
 			mcpCompleted := currentEvent.AsResponseMcpCallCompleted()
-			logrus.Debugf("[ResponsesAPI] MCP call completed: name=%s", mcpCompleted)
+			logrus.Debugf("[ResponsesAPI] MCP call completed: %v", mcpCompleted)
 
 		case "response.mcp_call.failed":
 			mcpFailed := currentEvent.AsResponseMcpCallFailed()
-			logrus.Debugf("[ResponsesAPI] MCP call failed: name=%s, error=%s", mcpFailed, mcpFailed)
+			logrus.Debugf("[ResponsesAPI] MCP call failed: %v", mcpFailed)
 
 		case "response.mcp_list_tools.in_progress":
 			logrus.Debugf("[ResponsesAPI] MCP list tools in progress")
