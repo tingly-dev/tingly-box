@@ -329,7 +329,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// Chain: Base Transform → Consistency Transform → Vendor Transform
 			chain := transform.NewTransformChain([]transform.Transform{
 				transform.NewBaseTransform(transform.TargetAPIStyleOpenAIResponses),
-				transform.NewConsistencyTransform(transform.TargetAPIStyleOpenAIResponses),
+				//transform.NewConsistencyTransform(transform.TargetAPIStyleOpenAIResponses),
 				transform.NewVendorTransform(provider.APIBase),
 			})
 
@@ -372,7 +372,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		// Chain: Base Transform → Consistency Transform → Vendor Transform
 		chain := transform.NewTransformChain([]transform.Transform{
 			transform.NewBaseTransform(transform.TargetAPIStyleOpenAIChat),
-			transform.NewConsistencyTransform(transform.TargetAPIStyleOpenAIChat),
+			//transform.NewConsistencyTransform(transform.TargetAPIStyleOpenAIChat),
 			transform.NewVendorTransform(provider.APIBase),
 		})
 

@@ -172,7 +172,7 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 	// Note: Base transform is not needed since the request is already in Responses API format
 	// Chain: Consistency Transform → Vendor Transform
 	chain := transform.NewTransformChain([]transform.Transform{
-		transform.NewConsistencyTransform(transform.TargetAPIStyleOpenAIResponses),
+		//transform.NewConsistencyTransform(transform.TargetAPIStyleOpenAIResponses),
 		transform.NewVendorTransform(provider.APIBase),
 	})
 
