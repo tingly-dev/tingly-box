@@ -154,9 +154,9 @@ export function ModelsPanel({
 
     const buildProbeCurl = useCallback(() => {
         if (!selectedModel) return '';
-        const baseUrl = window.location.origin;
+        const baseUrl = `${window.location.origin}/tbe`;
         return [
-            `curl -X POST '${baseUrl}/api/v1/probe/model-capability' \\`,
+            `curl -X POST '${baseUrl}/api/v1/probe/model/capability' \\`,
             `  -H 'Content-Type: application/json' \\`,
             `  -H 'Authorization: Bearer YOUR_TOKEN' \\`,
             `  -d '{\"provider_uuid\":\"${provider.uuid}\",\"model_id\":\"${selectedModel}\",\"force_refresh\":true}'`,
