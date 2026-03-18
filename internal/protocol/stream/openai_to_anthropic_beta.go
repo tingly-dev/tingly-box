@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/shared/constant"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
@@ -358,6 +360,104 @@ func HandleResponsesToAnthropicBetaStream(c *gin.Context, stream *openaistream.S
 		},
 		SendErrorEvent: func(event map[string]interface{}, flusher http.Flusher) {
 			sendAnthropicBetaStreamEvent(c, "error", event, flusher)
+		},
+	})
+}
+
+func HandleResponsesToAnthropicBetaAssembly(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {
+	blocks := make(map[int]*anthropic.BetaContentBlockUnion)
+
+	msg := anthropic.BetaMessage{
+		Type: constant.Message("message"),
+		Role: constant.Assistant("assistant"),
+		Container: anthropic.BetaContainer{
+			ID:        "",
+			ExpiresAt: time.Time{},
+			Skills:    []anthropic.BetaSkill{},
+		},
+		ContextManagement: anthropic.BetaContextManagementResponse{
+			AppliedEdits: []anthropic.BetaContextManagementResponseAppliedEditUnion{},
+		},
+	}
+
+	return handleResponsesToAnthropicV1Stream(c, stream, responseModel, responsesAPIEventSenders{
+		SendMessageStart: func(event map[string]interface{}, flusher http.Flusher) {
+			if msgData, ok := event["message"].(map[string]interface{}); ok {
+				if id, ok := msgData["id"].(string); ok {
+					msg.ID = id
+				}
+				if model, ok := msgData["model"].(string); ok {
+					msg.Model = anthropic.Model(model)
+				}
+			}
+		},
+		SendContentBlockStart: func(index int, blockType string, content map[string]interface{}, flusher http.Flusher) {
+			block := anthropic.BetaContentBlockUnion{Type: blockType}
+			if id, ok := content["id"].(string); ok {
+				block.ID = id
+			}
+			if name, ok := content["name"].(string); ok {
+				block.Name = name
+			}
+			blocks[index] = &block
+		},
+		SendContentBlockDelta: func(index int, content map[string]interface{}, flusher http.Flusher) {
+			block, ok := blocks[index]
+			if !ok {
+				return
+			}
+			if deltaType, ok := content["type"].(string); ok {
+				switch deltaType {
+				case "text_delta":
+					if text, ok := content["text"].(string); ok {
+						block.Text += text
+					}
+				case "thinking_delta":
+					if thinking, ok := content["thinking"].(string); ok {
+						block.Thinking += thinking
+					}
+				case "input_json_delta":
+					if partialJSON, ok := content["partial_json"].(string); ok {
+						if block.Input == nil {
+							block.Input = json.RawMessage(partialJSON)
+						} else {
+							block.Input = append(block.Input, partialJSON...)
+						}
+					}
+				}
+			}
+			blocks[index] = block
+		},
+		SendContentBlockStop: func(state *streamState, index int, flusher http.Flusher) {
+			if block, ok := blocks[index]; ok {
+				msg.Content = append(msg.Content, *block)
+				delete(blocks, index)
+			}
+		},
+		SendStopEvents: func(state *streamState, flusher http.Flusher) {
+			msg.StopReason = anthropic.BetaStopReasonEndTurn
+		},
+		SendMessageDelta: func(state *streamState, stopReason string, flusher http.Flusher) {
+			msg.StopReason = anthropic.BetaStopReason(stopReason)
+		},
+		SendMessageStop: func(messageID, model string, state *streamState, stopReason string, flusher http.Flusher) {
+			msg.ID = messageID
+			msg.Model = anthropic.Model(model)
+			msg.StopReason = anthropic.BetaStopReason(stopReason)
+
+			// Set usage
+			msg.Usage.InputTokens = state.inputTokens
+			msg.Usage.OutputTokens = state.outputTokens
+			if state.cacheTokens > 0 {
+				msg.Usage.CacheReadInputTokens = state.cacheTokens
+			}
+
+			// Send result
+			c.JSON(200, msg)
+		},
+		SendErrorEvent: func(event map[string]interface{}, flusher http.Flusher) {
+			// For error, still try to send what we have
+			c.JSON(200, msg)
 		},
 	})
 }

@@ -12,7 +12,6 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
-
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
@@ -361,7 +360,8 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// Get final transformed request
 			transformedReq := finalCtx.Request.(*responses.ResponseNewParams)
 
-			if isStreaming {
+			if isStreaming || provider.APIBase == protocol.ChatGPTBackendAPIBase {
+				req.Stream = true
 				s.handleAnthropicV1ViaResponsesAPIStreaming(c, req, proxyModel, actualModel, provider, *transformedReq)
 			} else {
 				s.handleAnthropicV1ViaResponsesAPINonStreaming(c, req, proxyModel, actualModel, provider, *transformedReq)
