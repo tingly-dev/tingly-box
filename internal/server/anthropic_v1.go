@@ -520,18 +520,12 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, re
 	var err error
 	var cancel context.CancelFunc
 
-	// Check if this is a ChatGPT backend API provider
-	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
-		// Use the ChatGPT backend API handler
-		response, cancel, err = s.forwardChatGPTBackendRequest(provider, responsesReq)
-		if cancel != nil {
-			defer cancel()
-		}
-	} else {
-		// Use standard OpenAI Responses API
-		wrapper := s.clientPool.GetOpenAIClient(provider, string(responsesReq.Model))
-		fc := NewForwardContext(nil, provider)
-		response, _, err = ForwardOpenAIResponses(fc, wrapper, responsesReq)
+	// Use standard OpenAI Responses API
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(responsesReq.Model))
+	fc := NewForwardContext(nil, provider)
+	response, cancel, err = ForwardOpenAIResponses(fc, wrapper, responsesReq)
+	if cancel != nil {
+		defer cancel()
 	}
 
 	if err != nil {
@@ -580,15 +574,6 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req p
 		recorder = r.(*ScenarioRecorder)
 	}
 	streamRec := newStreamRecorder(recorder)
-
-	// Check if this is a ChatGPT backend API provider
-	// These providers need special handling because they use custom HTTP implementation
-	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
-		// Use the ChatGPT backend API streaming handler
-		// This handler currently sends the stream in beta format, so we need to adapt it
-		s.handleChatGPTBackendStreamingRequest(c, provider, responsesReq, proxyModel, actualModel)
-		return
-	}
 
 	// For standard OpenAI providers, use the OpenAI SDK
 	wrapper := s.clientPool.GetOpenAIClient(provider, string(responsesReq.Model))

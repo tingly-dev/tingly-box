@@ -467,21 +467,12 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context
 	var err error
 	var cancel context.CancelFunc
 
-	// Check if this is a ChatGPT backend API provider
-	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
-		// Use the ChatGPT backend API handler
-		response, cancel, err = s.forwardChatGPTBackendRequest(provider, responsesReq)
-		if cancel != nil {
-			defer cancel()
-		}
-	} else {
-		// Use standard OpenAI Responses API
-		wrapper := s.clientPool.GetOpenAIClient(provider, string(responsesReq.Model))
-		fc := NewForwardContext(nil, provider)
-		response, cancel, err = ForwardOpenAIResponses(fc, wrapper, responsesReq)
-		if cancel != nil {
-			defer cancel()
-		}
+	// Use standard OpenAI Responses API
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(responsesReq.Model))
+	fc := NewForwardContext(nil, provider)
+	response, cancel, err = ForwardOpenAIResponses(fc, wrapper, responsesReq)
+	if cancel != nil {
+		defer cancel()
 	}
 
 	if err != nil {
@@ -524,17 +515,17 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, r
 	if streamRec != nil {
 		streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
 	}
-	// Check if this is a ChatGPT backend API provider
-	// These providers need special handling because they use custom HTTP implementation
-	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
-		// Use the ChatGPT backend API streaming handler
-		// This handler sends the stream directly to the client in OpenAI Responses API format
-		s.handleChatGPTBackendStreamingRequest(c, provider, responsesReq, proxyModel, actualModel)
-		return
-	}
+	//// Check if this is a ChatGPT backend API provider
+	//// These providers need special handling because they use custom HTTP implementation
+	//if provider.APIBase == protocol.ChatGPTBackendAPIBase {
+	//	// Use the ChatGPT backend API streaming handler
+	//	// This handler sends the stream directly to the client in OpenAI Responses API format
+	//	s.handleChatGPTBackendStreamingRequest(c, provider, responsesReq, proxyModel, actualModel)
+	//	return
+	//}
 
 	// For standard OpenAI providers, use the OpenAI SDK
-	wrapper := s.clientPool.GetOpenAIClient(provider, string(responsesReq.Model))
+	wrapper := s.clientPool.GetOpenAIClient(provider, responsesReq.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
 	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
 	if cancel != nil {

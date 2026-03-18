@@ -400,16 +400,11 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 	var err error
 	var cancel context.CancelFunc
 
-	// Check if this is a ChatGPT backend API provider
-	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
-		response, cancel, err = s.forwardChatGPTBackendRequest(provider, params)
-		if cancel != nil {
-			defer cancel()
-		}
-	} else {
-		wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model))
-		fc := NewForwardContext(nil, provider)
-		response, _, err = ForwardOpenAIResponses(fc, wrapper, params)
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model))
+	fc := NewForwardContext(nil, provider)
+	response, cancel, err = ForwardOpenAIResponses(fc, wrapper, params)
+	if cancel != nil {
+		defer cancel()
 	}
 
 	if err != nil {
@@ -450,13 +445,6 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 
 // handleResponsesStreamingRequest handles streaming Responses API requests
 func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string) {
-	// Check if this is a ChatGPT backend API provider (Codex OAuth)
-	// These providers use a custom streaming handler
-	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
-		s.handleChatGPTBackendStreamingRequest(c, provider, params, responseModel, actualModel)
-		return
-	}
-
 	// Create streaming request with request context for proper cancellation
 	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
