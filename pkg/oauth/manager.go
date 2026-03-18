@@ -168,6 +168,11 @@ func (m *Manager) getState(state string) (*StateData, error) {
 	return m.stateStorage.GetState(state)
 }
 
+// GetStateData retrieves state data by state parameter (public method for external access)
+func (m *Manager) GetStateData(state string) (*StateData, error) {
+	return m.stateStorage.GetState(state)
+}
+
 // deleteState removes state data
 func (m *Manager) deleteState(state string) {
 	_ = m.stateStorage.DeleteState(state)

@@ -329,7 +329,7 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 		Provider:  providerType,
 		UserID:    userID,
 		CreatedAt: now,
-		ExpiresAt: now.Add(10 * time.Minute),
+		ExpiresAt: now.Add(oauth2.DefaultSessionExpiry), // Use unified session expiration
 	}
 	// Store proxy URL if provided
 	if proxyURL != "" {
@@ -825,10 +825,23 @@ func (h *Handler) CancelOAuthSession(c *gin.Context) {
 // OAuthCallback handles OAuth callback from providers
 // GET /oauth/callback and /callback
 func (h *Handler) OAuthCallback(c *gin.Context) {
+	// Get state parameter first for error handling
+	state := c.Query("state")
+
+	// Retrieve state data BEFORE calling HandleCallback, because HandleCallback
+	// deletes the state data after validation. We need sessionID for error handling.
+	var sessionID string
+	if stateData, err := h.oauthManager.GetStateData(state); err == nil {
+		sessionID = stateData.SessionID
+	}
+
 	// Delegate to the oauth handler's callback, now returns name in token
 	token, err := h.oauthManager.HandleCallback(c.Request.Context(), c.Request)
 	if err != nil {
-		h.sessionMgr.FailSession(c.Query("state"), err.Error())
+		// Fail the session if we have a sessionID from the state data
+		if sessionID != "" {
+			h.sessionMgr.FailSession(sessionID, err.Error())
+		}
 		c.HTML(http.StatusBadRequest, "oauth_error.html", gin.H{
 			"error": err.Error(),
 		})

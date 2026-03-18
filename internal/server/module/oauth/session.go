@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // SessionManager manages OAuth session state
@@ -54,7 +55,7 @@ func (sm *SessionManager) CreateSession(provider, userID, redirect, responseType
 		ProxyURL:     proxyURL,
 		Status:       "pending",
 		CreatedAt:    time.Now(),
-		ExpiresAt:    time.Now().Add(30 * time.Minute),
+		ExpiresAt:    time.Now().Add(oauth.DefaultSessionExpiry),
 	}
 	return sessionID
 }
