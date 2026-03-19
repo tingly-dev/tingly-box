@@ -14,6 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -194,7 +195,10 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 	actualModel := selectedService.Model
 	req.Model = actualModel
 	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
-	responseModel := proxyModel
+	responseModel := string(proxyModel)
+
+	cursorCompat := resolveCursorCompat(c, rule)
+	applyCursorCompatFlag(&req.ChatCompletionNewParams, cursorCompat)
 
 	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, isStreaming)
@@ -206,6 +210,10 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 	// === Tool Interceptor: Check if enabled and should be used ===
 	shouldIntercept, shouldStripTools, _ := s.resolveToolInterceptor(provider, hasBuiltInWebSearch)
 
+	if !s.enforceToolParserSupport(c, provider, actualModel, &req.ChatCompletionNewParams) {
+		return
+	}
+
 	switch apiStyle {
 	default:
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -216,6 +224,11 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		})
 		return
 	case protocol.APIStyleAnthropic:
+		// Apply cursor_compat content normalization before converting to Anthropic format
+		// This ensures rich content is flattened for all providers when cursor_compat is enabled
+		if cursorCompat {
+			ops.ApplyCursorCompatContentNormalization(&req.ChatCompletionNewParams)
+		}
 		anthropicReq := request.ConvertOpenAIToAnthropicRequest(&req.ChatCompletionNewParams, int64(maxAllowed))
 		if isStreaming {
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
@@ -237,9 +250,9 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			}
 
 			// Get scenario config for DisableStreamUsage flag
-			disableStreamUsage := false
+			disableStreamUsage := cursorCompat
 			if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
-				disableStreamUsage = scenarioConfig.Flags.DisableStreamUsage
+				disableStreamUsage = disableStreamUsage || scenarioConfig.Flags.DisableStreamUsage
 			}
 
 			inputTokens, outputTokens, err := stream.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, streamResp, responseModel, disableStreamUsage)
@@ -305,6 +318,9 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				}
 				openaiResp = roundtripped
 			}
+			if cursorCompat {
+				delete(openaiResp, "usage")
+			}
 			c.JSON(http.StatusOK, openaiResp)
 			return
 		}
@@ -355,14 +371,14 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 
 		if isStreaming {
 			// Get scenario config for DisableStreamUsage flag
-			disableStreamUsage := false
+			disableStreamUsage := cursorCompat
 			if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
-				disableStreamUsage = scenarioConfig.Flags.DisableStreamUsage
+				disableStreamUsage = disableStreamUsage || scenarioConfig.Flags.DisableStreamUsage
 			}
 
 			s.handleOpenAIChatStreamingRequest(c, provider, transformedReq, responseModel, shouldIntercept, shouldStripTools, disableStreamUsage)
 		} else {
-			s.handleNonStreamingRequest(c, provider, transformedReq, responseModel, shouldIntercept, shouldStripTools)
+			s.handleNonStreamingRequest(c, provider, transformedReq, responseModel, shouldIntercept, shouldStripTools, cursorCompat)
 		}
 	}
 }

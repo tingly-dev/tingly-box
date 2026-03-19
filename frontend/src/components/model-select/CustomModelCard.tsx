@@ -14,6 +14,7 @@ interface CustomModelCardProps {
     onSelect: () => void;
     variant: 'localStorage' | 'backend' | 'selected';
     loading?: boolean;
+    showToolSupport?: boolean;
 }
 
 export default function CustomModelCard({
@@ -25,6 +26,7 @@ export default function CustomModelCard({
     onSelect,
     variant,
     loading = false,
+    showToolSupport = false,
 }: CustomModelCardProps) {
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
@@ -147,6 +149,26 @@ export default function CustomModelCard({
                             }}
                         />
                     </Tooltip>
+                )}
+
+                {/* Tool support badge */}
+                {showToolSupport && !loading && (
+                    <Box
+                        sx={{
+                            position: 'absolute',
+                            bottom: 4,
+                            left: 24,
+                            bgcolor: 'info.main',
+                            color: 'white',
+                            fontSize: '0.6rem',
+                            px: 0.5,
+                            py: 0.2,
+                            borderRadius: 1,
+                            fontWeight: 'bold',
+                        }}
+                    >
+                        TOOL
+                    </Box>
                 )}
 
                 {/* Control bar - visible on hover */}

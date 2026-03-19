@@ -220,13 +220,21 @@ func (s *Server) HandleProbeModelEndpoints(c *gin.Context) {
 		LastChecked:  result.ResponsesEndpoint.LastChecked.Format(time.RFC3339),
 	}
 
+	toolParserStatus := EndpointProbeStatus{
+		Available:    result.ToolParserEndpoint.Available,
+		LatencyMs:    result.ToolParserEndpoint.LatencyMs,
+		ErrorMessage: result.ToolParserEndpoint.ErrorMessage,
+		LastChecked:  result.ToolParserEndpoint.LastChecked.Format(time.RFC3339),
+	}
+
 	data := &ModelProbeData{
-		ProviderUUID:      result.ProviderUUID,
-		ModelID:           result.ModelID,
-		ChatEndpoint:      chatStatus,
-		ResponsesEndpoint: responsesStatus,
-		PreferredEndpoint: result.PreferredEndpoint,
-		LastUpdated:       result.LastUpdated.Format(time.RFC3339),
+		ProviderUUID:       result.ProviderUUID,
+		ModelID:            result.ModelID,
+		ChatEndpoint:       chatStatus,
+		ResponsesEndpoint:  responsesStatus,
+		ToolParserEndpoint: toolParserStatus,
+		PreferredEndpoint:  result.PreferredEndpoint,
+		LastUpdated:        result.LastUpdated.Format(time.RFC3339),
 	}
 
 	c.JSON(http.StatusOK, ModelProbeResponse{

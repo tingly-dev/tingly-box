@@ -29,6 +29,7 @@ type ExportRuleData struct {
 	ResponseModel string                 `json:"response_model"`
 	Description   string                 `json:"description"`
 	Services      []*loadbalance.Service `json:"services"`
+	Flags         typ.RuleFlags          `json:"flags,omitempty"`
 	LBTactic      typ.Tactic             `json:"lb_tactic"`
 	Active        bool                   `json:"active"`
 	SmartEnabled  bool                   `json:"smart_enabled"`
@@ -156,6 +157,7 @@ func (e *JSONLExporter) buildRuleData(rule *typ.Rule) ExportRuleData {
 		ResponseModel: rule.ResponseModel,
 		Description:   rule.Description,
 		Services:      rule.Services,
+		Flags:         rule.Flags,
 		LBTactic:      rule.LBTactic,
 		Active:        rule.Active,
 		SmartEnabled:  rule.SmartEnabled,

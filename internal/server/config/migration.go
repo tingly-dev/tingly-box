@@ -16,6 +16,7 @@ const (
 	RuleUUIDBuiltinOpenAI     = "built-in-openai"
 	RuleUUIDBuiltinAnthropic  = "built-in-anthropic"
 	RuleUUIDBuiltinCodex      = "built-in-codex"
+	RuleUUIDBuiltinCursor     = "built-in-cursor"
 	RuleUUIDBuiltinCC         = "built-in-cc"
 	RuleUUIDClaudeCode        = "claude-code"
 	RuleUUIDBuiltinCCHaiku    = "built-in-cc-haiku"
@@ -34,6 +35,7 @@ func Migrate(c *Config) error {
 	migrate20260114(c)
 	migrate20260210(c)
 	migrate20260306(c)
+	migrate20260318(c)
 	return nil
 }
 
@@ -161,6 +163,7 @@ func migrate20260103(c *Config) {
 		RuleUUIDBuiltinOpenAI:     typ.ScenarioOpenAI,
 		RuleUUIDBuiltinAnthropic:  typ.ScenarioAnthropic,
 		RuleUUIDBuiltinCodex:      typ.ScenarioCodex,
+		RuleUUIDBuiltinCursor:     typ.ScenarioOpenAI,
 		RuleUUIDBuiltinCC:         typ.ScenarioClaudeCode,
 		RuleUUIDClaudeCode:        typ.ScenarioClaudeCode,
 		RuleUUIDBuiltinCCHaiku:    typ.ScenarioClaudeCode,
@@ -338,5 +341,26 @@ func migrate20260306(c *Config) {
 			_ = c.Save()
 			return
 		}
+	}
+}
+
+// migrate20260318 ensures built-in-cursor rule has CursorCompat flag enabled
+func migrate20260318(c *Config) {
+	needsSave := false
+
+	for i := range c.Rules {
+		rule := &c.Rules[i]
+		if rule.UUID == RuleUUIDBuiltinCursor {
+			// Ensure CursorCompat is enabled for built-in-cursor rule
+			if !rule.Flags.CursorCompat {
+				rule.Flags.CursorCompat = true
+				needsSave = true
+			}
+			break
+		}
+	}
+
+	if needsSave {
+		_ = c.Save()
 	}
 }

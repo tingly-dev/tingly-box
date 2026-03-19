@@ -97,6 +97,17 @@ func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens
 
 	// 4. Report to health monitor for service health tracking
 	s.reportHealthStatus(provider, model, err, errorCode)
+
+	// 5. Enterprise key-level 429 alerting hook (best-effort).
+	if err != nil && isRateLimitError(err) && strings.TrimSpace(c.GetString("enterprise_user_id")) != "" {
+		_ = reportEnterpriseRateLimitEvent(
+			c.Request.Context(),
+			c.GetString("enterprise_key_prefix"),
+			provider.UUID,
+			scenario,
+			c.GetString("enterprise_user_id"),
+		)
+	}
 }
 
 // trackUsageWithTokenUsage records comprehensive token usage using the TokenUsage structure.

@@ -34,6 +34,7 @@ type ImportRuleData struct {
 	ResponseModel string                 `json:"response_model"`
 	Description   string                 `json:"description"`
 	Services      []*loadbalance.Service `json:"services"`
+	Flags         typ.RuleFlags          `json:"flags,omitempty"`
 	LBTactic      typ.Tactic             `json:"lb_tactic"`
 	Active        bool                   `json:"active"`
 	SmartEnabled  bool                   `json:"smart_enabled"`
@@ -245,6 +246,7 @@ func (i *JSONLImporter) Import(data string, globalConfig *config.Config, opts Im
 		ResponseModel: ruleData.ResponseModel,
 		Description:   ruleData.Description,
 		Services:      ruleData.Services,
+		Flags:         ruleData.Flags,
 		LBTactic:      ruleData.LBTactic,
 		Active:        ruleData.Active,
 	}

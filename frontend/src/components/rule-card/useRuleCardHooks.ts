@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { api } from '@/services/api';
-import type { ProbeResponse } from '@/client';
+import type { ModelProbeResponse, ProbeResponse } from '@/client';
 import type { ConfigRecord, Rule, SmartRouting } from '@/components/RoutingGraphTypes';
 import {
     ruleToConfigRecord,
@@ -111,6 +111,10 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
                     response_model: newConfigRecord.responseModel,
                     active: newConfigRecord.active,
                     description: newConfigRecord.description,
+                    flags: {
+                        cursor_compat: newConfigRecord.flags?.cursorCompat || false,
+                        cursor_compat_auto: newConfigRecord.flags?.cursorCompatAuto || false,
+                    },
                     services: newConfigRecord.providers
                         .filter((p) => p.provider && p.model)
                         .map((provider) => ({
@@ -133,6 +137,7 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
                         response_model: ruleData.response_model,
                         active: ruleData.active,
                         description: ruleData.description,
+                        flags: ruleData.flags,
                         services: ruleData.services,
                         smart_enabled: ruleData.smart_enabled,
                         smart_routing: ruleData.smart_routing,
@@ -206,6 +211,7 @@ export function useRuleProbe(configRecord: ConfigRecord | null) {
     const [detailsExpanded, setDetailsExpanded] = useState(false);
     const [probeDialogOpen, setProbeDialogOpen] = useState(false);
     const [providerName, setProviderName] = useState<string>('');
+    const [capabilityResult, setCapabilityResult] = useState<ModelProbeResponse | null>(null);
 
     useEffect(() => {
         if (probeDialogOpen && configRecord?.providers[0]?.provider) {
@@ -232,11 +238,14 @@ export function useRuleProbe(configRecord: ConfigRecord | null) {
 
         setIsProbing(true);
         setProbeResult(null);
+        setCapabilityResult(null);
         setProbeDialogOpen(true);
 
         try {
             const result = await api.probeModel(providerUuid, model);
             setProbeResult(result);
+            const capability = await api.probeModelCapability(providerUuid, model);
+            setCapabilityResult(capability);
         } catch (error) {
             setProbeResult({
                 success: false,
@@ -245,6 +254,7 @@ export function useRuleProbe(configRecord: ConfigRecord | null) {
                     type: 'client_error',
                 },
             });
+            setCapabilityResult(null);
         } finally {
             setIsProbing(false);
         }
@@ -261,6 +271,7 @@ export function useRuleProbe(configRecord: ConfigRecord | null) {
     return {
         isProbing,
         probeResult,
+        capabilityResult,
         detailsExpanded,
         dialogOpen: probeDialogOpen,
         providerName,

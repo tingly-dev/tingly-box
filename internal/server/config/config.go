@@ -1007,7 +1007,11 @@ func (c *Config) AddProvider(provider *typ.Provider) error {
 		if provider.UUID == "" {
 			provider.UUID = GenerateUUID()
 		}
-		return c.providerStore.Save(provider)
+		if err := c.providerStore.Save(provider); err != nil {
+			return err
+		}
+		c.upsertProviderCache(provider)
+		return nil
 	}
 	return nil
 }
@@ -1018,7 +1022,11 @@ func (c *Config) UpdateProvider(uuid string, provider *typ.Provider) error {
 	if c.providerStore != nil {
 		// Preserve the UUID
 		provider.UUID = uuid
-		return c.providerStore.Save(provider)
+		if err := c.providerStore.Save(provider); err != nil {
+			return err
+		}
+		c.upsertProviderCache(provider)
+		return nil
 	}
 
 	// Fallback to in-memory (for migration period)
@@ -1038,6 +1046,7 @@ func (c *Config) DeleteProvider(uuid string) error {
 	if err := c.providerStore.Delete(uuid); err != nil {
 		return err
 	}
+	c.removeProviderCache(uuid)
 
 	// Delete the associated model file
 	if c.modelManager != nil {
@@ -1045,6 +1054,42 @@ func (c *Config) DeleteProvider(uuid string) error {
 	}
 
 	return nil
+}
+
+func (c *Config) upsertProviderCache(provider *typ.Provider) {
+	if provider == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.Providers == nil {
+		c.Providers = []*typ.Provider{}
+	}
+	for i, existing := range c.Providers {
+		if existing != nil && existing.UUID == provider.UUID {
+			c.Providers[i] = provider
+			return
+		}
+	}
+	c.Providers = append(c.Providers, provider)
+}
+
+func (c *Config) removeProviderCache(uuid string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if len(c.Providers) == 0 {
+		return
+	}
+	updated := c.Providers[:0]
+	for _, provider := range c.Providers {
+		if provider != nil && provider.UUID == uuid {
+			continue
+		}
+		updated = append(updated, provider)
+	}
+	c.Providers = updated
 }
 
 // Server configuration methods (merged from AppConfig)
@@ -1849,6 +1894,22 @@ func init() {
 			Description:   "Default proxy rule in tingly-box for general use with OpenAI",
 			Services:      []*loadbalance.Service{}, // Empty services initially
 			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "built-in-cursor",
+			Scenario:      typ.ScenarioOpenAI,
+			RequestModel:  "cursor",
+			ResponseModel: "",
+			Description:   "Cursor compatibility rule for proxying Cursor client traffic",
+			Services:      []*loadbalance.Service{},
+			Flags: typ.RuleFlags{
+				CursorCompat: true,
+			},
+			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
 				Params: typ.DefaultRoundRobinParams(),
 			},

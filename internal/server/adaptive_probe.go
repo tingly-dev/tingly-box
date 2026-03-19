@@ -55,7 +55,7 @@ func (ap *AdaptiveProbe) ProbeModelEndpoints(ctx context.Context, req ModelProbe
 
 	// Step 3: Run probes concurrently
 	var wg sync.WaitGroup
-	var chatStatus, responsesStatus EndpointStatus
+	var chatStatus, responsesStatus, toolParserStatus EndpointStatus
 
 	// Create context with timeout for both probes
 	probeCtx, cancel := context.WithTimeout(ctx, DefaultProbeTimeout)
@@ -84,6 +84,13 @@ func (ap *AdaptiveProbe) ProbeModelEndpoints(ctx context.Context, req ModelProbe
 		}
 	}
 
+	// Probe tool parser support for all providers.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		toolParserStatus = ap.probeToolParserEndpoint(probeCtx, provider, req.ModelID)
+	}()
+
 	// Wait for all probes to complete
 	wg.Wait()
 
@@ -91,12 +98,13 @@ func (ap *AdaptiveProbe) ProbeModelEndpoints(ctx context.Context, req ModelProbe
 	preferred := ap.determinePreferredEndpoint(&chatStatus, &responsesStatus)
 
 	result := &ProbeResult{
-		ProviderUUID:      req.ProviderUUID,
-		ModelID:           req.ModelID,
-		ChatEndpoint:      chatStatus,
-		ResponsesEndpoint: responsesStatus,
-		PreferredEndpoint: preferred,
-		LastUpdated:       time.Now(),
+		ProviderUUID:       req.ProviderUUID,
+		ModelID:            req.ModelID,
+		ChatEndpoint:       chatStatus,
+		ResponsesEndpoint:  responsesStatus,
+		ToolParserEndpoint: toolParserStatus,
+		PreferredEndpoint:  preferred,
+		LastUpdated:        time.Now(),
 	}
 
 	// Step 5: Cache results
@@ -366,6 +374,257 @@ func (ap *AdaptiveProbe) probeResponsesEndpoint(ctx context.Context, provider *t
 	}
 }
 
+// probeToolParserEndpoint probes tool-choice support using OpenAI-compatible request first.
+// For anthropic-style providers, it will fallback to anthropic-native probe when needed.
+func (ap *AdaptiveProbe) probeToolParserEndpoint(ctx context.Context, provider *typ.Provider, modelID string) EndpointStatus {
+	// Many providers configured as non-openai style are still OpenAI-compatible on /chat/completions.
+	// Try OpenAI-compatible probe first to match actual runtime behavior.
+	openAIStatus := ap.probeToolParserEndpointOpenAI(ctx, provider, modelID)
+	if openAIStatus.Available {
+		return openAIStatus
+	}
+	if provider.APIStyle == protocol.APIStyleAnthropic {
+		anthropicStatus := ap.probeToolParserEndpointAnthropic(ctx, provider, modelID)
+		if anthropicStatus.Available {
+			return anthropicStatus
+		}
+		// Prefer anthropic-specific error when it fails, fallback to openai error message otherwise.
+		if anthropicStatus.ErrorMessage != "" {
+			return anthropicStatus
+		}
+	}
+	return openAIStatus
+}
+
+func (ap *AdaptiveProbe) probeToolParserEndpointOpenAI(ctx context.Context, provider *typ.Provider, modelID string) EndpointStatus {
+	startTime := time.Now()
+
+	apiBase := strings.TrimSuffix(provider.APIBase, "/")
+	if !strings.Contains(apiBase, "/v1") {
+		apiBase = apiBase + "/v1"
+	}
+	chatURL := apiBase + "/chat/completions"
+
+	requestBody := map[string]interface{}{
+		"model": modelID,
+		"messages": []map[string]string{
+			{"role": "user", "content": "Call the ping tool now. Do not answer with plain text."},
+		},
+		"max_tokens": 64,
+		"tools": []map[string]interface{}{
+			{
+				"type": "function",
+				"function": map[string]interface{}{
+					"name":        "ping",
+					"description": "ping",
+					"parameters": map[string]interface{}{
+						"type":       "object",
+						"properties": map[string]interface{}{},
+					},
+				},
+			},
+		},
+		"tool_choice": map[string]interface{}{
+			"type": "function",
+			"function": map[string]interface{}{
+				"name": "ping",
+			},
+		},
+	}
+
+	bodyBytes, err := json.Marshal(requestBody)
+	if err != nil {
+		return EndpointStatus{
+			Available:    false,
+			ErrorMessage: fmt.Sprintf("Failed to marshal request: %v", err),
+			LastChecked:  time.Now(),
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", chatURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return EndpointStatus{
+			Available:    false,
+			ErrorMessage: fmt.Sprintf("Failed to create request: %v", err),
+			LastChecked:  time.Now(),
+		}
+	}
+
+	req.Header.Set("Authorization", "Bearer "+provider.Token)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: DefaultProbeTimeout}
+	resp, err := client.Do(req)
+	if err != nil {
+		return EndpointStatus{
+			Available:    false,
+			LatencyMs:    int(time.Since(startTime).Milliseconds()),
+			ErrorMessage: fmt.Sprintf("Tool parser request failed: %v", err),
+			LastChecked:  time.Now(),
+		}
+	}
+	defer resp.Body.Close()
+
+	latency := int(time.Since(startTime).Milliseconds())
+
+	bodyBytes, _ = readResponseBody(resp.Body)
+
+	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusTooManyRequests {
+		type toolCallProbeResponse struct {
+			Choices []struct {
+				FinishReason string `json:"finish_reason"`
+				Message      struct {
+					ToolCalls []struct{} `json:"tool_calls"`
+				} `json:"message"`
+			} `json:"choices"`
+		}
+
+		var probeResp toolCallProbeResponse
+		if err := json.Unmarshal(bodyBytes, &probeResp); err != nil {
+			return EndpointStatus{
+				Available:    false,
+				LatencyMs:    latency,
+				ErrorMessage: fmt.Sprintf("Tool parser probe failed to parse response: %v", err),
+				LastChecked:  time.Now(),
+			}
+		}
+
+		for _, choice := range probeResp.Choices {
+			if choice.FinishReason == "tool_calls" || len(choice.Message.ToolCalls) > 0 {
+				return EndpointStatus{
+					Available:    true,
+					LatencyMs:    latency,
+					ErrorMessage: "",
+					LastChecked:  time.Now(),
+				}
+			}
+		}
+
+		return EndpointStatus{
+			Available:    false,
+			LatencyMs:    latency,
+			ErrorMessage: "Tool parser probe returned no tool_calls",
+			LastChecked:  time.Now(),
+		}
+	}
+
+	errorMsg := fmt.Sprintf("Tool parser probe failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	return EndpointStatus{
+		Available:    false,
+		LatencyMs:    latency,
+		ErrorMessage: errorMsg,
+		LastChecked:  time.Now(),
+	}
+}
+
+func (ap *AdaptiveProbe) probeToolParserEndpointAnthropic(ctx context.Context, provider *typ.Provider, modelID string) EndpointStatus {
+	startTime := time.Now()
+
+	apiBase := strings.TrimSuffix(provider.APIBase, "/")
+	if !strings.Contains(apiBase, "/v1") {
+		apiBase = apiBase + "/v1"
+	}
+	messagesURL := apiBase + "/messages"
+
+	requestBody := map[string]interface{}{
+		"model":      modelID,
+		"max_tokens": 64,
+		"messages": []map[string]string{
+			{"role": "user", "content": "Call the ping tool now. Do not answer with plain text."},
+		},
+		"tools": []map[string]interface{}{
+			{
+				"name":        "ping",
+				"description": "ping",
+				"input_schema": map[string]interface{}{
+					"type":       "object",
+					"properties": map[string]interface{}{},
+				},
+			},
+		},
+		"tool_choice": map[string]interface{}{
+			"type": "tool",
+			"name": "ping",
+		},
+	}
+
+	bodyBytes, err := json.Marshal(requestBody)
+	if err != nil {
+		return EndpointStatus{
+			Available:    false,
+			ErrorMessage: fmt.Sprintf("Failed to marshal request: %v", err),
+			LastChecked:  time.Now(),
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", messagesURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return EndpointStatus{
+			Available:    false,
+			ErrorMessage: fmt.Sprintf("Failed to create request: %v", err),
+			LastChecked:  time.Now(),
+		}
+	}
+
+	req.Header.Set("x-api-key", provider.Token)
+	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: DefaultProbeTimeout}
+	resp, err := client.Do(req)
+	if err != nil {
+		return EndpointStatus{
+			Available:    false,
+			LatencyMs:    int(time.Since(startTime).Milliseconds()),
+			ErrorMessage: fmt.Sprintf("Tool parser request failed: %v", err),
+			LastChecked:  time.Now(),
+		}
+	}
+	defer resp.Body.Close()
+
+	latency := int(time.Since(startTime).Milliseconds())
+	bodyBytes, _ = readResponseBody(resp.Body)
+
+	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusTooManyRequests {
+		var payload map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &payload); err != nil {
+			return EndpointStatus{
+				Available:    false,
+				LatencyMs:    latency,
+				ErrorMessage: fmt.Sprintf("Tool parser probe failed to parse response: %v", err),
+				LastChecked:  time.Now(),
+			}
+		}
+		if content, ok := payload["content"].([]interface{}); ok {
+			for _, part := range content {
+				if entry, ok := part.(map[string]interface{}); ok {
+					if typ, _ := entry["type"].(string); typ == "tool_use" {
+						return EndpointStatus{
+							Available:    true,
+							LatencyMs:    latency,
+							ErrorMessage: "",
+							LastChecked:  time.Now(),
+						}
+					}
+				}
+			}
+		}
+		return EndpointStatus{
+			Available:    false,
+			LatencyMs:    latency,
+			ErrorMessage: "Tool parser probe returned no tool_use blocks",
+			LastChecked:  time.Now(),
+		}
+	}
+
+	return EndpointStatus{
+		Available:    false,
+		LatencyMs:    latency,
+		ErrorMessage: fmt.Sprintf("Tool parser probe failed with status %d: %s", resp.StatusCode, string(bodyBytes)),
+		LastChecked:  time.Now(),
+	}
+}
+
 // determinePreferredEndpoint determines which endpoint to prefer based on availability
 func (ap *AdaptiveProbe) determinePreferredEndpoint(chat, responses *EndpointStatus) string {
 	// Responses API is preferred when available
@@ -405,6 +664,19 @@ func (ap *AdaptiveProbe) persistResult(result *ProbeResult) {
 	if err != nil {
 		logrus.Warnf("Failed to save responses capability: %v", err)
 	}
+
+	// Save tool parser capability
+	err = ap.server.capabilityStore.SaveCapability(
+		result.ProviderUUID,
+		result.ModelID,
+		db.EndpointTypeToolParser,
+		result.ToolParserEndpoint.Available,
+		result.ToolParserEndpoint.LatencyMs,
+		result.ToolParserEndpoint.ErrorMessage,
+	)
+	if err != nil {
+		logrus.Warnf("Failed to save tool parser capability: %v", err)
+	}
 }
 
 // cachedCapabilityToResult converts cached capability to probe result
@@ -422,6 +694,12 @@ func (ap *AdaptiveProbe) cachedCapabilityToResult(capability *ModelEndpointCapab
 			Available:    capability.SupportsResponses,
 			LatencyMs:    capability.ResponsesLatencyMs,
 			ErrorMessage: capability.ResponsesError,
+			LastChecked:  capability.LastVerified,
+		},
+		ToolParserEndpoint: EndpointStatus{
+			Available:    capability.SupportsToolParser,
+			LatencyMs:    capability.ToolParserLatencyMs,
+			ErrorMessage: capability.ToolParserError,
 			LastChecked:  capability.LastVerified,
 		},
 		PreferredEndpoint: capability.PreferredEndpoint,
@@ -459,16 +737,20 @@ func (ap *AdaptiveProbe) GetModelCapability(providerUUID, modelID string) (*Mode
 
 			// Convert DB capability to internal capability type
 			capability := &ModelEndpointCapability{
-				ProviderUUID:       dbCapability.ProviderUUID,
-				ModelID:            dbCapability.ModelID,
-				SupportsChat:       dbCapability.SupportsChat,
-				ChatLatencyMs:      dbCapability.ChatLatencyMs,
-				ChatError:          dbCapability.ChatError,
-				SupportsResponses:  dbCapability.SupportsResponses,
-				ResponsesLatencyMs: dbCapability.ResponsesLatencyMs,
-				ResponsesError:     dbCapability.ResponsesError,
-				PreferredEndpoint:  dbCapability.PreferredEndpoint,
-				LastVerified:       dbCapability.LastVerified,
+				ProviderUUID:        dbCapability.ProviderUUID,
+				ModelID:             dbCapability.ModelID,
+				SupportsChat:        dbCapability.SupportsChat,
+				ChatLatencyMs:       dbCapability.ChatLatencyMs,
+				ChatError:           dbCapability.ChatError,
+				SupportsResponses:   dbCapability.SupportsResponses,
+				ResponsesLatencyMs:  dbCapability.ResponsesLatencyMs,
+				ResponsesError:      dbCapability.ResponsesError,
+				SupportsToolParser:  dbCapability.SupportsToolParser,
+				ToolParserLatencyMs: dbCapability.ToolParserLatencyMs,
+				ToolParserError:     dbCapability.ToolParserError,
+				ToolParserChecked:   dbCapability.ToolParserChecked,
+				PreferredEndpoint:   dbCapability.PreferredEndpoint,
+				LastVerified:        dbCapability.LastVerified,
 			}
 
 			// Also cache it (even if stale, will be refreshed soon)

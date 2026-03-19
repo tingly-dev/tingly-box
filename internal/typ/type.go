@@ -116,6 +116,16 @@ type ScenarioFlags struct {
 	CleanHeader bool `json:"clean_header,omitempty" yaml:"clean_header,omitempty"` // Remove billing header from system messages (Claude Code only)
 }
 
+// RuleFlags represents configuration flags for a specific rule.
+// These flags are applied at rule-match time and are independent of scenario flags.
+type RuleFlags struct {
+	// CursorCompat enables Cursor compatibility handling (rich content normalization, stream usage stripping, tool gating).
+	CursorCompat bool `json:"cursor_compat,omitempty" yaml:"cursor_compat,omitempty"`
+
+	// CursorCompatAuto enables Cursor auto-detection based on request headers.
+	CursorCompatAuto bool `json:"cursor_compat_auto,omitempty" yaml:"cursor_compat_auto,omitempty"`
+}
+
 // ScenarioConfig represents configuration for a specific scenario
 type ScenarioConfig struct {
 	Scenario   RuleScenario           `json:"scenario" yaml:"scenario"`
@@ -258,6 +268,7 @@ type Rule struct {
 	ResponseModel string                 `json:"response_model" yaml:"response_model"`
 	Description   string                 `json:"description"`
 	Services      []*loadbalance.Service `json:"services" yaml:"services"`
+	Flags         RuleFlags              `json:"flags,omitempty" yaml:"flags,omitempty"`
 	// CurrentServiceID is persisted to SQLite, not JSON (provider:model format)
 	// This identifies the current service for round-robin load balancing
 	CurrentServiceID string `json:"-" yaml:"-"`
@@ -282,6 +293,7 @@ func (r *Rule) ToJSON() interface{} {
 		"response_model": r.ResponseModel,
 		"description":    r.Description,
 		"services":       services,
+		"flags":          r.Flags,
 		"lb_tactic":      r.LBTactic,
 		"active":         r.Active,
 		"smart_enabled":  r.SmartEnabled,

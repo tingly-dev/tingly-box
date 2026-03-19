@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogTitle } from '@mui/material';
+import { Button, Dialog, DialogActions, DialogContent, DialogTitle } from '@mui/material';
 import React, { useCallback, useRef, useState } from 'react';
 import type { Provider } from '../types/provider';
 import ModelSelectDialog, { type ProviderSelectTabOption } from '@/components/ModelSelectDialog.tsx';
@@ -45,6 +45,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
     const [currentRuleUuid, setCurrentRuleUuid] = useState<string | null>(null);
     const [currentConfigRecord, setCurrentConfigRecord] = useState<ConfigRecord | null>(null);
     const [modelSelectionCleared, setModelSelectionCleared] = useState(false); // Track if model selection was cleared
+    const [pendingSelection, setPendingSelection] = useState<ProviderSelectTabOption | null>(null);
 
     // Refs for tracking context
     const currentSmartRuleIndexRef = useRef<number | null>(null);
@@ -82,6 +83,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
         setCurrentConfigRecord(configRecord);
         setMode(newMode);
         setModelSelectionCleared(false); // Reset the cleared state when opening dialog
+        setPendingSelection(null);
 
         // Check if providerUuid is a smart rule reference (format: "smart:${index}")
         if (providerUuid?.startsWith('smart:')) {
@@ -112,8 +114,14 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
         setOpen(true);
     }, [findService]);
 
-    // Handle model selection
+    // Store selection without closing dialog
     const handleModelSelect = useCallback((option: ProviderSelectTabOption) => {
+        setPendingSelection(option);
+        setModelSelectionCleared(false);
+    }, []);
+
+    // Apply selection on Save
+    const handleApplySelection = useCallback((option: ProviderSelectTabOption) => {
         if (!currentConfigRecord || !currentRuleUuid) return;
 
         const smartRuleIndex = currentSmartRuleIndexRef.current;
@@ -236,20 +244,28 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
         setCurrentRuleUuid(null);
         setCurrentConfigRecord(null);
         setEditingProviderUuid(null);
+        setPendingSelection(null);
+        setModelSelectionCleared(false);
         currentSmartRuleIndexRef.current = null;
         editingServiceContextRef.current = null;
     }, [currentConfigRecord, currentRuleUuid, mode, editingProviderUuid, rules, onRuleChange, showNotification]);
 
     // Get selected provider and model for pre-selection
     const getSelectedProvider = useCallback(() => {
+        if (pendingSelection) {
+            return pendingSelection.provider.uuid;
+        }
         if (mode === 'edit' && editingProviderUuid && currentConfigRecord) {
             const found = findService(currentConfigRecord, editingProviderUuid);
             return found?.service.provider;
         }
         return undefined;
-    }, [mode, editingProviderUuid, currentConfigRecord, findService]);
+    }, [mode, editingProviderUuid, currentConfigRecord, findService, pendingSelection]);
 
     const getSelectedModel = useCallback(() => {
+        if (pendingSelection) {
+            return pendingSelection.model;
+        }
         // If model selection was cleared (e.g., after deleting a custom model), return undefined
         if (modelSelectionCleared) {
             return undefined;
@@ -259,7 +275,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
             return found?.service.model;
         }
         return undefined;
-    }, [mode, editingProviderUuid, currentConfigRecord, findService, modelSelectionCleared]);
+    }, [mode, editingProviderUuid, currentConfigRecord, findService, modelSelectionCleared, pendingSelection]);
 
     // Get a unique key for ModelSelectTab to force remount when selection changes
     const dialogKey = open ? `${getSelectedProvider() || ''}-${getSelectedModel() || ''}` : 'closed';
@@ -270,6 +286,8 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
         setCurrentRuleUuid(null);
         setCurrentConfigRecord(null);
         setEditingProviderUuid(null);
+        setPendingSelection(null);
+        setModelSelectionCleared(false);
         currentSmartRuleIndexRef.current = null;
         editingServiceContextRef.current = null;
     }, []);
@@ -298,9 +316,27 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
                     selectedProvider={getSelectedProvider()}
                     selectedModel={getSelectedModel()}
                     onSelected={handleModelSelect}
-                    onSelectionClear={() => setModelSelectionCleared(true)}
+                    onSelectionClear={() => {
+                        setModelSelectionCleared(true);
+                        setPendingSelection(null);
+                    }}
                 />
             </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+                <Button onClick={() => {
+                    closeModelSelect();
+                    onClose?.();
+                }}>
+                    Cancel
+                </Button>
+                <Button
+                    variant="contained"
+                    onClick={() => pendingSelection && handleApplySelection(pendingSelection)}
+                    disabled={!pendingSelection}
+                >
+                    Save
+                </Button>
+            </DialogActions>
         </Dialog>
     );
 

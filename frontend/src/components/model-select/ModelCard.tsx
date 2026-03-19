@@ -9,6 +9,7 @@ interface ModelCardProps {
     gridColumns?: number;
     loading?: boolean;
     showNewBadge?: boolean;
+    showToolSupport?: boolean;
 }
 
 export default function ModelCard({
@@ -19,6 +20,7 @@ export default function ModelCard({
     gridColumns,
     loading = false,
     showNewBadge = false,
+    showToolSupport = false,
 }: ModelCardProps) {
     const getCardStyles = () => {
         const baseStyles = {
@@ -116,6 +118,24 @@ export default function ModelCard({
                         }}
                     >
                         NEW
+                    </Box>
+                )}
+                {showToolSupport && !loading && (
+                    <Box
+                        sx={{
+                            position: 'absolute',
+                            bottom: 4,
+                            left: 4,
+                            bgcolor: 'info.main',
+                            color: 'white',
+                            fontSize: '0.6rem',
+                            px: 0.5,
+                            py: 0.2,
+                            borderRadius: 1,
+                            fontWeight: 'bold',
+                        }}
+                    >
+                        TOOL
                     </Box>
                 )}
             </CardContent>
