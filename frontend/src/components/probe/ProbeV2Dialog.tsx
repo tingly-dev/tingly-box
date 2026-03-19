@@ -371,7 +371,7 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
             headers['Authorization'] = `Bearer ${token}`;
         }
 
-        const response = await fetch('/api/v3/probe', {
+        const response = await fetch('/api/v2/probe', {
             method: 'POST',
             headers,
             body: JSON.stringify(requestBody),

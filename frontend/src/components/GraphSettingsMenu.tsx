@@ -18,19 +18,16 @@ import type { ExportFormat } from '@/components/rule-card/utils';
 import { ProbeMenu } from './probe';
 
 export interface GraphSettingsMenuProps {
-    canProbe: boolean;
-    isProbing: boolean;
     allowDeleteRule: boolean;
     active: boolean;
     allowToggleRule: boolean;
     saving: boolean;
-    onProbe: () => void;
     onExport: (format: ExportFormat) => void;
     onExportAsJsonlToClipboard?: () => void;
     onExportAsBase64ToClipboard?: () => void;
     onDelete: () => void;
     onToggleActive: () => void;
-    // Probe V3 props
+    // Probe V2 props
     ruleUuid?: string;
     ruleName?: string;
     scenario?: string;
@@ -38,13 +35,10 @@ export interface GraphSettingsMenuProps {
 }
 
 export const GraphSettingsMenu = ({
-    canProbe,
-    isProbing,
     allowDeleteRule,
     active,
     allowToggleRule,
     saving,
-    onProbe,
     onExport,
     onExportAsJsonlToClipboard,
     onExportAsBase64ToClipboard,
@@ -89,8 +83,9 @@ export const GraphSettingsMenu = ({
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
             >
-                <MenuItem onClick={() => { closeMenu(); onProbe(); }} disabled={!canProbe || isProbing}>
-                    <ProbeIcon fontSize="small" sx={{ mr: 1 }} />Test Connection
+                <MenuItem onClick={(e) => { setProbeAnchorEl(e.currentTarget); closeMenu(); }}>
+                    <ProbeIcon fontSize="small" sx={{ mr: 1 }} />Test Probe
+                    <ExportMenuIcon fontSize="small" sx={{ ml: 1, fontSize: '1rem' }} />
                 </MenuItem>
 
                 <MenuItem onClick={(e) => { setExportMenuAnchorEl(e.currentTarget); closeMenu(); }}>
