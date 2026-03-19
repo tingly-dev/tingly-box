@@ -3,6 +3,7 @@ package transform
 import (
 	"strings"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -34,12 +35,11 @@ func (t *VendorTransform) Apply(ctx *TransformContext) error {
 		return t.applyChatCompletionVendor(ctx, req)
 	case *responses.ResponseNewParams:
 		return t.applyResponsesVendor(ctx, req)
-
-	// Future: Add cases for Anthropic API styles
-	// case *anthropic.MessageNewParams:
-	//     return t.applyAnthropicV1Vendor(ctx, req)
-	// case *anthropic.BetaMessageNewParams:
-	//     return t.applyAnthropicBetaVendor(ctx, req)
+	// ignore anthropic since no need
+	case *anthropic.MessageNewParams:
+		return nil
+	case *anthropic.BetaMessageNewParams:
+		return nil
 
 	default:
 		return &ValidationError{
