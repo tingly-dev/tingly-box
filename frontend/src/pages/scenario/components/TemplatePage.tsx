@@ -258,6 +258,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
             showExpandCollapseButton={showExpandCollapseButton}
             showImportButton={true}
             onImportFromClipboard={handleImportFromClipboard}
+            scenario={scenario}
         />
     );
 

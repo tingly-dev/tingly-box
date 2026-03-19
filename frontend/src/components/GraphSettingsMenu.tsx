@@ -7,11 +7,15 @@ import {
     Download as DownloadIcon,
     PlayArrow as ProbeIcon,
     Settings as SettingsIcon,
-    UnfoldMore as ExportMenuIcon
+    UnfoldMore as ExportMenuIcon,
+    Speed as SpeedIcon,
+    Stream as StreamIcon,
+    Build as ToolIcon,
 } from '@mui/icons-material';
-import { IconButton, Menu, MenuItem, Tooltip } from '@mui/material';
+import { IconButton, Menu, MenuItem, Tooltip, Divider } from '@mui/material';
 import { useState } from 'react';
 import type { ExportFormat } from '@/components/rule-card/utils';
+import { ProbeMenu } from './probe';
 
 export interface GraphSettingsMenuProps {
     canProbe: boolean;
@@ -26,6 +30,11 @@ export interface GraphSettingsMenuProps {
     onExportAsBase64ToClipboard?: () => void;
     onDelete: () => void;
     onToggleActive: () => void;
+    // Probe V3 props
+    ruleUuid?: string;
+    ruleName?: string;
+    scenario?: string;
+    model?: string;
 }
 
 export const GraphSettingsMenu = ({
@@ -41,15 +50,24 @@ export const GraphSettingsMenu = ({
     onExportAsBase64ToClipboard,
     onDelete,
     onToggleActive,
+    ruleUuid,
+    ruleName,
+    scenario,
+    model,
 }: GraphSettingsMenuProps) => {
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
     const [exportMenuAnchorEl, setExportMenuAnchorEl] = useState<null | HTMLElement>(null);
+    const [probeAnchorEl, setProbeAnchorEl] = useState<null | HTMLElement>(null);
 
     const closeMenu = () => setMenuAnchorEl(null);
     const closeExportMenu = () => setExportMenuAnchorEl(null);
     const closeAllMenus = () => {
         setMenuAnchorEl(null);
         setExportMenuAnchorEl(null);
+    };
+
+    const handleProbeClose = () => {
+        setProbeAnchorEl(null);
     };
 
     return (
@@ -127,6 +145,20 @@ export const GraphSettingsMenu = ({
                     </MenuItem>
                 )}
             </Menu>
+
+            {/* Probe V3 Menu */}
+            {ruleUuid && (
+                <ProbeMenu
+                    anchorEl={probeAnchorEl}
+                    open={Boolean(probeAnchorEl)}
+                    onClose={handleProbeClose}
+                    targetType="rule"
+                    targetId={ruleUuid}
+                    targetName={ruleName || ruleUuid}
+                    scenario={scenario}
+                    model={model}
+                />
+            )}
         </>
     );
 };

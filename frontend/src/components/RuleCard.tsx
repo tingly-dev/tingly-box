@@ -184,6 +184,10 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             onExportAsBase64ToClipboard={handleExportAsBase64ToClipboard}
             onDelete={handleDeleteButtonClick}
             onToggleActive={() => updateField(configRecord, setConfigRecord, 'active', !configRecord.active)}
+            ruleUuid={rule.uuid}
+            ruleName={rule.request_model || rule.uuid}
+            scenario={rule.scenario}
+            model={rule.request_model}
         />
     );
 
