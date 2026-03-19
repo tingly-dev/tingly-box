@@ -96,16 +96,19 @@ func (t *VendorTransform) applyResponsesVendor(ctx *TransformContext, req *respo
 	}
 
 	// Normalize provider URL for matching
-	providerURL := normalizeProviderURL(t.ProviderURL)
+	normalURL := normalizeProviderURL(t.ProviderURL)
 
 	// Apply vendor-specific transformations based on provider URL
 	// Note: Currently only DeepSeek and Moonshot have specific requirements for Responses API
 	// Google's thinking_config and tool schema filtering are Chat Completions-specific
 
 	switch {
-	case strings.Contains(providerURL, "api.deepseek.com"):
+	case t.ProviderURL == protocol.CodexAPIBase:
+		// Codex backend (ChatGPT) requires specific transformations
+		req = t.applyCodexResponsesTransform(ctx, req, config)
+	case strings.Contains(normalURL, "api.deepseek.com"):
 		req = t.applyDeepSeekResponsesTransform(req, config)
-	case strings.Contains(providerURL, "api.moonshot.cn") || strings.Contains(providerURL, "api.moonshot.ai"):
+	case strings.Contains(normalURL, "api.moonshot.cn") || strings.Contains(normalURL, "api.moonshot.ai"):
 		req = t.applyMoonshotResponsesTransform(req, config)
 		// Google and other providers don't require vendor-specific adjustments for Responses API yet
 	}
@@ -144,6 +147,23 @@ func (t *VendorTransform) applyDeepSeekResponsesTransform(req *responses.Respons
 func (t *VendorTransform) applyMoonshotResponsesTransform(req *responses.ResponseNewParams, config *protocol.OpenAIConfig) *responses.ResponseNewParams {
 	// Moonshot has the same requirements as DeepSeek
 	return t.applyDeepSeekResponsesTransform(req, config)
+}
+
+// applyCodexResponsesTransform applies Codex-specific transforms for Responses API
+// Codex (ChatGPT backend) requires:
+//   - Thinking -> Reasoning conversion
+//   - Tool name shortening (64 char limit)
+//   - Tool parameter normalization
+//   - Special tool mappings (web_search_20250305 -> web_search)
+func (t *VendorTransform) applyCodexResponsesTransform(ctx *TransformContext, req *responses.ResponseNewParams, config *protocol.OpenAIConfig) *responses.ResponseNewParams {
+	// Extract model from request
+	model := req.Model
+	if model == "" {
+		return req
+	}
+
+	// Apply Codex-specific transformations
+	return ops.ApplyCodexResponsesTransform(req, ctx.OriginalRequest)
 }
 
 // applyAnthropicV1Vendor applies vendor-specific transforms for Anthropic v1 API

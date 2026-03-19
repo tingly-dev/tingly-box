@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -9,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
-
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
@@ -82,6 +82,8 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				if req.Thinking.OfEnabled != nil {
 					req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budgetTokens)
 				}
+			default:
+				req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
 			}
 		}
 	}
@@ -300,9 +302,15 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			transformedReq := finalCtx.Request.(*responses.ResponseNewParams)
 
 			if isStreaming {
+				req.Stream = true
 				s.handleAnthropicV1BetaViaResponsesAPIStreaming(c, req, proxyModel, actualModel, provider, *transformedReq)
 			} else {
-				s.handleAnthropicV1BetaViaResponsesAPINonStreaming(c, req, proxyModel, actualModel, provider, *transformedReq)
+				if provider.APIBase == protocol.CodexAPIBase {
+					req.Stream = true
+					s.handleAnthropicV1BetaViaResponsesAPIAssembly(c, req, proxyModel, actualModel, provider, *transformedReq)
+				} else {
+					s.handleAnthropicV1BetaViaResponsesAPINonStreaming(c, req, proxyModel, actualModel, provider, *transformedReq)
+				}
 			}
 		} else {
 			// Set the rule and provider in context so middleware can use the same rule
@@ -464,16 +472,15 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context
 
 	var response *responses.Response
 	var err error
+	var cancel context.CancelFunc
 
-	// Check if this is a ChatGPT backend API provider
-	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
-		// Use the ChatGPT backend API handler
-		response, err = s.forwardChatGPTBackendRequest(provider, responsesReq)
-	} else {
-		// Use standard OpenAI Responses API
-		wrapper := s.clientPool.GetOpenAIClient(provider, string(responsesReq.Model))
-		fc := NewForwardContext(nil, provider)
-		response, _, err = ForwardOpenAIResponses(fc, wrapper, responsesReq)
+	// Use standard OpenAI Responses API
+	wrapper := s.clientPool.GetOpenAIClient(provider, responsesReq.Model)
+	fc := NewForwardContext(nil, provider)
+
+	response, cancel, err = ForwardOpenAIResponses(fc, wrapper, responsesReq)
+	if cancel != nil {
+		defer cancel()
 	}
 
 	if err != nil {
@@ -494,15 +501,14 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context
 	// Track usage
 	s.trackUsageWithTokenUsage(c, usage, nil)
 
-	// Convert Responses API response back to Anthropic beta format
 	anthropicResp := nonstream.ConvertResponsesToAnthropicBetaResponse(response, proxyModel)
-
 	// Record response if scenario recording is enabled
 	if recorder != nil {
 		recorder.SetAssembledResponse(anthropicResp)
 		recorder.RecordResponse(provider, actualModel)
 	}
 	c.JSON(http.StatusOK, anthropicResp)
+
 }
 
 // handleAnthropicV1BetaViaResponsesAPIStreaming handles streaming Responses API request
@@ -516,17 +522,9 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, r
 	if streamRec != nil {
 		streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
 	}
-	// Check if this is a ChatGPT backend API provider
-	// These providers need special handling because they use custom HTTP implementation
-	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
-		// Use the ChatGPT backend API streaming handler
-		// This handler sends the stream directly to the client in OpenAI Responses API format
-		s.handleChatGPTBackendStreamingRequest(c, provider, responsesReq, proxyModel, actualModel)
-		return
-	}
 
 	// For standard OpenAI providers, use the OpenAI SDK
-	wrapper := s.clientPool.GetOpenAIClient(provider, string(responsesReq.Model))
+	wrapper := s.clientPool.GetOpenAIClient(provider, responsesReq.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
 	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
 	if cancel != nil {
@@ -544,6 +542,59 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, r
 	// Handle the streaming response
 	// Use the dedicated stream handler to convert Responses API to Anthropic beta format
 	usage, err := stream.HandleResponsesToAnthropicBetaStream(c, streamResp, proxyModel)
+
+	// Track usage from stream handler
+	if err != nil {
+		s.trackUsageWithTokenUsage(c, usage, err)
+		if streamRec != nil {
+			streamRec.RecordError(err)
+		}
+		return
+	}
+
+	s.trackUsageWithTokenUsage(c, usage, nil)
+
+	// Finish recording and assemble response
+	if streamRec != nil {
+		streamRec.Finish(proxyModel, usage.InputTokens, usage.OutputTokens)
+		streamRec.RecordResponse(provider, actualModel)
+	}
+
+	// Success - usage tracking is handled inside the stream handler
+	// Note: The handler tracks usage when response.completed event is received
+}
+
+// handleAnthropicV1BetaViaResponsesAPIStreaming handles streaming Responses API request
+func (s *Server) handleAnthropicV1BetaViaResponsesAPIAssembly(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
+	// Get scenario recorder and set up stream recorder
+	var recorder *ScenarioRecorder
+	if r, exists := c.Get("scenario_recorder"); exists {
+		recorder = r.(*ScenarioRecorder)
+	}
+	streamRec := newStreamRecorder(recorder)
+	if streamRec != nil {
+		streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
+	}
+
+	// For standard OpenAI providers, use the OpenAI SDK
+	wrapper := s.clientPool.GetOpenAIClient(provider, responsesReq.Model)
+	fc := NewForwardContext(c.Request.Context(), provider)
+	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
+	if cancel != nil {
+		defer cancel()
+	}
+	if err != nil {
+		s.trackUsageFromContext(c, 0, 0, err)
+		stream.SendStreamingError(c, err)
+		if streamRec != nil {
+			streamRec.RecordError(err)
+		}
+		return
+	}
+
+	// Handle the streaming response
+	// Use the dedicated stream handler to convert Responses API to Anthropic beta format
+	usage, err := stream.HandleResponsesToAnthropicBetaAssembly(c, streamResp, proxyModel)
 
 	// Track usage from stream handler
 	if err != nil {

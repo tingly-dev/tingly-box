@@ -975,7 +975,7 @@ func (h *Handler) createProviderFromToken(token *oauth2.Token, providerType oaut
 			apiBase = "https://api.openai.com/v1"
 			apiStyle = protocol.APIStyleOpenAI
 		case oauth2.ProviderCodex:
-			apiBase = protocol.ChatGPTBackendAPIBase
+			apiBase = protocol.CodexAPIBase
 			apiStyle = protocol.APIStyleOpenAI
 		default:
 			apiBase = "mock"

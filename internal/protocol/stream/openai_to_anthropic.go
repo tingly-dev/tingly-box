@@ -337,7 +337,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 // This is a thin wrapper that uses the shared core logic with v1 event senders.
 // Returns UsageStat containing token usage information for tracking.
 func HandleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {
-	return handleResponsesToAnthropicV1Stream(c, stream, responseModel, responsesAPIEventSenders{
+	return handlerResponsesToAnthropicStream(c, stream, responseModel, responsesAPIEventSenders{
 		SendMessageStart: func(event map[string]interface{}, flusher http.Flusher) {
 			sendAnthropicStreamEvent(c, eventTypeMessageStart, event, flusher)
 		},
@@ -365,10 +365,10 @@ func HandleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Str
 	})
 }
 
-// handleResponsesToAnthropicV1Stream is the shared core logic for processing OpenAI Responses API streams
+// handlerResponsesToAnthropicStream is the shared core logic for processing OpenAI Responses API streams
 // and converting them to Anthropic format (v1 or beta depending on the senders provided).
 // Returns UsageStat containing token usage information for tracking.
-func handleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string, senders responsesAPIEventSenders) (*protocol.TokenUsage, error) {
+func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string, senders responsesAPIEventSenders) (*protocol.TokenUsage, error) {
 	logrus.Debugf("[ResponsesAPI] Starting Responses API to Anthropic streaming response handler, model=%s", responseModel)
 	defer func() {
 		if r := recover(); r != nil {
@@ -444,8 +444,6 @@ func handleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Str
 		eventCount++
 		currentEvent := stream.Current()
 
-		logrus.Debugf("Processing Responses API event #%d: type=%s", eventCount, currentEvent.Type)
-
 		switch currentEvent.Type {
 		case "response.created", "response.in_progress", "response.queued":
 			continue
@@ -481,7 +479,7 @@ func handleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Str
 				"text": textDelta.Delta,
 			}, flusher)
 			lastOutputItemType = "text"
-
+			logrus.Debugf("Processing Responses API event #%d: type=%s", eventCount, textDelta.Delta)
 		case "response.output_text.done", "response.content_part.done":
 			if state.textBlockIndex != -1 {
 				senders.SendContentBlockStop(state, state.textBlockIndex, flusher)
@@ -512,17 +510,16 @@ func handleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Str
 
 		case "response.reasoning_summary_text.delta":
 			summaryDelta := currentEvent.AsResponseReasoningSummaryTextDelta()
-			// Reasoning summary is condensed reasoning shown to user as visible text
-			// This is separate from both hidden thinking (reasoning_text) and main output text
+			// Reasoning summary is converted to thinking block (per Claude Code spec)
 			if state.reasoningSummaryBlockIndex == -1 {
 				state.reasoningSummaryBlockIndex = state.nextBlockIndex
 				state.hasTextContent = true
 				state.nextBlockIndex++
-				senders.SendContentBlockStart(state.reasoningSummaryBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
+				senders.SendContentBlockStart(state.reasoningSummaryBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
 			}
 			senders.SendContentBlockDelta(state.reasoningSummaryBlockIndex, map[string]interface{}{
-				"type": deltaTypeTextDelta,
-				"text": summaryDelta.Delta,
+				"type":     deltaTypeThinkingDelta,
+				"thinking": summaryDelta.Delta,
 			}, flusher)
 
 		case "response.reasoning_summary_text.done":
@@ -552,7 +549,35 @@ func handleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Str
 
 		case "response.output_item.added":
 			itemAdded := currentEvent.AsResponseOutputItemAdded()
-			if itemAdded.Item.Type == "function_call" || itemAdded.Item.Type == "custom_tool_call" || itemAdded.Item.Type == "mcp_call" {
+			logrus.Debugf("item type: %s", itemAdded.Item.Type)
+			switch itemAdded.Item.Type {
+			case "reasoning":
+				reasoningDelta := currentEvent.AsResponseReasoningTextDelta()
+				if state.thinkingBlockIndex == -1 {
+					state.thinkingBlockIndex = state.nextBlockIndex
+					state.nextBlockIndex++
+					logrus.Debugf("[Thinking][ResponsesAPI] Initializing thinking block at index %d", state.thinkingBlockIndex)
+					senders.SendContentBlockStart(state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
+				}
+				preview := reasoningDelta.Delta
+				logrus.Debugf("[Thinking][ResponsesAPI] Sending thinking_delta: len=%d, preview=%q", len(reasoningDelta.Delta), preview)
+				senders.SendContentBlockDelta(state.thinkingBlockIndex, map[string]interface{}{
+					"type":     deltaTypeThinkingDelta,
+					"thinking": reasoningDelta.Delta,
+				}, flusher)
+			case "message":
+				if state.textBlockIndex == -1 {
+					state.textBlockIndex = state.nextBlockIndex
+					state.hasTextContent = true
+					state.nextBlockIndex++
+					senders.SendContentBlockStart(state.textBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
+				}
+				textDelta := currentEvent.AsResponseOutputTextDelta()
+				senders.SendContentBlockDelta(state.textBlockIndex, map[string]interface{}{
+					"type": deltaTypeTextDelta,
+					"text": textDelta.Delta,
+				}, flusher)
+			case "function_call", "custom_tool_call", "mcp_call":
 				itemID := itemAdded.Item.ID
 				// Truncate tool call ID to meet OpenAI's 40 character limit
 				truncatedID := truncateToolCallID(itemID)
@@ -577,6 +602,8 @@ func handleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Str
 					"id":   truncatedID,
 					"name": toolName,
 				}, flusher)
+			default:
+				logrus.Warnf("missing process for stream chunk: %s, %s", itemAdded.Type, itemAdded.Item.Type)
 			}
 
 		case "response.function_call_arguments.delta":
@@ -638,8 +665,8 @@ func handleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Str
 
 		case "response.completed":
 			completed := currentEvent.AsResponseCompleted()
-			state.inputTokens = int64(completed.Response.Usage.InputTokens)
-			state.outputTokens = int64(completed.Response.Usage.OutputTokens)
+			state.inputTokens = completed.Response.Usage.InputTokens
+			state.outputTokens = completed.Response.Usage.OutputTokens
 
 			logrus.Debugf("[ResponsesAPI] Response completed: input_tokens=%d, output_tokens=%d", state.inputTokens, state.outputTokens)
 
@@ -713,6 +740,123 @@ func handleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Str
 
 			logrus.Debugf("[ResponsesAPI] Sent message_stop event with stop_reason=%s, finishing stream", stopReason)
 			return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
+
+		case "response.output_text.annotation.added":
+			annotationAdded := currentEvent.AsResponseOutputTextAnnotationAdded()
+			logrus.Debugf("[ResponsesAPI] Text annotation added: index=%d, citation_type=%s",
+				annotationAdded.OutputIndex,
+				annotationAdded.Annotation)
+
+		case "response.text.done":
+			// Finalize text content - already handled by content_part.done for output_text type
+
+		case "response.reasoning_summary_part.added":
+			summaryPartAdded := currentEvent.AsResponseReasoningSummaryPartAdded()
+			if summaryPartAdded.Part.Type == "text" {
+				if state.reasoningSummaryBlockIndex == -1 {
+					state.reasoningSummaryBlockIndex = state.nextBlockIndex
+					state.hasTextContent = true
+					state.nextBlockIndex++
+					// reasoning_summary should be converted to thinking block (per Claude Code spec)
+					senders.SendContentBlockStart(state.reasoningSummaryBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
+				}
+				if summaryPartAdded.Part.Text != "" {
+					senders.SendContentBlockDelta(state.reasoningSummaryBlockIndex, map[string]interface{}{
+						"type":     deltaTypeThinkingDelta,
+						"thinking": summaryPartAdded.Part.Text,
+					}, flusher)
+				}
+			}
+
+		case "response.reasoning_summary_part.done":
+			if state.reasoningSummaryBlockIndex != -1 {
+				senders.SendContentBlockStop(state, state.reasoningSummaryBlockIndex, flusher)
+				state.reasoningSummaryBlockIndex = -1
+			}
+
+		case "response.audio.delta":
+			audioDelta := currentEvent.AsResponseAudioDelta()
+			logrus.Debugf("[ResponsesAPI] Audio delta: sequence=%d, len=%d", audioDelta.SequenceNumber, len(audioDelta.Delta))
+
+		case "response.audio.done":
+			logrus.Debugf("[ResponsesAPI] Audio done")
+
+		case "response.audio.transcript.delta":
+			transcriptDelta := currentEvent.AsResponseAudioTranscriptDelta()
+			logrus.Debugf("[ResponsesAPI] Audio transcript delta: sequence=%d, len=%d", transcriptDelta.SequenceNumber, len(transcriptDelta.Delta))
+
+		case "response.audio.transcript.done":
+			logrus.Debugf("[ResponsesAPI] Audio transcript done")
+
+		case "response.code_interpreter_call_code.delta":
+			codeDelta := currentEvent.AsResponseCodeInterpreterCallCodeDelta()
+			logrus.Debugf("[ResponsesAPI] Code interpreter code delta: len=%d", len(codeDelta.Delta))
+
+		case "response.code_interpreter_call_code.done":
+			logrus.Debugf("[ResponsesAPI] Code interpreter code done")
+
+		case "response.code_interpreter_call.in_progress":
+			logrus.Debugf("[ResponsesAPI] Code interpreter in progress")
+
+		case "response.code_interpreter_call.interpreting":
+			logrus.Debugf("[ResponsesAPI] Code interpreter interpreting")
+
+		case "response.code_interpreter_call.completed":
+			logrus.Debugf("[ResponsesAPI] Code interpreter completed")
+
+		case "response.file_search_call.in_progress":
+			logrus.Debugf("[ResponsesAPI] File search in progress")
+
+		case "response.file_search_call.searching":
+			logrus.Debugf("[ResponsesAPI] File search searching: query=%s", currentEvent.RawJSON())
+
+		case "response.file_search_call.completed":
+			logrus.Debugf("[ResponsesAPI] File search completed")
+
+		case "response.web_search_call.in_progress":
+			logrus.Debugf("[ResponsesAPI] Web search in progress")
+
+		case "response.web_search_call.searching":
+			searching := currentEvent.AsResponseWebSearchCallSearching()
+			logrus.Debugf("[ResponsesAPI] Web search searching: %v", searching)
+
+		case "response.web_search_call.completed":
+			logrus.Debugf("[ResponsesAPI] Web search completed")
+
+		case "response.image_generation_call.in_progress":
+			logrus.Debugf("[ResponsesAPI] Image generation in progress")
+
+		case "response.image_generation_call.generating":
+			generating := currentEvent.AsResponseImageGenerationCallGenerating()
+			logrus.Debugf("[ResponsesAPI] Image generation generating: %v", generating)
+
+		case "response.image_generation_call.partial_image":
+			partial := currentEvent.AsResponseImageGenerationCallPartialImage()
+			logrus.Debugf("[ResponsesAPI] Image generation partial: index=%d", partial.PartialImageIndex)
+
+		case "response.image_generation_call.completed":
+			logrus.Debugf("[ResponsesAPI] Image generation completed")
+
+		case "response.mcp_call.in_progress":
+			mcpInProgress := currentEvent.AsResponseMcpCallInProgress()
+			logrus.Debugf("[ResponsesAPI] MCP call in progress: %v", mcpInProgress)
+
+		case "response.mcp_call.completed":
+			mcpCompleted := currentEvent.AsResponseMcpCallCompleted()
+			logrus.Debugf("[ResponsesAPI] MCP call completed: %v", mcpCompleted)
+
+		case "response.mcp_call.failed":
+			mcpFailed := currentEvent.AsResponseMcpCallFailed()
+			logrus.Debugf("[ResponsesAPI] MCP call failed: %v", mcpFailed)
+
+		case "response.mcp_list_tools.in_progress":
+			logrus.Debugf("[ResponsesAPI] MCP list tools in progress")
+
+		case "response.mcp_list_tools.completed":
+			logrus.Debugf("[ResponsesAPI] MCP list tools completed")
+
+		case "response.mcp_list_tools.failed":
+			logrus.Debugf("[ResponsesAPI] MCP list tools failed")
 
 		case "error", "response.failed", "response.incomplete":
 			logrus.Errorf("Responses API error event: %v", currentEvent)

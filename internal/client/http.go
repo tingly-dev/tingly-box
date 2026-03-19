@@ -25,7 +25,6 @@ type HookFunc func(req *http.Request) error
 var oauthHookFunctions = map[oauth.ProviderType]HookFunc{
 	oauth.ProviderClaudeCode:  claudeCodeHook,
 	oauth.ProviderAntigravity: antigravityHook,
-	oauth.ProviderCodex:       codexHook,
 }
 
 func antigravityHook(req *http.Request) error {
@@ -101,58 +100,6 @@ func claudeCodeHook(req *http.Request) error {
 	}
 
 	return nil
-}
-
-// codexHook applies ChatGPT/Codex OAuth specific request modifications:
-// - Rewrites URL paths from /v1/... to /codex/... for ChatGPT backend API
-// - Handles special cases for responses endpoint
-// - Adds required ChatGPT backend API headers
-// - Transforms X-ChatGPT-Account-ID to ChatGPT-Account-ID header
-func codexHook(req *http.Request) error {
-	if req.URL.Host != "chatgpt.com" {
-		return nil
-	}
-
-	originalPath := req.URL.Path
-	newPath := rewriteCodexPath(originalPath)
-
-	if newPath != originalPath {
-		logrus.Debugf("[Codex] Rewriting URL path: %s -> %s", originalPath, newPath)
-		req.URL.Path = newPath
-	}
-
-	req.Header.Set("OpenAI-Beta", "responses=experimental")
-	req.Header.Set("originator", "tingly-box")
-
-	if accountID := req.Header.Get("X-ChatGPT-Account-ID"); accountID != "" {
-		req.Header.Set("ChatGPT-Account-ID", accountID)
-		req.Header.Del("X-ChatGPT-Account-ID")
-	}
-
-	return nil
-}
-
-func rewriteCodexPath(path string) string {
-	if strings.HasPrefix(path, "/backend-api/") {
-		return rewriteBackendAPIPath(path)
-	}
-	if strings.HasPrefix(path, "/v1/") && !strings.Contains(path, "/codex/") {
-		return strings.Replace(path, "/v1/", "/codex/", 1)
-	}
-	return path
-}
-
-func rewriteBackendAPIPath(path string) string {
-	switch {
-	case strings.HasPrefix(path, "/backend-api/chat/completions"):
-		return "/backend-api/codex/responses"
-	case path == "/backend-api/responses":
-		return "/backend-api/codex/responses"
-	case strings.HasPrefix(path, "/backend-api/v1/"):
-		return strings.Replace(path, "/backend-api/v1/", "/backend-api/codex/", 1)
-	default:
-		return path
-	}
 }
 
 // requestModifier wraps an http.RoundTripper to apply hooks to each request
@@ -436,15 +383,6 @@ func (t *antigravityRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 	return resp, nil
 }
 
-// GetOAuthHook returns the hook function for the given provider type
-func GetOAuthHook(providerType oauth.ProviderType) HookFunc {
-	hook, ok := oauthHookFunctions[providerType]
-	if !ok {
-		return nil
-	}
-	return hook
-}
-
 // CreateHTTPClientWithProxy creates an HTTP client with proxy support
 func CreateHTTPClientWithProxy(proxyURL string) *http.Client {
 	if proxyURL == "" {
@@ -504,8 +442,12 @@ func CreateHTTPClientForProvider(provider *typ.Provider) *http.Client {
 	}
 
 	if provider.AuthType == typ.AuthTypeOAuth {
-		// For Antigravity, create a specialized RoundTripper with provider-specific config
-		if providerType == oauth.ProviderAntigravity && provider.OAuthDetail != nil {
+		switch providerType {
+		case oauth.ProviderAntigravity:
+			// For Antigravity, create a specialized RoundTripper with provider-specific config
+			if provider.OAuthDetail == nil {
+				return nil
+			}
 			project, model := "", ""
 			if provider.OAuthDetail.ExtraFields != nil {
 				if p, ok := provider.OAuthDetail.ExtraFields["project_id"].(string); ok {
@@ -530,14 +472,48 @@ func CreateHTTPClientForProvider(provider *typ.Provider) *http.Client {
 				proxyURL:     provider.ProxyURL,
 			}
 			logrus.Infof("Created Antigravity RoundTripper with project=%s, model=%s, proxy=%s", project, model, provider.ProxyURL)
-		} else {
+		case oauth.ProviderCodex:
+			// Create base transport with proxy support if needed
+			var baseTransport http.RoundTripper = transport
+			if provider.ProxyURL != "" {
+				// Explicitly create transport with proxy for this provider
+				proxyClient := CreateHTTPClientWithProxy(provider.ProxyURL)
+				if proxyClient.Transport != nil {
+					baseTransport = proxyClient.Transport
+					logrus.Infof("Created proxy transport for %s: %s", providerType, provider.ProxyURL)
+				}
+			}
+
+			// For ChatGPT backend API, wrap with response transformer
+			// This transforms the custom ChatGPT backend response format to OpenAI Responses API format
+			baseTransport = &codexRoundTripper{
+				RoundTripper: baseTransport,
+			}
+			logrus.Infof("Created ChatGPT backend response transformer RoundTripper with proxy=%s", provider.ProxyURL)
+
+			client.Transport = baseTransport
+		default:
 			// For other OAuth providers, use the hook-based approach
-			hook := GetOAuthHook(providerType)
-			if hook != nil {
-				client.Transport = &requestModifier{
-					RoundTripper: transport,
+			hook, ok := oauthHookFunctions[providerType]
+			if ok {
+				// Create base transport with proxy support if needed
+				var baseTransport http.RoundTripper = transport
+				if provider.ProxyURL != "" {
+					// Explicitly create transport with proxy for this provider
+					proxyClient := CreateHTTPClientWithProxy(provider.ProxyURL)
+					if proxyClient.Transport != nil {
+						baseTransport = proxyClient.Transport
+						logrus.Infof("Created proxy transport for %s: %s", providerType, provider.ProxyURL)
+					}
+				}
+
+				// Build the transport chain: base transport -> request modifier (hook) -> response transformer (if ChatGPT backend)
+				baseTransport = &requestModifier{
+					RoundTripper: baseTransport,
 					hooks:        []HookFunc{hook},
 				}
+
+				client.Transport = baseTransport
 			}
 		}
 	}

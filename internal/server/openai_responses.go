@@ -133,7 +133,7 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 		return
 	}
 
-	if scenarioType == typ.ScenarioCodex && provider.APIBase != protocol.ChatGPTBackendAPIBase {
+	if scenarioType == typ.ScenarioCodex && provider.APIBase != protocol.CodexAPIBase {
 		preferredEndpoint := NewAdaptiveProbe(s).GetPreferredEndpoint(provider, actualModel)
 		if preferredEndpoint != "responses" {
 			s.handleCodexResponsesFallback(c, provider, params, req.Model, actualModel, maxAllowed, req.Stream)
@@ -154,7 +154,7 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 
 	// For direct /responses requests, verify that the selected provider actually
 	// supports the Responses API unless it's the known ChatGPT backend special case.
-	if provider.APIBase != protocol.ChatGPTBackendAPIBase {
+	if provider.APIBase != protocol.CodexAPIBase {
 		preferredEndpoint := NewAdaptiveProbe(s).GetPreferredEndpoint(provider, actualModel)
 		if preferredEndpoint != "responses" {
 			c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -398,14 +398,13 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 	// Forward request to provider
 	var response *responses.Response
 	var err error
+	var cancel context.CancelFunc
 
-	// Check if this is a ChatGPT backend API provider
-	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
-		response, err = s.forwardChatGPTBackendRequest(provider, params)
-	} else {
-		wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model))
-		fc := NewForwardContext(nil, provider)
-		response, _, err = ForwardOpenAIResponses(fc, wrapper, params)
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model))
+	fc := NewForwardContext(nil, provider)
+	response, cancel, err = ForwardOpenAIResponses(fc, wrapper, params)
+	if cancel != nil {
+		defer cancel()
 	}
 
 	if err != nil {
@@ -428,15 +427,6 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 	// Track usage
 	s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil)
 
-	// Check if this is a ChatGPT backend API provider (Codex OAuth)
-	// These providers return responses in a different format that needs conversion
-	if provider.APIBase == protocol.ChatGPTBackendAPIBase && response.ID != "" {
-		// Convert ChatGPT backend API response to OpenAI chat completion format
-		// The response was accumulated from streaming chunks in forwardChatGPTBackendRequest
-		s.convertChatGPTResponseToOpenAIChatCompletion(c, *response, responseModel, inputTokens, outputTokens)
-		return
-	}
-
 	// Override model in response if needed
 	if responseModel != actualModel {
 		// Create a copy of the response with updated model
@@ -455,13 +445,6 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 
 // handleResponsesStreamingRequest handles streaming Responses API requests
 func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string) {
-	// Check if this is a ChatGPT backend API provider (Codex OAuth)
-	// These providers use a custom streaming handler
-	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
-		s.handleChatGPTBackendStreamingRequest(c, provider, params, responseModel, actualModel)
-		return
-	}
-
 	// Create streaming request with request context for proper cancellation
 	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
