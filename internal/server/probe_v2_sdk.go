@@ -111,7 +111,7 @@ func (s *Server) probeProviderWithSDK(ctx context.Context, provider *typ.Provide
 	if provider.APIStyle == protocol.APIStyleAnthropic {
 		url += "/v1/messages"
 	} else {
-		url += "/v1/chat/completions"
+		url += "/chat/completions"
 	}
 
 	switch provider.APIStyle {
@@ -165,7 +165,7 @@ func (s *Server) probeProviderStream(ctx context.Context, provider *typ.Provider
 	if provider.APIStyle == protocol.APIStyleAnthropic {
 		url += "/v1/messages"
 	} else {
-		url += "/v1/chat/completions"
+		url += "/chat/completions"
 	}
 
 	switch provider.APIStyle {
