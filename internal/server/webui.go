@@ -683,6 +683,14 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(ModelProbeResponse{}),
 	)
 
+	// Probe V2 endpoints (new unified probe API)
+	apiV2.POST("/probe", s.HandleProbeV2,
+		swagger.WithDescription("Probe V2 - Unified probe endpoint for testing rules and providers"),
+		swagger.WithTags("testing"),
+		swagger.WithRequestModel(ProbeV2Request{}),
+		swagger.WithResponseModel(ProbeV2Response{}),
+	)
+
 	// Token Management
 	apiV1.POST("/token", s.GenerateToken,
 		swagger.WithDescription("Generate a new API token"),

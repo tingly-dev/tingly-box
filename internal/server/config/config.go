@@ -41,6 +41,7 @@ type Config struct {
 	UserToken         string               `yaml:"user_token" json:"user_token"`                   // User token for UI and control API authentication
 	ModelToken        string               `yaml:"model_token" json:"model_token"`                 // Model token for OpenAI and Anthropic API authentication
 	VirtualModelToken string               `yaml:"virtual_model_token" json:"virtual_model_token"` // Virtual model token for testing (independent from ModelToken)
+	InternalAPIToken  string               `json:"-"`                                              // Internal API token for probe testing (generated at startup, not persisted)
 	EncryptProviders  bool                 `yaml:"encrypt_providers" json:"encrypt_providers"`     // Whether to encrypt provider info (default false)
 	Scenarios         []typ.ScenarioConfig `yaml:"scenarios" json:"scenarios"`                     // Scenario-specific configurations
 	GUI               GUIConfig            `json:"gui"`                                            // GUI-specific settings
@@ -254,6 +255,9 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		cfg.ModelToken = modelToken
 		updated = true
 	}
+	// Generate internal API token for probe testing (always regenerated at startup)
+	cfg.InternalAPIToken = fmt.Sprintf("tb-internal-%s", uuid.New().String())
+	updated = true // Don't save to config file, but mark as updated for this session
 	if cfg.Providers == nil {
 		cfg.ProvidersV1 = make(map[string]*typ.Provider)
 		cfg.Providers = make([]*typ.Provider, 0)
@@ -834,6 +838,15 @@ func (c *Config) HasVirtualModelToken() bool {
 	defer c.mu.RUnlock()
 
 	return c.VirtualModelToken != ""
+}
+
+// GetInternalAPIToken returns the internal API token for probe testing
+// The token is generated at startup and stored in memory only (not persisted to config file)
+func (c *Config) GetInternalAPIToken() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.InternalAPIToken
 }
 
 // Legacy compatibility methods for backward compatibility

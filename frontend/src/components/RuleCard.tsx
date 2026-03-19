@@ -6,11 +6,10 @@ import {
     useRuleCardExpanded,
     useRuleCardData,
     useRuleAutoSave,
-    useRuleProbe,
     useRuleExport,
     useSmartRoutingHandlers,
 } from '@/components/rule-card/useRuleCardHooks';
-import { RuleCardProbeDialog, RuleCardDeleteDialog } from '@/components/rule-card/dialogs';
+import { RuleCardDeleteDialog } from '@/components/rule-card/dialogs';
 import RoutingGraph from '@/components/RoutingGraph';
 import SmartRoutingGraph from '@/components/SmartRoutingGraph';
 import SmartRuleEditDialog from '@/components/SmartRuleEditDialog';
@@ -67,9 +66,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         onRuleChange,
         showNotification,
     });
-
-    // Probe functionality
-    const probeState = useRuleProbe(configRecord);
 
     // Export functionality
     const { handleExport, handleExportAsJsonlToClipboard, handleExportAsBase64ToClipboard } = useRuleExport({ rule, showNotification });
@@ -172,18 +168,19 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     // Extra actions menu - shared between RoutingGraph and SmartRoutingGraph
     const extraActions = (
         <GraphSettingsMenu
-            canProbe={!!configRecord.providers[0]?.provider && !!configRecord.providers[0]?.model}
-            isProbing={probeState.isProbing}
             allowDeleteRule={allowDeleteRule}
             active={configRecord.active}
             allowToggleRule={allowToggleRule}
             saving={saving}
-            onProbe={probeState.handleProbe}
             onExport={handleExport}
             onExportAsJsonlToClipboard={handleExportAsJsonlToClipboard}
             onExportAsBase64ToClipboard={handleExportAsBase64ToClipboard}
             onDelete={handleDeleteButtonClick}
             onToggleActive={() => updateField(configRecord, setConfigRecord, 'active', !configRecord.active)}
+            ruleUuid={rule.uuid}
+            ruleName={rule.request_model || rule.uuid}
+            scenario={rule.scenario}
+            model={rule.request_model}
         />
     );
 
@@ -234,18 +231,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                     onSwitchRoutingMode={handleRoutingModeSwitch}
                 />
             )}
-
-            {/* Probe Result Dialog */}
-            <RuleCardProbeDialog
-                open={probeState.dialogOpen}
-                onClose={probeState.handleCloseDialog}
-                configRecord={configRecord}
-                isProbing={probeState.isProbing}
-                probeResult={probeState.probeResult}
-                detailsExpanded={probeState.detailsExpanded}
-                providerName={probeState.providerName}
-                onToggleDetails={probeState.handleToggleDetails}
-            />
 
             {/* Delete Confirmation Dialog */}
             <RuleCardDeleteDialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} onConfirm={confirmDeleteRule} />

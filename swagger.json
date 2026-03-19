@@ -2286,6 +2286,41 @@
         }
       }
     },
+    "/api/v2/probe": {
+      "post": {
+        "tags": [
+          "testing"
+        ],
+        "summary": "Probe V2 - Unified probe endpoint for testing rules and providers",
+        "description": "Probe V2 - Unified probe endpoint for testing rules and providers",
+        "operationId": "apiV2ProbePost",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ProbeV2Request"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ProbeV2Response"
+            }
+          }
+        }
+      }
+    },
     "/api/v2/provider-templates": {
       "get": {
         "tags": [
@@ -4980,6 +5015,149 @@
         "time_cost"
       ]
     },
+    "ProbeV2Data": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "Field content"
+        },
+        "latency_ms": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field latency_ms"
+        },
+        "request_url": {
+          "type": "string",
+          "description": "Field request_url"
+        },
+        "tool_calls": {
+          "type": "array",
+          "description": "Field tool_calls",
+          "items": {
+            "$ref": "#/definitions/ProbeV2ToolCall"
+          }
+        },
+        "usage": {
+          "description": "Field usage",
+          "$ref": "#/definitions/ProbeV2Usage"
+        }
+      },
+      "required": [
+        "latency_ms"
+      ]
+    },
+    "ProbeV2Request": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "Field message"
+        },
+        "model": {
+          "type": "string",
+          "description": "Field model"
+        },
+        "provider_uuid": {
+          "type": "string",
+          "description": "Field provider_uuid"
+        },
+        "rule_uuid": {
+          "type": "string",
+          "description": "Field rule_uuid"
+        },
+        "scenario": {
+          "type": "string",
+          "description": "Field scenario",
+          "example": "anthropic"
+        },
+        "target_type": {
+          "type": "string",
+          "description": "Field target_type"
+        },
+        "test_mode": {
+          "type": "string",
+          "description": "Field test_mode"
+        }
+      },
+      "required": [
+        "target_type",
+        "rule_uuid",
+        "provider_uuid",
+        "model",
+        "test_mode"
+      ]
+    },
+    "ProbeV2Response": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/ProbeV2Data"
+        },
+        "error": {
+          "description": "Field error",
+          "$ref": "#/definitions/ErrorDetail"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        }
+      },
+      "required": [
+        "success"
+      ]
+    },
+    "ProbeV2ToolCall": {
+      "type": "object",
+      "properties": {
+        "arguments": {
+          "type": "object",
+          "description": "Field arguments",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "id": {
+          "type": "string",
+          "description": "Field id"
+        },
+        "name": {
+          "type": "string",
+          "description": "Field name"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "arguments"
+      ]
+    },
+    "ProbeV2Usage": {
+      "type": "object",
+      "properties": {
+        "completion_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field completion_tokens"
+        },
+        "prompt_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field prompt_tokens"
+        },
+        "total_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field total_tokens"
+        }
+      },
+      "required": [
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens"
+      ]
+    },
     "ProviderModelInfo": {
       "type": "object",
       "properties": {
@@ -6982,12 +7160,24 @@
   },
   "tags": [
     {
-      "name": "models",
-      "description": "Operations related to models"
+      "name": "info",
+      "description": "Operations related to info"
+    },
+    {
+      "name": "server",
+      "description": "Operations related to server"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
     },
     {
       "name": "token",
       "description": "Operations related to token"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
     },
     {
       "name": "skills",
@@ -6998,32 +7188,8 @@
       "description": "Operations related to imbot-settings"
     },
     {
-      "name": "config",
-      "description": "Operations related to config"
-    },
-    {
-      "name": "auth",
-      "description": "Operations related to auth"
-    },
-    {
-      "name": "info",
-      "description": "Operations related to info"
-    },
-    {
-      "name": "server",
-      "description": "Operations related to server"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
-      "name": "oauth",
-      "description": "Operations related to oauth"
-    },
-    {
-      "name": "actions",
-      "description": "Operations related to actions"
+      "name": "system-logs",
+      "description": "Operations related to system-logs"
     },
     {
       "name": "rules",
@@ -7034,16 +7200,12 @@
       "description": "Operations related to scenarios"
     },
     {
-      "name": "testing",
-      "description": "Operations related to testing"
-    },
-    {
       "name": "usage",
       "description": "Operations related to usage"
     },
     {
-      "name": "system-logs",
-      "description": "Operations related to system-logs"
+      "name": "auth",
+      "description": "Operations related to auth"
     },
     {
       "name": "logs",
@@ -7052,6 +7214,22 @@
     {
       "name": "history",
       "description": "Operations related to history"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
+      "name": "actions",
+      "description": "Operations related to actions"
+    },
+    {
+      "name": "models",
+      "description": "Operations related to models"
+    },
+    {
+      "name": "config",
+      "description": "Operations related to config"
     }
   ]
 }

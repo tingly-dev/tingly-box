@@ -7,49 +7,61 @@ import {
     Download as DownloadIcon,
     PlayArrow as ProbeIcon,
     Settings as SettingsIcon,
-    UnfoldMore as ExportMenuIcon
+    UnfoldMore as ExportMenuIcon,
+    Speed as SpeedIcon,
+    Stream as StreamIcon,
+    Build as ToolIcon,
 } from '@mui/icons-material';
-import { IconButton, Menu, MenuItem, Tooltip } from '@mui/material';
+import { IconButton, Menu, MenuItem, Tooltip, Divider } from '@mui/material';
 import { useState } from 'react';
 import type { ExportFormat } from '@/components/rule-card/utils';
+import { ProbeMenu } from './probe';
 
 export interface GraphSettingsMenuProps {
-    canProbe: boolean;
-    isProbing: boolean;
     allowDeleteRule: boolean;
     active: boolean;
     allowToggleRule: boolean;
     saving: boolean;
-    onProbe: () => void;
     onExport: (format: ExportFormat) => void;
     onExportAsJsonlToClipboard?: () => void;
     onExportAsBase64ToClipboard?: () => void;
     onDelete: () => void;
     onToggleActive: () => void;
+    // Probe V2 props
+    ruleUuid?: string;
+    ruleName?: string;
+    scenario?: string;
+    model?: string;
 }
 
 export const GraphSettingsMenu = ({
-    canProbe,
-    isProbing,
     allowDeleteRule,
     active,
     allowToggleRule,
     saving,
-    onProbe,
     onExport,
     onExportAsJsonlToClipboard,
     onExportAsBase64ToClipboard,
     onDelete,
     onToggleActive,
+    ruleUuid,
+    ruleName,
+    scenario,
+    model,
 }: GraphSettingsMenuProps) => {
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
     const [exportMenuAnchorEl, setExportMenuAnchorEl] = useState<null | HTMLElement>(null);
+    const [probeAnchorEl, setProbeAnchorEl] = useState<null | HTMLElement>(null);
 
     const closeMenu = () => setMenuAnchorEl(null);
     const closeExportMenu = () => setExportMenuAnchorEl(null);
     const closeAllMenus = () => {
         setMenuAnchorEl(null);
         setExportMenuAnchorEl(null);
+    };
+
+    const handleProbeClose = () => {
+        setProbeAnchorEl(null);
     };
 
     return (
@@ -71,8 +83,9 @@ export const GraphSettingsMenu = ({
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
             >
-                <MenuItem onClick={() => { closeMenu(); onProbe(); }} disabled={!canProbe || isProbing}>
-                    <ProbeIcon fontSize="small" sx={{ mr: 1 }} />Test Connection
+                <MenuItem onClick={(e) => { setProbeAnchorEl(e.currentTarget); closeMenu(); }}>
+                    <ProbeIcon fontSize="small" sx={{ mr: 1 }} />Test Probe
+                    <ExportMenuIcon fontSize="small" sx={{ ml: 1, fontSize: '1rem' }} />
                 </MenuItem>
 
                 <MenuItem onClick={(e) => { setExportMenuAnchorEl(e.currentTarget); closeMenu(); }}>
@@ -127,6 +140,20 @@ export const GraphSettingsMenu = ({
                     </MenuItem>
                 )}
             </Menu>
+
+            {/* Probe V3 Menu */}
+            {ruleUuid && (
+                <ProbeMenu
+                    anchorEl={probeAnchorEl}
+                    open={Boolean(probeAnchorEl)}
+                    onClose={handleProbeClose}
+                    targetType="rule"
+                    targetId={ruleUuid}
+                    targetName={ruleName || ruleUuid}
+                    scenario={scenario}
+                    model={model}
+                />
+            )}
         </>
     );
 };
