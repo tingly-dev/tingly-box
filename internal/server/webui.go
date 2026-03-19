@@ -484,6 +484,9 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	apiV2 := manager.NewGroup("api", "v2", "")
 	apiV2.Router.Use(s.authMW.UserAuthMiddleware())
 
+	apiV3 := manager.NewGroup("api", "v3", "")
+	apiV3.Router.Use(s.authMW.UserAuthMiddleware())
+
 	// Health check endpoint
 	apiV1.GET("/info/health", s.GetHealthInfo,
 		swagger.WithTags("info"),
@@ -681,6 +684,14 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithTags("testing"),
 		swagger.WithRequestModel(ModelProbeRequest{}),
 		swagger.WithResponseModel(ModelProbeResponse{}),
+	)
+
+	// Probe V2 endpoints (new unified probe API)
+	apiV3.POST("/probe", s.HandleProbeV2,
+		swagger.WithDescription("Probe V2 - Unified probe endpoint for testing rules and providers"),
+		swagger.WithTags("testing"),
+		swagger.WithRequestModel(ProbeV2Request{}),
+		swagger.WithResponseModel(ProbeV2Response{}),
 	)
 
 	// Token Management
