@@ -64,20 +64,45 @@ func antigravityHook(req *http.Request) error {
 }
 
 // requestModifier wraps an http.RoundTripper to apply hooks to each request:
-// - Converts X-Api-Key header to Authorization header
+// - Converts X-Api-Key header to Authorization header for OAuth tokens
 // - Adds required Claude Code specific headers
 // - Adds beta query parameter
 func claudeCodeHook(req *http.Request) error {
 	// Convert X-Api-Key to Authorization header
 	key := req.Header.Get("X-Api-Key")
 	if key != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
-		req.Header.Del("X-Api-Key")
+		// Check if this is an OAuth token (sk-ant-oat prefix)
+		isOAuthToken := IsClaudeOAuthToken(key)
+		// Check if target is Anthropic's API
+		isAnthropicBase := req.URL != nil && strings.Contains(strings.ToLower(req.URL.Host), "api.anthropic.com")
+
+		if isAnthropicBase && !isOAuthToken {
+			// Use x-api-key header for API keys to Anthropic
+			req.Header.Set("x-api-key", key)
+			req.Header.Del("X-Api-Key")
+		} else {
+			// Use Bearer for OAuth tokens or non-Anthropic endpoints
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
+			req.Header.Del("X-Api-Key")
+		}
 	}
 
 	// Set Claude Code specific headers
 	req.Header.Set("accept", "application/json")
-	req.Header.Set("anthropic-beta", "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14")
+
+	// Build beta header with all required flags
+	// Start with base betas including oauth support
+	baseBetas := "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05"
+
+	// If user provides custom betas, merge them while ensuring oauth is included
+	if val := strings.TrimSpace(req.Header.Get("Anthropic-Beta")); val != "" {
+		baseBetas = val
+		if !strings.Contains(val, "oauth") {
+			baseBetas += ",oauth-2025-04-20"
+		}
+	}
+
+	req.Header.Set("anthropic-beta", baseBetas)
 	req.Header.Set("anthropic-dangerous-direct-browser-access", "true")
 	req.Header.Set("anthropic-version", "2023-06-01")
 	req.Header.Set("user-agent", "claude-cli/2.0.76 (external, cli)")
