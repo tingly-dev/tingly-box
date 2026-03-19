@@ -128,9 +128,18 @@ function ModelSelectTabInner({
     // Auto-switch to selected provider tab and navigate to selected model on component mount (only once)
     // Use ref to track which provider we've initialized for to prevent re-initialization
     const initializedProviderRef = useRef<string | null>(null);
+    const isFirstRenderRef = useRef(true);
 
     useEffect(() => {
-        if (selectedProvider && selectedProvider !== initializedProviderRef.current) {
+        // Only run initialization on first render or when provider actually changes
+        if (!isFirstRenderRef.current) {
+            return;
+        };
+
+        // Clear first render flag so this only runs once
+        isFirstRenderRef.current = false;
+
+        if (selectedProvider) {
             const targetProviderIndex = flattenedProviders.findIndex(provider => provider.uuid === selectedProvider);
 
             // Auto-switch to the selected provider's tab
