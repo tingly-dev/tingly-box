@@ -19,7 +19,6 @@ const UseVSCodePage: React.FC = () => {
         isLoading,
         notification,
         copyToClipboard,
-        headerRef,
         baseUrl,
     } = useScenarioPageInternal(scenario);
 
@@ -33,7 +32,6 @@ const UseVSCodePage: React.FC = () => {
         <PageLayout loading={isLoading} notification={notification}>
             <CardGrid>
                 <UnifiedCard
-                    ref={headerRef}
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <span>VS Code Copilot</span>

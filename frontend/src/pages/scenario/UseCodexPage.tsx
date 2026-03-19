@@ -19,7 +19,6 @@ const UseCodexPage: React.FC = () => {
         isLoading,
         notification,
         copyToClipboard,
-        headerRef,
         baseUrl,
     } = useScenarioPageInternal(scenario);
 
@@ -55,7 +54,6 @@ const UseCodexPage: React.FC = () => {
                     }
                 >
                     <ProviderConfigCard
-                        headerRef={headerRef}
                         title="Codex Configuration"
                         baseUrlPath="/tingly/codex"
                         baseUrl={baseUrl}

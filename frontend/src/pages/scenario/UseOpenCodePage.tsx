@@ -22,7 +22,6 @@ const UseOpenCodePage: React.FC = () => {
         notification,
         showNotification,
         copyToClipboard,
-        headerRef,
         baseUrl,
     } = useScenarioPageInternal(scenario);
 
@@ -102,7 +101,6 @@ const UseOpenCodePage: React.FC = () => {
         <PageLayout loading={isLoading} notification={notification}>
             <CardGrid>
                 <UnifiedCard
-                    ref={headerRef}
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <span>OpenCode Configuration</span>

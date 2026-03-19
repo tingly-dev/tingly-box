@@ -21,7 +21,6 @@ export interface TemplatePageInternalProps {
     emptyStateTitle?: string;
     emptyStateDescription?: string;
     onAddApiKeyClick?: () => void;
-    onAddOAuthClick?: () => void;
 }
 
 /**
@@ -58,7 +57,6 @@ export interface TemplatePageExternalProps {
     emptyStateTitle?: string;
     emptyStateDescription?: string;
     onAddApiKeyClick?: () => void;
-    onAddOAuthClick?: () => void;
 }
 
 /**

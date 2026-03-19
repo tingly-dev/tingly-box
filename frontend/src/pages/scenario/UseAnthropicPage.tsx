@@ -17,7 +17,6 @@ const UseAnthropicPage: React.FC = () => {
         isLoading,
         notification,
         copyToClipboard,
-        headerRef,
         baseUrl,
     } = useScenarioPageInternal(scenario);
 
@@ -25,7 +24,6 @@ const UseAnthropicPage: React.FC = () => {
         <PageLayout loading={isLoading} notification={notification}>
             <CardGrid>
                 <UnifiedCard
-                    ref={headerRef}
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <span>Anthropic SDK Configuration</span>
@@ -34,7 +32,6 @@ const UseAnthropicPage: React.FC = () => {
                     size="full"
                 >
                     <ProviderConfigCard
-                        headerRef={headerRef}
                         title="Anthropic SDK Configuration"
                         baseUrlPath="/tingly/anthropic"
                         baseUrl={baseUrl}

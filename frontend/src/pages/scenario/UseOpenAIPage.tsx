@@ -17,7 +17,6 @@ const UseOpenAIPage: React.FC = () => {
         isLoading,
         notification,
         copyToClipboard,
-        headerRef,
         baseUrl,
     } = useScenarioPageInternal(scenario);
 
@@ -25,7 +24,6 @@ const UseOpenAIPage: React.FC = () => {
         <PageLayout loading={isLoading} notification={notification}>
             <CardGrid>
                 <UnifiedCard
-                    ref={headerRef}
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <span>OpenAI SDK Configuration</span>
@@ -34,7 +32,6 @@ const UseOpenAIPage: React.FC = () => {
                     size="full"
                 >
                     <ProviderConfigCard
-                        headerRef={headerRef}
                         title="OpenAI SDK Configuration"
                         baseUrlPath="/tingly/openai"
                         baseUrl={baseUrl}
