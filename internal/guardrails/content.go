@@ -41,6 +41,33 @@ func (c Content) Preview(limit int) string {
 	return text
 }
 
+// LatestPreview returns a short snippet biased toward the newest relevant input.
+// Message history is append-only in most protocol adapters, so using the full
+// combined text makes history rows all look the same. For history logging we
+// prefer the current text payload, current command, or the last message only.
+func (c Content) LatestPreview(limit int) string {
+	if limit <= 0 {
+		limit = 120
+	}
+
+	var text string
+	switch {
+	case c.Text != "":
+		text = c.Text
+	case c.Command != nil:
+		text = Content{Command: c.Command}.CombinedText()
+	case len(c.Messages) > 0:
+		text = Content{Messages: []Message{c.Messages[len(c.Messages)-1]}}.CombinedText()
+	default:
+		return ""
+	}
+
+	if len(text) > limit {
+		return text[:limit] + "..."
+	}
+	return text
+}
+
 // CombinedText returns a single string representation of the content.
 func (c Content) CombinedText() string {
 	return c.CombinedTextFor(nil)

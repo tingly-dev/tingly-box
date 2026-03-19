@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -20,8 +19,8 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/obs/otel"
 	remote_coder "github.com/tingly-dev/tingly-box/internal/remote_coder"
@@ -88,7 +87,7 @@ type Server struct {
 	toolInterceptor *toolinterceptor.Interceptor
 
 	// guardrails engine (optional)
-	guardrailsEngine guardrails.Guardrails
+	guardrailsEngine  guardrails.Guardrails
 	guardrailsHistory *guardrailsHistoryStore
 
 	// recording sinks
@@ -185,26 +184,6 @@ func (s *Server) syncGuardrailsFromConfig() {
 	if s.guardrailsEngine == nil {
 		s.initGuardrailsEngine()
 	}
-}
-
-func findGuardrailsConfig(configDir string) (string, error) {
-	if configDir == "" {
-		return "", fmt.Errorf("config dir is empty")
-	}
-
-	candidates := []string{
-		filepath.Join(configDir, "guardrails.yaml"),
-		filepath.Join(configDir, "guardrails.yml"),
-		filepath.Join(configDir, "guardrails.json"),
-	}
-
-	for _, path := range candidates {
-		if _, err := os.Stat(path); err == nil {
-			return path, nil
-		}
-	}
-
-	return "", fmt.Errorf("no guardrails config in %s", configDir)
 }
 
 // ServerOption defines a functional option for Server configuration
@@ -427,7 +406,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.clientPool = client.NewClientPool() // Initialize client pool
 	server.errorMW = errorMW
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
-	server.guardrailsHistory = newGuardrailsHistoryStore(200)
+	server.guardrailsHistory = newGuardrailsHistoryStore(200, getGuardrailsHistoryPath(cfg.ConfigDir))
 
 	// Auto-load guardrails if enabled and not injected explicitly.
 	server.initGuardrailsEngine()

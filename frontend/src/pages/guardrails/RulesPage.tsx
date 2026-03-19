@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+    Accordion,
+    AccordionDetails,
+    AccordionSummary,
     Alert,
     Box,
     Button,
@@ -40,6 +43,7 @@ import {
     AutoAwesome,
     Code as CodeIcon,
     DeleteOutline,
+    ExpandMore,
     LaptopMac,
     Refresh as RefreshIcon,
     Rule,
@@ -159,6 +163,8 @@ const GuardrailsRulesPage = () => {
     const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null);
     const [pendingGroupId, setPendingGroupId] = useState<string | null>(null);
     const [pendingGroupSave, setPendingGroupSave] = useState(false);
+    const [initializingDefaultGroup, setInitializingDefaultGroup] = useState(false);
+    const [advancedOpen, setAdvancedOpen] = useState(false);
     const [selectedPolicyTab, setSelectedPolicyTab] = useState<'resource_access' | 'command_execution' | 'content'>(
         'resource_access'
     );
@@ -210,6 +216,7 @@ const GuardrailsRulesPage = () => {
     };
 
     const joinLines = (values?: string[]) => (Array.isArray(values) ? values.join('\n') : '');
+    const normalizeGroup = (value?: string) => value?.trim() || '';
 
     const toggleValue = (values: string[], value: string) => {
         if (values.includes(value)) {
@@ -398,6 +405,15 @@ const GuardrailsRulesPage = () => {
         return `${severity} · ${verdict} · ${scenarios}`;
     };
 
+    const getGroupByID = (groupID?: string) => groups.find((group) => group.id === groupID);
+
+    const getGroupDefaultScenarios = (group?: PolicyGroup) => {
+        const scenarios = group?.default_scope?.scenarios;
+        return scenarios && scenarios.length > 0 ? scenarios : scenarioOptions;
+    };
+
+    const getGroupDefaultVerdict = (group?: PolicyGroup) => group?.default_verdict || 'block';
+
     // MUI restores focus to the trigger after a dialog closes. Blur it so toolbar buttons
     // do not keep the white focus overlay after closing policy/group dialogs.
     const blurActiveElement = () => {
@@ -409,15 +425,18 @@ const GuardrailsRulesPage = () => {
 
     const makeEditorState = (policy?: GuardrailsPolicy): EditorState => {
         const group = policy?.group || '';
+        const selectedGroup = getGroupByID(group);
         const scenarios =
-            policy?.scope?.scenarios && policy.scope.scenarios.length > 0 ? policy.scope.scenarios : scenarioOptions;
+            policy?.scope?.scenarios && policy.scope.scenarios.length > 0
+                ? policy.scope.scenarios
+                : getGroupDefaultScenarios(selectedGroup);
         const nextState: EditorState = {
             id: policy?.id || '',
             name: policy?.name || '',
             group,
             kind: policy?.kind === 'operation' ? 'resource_access' : policy?.kind || '',
             enabled: policy?.enabled !== false,
-            verdict: policy?.verdict || 'block',
+            verdict: policy?.verdict || getGroupDefaultVerdict(selectedGroup),
             scenarios,
             toolNames: joinLines(policy?.match?.tool_names),
             actions: policy?.match?.actions?.include || [],
@@ -434,16 +453,20 @@ const GuardrailsRulesPage = () => {
 
     const makeEditorStateFromDraft = (draft: Partial<EditorState>): EditorState => {
         const baseState = makeEditorState();
+        const selectedGroup = getGroupByID(normalizeGroup(draft.group));
         return {
             ...baseState,
             ...draft,
             id: draft.id || baseState.id,
             name: draft.name || baseState.name,
-            group: draft.group || '',
+            group: normalizeGroup(draft.group),
             kind: draft.kind || baseState.kind,
             enabled: draft.enabled ?? baseState.enabled,
-            verdict: draft.verdict || baseState.verdict,
-            scenarios: draft.scenarios && draft.scenarios.length > 0 ? draft.scenarios : baseState.scenarios,
+            verdict: draft.verdict || getGroupDefaultVerdict(selectedGroup) || baseState.verdict,
+            scenarios:
+                draft.scenarios && draft.scenarios.length > 0
+                    ? draft.scenarios
+                    : getGroupDefaultScenarios(selectedGroup),
             toolNames: draft.toolNames ?? baseState.toolNames,
             actions: draft.actions ?? baseState.actions,
             commandTerms: draft.commandTerms ?? baseState.commandTerms,
@@ -500,6 +523,39 @@ const GuardrailsRulesPage = () => {
     }, []);
 
     useEffect(() => {
+        if (loading || loadError || initializingDefaultGroup || groups.length > 0 || supportedScenarios.length === 0) {
+            return;
+        }
+
+        const ensureDefaultGroup = async () => {
+            try {
+                setInitializingDefaultGroup(true);
+                const result = await api.createGuardrailsGroup({
+                    id: 'default',
+                    name: 'Default',
+                    enabled: true,
+                    severity: 'high',
+                    default_verdict: 'block',
+                    default_scope: {
+                        scenarios: supportedScenarios,
+                    },
+                });
+                if (!result?.success) {
+                    setActionMessage({ type: 'error', text: result?.error || 'Failed to create default group' });
+                    return;
+                }
+                await loadPolicies(true);
+            } catch (error: any) {
+                setActionMessage({ type: 'error', text: error?.message || 'Failed to create default group' });
+            } finally {
+                setInitializingDefaultGroup(false);
+            }
+        };
+
+        ensureDefaultGroup();
+    }, [groups.length, initializingDefaultGroup, loadError, loading, supportedScenarios]);
+
+    useEffect(() => {
         const params = new URLSearchParams(location.search);
         const policyId = params.get('policyId') || params.get('ruleId');
         if (!policyId || policies.length === 0) {
@@ -513,6 +569,7 @@ const GuardrailsRulesPage = () => {
         setSelectedPolicyId(policy.id);
         setIsNewPolicy(false);
         setEditorOpen(true);
+        setAdvancedOpen(nextState.group === '');
         setEditorState(nextState);
         setEditorSnapshot(JSON.stringify(nextState));
         navigate('/guardrails/rules', { replace: true });
@@ -527,6 +584,7 @@ const GuardrailsRulesPage = () => {
         setSelectedPolicyId(null);
         setIsNewPolicy(true);
         setEditorOpen(true);
+        setAdvancedOpen(nextState.group === '');
         setSelectedResourceRow(splitLines(nextState.resources).length > 0 ? 0 : -1);
         setSelectedCommandTermRow(splitLines(nextState.commandTerms).length > 0 ? 0 : -1);
         setSelectedPatternRow(splitLines(nextState.patterns).length > 0 ? 0 : -1);
@@ -672,6 +730,7 @@ const GuardrailsRulesPage = () => {
         setSelectedPolicyId(policy.id);
         setIsNewPolicy(false);
         setEditorOpen(true);
+        setAdvancedOpen(nextState.group === '');
         setSelectedResourceRow(splitLines(nextState.resources).length > 0 ? 0 : -1);
         setSelectedCommandTermRow(splitLines(nextState.commandTerms).length > 0 ? 0 : -1);
         setSelectedPatternRow(splitLines(nextState.patterns).length > 0 ? 0 : -1);
@@ -685,11 +744,23 @@ const GuardrailsRulesPage = () => {
         setSelectedPolicyId(null);
         setIsNewPolicy(true);
         setEditorOpen(true);
+        setAdvancedOpen(nextState.group === '');
         setSelectedResourceRow(splitLines(nextState.resources).length > 0 ? 0 : -1);
         setSelectedCommandTermRow(splitLines(nextState.commandTerms).length > 0 ? 0 : -1);
         setSelectedPatternRow(splitLines(nextState.patterns).length > 0 ? 0 : -1);
         setEditorState(nextState);
         setEditorSnapshot(JSON.stringify(nextState));
+    };
+
+    const handleSelectPolicyGroup = (groupID: string) => {
+        const selectedGroup = getGroupByID(groupID);
+        setEditorState((state) => ({
+            ...state,
+            group: groupID,
+            verdict: groupID ? getGroupDefaultVerdict(selectedGroup) : state.verdict,
+            scenarios: groupID ? getGroupDefaultScenarios(selectedGroup) : state.scenarios,
+        }));
+        setAdvancedOpen(groupID === '');
     };
 
     const buildPolicyPayload = (state: EditorState) => {
@@ -1644,7 +1715,7 @@ const GuardrailsRulesPage = () => {
                                                 }}
                                             >
                                                 <Box
-                                                    onClick={() => setEditorState((state) => ({ ...state, group: '' }))}
+                                                    onClick={() => handleSelectPolicyGroup('')}
                                                     sx={{
                                                         border: '1px solid',
                                                         borderColor: editorState.group === '' ? 'primary.main' : 'divider',
@@ -1673,7 +1744,7 @@ const GuardrailsRulesPage = () => {
                                                     return (
                                                         <Box
                                                             key={option.value}
-                                                            onClick={() => setEditorState((state) => ({ ...state, group: option.value }))}
+                                                            onClick={() => handleSelectPolicyGroup(option.value)}
                                                             sx={{
                                                                 border: '1px solid',
                                                                 borderColor: selected ? 'primary.main' : 'divider',
@@ -1694,75 +1765,6 @@ const GuardrailsRulesPage = () => {
                                                                 </Stack>
                                                                 <Typography variant="caption" color="text.secondary">
                                                                     Policies in this group inherit its defaults when those fields are left empty.
-                                                                </Typography>
-                                                            </Stack>
-                                                        </Box>
-                                                    );
-                                                })}
-                                            </Box>
-                                        </Box>
-                                    </Stack>
-                                </Box>
-
-                                <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
-                                    <Stack spacing={2}>
-                                        <Box>
-                                            <Typography variant="subtitle2">
-                                                Set Verdict
-                                            </Typography>
-                                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                                                The verdict defines what Guardrails should do once this policy matches.
-                                            </Typography>
-                                            <Box
-                                                sx={{
-                                                    display: 'grid',
-                                                    gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' },
-                                                    gap: 1.5,
-                                                    mt: 1.5,
-                                                }}
-                                            >
-                                                {[
-                                                    {
-                                                        value: 'allow',
-                                                        label: 'Allow',
-                                                        description: 'Record the match but allow the content or action to continue.',
-                                                    },
-                                                    {
-                                                        value: 'review',
-                                                        label: 'Review',
-                                                        description: 'Mark the result as needing attention without fully blocking it.',
-                                                    },
-                                                    {
-                                                        value: 'block',
-                                                        label: 'Block',
-                                                        description: 'Stop the content or action and return the policy reason to the user.',
-                                                    },
-                                                ].map((option) => {
-                                                    const selected = editorState.verdict === option.value;
-                                                    return (
-                                                        <Box
-                                                            key={option.value}
-                                                            onClick={() => setEditorState((state) => ({ ...state, verdict: option.value }))}
-                                                            sx={{
-                                                                border: '1px solid',
-                                                                borderColor: selected ? 'primary.main' : 'divider',
-                                                                bgcolor: selected ? 'action.selected' : 'background.paper',
-                                                                borderRadius: 2,
-                                                                p: 1.5,
-                                                                cursor: 'pointer',
-                                                                transition: 'all 0.15s ease',
-                                                                '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
-                                                            }}
-                                                        >
-                                                            <Stack spacing={0.75}>
-                                                                <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-                                                                    <Typography variant="body2" fontWeight={600}>
-                                                                        {option.label}
-                                                                    </Typography>
-                                                                    {selected && <Chip size="small" color="primary" label="Selected" />}
-                                                                </Stack>
-                                                                <Typography variant="caption" color="text.secondary">
-                                                                    {option.description}
                                                                 </Typography>
                                                             </Stack>
                                                         </Box>
@@ -2012,14 +2014,114 @@ const GuardrailsRulesPage = () => {
                                     </Stack>
                                 </Box>
 
-                                {renderScenarioScopeSelector({
-                                    title: 'Scenario Scope',
-                                    description:
-                                        'Choose where this policy applies. By default, new policies start enabled for every Guardrails-supported scenario.',
-                                    value: editorState.scenarios,
-                                    onChange: (scenarios) => setEditorState((state) => ({ ...state, scenarios })),
-                                    helperText: 'Leave every scenario selected unless this policy should only apply to a narrower workflow.',
-                                })}
+                                <Accordion
+                                    expanded={advancedOpen}
+                                    onChange={(_, expanded) => setAdvancedOpen(expanded)}
+                                    disableGutters
+                                    elevation={0}
+                                    sx={{
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        borderRadius: 2,
+                                        '&:before': { display: 'none' },
+                                        overflow: 'hidden',
+                                    }}
+                                >
+                                    <AccordionSummary expandIcon={<ExpandMore />}>
+                                        <Stack spacing={0.5}>
+                                            <Typography variant="subtitle2">Advanced Settings</Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                {editorState.group
+                                                    ? 'This policy starts from the selected group defaults. Expand to review or override verdict and scope.'
+                                                    : 'Configure verdict and scenario scope directly for this standalone policy.'}
+                                            </Typography>
+                                        </Stack>
+                                    </AccordionSummary>
+                                    <AccordionDetails>
+                                        <Stack spacing={2}>
+                                            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
+                                                <Stack spacing={2}>
+                                                    <Box>
+                                                        <Typography variant="subtitle2">Set Verdict</Typography>
+                                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                                            {editorState.group
+                                                                ? 'Defaults come from the selected group. Change this only when the policy needs a different decision.'
+                                                                : 'The verdict defines what Guardrails should do once this policy matches.'}
+                                                        </Typography>
+                                                        <Box
+                                                            sx={{
+                                                                display: 'grid',
+                                                                gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' },
+                                                                gap: 1.5,
+                                                                mt: 1.5,
+                                                            }}
+                                                        >
+                                                            {[
+                                                                {
+                                                                    value: 'allow',
+                                                                    label: 'Allow',
+                                                                    description: 'Record the match but allow the content or action to continue.',
+                                                                },
+                                                                {
+                                                                    value: 'review',
+                                                                    label: 'Review',
+                                                                    description: 'Mark the result as needing attention without fully blocking it.',
+                                                                },
+                                                                {
+                                                                    value: 'block',
+                                                                    label: 'Block',
+                                                                    description: 'Stop the content or action and return the policy reason to the user.',
+                                                                },
+                                                            ].map((option) => {
+                                                                const selected = editorState.verdict === option.value;
+                                                                return (
+                                                                    <Box
+                                                                        key={option.value}
+                                                                        onClick={() => setEditorState((state) => ({ ...state, verdict: option.value }))}
+                                                                        sx={{
+                                                                            border: '1px solid',
+                                                                            borderColor: selected ? 'primary.main' : 'divider',
+                                                                            bgcolor: selected ? 'action.selected' : 'background.paper',
+                                                                            borderRadius: 2,
+                                                                            p: 1.5,
+                                                                            cursor: 'pointer',
+                                                                            transition: 'all 0.15s ease',
+                                                                            '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
+                                                                        }}
+                                                                    >
+                                                                        <Stack spacing={0.75}>
+                                                                            <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                                                                <Typography variant="body2" fontWeight={600}>
+                                                                                    {option.label}
+                                                                                </Typography>
+                                                                                {selected && <Chip size="small" color="primary" label="Selected" />}
+                                                                            </Stack>
+                                                                            <Typography variant="caption" color="text.secondary">
+                                                                                {option.description}
+                                                                            </Typography>
+                                                                        </Stack>
+                                                                    </Box>
+                                                                );
+                                                            })}
+                                                        </Box>
+                                                    </Box>
+                                                </Stack>
+                                            </Box>
+
+                                            {renderScenarioScopeSelector({
+                                                title: 'Scenario Scope',
+                                                description: editorState.group
+                                                    ? 'Defaults come from the selected group. Expand and change this only when the policy needs a narrower or broader scope.'
+                                                    : 'Choose where this policy applies. By default, standalone policies start enabled for every Guardrails-supported scenario.',
+                                                value: editorState.scenarios,
+                                                onChange: (scenarios) => setEditorState((state) => ({ ...state, scenarios })),
+                                                helperText: editorState.group
+                                                    ? 'The current selection was initialized from the chosen group.'
+                                                    : 'Leave every scenario selected unless this policy should only apply to a narrower workflow.',
+                                            })}
+                                        </Stack>
+                                    </AccordionDetails>
+                                </Accordion>
                             </>
                         ) : null}
                     </Stack>
@@ -2062,7 +2164,7 @@ const GuardrailsRulesPage = () => {
                 <DialogContent>
                     <Typography variant="body2" color="text.secondary">
                         {deletePolicyId
-                            ? `Delete policy "${deletePolicyId}"? This will update guardrails.yaml and reload the engine.`
+                            ? `Delete policy "${deletePolicyId}"? This will update the Guardrails config and reload the engine.`
                             : 'Delete this policy?'}
                     </Typography>
                 </DialogContent>

@@ -1,11 +1,14 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 )
@@ -27,24 +30,59 @@ type guardrailsHistoryEntry struct {
 type guardrailsHistoryStore struct {
 	mu         sync.RWMutex
 	maxEntries int
+	path       string
 	entries    []guardrailsHistoryEntry
 }
 
-func newGuardrailsHistoryStore(maxEntries int) *guardrailsHistoryStore {
+func newGuardrailsHistoryStore(maxEntries int, path string) *guardrailsHistoryStore {
 	if maxEntries <= 0 {
 		maxEntries = 200
 	}
-	return &guardrailsHistoryStore{maxEntries: maxEntries}
+
+	store := &guardrailsHistoryStore{
+		maxEntries: maxEntries,
+		path:       path,
+	}
+	store.load()
+	return store
+}
+
+func (s *guardrailsHistoryStore) load() {
+	if s.path == "" {
+		return
+	}
+
+	data, err := os.ReadFile(s.path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			logrus.WithError(err).Warnf("Guardrails history: failed to read %s", s.path)
+		}
+		return
+	}
+
+	var entries []guardrailsHistoryEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		logrus.WithError(err).Warnf("Guardrails history: failed to decode %s", s.path)
+		return
+	}
+
+	if len(entries) > s.maxEntries {
+		entries = entries[:s.maxEntries]
+	}
+
+	s.entries = entries
 }
 
 func (s *guardrailsHistoryStore) Add(entry guardrailsHistoryEntry) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	s.entries = append([]guardrailsHistoryEntry{entry}, s.entries...)
 	if len(s.entries) > s.maxEntries {
 		s.entries = s.entries[:s.maxEntries]
 	}
+	snapshot := append([]guardrailsHistoryEntry(nil), s.entries...)
+	s.mu.Unlock()
+
+	s.persist(snapshot)
 }
 
 func (s *guardrailsHistoryStore) List(limit int) []guardrailsHistoryEntry {
@@ -61,8 +99,27 @@ func (s *guardrailsHistoryStore) List(limit int) []guardrailsHistoryEntry {
 
 func (s *guardrailsHistoryStore) Clear() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.entries = nil
+	s.mu.Unlock()
+
+	s.persist([]guardrailsHistoryEntry{})
+}
+
+// History writes are intentionally best-effort. Guardrails enforcement should
+// keep working even if the local history file cannot be updated.
+func (s *guardrailsHistoryStore) persist(entries []guardrailsHistoryEntry) {
+	if s.path == "" {
+		return
+	}
+
+	data, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		logrus.WithError(err).Warn("Guardrails history: failed to encode entries")
+		return
+	}
+	if err := writeFileAtomic(s.path, data); err != nil {
+		logrus.WithError(err).Warnf("Guardrails history: failed to persist %s", s.path)
+	}
 }
 
 func (s *Server) recordGuardrailsHistory(session guardrailsSession, input guardrails.Input, result guardrails.Result, phase, blockMessage string) {
@@ -79,7 +136,7 @@ func (s *Server) recordGuardrailsHistory(session guardrailsSession, input guardr
 		Phase:        phase,
 		Verdict:      string(result.Verdict),
 		BlockMessage: blockMessage,
-		Preview:      input.Content.Preview(160),
+		Preview:      input.Content.LatestPreview(160),
 		Reasons:      append([]guardrails.PolicyResult(nil), result.Reasons...),
 	}
 	if input.Content.Command != nil {

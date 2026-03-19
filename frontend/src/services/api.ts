@@ -558,6 +558,9 @@ export const api = {
     getGuardrailsConfig: async (): Promise<any> => {
         return fetchUIAPI('/guardrails/config');
     },
+    getGuardrailsBuiltins: async (): Promise<any> => {
+        return fetchUIAPI('/guardrails/builtins');
+    },
     getGuardrailsHistory: async (): Promise<any> => {
         return fetchUIAPI('/guardrails/history');
     },

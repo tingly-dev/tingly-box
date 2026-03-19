@@ -5,6 +5,7 @@ import {
     Button,
     Card,
     CardContent,
+    Chip,
     Dialog,
     DialogActions,
     DialogContent,
@@ -24,11 +25,23 @@ import {
     Refresh as RefreshIcon,
     FileDownload,
     FileUpload,
+    Storefront,
+    FolderOpen,
+    Hub,
+    Terminal,
+    ArticleOutlined,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import PageLayout from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
+
+type GuardrailsHistoryEntry = {
+    time: string;
+    verdict: string;
+    phase: string;
+    scenario: string;
+};
 
 const GuardrailsPage = () => {
     const navigate = useNavigate();
@@ -36,7 +49,12 @@ const GuardrailsPage = () => {
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [configContent, setConfigContent] = useState('');
+    const [configPath, setConfigPath] = useState('');
+    const [configExists, setConfigExists] = useState(false);
+    const [groups, setGroups] = useState<any[]>([]);
+    const [supportedScenarios, setSupportedScenarios] = useState<string[]>([]);
     const [policies, setPolicies] = useState<any[]>([]);
+    const [historyEntries, setHistoryEntries] = useState<GuardrailsHistoryEntry[]>([]);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [importDialogOpen, setImportDialogOpen] = useState(false);
     const [importText, setImportText] = useState('');
@@ -45,10 +63,19 @@ const GuardrailsPage = () => {
     const loadGuardrails = async (showReloadMessage = false) => {
         try {
             setLoading(true);
-            const guardrailsConfig = await api.getGuardrailsConfig();
+            const [guardrailsConfig, guardrailsHistory] = await Promise.all([
+                api.getGuardrailsConfig(),
+                api.getGuardrailsHistory(),
+            ]);
             const nextPolicies = guardrailsConfig?.config?.policies || [];
+            const nextGroups = guardrailsConfig?.config?.groups || [];
             setPolicies(nextPolicies);
+            setGroups(nextGroups);
             setConfigContent(guardrailsConfig?.content || '');
+            setConfigPath(guardrailsConfig?.path || '');
+            setConfigExists(!!guardrailsConfig?.exists);
+            setSupportedScenarios(Array.isArray(guardrailsConfig?.supported_scenarios) ? guardrailsConfig.supported_scenarios : []);
+            setHistoryEntries(Array.isArray(guardrailsHistory?.data) ? guardrailsHistory.data : []);
             setLoadError(null);
             if (showReloadMessage) {
                 setActionMessage({ type: 'success', text: 'Guardrails config reloaded.' });
@@ -56,7 +83,12 @@ const GuardrailsPage = () => {
         } catch (error: any) {
             console.error('Failed to load guardrails config:', error);
             setPolicies([]);
+            setGroups([]);
             setConfigContent('');
+            setConfigPath('');
+            setConfigExists(false);
+            setSupportedScenarios([]);
+            setHistoryEntries([]);
             setLoadError('Failed to load guardrails config');
             if (showReloadMessage) {
                 setActionMessage({ type: 'error', text: error?.message || 'Failed to reload guardrails config' });
@@ -74,9 +106,29 @@ const GuardrailsPage = () => {
         const totalCount = policies.length;
         const enabled = policies.filter((item) => item?.enabled !== false).length;
         const blocking = policies.filter((item) => item?.verdict === 'block').length;
-        const operationPolicies = policies.filter((item) => item?.kind === 'operation').length;
-        return { total: totalCount, enabled, blocking, operationPolicies };
-    }, [policies]);
+        const resourceAccess = policies.filter((item) => item?.kind === 'resource_access').length;
+        const commandExecution = policies.filter((item) => item?.kind === 'command_execution').length;
+        const content = policies.filter((item) => item?.kind === 'content').length;
+        const blockedEvents = historyEntries.filter((entry) => entry?.verdict === 'block').length;
+        const toolUseEvents = historyEntries.filter((entry) => entry?.phase === 'tool_use').length;
+        const toolResultEvents = historyEntries.filter((entry) => entry?.phase === 'tool_result').length;
+        const latestEvent = historyEntries.length > 0 ? historyEntries[0] : null;
+        return {
+            total: totalCount,
+            enabled,
+            blocking,
+            groups: groups.length,
+            scenarios: supportedScenarios.length,
+            resourceAccess,
+            commandExecution,
+            content,
+            historyCount: historyEntries.length,
+            blockedEvents,
+            toolUseEvents,
+            toolResultEvents,
+            latestEvent,
+        };
+    }, [groups.length, historyEntries, policies, supportedScenarios.length]);
 
     const handleReload = async () => {
         try {
@@ -182,7 +234,7 @@ const GuardrailsPage = () => {
                             <Button variant="contained" startIcon={<Rule />} onClick={() => navigate('/guardrails/rules')}>
                                 Manage Policies
                             </Button>
-                            <Button variant="outlined" startIcon={<Security />} onClick={() => navigate('/guardrails/market')}>
+                            <Button variant="outlined" startIcon={<Storefront />} onClick={() => navigate('/guardrails/market')}>
                                 Browse Builtins
                             </Button>
                             <Button variant="outlined" startIcon={<HistoryIcon />} onClick={() => navigate('/guardrails/history')}>
@@ -312,15 +364,136 @@ const GuardrailsPage = () => {
                                     </Box>
                                     <Box>
                                         <Typography variant="h4" sx={{ fontWeight: 600 }}>
-                                            {stats.operationPolicies}
+                                            {stats.groups}
                                         </Typography>
                                         <Typography variant="body2" color="text.secondary">
-                                            Operation Policies
+                                            Policy Groups
                                         </Typography>
                                     </Box>
                                 </Stack>
                             </CardContent>
                         </Card>
+                    </Grid>
+                </Grid>
+
+                <Grid container spacing={2}>
+                    <Grid size={{ xs: 12, lg: 6 }}>
+                        <UnifiedCard title="Policy Breakdown" size="full">
+                            <Stack spacing={1.5}>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                    <Stack direction="row" spacing={1.25} alignItems="center">
+                                        <FolderOpen color="primary" fontSize="small" />
+                                        <Typography variant="body2">Filesystem Access</Typography>
+                                    </Stack>
+                                    <Chip size="small" label={`${stats.resourceAccess}`} />
+                                </Stack>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                    <Stack direction="row" spacing={1.25} alignItems="center">
+                                        <Terminal color="primary" fontSize="small" />
+                                        <Typography variant="body2">Command Execution</Typography>
+                                    </Stack>
+                                    <Chip size="small" label={`${stats.commandExecution}`} />
+                                </Stack>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                    <Stack direction="row" spacing={1.25} alignItems="center">
+                                        <ArticleOutlined color="primary" fontSize="small" />
+                                        <Typography variant="body2">Sensitive Output Protection</Typography>
+                                    </Stack>
+                                    <Chip size="small" label={`${stats.content}`} />
+                                </Stack>
+                            </Stack>
+                        </UnifiedCard>
+                    </Grid>
+                    <Grid size={{ xs: 12, lg: 6 }}>
+                        <UnifiedCard title="Config & Coverage" size="full">
+                            <Stack spacing={1.5}>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                    <Typography variant="body2" color="text.secondary">
+                                        Config file
+                                    </Typography>
+                                    <Chip
+                                        size="small"
+                                        color={configExists ? 'success' : 'default'}
+                                        label={configExists ? 'Detected' : 'Not created'}
+                                        variant={configExists ? 'filled' : 'outlined'}
+                                    />
+                                </Stack>
+                                <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+                                    {configPath || 'No config path available'}
+                                </Typography>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                    <Stack direction="row" spacing={1.25} alignItems="center">
+                                        <Hub color="primary" fontSize="small" />
+                                        <Typography variant="body2">Supported scenarios</Typography>
+                                    </Stack>
+                                    <Chip size="small" label={`${stats.scenarios}`} />
+                                </Stack>
+                                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                                    {supportedScenarios.length > 0 ? (
+                                        supportedScenarios.map((scenario) => (
+                                            <Chip key={scenario} size="small" label={scenario} variant="outlined" />
+                                        ))
+                                    ) : (
+                                        <Typography variant="body2" color="text.secondary">
+                                            No scenario coverage reported.
+                                        </Typography>
+                                    )}
+                                </Stack>
+                            </Stack>
+                        </UnifiedCard>
+                    </Grid>
+                </Grid>
+
+                <Grid container spacing={2}>
+                    <Grid size={{ xs: 12, lg: 6 }}>
+                        <UnifiedCard title="Interception Summary" size="full">
+                            <Stack spacing={1.5}>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                    <Typography variant="body2">Recorded events</Typography>
+                                    <Chip size="small" label={`${stats.historyCount}`} />
+                                </Stack>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                    <Typography variant="body2">Blocked events</Typography>
+                                    <Chip size="small" color="error" label={`${stats.blockedEvents}`} />
+                                </Stack>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                    <Typography variant="body2">Tool-use interceptions</Typography>
+                                    <Chip size="small" label={`${stats.toolUseEvents}`} variant="outlined" />
+                                </Stack>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                    <Typography variant="body2">Tool-result interceptions</Typography>
+                                    <Chip size="small" label={`${stats.toolResultEvents}`} variant="outlined" />
+                                </Stack>
+                            </Stack>
+                        </UnifiedCard>
+                    </Grid>
+                    <Grid size={{ xs: 12, lg: 6 }}>
+                        <UnifiedCard title="Latest Interception" size="full">
+                            {stats.latestEvent ? (
+                                <Stack spacing={1.5}>
+                                    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                                        <Chip size="small" label={stats.latestEvent.verdict} color={stats.latestEvent.verdict === 'block' ? 'error' : 'default'} />
+                                        <Chip size="small" label={`phase: ${stats.latestEvent.phase || 'unknown'}`} variant="outlined" />
+                                        <Chip size="small" label={`scenario: ${stats.latestEvent.scenario || 'unknown'}`} variant="outlined" />
+                                    </Stack>
+                                    <Typography variant="body2" color="text.secondary">
+                                        {stats.latestEvent.time ? new Date(stats.latestEvent.time).toLocaleString() : 'Unknown time'}
+                                    </Typography>
+                                    <Button variant="outlined" startIcon={<HistoryIcon />} onClick={() => navigate('/guardrails/history')}>
+                                        Open Full History
+                                    </Button>
+                                </Stack>
+                            ) : (
+                                <Stack spacing={1.5}>
+                                    <Typography variant="body2" color="text.secondary">
+                                        No Guardrails interceptions have been recorded yet.
+                                    </Typography>
+                                    <Button variant="outlined" startIcon={<HistoryIcon />} onClick={() => navigate('/guardrails/history')}>
+                                        Open Full History
+                                    </Button>
+                                </Stack>
+                            )}
+                        </UnifiedCard>
                     </Grid>
                 </Grid>
 

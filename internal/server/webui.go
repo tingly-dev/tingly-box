@@ -629,6 +629,10 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithDescription("Get guardrails config content and parsed config"),
 		swagger.WithTags("guardrails"),
 	)
+	apiV1.GET("/guardrails/builtins", s.GetGuardrailsBuiltins,
+		swagger.WithDescription("Get curated builtin guardrails policy templates"),
+		swagger.WithTags("guardrails"),
+	)
 	apiV1.PUT("/guardrails/config", s.UpdateGuardrailsConfig,
 		swagger.WithDescription("Update guardrails config and reload engine"),
 		swagger.WithTags("guardrails"),

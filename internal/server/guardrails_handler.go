@@ -39,6 +39,10 @@ type guardrailsReloadResponse struct {
 	RuleCount int    `json:"rule_count"`
 }
 
+type guardrailsBuiltinsResponse struct {
+	Templates []guardrails.BuiltinPolicyTemplate `json:"templates"`
+}
+
 type guardrailsPolicyUpdateRequest struct {
 	ID      *string                 `json:"id,omitempty"`
 	Name    *string                 `json:"name,omitempty"`
@@ -140,6 +144,16 @@ func countGuardrailsPolicies(cfg guardrails.Config) int {
 	return len(cfg.Policies)
 }
 
+// GetGuardrailsBuiltins returns curated builtin policy templates for the Guardrails UI.
+func (s *Server) GetGuardrailsBuiltins(c *gin.Context) {
+	templates, err := guardrails.LoadBuiltinPolicyTemplates()
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	c.JSON(200, guardrailsBuiltinsResponse{Templates: templates})
+}
+
 // GetGuardrailsConfig returns the current guardrails config file content and parsed config.
 func (s *Server) GetGuardrailsConfig(c *gin.Context) {
 	if s.config == nil || s.config.ConfigDir == "" {
@@ -150,7 +164,7 @@ func (s *Server) GetGuardrailsConfig(c *gin.Context) {
 	path, err := findGuardrailsConfig(s.config.ConfigDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) || strings.Contains(err.Error(), "no guardrails config") {
-			defaultPath := filepath.Join(s.config.ConfigDir, "guardrails.yaml")
+			defaultPath := getGuardrailsConfigPath(s.config.ConfigDir)
 			c.JSON(200, guardrailsConfigResponse{
 				Path:               defaultPath,
 				Exists:             false,
@@ -856,7 +870,7 @@ func ensureGuardrailsPath(configDir string) (string, error) {
 		return path, nil
 	}
 	if strings.Contains(err.Error(), "no guardrails config") || errors.Is(err, os.ErrNotExist) {
-		return filepath.Join(configDir, "guardrails.yaml"), nil
+		return getGuardrailsConfigPath(configDir), nil
 	}
 	return "", err
 }
