@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // ProbeV2TargetType defines the target type for probe
@@ -153,5 +154,14 @@ func getProbeMessage(mode ProbeV2TestMode, customMsg string) string {
 
 // getScenarioEndpoint returns the API endpoint for a given scenario
 func getScenarioEndpoint(scenario string) (endpoint string, apiStyle protocol.APIStyle) {
-	return fmt.Sprintf("/tingly/%s", scenario), apiStyle
+	endpoint = fmt.Sprintf("/tingly/%s", scenario)
+	switch typ.RuleScenario(scenario) {
+	case typ.ScenarioAnthropic:
+		fallthrough
+	case typ.ScenarioOpenCode, typ.ScenarioClaudeCode:
+		apiStyle = protocol.APIStyleAnthropic
+	default:
+		apiStyle = protocol.APIStyleOpenAI
+	}
+	return endpoint, apiStyle
 }
