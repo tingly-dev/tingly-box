@@ -7,27 +7,27 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// ProbeV2TargetType defines the target type for probe
-type ProbeV2TargetType string
+// ProbeTarget defines the target type for probe
+type ProbeTarget string
 
 const (
-	ProbeV2TargetRule     ProbeV2TargetType = "rule"
-	ProbeV2TargetProvider ProbeV2TargetType = "provider"
+	ProbeV2TargetRule     ProbeTarget = "rule"
+	ProbeV2TargetProvider ProbeTarget = "provider"
 )
 
-// ProbeV2TestMode defines the test mode
-type ProbeV2TestMode string
+// ProbeMode defines the test mode
+type ProbeMode string
 
 const (
-	ProbeV2ModeSimple    ProbeV2TestMode = "simple"
-	ProbeV2ModeStreaming ProbeV2TestMode = "streaming"
-	ProbeV2ModeTool      ProbeV2TestMode = "tool"
+	ProbeV2ModeSimple    ProbeMode = "simple"
+	ProbeV2ModeStreaming ProbeMode = "streaming"
+	ProbeV2ModeTool      ProbeMode = "tool"
 )
 
 // ProbeV2Request represents a Probe V3 request
 type ProbeV2Request struct {
 	// Target type: rule or provider
-	TargetType ProbeV2TargetType `json:"target_type" binding:"required"`
+	TargetType ProbeTarget `json:"target_type" binding:"required"`
 
 	// Rule test (required when target_type is rule)
 	Scenario string `json:"scenario,omitempty" example:"anthropic"`
@@ -38,7 +38,7 @@ type ProbeV2Request struct {
 	Model        string `json:"model,omitempty" binding:"required_if=TargetType provider"`
 
 	// Test mode
-	TestMode ProbeV2TestMode `json:"test_mode" binding:"required"`
+	TestMode ProbeMode `json:"test_mode" binding:"required"`
 
 	// Optional custom message (overrides preset)
 	Message string `json:"message,omitempty"`
@@ -139,7 +139,7 @@ func (e *ValidationError) Error() string {
 }
 
 // getProbeMessage returns the probe message based on test mode
-func getProbeMessage(mode ProbeV2TestMode, customMsg string) string {
+func getProbeMessage(mode ProbeMode, customMsg string) string {
 	if customMsg != "" {
 		return customMsg
 	}

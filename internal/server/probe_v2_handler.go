@@ -42,19 +42,19 @@ func (s *Server) HandleProbeV2(c *gin.Context) {
 	// Route to appropriate handler based on test mode
 	switch req.TestMode {
 	case ProbeV2ModeSimple:
-		s.handleProbeV2Simple(c, &req)
+		s.handleProbe(c, &req)
 	case ProbeV2ModeStreaming, ProbeV2ModeTool:
-		s.handleProbeV2Streaming(c, &req)
+		s.handleProbeStream(c, &req)
 	}
 }
 
-// handleProbeV2Simple handles simple (non-streaming) probe requests
-func (s *Server) handleProbeV2Simple(c *gin.Context, req *ProbeV2Request) {
+// handleProbe handles simple (non-streaming) probe requests
+func (s *Server) handleProbe(c *gin.Context, req *ProbeV2Request) {
 	ctx := c.Request.Context()
 	startTime := time.Now()
 
 	// Both rule and provider probes use SDK
-	data, err := s.probeV2SDK(ctx, req)
+	data, err := s.probe(ctx, req)
 
 	if err != nil {
 		c.JSON(http.StatusOK, ProbeV2Response{
@@ -75,13 +75,13 @@ func (s *Server) handleProbeV2Simple(c *gin.Context, req *ProbeV2Request) {
 	})
 }
 
-// handleProbeV2Streaming handles streaming probe requests
-func (s *Server) handleProbeV2Streaming(c *gin.Context, req *ProbeV2Request) {
+// handleProbeStream handles streaming probe requests
+func (s *Server) handleProbeStream(c *gin.Context, req *ProbeV2Request) {
 	ctx := c.Request.Context()
 	startTime := time.Now()
 
 	// Both rule and provider probes use SDK
-	data, err := s.probeV2SDKStreaming(ctx, req)
+	data, err := s.probeStream(ctx, req)
 
 	if err != nil {
 		c.JSON(http.StatusOK, ProbeV2Response{
@@ -102,8 +102,8 @@ func (s *Server) handleProbeV2Streaming(c *gin.Context, req *ProbeV2Request) {
 	})
 }
 
-// probeV2SDK performs a probe using SDK for both rule and provider targets
-func (s *Server) probeV2SDK(ctx context.Context, req *ProbeV2Request) (*ProbeV2Data, error) {
+// probe performs a probe using SDK for both rule and provider targets
+func (s *Server) probe(ctx context.Context, req *ProbeV2Request) (*ProbeV2Data, error) {
 	provider, model, err := s.resolveTargetToProviderModel(ctx, req)
 	if err != nil {
 		return nil, err
@@ -113,15 +113,15 @@ func (s *Server) probeV2SDK(ctx context.Context, req *ProbeV2Request) (*ProbeV2D
 	return s.probeProviderWithSDK(ctx, provider, model, message, req.TestMode)
 }
 
-// probeV2SDKStreaming performs a streaming probe using SDK for both rule and provider targets
-func (s *Server) probeV2SDKStreaming(ctx context.Context, req *ProbeV2Request) (*ProbeV2Data, error) {
+// probeStream performs a streaming probe using SDK for both rule and provider targets
+func (s *Server) probeStream(ctx context.Context, req *ProbeV2Request) (*ProbeV2Data, error) {
 	provider, model, err := s.resolveTargetToProviderModel(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
 	message := getProbeMessage(req.TestMode, req.Message)
-	return s.probeProviderWithSDKStreaming(ctx, provider, model, message, req.TestMode)
+	return s.probeProviderStream(ctx, provider, model, message, req.TestMode)
 }
 
 // resolveTargetToProviderModel resolves a probe request (rule or provider) to a provider and model
