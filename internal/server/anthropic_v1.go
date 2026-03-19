@@ -21,11 +21,10 @@ import (
 )
 
 // AnthropicMessagesV1 implements standard v1 messages API
-func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, provider *typ.Provider, actualModel string, rule *typ.Rule) {
+func (s *Server) AnthropicMessagesV1(c *gin.Context, req *protocol.AnthropicMessagesRequest, proxyModel string, provider *typ.Provider, actualModel string, rule *typ.Rule) {
 	// Get or create recorder for dual-stage recording (when V2 flag is enabled)
-	var recorder *ProtocolRecorder
 	scenarioType := rule.GetScenario()
-	recorder = s.GetOrCreateScenarioRecorderV2(c, string(scenarioType), provider, actualModel, s.recordMode)
+	recorder := s.GetOrCreateScenarioRecorderV2(c, string(scenarioType), provider, actualModel, s.recordMode)
 
 	// Check if streaming is requested
 	isStreaming := req.Stream
@@ -136,7 +135,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 				s.trackUsageFromContext(c, 0, 0, err)
 				stream.SendStreamingError(c, err)
 				if recorder != nil {
-					recorder.RecordError(err)
+					recorder.RecordError(err, provider, actualModel, s.recordMode)
 				}
 				return
 			}
@@ -154,7 +153,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 				s.trackUsageFromContext(c, 0, 0, err)
 				stream.SendForwardingError(c, err)
 				if recorder != nil {
-					recorder.RecordError(err)
+					recorder.RecordError(err, provider, actualModel, s.recordMode)
 				}
 				return
 			}
@@ -202,7 +201,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			if err != nil {
 				stream.SendStreamingError(c, err)
 				if recorder != nil {
-					recorder.RecordError(err)
+					recorder.RecordError(err, provider, actualModel, s.recordMode)
 				}
 				return
 			}
@@ -213,7 +212,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 				s.trackUsageWithTokenUsage(c, usage, err)
 				stream.SendInternalError(c, err.Error())
 				if recorder != nil {
-					recorder.RecordError(err)
+					recorder.RecordError(err, provider, actualModel, s.recordMode)
 				}
 				return
 			}
@@ -229,7 +228,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			if err != nil {
 				stream.SendForwardingError(c, err)
 				if recorder != nil {
-					recorder.RecordError(err)
+					recorder.RecordError(err, provider, actualModel, s.recordMode)
 				}
 				return
 			}
@@ -290,11 +289,11 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			logrus.Debugf("[AnthropicV1] Using Transform Chain for Responses API for model=%s", actualModel)
 
 			// Build transform chain with recording support
-			chain, err := s.BuildTransformChain(c, transform.TargetAPIStyleOpenAIResponses, provider.APIBase, nil, recorder)
+chain, err := s.BuildTransformChain(c, transform.TargetAPIStyleOpenAIResponses, provider.APIBase, nil, isStreaming, recorder)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				if recorder != nil {
-					recorder.RecordError(err)
+					recorder.RecordError(err, provider, actualModel, s.recordMode)
 				}
 				return
 			}
@@ -318,11 +317,8 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				if recorder != nil {
-					recorder.RecordError(err)
-				}
-				if recorder != nil {
 					recorder.SetTransformSteps(finalCtx.TransformSteps)
-					recorder.RecordError(err)
+					recorder.RecordError(err, provider, actualModel, s.recordMode)
 				}
 				return
 			}
@@ -345,11 +341,11 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		}
 
 		// Build transform chain with recording support
-		chain, err := s.BuildTransformChain(c, transform.TargetAPIStyleOpenAIChat, provider.APIBase, nil, recorder)
+		chain, err := s.BuildTransformChain(c, transform.TargetAPIStyleOpenAIChat, provider.APIBase, nil, isStreaming, recorder)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			if recorder != nil {
-				recorder.RecordError(err)
+				recorder.RecordError(err, provider, actualModel, s.recordMode)
 			}
 			return
 		}
@@ -373,11 +369,8 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			if recorder != nil {
-				recorder.RecordError(err)
-			}
-			if recorder != nil {
 				recorder.SetTransformSteps(finalCtx.TransformSteps)
-				recorder.RecordError(err)
+				recorder.RecordError(err, provider, actualModel, s.recordMode)
 			}
 			return
 		}
@@ -407,7 +400,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			if err != nil {
 				stream.SendStreamingError(c, err)
 				if recorder != nil {
-					recorder.RecordError(err)
+					recorder.RecordError(err, provider, actualModel, s.recordMode)
 				}
 				return
 			}
@@ -418,7 +411,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 				s.trackUsageWithTokenUsage(c, usage, err)
 				stream.SendInternalError(c, err.Error())
 				if recorder != nil {
-					recorder.RecordError(err)
+					recorder.RecordError(err, provider, actualModel, s.recordMode)
 				}
 				return
 			}
@@ -434,7 +427,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			if err != nil {
 				stream.SendForwardingError(c, err)
 				if recorder != nil {
-					recorder.RecordError(err)
+					recorder.RecordError(err, provider, actualModel, s.recordMode)
 				}
 				return
 			}
@@ -466,7 +459,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	default:
 		c.JSON(http.StatusBadRequest, "tingly-box: invalid api style")
 		if recorder != nil {
-			recorder.RecordError(fmt.Errorf("invalid api style: %s", apiStyle))
+			recorder.RecordError(fmt.Errorf("invalid api style: %s", apiStyle), provider, actualModel, s.recordMode)
 		}
 	}
 }
@@ -495,7 +488,7 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 
 // handleAnthropicV1ViaResponsesAPINonStreaming handles non-streaming Responses API request for v1
 // This converts Anthropic v1 request directly to Responses API format, calls the API, and converts back to v1
-func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
+func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, req *protocol.AnthropicMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
 	// Get scenario recorder if exists
 	var recorder *ScenarioRecorder
 	if r, exists := c.Get("scenario_recorder"); exists {
@@ -519,7 +512,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, re
 		s.trackUsageFromContext(c, 0, 0, err)
 		stream.SendForwardingError(c, err)
 		if recorder != nil {
-			recorder.RecordError(err)
+			recorder.RecordError(err, provider, actualModel, s.recordMode)
 		}
 		return
 	}
@@ -554,7 +547,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, re
 
 // handleAnthropicV1ViaResponsesAPIStreaming handles streaming Responses API request for v1
 // This converts Anthropic v1 request directly to Responses API format, calls the API, and streams back in v1 format
-func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
+func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req *protocol.AnthropicMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
 	// Get scenario recorder and set up stream recorder
 	var recorder *ProtocolRecorder
 	if r, exists := c.Get("scenario_recorder"); exists {

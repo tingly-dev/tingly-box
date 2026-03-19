@@ -7,9 +7,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, target transform.TargetAPIStyle, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
+func (s *Server) transformAnthropicBeta(c *gin.Context, req *protocol.AnthropicBetaMessagesRequest, target transform.TargetAPIStyle, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, actualModel string) (*transform.TransformContext, error) {
 	// Build transform chain with recording support
-	chain, err := s.BuildTransformChain(c, target, provider.APIBase, nil, protocolRecorder)
+	chain, err := s.BuildTransformChain(c, target, provider.APIBase, nil, isStreaming, protocolRecorder)
 	if err != nil {
 		return nil, err
 	}

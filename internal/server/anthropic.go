@@ -69,7 +69,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 	if err != nil {
 		// Record error if recording is enabled
 		if recorder != nil {
-			recorder.RecordError(err)
+			recorder.RecordError(err, nil, "", s.recordMode)
 		}
 	} else {
 		// Store the body back for parsing
@@ -91,7 +91,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 		if err := json.Unmarshal(bodyBytes, &betaMessages); err != nil {
 			// Record error if recording is enabled
 			if recorder != nil {
-				recorder.RecordError(err)
+				recorder.RecordError(err, nil, "", s.recordMode)
 			}
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
@@ -108,7 +108,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 		if err := json.Unmarshal(bodyBytes, &messages); err != nil {
 			// Record error if recording is enabled
 			if recorder != nil {
-				recorder.RecordError(err)
+				recorder.RecordError(err, nil, "", s.recordMode)
 			}
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
@@ -138,7 +138,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 	if err != nil {
 		// Record error if recording is enabled
 		if recorder != nil {
-			recorder.RecordError(nil)
+			recorder.RecordError(err, nil, "", s.recordMode)
 		}
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -168,7 +168,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 			tf.HandleV1Beta(&betaMessages.BetaMessageNewParams)
 			logrus.Infoln("smart compact triggered")
 		}
-		s.AnthropicMessagesV1Beta(c, betaMessages, requestModel, provider, actualModel, rule)
+		s.AnthropicMessagesV1Beta(c, &betaMessages, requestModel, provider, actualModel, rule)
 
 	} else {
 
@@ -178,7 +178,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 			tf.HandleV1(&messages.MessageNewParams)
 			logrus.Infoln("smart compact triggered")
 		}
-		s.AnthropicMessagesV1(c, messages, requestModel, provider, actualModel, rule)
+		s.AnthropicMessagesV1(c, &messages, requestModel, provider, actualModel, rule)
 	}
 }
 

@@ -139,12 +139,15 @@ func (sr *ProtocolRecorder) Record() {
 }
 
 // RecordError records an error for V2 entries
-func (sr *ProtocolRecorder) RecordError(err error) {
+func (sr *ProtocolRecorder) RecordError(err error, provider *typ.Provider, actualModel string, recordMode obs.RecordMode) {
 	if sr == nil || sr.sink == nil || sr.mode == "" {
 		return
 	}
 
-	model := sr.model
+	model := actualModel
+	if model == "" {
+		model = sr.model
+	}
 
 	// Get model from original request if not provided
 	if model == "" && sr.originalRequest != nil && sr.originalRequest.Body != nil {
@@ -153,9 +156,19 @@ func (sr *ProtocolRecorder) RecordError(err error) {
 		}
 	}
 
+	providerName := sr.providerName
+	if providerName == "" && provider != nil {
+		providerName = provider.Name
+	}
+
+	mode := recordMode
+	if mode == "" {
+		mode = sr.mode
+	}
+
 	entry := &obs.RecordEntryV2{
 		Timestamp:  time.Now().UTC().Format(time.RFC3339),
-		Provider:   sr.providerName,
+		Provider:   providerName,
 		Scenario:   sr.scenario,
 		Model:      model,
 		DurationMs: time.Since(sr.startTime).Milliseconds(),
@@ -163,7 +176,7 @@ func (sr *ProtocolRecorder) RecordError(err error) {
 	}
 
 	// Filter based on existing record mode
-	switch sr.mode {
+	switch mode {
 	case obs.RecordModeAll, obs.RecordModeScenario:
 		entry.OriginalRequest = sr.originalRequest
 		entry.TransformedRequest = sr.transformedRequest
