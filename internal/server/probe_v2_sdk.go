@@ -8,7 +8,6 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
-
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -62,7 +61,10 @@ func (b *SDKProbeBuilder) buildOpenAIChatRequest(model, message string, testMode
 	}
 
 	if testMode == ProbeV2ModeTool {
-
+		params.Tools = GetProbeToolsOpenAI()
+		params.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{
+			OfAuto: openai.Opt("auto"),
+		}
 	}
 
 	return params
