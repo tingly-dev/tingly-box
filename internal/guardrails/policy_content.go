@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-// RuleTypeTextMatch is a rule that matches text patterns.
-const RuleTypeTextMatch RuleType = "text_match"
+// PolicyTypeContent identifies content policies backed by pattern matching.
+const PolicyTypeContent PolicyType = "text_match"
 
 // MatchMode determines how patterns are combined.
 type MatchMode string
@@ -30,8 +30,8 @@ type TextMatchConfig struct {
 	Reason        string        `json:"reason,omitempty" yaml:"reason,omitempty"`
 }
 
-// TextMatchRule implements a rule-based matcher.
-type TextMatchRule struct {
+// ContentPolicy evaluates content policies using literal or regex pattern matching.
+type ContentPolicy struct {
 	id       string
 	name     string
 	enabled  bool
@@ -41,21 +41,8 @@ type TextMatchRule struct {
 	regex    []*regexp.Regexp
 }
 
-func init() {
-	RegisterRule(RuleTypeTextMatch, newTextMatchFactory)
-}
-
-func newTextMatchFactory(cfg RuleConfig, _ Dependencies) (Rule, error) {
-	return NewTextMatchRuleFromConfig(cfg)
-}
-
-// NewTextMatchRuleFromConfig creates a text match rule from config.
-func NewTextMatchRuleFromConfig(cfg RuleConfig) (*TextMatchRule, error) {
-	params := TextMatchConfig{}
-	if err := DecodeParams(cfg.Params, &params); err != nil {
-		return nil, fmt.Errorf("decode params: %w", err)
-	}
-
+// NewContentPolicy creates a content policy from typed policy data.
+func NewContentPolicy(id, name string, enabled bool, scope Scope, params TextMatchConfig) (*ContentPolicy, error) {
 	if len(params.Patterns) == 0 {
 		return nil, fmt.Errorf("patterns cannot be empty")
 	}
@@ -67,69 +54,69 @@ func NewTextMatchRuleFromConfig(cfg RuleConfig) (*TextMatchRule, error) {
 		params.Verdict = VerdictBlock
 	}
 
-	rule := &TextMatchRule{
-		id:      cfg.ID,
-		name:    cfg.Name,
-		enabled: cfg.Enabled,
-		scope:   cfg.Scope,
+	policy := &ContentPolicy{
+		id:      id,
+		name:    name,
+		enabled: enabled,
+		scope:   scope,
 		config:  params,
 	}
 
 	if params.UseRegex {
-		rule.regex = make([]*regexp.Regexp, 0, len(params.Patterns))
+		policy.regex = make([]*regexp.Regexp, 0, len(params.Patterns))
 		for _, pattern := range params.Patterns {
 			re, err := regexp.Compile(pattern)
 			if err != nil {
 				return nil, fmt.Errorf("invalid regex %q: %w", pattern, err)
 			}
-			rule.regex = append(rule.regex, re)
+			policy.regex = append(policy.regex, re)
 		}
 	} else {
-		rule.patterns = make([]string, 0, len(params.Patterns))
+		policy.patterns = make([]string, 0, len(params.Patterns))
 		for _, pattern := range params.Patterns {
-			rule.patterns = append(rule.patterns, pattern)
+			policy.patterns = append(policy.patterns, pattern)
 		}
 	}
 
-	return rule, nil
+	return policy, nil
 }
 
-// ID returns the rule ID.
-func (r *TextMatchRule) ID() string {
+// ID returns the policy ID.
+func (r *ContentPolicy) ID() string {
 	return r.id
 }
 
-// Name returns the rule name.
-func (r *TextMatchRule) Name() string {
+// Name returns the policy name.
+func (r *ContentPolicy) Name() string {
 	return r.name
 }
 
-// Type returns the rule type.
-func (r *TextMatchRule) Type() RuleType {
-	return RuleTypeTextMatch
+// Type returns the policy type.
+func (r *ContentPolicy) Type() PolicyType {
+	return PolicyTypeContent
 }
 
-// Enabled returns whether the rule is enabled.
-func (r *TextMatchRule) Enabled() bool {
+// Enabled returns whether the policy is enabled.
+func (r *ContentPolicy) Enabled() bool {
 	return r.enabled
 }
 
 // Evaluate matches text against configured patterns.
-func (r *TextMatchRule) Evaluate(_ context.Context, input Input) (RuleResult, error) {
+func (r *ContentPolicy) Evaluate(_ context.Context, input Input) (PolicyResult, error) {
 	if !r.enabled {
-		return RuleResult{Verdict: VerdictAllow}, nil
+		return PolicyResult{Verdict: VerdictAllow}, nil
 	}
 	if !r.scope.Matches(input) {
-		return RuleResult{Verdict: VerdictAllow}, nil
+		return PolicyResult{Verdict: VerdictAllow}, nil
 	}
 
 	if len(r.config.Targets) > 0 && !input.Content.HasAny(r.config.Targets) {
-		return RuleResult{Verdict: VerdictAllow}, nil
+		return PolicyResult{Verdict: VerdictAllow}, nil
 	}
 
 	text := input.Content.CombinedTextFor(r.config.Targets)
 	if text == "" {
-		return RuleResult{Verdict: VerdictAllow}, nil
+		return PolicyResult{Verdict: VerdictAllow}, nil
 	}
 
 	matched := make([]string, 0)
@@ -160,7 +147,7 @@ func (r *TextMatchRule) Evaluate(_ context.Context, input Input) (RuleResult, er
 	}
 
 	if !r.isTriggered(matches, len(r.config.Patterns)) {
-		return RuleResult{Verdict: VerdictAllow}, nil
+		return PolicyResult{Verdict: VerdictAllow}, nil
 	}
 
 	reason := r.config.Reason
@@ -168,12 +155,12 @@ func (r *TextMatchRule) Evaluate(_ context.Context, input Input) (RuleResult, er
 		reason = "matched prohibited content"
 	}
 
-	return RuleResult{
-		RuleID:   r.id,
-		RuleName: r.name,
-		RuleType: r.Type(),
-		Verdict:  r.config.Verdict,
-		Reason:   reason,
+	return PolicyResult{
+		PolicyID:   r.id,
+		PolicyName: r.name,
+		PolicyType: r.Type(),
+		Verdict:    r.config.Verdict,
+		Reason:     reason,
 		Evidence: map[string]interface{}{
 			"matches":          matches,
 			"matched_patterns": matched,
@@ -181,7 +168,7 @@ func (r *TextMatchRule) Evaluate(_ context.Context, input Input) (RuleResult, er
 	}, nil
 }
 
-func (r *TextMatchRule) isTriggered(matches, total int) bool {
+func (r *ContentPolicy) isTriggered(matches, total int) bool {
 	if r.config.MinMatches > 0 {
 		return matches >= r.config.MinMatches
 	}

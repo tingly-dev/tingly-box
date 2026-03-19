@@ -6,39 +6,39 @@ import (
 	"testing"
 )
 
-type staticRule struct {
-	id       string
-	name     string
-	ruleType RuleType
-	result   RuleResult
-	err      error
+type staticEvaluator struct {
+	id         string
+	name       string
+	policyType PolicyType
+	result     PolicyResult
+	err        error
 }
 
-func (r staticRule) ID() string {
+func (r staticEvaluator) ID() string {
 	return r.id
 }
 
-func (r staticRule) Name() string {
+func (r staticEvaluator) Name() string {
 	return r.name
 }
 
-func (r staticRule) Type() RuleType {
-	return r.ruleType
+func (r staticEvaluator) Type() PolicyType {
+	return r.policyType
 }
 
-func (r staticRule) Enabled() bool {
+func (r staticEvaluator) Enabled() bool {
 	return true
 }
 
-func (r staticRule) Evaluate(_ context.Context, _ Input) (RuleResult, error) {
+func (r staticEvaluator) Evaluate(_ context.Context, _ Input) (PolicyResult, error) {
 	return r.result, r.err
 }
 
 func TestEngineAggregatesVerdicts(t *testing.T) {
 	engine := NewEngine(
-		WithRules(
-			staticRule{ruleType: "rule_a", result: RuleResult{Verdict: VerdictReview}},
-			staticRule{ruleType: "rule_b", result: RuleResult{Verdict: VerdictBlock}},
+		WithEvaluators(
+			staticEvaluator{policyType: "policy_a", result: PolicyResult{Verdict: VerdictReview}},
+			staticEvaluator{policyType: "policy_b", result: PolicyResult{Verdict: VerdictBlock}},
 		),
 	)
 
@@ -56,7 +56,7 @@ func TestEngineAggregatesVerdicts(t *testing.T) {
 
 func TestEngineErrorStrategyReview(t *testing.T) {
 	engine := NewEngine(
-		WithRules(staticRule{ruleType: "rule_error", err: errors.New("boom")}),
+		WithEvaluators(staticEvaluator{policyType: "policy_error", err: errors.New("boom")}),
 		WithErrorStrategy(ErrorStrategyReview),
 	)
 

@@ -3,11 +3,10 @@ package guardrails
 import (
 	"context"
 	"errors"
-	"fmt"
 )
 
-// RuleTypeModelJudge delegates verdicts to a judge model.
-const RuleTypeModelJudge RuleType = "model_judge"
+// PolicyTypeJudge identifies judge-backed policies.
+const PolicyTypeJudge PolicyType = "model_judge"
 
 // Judge evaluates input using a model or external service.
 type Judge interface {
@@ -21,7 +20,7 @@ type JudgeResult struct {
 	Evidence map[string]interface{} `json:"evidence,omitempty" yaml:"evidence,omitempty"`
 }
 
-// ModelJudgeConfig configures model-based rules.
+// ModelJudgeConfig configures model-based judge policies.
 type ModelJudgeConfig struct {
 	Model            string        `json:"model,omitempty" yaml:"model,omitempty"`
 	Prompt           string        `json:"prompt,omitempty" yaml:"prompt,omitempty"`
@@ -32,8 +31,8 @@ type ModelJudgeConfig struct {
 	ReasonOnFallback string        `json:"reason_on_fallback,omitempty" yaml:"reason_on_fallback,omitempty"`
 }
 
-// ModelJudgeRule calls a judge to produce a verdict.
-type ModelJudgeRule struct {
+// JudgePolicy evaluates policies by delegating to an external judge.
+type JudgePolicy struct {
 	id      string
 	name    string
 	enabled bool
@@ -42,21 +41,8 @@ type ModelJudgeRule struct {
 	judge   Judge
 }
 
-func init() {
-	RegisterRule(RuleTypeModelJudge, newModelJudgeFactory)
-}
-
-func newModelJudgeFactory(cfg RuleConfig, deps Dependencies) (Rule, error) {
-	return NewModelJudgeRuleFromConfig(cfg, deps.Judge)
-}
-
-// NewModelJudgeRuleFromConfig creates a model judge rule from config.
-func NewModelJudgeRuleFromConfig(cfg RuleConfig, judge Judge) (*ModelJudgeRule, error) {
-	params := ModelJudgeConfig{}
-	if err := DecodeParams(cfg.Params, &params); err != nil {
-		return nil, fmt.Errorf("decode params: %w", err)
-	}
-
+// NewJudgePolicy creates a judge-backed policy from typed policy data.
+func NewJudgePolicy(id, name string, enabled bool, scope Scope, params ModelJudgeConfig, judge Judge) (*JudgePolicy, error) {
 	if params.VerdictOnError == "" {
 		params.VerdictOnError = VerdictReview
 	}
@@ -64,49 +50,49 @@ func NewModelJudgeRuleFromConfig(cfg RuleConfig, judge Judge) (*ModelJudgeRule, 
 		params.VerdictOnRefuse = VerdictReview
 	}
 
-	return &ModelJudgeRule{
-		id:      cfg.ID,
-		name:    cfg.Name,
-		enabled: cfg.Enabled,
-		scope:   cfg.Scope,
+	return &JudgePolicy{
+		id:      id,
+		name:    name,
+		enabled: enabled,
+		scope:   scope,
 		config:  params,
 		judge:   judge,
 	}, nil
 }
 
-// ID returns the rule ID.
-func (r *ModelJudgeRule) ID() string {
+// ID returns the policy ID.
+func (r *JudgePolicy) ID() string {
 	return r.id
 }
 
-// Name returns the rule name.
-func (r *ModelJudgeRule) Name() string {
+// Name returns the policy name.
+func (r *JudgePolicy) Name() string {
 	return r.name
 }
 
-// Type returns the rule type.
-func (r *ModelJudgeRule) Type() RuleType {
-	return RuleTypeModelJudge
+// Type returns the policy type.
+func (r *JudgePolicy) Type() PolicyType {
+	return PolicyTypeJudge
 }
 
-// Enabled returns whether the rule is enabled.
-func (r *ModelJudgeRule) Enabled() bool {
+// Enabled returns whether the policy is enabled.
+func (r *JudgePolicy) Enabled() bool {
 	return r.enabled
 }
 
 // Evaluate calls the judge for a verdict.
-func (r *ModelJudgeRule) Evaluate(ctx context.Context, input Input) (RuleResult, error) {
+func (r *JudgePolicy) Evaluate(ctx context.Context, input Input) (PolicyResult, error) {
 	if !r.enabled {
-		return RuleResult{Verdict: VerdictAllow}, nil
+		return PolicyResult{Verdict: VerdictAllow}, nil
 	}
 	if !r.scope.Matches(input) {
-		return RuleResult{Verdict: VerdictAllow}, nil
+		return PolicyResult{Verdict: VerdictAllow}, nil
 	}
 	if r.judge == nil {
-		return RuleResult{}, errors.New("judge dependency is not configured")
+		return PolicyResult{}, errors.New("judge dependency is not configured")
 	}
 	if len(r.config.Targets) > 0 && !input.Content.HasAny(r.config.Targets) {
-		return RuleResult{Verdict: VerdictAllow}, nil
+		return PolicyResult{Verdict: VerdictAllow}, nil
 	}
 
 	if len(r.config.Targets) > 0 {
@@ -114,7 +100,7 @@ func (r *ModelJudgeRule) Evaluate(ctx context.Context, input Input) (RuleResult,
 	}
 	judgeResult, err := r.judge.Evaluate(ctx, input, r.config)
 	if err != nil {
-		return RuleResult{}, err
+		return PolicyResult{}, err
 	}
 
 	verdict := judgeResult.Verdict
@@ -122,12 +108,12 @@ func (r *ModelJudgeRule) Evaluate(ctx context.Context, input Input) (RuleResult,
 		verdict = VerdictAllow
 	}
 
-	return RuleResult{
-		RuleID:   r.id,
-		RuleName: r.name,
-		RuleType: r.Type(),
-		Verdict:  verdict,
-		Reason:   judgeResult.Reason,
-		Evidence: judgeResult.Evidence,
+	return PolicyResult{
+		PolicyID:   r.id,
+		PolicyName: r.name,
+		PolicyType: r.Type(),
+		Verdict:    verdict,
+		Reason:     judgeResult.Reason,
+		Evidence:   judgeResult.Evidence,
 	}, nil
 }

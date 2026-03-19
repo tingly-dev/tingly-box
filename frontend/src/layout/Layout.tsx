@@ -234,12 +234,12 @@ const Layout = ({ children }: LayoutProps) => {
                     },
                     {
                         path: '/guardrails/rules',
-                        label: 'Rules',
+                        label: 'Policies',
                         icon: <Rule sx={{ fontSize: 20 }} />,
                     },
                     {
                         path: '/guardrails/market',
-                        label: 'Rule Market',
+                        label: 'Builtins',
                         icon: <Storefront sx={{ fontSize: 20 }} />,
                     },
                     {

@@ -1,116 +1,215 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-    Box,
-    Stack,
-    Typography,
-    Chip,
-    Button,
-    Divider,
     Alert,
+    Box,
+    Button,
+    Chip,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    Divider,
+    FormControl,
+    FormControlLabel,
+    FormHelperText,
+    IconButton,
+    InputBase,
+    InputLabel,
     List,
     ListItem,
-    ListItemText,
-    Accordion,
-    AccordionSummary,
-    AccordionDetails,
-    Collapse,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Tooltip,
-    TextField,
-    FormControl,
-    InputLabel,
-    FormHelperText,
-    Select,
     MenuItem,
+    Paper,
+    Select,
+    Stack,
     Switch,
-    FormControlLabel,
-    Checkbox,
-    FormGroup,
-    IconButton,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    Tab,
+    Tabs,
+    TextField,
+    Tooltip,
+    Typography,
 } from '@mui/material';
-import { Rule, ExpandMore, Refresh as RefreshIcon, DeleteOutline } from '@mui/icons-material';
+import {
+    Add,
+    ArticleOutlined,
+    AutoAwesome,
+    Code as CodeIcon,
+    DeleteOutline,
+    LaptopMac,
+    Refresh as RefreshIcon,
+    Rule,
+    Remove,
+    Terminal,
+} from '@mui/icons-material';
+import { Anthropic, Claude, OpenAI } from '@/components/BrandIcons';
+import EmptyStateGuide from '@/components/EmptyStateGuide';
 import PageLayout from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-type GuardrailsRule = {
+type PolicyGroup = {
     id: string;
-    type: string;
-    scope: string;
-    status: string;
-    reason: string;
-    enabled: boolean;
+    name?: string;
+    severity?: string;
+    enabled?: boolean;
+    default_verdict?: string;
+    default_scope?: {
+        scenarios?: string[];
+    };
 };
 
-const defaultDirectionOptions = ['request', 'response'];
-const defaultContentTypeOptions = ['command', 'text', 'messages'];
-const defaultCommandKindOptions = ['shell'];
-const defaultCommandActionOptions = ['read', 'write', 'delete', 'execute', 'transfer', 'redirect'];
+type GuardrailsPolicy = {
+    id: string;
+    name?: string;
+    group?: string;
+    kind: 'resource_access' | 'command_execution' | 'content' | 'operation';
+    enabled?: boolean;
+    scope?: {
+        scenarios?: string[];
+    };
+    match?: {
+        tool_names?: string[];
+        actions?: { include?: string[]; exclude?: string[] };
+        resources?: { type?: string; mode?: string; values?: string[] };
+        terms?: string[];
+        patterns?: string[];
+        pattern_mode?: string;
+        case_sensitive?: boolean;
+    };
+    verdict?: string;
+    reason?: string;
+};
+
+type EditorState = {
+    id: string;
+    name: string;
+    group: string;
+    kind: 'resource_access' | 'command_execution' | 'content' | '';
+    enabled: boolean;
+    verdict: string;
+    scenarios: string[];
+    toolNames: string;
+    actions: string[];
+    commandTerms: string;
+    resources: string;
+    resourceMode: string;
+    patterns: string;
+    patternMode: string;
+    caseSensitive: boolean;
+    reason: string;
+};
+
+type GroupEditorState = {
+    id: string;
+    name: string;
+    enabled: boolean;
+    severity: string;
+    defaultVerdict: string;
+    scenarios: string[];
+};
+
+const resourceAccessActionOptions = [
+    {
+        value: 'read',
+        label: 'Read',
+        description: 'Inspect or list files, directories, and other protected paths.',
+    },
+    {
+        value: 'write',
+        label: 'Write',
+        description: 'Create or modify files, directories, or configuration content.',
+    },
+    {
+        value: 'delete',
+        label: 'Delete',
+        description: 'Remove files, directories, or other protected resources.',
+    },
+    {
+        value: 'network',
+        label: 'Network',
+        description: 'Fetch from or send data to remote endpoints.',
+    },
+] as const;
 
 const GuardrailsRulesPage = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
-    const [rules, setRules] = useState<GuardrailsRule[]>([]);
-    const [rawRules, setRawRules] = useState<any[]>([]);
-    const [supportedScenarios, setSupportedScenarios] = useState<string[]>([]);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-    const [pendingRuleId, setPendingRuleId] = useState<string | null>(null);
+    const [supportedScenarios, setSupportedScenarios] = useState<string[]>([]);
+    const [groups, setGroups] = useState<PolicyGroup[]>([]);
+    const [policies, setPolicies] = useState<GuardrailsPolicy[]>([]);
+    const [pendingPolicyId, setPendingPolicyId] = useState<string | null>(null);
     const [pendingSave, setPendingSave] = useState(false);
-    const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
-    const [isNewRule, setIsNewRule] = useState(false);
+    const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null);
+    const [isNewPolicy, setIsNewPolicy] = useState(false);
     const [editorOpen, setEditorOpen] = useState(false);
     const [editorSnapshot, setEditorSnapshot] = useState('');
     const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
-    const [deleteRuleId, setDeleteRuleId] = useState<string | null>(null);
-    const [editorState, setEditorState] = useState({
+    const [deletePolicyId, setDeletePolicyId] = useState<string | null>(null);
+    const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+    const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+    const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null);
+    const [pendingGroupId, setPendingGroupId] = useState<string | null>(null);
+    const [pendingGroupSave, setPendingGroupSave] = useState(false);
+    const [selectedPolicyTab, setSelectedPolicyTab] = useState<'resource_access' | 'command_execution' | 'content'>(
+        'resource_access'
+    );
+    const [selectedResourceRow, setSelectedResourceRow] = useState(-1);
+    const [selectedCommandTermRow, setSelectedCommandTermRow] = useState(-1);
+    const [selectedPatternRow, setSelectedPatternRow] = useState(-1);
+    const [editorState, setEditorState] = useState<EditorState>({
         id: '',
         name: '',
-        type: 'text_match',
-        verdict: 'block',
+        group: '',
+        kind: '',
         enabled: true,
+        verdict: 'block',
         scenarios: [],
-        directions: defaultDirectionOptions,
-        contentTypes: defaultContentTypeOptions,
-        patterns: '',
-        reason: '',
-        targets: ['command'],
-        kinds: defaultCommandKindOptions,
-        actions: ['read'],
+        toolNames: '',
+        actions: [],
+        commandTerms: '',
         resources: '',
-        resourceMatch: 'prefix',
-        terms: '',
+        resourceMode: 'prefix',
+        patterns: '',
+        patternMode: 'substring',
+        caseSensitive: false,
+        reason: '',
+    });
+    const [groupEditorState, setGroupEditorState] = useState<GroupEditorState>({
+        id: '',
+        name: '',
+        enabled: true,
+        severity: 'medium',
+        defaultVerdict: 'block',
+        scenarios: [],
     });
 
-    const isEditorDirty = useMemo(() => {
-        if (!editorSnapshot) {
-            return false;
+    const splitLines = (value: string) =>
+        value
+            .split('\n')
+            .map((item) => item.trim())
+            .filter(Boolean);
+
+    const textListRows = (value: string) => {
+        const rows = value.split('\n');
+        if (rows.length === 0) {
+            return [''];
         }
-        return JSON.stringify(editorState) !== editorSnapshot;
-    }, [editorState, editorSnapshot]);
+        if (rows.length === 1 && rows[0] === '') {
+            return [''];
+        }
+        return rows;
+    };
 
-    const scenarioOptions = useMemo(() => {
-        return supportedScenarios.filter((value) => value && value !== '_global');
-    }, [supportedScenarios]);
-
-    const directionOptions = useMemo(() => {
-        const fromRules = rawRules.flatMap((rule) => rule?.scope?.directions ?? []);
-        return Array.from(new Set([...defaultDirectionOptions, ...fromRules])).filter(Boolean);
-    }, [rawRules]);
-
-    const contentTypeOptions = useMemo(() => {
-        const fromRules = rawRules.flatMap((rule) => rule?.scope?.content_types ?? []);
-        return Array.from(new Set([...defaultContentTypeOptions, ...fromRules])).filter(Boolean);
-    }, [rawRules]);
-
-    const targetOptions = contentTypeOptions;
-    const commandActionOptions = defaultCommandActionOptions;
-    const commandKindOptions = defaultCommandKindOptions;
+    const joinLines = (values?: string[]) => (Array.isArray(values) ? values.join('\n') : '');
 
     const toggleValue = (values: string[], value: string) => {
         if (values.includes(value)) {
@@ -119,348 +218,322 @@ const GuardrailsRulesPage = () => {
         return [...values, value];
     };
 
-    const splitLines = (value: string) =>
-        value
-            .split('\n')
-            .map((item) => item.trim())
-            .filter(Boolean);
+    const updateTextListValue = (value: string, index: number, nextItem: string) => {
+        const items = textListRows(value);
+        while (items.length <= index) {
+            items.push('');
+        }
+        items[index] = nextItem;
+        return items.join('\n');
+    };
 
-    const buildSuggestedReason = (state: typeof editorState) => {
-        if (state.type === 'command_policy') {
-            const actionPhrases: Record<string, string> = {
-                read: 'read',
-                write: 'modify',
-                delete: 'delete',
-                execute: 'execute',
-                transfer: 'transfer',
-                redirect: 'redirect output from',
-            };
-            const actions = state.actions.length > 0
-                ? state.actions.map((action) => actionPhrases[action] ?? action).join(', ')
-                : 'access';
+    const appendTextListValue = (value: string) => {
+        const items = textListRows(value);
+        items.push('');
+        return items.join('\n');
+    };
+
+    const removeTextListValue = (value: string, index: number) => {
+        const items = textListRows(value);
+        if (index < 0 || index >= items.length) {
+            return value;
+        }
+        items.splice(index, 1);
+        if (items.length === 0) {
+            return '';
+        }
+        return items.join('\n');
+    };
+
+    const isEditorDirty = useMemo(() => {
+        if (!editorSnapshot) {
+            return false;
+        }
+        return JSON.stringify(editorState) !== editorSnapshot;
+    }, [editorState, editorSnapshot]);
+
+    const scenarioOptions = useMemo(() => supportedScenarios.filter(Boolean), [supportedScenarios]);
+    const groupOptions = useMemo(
+        () => groups.map((group) => ({ value: group.id, label: group.name || group.id })),
+        [groups]
+    );
+    const resourceAccessPolicies = useMemo(
+        () => policies.filter((policy) => policy.kind === 'resource_access' || policy.kind === 'operation'),
+        [policies]
+    );
+    const commandExecutionPolicies = useMemo(
+        () => policies.filter((policy) => policy.kind === 'command_execution'),
+        [policies]
+    );
+    const contentPolicies = useMemo(
+        () => policies.filter((policy) => policy.kind === 'content'),
+        [policies]
+    );
+
+    const generatePolicyId = (name: string, kind: EditorState['kind'], currentId?: string) => {
+        const normalizedName = name
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        const prefix = kind ? `${kind}-` : '';
+        const baseId = `${prefix}${normalizedName || 'policy'}`;
+        const existingIds = new Set(
+            policies.map((policy) => policy.id).filter((policyId) => policyId && policyId !== currentId)
+        );
+
+        let candidate = baseId;
+        let suffix = 2;
+        while (existingIds.has(candidate)) {
+            candidate = `${baseId}-${suffix}`;
+            suffix += 1;
+        }
+        return candidate;
+    };
+
+    const generateGroupId = (name: string, currentId?: string) => {
+        const normalizedName = name
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        const baseId = normalizedName || 'group';
+        const existingIds = new Set(groups.map((group) => group.id).filter((groupId) => groupId && groupId !== currentId));
+
+        let candidate = baseId;
+        let suffix = 2;
+        while (existingIds.has(candidate)) {
+            candidate = `${baseId}-${suffix}`;
+            suffix += 1;
+        }
+        return candidate;
+    };
+
+    const applyKindDefaults = (kind: 'resource_access' | 'command_execution' | 'content', current: EditorState): EditorState => {
+        const nextName =
+            current.name && current.name !== 'New Policy'
+                ? current.name
+                : kind === 'resource_access'
+                  ? 'New Resource Access Policy'
+                  : kind === 'command_execution'
+                    ? 'New Command Execution Policy'
+                    : 'New Content Policy';
+
+        return {
+            ...current,
+            kind,
+            name: nextName,
+            id: isNewPolicy ? generatePolicyId(nextName, kind) : current.id,
+            toolNames: kind === 'content' ? '' : current.toolNames || 'bash',
+            actions:
+                kind === 'resource_access'
+                    ? current.actions.length > 0
+                        ? current.actions.filter((action) => action !== 'execute')
+                        : ['read']
+                    : kind === 'command_execution'
+                      ? ['execute']
+                      : [],
+            commandTerms: kind === 'command_execution' ? current.commandTerms : '',
+            patterns: kind === 'content' ? current.patterns : '',
+        };
+    };
+
+    const buildSuggestedReason = (state: EditorState) => {
+        if (state.kind === 'command_execution') {
+            const commandTerms = splitLines(state.commandTerms);
+            if (commandTerms.length > 0) {
+                return `This policy blocks execution of commands matching ${commandTerms.join(', ')}.`;
+            }
+            const resources = splitLines(state.resources);
+            if (resources.length > 0) {
+                return `This policy blocks execution of commands that touch ${resources.join(', ')}.`;
+            }
+            const tools = splitLines(state.toolNames);
+            if (tools.length > 0) {
+                return `This policy blocks execution through ${tools.join(', ')}.`;
+            }
+        }
+        if (state.kind === 'resource_access') {
+            const actions = state.actions.length > 0 ? state.actions.join(', ') : 'access';
             const resources = splitLines(state.resources);
             const resourceLabel = resources.length > 0 ? resources.join(', ') : 'protected resources';
-            return `This rule blocks attempts to ${actions} ${resourceLabel}.`;
+            return `This policy blocks attempts to ${actions} ${resourceLabel}.`;
         }
-        if (state.type === 'text_match') {
-            const patterns = splitLines(state.patterns);
-            if (patterns.length === 0) {
-                return 'This rule blocks prohibited content.';
+        const patterns = splitLines(state.patterns);
+        if (patterns.length === 0) {
+            return 'This policy blocks prohibited content.';
+        }
+        return `This policy blocks content matching ${patterns.slice(0, 2).join(', ')}.`;
+    };
+
+    const buildPolicySummary = (policy: GuardrailsPolicy) => {
+        if (policy.kind === 'command_execution') {
+            const terms = policy.match?.terms?.join(', ') || 'any command';
+            const resources = policy.match?.resources?.values?.join(', ');
+            const toolNames = policy.match?.tool_names?.join(', ') || 'any tool';
+            return resources ? `${toolNames} · execute · ${terms} · ${resources}` : `${toolNames} · execute · ${terms}`;
+        }
+        if (policy.kind === 'resource_access' || policy.kind === 'operation') {
+            const actions = policy.match?.actions?.include?.join(', ') || 'any action';
+            const resources = policy.match?.resources?.values?.join(', ') || 'any resource';
+            const toolNames = policy.match?.tool_names?.join(', ') || 'any tool';
+            return `${toolNames} · ${actions} · ${resources}`;
+        }
+        const patterns = policy.match?.patterns || [];
+        if (patterns.length === 0) {
+            return 'No patterns configured';
+        }
+        return patterns.slice(0, 2).join(', ');
+    };
+
+    const buildPolicyScope = (policy: GuardrailsPolicy) => {
+        const scenarios = policy.scope?.scenarios?.join(', ') || 'all scenarios';
+        return scenarios;
+    };
+
+    const buildGroupSummary = (group: PolicyGroup) => {
+        const severity = group.severity || 'medium';
+        const verdict = group.default_verdict || 'block';
+        const scenarios = group.default_scope?.scenarios?.join(', ') || 'all scenarios';
+        return `${severity} · ${verdict} · ${scenarios}`;
+    };
+
+    // MUI restores focus to the trigger after a dialog closes. Blur it so toolbar buttons
+    // do not keep the white focus overlay after closing policy/group dialogs.
+    const blurActiveElement = () => {
+        const active = document.activeElement;
+        if (active instanceof HTMLElement) {
+            active.blur();
+        }
+    };
+
+    const makeEditorState = (policy?: GuardrailsPolicy): EditorState => {
+        const group = policy?.group || '';
+        const scenarios =
+            policy?.scope?.scenarios && policy.scope.scenarios.length > 0 ? policy.scope.scenarios : scenarioOptions;
+        const nextState: EditorState = {
+            id: policy?.id || '',
+            name: policy?.name || '',
+            group,
+            kind: policy?.kind === 'operation' ? 'resource_access' : policy?.kind || '',
+            enabled: policy?.enabled !== false,
+            verdict: policy?.verdict || 'block',
+            scenarios,
+            toolNames: joinLines(policy?.match?.tool_names),
+            actions: policy?.match?.actions?.include || [],
+            commandTerms: joinLines(policy?.match?.terms),
+            resources: joinLines(policy?.match?.resources?.values),
+            resourceMode: policy?.match?.resources?.mode || 'prefix',
+            patterns: joinLines(policy?.match?.patterns),
+            patternMode: policy?.match?.pattern_mode || 'substring',
+            caseSensitive: !!policy?.match?.case_sensitive,
+            reason: policy?.reason || '',
+        };
+        return nextState;
+    };
+
+    const makeEditorStateFromDraft = (draft: Partial<EditorState>): EditorState => {
+        const baseState = makeEditorState();
+        return {
+            ...baseState,
+            ...draft,
+            id: draft.id || baseState.id,
+            name: draft.name || baseState.name,
+            group: draft.group || '',
+            kind: draft.kind || baseState.kind,
+            enabled: draft.enabled ?? baseState.enabled,
+            verdict: draft.verdict || baseState.verdict,
+            scenarios: draft.scenarios && draft.scenarios.length > 0 ? draft.scenarios : baseState.scenarios,
+            toolNames: draft.toolNames ?? baseState.toolNames,
+            actions: draft.actions ?? baseState.actions,
+            commandTerms: draft.commandTerms ?? baseState.commandTerms,
+            resources: draft.resources ?? baseState.resources,
+            resourceMode: draft.resourceMode || baseState.resourceMode,
+            patterns: draft.patterns ?? baseState.patterns,
+            patternMode: draft.patternMode || baseState.patternMode,
+            caseSensitive: draft.caseSensitive ?? baseState.caseSensitive,
+            reason: draft.reason ?? baseState.reason,
+        };
+    };
+
+    const makeGroupEditorState = (group?: PolicyGroup): GroupEditorState => ({
+        id: group?.id || '',
+        name: group?.name || '',
+        enabled: group?.enabled !== false,
+        severity: group?.severity || 'medium',
+        defaultVerdict: group?.default_verdict || 'block',
+        scenarios:
+            group?.default_scope?.scenarios && group.default_scope.scenarios.length > 0
+                ? group.default_scope.scenarios
+                : scenarioOptions,
+    });
+
+    const loadPolicies = async (silent = false) => {
+        try {
+            if (!silent) {
+                setLoading(true);
             }
-            return `This rule blocks content matching ${patterns.slice(0, 2).join(', ')}.`;
+            const guardrailsConfig = await api.getGuardrailsConfig();
+            const config = guardrailsConfig?.config || {};
+            const scenarios = Array.isArray(guardrailsConfig?.supported_scenarios)
+                ? guardrailsConfig.supported_scenarios.filter((value: string) => value && value !== '_global')
+                : [];
+            setSupportedScenarios(scenarios);
+            setGroups(Array.isArray(config.groups) ? config.groups : []);
+            setPolicies(Array.isArray(config.policies) ? config.policies : []);
+            setLoadError(null);
+        } catch (error) {
+            console.error('Failed to load guardrails config:', error);
+            setGroups([]);
+            setPolicies([]);
+            setSupportedScenarios([]);
+            setLoadError('Failed to load guardrails config');
+        } finally {
+            if (!silent) {
+                setLoading(false);
+            }
         }
-        return 'This guardrails rule was triggered.';
     };
 
     useEffect(() => {
-        const loadFlags = async () => {
-            try {
-                setLoading(true);
-                const guardrailsConfig = await api.getGuardrailsConfig();
-                if (guardrailsConfig?.config?.rules) {
-                    setRules(mapRules(guardrailsConfig.config.rules));
-                    setRawRules(guardrailsConfig.config.rules);
-                } else {
-                    setRules([]);
-                    setRawRules([]);
-                }
-                if (Array.isArray(guardrailsConfig?.supported_scenarios)) {
-                    const scenarios = guardrailsConfig.supported_scenarios
-                        .filter((value: string) => value && value !== '_global');
-                    if (scenarios.length > 0) {
-                        setSupportedScenarios(Array.from(new Set(scenarios)));
-                    }
-                }
-                setLoadError(null);
-            } catch (error) {
-                console.error('Failed to load guardrails flags:', error);
-                setRules([]);
-                setRawRules([]);
-                setSupportedScenarios([]);
-                setLoadError('Failed to load guardrails config');
-            } finally {
-                setLoading(false);
-            }
-        };
-        loadFlags();
+        loadPolicies();
     }, []);
 
     useEffect(() => {
         const params = new URLSearchParams(location.search);
-        const ruleId = params.get('ruleId');
-        if (!ruleId || rawRules.length === 0) {
+        const policyId = params.get('policyId') || params.get('ruleId');
+        if (!policyId || policies.length === 0) {
             return;
         }
-        const targetRule = rules.find((rule) => rule.id === ruleId);
-        if (!targetRule) {
+        const policy = policies.find((item) => item.id === policyId);
+        if (!policy) {
             return;
         }
-        setSelectedRuleId(ruleId);
-        updateEditorFromRule(targetRule);
+        const nextState = makeEditorState(policy);
+        setSelectedPolicyId(policy.id);
+        setIsNewPolicy(false);
+        setEditorOpen(true);
+        setEditorState(nextState);
+        setEditorSnapshot(JSON.stringify(nextState));
         navigate('/guardrails/rules', { replace: true });
-    }, [location.search, rawRules, rules, navigate]);
+    }, [location.search, navigate, policies, scenarioOptions]);
 
-    const mapRules = (rawRules: any[]): GuardrailsRule[] => {
-        return rawRules.map((rule: any) => {
-            const scope = rule.scope || {};
-            const params = rule.params || {};
-            const contentTypes = Array.isArray(scope.content_types) ? scope.content_types.join(', ') : 'all';
-            const directions = Array.isArray(scope.directions) ? scope.directions.join(', ') : 'all';
-            const scenarios = Array.isArray(scope.scenarios) ? scope.scenarios.join(', ') : 'all';
-            const scopeText = `${contentTypes} · ${directions} · ${scenarios}`;
-            const semanticSummary =
-                rule.type === 'command_policy'
-                    ? buildCommandPolicySummary(params)
-                    : (params.reason || 'n/a');
-            return {
-                id: rule.id || 'unknown',
-                type: rule.type || 'unknown',
-                scope: scopeText,
-                status: rule.enabled ? 'Enabled' : 'Disabled',
-                reason: semanticSummary,
-                enabled: !!rule.enabled,
-            };
-        });
-    };
-
-    const buildCommandPolicySummary = (params: any) => {
-        const actions = Array.isArray(params.actions) ? params.actions.join(', ') : 'any action';
-        const resources = Array.isArray(params.resources) && params.resources.length > 0
-            ? params.resources.join(', ')
-            : 'any resource';
-        const matchMode = params.resource_match ? ` (${params.resource_match})` : '';
-        return `${actions} -> ${resources}${matchMode}`;
-    };
-
-    const updateEditorFromRule = (rule: GuardrailsRule) => {
-        const rawRule = rawRules.find((r) => r.id === rule.id) || {};
-        const scope = rawRule.scope || {};
-        const params = rawRule.params || {};
-        const patterns = Array.isArray(params.patterns) ? params.patterns.join('\n') : '';
-        const resources = Array.isArray(params.resources) ? params.resources.join('\n') : '';
-        const terms = Array.isArray(params.terms) ? params.terms.join('\n') : '';
-        const filteredScenarios = Array.isArray(scope.scenarios)
-            ? scope.scenarios.filter((scenario: string) => supportedScenarios.includes(scenario))
-            : [];
-        const nextState = {
-            id: rule.id,
-            name: rawRule.name || rule.id,
-            type: rawRule.type || rule.type || 'text_match',
-            verdict: params.verdict || 'block',
-            enabled: rule.enabled,
-            scenarios: filteredScenarios,
-            directions: Array.isArray(scope.directions) ? scope.directions : [],
-            contentTypes: Array.isArray(scope.content_types) ? scope.content_types : [],
-            targets: Array.isArray(params.targets) ? params.targets : [],
-            patterns,
-            reason: params.reason || rule.reason || '',
-            kinds: Array.isArray(params.kinds) ? params.kinds : ['shell'],
-            actions: Array.isArray(params.actions) ? params.actions : [],
-            resources,
-            resourceMatch: params.resource_match || 'prefix',
-            terms,
-        };
-        setEditorState(nextState);
-        setIsNewRule(false);
-        setEditorOpen(true);
-        setEditorSnapshot(JSON.stringify(nextState));
-    };
-
-    const handleToggleRule = async (ruleId: string, enabled: boolean) => {
-        try {
-            setPendingRuleId(ruleId);
-            const result = await api.updateGuardrailsRule(ruleId, { enabled });
-            if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to update rule' });
-                return;
-            }
-            const guardrailsConfig = await api.getGuardrailsConfig();
-            const nextRules = guardrailsConfig?.config?.rules || [];
-            setRules(nextRules.length ? mapRules(nextRules) : []);
-            setRawRules(nextRules);
-            if (selectedRuleId === ruleId) {
-                const updated = nextRules.find((r: any) => r.id === ruleId);
-                if (updated) {
-                    setEditorState((state) => ({
-                        ...state,
-                        enabled: !!updated.enabled,
-                    }));
-                    setEditorSnapshot((snapshot) => {
-                        if (!snapshot) {
-                            return snapshot;
-                        }
-                        const nextSnapshot = JSON.parse(snapshot);
-                        nextSnapshot.enabled = !!updated.enabled;
-                        return JSON.stringify(nextSnapshot);
-                    });
-                }
-            }
-            setActionMessage({ type: 'success', text: `Rule "${ruleId}" updated.` });
-        } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to update rule' });
-        } finally {
-            setPendingRuleId(null);
-        }
-    };
-
-    const handleSaveRule = async (): Promise<boolean> => {
-        if (!editorState.id) {
-            setActionMessage({ type: 'error', text: 'Rule ID is required.' });
-            return false;
-        }
-        try {
-            setPendingSave(true);
-            const basePayload = {
-                id: editorState.id,
-                name: editorState.name,
-                type: editorState.type,
-                enabled: editorState.enabled,
-                scope: {
-                    scenarios: editorState.scenarios,
-                    directions: editorState.directions,
-                    content_types: editorState.contentTypes,
-                },
-            };
-            const params =
-                editorState.type === 'command_policy'
-                    ? {
-                          kinds: editorState.kinds,
-                          actions: editorState.actions,
-                          resources: splitLines(editorState.resources),
-                          resource_match: editorState.resourceMatch,
-                          terms: splitLines(editorState.terms),
-                          verdict: editorState.verdict,
-                          reason: editorState.reason,
-                      }
-                    : {
-                          patterns: splitLines(editorState.patterns),
-                          verdict: editorState.verdict,
-                          reason: editorState.reason,
-                          targets: editorState.targets,
-                      };
-            const payload = {
-                ...basePayload,
-                params,
-            };
-            const result = isNewRule
-                ? await api.createGuardrailsRule(payload)
-                : await api.updateGuardrailsRule(editorState.id, payload);
-            if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to save rule' });
-                return false;
-            }
-            const guardrailsConfig = await api.getGuardrailsConfig();
-            setRules(guardrailsConfig?.config?.rules ? mapRules(guardrailsConfig.config.rules) : []);
-            setRawRules(guardrailsConfig?.config?.rules || []);
-            setActionMessage({ type: 'success', text: `Rule "${editorState.id}" saved.` });
-            setIsNewRule(false);
-            setEditorSnapshot(JSON.stringify(editorState));
-            return true;
-        } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to save rule' });
-            return false;
-        } finally {
-            setPendingSave(false);
-        }
-    };
-
-    const handleNewRule = () => {
-        setSelectedRuleId(null);
-        setIsNewRule(true);
-        const nextState = {
-            id: 'new-rule',
-            name: 'New Rule',
-            type: 'command_policy',
-            verdict: 'block',
-            enabled: true,
-            scenarios: scenarioOptions,
-            directions: directionOptions,
-            contentTypes: contentTypeOptions,
-            patterns: '',
-            reason: '',
-            targets: ['command'],
-            kinds: commandKindOptions,
-            actions: ['read'],
-            resources: '',
-            resourceMatch: 'prefix',
-            terms: '',
-        };
-        setEditorState(nextState);
-        setEditorOpen(true);
-        setEditorSnapshot(JSON.stringify(nextState));
-    };
-
-    const handleDuplicateRule = async () => {
-        if (!editorState.id) {
-            setActionMessage({ type: 'error', text: 'No rule selected to duplicate.' });
+    useEffect(() => {
+        const draft = (location.state as { newPolicyDraft?: Partial<EditorState> } | null)?.newPolicyDraft;
+        if (!draft) {
             return;
         }
-        const existingIds = new Set(rules.map((rule) => rule.id));
-        const baseId = `${editorState.id}-copy`;
-        let newId = baseId;
-        let suffix = 2;
-        while (existingIds.has(newId)) {
-            newId = `${baseId}-${suffix}`;
-            suffix += 1;
-        }
-        try {
-            setPendingSave(true);
-            const params =
-                editorState.type === 'command_policy'
-                    ? {
-                          kinds: editorState.kinds,
-                          actions: editorState.actions,
-                          resources: splitLines(editorState.resources),
-                          resource_match: editorState.resourceMatch,
-                          terms: splitLines(editorState.terms),
-                          verdict: editorState.verdict,
-                          reason: editorState.reason,
-                      }
-                    : {
-                          patterns: splitLines(editorState.patterns),
-                          verdict: editorState.verdict,
-                          reason: editorState.reason,
-                          targets: editorState.targets,
-                      };
-            const payload = {
-                id: newId,
-                name: `${editorState.name} (copy)`,
-                type: editorState.type,
-                enabled: editorState.enabled,
-                scope: {
-                    scenarios: editorState.scenarios,
-                    directions: editorState.directions,
-                    content_types: editorState.contentTypes,
-                },
-                params,
-            };
-            const result = await api.createGuardrailsRule(payload);
-            if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to duplicate rule' });
-                return;
-            }
-            const guardrailsConfig = await api.getGuardrailsConfig();
-            setRules(guardrailsConfig?.config?.rules ? mapRules(guardrailsConfig.config.rules) : []);
-            setRawRules(guardrailsConfig?.config?.rules || []);
-            setSelectedRuleId(newId);
-            setEditorState((state) => {
-                const nextState = {
-                    ...state,
-                    id: newId,
-                    name: `${state.name} (copy)`,
-                };
-                setEditorSnapshot(JSON.stringify(nextState));
-                return nextState;
-            });
-            setIsNewRule(false);
-            setActionMessage({ type: 'success', text: `Rule "${newId}" created.` });
-            setEditorOpen(true);
-        } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to duplicate rule' });
-        } finally {
-            setPendingSave(false);
-        }
-    };
+        const nextState = makeEditorStateFromDraft(draft);
+        setSelectedPolicyId(null);
+        setIsNewPolicy(true);
+        setEditorOpen(true);
+        setSelectedResourceRow(splitLines(nextState.resources).length > 0 ? 0 : -1);
+        setSelectedCommandTermRow(splitLines(nextState.commandTerms).length > 0 ? 0 : -1);
+        setSelectedPatternRow(splitLines(nextState.patterns).length > 0 ? 0 : -1);
+        setEditorState(nextState);
+        setEditorSnapshot(JSON.stringify(nextState));
+        navigate('/guardrails/rules', { replace: true, state: null });
+    }, [location.state, navigate, scenarioOptions]);
 
     const handleReload = async () => {
         try {
@@ -470,8 +543,7 @@ const GuardrailsRulesPage = () => {
                 setActionMessage({ type: 'error', text: result?.error || 'Failed to reload guardrails config' });
                 return;
             }
-            const guardrailsConfig = await api.getGuardrailsConfig();
-            setRules(guardrailsConfig?.config?.rules ? mapRules(guardrailsConfig.config.rules) : []);
+            await loadPolicies(true);
             setActionMessage({ type: 'success', text: 'Guardrails reloaded successfully.' });
         } catch (error: any) {
             setActionMessage({ type: 'error', text: error?.message || 'Failed to reload guardrails config' });
@@ -480,19 +552,331 @@ const GuardrailsRulesPage = () => {
         }
     };
 
-    const actionAlert = useMemo(() => {
-        if (!actionMessage) {
-            return null;
-        }
-        return <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>;
-    }, [actionMessage]);
+    const openNewGroupDialog = () => {
+        blurActiveElement();
+        setEditingGroupId(null);
+        setGroupEditorState(makeGroupEditorState());
+        setGroupDialogOpen(true);
+    };
 
-    const handleCloseEditor = async () => {
+    const openEditGroupDialog = (group: PolicyGroup) => {
+        blurActiveElement();
+        setEditingGroupId(group.id);
+        setGroupEditorState(makeGroupEditorState(group));
+        setGroupDialogOpen(true);
+    };
+
+    const handleSaveGroup = async () => {
+        if (!groupEditorState.name.trim()) {
+            setActionMessage({ type: 'error', text: 'Group name is required before saving.' });
+            return;
+        }
+        if (!groupEditorState.id.trim()) {
+            setActionMessage({ type: 'error', text: 'Group ID could not be generated.' });
+            return;
+        }
+
+        const payload = {
+            id: groupEditorState.id,
+            name: groupEditorState.name,
+            enabled: groupEditorState.enabled,
+            severity: groupEditorState.severity,
+            default_verdict: groupEditorState.defaultVerdict,
+            default_scope: {
+                scenarios: groupEditorState.scenarios,
+            },
+        };
+
+        try {
+            setPendingGroupSave(true);
+            const result = editingGroupId
+                ? await api.updateGuardrailsGroup(editingGroupId, payload)
+                : await api.createGuardrailsGroup(payload);
+            if (!result?.success) {
+                setActionMessage({ type: 'error', text: result?.error || 'Failed to save group' });
+                return;
+            }
+            await loadPolicies(true);
+            if (editingGroupId && editingGroupId !== groupEditorState.id && editorState.group === editingGroupId) {
+                setEditorState((state) => ({ ...state, group: groupEditorState.id }));
+            }
+            setGroupDialogOpen(false);
+            blurActiveElement();
+            setActionMessage({ type: 'success', text: `Group "${groupEditorState.id}" saved.` });
+        } catch (error: any) {
+            setActionMessage({ type: 'error', text: error?.message || 'Failed to save group' });
+        } finally {
+            setPendingGroupSave(false);
+        }
+    };
+
+    const handleDeleteGroup = async () => {
+        if (!deleteGroupId) {
+            return;
+        }
+        try {
+            setPendingGroupId(deleteGroupId);
+            const result = await api.deleteGuardrailsGroup(deleteGroupId);
+            if (!result?.success) {
+                setActionMessage({ type: 'error', text: result?.error || 'Failed to delete group' });
+                return;
+            }
+            await loadPolicies(true);
+            if (editorState.group === deleteGroupId) {
+                setEditorState((state) => ({ ...state, group: '' }));
+            }
+            setDeleteGroupId(null);
+            setActionMessage({ type: 'success', text: `Group "${deleteGroupId}" deleted.` });
+        } catch (error: any) {
+            setActionMessage({ type: 'error', text: error?.message || 'Failed to delete group' });
+        } finally {
+            setPendingGroupId(null);
+        }
+    };
+
+    const handleToggleGroup = async (groupId: string, enabled: boolean) => {
+        const group = groups.find((item) => item.id === groupId);
+        if (!group) {
+            return;
+        }
+
+        const payload = {
+            id: group.id,
+            name: group.name || group.id,
+            enabled,
+            severity: group.severity || 'medium',
+            default_verdict: group.default_verdict || 'block',
+            default_scope: {
+                scenarios: group.default_scope?.scenarios || [],
+            },
+        };
+
+        try {
+            setPendingGroupId(groupId);
+            const result = await api.updateGuardrailsGroup(groupId, payload);
+            if (!result?.success) {
+                setActionMessage({ type: 'error', text: result?.error || 'Failed to update group' });
+                return;
+            }
+            await loadPolicies(true);
+            setActionMessage({ type: 'success', text: `Group "${groupId}" updated.` });
+        } catch (error: any) {
+            setActionMessage({ type: 'error', text: error?.message || 'Failed to update group' });
+        } finally {
+            setPendingGroupId(null);
+        }
+    };
+
+    const openPolicyEditor = (policy: GuardrailsPolicy) => {
+        const nextState = makeEditorState(policy);
+        setSelectedPolicyId(policy.id);
+        setIsNewPolicy(false);
+        setEditorOpen(true);
+        setSelectedResourceRow(splitLines(nextState.resources).length > 0 ? 0 : -1);
+        setSelectedCommandTermRow(splitLines(nextState.commandTerms).length > 0 ? 0 : -1);
+        setSelectedPatternRow(splitLines(nextState.patterns).length > 0 ? 0 : -1);
+        setEditorState(nextState);
+        setEditorSnapshot(JSON.stringify(nextState));
+    };
+
+    const handleNewPolicy = (kind?: 'resource_access' | 'command_execution' | 'content') => {
+        const baseState = makeEditorState();
+        const nextState = kind ? applyKindDefaults(kind, baseState) : baseState;
+        setSelectedPolicyId(null);
+        setIsNewPolicy(true);
+        setEditorOpen(true);
+        setSelectedResourceRow(splitLines(nextState.resources).length > 0 ? 0 : -1);
+        setSelectedCommandTermRow(splitLines(nextState.commandTerms).length > 0 ? 0 : -1);
+        setSelectedPatternRow(splitLines(nextState.patterns).length > 0 ? 0 : -1);
+        setEditorState(nextState);
+        setEditorSnapshot(JSON.stringify(nextState));
+    };
+
+    const buildPolicyPayload = (state: EditorState) => {
+        const operationMatch = {
+            tool_names: splitLines(state.toolNames),
+            actions: {
+                include:
+                    state.kind === 'command_execution'
+                        ? ['execute']
+                        : state.actions.filter((action) => action !== 'execute'),
+            },
+            terms: state.kind === 'command_execution' ? splitLines(state.commandTerms) : [],
+            resources: {
+                type: 'path',
+                mode: state.resourceMode,
+                values: splitLines(state.resources),
+            },
+        };
+        const payload = {
+            id: state.id,
+            name: state.name,
+            group: state.group,
+            kind: state.kind,
+            enabled: state.enabled,
+            scope: {
+                scenarios: state.scenarios,
+            },
+            verdict: state.verdict,
+            reason: state.reason,
+            match:
+                state.kind === 'content'
+                    ? {
+                          patterns: splitLines(state.patterns),
+                          pattern_mode: state.patternMode,
+                          case_sensitive: state.caseSensitive,
+                      }
+                    : operationMatch,
+        };
+        return payload;
+    };
+
+    const handleSavePolicy = async (): Promise<boolean> => {
+        if (!editorState.kind) {
+            setActionMessage({ type: 'error', text: 'Choose a policy kind first.' });
+            return false;
+        }
+        if (!editorState.id.trim()) {
+            setActionMessage({ type: 'error', text: 'Policy name is required before saving.' });
+            return false;
+        }
+        if (editorState.kind === 'content' && splitLines(editorState.patterns).length === 0) {
+            setActionMessage({ type: 'error', text: 'Content policies require at least one pattern.' });
+            return false;
+        }
+        if (
+            editorState.kind === 'resource_access' &&
+            splitLines(editorState.resources).length === 0 &&
+            editorState.actions.length === 0 &&
+            splitLines(editorState.toolNames).length === 0
+        ) {
+            setActionMessage({ type: 'error', text: 'Resource access policies require at least one action, resource, or tool filter.' });
+            return false;
+        }
+        if (
+            editorState.kind === 'command_execution' &&
+            splitLines(editorState.commandTerms).length === 0 &&
+            splitLines(editorState.toolNames).length === 0 &&
+            splitLines(editorState.resources).length === 0
+        ) {
+            setActionMessage({ type: 'error', text: 'Command execution policies require a command match, tool filter, or resource filter.' });
+            return false;
+        }
+
+        try {
+            setPendingSave(true);
+            const payload = buildPolicyPayload(editorState);
+            const targetPolicyId = isNewPolicy ? editorState.id : (selectedPolicyId || editorState.id);
+            const result = isNewPolicy
+                ? await api.createGuardrailsPolicy(payload)
+                : await api.updateGuardrailsPolicy(targetPolicyId, payload);
+            if (!result?.success) {
+                setActionMessage({ type: 'error', text: result?.error || 'Failed to save policy' });
+                return false;
+            }
+            await loadPolicies(true);
+            setSelectedPolicyId(editorState.id);
+            setIsNewPolicy(false);
+            setEditorSnapshot(JSON.stringify(editorState));
+            setActionMessage({ type: 'success', text: `Policy "${editorState.id}" saved.` });
+            return true;
+        } catch (error: any) {
+            setActionMessage({ type: 'error', text: error?.message || 'Failed to save policy' });
+            return false;
+        } finally {
+            setPendingSave(false);
+        }
+    };
+
+    const handleDuplicatePolicy = async () => {
+        const existingIds = new Set(policies.map((policy) => policy.id));
+        const baseId = `${editorState.id}-copy`;
+        let nextId = baseId;
+        let suffix = 2;
+        while (existingIds.has(nextId)) {
+            nextId = `${baseId}-${suffix}`;
+            suffix += 1;
+        }
+
+        const nextState = {
+            ...editorState,
+            id: nextId,
+            name: `${editorState.name} (copy)`,
+        };
+
+        // Duplicating now only creates a local draft. The copied policy is not
+        // persisted until the user explicitly saves it.
+        setSelectedPolicyId(null);
+        setIsNewPolicy(true);
+        setEditorOpen(true);
+        setSelectedResourceRow(splitLines(nextState.resources).length > 0 ? 0 : -1);
+        setSelectedCommandTermRow(splitLines(nextState.commandTerms).length > 0 ? 0 : -1);
+        setSelectedPatternRow(splitLines(nextState.patterns).length > 0 ? 0 : -1);
+        setEditorState(nextState);
+        setEditorSnapshot(JSON.stringify(editorState));
+        setActionMessage({ type: 'success', text: `Draft copy "${nextId}" is ready. Save to create it.` });
+    };
+
+    const handleTogglePolicy = async (policyId: string, enabled: boolean) => {
+        try {
+            setPendingPolicyId(policyId);
+            const result = await api.updateGuardrailsPolicy(policyId, { enabled });
+            if (!result?.success) {
+                setActionMessage({ type: 'error', text: result?.error || 'Failed to update policy' });
+                return;
+            }
+            await loadPolicies(true);
+            if (selectedPolicyId === policyId) {
+                setEditorState((state) => ({ ...state, enabled }));
+                setEditorSnapshot((snapshot) => {
+                    if (!snapshot) {
+                        return snapshot;
+                    }
+                    const nextSnapshot = JSON.parse(snapshot);
+                    nextSnapshot.enabled = enabled;
+                    return JSON.stringify(nextSnapshot);
+                });
+            }
+            setActionMessage({ type: 'success', text: `Policy "${policyId}" updated.` });
+        } catch (error: any) {
+            setActionMessage({ type: 'error', text: error?.message || 'Failed to update policy' });
+        } finally {
+            setPendingPolicyId(null);
+        }
+    };
+
+    const handleDeletePolicy = async () => {
+        if (!deletePolicyId) {
+            return;
+        }
+        try {
+            setPendingPolicyId(deletePolicyId);
+            const result = await api.deleteGuardrailsPolicy(deletePolicyId);
+            if (!result?.success) {
+                setActionMessage({ type: 'error', text: result?.error || 'Failed to delete policy' });
+                return;
+            }
+            await loadPolicies(true);
+            if (selectedPolicyId === deletePolicyId) {
+                setSelectedPolicyId(null);
+                setEditorOpen(false);
+            }
+            setActionMessage({ type: 'success', text: `Policy "${deletePolicyId}" deleted.` });
+        } catch (error: any) {
+            setActionMessage({ type: 'error', text: error?.message || 'Failed to delete policy' });
+        } finally {
+            setPendingPolicyId(null);
+            setDeletePolicyId(null);
+        }
+    };
+
+    const handleCloseEditor = () => {
         if (isEditorDirty) {
             setConfirmCloseOpen(true);
             return;
         }
         setEditorOpen(false);
+        blurActiveElement();
     };
 
     const handleConfirmClose = async (action: 'save' | 'discard' | 'cancel') => {
@@ -501,49 +885,404 @@ const GuardrailsRulesPage = () => {
             return;
         }
         if (action === 'save') {
-            const saved = await handleSaveRule();
+            const saved = await handleSavePolicy();
             if (!saved) {
                 return;
             }
         }
         setConfirmCloseOpen(false);
         setEditorOpen(false);
+        blurActiveElement();
     };
 
-    const handleDeleteRule = async () => {
-        if (!deleteRuleId) {
-            return;
-        }
-        try {
-            setPendingRuleId(deleteRuleId);
-            const result = await api.deleteGuardrailsRule(deleteRuleId);
-            if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to delete rule' });
-                return;
+    const renderPolicySection = (
+        title: string,
+        description: string,
+        items: GuardrailsPolicy[],
+        kind: 'resource_access' | 'command_execution' | 'content'
+    ) => (
+        <Box sx={{ mb: 3 }}>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
+                <Typography variant="subtitle1" fontWeight={500}>
+                    {title}
+                </Typography>
+                <Chip
+                    label={items.length}
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    sx={{ height: 20, minWidth: 20, fontSize: '0.7rem' }}
+                />
+            </Stack>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                {description}
+            </Typography>
+            {items.length === 0 ? (
+                <Box sx={{ border: '1px dashed', borderColor: 'divider', borderRadius: 2 }}>
+                    <EmptyStateGuide
+                        title={
+                            kind === 'resource_access'
+                                ? 'No resource access policies yet'
+                                : kind === 'command_execution'
+                                  ? 'No command execution policies yet'
+                                  : 'No content policies yet'
+                        }
+                        description={
+                            kind === 'resource_access'
+                                ? 'Start with a guided resource access policy to control reads, writes, deletes, and protected paths.'
+                                : kind === 'command_execution'
+                                  ? 'Start with a guided command execution policy to control dangerous or disallowed commands.'
+                                  : 'Start with a guided content policy to filter model output or tool results.'
+                        }
+                        showOAuthButton={false}
+                        showHeroIcon={false}
+                        primaryButtonLabel="New Policy"
+                        onAddApiKeyClick={() => handleNewPolicy(kind)}
+                    />
+                </Box>
+            ) : (
+                <List dense sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, py: 0 }}>
+                    {items.map((policy) => (
+                        <ListItem
+                            key={policy.id}
+                            sx={{
+                                px: 0,
+                                py: 0,
+                                borderBottom: '1px solid',
+                                borderColor: 'divider',
+                                '&:last-child': { borderBottom: 'none' },
+                            }}
+                        >
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    alignItems: { xs: 'flex-start', lg: 'center' },
+                                    flexDirection: { xs: 'column', lg: 'row' },
+                                    gap: 1.5,
+                                    width: '100%',
+                                    cursor: 'pointer',
+                                    px: 2,
+                                    py: 1.5,
+                                    bgcolor: selectedPolicyId === policy.id ? 'action.selected' : 'transparent',
+                                    '&:hover': { bgcolor: 'action.hover' },
+                                }}
+                                onClick={() => openPolicyEditor(policy)}
+                            >
+                                <Box sx={{ minWidth: { lg: 220 }, flexShrink: 0 }}>
+                                    <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                            {policy.id}
+                                        </Typography>
+                                        {policy.group && <Chip size="small" label={policy.group} variant="outlined" />}
+                                    </Stack>
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                        {policy.name || 'Unnamed policy'}
+                                    </Typography>
+                                </Box>
+
+                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                    <Typography variant="body2" color="text.primary" sx={{ whiteSpace: 'normal' }}>
+                                        {buildPolicySummary(policy)}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, whiteSpace: 'normal' }}>
+                                        {buildPolicyScope(policy)}
+                                    </Typography>
+                                </Box>
+
+                                <Stack
+                                    direction={{ xs: 'row', sm: 'row' }}
+                                    spacing={1}
+                                    alignItems="center"
+                                    sx={{ width: { xs: '100%', lg: 'auto' }, justifyContent: { xs: 'space-between', lg: 'flex-end' } }}
+                                >
+                                    <Chip size="small" label={policy.enabled === false ? 'Disabled' : 'Enabled'} />
+                                    <FormControlLabel
+                                        sx={{ ml: 0 }}
+                                        onClick={(e) => e.stopPropagation()}
+                                        control={
+                                            <Switch
+                                                size="small"
+                                                checked={policy.enabled !== false}
+                                                disabled={pendingPolicyId === policy.id}
+                                                onChange={(e) => handleTogglePolicy(policy.id, e.target.checked)}
+                                            />
+                                        }
+                                        label="Enabled"
+                                    />
+                                    <Tooltip title="Delete policy" arrow>
+                                        <span>
+                                            <IconButton
+                                                size="small"
+                                                disabled={pendingPolicyId === policy.id}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setDeletePolicyId(policy.id);
+                                                }}
+                                            >
+                                                <DeleteOutline fontSize="small" />
+                                            </IconButton>
+                                        </span>
+                                    </Tooltip>
+                                </Stack>
+                            </Box>
+                        </ListItem>
+                    ))}
+                </List>
+            )}
+        </Box>
+    );
+
+    const renderCompactListEditor = ({
+        title,
+        description,
+        columnLabel,
+        value,
+        selectedIndex,
+        onSelectedIndexChange,
+        onChange,
+        placeholder,
+        helperText,
+    }: {
+        title: string;
+        description: string;
+        columnLabel: string;
+        value: string;
+        selectedIndex: number;
+        onSelectedIndexChange: (index: number) => void;
+        onChange: (value: string) => void;
+        placeholder: string;
+        helperText: string;
+    }) => {
+        const rows = textListRows(value);
+        const isEmpty = rows.length === 1 && rows[0] === '';
+        const showEmptyState = isEmpty && selectedIndex < 0;
+        const canRemove = !showEmptyState;
+        const visibleRows = showEmptyState ? [] : rows;
+
+        return (
+            <Stack spacing={1.5}>
+                <Box>
+                    <Typography variant="subtitle2">{title}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                        {description}
+                    </Typography>
+                </Box>
+                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2, boxShadow: 'none' }}>
+                    <Stack
+                        direction="row"
+                        spacing={0.5}
+                        sx={{
+                            px: 1,
+                            py: 0.5,
+                            borderBottom: '1px solid',
+                            borderColor: 'divider',
+                            bgcolor: 'action.hover',
+                        }}
+                    >
+                        <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => {
+                                if (showEmptyState) {
+                                    onSelectedIndexChange(0);
+                                    return;
+                                }
+                                onChange(appendTextListValue(value));
+                                onSelectedIndexChange(rows.length);
+                            }}
+                        >
+                            <Add fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                            size="small"
+                            disabled={!canRemove}
+                            onClick={() => {
+                                if (showEmptyState) {
+                                    return;
+                                }
+                                const index = Math.min(selectedIndex, rows.length - 1);
+                                const nextValue = removeTextListValue(value, index);
+                                onChange(nextValue);
+                                const nextRows = textListRows(nextValue);
+                                if (nextRows.length === 1 && nextRows[0] === '') {
+                                    onSelectedIndexChange(-1);
+                                } else {
+                                    onSelectedIndexChange(Math.max(0, Math.min(selectedIndex - 1, nextRows.length - 1)));
+                                }
+                            }}
+                        >
+                            <Remove fontSize="small" />
+                        </IconButton>
+                    </Stack>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow>
+                                <TableCell sx={{ fontWeight: 600 }}>{columnLabel}</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {showEmptyState ? (
+                                <TableRow>
+                                    <TableCell sx={{ py: 3, textAlign: 'center', color: 'text.secondary' }}>
+                                        No entries
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                visibleRows.map((item, index) => (
+                                    <TableRow
+                                        key={`${title}-${index}`}
+                                        hover
+                                        selected={selectedIndex === index}
+                                        onClick={() => onSelectedIndexChange(index)}
+                                        sx={{ cursor: 'pointer' }}
+                                    >
+                                        <TableCell sx={{ py: 0.5 }}>
+                                            <InputBase
+                                                fullWidth
+                                                value={item}
+                                                placeholder={index === 0 ? placeholder : 'Add another entry'}
+                                                onFocus={() => onSelectedIndexChange(index)}
+                                                onChange={(e) => onChange(updateTextListValue(value, index, e.target.value))}
+                                                sx={{ fontSize: '0.9rem' }}
+                                            />
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+                <FormHelperText>{helperText}</FormHelperText>
+            </Stack>
+        );
+    };
+
+    const getScenarioPresentation = (scenario: string) => {
+        switch (scenario) {
+            case 'anthropic':
+                return {
+                    label: 'Anthropic',
+                    description: 'Anthropic-compatible requests and responses.',
+                    icon: <Anthropic size={18} />,
+                };
+            case 'claude_code':
+                return {
+                    label: 'Claude Code',
+                    description: 'Tool-enabled Claude Code sessions and command workflows.',
+                    icon: <Claude size={18} />,
+                };
+            case 'openai':
+                return {
+                    label: 'OpenAI',
+                    description: 'OpenAI-compatible requests and responses.',
+                    icon: <OpenAI size={18} />,
+                };
+            case 'opencode':
+                return {
+                    label: 'OpenCode',
+                    description: 'OpenCode scenario traffic and agent flows.',
+                    icon: <CodeIcon sx={{ fontSize: 18 }} />,
+                };
+            case 'xcode':
+                return {
+                    label: 'Xcode',
+                    description: 'Xcode-integrated coding workflows.',
+                    icon: <LaptopMac sx={{ fontSize: 18 }} />,
+                };
+            case 'agent':
+                return {
+                    label: 'Agent',
+                    description: 'Agent-style orchestration and assistant flows.',
+                    icon: <AutoAwesome sx={{ fontSize: 18 }} />,
+                };
+            default: {
+                const label = scenario
+                    .split('_')
+                    .filter(Boolean)
+                    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+                    .join(' ');
+                return {
+                    label,
+                    description: `${label} scenario traffic.`,
+                    icon: <Rule sx={{ fontSize: 18 }} color="action" />,
+                };
             }
-            const guardrailsConfig = await api.getGuardrailsConfig();
-            const nextRules = guardrailsConfig?.config?.rules || [];
-            setRules(nextRules.length ? mapRules(nextRules) : []);
-            setRawRules(nextRules);
-            if (selectedRuleId === deleteRuleId) {
-                setSelectedRuleId(null);
-                setEditorOpen(false);
-            }
-            setActionMessage({ type: 'success', text: `Rule "${deleteRuleId}" deleted.` });
-        } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to delete rule' });
-        } finally {
-            setPendingRuleId(null);
-            setDeleteRuleId(null);
         }
     };
+
+    const renderScenarioScopeSelector = ({
+        title,
+        description,
+        value,
+        onChange,
+        helperText,
+    }: {
+        title: string;
+        description: string;
+        value: string[];
+        onChange: (value: string[]) => void;
+        helperText: string;
+    }) => (
+        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
+            <Stack spacing={1.5}>
+                <Box>
+                    <Typography variant="subtitle2">{title}</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                        {description}
+                    </Typography>
+                </Box>
+                <Box
+                    sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                        gap: 1.5,
+                    }}
+                >
+                    {scenarioOptions.map((option) => {
+                        const selected = value.includes(option);
+                        const presentation = getScenarioPresentation(option);
+                        return (
+                            <Box
+                                key={option}
+                                onClick={() => onChange(toggleValue(value, option))}
+                                sx={{
+                                    border: '1px solid',
+                                    borderColor: selected ? 'primary.main' : 'divider',
+                                    bgcolor: selected ? 'action.selected' : 'background.paper',
+                                    borderRadius: 2,
+                                    p: 1.5,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease',
+                                    '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
+                                }}
+                            >
+                                <Stack spacing={0.75}>
+                                    <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                        {presentation.icon}
+                                        <Typography variant="body2" fontWeight={600}>
+                                            {presentation.label}
+                                        </Typography>
+                                        {selected && <Chip size="small" color="primary" label="Selected" />}
+                                    </Stack>
+                                    <Typography variant="caption" color="text.secondary">
+                                        {presentation.description}
+                                    </Typography>
+                                </Stack>
+                            </Box>
+                        );
+                    })}
+                </Box>
+                <FormHelperText>{helperText}</FormHelperText>
+            </Stack>
+        </Box>
+    );
 
     return (
         <PageLayout loading={loading}>
             <Stack spacing={3}>
                 <UnifiedCard
-                    title="Guardrails Rules"
-                    subtitle="Create and maintain the rules used to block risky tool calls and filter sensitive tool results."
+                    title="Guardrails Policies"
+                    subtitle="Manage policy-based Guardrails configuration. Policies are grouped by risk or ownership, then compiled into the runtime engine."
                     size="full"
                     rightAction={
                         <Tooltip title="Reload guardrails config">
@@ -555,624 +1294,948 @@ const GuardrailsRulesPage = () => {
                 >
                     <Stack spacing={1.5}>
                         <Typography variant="body2" color="text.secondary">
-                            Configure pre-execution blocks (tool_use) and post-execution filters (tool_result).
+                            Use resource access policies to protect files and directories, command execution policies to control risky commands, and content policies to filter model or tool output.
                         </Typography>
+                        {loadError && <Alert severity="error">{loadError}</Alert>}
+                        {actionMessage && <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>}
                         <Divider />
-                    </Stack>
-                </UnifiedCard>
-
-                <Box sx={{ width: '100%' }}>
-                    <UnifiedCard
-                        title="Rules"
-                        subtitle={`${rules.length} rule${rules.length === 1 ? '' : 's'} configured`}
-                        size="full"
-                        rightAction={
-                            <Stack direction="row" spacing={1}>
-                                <Button variant="contained" size="small" startIcon={<Rule />} onClick={handleNewRule}>
-                                    New Rule
+                        <Stack spacing={1.5}>
+                            <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                                <Typography variant="subtitle2">Groups</Typography>
+                                <Button size="small" variant="contained" onClick={openNewGroupDialog}>
+                                    New Group
                                 </Button>
                             </Stack>
-                        }
-                    >
-                            <Stack spacing={2}>
-                                {loadError && <Alert severity="error">{loadError}</Alert>}
-                                {actionAlert}
+                            <Typography variant="body2" color="text.secondary">
+                                Groups are a way to organize policies and share defaults. A group can define things like severity,
+                                default verdict, and default scope, so policies inside the group do not need to repeat those
+                                settings.
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Use groups to separate high-risk policies from lower-risk ones, or to organize policies by team,
+                                scenario, or use case.
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                {groups.length} group{groups.length === 1 ? '' : 's'} configured.
+                            </Typography>
 
-                                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1.1fr 1.4fr' }, gap: 2 }}>
-                                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
-                                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                                            Rule List
-                                        </Typography>
-                                        <List dense>
-                                            {rules.length === 0 && (
-                                                <ListItem sx={{ px: 0 }}>
-                                                    <ListItemText primary="No rules found" secondary="Upload guardrails.yaml to configure rules." />
-                                                </ListItem>
-                                            )}
-                                            {rules.map((rule) => (
-                                                <ListItem
-                                                    key={rule.id}
-                                                    sx={{ px: 0, alignItems: 'flex-start' }}
-                                                >
-                                                    <Box
-                                                        sx={{
-                                                            display: 'flex',
-                                                            alignItems: 'flex-start',
-                                                            width: '100%',
-                                                            cursor: 'pointer',
-                                                            borderRadius: 1,
-                                                            px: 1,
-                                                            py: 0.5,
-                                                            bgcolor: selectedRuleId === rule.id ? 'action.selected' : 'transparent',
-                                                            '&:hover': { bgcolor: 'action.hover' },
-                                                        }}
-                                                        onClick={() => {
-                                                            setSelectedRuleId(rule.id);
-                                                            updateEditorFromRule(rule);
-                                                        }}
-                                                    >
-                                                    <ListItemText
-                                                        primary={
-                                                            <Stack direction="row" spacing={1} alignItems="center">
-                                                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                                                    {rule.id}
-                                                                </Typography>
-                                                                <Chip size="small" label={rule.type} variant="outlined" />
-                                                            </Stack>
-                                                        }
-                                                        secondary={
-                                                            <Stack spacing={0.5} sx={{ mt: 0.5 }}>
-                                                                <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'normal' }}>
-                                                                    {rule.reason}
-                                                                </Typography>
-                                                                <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'normal' }}>
-                                                                    {rule.scope}
-                                                                </Typography>
-                                                            </Stack>
-                                                        }
-                                                    />
-                                                    <Box sx={{ pl: 1, pt: 0.5 }}>
-                                                        <Tooltip title={rule.status} arrow>
-                                                            <Chip size="small" label={rule.status} />
-                                                        </Tooltip>
-                                                        <Tooltip title="Delete rule" arrow>
-                                                            <span>
-                                                                <IconButton
-                                                                    size="small"
-                                                                    sx={{ ml: 0.5 }}
-                                                                    disabled={pendingRuleId === rule.id}
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setDeleteRuleId(rule.id);
-                                                                    }}
-                                                                >
-                                                                    <DeleteOutline fontSize="small" />
-                                                                </IconButton>
-                                                            </span>
-                                                        </Tooltip>
-                                                        <FormControlLabel
-                                                            sx={{ ml: 1 }}
-                                                            control={
-                                                                <Switch
-                                                                    size="small"
-                                                                    checked={rule.enabled}
-                                                                    disabled={pendingRuleId === rule.id}
-                                                                    onChange={(e) => handleToggleRule(rule.id, e.target.checked)}
-                                                                />
-                                                            }
-                                                            label="Enabled"
-                                                        />
-                                                        {pendingRuleId === rule.id && (
-                                                            <Chip
-                                                                size="small"
-                                                                label="Saving…"
-                                                                sx={{ ml: 1 }}
-                                                            />
-                                                        )}
-                                                    </Box>
-                                                    </Box>
-                                                </ListItem>
-                                            ))}
-                                        </List>
-                                    </Box>
-
-                                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
-                                        <Collapse in={editorOpen} unmountOnExit>
-                                            <Stack spacing={2}>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                    <Typography variant="subtitle2">Rule Editor</Typography>
-                                                    <Stack spacing={0} alignItems="flex-end">
-                                                        <FormControlLabel
-                                                            control={
-                                                                <Switch
-                                                                    size="small"
-                                                                    checked={editorState.enabled}
-                                                                    onChange={(e) =>
-                                                                        setEditorState((s) => ({ ...s, enabled: e.target.checked }))
-                                                                    }
-                                                                />
-                                                            }
-                                                            label="Enabled"
-                                                        />
-                                                        <Typography variant="caption" color="text.secondary">
-                                                            Synced with the rule list toggle.
+                            {groups.length === 0 ? (
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                    <Chip size="small" label="No groups defined" variant="outlined" />
+                                    <Button size="small" variant="contained" onClick={openNewGroupDialog}>
+                                        New Group
+                                    </Button>
+                                </Stack>
+                            ) : (
+                                <List dense sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, py: 0 }}>
+                                    {groups.map((group) => (
+                                        <ListItem
+                                            key={group.id}
+                                            sx={{
+                                                px: 0,
+                                                py: 0,
+                                                borderBottom: '1px solid',
+                                                borderColor: 'divider',
+                                                '&:last-child': { borderBottom: 'none' },
+                                            }}
+                                        >
+                                            <Box
+                                                sx={{
+                                                    display: 'flex',
+                                                    alignItems: { xs: 'flex-start', md: 'center' },
+                                                    flexDirection: { xs: 'column', md: 'row' },
+                                                    gap: 1.5,
+                                                    width: '100%',
+                                                    px: 2,
+                                                    py: 1.5,
+                                                    cursor: 'pointer',
+                                                    '&:hover': { bgcolor: 'action.hover' },
+                                                }}
+                                                onClick={() => openEditGroupDialog(group)}
+                                            >
+                                                <Box sx={{ minWidth: { md: 220 }, flexShrink: 0 }}>
+                                                    <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                                            {group.name || group.id}
                                                         </Typography>
+                                                        <Chip size="small" label={group.id} variant="outlined" />
                                                     </Stack>
                                                 </Box>
 
-                                                <Typography variant="subtitle2">Basic Settings</Typography>
-                                                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                                                    <TextField
-                                                        label="Rule ID"
-                                                        size="small"
-                                                        fullWidth
-                                                        value={editorState.id}
-                                                        onChange={(e) => setEditorState((s) => ({ ...s, id: e.target.value }))}
-                                                        helperText="Unique identifier used by the engine and API."
-                                                    />
-                                                    <TextField
-                                                        label="Name"
-                                                        size="small"
-                                                        fullWidth
-                                                        value={editorState.name}
-                                                        onChange={(e) => setEditorState((s) => ({ ...s, name: e.target.value }))}
-                                                        helperText="Human-friendly label shown in UI."
-                                                    />
-                                                </Stack>
+                                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                    <Typography variant="body2" color="text.primary" sx={{ whiteSpace: 'normal' }}>
+                                                        {buildGroupSummary(group)}
+                                                    </Typography>
+                                                </Box>
 
-                                                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                                                    <FormControl size="small" fullWidth>
-                                                        <InputLabel id="rule-type">Rule Type</InputLabel>
-                                                        <Select
-                                                            labelId="rule-type"
-                                                            label="Rule Type"
-                                                            value={editorState.type}
-                                                            onChange={(e) =>
-                                                                setEditorState((s) => ({ ...s, type: String(e.target.value) }))
-                                                            }
-                                                        >
-                                                            <MenuItem value="text_match">text_match</MenuItem>
-                                                            <MenuItem value="command_policy">command_policy</MenuItem>
-                                                            {editorState.type === 'model_judge' && (
-                                                                <MenuItem value="model_judge" disabled>
-                                                                    model_judge (legacy)
-                                                                </MenuItem>
-                                                            )}
-                                                        </Select>
-                                                        <FormHelperText>
-                                                            How the rule evaluates content. `model_judge` is hidden from new rules for now.
-                                                        </FormHelperText>
-                                                    </FormControl>
-                                                    <FormControl size="small" fullWidth>
-                                                        <InputLabel id="rule-verdict">Default Verdict</InputLabel>
-                                                        <Select
-                                                            labelId="rule-verdict"
-                                                            label="Default Verdict"
-                                                            value={editorState.verdict}
-                                                            onChange={(e) =>
-                                                                setEditorState((s) => ({ ...s, verdict: String(e.target.value) }))
-                                                            }
-                                                        >
-                                                            <MenuItem value="allow">allow</MenuItem>
-                                                            <MenuItem value="review">review</MenuItem>
-                                                            <MenuItem value="block">block</MenuItem>
-                                                        </Select>
-                                                        <FormHelperText>Action to take when the rule matches.</FormHelperText>
-                                                    </FormControl>
-                                                </Stack>
-
-                                                {editorState.type === 'command_policy' ? (
-                                                    <Stack spacing={2}>
-                                                        <Box>
-                                                            <Typography variant="subtitle2">Command Policy</Typography>
-                                                            <Typography variant="caption" color="text.secondary">
-                                                                Define what kind of command behavior should be blocked, such as reading
-                                                                sensitive directories.
-                                                            </Typography>
-                                                        </Box>
-
-                                                        <Box>
-                                                            <Typography variant="caption" color="text.secondary">
-                                                                Command Kind
-                                                            </Typography>
-                                                            <FormGroup row sx={{ mt: 0.5, columnGap: 1.5, rowGap: 0.5 }}>
-                                                                {commandKindOptions.map((option) => (
-                                                                    <FormControlLabel
-                                                                        key={`kind-${option}`}
-                                                                        sx={{ ml: 0, mr: 1 }}
-                                                                        control={
-                                                                            <Checkbox
-                                                                                size="small"
-                                                                                checked={editorState.kinds.includes(option)}
-                                                                                onChange={() =>
-                                                                                    setEditorState((state) => ({
-                                                                                        ...state,
-                                                                                        kinds: toggleValue(state.kinds, option),
-                                                                                    }))
-                                                                                }
-                                                                            />
-                                                                        }
-                                                                        label={option}
-                                                                    />
-                                                                ))}
-                                                            </FormGroup>
-                                                            <FormHelperText>Usually `shell` for Claude Code bash calls.</FormHelperText>
-                                                        </Box>
-
-                                                        <Box>
-                                                            <Typography variant="caption" color="text.secondary">
-                                                                Actions
-                                                            </Typography>
-                                                            <FormGroup row sx={{ mt: 0.5, columnGap: 1.5, rowGap: 0.5 }}>
-                                                                {commandActionOptions.map((option) => (
-                                                                    <FormControlLabel
-                                                                        key={`action-${option}`}
-                                                                        sx={{ ml: 0, mr: 1 }}
-                                                                        control={
-                                                                            <Checkbox
-                                                                                size="small"
-                                                                                checked={editorState.actions.includes(option)}
-                                                                                onChange={() =>
-                                                                                    setEditorState((state) => ({
-                                                                                        ...state,
-                                                                                        actions: toggleValue(state.actions, option),
-                                                                                    }))
-                                                                                }
-                                                                            />
-                                                                        }
-                                                                        label={option}
-                                                                    />
-                                                                ))}
-                                                            </FormGroup>
-                                                            <FormHelperText>
-                                                                Example: use `read` to block reading `~/.ssh`.
-                                                            </FormHelperText>
-                                                        </Box>
-
-                                                        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                                                            <TextField
-                                                                label="Resources"
-                                                                size="small"
-                                                                fullWidth
-                                                                multiline
-                                                                minRows={3}
-                                                                value={editorState.resources}
-                                                                onChange={(e) =>
-                                                                    setEditorState((s) => ({ ...s, resources: e.target.value }))
-                                                                }
-                                                                helperText="One path/resource per line, for example `~/.ssh` or `/etc/ssh`."
-                                                            />
-                                                            <Stack spacing={2} sx={{ minWidth: { md: 220 } }}>
-                                                                <FormControl size="small" fullWidth>
-                                                                    <InputLabel id="resource-match">Resource Match</InputLabel>
-                                                                    <Select
-                                                                        labelId="resource-match"
-                                                                        label="Resource Match"
-                                                                        value={editorState.resourceMatch}
-                                                                        onChange={(e) =>
-                                                                            setEditorState((s) => ({
-                                                                                ...s,
-                                                                                resourceMatch: String(e.target.value),
-                                                                            }))
-                                                                        }
-                                                                    >
-                                                                        <MenuItem value="prefix">prefix</MenuItem>
-                                                                        <MenuItem value="contains">contains</MenuItem>
-                                                                        <MenuItem value="exact">exact</MenuItem>
-                                                                    </Select>
-                                                                    <FormHelperText>
-                                                                        `prefix` is usually the safest default for paths.
-                                                                    </FormHelperText>
-                                                                </FormControl>
-                                                            </Stack>
-                                                        </Stack>
-                                                    </Stack>
-                                                ) : (
-                                                    <TextField
-                                                        label="Patterns"
-                                                        size="small"
-                                                        fullWidth
-                                                        multiline
-                                                        minRows={3}
-                                                        value={editorState.patterns}
-                                                        onChange={(e) => setEditorState((s) => ({ ...s, patterns: e.target.value }))}
-                                                        helperText="One pattern per line. Used by text_match rules."
-                                                    />
-                                                )}
-
-                                                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ md: 'flex-start' }}>
-                                                    <TextField
-                                                        label="Reason"
-                                                        size="small"
-                                                        fullWidth
-                                                        value={editorState.reason}
-                                                        onChange={(e) => setEditorState((s) => ({ ...s, reason: e.target.value }))}
-                                                        helperText="Shown to users when a rule blocks or reviews content."
-                                                    />
-                                                    <Button
-                                                        variant="outlined"
-                                                        size="small"
-                                                        sx={{ minWidth: { md: 140 }, mt: { md: 0.5 } }}
-                                                        onClick={() =>
-                                                            setEditorState((state) => ({
-                                                                ...state,
-                                                                reason: buildSuggestedReason(state),
-                                                            }))
-                                                        }
-                                                    >
-                                                        Generate
-                                                    </Button>
-                                                </Stack>
-
-                                                <Accordion
-                                                    defaultExpanded={false}
-                                                    elevation={0}
-                                                    sx={{ border: '1px solid', borderColor: 'divider' }}
+                                                <Stack
+                                                    direction="row"
+                                                    spacing={1}
+                                                    alignItems="center"
+                                                    sx={{ width: { xs: '100%', md: 'auto' }, justifyContent: { xs: 'space-between', md: 'flex-end' } }}
                                                 >
-                                                    <AccordionSummary expandIcon={<ExpandMore />}>
-                                                        <Stack>
-                                                            <Typography variant="subtitle2">Advanced Settings</Typography>
-                                                            <Typography variant="caption" color="text.secondary">
-                                                                Scope and evaluation targets. Defaults apply when left empty.
-                                                            </Typography>
-                                                        </Stack>
-                                                    </AccordionSummary>
-                                                    <AccordionDetails>
-                                                        <Stack spacing={2}>
-                                                            <Box>
-                                                                <Typography variant="subtitle2">Scope</Typography>
-                                                                <Typography variant="caption" color="text.secondary">
-                                                                    Where the rule applies: scenario (provider), direction, and content
-                                                                    type.
-                                                                </Typography>
-                                                                <Stack spacing={1.5} sx={{ mt: 1 }}>
-                                                                    <FormControl component="fieldset" variant="standard">
-                                                                        <Typography variant="caption" color="text.secondary">
-                                                                            Scenarios
-                                                                        </Typography>
-                                                                        <FormGroup
-                                                                            row
-                                                                            sx={{
-                                                                                alignItems: 'center',
-                                                                                columnGap: 1.5,
-                                                                                rowGap: 0.5,
-                                                                            }}
-                                                                        >
-                                                                            {scenarioOptions.map((option) => (
-                                                                                <FormControlLabel
-                                                                                    key={`scenario-${option}`}
-                                                                                    sx={{ ml: 0, mr: 1 }}
-                                                                                    control={
-                                                                                        <Checkbox
-                                                                                            size="small"
-                                                                                            checked={editorState.scenarios.includes(option)}
-                                                                                            onChange={() =>
-                                                                                                setEditorState((state) => ({
-                                                                                                    ...state,
-                                                                                                    scenarios: toggleValue(
-                                                                                                        state.scenarios,
-                                                                                                        option
-                                                                                                    ),
-                                                                                                }))
-                                                                                            }
-                                                                                        />
-                                                                                    }
-                                                                                    label={option}
-                                                                                />
-                                                                            ))}
-                                                                        </FormGroup>
-                                                                        <FormHelperText>
-                                                                            Synced from the Guardrails-supported scenario list. Leave empty to apply to all supported scenarios.
-                                                                        </FormHelperText>
-                                                                    </FormControl>
-
-                                                                    <FormControl component="fieldset" variant="standard">
-                                                                        <Typography variant="caption" color="text.secondary">
-                                                                            Directions
-                                                                        </Typography>
-                                                                        <FormGroup
-                                                                            row
-                                                                            sx={{
-                                                                                alignItems: 'center',
-                                                                                columnGap: 1.5,
-                                                                                rowGap: 0.5,
-                                                                            }}
-                                                                        >
-                                                                            {directionOptions.map((option) => (
-                                                                                <FormControlLabel
-                                                                                    key={`direction-${option}`}
-                                                                                    sx={{ ml: 0, mr: 1 }}
-                                                                                    control={
-                                                                                        <Checkbox
-                                                                                            size="small"
-                                                                                            checked={editorState.directions.includes(option)}
-                                                                                            onChange={() =>
-                                                                                                setEditorState((state) => ({
-                                                                                                    ...state,
-                                                                                                    directions: toggleValue(
-                                                                                                        state.directions,
-                                                                                                        option
-                                                                                                    ),
-                                                                                                }))
-                                                                                            }
-                                                                                        />
-                                                                                    }
-                                                                                    label={option}
-                                                                                />
-                                                                            ))}
-                                                                        </FormGroup>
-                                                                        <FormHelperText>
-                                                                            Request = tool_result, Response = model output.
-                                                                        </FormHelperText>
-                                                                    </FormControl>
-
-                                                                    <FormControl component="fieldset" variant="standard">
-                                                                        <Typography variant="caption" color="text.secondary">
-                                                                            Content Types
-                                                                        </Typography>
-                                                                        <FormGroup
-                                                                            row
-                                                                            sx={{
-                                                                                alignItems: 'center',
-                                                                                columnGap: 1.5,
-                                                                                rowGap: 0.5,
-                                                                            }}
-                                                                        >
-                                                                            {contentTypeOptions.map((option) => (
-                                                                                <FormControlLabel
-                                                                                    key={`content-${option}`}
-                                                                                    sx={{ ml: 0, mr: 1 }}
-                                                                                    control={
-                                                                                        <Checkbox
-                                                                                            size="small"
-                                                                                            checked={editorState.contentTypes.includes(option)}
-                                                                                            onChange={() =>
-                                                                                                setEditorState((state) => ({
-                                                                                                    ...state,
-                                                                                                    contentTypes: toggleValue(
-                                                                                                        state.contentTypes,
-                                                                                                        option
-                                                                                                    ),
-                                                                                                }))
-                                                                                            }
-                                                                                        />
-                                                                                    }
-                                                                                    label={option}
-                                                                                />
-                                                                            ))}
-                                                                        </FormGroup>
-                                                                        <FormHelperText>
-                                                                            Controls which content is eligible for this rule.
-                                                                        </FormHelperText>
-                                                                    </FormControl>
-                                                                </Stack>
-                                                            </Box>
-
-                                                            {editorState.type !== 'command_policy' && (
-                                                                <Box sx={{ width: '100%' }}>
-                                                                    <Typography variant="subtitle2">Targets</Typography>
-                                                                    <Typography variant="caption" color="text.secondary">
-                                                                        Which content parts the rule evaluates once it runs.
-                                                                    </Typography>
-                                                                    <FormControl
-                                                                        component="fieldset"
-                                                                        variant="standard"
-                                                                        sx={{ mt: 1, alignItems: 'flex-start', width: '100%' }}
-                                                                    >
-                                                                        <FormGroup
-                                                                            row
-                                                                            sx={{
-                                                                                alignItems: 'center',
-                                                                                columnGap: 1.5,
-                                                                                rowGap: 0.5,
-                                                                                justifyContent: 'flex-start',
-                                                                                width: '100%',
-                                                                            }}
-                                                                        >
-                                                                            {targetOptions.map((option) => (
-                                                                                <FormControlLabel
-                                                                                    key={`target-${option}`}
-                                                                                    sx={{ ml: 0, mr: 1 }}
-                                                                                    control={
-                                                                                        <Checkbox
-                                                                                            size="small"
-                                                                                            checked={editorState.targets.includes(option)}
-                                                                                            onChange={() =>
-                                                                                                setEditorState((state) => ({
-                                                                                                    ...state,
-                                                                                                    targets: toggleValue(state.targets, option),
-                                                                                                }))
-                                                                                            }
-                                                                                        />
-                                                                                    }
-                                                                                    label={option}
-                                                                                />
-                                                                            ))}
-                                                                        </FormGroup>
-                                                                        <FormHelperText sx={{ textAlign: 'left' }}>
-                                                                            Leave empty to evaluate all available content.
-                                                                        </FormHelperText>
-                                                                    </FormControl>
-                                                                </Box>
-                                                            )}
-                                                        </Stack>
-                                                    </AccordionDetails>
-                                                </Accordion>
-
-                                                <Stack direction="row" spacing={1} justifyContent="flex-end">
-                                                    <Button variant="outlined" size="small" onClick={handleCloseEditor}>
-                                                        Close
-                                                    </Button>
-                                                    <Button
-                                                        variant="outlined"
-                                                        size="small"
-                                                        disabled={pendingSave}
-                                                        onClick={handleDuplicateRule}
-                                                    >
-                                                        Duplicate
-                                                    </Button>
-                                                    <Button
-                                                        variant="contained"
-                                                        size="small"
-                                                        disabled={pendingSave}
-                                                        onClick={handleSaveRule}
-                                                    >
-                                                        {pendingSave ? 'Saving…' : 'Save'}
-                                                    </Button>
+                                                    <Chip size="small" label={group.enabled === false ? 'Disabled' : 'Enabled'} />
+                                                    <FormControlLabel
+                                                        sx={{ ml: 0 }}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        control={
+                                                            <Switch
+                                                                size="small"
+                                                                checked={group.enabled !== false}
+                                                                disabled={pendingGroupId === group.id}
+                                                                onChange={(e) => handleToggleGroup(group.id, e.target.checked)}
+                                                            />
+                                                        }
+                                                        label="Enabled"
+                                                    />
+                                                    <Tooltip title="Delete group" arrow>
+                                                        <span>
+                                                            <IconButton
+                                                                size="small"
+                                                                disabled={pendingGroupId === group.id}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setDeleteGroupId(group.id);
+                                                                }}
+                                                            >
+                                                                <DeleteOutline fontSize="small" />
+                                                            </IconButton>
+                                                        </span>
+                                                    </Tooltip>
                                                 </Stack>
-                                            </Stack>
-                                        </Collapse>
-                                        {!editorOpen && (
-                                            <Box sx={{ py: 6, textAlign: 'center' }}>
-                                                <Typography variant="body2" color="text.secondary">
-                                                    Select a rule from the list or create a new one to start editing.
-                                                </Typography>
                                             </Box>
-                                        )}
-                                        <Dialog open={confirmCloseOpen} onClose={() => handleConfirmClose('cancel')}>
-                                            <DialogTitle>Unsaved changes</DialogTitle>
-                                            <DialogContent>
-                                                <Typography variant="body2" color="text.secondary">
-                                                    You have unsaved changes in this rule. What would you like to do?
-                                                </Typography>
-                                            </DialogContent>
-                                            <DialogActions>
-                                                <Button variant="text" onClick={() => handleConfirmClose('cancel')}>
-                                                    Cancel
-                                                </Button>
-                                                <Button variant="outlined" onClick={() => handleConfirmClose('discard')}>
-                                                    Discard
-                                                </Button>
-                                                <Button variant="contained" onClick={() => handleConfirmClose('save')}>
-                                                    Save & Close
-                                                </Button>
-                                            </DialogActions>
-                                        </Dialog>
-                                        <Dialog open={!!deleteRuleId} onClose={() => setDeleteRuleId(null)}>
-                                            <DialogTitle>Delete rule</DialogTitle>
-                                            <DialogContent>
-                                                <Typography variant="body2" color="text.secondary">
-                                                    {deleteRuleId
-                                                        ? `Delete rule "${deleteRuleId}"? This will update guardrails.yaml and reload the engine.`
-                                                        : 'Delete this rule?'}
-                                                </Typography>
-                                            </DialogContent>
-                                            <DialogActions>
-                                                <Button variant="text" onClick={() => setDeleteRuleId(null)}>
-                                                    Cancel
-                                                </Button>
-                                                <Button variant="contained" color="error" onClick={handleDeleteRule}>
-                                                    Delete
-                                                </Button>
-                                            </DialogActions>
-                                        </Dialog>
-                                    </Box>
+                                        </ListItem>
+                                    ))}
+                                </List>
+                            )}
+                        </Stack>
+                    </Stack>
+                </UnifiedCard>
+
+                <UnifiedCard
+                    title="Policies"
+                    subtitle={`${policies.length} polic${policies.length === 1 ? 'y' : 'ies'} configured`}
+                    size="full"
+                    rightAction={
+                        <Stack direction="row" spacing={1}>
+                            <Button
+                                variant="contained"
+                                size="small"
+                                startIcon={<Rule />}
+                                onClick={() => handleNewPolicy(selectedPolicyTab)}
+                            >
+                                New Policy
+                            </Button>
+                        </Stack>
+                    }
+                >
+                    <Stack spacing={2}>
+                        <Alert severity="info">
+                            Create or edit policies in a dialog. Resource access policies protect files and directories, command execution policies control commands, and content policies filter returned text.
+                        </Alert>
+                        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                            <Tabs
+                                value={selectedPolicyTab}
+                                onChange={(_, value) => setSelectedPolicyTab(value)}
+                                variant="scrollable"
+                                scrollButtons="auto"
+                            >
+                                <Tab value="resource_access" label={`Resource Access (${resourceAccessPolicies.length})`} />
+                                <Tab value="command_execution" label={`Command Execution (${commandExecutionPolicies.length})`} />
+                                <Tab value="content" label={`Content (${contentPolicies.length})`} />
+                            </Tabs>
+                        </Box>
+                        {selectedPolicyTab === 'resource_access' &&
+                            renderPolicySection(
+                                'Resource Access Policies',
+                                'Use these to control reads, writes, deletes, and other path or resource access behaviors.',
+                                resourceAccessPolicies,
+                                'resource_access'
+                            )}
+                        {selectedPolicyTab === 'command_execution' &&
+                            renderPolicySection(
+                                'Command Execution Policies',
+                                'Use these to control dangerous command execution patterns and shell behavior.',
+                                commandExecutionPolicies,
+                                'command_execution'
+                            )}
+                        {selectedPolicyTab === 'content' &&
+                            renderPolicySection(
+                                'Content Policies',
+                                'Use these to filter model output and tool results before they are shown or forwarded.',
+                                contentPolicies,
+                                'content'
+                            )}
+                    </Stack>
+                </UnifiedCard>
+            </Stack>
+
+            <Dialog open={editorOpen} onClose={handleCloseEditor} disableRestoreFocus fullWidth maxWidth="md">
+                <DialogTitle>{isNewPolicy ? 'New Policy' : `Edit Policy${selectedPolicyId ? ` · ${selectedPolicyId}` : ''}`}</DialogTitle>
+                <DialogContent dividers>
+                    <Stack spacing={2} sx={{ pt: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Typography variant="subtitle2">Policy Editor</Typography>
+                            <Stack spacing={0} alignItems="flex-end">
+                                <FormControlLabel
+                                    control={
+                                        <Switch
+                                            size="small"
+                                            checked={editorState.enabled}
+                                            onChange={(e) => setEditorState((state) => ({ ...state, enabled: e.target.checked }))}
+                                        />
+                                    }
+                                    label="Enabled"
+                                />
+                                <Typography variant="caption" color="text.secondary">
+                                    Synced with the list toggle.
+                                </Typography>
+                            </Stack>
+                        </Box>
+
+                        <Alert severity="info">
+                            {editorState.kind === 'resource_access'
+                                ? 'Guided flow: choose the access action first, then define the protected resource.'
+                                : editorState.kind === 'command_execution'
+                                  ? 'Guided flow: describe the command you want to block or review, then add optional tool or resource filters.'
+                                : editorState.kind === 'content'
+                                  ? 'Guided flow: choose where the content appears, then add a few patterns that clearly describe what should be blocked or reviewed.'
+                                  : 'Start by choosing the policy kind. The editor will then show the relevant options.'}
+                        </Alert>
+
+                        <Typography variant="subtitle2">Basic Settings</Typography>
+                        <Stack spacing={1}>
+                            <Typography variant="body2" color="text.secondary">
+                                Policy kind defines what the policy inspects. Choose one before filling the rest of the form.
+                            </Typography>
+                            <Box
+                                sx={{
+                                    display: 'grid',
+                                    gridTemplateColumns: { xs: '1fr', md: '1fr', lg: '1fr 1fr 1fr' },
+                                    gap: 2,
+                                }}
+                            >
+                                <Box
+                                    onClick={() => setEditorState((state) => applyKindDefaults('resource_access', state))}
+                                    sx={{
+                                        border: '1px solid',
+                                        borderColor: editorState.kind === 'resource_access' ? 'primary.main' : 'divider',
+                                        bgcolor: editorState.kind === 'resource_access' ? 'action.selected' : 'background.paper',
+                                        borderRadius: 2,
+                                        p: 2,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease',
+                                        '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
+                                    }}
+                                >
+                                    <Stack spacing={1.25}>
+                                        <Stack direction="row" spacing={1} alignItems="center">
+                                            <Terminal fontSize="small" color={editorState.kind === 'resource_access' ? 'primary' : 'action'} />
+                                            <Typography variant="subtitle2">Resource Access</Typography>
+                                            {editorState.kind === 'resource_access' && <Chip size="small" color="primary" label="Selected" />}
+                                        </Stack>
+                                        <Typography variant="body2" color="text.secondary">
+                                            Inspect access to files, directories, and other resources. Use this for reads, writes, deletes, and other resource-oriented operations.
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Best for: `~/.ssh`, `.env`, secrets files, protected paths.
+                                        </Typography>
+                                    </Stack>
                                 </Box>
 
+                                <Box
+                                    onClick={() => setEditorState((state) => applyKindDefaults('command_execution', state))}
+                                    sx={{
+                                        border: '1px solid',
+                                        borderColor: editorState.kind === 'command_execution' ? 'primary.main' : 'divider',
+                                        bgcolor: editorState.kind === 'command_execution' ? 'action.selected' : 'background.paper',
+                                        borderRadius: 2,
+                                        p: 2,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease',
+                                        '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
+                                    }}
+                                >
+                                        <Stack spacing={1.25}>
+                                        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                            <Terminal fontSize="small" color={editorState.kind === 'command_execution' ? 'primary' : 'action'} />
+                                            <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap' }}>
+                                                Command Execution
+                                            </Typography>
+                                            {editorState.kind === 'command_execution' && <Chip size="small" color="primary" label="Selected" />}
+                                        </Stack>
+                                        <Typography variant="body2" color="text.secondary">
+                                            Inspect commands that the model wants to run. Use this for dangerous shell commands, execution patterns, or risky programs.
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Best for: `rm -rf`, `curl | sh`, shell execution, dangerous commands.
+                                        </Typography>
+                                    </Stack>
+                                </Box>
+
+                                <Box
+                                    onClick={() => setEditorState((state) => applyKindDefaults('content', state))}
+                                    sx={{
+                                        border: '1px solid',
+                                        borderColor: editorState.kind === 'content' ? 'primary.main' : 'divider',
+                                        bgcolor: editorState.kind === 'content' ? 'action.selected' : 'background.paper',
+                                        borderRadius: 2,
+                                        p: 2,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease',
+                                        '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
+                                    }}
+                                >
+                                    <Stack spacing={1.25}>
+                                        <Stack direction="row" spacing={1} alignItems="center">
+                                            <ArticleOutlined fontSize="small" color={editorState.kind === 'content' ? 'primary' : 'action'} />
+                                            <Typography variant="subtitle2">Content Policy</Typography>
+                                            {editorState.kind === 'content' && <Chip size="small" color="primary" label="Selected" />}
+                                        </Stack>
+                                        <Typography variant="body2" color="text.secondary">
+                                            Inspect returned text from the model or tools. Use this for secrets, unsafe phrases, sensitive file contents, or outputs that should be blocked.
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Best for: tool results, model output, text patterns, secret filtering.
+                                        </Typography>
+                                    </Stack>
+                                </Box>
+                            </Box>
+                        </Stack>
+
+                        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+                            <TextField
+                                label="Name"
+                                size="small"
+                                fullWidth
+                                value={editorState.name}
+                                onChange={(e) =>
+                                    setEditorState((state) => {
+                                        const name = e.target.value;
+                                        return {
+                                            ...state,
+                                            name,
+                                            id: isNewPolicy ? generatePolicyId(name, state.kind) : state.id,
+                                        };
+                                    })
+                                }
+                                helperText="Human-friendly label shown in UI."
+                                disabled={!editorState.kind}
+                            />
+                        </Stack>
+
+                        {editorState.kind ? (
+                            <>
+                                <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
+                                    <Stack spacing={2}>
+                                        <Box>
+                                            <Typography variant="subtitle2">
+                                                Assign Group
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                                Groups are mainly for ownership and shared defaults. Choose one when this policy belongs to a specific risk bucket, team, or scenario set.
+                                            </Typography>
+                                            <Box
+                                                sx={{
+                                                    display: 'grid',
+                                                    gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                                                    gap: 1.5,
+                                                    mt: 1.5,
+                                                }}
+                                            >
+                                                <Box
+                                                    onClick={() => setEditorState((state) => ({ ...state, group: '' }))}
+                                                    sx={{
+                                                        border: '1px solid',
+                                                        borderColor: editorState.group === '' ? 'primary.main' : 'divider',
+                                                        bgcolor: editorState.group === '' ? 'action.selected' : 'background.paper',
+                                                        borderRadius: 2,
+                                                        p: 1.5,
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.15s ease',
+                                                        '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
+                                                    }}
+                                                >
+                                                    <Stack spacing={0.75}>
+                                                        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                                            <Typography variant="body2" fontWeight={600}>
+                                                                Ungrouped
+                                                            </Typography>
+                                                            {editorState.group === '' && <Chip size="small" color="primary" label="Selected" />}
+                                                        </Stack>
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            Keep this policy standalone. It will not inherit any group defaults.
+                                                        </Typography>
+                                                    </Stack>
+                                                </Box>
+                                                {groupOptions.map((option) => {
+                                                    const selected = editorState.group === option.value;
+                                                    return (
+                                                        <Box
+                                                            key={option.value}
+                                                            onClick={() => setEditorState((state) => ({ ...state, group: option.value }))}
+                                                            sx={{
+                                                                border: '1px solid',
+                                                                borderColor: selected ? 'primary.main' : 'divider',
+                                                                bgcolor: selected ? 'action.selected' : 'background.paper',
+                                                                borderRadius: 2,
+                                                                p: 1.5,
+                                                                cursor: 'pointer',
+                                                                transition: 'all 0.15s ease',
+                                                                '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
+                                                            }}
+                                                        >
+                                                            <Stack spacing={0.75}>
+                                                                <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                                                    <Typography variant="body2" fontWeight={600}>
+                                                                        {option.label}
+                                                                    </Typography>
+                                                                    {selected && <Chip size="small" color="primary" label="Selected" />}
+                                                                </Stack>
+                                                                <Typography variant="caption" color="text.secondary">
+                                                                    Policies in this group inherit its defaults when those fields are left empty.
+                                                                </Typography>
+                                                            </Stack>
+                                                        </Box>
+                                                    );
+                                                })}
+                                            </Box>
+                                        </Box>
+                                    </Stack>
+                                </Box>
+
+                                <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
+                                    <Stack spacing={2}>
+                                        <Box>
+                                            <Typography variant="subtitle2">
+                                                Set Verdict
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                                The verdict defines what Guardrails should do once this policy matches.
+                                            </Typography>
+                                            <Box
+                                                sx={{
+                                                    display: 'grid',
+                                                    gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' },
+                                                    gap: 1.5,
+                                                    mt: 1.5,
+                                                }}
+                                            >
+                                                {[
+                                                    {
+                                                        value: 'allow',
+                                                        label: 'Allow',
+                                                        description: 'Record the match but allow the content or action to continue.',
+                                                    },
+                                                    {
+                                                        value: 'review',
+                                                        label: 'Review',
+                                                        description: 'Mark the result as needing attention without fully blocking it.',
+                                                    },
+                                                    {
+                                                        value: 'block',
+                                                        label: 'Block',
+                                                        description: 'Stop the content or action and return the policy reason to the user.',
+                                                    },
+                                                ].map((option) => {
+                                                    const selected = editorState.verdict === option.value;
+                                                    return (
+                                                        <Box
+                                                            key={option.value}
+                                                            onClick={() => setEditorState((state) => ({ ...state, verdict: option.value }))}
+                                                            sx={{
+                                                                border: '1px solid',
+                                                                borderColor: selected ? 'primary.main' : 'divider',
+                                                                bgcolor: selected ? 'action.selected' : 'background.paper',
+                                                                borderRadius: 2,
+                                                                p: 1.5,
+                                                                cursor: 'pointer',
+                                                                transition: 'all 0.15s ease',
+                                                                '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
+                                                            }}
+                                                        >
+                                                            <Stack spacing={0.75}>
+                                                                <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                                                    <Typography variant="body2" fontWeight={600}>
+                                                                        {option.label}
+                                                                    </Typography>
+                                                                    {selected && <Chip size="small" color="primary" label="Selected" />}
+                                                                </Stack>
+                                                                <Typography variant="caption" color="text.secondary">
+                                                                    {option.description}
+                                                                </Typography>
+                                                            </Stack>
+                                                        </Box>
+                                                    );
+                                                })}
+                                            </Box>
+                                        </Box>
+                                    </Stack>
+                                </Box>
+
+                                {editorState.kind === 'resource_access' ? (
+                                    <Box
+                                        sx={{
+                                            display: 'grid',
+                                            gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                                            gap: 2,
+                                        }}
+                                    >
+                                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
+                                            <Stack spacing={1.5}>
+                                                <Typography variant="subtitle2">Choose Actions</Typography>
+                                                <Typography variant="caption" color="text.secondary">
+                                                    Choose the type of resource access you want to control. These actions focus on files, directories, and other protected paths.
+                                                </Typography>
+                                                <Box
+                                                    sx={{
+                                                        display: 'grid',
+                                                        gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                                                        gap: 1.5,
+                                                    }}
+                                                >
+                                                    {resourceAccessActionOptions.map((option) => {
+                                                        const selected = editorState.actions.includes(option.value);
+                                                        return (
+                                                            <Box
+                                                                key={option.value}
+                                                                onClick={() =>
+                                                                    setEditorState((state) => ({
+                                                                        ...state,
+                                                                        actions: toggleValue(state.actions, option.value),
+                                                                    }))
+                                                                }
+                                                                sx={{
+                                                                    border: '1px solid',
+                                                                    borderColor: selected ? 'primary.main' : 'divider',
+                                                                    bgcolor: selected ? 'action.selected' : 'background.paper',
+                                                                    borderRadius: 2,
+                                                                    p: 1.5,
+                                                                    cursor: 'pointer',
+                                                                    transition: 'all 0.15s ease',
+                                                                    '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
+                                                                }}
+                                                            >
+                                                                <Stack spacing={0.75}>
+                                                                    <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                                                        <Typography variant="body2" fontWeight={600}>
+                                                                            {option.label}
+                                                                        </Typography>
+                                                                        {selected && <Chip size="small" color="primary" label="Selected" />}
+                                                                    </Stack>
+                                                                    <Typography variant="caption" color="text.secondary">
+                                                                        {option.description}
+                                                                    </Typography>
+                                                                </Stack>
+                                                            </Box>
+                                                        );
+                                                    })}
+                                                </Box>
+                                                <FormHelperText>
+                                                    `Command Execution` policies always use `execute`, so `execute` is not shown here. Shell redirection is treated as `write`.
+                                                </FormHelperText>
+                                            </Stack>
+                                        </Box>
+
+                                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
+                                            <Stack spacing={1.5}>
+                                                {renderCompactListEditor({
+                                                    title: 'Protected Resources',
+                                                    description: 'Define the files, directories, URLs, or other resources this policy protects.',
+                                                    columnLabel: 'Path / URL / Resource',
+                                                    value: editorState.resources,
+                                                    selectedIndex: selectedResourceRow,
+                                                    onSelectedIndexChange: setSelectedResourceRow,
+                                                    onChange: (resources) => setEditorState((state) => ({ ...state, resources })),
+                                                    placeholder: '~/.ssh',
+                                                    helperText: 'Add one resource per row, such as `~/.ssh`, `.env`, `/etc/ssh`, or `https://api.example.com`.',
+                                                })}
+                                                <FormControl size="small" fullWidth>
+                                                    <InputLabel id="resource-mode">Resource Match</InputLabel>
+                                                    <Select
+                                                        labelId="resource-mode"
+                                                        label="Resource Match"
+                                                        value={editorState.resourceMode}
+                                                        onChange={(e) => setEditorState((state) => ({ ...state, resourceMode: String(e.target.value) }))}
+                                                    >
+                                                        <MenuItem value="prefix">prefix</MenuItem>
+                                                        <MenuItem value="contains">contains</MenuItem>
+                                                        <MenuItem value="exact">exact</MenuItem>
+                                                    </Select>
+                                                    <FormHelperText>
+                                                        This match mode currently applies to every resource in the list. `prefix` is usually the safest default for path-oriented resources.
+                                                    </FormHelperText>
+                                                </FormControl>
+                                            </Stack>
+                                        </Box>
+                                    </Box>
+                                ) : editorState.kind === 'command_execution' ? (
+                                    <Box
+                                        sx={{
+                                            display: 'grid',
+                                            gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                                            gap: 2,
+                                        }}
+                                    >
+                                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
+                                            {renderCompactListEditor({
+                                                title: 'Command Match',
+                                                description: 'Describe the command patterns you want to block or review. This is the main selector for execution policies.',
+                                                columnLabel: 'Command Pattern',
+                                                value: editorState.commandTerms,
+                                                selectedIndex: selectedCommandTermRow,
+                                                onSelectedIndexChange: setSelectedCommandTermRow,
+                                                onChange: (commandTerms) => setEditorState((state) => ({ ...state, commandTerms })),
+                                                placeholder: 'rm -rf',
+                                                helperText: 'One pattern per row, such as `rm -rf`, `curl | sh`, or `python -c`.',
+                                            })}
+                                        </Box>
+
+                                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
+                                            <Stack spacing={1.5}>
+                                                {renderCompactListEditor({
+                                                    title: 'Limit To Resources',
+                                                    description: 'Optional. Add paths only when the command rule should apply to a specific file, directory, URL, or other resource.',
+                                                    columnLabel: 'Path / Resource',
+                                                    value: editorState.resources,
+                                                    selectedIndex: selectedResourceRow,
+                                                    onSelectedIndexChange: setSelectedResourceRow,
+                                                    onChange: (resources) => setEditorState((state) => ({ ...state, resources })),
+                                                    placeholder: '~/.ssh',
+                                                    helperText: 'Optional. Add one resource per row.',
+                                                })}
+                                                <FormControl size="small" fullWidth>
+                                                    <InputLabel id="resource-mode">Resource Match</InputLabel>
+                                                    <Select
+                                                        labelId="resource-mode"
+                                                        label="Resource Match"
+                                                        value={editorState.resourceMode}
+                                                        onChange={(e) => setEditorState((state) => ({ ...state, resourceMode: String(e.target.value) }))}
+                                                    >
+                                                        <MenuItem value="prefix">prefix</MenuItem>
+                                                        <MenuItem value="contains">contains</MenuItem>
+                                                        <MenuItem value="exact">exact</MenuItem>
+                                                    </Select>
+                                                    <FormHelperText>
+                                                        This match mode currently applies to every resource in the list. Use a resource filter only when command matching alone is too broad.
+                                                    </FormHelperText>
+                                                </FormControl>
+                                            </Stack>
+                                        </Box>
+                                    </Box>
+                                ) : (
+                                    <Box
+                                        sx={{
+                                            display: 'grid',
+                                            gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                                            gap: 2,
+                                        }}
+                                    >
+                                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
+                                            <Stack spacing={1.5}>
+                                                {renderCompactListEditor({
+                                                    title: 'Content Patterns',
+                                                    description: 'Define the text you want to block or review. Each row becomes one pattern.',
+                                                    columnLabel: 'Pattern',
+                                                    value: editorState.patterns,
+                                                    selectedIndex: selectedPatternRow,
+                                                    onSelectedIndexChange: setSelectedPatternRow,
+                                                    onChange: (patterns) => setEditorState((state) => ({ ...state, patterns })),
+                                                    placeholder: 'BEGIN OPENSSH PRIVATE KEY',
+                                                    helperText: 'Use a few specific patterns instead of a long generic list.',
+                                                })}
+                                                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+                                                    <FormControl size="small" fullWidth>
+                                                        <InputLabel id="pattern-mode">Pattern Mode</InputLabel>
+                                                        <Select
+                                                            labelId="pattern-mode"
+                                                            label="Pattern Mode"
+                                                            value={editorState.patternMode}
+                                                            onChange={(e) => setEditorState((state) => ({ ...state, patternMode: String(e.target.value) }))}
+                                                        >
+                                                            <MenuItem value="substring">substring</MenuItem>
+                                                            <MenuItem value="regex">regex</MenuItem>
+                                                        </Select>
+                                                        <FormHelperText>Use regex only when substring matching is not precise enough.</FormHelperText>
+                                                    </FormControl>
+                                                    <FormControlLabel
+                                                        sx={{ ml: 0, alignItems: 'center', minWidth: { md: 160 } }}
+                                                        control={
+                                                            <Switch
+                                                                size="small"
+                                                                checked={editorState.caseSensitive}
+                                                                onChange={(e) => setEditorState((state) => ({ ...state, caseSensitive: e.target.checked }))}
+                                                            />
+                                                        }
+                                                        label="Case sensitive"
+                                                    />
+                                                </Stack>
+                                            </Stack>
+                                        </Box>
+
+                                    </Box>
+                                )}
+
+                                <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
+                                    <Stack spacing={1.5}>
+                                        <Stack
+                                            direction={{ xs: 'column', md: 'row' }}
+                                            spacing={1.5}
+                                            justifyContent="space-between"
+                                            alignItems={{ xs: 'stretch', md: 'flex-start' }}
+                                        >
+                                            <Box>
+                                                <Typography variant="subtitle2">Reason</Typography>
+                                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                                    This message is shown when the policy blocks or reviews content. Keep it short, explicit, and user-facing.
+                                                </Typography>
+                                            </Box>
+                                            <Button
+                                                variant="outlined"
+                                                size="small"
+                                                sx={{ minWidth: { md: 140 }, alignSelf: { md: 'flex-start' } }}
+                                                onClick={() => setEditorState((state) => ({ ...state, reason: buildSuggestedReason(state) }))}
+                                            >
+                                                Generate
+                                            </Button>
+                                        </Stack>
+                                        <TextField
+                                            size="small"
+                                            fullWidth
+                                            multiline
+                                            minRows={2}
+                                            maxRows={4}
+                                            value={editorState.reason}
+                                            onChange={(e) => setEditorState((state) => ({ ...state, reason: e.target.value }))}
+                                            placeholder="Example: Access to protected SSH resources is blocked."
+                                        />
+                                    </Stack>
+                                </Box>
+
+                                {renderScenarioScopeSelector({
+                                    title: 'Scenario Scope',
+                                    description:
+                                        'Choose where this policy applies. By default, new policies start enabled for every Guardrails-supported scenario.',
+                                    value: editorState.scenarios,
+                                    onChange: (scenarios) => setEditorState((state) => ({ ...state, scenarios })),
+                                    helperText: 'Leave every scenario selected unless this policy should only apply to a narrower workflow.',
+                                })}
+                            </>
+                        ) : null}
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button variant="text" onClick={handleCloseEditor}>
+                        Cancel
+                    </Button>
+                    <Button variant="outlined" disabled={pendingSave} onClick={handleDuplicatePolicy}>
+                        Duplicate
+                    </Button>
+                    <Button variant="contained" disabled={pendingSave} onClick={handleSavePolicy}>
+                        {pendingSave ? 'Saving…' : 'Save'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={confirmCloseOpen} onClose={() => handleConfirmClose('cancel')} disableRestoreFocus>
+                <DialogTitle>Unsaved changes</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" color="text.secondary">
+                        You have unsaved changes in this policy. What would you like to do?
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button variant="text" onClick={() => handleConfirmClose('cancel')}>
+                        Cancel
+                    </Button>
+                    <Button variant="outlined" onClick={() => handleConfirmClose('discard')}>
+                        Discard
+                    </Button>
+                    <Button variant="contained" onClick={() => handleConfirmClose('save')}>
+                        Save & Close
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={!!deletePolicyId} onClose={() => setDeletePolicyId(null)} disableRestoreFocus>
+                <DialogTitle>Delete policy</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" color="text.secondary">
+                        {deletePolicyId
+                            ? `Delete policy "${deletePolicyId}"? This will update guardrails.yaml and reload the engine.`
+                            : 'Delete this policy?'}
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button variant="text" onClick={() => setDeletePolicyId(null)}>
+                        Cancel
+                    </Button>
+                    <Button variant="contained" color="error" onClick={handleDeletePolicy}>
+                        Delete
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog
+                open={groupDialogOpen}
+                onClose={() => {
+                    if (!pendingGroupSave) {
+                        setGroupDialogOpen(false);
+                        blurActiveElement();
+                    }
+                }}
+                disableRestoreFocus
+                fullWidth
+                maxWidth="sm"
+            >
+                <DialogTitle>{editingGroupId ? 'Edit group' : 'New group'}</DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2} sx={{ pt: 1 }}>
+                        <Alert severity="info">
+                            Groups are used to organize policies and provide shared defaults like severity, default verdict, and scope.
+                        </Alert>
+
+                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
+                            <Stack spacing={2}>
+                                <Typography variant="subtitle2">Basic Settings</Typography>
+                                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+                                    <TextField
+                                        label="Name"
+                                        size="small"
+                                        fullWidth
+                                        value={groupEditorState.name}
+                                        onChange={(e) =>
+                                            setGroupEditorState((state) => {
+                                                const name = e.target.value;
+                                                return {
+                                                    ...state,
+                                                    name,
+                                                    id: editingGroupId ? state.id : generateGroupId(name),
+                                                };
+                                            })
+                                        }
+                                        helperText="Human-friendly label shown in UI."
+                                    />
+                                </Stack>
+                                <FormHelperText>
+                                    A stable group ID is generated automatically from the name and used by policies internally.
+                                </FormHelperText>
+                                <FormControlLabel
+                                    control={
+                                        <Switch
+                                            size="small"
+                                            checked={groupEditorState.enabled}
+                                            onChange={(e) => setGroupEditorState((state) => ({ ...state, enabled: e.target.checked }))}
+                                        />
+                                    }
+                                    label="Enabled"
+                                />
                             </Stack>
-                    </UnifiedCard>
-                </Box>
-            </Stack>
+                        </Box>
+
+                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
+                            <Stack spacing={2}>
+                                <Typography variant="subtitle2">Defaults</Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    Defaults are inherited by policies in this group when those policies leave the field empty. They help you define a common baseline once instead of repeating it in every policy.
+                                </Typography>
+                                <Box>
+                                    <Typography variant="caption" color="text.secondary">
+                                        Severity
+                                    </Typography>
+                                    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
+                                        {[
+                                            { value: 'low', label: 'Low' },
+                                            { value: 'medium', label: 'Medium' },
+                                            { value: 'high', label: 'High' },
+                                        ].map((option) => (
+                                            <Chip
+                                                key={option.value}
+                                                label={option.label}
+                                                clickable
+                                                color={groupEditorState.severity === option.value ? 'primary' : 'default'}
+                                                variant={groupEditorState.severity === option.value ? 'filled' : 'outlined'}
+                                                onClick={() => setGroupEditorState((state) => ({ ...state, severity: option.value }))}
+                                            />
+                                        ))}
+                                    </Stack>
+                                    <FormHelperText sx={{ mt: 1 }}>Used for risk grouping and UI labeling.</FormHelperText>
+                                </Box>
+
+                                <Box>
+                                    <Typography variant="caption" color="text.secondary">
+                                        Default Verdict
+                                    </Typography>
+                                    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
+                                        {[
+                                            { value: 'allow', label: 'Allow' },
+                                            { value: 'review', label: 'Review' },
+                                            { value: 'block', label: 'Block' },
+                                        ].map((option) => (
+                                            <Chip
+                                                key={option.value}
+                                                label={option.label}
+                                                clickable
+                                                color={groupEditorState.defaultVerdict === option.value ? 'primary' : 'default'}
+                                                variant={groupEditorState.defaultVerdict === option.value ? 'filled' : 'outlined'}
+                                                onClick={() =>
+                                                    setGroupEditorState((state) => ({ ...state, defaultVerdict: option.value }))
+                                                }
+                                            />
+                                        ))}
+                                    </Stack>
+                                    <FormHelperText sx={{ mt: 1 }}>
+                                        Used when a policy does not set its own verdict.
+                                    </FormHelperText>
+                                </Box>
+                            </Stack>
+                        </Box>
+
+                        {renderScenarioScopeSelector({
+                            title: 'Default Scenario Scope',
+                            description:
+                                'Policies in this group inherit these scenarios unless they explicitly set their own scope.',
+                            value: groupEditorState.scenarios,
+                            onChange: (scenarios) => setGroupEditorState((state) => ({ ...state, scenarios })),
+                            helperText: 'New groups start with every supported scenario selected so their policies apply broadly by default.',
+                        })}
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        variant="text"
+                        onClick={() => {
+                            setGroupDialogOpen(false);
+                            blurActiveElement();
+                        }}
+                        disabled={pendingGroupSave}
+                    >
+                        Cancel
+                    </Button>
+                    <Button variant="contained" onClick={handleSaveGroup} disabled={pendingGroupSave}>
+                        {pendingGroupSave ? 'Saving…' : 'Save'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={!!deleteGroupId} onClose={() => setDeleteGroupId(null)} disableRestoreFocus>
+                <DialogTitle>Delete group</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" color="text.secondary">
+                        {deleteGroupId
+                            ? `Delete group "${deleteGroupId}"? This only works when no policies still reference the group.`
+                            : 'Delete this group?'}
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button variant="text" onClick={() => setDeleteGroupId(null)}>
+                        Cancel
+                    </Button>
+                    <Button variant="contained" color="error" onClick={handleDeleteGroup}>
+                        Delete
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </PageLayout>
     );
 };

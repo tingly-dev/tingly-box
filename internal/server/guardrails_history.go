@@ -11,17 +11,17 @@ import (
 )
 
 type guardrailsHistoryEntry struct {
-	Time           time.Time                `json:"time"`
-	Scenario       string                   `json:"scenario"`
-	Model          string                   `json:"model"`
-	Provider       string                   `json:"provider"`
-	Direction      string                   `json:"direction"`
-	Phase          string                   `json:"phase"`
-	Verdict        string                   `json:"verdict"`
-	BlockMessage   string                   `json:"block_message,omitempty"`
-	Preview        string                   `json:"preview,omitempty"`
-	CommandName    string                   `json:"command_name,omitempty"`
-	Reasons        []guardrails.RuleResult  `json:"reasons,omitempty"`
+	Time         time.Time                 `json:"time"`
+	Scenario     string                    `json:"scenario"`
+	Model        string                    `json:"model"`
+	Provider     string                    `json:"provider"`
+	Direction    string                    `json:"direction"`
+	Phase        string                    `json:"phase"`
+	Verdict      string                    `json:"verdict"`
+	BlockMessage string                    `json:"block_message,omitempty"`
+	Preview      string                    `json:"preview,omitempty"`
+	CommandName  string                    `json:"command_name,omitempty"`
+	Reasons      []guardrails.PolicyResult `json:"reasons,omitempty"`
 }
 
 type guardrailsHistoryStore struct {
@@ -80,7 +80,7 @@ func (s *Server) recordGuardrailsHistory(session guardrailsSession, input guardr
 		Verdict:      string(result.Verdict),
 		BlockMessage: blockMessage,
 		Preview:      input.Content.Preview(160),
-		Reasons:      append([]guardrails.RuleResult(nil), result.Reasons...),
+		Reasons:      append([]guardrails.PolicyResult(nil), result.Reasons...),
 	}
 	if input.Content.Command != nil {
 		entry.CommandName = input.Content.Command.Name

@@ -2,9 +2,9 @@ package guardrails
 
 import "context"
 
-// Engine evaluates inputs against a set of guardrail rules.
+// Engine evaluates inputs against a set of guardrail policies.
 type Engine struct {
-	rules         []Rule
+	evaluators    []Evaluator
 	strategy      CombineStrategy
 	errorStrategy ErrorStrategy
 	shortCircuit  bool
@@ -25,10 +25,10 @@ func NewEngine(opts ...Option) *Engine {
 	return e
 }
 
-// WithRules sets the rules for the Engine.
-func WithRules(rules ...Rule) Option {
+// WithEvaluators sets the policy evaluators for the Engine.
+func WithEvaluators(evaluators ...Evaluator) Option {
 	return func(e *Engine) {
-		e.rules = append(e.rules, rules...)
+		e.evaluators = append(e.evaluators, evaluators...)
 	}
 }
 
@@ -57,32 +57,32 @@ func WithShortCircuit(enable bool) Option {
 	}
 }
 
-// Rules returns a copy of current rules.
-func (e *Engine) Rules() []Rule {
-	if len(e.rules) == 0 {
+// Evaluators returns a copy of current policy evaluators.
+func (e *Engine) Evaluators() []Evaluator {
+	if len(e.evaluators) == 0 {
 		return nil
 	}
-	cpy := make([]Rule, len(e.rules))
-	copy(cpy, e.rules)
+	cpy := make([]Evaluator, len(e.evaluators))
+	copy(cpy, e.evaluators)
 	return cpy
 }
 
-// Evaluate runs all rules and returns the aggregated result.
+// Evaluate runs all policy evaluators and returns the aggregated result.
 func (e *Engine) Evaluate(ctx context.Context, input Input) (Result, error) {
 	result := Result{Verdict: VerdictAllow}
 
-	for _, rule := range e.rules {
-		if rule == nil {
+	for _, evaluator := range e.evaluators {
+		if evaluator == nil {
 			continue
 		}
 
-		ruleResult, err := rule.Evaluate(ctx, input)
+		policyResult, err := evaluator.Evaluate(ctx, input)
 		if err != nil {
-			result.Errors = append(result.Errors, RuleError{
-				RuleID:   rule.ID(),
-				RuleName: rule.Name(),
-				RuleType: rule.Type(),
-				Error:    err.Error(),
+			result.Errors = append(result.Errors, PolicyError{
+				PolicyID:   evaluator.ID(),
+				PolicyName: evaluator.Name(),
+				PolicyType: evaluator.Type(),
+				Error:      err.Error(),
 			})
 
 			errorVerdict := verdictForErrorStrategy(e.errorStrategy)
@@ -94,13 +94,13 @@ func (e *Engine) Evaluate(ctx context.Context, input Input) (Result, error) {
 			continue
 		}
 
-		if ruleResult.Verdict == "" {
-			ruleResult.Verdict = VerdictAllow
+		if policyResult.Verdict == "" {
+			policyResult.Verdict = VerdictAllow
 		}
 
-		if ruleResult.Verdict != VerdictAllow {
-			result.Reasons = append(result.Reasons, ruleResult)
-			result.Verdict = mergeVerdict(result.Verdict, ruleResult.Verdict, e.strategy)
+		if policyResult.Verdict != VerdictAllow {
+			result.Reasons = append(result.Reasons, policyResult)
+			result.Verdict = mergeVerdict(result.Verdict, policyResult.Verdict, e.strategy)
 
 			if e.shortCircuit && result.Verdict == VerdictBlock {
 				break

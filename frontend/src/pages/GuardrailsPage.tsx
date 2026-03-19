@@ -5,9 +5,14 @@ import {
     Button,
     Card,
     CardContent,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
     Grid,
     IconButton,
     Stack,
+    TextField,
     Tooltip,
     Typography,
 } from '@mui/material';
@@ -31,15 +36,18 @@ const GuardrailsPage = () => {
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [configContent, setConfigContent] = useState('');
-    const [rules, setRules] = useState<any[]>([]);
+    const [policies, setPolicies] = useState<any[]>([]);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [importDialogOpen, setImportDialogOpen] = useState(false);
+    const [importText, setImportText] = useState('');
+    const [importing, setImporting] = useState(false);
 
     const loadGuardrails = async (showReloadMessage = false) => {
         try {
             setLoading(true);
             const guardrailsConfig = await api.getGuardrailsConfig();
-            const nextRules = guardrailsConfig?.config?.rules || [];
-            setRules(nextRules);
+            const nextPolicies = guardrailsConfig?.config?.policies || [];
+            setPolicies(nextPolicies);
             setConfigContent(guardrailsConfig?.content || '');
             setLoadError(null);
             if (showReloadMessage) {
@@ -47,7 +55,7 @@ const GuardrailsPage = () => {
             }
         } catch (error: any) {
             console.error('Failed to load guardrails config:', error);
-            setRules([]);
+            setPolicies([]);
             setConfigContent('');
             setLoadError('Failed to load guardrails config');
             if (showReloadMessage) {
@@ -63,12 +71,12 @@ const GuardrailsPage = () => {
     }, []);
 
     const stats = useMemo(() => {
-        const total = rules.length;
-        const enabled = rules.filter((rule) => rule?.enabled).length;
-        const blocking = rules.filter((rule) => rule?.params?.verdict === 'block').length;
-        const commandPolicies = rules.filter((rule) => rule?.type === 'command_policy').length;
-        return { total, enabled, blocking, commandPolicies };
-    }, [rules]);
+        const totalCount = policies.length;
+        const enabled = policies.filter((item) => item?.enabled !== false).length;
+        const blocking = policies.filter((item) => item?.verdict === 'block').length;
+        const operationPolicies = policies.filter((item) => item?.kind === 'operation').length;
+        return { total: totalCount, enabled, blocking, operationPolicies };
+    }, [policies]);
 
     const handleReload = async () => {
         try {
@@ -85,7 +93,8 @@ const GuardrailsPage = () => {
     };
 
     const handleImportClick = () => {
-        fileInputRef.current?.click();
+        setImportText('');
+        setImportDialogOpen(true);
     };
 
     const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -95,17 +104,35 @@ const GuardrailsPage = () => {
         }
         try {
             const content = await file.text();
-            const result = await api.updateGuardrailsConfig(content);
+            setImportText(content);
+        } catch (error: any) {
+            setActionMessage({ type: 'error', text: error?.message || 'Failed to read config file' });
+        } finally {
+            e.target.value = '';
+        }
+    };
+
+    const handleImportSubmit = async () => {
+        if (!importText.trim()) {
+            setActionMessage({ type: 'error', text: 'Paste config text or choose a file first.' });
+            return;
+        }
+
+        try {
+            setImporting(true);
+            const result = await api.updateGuardrailsConfig(importText);
             if (!result?.success) {
                 setActionMessage({ type: 'error', text: result?.error || 'Failed to update guardrails config' });
                 return;
             }
+            setImportDialogOpen(false);
+            setImportText('');
             setActionMessage({ type: 'success', text: 'Guardrails config updated.' });
             await loadGuardrails();
         } catch (error: any) {
             setActionMessage({ type: 'error', text: error?.message || 'Failed to update guardrails config' });
         } finally {
-            e.target.value = '';
+            setImporting(false);
         }
     };
 
@@ -153,10 +180,10 @@ const GuardrailsPage = () => {
                         {actionAlert}
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
                             <Button variant="contained" startIcon={<Rule />} onClick={() => navigate('/guardrails/rules')}>
-                                Manage Rules
+                                Manage Policies
                             </Button>
                             <Button variant="outlined" startIcon={<Security />} onClick={() => navigate('/guardrails/market')}>
-                                Browse Rule Market
+                                Browse Builtins
                             </Button>
                             <Button variant="outlined" startIcon={<HistoryIcon />} onClick={() => navigate('/guardrails/history')}>
                                 View History
@@ -201,7 +228,7 @@ const GuardrailsPage = () => {
                                             {stats.total}
                                         </Typography>
                                         <Typography variant="body2" color="text.secondary">
-                                            Total Rules
+                                            Total Policies
                                         </Typography>
                                     </Box>
                                 </Stack>
@@ -259,7 +286,7 @@ const GuardrailsPage = () => {
                                             {stats.blocking}
                                         </Typography>
                                         <Typography variant="body2" color="text.secondary">
-                                            Block Rules
+                                            Block Policies
                                         </Typography>
                                     </Box>
                                 </Stack>
@@ -285,10 +312,10 @@ const GuardrailsPage = () => {
                                     </Box>
                                     <Box>
                                         <Typography variant="h4" sx={{ fontWeight: 600 }}>
-                                            {stats.commandPolicies}
+                                            {stats.operationPolicies}
                                         </Typography>
                                         <Typography variant="body2" color="text.secondary">
-                                            Command Policies
+                                            Operation Policies
                                         </Typography>
                                     </Box>
                                 </Stack>
@@ -325,13 +352,50 @@ const GuardrailsPage = () => {
                                     Rule management
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary">
-                                    Keep rule editing in the dedicated Rules page so overview and operations stay separate.
+                                    Keep policy editing in the dedicated Policies page so overview and operations stay separate.
                                 </Typography>
                             </Stack>
                         </Grid>
                     </Grid>
                 </UnifiedCard>
             </Stack>
+            <Dialog
+                open={importDialogOpen}
+                onClose={() => !importing && setImportDialogOpen(false)}
+                fullWidth
+                maxWidth="md"
+            >
+                <DialogTitle>Import Guardrails Config</DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2} sx={{ pt: 1 }}>
+                        <Typography variant="body2" color="text.secondary">
+                            Import from a local file or paste YAML or JSON directly. Saving replaces the current Guardrails config.
+                        </Typography>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+                            <Button variant="outlined" startIcon={<FileUpload />} onClick={() => fileInputRef.current?.click()}>
+                                Choose File
+                            </Button>
+                        </Stack>
+                        <TextField
+                            label="Config Content"
+                            value={importText}
+                            onChange={(e) => setImportText(e.target.value)}
+                            multiline
+                            minRows={16}
+                            fullWidth
+                            placeholder={'groups:\n  - id: high-risk\n    name: High Risk\npolicies:\n  - id: block-ssh-read\n    kind: operation\n    ...'}
+                        />
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setImportDialogOpen(false)} disabled={importing}>
+                        Cancel
+                    </Button>
+                    <Button variant="contained" onClick={handleImportSubmit} disabled={importing}>
+                        Import
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </PageLayout>
     );
 };

@@ -12,7 +12,7 @@ type NormalizedCommand struct {
 	Structured map[string]interface{} `json:"structured,omitempty" yaml:"structured,omitempty"`
 }
 
-// MatchText returns a stable semantic representation used by rule-based matching.
+// MatchText returns a stable semantic representation used by policy matching.
 func (n *NormalizedCommand) MatchText() string {
 	if n == nil {
 		return ""
@@ -81,7 +81,9 @@ func normalizeShellCommand(shell *ShellCommand) *NormalizedCommand {
 			if isResourceLikeToken(redirect.Target) {
 				resources = appendUniqueString(resources, redirect.Target)
 			}
-			actions = appendUniqueString(actions, "redirect")
+			// Shell redirection writes command output into a target, so model it
+			// as a write action instead of exposing a separate redirect action.
+			actions = appendUniqueString(actions, ActionWrite)
 		}
 	}
 
@@ -101,17 +103,17 @@ func normalizeShellCommand(shell *ShellCommand) *NormalizedCommand {
 func normalizeShellAction(program string) string {
 	switch program {
 	case "cat", "less", "more", "head", "tail", "grep", "rg", "find", "ls", "stat":
-		return "read"
+		return ActionRead
 	case "cp", "mv", "tee", "touch", "mkdir", "chmod", "chown", "sed", "awk":
-		return "write"
+		return ActionWrite
 	case "rm", "rmdir", "shred":
-		return "delete"
+		return ActionDelete
 	case "curl", "wget", "scp", "rsync":
-		return "transfer"
+		return ActionNetwork
 	case "bash", "sh", "zsh", "python", "node", "ruby", "perl":
-		return "execute"
+		return ActionExecute
 	default:
-		return "execute"
+		return ActionExecute
 	}
 }
 
