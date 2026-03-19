@@ -15,15 +15,17 @@ import {
     Accordion,
     AccordionDetails,
     AccordionSummary,
+    Tooltip,
 } from '@mui/material';
 import {
-    Close as CloseIcon,
     CheckCircle as CheckIcon,
     Error as ErrorIcon,
     ExpandMore as ExpandMoreIcon,
     Speed as SpeedIcon,
     Token as TokenIcon,
     Build as ToolIcon,
+    ContentCopy as CopyIcon,
+    Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import type { ProbeV2TestMode, ProbeV2TargetType } from '@/types/probe-v2.ts';
@@ -316,14 +318,15 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
     const theme = useTheme();
     const [isLoading, setIsLoading] = useState(false);
     const [result, setResult] = useState<ProbeV2Response | null>(null);
-    const [detailsExpanded, setDetailsExpanded] = useState(true);
+    const [detailsExpanded, setDetailsExpanded] = useState(false);
+    const [copyTooltipOpen, setCopyTooltipOpen] = useState(false);
 
     // Reset state when dialog opens
     useEffect(() => {
         if (open) {
             setIsLoading(false);
             setResult(null);
-            setDetailsExpanded(true);
+            setDetailsExpanded(false);
 
             // Auto-start test
             runTest();
@@ -414,6 +417,16 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
         runTest();
     };
 
+    const handleCopyResponse = () => {
+        if (!result) return;
+
+        const responseText = JSON.stringify(result, null, 2);
+        navigator.clipboard.writeText(responseText).then(() => {
+            setCopyTooltipOpen(true);
+            setTimeout(() => setCopyTooltipOpen(false), 2000);
+        });
+    };
+
     return (
         <Dialog
             open={open}
@@ -447,18 +460,32 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
                 </Box>
                 <Box sx={{ display: 'flex', gap: 0.5 }}>
                     {!isLoading && result && (
-                        <Button
-                            variant="outlined"
-                            size="small"
-                            startIcon={<SpeedIcon />}
-                            onClick={handleReRun}
-                        >
-                            Re-run
-                        </Button>
+                        <>
+                            <Tooltip
+                                title={copyTooltipOpen ? 'Copied!' : 'Copy response'}
+                                open={copyTooltipOpen}
+                                onClose={() => setCopyTooltipOpen(false)}
+                                disableHoverListener
+                            >
+                                <IconButton
+                                    onClick={handleCopyResponse}
+                                    size="small"
+                                    sx={{ color: 'text.secondary' }}
+                                >
+                                    <CopyIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Re-run">
+                                <IconButton
+                                    onClick={handleReRun}
+                                    size="small"
+                                    sx={{ color: 'text.secondary' }}
+                                >
+                                    <RefreshIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        </>
                     )}
-                    <IconButton onClick={onClose} size="small">
-                        <CloseIcon />
-                    </IconButton>
                 </Box>
             </DialogTitle>
 
