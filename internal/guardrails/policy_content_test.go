@@ -5,27 +5,25 @@ import (
 	"testing"
 )
 
-func TestTextMatchRuleMatchesContains(t *testing.T) {
-	cfg := RuleConfig{
-		ID:      "dangerous",
-		Name:    "Dangerous Ops",
-		Type:    RuleTypeTextMatch,
-		Enabled: true,
-		Params: map[string]interface{}{
-			"patterns":       []string{"rm -rf", "format c:"},
-			"mode":           "any",
-			"case_sensitive": false,
-			"use_regex":      false,
-			"verdict":        "block",
+func TestContentPolicyMatchesContains(t *testing.T) {
+	policy, err := NewContentPolicy(
+		"dangerous",
+		"Dangerous Ops",
+		true,
+		Scope{},
+		TextMatchConfig{
+			Patterns:      []string{"rm -rf", "format c:"},
+			Mode:          MatchAny,
+			CaseSensitive: false,
+			UseRegex:      false,
+			Verdict:       VerdictBlock,
 		},
-	}
-
-	rule, err := NewTextMatchRuleFromConfig(cfg)
+	)
 	if err != nil {
-		t.Fatalf("new rule: %v", err)
+		t.Fatalf("new policy: %v", err)
 	}
 
-	res, err := rule.Evaluate(context.Background(), Input{
+	res, err := policy.Evaluate(context.Background(), Input{
 		Scenario:  "openai",
 		Model:     "gpt-4.1-mini",
 		Direction: DirectionRequest,
@@ -50,26 +48,19 @@ func TestTextMatchRuleMatchesContains(t *testing.T) {
 	}
 }
 
-func TestTextMatchRuleScopeMismatch(t *testing.T) {
-	cfg := RuleConfig{
-		ID:      "dangerous",
-		Name:    "Dangerous Ops",
-		Type:    RuleTypeTextMatch,
-		Enabled: true,
-		Scope: Scope{
-			Scenarios: []string{"openai"},
-		},
-		Params: map[string]interface{}{
-			"patterns": []string{"rm -rf"},
-		},
-	}
-
-	rule, err := NewTextMatchRuleFromConfig(cfg)
+func TestContentPolicyScopeMismatch(t *testing.T) {
+	policy, err := NewContentPolicy(
+		"dangerous",
+		"Dangerous Ops",
+		true,
+		Scope{Scenarios: []string{"openai"}},
+		TextMatchConfig{Patterns: []string{"rm -rf"}},
+	)
 	if err != nil {
-		t.Fatalf("new rule: %v", err)
+		t.Fatalf("new policy: %v", err)
 	}
 
-	res, err := rule.Evaluate(context.Background(), Input{
+	res, err := policy.Evaluate(context.Background(), Input{
 		Scenario:  "anthropic",
 		Direction: DirectionRequest,
 		Content:   Content{Text: "rm -rf /"},
@@ -82,25 +73,23 @@ func TestTextMatchRuleScopeMismatch(t *testing.T) {
 	}
 }
 
-func TestTextMatchRuleTargetsCommand(t *testing.T) {
-	cfg := RuleConfig{
-		ID:      "cmd-only",
-		Name:    "Command Only",
-		Type:    RuleTypeTextMatch,
-		Enabled: true,
-		Params: map[string]interface{}{
-			"patterns": []string{"rm -rf"},
-			"targets":  []string{"command"},
-			"verdict":  "block",
+func TestContentPolicyTargetsCommand(t *testing.T) {
+	policy, err := NewContentPolicy(
+		"cmd-only",
+		"Command Only",
+		true,
+		Scope{},
+		TextMatchConfig{
+			Patterns: []string{"rm -rf"},
+			Targets:  []ContentType{ContentTypeCommand},
+			Verdict:  VerdictBlock,
 		},
-	}
-
-	rule, err := NewTextMatchRuleFromConfig(cfg)
+	)
 	if err != nil {
-		t.Fatalf("new rule: %v", err)
+		t.Fatalf("new policy: %v", err)
 	}
 
-	res, err := rule.Evaluate(context.Background(), Input{
+	res, err := policy.Evaluate(context.Background(), Input{
 		Scenario:  "anthropic",
 		Model:     "claude-3.7-sonnet",
 		Direction: DirectionRequest,
@@ -130,25 +119,23 @@ func TestTextMatchRuleTargetsCommand(t *testing.T) {
 	}
 }
 
-func TestTextMatchRuleTargetsCommandIgnoresDescriptionNoise(t *testing.T) {
-	cfg := RuleConfig{
-		ID:      "cmd-shell-only",
-		Name:    "Command Shell Only",
-		Type:    RuleTypeTextMatch,
-		Enabled: true,
-		Params: map[string]interface{}{
-			"patterns": []string{"ssh directory"},
-			"targets":  []string{"command"},
-			"verdict":  "block",
+func TestContentPolicyTargetsCommandIgnoresDescriptionNoise(t *testing.T) {
+	policy, err := NewContentPolicy(
+		"cmd-shell-only",
+		"Command Shell Only",
+		true,
+		Scope{},
+		TextMatchConfig{
+			Patterns: []string{"ssh directory"},
+			Targets:  []ContentType{ContentTypeCommand},
+			Verdict:  VerdictBlock,
 		},
-	}
-
-	rule, err := NewTextMatchRuleFromConfig(cfg)
+	)
 	if err != nil {
-		t.Fatalf("new rule: %v", err)
+		t.Fatalf("new policy: %v", err)
 	}
 
-	res, err := rule.Evaluate(context.Background(), Input{
+	res, err := policy.Evaluate(context.Background(), Input{
 		Scenario:  "anthropic",
 		Model:     "claude-3.7-sonnet",
 		Direction: DirectionResponse,

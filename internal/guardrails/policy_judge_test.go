@@ -16,26 +16,23 @@ func (s *stubJudge) Evaluate(_ context.Context, input Input, _ ModelJudgeConfig)
 	return s.result, s.err
 }
 
-func TestModelJudgeRuleUsesJudge(t *testing.T) {
-	cfg := RuleConfig{
-		ID:      "model-check",
-		Name:    "Model Judge",
-		Type:    RuleTypeModelJudge,
-		Enabled: true,
-		Params: map[string]interface{}{
-			"model": "mini-judge",
-		},
-	}
-
+func TestJudgePolicyUsesJudge(t *testing.T) {
 	judge := &stubJudge{
 		result: JudgeResult{Verdict: VerdictReview, Reason: "needs review"},
 	}
-	rule, err := NewModelJudgeRuleFromConfig(cfg, judge)
+	policy, err := NewJudgePolicy(
+		"model-check",
+		"Model Judge",
+		true,
+		Scope{},
+		ModelJudgeConfig{Model: "mini-judge"},
+		judge,
+	)
 	if err != nil {
-		t.Fatalf("new rule: %v", err)
+		t.Fatalf("new policy: %v", err)
 	}
 
-	res, err := rule.Evaluate(context.Background(), Input{
+	res, err := policy.Evaluate(context.Background(), Input{
 		Direction: DirectionResponse,
 		Content:   Content{Text: "some output"},
 	})
@@ -47,27 +44,26 @@ func TestModelJudgeRuleUsesJudge(t *testing.T) {
 	}
 }
 
-func TestModelJudgeRuleTargetsFilterContent(t *testing.T) {
-	cfg := RuleConfig{
-		ID:      "model-check",
-		Name:    "Model Judge",
-		Type:    RuleTypeModelJudge,
-		Enabled: true,
-		Params: map[string]interface{}{
-			"model":   "mini-judge",
-			"targets": []string{"text"},
-		},
-	}
-
+func TestJudgePolicyTargetsFilterContent(t *testing.T) {
 	judge := &stubJudge{
 		result: JudgeResult{Verdict: VerdictAllow},
 	}
-	rule, err := NewModelJudgeRuleFromConfig(cfg, judge)
+	policy, err := NewJudgePolicy(
+		"model-check",
+		"Model Judge",
+		true,
+		Scope{},
+		ModelJudgeConfig{
+			Model:   "mini-judge",
+			Targets: []ContentType{ContentTypeText},
+		},
+		judge,
+	)
 	if err != nil {
-		t.Fatalf("new rule: %v", err)
+		t.Fatalf("new policy: %v", err)
 	}
 
-	_, err = rule.Evaluate(context.Background(), Input{
+	_, err = policy.Evaluate(context.Background(), Input{
 		Scenario:  "openai",
 		Model:     "gpt-4.1-mini",
 		Direction: DirectionResponse,

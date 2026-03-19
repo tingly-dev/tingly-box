@@ -155,6 +155,20 @@ func (s *TinglyService) GetPort() int {
 	return s.appManager.GetServerPort()
 }
 
+// ChoosePath opens a native file dialog and returns a selected file or directory path.
+func (s *TinglyService) ChoosePath() (string, error) {
+	if s.app == nil {
+		return "", fmt.Errorf("application is not ready")
+	}
+
+	return s.app.Dialog.OpenFile().
+		SetTitle("Choose File or Directory").
+		CanChooseFiles(true).
+		CanChooseDirectories(true).
+		ShowHiddenFiles(true).
+		PromptForSingleSelection()
+}
+
 // ============
 // Provider Management (exposed to GUI)
 // ============

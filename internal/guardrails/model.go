@@ -2,7 +2,7 @@ package guardrails
 
 import "context"
 
-// Verdict is the overall decision from a rule or engine.
+// Verdict is the overall decision from a policy or engine.
 type Verdict string
 
 const (
@@ -12,7 +12,7 @@ const (
 	VerdictBlock  Verdict = "block"
 )
 
-// CombineStrategy controls how multiple rule verdicts are merged.
+// CombineStrategy controls how multiple policy verdicts are merged.
 type CombineStrategy string
 
 const (
@@ -20,7 +20,7 @@ const (
 	StrategyBlockOnAny CombineStrategy = "block_on_any"
 )
 
-// ErrorStrategy controls the fallback verdict when a rule fails.
+// ErrorStrategy controls the fallback verdict when a policy evaluation fails.
 type ErrorStrategy string
 
 const (
@@ -61,41 +61,41 @@ func (i Input) Text() string {
 	return i.Content.CombinedText()
 }
 
-// RuleType identifies a rule implementation.
-type RuleType string
+// PolicyType identifies a policy evaluator implementation.
+type PolicyType string
 
-// RuleResult captures a single rule decision.
-type RuleResult struct {
-	RuleID   string                 `json:"rule_id" yaml:"rule_id"`
-	RuleName string                 `json:"rule_name" yaml:"rule_name"`
-	RuleType RuleType               `json:"rule_type" yaml:"rule_type"`
-	Verdict  Verdict                `json:"verdict" yaml:"verdict"`
-	Reason   string                 `json:"reason,omitempty" yaml:"reason,omitempty"`
-	Evidence map[string]interface{} `json:"evidence,omitempty" yaml:"evidence,omitempty"`
+// PolicyResult captures a single policy decision.
+type PolicyResult struct {
+	PolicyID   string                 `json:"policy_id" yaml:"policy_id"`
+	PolicyName string                 `json:"policy_name" yaml:"policy_name"`
+	PolicyType PolicyType             `json:"policy_type" yaml:"policy_type"`
+	Verdict    Verdict                `json:"verdict" yaml:"verdict"`
+	Reason     string                 `json:"reason,omitempty" yaml:"reason,omitempty"`
+	Evidence   map[string]interface{} `json:"evidence,omitempty" yaml:"evidence,omitempty"`
 }
 
-// RuleError captures an evaluation failure for a rule.
-type RuleError struct {
-	RuleID   string   `json:"rule_id" yaml:"rule_id"`
-	RuleName string   `json:"rule_name" yaml:"rule_name"`
-	RuleType RuleType `json:"rule_type" yaml:"rule_type"`
-	Error    string   `json:"error" yaml:"error"`
+// PolicyError captures an evaluation failure for a policy.
+type PolicyError struct {
+	PolicyID   string     `json:"policy_id" yaml:"policy_id"`
+	PolicyName string     `json:"policy_name" yaml:"policy_name"`
+	PolicyType PolicyType `json:"policy_type" yaml:"policy_type"`
+	Error      string     `json:"error" yaml:"error"`
 }
 
 // Result is the aggregated guardrails decision.
 type Result struct {
-	Verdict Verdict      `json:"verdict" yaml:"verdict"`
-	Reasons []RuleResult `json:"reasons,omitempty" yaml:"reasons,omitempty"`
-	Errors  []RuleError  `json:"errors,omitempty" yaml:"errors,omitempty"`
+	Verdict Verdict        `json:"verdict" yaml:"verdict"`
+	Reasons []PolicyResult `json:"reasons,omitempty" yaml:"reasons,omitempty"`
+	Errors  []PolicyError  `json:"errors,omitempty" yaml:"errors,omitempty"`
 }
 
-// Rule evaluates a single guardrail policy.
-type Rule interface {
+// Evaluator evaluates a single guardrail policy.
+type Evaluator interface {
 	ID() string
 	Name() string
-	Type() RuleType
+	Type() PolicyType
 	Enabled() bool
-	Evaluate(ctx context.Context, input Input) (RuleResult, error)
+	Evaluate(ctx context.Context, input Input) (PolicyResult, error)
 }
 
 // Guardrails is the interface for evaluating input.

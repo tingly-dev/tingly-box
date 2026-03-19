@@ -633,16 +633,28 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithDescription("Update guardrails config and reload engine"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.PUT("/guardrails/rule/:id", s.UpdateGuardrailsRule,
-		swagger.WithDescription("Update a guardrails rule and reload engine"),
+	apiV1.PUT("/guardrails/policy/:id", s.UpdateGuardrailsPolicy,
+		swagger.WithDescription("Update a guardrails policy and reload engine"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.DELETE("/guardrails/rule/:id", s.DeleteGuardrailsRule,
-		swagger.WithDescription("Delete a guardrails rule and reload engine"),
+	apiV1.DELETE("/guardrails/policy/:id", s.DeleteGuardrailsPolicy,
+		swagger.WithDescription("Delete a guardrails policy and reload engine"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.POST("/guardrails/rule", s.CreateGuardrailsRule,
-		swagger.WithDescription("Create a new guardrails rule and reload engine"),
+	apiV1.POST("/guardrails/policy", s.CreateGuardrailsPolicy,
+		swagger.WithDescription("Create a new guardrails policy and reload engine"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.PUT("/guardrails/group/:id", s.UpdateGuardrailsGroup,
+		swagger.WithDescription("Update a guardrails group and reload engine"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.DELETE("/guardrails/group/:id", s.DeleteGuardrailsGroup,
+		swagger.WithDescription("Delete a guardrails group and reload engine"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.POST("/guardrails/group", s.CreateGuardrailsGroup,
+		swagger.WithDescription("Create a new guardrails group and reload engine"),
 		swagger.WithTags("guardrails"),
 	)
 	apiV1.POST("/guardrails/reload", s.ReloadGuardrailsConfig,

@@ -4,10 +4,6 @@ import {
     Box,
     Button,
     Chip,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
     Stack,
     TextField,
     Typography,
@@ -43,20 +39,22 @@ const ruleTemplates: RuleTemplate[] = [
         payload: {
             id: 'block-ssh-read',
             name: 'Block SSH directory reads',
-            type: 'command_policy',
             enabled: true,
+            kind: 'resource_access',
+            group: '',
             scope: {
                 scenarios: ['claude_code'],
-                directions: ['response'],
-                content_types: ['command'],
             },
-            params: {
-                kinds: ['shell'],
-                actions: ['read'],
-                resources: ['~/.ssh', '/etc/ssh'],
-                resource_match: 'prefix',
-                verdict: 'block',
-                reason: 'This rule blocks attempts to read SSH configuration and key directories.',
+            verdict: 'block',
+            reason: 'This policy blocks attempts to read SSH configuration and key directories.',
+            match: {
+                tool_names: ['bash'],
+                actions: { include: ['read'] },
+                resources: {
+                    type: 'path',
+                    mode: 'prefix',
+                    values: ['~/.ssh', '/etc/ssh'],
+                },
             },
         },
     },
@@ -69,20 +67,22 @@ const ruleTemplates: RuleTemplate[] = [
         payload: {
             id: 'block-env-read',
             name: 'Block .env file reads',
-            type: 'command_policy',
             enabled: true,
+            kind: 'resource_access',
+            group: '',
             scope: {
                 scenarios: ['claude_code'],
-                directions: ['response'],
-                content_types: ['command'],
             },
-            params: {
-                kinds: ['shell'],
-                actions: ['read'],
-                resources: ['.env', '.env.local', '.env.production'],
-                resource_match: 'contains',
-                verdict: 'block',
-                reason: 'This rule blocks attempts to read environment variable files that may contain secrets.',
+            verdict: 'block',
+            reason: 'This policy blocks attempts to read environment variable files that may contain secrets.',
+            match: {
+                tool_names: ['bash'],
+                actions: { include: ['read'] },
+                resources: {
+                    type: 'path',
+                    mode: 'contains',
+                    values: ['.env', '.env.local', '.env.production'],
+                },
             },
         },
     },
@@ -95,20 +95,22 @@ const ruleTemplates: RuleTemplate[] = [
         payload: {
             id: 'block-shell-history-read',
             name: 'Block shell history reads',
-            type: 'command_policy',
             enabled: true,
+            kind: 'resource_access',
+            group: '',
             scope: {
                 scenarios: ['claude_code'],
-                directions: ['response'],
-                content_types: ['command'],
             },
-            params: {
-                kinds: ['shell'],
-                actions: ['read'],
-                resources: ['.zsh_history', '.bash_history'],
-                resource_match: 'contains',
-                verdict: 'block',
-                reason: 'This rule blocks attempts to read shell history files.',
+            verdict: 'block',
+            reason: 'This policy blocks attempts to read shell history files.',
+            match: {
+                tool_names: ['bash'],
+                actions: { include: ['read'] },
+                resources: {
+                    type: 'path',
+                    mode: 'contains',
+                    values: ['.zsh_history', '.bash_history'],
+                },
             },
         },
     },
@@ -121,20 +123,22 @@ const ruleTemplates: RuleTemplate[] = [
         payload: {
             id: 'block-git-credentials-read',
             name: 'Block Git credential config reads',
-            type: 'command_policy',
             enabled: true,
+            kind: 'resource_access',
+            group: '',
             scope: {
                 scenarios: ['claude_code'],
-                directions: ['response'],
-                content_types: ['command'],
             },
-            params: {
-                kinds: ['shell'],
-                actions: ['read'],
-                resources: ['.git-credentials', '.gitconfig'],
-                resource_match: 'contains',
-                verdict: 'block',
-                reason: 'This rule blocks attempts to read Git credential and configuration files that may contain secrets.',
+            verdict: 'block',
+            reason: 'This policy blocks attempts to read Git credential and configuration files that may contain secrets.',
+            match: {
+                tool_names: ['bash'],
+                actions: { include: ['read'] },
+                resources: {
+                    type: 'path',
+                    mode: 'contains',
+                    values: ['.git-credentials', '.gitconfig'],
+                },
             },
         },
     },
@@ -143,12 +147,10 @@ const ruleTemplates: RuleTemplate[] = [
 const GuardrailsMarketPage = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
-    const [existingRuleIds, setExistingRuleIds] = useState<string[]>([]);
-    const [pendingTemplateKey, setPendingTemplateKey] = useState<string | null>(null);
+    const [existingPolicyIds, setExistingPolicyIds] = useState<string[]>([]);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [search, setSearch] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string>('All');
-    const [previewTemplate, setPreviewTemplate] = useState<RuleTemplate | null>(null);
 
     const categories = useMemo(() => {
         return ['All', ...Array.from(new Set(ruleTemplates.map((template) => template.category)))];
@@ -178,29 +180,29 @@ const GuardrailsMarketPage = () => {
         }, {});
     }, [filteredTemplates]);
 
-    const loadExistingRules = async () => {
+    const loadExistingPolicies = async () => {
         try {
             setLoading(true);
             const guardrailsConfig = await api.getGuardrailsConfig();
-            const ids = (guardrailsConfig?.config?.rules || [])
-                .map((rule: any) => rule?.id)
+            const ids = (guardrailsConfig?.config?.policies || [])
+                .map((policy: any) => policy?.id)
                 .filter(Boolean);
-            setExistingRuleIds(ids);
+            setExistingPolicyIds(ids);
         } catch (error) {
             console.error('Failed to load guardrails config for market:', error);
-            setActionMessage({ type: 'error', text: 'Failed to load existing rules.' });
-            setExistingRuleIds([]);
+            setActionMessage({ type: 'error', text: 'Failed to load existing policies.' });
+            setExistingPolicyIds([]);
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        loadExistingRules();
+        loadExistingPolicies();
     }, []);
 
-    const buildUniqueRuleId = (baseId: string) => {
-        const existing = new Set(existingRuleIds);
+    const buildUniquePolicyId = (baseId: string) => {
+        const existing = new Set(existingPolicyIds);
         if (!existing.has(baseId)) {
             return baseId;
         }
@@ -213,56 +215,69 @@ const GuardrailsMarketPage = () => {
         return nextId;
     };
 
-    const handleInstallTemplate = async (template: RuleTemplate) => {
-        try {
-            setPendingTemplateKey(template.key);
-            const nextId = buildUniqueRuleId(template.payload.id);
-            const payload = {
-                ...template.payload,
-                id: nextId,
-                name: nextId === template.payload.id ? template.payload.name : `${template.payload.name} (${nextId})`,
-            };
-            const result = await api.createGuardrailsRule(payload);
-            if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to install rule template.' });
-                return;
-            }
-            setActionMessage({ type: 'success', text: `Installed rule template as "${nextId}".` });
-            await loadExistingRules();
-            navigate(`/guardrails/rules?ruleId=${encodeURIComponent(nextId)}`);
-        } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to install rule template.' });
-        } finally {
-            setPendingTemplateKey(null);
-        }
-    };
+    const slugify = (value: string) =>
+        value
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
 
-    const formatTemplatePreview = (template: RuleTemplate) => {
-        return JSON.stringify(template.payload, null, 2);
-    };
-
-    const buildTemplateSummary = (template: RuleTemplate) => {
-        const params = template.payload?.params || {};
-        const actions = Array.isArray(params.actions) ? params.actions : [];
-        const resources = Array.isArray(params.resources) ? params.resources : [];
+    const makeDraftFromTemplate = (template: RuleTemplate) => {
+        const payload = template.payload || {};
+        const match = payload.match || {};
+        const baseId = payload.id || slugify(payload.name || template.title || 'policy-template');
         return {
-            actions: actions.length > 0 ? actions.join(', ') : 'any action',
-            resources: resources.length > 0 ? resources.join(', ') : 'any resource',
-            matchMode: params.resource_match || 'prefix',
+            id: buildUniquePolicyId(baseId),
+            name: payload.name || template.title,
+            group: payload.group || '',
+            kind: payload.kind || 'resource_access',
+            enabled: payload.enabled !== false,
+            verdict: payload.verdict || 'block',
+            scenarios: Array.isArray(payload.scope?.scenarios) ? payload.scope.scenarios : ['claude_code'],
+            toolNames: Array.isArray(match.tool_names) ? match.tool_names.join('\n') : '',
+            actions: Array.isArray(match.actions?.include) ? match.actions.include : [],
+            commandTerms: Array.isArray(match.terms) ? match.terms.join('\n') : '',
+            resources: Array.isArray(match.resources?.values) ? match.resources.values.join('\n') : '',
+            resourceMode: match.resources?.mode || 'prefix',
+            patterns: Array.isArray(match.patterns) ? match.patterns.join('\n') : '',
+            patternMode: match.pattern_mode || 'substring',
+            caseSensitive: !!match.case_sensitive,
+            reason: payload.reason || '',
         };
+    };
+
+    const handleInstallTemplate = (template: RuleTemplate) => {
+        navigate('/guardrails/rules', {
+            state: {
+                newPolicyDraft: makeDraftFromTemplate(template),
+            },
+        });
+    };
+
+    const formatKindLabel = (kind: string) => {
+        switch (kind) {
+            case 'resource_access':
+                return 'Resource Access';
+            case 'command_execution':
+                return 'Command Execution';
+            case 'content':
+                return 'Content';
+            default:
+                return kind;
+        }
     };
 
     return (
         <PageLayout loading={loading}>
             <Stack spacing={3}>
                 <UnifiedCard
-                    title="Rule Market"
-                    subtitle="Start from curated Guardrails templates instead of creating every rule from scratch."
+                    title="Builtins"
+                    subtitle="Start from curated Guardrails policy templates instead of creating every policy from scratch."
                     size="full"
                 >
                     <Stack spacing={2}>
                         <Typography variant="body2" color="text.secondary">
-                            These templates are local starter rules. Installing one writes it into your current Guardrails config and reloads the engine through the existing rule API.
+                            These templates are local starters. Install opens the policy editor with a prefilled draft. Nothing is saved until you click Save there.
                         </Typography>
                         {actionMessage && (
                             <Alert severity={actionMessage.type} onClose={() => setActionMessage(null)}>
@@ -311,20 +326,21 @@ const GuardrailsMarketPage = () => {
                                         border: '1px solid',
                                         borderColor: 'divider',
                                         borderRadius: 2,
-                                        p: 2,
+                                        px: 2,
+                                        py: 1.5,
                                     }}
                                 >
                                     <Stack
                                         direction={{ xs: 'column', lg: 'row' }}
-                                        spacing={2}
+                                        spacing={1.5}
                                         alignItems={{ lg: 'center' }}
                                         justifyContent="space-between"
                                     >
                                         <Stack direction="row" spacing={1.5} sx={{ minWidth: 0, flex: 1 }}>
                                             <Box
                                                 sx={{
-                                                    width: 48,
-                                                    height: 48,
+                                                    width: 40,
+                                                    height: 40,
                                                     borderRadius: 2,
                                                     bgcolor: 'action.hover',
                                                     display: 'flex',
@@ -335,46 +351,26 @@ const GuardrailsMarketPage = () => {
                                             >
                                                 {template.icon}
                                             </Box>
-                                            <Stack spacing={1} sx={{ minWidth: 0, flex: 1 }}>
-                                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
-                                                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                                            <Stack spacing={0.75} sx={{ minWidth: 0, flex: 1 }}>
+                                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} useFlexGap flexWrap="wrap">
+                                                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                                                         {template.title}
                                                     </Typography>
-                                                    <Chip size="small" label={template.payload.type} variant="outlined" />
+                                                    <Chip size="small" label={formatKindLabel(template.payload.kind)} variant="outlined" />
+                                                    <Chip size="small" label={template.category} variant="outlined" />
                                                 </Stack>
                                                 <Typography variant="body2" color="text.secondary">
                                                     {template.description}
                                                 </Typography>
-                                                {(() => {
-                                                    const summary = buildTemplateSummary(template);
-                                                    return (
-                                                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
-                                                            <Chip size="small" label={`Actions: ${summary.actions}`} />
-                                                            <Chip size="small" label={`Resources: ${summary.resources}`} />
-                                                            <Chip size="small" label={`Match: ${summary.matchMode}`} variant="outlined" />
-                                                        </Stack>
-                                                    );
-                                                })()}
                                             </Stack>
                                         </Stack>
-                                        <Stack
-                                            direction={{ xs: 'row', lg: 'column' }}
-                                            spacing={1}
-                                            sx={{ flexShrink: 0, minWidth: { lg: 148 } }}
-                                        >
+                                        <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
                                             <Button
                                                 variant="contained"
                                                 startIcon={<AddShoppingCart />}
-                                                disabled={pendingTemplateKey === template.key}
                                                 onClick={() => handleInstallTemplate(template)}
                                             >
-                                                {pendingTemplateKey === template.key ? 'Installing…' : 'Install'}
-                                            </Button>
-                                            <Button
-                                                variant="outlined"
-                                                onClick={() => setPreviewTemplate(template)}
-                                            >
-                                                Preview
+                                                Install
                                             </Button>
                                         </Stack>
                                     </Stack>
@@ -383,47 +379,6 @@ const GuardrailsMarketPage = () => {
                         </Stack>
                     </UnifiedCard>
                 ))}
-
-                <Dialog
-                    open={!!previewTemplate}
-                    onClose={() => setPreviewTemplate(null)}
-                    maxWidth="md"
-                    fullWidth
-                >
-                    <DialogTitle>{previewTemplate?.title ?? 'Rule Preview'}</DialogTitle>
-                    <DialogContent dividers>
-                        {previewTemplate && (
-                            <Box
-                                component="pre"
-                                sx={{
-                                    m: 0,
-                                    p: 2,
-                                    borderRadius: 1.5,
-                                    bgcolor: 'action.hover',
-                                    overflowX: 'auto',
-                                    fontSize: 13,
-                                    lineHeight: 1.6,
-                                    fontFamily: '"Fira Code", "Monaco", "Consolas", monospace',
-                                }}
-                            >
-                                {formatTemplatePreview(previewTemplate)}
-                            </Box>
-                        )}
-                    </DialogContent>
-                    <DialogActions>
-                        <Button onClick={() => setPreviewTemplate(null)}>Close</Button>
-                        {previewTemplate && (
-                            <Button
-                                variant="contained"
-                                startIcon={<AddShoppingCart />}
-                                disabled={pendingTemplateKey === previewTemplate.key}
-                                onClick={() => handleInstallTemplate(previewTemplate)}
-                            >
-                                {pendingTemplateKey === previewTemplate.key ? 'Installing…' : 'Install Template'}
-                            </Button>
-                        )}
-                    </DialogActions>
-                </Dialog>
             </Stack>
         </PageLayout>
     );

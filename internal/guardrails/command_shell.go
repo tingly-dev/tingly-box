@@ -36,7 +36,7 @@ type ShellRedirect struct {
 	Target string `json:"target,omitempty" yaml:"target,omitempty"`
 }
 
-// MatchText returns a stable text representation used by rule-based matching.
+// MatchText returns a stable text representation used by policy matching.
 func (s *ShellCommand) MatchText() string {
 	if s == nil {
 		return ""

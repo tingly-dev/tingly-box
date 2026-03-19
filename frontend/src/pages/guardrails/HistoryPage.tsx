@@ -24,7 +24,7 @@ type GuardrailsHistoryEntry = {
     block_message?: string;
     preview?: string;
     command_name?: string;
-    reasons?: Array<{ rule_id?: string; rule_name?: string; reason?: string }>;
+    reasons?: Array<{ policy_id?: string; policy_name?: string; reason?: string }>;
 };
 
 const GuardrailsHistoryPage = () => {
@@ -140,8 +140,8 @@ const GuardrailsHistoryPage = () => {
                                             <Divider />
                                             <Stack spacing={0.75}>
                                                 {entry.reasons.map((reason, reasonIndex) => (
-                                                    <Typography key={`${reason.rule_id || 'reason'}-${reasonIndex}`} variant="body2" color="text.secondary">
-                                                        {(reason.rule_name || reason.rule_id || 'Rule') + ': ' + (reason.reason || 'matched')}
+                                                    <Typography key={`${reason.policy_id || 'reason'}-${reasonIndex}`} variant="body2" color="text.secondary">
+                                                        {(reason.policy_name || reason.policy_id || 'Policy') + ': ' + (reason.reason || 'matched')}
                                                     </Typography>
                                                 ))}
                                             </Stack>

@@ -30,13 +30,13 @@ func LoadConfig(path string) (Config, error) {
 		}
 	default:
 		if err := json.Unmarshal(data, &cfg); err == nil {
-			return cfg, nil
+			return ResolveConfig(cfg)
 		}
 		if err := yaml.Unmarshal(data, &cfg); err == nil {
-			return cfg, nil
+			return ResolveConfig(cfg)
 		}
 		return cfg, fmt.Errorf("unsupported config file extension: %s", filepath.Ext(path))
 	}
 
-	return cfg, nil
+	return ResolveConfig(cfg)
 }

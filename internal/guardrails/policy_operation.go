@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// RuleTypeCommandPolicy evaluates normalized command semantics.
-const RuleTypeCommandPolicy RuleType = "command_policy"
+// PolicyTypeOperation identifies operation policies backed by normalized command semantics.
+const PolicyTypeOperation PolicyType = "command_policy"
 
 // ResourceMatchMode controls how resources are compared.
 type ResourceMatchMode string
@@ -20,7 +20,7 @@ const (
 
 // CommandPolicyConfig configures semantic command matching.
 type CommandPolicyConfig struct {
-	Kinds         []string          `json:"kinds,omitempty" yaml:"kinds,omitempty"`
+	ToolNames     []string          `json:"tool_names,omitempty" yaml:"tool_names,omitempty"`
 	Actions       []string          `json:"actions,omitempty" yaml:"actions,omitempty"`
 	Resources     []string          `json:"resources,omitempty" yaml:"resources,omitempty"`
 	Terms         []string          `json:"terms,omitempty" yaml:"terms,omitempty"`
@@ -29,8 +29,8 @@ type CommandPolicyConfig struct {
 	Reason        string            `json:"reason,omitempty" yaml:"reason,omitempty"`
 }
 
-// CommandPolicyRule matches against normalized command semantics.
-type CommandPolicyRule struct {
+// OperationPolicy evaluates operation policies against normalized command semantics.
+type OperationPolicy struct {
 	id      string
 	name    string
 	enabled bool
@@ -38,22 +38,10 @@ type CommandPolicyRule struct {
 	config  CommandPolicyConfig
 }
 
-func init() {
-	RegisterRule(RuleTypeCommandPolicy, newCommandPolicyFactory)
-}
-
-func newCommandPolicyFactory(cfg RuleConfig, _ Dependencies) (Rule, error) {
-	return NewCommandPolicyRuleFromConfig(cfg)
-}
-
-// NewCommandPolicyRuleFromConfig creates a semantic command rule from config.
-func NewCommandPolicyRuleFromConfig(cfg RuleConfig) (*CommandPolicyRule, error) {
-	params := CommandPolicyConfig{}
-	if err := DecodeParams(cfg.Params, &params); err != nil {
-		return nil, fmt.Errorf("decode params: %w", err)
-	}
-	if len(params.Kinds) == 0 && len(params.Actions) == 0 && len(params.Resources) == 0 && len(params.Terms) == 0 {
-		return nil, fmt.Errorf("at least one of kinds, actions, resources, or terms is required")
+// NewOperationPolicy creates an operation policy from typed policy data.
+func NewOperationPolicy(id, name string, enabled bool, scope Scope, params CommandPolicyConfig) (*OperationPolicy, error) {
+	if len(params.ToolNames) == 0 && len(params.Actions) == 0 && len(params.Resources) == 0 && len(params.Terms) == 0 {
+		return nil, fmt.Errorf("at least one of tool_names, actions, resources, or terms is required")
 	}
 	if params.ResourceMatch == "" {
 		params.ResourceMatch = ResourceMatchPrefix
@@ -62,33 +50,33 @@ func NewCommandPolicyRuleFromConfig(cfg RuleConfig) (*CommandPolicyRule, error) 
 		params.Verdict = VerdictBlock
 	}
 
-	return &CommandPolicyRule{
-		id:      cfg.ID,
-		name:    cfg.Name,
-		enabled: cfg.Enabled,
-		scope:   cfg.Scope,
+	return &OperationPolicy{
+		id:      id,
+		name:    name,
+		enabled: enabled,
+		scope:   scope,
 		config:  params,
 	}, nil
 }
 
-func (r *CommandPolicyRule) ID() string { return r.id }
+func (r *OperationPolicy) ID() string { return r.id }
 
-func (r *CommandPolicyRule) Name() string { return r.name }
+func (r *OperationPolicy) Name() string { return r.name }
 
-func (r *CommandPolicyRule) Type() RuleType { return RuleTypeCommandPolicy }
+func (r *OperationPolicy) Type() PolicyType { return PolicyTypeOperation }
 
-func (r *CommandPolicyRule) Enabled() bool { return r.enabled }
+func (r *OperationPolicy) Enabled() bool { return r.enabled }
 
 // Evaluate checks whether a normalized command violates semantic policy constraints.
-func (r *CommandPolicyRule) Evaluate(_ context.Context, input Input) (RuleResult, error) {
+func (r *OperationPolicy) Evaluate(_ context.Context, input Input) (PolicyResult, error) {
 	if !r.enabled {
-		return RuleResult{Verdict: VerdictAllow}, nil
+		return PolicyResult{Verdict: VerdictAllow}, nil
 	}
 	if !r.scope.Matches(input) {
-		return RuleResult{Verdict: VerdictAllow}, nil
+		return PolicyResult{Verdict: VerdictAllow}, nil
 	}
 	if input.Content.Command == nil {
-		return RuleResult{Verdict: VerdictAllow}, nil
+		return PolicyResult{Verdict: VerdictAllow}, nil
 	}
 
 	cmd := input.Content.Command
@@ -97,24 +85,28 @@ func (r *CommandPolicyRule) Evaluate(_ context.Context, input Input) (RuleResult
 		cloned.AttachDerivedFields()
 		cmd = &cloned
 	}
-	// command_policy only works on derived command semantics. If the tool call
-	// cannot be normalized yet, we treat it as non-match instead of guessing.
+	// Operation policies only work on derived command semantics. If the tool
+	// call cannot be normalized yet, we treat it as non-match instead of
+	// guessing.
 	if cmd.Normalized == nil {
-		return RuleResult{Verdict: VerdictAllow}, nil
+		return PolicyResult{Verdict: VerdictAllow}, nil
 	}
 	norm := cmd.Normalized
 
-	if len(r.config.Kinds) > 0 && !stringSliceIntersects(norm.Kind, r.config.Kinds) {
-		return RuleResult{Verdict: VerdictAllow}, nil
+	// Tool name matching stays separate from normalized action/resource
+	// matching so policies can still narrow behavior to a specific tool like
+	// bash without exposing parser-specific command kind configuration.
+	if len(r.config.ToolNames) > 0 && !stringSliceIntersects(cmd.Name, r.config.ToolNames) {
+		return PolicyResult{Verdict: VerdictAllow}, nil
 	}
 	if len(r.config.Actions) > 0 && !sliceIntersects(norm.Actions, r.config.Actions) {
-		return RuleResult{Verdict: VerdictAllow}, nil
+		return PolicyResult{Verdict: VerdictAllow}, nil
 	}
 	if len(r.config.Resources) > 0 && !resourcesMatch(norm.Resources, r.config.Resources, r.config.ResourceMatch) {
-		return RuleResult{Verdict: VerdictAllow}, nil
+		return PolicyResult{Verdict: VerdictAllow}, nil
 	}
 	if len(r.config.Terms) > 0 && !sliceContainsPattern(norm.Terms, r.config.Terms) {
-		return RuleResult{Verdict: VerdictAllow}, nil
+		return PolicyResult{Verdict: VerdictAllow}, nil
 	}
 
 	reason := r.config.Reason
@@ -122,14 +114,14 @@ func (r *CommandPolicyRule) Evaluate(_ context.Context, input Input) (RuleResult
 		reason = "command policy violation"
 	}
 
-	return RuleResult{
-		RuleID:   r.id,
-		RuleName: r.name,
-		RuleType: r.Type(),
-		Verdict:  r.config.Verdict,
-		Reason:   reason,
+	return PolicyResult{
+		PolicyID:   r.id,
+		PolicyName: r.name,
+		PolicyType: r.Type(),
+		Verdict:    r.config.Verdict,
+		Reason:     reason,
 		Evidence: map[string]interface{}{
-			"kind":      norm.Kind,
+			"tool_name": cmd.Name,
 			"actions":   norm.Actions,
 			"resources": norm.Resources,
 			"terms":     norm.Terms,

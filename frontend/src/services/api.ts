@@ -566,6 +566,40 @@ export const api = {
             method: 'DELETE',
         });
     },
+    createGuardrailsPolicy: async (payload: any): Promise<any> => {
+        return fetchUIAPI('/guardrails/policy', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    },
+    updateGuardrailsPolicy: async (policyId: string, payload: any): Promise<any> => {
+        return fetchUIAPI(`/guardrails/policy/${encodeURIComponent(policyId)}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+    },
+    deleteGuardrailsPolicy: async (policyId: string): Promise<any> => {
+        return fetchUIAPI(`/guardrails/policy/${encodeURIComponent(policyId)}`, {
+            method: 'DELETE',
+        });
+    },
+    createGuardrailsGroup: async (payload: any): Promise<any> => {
+        return fetchUIAPI('/guardrails/group', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    },
+    updateGuardrailsGroup: async (groupId: string, payload: any): Promise<any> => {
+        return fetchUIAPI(`/guardrails/group/${encodeURIComponent(groupId)}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+    },
+    deleteGuardrailsGroup: async (groupId: string): Promise<any> => {
+        return fetchUIAPI(`/guardrails/group/${encodeURIComponent(groupId)}`, {
+            method: 'DELETE',
+        });
+    },
 
     updateGuardrailsConfig: async (content: string): Promise<any> => {
         return fetchUIAPI('/guardrails/config', {
@@ -577,26 +611,6 @@ export const api = {
     reloadGuardrailsConfig: async (): Promise<any> => {
         return fetchUIAPI('/guardrails/reload', {
             method: 'POST',
-        });
-    },
-
-    updateGuardrailsRule: async (id: string, payload: any): Promise<any> => {
-        return fetchUIAPI(`/guardrails/rule/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify(payload),
-        });
-    },
-
-    deleteGuardrailsRule: async (id: string): Promise<any> => {
-        return fetchUIAPI(`/guardrails/rule/${id}`, {
-            method: 'DELETE',
-        });
-    },
-
-    createGuardrailsRule: async (payload: any): Promise<any> => {
-        return fetchUIAPI('/guardrails/rule', {
-            method: 'POST',
-            body: JSON.stringify(payload),
         });
     },
 

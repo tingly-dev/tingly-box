@@ -1,6 +1,6 @@
 package guardrails
 
-// Scope limits when a rule is applied.
+// Scope limits when a policy is applied.
 type Scope struct {
 	Scenarios  []string      `json:"scenarios,omitempty" yaml:"scenarios,omitempty"`
 	Models     []string      `json:"models,omitempty" yaml:"models,omitempty"`
