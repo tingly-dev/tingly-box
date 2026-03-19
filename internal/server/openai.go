@@ -210,9 +210,8 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 	// === Tool Interceptor: Check if enabled and should be used ===
 	shouldIntercept, shouldStripTools, _ := s.resolveToolInterceptor(provider, hasBuiltInWebSearch)
 
-	if !s.enforceToolParserSupport(c, provider, actualModel, &req.ChatCompletionNewParams) {
-		return
-	}
+	// Probe tool parser support (non-blocking, allows request to proceed regardless)
+	s.checkToolParserSupport(c, provider, actualModel, &req.ChatCompletionNewParams)
 
 	switch apiStyle {
 	default:

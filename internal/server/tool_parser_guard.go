@@ -33,7 +33,9 @@ func requestUsesToolParser(req *openai.ChatCompletionNewParams) bool {
 	return false
 }
 
-func (s *Server) enforceToolParserSupport(c *gin.Context, provider *typ.Provider, modelID string, req *openai.ChatCompletionNewParams) bool {
+// checkToolParserSupport probes tool parser capability without blocking requests.
+// It always returns true to allow the request to proceed, but triggers async probe if needed.
+func (s *Server) checkToolParserSupport(c *gin.Context, provider *typ.Provider, modelID string, req *openai.ChatCompletionNewParams) bool {
 	if provider == nil || req == nil {
 		return true
 	}
