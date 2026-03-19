@@ -102,7 +102,12 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Str
 			if choice.Delta.Role != "" {
 				delta["role"] = choice.Delta.Role
 			}
-			if choice.Delta.Content != "" {
+			// Handle content field: null when tool_calls are present, otherwise use actual content or empty string
+			hasToolCalls := len(choice.Delta.ToolCalls) > 0
+			if hasToolCalls {
+				// When tool_calls are present, content should be null (matching OpenAI spec)
+				delta["content"] = nil
+			} else if choice.Delta.Content != "" {
 				delta["content"] = choice.Delta.Content
 			} else {
 				delta["content"] = ""
@@ -115,8 +120,57 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Str
 			if choice.Delta.JSON.FunctionCall.Valid() {
 				delta["function_call"] = choice.Delta.FunctionCall
 			}
-			if len(choice.Delta.ToolCalls) > 0 {
-				delta["tool_calls"] = choice.Delta.ToolCalls
+			if hasToolCalls {
+				// Clean up tool_calls to remove empty name/id fields in subsequent chunks
+				// This matches OpenAI's actual streaming format where only the first chunk has name
+				cleanedToolCalls := make([]map[string]interface{}, 0, len(choice.Delta.ToolCalls))
+				for _, tc := range choice.Delta.ToolCalls {
+					// Parse the raw JSON to get the actual fields
+					var rawTc map[string]interface{}
+					if err := json.Unmarshal([]byte(tc.RawJSON()), &rawTc); err == nil {
+						cleanedTc := make(map[string]interface{})
+						// Always include index
+						if idx, ok := rawTc["index"]; ok {
+							cleanedTc["index"] = idx
+						}
+						// Include id only if non-empty (first chunk has id, subsequent don't)
+						if id, ok := rawTc["id"]; ok && id != "" {
+							cleanedTc["id"] = id
+						}
+						// Include type only if id is present (first chunk only)
+						// DeepSeek format: type only in first chunk, not in subsequent chunks
+						if _, hasID := rawTc["id"]; hasID {
+							if typ, ok := rawTc["type"]; ok {
+								cleanedTc["type"] = typ
+							}
+						}
+						// Handle function field - clean up empty name
+						if fn, ok := rawTc["function"].(map[string]interface{}); ok {
+							cleanedFn := make(map[string]interface{})
+							// Only include name if non-empty (first chunk has name, subsequent don't)
+							if name, ok := fn["name"]; ok && name != "" {
+								cleanedFn["name"] = name
+							}
+							// Always include arguments if present
+							if args, ok := fn["arguments"]; ok && args != "" {
+								cleanedFn["arguments"] = args
+							}
+							if len(cleanedFn) > 0 {
+								cleanedTc["function"] = cleanedFn
+							}
+						}
+						// Only add if we have meaningful content
+						if len(cleanedTc) > 1 { // At least index + one other field
+							cleanedToolCalls = append(cleanedToolCalls, cleanedTc)
+						}
+					} else {
+						// Fallback to raw value if parsing fails
+						cleanedToolCalls = append(cleanedToolCalls, rawTc)
+					}
+				}
+				if len(cleanedToolCalls) > 0 {
+					delta["tool_calls"] = cleanedToolCalls
+				}
 			}
 
 			finishReason := &choice.FinishReason
@@ -214,12 +268,12 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Str
 			chunkID = fmt.Sprintf("chatcmpl-%d", time.Now().Unix())
 		}
 
-		// Send estimated usage as final chunk (only if not disabled)
-		if !hc.DisableStreamUsage {
+		// Send estimated usage as final chunk (only if not disabled and we have actual usage)
+		if !hc.DisableStreamUsage && (inputTokens > 0 || outputTokens > 0) {
 			usageChunk := map[string]interface{}{
 				"id":      chunkID,
 				"object":  "chat.completion.chunk",
-				"created": 0,
+				"created": time.Now().Unix(),
 				"model":   hc.ResponseModel,
 				"choices": []map[string]interface{}{
 					{
