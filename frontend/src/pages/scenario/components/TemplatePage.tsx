@@ -12,31 +12,63 @@ import {TemplatePageActions} from './TemplatePageActions';
 import {useTemplatePageRules} from '@/pages/scenario/hooks/useTemplatePageRules';
 import {useScrollToNewRule} from '@/components/hooks/useScrollToNewRule';
 import {useModelSelectDialog} from '@/hooks/useModelSelectDialog';
+import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal';
 import api from '@/services/api';
 
-const TemplatePage: React.FC<TabTemplatePageProps> = ({
-                                                          rules,
-                                                          showTokenModal,
-                                                          setShowTokenModal,
-                                                          token,
-                                                          showNotification,
-                                                          providers,
-                                                          onRulesChange,
-                                                          onProvidersLoad,
-                                                          title = "",
-                                                          collapsible = false,
-                                                          allowDeleteRule = false,
-                                                          onRuleDelete,
-                                                          allowToggleRule = true,
-                                                          allowAddRule = true,
-                                                          scenario,
-                                                          showAddApiKeyButton = true,
-                                                          showExpandCollapseButton = true,
-                                                          showEmptyState = true,
-                                                          rightAction: customRightAction,
-                                                          onAddApiKeyClick,
-                                                          onAddOAuthClick,
-                                                      }) => {
+/**
+ * TemplatePage component that supports two modes:
+ *
+ * INTERNAL MODE (recommended):
+ * Only provide `scenario` prop - TemplatePage fetches all data internally.
+ * <TemplatePage scenario="agent" />
+ *
+ * EXTERNAL MODE (legacy):
+ * Provide all props - for backward compatibility with existing code.
+ * <TemplatePage rules={rules} providers={providers} scenario="agent" ... />
+ */
+const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
+    // Determine which mode we're in
+    // If `rules` is provided, use external mode (legacy)
+    // If only `scenario` is provided, use internal mode (recommended)
+    const isInternalMode = !props.rules && props.scenario;
+
+    // Internal mode: fetch all data internally
+    const internalData = useScenarioPageInternal(
+        isInternalMode ? (props.scenario as string) : ''
+    );
+
+    // External mode: use props directly
+    const {
+        rules = internalData.rules,
+        showTokenModal = internalData.showTokenModal,
+        setShowTokenModal = internalData.setShowTokenModal,
+        token = internalData.token,
+        showNotification = internalData.showNotification,
+        providers = internalData.providers,
+        onRulesChange = internalData.handleRulesChange,
+        onProvidersLoad = internalData.loadProviders,
+        loadRules = internalData.loadRules,
+        title = "",
+        collapsible = false,
+        allowDeleteRule = false,
+        onRuleDelete = internalData.handleRuleDelete,
+        allowToggleRule = true,
+        allowAddRule = true,
+        scenario,
+        showAddApiKeyButton = true,
+        showCreateRuleButton = true,
+        showExpandCollapseButton = true,
+        showImportButton = true,
+        showEmptyState = true,
+        rightAction: customRightAction,
+        onAddApiKeyClick,
+        onAddOAuthClick,
+        newlyCreatedRuleUuids = internalData.newlyCreatedRuleUuids,
+        headerHeight = internalData.headerHeight,
+    } = props;
+
+    const isLoading = isInternalMode ? internalData.isLoading : false;
+
     const navigate = useNavigate();
     const [allExpanded, setAllExpanded] = useState<boolean>(true);
     const [expandedStates, setExpandedStates] = useState<Record<string, boolean>>({});
@@ -58,6 +90,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         onRulesChange,
         showNotification,
         scenario,
+        loadRules,
     });
 
     const {
@@ -256,7 +289,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
             allowAddRule={allowAddRule}
             onCreateRule={handleCreateRule}
             showExpandCollapseButton={showExpandCollapseButton}
-            showImportButton={true}
+            showImportButton={showImportButton}
             onImportFromClipboard={handleImportFromClipboard}
             scenario={scenario}
         />
