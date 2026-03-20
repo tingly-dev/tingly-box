@@ -328,6 +328,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 		// Note: Base transform is not needed since the request is already in OpenAI Chat format
 		// Chain: Consistency Transform → Vendor Transform
 		chain := transform.NewTransformChain([]transform.Transform{
+			transform.NewBaseTransform(transform.TargetAPIStyleOpenAIChat),
 			//transform.NewConsistencyTransform(transform.TargetAPIStyleOpenAIChat),
 			transform.NewVendorTransform(provider.APIBase),
 		})

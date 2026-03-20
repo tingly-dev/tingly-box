@@ -94,6 +94,11 @@ func (t *BaseTransform) convertToOpenAIChat(ctx *TransformContext, disableStream
 	case *openai.ChatCompletionNewParams:
 		// Already in OpenAI Chat format, no conversion needed
 		// Still create a default config for consistency
+		if len(req.Tools) > 0 {
+			req.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{
+				OfAuto: openai.Opt("auto"),
+			}
+		}
 		config := &protocol.OpenAIConfig{
 			HasThinking:     false,
 			ReasoningEffort: "none",
