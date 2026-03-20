@@ -6,17 +6,19 @@ func DefaultRegistry() *Registry {
 	registry := NewRegistry()
 
 	// Anthropic (Claude) OAuth - uses PKCE
+	// TokenURL verified: https://api.anthropic.com/v1/oauth/token (not console.anthropic.com)
+	// PKCE is required: code_verifier must be included in token request
 	registry.Register(&ProviderConfig{
 		Type:               ProviderClaudeCode,
 		DisplayName:        "Anthropic Claude Code",
 		ClientID:           "9d1c250a-e61b-44d9-88ed-5944d1962f5e", // Public client ID for Claude Code
 		ClientSecret:       "",                                     // No secret required for public client
 		AuthURL:            "https://claude.ai/oauth/authorize",
-		TokenURL:           "https://console.anthropic.com/v1/oauth/token",
-		RedirectURL:        "https://console.anthropic.com/oauth/code/callback",
+		TokenURL:           "https://api.anthropic.com/v1/oauth/token", // API endpoint (verified working)
+		RedirectURL:        "",                                         // Dynamic: set to server.BaseURL + "/callback"
 		Scopes:             []string{"org:create_api_key", "user:profile", "user:inference", "user:sessions:claude_code"},
 		AuthStyle:          AuthStyleInNone,        // Public client, no auth in token request
-		OAuthMethod:        OAuthMethodPKCE,        // Uses PKCE for security
+		OAuthMethod:        OAuthMethodPKCE,        // Uses PKCE for security (REQUIRED)
 		TokenRequestFormat: TokenRequestFormatJSON, // Anthropic requires JSON format
 		ConsoleURL:         "https://console.anthropic.com/",
 		Hook:               &AnthropicHook{},
