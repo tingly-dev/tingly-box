@@ -1630,14 +1630,8 @@ func (c *Config) GetScenarioRecordingMode(scenario typ.RuleScenario) typ.Recordi
 
 	flags := config.GetDefaultFlags()
 
-	// Check new RecordV2 first (higher priority)
 	if flags.RecordV2 != typ.RecordingModeDisabled {
 		return flags.RecordV2
-	}
-
-	// Fall back to legacy Recording flag
-	if flags.Recording {
-		return typ.RecordingModeRequestResponse
 	}
 
 	return typ.RecordingModeDisabled
