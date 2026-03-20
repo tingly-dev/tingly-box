@@ -2,14 +2,22 @@ package background
 
 import (
 	"context"
-	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
+)
+
+const (
+	// defaultCheckInterval is how often to check for tokens needing refresh
+	defaultCheckInterval = 10 * time.Minute
+	// defaultRefreshBuffer is how long before expiry to refresh a token (matches OAuth package default)
+	defaultRefreshBuffer = 5 * time.Minute
+	// jitterPercent is the maximum jitter percentage to add to the check interval
+	jitterPercent = 0.10 // 10% jitter
 )
 
 // tokenManager defines the interface for token refresh operations
@@ -17,25 +25,33 @@ type tokenManager interface {
 	RefreshToken(ctx context.Context, userID string, providerType oauth2.ProviderType, refreshToken string, opts ...oauth2.Option) (*oauth2.Token, error)
 }
 
-// OAuthRefresher handles periodic OAuth token refresh
+// providerConfig defines the interface for provider config operations used by OAuthRefresher
+type providerConfig interface {
+	ListOAuthProviders() ([]*typ.Provider, error)
+	UpdateProvider(uuid string, provider *typ.Provider) error
+}
+
+// OAuthRefresher handles periodic OAuth token refresh with jitter to distribute
+// load across multiple instances
 type OAuthRefresher struct {
 	manager       tokenManager
-	serverConfig  *config.Config
-	checkInterval time.Duration // Check every 10 minutes
-	refreshBuffer time.Duration // Refresh if expires within 5 minutes
-	stopChan      chan struct{}
+	serverConfig  providerConfig
+	checkInterval time.Duration
+	refreshBuffer time.Duration
+	cancelFunc    context.CancelFunc
 	mu            sync.RWMutex
 	running       bool
+	rng           *rand.Rand // Random number generator for jitter
 }
 
 // NewTokenRefresher creates a new token refresher
-func NewTokenRefresher(manager *oauth2.Manager, serverConfig *config.Config) *OAuthRefresher {
+func NewTokenRefresher(manager *oauth2.Manager, serverConfig providerConfig) *OAuthRefresher {
 	return &OAuthRefresher{
 		manager:       manager,
 		serverConfig:  serverConfig,
-		checkInterval: 10 * time.Minute,
-		refreshBuffer: 30 * time.Minute,
-		stopChan:      make(chan struct{}),
+		checkInterval: defaultCheckInterval,
+		refreshBuffer: defaultRefreshBuffer,
+		rng:           rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
@@ -69,8 +85,23 @@ func (tr *OAuthRefresher) Start(ctx context.Context) {
 		tr.mu.Unlock()
 	}()
 
-	ticker := time.NewTicker(tr.checkInterval)
+	// Create a cancellable context for this run
+	ctx, tr.cancelFunc = context.WithCancel(ctx)
+	defer func() {
+		tr.mu.Lock()
+		tr.cancelFunc = nil
+		tr.mu.Unlock()
+	}()
+
+	// Add jitter to distribute load across multiple instances
+	jitter := time.Duration(tr.rng.Float64() * float64(tr.checkInterval) * jitterPercent)
+	ticker := time.NewTicker(tr.checkInterval + jitter)
 	defer ticker.Stop()
+
+	logger := logrus.WithField("component", "OAuthRefresher")
+	logger.WithField("checkInterval", tr.checkInterval+jitter).
+		WithField("refreshBuffer", tr.refreshBuffer).
+		Info("Starting OAuth token refresher")
 
 	// Initial check on start
 	tr.CheckAndRefreshTokens()
@@ -78,8 +109,7 @@ func (tr *OAuthRefresher) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			return
-		case <-tr.stopChan:
+			logger.Info("OAuth refresher stopped")
 			return
 		case <-ticker.C:
 			tr.CheckAndRefreshTokens()
@@ -92,9 +122,8 @@ func (tr *OAuthRefresher) Stop() {
 	tr.mu.Lock()
 	defer tr.mu.Unlock()
 
-	if tr.running {
-		close(tr.stopChan)
-		tr.stopChan = make(chan struct{})
+	if tr.running && tr.cancelFunc != nil {
+		tr.cancelFunc()
 	}
 }
 
@@ -107,11 +136,24 @@ func (tr *OAuthRefresher) Running() bool {
 
 // CheckAndRefreshTokens checks all OAuth providers and refreshes tokens if needed
 func (tr *OAuthRefresher) CheckAndRefreshTokens() {
+	logger := logrus.WithField("component", "OAuthRefresher")
+
+	// Recover from panics to prevent background goroutine crashes
+	defer func() {
+		if r := recover(); r != nil {
+			logger.WithField("panic", r).Error("Panic in CheckAndRefreshTokens")
+		}
+	}()
+
 	providers, err := tr.serverConfig.ListOAuthProviders()
 	if err != nil {
-		fmt.Printf("[OAuthRefresher] Failed to list providers: %v\n", err)
+		logger.Errorf("Failed to list providers: %v", err)
 		return
 	}
+
+	tr.mu.RLock()
+	buffer := tr.refreshBuffer
+	tr.mu.RUnlock()
 
 	now := time.Now()
 	refreshCount := 0
@@ -123,27 +165,38 @@ func (tr *OAuthRefresher) CheckAndRefreshTokens() {
 
 		expiresAt, err := time.Parse(time.RFC3339, provider.OAuthDetail.ExpiresAt)
 		if err != nil {
-			fmt.Printf("[OAuthRefresher] Invalid expires_at for %s: %v\n", provider.Name, err)
+			logger.WithFields(logrus.Fields{
+				"provider": provider.Name,
+				"error":    err,
+			}).Error("Invalid expires_at format")
 			continue
 		}
 
 		// Check if token needs refresh (sequential, not concurrent)
-		if expiresAt.Before(now.Add(tr.refreshBuffer)) {
+		if expiresAt.Before(now.Add(buffer)) {
 			tr.refreshProviderToken(provider)
 			refreshCount++
 		}
 	}
 
 	if refreshCount > 0 {
-		fmt.Printf("[OAuthRefresher] Checked %d OAuth providers, refreshed %d tokens\n", len(providers), refreshCount)
+		logger.WithFields(logrus.Fields{
+			"totalProviders": len(providers),
+			"refreshed":      refreshCount,
+		}).Info("OAuth token refresh completed")
 	}
 }
 
 // refreshProviderToken refreshes a single provider's token
 func (tr *OAuthRefresher) refreshProviderToken(provider *typ.Provider) {
+	logger := logrus.WithFields(logrus.Fields{
+		"component": "OAuthRefresher",
+		"provider":  provider.Name,
+	})
+
 	providerType, err := oauth2.ParseProviderType(provider.OAuthDetail.ProviderType)
 	if err != nil {
-		logrus.Errorf("[OAuthRefresher] Invalid provider type for %s: %v\n", provider.Name, err)
+		logger.WithError(err).Error("Invalid provider type")
 		return
 	}
 
@@ -156,7 +209,7 @@ func (tr *OAuthRefresher) refreshProviderToken(provider *typ.Provider) {
 	)
 
 	if err != nil {
-		fmt.Printf("[OAuthRefresher] Failed to refresh %s: %v\n", provider.Name, err)
+		logger.WithError(err).Error("Failed to refresh token")
 		return
 	}
 
@@ -168,9 +221,9 @@ func (tr *OAuthRefresher) refreshProviderToken(provider *typ.Provider) {
 	provider.OAuthDetail.ExpiresAt = token.Expiry.Format(time.RFC3339)
 
 	if err := tr.serverConfig.UpdateProvider(provider.UUID, provider); err != nil {
-		fmt.Printf("[OAuthRefresher] Failed to update %s: %v\n", provider.Name, err)
+		logger.WithError(err).Error("Failed to update provider")
 		return
 	}
 
-	fmt.Printf("[OAuthRefresher] Refreshed token for %s (expires at %s)\n", provider.Name, provider.OAuthDetail.ExpiresAt)
+	logger.WithField("expiresAt", provider.OAuthDetail.ExpiresAt).Info("Token refreshed successfully")
 }
