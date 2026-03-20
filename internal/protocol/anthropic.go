@@ -15,7 +15,7 @@ type (
 		Stream bool `json:"stream"`
 
 		// an extra model field for any preprocess logic like middleware
-		Model string `json:"model"`
+		AuxModel string `json:"model"`
 	}
 	// AnthropicBetaMessagesRequest Request with beta
 	AnthropicBetaMessagesRequest struct {
@@ -25,7 +25,7 @@ type (
 		Stream bool `json:"stream"`
 
 		// an extra model field for any preprocess logic like middleware
-		Model string `json:"model"`
+		AuxModel string `json:"model"`
 	}
 )
 
@@ -39,7 +39,7 @@ func (r *AnthropicBetaMessagesRequest) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	r.Stream = aux.Stream
-	r.Model = aux.Model
+	r.AuxModel = aux.Model
 	r.BetaMessageNewParams = &inner
 	return nil
 }
@@ -54,7 +54,7 @@ func (r *AnthropicMessagesRequest) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	r.Stream = aux.Stream
-	r.Model = aux.Model
+	r.AuxModel = aux.Model
 	r.MessageNewParams = &inner
 	return nil
 }

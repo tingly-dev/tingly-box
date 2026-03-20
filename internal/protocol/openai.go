@@ -16,8 +16,8 @@ import (
 type OpenAIChatCompletionRequest struct {
 	*openai.ChatCompletionNewParams
 	// an extra model field for any preprocess logic like middleware
-	Model  string `json:"model"`
-	Stream bool   `json:"stream"`
+	AuxModel string `json:"model"`
+	Stream   bool   `json:"stream"`
 }
 
 func (r *OpenAIChatCompletionRequest) UnmarshalJSON(data []byte) error {
@@ -30,7 +30,7 @@ func (r *OpenAIChatCompletionRequest) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	r.Stream = aux.Stream
-	r.Model = aux.Model
+	r.AuxModel = aux.Model
 	r.ChatCompletionNewParams = &inner
 	return nil
 }
@@ -56,7 +56,7 @@ type ResponseCreateRequest struct {
 	Stream bool `json:"stream"`
 
 	// an extra model field for any preprocess logic like middleware
-	Model string `json:"model"`
+	AuxModel string `json:"model"`
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling for ResponseCreateRequest
@@ -82,7 +82,7 @@ func (r *ResponseCreateRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	r.Stream = aux.Stream
-	r.Model = aux.Model
+	r.AuxModel = aux.Model
 	r.ResponseNewParams = &inner
 	return nil
 }

@@ -30,10 +30,8 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req *protocol.Anthropic
 	// Check if streaming is requested
 	isStreaming := req.Stream
 
-	req.Model = actualModel
-
 	// Also update the embedded SDK model field
-	req.BetaMessageNewParams.Model = anthropic.Model(actualModel)
+	req.Model = anthropic.Model(actualModel)
 
 	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
 	SetTrackingContext(c, rule, provider, actualModel, proxyModel, isStreaming)
