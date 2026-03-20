@@ -1566,6 +1566,8 @@ func (c *Config) GetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 		return string(flags.ThinkingEffort)
 	case "thinking_mode":
 		return flags.ThinkingMode
+	case "record_v2":
+		return string(flags.RecordV2)
 	default:
 		return ""
 	}
@@ -1602,11 +1604,42 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 		config.Flags.ThinkingEffort = typ.ThinkingEffortLevel(value)
 	case "thinking_mode":
 		config.Flags.ThinkingMode = value
+	case "record_v2":
+		if !typ.IsValidRecordingMode(value) {
+			return fmt.Errorf("invalid record_v2 value: %s (must be one of: request, response, request_response, or empty)", value)
+		}
+		config.Flags.RecordV2 = typ.RecordingMode(value)
 	default:
 		return fmt.Errorf("unknown string flag name: %s", flagName)
 	}
 
 	return c.Save()
+}
+
+// GetScenarioRecordingMode returns the effective recording mode for a scenario
+// It checks both legacy Recording (bool) and new RecordV2 (RecordingMode)
+// Priority: RecordV2 > legacy Recording
+func (c *Config) GetScenarioRecordingMode(scenario typ.RuleScenario) typ.RecordingMode {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	config := c.GetScenarioConfig(scenario)
+	if config == nil {
+		return typ.RecordingModeDisabled
+	}
+
+	flags := config.GetDefaultFlags()
+
+	if flags.RecordV2 != typ.RecordingModeDisabled {
+		return flags.RecordV2
+	}
+
+	return typ.RecordingModeDisabled
+}
+
+// IsScenarioRecordingEnabled checks if recording is enabled for a scenario
+func (c *Config) IsScenarioRecordingEnabled(scenario typ.RuleScenario) bool {
+	return c.GetScenarioRecordingMode(scenario) != typ.RecordingModeDisabled
 }
 
 // FetchAndSaveProviderModels fetches models from a provider with fallback hierarchy

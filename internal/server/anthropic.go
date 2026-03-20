@@ -54,7 +54,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	}
 
 	// Start scenario-level recording (client -> tingly-box traffic) only if enabled
-	var recorder *ScenarioRecorder
+	var recorder *ProtocolRecorder
 	if s.ApplyRecording(scenarioType) {
 		recorder = s.RecordScenarioRequest(c, scenario)
 		if recorder != nil {

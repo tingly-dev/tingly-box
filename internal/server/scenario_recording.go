@@ -19,7 +19,7 @@ import (
 
 // RecordScenarioRequest records the scenario-level request (client -> tingly-box)
 // This captures the original request from the client before any transformation
-func (s *Server) RecordScenarioRequest(c *gin.Context, scenario string) *ScenarioRecorder {
+func (s *Server) RecordScenarioRequest(c *gin.Context, scenario string) *ProtocolRecorder {
 	scenarioType := typ.RuleScenario(scenario)
 
 	// Get or create sink for this scenario (on-demand)
@@ -54,13 +54,15 @@ func (s *Server) RecordScenarioRequest(c *gin.Context, scenario string) *Scenari
 		Body:    bodyJSON,
 	}
 
-	return &ScenarioRecorder{
-		sink:      sink,
-		scenario:  scenario,
-		req:       req,
-		startTime: time.Now(),
-		c:         c,
-		bodyBytes: bodyBytes,
+	return &ProtocolRecorder{
+		ScenarioRecorder: &ScenarioRecorder{
+			sink:      sink,
+			scenario:  scenario,
+			req:       req,
+			startTime: time.Now(),
+			c:         c,
+			bodyBytes: bodyBytes,
+		},
 	}
 }
 
@@ -258,7 +260,7 @@ func headerToMap(h http.Header) map[string]string {
 // streamRecorder encapsulates recording and assembly logic for streaming responses
 // It provides a unified way to handle both v1 and v1beta Anthropic streaming events
 type streamRecorder struct {
-	recorder     *ScenarioRecorder
+	recorder     *ProtocolRecorder
 	assembler    *stream.AnthropicStreamAssembler
 	inputTokens  int
 	outputTokens int
@@ -266,7 +268,7 @@ type streamRecorder struct {
 }
 
 // newStreamRecorder creates a new streamRecorder
-func newStreamRecorder(recorder *ScenarioRecorder) *streamRecorder {
+func newStreamRecorder(recorder *ProtocolRecorder) *streamRecorder {
 	if recorder == nil {
 		return nil
 	}
@@ -414,7 +416,7 @@ func (sr *streamRecorder) SetupStreamRecorderInContext(c *gin.Context, key strin
 // - onStreamEvent: Hook for each stream event
 // - onStreamComplete: Hook for stream completion
 // - onStreamError: Hook for stream errors
-func NewRecorderHooks(recorder *ScenarioRecorder) (onStreamEvent func(event interface{}) error, onStreamComplete func(), onStreamError func(err error)) {
+func NewRecorderHooks(recorder *ProtocolRecorder) (onStreamEvent func(event interface{}) error, onStreamComplete func(), onStreamError func(err error)) {
 	if recorder == nil {
 		return nil, nil, nil
 	}
@@ -486,7 +488,7 @@ func NewRecorderHooks(recorder *ScenarioRecorder) (onStreamEvent func(event inte
 // NewRecorderHooksWithModel creates hook functions with an explicit model parameter.
 // This is preferred when the model is known at hook creation time.
 // Usage is tracked internally in the event hook.
-func NewRecorderHooksWithModel(recorder *ScenarioRecorder, model string, provider *typ.Provider) (onStreamEvent func(event interface{}) error, onStreamComplete func(), onStreamError func(err error)) {
+func NewRecorderHooksWithModel(recorder *ProtocolRecorder, model string, provider *typ.Provider) (onStreamEvent func(event interface{}) error, onStreamComplete func(), onStreamError func(err error)) {
 	if recorder == nil {
 		return nil, nil, nil
 	}

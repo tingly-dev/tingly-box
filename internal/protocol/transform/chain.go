@@ -81,6 +81,11 @@ func (c *TransformChain) Execute(ctx *TransformContext) (*TransformContext, erro
 
 	// Execute transforms in order
 	for _, transform := range c.transforms {
+		// DESIGN: we allow nil transform and ignore them, this is a design pattern to help upstream build chain
+		if transform == nil {
+			continue
+		}
+
 		// Record the transform name
 		transformName := transform.Name()
 		ctx.TransformSteps = append(ctx.TransformSteps, transformName)

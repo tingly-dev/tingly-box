@@ -1,0 +1,46 @@
+package server
+
+import (
+	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	"github.com/tingly-dev/tingly-box/internal/typ"
+)
+
+func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, target transform.TargetAPIStyle, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
+	// Build transform chain with recording support
+	chain, err := s.BuildTransformChain(c, target, provider.APIBase, nil, protocolRecorder)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create transform context
+	var scenarioFlags *typ.ScenarioFlags
+	if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
+		scenarioFlags = &scenarioConfig.Flags
+	}
+
+	transformCtx := &transform.TransformContext{
+		OriginalRequest: &req.BetaMessageNewParams,
+		Request:         &req.BetaMessageNewParams, // Original Anthropic beta request
+		ProviderURL:     provider.APIBase,
+		ScenarioFlags:   scenarioFlags,
+		IsStreaming:     isStreaming,
+	}
+
+	// Execute transform chain
+	finalCtx, err := chain.Execute(transformCtx)
+	if err != nil {
+		if protocolRecorder != nil {
+			protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
+			protocolRecorder.RecordError(err)
+		}
+		return nil, err
+	}
+
+	// Store transform steps in V2 recorder
+	if protocolRecorder != nil {
+		protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
+	}
+	return finalCtx, nil
+}

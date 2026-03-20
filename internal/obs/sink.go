@@ -16,10 +16,13 @@ import (
 type RecordMode string
 
 const (
-	RecordModeAll      RecordMode = "all"      // Record both request and response
-	RecordModeResponse RecordMode = "response" // Record only response
+	RecordModeAll      RecordMode = "all" // Record both request and response
 	RecordModeScenario RecordMode = "scenario"
 	RecordModeSlim     RecordMode = "slim" // TODO: Not implemented yet
+
+	RecordModeRequest           RecordMode = "request"          // Record only requests (original + transformed)
+	RecordModeResponse          RecordMode = "response"         // Record only response
+	RecordModeV2RequestResponse RecordMode = "request_response" // Record both requests and responses
 )
 
 // RecordEntry represents a single recorded request/response pair
@@ -54,6 +57,33 @@ type RecordResponse struct {
 	StreamChunks []string `json:"-"` // Parsed SSE data chunks
 }
 
+// RecordEntryV2 represents a V2 recorded entry with dual-stage request/response recording
+// This is used for protocol conversion scenarios where we need to capture:
+// - Original request (before transforms)
+// - Transformed request (after protocol conversion)
+// - Provider response (raw response from provider)
+// - Final response (after reverse transformation, if applicable)
+type RecordEntryV2 struct {
+	Timestamp string `json:"timestamp"`
+	RequestID string `json:"request_id"`
+	Provider  string `json:"provider"`
+	Scenario  string `json:"scenario,omitempty"` // Scenario: openai, anthropic, claude_code, etc.
+	Model     string `json:"model"`
+
+	// Dual-stage request recording
+	OriginalRequest    *RecordRequest `json:"original_request,omitempty"`    // Before any transforms
+	TransformedRequest *RecordRequest `json:"transformed_request,omitempty"` // After base transform
+
+	// Dual-stage response recording
+	ProviderResponse *RecordResponse `json:"provider_response,omitempty"` // Raw response from provider
+	FinalResponse    *RecordResponse `json:"final_response,omitempty"`    // Final response to client
+
+	DurationMs     int64                  `json:"duration_ms"`
+	Error          string                 `json:"error,omitempty"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	TransformSteps []string               `json:"transform_steps,omitempty"` // Applied transforms
+}
+
 // Sink manages recording of HTTP requests/responses to JSONL files
 type Sink struct {
 	mode    RecordMode
@@ -71,6 +101,7 @@ type recordFile struct {
 
 // NewSink creates a new record sink
 // mode: empty string = disabled, "all" = record all, "response" = response only
+// V2 modes: "request", "response_only", "request_response"
 func NewSink(baseDir string, mode RecordMode) *Sink {
 	switch mode {
 	case "":
@@ -82,7 +113,8 @@ func NewSink(baseDir string, mode RecordMode) *Sink {
 		logrus.Warnf("Record mode 'slim' is not implemented yet, please use 'all' or 'response'")
 		return nil
 
-	case RecordModeAll, RecordModeResponse, RecordModeScenario:
+	case RecordModeAll, RecordModeScenario,
+		RecordModeRequest, RecordModeResponse, RecordModeV2RequestResponse:
 
 		// Ensure base directory exists
 		if err := os.MkdirAll(baseDir, 0755); err != nil {
@@ -300,4 +332,57 @@ func (r *Sink) IsEnabled() bool {
 // GetBaseDir returns the base directory for recordings
 func (r *Sink) GetBaseDir() string {
 	return r.baseDir
+}
+
+// RecordEntryV2 records a V2 entry with dual-stage request/response recording
+// This is used for protocol conversion scenarios where we need to capture requests at multiple stages
+func (r *Sink) RecordEntryV2(entry *RecordEntryV2) {
+	if r == nil || r.mode == "" {
+		return
+	}
+
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	// Get current hour for file rotation (YYYY-MM-DD-HH)
+	currentHour := time.Now().UTC().Format("2006-01-02-15")
+
+	// Use scenario-based file key if scenario is available, otherwise use provider
+	fileKey := fmt.Sprintf("v2:%s:%s", entry.Scenario, entry.Provider)
+	if entry.Scenario == "" {
+		fileKey = fmt.Sprintf("v2:%s", entry.Provider)
+	}
+
+	// Get or create file for this entry
+	rf, exists := r.fileMap[fileKey]
+	if !exists || rf.currentHour != currentHour {
+		// Close old file if hour changed
+		if exists && rf.currentHour != currentHour {
+			r.closeFile(rf)
+		}
+
+		// Create new file with V2 naming
+		filename := filepath.Join(r.baseDir, fmt.Sprintf("%s.%s.v2.%s.jsonl", entry.Scenario, entry.Provider, currentHour))
+		if entry.Scenario == "" {
+			filename = filepath.Join(r.baseDir, fmt.Sprintf("%s.v2.%s.jsonl", entry.Provider, currentHour))
+		}
+
+		file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0640)
+		if err != nil {
+			logrus.Errorf("Failed to open V2 record file %s: %v", filename, err)
+			return
+		}
+
+		rf = &recordFile{
+			file:        file,
+			writer:      json.NewEncoder(file),
+			currentHour: currentHour,
+		}
+		r.fileMap[fileKey] = rf
+	}
+
+	// Write entry as JSONL (one JSON object per line)
+	if err := rf.writer.Encode(entry); err != nil {
+		logrus.Errorf("Failed to write V2 record entry: %v", err)
+	}
 }

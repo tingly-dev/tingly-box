@@ -119,6 +119,9 @@ type Server struct {
 	recordMode obs.RecordMode
 	recordDir  string
 
+	// recording flag - enables dual-stage request recording
+	enableRecording bool
+
 	// experimental features
 	experimentalFeatures map[string]bool
 
@@ -221,6 +224,13 @@ func WithRecordMode(mode obs.RecordMode) ServerOption {
 func WithRecordDir(dir string) ServerOption {
 	return func(s *Server) {
 		s.recordDir = dir
+	}
+}
+
+// WithRecording enables dual-stage recording for protocol conversion scenarios
+func WithRecording(enabled bool) ServerOption {
+	return func(s *Server) {
+		s.enableRecording = enabled
 	}
 }
 
@@ -369,6 +379,11 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		logrus.Debugf("Scenario recording mode enabled, sinks will be created on-demand per scenario")
 	default:
 		log.Panicf("Unknown recording mode %s", server.recordMode)
+	}
+
+	// Log recording flag if enabled
+	if server.enableRecording {
+		logrus.Debugf("Dual-stage recording enabled")
 	}
 
 	// Initialize multi-mode memory log middleware for HTTP request logging
