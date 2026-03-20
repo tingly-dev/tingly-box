@@ -2,6 +2,8 @@ package background
 
 import (
 	"context"
+	"errors"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -10,6 +12,38 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
 )
+
+var errProviderNotFound = errors.New("provider not found")
+
+// mockConfig wraps Config to provide ListOAuthProviders from the Providers slice
+// for testing purposes (bypasses provider store)
+type mockConfig struct {
+	*config.Config
+}
+
+func (m *mockConfig) ListOAuthProviders() ([]*typ.Provider, error) {
+	return m.Providers, nil
+}
+
+func (m *mockConfig) UpdateProvider(uuid string, provider *typ.Provider) error {
+	// Update in the slice
+	for i, p := range m.Providers {
+		if p.UUID == uuid {
+			m.Providers[i] = provider
+			return nil
+		}
+	}
+	return errProviderNotFound
+}
+
+func (m *mockConfig) GetProviderByUUID(uuid string) (*typ.Provider, error) {
+	for _, p := range m.Providers {
+		if p.UUID == uuid {
+			return p, nil
+		}
+	}
+	return nil, errProviderNotFound
+}
 
 // tokenRefresher is a minimal interface for the refresh functionality
 type tokenRefresher interface {
@@ -68,8 +102,8 @@ func TestNewOAuthRefresher(t *testing.T) {
 		t.Errorf("Expected check interval 10m, got %v", refresher.checkInterval)
 	}
 
-	if refresher.refreshBuffer != 30*time.Minute {
-		t.Errorf("Expected refresh buffer 30m, got %v", refresher.refreshBuffer)
+	if refresher.refreshBuffer != 5*time.Minute {
+		t.Errorf("Expected refresh buffer 5m, got %v", refresher.refreshBuffer)
 	}
 }
 
@@ -238,7 +272,7 @@ func TestOAuthRefresherStartTwice(t *testing.T) {
 
 // TestOAuthRefresherActualRefresh tests that refresh is actually triggered for expiring tokens
 func TestOAuthRefresherActualRefresh(t *testing.T) {
-	cfg := &config.Config{}
+	cfg := &mockConfig{Config: &config.Config{}}
 
 	// Create mock refresher
 	mockMgr := &mockTokenRefresher{}
@@ -268,7 +302,7 @@ func TestOAuthRefresherActualRefresh(t *testing.T) {
 		serverConfig:  cfg,
 		checkInterval: 10 * time.Minute,
 		refreshBuffer: 5 * time.Minute, // Should refresh if expires within 5 min
-		stopChan:      make(chan struct{}),
+		rng:           rand.New(rand.NewSource(42)),
 	}
 
 	// Call CheckAndRefreshTokens directly
@@ -300,7 +334,7 @@ func TestOAuthRefresherActualRefresh(t *testing.T) {
 
 // TestOAuthRefresherSkipValidTokens tests that valid tokens are not refreshed
 func TestOAuthRefresherSkipValidTokens(t *testing.T) {
-	cfg := &config.Config{}
+	cfg := &mockConfig{Config: &config.Config{}}
 
 	// Create mock refresher
 	mockMgr := &mockTokenRefresher{}
@@ -330,7 +364,7 @@ func TestOAuthRefresherSkipValidTokens(t *testing.T) {
 		serverConfig:  cfg,
 		checkInterval: 10 * time.Minute,
 		refreshBuffer: 5 * time.Minute, // Should only refresh if expires within 5 min
-		stopChan:      make(chan struct{}),
+		rng:           rand.New(rand.NewSource(42)),
 	}
 
 	// Call CheckAndRefreshTokens directly
