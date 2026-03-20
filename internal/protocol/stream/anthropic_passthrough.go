@@ -27,6 +27,9 @@ func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNe
 
 	err := hc.ProcessStream(
 		func() (bool, error, interface{}) {
+			if streamResp.Err() != nil {
+				return false, streamResp.Err(), nil
+			}
 			if !streamResp.Next() {
 				return false, nil, nil
 			}
@@ -96,6 +99,9 @@ func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaM
 
 	err := hc.ProcessStream(
 		func() (bool, error, interface{}) {
+			if streamResp.Err() != nil {
+				return false, streamResp.Err(), nil
+			}
 			if !streamResp.Next() {
 				return false, nil, nil
 			}
