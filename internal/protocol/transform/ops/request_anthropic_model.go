@@ -48,17 +48,6 @@ func isThinkingSupportedModel(model string) bool {
 	return strings.Contains(modelLower, "claude-opus-4-6") || strings.Contains(modelLower, "claude-sonnet-4-6")
 }
 
-// isThinkingAdaptiveV1 checks if the v1 thinking is set to adaptive type.
-// Thinking is adaptive when the OfAdaptive field is set.
-func isThinkingAdaptiveV1(thinking anthropic.ThinkingConfigParamUnion) bool {
-	return thinking.OfAdaptive != nil
-}
-
-// isThinkingAdaptiveBeta checks if the beta thinking is set to adaptive type.
-func isThinkingAdaptiveBeta(thinking anthropic.BetaThinkingConfigParamUnion) bool {
-	return thinking.OfAdaptive != nil
-}
-
 // applyAnthropicV1ThinkingFilter removes thinking configuration from Anthropic v1 requests
 // for models that don't support adaptive thinking.
 func applyAnthropicV1ThinkingFilter(req *anthropic.MessageNewParams) *anthropic.MessageNewParams {
@@ -66,10 +55,15 @@ func applyAnthropicV1ThinkingFilter(req *anthropic.MessageNewParams) *anthropic.
 		return req
 	}
 
+	req.Messages = filterThinkingBlocksInMessages(req.Messages)
 	// Check if thinking is set to adaptive
-	if isThinkingAdaptiveV1(req.Thinking) {
+	if req.Thinking.OfAdaptive != nil {
 		// Remove thinking configuration for Haiku
-		req.Thinking = anthropic.ThinkingConfigParamUnion{}
+		req.Thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}}
+	}
+
+	if req.Thinking.OfEnabled == nil {
+		req.OutputConfig = anthropic.OutputConfigParam{}
 	}
 
 	// Also check messages for thinking blocks
@@ -85,10 +79,15 @@ func applyAnthropicBetaThinkingFilter(req *anthropic.BetaMessageNewParams) *anth
 		return req
 	}
 
+	req.Messages = filterBetaThinkingBlocksInMessages(req.Messages)
 	// Check if thinking is set to adaptive
-	if isThinkingAdaptiveBeta(req.Thinking) {
+	if req.Thinking.OfAdaptive != nil {
 		// Remove thinking configuration for Haiku
-		req.Thinking = anthropic.BetaThinkingConfigParamUnion{}
+		req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
+	}
+
+	if req.Thinking.OfEnabled == nil {
+		req.OutputConfig = anthropic.BetaOutputConfigParam{}
 	}
 
 	// Also check messages for thinking blocks
