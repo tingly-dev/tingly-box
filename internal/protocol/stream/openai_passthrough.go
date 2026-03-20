@@ -227,8 +227,10 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Str
 			// Convert to JSON and send as SSE
 			chunkJSON, err := json.Marshal(chunkMap)
 			if err != nil {
+				logrus.Errorf("failed to marshal chunk JSON: %v", err)
 				return err
 			}
+			logrus.Debugf("chunkJSON: %s", string(chunkJSON))
 
 			// Send the chunk
 			// MENTION: Must keep extra space

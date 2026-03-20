@@ -135,6 +135,17 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 		multiLogger.SetLevel(logrus.DebugLevel)
 	}
 
+	// Configure stdout formatter to plain text for better readability
+	// In non-daemon mode, stdout shows colored plain text; file gets full logs
+	if !opts.Daemon {
+		logrus.SetFormatter(&logrus.TextFormatter{
+			TimestampFormat: "2006-01-02 15:04:05",
+			FullTimestamp:   true,
+			ForceColors:     true,
+			DisableColors:   false,
+		})
+	}
+
 	// Set up logrus to write to both stdout and file with rotation
 	if opts.Daemon {
 		// In daemon mode, only write to file
@@ -145,7 +156,7 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 		logrus.SetOutput(multiWriter)
 	}
 
-	// Add hook for JSON logging
+	// Add hook for JSON logging (writes to JSON file only, not stdout)
 	logrus.AddHook(obs2.NewMultiLoggerHook(multiLogger, nil))
 
 	logrus.Infof("Logging to file: %s (with rotation)", logFile)
