@@ -9,6 +9,7 @@ export interface UseTemplatePageRulesParams {
     onRulesChange?: (updatedRules: Rule[]) => void;
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
     scenario?: string;
+    loadRules?: (scenario: string) => Promise<void>;
 }
 
 export interface UseTemplatePageRulesReturn {
@@ -25,6 +26,7 @@ export const useTemplatePageRules = ({
     onRulesChange,
     showNotification,
     scenario,
+    loadRules,
 }: UseTemplatePageRulesParams): UseTemplatePageRulesReturn => {
     const [providerModelsByUuid, setProviderModelsByUuid] = useState<ProviderModelsDataByUuid>({});
     const [refreshingProviders, setRefreshingProviders] = useState<string[]>([]);
@@ -69,7 +71,10 @@ export const useTemplatePageRules = ({
     }, [showNotification]);
 
     const handleCreateRule = useCallback(async (): Promise<string | null> => {
-        if (!scenario) return null;
+        if (!scenario) {
+            showNotification('Cannot create rule: scenario not specified', 'error');
+            return null;
+        }
 
         try {
             const newRuleData = {
@@ -79,21 +84,43 @@ export const useTemplatePageRules = ({
                 active: true,
                 services: []
             };
+
+            // Create rule via API (empty string for UUID signals backend to generate new UUID)
             const result = await api.createRule('', newRuleData);
-            if (result.success && result.data?.uuid) {
-                onRulesChange?.([...rules, result.data]);
-                showNotification('Routing rule created successfully!', 'success');
-                return result.data.uuid;
-            } else {
+
+            // Validate response has required data
+            if (!result.success) {
                 showNotification(`Failed to create rule: ${result.error || 'Unknown error'}`, 'error');
                 return null;
             }
+
+            if (!result.data || !result.data.uuid) {
+                showNotification('Failed to create rule: Invalid response from server (missing UUID)', 'error');
+                console.error('Invalid createRule response:', result);
+                return null;
+            }
+
+            // Verify the rule has the expected scenario
+            if (result.data.scenario !== scenario) {
+                showNotification(`Warning: Rule created but scenario mismatch (expected: ${scenario}, got: ${result.data.scenario})`, 'warning');
+            }
+
+            // Reload rules from backend to verify persistence
+            if (loadRules) {
+                await loadRules(scenario);
+            } else if (onRulesChange) {
+                // Fallback: update local state if loadRules not provided
+                onRulesChange([...rules, result.data]);
+            }
+
+            showNotification('Routing rule created successfully!', 'success');
+            return result.data.uuid;
         } catch (error) {
             console.error('Error creating rule:', error);
-            showNotification('Failed to create routing rule', 'error');
+            showNotification(`Failed to create routing rule: ${(error as Error).message || 'Unknown error'}`, 'error');
             return null;
         }
-    }, [scenario, rules, onRulesChange, showNotification]);
+    }, [scenario, rules, onRulesChange, showNotification, loadRules]);
 
     return {
         providerModelsByUuid,

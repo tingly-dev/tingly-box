@@ -3,14 +3,12 @@ import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import { Box, Button, Tooltip, IconButton } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import ExperimentalFeatures from '@/components/ExperimentalFeatures.tsx';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import OpenCodeConfigModal from '@/components/OpenCodeConfigModal';
-import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
-import { useRuleManagement } from '@/pages/scenario/hooks/useRuleManagement.ts';
-import { useScenarioPageData } from '@/pages/scenario/hooks/useScenarioPageData.ts';
+import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { api } from '@/services/api';
 
 const scenario = "opencode";
@@ -20,22 +18,12 @@ const UseOpenCodePage: React.FC = () => {
         showTokenModal,
         setShowTokenModal,
         token,
-        showNotification,
-        providers,
-        loading: providersLoading,
+        isLoading,
         notification,
-        loadProviders,
+        showNotification,
         copyToClipboard,
-    } = useFunctionPanelData();
-
-    const {
-        rules,
-        loadingRule,
-        newlyCreatedRuleUuids,
-        handleRuleDelete,
-        handleRulesChange,
-        loadRules,
-    } = useRuleManagement();
+        baseUrl,
+    } = useScenarioPageInternal(scenario);
 
     const [configModalOpen, setConfigModalOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
@@ -44,8 +32,6 @@ const UseOpenCodePage: React.FC = () => {
     const [scriptWindows, setScriptWindows] = useState('');
     const [scriptUnix, setScriptUnix] = useState('');
     const [isConfigLoading, setIsConfigLoading] = useState(false);
-
-    const { headerRef, baseUrl, headerHeight } = useScenarioPageData(providers);
 
     // Fetch OpenCode config preview from backend
     const fetchConfigPreview = async () => {
@@ -111,17 +97,10 @@ const UseOpenCodePage: React.FC = () => {
         }
     };
 
-    useEffect(() => {
-        loadRules(scenario);
-    }, [scenario, loadRules]);
-
-    const isLoading = providersLoading || loadingRule;
-
     return (
         <PageLayout loading={isLoading} notification={notification}>
             <CardGrid>
                 <UnifiedCard
-                    ref={headerRef}
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <span>OpenCode Configuration</span>
@@ -156,21 +135,10 @@ const UseOpenCodePage: React.FC = () => {
                 </UnifiedCard>
 
                 <TemplatePage
-                    title="Models and Forwarding Rules"
                     scenario={scenario}
-                    rules={rules}
+                    title="Models and Forwarding Rules"
                     collapsible={true}
-                    showTokenModal={showTokenModal}
-                    setShowTokenModal={setShowTokenModal}
-                    token={token}
-                    showNotification={showNotification}
-                    providers={providers}
-                    onRulesChange={handleRulesChange}
-                    onProvidersLoad={loadProviders}
-                    newlyCreatedRuleUuids={newlyCreatedRuleUuids}
                     allowDeleteRule={true}
-                    onRuleDelete={handleRuleDelete}
-                    headerHeight={headerHeight}
                 />
 
                 <OpenCodeConfigModal

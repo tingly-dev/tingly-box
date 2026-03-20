@@ -4,12 +4,10 @@ import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import { Box, Button, IconButton, Tooltip } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
-import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
-import { useRuleManagement } from '@/pages/scenario/hooks/useRuleManagement.ts';
-import { useScenarioPageData } from '@/pages/scenario/hooks/useScenarioPageData.ts';
+import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 
 const scenario = "codex";
 
@@ -18,36 +16,17 @@ const UseCodexPage: React.FC = () => {
         showTokenModal,
         setShowTokenModal,
         token,
-        showNotification,
-        providers,
-        loading: providersLoading,
+        isLoading,
         notification,
-        loadProviders,
         copyToClipboard,
-    } = useFunctionPanelData();
-
-    const {
-        rules,
-        loadingRule,
-        newlyCreatedRuleUuids,
-        handleRuleDelete,
-        handleRulesChange,
-        loadRules,
-    } = useRuleManagement();
+        baseUrl,
+    } = useScenarioPageInternal(scenario);
 
     const [configModalOpen, setConfigModalOpen] = useState(false);
-
-    const { headerRef, baseUrl, headerHeight } = useScenarioPageData(providers);
 
     const handleOpenConfigModal = () => {
         setConfigModalOpen(true);
     };
-
-    useEffect(() => {
-        loadRules(scenario);
-    }, [scenario, loadRules]);
-
-    const isLoading = providersLoading || loadingRule;
 
     return (
         <PageLayout loading={isLoading} notification={notification}>
@@ -75,7 +54,6 @@ const UseCodexPage: React.FC = () => {
                     }
                 >
                     <ProviderConfigCard
-                        headerRef={headerRef}
                         title="Codex Configuration"
                         baseUrlPath="/tingly/codex"
                         baseUrl={baseUrl}
@@ -86,21 +64,10 @@ const UseCodexPage: React.FC = () => {
                     />
                 </UnifiedCard>
                 <TemplatePage
-                    title="Models and Forwarding Rules"
                     scenario={scenario}
-                    rules={rules}
+                    title="Models and Forwarding Rules"
                     collapsible={true}
-                    showTokenModal={showTokenModal}
-                    setShowTokenModal={setShowTokenModal}
-                    token={token}
-                    showNotification={showNotification}
-                    providers={providers}
-                    onRulesChange={handleRulesChange}
-                    onProvidersLoad={loadProviders}
-                    newlyCreatedRuleUuids={newlyCreatedRuleUuids}
                     allowDeleteRule={true}
-                    onRuleDelete={handleRuleDelete}
-                    headerHeight={headerHeight}
                 />
 
                 <CodexConfigModal

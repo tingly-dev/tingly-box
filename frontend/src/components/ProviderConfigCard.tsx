@@ -9,7 +9,7 @@ import {
     Tooltip,
     Typography
 } from '@mui/material';
-import React, { ReactNode, RefObject } from 'react';
+import React, {type ReactNode } from 'react';
 import { ApiConfigRow } from './ApiConfigRow';
 import { BaseUrlRow } from './BaseUrlRow';
 import PluginFeatures from './PluginFeatures';
@@ -39,8 +39,6 @@ const ConfigSection: React.FC<ConfigSectionProps> = ({ label, children, infoTool
 );
 
 export interface ProviderConfigCardProps {
-    /** Ref for measuring header height */
-    headerRef?: RefObject<HTMLDivElement>;
     /** Card title */
     title: string;
     /** Base URL path (e.g., "/tingly/anthropic") */
@@ -82,7 +80,6 @@ export interface ProviderConfigCardProps {
  * 5. Experimental features (optional, when scenario is provided)
  */
 export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
-    headerRef,
     title,
     baseUrlPath,
     baseUrl,
@@ -102,7 +99,7 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
     const hasDivider = showApiKeyRow && showOptionalSections;
 
     return (
-        <Box ref={headerRef} {...containerProps}>
+        <Box {...containerProps}>
             {/* Base URL Row - Always shown */}
             {showBaseUrlRow && <Box sx={{ p: 2, pb: showApiKeyRow ? 2 : 0 }}>
                 <BaseUrlRow

@@ -14,14 +14,12 @@ export interface TemplatePageActionsProps {
     collapsible: boolean;
     allExpanded: boolean;
     onToggleExpandAll: () => void;
-    showAddApiKeyButton: boolean;
+    showAddApiKeyButton?: boolean;
     onAddApiKeyClick: () => void;
-    showAddOAuthButton: boolean;
-    onAddOAuthClick?: () => void;
     allowAddRule: boolean;
     onCreateRule: () => void;
-    showExpandCollapseButton: boolean;
-    showImportButton: boolean;
+    showExpandCollapseButton?: boolean;
+    showImportButton?: boolean;
     onImportFromClipboard?: () => void;
     // Probe V2 props
     scenario?: string;
@@ -31,10 +29,12 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
     collapsible,
     allExpanded,
     onToggleExpandAll,
+    showAddApiKeyButton = true,
     onAddApiKeyClick,
     allowAddRule,
     onCreateRule,
-    showExpandCollapseButton,
+    showExpandCollapseButton = true,
+    showImportButton = true,
     onImportFromClipboard,
     scenario,
 }) => {
@@ -64,26 +64,30 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
                     </Button>
                 </Tooltip>
             )}
-            <Tooltip title="Add new API Key / OAuth">
-                <Button
-                    variant="outlined"
-                    startIcon={<KeyIcon/>}
-                    onClick={onAddApiKeyClick}
-                    size="small"
-                >
-                    New Key / OAuth
-                </Button>
-            </Tooltip>
-            <Tooltip title="Import rule and keys from file or clipboard">
-                <Button
-                    variant="outlined"
-                    startIcon={<ImportIcon/>}
-                    onClick={onImportFromClipboard}
-                    size="small"
-                >
-                    Import
-                </Button>
-            </Tooltip>
+            {showAddApiKeyButton && (
+                <Tooltip title="Add new API Key">
+                    <Button
+                        variant="outlined"
+                        startIcon={<KeyIcon/>}
+                        onClick={onAddApiKeyClick}
+                        size="small"
+                    >
+                        New Key
+                    </Button>
+                </Tooltip>
+            )}
+            {showImportButton && onImportFromClipboard && (
+                <Tooltip title="Import rule and keys from file or clipboard">
+                    <Button
+                        variant="outlined"
+                        startIcon={<ImportIcon/>}
+                        onClick={onImportFromClipboard}
+                        size="small"
+                    >
+                        Import
+                    </Button>
+                </Tooltip>
+            )}
             {allowAddRule && (
                 <Tooltip title="Create new routing rule">
                     <Button
@@ -95,20 +99,6 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
                         New Rule
                     </Button>
                 </Tooltip>
-            )}
-
-            {/* Probe V2 Button */}
-            {scenario && (
-                <>
-                    <ProbeMenu
-                        anchorEl={probeAnchorEl}
-                        open={probeMenuOpen}
-                        onClose={handleProbeClose}
-                        targetType="scenario"
-                        targetId={scenario}
-                        targetName={scenario}
-                    />
-                </>
             )}
         </Stack>
     );
