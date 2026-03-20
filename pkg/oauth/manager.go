@@ -587,6 +587,7 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 		"client_secret": config.ClientSecret,
 	}
 
+	// Build request body first
 	reqBody, contentType, err := buildRequestBody(params, config.TokenRequestFormat)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request body: %w", err)
@@ -597,20 +598,23 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 		return nil, err
 	}
 
-	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Accept", "application/json")
 
-	// Call provider's token hook if present
+	// Call provider's token hook if present (may modify params and headers)
 	if config.Hook != nil {
 		if err := config.Hook.BeforeToken(params, req.Header); err != nil {
 			return nil, err
 		}
-		reqBody, _, err = buildRequestBody(params, config.TokenRequestFormat)
+		// Rebuild body in case hook modified params
+		reqBody, contentType, err = buildRequestBody(params, config.TokenRequestFormat)
 		if err != nil {
 			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
 		}
 		req.Body = io.NopCloser(reqBody)
 	}
+
+	// Set Content-Type after hook (hook may have modified it)
+	req.Header.Set("Content-Type", contentType)
 
 	// Debug: print request details
 	m.debugRequest(req, config.TokenRequestFormat)
