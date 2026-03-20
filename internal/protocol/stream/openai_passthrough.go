@@ -25,8 +25,8 @@ import (
 
 // HandleOpenAIChatStream handles OpenAI chat streaming response.
 // Returns (UsageStat, error)
-func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams) (*protocol.TokenUsage, error) {
-	defer stream.Close()
+func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams) (*protocol.TokenUsage, error) {
+	defer streamResp.Close()
 
 	// Set SSE headers (mimicking OpenAI response headers)
 	c := hc.GinContext
@@ -56,10 +56,13 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, stream *openaistream.Str
 
 	err := hc.ProcessStream(
 		func() (bool, error, interface{}) {
-			if !stream.Next() {
+			if streamResp.Err() != nil {
+				return false, streamResp.Err(), nil
+			}
+			if !streamResp.Next() {
 				return false, nil, nil
 			}
-			chunk := stream.Current()
+			chunk := streamResp.Current()
 			return true, nil, &chunk
 		},
 		func(event interface{}) error {
