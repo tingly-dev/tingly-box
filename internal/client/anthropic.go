@@ -93,13 +93,13 @@ func (c *AnthropicClient) HttpClient() *http.Client {
 }
 
 // MessagesNew creates a new message request
-func (c *AnthropicClient) MessagesNew(ctx context.Context, req anthropic.MessageNewParams) (*anthropic.Message, error) {
-	return c.client.Messages.New(ctx, req)
+func (c *AnthropicClient) MessagesNew(ctx context.Context, req *anthropic.MessageNewParams) (*anthropic.Message, error) {
+	return c.client.Messages.New(ctx, *req)
 }
 
 // MessagesNewStreaming creates a new streaming message request
-func (c *AnthropicClient) MessagesNewStreaming(ctx context.Context, req anthropic.MessageNewParams) *anthropicstream.Stream[anthropic.MessageStreamEventUnion] {
-	return c.client.Messages.NewStreaming(ctx, req)
+func (c *AnthropicClient) MessagesNewStreaming(ctx context.Context, req *anthropic.MessageNewParams) *anthropicstream.Stream[anthropic.MessageStreamEventUnion] {
+	return c.client.Messages.NewStreaming(ctx, *req)
 }
 
 // MessagesCountTokens counts tokens for a message request
@@ -112,13 +112,13 @@ func (c *AnthropicClient) BetaMessagesCountTokens(ctx context.Context, req anthr
 }
 
 // BetaMessagesNew creates a new beta message request
-func (c *AnthropicClient) BetaMessagesNew(ctx context.Context, req anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, error) {
-	return c.client.Beta.Messages.New(ctx, req)
+func (c *AnthropicClient) BetaMessagesNew(ctx context.Context, req *anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, error) {
+	return c.client.Beta.Messages.New(ctx, *req)
 }
 
 // BetaMessagesNewStreaming creates a new beta streaming message request
-func (c *AnthropicClient) BetaMessagesNewStreaming(ctx context.Context, req anthropic.BetaMessageNewParams) *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion] {
-	return c.client.Beta.Messages.NewStreaming(ctx, req)
+func (c *AnthropicClient) BetaMessagesNewStreaming(ctx context.Context, req *anthropic.BetaMessageNewParams) *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion] {
+	return c.client.Beta.Messages.NewStreaming(ctx, *req)
 }
 
 // SetRecordSink sets the record sink for the client

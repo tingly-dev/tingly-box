@@ -118,7 +118,7 @@ func (s *Server) probeProviderWithSDK(ctx context.Context, provider *typ.Provide
 	case protocol.APIStyleAnthropic:
 		anthropicClient := clientInterface.(*client.AnthropicClient)
 		params := builder.buildAnthropicMessageRequest(model, message, testMode)
-		resp, err := anthropicClient.MessagesNew(ctx, params)
+		resp, err := anthropicClient.MessagesNew(ctx, &params)
 		if err != nil {
 			return nil, err
 		}
@@ -172,7 +172,7 @@ func (s *Server) probeProviderStream(ctx context.Context, provider *typ.Provider
 	case protocol.APIStyleAnthropic:
 		anthropicClient := clientInterface.(*client.AnthropicClient)
 		params := builder.buildAnthropicMessageRequest(model, message, testMode)
-		stream := anthropicClient.MessagesNewStreaming(ctx, params)
+		stream := anthropicClient.MessagesNewStreaming(ctx, &params)
 		defer stream.Close()
 
 		var chunks []interface{}

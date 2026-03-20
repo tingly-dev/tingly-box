@@ -111,8 +111,8 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req *protocol.AnthropicMess
 
 	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
 	if shouldIntercept {
-		preparedReq, _ := s.toolInterceptor.PrepareAnthropicRequest(provider, &req.MessageNewParams)
-		req.MessageNewParams = *preparedReq
+		preparedReq, _ := s.toolInterceptor.PrepareAnthropicRequest(provider, req.MessageNewParams)
+		req.MessageNewParams = preparedReq
 	} else if shouldStripTools {
 		req.MessageNewParams.Tools = toolinterceptor.StripSearchFetchToolsAnthropic(req.MessageNewParams.Tools)
 	}
@@ -140,7 +140,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req *protocol.AnthropicMess
 				return
 			}
 			// Handle the streaming response
-			s.handleAnthropicStreamResponseV1(c, req.MessageNewParams, streamResp, proxyModel, actualModel, provider, recorder)
+			s.handleAnthropicStreamResponseV1(c, *req.MessageNewParams, streamResp, proxyModel, actualModel, provider, recorder)
 		} else {
 			// Handle non-streaming request
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(req.MessageNewParams.Model))
@@ -188,7 +188,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req *protocol.AnthropicMess
 
 	case protocol.APIStyleGoogle:
 		// Convert Anthropic request to Google format
-		model, googleReq, cfg := request.ConvertAnthropicToGoogleRequest(&req.MessageNewParams, 0)
+		model, googleReq, cfg := request.ConvertAnthropicToGoogleRequest(req.MessageNewParams, 0)
 
 		if isStreaming {
 			// Create streaming request with request context for proper cancellation
@@ -289,7 +289,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req *protocol.AnthropicMess
 			logrus.Debugf("[AnthropicV1] Using Transform Chain for Responses API for model=%s", actualModel)
 
 			// Build transform chain with recording support
-chain, err := s.BuildTransformChain(c, transform.TargetAPIStyleOpenAIResponses, provider.APIBase, nil, isStreaming, recorder)
+			chain, err := s.BuildTransformChain(c, transform.TargetAPIStyleOpenAIResponses, provider.APIBase, nil, isStreaming, recorder)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				if recorder != nil {
@@ -512,7 +512,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, re
 		s.trackUsageFromContext(c, 0, 0, err)
 		stream.SendForwardingError(c, err)
 		if recorder != nil {
-			recorder.RecordError(err, provider, actualModel, s.recordMode)
+			recorder.RecordError(err)
 		}
 		return
 	}

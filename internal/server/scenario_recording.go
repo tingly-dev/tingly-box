@@ -351,10 +351,11 @@ func (sr *streamRecorder) Finish(model string, inputTokens, outputTokens int) {
 
 // RecordError records an error
 func (sr *streamRecorder) RecordError(err error) {
-	if sr == nil {
+	if sr == nil || sr.recorder == nil {
 		return
 	}
-	sr.recorder.RecordError(err)
+	// Call ProtocolRecorder's RecordError with all required parameters
+	sr.recorder.RecordError(err, nil, "", "")
 }
 
 // RecordResponse records the final response

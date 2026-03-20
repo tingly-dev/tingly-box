@@ -573,18 +573,18 @@ func (s *Server) handleResponsesForChatRequest(c *gin.Context, provider *typ.Pro
 	params := s.convertChatCompletionToResponsesParams(req, actualModel)
 
 	if isStreaming {
-		s.handleResponsesStreamingRequest(c, provider, params, responseModel, actualModel)
+		s.handleResponsesStreamingRequest(c, provider, *params, responseModel, actualModel)
 	} else {
-		s.handleResponsesNonStreamingRequest(c, provider, params, responseModel, actualModel)
+		s.handleResponsesNonStreamingRequest(c, provider, *params, responseModel, actualModel)
 	}
 }
 
 // convertChatCompletionToResponsesParams converts a chat completion request to responses API params
-func (s *Server) convertChatCompletionToResponsesParams(req *protocol.OpenAIChatCompletionRequest, actualModel string) responses.ResponseNewParams {
+func (s *Server) convertChatCompletionToResponsesParams(req *protocol.OpenAIChatCompletionRequest, actualModel string) *responses.ResponseNewParams {
 	// Build input items from chat messages
 	inputItems := s.convertMessagesToResponseInputItems(req.Messages)
 
-	params := responses.ResponseNewParams{
+	params := &responses.ResponseNewParams{
 		Model:       actualModel,
 		Input:       responses.ResponseNewParamsInputUnion{OfInputItemList: responses.ResponseInputParam(inputItems)},
 		Temperature: req.Temperature,

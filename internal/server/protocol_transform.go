@@ -33,7 +33,7 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req *protocol.AnthropicB
 	if err != nil {
 		if protocolRecorder != nil {
 			protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
-			protocolRecorder.RecordError(err)
+			protocolRecorder.RecordError(err, provider, actualModel, s.recordMode)
 		}
 		return nil, err
 	}

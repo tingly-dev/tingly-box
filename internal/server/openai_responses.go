@@ -141,7 +141,7 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 		}
 	}
 
-	req.ResponseNewParams = params
+	req.ResponseNewParams = &params
 	// req.Model is replaced with actualModel (resolved backend model) from this point on
 	req.Model = actualModel
 	s.ResponsesCreate(c, scenarioType, provider, req, rule.RequestModel)
@@ -224,7 +224,7 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string, maxAllowed int, isStreaming bool) {
 	switch provider.APIStyle {
 	case protocol.APIStyleOpenAI:
-		chatReq := request.ConvertOpenAIResponsesToChat(params, int64(maxAllowed))
+		chatReq := request.ConvertOpenAIResponsesToChat(&params, int64(maxAllowed))
 		if isStreaming {
 			wrapper := s.clientPool.GetOpenAIClient(provider, chatReq.Model)
 			fc := NewForwardContext(c.Request.Context(), provider)
@@ -263,7 +263,7 @@ func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Prov
 		return
 
 	case protocol.APIStyleAnthropic:
-		anthropicReq := request.ConvertOpenAIResponsesToAnthropicRequest(params, int64(maxAllowed))
+		anthropicReq := request.ConvertOpenAIResponsesToAnthropicRequest(&params, int64(maxAllowed))
 		if isStreaming {
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
 			fc := NewForwardContext(c.Request.Context(), provider)

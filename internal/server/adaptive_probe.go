@@ -210,7 +210,7 @@ func (ap *AdaptiveProbe) probeAnthropicChatEndpointWithSDK(ctx context.Context, 
 	probeCtx, cancel := context.WithTimeout(ctx, DefaultProbeTimeout)
 	defer cancel()
 
-	resp, err := wrapper.MessagesNew(probeCtx, params)
+	resp, err := wrapper.MessagesNew(probeCtx, &params)
 	latency := int(time.Since(startTime).Milliseconds())
 
 	if err != nil {

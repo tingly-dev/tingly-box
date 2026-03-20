@@ -10,7 +10,7 @@ type (
 	// AnthropicMessagesRequest Request
 	AnthropicMessagesRequest struct {
 		// Use official Anthropic SDK types directly
-		anthropic.MessageNewParams
+		*anthropic.MessageNewParams
 
 		Stream bool `json:"stream"`
 

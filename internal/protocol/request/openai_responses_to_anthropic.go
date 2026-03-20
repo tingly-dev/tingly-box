@@ -19,9 +19,9 @@ import (
 //   - TopLogprobs: Anthropic Message API doesn't support logprobs
 //   - Reasoning tokens: Special handling required for o1/o3 models
 func ConvertOpenAIResponsesToAnthropicRequest(
-	params responses.ResponseNewParams,
+	params *responses.ResponseNewParams,
 	defaultMaxTokens int64,
-) anthropic.MessageNewParams {
+) *anthropic.MessageNewParams {
 	anthropicParams := anthropic.MessageNewParams{}
 
 	// Convert model
@@ -81,14 +81,14 @@ func ConvertOpenAIResponsesToAnthropicRequest(
 		}
 	}
 
-	return anthropicParams
+	return &anthropicParams
 }
 
 // ConvertOpenAIResponsesToAnthropicBetaRequest converts OpenAI Responses API params to Anthropic Beta Message API format
 func ConvertOpenAIResponsesToAnthropicBetaRequest(
-	params responses.ResponseNewParams,
+	params *responses.ResponseNewParams,
 	defaultMaxTokens int64,
-) anthropic.BetaMessageNewParams {
+) *anthropic.BetaMessageNewParams {
 	anthropicParams := anthropic.BetaMessageNewParams{}
 
 	// Convert model
@@ -148,7 +148,7 @@ func ConvertOpenAIResponsesToAnthropicBetaRequest(
 		}
 	}
 
-	return anthropicParams
+	return &anthropicParams
 }
 
 // convertResponsesInputToAnthropicMessages converts Responses API input items to Anthropic v1 messages

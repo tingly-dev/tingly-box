@@ -12,7 +12,7 @@ import (
 
 // ConvertOpenAIResponsesToChat converts OpenAI Responses API params to Chat Completions format.
 // This is useful when translating between the two API formats.
-func ConvertOpenAIResponsesToChat(params responses.ResponseNewParams, defaultMaxTokens int64) *openai.ChatCompletionNewParams {
+func ConvertOpenAIResponsesToChat(params *responses.ResponseNewParams, defaultMaxTokens int64) *openai.ChatCompletionNewParams {
 	result := &openai.ChatCompletionNewParams{
 		Model: openai.ChatModel(params.Model),
 	}

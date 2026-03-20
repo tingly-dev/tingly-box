@@ -179,7 +179,7 @@ func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
 		})
 		return
 	}
-	provider, selectedService, err = s.DetermineProviderAndModelWithScenario(scenarioType, rule, &req.ChatCompletionNewParams)
+	provider, selectedService, err = s.DetermineProviderAndModelWithScenario(scenarioType, rule, req.ChatCompletionNewParams)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -221,7 +221,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 		})
 		return
 	case protocol.APIStyleAnthropic:
-		anthropicReq := request.ConvertOpenAIToAnthropicRequest(&req.ChatCompletionNewParams, int64(maxAllowed))
+		anthropicReq := request.ConvertOpenAIToAnthropicRequest(req.ChatCompletionNewParams, int64(maxAllowed))
 		if isStreaming {
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
 			fc := NewForwardContext(c.Request.Context(), provider)
@@ -247,7 +247,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 				disableStreamUsage = scenarioConfig.Flags.DisableStreamUsage
 			}
 
-			inputTokens, outputTokens, err := stream.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, streamResp, responseModel, disableStreamUsage)
+			inputTokens, outputTokens, err := stream.HandleAnthropicToOpenAIStreamResponse(c, anthropicReq, streamResp, responseModel, disableStreamUsage)
 			if err != nil {
 				// Track usage with error status
 				if inputTokens > 0 || outputTokens > 0 {
@@ -339,8 +339,8 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 		}
 
 		transformCtx := &transform.TransformContext{
-			OriginalRequest: &req.ChatCompletionNewParams,
-			Request:         &req.ChatCompletionNewParams,
+			OriginalRequest: req.ChatCompletionNewParams,
+			Request:         req.ChatCompletionNewParams,
 			ProviderURL:     provider.APIBase,
 			ScenarioFlags:   scenarioFlags,
 			IsStreaming:     isStreaming,
