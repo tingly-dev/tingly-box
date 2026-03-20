@@ -14,15 +14,15 @@ import (
 
 // OpenAIChatCompletionRequest is a type alias for OpenAI chat completion request with extra fields.
 type OpenAIChatCompletionRequest struct {
-	openai.ChatCompletionNewParams
-	Stream bool `json:"stream"`
+	*openai.ChatCompletionNewParams
+	// an extra model field for any preprocess logic like middleware
+	AuxModel string `json:"model"`
+	Stream   bool   `json:"stream"`
 }
 
 func (r *OpenAIChatCompletionRequest) UnmarshalJSON(data []byte) error {
 	var inner openai.ChatCompletionNewParams
-	aux := &struct {
-		Stream bool `json:"stream"`
-	}{}
+	aux := &AuxStreamModel{}
 	if err := json.Unmarshal(data, aux); err != nil {
 		return err
 	}
@@ -30,7 +30,8 @@ func (r *OpenAIChatCompletionRequest) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	r.Stream = aux.Stream
-	r.ChatCompletionNewParams = inner
+	r.AuxModel = aux.Model
+	r.ChatCompletionNewParams = &inner
 	return nil
 }
 
@@ -46,22 +47,23 @@ func (r *OpenAIChatCompletionRequest) UnmarshalJSON(data []byte) error {
 // ResponseCreateRequest wraps the native ResponseNewParams with additional fields
 // for proxy-specific handling like the `stream` parameter.
 type ResponseCreateRequest struct {
+	// Embed the native SDK type for all other fields
+	*responses.ResponseNewParams
+
 	// Stream indicates whether to stream the response
 	// This is not part of ResponseNewParams as streaming is controlled
 	// by using NewStreaming() method on the SDK client
 	Stream bool `json:"stream"`
 
-	// Embed the native SDK type for all other fields
-	responses.ResponseNewParams
+	// an extra model field for any preprocess logic like middleware
+	AuxModel string `json:"model"`
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling for ResponseCreateRequest
 // It handles both the custom Stream field and the embedded ResponseNewParams
 func (r *ResponseCreateRequest) UnmarshalJSON(data []byte) error {
 	// First, extract the Stream field
-	aux := &struct {
-		Stream bool `json:"stream"`
-	}{}
+	aux := &AuxStreamModel{}
 	if err := json.Unmarshal(data, aux); err != nil {
 		return err
 	}
@@ -80,7 +82,8 @@ func (r *ResponseCreateRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	r.Stream = aux.Stream
-	r.ResponseNewParams = inner
+	r.AuxModel = aux.Model
+	r.ResponseNewParams = &inner
 	return nil
 }
 
