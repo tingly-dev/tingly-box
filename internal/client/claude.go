@@ -100,15 +100,23 @@ func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthTo
 
 	// Check if target is Anthropic's API
 	isAnthropicBase := req.URL != nil && strings.Contains(strings.ToLower(req.URL.Host), "api.anthropic.com")
+	// /models endpoint should always use x-api-key header
+	isModelsEndpoint := req.URL != nil && req.URL.Path == "/models"
 
 	if isAnthropicBase && !isOAuthToken {
-		// Use x-api-key header for API keys to Anthropic
-		req.Header.Set("x-api-key", key)
+		// Use x-api-key header for API keys to Anthropic, or for /models endpoint
 		req.Header.Del("X-Api-Key")
+		// force lower
+		req.Header["x-api-key"] = []string{key}
+	} else if isModelsEndpoint {
+		// Use x-api-key header for API keys to Anthropic, or for /models endpoint
+		req.Header.Del("X-Api-Key")
+		// force lower
+		req.Header["x-api-key"] = []string{key}
 	} else {
-		// Use Bearer for OAuth tokens or non-Anthropic endpoints
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
+		// Use Bearer for OAuth tokens (except /models endpoint) or non-Anthropic endpoints
 		req.Header.Del("X-Api-Key")
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
 	}
 
 	// Set Claude Code specific headers
