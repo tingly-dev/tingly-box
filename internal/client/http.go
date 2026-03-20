@@ -23,7 +23,6 @@ type HookFunc func(req *http.Request) error
 // oauthHookFunctions defines custom hooks for OAuth providers based on provider type
 // Each hook handles custom headers, query params, and any special request modifications
 var oauthHookFunctions = map[oauth.ProviderType]HookFunc{
-	oauth.ProviderClaudeCode:  claudeCodeHook,
 	oauth.ProviderAntigravity: antigravityHook,
 }
 
@@ -60,45 +59,6 @@ func antigravityHook(req *http.Request) error {
 	if key != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
 	}
-	return nil
-}
-
-// requestModifier wraps an http.RoundTripper to apply hooks to each request:
-// - Converts X-Api-Key header to Authorization header
-// - Adds required Claude Code specific headers
-// - Adds beta query parameter
-func claudeCodeHook(req *http.Request) error {
-	// Convert X-Api-Key to Authorization header
-	key := req.Header.Get("X-Api-Key")
-	if key != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
-		req.Header.Del("X-Api-Key")
-	}
-
-	// Set Claude Code specific headers
-	req.Header.Set("accept", "application/json")
-	req.Header.Set("anthropic-beta", "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14")
-	req.Header.Set("anthropic-dangerous-direct-browser-access", "true")
-	req.Header.Set("anthropic-version", "2023-06-01")
-	req.Header.Set("user-agent", "claude-cli/2.0.76 (external, cli)")
-	req.Header.Set("x-app", "cli")
-	req.Header.Set("x-stainless-helper-method", "stream")
-	req.Header.Set("x-stainless-retry-count", "0")
-	req.Header.Set("x-stainless-runtime-version", "v25.2.1")
-	req.Header.Set("x-stainless-package-version", "0.70.0")
-	req.Header.Set("x-stainless-runtime", "node")
-	req.Header.Set("x-stainless-lang", "js")
-	req.Header.Set("x-stainless-arch", "arm64")
-	req.Header.Set("x-stainless-os", "MacOS")
-	req.Header.Set("x-stainless-timeout", "3000")
-
-	// Add beta query parameter if not already present
-	q := req.URL.Query()
-	if !q.Has("beta") {
-		q.Add("beta", "true")
-		req.URL.RawQuery = q.Encode()
-	}
-
 	return nil
 }
 
@@ -472,6 +432,20 @@ func CreateHTTPClientForProvider(provider *typ.Provider) *http.Client {
 				proxyURL:     provider.ProxyURL,
 			}
 			logrus.Infof("Created Antigravity RoundTripper with project=%s, model=%s, proxy=%s", project, model, provider.ProxyURL)
+		case oauth.ProviderClaudeCode:
+			// For Claude Code OAuth, use claudeRoundTripper for request/response transformations
+			var claudeTransport http.RoundTripper = transport
+			if provider.ProxyURL != "" {
+				proxyClient := CreateHTTPClientWithProxy(provider.ProxyURL)
+				if proxyClient.Transport != nil {
+					claudeTransport = proxyClient.Transport
+				}
+			}
+
+			client.Transport = &claudeRoundTripper{
+				RoundTripper: claudeTransport,
+			}
+			logrus.Infof("Created Claude Code RoundTripper with proxy=%s", provider.ProxyURL)
 		case oauth.ProviderCodex:
 			// Create base transport with proxy support if needed
 			var baseTransport http.RoundTripper = transport

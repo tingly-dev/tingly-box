@@ -271,6 +271,30 @@ func (p *Provider) IsOAuthExpired() bool {
 	return false
 }
 
+// IsOAuthToken checks if the current access token is an OAuth token
+// by detecting the sk-ant-oat prefix. This provides runtime detection
+// independent of the AuthType field.
+func (p *Provider) IsOAuthToken() bool {
+	token := p.GetAccessToken()
+	if token == "" {
+		return false
+	}
+	// Claude OAuth tokens start with sk-ant-oat
+	const oAuthPrefix = "sk-ant-oat"
+	if len(token) >= len(oAuthPrefix) {
+		return token[:len(oAuthPrefix)] == oAuthPrefix
+	}
+	return false
+}
+
+// IsClaudeCodeProvider checks if this provider is using Claude Code OAuth
+func (p *Provider) IsClaudeCodeProvider() bool {
+	if p.AuthType == AuthTypeOAuth && p.OAuthDetail != nil {
+		return p.OAuthDetail.ProviderType == "claude_code"
+	}
+	return false
+}
+
 // Rule represents a request/response configuration with load balancing support
 type Rule struct {
 	UUID          string                 `json:"uuid"`

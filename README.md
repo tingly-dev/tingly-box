@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go" alt="Go Version" />
+  <img src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go" alt="Go Version" />
   <img src="https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg" alt="License" />
   <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Platform" />
 </p>
@@ -52,7 +52,7 @@ npx tingly-box@latest
 
 **From source code**
 
-*Requires: Go 1.21+, Node.js 18+, pnpm, task, openapi-generator-cli*
+*Requires: Go 1.25+, Node.js 20+, pnpm, task, openapi-generator-cli*
 
 ```bash
 # Install dependencies
