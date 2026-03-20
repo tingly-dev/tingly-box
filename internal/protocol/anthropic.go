@@ -6,24 +6,32 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
-// Use official Anthropic SDK types directly
 type (
-	// Request types
+	// AnthropicMessagesRequest Request
 	AnthropicMessagesRequest struct {
-		Stream bool `json:"stream"`
+		// Use official Anthropic SDK types directly
 		anthropic.MessageNewParams
-	}
-	AnthropicBetaMessagesRequest struct {
+
 		Stream bool `json:"stream"`
+
+		// an extra model field for any preprocess logic like middleware
+		Model string `json:"model"`
+	}
+	// AnthropicBetaMessagesRequest Request with beta
+	AnthropicBetaMessagesRequest struct {
+		// Use official Anthropic SDK types directly
 		anthropic.BetaMessageNewParams
+
+		Stream bool `json:"stream"`
+
+		// an extra model field for any preprocess logic like middleware
+		Model string `json:"model"`
 	}
 )
 
 func (r *AnthropicBetaMessagesRequest) UnmarshalJSON(data []byte) error {
 	var inner anthropic.BetaMessageNewParams
-	aux := &struct {
-		Stream bool `json:"stream"`
-	}{}
+	aux := &AuxStreamModel{}
 	if err := json.Unmarshal(data, aux); err != nil {
 		return err
 	}
@@ -31,15 +39,14 @@ func (r *AnthropicBetaMessagesRequest) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	r.Stream = aux.Stream
+	r.Model = aux.Model
 	r.BetaMessageNewParams = inner
 	return nil
 }
 
 func (r *AnthropicMessagesRequest) UnmarshalJSON(data []byte) error {
 	var inner anthropic.MessageNewParams
-	aux := &struct {
-		Stream bool `json:"stream"`
-	}{}
+	aux := &AuxStreamModel{}
 	if err := json.Unmarshal(data, aux); err != nil {
 		return err
 	}
@@ -47,6 +54,7 @@ func (r *AnthropicMessagesRequest) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	r.Stream = aux.Stream
+	r.Model = aux.Model
 	r.MessageNewParams = inner
 	return nil
 }
