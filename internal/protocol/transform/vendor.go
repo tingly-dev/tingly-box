@@ -35,11 +35,10 @@ func (t *VendorTransform) Apply(ctx *TransformContext) error {
 		return t.applyChatCompletionVendor(ctx, req)
 	case *responses.ResponseNewParams:
 		return t.applyResponsesVendor(ctx, req)
-	// ignore anthropic since no need
 	case *anthropic.MessageNewParams:
-		return nil
+		return t.applyAnthropicV1Vendor(ctx, req)
 	case *anthropic.BetaMessageNewParams:
-		return nil
+		return t.applyAnthropicBetaVendor(ctx, req)
 
 	default:
 		return &ValidationError{
@@ -166,17 +165,35 @@ func (t *VendorTransform) applyCodexResponsesTransform(ctx *TransformContext, re
 	return ops.ApplyCodexResponsesTransform(req, ctx.OriginalRequest)
 }
 
-// applyAnthropicV1Vendor applies vendor-specific transforms for Anthropic v1 API
-// Phase 3: To be implemented
-func (t *VendorTransform) applyAnthropicV1Vendor(ctx *TransformContext, req interface{}) error {
-	// Phase 3: Implement Anthropic v1 vendor-specific transforms
+// applyAnthropicV1Vendor applies Anthropic-specific model filtering for v1 API
+// This handles model-specific limitations such as Haiku not supporting thinking.type="adaptive"
+func (t *VendorTransform) applyAnthropicV1Vendor(ctx *TransformContext, req *anthropic.MessageNewParams) error {
+	// Get model name from context
+	model := req.Model
+	if model == "" {
+		return nil
+	}
+
+	// Apply Anthropic model-specific transforms
+	transformed := ops.ApplyAnthropicModelTransform(req, string(model))
+	ctx.Request = transformed
+
 	return nil
 }
 
-// applyAnthropicBetaVendor applies vendor-specific transforms for Anthropic beta API
-// Phase 3: To be implemented
-func (t *VendorTransform) applyAnthropicBetaVendor(ctx *TransformContext, req interface{}) error {
-	// Phase 3: Implement Anthropic beta vendor-specific transforms
+// applyAnthropicBetaVendor applies Anthropic-specific model filtering for beta API
+// This handles model-specific limitations such as Haiku not supporting thinking.type="adaptive"
+func (t *VendorTransform) applyAnthropicBetaVendor(ctx *TransformContext, req *anthropic.BetaMessageNewParams) error {
+	// Get model name from context
+	model := req.Model
+	if model == "" {
+		return nil
+	}
+
+	// Apply Anthropic model-specific transforms
+	transformed := ops.ApplyAnthropicModelTransform(req, string(model))
+	ctx.Request = transformed
+
 	return nil
 }
 

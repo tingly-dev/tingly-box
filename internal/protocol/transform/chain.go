@@ -25,6 +25,10 @@ type TransformContext struct {
 	// ProviderURL identifies the provider (e.g., "api.deepseek.com")
 	ProviderURL string
 
+	// ProviderType identifies the OAuth provider type (e.g., "claude_code", "codex")
+	// This is used for provider-specific model filtering
+	ProviderType string
+
 	// ScenarioFlags contains configuration flags for the scenario
 	ScenarioFlags *typ.ScenarioFlags
 
