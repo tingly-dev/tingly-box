@@ -21,6 +21,7 @@ import {
     Rule,
     Storefront,
     History as HistoryIcon,
+    VpnKey as VpnKeyIcon,
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -236,6 +237,11 @@ const Layout = ({ children }: LayoutProps) => {
                         path: '/guardrails/rules',
                         label: 'Policies',
                         icon: <Rule sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/guardrails/credentials',
+                        label: 'Credentials',
+                        icon: <VpnKeyIcon sx={{ fontSize: 20 }} />,
                     },
                     {
                         path: '/guardrails/market',

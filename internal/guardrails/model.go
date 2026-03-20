@@ -8,6 +8,7 @@ type Verdict string
 const (
 	VerdictAllow  Verdict = "allow"
 	VerdictReview Verdict = "review"
+	VerdictMask   Verdict = "mask"
 	VerdictRedact Verdict = "redact"
 	VerdictBlock  Verdict = "block"
 )

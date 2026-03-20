@@ -20,14 +20,15 @@ const (
 
 // TextMatchConfig configures text matching rules.
 type TextMatchConfig struct {
-	Patterns      []string      `json:"patterns" yaml:"patterns"`
-	Targets       []ContentType `json:"targets,omitempty" yaml:"targets,omitempty"`
-	Mode          MatchMode     `json:"mode,omitempty" yaml:"mode,omitempty"`
-	CaseSensitive bool          `json:"case_sensitive,omitempty" yaml:"case_sensitive,omitempty"`
-	UseRegex      bool          `json:"use_regex,omitempty" yaml:"use_regex,omitempty"`
-	MinMatches    int           `json:"min_matches,omitempty" yaml:"min_matches,omitempty"`
-	Verdict       Verdict       `json:"verdict,omitempty" yaml:"verdict,omitempty"`
-	Reason        string        `json:"reason,omitempty" yaml:"reason,omitempty"`
+	Patterns       []string      `json:"patterns" yaml:"patterns"`
+	CredentialRefs []string      `json:"credential_refs,omitempty" yaml:"credential_refs,omitempty"`
+	Targets        []ContentType `json:"targets,omitempty" yaml:"targets,omitempty"`
+	Mode           MatchMode     `json:"mode,omitempty" yaml:"mode,omitempty"`
+	CaseSensitive  bool          `json:"case_sensitive,omitempty" yaml:"case_sensitive,omitempty"`
+	UseRegex       bool          `json:"use_regex,omitempty" yaml:"use_regex,omitempty"`
+	MinMatches     int           `json:"min_matches,omitempty" yaml:"min_matches,omitempty"`
+	Verdict        Verdict       `json:"verdict,omitempty" yaml:"verdict,omitempty"`
+	Reason         string        `json:"reason,omitempty" yaml:"reason,omitempty"`
 }
 
 // ContentPolicy evaluates content policies using literal or regex pattern matching.
@@ -43,8 +44,8 @@ type ContentPolicy struct {
 
 // NewContentPolicy creates a content policy from typed policy data.
 func NewContentPolicy(id, name string, enabled bool, scope Scope, params TextMatchConfig) (*ContentPolicy, error) {
-	if len(params.Patterns) == 0 {
-		return nil, fmt.Errorf("patterns cannot be empty")
+	if len(params.Patterns) == 0 && len(params.CredentialRefs) == 0 {
+		return nil, fmt.Errorf("patterns or credential refs cannot be empty")
 	}
 
 	if params.Mode == "" {
@@ -112,6 +113,21 @@ func (r *ContentPolicy) Evaluate(_ context.Context, input Input) (PolicyResult, 
 
 	if len(r.config.Targets) > 0 && !input.Content.HasAny(r.config.Targets) {
 		return PolicyResult{Verdict: VerdictAllow}, nil
+	}
+
+	// Credential-backed mask policies do their actual replacement in the request/runtime
+	// pipeline. The evaluator only needs to validate config and identify the policy.
+	if len(r.config.Patterns) == 0 && len(r.config.CredentialRefs) > 0 {
+		return PolicyResult{
+			PolicyID:   r.id,
+			PolicyName: r.name,
+			PolicyType: r.Type(),
+			Verdict:    r.config.Verdict,
+			Reason:     r.config.Reason,
+			Evidence: map[string]interface{}{
+				"credential_refs": append([]string(nil), r.config.CredentialRefs...),
+			},
+		}, nil
 	}
 
 	text := input.Content.CombinedTextFor(r.config.Targets)

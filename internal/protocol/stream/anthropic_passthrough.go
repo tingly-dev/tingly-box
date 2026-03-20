@@ -10,6 +10,7 @@ import (
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
@@ -58,6 +59,7 @@ func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNe
 			if err != nil {
 				return err
 			}
+			restoreCredentialAliasesInEventMap(hc.GinContext, eventMap)
 
 			if handleToolUseBuffer(hc.GinContext, false, evt.Type, int(evt.Index), evt.ContentBlock, eventMap) {
 				return nil
@@ -132,6 +134,7 @@ func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaM
 			if err != nil {
 				return err
 			}
+			restoreCredentialAliasesInEventMap(hc.GinContext, eventMap)
 
 			if handleToolUseBuffer(hc.GinContext, true, evt.Type, int(evt.Index), evt.ContentBlock, eventMap) {
 				return nil
@@ -294,6 +297,18 @@ func handleToolUseBuffer(c *gin.Context, beta bool, eventType string, index int,
 			delete(state.ToolIDByIndex, index)
 			return true
 		}
+		if rebuilt, ok := rebuildBufferedToolUseEvents(c, state.ByIndex[index]); ok {
+			for _, buffered := range rebuilt {
+				if beta {
+					sendAnthropicBetaStreamEvent(c, buffered.eventType, buffered.payload, flusher)
+				} else {
+					sendAnthropicStreamEvent(c, buffered.eventType, buffered.payload, flusher)
+				}
+			}
+			delete(state.ByIndex, index)
+			delete(state.ToolIDByIndex, index)
+			return true
+		}
 		for _, buffered := range state.ByIndex[index] {
 			if beta {
 				sendAnthropicBetaStreamEvent(c, buffered.eventType, buffered.payload, flusher)
@@ -308,11 +323,179 @@ func handleToolUseBuffer(c *gin.Context, beta bool, eventType string, index int,
 	return false
 }
 
+func getCredentialMaskState(c *gin.Context) *guardrails.CredentialMaskState {
+	if existing, ok := c.Get(guardrails.CredentialMaskStateContextKey); ok {
+		if state, ok := existing.(*guardrails.CredentialMaskState); ok {
+			return state
+		}
+	}
+	return nil
+}
+
+func restoreCredentialAliasesInEventMap(c *gin.Context, eventMap map[string]interface{}) {
+	state := getCredentialMaskState(c)
+	if state == nil || len(state.AliasToReal) == 0 || eventMap == nil {
+		return
+	}
+	eventType, _ := eventMap["type"].(string)
+	switch eventType {
+	case eventTypeContentBlockDelta:
+		delta, _ := eventMap["delta"].(map[string]interface{})
+		deltaType, _ := delta["type"].(string)
+		if deltaType == deltaTypeTextDelta {
+			if text, ok := delta["text"].(string); ok {
+				if !guardrails.MayContainAliasToken(text) {
+					return
+				}
+				if restored, changed := guardrails.RestoreText(text, state); changed {
+					delta["text"] = restored
+				}
+			}
+		}
+	case eventTypeContentBlockStart:
+		contentBlock, _ := eventMap["content_block"].(map[string]interface{})
+		if blockType, _ := contentBlock["type"].(string); blockType == "text" {
+			if text, ok := contentBlock["text"].(string); ok {
+				if !guardrails.MayContainAliasToken(text) {
+					return
+				}
+				if restored, changed := guardrails.RestoreText(text, state); changed {
+					contentBlock["text"] = restored
+				}
+			}
+		}
+	}
+}
+
+func rebuildBufferedToolUseEvents(c *gin.Context, events []bufferedEvent) ([]bufferedEvent, bool) {
+	state := getCredentialMaskState(c)
+	if state == nil || len(state.AliasToReal) == 0 || len(events) == 0 {
+		return nil, false
+	}
+
+	startBlock, _ := events[0].payload["content_block"].(map[string]interface{})
+	if blockType, _ := startBlock["type"].(string); blockType != "tool_use" {
+		return nil, false
+	}
+
+	rawArgs := ""
+	hasDeltaJSON := false
+	hasAliasCandidate := false
+	if input, ok := startBlock["input"]; ok && input != nil {
+		if payload, err := json.Marshal(input); err == nil && guardrails.MayContainAliasToken(string(payload)) {
+			hasAliasCandidate = true
+		}
+		// Anthropic often starts tool_use input with an empty object and streams the
+		// real JSON through input_json_delta chunks. Skip the empty "{}" seed here so
+		// we do not rebuild an invalid payload like `{}{"command":"..."}`.
+		if inputMap, ok := input.(map[string]interface{}); ok && len(inputMap) == 0 {
+			// no-op
+		} else if payload, err := json.Marshal(input); err == nil {
+			rawArgs = string(payload)
+		}
+	}
+
+	for _, buffered := range events {
+		if buffered.eventType != eventTypeContentBlockDelta {
+			continue
+		}
+		delta, _ := buffered.payload["delta"].(map[string]interface{})
+		if deltaType, _ := delta["type"].(string); deltaType == deltaTypeInputJSONDelta {
+			hasDeltaJSON = true
+			if partial, ok := delta["partial_json"].(string); ok {
+				if guardrails.MayContainAliasToken(partial) {
+					hasAliasCandidate = true
+				}
+				rawArgs += partial
+			}
+		}
+	}
+	if !hasAliasCandidate {
+		return nil, false
+	}
+	if !hasDeltaJSON {
+		startPayload := cloneEventPayload(events[0].payload)
+		stopPayload := cloneEventPayload(events[len(events)-1].payload)
+		contentBlock, _ := startPayload["content_block"].(map[string]interface{})
+		if input, ok := contentBlock["input"]; ok && input != nil {
+			if restored, changed := guardrails.RestoreStructuredValue(input, state); changed {
+				contentBlock["input"] = restored
+				return []bufferedEvent{
+					{eventType: eventTypeContentBlockStart, payload: startPayload},
+					{eventType: eventTypeContentBlockStop, payload: stopPayload},
+				}, true
+			}
+		}
+		return nil, false
+	}
+	if rawArgs == "" {
+		return nil, false
+	}
+
+	var parsed interface{}
+	if err := json.Unmarshal([]byte(rawArgs), &parsed); err != nil {
+		return nil, false
+	}
+
+	restoredValue, changed := guardrails.RestoreStructuredValue(parsed, state)
+	if !changed {
+		return nil, false
+	}
+	restoredJSON, err := json.Marshal(restoredValue)
+	if err != nil {
+		return nil, false
+	}
+
+	startPayload := cloneEventPayload(events[0].payload)
+	stopPayload := cloneEventPayload(events[len(events)-1].payload)
+	contentBlock, _ := startPayload["content_block"].(map[string]interface{})
+
+	// Rebuild the buffered tool_use in the same shape Anthropic streams it:
+	// keep the empty input object on the start event, then emit one restored
+	// input_json_delta chunk. Claude Code is stricter about this structure than
+	// about how many delta chunks it receives.
+	contentBlock["input"] = map[string]interface{}{}
+	return []bufferedEvent{
+		{eventType: eventTypeContentBlockStart, payload: startPayload},
+		{
+			eventType: eventTypeContentBlockDelta,
+			payload: map[string]interface{}{
+				"type":  eventTypeContentBlockDelta,
+				"index": startPayload["index"],
+				"delta": map[string]interface{}{
+					"type":         deltaTypeInputJSONDelta,
+					"partial_json": string(restoredJSON),
+				},
+			},
+		},
+		{eventType: eventTypeContentBlockStop, payload: stopPayload},
+	}, true
+}
+
+func cloneEventPayload(payload map[string]interface{}) map[string]interface{} {
+	if payload == nil {
+		return nil
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return payload
+	}
+	var cloned map[string]interface{}
+	if err := json.Unmarshal(raw, &cloned); err != nil {
+		return payload
+	}
+	return cloned
+}
+
 func emitGuardrailsTextBlock(c *gin.Context, beta bool, index int, message string, flusher http.Flusher) error {
 	if message == "" {
 		return nil
 	}
 
+	// emitGuardrailsTextBlock is the low-level helper used while we are already
+	// inside the Anthropic passthrough streaming path. At this point we have the
+	// current block index, a live flusher, and we only need to splice a synthetic
+	// text block into the stream in place of the intercepted tool block.
 	start := map[string]interface{}{
 		"type":  eventTypeContentBlockStart,
 		"index": index,

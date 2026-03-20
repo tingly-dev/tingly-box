@@ -24,6 +24,9 @@ type GuardrailsHistoryEntry = {
     block_message?: string;
     preview?: string;
     command_name?: string;
+    credential_refs?: string[];
+    credential_names?: string[];
+    alias_hits?: string[];
     reasons?: Array<{ policy_id?: string; policy_name?: string; reason?: string }>;
 };
 
@@ -88,7 +91,7 @@ const GuardrailsHistoryPage = () => {
                             </Alert>
                         )}
                         <Typography variant="body2" color="text.secondary">
-                            This view only shows recent in-memory events. It is intended for debugging current Guardrails behavior, not long-term audit storage.
+                            This view shows recent local Guardrails events, including credential masking activity and blocked content.
                         </Typography>
                     </Stack>
                 </UnifiedCard>
@@ -112,6 +115,9 @@ const GuardrailsHistoryPage = () => {
                                             <Chip size="small" label={`phase: ${entry.phase}`} variant="outlined" />
                                             <Chip size="small" label={`scenario: ${entry.scenario || 'unknown'}`} variant="outlined" />
                                             {entry.command_name && <Chip size="small" label={`tool: ${entry.command_name}`} variant="outlined" />}
+                                            {entry.alias_hits && entry.alias_hits.length > 0 && (
+                                                <Chip size="small" label={`alias hits: ${entry.alias_hits.length}`} variant="outlined" />
+                                            )}
                                         </Stack>
                                         <Typography variant="caption" color="text.secondary">
                                             {new Date(entry.time).toLocaleString()}
@@ -133,6 +139,36 @@ const GuardrailsHistoryPage = () => {
                                             <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                                                 {entry.preview}
                                             </Typography>
+                                        </Box>
+                                    )}
+                                    {((entry.credential_names && entry.credential_names.length > 0) || (entry.alias_hits && entry.alias_hits.length > 0)) && (
+                                        <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: 'action.hover' }}>
+                                            <Stack spacing={1}>
+                                                {entry.credential_names && entry.credential_names.length > 0 && (
+                                                    <Box>
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            Credential Names
+                                                        </Typography>
+                                                        <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ mt: 0.5 }}>
+                                                            {entry.credential_names.map((name) => (
+                                                                <Chip key={name} size="small" label={name} color="primary" variant="outlined" />
+                                                            ))}
+                                                        </Stack>
+                                                    </Box>
+                                                )}
+                                                {entry.alias_hits && entry.alias_hits.length > 0 && (
+                                                    <Box>
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            Alias Hits
+                                                        </Typography>
+                                                        <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ mt: 0.5 }}>
+                                                            {entry.alias_hits.map((alias) => (
+                                                                <Chip key={alias} size="small" label={alias} variant="outlined" />
+                                                            ))}
+                                                        </Stack>
+                                                    </Box>
+                                                )}
+                                            </Stack>
                                         </Box>
                                     )}
                                     {entry.reasons && entry.reasons.length > 0 && (

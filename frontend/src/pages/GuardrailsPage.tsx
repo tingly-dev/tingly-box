@@ -26,6 +26,7 @@ import {
     FileDownload,
     FileUpload,
     Storefront,
+    VpnKey,
     FolderOpen,
     Hub,
     Terminal,
@@ -41,6 +42,9 @@ type GuardrailsHistoryEntry = {
     verdict: string;
     phase: string;
     scenario: string;
+    alias_hits?: string[];
+    credential_refs?: string[];
+    credential_names?: string[];
 };
 
 const GuardrailsPage = () => {
@@ -110,8 +114,14 @@ const GuardrailsPage = () => {
         const commandExecution = policies.filter((item) => item?.kind === 'command_execution').length;
         const content = policies.filter((item) => item?.kind === 'content').length;
         const blockedEvents = historyEntries.filter((entry) => entry?.verdict === 'block').length;
+        const maskedEvents = historyEntries.filter((entry) => entry?.verdict === 'mask').length;
         const toolUseEvents = historyEntries.filter((entry) => entry?.phase === 'tool_use').length;
         const toolResultEvents = historyEntries.filter((entry) => entry?.phase === 'tool_result').length;
+        const totalAliasHits = historyEntries.reduce((sum, entry) => sum + (entry?.alias_hits?.length || 0), 0);
+        const credentialMaskRefs = new Set<string>();
+        historyEntries.forEach((entry) => {
+            (entry?.credential_refs || []).forEach((ref) => credentialMaskRefs.add(ref));
+        });
         const latestEvent = historyEntries.length > 0 ? historyEntries[0] : null;
         return {
             total: totalCount,
@@ -124,8 +134,11 @@ const GuardrailsPage = () => {
             content,
             historyCount: historyEntries.length,
             blockedEvents,
+            maskedEvents,
             toolUseEvents,
             toolResultEvents,
+            totalAliasHits,
+            maskedCredentialCount: credentialMaskRefs.size,
             latestEvent,
         };
     }, [groups.length, historyEntries, policies, supportedScenarios.length]);
@@ -233,6 +246,9 @@ const GuardrailsPage = () => {
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
                             <Button variant="contained" startIcon={<Rule />} onClick={() => navigate('/guardrails/rules')}>
                                 Manage Policies
+                            </Button>
+                            <Button variant="outlined" startIcon={<VpnKey />} onClick={() => navigate('/guardrails/credentials')}>
+                                Protected Credentials
                             </Button>
                             <Button variant="outlined" startIcon={<Storefront />} onClick={() => navigate('/guardrails/market')}>
                                 Browse Builtins
@@ -457,12 +473,24 @@ const GuardrailsPage = () => {
                                     <Chip size="small" color="error" label={`${stats.blockedEvents}`} />
                                 </Stack>
                                 <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                    <Typography variant="body2">Masked events</Typography>
+                                    <Chip size="small" color="warning" label={`${stats.maskedEvents}`} />
+                                </Stack>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
                                     <Typography variant="body2">Tool-use interceptions</Typography>
                                     <Chip size="small" label={`${stats.toolUseEvents}`} variant="outlined" />
                                 </Stack>
                                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                                     <Typography variant="body2">Tool-result interceptions</Typography>
                                     <Chip size="small" label={`${stats.toolResultEvents}`} variant="outlined" />
+                                </Stack>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                    <Typography variant="body2">Masked credential refs</Typography>
+                                    <Chip size="small" label={`${stats.maskedCredentialCount}`} variant="outlined" />
+                                </Stack>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                    <Typography variant="body2">Alias hits</Typography>
+                                    <Chip size="small" label={`${stats.totalAliasHits}`} variant="outlined" />
                                 </Stack>
                             </Stack>
                         </UnifiedCard>
@@ -475,6 +503,9 @@ const GuardrailsPage = () => {
                                         <Chip size="small" label={stats.latestEvent.verdict} color={stats.latestEvent.verdict === 'block' ? 'error' : 'default'} />
                                         <Chip size="small" label={`phase: ${stats.latestEvent.phase || 'unknown'}`} variant="outlined" />
                                         <Chip size="small" label={`scenario: ${stats.latestEvent.scenario || 'unknown'}`} variant="outlined" />
+                                        {stats.latestEvent.alias_hits && stats.latestEvent.alias_hits.length > 0 && (
+                                            <Chip size="small" label={`alias hits: ${stats.latestEvent.alias_hits.length}`} variant="outlined" />
+                                        )}
                                     </Stack>
                                     <Typography variant="body2" color="text.secondary">
                                         {stats.latestEvent.time ? new Date(stats.latestEvent.time).toLocaleString() : 'Unknown time'}

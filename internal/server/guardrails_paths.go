@@ -9,6 +9,7 @@ import (
 const (
 	guardrailsDirName         = "guardrails"
 	guardrailsConfigBaseName  = "guardrails"
+	guardrailsCredentialsFile = "credentials.json"
 	guardrailsHistoryFileName = "history.json"
 )
 
@@ -22,6 +23,10 @@ func getGuardrailsConfigPath(configDir string) string {
 
 func getGuardrailsHistoryPath(configDir string) string {
 	return filepath.Join(getGuardrailsDir(configDir), guardrailsHistoryFileName)
+}
+
+func getGuardrailsCredentialsPath(configDir string) string {
+	return filepath.Join(getGuardrailsDir(configDir), guardrailsCredentialsFile)
 }
 
 func guardrailsConfigCandidates(configDir string) []string {

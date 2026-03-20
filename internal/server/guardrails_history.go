@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"reflect"
+	"sort"
 	"sync"
 	"time"
 
@@ -14,17 +16,20 @@ import (
 )
 
 type guardrailsHistoryEntry struct {
-	Time         time.Time                 `json:"time"`
-	Scenario     string                    `json:"scenario"`
-	Model        string                    `json:"model"`
-	Provider     string                    `json:"provider"`
-	Direction    string                    `json:"direction"`
-	Phase        string                    `json:"phase"`
-	Verdict      string                    `json:"verdict"`
-	BlockMessage string                    `json:"block_message,omitempty"`
-	Preview      string                    `json:"preview,omitempty"`
-	CommandName  string                    `json:"command_name,omitempty"`
-	Reasons      []guardrails.PolicyResult `json:"reasons,omitempty"`
+	Time            time.Time                 `json:"time"`
+	Scenario        string                    `json:"scenario"`
+	Model           string                    `json:"model"`
+	Provider        string                    `json:"provider"`
+	Direction       string                    `json:"direction"`
+	Phase           string                    `json:"phase"`
+	Verdict         string                    `json:"verdict"`
+	BlockMessage    string                    `json:"block_message,omitempty"`
+	Preview         string                    `json:"preview,omitempty"`
+	CommandName     string                    `json:"command_name,omitempty"`
+	CredentialRefs  []string                  `json:"credential_refs,omitempty"`
+	CredentialNames []string                  `json:"credential_names,omitempty"`
+	AliasHits       []string                  `json:"alias_hits,omitempty"`
+	Reasons         []guardrails.PolicyResult `json:"reasons,omitempty"`
 }
 
 type guardrailsHistoryStore struct {
@@ -75,6 +80,10 @@ func (s *guardrailsHistoryStore) load() {
 
 func (s *guardrailsHistoryStore) Add(entry guardrailsHistoryEntry) {
 	s.mu.Lock()
+	if len(s.entries) > 0 && sameGuardrailsHistoryEntry(s.entries[0], entry) {
+		s.mu.Unlock()
+		return
+	}
 	s.entries = append([]guardrailsHistoryEntry{entry}, s.entries...)
 	if len(s.entries) > s.maxEntries {
 		s.entries = s.entries[:s.maxEntries]
@@ -83,6 +92,22 @@ func (s *guardrailsHistoryStore) Add(entry guardrailsHistoryEntry) {
 	s.mu.Unlock()
 
 	s.persist(snapshot)
+}
+
+func sameGuardrailsHistoryEntry(a, b guardrailsHistoryEntry) bool {
+	return a.Scenario == b.Scenario &&
+		a.Model == b.Model &&
+		a.Provider == b.Provider &&
+		a.Direction == b.Direction &&
+		a.Phase == b.Phase &&
+		a.Verdict == b.Verdict &&
+		a.BlockMessage == b.BlockMessage &&
+		a.Preview == b.Preview &&
+		a.CommandName == b.CommandName &&
+		reflect.DeepEqual(a.CredentialRefs, b.CredentialRefs) &&
+		reflect.DeepEqual(a.CredentialNames, b.CredentialNames) &&
+		reflect.DeepEqual(a.AliasHits, b.AliasHits) &&
+		reflect.DeepEqual(a.Reasons, b.Reasons)
 }
 
 func (s *guardrailsHistoryStore) List(limit int) []guardrailsHistoryEntry {
@@ -122,27 +147,121 @@ func (s *guardrailsHistoryStore) persist(entries []guardrailsHistoryEntry) {
 	}
 }
 
-func (s *Server) recordGuardrailsHistory(session guardrailsSession, input guardrails.Input, result guardrails.Result, phase, blockMessage string) {
+func (s *Server) recordGuardrailsHistory(c *gin.Context, session guardrailsSession, input guardrails.Input, result guardrails.Result, phase, blockMessage string) {
 	if s.guardrailsHistory == nil {
 		return
 	}
 
+	credentialRefs, aliasHits := collectGuardrailsHistoryCredentialData(c, result)
 	entry := guardrailsHistoryEntry{
-		Time:         time.Now(),
-		Scenario:     session.Scenario,
-		Model:        session.Model,
-		Provider:     session.ProviderName,
-		Direction:    string(input.Direction),
-		Phase:        phase,
-		Verdict:      string(result.Verdict),
-		BlockMessage: blockMessage,
-		Preview:      input.Content.LatestPreview(160),
-		Reasons:      append([]guardrails.PolicyResult(nil), result.Reasons...),
+		Time:            time.Now(),
+		Scenario:        session.Scenario,
+		Model:           session.Model,
+		Provider:        session.ProviderName,
+		Direction:       string(input.Direction),
+		Phase:           phase,
+		Verdict:         string(result.Verdict),
+		BlockMessage:    blockMessage,
+		Preview:         input.Content.LatestPreview(160),
+		CredentialRefs:  credentialRefs,
+		CredentialNames: s.resolveGuardrailsCredentialNames(credentialRefs),
+		AliasHits:       aliasHits,
+		Reasons:         append([]guardrails.PolicyResult(nil), result.Reasons...),
 	}
 	if input.Content.Command != nil {
 		entry.CommandName = input.Content.Command.Name
 	}
 	s.guardrailsHistory.Add(entry)
+}
+
+func (s *Server) recordGuardrailsMaskHistory(c *gin.Context, session guardrailsSession, input guardrails.Input, phase string) {
+	if s.guardrailsHistory == nil {
+		return
+	}
+	credentialRefs, aliasHits := collectGuardrailsHistoryCredentialData(c, guardrails.Result{})
+	if len(credentialRefs) == 0 && len(aliasHits) == 0 {
+		return
+	}
+	entry := guardrailsHistoryEntry{
+		Time:            time.Now(),
+		Scenario:        session.Scenario,
+		Model:           session.Model,
+		Provider:        session.ProviderName,
+		Direction:       string(input.Direction),
+		Phase:           phase,
+		Verdict:         string(guardrails.VerdictMask),
+		Preview:         input.Content.LatestPreview(160),
+		CredentialRefs:  credentialRefs,
+		CredentialNames: s.resolveGuardrailsCredentialNames(credentialRefs),
+		AliasHits:       aliasHits,
+	}
+	if input.Content.Command != nil {
+		entry.CommandName = input.Content.Command.Name
+	}
+	s.guardrailsHistory.Add(entry)
+}
+
+func collectGuardrailsHistoryCredentialData(c *gin.Context, result guardrails.Result) ([]string, []string) {
+	refSet := make(map[string]struct{})
+	aliasSet := make(map[string]struct{})
+
+	for _, reason := range result.Reasons {
+		rawRefs, ok := reason.Evidence["credential_refs"]
+		if !ok {
+			continue
+		}
+		switch typed := rawRefs.(type) {
+		case []string:
+			for _, ref := range typed {
+				if ref != "" {
+					refSet[ref] = struct{}{}
+				}
+			}
+		case []interface{}:
+			for _, item := range typed {
+				if ref, ok := item.(string); ok && ref != "" {
+					refSet[ref] = struct{}{}
+				}
+			}
+		}
+	}
+
+	if c != nil {
+		if existing, ok := c.Get(guardrails.CredentialMaskStateContextKey); ok {
+			if state, ok := existing.(*guardrails.CredentialMaskState); ok && state != nil {
+				for _, ref := range state.UsedRefs {
+					if ref != "" {
+						refSet[ref] = struct{}{}
+					}
+				}
+				for alias := range state.AliasToReal {
+					if alias != "" {
+						aliasSet[alias] = struct{}{}
+					}
+				}
+			}
+		}
+	}
+
+	refs := sortedKeys(refSet)
+	aliases := sortedKeys(aliasSet)
+	return refs, aliases
+}
+
+func sortedKeys(values map[string]struct{}) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for value := range values {
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func (s *Server) resolveGuardrailsCredentialNames(ids []string) []string {
+	return s.getCachedGuardrailsCredentialNames(ids)
 }
 
 func (s *Server) GetGuardrailsHistory(c *gin.Context) {

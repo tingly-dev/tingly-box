@@ -36,15 +36,16 @@ type Policy struct {
 // PolicyMatch keeps operation and content selectors in one shape so the UI can
 // stay policy-oriented while the backend compiles into internal evaluators.
 type PolicyMatch struct {
-	ToolNames     []string         `json:"tool_names,omitempty" yaml:"tool_names,omitempty"`
-	Actions       *ActionSelector  `json:"actions,omitempty" yaml:"actions,omitempty"`
-	Resources     *ResourceMatcher `json:"resources,omitempty" yaml:"resources,omitempty"`
-	Terms         []string         `json:"terms,omitempty" yaml:"terms,omitempty"`
-	Patterns      []string         `json:"patterns,omitempty" yaml:"patterns,omitempty"`
-	PatternMode   string           `json:"pattern_mode,omitempty" yaml:"pattern_mode,omitempty"`
-	MatchMode     string           `json:"match_mode,omitempty" yaml:"match_mode,omitempty"`
-	MinMatches    int              `json:"min_matches,omitempty" yaml:"min_matches,omitempty"`
-	CaseSensitive bool             `json:"case_sensitive,omitempty" yaml:"case_sensitive,omitempty"`
+	ToolNames      []string         `json:"tool_names,omitempty" yaml:"tool_names,omitempty"`
+	Actions        *ActionSelector  `json:"actions,omitempty" yaml:"actions,omitempty"`
+	Resources      *ResourceMatcher `json:"resources,omitempty" yaml:"resources,omitempty"`
+	Terms          []string         `json:"terms,omitempty" yaml:"terms,omitempty"`
+	CredentialRefs []string         `json:"credential_refs,omitempty" yaml:"credential_refs,omitempty"`
+	Patterns       []string         `json:"patterns,omitempty" yaml:"patterns,omitempty"`
+	PatternMode    string           `json:"pattern_mode,omitempty" yaml:"pattern_mode,omitempty"`
+	MatchMode      string           `json:"match_mode,omitempty" yaml:"match_mode,omitempty"`
+	MinMatches     int              `json:"min_matches,omitempty" yaml:"min_matches,omitempty"`
+	CaseSensitive  bool             `json:"case_sensitive,omitempty" yaml:"case_sensitive,omitempty"`
 }
 
 // ActionSelector narrows operation policies to semantic action labels.

@@ -103,7 +103,7 @@ func (s *Server) attachGuardrailsHooks(c *gin.Context, hc *protocol.HandleContex
 			if result.BlockToolID == "" || result.BlockMessage == "" {
 				return
 			}
-			s.recordGuardrailsHistory(session, baseInput, result.Result, "tool_use", result.BlockMessage)
+			s.recordGuardrailsHistory(c, session, baseInput, result.Result, "tool_use", result.BlockMessage)
 			stream.RegisterGuardrailsBlock(c, result.BlockToolID, result.BlockIndex, result.BlockMessage)
 		}),
 		WithGuardrailsOnVerdict(func(result GuardrailsHookResult) {
@@ -114,7 +114,12 @@ func (s *Server) attachGuardrailsHooks(c *gin.Context, hc *protocol.HandleContex
 				if result.BlockToolID != "" {
 					c.Set("guardrails_block_tool_id", result.BlockToolID)
 				}
-				s.recordGuardrailsHistory(session, baseInput, result.Result, "response", result.BlockMessage)
+				// Early tool_use blocks are already recorded in onBlock. Skip adding a
+				// second near-identical response entry when the final verdict points at
+				// the same blocked tool_use.
+				if result.BlockToolID == "" {
+					s.recordGuardrailsHistory(c, session, baseInput, result.Result, "response", result.BlockMessage)
+				}
 			}
 			if result.Err != nil {
 				c.Set("guardrails_error", result.Err.Error())
@@ -150,7 +155,7 @@ func (s *Server) evaluateGuardrailsToolResult(c *gin.Context, session guardrails
 		return guardrails.Result{}, false
 	}
 	if result.Verdict == guardrails.VerdictBlock {
-		s.recordGuardrailsHistory(session, input, result, "tool_result", "")
+		s.recordGuardrailsHistory(c, session, input, result, "tool_result", "")
 	}
 	return result, true
 }

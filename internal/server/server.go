@@ -90,6 +90,11 @@ type Server struct {
 	guardrailsEngine  guardrails.Guardrails
 	guardrailsHistory *guardrailsHistoryStore
 
+	// Protected credential aliasing needs a fast request-path lookup from
+	// scenario -> active mask credentials, plus ID -> credential metadata.
+	guardrailsCredentialCache   guardrailsCredentialCache
+	guardrailsCredentialCacheMu sync.RWMutex
+
 	// recording sinks
 	recordSink *obs.Sink
 
@@ -158,7 +163,7 @@ func (s *Server) initGuardrailsEngine() {
 		return
 	}
 
-	s.guardrailsEngine = engine
+	s.setGuardrailsEngine(engine, "guardrails init")
 	logrus.Infof("Guardrails enabled with config: %s", cfgPath)
 }
 
@@ -176,7 +181,7 @@ func (s *Server) syncGuardrailsFromConfig() {
 	}
 
 	if !s.guardrailsEnabled() {
-		s.guardrailsEngine = nil
+		s.setGuardrailsEngine(nil, "guardrails disable")
 		logrus.Debug("Guardrails disabled via config")
 		return
 	}
@@ -410,6 +415,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Auto-load guardrails if enabled and not injected explicitly.
 	server.initGuardrailsEngine()
+	server.refreshGuardrailsCredentialCacheOrWarn("server init")
 
 	// Initialize record sink if recording is enabled
 	switch server.recordMode {

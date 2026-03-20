@@ -162,6 +162,12 @@ func injectGuardrailsBlock(c *gin.Context, beta bool) error {
 		return errors.New("streaming not supported")
 	}
 
+	// injectGuardrailsBlock is the higher-level error-path bridge. It rebuilds a
+	// synthetic text block from guardrails data already stored on gin.Context and
+	// writes it directly to the client when normal tool-use passthrough is no
+	// longer driving the stream. In contrast, emitGuardrailsTextBlock is used from
+	// the normal passthrough path where the caller already has the block index,
+	// message, and flusher in hand.
 	start := map[string]interface{}{
 		"type":  eventTypeContentBlockStart,
 		"index": index,

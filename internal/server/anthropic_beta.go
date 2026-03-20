@@ -75,6 +75,9 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	}
 
 	s.applyGuardrailsToToolResultV1Beta(c, &req.BetaMessageNewParams, actualModel, provider)
+	// Apply alias masking after terminal tool_result filtering so the decision
+	// engine sees original tool output and the upstream model sees aliases.
+	s.applyGuardrailsCredentialMasksV1Beta(c, &req.BetaMessageNewParams, actualModel, provider)
 
 	// Check provider's API style to decide which path to take
 	apiStyle := provider.APIStyle
@@ -120,6 +123,8 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 
 			// FIXME: now we use req model as resp model
 			anthropicResp.Model = anthropic.Model(proxyModel)
+
+			s.restoreGuardrailsCredentialAliasesV1BetaResponse(c, anthropicResp)
 
 			// Record response if scenario recording is enabled
 			if recorder != nil {

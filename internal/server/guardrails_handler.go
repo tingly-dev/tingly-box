@@ -239,7 +239,7 @@ func (s *Server) UpdateGuardrailsConfig(c *gin.Context) {
 		return
 	}
 
-	s.guardrailsEngine = engine
+	s.setGuardrailsEngine(engine, "guardrails config update")
 	logrus.Infof("Guardrails config updated: %s", path)
 
 	c.JSON(200, guardrailsConfigUpdateResponse{
@@ -274,7 +274,7 @@ func (s *Server) ReloadGuardrailsConfig(c *gin.Context) {
 		return
 	}
 
-	s.guardrailsEngine = engine
+	s.setGuardrailsEngine(engine, "guardrails config reload")
 	logrus.Infof("Guardrails config reloaded: %s", path)
 
 	c.JSON(200, guardrailsReloadResponse{
@@ -393,7 +393,7 @@ func (s *Server) UpdateGuardrailsPolicy(c *gin.Context) {
 		return
 	}
 
-	s.guardrailsEngine = engine
+	s.setGuardrailsEngine(engine, "guardrails policy update")
 	logrus.Infof("Guardrails policy updated: %s", policyID)
 
 	c.JSON(200, guardrailsPolicyUpdateResponse{
@@ -484,7 +484,7 @@ func (s *Server) CreateGuardrailsPolicy(c *gin.Context) {
 		return
 	}
 
-	s.guardrailsEngine = engine
+	s.setGuardrailsEngine(engine, "guardrails policy create")
 	logrus.Infof("Guardrails policy created: %s", req.ID)
 
 	c.JSON(200, guardrailsPolicyUpdateResponse{
@@ -560,7 +560,7 @@ func (s *Server) DeleteGuardrailsPolicy(c *gin.Context) {
 		return
 	}
 
-	s.guardrailsEngine = engine
+	s.setGuardrailsEngine(engine, "guardrails policy delete")
 	logrus.Infof("Guardrails policy deleted: %s", policyID)
 
 	c.JSON(200, guardrailsPolicyUpdateResponse{
@@ -676,7 +676,7 @@ func (s *Server) UpdateGuardrailsGroup(c *gin.Context) {
 		return
 	}
 
-	s.guardrailsEngine = engine
+	s.setGuardrailsEngine(engine, "guardrails group update")
 	logrus.Infof("Guardrails group updated: %s", groupID)
 
 	c.JSON(200, guardrailsGroupUpdateResponse{
@@ -760,7 +760,7 @@ func (s *Server) CreateGuardrailsGroup(c *gin.Context) {
 		return
 	}
 
-	s.guardrailsEngine = engine
+	s.setGuardrailsEngine(engine, "guardrails group create")
 	logrus.Infof("Guardrails group created: %s", req.ID)
 
 	c.JSON(200, guardrailsGroupUpdateResponse{
@@ -843,7 +843,7 @@ func (s *Server) DeleteGuardrailsGroup(c *gin.Context) {
 		return
 	}
 
-	s.guardrailsEngine = engine
+	s.setGuardrailsEngine(engine, "guardrails group delete")
 	logrus.Infof("Guardrails group deleted: %s", groupID)
 
 	c.JSON(200, guardrailsGroupUpdateResponse{

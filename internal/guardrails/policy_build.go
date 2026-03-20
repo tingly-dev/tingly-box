@@ -137,8 +137,8 @@ func buildCommandExecutionPolicyEvaluator(policy Policy, group *PolicyGroup) (Ev
 }
 
 func buildContentPolicyEvaluator(policy Policy, group *PolicyGroup) (Evaluator, error) {
-	if len(policy.Match.Patterns) == 0 {
-		return nil, fmt.Errorf("policy %s: content policies require patterns", policy.ID)
+	if len(policy.Match.Patterns) == 0 && len(policy.Match.CredentialRefs) == 0 {
+		return nil, fmt.Errorf("policy %s: content policies require patterns or credential refs", policy.ID)
 	}
 
 	contentTypes := []ContentType{ContentTypeText}
@@ -146,13 +146,14 @@ func buildContentPolicyEvaluator(policy Policy, group *PolicyGroup) (Evaluator, 
 	scope.Content = contentTypes
 
 	params := TextMatchConfig{
-		Patterns:      append([]string(nil), policy.Match.Patterns...),
-		Targets:       contentTypes,
-		Verdict:       resolvePolicyVerdict(policy, group, VerdictBlock),
-		Mode:          MatchMode(policy.Match.MatchMode),
-		MinMatches:    policy.Match.MinMatches,
-		CaseSensitive: policy.Match.CaseSensitive,
-		Reason:        policy.Reason,
+		Patterns:       append([]string(nil), policy.Match.Patterns...),
+		CredentialRefs: append([]string(nil), policy.Match.CredentialRefs...),
+		Targets:        contentTypes,
+		Verdict:        resolvePolicyVerdict(policy, group, VerdictBlock),
+		Mode:           MatchMode(policy.Match.MatchMode),
+		MinMatches:     policy.Match.MinMatches,
+		CaseSensitive:  policy.Match.CaseSensitive,
+		Reason:         policy.Reason,
 	}
 	if policy.Match.PatternMode == "regex" {
 		params.UseRegex = true

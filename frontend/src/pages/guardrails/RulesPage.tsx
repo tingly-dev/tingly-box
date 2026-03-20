@@ -82,12 +82,22 @@ type GuardrailsPolicy = {
         actions?: { include?: string[]; exclude?: string[] };
         resources?: { type?: string; mode?: string; values?: string[] };
         terms?: string[];
+        credential_refs?: string[];
         patterns?: string[];
         pattern_mode?: string;
         case_sensitive?: boolean;
     };
     verdict?: string;
     reason?: string;
+};
+
+type ProtectedCredentialSummary = {
+    id: string;
+    name: string;
+    type: 'api_key' | 'token' | 'private_key';
+    alias_token: string;
+    enabled: boolean;
+    secret_mask: string;
 };
 
 type EditorState = {
@@ -104,6 +114,7 @@ type EditorState = {
     resources: string;
     resourceMode: string;
     patterns: string;
+    credentialRefs: string[];
     patternMode: string;
     caseSensitive: boolean;
     reason: string;
@@ -150,6 +161,7 @@ const GuardrailsRulesPage = () => {
     const [supportedScenarios, setSupportedScenarios] = useState<string[]>([]);
     const [groups, setGroups] = useState<PolicyGroup[]>([]);
     const [policies, setPolicies] = useState<GuardrailsPolicy[]>([]);
+    const [credentials, setCredentials] = useState<ProtectedCredentialSummary[]>([]);
     const [pendingPolicyId, setPendingPolicyId] = useState<string | null>(null);
     const [pendingSave, setPendingSave] = useState(false);
     const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null);
@@ -185,6 +197,7 @@ const GuardrailsRulesPage = () => {
         resources: '',
         resourceMode: 'prefix',
         patterns: '',
+        credentialRefs: [],
         patternMode: 'substring',
         caseSensitive: false,
         reason: '',
@@ -264,6 +277,18 @@ const GuardrailsRulesPage = () => {
         () => groups.map((group) => ({ value: group.id, label: group.name || group.id })),
         [groups]
     );
+    const credentialOptions = useMemo(
+        () => credentials.filter((credential) => credential.enabled !== false),
+        [credentials]
+    );
+    const credentialsById = useMemo(
+        () => new Map(credentialOptions.map((credential) => [credential.id, credential])),
+        [credentialOptions]
+    );
+    const groupsById = useMemo(
+        () => new Map(groups.map((group) => [group.id, group])),
+        [groups]
+    );
     const resourceAccessPolicies = useMemo(
         () => policies.filter((policy) => policy.kind === 'resource_access' || policy.kind === 'operation'),
         [policies]
@@ -276,6 +301,15 @@ const GuardrailsRulesPage = () => {
         () => policies.filter((policy) => policy.kind === 'content'),
         [policies]
     );
+
+    const getEffectivePolicyState = (policy: GuardrailsPolicy) => {
+        const group = policy.group ? groupsById.get(policy.group) : undefined;
+        const inheritedDisabled = !!group && group.enabled === false;
+        return {
+            inheritedDisabled,
+            visibleEnabled: policy.enabled !== false && !inheritedDisabled,
+        };
+    };
 
     const generatePolicyId = (name: string, kind: EditorState['kind'], currentId?: string) => {
         const normalizedName = name
@@ -317,20 +351,12 @@ const GuardrailsRulesPage = () => {
     };
 
     const applyKindDefaults = (kind: 'resource_access' | 'command_execution' | 'content', current: EditorState): EditorState => {
-        const nextName =
-            current.name && current.name !== 'New Policy'
-                ? current.name
-                : kind === 'resource_access'
-                  ? 'New Resource Access Policy'
-                  : kind === 'command_execution'
-                    ? 'New Command Execution Policy'
-                    : 'New Content Policy';
-
         return {
             ...current,
             kind,
-            name: nextName,
-            id: isNewPolicy ? generatePolicyId(nextName, kind) : current.id,
+            name: current.name,
+            id: isNewPolicy && current.name.trim() ? generatePolicyId(current.name, kind) : current.id,
+            verdict: sanitizeVerdictForKind(kind, current.verdict),
             toolNames: kind === 'content' ? '' : current.toolNames || 'bash',
             actions:
                 kind === 'resource_access'
@@ -367,6 +393,9 @@ const GuardrailsRulesPage = () => {
             return `This policy blocks attempts to ${actions} ${resourceLabel}.`;
         }
         const patterns = splitLines(state.patterns);
+        if (state.credentialRefs.length > 0) {
+            return `This policy masks ${state.credentialRefs.length} protected credential${state.credentialRefs.length > 1 ? 's' : ''} before content reaches the model.`;
+        }
         if (patterns.length === 0) {
             return 'This policy blocks prohibited content.';
         }
@@ -387,7 +416,11 @@ const GuardrailsRulesPage = () => {
             return `${toolNames} · ${actions} · ${resources}`;
         }
         const patterns = policy.match?.patterns || [];
+        const credentialRefs = policy.match?.credential_refs || [];
         if (patterns.length === 0) {
+            if (credentialRefs.length > 0) {
+                return `${credentialRefs.length} protected credential${credentialRefs.length > 1 ? 's' : ''}`;
+            }
             return 'No patterns configured';
         }
         return patterns.slice(0, 2).join(', ');
@@ -406,13 +439,20 @@ const GuardrailsRulesPage = () => {
     };
 
     const getGroupByID = (groupID?: string) => groups.find((group) => group.id === groupID);
+    const sanitizeVerdictForKind = (kind: EditorState['kind'], verdict?: string) => {
+        if (verdict === 'mask' && kind !== 'content') {
+            return 'block';
+        }
+        return verdict || 'block';
+    };
 
     const getGroupDefaultScenarios = (group?: PolicyGroup) => {
         const scenarios = group?.default_scope?.scenarios;
         return scenarios && scenarios.length > 0 ? scenarios : scenarioOptions;
     };
 
-    const getGroupDefaultVerdict = (group?: PolicyGroup) => group?.default_verdict || 'block';
+    const getGroupDefaultVerdict = (group?: PolicyGroup, kind?: EditorState['kind']) =>
+        sanitizeVerdictForKind(kind || '', group?.default_verdict || 'block');
 
     // MUI restores focus to the trigger after a dialog closes. Blur it so toolbar buttons
     // do not keep the white focus overlay after closing policy/group dialogs.
@@ -436,7 +476,10 @@ const GuardrailsRulesPage = () => {
             group,
             kind: policy?.kind === 'operation' ? 'resource_access' : policy?.kind || '',
             enabled: policy?.enabled !== false,
-            verdict: policy?.verdict || getGroupDefaultVerdict(selectedGroup),
+            verdict: sanitizeVerdictForKind(
+                policy?.kind === 'operation' ? 'resource_access' : policy?.kind || '',
+                policy?.verdict || getGroupDefaultVerdict(selectedGroup, policy?.kind === 'operation' ? 'resource_access' : policy?.kind || '')
+            ),
             scenarios,
             toolNames: joinLines(policy?.match?.tool_names),
             actions: policy?.match?.actions?.include || [],
@@ -444,6 +487,7 @@ const GuardrailsRulesPage = () => {
             resources: joinLines(policy?.match?.resources?.values),
             resourceMode: policy?.match?.resources?.mode || 'prefix',
             patterns: joinLines(policy?.match?.patterns),
+            credentialRefs: policy?.match?.credential_refs || [],
             patternMode: policy?.match?.pattern_mode || 'substring',
             caseSensitive: !!policy?.match?.case_sensitive,
             reason: policy?.reason || '',
@@ -454,15 +498,23 @@ const GuardrailsRulesPage = () => {
     const makeEditorStateFromDraft = (draft: Partial<EditorState>): EditorState => {
         const baseState = makeEditorState();
         const selectedGroup = getGroupByID(normalizeGroup(draft.group));
+        const nextKind = draft.kind || baseState.kind;
+        const nextName = draft.name || baseState.name;
+        const nextID =
+            draft.id ||
+            (nextKind && nextName.trim() ? generatePolicyId(nextName, nextKind) : baseState.id);
         return {
             ...baseState,
             ...draft,
-            id: draft.id || baseState.id,
-            name: draft.name || baseState.name,
+            id: nextID,
+            name: nextName,
             group: normalizeGroup(draft.group),
-            kind: draft.kind || baseState.kind,
+            kind: nextKind,
             enabled: draft.enabled ?? baseState.enabled,
-            verdict: draft.verdict || getGroupDefaultVerdict(selectedGroup) || baseState.verdict,
+            verdict: sanitizeVerdictForKind(
+                nextKind,
+                draft.verdict || getGroupDefaultVerdict(selectedGroup, nextKind) || baseState.verdict
+            ),
             scenarios:
                 draft.scenarios && draft.scenarios.length > 0
                     ? draft.scenarios
@@ -473,6 +525,7 @@ const GuardrailsRulesPage = () => {
             resources: draft.resources ?? baseState.resources,
             resourceMode: draft.resourceMode || baseState.resourceMode,
             patterns: draft.patterns ?? baseState.patterns,
+            credentialRefs: draft.credentialRefs ?? baseState.credentialRefs,
             patternMode: draft.patternMode || baseState.patternMode,
             caseSensitive: draft.caseSensitive ?? baseState.caseSensitive,
             reason: draft.reason ?? baseState.reason,
@@ -496,7 +549,10 @@ const GuardrailsRulesPage = () => {
             if (!silent) {
                 setLoading(true);
             }
-            const guardrailsConfig = await api.getGuardrailsConfig();
+            const [guardrailsConfig, guardrailsCredentials] = await Promise.all([
+                api.getGuardrailsConfig(),
+                api.getGuardrailsCredentials(),
+            ]);
             const config = guardrailsConfig?.config || {};
             const scenarios = Array.isArray(guardrailsConfig?.supported_scenarios)
                 ? guardrailsConfig.supported_scenarios.filter((value: string) => value && value !== '_global')
@@ -504,11 +560,13 @@ const GuardrailsRulesPage = () => {
             setSupportedScenarios(scenarios);
             setGroups(Array.isArray(config.groups) ? config.groups : []);
             setPolicies(Array.isArray(config.policies) ? config.policies : []);
+            setCredentials(Array.isArray(guardrailsCredentials?.data) ? guardrailsCredentials.data : []);
             setLoadError(null);
         } catch (error) {
             console.error('Failed to load guardrails config:', error);
             setGroups([]);
             setPolicies([]);
+            setCredentials([]);
             setSupportedScenarios([]);
             setLoadError('Failed to load guardrails config');
         } finally {
@@ -580,6 +638,9 @@ const GuardrailsRulesPage = () => {
         if (!draft) {
             return;
         }
+        if (supportedScenarios.length === 0) {
+            return;
+        }
         const nextState = makeEditorStateFromDraft(draft);
         setSelectedPolicyId(null);
         setIsNewPolicy(true);
@@ -591,7 +652,7 @@ const GuardrailsRulesPage = () => {
         setEditorState(nextState);
         setEditorSnapshot(JSON.stringify(nextState));
         navigate('/guardrails/rules', { replace: true, state: null });
-    }, [location.state, navigate, scenarioOptions]);
+    }, [location.state, navigate, supportedScenarios]);
 
     const handleReload = async () => {
         try {
@@ -757,7 +818,7 @@ const GuardrailsRulesPage = () => {
         setEditorState((state) => ({
             ...state,
             group: groupID,
-            verdict: groupID ? getGroupDefaultVerdict(selectedGroup) : state.verdict,
+            verdict: groupID ? getGroupDefaultVerdict(selectedGroup, state.kind) : sanitizeVerdictForKind(state.kind, state.verdict),
             scenarios: groupID ? getGroupDefaultScenarios(selectedGroup) : state.scenarios,
         }));
         setAdvancedOpen(groupID === '');
@@ -793,7 +854,8 @@ const GuardrailsRulesPage = () => {
             match:
                 state.kind === 'content'
                     ? {
-                          patterns: splitLines(state.patterns),
+                          patterns: state.verdict === 'mask' ? [] : splitLines(state.patterns),
+                          credential_refs: state.verdict === 'mask' ? state.credentialRefs : [],
                           pattern_mode: state.patternMode,
                           case_sensitive: state.caseSensitive,
                       }
@@ -807,11 +869,22 @@ const GuardrailsRulesPage = () => {
             setActionMessage({ type: 'error', text: 'Choose a policy kind first.' });
             return false;
         }
-        if (!editorState.id.trim()) {
+        if (!editorState.name.trim()) {
             setActionMessage({ type: 'error', text: 'Policy name is required before saving.' });
             return false;
         }
-        if (editorState.kind === 'content' && splitLines(editorState.patterns).length === 0) {
+        const effectiveEditorState =
+            editorState.id.trim() || !editorState.kind
+                ? editorState
+                : {
+                      ...editorState,
+                      id: generatePolicyId(editorState.name, editorState.kind, isNewPolicy ? undefined : selectedPolicyId || editorState.id),
+                  };
+        if (editorState.kind === 'content' && editorState.verdict === 'mask' && editorState.credentialRefs.length === 0) {
+            setActionMessage({ type: 'error', text: 'Mask policies must reference at least one protected credential.' });
+            return false;
+        }
+        if (editorState.kind === 'content' && editorState.verdict !== 'mask' && splitLines(editorState.patterns).length === 0) {
             setActionMessage({ type: 'error', text: 'Content policies require at least one pattern.' });
             return false;
         }
@@ -836,8 +909,8 @@ const GuardrailsRulesPage = () => {
 
         try {
             setPendingSave(true);
-            const payload = buildPolicyPayload(editorState);
-            const targetPolicyId = isNewPolicy ? editorState.id : (selectedPolicyId || editorState.id);
+            const payload = buildPolicyPayload(effectiveEditorState);
+            const targetPolicyId = isNewPolicy ? effectiveEditorState.id : (selectedPolicyId || effectiveEditorState.id);
             const result = isNewPolicy
                 ? await api.createGuardrailsPolicy(payload)
                 : await api.updateGuardrailsPolicy(targetPolicyId, payload);
@@ -846,10 +919,13 @@ const GuardrailsRulesPage = () => {
                 return false;
             }
             await loadPolicies(true);
-            setSelectedPolicyId(editorState.id);
+            setEditorState(effectiveEditorState);
+            setSelectedPolicyId(effectiveEditorState.id);
             setIsNewPolicy(false);
-            setEditorSnapshot(JSON.stringify(editorState));
-            setActionMessage({ type: 'success', text: `Policy "${editorState.id}" saved.` });
+            setEditorSnapshot(JSON.stringify(effectiveEditorState));
+            setActionMessage({ type: 'success', text: `Policy "${effectiveEditorState.id}" saved.` });
+            setEditorOpen(false);
+            setConfirmCloseOpen(false);
             return true;
         } catch (error: any) {
             setActionMessage({ type: 'error', text: error?.message || 'Failed to save policy' });
@@ -1013,91 +1089,107 @@ const GuardrailsRulesPage = () => {
                 </Box>
             ) : (
                 <List dense sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, py: 0 }}>
-                    {items.map((policy) => (
-                        <ListItem
-                            key={policy.id}
-                            sx={{
-                                px: 0,
-                                py: 0,
-                                borderBottom: '1px solid',
-                                borderColor: 'divider',
-                                '&:last-child': { borderBottom: 'none' },
-                            }}
-                        >
-                            <Box
+                    {items.map((policy) => {
+                        const effectiveState = getEffectivePolicyState(policy);
+                        return (
+                            <ListItem
+                                key={policy.id}
                                 sx={{
-                                    display: 'flex',
-                                    alignItems: { xs: 'flex-start', lg: 'center' },
-                                    flexDirection: { xs: 'column', lg: 'row' },
-                                    gap: 1.5,
-                                    width: '100%',
-                                    cursor: 'pointer',
-                                    px: 2,
-                                    py: 1.5,
-                                    bgcolor: selectedPolicyId === policy.id ? 'action.selected' : 'transparent',
-                                    '&:hover': { bgcolor: 'action.hover' },
+                                    px: 0,
+                                    py: 0,
+                                    borderBottom: '1px solid',
+                                    borderColor: 'divider',
+                                    '&:last-child': { borderBottom: 'none' },
                                 }}
-                                onClick={() => openPolicyEditor(policy)}
                             >
-                                <Box sx={{ minWidth: { lg: 220 }, flexShrink: 0 }}>
-                                    <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                            {policy.id}
-                                        </Typography>
-                                        {policy.group && <Chip size="small" label={policy.group} variant="outlined" />}
-                                    </Stack>
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                                        {policy.name || 'Unnamed policy'}
-                                    </Typography>
-                                </Box>
-
-                                <Box sx={{ flex: 1, minWidth: 0 }}>
-                                    <Typography variant="body2" color="text.primary" sx={{ whiteSpace: 'normal' }}>
-                                        {buildPolicySummary(policy)}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, whiteSpace: 'normal' }}>
-                                        {buildPolicyScope(policy)}
-                                    </Typography>
-                                </Box>
-
-                                <Stack
-                                    direction={{ xs: 'row', sm: 'row' }}
-                                    spacing={1}
-                                    alignItems="center"
-                                    sx={{ width: { xs: '100%', lg: 'auto' }, justifyContent: { xs: 'space-between', lg: 'flex-end' } }}
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: { xs: 'flex-start', lg: 'center' },
+                                        flexDirection: { xs: 'column', lg: 'row' },
+                                        gap: 1.5,
+                                        width: '100%',
+                                        cursor: 'pointer',
+                                        px: 2,
+                                        py: 1.5,
+                                        bgcolor: selectedPolicyId === policy.id ? 'action.selected' : 'transparent',
+                                        '&:hover': { bgcolor: 'action.hover' },
+                                        opacity: effectiveState.inheritedDisabled ? 0.65 : 1,
+                                    }}
+                                    onClick={() => openPolicyEditor(policy)}
                                 >
-                                    <Chip size="small" label={policy.enabled === false ? 'Disabled' : 'Enabled'} />
-                                    <FormControlLabel
-                                        sx={{ ml: 0 }}
-                                        onClick={(e) => e.stopPropagation()}
-                                        control={
-                                            <Switch
-                                                size="small"
-                                                checked={policy.enabled !== false}
-                                                disabled={pendingPolicyId === policy.id}
-                                                onChange={(e) => handleTogglePolicy(policy.id, e.target.checked)}
-                                            />
-                                        }
-                                        label="Enabled"
-                                    />
-                                    <Tooltip title="Delete policy" arrow>
-                                        <span>
-                                            <IconButton
-                                                size="small"
-                                                disabled={pendingPolicyId === policy.id}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setDeletePolicyId(policy.id);
-                                                }}
-                                            >
-                                                <DeleteOutline fontSize="small" />
-                                            </IconButton>
-                                        </span>
-                                    </Tooltip>
-                                </Stack>
-                            </Box>
-                        </ListItem>
-                    ))}
+                                    <Box sx={{ minWidth: { lg: 220 }, flexShrink: 0 }}>
+                                        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                                {policy.id}
+                                            </Typography>
+                                            {policy.group && <Chip size="small" label={policy.group} variant="outlined" />}
+                                            {effectiveState.inheritedDisabled && (
+                                                <Chip size="small" label="Group disabled" variant="outlined" />
+                                            )}
+                                        </Stack>
+                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                            {policy.name || 'Unnamed policy'}
+                                        </Typography>
+                                    </Box>
+
+                                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                                        <Typography variant="body2" color="text.primary" sx={{ whiteSpace: 'normal' }}>
+                                            {buildPolicySummary(policy)}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, whiteSpace: 'normal' }}>
+                                            {buildPolicyScope(policy)}
+                                        </Typography>
+                                    </Box>
+
+                                    <Stack
+                                        direction={{ xs: 'row', sm: 'row' }}
+                                        spacing={1}
+                                        alignItems="center"
+                                        sx={{ width: { xs: '100%', lg: 'auto' }, justifyContent: { xs: 'space-between', lg: 'flex-end' } }}
+                                    >
+                                        <Chip
+                                            size="small"
+                                            label={
+                                                effectiveState.inheritedDisabled
+                                                    ? 'Inherited disabled'
+                                                    : policy.enabled === false
+                                                      ? 'Disabled'
+                                                      : 'Enabled'
+                                            }
+                                        />
+                                        <FormControlLabel
+                                            sx={{ ml: 0 }}
+                                            onClick={(e) => e.stopPropagation()}
+                                            control={
+                                                <Switch
+                                                    size="small"
+                                                    checked={policy.enabled !== false}
+                                                    disabled={pendingPolicyId === policy.id}
+                                                    onChange={(e) => handleTogglePolicy(policy.id, e.target.checked)}
+                                                />
+                                            }
+                                            label="Enabled"
+                                        />
+                                        <Tooltip title="Delete policy" arrow>
+                                            <span>
+                                                <IconButton
+                                                    size="small"
+                                                    disabled={pendingPolicyId === policy.id}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setDeletePolicyId(policy.id);
+                                                    }}
+                                                >
+                                                    <DeleteOutline fontSize="small" />
+                                                </IconButton>
+                                            </span>
+                                        </Tooltip>
+                                    </Stack>
+                                </Box>
+                            </ListItem>
+                        );
+                    })}
                 </List>
             )}
         </Box>
@@ -1348,6 +1440,98 @@ const GuardrailsRulesPage = () => {
         </Box>
     );
 
+    const renderCredentialRefSelector = () => (
+        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
+            <Stack spacing={1.5}>
+                <Box>
+                    <Typography variant="subtitle2">Protected Credentials</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                        Mask policies only work with credentials already added in the Protected Credentials page. Select which aliases this policy should apply to.
+                    </Typography>
+                </Box>
+                {credentialOptions.length === 0 ? (
+                    <Alert
+                        severity="warning"
+                        action={
+                            <Button color="inherit" size="small" onClick={() => navigate('/guardrails/credentials')}>
+                                Open Credentials
+                            </Button>
+                        }
+                    >
+                        No protected credentials are available yet.
+                    </Alert>
+                ) : (
+                    <Stack spacing={1}>
+                        {credentialOptions.map((credential) => {
+                            const selected = editorState.credentialRefs.includes(credential.id);
+                            return (
+                                <Box
+                                    key={credential.id}
+                                    onClick={() =>
+                                        setEditorState((state) => ({
+                                            ...state,
+                                            credentialRefs: toggleValue(state.credentialRefs, credential.id),
+                                        }))
+                                    }
+                                    sx={{
+                                        border: '1px solid',
+                                        borderColor: selected ? 'primary.main' : 'divider',
+                                        bgcolor: selected ? 'action.selected' : 'background.paper',
+                                        borderRadius: 2,
+                                        p: 1.25,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease',
+                                        '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
+                                    }}
+                                >
+                                    <Stack spacing={0.75}>
+                                        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                            <Typography variant="body2" fontWeight={600}>
+                                                {credential.name}
+                                            </Typography>
+                                            <Chip size="small" label={credential.type.replace('_', ' ')} variant="outlined" />
+                                            {selected && <Chip size="small" color="primary" label="Selected" />}
+                                        </Stack>
+                                        <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                                            {credential.alias_token}
+                                        </Typography>
+                                    </Stack>
+                                </Box>
+                            );
+                        })}
+                    </Stack>
+                )}
+                {editorState.credentialRefs.length > 0 && (
+                    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                        {editorState.credentialRefs.map((credentialID) => {
+                            const credential = credentialsById.get(credentialID);
+                            if (!credential) {
+                                return null;
+                            }
+                            return (
+                                <Chip
+                                    key={credentialID}
+                                    label={credential.name}
+                                    onDelete={() =>
+                                        setEditorState((state) => ({
+                                            ...state,
+                                            credentialRefs: state.credentialRefs.filter((id) => id !== credentialID),
+                                        }))
+                                    }
+                                />
+                            );
+                        })}
+                    </Stack>
+                )}
+                <FormHelperText>
+                    {editorState.credentialRefs.length > 0
+                        ? `${editorState.credentialRefs.length} protected credential${editorState.credentialRefs.length > 1 ? 's are' : ' is'} selected for alias masking.`
+                        : 'Select one or more protected credentials.'}
+                </FormHelperText>
+            </Stack>
+        </Box>
+    );
+
     return (
         <PageLayout loading={loading}>
             <Stack spacing={3}>
@@ -1368,7 +1552,9 @@ const GuardrailsRulesPage = () => {
                             Use resource access policies to protect files and directories, command execution policies to control risky commands, and content policies to filter model or tool output.
                         </Typography>
                         {loadError && <Alert severity="error">{loadError}</Alert>}
-                        {actionMessage && <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>}
+                        {actionMessage && !editorOpen && !groupDialogOpen && (
+                            <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>
+                        )}
                         <Divider />
                         <Stack spacing={1.5}>
                             <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
@@ -1545,6 +1731,7 @@ const GuardrailsRulesPage = () => {
                 <DialogTitle>{isNewPolicy ? 'New Policy' : `Edit Policy${selectedPolicyId ? ` · ${selectedPolicyId}` : ''}`}</DialogTitle>
                 <DialogContent dividers>
                     <Stack spacing={2} sx={{ pt: 1 }}>
+                        {actionMessage && <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>}
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <Typography variant="subtitle2">Policy Editor</Typography>
                             <Stack spacing={0} alignItems="flex-end">
@@ -1675,11 +1862,11 @@ const GuardrailsRulesPage = () => {
                         </Stack>
 
                         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                            <TextField
-                                label="Name"
-                                size="small"
-                                fullWidth
-                                value={editorState.name}
+                                <TextField
+                                    label="Name"
+                                    size="small"
+                                    fullWidth
+                                    value={editorState.name}
                                 onChange={(e) =>
                                     setEditorState((state) => {
                                         const name = e.target.value;
@@ -1689,10 +1876,19 @@ const GuardrailsRulesPage = () => {
                                             id: isNewPolicy ? generatePolicyId(name, state.kind) : state.id,
                                         };
                                     })
-                                }
-                                helperText="Human-friendly label shown in UI."
-                                disabled={!editorState.kind}
-                            />
+                                    }
+                                    helperText="Required. Choose a clear name before saving."
+                                    placeholder={
+                                        editorState.kind === 'resource_access'
+                                            ? 'Example: Block SSH directory reads'
+                                            : editorState.kind === 'command_execution'
+                                              ? 'Example: Block destructive rm commands'
+                                              : editorState.kind === 'content'
+                                                ? 'Example: Block private key output'
+                                                : 'Enter a policy name'
+                                    }
+                                    disabled={!editorState.kind}
+                                />
                         </Stack>
 
                         {editorState.kind ? (
@@ -1935,43 +2131,54 @@ const GuardrailsRulesPage = () => {
                                     >
                                         <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
                                             <Stack spacing={1.5}>
-                                                {renderCompactListEditor({
-                                                    title: 'Content Patterns',
-                                                    description: 'Define the text you want to block or review. Each row becomes one pattern.',
-                                                    columnLabel: 'Pattern',
-                                                    value: editorState.patterns,
-                                                    selectedIndex: selectedPatternRow,
-                                                    onSelectedIndexChange: setSelectedPatternRow,
-                                                    onChange: (patterns) => setEditorState((state) => ({ ...state, patterns })),
-                                                    placeholder: 'BEGIN OPENSSH PRIVATE KEY',
-                                                    helperText: 'Use a few specific patterns instead of a long generic list.',
-                                                })}
-                                                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                                                    <FormControl size="small" fullWidth>
-                                                        <InputLabel id="pattern-mode">Pattern Mode</InputLabel>
-                                                        <Select
-                                                            labelId="pattern-mode"
-                                                            label="Pattern Mode"
-                                                            value={editorState.patternMode}
-                                                            onChange={(e) => setEditorState((state) => ({ ...state, patternMode: String(e.target.value) }))}
-                                                        >
-                                                            <MenuItem value="substring">substring</MenuItem>
-                                                            <MenuItem value="regex">regex</MenuItem>
-                                                        </Select>
-                                                        <FormHelperText>Use regex only when substring matching is not precise enough.</FormHelperText>
-                                                    </FormControl>
-                                                    <FormControlLabel
-                                                        sx={{ ml: 0, alignItems: 'center', minWidth: { md: 160 } }}
-                                                        control={
-                                                            <Switch
-                                                                size="small"
-                                                                checked={editorState.caseSensitive}
-                                                                onChange={(e) => setEditorState((state) => ({ ...state, caseSensitive: e.target.checked }))}
+                                                {editorState.verdict === 'mask' ? (
+                                                    <>
+                                                        <Alert severity="info">
+                                                            Mask policies do not match arbitrary content. They replace only the protected credentials selected below with alias tokens before content reaches the model.
+                                                        </Alert>
+                                                        {renderCredentialRefSelector()}
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        {renderCompactListEditor({
+                                                            title: 'Content Patterns',
+                                                            description: 'Define the text you want to block or review. Each row becomes one pattern.',
+                                                            columnLabel: 'Pattern',
+                                                            value: editorState.patterns,
+                                                            selectedIndex: selectedPatternRow,
+                                                            onSelectedIndexChange: setSelectedPatternRow,
+                                                            onChange: (patterns) => setEditorState((state) => ({ ...state, patterns })),
+                                                            placeholder: 'BEGIN OPENSSH PRIVATE KEY',
+                                                            helperText: 'Use a few specific patterns instead of a long generic list.',
+                                                        })}
+                                                        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+                                                            <FormControl size="small" fullWidth>
+                                                                <InputLabel id="pattern-mode">Pattern Mode</InputLabel>
+                                                                <Select
+                                                                    labelId="pattern-mode"
+                                                                    label="Pattern Mode"
+                                                                    value={editorState.patternMode}
+                                                                    onChange={(e) => setEditorState((state) => ({ ...state, patternMode: String(e.target.value) }))}
+                                                                >
+                                                                    <MenuItem value="substring">substring</MenuItem>
+                                                                    <MenuItem value="regex">regex</MenuItem>
+                                                                </Select>
+                                                                <FormHelperText>Use regex only when substring matching is not precise enough.</FormHelperText>
+                                                            </FormControl>
+                                                            <FormControlLabel
+                                                                sx={{ ml: 0, alignItems: 'center', minWidth: { md: 160 } }}
+                                                                control={
+                                                                    <Switch
+                                                                        size="small"
+                                                                        checked={editorState.caseSensitive}
+                                                                        onChange={(e) => setEditorState((state) => ({ ...state, caseSensitive: e.target.checked }))}
+                                                                    />
+                                                                }
+                                                                label="Case sensitive"
                                                             />
-                                                        }
-                                                        label="Case sensitive"
-                                                    />
-                                                </Stack>
+                                                        </Stack>
+                                                    </>
+                                                )}
                                             </Stack>
                                         </Box>
 
@@ -2051,7 +2258,7 @@ const GuardrailsRulesPage = () => {
                                                         <Box
                                                             sx={{
                                                                 display: 'grid',
-                                                                gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' },
+                                                                gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr 1fr' },
                                                                 gap: 1.5,
                                                                 mt: 1.5,
                                                             }}
@@ -2067,6 +2274,15 @@ const GuardrailsRulesPage = () => {
                                                                     label: 'Review',
                                                                     description: 'Mark the result as needing attention without fully blocking it.',
                                                                 },
+                                                                ...(editorState.kind === 'content'
+                                                                    ? [
+                                                                          {
+                                                                              value: 'mask',
+                                                                              label: 'Mask',
+                                                                              description: 'Replace selected protected credentials with alias tokens and continue.',
+                                                                          },
+                                                                      ]
+                                                                    : []),
                                                                 {
                                                                     value: 'block',
                                                                     label: 'Block',
@@ -2193,6 +2409,7 @@ const GuardrailsRulesPage = () => {
                 <DialogTitle>{editingGroupId ? 'Edit group' : 'New group'}</DialogTitle>
                 <DialogContent>
                     <Stack spacing={2} sx={{ pt: 1 }}>
+                        {actionMessage && <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>}
                         <Alert severity="info">
                             Groups are used to organize policies and provide shared defaults like severity, default verdict, and scope.
                         </Alert>
@@ -2272,6 +2489,7 @@ const GuardrailsRulesPage = () => {
                                         {[
                                             { value: 'allow', label: 'Allow' },
                                             { value: 'review', label: 'Review' },
+                                            { value: 'mask', label: 'Mask' },
                                             { value: 'block', label: 'Block' },
                                         ].map((option) => (
                                             <Chip

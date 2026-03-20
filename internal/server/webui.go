@@ -633,6 +633,26 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithDescription("Get curated builtin guardrails policy templates"),
 		swagger.WithTags("guardrails"),
 	)
+	apiV1.GET("/guardrails/credentials", s.GetGuardrailsCredentials,
+		swagger.WithDescription("List protected credentials used by guardrails pseudonymization"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.GET("/guardrails/credential/:id", s.GetGuardrailsCredential,
+		swagger.WithDescription("Get a protected credential for the local editor dialog"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.POST("/guardrails/credential", s.CreateGuardrailsCredential,
+		swagger.WithDescription("Create a protected credential for guardrails pseudonymization"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.PUT("/guardrails/credential/:id", s.UpdateGuardrailsCredential,
+		swagger.WithDescription("Update a protected credential for guardrails pseudonymization"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.DELETE("/guardrails/credential/:id", s.DeleteGuardrailsCredential,
+		swagger.WithDescription("Delete a protected credential for guardrails pseudonymization"),
+		swagger.WithTags("guardrails"),
+	)
 	apiV1.PUT("/guardrails/config", s.UpdateGuardrailsConfig,
 		swagger.WithDescription("Update guardrails config and reload engine"),
 		swagger.WithTags("guardrails"),

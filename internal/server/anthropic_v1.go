@@ -76,6 +76,10 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	}
 
 	s.applyGuardrailsToToolResultV1(c, &req.MessageNewParams, actualModel, provider)
+	// Run credential masking after terminal tool_result filtering so block/review
+	// decisions still inspect the original tool output while the upstream model
+	// only receives alias tokens.
+	s.applyGuardrailsCredentialMasksV1(c, &req.MessageNewParams, actualModel, provider)
 
 	// Check provider's API style to decide which path to take
 	apiStyle := provider.APIStyle
@@ -130,6 +134,8 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 				}
 				anthropicResp = roundtripped
 			}
+
+			s.restoreGuardrailsCredentialAliasesV1Response(c, anthropicResp)
 
 			// Record response if scenario recording is enabled
 			if recorder != nil {

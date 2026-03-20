@@ -561,6 +561,29 @@ export const api = {
     getGuardrailsBuiltins: async (): Promise<any> => {
         return fetchUIAPI('/guardrails/builtins');
     },
+    getGuardrailsCredentials: async (): Promise<any> => {
+        return fetchUIAPI('/guardrails/credentials');
+    },
+    getGuardrailsCredential: async (credentialId: string): Promise<any> => {
+        return fetchUIAPI(`/guardrails/credential/${encodeURIComponent(credentialId)}`);
+    },
+    createGuardrailsCredential: async (payload: any): Promise<any> => {
+        return fetchUIAPI('/guardrails/credential', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    },
+    updateGuardrailsCredential: async (credentialId: string, payload: any): Promise<any> => {
+        return fetchUIAPI(`/guardrails/credential/${encodeURIComponent(credentialId)}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+    },
+    deleteGuardrailsCredential: async (credentialId: string): Promise<any> => {
+        return fetchUIAPI(`/guardrails/credential/${encodeURIComponent(credentialId)}`, {
+            method: 'DELETE',
+        });
+    },
     getGuardrailsHistory: async (): Promise<any> => {
         return fetchUIAPI('/guardrails/history');
     },
