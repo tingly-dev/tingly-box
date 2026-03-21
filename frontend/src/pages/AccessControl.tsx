@@ -14,7 +14,6 @@ import {
     Tooltip,
 } from '@mui/material';
 import {
-    Refresh as RefreshIcon,
     Sync as SyncIcon,
     ContentCopy as ContentCopyIcon,
     CheckCircle as CheckCircleIcon,
@@ -51,10 +50,6 @@ const AccessControl = () => {
     // Visibility states for showing full tokens
     const [showUserToken, setShowUserToken] = useState(false);
     const [showModelToken, setShowModelToken] = useState(false);
-
-    // Pull/refresh loading states
-    const [pullingUser, setPullingUser] = useState(false);
-    const [pullingModel, setPullingModel] = useState(false);
 
     const loadTokenInfo = async () => {
         setLoading(true);
@@ -131,18 +126,6 @@ const AccessControl = () => {
 
     const handleModelSuccessAcknowledge = () => {
         setModelSuccessToken(null);
-    };
-
-    const handlePullUserToken = async () => {
-        setPullingUser(true);
-        await loadTokenInfo();
-        setPullingUser(false);
-    };
-
-    const handlePullModelToken = async () => {
-        setPullingModel(true);
-        await loadModelToken();
-        setPullingModel(false);
     };
 
     const maskToken = (token: string): string => {
@@ -320,16 +303,6 @@ const AccessControl = () => {
                                 {showUserToken ? displayUserToken : maskToken(displayUserToken)}
                             </Typography>
                             <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                <Tooltip title={t('accessControl.userToken.pullToken') || 'Pull token'}>
-                                    <IconButton
-                                        size="small"
-                                        onClick={handlePullUserToken}
-                                        disabled={pullingUser}
-                                        sx={{ color: 'info.main' }}
-                                    >
-                                        {pullingUser ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
-                                    </IconButton>
-                                </Tooltip>
                                 <Tooltip title={showUserToken ? 'Hide token' : 'Show token'}>
                                     <IconButton
                                         size="small"
@@ -458,16 +431,6 @@ const AccessControl = () => {
                                 {showModelToken ? displayModelToken : maskToken(displayModelToken)}
                             </Typography>
                             <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                <Tooltip title={t('accessControl.modelToken.pullToken') || 'Pull token'}>
-                                    <IconButton
-                                        size="small"
-                                        onClick={handlePullModelToken}
-                                        disabled={pullingModel}
-                                        sx={{ color: 'info.main' }}
-                                    >
-                                        {pullingModel ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
-                                    </IconButton>
-                                </Tooltip>
                                 <Tooltip title={showModelToken ? 'Hide token' : 'Show token'}>
                                     <IconButton
                                         size="small"
