@@ -1,24 +1,24 @@
 import {
-    Delete as DeleteIcon
+    Delete as DeleteIcon,
+    Warning as WarningIcon,
+    MoreVert as MoreVertIcon,
+    PlayArrow as PlayIcon
 } from '@mui/icons-material';
 import {
     Box,
     Divider,
     IconButton,
-    ListItemIcon,
-    ListItemText,
-    Menu,
-    MenuItem,
     Tooltip,
     Typography
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
-import React from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { useState } from 'react';
 import type { Provider } from '@/types/provider.ts';
 import { ApiStyleBadge } from '../ApiStyleBadge.tsx';
+import { ProbeV2Menu } from '../probe';
 import type { ConfigProvider } from '../RoutingGraphTypes.ts';
-import { ProviderNodeContainer, providerNode, NODE_LAYER_STYLES } from './styles.tsx';
+import { ProviderNodeContainer, NODE_LAYER_STYLES } from './styles.tsx';
+import ProviderNodeContent from './ProviderNodeContent.tsx';
 
 // Action button container
 const ActionButtonsBox = styled(Box)(({ theme }) => ({
@@ -38,10 +38,14 @@ const ProviderNodeWrapper = styled(Box)(({ theme }) => ({
     }
 }));
 
-// Helper function to get provider name from providersData
-const getProviderName = (providerUuid: string, providersData: Provider[]): string => {
+// Helper function to get provider info from providersData
+const getProviderInfo = (providerUuid: string, providersData: Provider[]) => {
     const provider = providersData.find(p => p.uuid === providerUuid);
-    return provider?.name || 'Unknown Provider';
+    return {
+        name: provider?.name || 'Unknown Provider',
+        exists: !!provider,
+        provider
+    };
 };
 
 // Provider Node Component Props
@@ -63,17 +67,21 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
     onDelete,
     onNodeClick
 }) => {
-    const { t } = useTranslation();
-    const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
-    const menuOpen = Boolean(anchorEl);
+    const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+    const [probeAnchorEl, setProbeAnchorEl] = useState<null | HTMLElement>(null);
+    const menuOpen = Boolean(menuAnchorEl);
+    const probeMenuOpen = Boolean(probeAnchorEl);
+
+    const providerInfo = getProviderInfo(provider.provider, providersData);
+    const isProviderMissing = provider.provider && !providerInfo.exists;
 
     const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
         event.stopPropagation();
-        setAnchorEl(event.currentTarget);
+        setMenuAnchorEl(event.currentTarget);
     };
 
     const handleMenuClose = () => {
-        setAnchorEl(null);
+        setMenuAnchorEl(null);
     };
 
     const handleDelete = () => {
@@ -81,42 +89,57 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
         onDelete();
     };
 
-    const providerName = getProviderName(provider.provider, providersData);
+    const handleProbeClick = (event: React.MouseEvent<HTMLElement>) => {
+        event.stopPropagation();
+        setProbeAnchorEl(event.currentTarget);
+    };
+
+    const handleProbeClose = () => {
+        setProbeAnchorEl(null);
+    };
 
     return (
         <ProviderNodeWrapper>
-            <Menu
-                anchorEl={anchorEl}
-                open={menuOpen}
-                onClose={handleMenuClose}
-                onClick={(e) => e.stopPropagation()}
-                transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-                anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-            >
-                <MenuItem onClick={handleDelete}>
-                    <ListItemIcon>
-                        <DeleteIcon />
-                    </ListItemIcon>
-                    <ListItemText>{t('rule.menu.deleteProvider')}</ListItemText>
-                </MenuItem>
-                <MenuItem onClick={handleMenuClose} sx={{ color: 'text.secondary' }}>
-                    <ListItemText>Cancel</ListItemText>
-                </MenuItem>
-            </Menu>
+            {/* Delete Menu */}
+            <ProviderNodeContent
+                menuAnchorEl={menuAnchorEl}
+                menuOpen={menuOpen}
+                onMenuClose={handleMenuClose}
+                onDelete={handleDelete}
+            />
+
+            {/* Probe Menu */}
+            {provider.provider && providerInfo.exists && (
+                <ProbeV2Menu
+                    anchorEl={probeAnchorEl}
+                    open={probeMenuOpen}
+                    onClose={handleProbeClose}
+                    targetType="provider"
+                    targetId={provider.provider}
+                    targetName={providerInfo.name}
+                    model={provider.model}
+                />
+            )}
+
             <ProviderNodeContainer onClick={onNodeClick} sx={{ cursor: active ? 'pointer' : 'default', display: 'flex', flexDirection: 'column' }}>
                 {/* Top Layer - Provider/Model Field */}
                 <Box sx={NODE_LAYER_STYLES.topLayer}>
                     <Tooltip title={
                         provider.provider && provider.model
-                            ? <>Provider: {providerName}<br/>Model: {provider.model}</>
+                            ? `Provider: ${providerInfo.name}\nModel: ${provider.model}`
                             : provider.provider
-                                ? <>Provider: {providerName}<br/>Model: (select model)</>
-                                : t('rule.graph.selectProvider')
+                                ? `Provider: ${providerInfo.name}\nModel: (select model)`
+                                : 'Select Provider'
                     } arrow>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                            {isProviderMissing && (
+                                <Tooltip title="Provider not found. Please refresh the page or re-import the provider." arrow>
+                                    <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main' }} />
+                                </Tooltip>
+                            )}
                             <Typography
                                 variant="body2"
-                                color="text.primary"
+                                color={isProviderMissing ? 'warning.main' : 'text.primary'}
                                 noWrap
                                 sx={{
                                     ...NODE_LAYER_STYLES.typography,
@@ -125,7 +148,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                                     textAlign: 'center',
                                 }}
                             >
-                                {providerName || t('rule.graph.selectProvider')}
+                                {providerInfo.name || 'Select Provider'}
                             </Typography>
 
                             {provider.provider && (
@@ -174,7 +197,20 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
 
                 {/* Action Buttons - visible on hover */}
                 <ActionButtonsBox className="action-buttons">
-                    <Tooltip title={t('rule.menu.deleteProvider')}>
+                    {/* Probe Button */}
+                    {provider.provider && providerInfo.exists && (
+                        <Tooltip title="Test Provider">
+                            <IconButton
+                                size="small"
+                                onClick={handleProbeClick}
+                                sx={{ p: 0.5, backgroundColor: 'background.paper' }}
+                            >
+                                <PlayIcon sx={{ fontSize: '1rem', color: 'success.main' }} />
+                            </IconButton>
+                        </Tooltip>
+                    )}
+                    {/* Delete Button */}
+                    <Tooltip title="Delete Provider">
                         <IconButton
                             size="small"
                             onClick={handleMenuClick}

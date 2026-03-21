@@ -8,6 +8,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/tingly-dev/tingly-box/internal/config"
+	exportpkg "github.com/tingly-dev/tingly-box/internal/dataexport"
+	importpkg "github.com/tingly-dev/tingly-box/internal/dataimport"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server"
@@ -128,14 +130,32 @@ func (am *AppManager) DeleteProvider(name string) error {
 	return nil
 }
 
+// DeleteProviderByUUID removes an AI provider by UUID.
+func (am *AppManager) DeleteProviderByUUID(uuid string) error {
+	globalConfig := am.appConfig.GetGlobalConfig()
+	if err := globalConfig.DeleteProvider(uuid); err != nil {
+		return fmt.Errorf("failed to delete provider: %w", err)
+	}
+	return nil
+}
+
+// UpdateProviderByUUID updates an existing provider by UUID.
+func (am *AppManager) UpdateProviderByUUID(uuid string, provider *typ.Provider) error {
+	globalConfig := am.appConfig.GetGlobalConfig()
+	if err := globalConfig.UpdateProvider(uuid, provider); err != nil {
+		return fmt.Errorf("failed to update provider: %w", err)
+	}
+	return nil
+}
+
 // ListProviders returns all configured providers.
 func (am *AppManager) ListProviders() []*typ.Provider {
 	return am.appConfig.ListProviders()
 }
 
-// GetProvider returns a provider by name, or nil if not found.
-func (am *AppManager) GetProvider(name string) (*typ.Provider, error) {
-	return am.appConfig.GetProviderByName(name)
+// GetProvider returns a provider by UUID, or nil if not found.
+func (am *AppManager) GetProvider(uuid string) (*typ.Provider, error) {
+	return am.appConfig.GetProviderByUUID(uuid)
 }
 
 // ============
@@ -338,8 +358,8 @@ func (am *AppManager) ImportRuleFromJSONL(data string, opts ImportOptions) (*Imp
 		return nil, fmt.Errorf("error reading input: %w", err)
 	}
 
-	if ruleData == nil {
-		return nil, fmt.Errorf("no rule data found in export")
+	if ruleData == nil && len(providersData) == 0 {
+		return nil, fmt.Errorf("no rule or provider data found in export")
 	}
 
 	globalConfig := am.appConfig.GetGlobalConfig()
@@ -400,6 +420,11 @@ func (am *AppManager) ImportRuleFromJSONL(data string, opts ImportOptions) (*Imp
 		result.ProvidersCreated++
 	}
 
+	// If we don't have rule data, we're done (provider-only import)
+	if ruleData == nil {
+		return result, nil
+	}
+
 	// Check for existing rule
 	existingRule := globalConfig.GetRuleByRequestModelAndScenario(ruleData.RequestModel, typ.RuleScenario(ruleData.Scenario))
 
@@ -447,4 +472,95 @@ func (am *AppManager) ImportRuleFromJSONL(data string, opts ImportOptions) (*Imp
 	}
 
 	return result, nil
+}
+
+// ============
+// Export
+// ============
+
+// CollectProvidersFromRule collects all providers referenced by the rule's services.
+// This is a helper function for gathering providers to export with a rule.
+func (am *AppManager) CollectProvidersFromRule(rule *typ.Rule) ([]*typ.Provider, error) {
+	globalConfig := am.appConfig.GetGlobalConfig()
+
+	providerUUIDs := am.getProviderUUIDsFromRule(rule)
+	providers := make([]*typ.Provider, 0, len(providerUUIDs))
+
+	for _, providerUUID := range providerUUIDs {
+		provider, err := globalConfig.GetProviderByUUID(providerUUID)
+		if err == nil && provider != nil {
+			providers = append(providers, provider)
+		}
+	}
+
+	return providers, nil
+}
+
+// ExportRule exports a rule with its providers, or providers only, in the specified format.
+// At least one of rule or providers must be specified.
+func (am *AppManager) ExportRule(rule *typ.Rule, providers []*typ.Provider, format exportpkg.Format) (string, error) {
+	if rule == nil && len(providers) == 0 {
+		return "", fmt.Errorf("either rule or providers must be specified for export")
+	}
+
+	// Build export request
+	req := &exportpkg.ExportRequest{
+		Rule:      rule,
+		Providers: providers,
+	}
+
+	// Perform export
+	result, err := exportpkg.Export(req, format)
+	if err != nil {
+		return "", fmt.Errorf("failed to export: %w", err)
+	}
+
+	return result.Content, nil
+}
+
+// getProviderUUIDsFromRule extracts all provider UUIDs from the rule's services
+func (am *AppManager) getProviderUUIDsFromRule(rule *typ.Rule) []string {
+	uuids := make(map[string]bool)
+	for _, service := range rule.Services {
+		if service.Provider != "" {
+			uuids[service.Provider] = true
+		}
+	}
+
+	result := make([]string, 0, len(uuids))
+	for uuid := range uuids {
+		result = append(result, uuid)
+	}
+	return result
+}
+
+// ============
+// Import
+// ============
+
+// ImportRule imports a rule from data in the specified format
+func (am *AppManager) ImportRule(data string, format importpkg.Format, opts ImportOptions) (*ImportResult, error) {
+	globalConfig := am.appConfig.GetGlobalConfig()
+
+	// Convert command.ImportOptions to import.ImportOptions
+	importOpts := importpkg.ImportOptions{
+		OnProviderConflict: opts.OnProviderConflict,
+		OnRuleConflict:     opts.OnRuleConflict,
+		Quiet:              opts.Quiet,
+	}
+
+	// Perform import
+	result, err := importpkg.Import(data, globalConfig, format, importOpts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to import rule: %w", err)
+	}
+
+	// Convert import.ImportResult to command.ImportResult
+	return &ImportResult{
+		RuleCreated:      result.RuleCreated,
+		RuleUpdated:      result.RuleUpdated,
+		ProvidersCreated: result.ProvidersCreated,
+		ProvidersUsed:    result.ProvidersUsed,
+		ProviderMap:      result.ProviderMap,
+	}, nil
 }

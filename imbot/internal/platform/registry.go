@@ -8,6 +8,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/dingtalk"
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/discord"
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/feishu"
+	"github.com/tingly-dev/tingly-box/imbot/internal/platform/lark"
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/slack"
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/telegram"
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/whatsapp"
@@ -80,9 +81,14 @@ func (r *Registry) RegisterBuiltinPlatforms() {
 		return slack.NewSlackBot(config)
 	})
 
-	// Feishu/Lark
+	// Feishu
 	r.Register(core.PlatformFeishu, func(config *core.Config) (core.Bot, error) {
 		return feishu.NewFeishuBot(config)
+	})
+
+	// Lark (alias to Feishu with different domain)
+	r.Register(core.PlatformLark, func(config *core.Config) (core.Bot, error) {
+		return lark.NewBot(config)
 	})
 
 	// WhatsApp

@@ -20,21 +20,19 @@ import (
 
 // HandleAnthropicV1Stream handles Anthropic v1 streaming response.
 // Returns (UsageStat, error)
-func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNewParams, streamResp *anthropicstream.Stream[anthropic.MessageStreamEventUnion]) (protocol.UsageStat, error) {
+func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNewParams, streamResp *anthropicstream.Stream[anthropic.MessageStreamEventUnion]) (*protocol.TokenUsage, error) {
 	defer streamResp.Close()
 
 	hc.SetupSSEHeaders()
 
-	flusher, ok := hc.GinContext.Writer.(http.Flusher)
-	if !ok {
-		return protocol.ZeroUsageStat(), errors.New("streaming not supported")
-	}
-
-	var inputTokens, outputTokens int
+	var inputTokens, outputTokens, cacheTokens int
 	var hasUsage bool
 
 	err := hc.ProcessStream(
 		func() (bool, error, interface{}) {
+			if streamResp.Err() != nil {
+				return false, streamResp.Err(), nil
+			}
 			if !streamResp.Next() {
 				return false, nil, nil
 			}
@@ -44,7 +42,10 @@ func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNe
 		},
 		func(event interface{}) error {
 			evt := event.(*anthropic.MessageStreamEventUnion)
-			evt.Message.Model = anthropic.Model(hc.ResponseModel)
+			// Only set model for message_start events, as other events don't have a message field
+			if evt.Type == "message_start" {
+				evt.Message.Model = anthropic.Model(hc.ResponseModel)
+			}
 
 			if evt.Usage.InputTokens > 0 {
 				inputTokens = int(evt.Usage.InputTokens)
@@ -52,6 +53,10 @@ func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNe
 			}
 			if evt.Usage.OutputTokens > 0 {
 				outputTokens = int(evt.Usage.OutputTokens)
+				hasUsage = true
+			}
+			if evt.Usage.CacheReadInputTokens > 0 {
+				cacheTokens = int(evt.Usage.CacheReadInputTokens)
 				hasUsage = true
 			}
 
@@ -75,13 +80,13 @@ func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNe
 		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
 			logrus.Debug("Anthropic v1 stream canceled by client")
 			if !hasUsage {
-				return protocol.ZeroUsageStat(), nil
+				return protocol.ZeroTokenUsage(), nil
 			}
-			return protocol.NewUsageStat(inputTokens, outputTokens), nil
+			return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 		}
 
 		MarshalAndSendErrorEvent(hc.GinContext, err.Error(), "stream_error", "stream_failed")
-		return protocol.NewUsageStat(inputTokens, outputTokens), err
+		return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), err
 	}
 
 	if err := injectGuardrailsBlock(hc.GinContext, false); err != nil {
@@ -90,26 +95,24 @@ func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNe
 
 	SendFinishEvent(hc.GinContext)
 
-	return protocol.NewUsageStat(inputTokens, outputTokens), nil
+	return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 }
 
 // HandleAnthropicV1BetaStream handles Anthropic v1 beta streaming response.
 // Returns (UsageStat, error)
-func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion]) (protocol.UsageStat, error) {
+func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion]) (*protocol.TokenUsage, error) {
 	defer streamResp.Close()
 
 	hc.SetupSSEHeaders()
 
-	flusher, ok := hc.GinContext.Writer.(http.Flusher)
-	if !ok {
-		return protocol.ZeroUsageStat(), errors.New("streaming not supported")
-	}
-
-	var inputTokens, outputTokens int
+	var inputTokens, outputTokens, cacheTokens int
 	var hasUsage bool
 
 	err := hc.ProcessStream(
 		func() (bool, error, interface{}) {
+			if streamResp.Err() != nil {
+				return false, streamResp.Err(), nil
+			}
 			if !streamResp.Next() {
 				return false, nil, nil
 			}
@@ -119,7 +122,10 @@ func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaM
 		},
 		func(event interface{}) error {
 			evt := event.(*anthropic.BetaRawMessageStreamEventUnion)
-			evt.Message.Model = anthropic.Model(hc.ResponseModel)
+			// Only set model for message_start events, as other events don't have a message field
+			if evt.Type == "message_start" {
+				evt.Message.Model = anthropic.Model(hc.ResponseModel)
+			}
 
 			if evt.Usage.InputTokens > 0 {
 				inputTokens = int(evt.Usage.InputTokens)
@@ -127,6 +133,10 @@ func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaM
 			}
 			if evt.Usage.OutputTokens > 0 {
 				outputTokens = int(evt.Usage.OutputTokens)
+				hasUsage = true
+			}
+			if evt.Usage.CacheReadInputTokens > 0 {
+				cacheTokens = int(evt.Usage.CacheReadInputTokens)
 				hasUsage = true
 			}
 
@@ -150,13 +160,13 @@ func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaM
 		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
 			logrus.Debug("Anthropic v1 beta stream canceled by client")
 			if !hasUsage {
-				return protocol.ZeroUsageStat(), nil
+				return protocol.ZeroTokenUsage(), nil
 			}
-			return protocol.NewUsageStat(inputTokens, outputTokens), nil
+			return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 		}
 
 		MarshalAndSendErrorEvent(hc.GinContext, err.Error(), "stream_error", "stream_failed")
-		return protocol.NewUsageStat(inputTokens, outputTokens), err
+		return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), err
 	}
 
 	if err := injectGuardrailsBlock(hc.GinContext, true); err != nil {
@@ -165,7 +175,7 @@ func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaM
 
 	SendFinishEvent(hc.GinContext)
 
-	return protocol.NewUsageStat(inputTokens, outputTokens), nil
+	return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 }
 
 func toEventMap(evt interface{}, eventType string) (map[string]interface{}, error) {

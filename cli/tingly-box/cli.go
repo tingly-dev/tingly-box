@@ -110,15 +110,17 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 
 	// Add subcommands with initialized appManager
-	rootCmd.AddCommand(command.AddCommand(appManager))
-	rootCmd.AddCommand(command.ListCommand(appManager))
-	rootCmd.AddCommand(command.DeleteCommand(appManager))
+	rootCmd.AddCommand(command.AgentCommand(appManager))
+	rootCmd.AddCommand(command.ExportCommand(appManager))
+	rootCmd.AddCommand(command.ProviderCommand(appManager))
 	rootCmd.AddCommand(command.ImportCommand(appManager))
+	rootCmd.AddCommand(command.OAuthCommand(appManager).(*cobra.Command))
 	rootCmd.AddCommand(command.StartCommand(appManager))
 	rootCmd.AddCommand(command.StopCommand(appManager))
 	rootCmd.AddCommand(command.RestartCommand(appManager))
 	rootCmd.AddCommand(command.StatusCommand(appManager))
-	rootCmd.AddCommand(command.RemoteCoderCommand(appManager))
+	rootCmd.AddCommand(command.OpenCommand(appManager))
+	rootCmd.AddCommand(command.RemoteCommand(appManager))
 	rootCmd.AddCommand(command.QuickstartCommand(appManager))
 }
 

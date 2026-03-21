@@ -249,6 +249,41 @@ func (b *Bot) EditMessageWithKeyboard(ctx interface{}, chatID string, messageID 
 	return nil
 }
 
+// RemoveMessageKeyboard removes the inline keyboard from a message
+func (b *Bot) RemoveMessageKeyboard(ctx interface{}, chatID string, messageID string) error {
+	if err := b.EnsureReady(); err != nil {
+		return err
+	}
+
+	// Parse chat ID
+	chatIDInt, err := strconv.ParseInt(chatID, 10, 64)
+	if err != nil {
+		return core.NewInvalidTargetError(core.PlatformTelegram, chatID, "invalid chat ID")
+	}
+
+	// Parse message ID
+	msgIDInt, err := strconv.Atoi(messageID)
+	if err != nil {
+		return core.NewInvalidTargetError(core.PlatformTelegram, messageID, "invalid message ID")
+	}
+
+	// Create edit config with empty inline keyboard to remove existing keyboard
+	editConfig := tgbotapi.NewEditMessageReplyMarkup(
+		chatIDInt, msgIDInt,
+		tgbotapi.InlineKeyboardMarkup{
+			InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{},
+		},
+	)
+
+	_, err = b.api.Send(editConfig)
+	if err != nil {
+		return core.WrapError(err, core.PlatformTelegram, core.ErrPlatformError)
+	}
+
+	b.UpdateLastActivity()
+	return nil
+}
+
 // DeleteMessage deletes a message
 func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 	if err := b.EnsureReady(); err != nil {
@@ -340,21 +375,26 @@ func (b *Bot) sendText(ctx context.Context, chatID int64, opts *core.SendMessage
 		return nil, err
 	}
 
-	chunks := b.ChunkText(opts.Text)
+	var parseMode string
+	var text string = opts.Text
+	// Set parse mode
+	if opts.ParseMode != "" {
+		switch opts.ParseMode {
+		case core.ParseModeMarkdown:
+			parseMode = tgbotapi.ModeMarkdown
+			text = tgbotapi.EscapeText(parseMode, text)
+		case core.ParseModeHTML:
+			parseMode = tgbotapi.ModeHTML
+			text = tgbotapi.EscapeText(parseMode, text)
+		}
+	}
+
+	chunks := b.ChunkText(text)
 
 	var lastResult *core.SendResult
 	for _, chunk := range chunks {
 		msg := tgbotapi.NewMessage(chatID, chunk)
-
-		// Set parse mode
-		if opts.ParseMode != "" {
-			switch opts.ParseMode {
-			case core.ParseModeMarkdown:
-				msg.ParseMode = tgbotapi.ModeMarkdown
-			case core.ParseModeHTML:
-				msg.ParseMode = tgbotapi.ModeHTML
-			}
-		}
+		msg.ParseMode = parseMode
 
 		// Set reply to
 		if opts.ReplyTo != "" {

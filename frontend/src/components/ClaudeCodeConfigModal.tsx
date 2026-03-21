@@ -1,7 +1,8 @@
 import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Link, Tab, Tabs, Typography } from '@mui/material';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import CodeBlock from './CodeBlock';
+import { isFullEdition } from '@/utils/edition';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -9,18 +10,9 @@ interface ClaudeCodeConfigModalProps {
     open: boolean;
     onClose: () => void;
     configMode: ConfigMode;
-    // Settings.json scripts
-    generateSettingsConfig: () => string;
-    generateSettingsScriptWindows: () => string;
-    generateSettingsScriptUnix: () => string;
-    // .claude.json scripts
-    generateClaudeJsonConfig: () => string;
-    generateScriptWindows: () => string;
-    generateScriptUnix: () => string;
-    // Status line scripts
-    generateStatusLineConfig?: () => string;
-    generateStatusLineScriptWindows?: () => string;
-    generateStatusLineScriptUnix?: () => string;
+    baseUrl: string;
+    token: string;
+    rules: any[];
     copyToClipboard: (text: string, label: string) => Promise<void>;
     // Apply handlers
     onApply?: () => Promise<void>;
@@ -30,19 +22,44 @@ interface ClaudeCodeConfigModalProps {
 
 type ScriptTab = 'json' | 'windows' | 'unix';
 
+// Helper to generate common Node.js script for writing config files
+const generateNodeScript = (settingsPath: string, envConfig: Record<string, any>) => {
+    return `const fs = require("fs");
+const path = require("path");
+const os = require("os");
+
+const homeDir = os.homedir();
+const targetPath = path.join(homeDir, "${settingsPath}");
+
+// Create directory if needed
+const targetDir = path.dirname(targetPath);
+if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+}
+
+const config = ${JSON.stringify(envConfig, null, 4)};
+
+let existing = {};
+if (fs.existsSync(targetPath)) {
+    const content = fs.readFileSync(targetPath, "utf-8");
+    try { existing = JSON.parse(content); } catch (e) {}
+}
+
+const merged = settingsPath.includes("settings.json")
+    ? { ...existing, env: config }
+    : { ...existing, ...config };
+
+fs.writeFileSync(targetPath, JSON.stringify(merged, null, 2));
+console.log("Config written to", targetPath);`;
+};
+
 const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     open,
     onClose,
     configMode,
-    generateSettingsConfig,
-    generateSettingsScriptWindows,
-    generateSettingsScriptUnix,
-    generateClaudeJsonConfig,
-    generateScriptWindows,
-    generateScriptUnix,
-    generateStatusLineConfig,
-    generateStatusLineScriptWindows,
-    generateStatusLineScriptUnix,
+    baseUrl,
+    token,
+    rules,
     copyToClipboard,
     onApply,
     onApplyWithStatusLine,
@@ -52,6 +69,179 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     const [settingsTab, setSettingsTab] = React.useState<ScriptTab>('json');
     const [claudeJsonTab, setClaudeJsonTab] = React.useState<ScriptTab>('json');
     const [statusLineTab, setStatusLineTab] = React.useState<ScriptTab>('json');
+
+    // Memoized configuration generators
+    const {
+        claudeCodeBaseUrl,
+        modelForVariant,
+        subagentModel,
+        settingsEnvConfig,
+        claudeJsonConfig,
+    } = React.useMemo(() => {
+        const claudeCodeBaseUrl = `${baseUrl}/tingly/claude_code`;
+
+        const getModelForVariant = (variant: string): string => {
+            if (configMode === 'unified') {
+                return rules[0]?.request_model || '';
+            }
+            const rule = rules.find((r: any) => r?.uuid === `built-in-cc-${variant}`);
+            return rule?.request_model || '';
+        };
+
+        const subagentModel = configMode === 'unified'
+            ? (rules[0]?.request_model || '')
+            : (getModelForVariant('subagent') || 'tingly/cc-subagent');
+
+        // Generate env config for settings.json
+        const settingsEnvConfig = configMode === 'unified'
+            ? {
+                ANTHROPIC_MODEL: rules[0]?.request_model,
+                ANTHROPIC_DEFAULT_HAIKU_MODEL: rules[0]?.request_model,
+                ANTHROPIC_DEFAULT_OPUS_MODEL: rules[0]?.request_model,
+                ANTHROPIC_DEFAULT_SONNET_MODEL: rules[0]?.request_model,
+                CLAUDE_CODE_SUBAGENT_MODEL: subagentModel,
+                DISABLE_TELEMETRY: "1",
+                DISABLE_ERROR_REPORTING: "1",
+                CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+                API_TIMEOUT_MS: "3000000",
+                ANTHROPIC_AUTH_TOKEN: token,
+                ANTHROPIC_BASE_URL: claudeCodeBaseUrl,
+            }
+            : {
+                ANTHROPIC_MODEL: getModelForVariant('default'),
+                ANTHROPIC_DEFAULT_HAIKU_MODEL: getModelForVariant('haiku'),
+                ANTHROPIC_DEFAULT_OPUS_MODEL: getModelForVariant('opus'),
+                ANTHROPIC_DEFAULT_SONNET_MODEL: getModelForVariant('sonnet'),
+                CLAUDE_CODE_SUBAGENT_MODEL: subagentModel,
+                DISABLE_TELEMETRY: "1",
+                DISABLE_ERROR_REPORTING: "1",
+                CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+                API_TIMEOUT_MS: "3000000",
+                ANTHROPIC_AUTH_TOKEN: token,
+                ANTHROPIC_BASE_URL: claudeCodeBaseUrl,
+            };
+
+        const claudeJsonConfig = { hasCompletedOnboarding: true };
+
+        return { claudeCodeBaseUrl, modelForVariant: getModelForVariant, subagentModel, settingsEnvConfig, claudeJsonConfig };
+    }, [configMode, baseUrl, token, rules]);
+
+    // Generate settings.json content
+    const generateSettingsConfig = React.useCallback(() => {
+        return JSON.stringify({ env: settingsEnvConfig }, null, 2);
+    }, [settingsEnvConfig]);
+
+    // Generate settings.json scripts
+    const generateSettingsScriptWindows = React.useCallback(() => {
+        const nodeCode = generateNodeScript('.claude/settings.json', settingsEnvConfig);
+        return `# PowerShell - Run in PowerShell
+@"
+${nodeCode}
+"@ | node`;
+    }, [settingsEnvConfig]);
+
+    const generateSettingsScriptUnix = React.useCallback(() => {
+        const nodeCode = generateNodeScript('.claude/settings.json', settingsEnvConfig);
+        return `# Bash - Run in terminal
+node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
+    }, [settingsEnvConfig]);
+
+    // Generate .claude.json content
+    const generateClaudeJsonConfig = React.useCallback(() => {
+        return JSON.stringify(claudeJsonConfig, null, 2);
+    }, [claudeJsonConfig]);
+
+    // Generate .claude.json scripts
+    const generateScriptWindows = React.useCallback(() => {
+        const nodeCode = generateNodeScript('.claude.json', claudeJsonConfig);
+        return `# PowerShell - Run in PowerShell
+@"
+${nodeCode}
+"@ | node`;
+    }, [claudeJsonConfig]);
+
+    const generateScriptUnix = React.useCallback(() => {
+        const nodeCode = generateNodeScript('.claude.json', claudeJsonConfig);
+        return `# Bash - Run in terminal
+node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
+    }, [claudeJsonConfig]);
+
+    // Status line config (TODO: implement when script is ready)
+    const generateStatusLineConfig = React.useCallback(() => {
+        const scriptPath = '~/.claude/tingly-statusline.sh';
+        return JSON.stringify({
+            statusLine: {
+                type: 'command',
+                command: scriptPath
+            }
+        }, null, 2);
+    }, []);
+
+    // Status line scripts (WIP - placeholder download URLs)
+    const generateStatusLineScriptWindows = React.useCallback(() => {
+        const downloadUrl = "https://github.com/your-repo/tingly-statusline/raw/main/tingly-statusline.ps1";
+        const nodeCode = `const fs = require("fs");
+const path = require("path");
+const os = require("os");
+const https = require("https");
+
+const homeDir = os.homedir();
+const statusLineDir = path.join(homeDir, ".claude", "scripts");
+const statusLinePath = path.join(statusLineDir, "tingly-statusline.ps1");
+
+if (!fs.existsSync(statusLineDir)) {
+    fs.mkdirSync(statusLineDir, { recursive: true });
+}
+
+const file = fs.createWriteStream(statusLinePath);
+https.get("${downloadUrl}", (response) => {
+    response.pipe(file);
+    file.on('finish', () => {
+        file.close();
+        console.log("Status line script installed to:", statusLinePath);
+        console.log("Add this to your PowerShell profile:\\n. ~/.claude/scripts/tingly-statusline.ps1");
+    });
+}).on('error', (err) => {
+    fs.unlink(statusLinePath, () => {});
+    console.error("Error downloading status line script:", err.message);
+});`;
+        return `# PowerShell - Run in PowerShell
+@"
+${nodeCode}
+"@ | node`;
+    }, []);
+
+    const generateStatusLineScriptUnix = React.useCallback(() => {
+        const downloadUrl = "https://github.com/your-repo/tingly-statusline/raw/main/tingly-statusline.sh";
+        const nodeCode = `const fs = require("fs");
+const path = require("path");
+const os = require("os");
+const https = require("https");
+
+const homeDir = os.homedir();
+const statusLineDir = path.join(homeDir, ".claude", "scripts");
+const statusLinePath = path.join(statusLineDir, "tingly-statusline.sh");
+
+if (!fs.existsSync(statusLineDir)) {
+    fs.mkdirSync(statusLineDir, { recursive: true });
+}
+
+const file = fs.createWriteStream(statusLinePath);
+https.get("${downloadUrl}", (response) => {
+    response.pipe(file);
+    file.on('finish', () => {
+        file.close();
+        fs.chmodSync(statusLinePath, '755');
+        console.log("Status line script installed to:", statusLinePath);
+        console.log("Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):\\nsource ~/.claude/scripts/tingly-statusline.sh");
+    });
+}).on('error', (err) => {
+    fs.unlink(statusLinePath, () => {});
+    console.error("Error downloading status line script:", err.message);
+});`;
+        return `# Bash - Run in terminal
+node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
+    }, []);
 
     const handleApplyClick = () => {
         if (onApply) {
@@ -317,7 +507,8 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                 <Button onClick={onClose} color="inherit">
                     {t('common.cancel')}
                 </Button>
-                {onApply && (
+                {/* Hide Apply buttons in lite edition */}
+                {isFullEdition && onApply && (
                     <Button
                         onClick={handleApplyClick}
                         variant="contained"
@@ -327,7 +518,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                         {t('claudeCode.quickApply')}
                     </Button>
                 )}
-                {onApplyWithStatusLine && (
+                {isFullEdition && onApplyWithStatusLine && (
                     <Button
                         onClick={handleApplyWithStatusLineClick}
                         variant="contained"

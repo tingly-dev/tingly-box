@@ -5,26 +5,14 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3/responses"
-
-	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/openai/openai-go/v3/shared"
 )
-
-// ConvertAnthropicBetaToResponsesRequestWithProvider converts Anthropic beta request to OpenAI Responses API format
-// and applies provider-specific transformations
-func ConvertAnthropicBetaToResponsesRequestWithProvider(
-	anthropicReq *anthropic.BetaMessageNewParams,
-	provider *typ.Provider,
-	model string,
-) responses.ResponseNewParams {
-	responsesReq := ConvertAnthropicBetaToResponsesRequest(anthropicReq)
-	responsesReq.Model = model
-	return responsesReq
-}
 
 // ConvertAnthropicBetaToResponsesRequest converts Anthropic beta request to OpenAI Responses API format
 // The Responses API has a different structure than Chat Completions
 func ConvertAnthropicBetaToResponsesRequest(anthropicReq *anthropic.BetaMessageNewParams) responses.ResponseNewParams {
 	params := responses.ResponseNewParams{}
+	params.Model = shared.ResponsesModel(anthropicReq.Model)
 
 	// Convert system messages to Instructions (system/developer role)
 	if len(anthropicReq.System) > 0 {

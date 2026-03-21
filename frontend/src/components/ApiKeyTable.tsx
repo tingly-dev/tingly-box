@@ -1,9 +1,12 @@
 import { ApiStyleBadge } from '@/components/ApiStyleBadge.tsx';
 import ModelListDialog from '@/components/ModelListDialog';
+import ProviderExportMenu from '@/components/ProviderExportMenu';
+import { exportProvider, exportProviderAsBase64ToClipboard, exportProviderAsJsonlToClipboard } from '@/components/rule-card/utils';
 import { Cancel, ContentCopy, Delete, Edit, ListAlt, Route, Visibility } from '@mui/icons-material';
 import {
     Box,
     Button,
+    Divider,
     FormControlLabel,
     IconButton,
     Modal,
@@ -19,7 +22,8 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import { useState } from 'react';
+import type { ExportFormat } from '@/components/rule-card/utils';
+import {useCallback, useState} from 'react';
 import api from '../services/api';
 import type { Provider } from '../types/provider';
 
@@ -28,6 +32,7 @@ interface ApiKeyTableProps {
     onEdit?: (providerUuid: string) => void;
     onToggle?: (providerUuid: string) => void;
     onDelete?: (providerUuid: string) => void;
+    onNotification?: (message: string, severity: 'success' | 'error') => void;
 }
 
 interface TokenModalState {
@@ -48,7 +53,7 @@ interface ModelListDialogState {
     provider: Provider | null;
 }
 
-const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps) => {
+const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification }: ApiKeyTableProps) => {
     const [tokenModal, setTokenModal] = useState<TokenModalState>({
         open: false,
         providerName: '',
@@ -151,6 +156,24 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
         setModelListDialog({ open: false, provider: null });
     };
 
+    const handleExportProvider = useCallback(async (provider: Provider, format: ExportFormat) => {
+        await exportProvider(provider, format, (message, severity) => {
+            onNotification?.(message, severity);
+        });
+    }, [onNotification]);
+
+    const handleCopyProviderBase64 = useCallback(async (provider: Provider) => {
+        await exportProviderAsBase64ToClipboard(provider, (message, severity) => {
+            onNotification?.(message, severity);
+        });
+    }, [onNotification]);
+
+    const handleCopyProviderJsonl = useCallback(async (provider: Provider) => {
+        await exportProviderAsJsonlToClipboard(provider, (message, severity) => {
+            onNotification?.(message, severity);
+        });
+    }, [onNotification]);
+
     return (
         <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
             <Table>
@@ -162,8 +185,7 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                         <TableCell sx={{ fontWeight: 600, minWidth: 120, maxWidth: 120 }}>API Base URL</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120, maxWidth: 120 }}>API Key</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 80 }}>Proxy</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Model List</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Actions</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 240 }}>Actions</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -253,26 +275,27 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                                     </Typography>
                                 )}
                             </TableCell>
-                            {/* Model List */}
-                            <TableCell>
-                                <Button
-                                    variant="outlined"
-                                    size="small"
-                                    startIcon={<ListAlt />}
-                                    onClick={() => handleModelListClick(provider.uuid)}
-                                    disabled={!provider.enabled}
-                                    sx={{
-                                        textTransform: 'none',
-                                        borderRadius: 1.5,
-                                        fontSize: '0.8rem',
-                                    }}
-                                >
-                                    Models
-                                </Button>
-                            </TableCell>
                             {/* Actions */}
                             <TableCell>
-                                <Stack direction="row" spacing={0.5}>
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 0.5,
+                                        border: 1,
+                                        borderColor: 'divider',
+                                        borderRadius: 1.5,
+                                        p: 0.5,
+                                        pr: 1,
+                                        width: 240,
+                                    }}
+                                >
+                                    <ProviderExportMenu
+                                        provider={provider}
+                                        onExport={handleExportProvider}
+                                        onCopyJsonl={handleCopyProviderJsonl}
+                                        onCopyBase64={handleCopyProviderBase64}
+                                    />
                                     {onEdit && (
                                         <Tooltip title="Edit">
                                             <IconButton size="small" color="primary" onClick={() => onEdit(provider.uuid)}>
@@ -287,7 +310,24 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                                             </IconButton>
                                         </Tooltip>
                                     )}
-                                </Stack>
+                                    <Divider orientation="vertical" flexItem />
+                                    <Button
+                                        variant="text"
+                                        size="small"
+                                        startIcon={<ListAlt />}
+                                        onClick={() => handleModelListClick(provider.uuid)}
+                                        disabled={!provider.enabled}
+                                        sx={{
+                                            textTransform: 'none',
+                                            fontSize: '0.75rem',
+                                            minWidth: 'auto',
+                                            px: 1,
+                                            color: 'text.primary',
+                                        }}
+                                    >
+                                        Models
+                                    </Button>
+                                </Box>
                             </TableCell>
                         </TableRow>
                     ))}

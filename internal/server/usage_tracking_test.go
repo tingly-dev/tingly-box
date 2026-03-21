@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"sync/atomic"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -122,4 +123,43 @@ func TestTrackUsageFromContext_DoesNotPanic(t *testing.T) {
 			s.trackUsageFromContext(c, tt.input, tt.output, tt.err)
 		})
 	}
+}
+
+func TestTrackUsageFromContext_ReportsEnterpriseRateLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	var called int32
+	var gotKeyPrefix, gotProvider, gotScenario, gotUser string
+
+	SetEnterpriseRateLimitReporter(func(_ context.Context, keyPrefix, providerID, scenario, userID string) error {
+		atomic.AddInt32(&called, 1)
+		gotKeyPrefix = keyPrefix
+		gotProvider = providerID
+		gotScenario = scenario
+		gotUser = userID
+		return nil
+	})
+	defer SetEnterpriseRateLimitReporter(nil)
+
+	c, _ := gin.CreateTestContext(nil)
+	req, _ := http.NewRequest(http.MethodPost, "/openai/v1/chat/completions", nil)
+	c.Request = req
+
+	rule := &typ.Rule{UUID: "r1"}
+	provider := &typ.Provider{UUID: "p1", Name: "provider-1"}
+	SetTrackingContext(c, rule, provider, "tingly/cc", "tingly/cc", false)
+	c.Set("client_id", "enterprise_access_token")
+	c.Set("enterprise_key_prefix", "sk-tbe-12345678")
+	c.Set("enterprise_user_id", "u1")
+
+	s := &Server{}
+	s.trackUsageFromContext(c, 0, 0, errors.New("upstream returned 429 rate limit"))
+
+	if atomic.LoadInt32(&called) != 1 {
+		t.Fatalf("expected reporter called once, got %d", atomic.LoadInt32(&called))
+	}
+	assert.Equal(t, "sk-tbe-12345678", gotKeyPrefix)
+	assert.Equal(t, "p1", gotProvider)
+	assert.Equal(t, "openai", gotScenario)
+	assert.Equal(t, "u1", gotUser)
 }

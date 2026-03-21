@@ -19,18 +19,22 @@ const Login = lazy(() => import('./pages/Login'));
 const Guiding = lazy(() => import('./pages/./Guiding'));
 const UseOpenAIPage = lazy(() => import('./pages/scenario/UseOpenAIPage'));
 const UseAnthropicPage = lazy(() => import('./pages/scenario/UseAnthropicPage'));
+const UseCodexPage = lazy(() => import('./pages/scenario/UseCodexPage'));
 const UseClaudeCodePage = lazy(() => import('./pages/scenario/UseClaudeCodePage'));
 const UseAgentPage = lazy(() => import('./pages/scenario/UseAgentPage'));
 const UseOpenCodePage = lazy(() => import('./pages/scenario/UseOpenCodePage'));
 const UseXcodePage = lazy(() => import('./pages/scenario/UseXcodePage'));
+const UseVSCodePage = lazy(() => import('./pages/scenario/UseVSCodePage'));
 const CredentialPage = lazy(() => import('./pages/CredentialPage'));
 const System = lazy(() => import('./pages/System'));
+const LogsPage = lazy(() => import('./pages/system/LogsPage'));
 const GuardrailsPage = lazy(() => import('./pages/GuardrailsPage'));
 const GuardrailsRulesPage = lazy(() => import('./pages/guardrails/RulesPage'));
 const GuardrailsCredentialsPage = lazy(() => import('./pages/guardrails/CredentialsPage'));
 const GuardrailsMarketPage = lazy(() => import('./pages/guardrails/MarketPage'));
 const GuardrailsHistoryPage = lazy(() => import('./pages/guardrails/HistoryPage'));
 const DashboardPage = lazy(() => import('./pages/./DashboardPage'));
+const OverviewPage = lazy(() => import('./pages/overview/OverviewPage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
 
 // Prompt pages
@@ -273,58 +277,66 @@ function AppContent() {
         <Suspense fallback={<PageLoader />}>
             <Routes>
                 <Route path="/login" element={<Login />} />
+                {/* Protected routes with Layout */}
                 <Route
-                    path="/*"
                     element={
                         <ProtectedRoute>
-                            <Layout>
-                                <Suspense fallback={<PageLoader />}>
-                                    <Routes>
-                                        <Route path="/" element={<Navigate to="/dashboard/7d" replace />} />
-                                        {/* Function panel routes */}
-                                        <Route path="/use-openai" element={<UseOpenAIPage />} />
-                                        <Route path="/use-anthropic" element={<UseAnthropicPage />} />
-                                        <Route path="/use-claude-code" element={<UseClaudeCodePage />} />
-                                        <Route path="/use-agent" element={<UseAgentPage />} />
-                                        <Route path="/use-opencode" element={<UseOpenCodePage />} />
-                                        <Route path="/use-xcode" element={<UseXcodePage />} />
-                                        {/* Credential routes - new unified page */}
-                                        <Route path="/credentials" element={<CredentialPage />} />
-                                        <Route path="/credentials/:tab" element={<CredentialPage />} />
-                                        {/* Legacy redirects for backward compatibility */}
-                                        <Route path="/api-keys" element={<Navigate to="/credentials" replace />} />
-                                        <Route path="/oauth" element={<Navigate to="/credentials" replace />} />
-                                        {/* Other routes */}
-                                        <Route path="/system" element={<System />} />
-                                        <Route path="/logs" element={<Navigate to="/system" replace />} />
-                                        {/* Dashboard routes with time range */}
-                                        <Route path="/dashboard" element={<Navigate to="/dashboard/7d" replace />} />
-                                        <Route path="/dashboard/:timeRange" element={<DashboardPage />} />
-                                        <Route path="/model-test/:providerUuid" element={<ModelTestPage />} />
-                                        {/* Prompt routes */}
-                                        <Route path="/prompt/user" element={<UserPage />} />
-                                        <Route path="/prompt/skill" element={<SkillPage />} />
-                                        <Route path="/prompt/command" element={<CommandPage />} />
-                                        {/* Remote Control routes */}
-                                        <Route path="/remote-coder" element={<Navigate to="/remote-coder/chat" replace />} />
-                                        <Route path="/remote-coder/chat" element={<RemoteCoderPage />} />
-                                        <Route path="/remote-coder/sessions" element={<RemoteCoderSessionsPage />} />
-                                        {/* Remote Control routes */}
-                                        <Route path="/remote-control" element={<RemoteControlOverviewPage />} />
-                                        <Route path="/remote-control/bot" element={<BotPage />} />
-                                        <Route path="/remote-control/agent" element={<AgentPage />} />
-                                        {/* Guardrails */}
-                                        <Route path="/guardrails" element={<GuardrailsPage />} />
-                                        <Route path="/guardrails/rules" element={<GuardrailsRulesPage />} />
-                                        <Route path="/guardrails/credentials" element={<GuardrailsCredentialsPage />} />
-                                        <Route path="/guardrails/market" element={<GuardrailsMarketPage />} />
-                                        <Route path="/guardrails/history" element={<GuardrailsHistoryPage />} />
-                                    </Routes>
-                                </Suspense>
-                            </Layout>
+                            <Layout />
                         </ProtectedRoute>
                     }
-                />
+                >
+                    {/* Default redirect */}
+                    <Route index element={<Navigate to="/dashboard/7d" replace />} />
+                    {/* Function panel routes */}
+                    <Route path="/use-openai" element={<UseOpenAIPage />} />
+                    <Route path="/use-anthropic" element={<UseAnthropicPage />} />
+                    <Route path="/use-codex" element={<UseCodexPage />} />
+                    <Route path="/use-claude-code" element={<UseClaudeCodePage />} />
+                    <Route path="/use-agent" element={<UseAgentPage />} />
+                    <Route path="/use-opencode" element={<UseOpenCodePage />} />
+                    <Route path="/use-xcode" element={<UseXcodePage />} />
+                    <Route path="/use-vscode" element={<UseVSCodePage />} />
+                    {/* Credential routes - new unified page */}
+                    <Route path="/credentials" element={<CredentialPage />} />
+                    <Route path="/credentials/:tab" element={<CredentialPage />} />
+                    {/* Legacy redirects for backward compatibility */}
+                    <Route path="/api-keys" element={<Navigate to="/credentials" replace />} />
+                    <Route path="/oauth" element={<Navigate to="/credentials" replace />} />
+                    {/* Other routes */}
+                    <Route path="/system" element={<System />} />
+                    <Route path="/system/logs" element={<LogsPage />} />
+                    {/* Legacy redirects for backward compatibility */}
+                    <Route path="/system/http-logs" element={<Navigate to="/system/logs" replace />} />
+                    <Route path="/system/system-logs" element={<Navigate to="/system/logs" replace />} />
+                    <Route path="/logs" element={<Navigate to="/system/logs" replace />} />
+                    {/* Dashboard routes with time range */}
+                    <Route path="/dashboard" element={<Navigate to="/dashboard/7d" replace />} />
+                    <Route path="/dashboard/:timeRange" element={<DashboardPage />} />
+                    {/* Overview / Token Heatmap routes */}
+                    <Route path="/overview" element={<Navigate to="/overview/90d" replace />} />
+                    <Route path="/overview/:timeRange" element={<OverviewPage />} />
+                    <Route path="/model-test/:providerUuid" element={<ModelTestPage />} />
+                    {/* Prompt routes */}
+                    <Route path="/prompt/user" element={<UserPage />} />
+                    <Route path="/prompt/skill" element={<SkillPage />} />
+                    <Route path="/prompt/command" element={<CommandPage />} />
+                    {/* Remote Control routes */}
+                    <Route path="/remote-coder" element={<Navigate to="/remote-coder/chat" replace />} />
+                    <Route path="/remote-coder/chat" element={<RemoteCoderPage />} />
+                    <Route path="/remote-coder/sessions" element={<RemoteCoderSessionsPage />} />
+                    {/* Remote Control routes */}
+                    <Route path="/remote-control" element={<RemoteControlOverviewPage />} />
+                    <Route path="/remote-control/bot" element={<BotPage />} />
+                    <Route path="/remote-control/agent" element={<AgentPage />} />
+                    {/* Guardrails */}
+                    <Route path="/guardrails" element={<GuardrailsPage />} />
+                    <Route path="/guardrails/rules" element={<GuardrailsRulesPage />} />
+                    <Route path="/guardrails/credentials" element={<GuardrailsCredentialsPage />} />
+                    <Route path="/guardrails/market" element={<GuardrailsMarketPage />} />
+                    <Route path="/guardrails/history" element={<GuardrailsHistoryPage />} />
+                    {/* Catch-all redirect for unknown routes */}
+                    <Route path="*" element={<Navigate to="/dashboard/7d" replace />} />
+                </Route>
             </Routes>
         </Suspense>
     )

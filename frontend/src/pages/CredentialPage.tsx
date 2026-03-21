@@ -1,4 +1,4 @@
-import { Add, VpnKey } from '@mui/icons-material';
+import { Add, Upload, VpnKey } from '@mui/icons-material';
 import {
     Alert,
     Box,
@@ -15,6 +15,7 @@ import { PageLayout } from '@/components/PageLayout';
 import ProviderFormDialog from '@/components/ProviderFormDialog.tsx';
 import { type EnhancedProviderFormData } from '@/components/ProviderFormDialog.tsx';
 import UnifiedCard from '@/components/UnifiedCard';
+import ImportModal from '@/components/ImportModal';
 import { api } from '../services/api';
 import ApiKeyTable from '@/components/ApiKeyTable.tsx';
 import OAuthTable from '@/components/OAuthTable.tsx';
@@ -58,6 +59,10 @@ const CredentialPage = () => {
     const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
     const [oauthDetailProvider, setOAuthDetailProvider] = useState<any | null>(null);
     const [oauthDetailDialogOpen, setOAuthDetailDialogOpen] = useState(false);
+
+    // Import Dialog state
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [importing, setImporting] = useState(false);
 
     // URL param handling for auto-opening dialogs
     useEffect(() => {
@@ -171,7 +176,9 @@ const CredentialPage = () => {
                     api_style: protocol,
                     token: providerFormData.token,
                     no_key_required: (providerFormData as any).noKeyRequired || false,
+                    enabled: true,
                     proxy_url: (providerFormData as any).proxyUrl ?? '',
+                    auth_type: 'api_key',
                 };
 
                 const result = await api.addProvider(providerData);
@@ -230,7 +237,9 @@ const CredentialPage = () => {
                     api_style: protocol,
                     token: providerFormData.token,
                     no_key_required: (providerFormData as any).noKeyRequired || false,
+                    enabled: true,
                     proxy_url: (providerFormData as any).proxyUrl ?? '',
+                    auth_type: 'api_key',
                 };
 
                 const result = await api.addProvider(providerData, true);
@@ -325,6 +334,41 @@ const CredentialPage = () => {
         }
     };
 
+    // Import handlers
+    const handleImportClick = () => {
+        setShowImportModal(true);
+    };
+
+    const handleImportData = async (data: string) => {
+        setImporting(true);
+        try {
+            const result = await api.importProvider(data);
+            if (result.success) {
+                const providersCreated = result.data?.providers_created || 0;
+                const providersUsed = result.data?.providers_used || 0;
+                let message = 'Provider import completed';
+                if (providersCreated > 0) {
+                    message += `. ${providersCreated} new provider${providersCreated > 1 ? 's' : ''} created`;
+                }
+                if (providersUsed > 0) {
+                    message += `. ${providersUsed} existing provider${providersUsed > 1 ? 's' : ''} referenced`;
+                }
+                if (providersCreated === 0 && providersUsed === 0) {
+                    message = 'No providers found in import data';
+                }
+                showNotification(message, 'success');
+                setShowImportModal(false);
+                await loadProviders();
+            } else {
+                showNotification(`Import failed: ${result.error || 'Unknown error'}`, 'error');
+            }
+        } catch (err: any) {
+            showNotification(`Import failed: ${err?.message || 'Unknown error'}`, 'error');
+        } finally {
+            setImporting(false);
+        }
+    };
+
     // Derived state
     const { apiKeyProviders, oauthProviders, credentialCounts } = useMemo(() => {
         const apiKeys = providers.filter((p: any) => p.auth_type !== 'oauth');
@@ -349,10 +393,20 @@ const CredentialPage = () => {
                 rightAction={
                     <Stack direction="row" spacing={1}>
                         <Button
+                            variant="outlined"
+                            startIcon={<Upload />}
+                            onClick={handleImportClick}
+                            size="small"
+                            sx={{ minWidth: 110 }}
+                        >
+                            Import
+                        </Button>
+                        <Button
                             variant="contained"
                             startIcon={<VpnKey />}
                             onClick={handleAddOAuth}
                             size="small"
+                            sx={{ minWidth: 110 }}
                         >
                             Add OAuth
                         </Button>
@@ -361,6 +415,7 @@ const CredentialPage = () => {
                             startIcon={<Add />}
                             onClick={handleAddApiKey}
                             size="small"
+                            sx={{ minWidth: 110 }}
                         >
                             Add API Key
                         </Button>
@@ -388,6 +443,9 @@ const CredentialPage = () => {
                             onToggle={handleToggleProvider}
                             onDelete={handleDeleteProvider}
                             onRefreshToken={handleRefreshToken}
+                            onNotification={(message, severity) => {
+                                setSnackbar({ open: true, message, severity });
+                            }}
                         />
                     ) : (
                         <EmptyStateGuide
@@ -423,6 +481,9 @@ const CredentialPage = () => {
                             onEdit={handleEditProvider}
                             onToggle={handleToggleProvider}
                             onDelete={handleDeleteProvider}
+                            onNotification={(message, severity) => {
+                                setSnackbar({ open: true, message, severity });
+                            }}
                         />
                     ) : (
                         <EmptyStateGuide
@@ -475,6 +536,14 @@ const CredentialPage = () => {
                     showNotification('Provider updated successfully!', 'success');
                     loadProviders();
                 }}
+            />
+
+            {/* Import Modal */}
+            <ImportModal
+                open={showImportModal}
+                onClose={() => setShowImportModal(false)}
+                onImport={handleImportData}
+                loading={importing}
             />
 
             {/* Snackbar for notifications */}

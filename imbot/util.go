@@ -1,26 +1,102 @@
 package imbot
 
-// Platform message limits
-const (
-	TelegramMessageLimit = 4096
-	DiscordMessageLimit  = 2000
-	DingTalkMessageLimit = 20480 // 20KB
-	FeishuMessageLimit   = 30000
-	DefaultMessageLimit  = 4000
+import (
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/tingly-dev/tingly-box/imbot/internal/core"
 )
 
+// DefaultMessageLimit is a fallback value for unknown platforms
+const DefaultMessageLimit = 4000
+
 // GetMessageLimit returns the message length limit for each platform.
+// Deprecated: Use core.GetPlatformCapabilities(platform).TextLimit instead.
+// This function is kept for backward compatibility.
 func GetMessageLimit(platform Platform) int {
-	switch platform {
-	case PlatformTelegram:
-		return TelegramMessageLimit
-	case PlatformDiscord:
-		return DiscordMessageLimit
-	case PlatformDingTalk:
-		return DingTalkMessageLimit
-	case PlatformFeishu:
-		return FeishuMessageLimit
-	default:
-		return DefaultMessageLimit
+	caps := core.GetPlatformCapabilities(core.Platform(platform))
+	if caps != nil && caps.TextLimit > 0 {
+		return caps.TextLimit
 	}
+	return DefaultMessageLimit
+}
+
+// ChunkText splits text into chunks based on the platform's message limit.
+// It uses smart break-point detection to avoid breaking words in the middle.
+//
+// Parameters:
+//   - platform: The platform identifier (e.g., "telegram", "discord", "slack")
+//   - text: The text to chunk
+//
+// Returns:
+//   - []string: Array of text chunks, each within the platform's limit
+//
+// Example:
+//
+//	chunks := ChunkText("telegram", longText)
+//	for i, chunk := range chunks {
+//	    fmt.Printf("Chunk %d: %s\n", i+1, chunk)
+//	}
+func ChunkText(platform string, text string) []string {
+	caps := core.GetPlatformCapabilities(core.Platform(platform))
+	if caps == nil || caps.TextLimit <= 0 || len(text) <= caps.TextLimit {
+		return []string{text}
+	}
+
+	var chunks []string
+	remaining := text
+	limit := caps.TextLimit
+
+	for len(remaining) > limit {
+		breakPoint := findBreakPoint(remaining, limit)
+		chunks = append(chunks, remaining[:breakPoint])
+		remaining = remaining[breakPoint:]
+	}
+
+	if len(remaining) > 0 {
+		chunks = append(chunks, remaining)
+	}
+
+	return chunks
+}
+
+// findBreakPoint finds a good break point for chunking text.
+// It tries to break at newline first, then space, and falls back to hard break at limit.
+func findBreakPoint(text string, limit int) int {
+	// Try to break at newline
+	for i := limit - 1; i >= limit*7/10 && i >= 0; i-- {
+		if text[i] == '\n' {
+			return i + 1
+		}
+	}
+
+	// Try to break at space
+	for i := limit - 1; i >= limit*7/10 && i >= 0; i-- {
+		if text[i] == ' ' {
+			return i + 1
+		}
+	}
+
+	// Hard break at limit
+	return limit
+}
+
+// BuildTelegramActionKeyboard converts imbot.InlineKeyboardMarkup to tgbotapi.InlineKeyboardMarkup
+func BuildTelegramActionKeyboard(kb InlineKeyboardMarkup) tgbotapi.InlineKeyboardMarkup {
+	var rows [][]tgbotapi.InlineKeyboardButton
+	for _, row := range kb.InlineKeyboard {
+		var buttons []tgbotapi.InlineKeyboardButton
+		for _, btn := range row {
+			tgBtn := tgbotapi.InlineKeyboardButton{
+				Text: btn.Text,
+			}
+			if btn.CallbackData != "" {
+				tgBtn.CallbackData = &btn.CallbackData
+			}
+			if btn.URL != "" {
+				tgBtn.URL = &btn.URL
+			}
+			buttons = append(buttons, tgBtn)
+		}
+		rows = append(rows, buttons)
+	}
+	return tgbotapi.InlineKeyboardMarkup{InlineKeyboard: rows}
 }

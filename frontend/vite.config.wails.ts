@@ -39,56 +39,28 @@ export default defineConfig(({mode}) => {
         build: {
             rollupOptions: {
                 output: {
-                    // Optimized chunk splitting strategy
+                    // Optimized chunk splitting strategy - aligned with vite.config.ts
                     manualChunks: (id) => {
-                        if (!id.includes('node_modules/')) {
+                        if (!id.includes('node_modules')) {
                             return;
                         }
 
-                        // Core React vendors
-                        if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
-                            return 'react-vendor';
+                        // MUI packages - group together for better caching
+                        if (id.includes('@mui/material') || id.includes('@mui/system') || id.includes('@mui/utils')) {
+                            return 'mui-vendor';
                         }
-                        if (id.includes('node_modules/react-router-dom/')) {
-                            return 'router-vendor';
+                        if (id.includes('@mui/icons-material')) {
+                            return 'mui-icons-vendor';
                         }
-
-                        // MUI split by sub-package
-                        if (id.includes('node_modules/@mui/material/')) {
-                            return 'mui-material';
+                        // Charts/visualization - depends on react and d3
+                        if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-')) {
+                            return 'recharts-vendor';
                         }
-                        if (id.includes('node_modules/@mui/icons-material/')) {
-                            return 'mui-icons';
-                        }
-                        if (id.includes('node_modules/@mui/x-date-pickers/')) {
-                            return 'mui-pickers';
-                        }
-
-                        // Visualization
-                        if (id.includes('node_modules/recharts/') || id.includes('node_modules/d3-')) {
-                            return 'charts-vendor';
-                        }
-
-                        // Icon libraries
-                        if (id.includes('node_modules/@lobehub/icons-static-svg/')) {
-                            return 'lobehub-icons';
-                        }
-                        if (id.includes('node_modules/devicons-react/')) {
-                            return 'devicons';
-                        }
-
-                        // i18n
-                        if (id.includes('node_modules/i18next/') || id.includes('node_modules/react-i18next/')) {
-                            return 'i18n-vendor';
-                        }
-
-                        // Markdown
-                        if (id.includes('node_modules/@ant-design/x-markdown/')) {
-                            return 'markdown-vendor';
-                        }
+                        // Let Rollup handle remaining node_modules automatically
+                        return undefined;
                     },
                 },
-                maxParallelFileOps: 20,
+                maxParallelFileOps: 4,
             },
             chunkSizeWarningLimit: 500,
             sourcemap: mode !== 'production',

@@ -49,7 +49,7 @@ func NewErrorLogMiddleware(logPath string, maxSizeMB int) *ErrorLogMiddleware {
 	}
 
 	// Compile default filter expression
-	program, err := expr.Compile("StatusCode >= 400 && Path matches '^/api/'", expr.Env(FilterContext{}))
+	program, err := expr.Compile("StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')", expr.Env(FilterContext{}))
 	if err != nil {
 		logrus.Errorf("Failed to compile default filter expression: %v", err)
 	} else {
@@ -113,7 +113,7 @@ func (dm *ErrorLogMiddleware) SetFilterExpression(expression string) error {
 	defer dm.mu.Unlock()
 
 	if expression == "" {
-		expression = "StatusCode >= 400 && Path matches '^/api/'"
+		expression = "StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')"
 	}
 
 	program, err := expr.Compile(expression, expr.Env(FilterContext{}))

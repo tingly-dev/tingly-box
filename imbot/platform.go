@@ -96,7 +96,31 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 	"feishu": {
 		Platform:    "feishu",
 		AuthType:    "oauth",
-		DisplayName: "Feishu / Lark",
+		DisplayName: "Feishu",
+		Category:    "enterprise",
+		Fields: []FieldSpec{
+			{
+				Key:         "clientId",
+				Label:       "App ID",
+				Placeholder: "cli-your-app-id",
+				Required:    true,
+				Secret:      true,
+				HelperText:  "Also known as AppID or ClientId",
+			},
+			{
+				Key:         "clientSecret",
+				Label:       "App Secret",
+				Placeholder: "Your app secret",
+				Required:    true,
+				Secret:      true,
+				HelperText:  "Also known as AppSecret or ClientSecret",
+			},
+		},
+	},
+	"lark": {
+		Platform:    "lark",
+		AuthType:    "oauth",
+		DisplayName: "Lark",
 		Category:    "enterprise",
 		Fields: []FieldSpec{
 			{

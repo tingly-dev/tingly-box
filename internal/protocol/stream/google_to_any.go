@@ -88,7 +88,7 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 					},
 				},
 			}
-			sendOpenAIStreamChunk(c, chunk)
+			sendOpenAIStreamChunkForce(c, chunk)
 			hasStarted = true
 		}
 
@@ -117,7 +117,7 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 								},
 							},
 						}
-						sendOpenAIStreamChunk(c, chunk)
+						sendOpenAIStreamChunkForce(c, chunk)
 					}
 
 					// Handle function calls
@@ -151,7 +151,7 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 								},
 							},
 						}
-						sendOpenAIStreamChunk(c, chunk)
+						sendOpenAIStreamChunkForce(c, chunk)
 					}
 				}
 			}
@@ -189,7 +189,7 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 					}
 				}
 
-				sendOpenAIStreamChunk(c, chunk)
+				sendOpenAIStreamChunkForce(c, chunk)
 				// Send final [DONE] message
 				c.Writer.Write([]byte("data: [DONE]\n\n"))
 				flusher.Flush()
@@ -203,7 +203,7 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 
 // HandleGoogleToAnthropicStreamResponse processes Google streaming events and converts them to Anthropic format.
 // Returns UsageStat containing token usage information for tracking.
-func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*genai.GenerateContentResponse, error], responseModel string) (protocol.UsageStat, error) {
+func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*genai.GenerateContentResponse, error], responseModel string) (*protocol.TokenUsage, error) {
 	logrus.Info("Starting Google to Anthropic streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
@@ -227,7 +227,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		return protocol.ZeroUsageStat(), errors.New("streaming not supported by this connection")
+		return protocol.ZeroTokenUsage(), errors.New("streaming not supported by this connection")
 	}
 
 	// Generate message ID for Anthropic format
@@ -239,6 +239,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 		toolBlockIndex = -1
 		inputTokens    int64
 		outputTokens   int64
+		cacheTokens    int64
 	)
 
 	// Send message_start event first
@@ -266,7 +267,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 		select {
 		case <-c.Request.Context().Done():
 			logrus.Debug("Client disconnected, stopping Google to Anthropic stream")
-			return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), nil
+			return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
 		default:
 		}
 
@@ -274,7 +275,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 			// Check if it was a client cancellation
 			if errors.Is(err, context.Canceled) {
 				logrus.Debug("Google stream canceled by client")
-				return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), nil
+				return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
 			}
 			logrus.Errorf("Google stream error: %v", err)
 			errorEvent := map[string]interface{}{
@@ -286,7 +287,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 				},
 			}
 			sendAnthropicStreamEventFromG(c, "error", errorEvent, flusher)
-			return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), err
+			return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), err
 		}
 
 		// Process candidates
@@ -367,6 +368,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 				if googleResp.UsageMetadata != nil {
 					inputTokens = int64(googleResp.UsageMetadata.PromptTokenCount)
 					outputTokens = int64(googleResp.UsageMetadata.CandidatesTokenCount)
+					cacheTokens = int64(googleResp.UsageMetadata.CachedContentTokenCount)
 				}
 
 				// Send message_delta with stop reason and usage
@@ -387,7 +389,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 					"type": "message_stop",
 				}
 				sendAnthropicStreamEventFromG(c, "message_stop", messageStopEvent, flusher)
-				return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), nil
+				return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
 			}
 		}
 
@@ -395,10 +397,11 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 		if googleResp.UsageMetadata != nil {
 			inputTokens = int64(googleResp.UsageMetadata.PromptTokenCount)
 			outputTokens = int64(googleResp.UsageMetadata.CandidatesTokenCount)
+			cacheTokens = int64(googleResp.UsageMetadata.CachedContentTokenCount)
 		}
 	}
 
-	return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), nil
+	return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
 }
 
 // sendAnthropicStreamEventFromG helper function (rename to avoid duplicate)
@@ -416,7 +419,7 @@ func sendAnthropicStreamEventFromG(c *gin.Context, eventType string, eventData m
 
 // HandleGoogleToAnthropicBetaStreamResponse processes Google streaming events and converts them to Anthropic beta format.
 // Returns UsageStat containing token usage information for tracking.
-func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[*genai.GenerateContentResponse, error], responseModel string) (protocol.UsageStat, error) {
+func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[*genai.GenerateContentResponse, error], responseModel string) (*protocol.TokenUsage, error) {
 	logrus.Info("Starting Google to Anthropic beta streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
@@ -440,7 +443,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		return protocol.ZeroUsageStat(), errors.New("streaming not supported by this connection")
+		return protocol.ZeroTokenUsage(), errors.New("streaming not supported by this connection")
 	}
 
 	// Generate message ID for Anthropic beta format
@@ -452,6 +455,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 		toolBlockIndex = -1
 		inputTokens    int64
 		outputTokens   int64
+		cacheTokens    int64
 	)
 
 	// Send message_start event first
@@ -479,7 +483,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 		select {
 		case <-c.Request.Context().Done():
 			logrus.Debug("Client disconnected, stopping Google to Anthropic beta stream")
-			return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), nil
+			return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
 		default:
 		}
 
@@ -487,7 +491,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 			// Check if it was a client cancellation
 			if errors.Is(err, context.Canceled) {
 				logrus.Debug("Google stream canceled by client")
-				return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), nil
+				return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
 			}
 			logrus.Errorf("Google stream error: %v", err)
 			errorEvent := map[string]interface{}{
@@ -499,7 +503,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 				},
 			}
 			sendAnthropicBetaStreamEventFromG(c, "error", errorEvent, flusher)
-			return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), err
+			return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), err
 		}
 
 		// Process candidates
@@ -580,6 +584,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 				if googleResp.UsageMetadata != nil {
 					inputTokens = int64(googleResp.UsageMetadata.PromptTokenCount)
 					outputTokens = int64(googleResp.UsageMetadata.CandidatesTokenCount)
+					cacheTokens = int64(googleResp.UsageMetadata.CachedContentTokenCount)
 				}
 
 				// Send message_delta with stop reason and usage
@@ -616,7 +621,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 				// Send final simple data with type (without event, aka empty)
 				c.SSEvent("", map[string]interface{}{"type": eventTypeMessageStop})
 				flusher.Flush()
-				return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), nil
+				return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
 			}
 		}
 
@@ -624,10 +629,11 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 		if googleResp.UsageMetadata != nil {
 			inputTokens = int64(googleResp.UsageMetadata.PromptTokenCount)
 			outputTokens = int64(googleResp.UsageMetadata.CandidatesTokenCount)
+			cacheTokens = int64(googleResp.UsageMetadata.CachedContentTokenCount)
 		}
 	}
 
-	return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), nil
+	return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
 }
 
 // sendAnthropicBetaStreamEventFromG helper function for beta streaming

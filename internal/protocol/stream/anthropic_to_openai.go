@@ -13,6 +13,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
+	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 )
 
@@ -26,12 +27,7 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 			// Try to send an error event if possible
 			if c.Writer != nil {
 				c.Writer.WriteHeader(http.StatusInternalServerError)
-				c.SSEvent("", map[string]interface{}{
-					"error": map[string]interface{}{
-						"message": "Internal streaming error",
-						"type":    "internal_error",
-					},
-				})
+				sendOpenAIStreamError(c, "Internal streaming error", "internal_error")
 			}
 		}
 		// Ensure stream is always closed
@@ -59,6 +55,13 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 		inputTokens  int
 		outputTokens int
 		finished     bool
+		// Track tool call state for proper streaming
+		toolCallID   string
+		toolCallName string
+		toolCallArgs strings.Builder
+		hasToolCalls bool
+		// Track thinking state for extended thinking support
+		thinkingText strings.Builder
 	)
 
 	// Process the stream with context cancellation checking
@@ -81,50 +84,125 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 		// Handle different event types
 		switch event.Type {
 		case "message_start":
-			// Send initial chat completion chunk
-			chunk := map[string]interface{}{
-				"id":      chatID,
-				"object":  "chat.completion.chunk",
-				"created": created,
-				"model":   responseModel,
-				"choices": []map[string]interface{}{
+			// Send initial chat completion chunk with role
+			chunk := openai.ChatCompletionChunk{
+				ID:      chatID,
+				Created: created,
+				Model:   responseModel,
+				Choices: []openai.ChatCompletionChunkChoice{
 					{
-						"index":         0,
-						"delta":         map[string]interface{}{"role": "assistant"},
-						"finish_reason": nil,
+						Index: 0,
+						Delta: openai.ChatCompletionChunkChoiceDelta{
+							Role: "assistant",
+						},
 					},
 				},
 			}
 			sendOpenAIStreamChunk(c, chunk)
 
 		case "content_block_start":
-			// Content block starting (usually text)
+			// Content block starting
 			if event.ContentBlock.Type == "text" {
-				// Reset content builder for new block
+				// Reset content builder for new text block
 				contentText.Reset()
-			}
+			} else if event.ContentBlock.Type == "tool_use" {
+				// Tool use block starting - send first tool_call chunk
+				toolCallID = event.ContentBlock.ID
+				toolCallName = event.ContentBlock.Name
+				toolCallArgs.Reset()
+				hasToolCalls = true
 
-		case "content_block_delta":
-			// Text delta - send as OpenAI chunk
-			if event.Delta.Type == "text_delta" && event.Delta.Text != "" {
-				text := event.Delta.Text
-				contentText.WriteString(text)
-
-				chunk := map[string]interface{}{
-					"id":      chatID,
-					"object":  "chat.completion.chunk",
-					"created": created,
-					"model":   responseModel,
-					"choices": []map[string]interface{}{
+				// Send initial tool_call chunk with id, type, and name
+				chunk := openai.ChatCompletionChunk{
+					ID:      chatID,
+					Created: created,
+					Model:   responseModel,
+					Choices: []openai.ChatCompletionChunkChoice{
 						{
-							"index":         0,
-							"delta":         map[string]interface{}{"content": text},
-							"finish_reason": nil,
+							Index: 0,
+							Delta: openai.ChatCompletionChunkChoiceDelta{
+								ToolCalls: []openai.ChatCompletionChunkChoiceDeltaToolCall{
+									{
+										Index: 0,
+										ID:    toolCallID,
+										Type:  "function",
+										Function: openai.ChatCompletionChunkChoiceDeltaToolCallFunction{
+											Name:      toolCallName,
+											Arguments: "",
+										},
+									},
+								},
+							},
 						},
 					},
 				}
 				sendOpenAIStreamChunk(c, chunk)
+			} else if event.ContentBlock.Type == "thinking" {
+				// Thinking block starting - reset thinking builder
+				thinkingText.Reset()
+			} else if event.ContentBlock.Type == "redacted_thinking" {
+				// Redacted thinking - should be included as reasoning_content with placeholder
+				thinkingText.Reset()
+				thinkingText.WriteString("[REDACTED THINKING]")
 			}
+
+		case "content_block_delta":
+			// Text, tool arguments, or thinking delta - send as OpenAI chunk
+			if event.Delta.Type == "text_delta" && event.Delta.Text != "" {
+				text := event.Delta.Text
+				contentText.WriteString(text)
+
+				chunk := openai.ChatCompletionChunk{
+					ID:      chatID,
+					Created: created,
+					Model:   responseModel,
+					Choices: []openai.ChatCompletionChunkChoice{
+						{
+							Index: 0,
+							Delta: openai.ChatCompletionChunkChoiceDelta{
+								Content: text,
+							},
+						},
+					},
+				}
+				sendOpenAIStreamChunk(c, chunk)
+			} else if event.Delta.Type == "input_json_delta" && event.Delta.PartialJSON != "" {
+				// Tool call arguments delta
+				args := event.Delta.PartialJSON
+				toolCallArgs.WriteString(args)
+
+				// Send subsequent tool_call chunks with only arguments (no id, no name, no type)
+				chunk := openai.ChatCompletionChunk{
+					ID:      chatID,
+					Created: created,
+					Model:   responseModel,
+					Choices: []openai.ChatCompletionChunkChoice{
+						{
+							Index: 0,
+							Delta: openai.ChatCompletionChunkChoiceDelta{
+								ToolCalls: []openai.ChatCompletionChunkChoiceDeltaToolCall{
+									{
+										Index: 0,
+										Function: openai.ChatCompletionChunkChoiceDeltaToolCallFunction{
+											Arguments: args,
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+				sendOpenAIStreamChunk(c, chunk)
+			} else if event.Delta.Type == "thinking_delta" && event.Delta.Thinking != "" {
+				// Thinking content delta - convert to OpenAI's reasoning_content format
+				thinking := event.Delta.Thinking
+				thinkingText.WriteString(thinking)
+
+				// Send as reasoning_content - use custom chunk creation since reasoning_content is not a standard field
+				chunk := createReasoningContentChunk(chatID, created, responseModel, thinking)
+				sendOpenAIStreamChunk(c, chunk)
+			}
+			// Note: signature_delta is intentionally ignored as OpenAI doesn't have an equivalent
 
 		case "content_block_stop":
 			// Content block finished - no specific action needed
@@ -138,27 +216,40 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 			}
 
 		case "message_stop":
-			// Send final chunk with finish_reason and usage
-			chunk := map[string]interface{}{
-				"id":      chatID,
-				"object":  "chat.completion.chunk",
-				"created": created,
-				"model":   responseModel,
-				"choices": []map[string]interface{}{
+			// Determine the correct finish_reason
+			// "tool_calls" if we had tool use, "stop" otherwise
+			// Any of "stop", "length", "tool_calls", "content_filter", "function_call".
+			finishReason := "stop"
+			if hasToolCalls {
+				finishReason = "tool_calls"
+			}
+
+			// Build delta for final chunk
+			delta := openai.ChatCompletionChunkChoiceDelta{}
+			if hasToolCalls {
+				// For tool_calls, content should be empty string (matching DeepSeek format)
+				delta.Content = ""
+			}
+
+			chunk := openai.ChatCompletionChunk{
+				ID:      chatID,
+				Created: created,
+				Model:   responseModel,
+				Choices: []openai.ChatCompletionChunkChoice{
 					{
-						"index":         0,
-						"delta":         map[string]interface{}{},
-						"finish_reason": "stop",
+						Index:        0,
+						Delta:        delta,
+						FinishReason: finishReason,
 					},
 				},
 			}
 
 			// Add usage if available and not disabled
 			if !disableStreamUsage && usage != nil {
-				chunk["usage"] = map[string]interface{}{
-					"prompt_tokens":     usage.InputTokens,
-					"completion_tokens": usage.OutputTokens,
-					"total_tokens":      usage.InputTokens + usage.OutputTokens,
+				chunk.Usage = openai.CompletionUsage{
+					PromptTokens:     usage.InputTokens,
+					CompletionTokens: usage.OutputTokens,
+					TotalTokens:      usage.InputTokens + usage.OutputTokens,
 				}
 			}
 
@@ -190,29 +281,15 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 			return inputTokens, outputTokens, nil
 		}
 		logrus.Errorf("Anthropic stream error: %v", err)
-		// Send error event in OpenAI format
-		errorChunk := map[string]interface{}{
-			"error": map[string]interface{}{
-				"message": err.Error(),
-				"type":    "stream_error",
-				"code":    "stream_failed",
-			},
-		}
-		errorJSON, marshalErr := json.Marshal(errorChunk)
-		if marshalErr == nil {
-			c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", errorJSON))
-		}
-		if flusher, ok := c.Writer.(http.Flusher); ok {
-			flusher.Flush()
-		}
+		sendOpenAIStreamError(c, err.Error(), "stream_error")
 		return inputTokens, outputTokens, nil
 	}
 
 	return inputTokens, outputTokens, nil
 }
 
-// sendOpenAIStreamChunk helper function to send a chunk in OpenAI format
-func sendOpenAIStreamChunk(c *gin.Context, chunk map[string]interface{}) {
+// sendOpenAIStreamChunk sends a ChatCompletionChunk as SSE
+func sendOpenAIStreamChunk(c *gin.Context, chunk openai.ChatCompletionChunk) {
 	chunkJSON, err := json.Marshal(chunk)
 	if err != nil {
 		logrus.Errorf("Failed to marshal chunk: %v", err)
@@ -223,4 +300,72 @@ func sendOpenAIStreamChunk(c *gin.Context, chunk map[string]interface{}) {
 	if flusher, ok := c.Writer.(http.Flusher); ok {
 		flusher.Flush()
 	}
+}
+
+// sendOpenAIStreamChunk helper function to send a chunk in OpenAI format
+func sendOpenAIStreamChunkForce(c *gin.Context, chunk map[string]interface{}) {
+	chunkJSON, err := json.Marshal(chunk)
+	if err != nil {
+		logrus.Errorf("Failed to marshal chunk: %v", err)
+		return
+	}
+	// MENTION: Must keep extra space (matching openai_chat.go:365)
+	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", chunkJSON))
+	if flusher, ok := c.Writer.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+// sendOpenAIStreamError sends an error chunk in OpenAI format
+func sendOpenAIStreamError(c *gin.Context, message, errorType string) {
+	errorMap := map[string]interface{}{
+		"error": map[string]interface{}{
+			"message": message,
+			"type":    errorType,
+		},
+	}
+	errorJSON, _ := json.Marshal(errorMap)
+	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", errorJSON))
+	if flusher, ok := c.Writer.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+// createReasoningContentChunk creates a chunk with reasoning_content field
+// This is a workaround for OpenAI's extended thinking format which is not natively supported in the SDK
+func createReasoningContentChunk(chatID string, created int64, model, reasoning string) openai.ChatCompletionChunk {
+	// Create the chunk structure manually with reasoning_content
+	chunk := openai.ChatCompletionChunk{
+		ID:      chatID,
+		Created: created,
+		Model:   model,
+		Choices: []openai.ChatCompletionChunkChoice{
+			{
+				Index: 0,
+				Delta: openai.ChatCompletionChunkChoiceDelta{
+					Content: "",
+				},
+			},
+		},
+	}
+
+	// Marshal to JSON, add reasoning_content, and unmarshal back
+	chunkJSON, _ := json.Marshal(chunk)
+	var chunkMap map[string]interface{}
+	json.Unmarshal(chunkJSON, &chunkMap)
+
+	// Add reasoning_content to the delta
+	if choices, ok := chunkMap["choices"].([]interface{}); ok && len(choices) > 0 {
+		if choice, ok := choices[0].(map[string]interface{}); ok {
+			if delta, ok := choice["delta"].(map[string]interface{}); ok {
+				delta["reasoning_content"] = reasoning
+			}
+		}
+	}
+
+	// Marshal back and unmarshal into the struct
+	updatedJSON, _ := json.Marshal(chunkMap)
+	json.Unmarshal(updatedJSON, &chunk)
+
+	return chunk
 }

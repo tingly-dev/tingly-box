@@ -14,7 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/browser"
 	"github.com/sirupsen/logrus"
-
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/data"
@@ -22,19 +21,20 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/obs"
-	"github.com/tingly-dev/tingly-box/internal/obs/otel"
-	remote_coder "github.com/tingly-dev/tingly-box/internal/remote_coder"
-	remoteconfig "github.com/tingly-dev/tingly-box/internal/remote_coder/config"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
+	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 	"github.com/tingly-dev/tingly-box/pkg/network"
-	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
+	pkgoauth "github.com/tingly-dev/tingly-box/pkg/oauth"
+	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
+	pkgotel "github.com/tingly-dev/tingly-box/pkg/otel"
+	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
 )
 
 // Server represents the HTTP server
@@ -44,22 +44,29 @@ type Server struct {
 	engine     *gin.Engine
 	httpServer *http.Server
 	watcher    *config.Watcher
-	logger     *obs.MemoryLogger
+
+	// multi-mode logger for text + JSON + memory output
+	multiLogger *pkgobs.MultiLogger
 
 	// middleware
 	errorMW         *middleware.ErrorLogMiddleware
 	authMW          *middleware.AuthMiddleware
-	memoryLogMW     *middleware.MemoryLogMiddleware
+	memoryLogMW     *middleware.MultiModeMemoryLogMiddleware
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
-	usageAPI        *UsageAPI
 	healthMonitor   *loadbalance.HealthMonitor
 
 	// client pool for caching
 	clientPool *client.ClientPool
 
 	// OAuth manager
-	oauthManager *oauth2.Manager
+	oauthManager *pkgoauth.Manager
+
+	// OAuth handler (module)
+	oauthHandler *oauthmodule.Handler
+
+	// ImBot settings handler (module)
+	imbotSettingsHandler interface{}
 
 	// OAuth refresher for OAuth auto-refresh
 	oauthRefresher *background.OAuthRefresher
@@ -68,14 +75,11 @@ type Server struct {
 	oauthCallbackServer *http.Server
 
 	// Dynamic callback servers (one per active OAuth flow)
-	callbackServers   map[string]*oauth2.CallbackServer
+	callbackServers   map[string]*pkgoauth.CallbackServer
 	callbackServersMu sync.RWMutex
 
 	// template manager for provider templates
 	templateManager *data.TemplateManager
-
-	// skill manager for skill locations
-	skillManager *data.SkillManager
 
 	// probe cache for model endpoint capabilities
 	probeCache *ProbeCache
@@ -103,8 +107,8 @@ type Server struct {
 	scenarioRecordSinksMu sync.RWMutex
 
 	// OTel meter setup for unified token tracking
-	meterSetup   *otel.MeterSetup
-	tokenTracker *otel.TokenTracker
+	meterSetup   *pkgotel.MeterSetup
+	tokenTracker *tracker.TokenTracker
 
 	// virtual model service for testing
 	virtualModelService *virtualmodel.Service
@@ -125,6 +129,9 @@ type Server struct {
 	recordMode obs.RecordMode
 	recordDir  string
 
+	// recording flag - enables dual-stage request recording
+	enableRecording bool
+
 	// experimental features
 	experimentalFeatures map[string]bool
 
@@ -134,6 +141,18 @@ type Server struct {
 	remoteCoderMu     sync.Mutex
 
 	version string
+}
+
+// UsageStore returns the server's usage store instance for internal integrations.
+func (s *Server) UsageStore() *db.UsageStore {
+	if s == nil || s.config == nil {
+		return nil
+	}
+	sm := s.config.StoreManager()
+	if sm == nil {
+		return nil
+	}
+	return sm.Usage()
 }
 
 func (s *Server) initGuardrailsEngine() {
@@ -273,6 +292,13 @@ func WithRecordDir(dir string) ServerOption {
 	}
 }
 
+// WithRecording enables dual-stage recording for protocol conversion scenarios
+func WithRecording(enabled bool) ServerOption {
+	return func(s *Server) {
+		s.enableRecording = enabled
+	}
+}
+
 // WithGuardrails sets a guardrails engine for stream evaluation.
 func WithGuardrails(engine guardrails.Guardrails) ServerOption {
 	return func(s *Server) {
@@ -291,6 +317,13 @@ func WithExperimentalFeatures(features map[string]bool) ServerOption {
 func WithDebug(enabled bool) ServerOption {
 	return func(s *Server) {
 		s.debug = enabled
+	}
+}
+
+// WithMultiLogger sets the multi-mode logger for the server
+func WithMultiLogger(logger *pkgobs.MultiLogger) ServerOption {
+	return func(s *Server) {
+		s.multiLogger = logger
 	}
 }
 
@@ -380,14 +413,8 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		logrus.Debugf("Using existing model token from global config")
 	}
 
-	// Initialize memory logger
-	memoryLogger, err := obs.NewMemoryLogger()
-	if err != nil {
-		logrus.Debugf("Warning: Failed to initialize memory logger: %v", err)
-		memoryLogger = nil
-	}
-
-	// Initialize debug middleware (only if debug mode is enabled)
+	// Create server struct first with applied options
+	server.jwtManager = jwtManager
 	var errorMW *middleware.ErrorLogMiddleware
 	errorLogPath := filepath.Join(cfg.ConfigDir, constant.LogDirName, constant.DebugLogFileName)
 	errorMW = middleware.NewErrorLogMiddleware(errorLogPath, 10)
@@ -407,7 +434,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Create server struct first with applied options
 	server.jwtManager = jwtManager
 	server.engine = gin.New()
-	server.logger = memoryLogger
 	server.clientPool = client.NewClientPool() // Initialize client pool
 	server.errorMW = errorMW
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
@@ -432,8 +458,14 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		log.Panicf("Unknown recording mode %s", server.recordMode)
 	}
 
-	// Initialize memory log middleware for HTTP request logging
-	memoryLogMW := middleware.NewMemoryLogMiddleware(1000) // Store up to 1000 entries
+	// Log recording flag if enabled
+	if server.enableRecording {
+		logrus.Debugf("Dual-stage recording enabled")
+	}
+
+	// Initialize multi-mode memory log middleware for HTTP request logging
+	// Logs are written to both multi-mode logger (persistence) and memory (quick access)
+	memoryLogMW := middleware.NewMultiModeMemoryLogMiddleware(server.multiLogger)
 
 	// Initialize auth middleware
 	authMW := middleware.NewAuthMiddleware(cfg, jwtManager)
@@ -450,9 +482,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize load balancer API
 	loadBalancerAPI := NewLoadBalancerAPI(loadBalancer, cfg)
 
-	// Initialize usage API
-	usageAPI := NewUsageAPI(cfg)
-
 	// Determine protocol for OAuth BaseURL
 	protocol := "http"
 	if server.httpsEnabled {
@@ -461,15 +490,15 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Initialize OAuth manager and handler
 	// Note: BaseURL will be dynamically updated for providers with port constraints
-	registry := oauth2.DefaultRegistry()
-	oauthConfig := &oauth2.Config{
+	registry := pkgoauth.DefaultRegistry()
+	oauthConfig := &pkgoauth.Config{
 		BaseURL:           fmt.Sprintf("%s://localhost:%d", protocol, cfg.GetServerPort()),
-		ProviderConfigs:   make(map[oauth2.ProviderType]*oauth2.ProviderConfig),
-		TokenStorage:      oauth2.NewMemoryTokenStorage(),
+		ProviderConfigs:   make(map[pkgoauth.ProviderType]*pkgoauth.ProviderConfig),
+		TokenStorage:      pkgoauth.NewMemoryTokenStorage(),
 		StateExpiry:       10 * time.Minute,
 		TokenExpiryBuffer: 5 * time.Minute,
 	}
-	oauthManager := oauth2.NewManager(oauthConfig, registry)
+	oauthManager := pkgoauth.NewManager(oauthConfig, registry)
 
 	// Initialize token refresher for OAuth auto-refresh
 	tokenRefresher := background.NewTokenRefresher(oauthManager, cfg)
@@ -479,10 +508,14 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.memoryLogMW = memoryLogMW
 	server.loadBalancer = loadBalancer
 	server.loadBalancerAPI = loadBalancerAPI
-	server.usageAPI = usageAPI
 	server.healthMonitor = healthMonitor
 	server.oauthManager = oauthManager
 	server.oauthRefresher = tokenRefresher
+
+	// Initialize OAuth handler
+	server.oauthHandler = oauthmodule.NewHandler(oauthManager, cfg)
+	// Set callback server manager (the server itself implements this interface)
+	server.oauthHandler.SetCallbackServerManager(server)
 
 	// Initialize template manager with GitHub URL for template sync
 	templateManager := data.NewTemplateManager(data.TemplateGitHubURL)
@@ -502,16 +535,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		return cfg.GetToolInterceptorConfigForProvider(providerUUID)
 	})
 
-	// Initialize skill manager for skill locations
-	skillManager, err := data.NewSkillManager(cfg.ConfigDir)
-	if err != nil {
-		log.Printf("Failed to initialize skill manager: %v", err)
-		// Continue without skill manager - skill features will be disabled
-	} else {
-		server.skillManager = skillManager
-		log.Printf("Skill manager initialized")
-	}
-
 	// Initialize probe cache with 24-hour TTL
 	server.probeCache = NewProbeCache(24 * time.Hour)
 	// Start background cleanup task for expired cache entries
@@ -529,17 +552,22 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	}
 
 	// Initialize OTel meter setup for token tracking
-	meterSetup, err := otel.NewMeterSetup(context.Background(), otel.DefaultConfig(), &otel.StoreRefs{
-		StatsStore: cfg.GetStatsStore(),
-		UsageStore: cfg.GetUsageStore(),
-		Sink:       server.recordSink,
-	})
-	if err != nil {
-		logrus.Warnf("Failed to initialize OTel meter setup: %v", err)
-	} else if meterSetup != nil {
-		server.meterSetup = meterSetup
-		server.tokenTracker = meterSetup.Tracker()
-		logrus.Debugf("OTel meter setup initialized")
+	sm := cfg.StoreManager()
+	if sm == nil {
+		logrus.Warnf("StoreManager not available, skipping OTel meter setup")
+	} else {
+		meterSetup, err := pkgotel.NewMeterSetup(context.Background(), pkgotel.DefaultConfig(), &pkgotel.StoreRefs{
+			StatsStore: sm.Stats(),
+			UsageStore: sm.Usage(),
+			Sink:       server.recordSink,
+		})
+		if err != nil {
+			logrus.Warnf("Failed to initialize OTel meter setup: %v", err)
+		} else if meterSetup != nil {
+			server.meterSetup = meterSetup
+			server.tokenTracker = meterSetup.Tracker()
+			logrus.Debugf("OTel meter setup initialized")
+		}
 	}
 
 	// Initialize virtual model service
@@ -556,7 +584,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.setupConfigWatcher()
 
 	// Initialize dynamic callback servers map
-	server.callbackServers = make(map[string]*oauth2.CallbackServer)
+	server.callbackServers = make(map[string]*pkgoauth.CallbackServer)
 
 	// Set up health monitor probe function using existing probe infrastructure
 	if server.healthMonitor != nil {
@@ -662,8 +690,8 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 			return
 		}
 
-		// Use createProviderFromToken to create the provider
-		providerUUID, err := s.createProviderFromToken(token, token.Provider, "", token.SessionID)
+		// Use oauth handler to create the provider
+		providerUUID, err := s.oauthHandler.CreateProviderFromToken(token, token.Provider, "", token.SessionID)
 		if err != nil {
 			logrus.Debugf("[OAuth] Failed to create provider: %v", err)
 			w.Header().Set("Content-Type", "text/html")
@@ -674,7 +702,7 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 
 		// Update session status to success if session ID exists
 		if token.SessionID != "" {
-			_ = s.oauthManager.UpdateSessionStatus(token.SessionID, oauth2.SessionStatusSuccess, providerUUID, "")
+			_ = s.oauthManager.UpdateSessionStatus(token.SessionID, pkgoauth.SessionStatusSuccess, providerUUID, "")
 		}
 
 		logrus.Debugf("[OAuth] Callback successful for provider %s, created provider %s", token.Provider, providerUUID)
@@ -709,7 +737,7 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 	}
 
 	// Create a new callback server with the handler
-	callbackServer := oauth2.NewCallbackServer(handlerFunc)
+	callbackServer := pkgoauth.NewCallbackServer(handlerFunc)
 
 	// Start the callback server on the specified port
 	if err := callbackServer.Start(port); err != nil {
@@ -755,6 +783,18 @@ func (s *Server) stopDynamicCallbackServer(sessionID string) {
 	s.oauthManager.ResetProxyURL()
 
 	logrus.Debugf("[OAuth] Stopped dynamic callback server for session %s", sessionID)
+}
+
+// StartDynamicCallbackServer starts a temporary callback server for OAuth
+// Implements CallbackServerManager interface for oauth module
+func (s *Server) StartDynamicCallbackServer(sessionID string, port int) error {
+	return s.startDynamicCallbackServer(sessionID, port)
+}
+
+// StopDynamicCallbackServer stops a temporary callback server for OAuth
+// Implements CallbackServerManager interface for oauth module
+func (s *Server) StopDynamicCallbackServer(sessionID string) {
+	s.stopDynamicCallbackServer(sessionID)
 }
 
 // setupMiddleware configures server middleware
@@ -932,10 +972,11 @@ func (s *Server) Start(port int) error {
 		}
 	}
 
-	if s.config.GetScenarioFlag(typ.ScenarioGlobal, "enable_remote_coder") {
-		if err := s.StartRemoteCoder(); err != nil {
-			logrus.WithError(err).Warn("Failed to auto-start remote-coder")
-		}
+	// Start remote coder service (auto-start by default)
+	if err := s.StartRemoteCoder(); err != nil {
+		logrus.WithError(err).Warn("Failed to auto-start remote-coder")
+	} else {
+		logrus.Info("Remote-coder auto-start initiated")
 	}
 
 	// Determine scheme and handle HTTPS setup
@@ -960,8 +1001,12 @@ func (s *Server) Start(port int) error {
 
 	addr := fmt.Sprintf("%s:%d", s.host, port)
 	s.httpServer = &http.Server{
-		Addr:    addr,
-		Handler: s.engine,
+		Addr:              addr,
+		Handler:           s.engine,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      10 * time.Minute,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	resolvedHost := network.ResolveHost(s.host)
@@ -1066,10 +1111,10 @@ func (s *Server) GetPreferredEndpointForModel(provider *typ.Provider, modelID st
 	if strings.Contains(strings.ToLower(modelID), "codex") {
 		return string(db.EndpointTypeResponses)
 	}
-	return "chat"
 	// TODO: we use chat as default unless the model do not support chat, e.g. codex
-	adaptiveProbe := NewAdaptiveProbe(s)
-	return adaptiveProbe.GetPreferredEndpoint(provider, modelID)
+	// In the future, we can use adaptiveProbe := NewAdaptiveProbe(s)
+	// return adaptiveProbe.GetPreferredEndpoint(provider, modelID)
+	return "chat"
 }
 
 // HealthMonitor returns the server's health monitor
@@ -1088,24 +1133,35 @@ func (s *Server) StartRemoteCoder() error {
 		return nil
 	}
 
-	rcCfg, err := remoteconfig.LoadFromAppConfig(s.config, remoteconfig.Options{})
-	if err != nil {
-		logrus.WithError(err).Warn("Remote-coder not started: invalid config")
-		return fmt.Errorf("invalid remote control config: %w", err)
+	// Check if imbotsettings handler is available
+	if s.imbotSettingsHandler == nil {
+		return fmt.Errorf("imbotsettings handler not available")
+	}
+
+	// Use type assertion to access BotManager methods
+	handler, ok := s.imbotSettingsHandler.(interface {
+		StartAllEnabled(context.Context) error
+	})
+	if !ok {
+		return fmt.Errorf("imbotsettings handler does not support StartAllEnabled")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	s.remoteCoderCtx = ctx
 	s.remoteCoderCancel = cancel
 
+	logrus.Info("Starting remote control service...")
+
+	// Start all enabled bots through the imbotsettings handler
 	go func() {
-		imbotStore := s.config.GetImBotSettingsStore()
-		if err := remote_coder.Run(ctx, rcCfg, imbotStore); err != nil && ctx.Err() == nil {
-			logrus.WithError(err).Warn("Remote-coder stopped with error")
+		if err := handler.StartAllEnabled(ctx); err != nil && ctx.Err() == nil {
+			logrus.WithError(err).Warn("Failed to start some enabled bots")
 		}
+		// Keep context alive until canceled
+		<-ctx.Done()
+		logrus.Info("Remote control service stopped")
 	}()
 
-	logrus.Info("Remote-coder started")
 	return nil
 }
 
@@ -1119,10 +1175,20 @@ func (s *Server) StopRemoteCoder() {
 		return
 	}
 
-	logrus.Info("Stopping remote-coder...")
+	// Cancel the context first
 	s.remoteCoderCancel()
 	s.remoteCoderCancel = nil
 	s.remoteCoderCtx = nil
+
+	// Stop all bots through the imbotsettings handler
+	if s.imbotSettingsHandler != nil {
+		if handler, ok := s.imbotSettingsHandler.(interface{ StopAll() }); ok {
+			handler.StopAll()
+			logrus.Info("All bots stopped via imbotsettings handler")
+		}
+	}
+
+	logrus.Info("Remote-coder stopped")
 }
 
 // IsRemoteCoderRunning returns whether the remote control service is running
@@ -1134,11 +1200,15 @@ func (s *Server) IsRemoteCoderRunning() bool {
 
 // SyncRemoteCoderBots syncs bots with the remote control bot manager
 func (s *Server) SyncRemoteCoderBots(ctx context.Context) error {
-	botManager := remote_coder.GetBotManager()
-	if botManager == nil {
-		return fmt.Errorf("bot manager not available")
+	// Use the imbotsettings handler's bot manager if available
+	if s.imbotSettingsHandler != nil {
+		if handler, ok := s.imbotSettingsHandler.(interface {
+			Sync(context.Context) error
+		}); ok {
+			return handler.Sync(ctx)
+		}
 	}
-	return botManager.Sync(ctx)
+	return fmt.Errorf("bot manager not available")
 }
 
 // Stop gracefully stops the HTTP server
@@ -1149,6 +1219,14 @@ func (s *Server) Stop(ctx context.Context) error {
 
 	// Stop remote control if running
 	s.StopRemoteCoder()
+
+	// Shutdown ImBot settings handler
+	if s.imbotSettingsHandler != nil {
+		if handler, ok := s.imbotSettingsHandler.(interface{ Shutdown() }); ok {
+			handler.Shutdown()
+			log.Println("ImBot settings handler stopped")
+		}
+	}
 
 	// Stop token refresher
 	if s.oauthRefresher != nil {
@@ -1182,6 +1260,13 @@ func (s *Server) Stop(ctx context.Context) error {
 	if s.meterSetup != nil {
 		if err := s.meterSetup.Shutdown(ctx); err != nil {
 			logrus.Errorf("OTel shutdown error: %v", err)
+		}
+	}
+
+	// Close all database stores via StoreManager
+	if s.config.StoreManager() != nil {
+		if err := s.config.StoreManager().Close(); err != nil {
+			logrus.Errorf("Error closing stores: %v", err)
 		}
 	}
 

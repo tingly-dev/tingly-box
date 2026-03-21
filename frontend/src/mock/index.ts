@@ -1,5 +1,43 @@
 import { MockMethod } from 'vite-plugin-mock';
 
+// Mock remote graphs data
+const mockRemoteGraphs: any[] = [
+    {
+        uuid: 'mock-graph-001',
+        name: 'Default Graph',
+        description: 'Default remote graph for agent connections',
+        connections: [
+            {
+                uuid: 'mock-connection-001',
+                graph_uuid: 'mock-graph-001',
+                imbot_uuid: 'mock-imbot-001',
+                agent_uuid: 'mock-agent-001',
+                guide_config: null,
+                agent_config: {
+                    uuid: 'mock-agent-001',
+                    name: 'Claude Code Agent',
+                    agent_type: 'claude-code',
+                    system_prompt: 'You are a helpful coding assistant.',
+                    temperature: 0.7,
+                    max_tokens: 4096,
+                    tools: ['read', 'write', 'execute'],
+                    enabled: true,
+                },
+                routing_mode: 'direct',
+                enabled: true,
+                status: 'active',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            }
+        ],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+    }
+];
+
+// Helper to find graph by UUID
+const findGraph = (uuid: string) => mockRemoteGraphs.find(g => g.uuid === uuid);
+
 const mockRules = {
     tingly: {
         provider: "openai",
@@ -53,6 +91,328 @@ const mockDefaults = {
 };
 
 export default [
+    // ============================================
+    // Remote Agents / Remote Graphs API endpoints
+    // ============================================
+
+    // List all remote agents
+    {
+        url: '/api/remote-agents',
+        method: 'get',
+        response: () => ({
+            success: true,
+            graphs: mockRemoteGraphs
+        })
+    },
+
+    // Get a specific remote agent
+    {
+        url: '/api/remote-agents/:uuid',
+        method: 'get',
+        response: ({ query }: any) => {
+            const uuid = query.uuid;
+            const graph = findGraph(uuid);
+            if (graph) {
+                return {
+                    success: true,
+                    graph: graph
+                };
+            }
+            return {
+                success: false,
+                error: 'Graph not found'
+            };
+        }
+    },
+
+    // Create a new remote agent
+    {
+        url: '/api/remote-agents',
+        method: 'post',
+        response: ({ body }: any) => {
+            const newGraph = {
+                uuid: `mock-graph-${Date.now()}`,
+                name: body.name,
+                description: body.description || '',
+                connections: [],
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            };
+            mockRemoteGraphs.push(newGraph);
+            return {
+                success: true,
+                graph: newGraph
+            };
+        }
+    },
+
+    // Update a remote agent
+    {
+        url: '/api/remote-agents/:uuid',
+        method: 'put',
+        response: ({ query, body }: any) => {
+            const uuid = query.uuid;
+            const graph = findGraph(uuid);
+            if (graph) {
+                if (body.name) graph.name = body.name;
+                if (body.description !== undefined) graph.description = body.description;
+                graph.updated_at = new Date().toISOString();
+                return {
+                    success: true,
+                    graph: graph
+                };
+            }
+            return {
+                success: false,
+                error: 'Graph not found'
+            };
+        }
+    },
+
+    // Delete a remote agent
+    {
+        url: '/api/remote-agents/:uuid',
+        method: 'delete',
+        response: ({ query }: any) => {
+            const uuid = query.uuid;
+            const index = mockRemoteGraphs.findIndex(g => g.uuid === uuid);
+            if (index >= 0) {
+                mockRemoteGraphs.splice(index, 1);
+                return {
+                    success: true,
+                    message: 'Graph deleted successfully'
+                };
+            }
+            return {
+                success: false,
+                error: 'Graph not found'
+            };
+        }
+    },
+
+    // Create a binding in a remote agent
+    {
+        url: '/api/remote-agents/:agentUuid/bindings',
+        method: 'post',
+        response: ({ query, body }: any) => {
+            const agentUuid = query.agentUuid;
+            const graph = findGraph(agentUuid);
+            if (graph) {
+                const newConnection = {
+                    uuid: `mock-connection-${Date.now()}`,
+                    graph_uuid: agentUuid,
+                    imbot_uuid: body.imbot_uuid,
+                    agent_uuid: body.agent_uuid,
+                    guide_config: null,
+                    agent_config: body.agent_config,
+                    routing_mode: 'direct',
+                    enabled: true,
+                    status: 'active',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                };
+                graph.connections.push(newConnection);
+                graph.updated_at = new Date().toISOString();
+                return {
+                    success: true,
+                    connection: newConnection
+                };
+            }
+            return {
+                success: false,
+                error: 'Graph not found'
+            };
+        }
+    },
+
+    // Update a binding
+    {
+        url: '/api/remote-agents/:agentUuid/bindings/:bindingUuid',
+        method: 'put',
+        response: ({ query, body }: any) => {
+            const agentUuid = query.agentUuid;
+            const bindingUuid = query.bindingUuid;
+            const graph = findGraph(agentUuid);
+            if (graph) {
+                const connection = graph.connections.find((c: any) => c.uuid === bindingUuid);
+                if (connection) {
+                    Object.assign(connection, body);
+                    connection.updated_at = new Date().toISOString();
+                    graph.updated_at = new Date().toISOString();
+                    return {
+                        success: true,
+                        connection: connection
+                    };
+                }
+                return {
+                    success: false,
+                    error: 'Connection not found'
+                };
+            }
+            return {
+                success: false,
+                error: 'Graph not found'
+            };
+        }
+    },
+
+    // Delete a binding
+    {
+        url: '/api/remote-agents/:agentUuid/bindings/:bindingUuid',
+        method: 'delete',
+        response: ({ query }: any) => {
+            const agentUuid = query.agentUuid;
+            const bindingUuid = query.bindingUuid;
+            const graph = findGraph(agentUuid);
+            if (graph) {
+                const index = graph.connections.findIndex((c: any) => c.uuid === bindingUuid);
+                if (index >= 0) {
+                    graph.connections.splice(index, 1);
+                    graph.updated_at = new Date().toISOString();
+                    return {
+                        success: true,
+                        message: 'Connection deleted successfully'
+                    };
+                }
+                return {
+                    success: false,
+                    error: 'Connection not found'
+                };
+            }
+            return {
+                success: false,
+                error: 'Graph not found'
+            };
+        }
+    },
+
+    // Set guide agent for a binding
+    {
+        url: '/api/remote-agents/:agentUuid/bindings/:bindingUuid/guide',
+        method: 'put',
+        response: ({ query, body }: any) => {
+            const agentUuid = query.agentUuid;
+            const bindingUuid = query.bindingUuid;
+            const graph = findGraph(agentUuid);
+            if (graph) {
+                const connection = graph.connections.find((c: any) => c.uuid === bindingUuid);
+                if (connection) {
+                    connection.guide_config = JSON.stringify(body);
+                    connection.updated_at = new Date().toISOString();
+                    graph.updated_at = new Date().toISOString();
+                    return {
+                        success: true,
+                        guide: body
+                    };
+                }
+                return {
+                    success: false,
+                    error: 'Connection not found'
+                };
+            }
+            return {
+                success: false,
+                error: 'Graph not found'
+            };
+        }
+    },
+
+    // Set routing mode for a binding
+    {
+        url: '/api/remote-agents/:agentUuid/bindings/:bindingUuid/routing-mode',
+        method: 'put',
+        response: ({ query, body }: any) => {
+            const agentUuid = query.agentUuid;
+            const bindingUuid = query.bindingUuid;
+            const graph = findGraph(agentUuid);
+            if (graph) {
+                const connection = graph.connections.find((c: any) => c.uuid === bindingUuid);
+                if (connection) {
+                    connection.routing_mode = body.routing_mode;
+                    connection.updated_at = new Date().toISOString();
+                    graph.updated_at = new Date().toISOString();
+                    return {
+                        success: true,
+                        routing_mode: body.routing_mode
+                    };
+                }
+                return {
+                    success: false,
+                    error: 'Connection not found'
+                };
+            }
+            return {
+                success: false,
+                error: 'Graph not found'
+            };
+        }
+    },
+
+    // Update agent configuration for a binding
+    {
+        url: '/api/remote-agents/:agentUuid/bindings/:bindingUuid/agent-config',
+        method: 'put',
+        response: ({ query, body }: any) => {
+            const agentUuid = query.agentUuid;
+            const bindingUuid = query.bindingUuid;
+            const graph = findGraph(agentUuid);
+            if (graph) {
+                const connection = graph.connections.find((c: any) => c.uuid === bindingUuid);
+                if (connection) {
+                    connection.agent_config = body;
+                    connection.updated_at = new Date().toISOString();
+                    graph.updated_at = new Date().toISOString();
+                    return {
+                        success: true,
+                        config: body
+                    };
+                }
+                return {
+                    success: false,
+                    error: 'Connection not found'
+                };
+            }
+            return {
+                success: false,
+                error: 'Graph not found'
+            };
+        }
+    },
+
+    // Update binding position
+    {
+        url: '/api/remote-agents/:agentUuid/bindings/:bindingUuid/position',
+        method: 'put',
+        response: ({ query, body }: any) => {
+            const agentUuid = query.agentUuid;
+            const bindingUuid = query.bindingUuid;
+            const graph = findGraph(agentUuid);
+            if (graph) {
+                const connection = graph.connections.find((c: any) => c.uuid === bindingUuid);
+                if (connection) {
+                    connection.position = { x: body.x, y: body.y };
+                    connection.updated_at = new Date().toISOString();
+                    graph.updated_at = new Date().toISOString();
+                    return {
+                        success: true
+                    };
+                }
+                return {
+                    success: false,
+                    error: 'Connection not found'
+                };
+            }
+            return {
+                success: false,
+                error: 'Graph not found'
+            };
+        }
+    },
+
+    // ============================================
+    // Existing API endpoints (Rules, Providers, etc.)
+    // ============================================
+
     // Rules API endpoints
     {
         url: '/api/rules',

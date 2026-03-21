@@ -35,6 +35,7 @@ type Launcher struct {
 		sessionID string
 		chatID    string
 		platform  string
+		botUUID   string
 	}
 }
 
@@ -132,6 +133,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 	l.executionContext.sessionID = opts.SessionID
 	l.executionContext.chatID = opts.ChatID
 	l.executionContext.platform = opts.Platform
+	l.executionContext.botUUID = opts.BotUUID
 	l.mu.Unlock()
 
 	logrus.WithFields(logrus.Fields{
@@ -144,6 +146,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 		l.executionContext.sessionID = ""
 		l.executionContext.chatID = ""
 		l.executionContext.platform = ""
+		l.executionContext.botUUID = ""
 		l.mu.Unlock()
 	}()
 
@@ -197,17 +200,36 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 		nil,
 	)
 
+	// Track if we intentionally killed the process (expected termination)
+	var processIntentionallyKilled bool
+
 	runner.Codec = mitm.CodecJSON
 
 	inputSource := mitm.NewChanSource(100)
 
+	// done channel signals the input feeder goroutine to stop
+	done := make(chan struct{})
 	go func() {
-		for m := range inputPrompt {
-			inputSource.Write(m)
+		for {
+			select {
+			case m, ok := <-inputPrompt:
+				if !ok {
+					return
+				}
+				inputSource.Write(m)
+			case <-done:
+				return
+			}
 		}
 	}()
 
 	runner.InputSource = inputSource
+
+	// Ensure cleanup on exit
+	defer func() {
+		close(done)
+		inputSource.Close()
+	}()
 
 	outputHandler := func(ctx context.Context, c *mitm.IOContext) (*mitm.OutputResult, error) {
 		// Try to parse as JSON
@@ -216,11 +238,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 		if data, ok = c.Msg.(map[string]any); !ok {
 
 			// Parser finished (EOF reached)
-			// Now wait for command to complete
-			if err := cmd.Wait(); err != nil {
-				return nil, l.handleExecutionError(err, "runtime error", handler)
-			}
-
+			// The Runner.Run() will call cmd.Wait() for us, don't call it here
 			return nil, fmt.Errorf("invalid event data")
 		}
 
@@ -229,7 +247,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 
 		logrus.Debugf("[Event] %s", event)
 
-		messages, hasResult, resultSuccess := accumulator.AddEvent(event)
+		messages, _, resultSuccess := accumulator.AddEvent(event)
 
 		for _, msg := range messages {
 			logrus.WithFields(logrus.Fields{
@@ -296,7 +314,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 								}
 
 								// Send control response via stdin
-								input := l.sendPermissionResponseNew(requestID, result)
+								input := l.sendPermissionResponseNew(requestID, result, req.Input)
 								inputSource.Write(input)
 							} else {
 								logrus.Warn("Permission handler is nil, cannot process permission request")
@@ -312,7 +330,6 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 				requestID := getString(event.Data, "request_id")
 
 				if assistant, ok := msg.(*AssistantMessage); ok {
-					fmt.Printf("%s", assistant)
 					for _, c := range assistant.Message.Content {
 						if c.Name == "AskUserQuestion" {
 							req := l.parseAskRequest(c)
@@ -345,6 +362,17 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 
 				}
 
+			case event.Type == EventTypeResult:
+				handler.OnComplete(&agentboot.CompletionResult{
+					Success: resultSuccess,
+				})
+				// Got final result, stop processing immediately
+				// The process will be cleaned up by deferred close(done) and inputSource.Close()
+				processIntentionallyKilled = true
+				_ = cmd.Process.Kill()
+				//_ = cmd.Wait()
+				logrus.Warnf("killed: %d", cmd.Process.Pid)
+				return &mitm.OutputResult{Action: mitm.Stop}, nil
 			default:
 				if hErr := handler.OnMessage(msg); hErr != nil {
 					handler.OnError(hErr)
@@ -352,20 +380,30 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 			}
 		}
 
-		if hasResult {
-			handler.OnComplete(&agentboot.CompletionResult{
-				Success: resultSuccess,
-			})
-			// Got final result, terminate command early
-			_ = cmd.Process.Kill()
-		}
-
 		return &mitm.OutputResult{Action: mitm.Pass}, nil
 	}
 
 	runner.OutputHandler = outputHandler
 
-	return runner.Run(ctx)
+	err = runner.Run(ctx)
+
+	// Check if the error is due to the process being killed
+	// If we intentionally killed it (after getting result), this is expected and not an error
+	if err != nil && processIntentionallyKilled {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			// Process was killed by signal - this is expected if we killed it
+			// Check if process exited with a signal (not normal exit)
+			if exitErr.ProcessState != nil && !exitErr.ProcessState.Success() {
+				logrus.WithFields(logrus.Fields{
+					"exit_code": exitErr.ProcessState.ExitCode(),
+					"state":     exitErr.ProcessState.String(),
+				}).Debug("Process terminated after intentional kill - this is expected")
+				return nil
+			}
+		}
+	}
+
+	return err
 }
 
 // buildCommandArgs constructs CLI arguments based on format, prompt, and config options
@@ -638,6 +676,7 @@ func (l *Launcher) parseAskRequestFromControl(controlData map[string]interface{}
 	sessionID := l.executionContext.sessionID
 	chatID := l.executionContext.chatID
 	platform := l.executionContext.platform
+	botUUID := l.executionContext.botUUID
 	l.mu.RUnlock()
 
 	toolName, _ := controlData["tool_name"].(string)
@@ -650,6 +689,7 @@ func (l *Launcher) parseAskRequestFromControl(controlData map[string]interface{}
 
 		Platform:  platform,
 		ChatID:    chatID,
+		BotUUID:   botUUID,
 		SessionID: sessionID,
 
 		ToolName: toolName,
@@ -749,6 +789,7 @@ func (l *Launcher) parsePermissionRequest(data map[string]interface{}) agentboot
 	sessionID := l.executionContext.sessionID
 	chatID := l.executionContext.chatID
 	platform := l.executionContext.platform
+	botUUID := l.executionContext.botUUID
 	l.mu.RUnlock()
 
 	if chatID != "" {
@@ -767,28 +808,46 @@ func (l *Launcher) parsePermissionRequest(data map[string]interface{}) agentboot
 		Input:     input,
 		Timestamp: time.Now(),
 		SessionID: sessionID,
+		BotUUID:   botUUID, // Include bot UUID for proper routing
 	}
 }
 
 // sendPermissionResponse sends a permission response to Claude Code
-func (l *Launcher) sendPermissionResponseNew(requestID string, result agentboot.PermissionResult) map[string]any {
+func (l *Launcher) sendPermissionResponseNew(requestID string, result agentboot.PermissionResult, originalInput map[string]interface{}) map[string]any {
 	response := map[string]interface{}{
 		"request_id": requestID,
 		"type":       "control_response",
 	}
 
+	innerResponse := map[string]interface{}{
+		"subtype":    "success", // Always use "success" for control_response
+		"request_id": requestID,
+	}
+
 	if result.Approved {
-		response["response"] = map[string]interface{}{
-			"subtype":    "success",
-			"request_id": requestID,
+		// Allow: must include updatedInput (original or modified)
+		updatedInput := result.UpdatedInput
+		if updatedInput == nil {
+			// If no updatedInput provided, use the original input
+			updatedInput = originalInput
+		}
+		innerResponse["response"] = map[string]interface{}{
+			"behavior":     "allow",
+			"updatedInput": updatedInput,
 		}
 	} else {
-		response["response"] = map[string]interface{}{
-			"subtype":    "error",
-			"request_id": requestID,
-			"error":      result.Reason,
+		// Deny: must include message
+		message := result.Reason
+		if message == "" {
+			message = "User denied this request"
+		}
+		innerResponse["response"] = map[string]interface{}{
+			"behavior": "deny",
+			"message":  message,
 		}
 	}
+
+	response["response"] = innerResponse
 
 	return response
 }

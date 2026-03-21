@@ -4,6 +4,7 @@ package imbot
 import (
 	"github.com/tingly-dev/tingly-box/imbot/internal/builder"
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
+	"github.com/tingly-dev/tingly-box/imbot/internal/interaction"
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/telegram"
 )
 
@@ -14,6 +15,8 @@ type TelegramBot interface {
 	ResolveChatID(input string) (string, error)
 	// EditMessageWithKeyboard edits a message text and keyboard
 	EditMessageWithKeyboard(ctx interface{}, chatID string, messageID string, text string, keyboard interface{}) error
+	// RemoveMessageKeyboard removes the inline keyboard from a message
+	RemoveMessageKeyboard(ctx interface{}, chatID string, messageID string) error
 }
 
 // AsTelegramBot attempts to cast a Bot to TelegramBot interface
@@ -86,6 +89,7 @@ const (
 	PlatformSignal      = core.PlatformSignal
 	PlatformBlueBubbles = core.PlatformBlueBubbles
 	PlatformFeishu      = core.PlatformFeishu
+	PlatformLark        = core.PlatformLark
 	PlatformWebChat     = core.PlatformWebChat
 	PlatformDingTalk    = core.PlatformDingTalk
 
@@ -253,3 +257,77 @@ func ParseDirPath(encoded string) string {
 func FormatDirButton(name string, maxLen int) string {
 	return builder.FormatDirButton(name, maxLen)
 }
+
+// Interaction types re-exported from internal/interaction package
+
+// Interaction types
+type (
+	// ActionType represents the type of user action
+	ActionType = interaction.ActionType
+
+	// InteractionMode controls how interactions are presented
+	InteractionMode = interaction.InteractionMode
+
+	// Interaction represents a platform-agnostic interactive element
+	Interaction = interaction.Interaction
+
+	// Option represents a selectable option
+	Option = interaction.Option
+
+	// InteractionRequest represents a request for user interaction
+	InteractionRequest = interaction.InteractionRequest
+
+	// InteractionResponse represents the user's response
+	InteractionResponse = interaction.InteractionResponse
+
+	// Adapter converts platform-agnostic interactions to platform-specific format
+	Adapter = interaction.Adapter
+
+	// InteractionHandler manages interaction requests and responses (concrete type)
+	InteractionHandler = Handler
+
+	// InteractionBuilder builds platform-agnostic interactions
+	InteractionBuilder = interaction.Builder
+)
+
+// Interaction constants
+const (
+	// Action types
+	ActionSelect   = interaction.ActionSelect
+	ActionConfirm  = interaction.ActionConfirm
+	ActionCancel   = interaction.ActionCancel
+	ActionNavigate = interaction.ActionNavigate
+	ActionInput    = interaction.ActionInput
+	ActionCustom   = interaction.ActionCustom
+
+	// Interaction modes
+	ModeAuto        = interaction.ModeAuto
+	ModeInteractive = interaction.ModeInteractive
+	ModeText        = interaction.ModeText
+)
+
+// Interaction constructors
+
+// NewInteractionBuilder creates a new interaction builder
+func NewInteractionBuilder() *interaction.Builder {
+	return interaction.NewBuilder()
+}
+
+// NewInteractionHandler creates a new interaction handler
+func NewInteractionHandler(manager *Manager) *InteractionHandler {
+	return NewHandler(manager)
+}
+
+// Interaction errors
+var (
+	ErrNotInteraction         = interaction.ErrNotInteraction
+	ErrBotNotFound            = interaction.ErrBotNotFound
+	ErrNoAdapter              = interaction.ErrNoAdapter
+	ErrNotSupported           = interaction.ErrNotSupported
+	ErrRequestNotFound        = interaction.ErrRequestNotFound
+	ErrRequestExpired         = interaction.ErrRequestExpired
+	ErrInteractionTimeout     = interaction.ErrTimeout
+	ErrChannelClosed          = interaction.ErrChannelClosed
+	ErrInvalidMode            = interaction.ErrInvalidMode
+	ErrPendingRequestNotFound = interaction.ErrPendingRequestNotFound
+)

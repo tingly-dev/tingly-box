@@ -8,7 +8,9 @@ import {
     Code as CodeIcon,
     DateRange as DateRangeIcon,
     ErrorOutline,
+    GridOn as GridOnIcon,
     LaptopMac,
+    ListAlt as LogsIcon,
     Menu as MenuIcon,
     NewReleases,
     Psychology as PromptIcon,
@@ -17,6 +19,7 @@ import {
     Settings as SystemIcon,
     Today as TodayIcon,
     Send as UserPromptIcon,
+    Extension as VSCodeIcon,
     Security,
     Rule,
     Storefront,
@@ -41,13 +44,14 @@ import {
 import type { ReactNode } from 'react';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useHealth } from '../contexts/HealthContext';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
+import { isFullEdition } from '@/utils/edition';
 
 interface LayoutProps {
-    children: ReactNode;
+    children?: ReactNode;
 }
 
 const activityBarWidth = 88;
@@ -76,7 +80,7 @@ const Layout = ({ children }: LayoutProps) => {
     const navigate = useNavigate();
     const { hasUpdate, currentVersion, showUpdateDialog } = useAppVersion();
     const { isHealthy, showDisconnectDialog } = useHealth();
-    const { skillUser, skillIde, enableRemoteCoder, enableGuardrails } = useFeatureFlags();
+    const { skillUser, skillIde, enableGuardrails} = useFeatureFlags();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
 
@@ -123,8 +127,15 @@ const Layout = ({ children }: LayoutProps) => {
                 key: 'dashboard',
                 icon: <BarChartIcon sx={{ fontSize: 22 }} />,
                 label: 'Dashboard',
+                path: '/dashboard/7d',
                 children: [
                     {
+                        path: '/overview/90d',
+                        label: 'Heatmap',
+                        icon: <GridOnIcon sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        divider: true,
                         path: '/dashboard/today',
                         label: 'Today',
                         icon: <TodayIcon sx={{ fontSize: 20 }} />,
@@ -184,6 +195,11 @@ const Layout = ({ children }: LayoutProps) => {
                         icon: <Claude size={20} />,
                     },
                     {
+                        path: '/use-codex',
+                        label: t('layout.nav.useCodex', { defaultValue: 'Codex' }),
+                        icon: <OpenAI size={20} />,
+                    },
+                    {
                         path: '/use-opencode',
                         label: t('layout.nav.useOpenCode', { defaultValue: 'OpenCode' }),
                         icon: <CodeIcon sx={{ fontSize: 20 }} />,
@@ -193,33 +209,40 @@ const Layout = ({ children }: LayoutProps) => {
                         label: t('layout.nav.useXcode', { defaultValue: 'Xcode' }),
                         icon: <LaptopMac sx={{ fontSize: 20 }} />,
                     },
+                    {
+                        path: '/use-vscode',
+                        label: t('layout.nav.useVSCode', { defaultValue: 'VS Code' }),
+                        icon: <VSCodeIcon sx={{ fontSize: 20 }} />,
+                    },
                 ],
             },
-            ...(promptMenuItems.length > 0 ? [{
+            // Only add Prompt menu if full edition
+            ...(isFullEdition && promptMenuItems.length > 0 ? [{
                 key: 'prompt' as const,
                 icon: <PromptIcon sx={{ fontSize: 22 }} />,
                 label: 'Prompt',
                 children: promptMenuItems,
             }] : []),
-            ...(enableRemoteCoder ? [{
+            // Only add Remote menu if full edition
+            ...(isFullEdition ? [{
                 key: 'remote-control' as const,
-                icon: <RemoteIcon sx={{ fontSize: 22 }} />,
+                icon: <RemoteIcon sx={{fontSize: 22}}/>,
                 label: 'Remote',
                 children: [
-                    {
-                        path: '/remote-control',
-                        label: 'Overview',
-                        icon: <RemoteIcon sx={{ fontSize: 20 }} />,
-                    },
+                    // {
+                    //     path: '/remote-control',
+                    //     label: 'Overview',
+                    //     icon: <RemoteIcon sx={{fontSize: 20}}/>,
+                    // },
                     {
                         path: '/remote-control/bot',
                         label: 'IM Bot',
-                        icon: <ChatBubble sx={{ fontSize: 20 }} />,
+                        icon: <ChatBubble sx={{fontSize: 20}}/>,
                     },
                     {
                         path: '/remote-control/agent',
                         label: 'Agent Assistant',
-                        icon: <AutoAwesome sx={{ fontSize: 20 }} />,
+                        icon: <AutoAwesome sx={{fontSize: 20}}/>,
                     },
                 ],
             }] : []),
@@ -265,11 +288,22 @@ const Layout = ({ children }: LayoutProps) => {
                 key: 'system',
                 icon: <SystemIcon sx={{ fontSize: 22 }} />,
                 label: 'System',
-                path: '/system',
+                children: [
+                    {
+                        path: '/system',
+                        label: 'Status',
+                        icon: <SystemIcon sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/system/logs',
+                        label: 'Logs',
+                        icon: <LogsIcon sx={{ fontSize: 20 }} />,
+                    },
+                ],
             },
         ];
         return items;
-    }, [t, promptMenuItems, enableRemoteCoder, enableGuardrails]);
+    }, [t, promptMenuItems, enableGuardrails]);
 
     // Find current active activity
     const activeActivity = useMemo(() => {
@@ -351,10 +385,12 @@ const Layout = ({ children }: LayoutProps) => {
                 {activityItems.map((item) => {
                     const isActiveItem = activeActivity === item.key;
 
-                    // Handle click: if has children, navigate to first child
+                    // Handle click: if has path, navigate to path; otherwise navigate to first child
                     const handleClick = () => {
                         setMobileOpen(false);
-                        if (item.children && item.children.length > 0) {
+                        if (item.path) {
+                            navigate(item.path);
+                        } else if (item.children && item.children.length > 0) {
                             navigate(item.children[0].path);
                         }
                     };
@@ -365,9 +401,9 @@ const Layout = ({ children }: LayoutProps) => {
                     return (
                         <ListItemButton
                             key={item.key}
-                            component={item.path ? RouterLink : 'div'}
-                            to={item.path}
-                            onClick={item.children ? handleClick : () => setMobileOpen(false)}
+                            component={item.path && !item.children ? RouterLink : 'div'}
+                            to={item.path && !item.children ? item.path : undefined}
+                            onClick={handleClick}
                             sx={{
                                 minHeight: 56,
                                 mx: 0.5,
@@ -808,7 +844,7 @@ const Layout = ({ children }: LayoutProps) => {
                     height: '100vh',
                     display: 'flex',
                     flexDirection: 'column',
-                    overflow: 'visible',
+                    overflowX: 'hidden',
                 }}
             >
                 <Box
@@ -833,7 +869,7 @@ const Layout = ({ children }: LayoutProps) => {
                         },
                     }}
                 >
-                    {children}
+                    {children ?? <Outlet />}
                 </Box>
             </Box>
 

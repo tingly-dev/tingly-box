@@ -53,11 +53,64 @@ const (
 	ScenarioOpenAI     RuleScenario = "openai"
 	ScenarioAnthropic  RuleScenario = "anthropic"
 	ScenarioAgent      RuleScenario = "agent"
+	ScenarioCodex      RuleScenario = "codex"
 	ScenarioClaudeCode RuleScenario = "claude_code"
 	ScenarioOpenCode   RuleScenario = "opencode"
 	ScenarioXcode      RuleScenario = "xcode"
+	ScenarioVSCode     RuleScenario = "vscode"
+	ScenarioSmartGuide RuleScenario = "_smart_guide"
 	ScenarioGlobal     RuleScenario = "_global" // Global flags that apply to all scenarios
 )
+
+// ThinkingEffortLevel represents the thinking effort level for extended thinking
+type ThinkingEffortLevel = string
+
+const (
+	ThinkingEffortLow     ThinkingEffortLevel = "low"
+	ThinkingEffortMedium  ThinkingEffortLevel = "medium"
+	ThinkingEffortHigh    ThinkingEffortLevel = "high"
+	ThinkingEffortMax     ThinkingEffortLevel = "max"
+	ThinkingEffortDefault ThinkingEffortLevel = "" // Use model default
+)
+
+// ThinkingBudgetMapping defines budget_tokens for each effort level
+// Note: Default max is 31,999 tokens per Claude Code documentation
+var ThinkingBudgetMapping = map[ThinkingEffortLevel]int64{
+	ThinkingEffortDefault: 31999,
+	ThinkingEffortLow:     1024,  // ~1K tokens - minimal reasoning (minimum allowed)
+	ThinkingEffortMedium:  5120,  // ~5K tokens - balanced
+	ThinkingEffortHigh:    20480, // ~20K tokens - deep reasoning
+	ThinkingEffortMax:     31999, // ~32K tokens - maximum (default)
+}
+
+// ThinkingMode represents the thinking mode for extended thinking
+type ThinkingMode string
+
+const (
+	ThinkingModeDefault  ThinkingMode = "default"  // Use model default
+	ThinkingModeAdaptive ThinkingMode = "adaptive" // Model decides when to use
+	ThinkingModeForce    ThinkingMode = "force"    // Force for all requests
+)
+
+// RecordingMode represents the recording mode for scenario recording
+type RecordingMode string
+
+const (
+	RecordingModeDisabled       RecordingMode = ""              // Recording disabled (default)
+	RecordingModeRequest        RecordingMode = "request"       // Record request only
+	RecordingModeResponse       RecordingMode = "response"      // Record response only
+	RecordingModeRequestResponse RecordingMode = "request_response" // Record both request and response
+)
+
+// IsValidRecordingMode checks if the given string is a valid recording mode
+func IsValidRecordingMode(mode string) bool {
+	switch RecordingMode(mode) {
+	case RecordingModeDisabled, RecordingModeRequest, RecordingModeResponse, RecordingModeRequestResponse:
+		return true
+	default:
+		return false
+	}
+}
 
 // ScenarioFlags represents configuration flags for a scenario
 type ScenarioFlags struct {
@@ -66,11 +119,22 @@ type ScenarioFlags struct {
 	Smart    bool `json:"smart" yaml:"smart"`       // Smart mode with automatic optimization
 
 	// Experimental feature flags (scenario-based opt-in)
-	SmartCompact bool `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"` // Enable smart compact (remove thinking blocks)
-	Recording    bool `json:"recording,omitempty" yaml:"recording,omitempty"`         // Enable scenario recording
+	SmartCompact bool `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"`   // Enable smart compact (remove thinking blocks)
+	Recording    bool `json:"recording,omitempty" yaml:"recording,omitempty"`           // Enable scenario recording (legacy boolean flag)
+	RecordV2     RecordingMode `json:"record_v2,omitempty" yaml:"record_v2,omitempty"` // Enable scenario recording V2 (request/response/request_response)
+	Beta         bool          `json:"anthropic_beta,omitempty" yaml:"anthropic_beta,omitempty"` // Enable Anthropic beta features (e.g. extended thinking)
 
 	// Stream configuration flags
 	DisableStreamUsage bool `json:"disable_stream_usage,omitempty" yaml:"disable_stream_usage,omitempty"` // Don't include usage in streaming chunks (for incompatible clients like xcode)
+
+	// Thinking effort level (empty string = use model default)
+	ThinkingEffort ThinkingEffortLevel `json:"thinking_effort,omitempty" yaml:"thinking_effort,omitempty"`
+
+	// Thinking mode for claude_code scenario (default/adaptive/force)
+	// Using string directly instead of ThinkingMode type to avoid naming conflicts
+	ThinkingMode string `json:"thinking_mode,omitempty" yaml:"thinking_mode,omitempty"`
+
+	CleanHeader bool `json:"clean_header,omitempty" yaml:"clean_header,omitempty"` // Remove billing header from system messages (Claude Code only)
 }
 
 // ScenarioConfig represents configuration for a specific scenario
@@ -110,9 +174,9 @@ type OAuthDetail struct {
 // ToolInterceptorConfig contains configuration for tool interceptor (search & fetch)
 type ToolInterceptorConfig struct {
 	PreferLocalSearch FlexibleBool `json:"prefer_local_search,omitempty"` // Prefer local tool interception even if provider has built-in search
-	SearchAPI         string `json:"search_api,omitempty"`          // "brave" or "google"
-	SearchKey         string `json:"search_key,omitempty"`          // API key for search service
-	MaxResults        int    `json:"max_results,omitempty"`         // Max search results to return (default: 10)
+	SearchAPI         string       `json:"search_api,omitempty"`          // "brave" or "google"
+	SearchKey         string       `json:"search_key,omitempty"`          // API key for search service
+	MaxResults        int          `json:"max_results,omitempty"`         // Max search results to return (default: 10)
 
 	// Proxy configuration
 	ProxyURL string `json:"proxy_url,omitempty"` // HTTP proxy URL (e.g., "http://127.0.0.1:7897")
@@ -180,9 +244,9 @@ type Provider struct {
 	Models        []string          `json:"models,omitempty"`       // Available models for this provider (cached)
 	LastUpdated   string            `json:"last_updated,omitempty"` // Last update timestamp
 
-// Auth configuration
-	AuthType                AuthType                 `json:"auth_type"`                           // api_key or oauth
-	OAuthDetail             *OAuthDetail             `json:"oauth_detail,omitempty"`              // OAuth credentials (only for oauth auth type)
+	// Auth configuration
+	AuthType    AuthType     `json:"auth_type"`              // api_key or oauth
+	OAuthDetail *OAuthDetail `json:"oauth_detail,omitempty"` // OAuth credentials (only for oauth auth type)
 }
 
 // GetAccessToken returns the access token based on auth type
@@ -203,6 +267,30 @@ func (p *Provider) GetAccessToken() string {
 func (p *Provider) IsOAuthExpired() bool {
 	if p.AuthType == AuthTypeOAuth && p.OAuthDetail != nil {
 		return p.OAuthDetail.IsExpired()
+	}
+	return false
+}
+
+// IsOAuthToken checks if the current access token is an OAuth token
+// by detecting the sk-ant-oat prefix. This provides runtime detection
+// independent of the AuthType field.
+func (p *Provider) IsOAuthToken() bool {
+	token := p.GetAccessToken()
+	if token == "" {
+		return false
+	}
+	// Claude OAuth tokens start with sk-ant-oat
+	const oAuthPrefix = "sk-ant-oat"
+	if len(token) >= len(oAuthPrefix) {
+		return token[:len(oAuthPrefix)] == oAuthPrefix
+	}
+	return false
+}
+
+// IsClaudeCodeProvider checks if this provider is using Claude Code OAuth
+func (p *Provider) IsClaudeCodeProvider() bool {
+	if p.AuthType == AuthTypeOAuth && p.OAuthDetail != nil {
+		return p.OAuthDetail.ProviderType == "claude_code"
 	}
 	return false
 }

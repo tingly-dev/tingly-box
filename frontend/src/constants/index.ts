@@ -12,8 +12,10 @@ export const API_STYLES = {
 export const SCENARIOS = {
   OPENAI: 'openai',
   ANTHROPIC: 'anthropic',
+  CODEX: 'codex',
   CLAUDE_CODE: 'claude_code',
   OPENCODE: 'opencode',
+  VSCODE: 'vscode',
   GLOBAL: '_global', // Global flags that apply to all scenarios
 } as const;
 

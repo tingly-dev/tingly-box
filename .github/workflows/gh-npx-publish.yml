@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag (auto-detected from ref, optional for override)'
-        required: false
+        description: 'GitHub Release tag to download assets from (e.g., v1.0.0)'
+        required: true
         type: string
-      version_override:
-        description: 'NPX Package version (leave empty to use tag version)'
+      npx_version:
+        description: 'NPX Package version to publish (defaults to release tag version without v prefix)'
         required: false
         type: string
         default: ''
@@ -34,7 +34,8 @@ permissions:
   actions: write
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '24'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   setup:
@@ -58,46 +59,11 @@ jobs:
           echo "publish_gui=${{ github.event.inputs.publish_gui }}" >> $GITHUB_OUTPUT
           echo "publish_bundle=${{ github.event.inputs.publish_bundle }}" >> $GITHUB_OUTPUT
 
-      - name: Validate trigger source and extract tag
-        id: validate_trigger
-        run: |
-          CURRENT_REF="${{ github.ref }}"
-          CURRENT_REF_TYPE="${{ github.ref_type }}"
-          INPUT_RELEASE_TAG="${{ github.event.inputs.release_tag }}"
-
-          echo "🔍 Validating workflow trigger..."
-          echo "   Current ref: $CURRENT_REF"
-          echo "   Current ref type: $CURRENT_REF_TYPE"
-          [ -n "$INPUT_RELEASE_TAG" ] && echo "   Input release_tag: $INPUT_RELEASE_TAG"
-
-          # Check if triggered from a tag
-          if [ "$CURRENT_REF_TYPE" != "tag" ]; then
-            echo "❌ Error: This workflow can only be triggered from a git tag, not from a branch."
-            echo "   Please select a tag in 'Use workflow from' dropdown, or use:"
-            echo "   gh workflow run gh-npx-publish.yml --ref <tag-name>"
-            exit 1
-          fi
-
-          # Extract current tag name from ref
-          REF_TAG="${CURRENT_REF#refs/tags/}"
-
-          # Determine which tag to use
-          if [ -n "$INPUT_RELEASE_TAG" ] && [ "$INPUT_RELEASE_TAG" != "$REF_TAG" ]; then
-            echo "⚠️  Warning: Input release_tag ($INPUT_RELEASE_TAG) differs from ref tag ($REF_TAG)."
-            echo "   Using input release_tag: $INPUT_RELEASE_TAG"
-            RELEASE_TAG="$INPUT_RELEASE_TAG"
-          else
-            RELEASE_TAG="$REF_TAG"
-            echo "✅ Using tag from ref: $RELEASE_TAG"
-          fi
-
-          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
-
       - name: Validate and extract version
         id: version
         run: |
-          RELEASE_TAG="${{ steps.validate_trigger.outputs.release_tag }}"
-          VERSION_OVERRIDE="${{ github.event.inputs.version_override }}"
+          RELEASE_TAG="${{ github.event.inputs.release_tag }}"
+          NPX_VERSION_INPUT="${{ github.event.inputs.npx_version }}"
 
           # Validate tag format
           if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
@@ -105,16 +71,22 @@ jobs:
             exit 1
           fi
 
-          # Extract version from tag or use override
-          if [ -n "$VERSION_OVERRIDE" ]; then
-            NPX_VERSION="$VERSION_OVERRIDE"
+          # Use provided version or extract from tag
+          if [ -n "$NPX_VERSION_INPUT" ]; then
+            NPX_VERSION="$NPX_VERSION_INPUT"
+            echo "📝 Using custom NPX version: $NPX_VERSION"
           else
             NPX_VERSION="${RELEASE_TAG#v}"
+            echo "📝 Using version from release tag: $NPX_VERSION"
           fi
 
           echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
           echo "npx_version=$NPX_VERSION" >> $GITHUB_OUTPUT
-          echo "Release tag: $RELEASE_TAG, NPX version: $NPX_VERSION"
+          echo ""
+          echo "Summary:"
+          echo "  - Branch: ${{ github.ref_name }}"
+          echo "  - Release tag (assets source): $RELEASE_TAG"
+          echo "  - NPX version to publish: $NPX_VERSION"
 
       - name: Check if GitHub Release exists
         run: |
@@ -484,9 +456,16 @@ jobs:
 
           echo "✅ Downloaded zip files:"
           ls -lh "$PKG_DIR/zip/"
-          
-          # No GUI
+
+          # Remove unwanted packages to reduce size
+          # We exclude: GUI packages, linux arm64, macos amd64
+          echo "🗑️ Removing unwanted packages..."
           rm -rf "$PKG_DIR"/zip/tingly-box-gui-*.zip
+          rm -f "$PKG_DIR"/zip/tingly-box-linux-arm64.zip
+          rm -f "$PKG_DIR"/zip/tingly-box-macos-amd64.zip
+
+          echo "✅ Remaining zip files after cleanup:"
+          ls -lh "$PKG_DIR/zip/"
 
       - name: Verify bundle structure
         run: |
@@ -509,7 +488,9 @@ jobs:
           fi
 
           # Expected zip files
-          for zip in tingly-box-macos-arm64.zip tingly-box-macos-amd64.zip tingly-box-linux-amd64.zip tingly-box-linux-arm64.zip tingly-box-windows-amd64.zip; do
+          # for zip in tingly-box-macos-arm64.zip tingly-box-macos-amd64.zip tingly-box-linux-amd64.zip tingly-box-linux-arm64.zip tingly-box-windows-amd64.zip; do
+          # to reduce size, we remove linux arm and macos amd
+          for zip in tingly-box-macos-arm64.zip tingly-box-linux-amd64.zip tingly-box-windows-amd64.zip; do
             if [ ! -f "$PKG_DIR/zip/$zip" ]; then
               echo "❌ Zip file not found: $zip"
               exit 1

@@ -27,7 +27,16 @@ export interface BotSettings {
     chat_id?: string;
     bash_allowlist?: string[];
     enabled?: boolean;
+
+    // Agent configuration fields
+    default_agent?: string;       // Default Agent UUID (points to remote_agents table)
+    default_cwd?: string;         // Default working directory
+
     token?: string; // Legacy field for backward compatibility
+    // SmartGuide model configuration
+    smartguide_provider?: string; // Provider UUID
+    smartguide_model?: string; // Model identifier
+
     created_at?: string;
     updated_at?: string;
 }

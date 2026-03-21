@@ -20,7 +20,7 @@ func TestConfigDefaults(t *testing.T) {
 
 	assert.True(t, config.EnableStreamJSON)
 	assert.Equal(t, 100, config.StreamBufferSize)
-	assert.Equal(t, PermissionModeManual, config.PermissionMode)
+	assert.Equal(t, PermissionModeDefault, config.PermissionMode)
 	assert.Empty(t, config.Model)
 }
 
@@ -418,11 +418,11 @@ func TestGenerateRequestID(t *testing.T) {
 // TestLauncherWithNewConfig tests launcher with new config options
 func TestLauncherWithNewConfig(t *testing.T) {
 	config := Config{
-		Model:              "claude-sonnet-4-6",
+		Model:                "claude-sonnet-4-6",
 		ContinueConversation: true,
-		PermissionMode:     PermissionModeAuto,
-		AllowedTools:       []string{"bash", "editor"},
-		CustomSystemPrompt: "You are a helpful assistant",
+		PermissionMode:       PermissionModeAuto,
+		AllowedTools:         []string{"bash", "editor"},
+		CustomSystemPrompt:   "You are a helpful assistant",
 	}
 
 	launcher := NewLauncher(config)
@@ -448,7 +448,7 @@ func TestLauncherWithConfig(t *testing.T) {
 		expectedSubstr []string
 	}{
 		{
-			name: "Model selection",
+			name:   "Model selection",
 			config: Config{Model: "claude-sonnet-4-6"},
 			opts: agentboot.ExecutionOptions{
 				OutputFormat: agentboot.OutputFormatStreamJSON,
@@ -456,7 +456,7 @@ func TestLauncherWithConfig(t *testing.T) {
 			expectedSubstr: []string{"--model", "claude-sonnet-4-6"},
 		},
 		{
-			name: "Continue conversation",
+			name:   "Continue conversation",
 			config: Config{ContinueConversation: true},
 			opts: agentboot.ExecutionOptions{
 				OutputFormat: agentboot.OutputFormatStreamJSON,
@@ -464,7 +464,7 @@ func TestLauncherWithConfig(t *testing.T) {
 			expectedSubstr: []string{"--continue"},
 		},
 		{
-			name: "Custom system prompt",
+			name:   "Custom system prompt",
 			config: Config{CustomSystemPrompt: "Custom prompt"},
 			opts: agentboot.ExecutionOptions{
 				OutputFormat: agentboot.OutputFormatStreamJSON,
@@ -472,7 +472,7 @@ func TestLauncherWithConfig(t *testing.T) {
 			expectedSubstr: []string{"--custom-system-prompt", "Custom prompt"},
 		},
 		{
-			name: "Allowed tools",
+			name:   "Allowed tools",
 			config: Config{AllowedTools: []string{"bash", "editor"}},
 			opts: agentboot.ExecutionOptions{
 				OutputFormat: agentboot.OutputFormatStreamJSON,
@@ -480,7 +480,7 @@ func TestLauncherWithConfig(t *testing.T) {
 			expectedSubstr: []string{"--allowed-tools", "bash,editor"},
 		},
 		{
-			name: "Resume session",
+			name:   "Resume session",
 			config: Config{},
 			opts: agentboot.ExecutionOptions{
 				OutputFormat: agentboot.OutputFormatStreamJSON,
@@ -490,7 +490,7 @@ func TestLauncherWithConfig(t *testing.T) {
 			expectedSubstr: []string{"--resume", "session-123"},
 		},
 		{
-			name: "Permission mode auto",
+			name:   "Permission mode auto",
 			config: Config{PermissionMode: PermissionModeAuto},
 			opts: agentboot.ExecutionOptions{
 				OutputFormat: agentboot.OutputFormatStreamJSON,

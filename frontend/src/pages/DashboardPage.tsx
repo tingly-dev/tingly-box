@@ -22,6 +22,7 @@ import PaidIcon from '@mui/icons-material/Paid';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import StreamIcon from '@mui/icons-material/Stream';
 import SpeedIcon from '@mui/icons-material/Speed';
+import CachedIcon from '@mui/icons-material/Cached';
 import { StatCard, TokenUsageChart, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable } from '@/components/dashboard';
 import type { TimeSeriesData, AggregatedStat } from '@/components/dashboard';
 import { switchControlLabelStyle } from '@/styles/toggleStyles';
@@ -164,7 +165,8 @@ export default function DashboardPage() {
     const totalRequests = stats.reduce((sum, s) => sum + (s.request_count || 0), 0);
     const totalInputTokens = stats.reduce((sum, s) => sum + (s.total_input_tokens || 0), 0);
     const totalOutputTokens = stats.reduce((sum, s) => sum + (s.total_output_tokens || 0), 0);
-    const totalTokens = totalInputTokens + totalOutputTokens;
+    const totalCacheTokens = stats.reduce((sum, s) => sum + (s.cache_input_tokens || 0), 0);
+    const totalTokens = totalInputTokens + totalOutputTokens + totalCacheTokens;
 
     // Calculate average latency (weighted by request count)
     const totalLatencyWeight = stats.reduce((sum, s) => sum + (s.avg_latency_ms || 0) * (s.request_count || 0), 0);
@@ -178,6 +180,11 @@ export default function DashboardPage() {
     const totalStreamed = stats.reduce((sum, s) => sum + (s.streamed_count || 0), 0);
     const streamedRate = totalRequests > 0 ? (totalStreamed / totalRequests) * 100 : 0;
 
+    // Calculate cache hit rate: cache / (cache + input)
+    const cacheHitRate = (totalCacheTokens + totalInputTokens) > 0
+        ? (totalCacheTokens / (totalCacheTokens + totalInputTokens)) * 100
+        : 0;
+
     // Prepare chart data - include provider name to distinguish same model from different providers
     const tokenChartData = stats.slice(0, 10).map((stat) => {
         const provider = stat.provider_name || 'Unknown';
@@ -187,6 +194,7 @@ export default function DashboardPage() {
             name: label.length > 30 ? label.substring(0, 30) + '...' : label,
             inputTokens: stat.total_input_tokens || 0,
             outputTokens: stat.total_output_tokens || 0,
+            cacheTokens: stat.cache_input_tokens || 0,
         };
     });
 
@@ -299,36 +307,45 @@ export default function DashboardPage() {
 
             {/* Stats Cards - Row 1 */}
             <Grid container spacing={2.5} sx={{ mb: 4 }}>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
                     <StatCard
-                        title="Total Requests"
+                        title={'Total\nRequests'}
                         value={totalRequests.toLocaleString()}
                         subtitle={TIME_RANGE_CONFIG[timeRange].label}
                         icon={<CallMadeIcon />}
                         color="primary"
                     />
                 </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
                     <StatCard
-                        title="Total Tokens"
+                        title={'Total\nTokens'}
                         value={formatNumber(totalTokens)}
-                        subtitle={`${formatNumber(totalInputTokens)} in / ${formatNumber(totalOutputTokens)} out`}
+                        subtitle={`Input: ${formatNumber(totalInputTokens)}\nOutput: ${formatNumber(totalOutputTokens)}\nCache: ${formatNumber(totalCacheTokens)}`}
                         icon={<PaidIcon />}
                         color="success"
                     />
                 </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
                     <StatCard
-                        title="Error Rate"
+                        title={'Cache Hit\nRate'}
+                        value={`${cacheHitRate.toFixed(1)}%`}
+                        subtitle={`${formatNumber(totalCacheTokens)} cached`}
+                        icon={<CachedIcon />}
+                        color="warning"
+                    />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+                    <StatCard
+                        title={'Error\nRate'}
                         value={`${errorRate.toFixed(2)}%`}
                         subtitle={`${totalErrors} errors`}
                         icon={<ErrorOutlineIcon />}
                         color={errorRate > 5 ? 'error' : 'success'}
                     />
                 </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
                     <StatCard
-                        title="Streamed Rate"
+                        title={'Streamed\nRate'}
                         value={`${streamedRate.toFixed(1)}%`}
                         subtitle={`${totalStreamed} streamed`}
                         icon={<StreamIcon />}

@@ -18,6 +18,7 @@ type streamState struct {
 	deltaExtras                map[string]interface{}
 	outputTokens               int64
 	inputTokens                int64
+	cacheTokens                int64        // Cache read tokens (from Anthropic or other sources)
 	stoppedBlocks              map[int]bool // Tracks blocks that have already sent content_block_stop
 }
 

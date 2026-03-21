@@ -195,7 +195,38 @@ func (m *Manager) Start(ctx context.Context) error {
 	}
 
 	m.logger.Info("Bot manager started")
+
+	// Start a goroutine to watch for context cancellation and auto-cleanup
+	go func() {
+		<-ctx.Done()
+		m.logger.Info("Context cancelled, shutting down manager...")
+		m.shutdown()
+	}()
+
 	return nil
+}
+
+// shutdown performs the actual shutdown (called from Stop goroutine or when context is cancelled)
+func (m *Manager) shutdown() {
+	// Disconnect all bots without using WaitGroup to avoid deadlock
+	m.mu.Lock()
+	bots := make([]core.Bot, 0, len(m.bots))
+	for _, bot := range m.bots {
+		bots = append(bots, bot)
+	}
+	m.mu.Unlock()
+
+	// Disconnect each bot (with timeout)
+	for _, bot := range bots {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := bot.Disconnect(ctx); err != nil {
+			m.logger.Error("Error disconnecting %s bot: %s %v", bot.PlatformInfo().Name, bot.UUID(), err)
+		}
+		cancel()
+	}
+
+	m.wg.Wait()
+	m.logger.Info("Manager shutdown complete")
 }
 
 // Stop stops the manager and disconnects all bots
@@ -204,23 +235,21 @@ func (m *Manager) Stop(ctx context.Context) error {
 
 	m.cancel()
 
-	// Disconnect all bots
-	var wg sync.WaitGroup
-	for _, bot := range m.bots {
-		wg.Add(1)
-		go func(b core.Bot) {
-			defer wg.Done()
-			if err := b.Disconnect(ctx); err != nil {
-				m.logger.Error("Error disconnecting %s bot: %s %v", b.PlatformInfo().Name, b.UUID(), err)
-			}
-		}(bot)
+	// Wait for shutdown to complete (with timeout)
+	done := make(chan struct{})
+	go func() {
+		m.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		m.logger.Info("Bot manager stopped")
+		return nil
+	case <-time.After(10 * time.Second):
+		m.logger.Warn("Timeout waiting for bot manager to stop")
+		return fmt.Errorf("timeout waiting for bots to stop")
 	}
-
-	wg.Wait()
-	m.wg.Wait()
-
-	m.logger.Info("Bot manager stopped")
-	return nil
 }
 
 // Close closes the manager and all bots
@@ -387,6 +416,18 @@ func (m *Manager) handleReconnect(bot core.Bot, platform Platform) {
 		delay := time.Duration(m.config.ReconnectDelayMs) * time.Millisecond
 
 		for attempts < m.config.MaxReconnectAttempts {
+			// Check if manager context is cancelled - if so, don't reconnect
+			m.mu.RLock()
+			ctxCancelled := m.ctx.Err() != nil
+			autoReconnect := m.config.AutoReconnect
+			m.mu.RUnlock()
+
+			// Don't reconnect if context is cancelled or auto-reconnect is disabled
+			if ctxCancelled || !autoReconnect {
+				m.logger.Info("Skipping reconnect for %s bot: context cancelled or auto-reconnect disabled", platform)
+				return
+			}
+
 			if bot.IsConnected() {
 				return
 			}

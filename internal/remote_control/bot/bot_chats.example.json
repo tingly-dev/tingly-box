@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "updated": "2026-03-10T12:30:00Z",
+  "items": {
+    "telegram:123456789": {
+      "chat_id": "telegram:123456789",
+      "platform": "telegram",
+      "project_path": "/Users/developer/my-project",
+      "owner_id": "user_abc123",
+      "session_id": "sess_xyz789",
+      "is_whitelisted": false,
+      "whitelisted_by": "",
+      "bash_cwd": "/Users/developer/my-project",
+      "current_agent": "claude",
+      "agent_state": null,
+      "created_at": "2026-03-10T12:00:00Z",
+      "updated_at": "2026-03-10T12:30:00Z"
+    },
+    "telegram:-1001234567890": {
+      "chat_id": "telegram:-1001234567890",
+      "platform": "telegram",
+      "project_path": "/Users/developer/team-project",
+      "owner_id": "admin_user",
+      "session_id": "sess_group001",
+      "is_whitelisted": true,
+      "whitelisted_by": "admin_user",
+      "bash_cwd": "/Users/developer/team-project",
+      "current_agent": "tingly-box",
+      "agent_state": "eyJtZW1vcnkiOiAic29tZSBhZ2VudCBzdGF0ZSJ9",
+      "created_at": "2026-03-10T10:00:00Z",
+      "updated_at": "2026-03-10T11:45:00Z"
+    },
+    "discord:987654321": {
+      "chat_id": "discord:987654321",
+      "platform": "discord",
+      "project_path": "",
+      "owner_id": "",
+      "session_id": "",
+      "is_whitelisted": false,
+      "whitelisted_by": "",
+      "bash_cwd": "",
+      "current_agent": "claude",
+      "agent_state": null,
+      "created_at": "2026-03-10T14:00:00Z",
+      "updated_at": "2026-03-10T14:00:00Z"
+    }
+  }
+}

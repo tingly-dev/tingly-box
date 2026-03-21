@@ -1,11 +1,14 @@
 import { ApiStyleBadge } from '@/components/ApiStyleBadge.tsx';
 import ModelListDialog from '@/components/ModelListDialog';
+import ProviderExportMenu from '@/components/ProviderExportMenu';
+import { exportProvider, exportProviderAsBase64ToClipboard, exportProviderAsJsonlToClipboard } from '@/components/rule-card/utils';
 import { Delete, Edit, ListAlt, Refresh as RefreshIcon, Route, Schedule, VpnKey } from '@mui/icons-material';
 import {
     Box,
     Button,
     Chip,
     CircularProgress,
+    Divider,
     FormControlLabel,
     IconButton,
     Modal,
@@ -21,7 +24,8 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import { useState } from 'react';
+import type { ExportFormat } from '@/components/rule-card/utils';
+import {useCallback, useState} from 'react';
 import type { Provider } from '../types/provider';
 
 interface OAuthTableProps {
@@ -31,6 +35,7 @@ interface OAuthTableProps {
     onDelete?: (providerUuid: string) => void;
     onReauthorize?: (providerUuid: string) => void;
     onRefreshToken?: (providerUuid: string) => Promise<void>;
+    onNotification?: (message: string, severity: 'success' | 'error') => void;
 }
 
 interface DeleteModalState {
@@ -50,7 +55,7 @@ interface ModelListDialogState {
     provider: Provider | null;
 }
 
-const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRefreshToken }: OAuthTableProps) => {
+const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRefreshToken, onNotification }: OAuthTableProps) => {
     const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
         open: false,
         providerUuid: '',
@@ -126,6 +131,24 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
         setModelListDialog({ open: false, provider: null });
     };
 
+    const handleExportProvider = useCallback(async (provider: Provider, format: ExportFormat) => {
+        await exportProvider(provider, format, (message, severity) => {
+            onNotification?.(message, severity);
+        });
+    }, [onNotification]);
+
+    const handleCopyProviderBase64 = useCallback(async (provider: Provider) => {
+        await exportProviderAsBase64ToClipboard(provider, (message, severity) => {
+            onNotification?.(message, severity);
+        });
+    }, [onNotification]);
+
+    const handleCopyProviderJsonl = useCallback(async (provider: Provider) => {
+        await exportProviderAsJsonlToClipboard(provider, (message, severity) => {
+            onNotification?.(message, severity);
+        });
+    }, [onNotification]);
+
     const formatExpiresAt = (expiresAt?: string) => {
         if (!expiresAt) return 'Never';
         const date = new Date(expiresAt);
@@ -176,8 +199,7 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                         <TableCell sx={{ fontWeight: 600, minWidth: 180 }}>Provider</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 180 }}>Expires At</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 80 }}>Proxy</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Model List</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Actions</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 240 }}>Actions</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -248,26 +270,27 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                                         </Typography>
                                     )}
                                 </TableCell>
-                                {/* Model List */}
-                                <TableCell>
-                                    <Button
-                                        variant="outlined"
-                                        size="small"
-                                        startIcon={<ListAlt />}
-                                        onClick={() => handleModelListClick(provider.uuid)}
-                                        disabled={!provider.enabled}
+                                {/* Actions */}
+                                <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                                    <Box
                                         sx={{
-                                            textTransform: 'none',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 0.5,
+                                            border: 1,
+                                            borderColor: 'divider',
                                             borderRadius: 1.5,
-                                            fontSize: '0.8rem',
+                                            p: 0.5,
+                                            pr: 1,
+                                            width: 240,
                                         }}
                                     >
-                                        Models
-                                    </Button>
-                                </TableCell>
-                                {/* Actions */}
-                                <TableCell>
-                                    <Stack direction="row" spacing={0.5}>
+                                        <ProviderExportMenu
+                                            provider={provider}
+                                            onExport={handleExportProvider}
+                                            onCopyJsonl={handleCopyProviderJsonl}
+                                            onCopyBase64={handleCopyProviderBase64}
+                                        />
                                         {onEdit && (
                                             <Tooltip title="View Details">
                                                 <IconButton size="small" color="primary" onClick={() => onEdit(provider.uuid)}>
@@ -309,7 +332,24 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                                                 </IconButton>
                                             </Tooltip>
                                         )}
-                                    </Stack>
+                                        <Divider orientation="vertical" flexItem />
+                                        <Button
+                                            variant="text"
+                                            size="small"
+                                            startIcon={<ListAlt />}
+                                            onClick={() => handleModelListClick(provider.uuid)}
+                                            disabled={!provider.enabled}
+                                            sx={{
+                                                textTransform: 'none',
+                                                fontSize: '0.75rem',
+                                                minWidth: 'auto',
+                                                px: 1,
+                                                color: 'text.primary',
+                                            }}
+                                        >
+                                            Models
+                                        </Button>
+                                    </Box>
                                 </TableCell>
                             </TableRow>
                         );

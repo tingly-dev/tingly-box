@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/obs"
@@ -48,12 +49,12 @@ func (s *Server) HandleProbeProvider(c *gin.Context) {
 	responseTime := time.Since(startTime).Milliseconds()
 
 	if err != nil {
-		if s.logger != nil {
-			s.logger.LogAction(obs.ActionFetchModels, map[string]interface{}{
-				"provider": req.Name,
-				"api_base": req.APIBase,
-			}, false, err.Error())
-		}
+		logrus.WithFields(logrus.Fields{
+			"action":   obs.ActionFetchModels,
+			"success":  false,
+			"provider": req.Name,
+			"api_base": req.APIBase,
+		}).Error(err.Error())
 
 		c.JSON(http.StatusOK, ProbeProviderResponse{
 			Success: false,
@@ -66,15 +67,15 @@ func (s *Server) HandleProbeProvider(c *gin.Context) {
 	}
 
 	// Log successful test
-	if s.logger != nil {
-		s.logger.LogAction(obs.ActionFetchModels, map[string]interface{}{
-			"provider":      req.Name,
-			"api_base":      req.APIBase,
-			"valid":         valid,
-			"models_count":  modelsCount,
-			"response_time": responseTime,
-		}, true, message)
-	}
+	logrus.WithFields(logrus.Fields{
+		"action":        obs.ActionFetchModels,
+		"success":       true,
+		"provider":      req.Name,
+		"api_base":      req.APIBase,
+		"valid":         valid,
+		"models_count":  modelsCount,
+		"response_time": responseTime,
+	}).Info(message)
 
 	// Determine test result
 	testResult := "models_endpoint_success"

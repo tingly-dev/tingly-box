@@ -1,8 +1,17 @@
 // Re-exports from split node files
-export * from './ActionAddNode.tsx'
-export * from './ArrowNode.tsx'
-export * from './SmartFallbackNode.tsx'
-export * from './ModelNode.tsx';
-export * from './ProviderNode.tsx';
-export * from './SmartOpNode.tsx'
-export * from './styles.tsx';
+export * from './ActionAddNode';
+export * from './ArrowNode';
+export * from './SmartFallbackNode';
+export * from './ModelNode';
+export * from './ProviderNode';
+export * from './SmartOpNode';
+export * from './styles';
+
+// Remote Graph nodes
+export { default as ImBotNode } from './ImBotNode';
+export { default as AgentNode } from './AgentNode';
+export { default as AgentConfigNode } from './AgentConfigNode';
+export { default as RoutingModeNode } from './RoutingModeNode';
+export { default as CWDNode } from './ConfigNode';
+export { default as BotModelNode } from './BotModelNode';
+export { default as CrossNode } from './CrossNode';

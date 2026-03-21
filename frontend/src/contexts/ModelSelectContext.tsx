@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import type { Provider } from '@/types/provider';
 
 export interface SnackbarState {
@@ -66,14 +66,21 @@ export function ModelSelectProvider({ children, key: providerKey }: ModelSelectP
     });
     const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-    // Reset state when providerKey changes (dialog reopens with different selection)
+    // Track the previous key to detect if this is a new dialog session vs provider change
+    const previousKeyRef = useRef<string | undefined>(undefined);
+
     useEffect(() => {
-        setInternalCurrentTab(undefined);
-        setIsInitialized(false);
-        setProbingModels(new Set());
-        setSnackbar({ open: false, message: '', severity: 'error' });
-        setCustomModelDialog({ open: false, provider: null, value: '' });
-        setRefreshTrigger(0);
+        const prevKey = previousKeyRef.current;
+        previousKeyRef.current = providerKey;
+
+        // Check if this is a completely new session (dialog reopened)
+        // providerKey format is "closed" or "providerUuid-modelName"
+        if (prevKey === undefined || prevKey === 'closed' || providerKey === 'closed') {
+            // New session - reset initialization state
+            setInternalCurrentTab(undefined);
+            setIsInitialized(false);
+        }
+        // Otherwise it's just a provider change within the same session - preserve all state
     }, [providerKey]);
 
     const triggerRefresh = useCallback(() => {

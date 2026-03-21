@@ -310,6 +310,15 @@ func (b *BaseBot) ValidateTextLength(text string) error {
 	return nil
 }
 
+// GetMessageLimit returns the message length limit for this bot's platform
+func (b *BaseBot) GetMessageLimit() int {
+	caps := GetPlatformCapabilities(b.config.Platform)
+	if caps.TextLimit > 0 {
+		return caps.TextLimit
+	}
+	return 4000 // Default fallback
+}
+
 // ChunkText chunks text into smaller parts based on platform limit
 func (b *BaseBot) ChunkText(text string) []string {
 	caps := GetPlatformCapabilities(b.config.Platform)

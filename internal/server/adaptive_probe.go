@@ -1,16 +1,15 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
-	"strings"
 	"sync"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
@@ -118,9 +117,9 @@ func (ap *AdaptiveProbe) probeChatEndpoint(ctx context.Context, provider *typ.Pr
 
 	switch provider.APIStyle {
 	case protocol.APIStyleOpenAI:
-		return ap.probeOpenAIChatEndpoint(ctx, provider, modelID, startTime)
+		return ap.probeOpenAIChatEndpointWithSDK(ctx, provider, modelID, startTime)
 	case protocol.APIStyleAnthropic:
-		return ap.probeAnthropicChatEndpoint(ctx, provider, modelID, startTime)
+		return ap.probeAnthropicChatEndpointWithSDK(ctx, provider, modelID, startTime)
 	default:
 		return EndpointStatus{
 			Available:    false,
@@ -130,59 +129,45 @@ func (ap *AdaptiveProbe) probeChatEndpoint(ctx context.Context, provider *typ.Pr
 	}
 }
 
-// probeOpenAIChatEndpoint probes OpenAI-style chat completions endpoint
-func (ap *AdaptiveProbe) probeOpenAIChatEndpoint(ctx context.Context, provider *typ.Provider, modelID string, startTime time.Time) EndpointStatus {
-	apiBase := strings.TrimSuffix(provider.APIBase, "/")
-	if !strings.Contains(apiBase, "/v1") {
-		apiBase = apiBase + "/v1"
-	}
-
-	chatURL := apiBase + "/chat/completions"
-
-	requestBody := map[string]interface{}{
-		"model": modelID,
-		"messages": []map[string]string{
-			{"role": "user", "content": "Hi"},
-		},
-		"max_tokens": 5,
-	}
-
-	bodyBytes, err := json.Marshal(requestBody)
-	if err != nil {
+// probeOpenAIChatEndpointWithSDK probes OpenAI-style chat completions endpoint using SDK
+func (ap *AdaptiveProbe) probeOpenAIChatEndpointWithSDK(ctx context.Context, provider *typ.Provider, modelID string, startTime time.Time) EndpointStatus {
+	// Get OpenAI client from pool
+	wrapper := ap.server.clientPool.GetOpenAIClient(provider, "")
+	if wrapper == nil {
 		return EndpointStatus{
 			Available:    false,
-			ErrorMessage: fmt.Sprintf("Failed to marshal request: %v", err),
+			ErrorMessage: "Failed to get OpenAI client",
 			LastChecked:  time.Now(),
 		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", chatURL, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return EndpointStatus{
-			Available:    false,
-			ErrorMessage: fmt.Sprintf("Failed to create request: %v", err),
-			LastChecked:  time.Now(),
-		}
+	messages := []openai.ChatCompletionMessageParamUnion{
+		openai.UserMessage("Hi"),
 	}
 
-	req.Header.Set("Authorization", "Bearer "+provider.Token)
-	req.Header.Set("Content-Type", "application/json")
+	params := openai.ChatCompletionNewParams{
+		Model:    openai.ChatModel(modelID),
+		Messages: messages,
+	}
 
-	client := &http.Client{Timeout: DefaultProbeTimeout}
-	resp, err := client.Do(req)
+	// Create a context with timeout for the probe
+	probeCtx, cancel := context.WithTimeout(ctx, DefaultProbeTimeout)
+	defer cancel()
+
+	resp, err := wrapper.Client().Chat.Completions.New(probeCtx, params)
+	latency := int(time.Since(startTime).Milliseconds())
+
 	if err != nil {
 		return EndpointStatus{
 			Available:    false,
+			LatencyMs:    latency,
 			ErrorMessage: fmt.Sprintf("Chat request failed: %v", err),
 			LastChecked:  time.Now(),
 		}
 	}
-	defer resp.Body.Close()
 
-	latency := int(time.Since(startTime).Milliseconds())
-
-	// Consider 200 or 429 (rate limit) as available
-	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusTooManyRequests {
+	// Check if response is valid
+	if resp != nil && len(resp.Choices) > 0 {
 		return EndpointStatus{
 			Available:    true,
 			LatencyMs:    latency,
@@ -191,72 +176,54 @@ func (ap *AdaptiveProbe) probeOpenAIChatEndpoint(ctx context.Context, provider *
 		}
 	}
 
-	// Read error message from response body
-	bodyBytes, _ = readResponseBody(resp.Body)
-	errorMsg := fmt.Sprintf("Chat endpoint failed with status %d: %s", resp.StatusCode, string(bodyBytes))
-
 	return EndpointStatus{
 		Available:    false,
 		LatencyMs:    latency,
-		ErrorMessage: errorMsg,
+		ErrorMessage: "Chat endpoint returned invalid response",
 		LastChecked:  time.Now(),
 	}
 }
 
-// probeAnthropicChatEndpoint probes Anthropic-style messages endpoint
-func (ap *AdaptiveProbe) probeAnthropicChatEndpoint(ctx context.Context, provider *typ.Provider, modelID string, startTime time.Time) EndpointStatus {
-	apiBase := strings.TrimSuffix(provider.APIBase, "/")
-	if !strings.Contains(apiBase, "/v1") {
-		apiBase = apiBase + "/v1"
-	}
-
-	messagesURL := apiBase + "/messages"
-
-	requestBody := map[string]interface{}{
-		"model":      modelID,
-		"max_tokens": 5,
-		"messages": []map[string]string{
-			{"role": "user", "content": "Hi"},
-		},
-	}
-
-	bodyBytes, err := json.Marshal(requestBody)
-	if err != nil {
+// probeAnthropicChatEndpointWithSDK probes Anthropic-style messages endpoint using SDK
+func (ap *AdaptiveProbe) probeAnthropicChatEndpointWithSDK(ctx context.Context, provider *typ.Provider, modelID string, startTime time.Time) EndpointStatus {
+	// Get Anthropic client from pool
+	wrapper := ap.server.clientPool.GetAnthropicClient(provider, "")
+	if wrapper == nil {
 		return EndpointStatus{
 			Available:    false,
-			ErrorMessage: fmt.Sprintf("Failed to marshal request: %v", err),
+			ErrorMessage: "Failed to get Anthropic client",
 			LastChecked:  time.Now(),
 		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", messagesURL, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return EndpointStatus{
-			Available:    false,
-			ErrorMessage: fmt.Sprintf("Failed to create request: %v", err),
-			LastChecked:  time.Now(),
-		}
+	messages := []anthropic.MessageParam{
+		anthropic.NewUserMessage(anthropic.NewTextBlock("Hi")),
 	}
 
-	req.Header.Set("x-api-key", provider.Token)
-	req.Header.Set("anthropic-version", "2023-06-01")
-	req.Header.Set("Content-Type", "application/json")
+	params := anthropic.MessageNewParams{
+		Model:     anthropic.Model(modelID),
+		MaxTokens: 5,
+		Messages:  messages,
+	}
 
-	client := &http.Client{Timeout: DefaultProbeTimeout}
-	resp, err := client.Do(req)
+	// Create a context with timeout for the probe
+	probeCtx, cancel := context.WithTimeout(ctx, DefaultProbeTimeout)
+	defer cancel()
+
+	resp, err := wrapper.MessagesNew(probeCtx, params)
+	latency := int(time.Since(startTime).Milliseconds())
+
 	if err != nil {
 		return EndpointStatus{
 			Available:    false,
+			LatencyMs:    latency,
 			ErrorMessage: fmt.Sprintf("Messages request failed: %v", err),
 			LastChecked:  time.Now(),
 		}
 	}
-	defer resp.Body.Close()
 
-	latency := int(time.Since(startTime).Milliseconds())
-
-	// Consider 200 or 429 (rate limit) as available
-	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusTooManyRequests {
+	// Check if response is valid
+	if resp != nil && resp.ID != "" {
 		return EndpointStatus{
 			Available:    true,
 			LatencyMs:    latency,
@@ -265,16 +232,24 @@ func (ap *AdaptiveProbe) probeAnthropicChatEndpoint(ctx context.Context, provide
 		}
 	}
 
-	// Read error message from response body
-	bodyBytes, _ = readResponseBody(resp.Body)
-	errorMsg := fmt.Sprintf("Messages endpoint failed with status %d: %s", resp.StatusCode, string(bodyBytes))
-
 	return EndpointStatus{
 		Available:    false,
 		LatencyMs:    latency,
-		ErrorMessage: errorMsg,
+		ErrorMessage: "Messages endpoint returned invalid response",
 		LastChecked:  time.Now(),
 	}
+}
+
+// probeOpenAIChatEndpoint probes OpenAI-style chat completions endpoint (deprecated, use SDK version)
+// Kept for backwards compatibility only
+func (ap *AdaptiveProbe) probeOpenAIChatEndpoint(ctx context.Context, provider *typ.Provider, modelID string, startTime time.Time) EndpointStatus {
+	return ap.probeOpenAIChatEndpointWithSDK(ctx, provider, modelID, startTime)
+}
+
+// probeAnthropicChatEndpoint probes Anthropic-style messages endpoint (deprecated, use SDK version)
+// Kept for backwards compatibility only
+func (ap *AdaptiveProbe) probeAnthropicChatEndpoint(ctx context.Context, provider *typ.Provider, modelID string, startTime time.Time) EndpointStatus {
+	return ap.probeAnthropicChatEndpointWithSDK(ctx, provider, modelID, startTime)
 }
 
 // probeResponsesEndpoint probes the Responses API endpoint for a model

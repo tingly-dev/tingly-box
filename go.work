@@ -1,0 +1,7 @@
+go 1.25.6
+
+use (
+	.
+	gui/wails3
+	imbot
+)

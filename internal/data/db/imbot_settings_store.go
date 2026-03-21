@@ -28,9 +28,14 @@ type Settings struct {
 	ProxyURL      string            `json:"proxy_url,omitempty"`
 	ChatIDLock    string            `json:"chat_id,omitempty"`
 	BashAllowlist []string          `json:"bash_allowlist,omitempty"`
+	DefaultCwd    string            `json:"default_cwd,omitempty"`   // Default working directory
+	DefaultAgent  string            `json:"default_agent,omitempty"` // Default Agent UUID
 	Enabled       bool              `json:"enabled"`
-	CreatedAt     time.Time         `json:"created_at,omitempty"`
-	UpdatedAt     time.Time         `json:"updated_at,omitempty"`
+	// SmartGuide model configuration (required for @tb agent)
+	SmartGuideProvider string    `json:"smartguide_provider,omitempty"` // Provider UUID
+	SmartGuideModel    string    `json:"smartguide_model,omitempty"`    // Model identifier
+	CreatedAt          time.Time `json:"created_at,omitempty"`
+	UpdatedAt          time.Time `json:"updated_at,omitempty"`
 }
 
 // ImBotSettingsStore persists ImBot settings in SQLite using GORM.
@@ -165,17 +170,21 @@ func (s *ImBotSettingsStore) CreateSettings(settings Settings) (Settings, error)
 	}
 
 	record := ImBotSettingsRecord{
-		BotUUID:       settings.UUID,
-		Name:          settings.Name,
-		Platform:      settings.Platform,
-		AuthType:      settings.AuthType,
-		AuthConfig:    authConfigJSON,
-		ProxyURL:      settings.ProxyURL,
-		ChatIDLock:    settings.ChatIDLock,
-		BashAllowlist: allowlistJSON,
-		Enabled:       settings.Enabled,
-		CreatedAt:     settings.CreatedAt,
-		UpdatedAt:     settings.UpdatedAt,
+		BotUUID:            settings.UUID,
+		Name:               settings.Name,
+		Platform:           settings.Platform,
+		AuthType:           settings.AuthType,
+		AuthConfig:         authConfigJSON,
+		ProxyURL:           settings.ProxyURL,
+		ChatIDLock:         settings.ChatIDLock,
+		BashAllowlist:      allowlistJSON,
+		DefaultCwd:         settings.DefaultCwd,
+		DefaultAgent:       settings.DefaultAgent,
+		Enabled:            settings.Enabled,
+		SmartGuideProvider: settings.SmartGuideProvider,
+		SmartGuideModel:    settings.SmartGuideModel,
+		CreatedAt:          settings.CreatedAt,
+		UpdatedAt:          settings.UpdatedAt,
 	}
 
 	if err := s.db.Create(&record).Error; err != nil {
@@ -186,6 +195,7 @@ func (s *ImBotSettingsStore) CreateSettings(settings Settings) (Settings, error)
 }
 
 // UpdateSettings updates an existing ImBot configuration.
+// Only updates fields that are non-zero/empty in the settings struct.
 func (s *ImBotSettingsStore) UpdateSettings(uuid string, settings Settings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -193,35 +203,64 @@ func (s *ImBotSettingsStore) UpdateSettings(uuid string, settings Settings) erro
 	now := time.Now()
 	settings.UpdatedAt = now
 
-	// Convert auth map to JSON
-	authConfigJSON := ""
+	// Build a map of only the fields to update
+	// This allows partial updates - empty/zero values won't overwrite existing data
+	updates := make(map[string]interface{})
+
+	if settings.Name != "" {
+		updates["name"] = settings.Name
+	}
+	if settings.Platform != "" {
+		updates["platform"] = settings.Platform
+	}
+	if settings.AuthType != "" {
+		updates["auth_type"] = settings.AuthType
+	}
+	if settings.ProxyURL != "" {
+		updates["proxy_url"] = settings.ProxyURL
+	}
+	if settings.ChatIDLock != "" {
+		updates["chat_id_lock"] = settings.ChatIDLock
+	}
+
+	// Handle Auth config - only update if non-empty
 	if len(settings.Auth) > 0 {
 		if b, err := json.Marshal(settings.Auth); err == nil {
-			authConfigJSON = string(b)
+			updates["auth_config"] = string(b)
 		}
 	}
 
-	// Convert bash allowlist to JSON
-	allowlistJSON := ""
+	// Handle BashAllowlist - only update if non-empty
 	if len(settings.BashAllowlist) > 0 {
 		if b, err := json.Marshal(settings.BashAllowlist); err == nil {
-			allowlistJSON = string(b)
+			updates["bash_allowlist"] = string(b)
 		}
+	}
+
+	if settings.DefaultCwd != "" {
+		updates["default_cwd"] = settings.DefaultCwd
+	}
+	if settings.DefaultAgent != "" {
+		updates["default_agent"] = settings.DefaultAgent
+	}
+	if settings.SmartGuideProvider != "" {
+		updates["smartguide_provider"] = settings.SmartGuideProvider
+	}
+	if settings.SmartGuideModel != "" {
+		updates["smartguide_model"] = settings.SmartGuideModel
+	}
+
+	// Always update enabled and updated_at if explicitly set
+	updates["enabled"] = settings.Enabled
+	updates["updated_at"] = settings.UpdatedAt
+
+	if len(updates) == 0 {
+		return nil // Nothing to update
 	}
 
 	result := s.db.Model(&ImBotSettingsRecord{}).
 		Where("bot_uuid = ?", uuid).
-		Updates(map[string]interface{}{
-			"name":           settings.Name,
-			"platform":       settings.Platform,
-			"auth_type":      settings.AuthType,
-			"auth_config":    authConfigJSON,
-			"proxy_url":      settings.ProxyURL,
-			"chat_id_lock":   settings.ChatIDLock,
-			"bash_allowlist": allowlistJSON,
-			"enabled":        settings.Enabled,
-			"updated_at":     settings.UpdatedAt,
-		})
+		Updates(updates)
 
 	if result.Error != nil {
 		return fmt.Errorf("failed to update settings: %w", result.Error)
@@ -276,16 +315,20 @@ func (s *ImBotSettingsStore) ToggleSettings(uuid string) (bool, error) {
 // recordToSettings converts an ImBotSettingsRecord to a Settings struct.
 func recordToSettings(record ImBotSettingsRecord) (Settings, error) {
 	settings := Settings{
-		UUID:       record.BotUUID,
-		Name:       record.Name,
-		Platform:   record.Platform,
-		AuthType:   record.AuthType,
-		ProxyURL:   record.ProxyURL,
-		ChatIDLock: record.ChatIDLock,
-		Enabled:    record.Enabled,
-		CreatedAt:  record.CreatedAt,
-		UpdatedAt:  record.UpdatedAt,
-		Auth:       make(map[string]string),
+		UUID:               record.BotUUID,
+		Name:               record.Name,
+		Platform:           record.Platform,
+		AuthType:           record.AuthType,
+		ProxyURL:           record.ProxyURL,
+		ChatIDLock:         record.ChatIDLock,
+		DefaultCwd:         record.DefaultCwd,
+		DefaultAgent:       record.DefaultAgent,
+		Enabled:            record.Enabled,
+		SmartGuideProvider: record.SmartGuideProvider,
+		SmartGuideModel:    record.SmartGuideModel,
+		CreatedAt:          record.CreatedAt,
+		UpdatedAt:          record.UpdatedAt,
+		Auth:               make(map[string]string),
 	}
 
 	// Parse auth config JSON
@@ -293,6 +336,11 @@ func recordToSettings(record ImBotSettingsRecord) (Settings, error) {
 		if err := json.Unmarshal([]byte(record.AuthConfig), &settings.Auth); err != nil {
 			return Settings{}, fmt.Errorf("failed to unmarshal auth config: %w", err)
 		}
+	}
+
+	// Set Token field for backward compatibility (from auth["token"])
+	if token, ok := settings.Auth["token"]; ok {
+		settings.Token = token
 	}
 
 	// Parse bash allowlist JSON

@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -43,18 +42,12 @@ type SessionState struct {
 
 // Manager handles OAuth flows
 type Manager struct {
-	config   *Config
-	registry *Registry
-
-	// State management for OAuth flow
-	states map[string]*StateData
-	mu     sync.RWMutex
-
-	// Session management for OAuth authorization tracking
-	sessions   map[string]*SessionState
-	sessionsMu sync.RWMutex
-
-	Debug bool
+	config         *Config
+	registry       *Registry
+	tokenStorage   TokenStorage
+	stateStorage   StateStorage
+	sessionStorage SessionStorage
+	Debug          bool
 }
 
 // StateData holds information about an OAuth state
@@ -81,16 +74,32 @@ func NewManager(config *Config, registry *Registry) *Manager {
 		registry = DefaultRegistry()
 	}
 
+	// Use storage from config, or create default memory storage
+	tokenStorage := config.TokenStorage
+	if tokenStorage == nil {
+		tokenStorage = NewMemoryTokenStorage()
+	}
+
+	stateStorage := config.StateStorage
+	if stateStorage == nil {
+		stateStorage = NewMemoryStateStorage()
+	}
+
+	sessionStorage := config.SessionStorage
+	if sessionStorage == nil {
+		sessionStorage = NewMemorySessionStorage()
+	}
+
 	m := &Manager{
-		config:   config,
-		registry: registry,
-		states:   make(map[string]*StateData),
-		sessions: make(map[string]*SessionState),
+		config:         config,
+		registry:       registry,
+		tokenStorage:   tokenStorage,
+		stateStorage:   stateStorage,
+		sessionStorage: sessionStorage,
 	}
 
 	// Start cleanup goroutine
-	go m.cleanupExpiredStates()
-	go m.cleanupExpiredSessions()
+	go m.cleanupPeriodically()
 
 	return m
 }
@@ -145,57 +154,31 @@ func (m *Manager) stateKey(state string) string {
 
 // saveState saves state data with expiration
 func (m *Manager) saveState(data *StateData) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
+	// Set expiration time based on config
 	now := time.Now()
 	data.Timestamp = now.Unix()
 	data.ExpiresAt = now.Add(m.config.StateExpiry)
 	data.ExpiresAtUnix = data.ExpiresAt.Unix()
-	m.states[m.stateKey(data.State)] = data
-	return nil
+
+	return m.stateStorage.SaveState(data.State, data)
 }
 
 // getState retrieves and validates state data
 func (m *Manager) getState(state string) (*StateData, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	return m.stateStorage.GetState(state)
+}
 
-	data, ok := m.states[m.stateKey(state)]
-	if !ok {
-		return nil, ErrInvalidState
-	}
-
-	if time.Now().After(data.ExpiresAt) {
-		return nil, ErrStateExpired
-	}
-
-	return data, nil
+// GetStateData retrieves state data by state parameter (public method for external access)
+func (m *Manager) GetStateData(state string) (*StateData, error) {
+	return m.stateStorage.GetState(state)
 }
 
 // deleteState removes state data
 func (m *Manager) deleteState(state string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	delete(m.states, m.stateKey(state))
+	_ = m.stateStorage.DeleteState(state)
 }
 
-// cleanupExpiredStates removes expired states periodically
-func (m *Manager) cleanupExpiredStates() {
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		m.mu.Lock()
-		now := time.Now()
-		for key, data := range m.states {
-			if now.After(data.ExpiresAt) {
-				delete(m.states, key)
-			}
-		}
-		m.mu.Unlock()
-	}
-}
+// cleanupExpiredStates is removed - now handled by cleanupPeriodically
 
 // GetAuthURL generates the OAuth authorization URL for a provider
 func (m *Manager) GetAuthURL(userID string, providerType ProviderType, redirectTo string, name string, sessionID string) (string, string, error) {
@@ -604,6 +587,7 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 		"client_secret": config.ClientSecret,
 	}
 
+	// Build request body first
 	reqBody, contentType, err := buildRequestBody(params, config.TokenRequestFormat)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request body: %w", err)
@@ -614,20 +598,23 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 		return nil, err
 	}
 
-	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Accept", "application/json")
 
-	// Call provider's token hook if present
+	// Call provider's token hook if present (may modify params and headers)
 	if config.Hook != nil {
 		if err := config.Hook.BeforeToken(params, req.Header); err != nil {
 			return nil, err
 		}
-		reqBody, _, err = buildRequestBody(params, config.TokenRequestFormat)
+		// Rebuild body in case hook modified params
+		reqBody, contentType, err = buildRequestBody(params, config.TokenRequestFormat)
 		if err != nil {
 			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
 		}
 		req.Body = io.NopCloser(reqBody)
 	}
+
+	// Set Content-Type after hook (hook may have modified it)
+	req.Header.Set("Content-Type", contentType)
 
 	// Debug: print request details
 	m.debugRequest(req, config.TokenRequestFormat)
@@ -1104,9 +1091,9 @@ func (m *Manager) CreateSession(userID string, provider ProviderType) (*SessionS
 		ExpiresAt: now.Add(10 * time.Minute), // Session expires after 10 minutes
 	}
 
-	m.sessionsMu.Lock()
-	m.sessions[sessionID] = session
-	m.sessionsMu.Unlock()
+	if err := m.sessionStorage.SaveSession(sessionID, session); err != nil {
+		return nil, err
+	}
 
 	logrus.WithFields(logrus.Fields{
 		"session_id": sessionID,
@@ -1120,16 +1107,14 @@ func (m *Manager) CreateSession(userID string, provider ProviderType) (*SessionS
 
 // GetSession retrieves a session by ID
 func (m *Manager) GetSession(sessionID string) (*SessionState, error) {
-	m.sessionsMu.RLock()
-	defer m.sessionsMu.RUnlock()
-
-	session, ok := m.sessions[sessionID]
-	if !ok {
-		return nil, fmt.Errorf("session not found")
+	session, err := m.sessionStorage.GetSession(sessionID)
+	if err != nil {
+		return nil, err
 	}
 
-	if time.Now().After(session.ExpiresAt) {
-		return nil, fmt.Errorf("session expired")
+	// Check expiration
+	if !session.ExpiresAt.IsZero() && time.Now().After(session.ExpiresAt) {
+		return nil, ErrSessionNotFound
 	}
 
 	return session, nil
@@ -1137,28 +1122,21 @@ func (m *Manager) GetSession(sessionID string) (*SessionState, error) {
 
 // StoreSession stores or updates a session
 func (m *Manager) StoreSession(session *SessionState) {
-	m.sessionsMu.Lock()
-	defer m.sessionsMu.Unlock()
-	m.sessions[session.SessionID] = session
+	_ = m.sessionStorage.SaveSession(session.SessionID, session)
 }
 
 // UpdateSessionStatus updates the status of a session
 func (m *Manager) UpdateSessionStatus(sessionID string, status SessionStatus, providerUUID string, errMsg string) error {
-	m.sessionsMu.Lock()
-	defer m.sessionsMu.Unlock()
-
-	session, ok := m.sessions[sessionID]
-	if !ok {
+	// First get the session to log provider info
+	session, err := m.sessionStorage.GetSession(sessionID)
+	if err != nil {
 		logrus.WithField("session_id", sessionID).Warn("[OAuth] Failed to update session: not found")
-		return fmt.Errorf("session not found")
+		return err
 	}
 
-	session.Status = status
-	if providerUUID != "" {
-		session.ProviderUUID = providerUUID
-	}
-	if errMsg != "" {
-		session.Error = errMsg
+	// Update the status
+	if err := m.sessionStorage.UpdateSessionStatus(sessionID, status, providerUUID, errMsg); err != nil {
+		return err
 	}
 
 	// Log session status change
@@ -1180,19 +1158,16 @@ func (m *Manager) UpdateSessionStatus(sessionID string, status SessionStatus, pr
 	return nil
 }
 
-// cleanupExpiredSessions removes expired sessions periodically
-func (m *Manager) cleanupExpiredSessions() {
+// cleanupExpiredSessions is removed - now handled by cleanupPeriodically
+
+// cleanupPeriodically removes expired states, sessions, and tokens
+func (m *Manager) cleanupPeriodically() {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		m.sessionsMu.Lock()
-		now := time.Now()
-		for key, session := range m.sessions {
-			if now.After(session.ExpiresAt) {
-				delete(m.sessions, key)
-			}
-		}
-		m.sessionsMu.Unlock()
+		m.stateStorage.CleanupExpired()
+		m.sessionStorage.CleanupExpired()
+		m.tokenStorage.CleanupExpired()
 	}
 }

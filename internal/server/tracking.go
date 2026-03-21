@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tingly-dev/tingly-box/internal/data/db"
-	"github.com/tingly-dev/tingly-box/internal/obs/otel"
+	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -21,9 +21,13 @@ type UsageTracker struct {
 
 // NewUsageTracker creates a new UsageTracker
 func (s *Server) NewUsageTracker() *UsageTracker {
+	sm := s.config.StoreManager()
+	if sm == nil {
+		return &UsageTracker{}
+	}
 	return &UsageTracker{
-		statsStore: s.config.GetStatsStore(),
-		usageStore: s.config.GetUsageStore(),
+		statsStore: sm.Stats(),
+		usageStore: sm.Usage(),
 	}
 }
 
@@ -62,8 +66,8 @@ func (t *UsageTracker) RecordUsage(
 
 	// 2. Record to OTel if token tracker is available (from server context)
 	if tokenTracker, exists := c.Get("token_tracker"); exists && tokenTracker != nil {
-		if tt, ok := tokenTracker.(*otel.TokenTracker); ok {
-			tt.RecordUsage(c.Request.Context(), otel.UsageOptions{
+		if tt, ok := tokenTracker.(*tracker.TokenTracker); ok {
+			tt.RecordUsage(c.Request.Context(), tracker.UsageOptions{
 				Provider:     provider.Name,
 				ProviderUUID: provider.UUID,
 				Model:        model,
@@ -122,6 +126,7 @@ func (t *UsageTracker) recordDetailed(
 		Model:        model,
 		Scenario:     scenario,
 		RequestModel: requestModel,
+		UserID:       c.GetString("enterprise_user_id"),
 		InputTokens:  inputTokens,
 		OutputTokens: outputTokens,
 		TotalTokens:  inputTokens + outputTokens,
@@ -142,6 +147,9 @@ func (t *UsageTracker) recordDetailed(
 func extractScenarioFromPath(path string) string {
 	if strings.Contains(path, "/openai/") {
 		return "openai"
+	}
+	if strings.Contains(path, "/codex/") {
+		return "codex"
 	}
 	if strings.Contains(path, "/anthropic/") {
 		return "anthropic"

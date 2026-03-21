@@ -738,3 +738,138 @@ func TestOptions(t *testing.T) {
 		}
 	})
 }
+
+// TestDefaultSessionExpiry tests the DefaultSessionExpiry constant
+func TestDefaultSessionExpiry(t *testing.T) {
+	if DefaultSessionExpiry != 10*time.Minute {
+		t.Errorf("Expected DefaultSessionExpiry to be 10 minutes, got %v", DefaultSessionExpiry)
+	}
+}
+
+// TestManager_GetStateData tests the GetStateData public method
+func TestManager_GetStateData(t *testing.T) {
+	t.Run("RetrieveExistingState", func(t *testing.T) {
+		registry := NewRegistry()
+		registry.Register(&ProviderConfig{
+			Type:         ProviderClaudeCode,
+			DisplayName:  "Anthropic",
+			ClientID:     "test-client-id",
+			ClientSecret: "test-secret",
+			AuthURL:      "https://anthropic.com/auth",
+			TokenURL:     "https://anthropic.com/token",
+			Scopes:       []string{"api"},
+		})
+
+		config := DefaultConfig()
+		manager := NewManager(config, registry)
+
+		// Create a state with sessionID
+		_, state, err := manager.GetAuthURL("user123", ProviderClaudeCode, "", "test-name", "test-session-id")
+		if err != nil {
+			t.Fatalf("GetAuthURL failed: %v", err)
+		}
+
+		// Retrieve it using public method
+		stateData, err := manager.GetStateData(state)
+		if err != nil {
+			t.Fatalf("GetStateData failed: %v", err)
+		}
+
+		if stateData.UserID != "user123" {
+			t.Errorf("Expected userID 'user123', got '%s'", stateData.UserID)
+		}
+
+		if stateData.Name != "test-name" {
+			t.Errorf("Expected name 'test-name', got '%s'", stateData.Name)
+		}
+
+		if stateData.SessionID != "test-session-id" {
+			t.Errorf("Expected sessionID 'test-session-id', got '%s'", stateData.SessionID)
+		}
+
+		if stateData.Provider != ProviderClaudeCode {
+			t.Errorf("Expected provider %s, got %s", ProviderClaudeCode, stateData.Provider)
+		}
+	})
+
+	t.Run("RetrieveNonExistentState", func(t *testing.T) {
+		config := DefaultConfig()
+		manager := NewManager(config, nil)
+
+		_, err := manager.GetStateData("non-existent-state")
+		if err != ErrInvalidState {
+			t.Errorf("Expected ErrInvalidState, got %v", err)
+		}
+	})
+
+	t.Run("RetrieveExpiredState", func(t *testing.T) {
+		registry := NewRegistry()
+		registry.Register(&ProviderConfig{
+			Type:         ProviderClaudeCode,
+			DisplayName:  "Anthropic",
+			ClientID:     "test-client-id",
+			ClientSecret: "test-secret",
+			AuthURL:      "https://anthropic.com/auth",
+			TokenURL:     "https://anthropic.com/token",
+			Scopes:       []string{"api"},
+		})
+
+		config := DefaultConfig()
+		config.StateExpiry = 10 * time.Millisecond
+		manager := NewManager(config, registry)
+
+		// Create a state
+		_, state, err := manager.GetAuthURL("user123", ProviderClaudeCode, "", "", "")
+		if err != nil {
+			t.Fatalf("GetAuthURL failed: %v", err)
+		}
+
+		// Wait for expiry
+		time.Sleep(20 * time.Millisecond)
+
+		// Try to retrieve expired state
+		_, err = manager.GetStateData(state)
+		if err != ErrStateExpired {
+			t.Errorf("Expected ErrStateExpired, got %v", err)
+		}
+	})
+
+	t.Run("StateDataAfterHandleCallback", func(t *testing.T) {
+		// This test verifies that GetStateData can retrieve state before it's deleted by HandleCallback
+		registry := NewRegistry()
+		registry.Register(&ProviderConfig{
+			Type:         ProviderClaudeCode,
+			DisplayName:  "Anthropic",
+			ClientID:     "test-client-id",
+			ClientSecret: "test-secret",
+			AuthURL:      "https://anthropic.com/auth",
+			TokenURL:     "https://anthropic.com/token",
+			Scopes:       []string{"api"},
+		})
+
+		config := DefaultConfig()
+		manager := NewManager(config, registry)
+
+		// Create a state with sessionID
+		testSessionID := "test-session-123"
+		_, state, err := manager.GetAuthURL("user123", ProviderClaudeCode, "", "", testSessionID)
+		if err != nil {
+			t.Fatalf("GetAuthURL failed: %v", err)
+		}
+
+		// Retrieve state data BEFORE HandleCallback (simulating the bugfix scenario)
+		stateData, err := manager.GetStateData(state)
+		if err != nil {
+			t.Fatalf("GetStateData failed: %v", err)
+		}
+
+		// Verify we have the sessionID
+		if stateData.SessionID != testSessionID {
+			t.Errorf("Expected sessionID '%s', got '%s'", testSessionID, stateData.SessionID)
+		}
+
+		// Now if we were to call HandleCallback, it would delete the state
+		// But we've already captured the sessionID, which is the key bugfix behavior
+		_ = stateData
+	})
+}

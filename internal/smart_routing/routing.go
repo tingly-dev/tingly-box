@@ -372,3 +372,8 @@ func EstimateTokens(text string) int {
 	// Rough approximation: ~4 characters per token
 	return len(text) / 4
 }
+
+// GetRules returns the router's rules
+func (r *Router) GetRules() []SmartRouting {
+	return r.rules
+}

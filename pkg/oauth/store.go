@@ -18,6 +18,9 @@ type TokenStorage interface {
 
 	// ListProviders returns all providers that have tokens for the user
 	ListProviders(userID string) ([]ProviderType, error)
+
+	// CleanupExpired removes all expired tokens from the storage
+	CleanupExpired() error
 }
 
 // MemoryTokenStorage is an in-memory implementation of TokenStorage
@@ -80,6 +83,25 @@ func (s *MemoryTokenStorage) DeleteToken(userID string, provider ProviderType) e
 	return nil
 }
 
+// CleanupExpired removes all expired tokens from the storage
+func (s *MemoryTokenStorage) CleanupExpired() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	for userID, providerTokens := range s.tokens {
+		for provider, token := range providerTokens {
+			if !token.Expiry.IsZero() && now.After(token.Expiry) {
+				delete(providerTokens, provider)
+			}
+		}
+		if len(s.tokens[userID]) == 0 {
+			delete(s.tokens, userID)
+		}
+	}
+	return nil
+}
+
 // ListProviders returns all providers that have tokens for the user
 func (s *MemoryTokenStorage) ListProviders(userID string) ([]ProviderType, error) {
 	s.mu.RLock()
@@ -95,24 +117,6 @@ func (s *MemoryTokenStorage) ListProviders(userID string) ([]ProviderType, error
 	}
 
 	return providers, nil
-}
-
-// CleanupExpiredTokens removes all expired tokens from the storage
-func (s *MemoryTokenStorage) CleanupExpiredTokens() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	now := time.Now()
-	for userID, providerTokens := range s.tokens {
-		for provider, token := range providerTokens {
-			if !token.Expiry.IsZero() && now.After(token.Expiry) {
-				delete(providerTokens, provider)
-			}
-		}
-		if len(s.tokens[userID]) == 0 {
-			delete(s.tokens, userID)
-		}
-	}
 }
 
 // TokenWithMetadata represents a token with additional metadata

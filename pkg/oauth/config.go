@@ -26,6 +26,10 @@ const (
 	ProviderMock        ProviderType = "mock"
 )
 
+// DefaultSessionExpiry is the default expiration time for OAuth sessions
+// This constant is used by both the OAuth manager and session manager
+const DefaultSessionExpiry = 10 * time.Minute
+
 // ParseProviderType parses a provider type from string, case-insensitive
 func ParseProviderType(s string) (ProviderType, error) {
 	p := ProviderType(s)
@@ -54,6 +58,12 @@ type Config struct {
 	// TokenStorage is the storage for OAuth tokens
 	TokenStorage TokenStorage
 
+	// StateStorage is the storage for OAuth state data
+	StateStorage StateStorage
+
+	// SessionStorage is the storage for OAuth session data
+	SessionStorage SessionStorage
+
 	// StateExpiry is the duration for which OAuth state is valid
 	StateExpiry time.Duration
 
@@ -68,10 +78,12 @@ type Config struct {
 // DefaultConfig returns a default OAuth configuration
 func DefaultConfig() *Config {
 	cfg := &Config{
-		BaseURL:           "http://localhost:12580",
-		ProviderConfigs:   make(map[ProviderType]*ProviderConfig),
-		TokenStorage:      NewMemoryTokenStorage(),
-		StateExpiry:       10 * time.Minute,
+		BaseURL:         "http://localhost:12580",
+		ProviderConfigs: make(map[ProviderType]*ProviderConfig),
+		TokenStorage:    NewMemoryTokenStorage(),
+		StateStorage:    NewMemoryStateStorage(),
+		SessionStorage:  NewMemorySessionStorage(),
+		StateExpiry:     10 * time.Minute,
 		TokenExpiryBuffer: 5 * time.Minute,
 	}
 

@@ -6,25 +6,14 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
-	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/openai/openai-go/v3/shared"
 )
-
-// ConvertAnthropicV1ToResponsesRequestWithProvider converts Anthropic v1 request to OpenAI Responses API format
-// and applies provider-specific transformations
-func ConvertAnthropicV1ToResponsesRequestWithProvider(
-	anthropicReq *anthropic.MessageNewParams,
-	provider *typ.Provider,
-	model string,
-) responses.ResponseNewParams {
-	responsesReq := ConvertAnthropicV1ToResponsesRequest(anthropicReq)
-	responsesReq.Model = model
-	return responsesReq
-}
 
 // ConvertAnthropicV1ToResponsesRequest converts Anthropic v1 request to OpenAI Responses API format
 // The Responses API has a different structure than Chat Completions
 func ConvertAnthropicV1ToResponsesRequest(anthropicReq *anthropic.MessageNewParams) responses.ResponseNewParams {
 	params := responses.ResponseNewParams{}
+	params.Model = shared.ResponsesModel(anthropicReq.Model)
 
 	// Convert system messages to Instructions (system role in v1)
 	// In v1, system messages are passed via the System param
@@ -40,13 +29,10 @@ func ConvertAnthropicV1ToResponsesRequest(anthropicReq *anthropic.MessageNewPara
 	}
 
 	// Convert messages to Input items (Responses API format)
-	if len(anthropicReq.Messages) > 0 {
-		inputItems := convertV1MessagesToResponsesInput(anthropicReq.Messages)
-		if len(inputItems) > 0 {
-			params.Input = responses.ResponseNewParamsInputUnion{
-				OfInputItemList: responses.ResponseInputParam(inputItems),
-			}
-		}
+	// Always set Input field, even if empty, as Responses API requires it
+	inputItems := convertV1MessagesToResponsesInput(anthropicReq.Messages)
+	params.Input = responses.ResponseNewParamsInputUnion{
+		OfInputItemList: responses.ResponseInputParam(inputItems),
 	}
 
 	// Convert max_tokens to max_output_tokens

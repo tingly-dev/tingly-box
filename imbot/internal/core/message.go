@@ -1,5 +1,9 @@
 package core
 
+import (
+	"strings"
+)
+
 // Content represents the message content interface
 type Content interface {
 	ContentType() string
@@ -32,6 +36,15 @@ func NewTextContent(text string, entities ...Entity) *TextContent {
 		Text:     text,
 		Entities: entities,
 	}
+}
+
+// GetReplyTarget returns the reply target ID for the message.
+// Different platforms may use different IDs:
+// - Telegram: Recipient.ID (chat ID)
+// - DingTalk/Feishu: Recipient.ID (conversation ID)
+// - Discord: Recipient.ID (channel ID)
+func (m *Message) GetReplyTarget() string {
+	return strings.TrimSpace(m.Recipient.ID)
 }
 
 // GetText returns the text from content if it's TextContent

@@ -214,7 +214,7 @@ func (r *Request) ToPermissionRequest() agentboot.PermissionRequest {
 
 // FromPermissionRequest creates a Request from legacy PermissionRequest
 func FromPermissionRequest(pr agentboot.PermissionRequest) *Request {
-	return &Request{
+	req := &Request{
 		ID:        pr.RequestID,
 		Type:      TypePermission,
 		SessionID: pr.SessionID,
@@ -222,8 +222,25 @@ func FromPermissionRequest(pr agentboot.PermissionRequest) *Request {
 		ToolName:  pr.ToolName,
 		Input:     pr.Input,
 		Reason:    pr.Reason,
-		Metadata:  pr.Input, // Input may contain _chat_id, _platform
+		BotUUID:   pr.BotUUID, // Include bot UUID for routing
+		Metadata:  pr.Input,
+		ChatID:    pr.ChatID,   // Use ChatID field directly
+		Platform:  pr.Platform, // Use Platform field directly
 	}
+
+	// Fallback: extract chat context from Input (for backward compatibility)
+	if req.ChatID == "" && pr.Input != nil {
+		if chatID, ok := pr.Input["_chat_id"].(string); ok {
+			req.ChatID = chatID
+		}
+	}
+	if req.Platform == "" && pr.Input != nil {
+		if platform, ok := pr.Input["_platform"].(string); ok {
+			req.Platform = platform
+		}
+	}
+
+	return req
 }
 
 // ToPermissionResult converts Result to legacy PermissionResult

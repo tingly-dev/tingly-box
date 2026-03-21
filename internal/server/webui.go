@@ -11,12 +11,22 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-
+	"github.com/sirupsen/logrus"
 	assets "github.com/tingly-dev/tingly-box/internal"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
+	"github.com/tingly-dev/tingly-box/internal/server/module/imbotsettings"
+	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
+	"github.com/tingly-dev/tingly-box/internal/server/module/providertemplate"
+	rulemodule "github.com/tingly-dev/tingly-box/internal/server/module/rule"
+	"github.com/tingly-dev/tingly-box/internal/server/module/scenario"
+	"github.com/tingly-dev/tingly-box/internal/server/module/skill"
+	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
+	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 	"github.com/tingly-dev/tingly-box/pkg/swagger"
 )
 
@@ -55,11 +65,10 @@ func (s *Server) UseUIEndpoints() {
 	// Exclude API routes from SPA catch-all by registering them first
 	// The routes registered below (manager APIs, OAuth, usage, etc.) will take precedence
 
-	// Claude Code status line endpoints (no auth required)
+	// Claude Code status line endpoints (no auth required) - register from claudecode module
 	// These must be registered before the /tingly/:scenario routes
-	ccGroup := s.engine.Group("/tingly/:scenario")
-	ccGroup.POST("/status", s.GetClaudeCodeStatus)
-	ccGroup.POST("/statusline", s.GetClaudeCodeStatusLine)
+	statusHandler := statusline.NewHandler(s.config, s.loadBalancer, statusline.NewCache())
+	statusline.RegisterRoutes(s.engine, statusHandler)
 
 	// Create route manager
 	manager := swagger.NewRouteManager(s.engine)
@@ -67,16 +76,34 @@ func (s *Server) UseUIEndpoints() {
 	// API routes (for web UI functionality)
 	s.useWebAPIEndpoints(manager)
 
-	s.useOAuthEndpoints(manager)
+	// OAuth API routes - register from oauth module
+	apiV1 := manager.NewGroup("api", "v1", "")
+	apiV1.Router.Use(s.authMW.UserAuthMiddleware())
+	oauthmodule.RegisterRoutes(apiV1, s.authMW.UserAuthMiddleware(), s.oauthHandler)
+	// Register callback routes (unauthenticated)
+	oauthmodule.RegisterCallbackRoutes(manager, s.oauthHandler)
 
-	// Usage API routes
-	s.RegisterUsageRoutes(manager)
+	// Usage API routes - register from usage module
+	// Note: apiV1 is already created above with auth middleware
+	sm := s.config.StoreManager()
+	if sm != nil {
+		usageHandler := usagemodule.NewHandler(sm.Usage())
+		usagemodule.RegisterRoutes(apiV1, usageHandler)
+	}
 
-	// ImBot settings API routes
-	s.RegisterImBotSettingsRoutes(manager)
+	// ImBot settings API routes - register from imbotsettings module
+	imbotSettingsHandler, err := imbotsettings.NewHandler(s.config)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to create imbotsettings handler, imbot settings APIs will not be available")
+	} else {
+		imbotsettings.RegisterRoutes(apiV1, imbotSettingsHandler)
+		// Store handler reference for shutdown
+		s.imbotSettingsHandler = imbotSettingsHandler
+	}
 
 	// Config apply API routes
-	s.RegisterConfigApplyRoutes(manager)
+	configapplyHandler := configapply.NewHandler(s.config, s.host)
+	configapply.RegisterRoutes(apiV1, configapplyHandler)
 
 	// Static files and templates - try embedded assets first, fallback to filesystem
 	s.useWebStaticEndpoints(s.engine)
@@ -312,8 +339,9 @@ func (s *Server) GetHistory(c *gin.Context) {
 		Success: true,
 	}
 
-	if s.logger != nil {
-		history := s.logger.GetHistory(50)
+	if s.multiLogger != nil {
+		actionLogger := s.multiLogger.WithSource(pkgobs.LogSourceAction)
+		history := actionLogger.GetMemoryLatest(50)
 		response.Data = history
 	} else {
 		response.Data = []interface{}{}
@@ -374,11 +402,10 @@ func (s *Server) StopServer(c *gin.Context) {
 	}
 
 	// Log the action
-	if s.logger != nil {
-		s.logger.LogAction(obs.ActionStopServer, map[string]interface{}{
-			"source": "web_ui",
-		}, true, "Server stopped via web interface")
-	}
+	logrus.WithFields(logrus.Fields{
+		"action": obs.ActionStopServer,
+		"source": "web_ui",
+	}).Info("Server stopped via web interface")
 
 	// Send shutdown signal to main process
 	select {
@@ -481,19 +508,49 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(LatestVersionResponse{}),
 	)
 
-	// Log API routes
+	// Log API routes (HTTP request logs from memory)
 	apiV1.GET("/log", s.GetLogs,
-		swagger.WithDescription("Get logs with optional filtering"),
+		swagger.WithDescription("Get HTTP request logs with optional filtering"),
 		swagger.WithTags("logs"),
 		swagger.WithResponseModel(LogsResponse{}),
 	)
 	apiV1.GET("/log/stats", s.GetLogStats,
-		swagger.WithDescription("Get log statistics"),
+		swagger.WithDescription("Get HTTP request log statistics"),
 		swagger.WithTags("logs"),
 	)
 	apiV1.DELETE("/log", s.ClearLogs,
-		swagger.WithDescription("Clear all logs"),
+		swagger.WithDescription("Clear all HTTP request logs"),
 		swagger.WithTags("logs"),
+	)
+
+	// System Log API routes (application logs from JSON file)
+	apiV1.GET("/system/logs", s.GetSystemLogs,
+		swagger.WithDescription("Get recent system logs with optional filtering (from JSON log file). Use 'limit' parameter to control how many recent entries to return."),
+		swagger.WithTags("system-logs"),
+		swagger.WithResponseModel(SystemLogsResponse{}),
+	)
+	apiV1.GET("/system/logs/stats", s.GetSystemLogStats,
+		swagger.WithDescription("Get system log statistics"),
+		swagger.WithTags("system-logs"),
+	)
+	apiV1.GET("/system/logs/level", s.GetSystemLogLevel,
+		swagger.WithDescription("Get the current system log level"),
+		swagger.WithTags("system-logs"),
+	)
+	apiV1.POST("/system/logs/level", s.SetSystemLogLevel,
+		swagger.WithDescription("Set the minimum log level for system logs"),
+		swagger.WithTags("system-logs"),
+	)
+
+	// Action History API routes (user operations/audit log)
+	apiV1.GET("/actions/history", s.GetActionHistory,
+		swagger.WithDescription("Get user action history from memory (recent operations)"),
+		swagger.WithTags("actions"),
+		swagger.WithResponseModel(ActionHistoryResponse{}),
+	)
+	apiV1.GET("/actions/stats", s.GetActionStats,
+		swagger.WithDescription("Get statistics about user actions"),
+		swagger.WithTags("actions"),
 	)
 
 	// Provider Management
@@ -530,7 +587,19 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	//)
 
 	useV2Provider(s, apiV2)
-	useV2Skill(s, apiV2)
+
+	// Create skill handler with skill manager
+	// Initialize skill manager for skill locations
+	skillManager, err := skill.NewSkillManager(s.config.ConfigDir)
+	if err != nil {
+		log.Printf("Failed to add skill api: %v", err)
+		// Continue without skill manager - skill features will be disabled
+	} else {
+		handler := skill.NewHandler(skillManager)
+		// Register routes from skill module
+		skill.RegisterRoutes(apiV2, handler)
+		log.Printf("Skill api initialized")
+	}
 
 	// Server Management
 	apiV1.GET("/status", s.GetStatus,
@@ -557,72 +626,13 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(ServerActionResponse{}),
 	)
 
-	// Rule Management
-	apiV1.GET("/rules", s.GetRules,
-		swagger.WithDescription("Get all configured rules"),
-		swagger.WithTags("rules"),
-		swagger.WithQueryRequired("scenario", "string", "Filter by scenario"),
-		swagger.WithResponseModel(RulesResponse{}),
-	)
+	// Rule Management - register from rule module
+	ruleHandler := rulemodule.NewHandler(s.config)
+	rulemodule.RegisterRoutes(apiV1, ruleHandler)
 
-	apiV1.GET("/rule/:uuid", s.GetRule,
-		swagger.WithDescription("Get specific rule by UUID"),
-		swagger.WithTags("rules"),
-		swagger.WithResponseModel(RuleResponse{}),
-	)
-
-	apiV1.POST("/rule/:uuid", s.UpdateRule,
-		swagger.WithDescription("Create or update a rule configuration"),
-		swagger.WithTags("rules"),
-		swagger.WithRequestModel(UpdateRuleRequest{}),
-		swagger.WithResponseModel(UpdateRuleResponse{}),
-	)
-
-	apiV1.POST("/rule", s.CreateRule,
-		swagger.WithDescription("Create or update a rule configuration"),
-		swagger.WithTags("rules"),
-		swagger.WithRequestModel(CreateRuleRequest{}),
-		swagger.WithResponseModel(UpdateRuleResponse{}),
-	)
-
-	apiV1.DELETE("/rule/:uuid", s.DeleteRule,
-		swagger.WithDescription("Delete a rule configuration"),
-		swagger.WithTags("rules"),
-		swagger.WithResponseModel(DeleteRuleResponse{}),
-	)
-
-	// Scenario Management
-	apiV1.GET("/scenarios", s.GetScenarios,
-		swagger.WithDescription("Get all scenario configurations"),
-		swagger.WithTags("scenarios"),
-		swagger.WithResponseModel(ScenariosResponse{}),
-	)
-
-	apiV1.GET("/scenario/:scenario", s.GetScenarioConfig,
-		swagger.WithDescription("Get configuration for a specific scenario"),
-		swagger.WithTags("scenarios"),
-		swagger.WithResponseModel(ScenarioResponse{}),
-	)
-
-	apiV1.POST("/scenario/:scenario", s.SetScenarioConfig,
-		swagger.WithDescription("Create or update scenario configuration"),
-		swagger.WithTags("scenarios"),
-		swagger.WithRequestModel(ScenarioUpdateRequest{}),
-		swagger.WithResponseModel(ScenarioUpdateResponse{}),
-	)
-
-	apiV1.GET("/scenario/:scenario/flag/:flag", s.GetScenarioFlag,
-		swagger.WithDescription("Get a specific flag value for a scenario"),
-		swagger.WithTags("scenarios"),
-		swagger.WithResponseModel(ScenarioFlagResponse{}),
-	)
-
-	apiV1.PUT("/scenario/:scenario/flag/:flag", s.SetScenarioFlag,
-		swagger.WithDescription("Set a specific flag value for a scenario"),
-		swagger.WithTags("scenarios"),
-		swagger.WithRequestModel(ScenarioFlagUpdateRequest{}),
-		swagger.WithResponseModel(ScenarioFlagResponse{}),
-	)
+	// Scenario Management - register from scenario module
+	scenarioHandler := scenario.NewHandler(s.config, s)
+	scenario.RegisterRoutes(apiV1, scenarioHandler)
 
 	// Guardrails Management
 	apiV1.GET("/guardrails/config", s.GetGuardrailsConfig,
@@ -743,6 +753,14 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(ModelProbeResponse{}),
 	)
 
+	// Probe V2 endpoints (new unified probe API)
+	apiV2.POST("/probe", s.HandleProbeV2,
+		swagger.WithDescription("Probe V2 - Unified probe endpoint for testing rules and providers"),
+		swagger.WithTags("testing"),
+		swagger.WithRequestModel(ProbeV2Request{}),
+		swagger.WithResponseModel(ProbeV2Response{}),
+	)
+
 	// Token Management
 	apiV1.POST("/token", s.GenerateToken,
 		swagger.WithDescription("Generate a new API token"),
@@ -802,87 +820,9 @@ func useV2Provider(s *Server, api *swagger.RouteGroup) {
 		swagger.WithResponseModel(DeleteProviderResponse{}),
 	)
 
-	// Provider template endpoints
-	api.GET("/provider-templates", s.GetProviderTemplates,
-		swagger.WithDescription("Get all provider templates"),
-		swagger.WithTags("providers"),
-		swagger.WithResponseModel(TemplateResponse{}),
-	)
-
-	api.GET("/provider-templates/:id", s.GetProviderTemplate,
-		swagger.WithDescription("Get a specific provider template by ID"),
-		swagger.WithTags("providers"),
-	)
-
-	api.POST("/provider-templates/refresh", s.RefreshProviderTemplates,
-		swagger.WithDescription("Refresh provider templates from GitHub"),
-		swagger.WithTags("providers"),
-	)
-
-	api.GET("/provider-templates/version", s.GetProviderTemplateVersion,
-		swagger.WithDescription("Get current provider template registry version"),
-		swagger.WithTags("providers"),
-	)
-}
-
-// Skill management endpoints
-func useV2Skill(s *Server, api *swagger.RouteGroup) {
-	api.GET("/skill-locations", s.GetSkillLocations,
-		swagger.WithDescription("Get all skill locations"),
-		swagger.WithTags("skills"),
-		swagger.WithResponseModel(SkillLocationsResponse{}),
-	)
-
-	api.POST("/skill-locations", s.AddSkillLocation,
-		swagger.WithDescription("Add a new skill location"),
-		swagger.WithTags("skills"),
-		swagger.WithRequestModel(AddSkillLocationRequest{}),
-		swagger.WithResponseModel(AddSkillLocationResponse{}),
-	)
-
-	api.GET("/skill-locations/:id", s.GetSkillLocation,
-		swagger.WithDescription("Get a specific skill location"),
-		swagger.WithTags("skills"),
-		swagger.WithResponseModel(SkillLocationResponse{}),
-	)
-
-	api.DELETE("/skill-locations/:id", s.RemoveSkillLocation,
-		swagger.WithDescription("Remove a skill location"),
-		swagger.WithTags("skills"),
-		swagger.WithResponseModel(RemoveSkillLocationResponse{}),
-	)
-
-	api.POST("/skill-locations/:id/refresh", s.RefreshSkillLocation,
-		swagger.WithDescription("Refresh/scan a skill location for updated skills"),
-		swagger.WithTags("skills"),
-		swagger.WithResponseModel(RefreshSkillLocationResponse{}),
-	)
-
-	// Scan all IDE locations for skills (comprehensive scan)
-	api.POST("/skill-locations/scan", s.ScanIdes,
-		swagger.WithDescription("Scan all IDE locations and return discovered skills"),
-		swagger.WithTags("skills"),
-		swagger.WithResponseModel(ScanIdesResponse{}),
-	)
-
-	api.GET("/skill-locations/discover", s.DiscoverIdes,
-		swagger.WithDescription("Discover IDEs with skills in home directory"),
-		swagger.WithTags("skills"),
-		swagger.WithResponseModel(DiscoverIdesResponse{}),
-	)
-
-	api.POST("/skill-locations/import", s.ImportSkillLocations,
-		swagger.WithDescription("Import discovered skill locations"),
-		swagger.WithTags("skills"),
-		swagger.WithRequestModel(ImportSkillLocationsRequest{}),
-		swagger.WithResponseModel(ImportSkillLocationsResponse{}),
-	)
-
-	api.GET("/skill-content", s.GetSkillContent,
-		swagger.WithDescription("Get skill file content"),
-		swagger.WithTags("skills"),
-		swagger.WithResponseModel(SkillContentResponse{}),
-	)
+	// Provider template endpoints - register from providertemplate module
+	providerTemplateHandler := providertemplate.NewHandler(s.templateManager)
+	providertemplate.RegisterRoutes(api, providerTemplateHandler)
 }
 
 func (s *Server) useWebStaticEndpoints(engine *gin.Engine) {

@@ -23,15 +23,20 @@ type UsageRecord struct {
 	Model        string    `gorm:"column:model;index:idx_provider_model;not null"`
 	Scenario     string    `gorm:"column:scenario;index:idx_scenario;not null"`
 	RuleUUID     string    `gorm:"column:rule_uuid;index:idx_rule"`
+	UserID       string    `gorm:"column:user_id;index:idx_user;not null;default:''"`
 	RequestModel string    `gorm:"column:request_model"`
 	Timestamp    time.Time `gorm:"column:timestamp;index:idx_timestamp;index:idx_timestamp_scenario;not null"`
 	InputTokens  int       `gorm:"column:input_tokens;not null"`
 	OutputTokens int       `gorm:"column:output_tokens;not null"`
 	TotalTokens  int       `gorm:"column:total_tokens;index;not null"`
-	Status       string    `gorm:"column:status;index;not null"` // success, error, partial
-	ErrorCode    string    `gorm:"column:error_code"`
-	LatencyMs    int       `gorm:"column:latency_ms"`
-	Streamed     bool      `gorm:"column:streamed;type:integer"`
+	// Cache tokens (combined cache creation and read)
+	CacheInputTokens int `gorm:"column:cache_input_tokens;default:0"`
+	// System tokens (framework overhead, templates, etc.)
+	SystemTokens int    `gorm:"column:system_tokens;default:0"`
+	Status       string `gorm:"column:status;index;not null"` // success, error, partial
+	ErrorCode    string `gorm:"column:error_code"`
+	LatencyMs    int    `gorm:"column:latency_ms"`
+	Streamed     bool   `gorm:"column:streamed;type:integer"`
 }
 
 // TableName specifies the table name for GORM
@@ -50,7 +55,11 @@ type UsageDailyRecord struct {
 	TotalTokens  int64     `gorm:"column:total_tokens;not null"`
 	InputTokens  int64     `gorm:"column:input_tokens;not null"`
 	OutputTokens int64     `gorm:"column:output_tokens;not null"`
-	ErrorCount   int64     `gorm:"column:error_count;default:0"`
+	// Cache tokens
+	CacheInputTokens int64 `gorm:"column:cache_input_tokens;default:0"`
+	// System tokens
+	SystemTokens int64 `gorm:"column:system_tokens;default:0"`
+	ErrorCount   int64 `gorm:"column:error_count;default:0"`
 }
 
 // TableName specifies the table name for GORM
@@ -70,7 +79,11 @@ type UsageMonthlyRecord struct {
 	TotalTokens  int64  `gorm:"column:total_tokens;not null"`
 	InputTokens  int64  `gorm:"column:input_tokens;not null"`
 	OutputTokens int64  `gorm:"column:output_tokens;not null"`
-	ErrorCount   int64  `gorm:"column:error_count;default:0"`
+	// Cache tokens
+	CacheInputTokens int64 `gorm:"column:cache_input_tokens;default:0"`
+	// System tokens
+	SystemTokens int64 `gorm:"column:system_tokens;default:0"`
+	ErrorCount   int64 `gorm:"column:error_count;default:0"`
 }
 
 // TableName specifies the table name for GORM
@@ -112,9 +125,46 @@ func NewUsageStore(baseDir string) (*UsageStore, error) {
 	if err := db.AutoMigrate(&UsageRecord{}, &UsageDailyRecord{}, &UsageMonthlyRecord{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate usage database: %w", err)
 	}
+	if err := ensureUsageRecordSchema(db); err != nil {
+		return nil, fmt.Errorf("failed to align usage schema: %w", err)
+	}
 	logrus.Debugf("Usage store initialization completed")
 
 	return store, nil
+}
+
+func ensureUsageRecordSchema(db *gorm.DB) error {
+	// Dev-stage breaking cleanup: remove deprecated department_id dimension.
+	if db.Migrator().HasColumn(&UsageRecord{}, "department_id") {
+		if err := db.Migrator().DropColumn(&UsageRecord{}, "department_id"); err != nil {
+			return err
+		}
+	}
+	// Migrate from separate cache fields to combined cache_input_tokens
+	if db.Migrator().HasColumn(&UsageRecord{}, "cache_creation_input_tokens") {
+		// Add new column if it doesn't exist
+		if !db.Migrator().HasColumn(&UsageRecord{}, "cache_input_tokens") {
+			if err := db.Migrator().AutoMigrate(&UsageRecord{}); err != nil {
+				return err
+			}
+		}
+		// Migrate data: sum of cache_creation + cache_read
+		if err := db.Exec(`
+			UPDATE usage_records
+			SET cache_input_tokens = COALESCE(cache_creation_input_tokens, 0) + COALESCE(cache_read_input_tokens, 0)
+			WHERE cache_input_tokens = 0
+		`).Error; err != nil {
+			return err
+		}
+		// Drop old columns
+		if err := db.Migrator().DropColumn(&UsageRecord{}, "cache_creation_input_tokens"); err != nil {
+			return err
+		}
+		if err := db.Migrator().DropColumn(&UsageRecord{}, "cache_read_input_tokens"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // RecordUsage records a single usage event
@@ -129,6 +179,7 @@ func (us *UsageStore) RecordUsage(record *UsageRecord) error {
 	if record.Timestamp.IsZero() {
 		record.Timestamp = time.Now()
 	}
+	// Total tokens is the sum of all token types
 	record.TotalTokens = record.InputTokens + record.OutputTokens
 	if record.Status == "" {
 		record.Status = "success"
@@ -139,13 +190,14 @@ func (us *UsageStore) RecordUsage(record *UsageRecord) error {
 
 // GetAggregatedStats returns aggregated usage statistics based on query parameters
 type UsageStatsQuery struct {
-	GroupBy   string // model, provider, scenario, rule, daily, hourly
+	GroupBy   string // model, provider, scenario, rule, user, daily, hourly
 	StartTime time.Time
 	EndTime   time.Time
 	Provider  string
 	Model     string
 	Scenario  string
 	RuleUUID  string
+	UserID    string
 	Status    string
 	Limit     int
 	SortBy    string // total_tokens, request_count, avg_latency
@@ -154,22 +206,25 @@ type UsageStatsQuery struct {
 
 // AggregatedStat represents aggregated usage statistics
 type AggregatedStat struct {
-	Key             string  `json:"key"`
-	ProviderUUID    string  `json:"provider_uuid,omitempty"`
-	ProviderName    string  `json:"provider_name,omitempty"`
-	Model           string  `json:"model,omitempty"`
-	Scenario        string  `json:"scenario,omitempty"`
-	RequestCount    int64   `json:"request_count"`
-	TotalTokens     int64   `json:"total_tokens"`
-	InputTokens     int64   `json:"total_input_tokens"`
-	OutputTokens    int64   `json:"total_output_tokens"`
-	AvgInputTokens  float64 `json:"avg_input_tokens"`
-	AvgOutputTokens float64 `json:"avg_output_tokens"`
-	AvgLatencyMs    float64 `json:"avg_latency_ms"`
-	ErrorCount      int64   `json:"error_count"`
-	ErrorRate       float64 `json:"error_rate"`
-	StreamedCount   int64   `json:"streamed_count"`
-	StreamedRate    float64 `json:"streamed_rate"`
+	Key              string  `json:"key"`
+	ProviderUUID     string  `json:"provider_uuid,omitempty"`
+	ProviderName     string  `json:"provider_name,omitempty"`
+	Model            string  `json:"model,omitempty"`
+	Scenario         string  `json:"scenario,omitempty"`
+	UserID           string  `json:"user_id,omitempty"`
+	RequestCount     int64   `json:"request_count"`
+	TotalTokens      int64   `json:"total_tokens"`
+	InputTokens      int64   `json:"total_input_tokens"`
+	OutputTokens     int64   `json:"total_output_tokens"`
+	CacheInputTokens int64   `json:"cache_input_tokens"`
+	SystemTokens     int64   `json:"system_tokens"`
+	AvgInputTokens   float64 `json:"avg_input_tokens"`
+	AvgOutputTokens  float64 `json:"avg_output_tokens"`
+	AvgLatencyMs     float64 `json:"avg_latency_ms"`
+	ErrorCount       int64   `json:"error_count"`
+	ErrorRate        float64 `json:"error_rate"`
+	StreamedCount    int64   `json:"streamed_count"`
+	StreamedRate     float64 `json:"streamed_rate"`
 }
 
 // GetAggregatedStats returns aggregated statistics
@@ -201,6 +256,9 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 	if query.RuleUUID != "" {
 		db = db.Where("rule_uuid = ?", query.RuleUUID)
 	}
+	if query.UserID != "" {
+		db = db.Where("user_id = ?", query.UserID)
+	}
 	if query.Status != "" {
 		db = db.Where("status = ?", query.Status)
 	}
@@ -218,6 +276,9 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 	case "rule":
 		groupBy = "rule_uuid"
 		keyField = "rule_uuid"
+	case "user":
+		groupBy = "user_id"
+		keyField = "user_id"
 	case "daily":
 		groupBy = "date(timestamp)"
 		keyField = "date(timestamp)"
@@ -230,18 +291,21 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 	}
 
 	type result struct {
-		Key           string
-		ProviderUUID  string
-		ProviderName  string
-		Model         string
-		Scenario      string
-		RequestCount  int64
-		TotalTokens   int64
-		InputTokens   int64
-		OutputTokens  int64
-		ErrorCount    int64
-		StreamedCount int64
-		AvgLatency    float64
+		Key              string
+		ProviderUUID     string
+		ProviderName     string
+		Model            string
+		Scenario         string
+		UserID           string
+		RequestCount     int64
+		TotalTokens      int64
+		InputTokens      int64
+		OutputTokens     int64
+		CacheInputTokens int64
+		SystemTokens     int64
+		ErrorCount       int64
+		StreamedCount    int64
+		AvgLatency       float64
 	}
 
 	var results []result
@@ -251,10 +315,13 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 		COALESCE(provider_name, '') as provider_name,
 		COALESCE(model, '') as model,
 		COALESCE(scenario, '') as scenario,
+		COALESCE(user_id, '') as user_id,
 		COUNT(*) as request_count,
 		COALESCE(SUM(total_tokens), 0) as total_tokens,
 		COALESCE(SUM(input_tokens), 0) as input_tokens,
 		COALESCE(SUM(output_tokens), 0) as output_tokens,
+		COALESCE(SUM(cache_input_tokens), 0) as cache_input_tokens,
+		COALESCE(SUM(system_tokens), 0) as system_tokens,
 		COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0) as error_count,
 		COALESCE(SUM(CASE WHEN streamed = true THEN 1 ELSE 0 END), 0) as streamed_count,
 		COALESCE(AVG(latency_ms), 0) as avg_latency
@@ -273,22 +340,25 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 	stats := make([]AggregatedStat, len(results))
 	for i, r := range results {
 		stats[i] = AggregatedStat{
-			Key:             r.Key,
-			ProviderUUID:    r.ProviderUUID,
-			ProviderName:    r.ProviderName,
-			Model:           r.Model,
-			Scenario:        r.Scenario,
-			RequestCount:    r.RequestCount,
-			TotalTokens:     r.TotalTokens,
-			InputTokens:     r.InputTokens,
-			OutputTokens:    r.OutputTokens,
-			AvgInputTokens:  avgFloat(float64(r.InputTokens), r.RequestCount),
-			AvgOutputTokens: avgFloat(float64(r.OutputTokens), r.RequestCount),
-			AvgLatencyMs:    r.AvgLatency,
-			ErrorCount:      r.ErrorCount,
-			ErrorRate:       rateFloat(r.ErrorCount, r.RequestCount),
-			StreamedCount:   r.StreamedCount,
-			StreamedRate:    rateFloat(r.StreamedCount, r.RequestCount),
+			Key:              r.Key,
+			ProviderUUID:     r.ProviderUUID,
+			ProviderName:     r.ProviderName,
+			Model:            r.Model,
+			Scenario:         r.Scenario,
+			UserID:           r.UserID,
+			RequestCount:     r.RequestCount,
+			TotalTokens:      r.TotalTokens,
+			InputTokens:      r.InputTokens,
+			OutputTokens:     r.OutputTokens,
+			CacheInputTokens: r.CacheInputTokens,
+			SystemTokens:     r.SystemTokens,
+			AvgInputTokens:   avgFloat(float64(r.InputTokens), r.RequestCount),
+			AvgOutputTokens:  avgFloat(float64(r.OutputTokens), r.RequestCount),
+			AvgLatencyMs:     r.AvgLatency,
+			ErrorCount:       r.ErrorCount,
+			ErrorRate:        rateFloat(r.ErrorCount, r.RequestCount),
+			StreamedCount:    r.StreamedCount,
+			StreamedRate:     rateFloat(r.StreamedCount, r.RequestCount),
 		}
 	}
 
@@ -297,13 +367,15 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 
 // TimeSeriesData represents a single time bucket in time series data
 type TimeSeriesData struct {
-	Timestamp    string  `json:"timestamp"`
-	RequestCount int64   `json:"request_count"`
-	TotalTokens  int64   `json:"total_tokens"`
-	InputTokens  int64   `json:"input_tokens"`
-	OutputTokens int64   `json:"output_tokens"`
-	ErrorCount   int64   `json:"error_count"`
-	AvgLatencyMs float64 `json:"avg_latency_ms"`
+	Timestamp        string  `json:"timestamp"`
+	RequestCount     int64   `json:"request_count"`
+	TotalTokens      int64   `json:"total_tokens"`
+	InputTokens      int64   `json:"input_tokens"`
+	OutputTokens     int64   `json:"output_tokens"`
+	CacheInputTokens int64   `json:"cache_input_tokens"`
+	SystemTokens     int64   `json:"system_tokens"`
+	ErrorCount       int64   `json:"error_count"`
+	AvgLatencyMs     float64 `json:"avg_latency_ms"`
 }
 
 // GetTimeSeries returns time-series data for usage
@@ -340,13 +412,15 @@ func (us *UsageStore) GetTimeSeries(interval string, startTime, endTime time.Tim
 	}
 
 	type result struct {
-		Timestamp    string
-		RequestCount int64
-		TotalTokens  int64
-		InputTokens  int64
-		OutputTokens int64
-		ErrorCount   int64
-		AvgLatency   float64
+		Timestamp        string
+		RequestCount     int64
+		TotalTokens      int64
+		InputTokens      int64
+		OutputTokens     int64
+		CacheInputTokens int64
+		SystemTokens     int64
+		ErrorCount       int64
+		AvgLatency       float64
 	}
 
 	var results []result
@@ -357,6 +431,8 @@ func (us *UsageStore) GetTimeSeries(interval string, startTime, endTime time.Tim
 		COALESCE(SUM(total_tokens), 0) as total_tokens,
 		COALESCE(SUM(input_tokens), 0) as input_tokens,
 		COALESCE(SUM(output_tokens), 0) as output_tokens,
+		COALESCE(SUM(cache_input_tokens), 0) as cache_input_tokens,
+		COALESCE(SUM(system_tokens), 0) as system_tokens,
 		COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0) as error_count,
 		COALESCE(AVG(latency_ms), 0) as avg_latency
 	`, timeFormat)
@@ -373,13 +449,15 @@ func (us *UsageStore) GetTimeSeries(interval string, startTime, endTime time.Tim
 	data := make([]TimeSeriesData, len(results))
 	for i, r := range results {
 		data[i] = TimeSeriesData{
-			Timestamp:    r.Timestamp,
-			RequestCount: r.RequestCount,
-			TotalTokens:  r.TotalTokens,
-			InputTokens:  r.InputTokens,
-			OutputTokens: r.OutputTokens,
-			ErrorCount:   r.ErrorCount,
-			AvgLatencyMs: r.AvgLatency,
+			Timestamp:        r.Timestamp,
+			RequestCount:     r.RequestCount,
+			TotalTokens:      r.TotalTokens,
+			InputTokens:      r.InputTokens,
+			OutputTokens:     r.OutputTokens,
+			CacheInputTokens: r.CacheInputTokens,
+			SystemTokens:     r.SystemTokens,
+			ErrorCount:       r.ErrorCount,
+			AvgLatencyMs:     r.AvgLatency,
 		}
 	}
 
@@ -439,7 +517,7 @@ func (us *UsageStore) AggregateToDaily(date time.Time) (int64, error) {
 
 	// Aggregate usage records to daily summaries
 	result := us.db.Exec(`
-		INSERT OR REPLACE INTO usage_daily (date, provider_uuid, provider_name, model, request_count, total_tokens, input_tokens, output_tokens, error_count)
+		INSERT OR REPLACE INTO usage_daily (date, provider_uuid, provider_name, model, request_count, total_tokens, input_tokens, output_tokens, cache_input_tokens, system_tokens, error_count)
 		SELECT
 			date(?) as date,
 			provider_uuid,
@@ -449,6 +527,8 @@ func (us *UsageStore) AggregateToDaily(date time.Time) (int64, error) {
 			SUM(total_tokens) as total_tokens,
 			SUM(input_tokens) as input_tokens,
 			SUM(output_tokens) as output_tokens,
+			SUM(cache_input_tokens) as cache_input_tokens,
+			SUM(system_tokens) as system_tokens,
 			SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as error_count
 		FROM usage_records
 		WHERE date(timestamp) = date(?)

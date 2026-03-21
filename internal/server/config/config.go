@@ -2,7 +2,11 @@ package config
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -13,7 +17,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"gorm.io/gorm"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/constant"
@@ -38,6 +41,7 @@ type Config struct {
 	UserToken         string               `yaml:"user_token" json:"user_token"`                   // User token for UI and control API authentication
 	ModelToken        string               `yaml:"model_token" json:"model_token"`                 // Model token for OpenAI and Anthropic API authentication
 	VirtualModelToken string               `yaml:"virtual_model_token" json:"virtual_model_token"` // Virtual model token for testing (independent from ModelToken)
+	InternalAPIToken  string               `json:"-"`                                              // Internal API token for probe testing (generated at startup, not persisted)
 	EncryptProviders  bool                 `yaml:"encrypt_providers" json:"encrypt_providers"`     // Whether to encrypt provider info (default false)
 	Scenarios         []typ.ScenarioConfig `yaml:"scenarios" json:"scenarios"`                     // Scenario-specific configurations
 	GUI               GUIConfig            `json:"gui"`                                            // GUI-specific settings
@@ -53,7 +57,7 @@ type Config struct {
 	DefaultMaxTokens int  `json:"default_max_tokens"` // Default max_tokens for anthropic API requests
 	Verbose          bool `json:"verbose"`            // Verbose mode for detailed logging
 	Debug            bool `json:"-"`                  // Debug mode for Gin debug level logging
-	OpenBrowser      bool `yaml:"-" json:"-"` // Auto-open browser in web UI mode (default: true)
+	OpenBrowser      bool `yaml:"-" json:"-"`         // Auto-open browser in web UI mode (default: true)
 
 	// Generic tool configs map for all tool types
 	// Key is tool_type (e.g., "tool_interceptor", "code_execution")
@@ -61,21 +65,28 @@ type Config struct {
 	ToolConfigs map[string]json.RawMessage `json:"tool_configs,omitempty"`
 
 	// Error log settings
-	ErrorLogFilterExpression string `json:"error_log_filter_expression"` // Expression for filtering error log entries (default: "StatusCode >= 400 && Path matches '^/api/'")
+	ErrorLogFilterExpression string `json:"error_log_filter_expression"` // Expression for filtering error log entries (default: "StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')")
 
 	// Health monitor settings
 	HealthMonitor loadbalance.HealthMonitorConfig `json:"health_monitor,omitempty" yaml:"health_monitor,omitempty"`
 
+	// Enterprise context JWT validation settings for TBE->TB proxy calls.
+	EnterpriseContextJWT EnterpriseContextJWTConfig `json:"enterprise_context_jwt,omitempty" yaml:"enterprise_context_jwt,omitempty"`
+
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
 
-	modelManager       *data.ModelListManager
+	modelManager *data.ModelListManager
+	storeManager *db.StoreManager // Unified store manager for all database stores
+
+	// Store references for internal Config methods (RefreshStatsFromStore, etc.)
+	// External consumers should use StoreManager() instead
 	statsStore         *db.StatsStore
 	usageStore         *db.UsageStore
-	ruleStateStore     *db.RuleStateStore     // Persists current_service_index to SQLite
-	imbotSettingsStore *db.ImBotSettingsStore // Persists ImBot credentials
-	providerStore      *db.ProviderStore      // Persists provider configurations and credentials
-	toolConfigStore    *db.ToolConfigStore    // Persists provider-specific tool configurations
+	ruleStateStore     *db.RuleStateStore
+	providerStore      *db.ProviderStore
+	toolConfigStore    *db.ToolConfigStore
+	imbotSettingsStore *db.ImBotSettingsStore
 	templateManager    *data.TemplateManager
 
 	mu sync.RWMutex
@@ -89,6 +100,72 @@ type GUIConfig struct {
 	Port int `json:"port"`
 	// Verbose enables verbose logging for GUI
 	Verbose bool `json:"verbose"`
+}
+
+type EnterpriseContextPublicKey struct {
+	KID string `json:"kid" yaml:"kid"`
+	PEM string `json:"pem" yaml:"pem"`
+}
+
+type EnterpriseContextJWTConfig struct {
+	Enabled           bool                         `json:"enabled" yaml:"enabled"`
+	AllowedIssuers    []string                     `json:"allowed_issuers,omitempty" yaml:"allowed_issuers,omitempty"`
+	AllowedAudiences  []string                     `json:"allowed_audiences,omitempty" yaml:"allowed_audiences,omitempty"`
+	AlgAllowlist      []string                     `json:"alg_allowlist,omitempty" yaml:"alg_allowlist,omitempty"`
+	HS256SecretRef    string                       `json:"hs256_secret_ref,omitempty" yaml:"hs256_secret_ref,omitempty"`
+	RS256PublicKeyRef string                       `json:"rs256_public_key_ref,omitempty" yaml:"rs256_public_key_ref,omitempty"`
+	JWKSURL           string                       `json:"jwks_url,omitempty" yaml:"jwks_url,omitempty"`
+	PublicKeys        []EnterpriseContextPublicKey `json:"public_keys,omitempty" yaml:"public_keys,omitempty"`
+	ClockSkewSeconds  int                          `json:"clock_skew_seconds,omitempty" yaml:"clock_skew_seconds,omitempty"`
+	RequireJTI        bool                         `json:"require_jti" yaml:"require_jti"`
+}
+
+func enterpriseContextKeyPaths(configDir string) (string, string) {
+	keyDir := filepath.Join(configDir, "keys")
+	return filepath.Join(keyDir, "enterprise_context_rs256_private.pem"),
+		filepath.Join(keyDir, "enterprise_context_rs256_public.pem")
+}
+
+func ensureEnterpriseContextRS256KeyPair(configDir string) (string, string, error) {
+	privatePath, publicPath := enterpriseContextKeyPaths(configDir)
+	privateOK := false
+	publicOK := false
+	if st, err := os.Stat(privatePath); err == nil && !st.IsDir() {
+		privateOK = true
+	}
+	if st, err := os.Stat(publicPath); err == nil && !st.IsDir() {
+		publicOK = true
+	}
+	if privateOK && publicOK {
+		return "file:" + privatePath, "file:" + publicPath, nil
+	}
+
+	if err := os.MkdirAll(filepath.Dir(privatePath), 0700); err != nil {
+		return "", "", fmt.Errorf("create enterprise key dir failed: %w", err)
+	}
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return "", "", fmt.Errorf("generate rsa key failed: %w", err)
+	}
+	privatePEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(key),
+	})
+	pubDer, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		return "", "", fmt.Errorf("marshal rsa public key failed: %w", err)
+	}
+	publicPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: pubDer,
+	})
+	if err := os.WriteFile(privatePath, privatePEM, 0600); err != nil {
+		return "", "", fmt.Errorf("write enterprise private key failed: %w", err)
+	}
+	if err := os.WriteFile(publicPath, publicPEM, 0644); err != nil {
+		return "", "", fmt.Errorf("write enterprise public key failed: %w", err)
+	}
+	return "file:" + privatePath, "file:" + publicPath, nil
 }
 
 // NewConfig creates a new global configuration manager
@@ -122,47 +199,20 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		ConfigDir:  configDir,
 	}
 
-	// Initialize stats store before loading config so load can hydrate runtime stats
-	statsStore, err := db.NewStatsStore(configDir)
+	// Initialize unified store manager (initializes all stores in one call)
+	storeManager, err := db.NewStoreManager(configDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize stats store: %w", err)
+		return nil, fmt.Errorf("failed to initialize store manager: %w", err)
 	}
-	cfg.statsStore = statsStore
+	cfg.storeManager = storeManager
 
-	// Initialize usage store
-	usageStore, err := db.NewUsageStore(configDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize usage store: %w", err)
-	}
-	cfg.usageStore = usageStore
-
-	// Initialize rule state store (for persisting current_service_index)
-	ruleStateStore, err := db.NewRuleStateStore(configDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize rule state store: %w", err)
-	}
-	cfg.ruleStateStore = ruleStateStore
-
-	// Initialize provider store (for persisting provider configurations and credentials)
-	providerStore, err := db.NewProviderStore(configDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize provider store: %w", err)
-	}
-	cfg.providerStore = providerStore
-
-	// Initialize tool config store (for persisting provider-specific tool configurations)
-	toolConfigStore, err := db.NewToolConfigStore(configDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize tool config store: %w", err)
-	}
-	cfg.toolConfigStore = toolConfigStore
-
-	// Initialize ImBot settings store
-	imbotSettingsStore, err := db.NewImBotSettingsStore(configDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize imbot settings store: %w", err)
-	}
-	cfg.imbotSettingsStore = imbotSettingsStore
+	// Cache store references for internal Config methods
+	cfg.statsStore = storeManager.Stats()
+	cfg.usageStore = storeManager.Usage()
+	cfg.ruleStateStore = storeManager.RuleState()
+	cfg.providerStore = storeManager.Provider()
+	cfg.toolConfigStore = storeManager.ToolConfig()
+	cfg.imbotSettingsStore = storeManager.ImBotSettings()
 
 	// Load existing cfg if exists
 	if err := cfg.load(); err != nil {
@@ -205,6 +255,9 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		cfg.ModelToken = modelToken
 		updated = true
 	}
+	// Generate internal API token for probe testing (always regenerated at startup)
+	cfg.InternalAPIToken = fmt.Sprintf("tb-internal-%s", uuid.New().String())
+	updated = true // Don't save to config file, but mark as updated for this session
 	if cfg.Providers == nil {
 		cfg.ProvidersV1 = make(map[string]*typ.Provider)
 		cfg.Providers = make([]*typ.Provider, 0)
@@ -219,7 +272,47 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		updated = true
 	}
 	if cfg.ErrorLogFilterExpression == "" {
-		cfg.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
+		cfg.ErrorLogFilterExpression = "StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')"
+		updated = true
+	}
+	_, defaultEnterpriseRS256PublicRef, keyErr := ensureEnterpriseContextRS256KeyPair(configDir)
+	if keyErr != nil {
+		return nil, keyErr
+	}
+	if !cfg.EnterpriseContextJWT.Enabled &&
+		len(cfg.EnterpriseContextJWT.AlgAllowlist) == 0 &&
+		len(cfg.EnterpriseContextJWT.AllowedIssuers) == 0 &&
+		len(cfg.EnterpriseContextJWT.AllowedAudiences) == 0 &&
+		cfg.EnterpriseContextJWT.HS256SecretRef == "" &&
+		cfg.EnterpriseContextJWT.RS256PublicKeyRef == "" &&
+		cfg.EnterpriseContextJWT.ClockSkewSeconds == 0 &&
+		!cfg.EnterpriseContextJWT.RequireJTI {
+		// Enabled by default for fresh configs; preserve explicit false for existing configs.
+		cfg.EnterpriseContextJWT.Enabled = true
+		updated = true
+	}
+	if len(cfg.EnterpriseContextJWT.AlgAllowlist) == 0 {
+		cfg.EnterpriseContextJWT.AlgAllowlist = []string{"RS256"}
+		updated = true
+	}
+	if len(cfg.EnterpriseContextJWT.AllowedIssuers) == 0 {
+		cfg.EnterpriseContextJWT.AllowedIssuers = []string{"tbe"}
+		updated = true
+	}
+	if len(cfg.EnterpriseContextJWT.AllowedAudiences) == 0 {
+		cfg.EnterpriseContextJWT.AllowedAudiences = []string{"tb"}
+		updated = true
+	}
+	if cfg.EnterpriseContextJWT.RS256PublicKeyRef == "" {
+		cfg.EnterpriseContextJWT.RS256PublicKeyRef = defaultEnterpriseRS256PublicRef
+		updated = true
+	}
+	if cfg.EnterpriseContextJWT.ClockSkewSeconds == 0 {
+		cfg.EnterpriseContextJWT.ClockSkewSeconds = 30
+		updated = true
+	}
+	if !cfg.EnterpriseContextJWT.RequireJTI {
+		cfg.EnterpriseContextJWT.RequireJTI = true
 		updated = true
 	}
 	if cfg.applyRemoteCoderDefaults() {
@@ -256,12 +349,6 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		// Continue anyway - provider store may already have data
 	}
 
-	// Migrate tool interceptor config from provider table to tool_config_store if needed
-	if err := cfg.migrateToolInterceptorFromProvider(); err != nil {
-		logrus.Warnf("Failed to migrate tool interceptor config: %v", err)
-		// Continue anyway - tool config may already have been migrated
-	}
-
 	return cfg, nil
 }
 
@@ -293,15 +380,29 @@ func (c *Config) Save() error {
 	if c.ConfigFile == "" {
 		return fmt.Errorf("ConfigFile is empty")
 	}
-	data, err := json.MarshalIndent(c, "", "    ")
+	data, err := json.Marshal(c)
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(c.ConfigFile, data, 0644)
+	var next map[string]interface{}
+	if err := json.Unmarshal(data, &next); err != nil {
+		return err
+	}
+	if raw, err := os.ReadFile(c.ConfigFile); err == nil && len(raw) > 0 {
+		var existing map[string]interface{}
+		if err := json.Unmarshal(raw, &existing); err == nil {
+			for k, v := range existing {
+				if _, ok := next[k]; !ok {
+					next[k] = v
+				}
+			}
+		}
+	}
+	out, err := json.MarshalIndent(next, "", "    ")
 	if err != nil {
 		return err
 	}
-	return nil
+	return os.WriteFile(c.ConfigFile, out, 0644)
 }
 
 // RefreshStatsFromStore hydrates service stats and rule state from the SQLite store.
@@ -699,28 +800,14 @@ func (c *Config) GetModelToken() string {
 	return c.ModelToken
 }
 
-// GetStatsStore returns the dedicated stats store (may be nil in tests).
-func (c *Config) GetStatsStore() *db.StatsStore {
+// StoreManager returns the unified store manager (may be nil in tests).
+// This provides access to all database stores through a single interface.
+// External consumers should use this method instead of the individual GetXxxStore() methods.
+func (c *Config) StoreManager() *db.StoreManager {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	return c.statsStore
-}
-
-// GetUsageStore returns the usage store (may be nil in tests).
-func (c *Config) GetUsageStore() *db.UsageStore {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	return c.usageStore
-}
-
-// GetImBotSettingsStore returns the ImBot settings store (may be nil in tests).
-func (c *Config) GetImBotSettingsStore() *db.ImBotSettingsStore {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	return c.imbotSettingsStore
+	return c.storeManager
 }
 
 // HasModelToken checks if a model token is configured
@@ -754,6 +841,15 @@ func (c *Config) HasVirtualModelToken() bool {
 	defer c.mu.RUnlock()
 
 	return c.VirtualModelToken != ""
+}
+
+// GetInternalAPIToken returns the internal API token for probe testing
+// The token is generated at startup and stored in memory only (not persisted to config file)
+func (c *Config) GetInternalAPIToken() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.InternalAPIToken
 }
 
 // Legacy compatibility methods for backward compatibility
@@ -816,139 +912,6 @@ func (c *Config) migrateProvidersToDB() error {
 	return nil
 }
 
-// migrateToolInterceptorFromProvider migrates tool interceptor config from provider table to tool_config_store
-// This is a one-time migration that runs on startup
-func (c *Config) migrateToolInterceptorFromProvider() error {
-	if c.providerStore == nil || c.toolConfigStore == nil {
-		return nil // Stores not initialized, skip migration
-	}
-
-	// Check if migration has already been done by checking if any tool_configs exist
-	// If tool_configs table has entries, assume migration is done
-	var toolConfigCount int64
-	if err := c.toolConfigStore.GetDB().Model(&db.ToolConfigRecord{}).Count(&toolConfigCount).Error; err != nil {
-		return fmt.Errorf("failed to check tool config count: %w", err)
-	}
-
-	// Get all provider UUIDs that need to be migrated
-	providerDB := c.providerStore.GetDB()
-
-	// Check if old columns exist by trying to query them
-	// We use raw SQL to check since the columns are no longer in the ProviderRecord struct
-	columnsExist, err := c.checkOldToolInterceptorColumnsExist(providerDB)
-	if err != nil {
-		logrus.Warnf("Failed to check if old tool interceptor columns exist: %v", err)
-		return nil // Continue anyway, columns may have been dropped
-	}
-
-	if !columnsExist {
-		logrus.Debugf("Old tool interceptor columns do not exist in provider table, skipping migration")
-		return nil
-	}
-
-	// Get all providers with tool interceptor config using raw SQL
-	type OldProviderToolConfig struct {
-		ProviderUUID string
-		ConfigJSON   string
-		Disabled     bool
-	}
-
-	var oldConfigs []OldProviderToolConfig
-	query := `
-		SELECT uuid as provider_uuid,
-		       json_object(
-		           'prefer_local_search', tool_interceptor_prefer_local_search,
-		           'search_api', tool_interceptor_search_api,
-		           'search_key', tool_interceptor_search_key,
-		           'max_results', tool_interceptor_max_results,
-		           'proxy_url', tool_interceptor_proxy_url,
-		           'max_fetch_size', tool_interceptor_max_fetch_size,
-		           'fetch_timeout', tool_interceptor_fetch_timeout,
-		           'max_url_length', tool_interceptor_max_url_length
-		       ) as config_json,
-		       tool_interceptor_disabled as disabled
-		FROM providers
-		WHERE tool_interceptor_search_api IS NOT NULL
-		   OR tool_interceptor_search_key IS NOT NULL
-		   OR tool_interceptor_max_results != 0
-	`
-
-	if err := providerDB.Raw(query).Scan(&oldConfigs).Error; err != nil {
-		logrus.Warnf("Failed to query old tool interceptor configs: %v", err)
-		return nil // Continue anyway, may have already been migrated
-	}
-
-	if len(oldConfigs) == 0 {
-		logrus.Debugf("No tool interceptor configs found in provider table, skipping migration")
-		return nil
-	}
-
-	logrus.Infof("Migrating %d tool interceptor configs from provider table to tool_config_store...", len(oldConfigs))
-
-	// Migrate each config
-	for _, oldConfig := range oldConfigs {
-		if oldConfig.ConfigJSON == "null" || oldConfig.ConfigJSON == "" {
-			continue
-		}
-
-		// Check if already migrated
-		existing, err := c.toolConfigStore.GetByProviderAndType(oldConfig.ProviderUUID, db.ToolTypeInterceptor)
-		if err != nil {
-			logrus.Warnf("Failed to check existing tool config for provider %s: %v", oldConfig.ProviderUUID, err)
-			continue
-		}
-		if existing != nil {
-			// Already migrated, skip
-			continue
-		}
-
-		// Create new tool config record
-		uuid := fmt.Sprintf("%s-%s", oldConfig.ProviderUUID, db.ToolTypeInterceptor)
-		record := &db.ToolConfigRecord{
-			UUID:         uuid,
-			ProviderUUID: oldConfig.ProviderUUID,
-			ToolType:     db.ToolTypeInterceptor,
-			ConfigJSON:   oldConfig.ConfigJSON,
-			Disabled:     oldConfig.Disabled,
-		}
-
-		if err := c.toolConfigStore.Save(record); err != nil {
-			logrus.Warnf("Failed to migrate tool config for provider %s: %v", oldConfig.ProviderUUID, err)
-			continue
-		}
-	}
-
-	logrus.Infof("Successfully migrated tool interceptor configs to tool_config_store")
-
-	// Note: The old columns will be dropped when GORM AutoMigrate is run
-	// since they're no longer in the ProviderRecord struct
-
-	return nil
-}
-
-// checkOldToolInterceptorColumnsExist checks if the old tool interceptor columns still exist in the provider table
-func (c *Config) checkOldToolInterceptorColumnsExist(database *gorm.DB) (bool, error) {
-	// Try to query one of the old columns
-	type ColumnCheck struct {
-		HasColumn bool
-	}
-
-	// SQLite specific check using pragma_table_info
-	query := `
-		SELECT EXISTS (
-			SELECT 1 FROM pragma_table_info('providers')
-			WHERE name = 'tool_interceptor_search_api'
-		) as has_column
-	`
-
-	var result ColumnCheck
-	if err := database.Raw(query).Scan(&result).Error; err != nil {
-		return false, err
-	}
-
-	return result.HasColumn, nil
-}
-
 // AddProviderByName adds a new AI provider configuration by name, API base, and token
 func (c *Config) AddProviderByName(name, apiBase, token string) error {
 	if name == "" {
@@ -971,26 +934,27 @@ func (c *Config) AddProviderByName(name, apiBase, token string) error {
 	return c.AddProvider(provider)
 }
 
-// GetProviderByUUID returns a provider
+// GetProviderByUUID returns a provider from database
 func (c *Config) GetProviderByUUID(uuid string) (*typ.Provider, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	// Try provider store first
-	if c.providerStore != nil {
-		if provider, err := c.providerStore.GetByUUID(uuid); err == nil {
-			return provider, nil
-		}
+	if c.providerStore == nil {
+		return nil, fmt.Errorf("provider store not initialized")
 	}
 
-	// Fallback to in-memory providers (for migration period)
-	for _, p := range c.Providers {
-		if p.UUID == uuid {
-			return p, nil
-		}
+	provider, err := c.providerStore.GetByUUID(uuid)
+	if err != nil {
+		return nil, fmt.Errorf("provider '%s' not found: %w", uuid, err)
 	}
+	return provider, nil
+}
 
-	return nil, fmt.Errorf("provider '%s' not found", uuid)
+// GetProviderStore returns the provider store instance
+func (c *Config) GetProviderStore() *db.ProviderStore {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.providerStore
 }
 
 func (c *Config) GetProviderByName(name string) (*typ.Provider, error) {
@@ -998,17 +962,12 @@ func (c *Config) GetProviderByName(name string) (*typ.Provider, error) {
 	defer c.mu.RUnlock()
 
 	// Try provider store first
-	if c.providerStore != nil {
-		if provider, err := c.providerStore.GetByName(name); err == nil {
-			return provider, nil
-		}
+	if c.providerStore == nil {
+		panic("[db] Provider store missing")
 	}
 
-	// Fallback to in-memory providers (for migration period)
-	for _, p := range c.Providers {
-		if p.Name == name {
-			return p, nil
-		}
+	if provider, err := c.providerStore.GetByName(name); err == nil {
+		return provider, nil
 	}
 
 	return nil, fmt.Errorf("provider with name '%s' not found", name)
@@ -1019,17 +978,18 @@ func (c *Config) ListProviders() []*typ.Provider {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	// Try provider store first
-	if c.providerStore != nil {
-		providers, err := c.providerStore.List()
-		if err == nil {
-			return providers
-		}
-		logrus.Warnf("Failed to list providers from store: %v", err)
+	// Try provider store first (database is the source of truth)
+	if c.providerStore == nil {
+		panic("[db] Provider store missing")
 	}
+	providers, err := c.providerStore.List()
+	if err == nil {
+		return providers
+	}
+	// Database error - log warning and fall back to in-memory providers
+	logrus.Warnf("Failed to list providers from database store, falling back to config file: %v", err)
 
-	// Fallback to in-memory providers (for migration period)
-	return c.Providers
+	return nil
 }
 
 // ListOAuthProviders returns all OAuth-enabled providers
@@ -1038,22 +998,15 @@ func (c *Config) ListOAuthProviders() ([]*typ.Provider, error) {
 	defer c.mu.RUnlock()
 
 	// Try provider store first
-	if c.providerStore != nil {
-		providers, err := c.providerStore.ListOAuth()
-		if err == nil {
-			return providers, nil
-		}
+	if c.providerStore == nil {
+		panic("[db] Provider store missing")
+	}
+	providers, err := c.providerStore.ListOAuth()
+	if err == nil {
+		return providers, nil
 	}
 
-	// Fallback to in-memory providers (for migration period)
-	var oauthProviders []*typ.Provider
-	for _, p := range c.Providers {
-		if p.AuthType == typ.AuthTypeOAuth && p.OAuthDetail != nil {
-			oauthProviders = append(oauthProviders, p)
-		}
-	}
-
-	return oauthProviders, nil
+	return nil, nil
 }
 
 // AddProvider adds a new provider using Provider struct
@@ -1072,13 +1025,7 @@ func (c *Config) AddProvider(provider *typ.Provider) error {
 		}
 		return c.providerStore.Save(provider)
 	}
-
-	// Fallback to in-memory (for migration period)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.Providers = append(c.Providers, provider)
-	return c.Save()
+	return nil
 }
 
 // UpdateProvider updates an existing provider by UUID
@@ -1094,51 +1041,26 @@ func (c *Config) UpdateProvider(uuid string, provider *typ.Provider) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for i, p := range c.Providers {
-		if p.UUID == uuid {
-			provider.UUID = uuid
-			c.Providers[i] = provider
-			return c.Save()
-		}
-	}
-
 	return fmt.Errorf("provider with UUID '%s' not found", uuid)
 }
 
 // DeleteProvider removes a provider by UUID
 func (c *Config) DeleteProvider(uuid string) error {
 	// Use provider store if available
-	if c.providerStore != nil {
-		if err := c.providerStore.Delete(uuid); err != nil {
-			return err
-		}
+	if c.providerStore == nil {
+		panic("[db] Provider store missing")
 
-		// Delete the associated model file
-		if c.modelManager != nil {
-			_ = c.modelManager.RemoveProvider(uuid)
-		}
-
-		return nil
+	}
+	if err := c.providerStore.Delete(uuid); err != nil {
+		return err
 	}
 
-	// Fallback to in-memory (for migration period)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	for i, p := range c.Providers {
-		if p.UUID == uuid {
-			c.Providers = append(c.Providers[:i], c.Providers[i+1:]...)
-
-			// Delete the associated model file
-			if c.modelManager != nil {
-				_ = c.modelManager.RemoveProvider(uuid)
-			}
-
-			return c.Save()
-		}
+	// Delete the associated model file
+	if c.modelManager != nil {
+		_ = c.modelManager.RemoveProvider(uuid)
 	}
 
-	return fmt.Errorf("provider with UUID '%s' not found", uuid)
+	return nil
 }
 
 // Server configuration methods (merged from AppConfig)
@@ -1554,6 +1476,10 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 		return flags.SmartCompact
 	case "recording":
 		return flags.Recording
+	case "disable_stream_usage":
+		return flags.DisableStreamUsage
+	case "clean_header":
+		return flags.CleanHeader
 	case "skill_user":
 		if val, ok := config.Extensions["skill_user"].(bool); ok {
 			return val
@@ -1561,15 +1487,6 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 		return false
 	case "skill_ide":
 		if val, ok := config.Extensions["skill_ide"].(bool); ok {
-			return val
-		}
-		return false
-	case "enable_remote_coder":
-		if val, ok := config.Extensions["enable_remote_coder"].(bool); ok {
-			return val
-		}
-		// Backward compatibility
-		if val, ok := config.Extensions["skill_remote_cc"].(bool); ok {
 			return val
 		}
 		return false
@@ -1620,6 +1537,10 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 		config.Flags.SmartCompact = value
 	case "recording":
 		config.Flags.Recording = value
+	case "disable_stream_usage":
+		config.Flags.DisableStreamUsage = value
+	case "clean_header":
+		config.Flags.CleanHeader = value
 	case "skill_user":
 		// Store in Extensions
 		if config.Extensions == nil {
@@ -1632,14 +1553,6 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 			config.Extensions = make(map[string]interface{})
 		}
 		config.Extensions["skill_ide"] = value
-	case "enable_remote_coder":
-		// Store in Extensions
-		if config.Extensions == nil {
-			config.Extensions = make(map[string]interface{})
-		}
-		config.Extensions["enable_remote_coder"] = value
-		// Backward compatibility
-		config.Extensions["skill_remote_cc"] = value
 	case "guardrails":
 		if config.Extensions == nil {
 			config.Extensions = make(map[string]interface{})
@@ -1652,20 +1565,102 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 	return c.Save()
 }
 
-// FetchAndSaveProviderModels fetches models from a provider with fallback hierarchy
-func (c *Config) FetchAndSaveProviderModels(uid string) error {
+// GetScenarioStringFlag returns a string flag value for a scenario
+func (c *Config) GetScenarioStringFlag(scenario typ.RuleScenario, flagName string) string {
 	c.mu.RLock()
-	var provider *typ.Provider
-	for _, p := range c.Providers {
-		if p.UUID == uid {
-			provider = p
+	defer c.mu.RUnlock()
+	config := c.GetScenarioConfig(scenario)
+	if config == nil {
+		return ""
+	}
+	flags := config.GetDefaultFlags()
+	switch flagName {
+	case "thinking_effort":
+		return string(flags.ThinkingEffort)
+	case "thinking_mode":
+		return flags.ThinkingMode
+	case "record_v2":
+		return string(flags.RecordV2)
+	default:
+		return ""
+	}
+}
+
+// SetScenarioStringFlag sets a string flag value for a scenario
+func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName string, value string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Find or create scenario config
+	var config *typ.ScenarioConfig
+	for i := range c.Scenarios {
+		if c.Scenarios[i].Scenario == scenario {
+			config = &c.Scenarios[i]
 			break
 		}
 	}
-	c.mu.RUnlock()
 
-	if provider == nil {
-		return fmt.Errorf("provider with UUID %s not found", uid)
+	if config == nil {
+		// Create new scenario config
+		newConfig := typ.ScenarioConfig{
+			Scenario:   scenario,
+			Flags:      typ.ScenarioFlags{},
+			Extensions: make(map[string]interface{}),
+		}
+		c.Scenarios = append(c.Scenarios, newConfig)
+		config = &c.Scenarios[len(c.Scenarios)-1]
+	}
+
+	// Set the specific flag
+	switch flagName {
+	case "thinking_effort":
+		config.Flags.ThinkingEffort = typ.ThinkingEffortLevel(value)
+	case "thinking_mode":
+		config.Flags.ThinkingMode = value
+	case "record_v2":
+		if !typ.IsValidRecordingMode(value) {
+			return fmt.Errorf("invalid record_v2 value: %s (must be one of: request, response, request_response, or empty)", value)
+		}
+		config.Flags.RecordV2 = typ.RecordingMode(value)
+	default:
+		return fmt.Errorf("unknown string flag name: %s", flagName)
+	}
+
+	return c.Save()
+}
+
+// GetScenarioRecordingMode returns the effective recording mode for a scenario
+// It checks both legacy Recording (bool) and new RecordV2 (RecordingMode)
+// Priority: RecordV2 > legacy Recording
+func (c *Config) GetScenarioRecordingMode(scenario typ.RuleScenario) typ.RecordingMode {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	config := c.GetScenarioConfig(scenario)
+	if config == nil {
+		return typ.RecordingModeDisabled
+	}
+
+	flags := config.GetDefaultFlags()
+
+	if flags.RecordV2 != typ.RecordingModeDisabled {
+		return flags.RecordV2
+	}
+
+	return typ.RecordingModeDisabled
+}
+
+// IsScenarioRecordingEnabled checks if recording is enabled for a scenario
+func (c *Config) IsScenarioRecordingEnabled(scenario typ.RuleScenario) bool {
+	return c.GetScenarioRecordingMode(scenario) != typ.RecordingModeDisabled
+}
+
+// FetchAndSaveProviderModels fetches models from a provider with fallback hierarchy
+func (c *Config) FetchAndSaveProviderModels(uid string) error {
+	// Use GetProviderByUUID which queries the database first, then falls back to in-memory providers
+	provider, err := c.GetProviderByUUID(uid)
+	if err != nil {
+		return fmt.Errorf("provider with UUID %s not found: %w", uid, err)
 	}
 
 	// Try provider API first using client layer
@@ -1839,7 +1834,20 @@ func (c *Config) CreateDefaultConfig() error {
 	c.JWTSecret = generateSecret()
 	// Set default error log filter expression
 	if c.ErrorLogFilterExpression == "" {
-		c.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
+		c.ErrorLogFilterExpression = "StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')"
+	}
+	_, defaultEnterpriseRS256PublicRef, keyErr := ensureEnterpriseContextRS256KeyPair(c.ConfigDir)
+	if keyErr != nil {
+		return keyErr
+	}
+	c.EnterpriseContextJWT = EnterpriseContextJWTConfig{
+		Enabled:           true,
+		AllowedIssuers:    []string{"tbe"},
+		AllowedAudiences:  []string{"tb"},
+		AlgAllowlist:      []string{"RS256"},
+		RS256PublicKeyRef: defaultEnterpriseRS256PublicRef,
+		ClockSkewSeconds:  30,
+		RequireJTI:        true,
 	}
 	c.applyRemoteCoderDefaults()
 	c.applyGuardrailsDefaults()
@@ -1901,6 +1909,19 @@ func init() {
 			Description:   "Default proxy rule in tingly-box for general use with OpenAI",
 			Services:      []*loadbalance.Service{}, // Empty services initially
 			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "built-in-codex",
+			Scenario:      typ.ScenarioCodex,
+			RequestModel:  "tingly-codex",
+			ResponseModel: "",
+			Description:   "Default proxy rule for Codex",
+			Services:      []*loadbalance.Service{},
+			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
 				Params: typ.DefaultRoundRobinParams(),
 			},
@@ -2041,4 +2062,191 @@ func (c *Config) EnsureDefaultScenarioConfigs() {
 			c.Scenarios = append(c.Scenarios, defaultConfig)
 		}
 	}
+}
+
+// SmartGuide rule management
+
+// SmartGuideRuleUUIDPrefix is the prefix for internal SmartGuide rules
+// Each bot will have its own rule: _internal_smart_guide_{botUUID}
+const SmartGuideRuleUUIDPrefix = "_internal_smart_guide_"
+
+// SmartGuideRuleUUID generates a unique rule UUID for a specific bot
+func SmartGuideRuleUUID(botUUID string) string {
+	return SmartGuideRuleUUIDPrefix + botUUID
+}
+
+// EnsureSmartGuideRuleForBot ensures the _smart_guide rule exists for a specific bot
+// If the rule doesn't exist, it creates it. If it exists but the configuration differs,
+// it updates the rule. The rule is persisted to config.json.
+//
+// Each bot gets its own rule with UUID: _internal_smart_guide_{botUUID}
+// The rule name uses the bot's name (if provided), otherwise uses botUUID
+func (c *Config) EnsureSmartGuideRuleForBot(botUUID, botName, providerUUID, modelID string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Generate rule UUID for this specific bot
+	ruleUUID := SmartGuideRuleUUID(botUUID)
+
+	// Use bot name for description, fallback to botUUID
+	displayName := botName
+	if displayName == "" {
+		displayName = botUUID
+	}
+
+	// Validate provider exists and is enabled
+	provider, err := c.providerStore.GetByUUID(providerUUID)
+	if err != nil || provider == nil {
+		logrus.WithFields(logrus.Fields{
+			"provider": providerUUID,
+			"bot":      botUUID,
+		}).Error("SmartGuide provider not found")
+		return fmt.Errorf("provider %s not found", providerUUID)
+	}
+	if !provider.Enabled {
+		logrus.WithFields(logrus.Fields{
+			"provider": providerUUID,
+			"bot":      botUUID,
+		}).Error("SmartGuide provider is disabled")
+		return fmt.Errorf("provider %s is disabled", providerUUID)
+	}
+
+	// Check if rule already exists for this bot
+	existingRuleIndex := -1
+	for i, rule := range c.Rules {
+		if rule.UUID == ruleUUID {
+			existingRuleIndex = i
+			break
+		}
+	}
+
+	// Create new rule if it doesn't exist
+	if existingRuleIndex == -1 {
+		newRule := typ.Rule{
+			UUID:          ruleUUID,
+			Scenario:      typ.ScenarioSmartGuide,
+			RequestModel:  WildcardRuleName,
+			ResponseModel: modelID,
+			Description:   fmt.Sprintf("Auto-generated rule for SmartGuide bot '%s' (DO NOT EDIT)", displayName),
+			Services: []*loadbalance.Service{
+				{
+					Provider: providerUUID,
+					Model:    modelID,
+					Active:   true,
+				},
+			},
+			LBTactic: typ.Tactic{
+				Type: loadbalance.TacticRoundRobin,
+			},
+			Active:       true,
+			SmartEnabled: false,
+		}
+
+		c.Rules = append(c.Rules, newRule)
+		if err := c.Save(); err != nil {
+			logrus.WithError(err).Error("Failed to save SmartGuide rule")
+			return fmt.Errorf("failed to save rule: %w", err)
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"bot":            botUUID,
+			"bot_name":       botName,
+			"provider":       providerUUID,
+			"model":          modelID,
+			"rule_uuid":      ruleUUID,
+			"scenario":       typ.ScenarioSmartGuide,
+			"request_model":  WildcardRuleName,
+			"response_model": modelID,
+		}).Info("SmartGuide rule created")
+		return nil
+	}
+
+	// Update existing rule if configuration differs
+	existingRule := &c.Rules[existingRuleIndex]
+	needsUpdate := false
+
+	// Check if services need updating
+	if len(existingRule.Services) == 0 {
+		needsUpdate = true
+	} else {
+		firstService := existingRule.Services[0]
+		if firstService.Provider != providerUUID || firstService.Model != modelID {
+			needsUpdate = true
+		}
+	}
+
+	if needsUpdate {
+		existingRule.Services = []*loadbalance.Service{
+			{
+				Provider: providerUUID,
+				Model:    modelID,
+				Active:   true,
+			},
+		}
+		existingRule.ResponseModel = modelID
+		// Update description if bot name changed
+		if botName != "" {
+			existingRule.Description = fmt.Sprintf("Auto-generated rule for SmartGuide bot '%s' (DO NOT EDIT)", botName)
+		}
+
+		if err := c.Save(); err != nil {
+			logrus.WithError(err).Error("Failed to update SmartGuide rule")
+			return fmt.Errorf("failed to update rule: %w", err)
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"bot":       botUUID,
+			"bot_name":  botName,
+			"provider":  providerUUID,
+			"model":     modelID,
+			"rule_uuid": ruleUUID,
+			"scenario":  typ.ScenarioSmartGuide,
+		}).Info("SmartGuide rule updated")
+	} else {
+		logrus.WithFields(logrus.Fields{
+			"bot":       botUUID,
+			"bot_name":  botName,
+			"provider":  providerUUID,
+			"model":     modelID,
+			"rule_uuid": ruleUUID,
+		}).Debug("SmartGuide rule already exists with correct configuration")
+	}
+
+	return nil
+}
+
+// EnsureSmartGuideRule ensures the _smart_guide rule exists (backward compatible)
+// This method creates a rule without bot-specific identification
+// Deprecated: Use EnsureSmartGuideRuleForBot for bot-specific rules
+func (c *Config) EnsureSmartGuideRule(providerUUID, modelID string) error {
+	return c.EnsureSmartGuideRuleForBot("", "", providerUUID, modelID)
+}
+
+// GetSmartGuideRuleForBot returns the _smart_guide rule for a specific bot
+func (c *Config) GetSmartGuideRuleForBot(botUUID string) *typ.Rule {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	ruleUUID := SmartGuideRuleUUID(botUUID)
+	for i, rule := range c.Rules {
+		if rule.UUID == ruleUUID {
+			return &c.Rules[i]
+		}
+	}
+	return nil
+}
+
+// GetSmartGuideRule returns the _smart_guide rule (backward compatible, non-bot-specific)
+// Deprecated: Use GetSmartGuideRuleForBot for bot-specific rules
+func (c *Config) GetSmartGuideRule() *typ.Rule {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// Return first matching smart guide rule
+	for i, rule := range c.Rules {
+		if rule.Scenario == typ.ScenarioSmartGuide {
+			return &c.Rules[i]
+		}
+	}
+	return nil
 }

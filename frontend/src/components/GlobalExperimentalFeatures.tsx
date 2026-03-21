@@ -1,25 +1,23 @@
-import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
+import {useFeatureFlags} from '@/contexts/FeatureFlagsContext';
 import { Cloud, Psychology, Security } from '@mui/icons-material';
-import {
-    Alert,
-    Box,
-    Chip,
-    Tooltip,
-    Typography,
-} from '@mui/material';
-import React, { useEffect, useState } from 'react';
-import { api } from '../services/api';
+import {Alert, Box, Chip, Tooltip, Typography,} from '@mui/material';
+import React, {useEffect, useState} from 'react';
+import {api} from '../services/api';
+import {isFullEdition} from "@/utils/edition.ts";
 
 const SKILL_FEATURES = [
-    { key: 'skill_ide', label: 'IDE Skills', description: 'Enable IDE Skills feature for managing code snippets and skills from IDEs' },
+    {
+        key: 'skill_ide',
+        label: 'IDE Skills',
+        description: 'Enable IDE Skills feature for managing code snippets and skills from IDEs'
+    },
 ] as const;
 
 const GlobalExperimentalFeatures: React.FC = () => {
     const [features, setFeatures] = useState<Record<string, boolean>>({});
-    const [remoteCoderEnabled, setRemoteCoderEnabled] = useState(false);
     const [guardrailsEnabled, setGuardrailsEnabled] = useState(false);
     const [loading, setLoading] = useState(true);
-    const { refresh } = useFeatureFlags();
+    const {refresh} = useFeatureFlags();
 
     const loadFeatures = async () => {
         try {
@@ -33,10 +31,6 @@ const GlobalExperimentalFeatures: React.FC = () => {
                 newFeatures[f.key] = results[i]?.data?.value || false;
             });
             setFeatures(newFeatures);
-
-            // Load Remote Control flag
-            const remoteCoderResult = await api.getScenarioFlag('_global', 'enable_remote_coder');
-            setRemoteCoderEnabled(remoteCoderResult?.data?.value || false);
 
             // Load Guardrails flag
             const guardrailsResult = await api.getScenarioFlag('_global', 'guardrails');
@@ -56,7 +50,7 @@ const GlobalExperimentalFeatures: React.FC = () => {
             .then((result) => {
                 console.log('setScenarioFlag result:', result);
                 if (result.success) {
-                    setFeatures(prev => ({ ...prev, [featureKey]: newValue }));
+                    setFeatures(prev => ({...prev, [featureKey]: newValue}));
                     refresh()
                 } else {
                     console.error('Failed to set global feature:', result);
@@ -65,24 +59,6 @@ const GlobalExperimentalFeatures: React.FC = () => {
             })
             .catch((err) => {
                 console.error('Failed to set global feature:', err);
-                loadFeatures();
-            });
-    };
-
-    const toggleRemoteCoder = () => {
-        const newValue = !remoteCoderEnabled;
-        api.setScenarioFlag('_global', 'enable_remote_coder', newValue)
-            .then((result) => {
-                if (result.success) {
-                    setRemoteCoderEnabled(newValue);
-                    refresh();
-                } else {
-                    console.error('Failed to set Remote Control:', result);
-                    loadFeatures();
-                }
-            })
-            .catch((err) => {
-                console.error('Failed to set Remote Control:', err);
                 loadFeatures();
             });
     };
@@ -125,60 +101,41 @@ const GlobalExperimentalFeatures: React.FC = () => {
     });
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {/* Skill Features */}
-            <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
-                {/* Label */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
-                    <Psychology sx={{ fontSize: '1rem', color: 'text.secondary' }} />
-                    <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
-                        Skills
-                    </Typography>
-                    <Tooltip title="Skill Features - Enable prompt and skill management features" arrow>
-                        <Box />
-                    </Tooltip>
-                </Box>
+        <Box sx={{display: 'flex', flexDirection: 'column', gap: 0}}>
+            {/* Skill Features - Only in full edition */}
+            {isFullEdition && (
+                <Box sx={{display: 'flex', alignItems: 'center', py: 2, gap: 3}}>
+                    {/* Label */}
+                    <Box sx={{display: 'flex', alignItems: 'center', gap: 1, minWidth: 180}}>
+                        <Psychology sx={{fontSize: '1rem', color: 'text.secondary'}}/>
+                        <Typography variant="subtitle2" sx={{color: 'text.secondary'}}>
+                            Skills
+                        </Typography>
+                        <Tooltip title="Skill Features - Enable prompt and skill management features" arrow>
+                            <Box/>
+                        </Tooltip>
+                    </Box>
 
-                {/* Skill feature toggles as clickable chips */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-                    {SKILL_FEATURES.map((feature) => {
-                        const isEnabled = features[feature.key] || false;
-                        return (
-                            <Tooltip key={feature.key} title={feature.description + (isEnabled ? ' (enabled)' : ' (disabled) - Click to enable')} arrow>
-                                <Chip
-                                    label={`${feature.label} · ${isEnabled ? 'On' : 'Off'}`}
-                                    onClick={() => toggleFeature(feature.key)}
-                                    size="small"
-                                    sx={chipStyle(isEnabled)}
-                                />
-                            </Tooltip>
-                        );
-                    })}
-                </Box>
-            </Box>
-
-            {/* Remote Control Section */}
-            <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
-                {/* Title with Icon */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
-                    <Cloud sx={{ fontSize: '1rem', color: 'text.secondary' }} />
-                    <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
-                        Remote Control
-                    </Typography>
-                </Box>
-
-                {/* Remote Control Toggle as clickable chip */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-                    <Tooltip title={"Enable Remote Control - access sessions remotely through the web UI" + (remoteCoderEnabled ? ' (enabled)' : ' (disabled) - Click to enable')} arrow>
-                        <Chip
-                            label={`Remote Control · ${remoteCoderEnabled ? 'On' : 'Off'}`}
-                            onClick={toggleRemoteCoder}
-                            size="small"
-                            sx={chipStyle(remoteCoderEnabled)}
-                        />
-                    </Tooltip>
-                </Box>
-            </Box>
+                    {/* Skill feature toggles as clickable chips */}
+                    <Box sx={{display: 'flex', alignItems: 'center', gap: 2, flex: 1}}>
+                        {SKILL_FEATURES.map((feature) => {
+                            const isEnabled = features[feature.key] || false;
+                            return (
+                                <Tooltip key={feature.key}
+                                         title={feature.description + (isEnabled ? ' (enabled)' : ' (disabled) - Click to enable')}
+                                         arrow>
+                                    <Chip
+                                        label={`${feature.label} · ${isEnabled ? 'On' : 'Off'}`}
+                                        onClick={() => toggleFeature(feature.key)}
+                                        size="small"
+                                        sx={chipStyle(isEnabled)}
+                                    />
+                                </Tooltip>
+                            );
+                        })}
+                    </Box>
+                </Box>)
+            }
 
             {/* Guardrails Section */}
             <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
@@ -205,15 +162,6 @@ const GlobalExperimentalFeatures: React.FC = () => {
                 <Alert severity="info" sx={{ mt: 1 }}>
                     <Typography variant="body2">
                         Guardrails is enabled. A "Guardrails" page is available in the sidebar for rule management.
-                    </Typography>
-                </Alert>
-            )}
-
-            {/* Tip message at the bottom when Remote Control is enabled */}
-            {remoteCoderEnabled && (
-                <Alert severity="info" sx={{ mt: 1 }}>
-                    <Typography variant="body2">
-                        Remote Control is now enabled! A "Remote Control" menu item has appeared in the sidebar. Click it to access the Remote Control interface.
                     </Typography>
                 </Alert>
             )}

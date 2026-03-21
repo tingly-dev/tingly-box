@@ -25,6 +25,15 @@ type Bot interface {
 	EditMessage(ctx context.Context, messageID string, text string) error
 	DeleteMessage(ctx context.Context, messageID string) error
 
+	// Text Processing
+	// ChunkText splits text into chunks based on the platform's message limit.
+	// Uses smart break-point detection to avoid breaking words in the middle.
+	ChunkText(text string) []string
+	// ValidateTextLength checks if text is within the platform's message limit.
+	ValidateTextLength(text string) error
+	// GetMessageLimit returns the message length limit for this bot's platform.
+	GetMessageLimit() int
+
 	// State
 	Status() *BotStatus
 	PlatformInfo() *PlatformInfo
@@ -106,7 +115,8 @@ var PlatformNames = map[Platform]string{
 	PlatformGoogleChat:  "Google Chat",
 	PlatformSignal:      "Signal",
 	PlatformBlueBubbles: "BlueBubbles (iMessage)",
-	PlatformFeishu:      "Feishu/Lark",
+	PlatformFeishu:      "Feishu",
+	PlatformLark:        "Lark",
 	PlatformWebChat:     "WebChat",
 	PlatformDingTalk:    "DingTalk",
 }
@@ -124,8 +134,8 @@ func IsValidPlatform(platform string) bool {
 	switch Platform(platform) {
 	case PlatformWhatsApp, PlatformTelegram, PlatformDiscord,
 		PlatformSlack, PlatformGoogleChat, PlatformSignal,
-		PlatformBlueBubbles, PlatformFeishu, PlatformWebChat,
-		PlatformDingTalk:
+		PlatformBlueBubbles, PlatformFeishu, PlatformLark,
+		PlatformWebChat, PlatformDingTalk:
 		return true
 	default:
 		return false

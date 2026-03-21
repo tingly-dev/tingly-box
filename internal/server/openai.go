@@ -4,13 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/openai/openai-go/v3"
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -47,30 +50,43 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 			continue
 		}
 
-		ownedBy := "tingly-box"
+		// Get timestamp from provider's LastUpdated field
+		var created int64
 		services := rule.GetServices()
-		if len(services) > 0 {
-			providerDesc := make([]string, 0, len(services))
-			for i := range services {
-				svc := services[i]
-				if svc.Active {
-					provider, err := cfg.GetProviderByUUID(svc.Provider)
-					if err == nil {
-						providerDesc = append(providerDesc, provider.Name)
-					} else {
-						providerDesc = append(providerDesc, svc.Provider)
+		providerDesc := make([]string, 0, len(services))
+		for i := range services {
+			svc := services[i]
+			// Skip nil services (defensive check after DB migration)
+			if svc == nil {
+				logrus.Debugf("Skipping nil service in rule %s during model list", rule.UUID)
+				continue
+			}
+			if svc.Active {
+				provider, err := cfg.GetProviderByUUID(svc.Provider)
+				if err == nil {
+					providerDesc = append(providerDesc, provider.Name)
+					// Parse LastUpdated timestamp if available
+					if provider.LastUpdated != "" {
+						if t, err := time.Parse(time.RFC3339, provider.LastUpdated); err == nil {
+							created = t.Unix()
+						}
 					}
+				} else {
+					providerDesc = append(providerDesc, svc.Provider)
 				}
 			}
-			if len(providerDesc) > 0 {
-				ownedBy += " via " + fmt.Sprintf("%v", providerDesc)
-			}
+		}
+
+		// Build owned_by field
+		ownedBy := "tingly-box"
+		if len(providerDesc) > 0 {
+			ownedBy += " via " + fmt.Sprintf("%v", providerDesc)
 		}
 
 		models = append(models, OpenAIModel{
 			ID:      rule.RequestModel,
 			Object:  "model",
-			Created: 0,
+			Created: created,
 			OwnedBy: ownedBy,
 		})
 	}
@@ -154,7 +170,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 	}
 
 	// Check if this is the request model name first
-	rule, err = s.determineRuleWithScenario(scenarioType, req.Model)
+	rule, err = s.determineRuleWithScenario(c, scenarioType, req.Model)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -205,6 +221,9 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
 			fc := NewForwardContext(c.Request.Context(), provider)
 			streamResp, cancel, err := ForwardAnthropicV1Stream(fc, wrapper, anthropicReq)
+			if cancel != nil {
+				defer cancel()
+			}
 			if err != nil {
 				// Track error with no usage
 				s.trackUsageFromContext(c, 0, 0, err)
@@ -216,7 +235,6 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				})
 				return
 			}
-			defer cancel()
 
 			// Get scenario config for DisableStreamUsage flag
 			disableStreamUsage := false
@@ -228,7 +246,8 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			if err != nil {
 				// Track usage with error status
 				if inputTokens > 0 || outputTokens > 0 {
-					s.trackUsageFromContext(c, inputTokens, outputTokens, err)
+					tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
+					s.trackUsageWithTokenUsage(c, tokenUsage, err)
 				}
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
@@ -241,13 +260,17 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 
 			// Track successful streaming completion
 			if inputTokens > 0 || outputTokens > 0 {
-				s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
+				tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
+				s.trackUsageWithTokenUsage(c, tokenUsage, nil)
 			}
 			return
 		} else {
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
 			fc := NewForwardContext(nil, provider)
 			anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, anthropicReq)
+			if cancel != nil {
+				defer cancel()
+			}
 			if err != nil {
 				// Track error with no usage
 				s.trackUsageFromContext(c, 0, 0, err)
@@ -259,17 +282,18 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				})
 				return
 			}
-			defer cancel()
 
 			// Track usage from response
 			inputTokens := int(anthropicResp.Usage.InputTokens)
 			outputTokens := int(anthropicResp.Usage.OutputTokens)
-			s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
+			cacheTokens := int(anthropicResp.Usage.CacheReadInputTokens + anthropicResp.Usage.CacheCreationInputTokens)
+			tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
+			s.trackUsageWithTokenUsage(c, tokenUsage, nil)
 
 			// Use provider-aware conversion for provider-specific handling
-			openaiResp := nonstream.ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
-			if nonstream.ShouldRoundtripResponse(c, "anthropic") {
-				roundtripped, err := nonstream.RoundtripOpenAIMapViaAnthropic(openaiResp, responseModel, provider, actualModel)
+			openaiResp := ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
+			if ShouldRoundtripResponse(c, "anthropic") {
+				roundtripped, err := RoundtripOpenAIMapViaAnthropic(openaiResp, responseModel, provider, actualModel)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, ErrorResponse{
 						Error: ErrorDetail{
@@ -292,6 +316,43 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			return
 		}
 
+		// Use Transform Chain for request transformation (Consistency + Vendor transforms)
+		// Note: Base transform is not needed since the request is already in OpenAI Chat format
+		// Chain: Consistency Transform → Vendor Transform
+		chain := transform.NewTransformChain([]transform.Transform{
+			//transform.NewConsistencyTransform(transform.TargetAPIStyleOpenAIChat),
+			transform.NewVendorTransform(provider.APIBase),
+		})
+
+		// Create transform context
+		var scenarioFlags *typ.ScenarioFlags
+		if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
+			scenarioFlags = &scenarioConfig.Flags
+		}
+
+		transformCtx := &transform.TransformContext{
+			OriginalRequest: &req.ChatCompletionNewParams,
+			Request:         &req.ChatCompletionNewParams,
+			ProviderURL:     provider.APIBase,
+			ScenarioFlags:   scenarioFlags,
+			IsStreaming:     isStreaming,
+		}
+
+		// Execute transform chain
+		finalCtx, err := chain.Execute(transformCtx)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Transform chain failed: " + err.Error(),
+					Type:    "invalid_request_error",
+				},
+			})
+			return
+		}
+
+		// Get final transformed request
+		transformedReq := finalCtx.Request.(*openai.ChatCompletionNewParams)
+
 		if isStreaming {
 			// Get scenario config for DisableStreamUsage flag
 			disableStreamUsage := false
@@ -299,9 +360,9 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				disableStreamUsage = scenarioConfig.Flags.DisableStreamUsage
 			}
 
-			s.handleOpenAIChatStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, shouldIntercept, shouldStripTools, disableStreamUsage)
+			s.handleOpenAIChatStreamingRequest(c, provider, transformedReq, responseModel, shouldIntercept, shouldStripTools, disableStreamUsage)
 		} else {
-			s.handleNonStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, shouldIntercept, shouldStripTools)
+			s.handleNonStreamingRequest(c, provider, transformedReq, responseModel, shouldIntercept, shouldStripTools)
 		}
 	}
 }
