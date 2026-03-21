@@ -118,6 +118,11 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		req.BetaMessageNewParams.Tools = toolinterceptor.StripSearchFetchToolsAnthropicBeta(req.BetaMessageNewParams.Tools)
 	}
 
+	s.applyGuardrailsToToolResultV1Beta(c, &req.BetaMessageNewParams, actualModel, provider)
+	// Apply alias masking after terminal tool_result filtering so the decision
+	// engine sees original tool output and the upstream model sees aliases.
+	s.applyGuardrailsCredentialMasksV1Beta(c, &req.BetaMessageNewParams, actualModel, provider)
+
 	// Check provider's API style to decide which path to take
 	apiStyle := provider.APIStyle
 
@@ -178,6 +183,8 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 
 			// FIXME: now we use req model as resp model
 			anthropicResp.Model = anthropic.Model(proxyModel)
+
+			s.restoreGuardrailsCredentialAliasesV1BetaResponse(c, anthropicResp)
 
 			// Record response if scenario recording is enabled
 			if recorder != nil {
@@ -427,6 +434,11 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 			hc.WithOnStreamError(onError)
 		}
 	}
+
+	// Anthropic beta only adapts request history; the shared runtime owns all
+	// enablement checks and hook wiring after this point.
+	session := s.guardrailsSessionFromContext(c, actualModel, provider)
+	s.attachGuardrailsHooks(c, hc, session, guardrailsMessagesFromAnthropicV1Beta(req.System, req.Messages))
 
 	usageStat, err := stream.HandleAnthropicV1BetaStream(hc, req, streamResp)
 	s.trackUsageWithTokenUsage(c, usageStat, err)

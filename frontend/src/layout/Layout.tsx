@@ -20,6 +20,11 @@ import {
     Today as TodayIcon,
     Send as UserPromptIcon,
     Extension as VSCodeIcon,
+    Security,
+    Rule,
+    Storefront,
+    History as HistoryIcon,
+    VpnKey as VpnKeyIcon,
     Security as AccessControlIcon
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
@@ -76,7 +81,7 @@ const Layout = ({ children }: LayoutProps) => {
     const navigate = useNavigate();
     const { hasUpdate, currentVersion, showUpdateDialog } = useAppVersion();
     const { isHealthy, showDisconnectDialog } = useHealth();
-    const { skillUser, skillIde } = useFeatureFlags();
+    const { skillUser, skillIde, enableGuardrails} = useFeatureFlags();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
 
@@ -242,6 +247,38 @@ const Layout = ({ children }: LayoutProps) => {
                     },
                 ],
             }] : []),
+            ...(enableGuardrails ? [{
+                key: 'guardrails',
+                icon: <Security sx={{ fontSize: 22 }} />,
+                label: 'Guardrails',
+                children: [
+                    {
+                        path: '/guardrails',
+                        label: 'Overview',
+                        icon: <Security sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/guardrails/rules',
+                        label: 'Policies',
+                        icon: <Rule sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/guardrails/credentials',
+                        label: 'Credentials',
+                        icon: <VpnKeyIcon sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/guardrails/market',
+                        label: 'Builtins',
+                        icon: <Storefront sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/guardrails/history',
+                        label: 'History',
+                        icon: <HistoryIcon sx={{ fontSize: 20 }} />,
+                    },
+                ],
+            }] : []),
             {
                 key: 'credential',
                 icon: <LockIcon sx={{ fontSize: 22 }} />,
@@ -272,7 +309,7 @@ const Layout = ({ children }: LayoutProps) => {
             },
         ];
         return items;
-    }, [t, promptMenuItems]);
+    }, [t, promptMenuItems, enableGuardrails]);
 
     // Find current active activity
     const activeActivity = useMemo(() => {

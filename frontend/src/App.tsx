@@ -29,6 +29,11 @@ const CredentialPage = lazy(() => import('./pages/CredentialPage'));
 const System = lazy(() => import('./pages/System'));
 const AccessControl = lazy(() => import('./pages/AccessControl'));
 const LogsPage = lazy(() => import('./pages/system/LogsPage'));
+const GuardrailsPage = lazy(() => import('./pages/GuardrailsPage'));
+const GuardrailsRulesPage = lazy(() => import('./pages/guardrails/RulesPage'));
+const GuardrailsCredentialsPage = lazy(() => import('./pages/guardrails/CredentialsPage'));
+const GuardrailsMarketPage = lazy(() => import('./pages/guardrails/MarketPage'));
+const GuardrailsHistoryPage = lazy(() => import('./pages/guardrails/HistoryPage'));
 const DashboardPage = lazy(() => import('./pages/./DashboardPage'));
 const OverviewPage = lazy(() => import('./pages/overview/OverviewPage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
@@ -325,6 +330,12 @@ function AppContent() {
                     <Route path="/remote-control" element={<RemoteControlOverviewPage />} />
                     <Route path="/remote-control/bot" element={<BotPage />} />
                     <Route path="/remote-control/agent" element={<AgentPage />} />
+                    {/* Guardrails */}
+                    <Route path="/guardrails" element={<GuardrailsPage />} />
+                    <Route path="/guardrails/rules" element={<GuardrailsRulesPage />} />
+                    <Route path="/guardrails/credentials" element={<GuardrailsCredentialsPage />} />
+                    <Route path="/guardrails/market" element={<GuardrailsMarketPage />} />
+                    <Route path="/guardrails/history" element={<GuardrailsHistoryPage />} />
                     {/* Catch-all redirect for unknown routes */}
                     <Route path="*" element={<Navigate to="/dashboard/7d" replace />} />
                 </Route>

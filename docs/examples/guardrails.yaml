@@ -1,0 +1,68 @@
+strategy: most_severe
+error_strategy: review
+
+groups:
+  - id: high-risk
+    name: High Risk
+    enabled: true
+    severity: high
+    default_verdict: block
+    default_scope:
+      scenarios: [claude_code]
+
+  - id: sensitive-output
+    name: Sensitive Output
+    enabled: true
+    severity: high
+    default_verdict: block
+    default_scope:
+      scenarios: [claude_code]
+
+policies:
+  - id: block-ssh-read
+    name: Block SSH directory reads
+    group: high-risk
+    kind: resource_access
+    enabled: true
+    scope:
+      directions: [response]
+    match:
+      tool_names: [bash]
+      actions:
+        include: [read]
+      resources:
+        type: path
+        mode: prefix
+        values: ["~/.ssh", "/etc/ssh"]
+    reason: Reading SSH directory content is blocked.
+
+  - id: block-env-read
+    name: Block .env file reads
+    group: high-risk
+    kind: resource_access
+    enabled: true
+    scope:
+      directions: [response]
+    match:
+      tool_names: [bash]
+      actions:
+        include: [read]
+      resources:
+        type: path
+        mode: contains
+        values: [".env", ".env.local", ".env.production"]
+    reason: Reading environment secret files is blocked.
+
+  - id: block-secret-output
+    name: Block sensitive output
+    group: sensitive-output
+    kind: content
+    enabled: true
+    scope:
+      directions: [request]
+    match:
+      patterns:
+        - BEGIN OPENSSH PRIVATE KEY
+        - AKIA[0-9A-Z]+
+      pattern_mode: regex
+    reason: Sensitive credential material is blocked before it goes back to the model.

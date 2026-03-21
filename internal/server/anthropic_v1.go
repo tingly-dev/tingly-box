@@ -118,6 +118,12 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		req.MessageNewParams.Tools = toolinterceptor.StripSearchFetchToolsAnthropic(req.MessageNewParams.Tools)
 	}
 
+	s.applyGuardrailsToToolResultV1(c, &req.MessageNewParams, actualModel, provider)
+	// Run credential masking after terminal tool_result filtering so block/review
+	// decisions still inspect the original tool output while the upstream model
+	// only receives alias tokens.
+	s.applyGuardrailsCredentialMasksV1(c, &req.MessageNewParams, actualModel, provider)
+
 	// Check provider's API style to decide which path to take
 	apiStyle := provider.APIStyle
 
@@ -177,6 +183,8 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 				}
 				anthropicResp = roundtripped
 			}
+
+			s.restoreGuardrailsCredentialAliasesV1Response(c, anthropicResp)
 
 			// Record response if scenario recording is enabled
 			if recorder != nil {
@@ -488,6 +496,11 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 			hc.WithOnStreamError(onError)
 		}
 	}
+
+	// Anthropic v1 only adapts request history; the shared runtime owns all
+	// enablement checks and hook wiring after this point.
+	session := s.guardrailsSessionFromContext(c, actualModel, provider)
+	s.attachGuardrailsHooks(c, hc, session, guardrailsMessagesFromAnthropicV1(req.System, req.Messages))
 
 	usageStat, err := stream.HandleAnthropicV1Stream(hc, req, streamResp)
 	s.trackUsageWithTokenUsage(c, usageStat, err)

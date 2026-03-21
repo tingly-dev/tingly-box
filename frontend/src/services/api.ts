@@ -590,6 +590,92 @@ export const api = {
         });
     },
 
+    // Guardrails API
+    getGuardrailsConfig: async (): Promise<any> => {
+        return fetchUIAPI('/guardrails/config');
+    },
+    getGuardrailsBuiltins: async (): Promise<any> => {
+        return fetchUIAPI('/guardrails/builtins');
+    },
+    getGuardrailsCredentials: async (): Promise<any> => {
+        return fetchUIAPI('/guardrails/credentials');
+    },
+    getGuardrailsCredential: async (credentialId: string): Promise<any> => {
+        return fetchUIAPI(`/guardrails/credential/${encodeURIComponent(credentialId)}`);
+    },
+    createGuardrailsCredential: async (payload: any): Promise<any> => {
+        return fetchUIAPI('/guardrails/credential', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    },
+    updateGuardrailsCredential: async (credentialId: string, payload: any): Promise<any> => {
+        return fetchUIAPI(`/guardrails/credential/${encodeURIComponent(credentialId)}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+    },
+    deleteGuardrailsCredential: async (credentialId: string): Promise<any> => {
+        return fetchUIAPI(`/guardrails/credential/${encodeURIComponent(credentialId)}`, {
+            method: 'DELETE',
+        });
+    },
+    getGuardrailsHistory: async (): Promise<any> => {
+        return fetchUIAPI('/guardrails/history');
+    },
+    clearGuardrailsHistory: async (): Promise<any> => {
+        return fetchUIAPI('/guardrails/history', {
+            method: 'DELETE',
+        });
+    },
+    createGuardrailsPolicy: async (payload: any): Promise<any> => {
+        return fetchUIAPI('/guardrails/policy', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    },
+    updateGuardrailsPolicy: async (policyId: string, payload: any): Promise<any> => {
+        return fetchUIAPI(`/guardrails/policy/${encodeURIComponent(policyId)}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+    },
+    deleteGuardrailsPolicy: async (policyId: string): Promise<any> => {
+        return fetchUIAPI(`/guardrails/policy/${encodeURIComponent(policyId)}`, {
+            method: 'DELETE',
+        });
+    },
+    createGuardrailsGroup: async (payload: any): Promise<any> => {
+        return fetchUIAPI('/guardrails/group', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    },
+    updateGuardrailsGroup: async (groupId: string, payload: any): Promise<any> => {
+        return fetchUIAPI(`/guardrails/group/${encodeURIComponent(groupId)}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+    },
+    deleteGuardrailsGroup: async (groupId: string): Promise<any> => {
+        return fetchUIAPI(`/guardrails/group/${encodeURIComponent(groupId)}`, {
+            method: 'DELETE',
+        });
+    },
+
+    updateGuardrailsConfig: async (content: string): Promise<any> => {
+        return fetchUIAPI('/guardrails/config', {
+            method: 'PUT',
+            body: JSON.stringify({ content }),
+        });
+    },
+
+    reloadGuardrailsConfig: async (): Promise<any> => {
+        return fetchUIAPI('/guardrails/reload', {
+            method: 'POST',
+        });
+    },
+
     probeModel: async (uuid: string, model: string): Promise<ProbeResponse> => {
         try {
             const apiInstances = await getApiInstances();
