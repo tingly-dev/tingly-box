@@ -14,8 +14,10 @@ import (
 	"github.com/sirupsen/logrus"
 	assets "github.com/tingly-dev/tingly-box/internal"
 	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbotsettings"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
@@ -334,6 +336,82 @@ func (s *Server) ValidateAuthToken(c *gin.Context) {
 	})
 }
 
+// GetUserToken returns the current user token (masked)
+// Requires authentication
+func (s *Server) GetUserToken(c *gin.Context) {
+	token := s.config.GetUserToken()
+	isDefault := token == constant.DefaultUserToken
+
+	// Return full token - frontend will handle masking
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"token":      token,
+			"is_default": isDefault,
+		},
+	})
+}
+
+// ResetUserToken generates a new secure random token and updates the configuration
+// Requires authentication
+func (s *Server) ResetUserToken(c *gin.Context) {
+	newToken, err := config.GenerateSecureToken()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to generate token",
+		})
+		return
+	}
+
+	if err := s.config.SetUserToken(newToken); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to save token",
+		})
+		return
+	}
+
+	logrus.Info("User token has been reset via web UI")
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"token": newToken,
+		},
+	})
+}
+
+// ResetModelToken generates a new secure random model token and updates the configuration
+// Requires authentication
+func (s *Server) ResetModelToken(c *gin.Context) {
+	newToken, err := config.GenerateSecureToken()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to generate token",
+		})
+		return
+	}
+
+	if err := s.config.SetModelToken(newToken); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to save token",
+		})
+		return
+	}
+
+	logrus.Info("Model token has been reset via web UI")
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"token": newToken,
+		},
+	})
+}
+
 func (s *Server) GetHistory(c *gin.Context) {
 	response := HistoryResponse{
 		Success: true,
@@ -357,7 +435,7 @@ func maskToken(token string) string {
 	}
 
 	// If already masked, return as is
-	if strings.Contains(token, "*") {
+	if strings.Contains(token, "...") {
 		return token
 	}
 
@@ -366,8 +444,9 @@ func maskToken(token string) string {
 		return strings.Repeat("*", len(token))
 	}
 
-	// For longer tokens, show first 4 and last 4 characters
-	return token[:4] + strings.Repeat("*", len(token)-8) + token[len(token)-4:]
+	// For longer tokens, show first 12 and last 4 characters
+	// This works for both short and long tokens
+	return token[:12] + "..." + token[len(token)-4:]
 }
 
 func (s *Server) StartServer(c *gin.Context) {
@@ -480,6 +559,24 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	// Create authenticated API group
 	apiV1 := manager.NewGroup("api", "v1", "")
 	apiV1.Router.Use(s.authMW.UserAuthMiddleware())
+
+	// User token management endpoints (authenticated)
+	apiV1.GET("/auth/token", s.GetUserToken,
+		swagger.WithDescription("Get current user token (masked)"),
+		swagger.WithTags("auth"),
+		swagger.WithResponseModel(gin.H{}),
+	)
+	apiV1.POST("/auth/token/reset", s.ResetUserToken,
+		swagger.WithDescription("Reset user token to a new secure random value"),
+		swagger.WithTags("auth"),
+		swagger.WithResponseModel(gin.H{}),
+	)
+	// Model token management endpoints (authenticated)
+	apiV1.POST("/auth/model-token/reset", s.ResetModelToken,
+		swagger.WithDescription("Reset model token to a new secure random value"),
+		swagger.WithTags("auth"),
+		swagger.WithResponseModel(gin.H{}),
+	)
 
 	apiV2 := manager.NewGroup("api", "v2", "")
 	apiV2.Router.Use(s.authMW.UserAuthMiddleware())
