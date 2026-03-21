@@ -27,6 +27,7 @@ const UseXcodePage = lazy(() => import('./pages/scenario/UseXcodePage'));
 const UseVSCodePage = lazy(() => import('./pages/scenario/UseVSCodePage'));
 const CredentialPage = lazy(() => import('./pages/CredentialPage'));
 const System = lazy(() => import('./pages/System'));
+const AccessControl = lazy(() => import('./pages/AccessControl'));
 const LogsPage = lazy(() => import('./pages/system/LogsPage'));
 const DashboardPage = lazy(() => import('./pages/./DashboardPage'));
 const OverviewPage = lazy(() => import('./pages/overview/OverviewPage'));
@@ -299,6 +300,7 @@ function AppContent() {
                     <Route path="/oauth" element={<Navigate to="/credentials" replace />} />
                     {/* Other routes */}
                     <Route path="/system" element={<System />} />
+                    <Route path="/access-control" element={<AccessControl />} />
                     <Route path="/system/logs" element={<LogsPage />} />
                     {/* Legacy redirects for backward compatibility */}
                     <Route path="/system/http-logs" element={<Navigate to="/system/logs" replace />} />
