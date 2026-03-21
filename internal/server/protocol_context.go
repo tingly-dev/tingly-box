@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -32,10 +33,14 @@ func NewForwardContext(baseCtx context.Context, provider *typ.Provider) *Forward
 	if baseCtx == nil {
 		baseCtx = context.Background()
 	}
+	timeout := time.Duration(provider.Timeout) * time.Second
+	if timeout <= 0 {
+		timeout = time.Duration(constant.DefaultRequestTimeout) * time.Second
+	}
 	return &ForwardContext{
 		Provider: provider,
 		BaseCtx:  baseCtx,
-		Timeout:  time.Duration(provider.Timeout) * time.Second,
+		Timeout:  timeout,
 	}
 }
 
@@ -83,6 +88,10 @@ func (fc *ForwardContext) PrepareContext(req interface{}) (context.Context, cont
 		if err != nil {
 			logrus.Errorf("Request hook error: %s", err)
 		}
+	}
+
+	if fc.Timeout <= 0 {
+		fc.Timeout = time.Duration(constant.DefaultRequestTimeout) * time.Second
 	}
 
 	return context.WithTimeout(ctx, fc.Timeout)

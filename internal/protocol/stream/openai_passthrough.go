@@ -311,6 +311,14 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 // HandleOpenAIResponsesStream handles OpenAI Responses API streaming response.
 // Returns (UsageStat, error)
 func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {
+	return handleOpenAIResponsesStream(hc, stream, responseModel, nil)
+}
+
+func HandleOpenAIResponsesStreamWithInitialEvent(hc *protocol.HandleContext, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string, initialEvent *responses.ResponseStreamEventUnion) (*protocol.TokenUsage, error) {
+	return handleOpenAIResponsesStream(hc, stream, responseModel, initialEvent)
+}
+
+func handleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string, initialEvent *responses.ResponseStreamEventUnion) (*protocol.TokenUsage, error) {
 	defer stream.Close()
 
 	// Set SSE headers for Responses API (different from Chat Completions)
@@ -323,6 +331,10 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 
 	var inputTokens, outputTokens, cacheTokens int64
 	var hasUsage bool
+	var eventCount int
+	var sawCompleted bool
+	var lastEventType string
+	var sawFailed bool
 
 	// Panic recovery
 	defer func() {
@@ -356,6 +368,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 	}
 
 	// Process the stream with context cancellation checking
+	initialConsumed := false
 	c.Stream(func(w io.Writer) bool {
 		// Check context cancellation first
 		select {
@@ -365,13 +378,23 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		default:
 		}
 
-		// Try to get next event
-		if !stream.Next() {
-			// Stream ended naturally
-			return false
+		var evt responses.ResponseStreamEventUnion
+		if initialEvent != nil && !initialConsumed {
+			evt = *initialEvent
+			initialConsumed = true
+		} else {
+			// Try to get next event
+			if !stream.Next() {
+				// Stream ended naturally
+				return false
+			}
+			evt = stream.Current()
 		}
-
-		evt := stream.Current()
+		eventCount++
+		lastEventType = string(evt.Type)
+		if string(evt.Type) == "response.completed" {
+			sawCompleted = true
+		}
 
 		// Accumulate usage from completed events
 		if evt.Response.Usage.InputTokens > 0 {
@@ -383,8 +406,9 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		}
 		// Note: Responses API may include cache tokens in usage details
 		// Check if available in the raw JSON
+		rawJSON := evt.RawJSON()
 		var evtParsed map[string]interface{}
-		if err := json.Unmarshal([]byte(evt.RawJSON()), &evtParsed); err == nil {
+		if err := json.Unmarshal([]byte(rawJSON), &evtParsed); err == nil {
 			if response, ok := evtParsed["response"].(map[string]interface{}); ok {
 				if usage, ok := response["usage"].(map[string]interface{}); ok {
 					if details, ok := usage["input_tokens_details"].(map[string]interface{}); ok {
@@ -394,10 +418,44 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 					}
 				}
 			}
+
+			if string(evt.Type) == "response.failed" {
+				sawFailed = true
+				fields := logrus.Fields{
+					"response_model": responseModel,
+					"event_count":    eventCount,
+					"last_event":     lastEventType,
+					"raw_json":       rawJSON,
+				}
+				if response, ok := evtParsed["response"].(map[string]interface{}); ok {
+					if id, ok := response["id"].(string); ok {
+						fields["response_id"] = id
+					}
+					if status, ok := response["status"].(string); ok {
+						fields["status"] = status
+					}
+					if model, ok := response["model"].(string); ok {
+						fields["upstream_model"] = model
+					}
+					if statusDetails, ok := response["status_details"].(map[string]interface{}); ok {
+						fields["status_details"] = statusDetails
+					}
+					if errObj, ok := response["error"].(map[string]interface{}); ok {
+						fields["response_error"] = errObj
+					}
+					if incomplete, ok := response["incomplete_details"].(map[string]interface{}); ok {
+						fields["incomplete_details"] = incomplete
+					}
+				}
+				if errObj, ok := evtParsed["error"].(map[string]interface{}); ok {
+					fields["event_error"] = errObj
+				}
+				logrus.WithFields(fields).Warn("Received response.failed event from upstream")
+			}
 		}
 
 		// Marshal event using RawJSON() to avoid serializing empty union fields
-		jsonBytes := []byte(evt.RawJSON())
+		jsonBytes := []byte(rawJSON)
 
 		// Apply model override if the event contains a response object with a model field
 		if len(jsonBytes) > 0 {
@@ -433,7 +491,16 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 			return protocol.ZeroTokenUsage(), nil
 		}
 
-		logrus.Errorf("Responses stream error: %v", err)
+		logrus.WithFields(logrus.Fields{
+			"response_model": responseModel,
+			"input_tokens":   inputTokens,
+			"output_tokens":  outputTokens,
+			"cache_tokens":   cacheTokens,
+			"has_usage":      hasUsage,
+			"event_count":    eventCount,
+			"last_event":     lastEventType,
+			"saw_completed":  sawCompleted,
+		}).Errorf("Responses stream error: %v", err)
 		if hasUsage {
 			return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), err
 		}
@@ -451,6 +518,26 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", string(errorJSON)))
 		flusher.Flush()
 		return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), err
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"response_model": responseModel,
+		"input_tokens":   inputTokens,
+		"output_tokens":  outputTokens,
+		"cache_tokens":   cacheTokens,
+		"has_usage":      hasUsage,
+		"event_count":    eventCount,
+		"last_event":     lastEventType,
+		"saw_completed":  sawCompleted,
+		"saw_failed":     sawFailed,
+	}).Info("Responses stream ended without SDK error")
+	if !sawCompleted {
+		logrus.WithFields(logrus.Fields{
+			"response_model": responseModel,
+			"event_count":    eventCount,
+			"last_event":     lastEventType,
+			"saw_failed":     sawFailed,
+		}).Warn("Responses stream closed before response.completed")
 	}
 
 	// Send final [DONE] message
