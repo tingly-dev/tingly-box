@@ -66,6 +66,7 @@ const (
 Bot Commands:
 /help - Show this help
 /stop - Stop current task
+/interrupt - Alias for /stop
 /clear - Clear context, stop task, and create new session
 /cd [path] - Bind and cd into a project
 /project - Show & switch projects
@@ -85,6 +86,7 @@ Bot Commands:
 Bot Commands:
 /help - Show this help
 /stop - Stop current task
+/interrupt - Alias for /stop
 /clear - Clear context, stop task, and create new session
 /cd [path] - Bind and cd into a project to this group
 /project - Show current project info
@@ -150,6 +152,15 @@ func isCommandMatch(cmd string, primary string, aliases []string) bool {
 
 // handleBotHelpCommand displays the bot help message
 func (h *BotHandler) handleBotHelpCommand(hCtx HandlerContext) {
+	// Try to use command registry for dynamic help generation
+	if h.commandRegistry != nil {
+		helpText := h.commandRegistry.BuildHelpText(hCtx.IsDirect())
+		helpText += fmt.Sprintf("\nYour ID: %s", hCtx.SenderID)
+		h.SendText(hCtx, helpText)
+		return
+	}
+
+	// Fallback to hardcoded templates
 	var helpText string
 	if hCtx.IsDirect() {
 		helpText = fmt.Sprintf(directHelpTemplate, hCtx.SenderID)
@@ -160,10 +171,10 @@ func (h *BotHandler) handleBotHelpCommand(hCtx HandlerContext) {
 }
 
 // isStopCommand checks if the text is a stop command
-// Supports: /stop, stop, /clear
+// Supports: /stop, stop, /interrupt, /clear
 func isStopCommand(text string) bool {
 	trimmed := strings.ToLower(strings.TrimSpace(text))
-	return trimmed == "/stop" || trimmed == "stop" || trimmed == "/clear"
+	return trimmed == "/stop" || trimmed == "stop" || trimmed == "/interrupt" || trimmed == "/clear"
 }
 
 // handleStopCommand handles stop commands (/stop, stop, /clear)
@@ -206,10 +217,36 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 
 	cmd := strings.ToLower(fields[0])
 
-	switch {
-	case cmd == "/bot":
+	// Special case: /bot subcommands are handled separately
+	if cmd == "/bot" {
 		h.handleBotCommand(hCtx, fields)
 		return
+	}
+
+	// Try the new command registry first (if initialized)
+	if h.commandRegistry != nil {
+		// Extract command name (remove slash)
+		cmdName := strings.TrimPrefix(cmd, "/")
+
+		// Look up handler via registry
+		handler, ok := h.commandRegistry.Match(cmdName)
+		if ok {
+			// Create command context using imbot types
+			cmdCtx := imbot.NewHandlerContext(hCtx.Bot, hCtx.ChatID, hCtx.SenderID, hCtx.Platform).
+				WithText(hCtx.Text()).
+				WithDirectMessage(hCtx.IsDirect()).
+				WithMessageID(hCtx.MessageID)
+
+			// Execute handler
+			if err := handler(cmdCtx, fields[1:]); err != nil {
+				logrus.WithError(err).WithField("command", cmdName).Error("Command handler failed")
+			}
+			return
+		}
+	}
+
+	// Fallback to old switch-based dispatch for backward compatibility
+	switch {
 	case isCommandMatch(cmd, cmdHelpPrimary, cmdHelpAliases):
 		h.handleBotHelpCommand(hCtx)
 		return

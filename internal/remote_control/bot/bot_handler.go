@@ -54,6 +54,12 @@ type BotHandler struct {
 	// true = show all messages (default), false = show only final results
 	verbose   bool
 	verboseMu sync.RWMutex
+
+	// commandRegistry holds the strongly-typed command registry
+	commandRegistry *imbot.CommandRegistry
+
+	// commandAdapter bridges BotHandler to the command system
+	commandAdapter BotHandlerAdapter
 }
 
 // PendingBind represents a pending bind confirmation request

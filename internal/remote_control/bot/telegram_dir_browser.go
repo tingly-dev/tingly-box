@@ -13,7 +13,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/pkg/fs"
 )
 
 const (
@@ -396,46 +395,4 @@ func SendDirectoryBrowser(ctx context.Context, bot imbot.Bot, browser *Directory
 	browser.SetMessageID(chatID, result.MessageID)
 
 	return result.MessageID, nil
-}
-
-// ValidateProjectPath checks if the path exists and is accessible
-func ValidateProjectPath(path string) error {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return fmt.Errorf("path cannot be empty")
-	}
-
-	// Expand ~ to home directory
-	if strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("cannot get home directory: %w", err)
-		}
-		path = filepath.Join(home, path[2:])
-	}
-
-	// Check if path exists
-	info, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("path does not exist: %s", path)
-		}
-		return fmt.Errorf("cannot access path: %w", err)
-	}
-
-	if !info.IsDir() {
-		return fmt.Errorf("path is not a directory: %s", path)
-	}
-
-	return nil
-}
-
-// ExpandPath expands ~ to home directory and returns absolute path
-// This is a wrapper around pkg/fs.ExpandConfigDir for convenience
-func ExpandPath(path string) (string, error) {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return "", fmt.Errorf("path cannot be empty")
-	}
-	return fs.ExpandConfigDir(path)
 }

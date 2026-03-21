@@ -66,6 +66,15 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 		return fmt.Errorf("failed to start bot manager: %w", err)
 	}
 
+	// Setup menu button after bot is connected
+	// This is called here so it applies to all code paths using runBotWithSettings
+	if err := SetupMenuButtonForBot(manager, setting.UUID); err != nil {
+		// Log warning but don't fail startup
+		logrus.WithError(err).WithField("platform", setting.Platform).Warn("Failed to setup menu button")
+	} else {
+		logrus.WithField("platform", setting.Platform).Info("Menu button configured successfully")
+	}
+
 	// Wait for context cancellation
 	// The manager will automatically clean up when context is cancelled
 	<-ctx.Done()
