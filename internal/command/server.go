@@ -15,6 +15,7 @@ import (
 	obs2 "github.com/tingly-dev/tingly-box/pkg/obs"
 
 	"github.com/tingly-dev/tingly-box/internal/command/options"
+	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
@@ -317,6 +318,7 @@ func StartCommand(appManager *AppManager) *cobra.Command {
 // that run after the server manager is created and before the server starts.
 func StartCommandWithHook(appManager *AppManager, hooks ...func(*ServerManager) error) *cobra.Command {
 	var flags options.StartFlags
+	var localConfigDir string
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -324,28 +326,102 @@ func StartCommandWithHook(appManager *AppManager, hooks ...func(*ServerManager) 
 		Long: `Start the Tingly Box HTTP server that provides the unified API endpoint.
 The server will handle request routing to configured AI providers.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts := options.ResolveStartOptions(cmd, flags, appManager.AppConfig())
-			return startServerWithHook(appManager, opts, hooks...)
+			// Resolve config directory from global and local flags
+			resolvedConfigDir, err := resolveConfigDirFromCmd(cmd, appManager.AppConfig().ConfigDir())
+			if err != nil {
+				return err
+			}
+
+			// Use default app manager if config dir matches, otherwise create new one
+			var targetManager *AppManager
+			if resolvedConfigDir == appManager.AppConfig().ConfigDir() {
+				targetManager = appManager
+			} else {
+				targetManager, err = CreateAppManagerForDir(resolvedConfigDir)
+				if err != nil {
+					return err
+				}
+			}
+
+			opts := options.ResolveStartOptions(cmd, flags, targetManager.AppConfig())
+			return startServerWithHook(targetManager, opts, hooks...)
 		},
 	}
 
 	options.AddStartFlags(cmd, &flags)
+	cmd.Flags().StringVar(&localConfigDir, "config-dir", "",
+		"configuration directory (overrides global --config-dir)")
 	return cmd
+}
+
+// CreateAppManagerForDir creates a new AppManager for the specified config directory.
+// This is used when a command specifies a different config directory than the global one.
+func CreateAppManagerForDir(configDir string) (*AppManager, error) {
+	// Create app config for the specified directory
+	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create app config for directory %s: %w", configDir, err)
+	}
+	return NewAppManagerWithConfig(appConfig), nil
 }
 
 // StopCommand represents the stop server command
 func StopCommand(appManager *AppManager) *cobra.Command {
+	var localConfigDir string
+
 	cmd := &cobra.Command{
 		Use:   "stop",
 		Short: "Stop the Tingly Box server",
 		Long: `Stop the running Tingly Box HTTP server gracefully.
 All ongoing requests will be completed before shutdown.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return doStopServer(appManager)
+			// Resolve config directory from global and local flags
+			resolvedConfigDir, err := resolveConfigDirFromCmd(cmd, appManager.AppConfig().ConfigDir())
+			if err != nil {
+				return err
+			}
+
+			// Create file lock with resolved config dir
+			fileLock := lock.NewFileLock(resolvedConfigDir)
+			return doStopServerWithFileLock(fileLock)
 		},
 	}
 
+	cmd.Flags().StringVar(&localConfigDir, "config-dir", "",
+		"configuration directory (specify which server instance to stop, overrides global --config-dir)")
+
 	return cmd
+}
+
+// resolveConfigDirFromCmd resolves the config directory from command flags.
+// It checks for a local --config-dir flag and uses that if present, otherwise falls back to the provided default.
+func resolveConfigDirFromCmd(cmd *cobra.Command, defaultConfigDir string) (string, error) {
+	localConfigDir, err := cmd.Flags().GetString("config-dir")
+	if err != nil {
+		return "", fmt.Errorf("failed to get config-dir flag: %w", err)
+	}
+
+	if localConfigDir != "" {
+		return localConfigDir, nil
+	}
+
+	return defaultConfigDir, nil
+}
+
+// doStopServerWithFileLock stops the server using the provided file lock
+func doStopServerWithFileLock(fileLock *lock.FileLock) error {
+	if !fileLock.IsLocked() {
+		fmt.Println("Server is not running")
+		return nil
+	}
+
+	fmt.Println("Stopping server...")
+	if err := stopServerWithFileLock(fileLock); err != nil {
+		return fmt.Errorf("failed to stop server: %w", err)
+	}
+
+	fmt.Println("Server stopped successfully")
+	return nil
 }
 
 // StatusCommand represents the status command
@@ -424,6 +500,7 @@ show configuration information including number of providers and server port.`,
 // RestartCommand represents the restart server command
 func RestartCommand(appManager *AppManager) *cobra.Command {
 	var flags options.StartFlags
+	var localConfigDir string
 
 	cmd := &cobra.Command{
 		Use:   "restart",
@@ -432,10 +509,27 @@ func RestartCommand(appManager *AppManager) *cobra.Command {
 This command will stop the current server (if running) and start a new instance.
 The restart is graceful - ongoing requests will be completed before shutdown.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts := options.ResolveStartOptions(cmd, flags, appManager.AppConfig())
+			// Resolve config directory from global and local flags
+			resolvedConfigDir, err := resolveConfigDirFromCmd(cmd, appManager.AppConfig().ConfigDir())
+			if err != nil {
+				return err
+			}
 
-			appConfig := appManager.AppConfig()
-			fileLock := lock.NewFileLock(appConfig.ConfigDir())
+			// Use default app manager if config dir matches, otherwise create new one
+			var targetManager *AppManager
+			if resolvedConfigDir == appManager.AppConfig().ConfigDir() {
+				targetManager = appManager
+			} else {
+				targetManager, err = CreateAppManagerForDir(resolvedConfigDir)
+				if err != nil {
+					return err
+				}
+			}
+
+			opts := options.ResolveStartOptions(cmd, flags, targetManager.AppConfig())
+
+			// Use resolved config dir for file lock
+			fileLock := lock.NewFileLock(resolvedConfigDir)
 			wasRunning := fileLock.IsLocked()
 
 			if wasRunning {
@@ -452,11 +546,13 @@ The restart is graceful - ongoing requests will be completed before shutdown.`,
 			}
 
 			// Start new server
-			return startServer(appManager, opts)
+			return startServer(targetManager, opts)
 		},
 	}
 
 	options.AddStartFlags(cmd, &flags)
+	cmd.Flags().StringVar(&localConfigDir, "config-dir", "",
+		"configuration directory (overrides global --config-dir)")
 	return cmd
 }
 
