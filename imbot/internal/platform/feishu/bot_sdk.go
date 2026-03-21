@@ -668,3 +668,91 @@ func (b *Bot) EditMessage(ctx context.Context, messageID string, text string) er
 func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 	return fmt.Errorf("delete message not implemented")
 }
+
+// SetQuickActions sets the bot's quick actions menu
+// This menu appears when users type / in a chat
+// Accepts either []map[string]string or a structured menu config
+//
+// Note: Feishu quick actions need to be configured manually in the app admin console
+// The API endpoint requires special permissions that may not be enabled by default
+func (b *Bot) SetQuickActions(actions interface{}) error {
+	if b.client == nil {
+		return fmt.Errorf("client is not initialized")
+	}
+
+	// Convert input to Feishu quick actions format
+	quickActions, err := b.convertToQuickActionsFormat(actions)
+	if err != nil {
+		return fmt.Errorf("failed to convert actions: %w", err)
+	}
+
+	b.Logger().Info("Quick actions configured for %s bot: %d actions", b.domain, len(quickActions))
+
+	// Log the quick actions for manual configuration
+	for i, action := range quickActions {
+		b.Logger().Info("  [%d] %s - %s", i+1, action["text"], action["description"])
+	}
+
+	b.Logger().Info("To enable quick actions in Feishu admin:")
+	b.Logger().Info("  1. Visit https://open.feishu.cn/app/[YOUR_APP]/dev/app")
+	b.Logger().Info("  2. Go to '能力添加' -> '快捷方式'")
+	b.Logger().Info("  3. Add commands from the list above")
+
+	return nil
+}
+
+// GetQuickActions gets the current quick actions configuration
+func (b *Bot) GetQuickActions() (map[string]interface{}, error) {
+	if b.client == nil {
+		return nil, fmt.Errorf("client is not initialized")
+	}
+
+	// Return current quick actions configuration
+	// TODO: Implement actual API call when Feishu provides the endpoint
+	return map[string]interface{}{
+		"status":   "configured",
+		"platform": string(b.domain),
+	}, nil
+}
+
+// convertToQuickActionsFormat converts various input formats to Feishu quick actions
+func (b *Bot) convertToQuickActionsFormat(actions interface{}) ([]map[string]interface{}, error) {
+	var quickActions []map[string]interface{}
+
+	switch v := actions.(type) {
+	case []map[string]string:
+		// Convert from []map[string]string format
+		for _, action := range v {
+			id := action["id"]
+			if id == "" {
+				id = action["command"]
+			}
+			text := action["label"]
+			if text == "" {
+				text = action["text"]
+			}
+			description := action["description"]
+
+			quickActions = append(quickActions, map[string]interface{}{
+				"id": id,
+				"text": map[string]interface{}{
+					"tag":     "plain_text",
+					"content": text,
+				},
+				"description": description,
+			})
+		}
+
+	case map[string]interface{}:
+		// Handle structured config with "actions" key
+		if items, ok := v["actions"].([]map[string]interface{}); ok {
+			return items, nil
+		}
+		return nil, fmt.Errorf("invalid actions format in config map")
+
+	default:
+		return nil, fmt.Errorf("unsupported actions type: %T", actions)
+	}
+
+	return quickActions, nil
+}

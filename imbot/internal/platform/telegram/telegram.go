@@ -565,3 +565,116 @@ func (b *Bot) ResolveChatID(input string) (string, error) {
 
 	return "", fmt.Errorf("invalid input format: %s (expected chat ID, @username, or invite link)", input)
 }
+
+// SetCommandList sets the bot's command list (shown in the menu button)
+// Accepts either []tgbotapi.BotCommand or []map[string]string
+func (b *Bot) SetCommandList(commands interface{}) error {
+	if err := b.EnsureReady(); err != nil {
+		return err
+	}
+
+	var botCommands []tgbotapi.BotCommand
+
+	switch v := commands.(type) {
+	case []tgbotapi.BotCommand:
+		botCommands = v
+	case []map[string]string:
+		// Convert from map format to BotCommand
+		botCommands = make([]tgbotapi.BotCommand, 0, len(v))
+		for _, cmd := range v {
+			botCommands = append(botCommands, tgbotapi.BotCommand{
+				Command:     cmd["command"],
+				Description: cmd["description"],
+			})
+		}
+	default:
+		return fmt.Errorf("invalid commands type: %T", commands)
+	}
+
+	_, err := b.api.Request(tgbotapi.NewSetMyCommands(botCommands...))
+	return err
+}
+
+// SetCommandListWithScope sets commands for a specific scope (e.g., all private chats, all group chats)
+func (b *Bot) SetCommandListWithScope(commands []tgbotapi.BotCommand, scope *tgbotapi.BotCommandScope, languageCode string) error {
+	if err := b.EnsureReady(); err != nil {
+		return err
+	}
+
+	var req tgbotapi.SetMyCommandsConfig
+	if scope != nil && languageCode != "" {
+		req = tgbotapi.NewSetMyCommandsWithScopeAndLanguage(*scope, languageCode, commands...)
+	} else if scope != nil {
+		req = tgbotapi.NewSetMyCommandsWithScope(*scope, commands...)
+	} else {
+		req = tgbotapi.NewSetMyCommands(commands...)
+	}
+
+	_, err := b.api.Request(req)
+	return err
+}
+
+// SetMenuButton sets the menu button for the bot
+// Config can be:
+// - map[string]interface{}{"type": "commands"} - Show commands menu
+// - map[string]interface{}{"type": "web_app", "text": "Text", "url": "https://..."} - Open web app
+// - map[string]interface{}{"type": "default"} - Reset to default
+func (b *Bot) SetMenuButton(config interface{}) error {
+	if err := b.EnsureReady(); err != nil {
+		return err
+	}
+
+	// Build the menu button request
+	params := tgbotapi.Params{}
+
+	switch cfg := config.(type) {
+	case map[string]interface{}:
+		menuType, _ := cfg["type"].(string)
+		params.AddNonEmpty("menu_type", menuType)
+
+		if text, ok := cfg["text"].(string); ok && text != "" {
+			params.AddNonEmpty("text", text)
+		}
+		if url, ok := cfg["url"].(string); ok && url != "" {
+			params.AddNonEmpty("url", url)
+		}
+
+		// Handle commands list if provided
+		if commands, ok := cfg["commands"].([]map[string]string); ok {
+			for i, cmd := range commands {
+				if command, ok := cmd["command"]; ok {
+					params.AddNonEmpty(fmt.Sprintf("commands[%d].command", i), command)
+				}
+				if description, ok := cmd["description"]; ok {
+					params.AddNonEmpty(fmt.Sprintf("commands[%d].description", i), description)
+				}
+			}
+		}
+
+	default:
+		// Default to commands menu
+		params.AddNonEmpty("menu_type", "commands")
+	}
+
+	_, err := b.api.MakeRequest("setChatMenuButton", params)
+	return err
+}
+
+// GetMenuButton gets the current menu button configuration
+func (b *Bot) GetMenuButton() (map[string]interface{}, error) {
+	if err := b.EnsureReady(); err != nil {
+		return nil, err
+	}
+
+	resp, err := b.api.MakeRequest("getChatMenuButton", tgbotapi.Params{})
+	if err != nil {
+		return nil, err
+	}
+
+	var menuButton map[string]interface{}
+	if err := json.Unmarshal(resp.Result, &menuButton); err != nil {
+		return nil, err
+	}
+
+	return menuButton, nil
+}
