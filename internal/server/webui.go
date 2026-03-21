@@ -342,13 +342,11 @@ func (s *Server) GetUserToken(c *gin.Context) {
 	token := s.config.GetUserToken()
 	isDefault := token == constant.DefaultUserToken
 
-	// Mask the token (show first 12 and last 4 characters for long tokens)
-	maskedToken := maskToken(token)
-
+	// Return full token - frontend will handle masking
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"token":      maskedToken,
+			"token":      token,
 			"is_default": isDefault,
 		},
 	})
