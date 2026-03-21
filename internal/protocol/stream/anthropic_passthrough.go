@@ -2,7 +2,6 @@ package stream
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -57,12 +56,8 @@ func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNe
 				hasUsage = true
 			}
 
-			// Send SSE event
-			eventJSON, err := json.Marshal(evt)
-			if err != nil {
-				return err
-			}
-			hc.GinContext.SSEvent(evt.Type, string(eventJSON))
+			// Send SSE event using RawJSON to preserve original API response
+			hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
 			hc.GinContext.Writer.Flush()
 			return nil
 		},
@@ -129,12 +124,8 @@ func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaM
 				hasUsage = true
 			}
 
-			// Send SSE event
-			eventJSON, err := json.Marshal(evt)
-			if err != nil {
-				return err
-			}
-			hc.GinContext.SSEvent(evt.Type, string(eventJSON))
+			// MENTION: Send SSE event, should use evt.RawJSON()
+			hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
 			hc.GinContext.Writer.Flush()
 			return nil
 		},
