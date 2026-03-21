@@ -87,6 +87,27 @@ func (h *SearchHandler) SearchWithConfig(query string, count int, config *Config
 		count = config.MaxResults
 	}
 
+	// Create HTTP client with proxy if specified in config
+	client := h.client
+	if config.ProxyURL != "" {
+		logrus.Infof("Using proxy for search: %s", config.ProxyURL)
+		proxyURL, err := url.Parse(config.ProxyURL)
+		if err != nil {
+			logrus.Warnf("Failed to parse proxy URL %s: %v", config.ProxyURL, err)
+		} else {
+			client = &http.Client{
+				Timeout: ddgTimeout,
+				Transport: &http.Transport{
+					Proxy: http.ProxyURL(proxyURL),
+					TLSClientConfig: nil, // Use default TLS config
+				},
+			}
+			logrus.Infof("Created HTTP client with proxy transport")
+		}
+	} else {
+		logrus.Infof("No proxy configured, using default client")
+	}
+
 	// Execute search based on configured API
 	var results []SearchResult
 	var err error
@@ -97,7 +118,7 @@ func (h *SearchHandler) SearchWithConfig(query string, count int, config *Config
 	case "google":
 		results, err = h.searchGoogleWithConfig(query, count, config)
 	case "duckduckgo", "ddg":
-		results, err = h.searchDuckDuckGo(query, count)
+		results, err = h.searchDuckDuckGoWithClient(query, count, client)
 	default:
 		err = fmt.Errorf("unsupported search API: %s (supported: brave, google, duckduckgo)", config.SearchAPI)
 	}
@@ -152,8 +173,8 @@ func (h *SearchHandler) searchBraveWithConfig(query string, count int, config *C
 	}
 	defer resp.Body.Close()
 
-	// Check status code
-	if resp.StatusCode != http.StatusOK {
+	// Check status code - DuckDuckGo may return 200 OK or 202 Accepted
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != 202 {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("search API returned status %d: %s", resp.StatusCode, string(body))
 	}
@@ -220,6 +241,11 @@ type DuckDuckGoInstantAnswerAPIResponse struct {
 
 // searchDuckDuckGo executes a search using DuckDuckGo Instant Answer API (no API key required)
 func (h *SearchHandler) searchDuckDuckGo(query string, count int) ([]SearchResult, error) {
+	return h.searchDuckDuckGoWithClient(query, count, h.client)
+}
+
+// searchDuckDuckGoWithClient executes a search using DuckDuckGo with a custom HTTP client
+func (h *SearchHandler) searchDuckDuckGoWithClient(query string, count int, client *http.Client) ([]SearchResult, error) {
 	// Apply count limits
 	if count <= 0 || count > 20 {
 		count = 10
@@ -245,15 +271,17 @@ func (h *SearchHandler) searchDuckDuckGo(query string, count int) ([]SearchResul
 	// Set headers
 	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; TinglyBox/1.0)")
 
-	// Execute request using the handler's client (which may have proxy configured)
-	resp, err := h.client.Do(req)
+	// Execute request using the provided client (which has proxy configured)
+	logrus.Infof("Executing DuckDuckGo search request to: %s", apiURL.String())
+	resp, err := client.Do(req)
 	if err != nil {
+		logrus.Warnf("DuckDuckGo request failed: %v", err)
 		return nil, h.enrichSearchError(fmt.Errorf("search request failed: %w", err))
 	}
 	defer resp.Body.Close()
 
-	// Check status code
-	if resp.StatusCode != http.StatusOK {
+	// Check status code - DuckDuckGo may return 200 OK or 202 Accepted
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != 202 {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("search returned status %d: %s", resp.StatusCode, string(body))
 	}
@@ -264,7 +292,7 @@ func (h *SearchHandler) searchDuckDuckGo(query string, count int) ([]SearchResul
 		// JSON parsing failed - DuckDuckGo might have changed format or returned error
 		// Fall back to HTML parsing
 		logrus.Debugf("DuckDuckGo JSON parsing failed: %v, falling back to HTML", err)
-		return h.searchDuckDuckGoHTML(query, count)
+		return h.searchDuckDuckGoHTMLWithClient(query, count, client)
 	}
 
 	// Convert to search results
@@ -319,7 +347,7 @@ func (h *SearchHandler) searchDuckDuckGo(query string, count int) ([]SearchResul
 
 	// If no results found, try HTML fallback
 	if len(results) == 0 {
-		return h.searchDuckDuckGoHTML(query, count)
+		return h.searchDuckDuckGoHTMLWithClient(query, count, client)
 	}
 
 	if len(results) == 0 {
@@ -331,6 +359,11 @@ func (h *SearchHandler) searchDuckDuckGo(query string, count int) ([]SearchResul
 
 // searchDuckDuckGoHTML executes a search using DuckDuckGo HTML (fallback)
 func (h *SearchHandler) searchDuckDuckGoHTML(query string, count int) ([]SearchResult, error) {
+	return h.searchDuckDuckGoHTMLWithClient(query, count, h.client)
+}
+
+// searchDuckDuckGoHTMLWithClient executes a search using DuckDuckGo HTML with a custom HTTP client
+func (h *SearchHandler) searchDuckDuckGoHTMLWithClient(query string, count int, client *http.Client) ([]SearchResult, error) {
 	// Apply count limits (DDG typically returns good results)
 	if count <= 0 || count > 20 {
 		count = 10
@@ -356,15 +389,15 @@ func (h *SearchHandler) searchDuckDuckGoHTML(query string, count int) ([]SearchR
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
 
-	// Execute request using the handler's client (which may have proxy configured)
-	resp, err := h.client.Do(req)
+	// Execute request using the provided client (which has proxy configured)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, h.enrichSearchError(fmt.Errorf("search request failed: %w", err))
 	}
 	defer resp.Body.Close()
 
-	// Check status code
-	if resp.StatusCode != http.StatusOK {
+	// Check status code - DuckDuckGo may return 200 OK or 202 Accepted
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != 202 {
 		return nil, fmt.Errorf("search returned status %d", resp.StatusCode)
 	}
 

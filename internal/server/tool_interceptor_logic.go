@@ -8,8 +8,14 @@ import (
 
 // resolveToolInterceptor determines interception and tool stripping behavior for a provider.
 func (s *Server) resolveToolInterceptor(provider *typ.Provider, hasBuiltInWebSearch bool) (shouldIntercept bool, shouldStripTools bool, interceptorConfig *typ.ToolInterceptorConfig) {
+	// First check provider-specific config
 	if s.toolInterceptor != nil {
 		interceptorConfig = s.toolInterceptor.GetConfigForProvider(provider)
+	}
+
+	// If no provider-specific config, use global config
+	if interceptorConfig == nil && s.toolInterceptor != nil {
+		interceptorConfig = s.toolInterceptor.GetGlobalConfig()
 	}
 
 	shouldIntercept = interceptorConfig != nil && (bool(interceptorConfig.PreferLocalSearch) || !hasBuiltInWebSearch)

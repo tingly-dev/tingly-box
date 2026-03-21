@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-shiori/go-readability"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -77,11 +78,25 @@ func NewFetchHandlerWithConfig(cache *Cache, config *Config) *FetchHandler {
 		timeout = time.Duration(config.FetchTimeout) * time.Second
 	}
 
+	client := &http.Client{
+		Timeout: timeout,
+	}
+
+	// Configure proxy if specified (like SearchHandler does)
+	if config.ProxyURL != "" {
+		proxyURL, err := url.Parse(config.ProxyURL)
+		if err != nil {
+			logrus.Warnf("Failed to parse proxy URL %s: %v", config.ProxyURL, err)
+		} else {
+			client.Transport = &http.Transport{
+				Proxy: http.ProxyURL(proxyURL),
+			}
+		}
+	}
+
 	return &FetchHandler{
-		cache: cache,
-		client: &http.Client{
-			Timeout: timeout,
-		},
+		cache:  cache,
+		client: client,
 		config: config,
 	}
 }
