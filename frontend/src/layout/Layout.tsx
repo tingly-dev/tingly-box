@@ -25,6 +25,7 @@ import {
     Storefront,
     History as HistoryIcon,
     VpnKey as VpnKeyIcon,
+    Security as AccessControlIcon
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -289,6 +290,11 @@ const Layout = ({ children }: LayoutProps) => {
                 icon: <SystemIcon sx={{ fontSize: 22 }} />,
                 label: 'System',
                 children: [
+                     {
+                        path: '/access-control',
+                        label: 'Access Control',
+                        icon: <AccessControlIcon sx={{ fontSize: 20 }} />,
+                    },
                     {
                         path: '/system',
                         label: 'Status',

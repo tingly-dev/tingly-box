@@ -1464,6 +1464,73 @@ export const api = {
             return { success: false, error: error.message };
         }
     },
+
+    // User Token Management APIs
+    // Get current user token (masked)
+    getUserAuthTokenInfo: async (): Promise<{ success: boolean; data?: { token: string; is_default: boolean }; error?: string }> => {
+        try {
+            const response = await fetch('/api/v1/auth/token', {
+                headers: {
+                    'Authorization': `Bearer ${getUserAuthToken()}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+            if (response.ok) {
+                const data = await response.json();
+                return { success: true, data: data.data };
+            } else {
+                return { success: false, error: 'Failed to get user token' };
+            }
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Reset user token to a new secure random value
+    resetUserToken: async (): Promise<{ success: boolean; data?: { token: string }; error?: string }> => {
+        try {
+            const response = await fetch('/api/v1/auth/token/reset', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${getUserAuthToken()}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+            if (response.ok) {
+                const data = await response.json();
+                // Update localStorage with new token
+                if (data.data?.token) {
+                    localStorage.setItem('user_auth_token', data.data.token);
+                }
+                return { success: true, data: data.data };
+            } else {
+                return { success: false, error: 'Failed to reset user token' };
+            }
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Reset model token to a new secure random value
+    resetModelToken: async (): Promise<{ success: boolean; data?: { token: string }; error?: string }> => {
+        try {
+            const response = await fetch('/api/v1/auth/model-token/reset', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${getUserAuthToken()}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+            if (response.ok) {
+                const data = await response.json();
+                return { success: true, data: data.data };
+            } else {
+                return { success: false, error: 'Failed to reset model token' };
+            }
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
 };
 
 export default api;

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -244,8 +245,29 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		updated = true
 	}
 	if cfg.UserToken == "" {
-		cfg.UserToken = constant.DefaultUserToken
+		// Generate secure random token instead of using default
+		userToken, err := GenerateSecureToken()
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to generate secure user token, using default")
+			cfg.UserToken = constant.DefaultUserToken
+		} else {
+			cfg.UserToken = userToken
+			logrus.Info("=============================================")
+			logrus.Info("Generated new UserToken for control panel:")
+			logrus.Infof("  %s", cfg.UserToken)
+			logrus.Info("Use this token to log in to the web UI at:")
+			logrus.Infof("  http://localhost:%d/login", cfg.ServerPort)
+			logrus.Info("=============================================")
+		}
 		updated = true
+	} else if IsDefaultToken(cfg.UserToken) {
+		// Warn if using default token
+		logrus.Warn("=============================================")
+		logrus.Warn("SECURITY WARNING: Using default UserToken!")
+		logrus.Warn("Please reset to a secure token via:")
+		logrus.Warn("  1. Web UI: System page > Access Control")
+		logrus.Warn("  2. CLI: tingly-box auth token --reset (coming soon)")
+		logrus.Warn("=============================================")
 	}
 	if cfg.ModelToken == "" {
 		modelToken, err := auth.NewJWTManager(cfg.JWTSecret).GenerateToken("tingly-box")
@@ -1796,6 +1818,21 @@ func (c *Config) DeleteRule(ruleUUID string) error {
 // generateSecret generates a random secret for JWT
 func generateSecret() string {
 	return fmt.Sprintf("%d", time.Now().UnixNano())
+}
+
+// GenerateSecureToken generates a cryptographically random token for user authentication
+// The token is a 256-bit (32 byte) random value, hex-encoded, with a "tingly-box-" prefix
+func GenerateSecureToken() (string, error) {
+	bytes := make([]byte, 32) // 256 bits
+	if _, err := rand.Read(bytes); err != nil {
+		return "", fmt.Errorf("failed to generate random token: %w", err)
+	}
+	return "tb-user-" + hex.EncodeToString(bytes), nil
+}
+
+// IsDefaultToken checks if the given token is the default token
+func IsDefaultToken(token string) bool {
+	return token == constant.DefaultUserToken
 }
 
 // GenerateUUID generates a new UUID string
