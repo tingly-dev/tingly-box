@@ -650,6 +650,14 @@ func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, set
 		return fmt.Errorf("failed to start bot manager: %w", err)
 	}
 
+	// Setup menu button after bot is connected
+	if err := bot.SetupMenuButtonForBot(manager, setting.UUID); err != nil {
+		// Log warning but don't fail startup
+		logrus.WithError(err).WithField("platform", setting.Platform).Warn("Failed to setup menu button")
+	} else {
+		logrus.WithField("platform", setting.Platform).Info("Menu button configured successfully")
+	}
+
 	logrus.Info("Bot started successfully. Press Ctrl+C to stop.")
 
 	<-ctx.Done()

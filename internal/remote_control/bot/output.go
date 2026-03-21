@@ -109,25 +109,6 @@ func GetAgentDisplayName(agentType string) string {
 	}
 }
 
-// ShortenPath creates a readable short version of a path
-// e.g., "/Users/yz/Project/101-project/tingly-box" -> "101-project/tingly-box"
-func ShortenPath(path string) string {
-	if path == "" {
-		return ""
-	}
-
-	// Normalize path separators
-	parts := splitPath(path)
-
-	// Already short enough
-	if len(parts) <= 2 {
-		return joinPath(parts)
-	}
-
-	// Show last 2 parts
-	return joinPath(parts[len(parts)-2:])
-}
-
 // ShortenID truncates an ID to a readable length
 // e.g., "a1b2c3d4e5f6g7h8" -> "a1b2c3d4"
 func ShortenID(id string, maxLen int) string {
