@@ -25,6 +25,11 @@ func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNe
 
 	hc.SetupSSEHeaders()
 
+	flusher, ok := hc.GinContext.Writer.(http.Flusher)
+	if !ok {
+		return protocol.ZeroTokenUsage(), errors.New("streaming not supported")
+	}
+
 	var inputTokens, outputTokens, cacheTokens int
 	var hasUsage bool
 
@@ -105,6 +110,11 @@ func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaM
 
 	hc.SetupSSEHeaders()
 
+	flusher, ok := hc.GinContext.Writer.(http.Flusher)
+	if !ok {
+		return protocol.ZeroTokenUsage(), errors.New("streaming not supported")
+	}
+
 	var inputTokens, outputTokens, cacheTokens int
 	var hasUsage bool
 
@@ -140,6 +150,7 @@ func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaM
 				hasUsage = true
 			}
 
+			// Send SSE event
 			eventMap, err := toEventMap(evt, evt.Type)
 			if err != nil {
 				return err
