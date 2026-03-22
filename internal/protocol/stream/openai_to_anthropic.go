@@ -68,9 +68,11 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 	}
 
 	// Estimate input tokens from request if counter available
+	var estimatedInputTokens int
 	if tokenCounter != nil && req != nil {
 		if inputTokens, err := token.EstimateInputTokens(req); err == nil {
 			tokenCounter.SetInputTokens(inputTokens)
+			estimatedInputTokens = inputTokens
 		}
 	}
 
@@ -86,7 +88,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 			"stop_reason":   nil,
 			"stop_sequence": nil,
 			"usage": map[string]interface{}{
-				"input_tokens":  0,
+				"input_tokens":  estimatedInputTokens,
 				"output_tokens": 0,
 			},
 		},
@@ -153,6 +155,9 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 		// Collect extra fields from this delta (for final message_delta)
 		// Handle special fields that need dedicated content blocks
 		if extras := parseRawJSON(delta.RawJSON()); extras != nil {
+			// Filter out OpenAI protocol fields that should NOT appear in Anthropic message_delta
+			extras = FilterOpenAIProtocolFields(extras)
+
 			for k, v := range extras {
 				// Handle reasoning_content -> thinking block
 				if k == OpenaiFieldReasoningContent {

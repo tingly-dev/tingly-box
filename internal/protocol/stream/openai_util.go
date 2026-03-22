@@ -24,6 +24,32 @@ func FilterSpecialFields(extras map[string]interface{}) map[string]interface{} {
 	return result
 }
 
+// FilterOpenAIProtocolFields removes OpenAI protocol fields that should NOT appear in Anthropic message_delta.
+// These fields are already properly handled via content_block events and should not be duplicated.
+func FilterOpenAIProtocolFields(extras map[string]interface{}) map[string]interface{} {
+	if extras == nil || len(extras) == 0 {
+		return extras
+	}
+	result := make(map[string]interface{})
+	// OpenAI protocol fields that must not appear in Anthropic message_delta
+	// - content: handled via content_block_start/delta for text
+	// - role: always "assistant" in responses, not needed in delta
+	// - tool_calls: handled via content_block_start/delta/stop for tool_use
+	// - refusal: handled via content_block for refusal text
+	openAIProtocolFields := map[string]bool{
+		"content":    true,
+		"role":       true,
+		"tool_calls": true,
+		"refusal":    true,
+	}
+	for k, v := range extras {
+		if !openAIProtocolFields[k] {
+			result[k] = v
+		}
+	}
+	return result
+}
+
 // GenerateObfuscationString generates a random string similar to "KOJz1A"
 func GenerateObfuscationString() string {
 	b := make([]byte, 4)
