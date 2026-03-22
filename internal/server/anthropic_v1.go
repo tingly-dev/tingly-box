@@ -361,8 +361,8 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		}
 
 		transformCtx := &transform.TransformContext{
-			OriginalRequest: req.MessageNewParams,
-			Request:         req.MessageNewParams, // Original Anthropic request
+			OriginalRequest: &req.MessageNewParams,
+			Request:         &req.MessageNewParams, // Original Anthropic request
 			ProviderURL:     provider.APIBase,
 			ScenarioFlags:   scenarioFlags,
 			IsStreaming:     isStreaming,

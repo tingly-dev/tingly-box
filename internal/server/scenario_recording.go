@@ -90,20 +90,36 @@ func (sr *ScenarioRecorder) EnableStreaming() {
 }
 
 // RecordStreamChunk records a single stream chunk
+// Uses RawJSON() when available to preserve the exact original API response
 func (sr *ScenarioRecorder) RecordStreamChunk(eventType string, chunk interface{}) {
 	if sr == nil || !sr.isStreaming {
 		return
 	}
 
-	// Convert chunk to map
-	chunkMap, err := json.Marshal(chunk)
-	if err != nil {
-		logrus.Debugf("Failed to marshal stream chunk: %v", err)
-		return
+	var chunkJSON []byte
+	var err error
+
+	// Use RawJSON() when available to preserve original API response
+	// This prevents SDK marshaling from adding invalid fields
+	switch v := chunk.(type) {
+	case *anthropic.MessageStreamEventUnion:
+		chunkJSON = []byte(v.RawJSON())
+	case *anthropic.BetaRawMessageStreamEventUnion:
+		chunkJSON = []byte(v.RawJSON())
+	case interface{ RawJSON() string }:
+		// Generic fallback for any type with RawJSON method
+		chunkJSON = []byte(v.RawJSON())
+	default:
+		// Fallback to json.Marshal for other types
+		chunkJSON, err = json.Marshal(chunk)
+		if err != nil {
+			logrus.Debugf("Failed to marshal stream chunk: %v", err)
+			return
+		}
 	}
 
 	var chunkData map[string]interface{}
-	if err := json.Unmarshal(chunkMap, &chunkData); err != nil {
+	if err := json.Unmarshal(chunkJSON, &chunkData); err != nil {
 		return
 	}
 
