@@ -25,93 +25,98 @@ export default function StatCard({ title, value, subtitle, icon, color = 'primar
         <Paper
             elevation={0}
             sx={{
-                p: 3,
-                borderRadius: 2.5,
+                p: 2,
+                pl: 2.5,
+                borderRadius: 2,
                 border: '1px solid',
                 borderColor: 'divider',
                 height: '100%',
                 transition: 'all 0.2s ease-in-out',
                 backgroundColor: 'background.paper',
-                boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
-                '&:hover': {
-                    borderColor: alpha(colors.text, 0.3),
-                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-                    transform: 'translateY(-2px)',
-                },
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
                 position: 'relative',
                 overflow: 'hidden',
+                '&:hover': {
+                    borderColor: alpha(colors.text, 0.3),
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                    transform: 'translateY(-1px)',
+                },
+                '&::before': {
+                    content: '""',
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 3,
+                    background: `linear-gradient(180deg, ${colors.text} 0%, ${alpha(colors.text, 0.6)} 100%)`,
+                },
             }}
         >
-            {/* Decorative gradient bar */}
-            <Box
-                sx={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: 3,
-                    background: `linear-gradient(90deg, ${colors.text} 0%, ${alpha(colors.text, 0.3)} 100%)`,
-                }}
-            />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mt: 1 }}>
-                <Box sx={{ flex: 1 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', pl: 0.5 }}>
+                <Typography
+                    variant="caption"
+                    sx={{
+                        fontWeight: 600,
+                        color: 'text.secondary',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        fontSize: '0.7rem',
+                        lineHeight: 1.3,
+                        whiteSpace: 'pre-line',
+                        minHeight: '1.7em',
+                        mb: 0.5,
+                    }}
+                >
+                    {title}
+                </Typography>
+                <Typography
+                    variant="h4"
+                    sx={{
+                        fontWeight: 700,
+                        fontSize: '1.5rem',
+                        lineHeight: 1.2,
+                        color: 'text.primary',
+                        mb: 0.25,
+                    }}
+                >
+                    {value}
+                </Typography>
+                {subtitle && (
                     <Typography
-                        variant="body2"
+                        variant="caption"
                         sx={{
-                            mb: 2,
-                            fontWeight: 600,
                             color: 'text.secondary',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em',
-                            fontSize: '0.75rem',
-                            minHeight: '2.4em',
-                            lineHeight: 1.2,
+                            fontSize: '0.7rem',
                             whiteSpace: 'pre-line',
-                            display: 'flex',
-                            alignItems: 'center',
+                            lineHeight: 1.3,
                         }}
                     >
-                        {title}
+                        {subtitle}
                     </Typography>
-                    <Typography
-                        variant="h3"
-                        sx={{
-                            fontWeight: 700,
-                            mb: 0.5,
-                            fontSize: '1.75rem',
-                            lineHeight: 1.2,
-                            color: 'text.primary',
-                        }}
-                    >
-                        {value}
-                    </Typography>
-                    {subtitle && (
-                        <Typography
-                            variant="caption"
-                            sx={{
-                                color: 'text.secondary',
-                                fontSize: '0.75rem',
-                                whiteSpace: 'pre-line',
-                            }}
-                        >
-                            {subtitle}
-                        </Typography>
-                    )}
-                </Box>
+                )}
                 {icon && (
                     <Box
                         sx={{
-                            p: 1.75,
-                            borderRadius: 2.5,
+                            position: 'absolute',
+                            top: 8,
+                            right: 8,
+                            width: 24,
+                            height: 24,
+                            borderRadius: 1.5,
                             backgroundColor: colors.bg,
                             color: colors.text,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
+                            opacity: 0.7,
                             transition: 'all 0.2s ease',
                             '.MuiPaper-root:hover &': {
                                 backgroundColor: colors.hover,
-                                transform: 'scale(1.05)',
+                                opacity: 1,
+                                transform: 'scale(1.1)',
+                            },
+                            '& svg': {
+                                fontSize: 14,
                             },
                         }}
                     >

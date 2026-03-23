@@ -211,13 +211,11 @@ export default function OverviewPage() {
     return (
         <Box
             sx={{
-                px: {xs: 3, sm: 4, md: 5},
-                py: {xs: 4, sm: 5, md: 6},
-                mx: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1,
                 minHeight: '100vh',
-                backgroundColor: 'background.default',
-            }}
-        >
+            }}>
             {/* Header with Filters */}
             <Paper
                 sx={{
