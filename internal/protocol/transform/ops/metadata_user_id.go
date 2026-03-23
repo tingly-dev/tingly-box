@@ -127,14 +127,12 @@ func (m *MetadataUserID) IsEmpty() bool {
 // =============================================
 
 // BuildMetadataUserID builds a MetadataUserID from extra map.
-// Returns nil if extra is nil or doesn't contain user_id.
+// Returns nil if all fields are empty after fixing.
 func BuildMetadataUserID(extra map[string]any) *MetadataUserID {
 	m := &MetadataUserID{}
 
-	// Set user_id if provided
-	if extra != nil {
-		m.Fix(extra)
-	}
+	// Always call Fix to generate default values if needed
+	m.Fix(extra)
 
 	// Only return nil if all fields are empty after fixing
 	if m.IsEmpty() {
