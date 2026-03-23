@@ -162,6 +162,9 @@ func (t *ConsistencyTransform) normalizeMessages(req *openai.ChatCompletionNewPa
 		return
 	}
 
+	// First, align tool messages to ensure they follow assistant messages with tool_calls
+	t.alignToolMessages(req)
+
 	for i := range req.Messages {
 		// Check if this is a tool message
 		if req.Messages[i].OfTool != nil {
@@ -216,6 +219,65 @@ func (t *ConsistencyTransform) normalizeMessages(req *openai.ChatCompletionNewPa
 			}
 		}
 	}
+}
+
+// AlignToolMessagesForOpenAI converts orphaned tool messages (those without a
+// matching tool_call_id) to user messages. This prevents "role 'tool' must be a
+// response to preceding message with 'tool_calls'" errors.
+func AlignToolMessagesForOpenAI(req *openai.ChatCompletionNewParams) {
+	if len(req.Messages) == 0 {
+		return
+	}
+
+	// Collect all valid tool_call_ids from assistant messages
+	validToolCallIDs := make(map[string]bool)
+	for _, msg := range req.Messages {
+		if msg.OfAssistant == nil {
+			continue
+		}
+		for _, tc := range msg.OfAssistant.ToolCalls {
+			if id := tc.GetID(); id != nil && *id != "" {
+				validToolCallIDs[*id] = true
+			}
+		}
+	}
+
+	// Convert orphaned tool messages to user messages
+	for i := range req.Messages {
+		if req.Messages[i].OfTool != nil {
+			toolMsg := req.Messages[i].OfTool
+			toolCallID := toolMsg.ToolCallID
+			if toolCallID == "" || validToolCallIDs[toolCallID] {
+				continue
+			}
+
+			// Orphaned tool message, convert to user message.
+			// Tool content supports string or text parts; map both to user content.
+			if toolMsg.Content.OfString.Valid() {
+				req.Messages[i] = openai.UserMessage(toolMsg.Content.OfString.Value)
+				continue
+			}
+
+			if len(toolMsg.Content.OfArrayOfContentParts) > 0 {
+				parts := make([]openai.ChatCompletionContentPartUnionParam, 0, len(toolMsg.Content.OfArrayOfContentParts))
+				for _, part := range toolMsg.Content.OfArrayOfContentParts {
+					parts = append(parts, openai.TextContentPart(part.Text))
+				}
+				req.Messages[i] = openai.UserMessage(parts)
+				continue
+			}
+
+			req.Messages[i] = openai.UserMessage("")
+		}
+	}
+}
+
+// alignToolMessages ensures tool messages follow assistant messages with tool_calls.
+// OpenAI API requires that messages with role "tool" must be a response to a preceding
+// message with "tool_calls". This function converts orphaned tool messages to user messages.
+func (t *ConsistencyTransform) alignToolMessages(req *openai.ChatCompletionNewParams) {
+	// Delegate to the public function
+	AlignToolMessagesForOpenAI(req)
 }
 
 // validateChatCompletion validates request parameters against OpenAI API constraints.

@@ -230,6 +230,10 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 			ops.ApplyCursorCompatContentNormalization(&req.ChatCompletionNewParams)
 		}
 
+		// Align tool messages to ensure valid message sequence for OpenAI API compatibility
+		// This prevents "role 'tool' must be a response to preceding message with 'tool_calls'" errors
+		transform.AlignToolMessagesForOpenAI(&req.ChatCompletionNewParams)
+
 		anthropicReq := request.ConvertOpenAIToAnthropicRequest(&req.ChatCompletionNewParams, int64(maxAllowed))
 		if isStreaming {
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
