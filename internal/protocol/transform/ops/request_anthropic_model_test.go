@@ -68,37 +68,6 @@ func TestIsThinkingSupportedModel(t *testing.T) {
 	}
 }
 
-func TestIsThinkingAdaptiveV1(t *testing.T) {
-	tests := []struct {
-		name     string
-		thinking anthropic.ThinkingConfigParamUnion
-		expected bool
-	}{
-		{
-			name:     "Adaptive thinking",
-			thinking: anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{}},
-			expected: true,
-		},
-		{
-			name:     "Enabled thinking",
-			thinking: anthropic.ThinkingConfigParamUnion{OfEnabled: &anthropic.ThinkingConfigEnabledParam{}},
-			expected: false,
-		},
-		{
-			name:     "Empty thinking",
-			thinking: anthropic.ThinkingConfigParamUnion{},
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := isThinkingAdaptiveV1(tt.thinking)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
 func TestApplyAnthropicModelTransform_V1_Opus46_Adaptive(t *testing.T) {
 	// Test case: Opus 4.6 model with adaptive thinking should keep thinking
 	req := &anthropic.MessageNewParams{

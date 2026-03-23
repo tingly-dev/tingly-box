@@ -26,6 +26,7 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 		ProviderURL:     provider.APIBase,
 		ScenarioFlags:   scenarioFlags,
 		IsStreaming:     isStreaming,
+		Extra:           map[string]interface{}{"user_id": provider.OAuthDetail.UserID},
 	}
 
 	// Execute transform chain
