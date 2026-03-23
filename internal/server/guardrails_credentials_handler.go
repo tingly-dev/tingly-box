@@ -58,7 +58,7 @@ func (s *Server) guardrailsCredentialStore() (*guardrails.ProtectedCredentialSto
 	if s.config == nil || s.config.ConfigDir == "" {
 		return nil, errors.New("config directory not set")
 	}
-	return guardrails.NewProtectedCredentialStore(getGuardrailsCredentialsPath(s.config.ConfigDir)), nil
+	return guardrails.NewProtectedCredentialStore(getGuardrailsDBPath(s.config.ConfigDir)), nil
 }
 
 func toProtectedCredentialResponse(credential guardrails.ProtectedCredential) protectedCredentialResponse {
