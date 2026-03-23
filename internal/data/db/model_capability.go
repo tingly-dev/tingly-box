@@ -18,8 +18,9 @@ import (
 type EndpointType string
 
 const (
-	EndpointTypeChat      EndpointType = "chat"
-	EndpointTypeResponses EndpointType = "responses"
+	EndpointTypeChat       EndpointType = "chat"
+	EndpointTypeResponses  EndpointType = "responses"
+	EndpointTypeToolParser EndpointType = "tool_parser"
 )
 
 // ModelCapability stores endpoint capability information for each model
@@ -42,16 +43,20 @@ func (ModelCapability) TableName() string {
 
 // ModelEndpointCapability represents aggregated endpoint capabilities for a model
 type ModelEndpointCapability struct {
-	ProviderUUID       string
-	ModelID            string
-	SupportsChat       bool
-	ChatLatencyMs      int
-	ChatError          string
-	SupportsResponses  bool
-	ResponsesLatencyMs int
-	ResponsesError     string
-	PreferredEndpoint  string // "chat", "responses", or ""
-	LastVerified       time.Time
+	ProviderUUID        string
+	ModelID             string
+	SupportsChat        bool
+	ChatLatencyMs       int
+	ChatError           string
+	SupportsResponses   bool
+	ResponsesLatencyMs  int
+	ResponsesError      string
+	SupportsToolParser  bool
+	ToolParserLatencyMs int
+	ToolParserError     string
+	ToolParserChecked   bool
+	PreferredEndpoint   string // "chat", "responses", or ""
+	LastVerified        time.Time
 }
 
 // ModelCapabilityStore persists model endpoint capability information in SQLite using GORM.
@@ -182,6 +187,11 @@ func (mcs *ModelCapabilityStore) GetModelCapability(providerUUID, modelID string
 			capability.SupportsResponses = record.Available
 			capability.ResponsesLatencyMs = record.LatencyMs
 			capability.ResponsesError = record.ErrorMessage
+		case EndpointTypeToolParser:
+			capability.SupportsToolParser = record.Available
+			capability.ToolParserLatencyMs = record.LatencyMs
+			capability.ToolParserError = record.ErrorMessage
+			capability.ToolParserChecked = true
 		}
 	}
 
@@ -237,6 +247,11 @@ func (mcs *ModelCapabilityStore) GetProviderCapabilities(providerUUID string) ma
 				capability.SupportsResponses = record.Available
 				capability.ResponsesLatencyMs = record.LatencyMs
 				capability.ResponsesError = record.ErrorMessage
+			case EndpointTypeToolParser:
+				capability.SupportsToolParser = record.Available
+				capability.ToolParserLatencyMs = record.LatencyMs
+				capability.ToolParserError = record.ErrorMessage
+				capability.ToolParserChecked = true
 			}
 		}
 

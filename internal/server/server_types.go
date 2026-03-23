@@ -446,10 +446,11 @@ type ModelProbeResponse struct {
 
 // ModelProbeData represents the probe result data
 type ModelProbeData struct {
-	ProviderUUID      string              `json:"provider_uuid" example:"uuid-123"`
-	ModelID           string              `json:"model_id" example:"gpt-4"`
-	ChatEndpoint      EndpointProbeStatus `json:"chat_endpoint"`
-	ResponsesEndpoint EndpointProbeStatus `json:"responses_endpoint"`
-	PreferredEndpoint string              `json:"preferred_endpoint" example:"responses"`
-	LastUpdated       string              `json:"last_updated" example:"2026-01-23T10:30:00Z"`
+	ProviderUUID       string              `json:"provider_uuid" example:"uuid-123"`
+	ModelID            string              `json:"model_id" example:"gpt-4"`
+	ChatEndpoint       EndpointProbeStatus `json:"chat_endpoint"`
+	ResponsesEndpoint  EndpointProbeStatus `json:"responses_endpoint"`
+	ToolParserEndpoint EndpointProbeStatus `json:"tool_parser_endpoint"`
+	PreferredEndpoint  string              `json:"preferred_endpoint" example:"responses"`
+	LastUpdated        string              `json:"last_updated" example:"2026-01-23T10:30:00Z"`
 }

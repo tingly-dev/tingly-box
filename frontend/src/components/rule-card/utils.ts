@@ -64,6 +64,10 @@ export function ruleToConfigRecord(rule: Rule): ConfigRecord {
         active: rule.active !== undefined ? rule.active : true,
         providers: providersList,
         description: rule.description,
+        flags: {
+            cursorCompat: rule.flags?.cursor_compat || false,
+            cursorCompatAuto: rule.flags?.cursor_compat_auto || false,
+        },
         smartEnabled: rule.smart_enabled || false,
         smartRouting: smartRouting,
     };
@@ -147,6 +151,10 @@ interface ExportRule {
     description?: string;
     services: any[];
     active?: boolean;
+    flags?: {
+        cursor_compat?: boolean;
+        cursor_compat_auto?: boolean;
+    };
     smart_enabled?: boolean;
     smart_routing: any[];
 }
@@ -365,6 +373,7 @@ function createRuleLine(rule: Rule): string {
         description: rule.description,
         services: rule.services || [],
         active: rule.active,
+        flags: rule.flags,
         smart_enabled: rule.smart_enabled,
         smart_routing: rule.smart_routing || [],
     } as ExportRule);

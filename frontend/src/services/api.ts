@@ -608,6 +608,24 @@ export const api = {
         }
     },
 
+    probeModelCapability: async (uuid: string, model: string, forceRefresh = false): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.testingApi.apiV1ProbeModelCapabilityPost({
+                provider_uuid: uuid,
+                model_id: model,
+                force_refresh: forceRefresh,
+            });
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
+                return { success: false, error: 'Authentication required' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
     probeProvider: async (api_style: string, api_base: string, token: string): Promise<any> => {
         try {
             const apiInstances = await getApiInstances();

@@ -54,7 +54,7 @@ func (ap *AdaptiveProbe) ProbeModelEndpoints(ctx context.Context, req ModelProbe
 
 	// Step 3: Run probes concurrently
 	var wg sync.WaitGroup
-	var chatStatus, responsesStatus EndpointStatus
+	var chatStatus, responsesStatus, toolParserStatus EndpointStatus
 
 	// Create context with timeout for both probes
 	probeCtx, cancel := context.WithTimeout(ctx, DefaultProbeTimeout)
@@ -74,11 +74,22 @@ func (ap *AdaptiveProbe) ProbeModelEndpoints(ctx context.Context, req ModelProbe
 			defer wg.Done()
 			responsesStatus = ap.probeResponsesEndpoint(probeCtx, provider, req.ModelID)
 		}()
+		// Probe tool parser support (OpenAI-style only)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			toolParserStatus = ap.probeToolParserEndpoint(probeCtx, provider, req.ModelID)
+		}()
 	} else {
 		// Mark responses as unavailable for non-OpenAI providers
 		responsesStatus = EndpointStatus{
 			Available:    false,
 			ErrorMessage: "Responses API is only supported by OpenAI-style providers",
+			LastChecked:  time.Now(),
+		}
+		toolParserStatus = EndpointStatus{
+			Available:    false,
+			ErrorMessage: "Tool parser probe is only supported by OpenAI-style providers",
 			LastChecked:  time.Now(),
 		}
 	}
@@ -90,12 +101,13 @@ func (ap *AdaptiveProbe) ProbeModelEndpoints(ctx context.Context, req ModelProbe
 	preferred := ap.determinePreferredEndpoint(&chatStatus, &responsesStatus)
 
 	result := &ProbeResult{
-		ProviderUUID:      req.ProviderUUID,
-		ModelID:           req.ModelID,
-		ChatEndpoint:      chatStatus,
-		ResponsesEndpoint: responsesStatus,
-		PreferredEndpoint: preferred,
-		LastUpdated:       time.Now(),
+		ProviderUUID:       req.ProviderUUID,
+		ModelID:            req.ModelID,
+		ChatEndpoint:       chatStatus,
+		ResponsesEndpoint:  responsesStatus,
+		ToolParserEndpoint: toolParserStatus,
+		PreferredEndpoint:  preferred,
+		LastUpdated:        time.Now(),
 	}
 
 	// Step 5: Cache results
@@ -341,6 +353,100 @@ func (ap *AdaptiveProbe) probeResponsesEndpoint(ctx context.Context, provider *t
 	}
 }
 
+// probeToolParserEndpoint probes tool_choice auto support for OpenAI-style providers.
+func (ap *AdaptiveProbe) probeToolParserEndpoint(ctx context.Context, provider *typ.Provider, modelID string) EndpointStatus {
+	startTime := time.Now()
+
+	if provider.APIStyle != protocol.APIStyleOpenAI {
+		return EndpointStatus{
+			Available:    false,
+			ErrorMessage: "Tool parser probe is only supported by OpenAI-style providers",
+			LastChecked:  time.Now(),
+		}
+	}
+
+	apiBase := strings.TrimSuffix(provider.APIBase, "/")
+	if !strings.Contains(apiBase, "/v1") {
+		apiBase = apiBase + "/v1"
+	}
+	chatURL := apiBase + "/chat/completions"
+
+	requestBody := map[string]interface{}{
+		"model": modelID,
+		"messages": []map[string]string{
+			{"role": "user", "content": "Hi"},
+		},
+		"max_tokens": 5,
+		"tools": []map[string]interface{}{
+			{
+				"type": "function",
+				"function": map[string]interface{}{
+					"name":        "ping",
+					"description": "ping",
+					"parameters": map[string]interface{}{
+						"type":       "object",
+						"properties": map[string]interface{}{},
+					},
+				},
+			},
+		},
+		"tool_choice": "auto",
+	}
+
+	bodyBytes, err := json.Marshal(requestBody)
+	if err != nil {
+		return EndpointStatus{
+			Available:    false,
+			ErrorMessage: fmt.Sprintf("Failed to marshal request: %v", err),
+			LastChecked:  time.Now(),
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", chatURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return EndpointStatus{
+			Available:    false,
+			ErrorMessage: fmt.Sprintf("Failed to create request: %v", err),
+			LastChecked:  time.Now(),
+		}
+	}
+
+	req.Header.Set("Authorization", "Bearer "+provider.Token)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: DefaultProbeTimeout}
+	resp, err := client.Do(req)
+	if err != nil {
+		return EndpointStatus{
+			Available:    false,
+			LatencyMs:    int(time.Since(startTime).Milliseconds()),
+			ErrorMessage: fmt.Sprintf("Tool parser request failed: %v", err),
+			LastChecked:  time.Now(),
+		}
+	}
+	defer resp.Body.Close()
+
+	latency := int(time.Since(startTime).Milliseconds())
+
+	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusTooManyRequests {
+		return EndpointStatus{
+			Available:    true,
+			LatencyMs:    latency,
+			ErrorMessage: "",
+			LastChecked:  time.Now(),
+		}
+	}
+
+	bodyBytes, _ = readResponseBody(resp.Body)
+	errorMsg := fmt.Sprintf("Tool parser probe failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	return EndpointStatus{
+		Available:    false,
+		LatencyMs:    latency,
+		ErrorMessage: errorMsg,
+		LastChecked:  time.Now(),
+	}
+}
+
 // determinePreferredEndpoint determines which endpoint to prefer based on availability
 func (ap *AdaptiveProbe) determinePreferredEndpoint(chat, responses *EndpointStatus) string {
 	// Responses API is preferred when available
@@ -380,6 +486,19 @@ func (ap *AdaptiveProbe) persistResult(result *ProbeResult) {
 	if err != nil {
 		logrus.Warnf("Failed to save responses capability: %v", err)
 	}
+
+	// Save tool parser capability
+	err = ap.server.capabilityStore.SaveCapability(
+		result.ProviderUUID,
+		result.ModelID,
+		db.EndpointTypeToolParser,
+		result.ToolParserEndpoint.Available,
+		result.ToolParserEndpoint.LatencyMs,
+		result.ToolParserEndpoint.ErrorMessage,
+	)
+	if err != nil {
+		logrus.Warnf("Failed to save tool parser capability: %v", err)
+	}
 }
 
 // cachedCapabilityToResult converts cached capability to probe result
@@ -397,6 +516,12 @@ func (ap *AdaptiveProbe) cachedCapabilityToResult(capability *ModelEndpointCapab
 			Available:    capability.SupportsResponses,
 			LatencyMs:    capability.ResponsesLatencyMs,
 			ErrorMessage: capability.ResponsesError,
+			LastChecked:  capability.LastVerified,
+		},
+		ToolParserEndpoint: EndpointStatus{
+			Available:    capability.SupportsToolParser,
+			LatencyMs:    capability.ToolParserLatencyMs,
+			ErrorMessage: capability.ToolParserError,
 			LastChecked:  capability.LastVerified,
 		},
 		PreferredEndpoint: capability.PreferredEndpoint,
@@ -434,16 +559,20 @@ func (ap *AdaptiveProbe) GetModelCapability(providerUUID, modelID string) (*Mode
 
 			// Convert DB capability to internal capability type
 			capability := &ModelEndpointCapability{
-				ProviderUUID:       dbCapability.ProviderUUID,
-				ModelID:            dbCapability.ModelID,
-				SupportsChat:       dbCapability.SupportsChat,
-				ChatLatencyMs:      dbCapability.ChatLatencyMs,
-				ChatError:          dbCapability.ChatError,
-				SupportsResponses:  dbCapability.SupportsResponses,
-				ResponsesLatencyMs: dbCapability.ResponsesLatencyMs,
-				ResponsesError:     dbCapability.ResponsesError,
-				PreferredEndpoint:  dbCapability.PreferredEndpoint,
-				LastVerified:       dbCapability.LastVerified,
+				ProviderUUID:        dbCapability.ProviderUUID,
+				ModelID:             dbCapability.ModelID,
+				SupportsChat:        dbCapability.SupportsChat,
+				ChatLatencyMs:       dbCapability.ChatLatencyMs,
+				ChatError:           dbCapability.ChatError,
+				SupportsResponses:   dbCapability.SupportsResponses,
+				ResponsesLatencyMs:  dbCapability.ResponsesLatencyMs,
+				ResponsesError:      dbCapability.ResponsesError,
+				SupportsToolParser:  dbCapability.SupportsToolParser,
+				ToolParserLatencyMs: dbCapability.ToolParserLatencyMs,
+				ToolParserError:     dbCapability.ToolParserError,
+				ToolParserChecked:   dbCapability.ToolParserChecked,
+				PreferredEndpoint:   dbCapability.PreferredEndpoint,
+				LastVerified:        dbCapability.LastVerified,
 			}
 
 			// Also cache it (even if stale, will be refreshed soon)

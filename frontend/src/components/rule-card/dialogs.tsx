@@ -1,5 +1,5 @@
-import { Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Typography } from '@mui/material';
-import type { ProbeResponse } from '@/client';
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Typography } from '@mui/material';
+import type { ModelProbeResponse, ProbeResponse } from '@/client';
 import Probe from '@/components/ProbeModal';
 import type { ConfigRecord } from '@/components/RoutingGraphTypes';
 
@@ -13,6 +13,7 @@ export interface RuleCardProbeDialogProps {
     configRecord: ConfigRecord | null;
     isProbing: boolean;
     probeResult: ProbeResponse | null;
+    capabilityResult?: ModelProbeResponse | null;
     detailsExpanded: boolean;
     providerName: string;
     onToggleDetails: () => void;
@@ -27,10 +28,12 @@ export function RuleCardProbeDialog({
     configRecord,
     isProbing,
     probeResult,
+    capabilityResult,
     detailsExpanded,
     providerName,
     onToggleDetails,
 }: RuleCardProbeDialogProps) {
+    const toolParserStatus = capabilityResult?.data?.tool_parser_endpoint;
     return (
         <Dialog
             open={open}
@@ -56,6 +59,17 @@ export function RuleCardProbeDialog({
                     onToggleDetails={onToggleDetails}
                     detailsExpanded={detailsExpanded}
                 />
+                {toolParserStatus && (
+                    <Box sx={{ mt: 2 }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                            Tool Parser Support
+                        </Typography>
+                        <Alert severity={toolParserStatus.available ? 'success' : 'warning'} variant="outlined">
+                            {toolParserStatus.available ? 'Supported' : 'Not supported'}
+                            {toolParserStatus.error_message ? `: ${toolParserStatus.error_message}` : ''}
+                        </Alert>
+                    </Box>
+                )}
             </DialogContent>
         </Dialog>
     );
