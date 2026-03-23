@@ -2,10 +2,11 @@ package server
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
+	"github.com/sirupsen/logrus"
+
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -46,15 +47,9 @@ func (s *Server) enforceToolParserSupport(c *gin.Context, provider *typ.Provider
 	supported, known, errMsg := s.getToolParserCapability(provider, modelID)
 	if known && !supported {
 		if errMsg == "" {
-			errMsg = "Tool parser is not supported by the selected provider/model. Please probe tool support or disable tool_choice."
+			errMsg = "Tool parser is not supported by the selected provider/model."
 		}
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: errMsg,
-				Type:    "invalid_request_error",
-			},
-		})
-		return false
+		logrus.Warnf("Tool parser unsupported for provider=%s model=%s: %s", provider.Name, modelID, errMsg)
 	}
 	return true
 }

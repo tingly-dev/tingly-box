@@ -165,19 +165,24 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         }
     }, [rule.uuid, onRuleDelete, showNotification]);
 
-    if (!configRecord) return null;
-
     const isSmartMode = rule.smart_enabled;
-    const cursorCompatEnabled = configRecord.flags?.cursorCompat || false;
-    const cursorCompatAutoEnabled = configRecord.flags?.cursorCompatAuto || false;
+    const cursorCompatEnabled = configRecord?.flags?.cursorCompat || false;
+    const cursorCompatAutoEnabled = configRecord?.flags?.cursorCompatAuto || false;
 
     const handleOpenFlagEditor = useCallback(() => {
-        setFlagInput(formatRuleFlags(configRecord.flags));
+        if (!configRecord) return;
+        const currentFlags = formatRuleFlags(configRecord.flags);
+        if (!currentFlags && configRecord.requestModel === 'cursor') {
+            setFlagInput('cursor_compat=true');
+        } else {
+            setFlagInput(currentFlags);
+        }
         setFlagError(undefined);
         setFlagDialogOpen(true);
-    }, [configRecord.flags]);
+    }, [configRecord]);
 
     const handleSaveFlags = useCallback(async () => {
+        if (!configRecord) return;
         const result = parseRuleFlags(flagInput);
         if (result.error) {
             setFlagError(result.error);
@@ -186,6 +191,8 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         await updateField(configRecord, setConfigRecord, 'flags', result.flags);
         setFlagDialogOpen(false);
     }, [configRecord, flagInput, updateField, setConfigRecord]);
+
+    if (!configRecord) return null;
 
     // Extra actions menu - shared between RoutingGraph and SmartRoutingGraph
     const extraActions = (

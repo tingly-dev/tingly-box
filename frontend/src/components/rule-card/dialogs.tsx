@@ -136,9 +136,21 @@ export function RuleFlagEditDialog({ open, value, error, onChange, onClose, onSa
                     label="Flags"
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
-                    placeholder="cursor_compat=true"
                     error={Boolean(error)}
                     helperText={error || ' '}
+                    variant="standard"
+                    InputProps={{ disableUnderline: true }}
+                    sx={{
+                        '& .MuiInputBase-root': {
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            borderRadius: 2,
+                            padding: '10px 12px',
+                        },
+                        '& .MuiInputBase-input': {
+                            padding: 0,
+                        },
+                    }}
                 />
             </DialogContent>
             <DialogActions>
