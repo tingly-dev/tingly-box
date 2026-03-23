@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -115,12 +116,29 @@ func (s *Server) GetToken(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// DetermineProviderAndModelWithScenario
-func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario, rule *typ.Rule, req interface{}) (*typ.Provider, *loadbalance.Service, error) {
+// DetermineProviderAndModelWithScenario determines the provider and service for a request
+// based on the rule's configuration, smart routing rules, and optional affinity locking.
+// sessionID is used for affinity locking when SmartAffinity is enabled.
+func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario, rule *typ.Rule, req interface{}, sessionID string) (*typ.Provider, *loadbalance.Service, error) {
 	modelName := rule.RequestModel
 	c := s.config
 	var selectedService *loadbalance.Service
 	var err error
+
+	// Affinity: check if we have a locked service for this session
+	if rule.SmartEnabled && rule.SmartAffinity && sessionID != "" {
+		if entry, ok := s.affinityStore.Get(rule.UUID, sessionID); ok {
+			// Verify the locked provider still exists and is enabled
+			provider, err := c.GetProviderByUUID(entry.Service.Provider)
+			if err == nil && provider.Enabled {
+				logrus.Infof("[affinity] using locked service for session %s: %s -> %s", sessionID, provider.Name, entry.Service.Model)
+				return provider, entry.Service, nil
+			}
+			// Locked provider unavailable, clear affinity and fall through to smart routing
+			logrus.Debugf("[affinity] locked provider unavailable, clearing affinity for session %s", sessionID)
+			s.affinityStore.Delete(rule.UUID, sessionID)
+		}
+	}
 
 	// Smart routing: check if enabled and try to match rules
 	if rule.SmartEnabled && len(rule.SmartRouting) > 0 && req != nil {
@@ -141,6 +159,17 @@ func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario
 						provider, err := c.GetProviderByUUID(selectedService.Provider)
 						if err == nil && provider.Enabled {
 							logrus.Infof("[smart_routing] using smart routed service: %s -> %s", provider.Name, selectedService.Model)
+
+							// Lock the service for this session if affinity is enabled
+							if rule.SmartAffinity && sessionID != "" {
+								s.affinityStore.Set(rule.UUID, sessionID, &AffinityEntry{
+									Service:   selectedService,
+									LockedAt:  time.Now(),
+									ExpiresAt: time.Now().Add(s.affinityStore.ttl),
+								})
+								logrus.Infof("[affinity] locked service %s -> %s for session %s", provider.Name, selectedService.Model, sessionID)
+							}
+
 							return provider, selectedService, nil
 						}
 					}

@@ -97,6 +97,9 @@ type Server struct {
 	scenarioRecordSinks   map[typ.RuleScenario]*obs.Sink
 	scenarioRecordSinksMu sync.RWMutex
 
+	// affinity store for smart routing session-model locking
+	affinityStore *AffinityStore
+
 	// OTel meter setup for unified token tracking
 	meterSetup   *pkgotel.MeterSetup
 	tokenTracker *tracker.TokenTracker
@@ -415,6 +418,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize load balancer
 	loadBalancer := NewLoadBalancer(cfg, healthFilter)
 
+	// Initialize affinity store for smart routing
+	affinityStore := NewAffinityStore(0) // 0 = use default TTL
+
 	// Initialize load balancer API
 	loadBalancerAPI := NewLoadBalancerAPI(loadBalancer, cfg)
 
@@ -453,6 +459,10 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.healthMonitor = healthMonitor
 	server.oauthManager = oauthManager
 	server.oauthRefresher = tokenRefresher
+	server.affinityStore = affinityStore
+
+	// Start affinity store background GC
+	affinityStore.StartGC()
 
 	// Initialize OAuth handler
 	server.oauthHandler = oauthmodule.NewHandler(oauthManager, cfg)

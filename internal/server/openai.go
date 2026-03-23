@@ -180,7 +180,11 @@ func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
 		})
 		return
 	}
-	provider, selectedService, err = s.DetermineProviderAndModelWithScenario(scenarioType, rule, &req.ChatCompletionNewParams)
+
+	// Resolve session ID for affinity
+	sessionID := ResolveSessionID(c, &req.ChatCompletionNewParams)
+
+	provider, selectedService, err = s.DetermineProviderAndModelWithScenario(scenarioType, rule, &req.ChatCompletionNewParams, sessionID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{

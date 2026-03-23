@@ -134,7 +134,11 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 		})
 		return
 	}
-	provider, selectedService, err = s.DetermineProviderAndModelWithScenario(scenarioType, rule, reqParams)
+
+	// Resolve session ID for affinity
+	sessionID := ResolveSessionID(c, reqParams)
+
+	provider, selectedService, err = s.DetermineProviderAndModelWithScenario(scenarioType, rule, reqParams, sessionID)
 	if err != nil {
 		// Record error if recording is enabled
 		if recorder != nil {
@@ -157,6 +161,9 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 	if rule != nil {
 		c.Set("rule", rule)
 	}
+
+	// Store sessionID in tracking context for use in response handlers
+	c.Set(ContextKeySessionID, sessionID)
 
 	actualModel := selectedService.Model
 	// Delegate to the appropriate implementation based on beta parameter

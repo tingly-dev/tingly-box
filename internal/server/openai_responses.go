@@ -104,7 +104,11 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 		})
 		return
 	}
-	provider, selectedService, err = s.DetermineProviderAndModelWithScenario(scenarioType, rule, req)
+
+	// Resolve session ID for affinity
+	sessionID := ResolveSessionID(c, req)
+
+	provider, selectedService, err = s.DetermineProviderAndModelWithScenario(scenarioType, rule, req, sessionID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
