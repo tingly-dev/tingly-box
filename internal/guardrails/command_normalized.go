@@ -62,6 +62,10 @@ func normalizeShellCommand(shell *ShellCommand) *NormalizedCommand {
 		}
 		programs = append(programs, cmd.Program)
 		terms = appendUniqueString(terms, cmd.Program)
+		// Any shell command invocation is an execution event. More specific
+		// actions like read/delete/network are added on top so command execution
+		// policies can still match commands such as `rm`.
+		actions = appendUniqueString(actions, ActionExecute)
 		actions = appendUniqueString(actions, normalizeShellAction(cmd.Program))
 
 		for _, arg := range cmd.Args {

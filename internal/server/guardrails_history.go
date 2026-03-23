@@ -152,7 +152,7 @@ func (s *Server) recordGuardrailsHistory(c *gin.Context, session guardrailsSessi
 		return
 	}
 
-	credentialRefs, aliasHits := collectGuardrailsHistoryCredentialData(c, result)
+	credentialRefs := collectGuardrailsHistoryCredentialRefs(result)
 	entry := guardrailsHistoryEntry{
 		Time:            time.Now(),
 		Scenario:        session.Scenario,
@@ -165,7 +165,6 @@ func (s *Server) recordGuardrailsHistory(c *gin.Context, session guardrailsSessi
 		Preview:         input.Content.LatestPreview(160),
 		CredentialRefs:  credentialRefs,
 		CredentialNames: s.resolveGuardrailsCredentialNames(credentialRefs),
-		AliasHits:       aliasHits,
 		Reasons:         append([]guardrails.PolicyResult(nil), result.Reasons...),
 	}
 	if input.Content.Command != nil {
@@ -178,7 +177,7 @@ func (s *Server) recordGuardrailsMaskHistory(c *gin.Context, session guardrailsS
 	if s.guardrailsHistory == nil {
 		return
 	}
-	credentialRefs, aliasHits := collectGuardrailsHistoryCredentialData(c, guardrails.Result{})
+	credentialRefs, aliasHits := collectGuardrailsMaskHistoryCredentialData(c)
 	if len(credentialRefs) == 0 && len(aliasHits) == 0 {
 		return
 	}
@@ -201,9 +200,8 @@ func (s *Server) recordGuardrailsMaskHistory(c *gin.Context, session guardrailsS
 	s.guardrailsHistory.Add(entry)
 }
 
-func collectGuardrailsHistoryCredentialData(c *gin.Context, result guardrails.Result) ([]string, []string) {
+func collectGuardrailsHistoryCredentialRefs(result guardrails.Result) []string {
 	refSet := make(map[string]struct{})
-	aliasSet := make(map[string]struct{})
 
 	for _, reason := range result.Reasons {
 		rawRefs, ok := reason.Evidence["credential_refs"]
@@ -226,26 +224,36 @@ func collectGuardrailsHistoryCredentialData(c *gin.Context, result guardrails.Re
 		}
 	}
 
-	if c != nil {
-		if existing, ok := c.Get(guardrails.CredentialMaskStateContextKey); ok {
-			if state, ok := existing.(*guardrails.CredentialMaskState); ok && state != nil {
-				for _, ref := range state.UsedRefs {
-					if ref != "" {
-						refSet[ref] = struct{}{}
-					}
-				}
-				for alias := range state.AliasToReal {
-					if alias != "" {
-						aliasSet[alias] = struct{}{}
-					}
-				}
-			}
-		}
+	return sortedKeys(refSet)
+}
+
+func collectGuardrailsMaskHistoryCredentialData(c *gin.Context) ([]string, []string) {
+	if c == nil {
+		return nil, nil
 	}
 
-	refs := sortedKeys(refSet)
-	aliases := sortedKeys(aliasSet)
-	return refs, aliases
+	existing, ok := c.Get(guardrails.CredentialMaskStateContextKey)
+	if !ok {
+		return nil, nil
+	}
+	state, ok := existing.(*guardrails.CredentialMaskState)
+	if !ok || state == nil {
+		return nil, nil
+	}
+
+	refSet := make(map[string]struct{})
+	aliasSet := make(map[string]struct{})
+	for _, ref := range state.UsedRefs {
+		if ref != "" {
+			refSet[ref] = struct{}{}
+		}
+	}
+	for alias := range state.AliasToReal {
+		if alias != "" {
+			aliasSet[alias] = struct{}{}
+		}
+	}
+	return sortedKeys(refSet), sortedKeys(aliasSet)
 }
 
 func sortedKeys(values map[string]struct{}) []string {
