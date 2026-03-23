@@ -7,6 +7,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -95,18 +96,18 @@ func (s *Server) attachGuardrailsHooks(c *gin.Context, hc *protocol.HandleContex
 	logrus.Debugf("Guardrails: attaching hook (scenario=%s model=%s)", session.Scenario, session.Model)
 	baseInput := s.buildGuardrailsBaseInput(session, guardrails.DirectionResponse, messages)
 
-	onEvent, onComplete, onError := NewGuardrailsHooks(
+	onEvent, onComplete, onError := serverguardrails.NewGuardrailsHooks(
 		s.guardrailsEngine,
 		baseInput,
-		WithGuardrailsContext(c.Request.Context()),
-		WithGuardrailsOnBlock(func(result GuardrailsHookResult) {
+		serverguardrails.WithGuardrailsContext(c.Request.Context()),
+		serverguardrails.WithGuardrailsOnBlock(func(result serverguardrails.GuardrailsHookResult) {
 			if result.BlockToolID == "" || result.BlockMessage == "" {
 				return
 			}
 			s.recordGuardrailsHistory(c, session, baseInput, result.Result, "tool_use", result.BlockMessage)
 			stream.RegisterGuardrailsBlock(c, result.BlockToolID, result.BlockIndex, result.BlockMessage)
 		}),
-		WithGuardrailsOnVerdict(func(result GuardrailsHookResult) {
+		serverguardrails.WithGuardrailsOnVerdict(func(result serverguardrails.GuardrailsHookResult) {
 			c.Set("guardrails_result", result.Result)
 			if result.BlockMessage != "" {
 				c.Set("guardrails_block_message", result.BlockMessage)
@@ -147,7 +148,7 @@ func (s *Server) evaluateGuardrailsToolResult(c *gin.Context, session guardrails
 		return guardrails.Result{}, false
 	}
 
-	input := s.buildGuardrailsBaseInput(session, guardrails.DirectionRequest, filterGuardrailsMessages(history))
+	input := s.buildGuardrailsBaseInput(session, guardrails.DirectionRequest, serverguardrails.FilterMessages(history))
 	input.Content.Text = toolResultText
 
 	result, err := s.guardrailsEngine.Evaluate(c.Request.Context(), input)

@@ -1,4 +1,4 @@
-package server
+package serverguardrails
 
 import (
 	"context"
@@ -115,7 +115,7 @@ func NewGuardrailsHooks(engine guardrails.Guardrails, baseInput guardrails.Input
 				if err == nil && result.Verdict == guardrails.VerdictBlock {
 					hook.onBlock(GuardrailsHookResult{
 						Result:       result,
-						BlockMessage: guardrailsBlockMessageForCommand(result, toolUse.name, parseToolArgs(toolUse.args)),
+						BlockMessage: BlockMessageForCommand(result, toolUse.name, parseToolArgs(toolUse.args)),
 						BlockIndex:   toolUse.index,
 						BlockToolID:  toolUse.id,
 					})
@@ -146,7 +146,7 @@ func NewGuardrailsHooks(engine guardrails.Guardrails, baseInput guardrails.Input
 		if onVerdict != nil {
 			blockMsg := ""
 			if result.Verdict == guardrails.VerdictBlock {
-				blockMsg = guardrailsBlockMessageWithSnippet(result, input.Content.Preview(120))
+				blockMsg = BlockMessageWithSnippet(result, input.Content.Preview(120))
 			}
 			onVerdict(GuardrailsHookResult{
 				Result:       result,
@@ -553,8 +553,8 @@ func (a *guardrailsAccumulator) popCompletedToolUse() (toolUseState, bool) {
 	return state, true
 }
 
-// guardrailsBlockMessageWithSnippet formats a block message for text responses.
-func guardrailsBlockMessageWithSnippet(result guardrails.Result, snippet string) string {
+// BlockMessageWithSnippet formats a block message for text responses.
+func BlockMessageWithSnippet(result guardrails.Result, snippet string) string {
 	prefix := "Blocked by guardrails. Content: text."
 	suffix := ""
 	if snippet != "" {
@@ -569,16 +569,16 @@ func guardrailsBlockMessageWithSnippet(result guardrails.Result, snippet string)
 	return prefix
 }
 
-// guardrailsBlockMessageForToolResult formats a block message for tool_result filtering.
-func guardrailsBlockMessageForToolResult(result guardrails.Result) string {
+// BlockMessageForToolResult formats a block message for tool_result filtering.
+func BlockMessageForToolResult(result guardrails.Result) string {
 	if len(result.Reasons) > 0 && result.Reasons[0].Reason != "" {
 		return "Blocked by guardrails. Content: tool_result. Output redacted. Reason: " + result.Reasons[0].Reason
 	}
 	return "Blocked by guardrails. Content: tool_result. Output redacted."
 }
 
-// guardrailsBlockMessageForCommand formats a block message for tool_use command blocking.
-func guardrailsBlockMessageForCommand(result guardrails.Result, name string, args map[string]interface{}) string {
+// BlockMessageForCommand formats a block message for tool_use command blocking.
+func BlockMessageForCommand(result guardrails.Result, name string, args map[string]interface{}) string {
 	command := formatGuardrailsCommand(name, args)
 	if len(result.Reasons) > 0 && result.Reasons[0].Reason != "" {
 		return "Blocked by guardrails. Content: command. Command: " + command + ". Reason: " + result.Reasons[0].Reason
@@ -640,7 +640,7 @@ func parseToolArgs(raw string) map[string]interface{} {
 	return map[string]interface{}{"_raw": raw}
 }
 
-func guardrailsMessagesFromAnthropicV1(system []anthropic.TextBlockParam, messages []anthropic.MessageParam) []guardrails.Message {
+func MessagesFromAnthropicV1(system []anthropic.TextBlockParam, messages []anthropic.MessageParam) []guardrails.Message {
 	out := make([]guardrails.Message, 0, len(messages)+1)
 
 	if len(system) > 0 {
@@ -661,7 +661,7 @@ func guardrailsMessagesFromAnthropicV1(system []anthropic.TextBlockParam, messag
 	return out
 }
 
-func guardrailsMessagesFromAnthropicV1Beta(system []anthropic.BetaTextBlockParam, messages []anthropic.BetaMessageParam) []guardrails.Message {
+func MessagesFromAnthropicV1Beta(system []anthropic.BetaTextBlockParam, messages []anthropic.BetaMessageParam) []guardrails.Message {
 	out := make([]guardrails.Message, 0, len(messages)+1)
 
 	if len(system) > 0 {

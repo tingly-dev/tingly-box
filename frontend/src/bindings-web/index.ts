@@ -15,10 +15,6 @@ export const TinglyService = {
         console.warn('[Mock] TinglyService.GetUserAuthToken called - returning empty string');
         return '';
     },
-    ChoosePath: async () => {
-        console.warn('[Mock] TinglyService.ChoosePath called - no-op in web mode');
-        return '';
-    },
     Start: async () => {
         console.warn('[Mock] TinglyService.Start called - no-op');
     },

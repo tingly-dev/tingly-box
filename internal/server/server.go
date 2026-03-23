@@ -23,6 +23,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
+	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
@@ -92,7 +93,7 @@ type Server struct {
 
 	// guardrails engine (optional)
 	guardrailsEngine  guardrails.Guardrails
-	guardrailsHistory *guardrailsHistoryStore
+	guardrailsHistory *serverguardrails.HistoryStore
 
 	// Protected credential aliasing needs a fast request-path lookup from
 	// scenario -> active mask credentials, plus ID -> credential metadata.
@@ -168,7 +169,7 @@ func (s *Server) initGuardrailsEngine() {
 		return
 	}
 
-	cfgPath, err := findGuardrailsConfig(s.config.ConfigDir)
+	cfgPath, err := serverguardrails.FindGuardrailsConfig(s.config.ConfigDir)
 	if err != nil {
 		logrus.WithError(err).Warn("Guardrails config not found; guardrails disabled")
 		return
@@ -441,7 +442,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.clientPool = client.NewClientPool() // Initialize client pool
 	server.errorMW = errorMW
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
-	server.guardrailsHistory = newGuardrailsHistoryStore(200, getGuardrailsHistoryPath(cfg.ConfigDir))
+	server.guardrailsHistory = serverguardrails.NewHistoryStore(200, serverguardrails.GetGuardrailsHistoryPath(cfg.ConfigDir))
 
 	// Auto-load guardrails if enabled and not injected explicitly.
 	server.initGuardrailsEngine()

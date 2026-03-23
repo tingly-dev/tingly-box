@@ -13,6 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
+	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
 )
 
 type guardrailsConfigResponse struct {
@@ -161,10 +162,10 @@ func (s *Server) GetGuardrailsConfig(c *gin.Context) {
 		return
 	}
 
-	path, err := findGuardrailsConfig(s.config.ConfigDir)
+	path, err := serverguardrails.FindGuardrailsConfig(s.config.ConfigDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) || strings.Contains(err.Error(), "no guardrails config") {
-			defaultPath := getGuardrailsConfigPath(s.config.ConfigDir)
+			defaultPath := serverguardrails.GetGuardrailsConfigPath(s.config.ConfigDir)
 			c.JSON(200, guardrailsConfigResponse{
 				Path:               defaultPath,
 				Exists:             false,
@@ -256,7 +257,7 @@ func (s *Server) ReloadGuardrailsConfig(c *gin.Context) {
 		return
 	}
 
-	path, err := findGuardrailsConfig(s.config.ConfigDir)
+	path, err := serverguardrails.FindGuardrailsConfig(s.config.ConfigDir)
 	if err != nil {
 		c.JSON(404, gin.H{"success": false, "error": err.Error()})
 		return
@@ -865,12 +866,12 @@ func decodeGuardrailsConfig(data []byte) (guardrails.Config, error) {
 }
 
 func ensureGuardrailsPath(configDir string) (string, error) {
-	path, err := findGuardrailsConfig(configDir)
+	path, err := serverguardrails.FindGuardrailsConfig(configDir)
 	if err == nil {
 		return path, nil
 	}
 	if strings.Contains(err.Error(), "no guardrails config") || errors.Is(err, os.ErrNotExist) {
-		return getGuardrailsConfigPath(configDir), nil
+		return serverguardrails.GetGuardrailsConfigPath(configDir), nil
 	}
 	return "", err
 }
