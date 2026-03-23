@@ -162,6 +162,9 @@ func (t *ConsistencyTransform) normalizeMessages(req *openai.ChatCompletionNewPa
 		return
 	}
 
+	// First, align tool messages to ensure they follow assistant messages with tool_calls
+	t.alignToolMessages(req)
+
 	for i := range req.Messages {
 		// Check if this is a tool message
 		if req.Messages[i].OfTool != nil {
@@ -216,6 +219,69 @@ func (t *ConsistencyTransform) normalizeMessages(req *openai.ChatCompletionNewPa
 			}
 		}
 	}
+}
+
+// AlignToolMessagesForOpenAI converts orphaned tool messages (those without a
+// matching tool_call_id) to user messages. This prevents "role 'tool' must be a
+// response to preceding message with 'tool_calls'" errors.
+func AlignToolMessagesForOpenAI(req *openai.ChatCompletionNewParams) {
+	if len(req.Messages) == 0 {
+		return
+	}
+
+	// Collect all valid tool_call_ids from assistant messages
+	validToolCallIDs := make(map[string]bool)
+	for _, msg := range req.Messages {
+		if msg.OfAssistant != nil {
+			if msgBytes, err := json.Marshal(msg); err == nil {
+				var assistantMsg map[string]interface{}
+				if err := json.Unmarshal(msgBytes, &assistantMsg); err == nil {
+					if toolCalls, ok := assistantMsg["tool_calls"].([]interface{}); ok {
+						for _, tc := range toolCalls {
+							if tcMap, ok := tc.(map[string]interface{}); ok {
+								if id, ok := tcMap["id"].(string); ok {
+									validToolCallIDs[id] = true
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Convert orphaned tool messages to user messages
+	for i := range req.Messages {
+		if req.Messages[i].OfTool != nil {
+			if msgBytes, err := json.Marshal(req.Messages[i]); err == nil {
+				var toolMsg map[string]interface{}
+				if err := json.Unmarshal(msgBytes, &toolMsg); err == nil {
+					if toolCallID, ok := toolMsg["tool_call_id"].(string); ok {
+						if !validToolCallIDs[toolCallID] {
+							// Orphaned tool message, convert to user message
+							toolMsg["role"] = "user"
+							delete(toolMsg, "tool_call_id")
+
+							if newBytes, err := json.Marshal(toolMsg); err == nil {
+								var updatedMsg openai.ChatCompletionMessageParamUnion
+								if err := json.Unmarshal(newBytes, &updatedMsg); err == nil {
+									req.Messages[i] = updatedMsg
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// alignToolMessages ensures tool messages follow assistant messages with tool_calls.
+// OpenAI API requires that messages with role "tool" must be a response to a preceding
+// message with "tool_calls". This function converts orphaned tool messages to user messages.
+func (t *ConsistencyTransform) alignToolMessages(req *openai.ChatCompletionNewParams) {
+	// Delegate to the public function
+	AlignToolMessagesForOpenAI(req)
 }
 
 // validateChatCompletion validates request parameters against OpenAI API constraints.
