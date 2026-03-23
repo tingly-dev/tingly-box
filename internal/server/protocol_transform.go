@@ -20,12 +20,20 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 		scenarioFlags = &scenarioConfig.Flags
 	}
 
+	extra := map[string]any{}
+
+	if provider.AuthType == typ.AuthTypeOAuth {
+		extra["user_id"] = provider.OAuthDetail.UserID
+	}
+	extra["device"] = s.config.Random256
+
 	transformCtx := &transform.TransformContext{
 		OriginalRequest: &req.BetaMessageNewParams,
 		Request:         &req.BetaMessageNewParams, // Original Anthropic beta request
 		ProviderURL:     provider.APIBase,
 		ScenarioFlags:   scenarioFlags,
 		IsStreaming:     isStreaming,
+		Extra:           extra,
 	}
 
 	// Execute transform chain

@@ -125,6 +125,8 @@ func filterCodexRequestJSON(data []byte) ([]byte, bool) {
 				req["input"] = tmp
 			}
 		}
+	} else {
+		req["instructions"] = "You are a helpful AI assistant."
 	}
 	//delete(req, "tools")
 	//delete(req, "input")
