@@ -165,6 +165,13 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 			},
 		},
 	},
+	"wechat": {
+		Platform:    "wechat",
+		AuthType:    "qr",
+		DisplayName: "WeChat",
+		Category:    "enterprise",
+		Fields:      []FieldSpec{}, // No fields - credentials set via QR flow
+	},
 }
 
 // GetPlatformConfig returns the auth config for a given platform

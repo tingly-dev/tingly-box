@@ -11,6 +11,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/lark"
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/slack"
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/telegram"
+	"github.com/tingly-dev/tingly-box/imbot/internal/platform/wechat"
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/whatsapp"
 )
 
@@ -104,6 +105,11 @@ func (r *Registry) RegisterBuiltinPlatforms() {
 	// DingTalk
 	r.Register(core.PlatformDingTalk, func(config *core.Config) (core.Bot, error) {
 		return dingtalk.NewDingTalkBot(config)
+	})
+
+	// WeChat
+	r.Register(core.PlatformWeChat, func(config *core.Config) (core.Bot, error) {
+		return wechat.NewBot(config)
 	})
 
 	// Add more platforms as they are implemented

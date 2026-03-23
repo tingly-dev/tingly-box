@@ -614,6 +614,16 @@ func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, set
 		options["proxy"] = setting.ProxyURL
 	}
 
+	// Add WeChat-specific options
+	if setting.Platform == "wechat" {
+		if userID, ok := setting.Auth["user_id"]; ok {
+			options["user_id"] = userID
+		}
+		if baseURL, ok := setting.Auth["base_url"]; ok {
+			options["base_url"] = baseURL
+		}
+	}
+
 	err = manager.AddBot(&imbot.Config{
 		UUID:     setting.UUID,
 		Platform: platform,
