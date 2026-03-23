@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff, OpenInNew } from '@mui/icons-material';
 import { type FieldSpec } from '@/types/bot.ts';
+import { WeChatQRAuth } from './WeChatQRAuth';
 
 interface BotAuthFormProps {
     platform: string;
@@ -49,6 +50,11 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
     const toggleVisibility = (key: string) => {
         setVisibleFields(prev => ({ ...prev, [key]: !prev[key] }));
     };
+
+    // QR code auth for WeChat
+    if (authType === 'qr') {
+        return <WeChatQRAuth botUUID={authData.bot_uuid || ''} platform={platform} />;
+    }
 
     if (!fields || fields.length === 0) {
         return (
