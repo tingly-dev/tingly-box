@@ -1,0 +1,61 @@
+templates:
+  - id: block-private-key-output
+    name: Block private key output
+    summary: Filter private key material from model output or tool results.
+    description: Blocks content containing private key markers such as `BEGIN OPENSSH PRIVATE KEY`.
+    kind: content
+    topic: output_filtering
+    tags: [output, secrets, private-key]
+    policy:
+      enabled: true
+      group: ""
+      kind: content
+      verdict: block
+      reason: This policy blocks private key material from being returned.
+      match:
+        patterns: ["BEGIN OPENSSH PRIVATE KEY", "BEGIN RSA PRIVATE KEY"]
+        pattern_mode: substring
+        case_sensitive: true
+
+  - id: block-access-token-output
+    name: Block access token output
+    summary: Filter common token and API key patterns from generated output.
+    description: Blocks content that looks like bearer tokens, GitHub tokens, or cloud API keys.
+    kind: content
+    topic: output_filtering
+    tags: [output, token, api-key, secrets]
+    policy:
+      enabled: true
+      group: ""
+      kind: content
+      verdict: block
+      reason: This policy blocks token-like credential output.
+      match:
+        patterns:
+          - "ghp_[A-Za-z0-9]{20,}"
+          - "sk-[A-Za-z0-9]{20,}"
+          - "AKIA[0-9A-Z]{16}"
+        pattern_mode: regex
+        case_sensitive: true
+
+  - id: block-env-output
+    name: Block environment variable output
+    summary: Filter environment variable dumps and dotenv content from model output or tool results.
+    description: Blocks content that looks like environment variable dumps or dotenv files being returned.
+    kind: content
+    topic: output_filtering
+    tags: [output, env, dotenv]
+    policy:
+      enabled: true
+      group: ""
+      kind: content
+      verdict: block
+      reason: This policy blocks environment variable output that may contain secrets.
+      match:
+        patterns:
+          - "API_KEY="
+          - "OPENAI_API_KEY="
+          - "ANTHROPIC_API_KEY="
+          - "DATABASE_URL="
+        pattern_mode: substring
+        case_sensitive: true

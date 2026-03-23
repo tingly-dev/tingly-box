@@ -1,0 +1,63 @@
+templates:
+  - id: block-destructive-rm
+    name: Block destructive rm commands
+    summary: Stop shell commands that attempt recursive destructive deletion.
+    description: Blocks command execution patterns such as `rm -rf`, especially when they target broad paths.
+    kind: command_execution
+    topic: command_execution
+    tags: [shell, deletion, rm, destructive]
+    policy:
+      enabled: true
+      group: ""
+      kind: command_execution
+      verdict: block
+      reason: This policy blocks destructive recursive deletion commands.
+      match:
+        tool_names: [bash]
+        terms: ["rm -rf", "rm -fr"]
+        resources:
+          type: path
+          mode: contains
+          values: ["/", "~", "."]
+
+  - id: block-download-and-exec
+    name: Block download-and-exec patterns
+    summary: Stop commands that download remote content and execute it immediately.
+    description: Blocks risky shell execution chains such as `curl | sh` or `wget ... | bash`.
+    kind: command_execution
+    topic: command_execution
+    tags: [shell, network, execution, supply-chain]
+    policy:
+      enabled: true
+      group: ""
+      kind: command_execution
+      verdict: block
+      reason: This policy blocks download-and-execute command patterns.
+      match:
+        tool_names: [bash]
+        terms: ["curl | sh", "curl|sh", "wget | bash", "wget|bash"]
+        resources:
+          type: path
+          mode: contains
+          values: []
+
+  - id: review-external-post
+    name: Review external POST requests
+    summary: Mark outbound POST or upload commands for review before sensitive data leaves the machine.
+    description: Reviews command execution patterns that look like outbound POST requests or uploads to external services.
+    kind: command_execution
+    topic: command_execution
+    tags: [network, upload, exfiltration]
+    policy:
+      enabled: true
+      group: ""
+      kind: command_execution
+      verdict: review
+      reason: This policy marks outbound upload or POST commands for review.
+      match:
+        tool_names: [bash]
+        terms: ["curl -X POST", "wget --post-data", "scp ", "rsync "]
+        resources:
+          type: path
+          mode: contains
+          values: ["http://", "https://"]

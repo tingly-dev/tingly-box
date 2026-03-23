@@ -1,0 +1,88 @@
+templates:
+  - id: block-ssh-read
+    name: Block SSH directory reads
+    summary: Prevent shell commands from reading common SSH key and config directories.
+    description: Prevents shell commands from reading `~/.ssh` and `/etc/ssh` paths before local execution.
+    kind: resource_access
+    topic: filesystem_access
+    tags: [ssh, secrets, filesystem]
+    policy:
+      enabled: true
+      group: ""
+      kind: resource_access
+      verdict: block
+      reason: This policy blocks attempts to read SSH configuration and key directories.
+      match:
+        tool_names: [bash]
+        actions:
+          include: [read]
+        resources:
+          type: path
+          mode: prefix
+          values: ["~/.ssh", "/etc/ssh"]
+
+  - id: block-env-read
+    name: Block .env file reads
+    summary: Prevent reads of common environment secret files.
+    description: Blocks common attempts to inspect `.env` files and other environment secret files through shell tools.
+    kind: resource_access
+    topic: filesystem_access
+    tags: [dotenv, env, secrets]
+    policy:
+      enabled: true
+      group: ""
+      kind: resource_access
+      verdict: block
+      reason: This policy blocks attempts to read environment variable files that may contain secrets.
+      match:
+        tool_names: [bash]
+        actions:
+          include: [read]
+        resources:
+          type: path
+          mode: contains
+          values: [".env", ".env.local", ".env.production"]
+
+  - id: block-git-config-read
+    name: Block Git credential config reads
+    summary: Prevent reads of Git credential and config files that may contain tokens.
+    description: Prevents reads of `.git-credentials` and related config files that may contain stored tokens.
+    kind: resource_access
+    topic: filesystem_access
+    tags: [git, credentials, tokens]
+    policy:
+      enabled: true
+      group: ""
+      kind: resource_access
+      verdict: block
+      reason: This policy blocks attempts to read Git credential and configuration files that may contain secrets.
+      match:
+        tool_names: [bash]
+        actions:
+          include: [read]
+        resources:
+          type: path
+          mode: contains
+          values: [".git-credentials", ".gitconfig"]
+
+  - id: block-shell-history-read
+    name: Block shell history reads
+    summary: Stop commands that inspect terminal history files.
+    description: Stops commands that inspect terminal history files such as `.zsh_history` and `.bash_history`.
+    kind: resource_access
+    topic: filesystem_access
+    tags: [history, shell, privacy]
+    policy:
+      enabled: true
+      group: ""
+      kind: resource_access
+      verdict: block
+      reason: This policy blocks attempts to read shell history files.
+      match:
+        tool_names: [bash]
+        actions:
+          include: [read]
+        resources:
+          type: path
+          mode: contains
+          values: [".zsh_history", ".bash_history"]
