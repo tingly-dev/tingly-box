@@ -245,25 +245,29 @@ func AlignToolMessagesForOpenAI(req *openai.ChatCompletionNewParams) {
 	// Convert orphaned tool messages to user messages
 	for i := range req.Messages {
 		if req.Messages[i].OfTool != nil {
-			if msgBytes, err := json.Marshal(req.Messages[i]); err == nil {
-				var toolMsg map[string]interface{}
-				if err := json.Unmarshal(msgBytes, &toolMsg); err == nil {
-					if toolCallID, ok := toolMsg["tool_call_id"].(string); ok {
-						if !validToolCallIDs[toolCallID] {
-							// Orphaned tool message, convert to user message
-							toolMsg["role"] = "user"
-							delete(toolMsg, "tool_call_id")
-
-							if newBytes, err := json.Marshal(toolMsg); err == nil {
-								var updatedMsg openai.ChatCompletionMessageParamUnion
-								if err := json.Unmarshal(newBytes, &updatedMsg); err == nil {
-									req.Messages[i] = updatedMsg
-								}
-							}
-						}
-					}
-				}
+			toolMsg := req.Messages[i].OfTool
+			toolCallID := toolMsg.ToolCallID
+			if toolCallID == "" || validToolCallIDs[toolCallID] {
+				continue
 			}
+
+			// Orphaned tool message, convert to user message.
+			// Tool content supports string or text parts; map both to user content.
+			if toolMsg.Content.OfString.Valid() {
+				req.Messages[i] = openai.UserMessage(toolMsg.Content.OfString.Value)
+				continue
+			}
+
+			if len(toolMsg.Content.OfArrayOfContentParts) > 0 {
+				parts := make([]openai.ChatCompletionContentPartUnionParam, 0, len(toolMsg.Content.OfArrayOfContentParts))
+				for _, part := range toolMsg.Content.OfArrayOfContentParts {
+					parts = append(parts, openai.TextContentPart(part.Text))
+				}
+				req.Messages[i] = openai.UserMessage(parts)
+				continue
+			}
+
+			req.Messages[i] = openai.UserMessage("")
 		}
 	}
 }
