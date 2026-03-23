@@ -794,14 +794,14 @@ func (s *Server) UseAIEndpoints() {
 
 func (s *Server) SetupMixinEndpoints(group *gin.RouterGroup) {
 	// Chat completions endpoint (OpenAI compatible)
-	group.POST("/chat/completions", s.getModelAuthMiddleware(), s.OpenAIChatCompletions)
+	group.POST("/chat/completions", s.getModelAuthMiddleware(), s.HandleOpenAIChatCompletions)
 
 	// Responses API endpoints (OpenAI compatible)
-	group.POST("/responses", s.getModelAuthMiddleware(), s.ResponsesCreate)
+	group.POST("/responses", s.getModelAuthMiddleware(), s.HandleResponsesCreate)
 	group.GET("/responses/:id", s.getModelAuthMiddleware(), s.ResponsesGet)
 
 	// Chat completions endpoint (Anthropic compatible)
-	group.POST("/messages", s.getModelAuthMiddleware(), s.AnthropicMessages)
+	group.POST("/messages", s.getModelAuthMiddleware(), s.HandleAnthropicMessages)
 	// Count tokens endpoint (Anthropic compatible)
 	group.POST("/messages/count_tokens", s.getModelAuthMiddleware(), s.AnthropicCountTokens)
 
@@ -811,18 +811,18 @@ func (s *Server) SetupMixinEndpoints(group *gin.RouterGroup) {
 
 func (s *Server) SetupOpenAIEndpoints(group *gin.RouterGroup) {
 	// Chat completions endpoint (OpenAI compatible)
-	group.POST("/chat/completions", s.getModelAuthMiddleware(), s.OpenAIChatCompletions)
+	group.POST("/chat/completions", s.getModelAuthMiddleware(), s.HandleOpenAIChatCompletions)
 	// Models endpoint (OpenAI compatible)
 	group.GET("/models", s.getModelAuthMiddleware(), s.OpenAIListModels)
 
 	// Responses API endpoints (OpenAI compatible)
-	group.POST("/responses", s.getModelAuthMiddleware(), s.ResponsesCreate)
+	group.POST("/responses", s.getModelAuthMiddleware(), s.HandleResponsesCreate)
 	group.GET("/responses/:id", s.getModelAuthMiddleware(), s.ResponsesGet)
 }
 
 func (s *Server) SetupAnthropicEndpoints(group *gin.RouterGroup) {
 	// Chat completions endpoint (Anthropic compatible)
-	group.POST("/messages", s.getModelAuthMiddleware(), s.AnthropicMessages)
+	group.POST("/messages", s.getModelAuthMiddleware(), s.HandleAnthropicMessages)
 	// Count tokens endpoint (Anthropic compatible)
 	group.POST("/messages/count_tokens", s.getModelAuthMiddleware(), s.AnthropicCountTokens)
 	// Models endpoint (Anthropic compatible)

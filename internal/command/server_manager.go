@@ -39,6 +39,11 @@ func (sm *ServerManager) GetGinEngine() *gin.Engine {
 	return sm.server.GetRouter()
 }
 
+// GetTBServer returns the underlying TinglyBox server instance
+func (sm *ServerManager) GetTBServer() *server.Server {
+	return sm.server
+}
+
 func (sm *ServerManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// All requests go to the Gin engine
 	sm.server.GetRouter().ServeHTTP(w, r)
