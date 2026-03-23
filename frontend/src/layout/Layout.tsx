@@ -271,13 +271,13 @@ const Layout = ({ children }: LayoutProps) => {
             }] : []),
             ...(enableGuardrails ? [{
                 key: 'guardrails',
-                icon: <Security sx={{ fontSize: 22 }} />,
+                icon: <AccessControlIcon sx={{ fontSize: 22 }} />,
                 label: 'Guardrails',
                 children: [
                     {
                         path: '/guardrails',
                         label: 'Overview',
-                        icon: <Security sx={{ fontSize: 20 }} />,
+                        icon: <AccessControlIcon sx={{ fontSize: 20 }} />,
                     },
                     {
                         path: '/guardrails/rules',
