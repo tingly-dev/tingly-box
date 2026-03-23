@@ -16,6 +16,7 @@ const (
 	RuleUUIDBuiltinOpenAI     = "built-in-openai"
 	RuleUUIDBuiltinAnthropic  = "built-in-anthropic"
 	RuleUUIDBuiltinCodex      = "built-in-codex"
+	RuleUUIDBuiltinCursor     = "built-in-cursor"
 	RuleUUIDBuiltinCC         = "built-in-cc"
 	RuleUUIDClaudeCode        = "claude-code"
 	RuleUUIDBuiltinCCHaiku    = "built-in-cc-haiku"
@@ -161,6 +162,7 @@ func migrate20260103(c *Config) {
 		RuleUUIDBuiltinOpenAI:     typ.ScenarioOpenAI,
 		RuleUUIDBuiltinAnthropic:  typ.ScenarioAnthropic,
 		RuleUUIDBuiltinCodex:      typ.ScenarioCodex,
+		RuleUUIDBuiltinCursor:     typ.ScenarioOpenAI,
 		RuleUUIDBuiltinCC:         typ.ScenarioClaudeCode,
 		RuleUUIDClaudeCode:        typ.ScenarioClaudeCode,
 		RuleUUIDBuiltinCCHaiku:    typ.ScenarioClaudeCode,

@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { api } from '@/services/api';
-import type { SmartRouting, ConfigProvider, Rule, ConfigRecord } from '@/components/RoutingGraphTypes';
+import type { SmartRouting, ConfigProvider, Rule, ConfigRecord, RuleFlags } from '@/components/RoutingGraphTypes';
 
 // ============================================================================
 // Helper Functions
@@ -173,6 +173,64 @@ interface ExportProvider {
     timeout?: number;
     tags?: string[];
     models?: any[];
+}
+
+// ============================================================================
+// Rule flag helpers
+// ============================================================================
+
+const TRUE_VALUES = new Set(['true', '1', 'yes', 'on']);
+const FALSE_VALUES = new Set(['false', '0', 'no', 'off']);
+
+export function formatRuleFlags(flags?: RuleFlags): string {
+    if (!flags) return '';
+    const entries: string[] = [];
+    if (flags.cursorCompat) entries.push('cursor_compat=true');
+    if (flags.cursorCompatAuto) entries.push('cursor_compat_auto=true');
+    return entries.join(',');
+}
+
+export function parseRuleFlags(input: string): { flags: RuleFlags; error?: string } {
+    const flags: RuleFlags = {
+        cursorCompat: false,
+        cursorCompatAuto: false,
+    };
+
+    const trimmed = input.trim();
+    if (!trimmed) {
+        return { flags };
+    }
+
+    const parts = trimmed.split(',').map((part) => part.trim()).filter(Boolean);
+    for (const part of parts) {
+        const [rawKey, rawValue] = part.split('=').map((chunk) => chunk.trim());
+        if (!rawKey || rawValue === undefined || rawValue === '') {
+            return { flags, error: `Invalid flag format: "${part}". Use key=value.` };
+        }
+
+        const valueLower = rawValue.toLowerCase();
+        let parsedValue: boolean;
+        if (TRUE_VALUES.has(valueLower)) {
+            parsedValue = true;
+        } else if (FALSE_VALUES.has(valueLower)) {
+            parsedValue = false;
+        } else {
+            return { flags, error: `Invalid value for "${rawKey}": "${rawValue}". Use true/false.` };
+        }
+
+        switch (rawKey) {
+            case 'cursor_compat':
+                flags.cursorCompat = parsedValue;
+                break;
+            case 'cursor_compat_auto':
+                flags.cursorCompatAuto = parsedValue;
+                break;
+            default:
+                return { flags, error: `Unknown flag "${rawKey}".` };
+        }
+    }
+
+    return { flags };
 }
 
 // Generic export handler

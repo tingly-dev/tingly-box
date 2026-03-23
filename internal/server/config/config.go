@@ -1938,6 +1938,22 @@ func init() {
 			Active: true,
 		},
 		{
+			UUID:          "built-in-cursor",
+			Scenario:      typ.ScenarioOpenAI,
+			RequestModel:  "cursor",
+			ResponseModel: "",
+			Description:   "Cursor compatibility rule for proxying Cursor client traffic",
+			Services:      []*loadbalance.Service{},
+			Flags: typ.RuleFlags{
+				CursorCompat: true,
+			},
+			LBTactic: typ.Tactic{
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
 			UUID:          "built-in-codex",
 			Scenario:      typ.ScenarioCodex,
 			RequestModel:  "tingly-codex",
