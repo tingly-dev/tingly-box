@@ -20,16 +20,20 @@ type CachedModelCapability struct {
 
 // ModelEndpointCapability represents the endpoint capability information for a model
 type ModelEndpointCapability struct {
-	ProviderUUID       string
-	ModelID            string
-	SupportsChat       bool
-	ChatLatencyMs      int
-	ChatError          string
-	SupportsResponses  bool
-	ResponsesLatencyMs int
-	ResponsesError     string
-	PreferredEndpoint  string // "chat", "responses", or ""
-	LastVerified       time.Time
+	ProviderUUID        string
+	ModelID             string
+	SupportsChat        bool
+	ChatLatencyMs       int
+	ChatError           string
+	SupportsResponses   bool
+	ResponsesLatencyMs  int
+	ResponsesError      string
+	SupportsToolParser  bool
+	ToolParserLatencyMs int
+	ToolParserError     string
+	ToolParserChecked    bool
+	PreferredEndpoint    string // "chat", "responses", or ""
+	LastVerified        time.Time
 }
 
 // EndpointStatus represents the status of a single endpoint
@@ -42,12 +46,13 @@ type EndpointStatus struct {
 
 // ProbeResult represents the complete probe result for a model
 type ProbeResult struct {
-	ProviderUUID      string
-	ModelID           string
-	ChatEndpoint      EndpointStatus
-	ResponsesEndpoint EndpointStatus
-	PreferredEndpoint string
-	LastUpdated       time.Time
+	ProviderUUID       string
+	ModelID            string
+	ChatEndpoint       EndpointStatus
+	ResponsesEndpoint  EndpointStatus
+	ToolParserEndpoint EndpointStatus
+	PreferredEndpoint  string
+	LastUpdated        time.Time
 }
 
 // ProbeCacheRequest represents a request to probe a model

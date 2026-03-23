@@ -232,7 +232,6 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 		// This ensures rich content is flattened for all providers when cursor_compat is enabled
 		if cursorCompat {
 			ops.ApplyCursorCompatContentNormalization(&req.ChatCompletionNewParams)
-			transformer.ApplyCursorCompatContentNormalization(&req.ChatCompletionNewParams)
 		}
 		anthropicReq := request.ConvertOpenAIToAnthropicRequest(&req.ChatCompletionNewParams, int64(maxAllowed))
 		if isStreaming {

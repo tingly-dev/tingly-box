@@ -195,8 +195,20 @@ func buildOpenAIConfig(req *openai.ChatCompletionNewParams) *protocol.OpenAIConf
 		ReasoningEffort: "",
 	}
 
-	// Check if request has thinking configuration in extra_fields
+	// Extract cursor_compat flag from extra fields (set by applyCursorCompatFlag)
 	extraFields := req.ExtraFields()
+	if extraFields == nil {
+		extraFields = map[string]interface{}{}
+	}
+	if cursorCompatRaw, ok := extraFields[cursorCompatExtraField]; ok {
+		if enabled, ok := cursorCompatRaw.(bool); ok && enabled {
+			config.CursorCompat = true
+		}
+		delete(extraFields, cursorCompatExtraField)
+		req.SetExtraFields(extraFields)
+	}
+
+	// Check if request has thinking configuration in extra_fields
 	if thinking, ok := extraFields["thinking"]; ok {
 		if _, ok := thinking.(map[string]interface{}); ok {
 			config.HasThinking = true
