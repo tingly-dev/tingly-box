@@ -47,6 +47,17 @@ const BotPage = lazy(() => import('./pages/remote-control/BotPage'));
 const AgentPage = lazy(() => import('./pages/remote-control/AgentPage'));
 const RemoteControlOverviewPage = lazy(() => import('./pages/remote-control/OverviewPage'));
 
+// Platform-specific bot pages
+const TelegramPage = lazy(() => import('./pages/remote-control/TelegramPage'));
+const FeishuPage = lazy(() => import('./pages/remote-control/FeishuPage'));
+const LarkPage = lazy(() => import('./pages/remote-control/LarkPage'));
+const DingTalkPage = lazy(() => import('./pages/remote-control/DingTalkPage'));
+const WeixinPage = lazy(() => import('./pages/remote-control/WeixinPage'));
+const WeComPage = lazy(() => import('./pages/remote-control/WeComPage'));
+const QQPage = lazy(() => import('./pages/remote-control/QQPage'));
+const DiscordPage = lazy(() => import('./pages/remote-control/DiscordPage'));
+const SlackPage = lazy(() => import('./pages/remote-control/SlackPage'));
+
 // Loading fallback component
 const PageLoader = () => (
     <Box
@@ -325,6 +336,16 @@ function AppContent() {
                     <Route path="/remote-control" element={<RemoteControlOverviewPage />} />
                     <Route path="/remote-control/bot" element={<BotPage />} />
                     <Route path="/remote-control/agent" element={<AgentPage />} />
+                    {/* Platform-specific bot pages */}
+                    <Route path="/remote-control/telegram" element={<TelegramPage />} />
+                    <Route path="/remote-control/feishu" element={<FeishuPage />} />
+                    <Route path="/remote-control/lark" element={<LarkPage />} />
+                    <Route path="/remote-control/dingtalk" element={<DingTalkPage />} />
+                    <Route path="/remote-control/weixin" element={<WeixinPage />} />
+                    <Route path="/remote-control/wecom" element={<WeComPage />} />
+                    <Route path="/remote-control/qq" element={<QQPage />} />
+                    <Route path="/remote-control/discord" element={<DiscordPage />} />
+                    <Route path="/remote-control/slack" element={<SlackPage />} />
                     {/* Catch-all redirect for unknown routes */}
                     <Route path="*" element={<Navigate to="/dashboard/7d" replace />} />
                 </Route>
