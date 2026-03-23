@@ -232,20 +232,12 @@ func AlignToolMessagesForOpenAI(req *openai.ChatCompletionNewParams) {
 	// Collect all valid tool_call_ids from assistant messages
 	validToolCallIDs := make(map[string]bool)
 	for _, msg := range req.Messages {
-		if msg.OfAssistant != nil {
-			if msgBytes, err := json.Marshal(msg); err == nil {
-				var assistantMsg map[string]interface{}
-				if err := json.Unmarshal(msgBytes, &assistantMsg); err == nil {
-					if toolCalls, ok := assistantMsg["tool_calls"].([]interface{}); ok {
-						for _, tc := range toolCalls {
-							if tcMap, ok := tc.(map[string]interface{}); ok {
-								if id, ok := tcMap["id"].(string); ok {
-									validToolCallIDs[id] = true
-								}
-							}
-						}
-					}
-				}
+		if msg.OfAssistant == nil {
+			continue
+		}
+		for _, tc := range msg.OfAssistant.ToolCalls {
+			if id := tc.GetID(); id != nil && *id != "" {
+				validToolCallIDs[*id] = true
 			}
 		}
 	}
