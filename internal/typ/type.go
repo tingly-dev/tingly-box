@@ -112,8 +112,7 @@ func IsValidRecordingMode(mode string) bool {
 	}
 }
 
-// ScenarioFlags represents legacy scenario-level feature flags.
-// These are global per scenario and are not a replacement for rule-level flags.
+// ScenarioFlags represents configuration flags for a scenario
 type ScenarioFlags struct {
 	Unified  bool `json:"unified" yaml:"unified"`   // Single configuration for all models
 	Separate bool `json:"separate" yaml:"separate"` // Separate configuration for each model
@@ -139,8 +138,6 @@ type ScenarioFlags struct {
 }
 
 // RuleFlags represents per-rule feature flags.
-// For routing behavior that should vary by rule (for example cursor compatibility),
-// add flags here instead of ScenarioFlags.
 type RuleFlags struct {
 	// CursorCompat enables Cursor compatibility handling (rich content normalization, stream usage stripping, tool gating).
 	CursorCompat bool `json:"cursor_compat,omitempty" yaml:"cursor_compat,omitempty"`
@@ -315,7 +312,7 @@ type Rule struct {
 	ResponseModel string                 `json:"response_model" yaml:"response_model"`
 	Description   string                 `json:"description"`
 	Services      []*loadbalance.Service `json:"services" yaml:"services"`
-	// RuleFlags represents configuration flags for a specific rule (e.g., cursor_compat)
+	// Per-rule feature flags (e.g. cursor_compat / cursor_compat_auto).
 	Flags         RuleFlags `json:"flags,omitempty" yaml:"flags,omitempty"`
 	// CurrentServiceID is persisted to SQLite, not JSON (provider:model format)
 	// This identifies the current service for round-robin load balancing
