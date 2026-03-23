@@ -75,7 +75,7 @@ func NewProtectedCredential(name, credentialType, secret, description string, ta
 }
 
 func GenerateAliasToken(credentialType string) (string, error) {
-	buf := make([]byte, 8)
+	buf := make([]byte, 16)
 	if _, err := rand.Read(buf); err != nil {
 		return "", fmt.Errorf("generate alias token: %w", err)
 	}
