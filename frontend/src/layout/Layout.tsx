@@ -1,4 +1,4 @@
-import { OpenAI, Anthropic, Claude } from '../components/BrandIcons';
+import { OpenAI, Anthropic, Claude, Telegram, Feishu, Lark, DingTalk, Weixin } from '../components/BrandIcons';
 import {
     AccountCircle as AccountIcon,
     AutoAwesome,
@@ -20,7 +20,7 @@ import {
     Today as TodayIcon,
     Send as UserPromptIcon,
     Extension as VSCodeIcon,
-    Security as AccessControlIcon
+    Security as AccessControlIcon,
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -225,20 +225,41 @@ const Layout = ({ children }: LayoutProps) => {
                 icon: <RemoteIcon sx={{fontSize: 22}}/>,
                 label: 'Remote',
                 children: [
-                    // {
-                    //     path: '/remote-control',
-                    //     label: 'Overview',
-                    //     icon: <RemoteIcon sx={{fontSize: 20}}/>,
-                    // },
                     {
                         path: '/remote-control/bot',
-                        label: 'IM Bot',
+                        label: 'Overview',
                         icon: <ChatBubble sx={{fontSize: 20}}/>,
                     },
+                    // {
+                    //     path: '/remote-control/agent',
+                    //     label: 'Agent Assistant',
+                    //     icon: <AutoAwesome sx={{fontSize: 20}}/>,
+                    // },
                     {
-                        path: '/remote-control/agent',
-                        label: 'Agent Assistant',
-                        icon: <AutoAwesome sx={{fontSize: 20}}/>,
+                        divider: true,
+                        path: '/remote-control/weixin',
+                        label: 'Weixin',
+                        icon: <Weixin size={20}/>,
+                    },
+                    {
+                        path: '/remote-control/telegram',
+                        label: 'Telegram',
+                        icon: <Telegram size={20}/>,
+                    },
+                    {
+                        path: '/remote-control/feishu',
+                        label: 'Feishu',
+                        icon: <Feishu size={20}/>,
+                    },
+                    {
+                        path: '/remote-control/lark',
+                        label: 'Lark',
+                        icon: <Lark size={20}/>,
+                    },
+                    {
+                        path: '/remote-control/dingtalk',
+                        label: 'DingTalk',
+                        icon: <DingTalk size={20}/>,
                     },
                 ],
             }] : []),
