@@ -76,6 +76,12 @@ func (m *MetadataUserID) Format() string {
 
 func (m *MetadataUserID) Fix(extras map[string]any) {
 	// Generate default device_id if not set (use extras UUID as identifier)
+	if extras != nil {
+		if v, ok := extras["device"]; ok {
+			m.DeviceID = v.(string)
+		}
+	}
+
 	if m.DeviceID == "" {
 		id := uuid.NewString()
 		hash := sha3.Sum256([]byte(id))
@@ -123,31 +129,17 @@ func (m *MetadataUserID) IsEmpty() bool {
 // BuildMetadataUserID builds a MetadataUserID from extra map.
 // Returns nil if extra is nil or doesn't contain user_id.
 func BuildMetadataUserID(extra map[string]any) *MetadataUserID {
-	if extra == nil {
+	m := &MetadataUserID{}
+
+	// Set user_id if provided
+	if extra != nil {
+		m.Fix(extra)
+	}
+
+	// Only return nil if all fields are empty after fixing
+	if m.IsEmpty() {
 		return nil
 	}
-
-	userID, ok := extra["user_id"]
-	if !ok {
-		return nil
-	}
-
-	m := &MetadataUserID{
-		SessionID: userID.(string),
-	}
-
-	// Set device_id if provided
-	if deviceID, ok := extra["device_id"]; ok {
-		m.DeviceID = deviceID.(string)
-	}
-
-	// Set account_uuid if provided
-	if accountUUID, ok := extra["account_uuid"]; ok {
-		m.AccountUUID = accountUUID.(string)
-	}
-
-	// Fix any missing fields
-	m.Fix(extra)
 
 	return m
 }

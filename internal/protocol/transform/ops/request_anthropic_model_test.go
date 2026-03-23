@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -247,4 +248,48 @@ func TestFilterThinkingBlocksInMessages(t *testing.T) {
 	assert.NotNil(t, result)
 	// User message should be preserved
 	assert.True(t, len(result) >= 1)
+}
+
+func TestApplyAnthropicMetadataTransform(t *testing.T) {
+	// Test case: Haiku model with enabled thinking should keep thinking
+	req := &anthropic.MessageNewParams{
+		Model:     anthropic.Model("claude-3-5-haiku-20241022"),
+		MaxTokens: int64(4096),
+		Thinking: anthropic.ThinkingConfigParamUnion{
+			OfEnabled: &anthropic.ThinkingConfigEnabledParam{},
+		},
+		System: []anthropic.TextBlockParam{
+			{
+				Text: "x-anthropic-billing-header",
+			},
+		},
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
+		},
+	}
+
+	deviceID := "ddd"
+	accountID := "uuu"
+
+	result := ApplyAnthropicMetadataTransform(req, map[string]any{
+		"device":  deviceID,
+		"user_id": accountID,
+	})
+
+	m := MetadataUserID{
+		DeviceID:    deviceID,
+		AccountUUID: accountID,
+		SessionID:   "",
+	}
+
+	t.Logf("%#v", m)
+
+	assert.NotNil(t, result)
+	typedResult, ok := result.(*anthropic.MessageNewParams)
+	assert.True(t, ok)
+	t.Logf("%#v", typedResult.Metadata.UserID)
+	t.Logf("%#v", typedResult.System[0].Text)
+	assert.True(t, strings.Contains(typedResult.Metadata.UserID.String(), deviceID))
+	assert.True(t, strings.Contains(typedResult.Metadata.UserID.String(), accountID))
+	assert.True(t, strings.Contains(typedResult.Metadata.UserID.String(), "session_id"))
 }
