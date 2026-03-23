@@ -60,7 +60,7 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 	if stream, ok := rawReq["stream"].(bool); ok {
 		isStreaming = stream
 	}
-	logrus.Debugf("Stream requested for AnthropicMessages: %v", isStreaming)
+	logrus.Debugf("Stream requested for HandleAnthropicMessages: %v", isStreaming)
 
 	// Get model from request
 	model := rawReq["model"].(string)
