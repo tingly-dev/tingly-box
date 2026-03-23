@@ -12,7 +12,7 @@ import (
 
 const (
 	// Claude Code client identification
-	claudeCLIUserAgent      = "claude-cli/2.1.78 (external, cli)"
+	claudeCLIUserAgent      = "claude-cli/2.1.81 (external, cli)"
 	claudeXApp              = "cli"
 	stainlessHelperMethod   = "stream"
 	stainlessRetryCount     = "0"
