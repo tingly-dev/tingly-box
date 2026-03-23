@@ -13,6 +13,7 @@ import (
 
 // mockImBotSettingsStore is a mock implementation of ImBotSettingsStore for testing
 type mockImBotSettingsStore struct {
+	db.ImBotSettingsStore
 	settings       []db.Settings
 	getSettings    db.Settings
 	createSettings db.Settings
@@ -46,7 +47,7 @@ func (m *mockImBotSettingsStore) CreateSettings(settings db.Settings) error {
 	return nil
 }
 
-func (m *mockImBotSettingsStore) UpdateSettings(settings db.Settings) error {
+func (m *mockImBotSettingsStore) UpdateSettings(uuid string, settings db.Settings) error {
 	if m.updateErr != nil {
 		return m.updateErr
 	}

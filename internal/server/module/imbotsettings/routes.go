@@ -87,12 +87,36 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 			Name:        "platform",
 			Type:        "string",
 			Required:    true,
-			Description: "Platform identifier (telegram, discord, slack, feishu, dingtalk, whatsapp)",
+			Description: "Platform identifier (telegram, discord, slack, feishu, dingtalk, whatsapp, wechat)",
 		}),
 		swagger.WithResponseModel(PlatformConfigResponse{}),
 		swagger.WithErrorResponses(
 			swagger.ErrorResponseConfig{Code: 400, Message: "Platform parameter is required"},
 			swagger.ErrorResponseConfig{Code: 404, Message: "Unknown platform"},
 		),
+	)
+
+	// WeChat QR Login endpoints
+	qrHandler := NewWeChatQRLoginHandler(handler.store)
+
+	// POST /imbot-settings/:uuid/wechat/qr-start - Start QR login
+	router.POST("/imbot-settings/:uuid/wechat/qr-start", qrHandler.QRStart,
+		swagger.WithTags("imbot-settings", "wechat"),
+		swagger.WithDescription("Initiates WeChat QR code login flow"),
+		swagger.WithRequestModel(QRStartRequest{}),
+		swagger.WithResponseModel(QRStartResponse{}),
+	)
+
+	// GET /imbot-settings/:uuid/wechat/qr-status - Poll QR login status
+	router.GET("/imbot-settings/:uuid/wechat/qr-status", qrHandler.QRStatus,
+		swagger.WithTags("imbot-settings", "wechat"),
+		swagger.WithDescription("Polls WeChat QR code login status"),
+		swagger.WithResponseModel(QRStatusResponse{}),
+	)
+
+	// POST /imbot-settings/:uuid/wechat/qr-cancel - Cancel QR login
+	router.POST("/imbot-settings/:uuid/wechat/qr-cancel", qrHandler.QRCancel,
+		swagger.WithTags("imbot-settings", "wechat"),
+		swagger.WithDescription("Cancels pending WeChat QR code login"),
 	)
 }
