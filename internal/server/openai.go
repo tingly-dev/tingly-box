@@ -215,9 +215,8 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	// === Tool Interceptor: Check if enabled and should be used ===
 	shouldIntercept, shouldStripTools, _ := s.resolveToolInterceptor(provider, hasBuiltInWebSearch)
 
-	if !s.enforceToolParserSupport(c, provider, actualModel, &req.ChatCompletionNewParams) {
-		return
-	}
+	// Probe tool parser support (non-blocking, allows request to proceed regardless)
+	s.checkToolParserSupport(c, provider, actualModel, &req.ChatCompletionNewParams)
 
 	switch apiStyle {
 	default:
@@ -233,6 +232,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 		// This ensures rich content is flattened for all providers when cursor_compat is enabled
 		if cursorCompat {
 			ops.ApplyCursorCompatContentNormalization(&req.ChatCompletionNewParams)
+			transformer.ApplyCursorCompatContentNormalization(&req.ChatCompletionNewParams)
 		}
 		anthropicReq := request.ConvertOpenAIToAnthropicRequest(&req.ChatCompletionNewParams, int64(maxAllowed))
 		if isStreaming {
