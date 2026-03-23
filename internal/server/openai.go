@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -97,8 +98,8 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 	})
 }
 
-// OpenAIChatCompletions handles OpenAI v1 chat completion requests
-func (s *Server) OpenAIChatCompletions(c *gin.Context) {
+// HandleOpenAIChatCompletions handles OpenAI v1 chat completion requests
+func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
 
 	scenario := c.Param("scenario")
 
@@ -126,10 +127,8 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		return
 	}
 
-	isStreaming := req.Stream
-
 	// Validate
-	proxyModel := req.Model
+	responseModel := req.Model
 	if req.Model == "" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -193,8 +192,14 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 
 	actualModel := selectedService.Model
 	req.Model = actualModel
+
+	s.OpenAIChatCompletion(c, req, responseModel, provider, scenarioType, rule)
+}
+
+func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCompletionRequest, responseModel string, provider *typ.Provider, scenarioType typ.RuleScenario, rule *typ.Rule) {
+	isStreaming := req.Stream
+	actualModel := req.Model
 	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
-	responseModel := proxyModel
 
 	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, isStreaming)
@@ -310,7 +315,10 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		}
 	case protocol.APIStyleOpenAI:
 		// Check if model prefers responses endpoint (for models like Codex)
-		if selectedService.PreferCompletions() {
+
+		// For now, all models with "codex" in their name (case insensitive) prefer completions
+		// In the future, this can be extended to support more models or be configured per-model
+		if strings.Contains(strings.ToLower(actualModel), "codex") {
 			// Convert chat request to responses request
 			s.handleResponsesForChatRequest(c, provider, &req, responseModel, actualModel, isStreaming)
 			return

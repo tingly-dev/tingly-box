@@ -558,9 +558,7 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 
 	// Create authenticated API group
 	apiV1 := manager.NewGroup("api", "v1", "")
-	apiV1.Router.Use(s.authMW.UserAuthMiddleware())
-
-	// User token management endpoints (authenticated)
+	apiV1.Router.Use(s.getUserAuthMiddleware())
 	apiV1.GET("/auth/token", s.GetUserToken,
 		swagger.WithDescription("Get current user token (masked)"),
 		swagger.WithTags("auth"),
@@ -579,7 +577,7 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	)
 
 	apiV2 := manager.NewGroup("api", "v2", "")
-	apiV2.Router.Use(s.authMW.UserAuthMiddleware())
+	apiV2.Router.Use(s.getUserAuthMiddleware())
 
 	// Health check endpoint
 	apiV1.GET("/info/health", s.GetHealthInfo,
