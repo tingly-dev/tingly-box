@@ -47,6 +47,9 @@ type OpenAIConfig struct {
 	// Defaults to "low" when HasThinking is true
 	ReasoningEffort shared.ReasoningEffort
 
+	// CursorCompat indicates Cursor compatibility handling is enabled for this request.
+	CursorCompat bool
+
 	// Future fields can be added here as needed for provider-specific transformations
 }
 

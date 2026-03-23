@@ -38,9 +38,15 @@ export interface ConfigRecord {
     active: boolean;
     providers: ConfigProvider[];
     description?: string;
+    flags?: RuleFlags;
     // Smart routing fields
     smartEnabled?: boolean;
     smartRouting?: SmartRouting[];
+}
+
+export interface RuleFlags {
+    cursorCompat?: boolean;
+    cursorCompatAuto?: boolean;
 }
 
 export interface Rule {
@@ -50,6 +56,10 @@ export interface Rule {
     response_model?: string;
     active?: boolean;
     description?: string;
+    flags?: {
+        cursor_compat?: boolean;
+        cursor_compat_auto?: boolean;
+    };
     services?: Array<{
         id?: string;
         uuid?: string;

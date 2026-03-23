@@ -122,6 +122,11 @@ func ForwardOpenAIChatStream(fc *ForwardContext, wrapper *client.OpenAIClient, r
 
 	ctx, cancel := fc.PrepareContext(req)
 
+	// Apply provider-specific transformations
+	config := buildOpenAIConfig(req)
+	transformedReq := ops.ApplyProviderTransforms(req, fc.Provider.APIBase, string(req.Model), config)
+	*req = *transformedReq
+
 	stream := wrapper.ChatCompletionsNewStreaming(ctx, *req)
 	return stream, cancel, nil
 }
@@ -192,6 +197,16 @@ func buildOpenAIConfig(req *openai.ChatCompletionNewParams) *protocol.OpenAIConf
 
 	// Check if request has thinking configuration in extra_fields
 	extraFields := req.ExtraFields()
+	if extraFields == nil {
+		extraFields = map[string]interface{}{}
+	}
+	if cursorCompatRaw, ok := extraFields[cursorCompatExtraField]; ok {
+		if enabled, ok := cursorCompatRaw.(bool); ok && enabled {
+			config.CursorCompat = true
+		}
+		delete(extraFields, cursorCompatExtraField)
+		req.SetExtraFields(extraFields)
+	}
 	if thinking, ok := extraFields["thinking"]; ok {
 		if _, ok := thinking.(map[string]interface{}); ok {
 			config.HasThinking = true

@@ -15,6 +15,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -200,6 +201,8 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	isStreaming := req.Stream
 	actualModel := req.Model
 	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
+	cursorCompat := resolveCursorCompat(c, rule)
+	applyCursorCompatFlag(&req.ChatCompletionNewParams, cursorCompat)
 
 	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, isStreaming)
@@ -221,6 +224,16 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 		})
 		return
 	case protocol.APIStyleAnthropic:
+		// Apply cursor_compat content normalization before converting to Anthropic format
+		// This ensures rich content is flattened for all providers when cursor_compat is enabled
+		if cursorCompat {
+			ops.ApplyCursorCompatContentNormalization(&req.ChatCompletionNewParams)
+		}
+
+		// Align tool messages to ensure valid message sequence for OpenAI API compatibility
+		// This prevents "role 'tool' must be a response to preceding message with 'tool_calls'" errors
+		transform.AlignToolMessagesForOpenAI(&req.ChatCompletionNewParams)
+
 		anthropicReq := request.ConvertOpenAIToAnthropicRequest(&req.ChatCompletionNewParams, int64(maxAllowed))
 		if isStreaming {
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
@@ -242,9 +255,9 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 			}
 
 			// Get scenario config for DisableStreamUsage flag
-			disableStreamUsage := false
+			disableStreamUsage := cursorCompat
 			if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
-				disableStreamUsage = scenarioConfig.Flags.DisableStreamUsage
+				disableStreamUsage = disableStreamUsage || scenarioConfig.Flags.DisableStreamUsage
 			}
 
 			inputTokens, outputTokens, err := stream.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, streamResp, responseModel, disableStreamUsage)
@@ -310,6 +323,9 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 				}
 				openaiResp = roundtripped
 			}
+			if cursorCompat {
+				delete(openaiResp, "usage")
+			}
 			c.JSON(http.StatusOK, openaiResp)
 			return
 		}
@@ -324,11 +340,17 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 			return
 		}
 
+		// Cap max_tokens at the model's maximum to prevent API errors
+		// This is critical for providers like DeepSeek which have strict max_tokens limits
+		if req.MaxTokens.Valid() && req.MaxTokens.Value > int64(maxAllowed) {
+			req.MaxTokens.Value = int64(maxAllowed)
+		}
+
 		// Use Transform Chain for request transformation (Consistency + Vendor transforms)
 		// Note: Base transform is not needed since the request is already in OpenAI Chat format
 		// Chain: Consistency Transform → Vendor Transform
 		chain := transform.NewTransformChain([]transform.Transform{
-			//transform.NewConsistencyTransform(transform.TargetAPIStyleOpenAIChat),
+			transform.NewConsistencyTransform(transform.TargetAPIStyleOpenAIChat),
 			transform.NewVendorTransform(provider.APIBase),
 		})
 
@@ -363,14 +385,14 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 
 		if isStreaming {
 			// Get scenario config for DisableStreamUsage flag
-			disableStreamUsage := false
+			disableStreamUsage := cursorCompat
 			if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
-				disableStreamUsage = scenarioConfig.Flags.DisableStreamUsage
+				disableStreamUsage = disableStreamUsage || scenarioConfig.Flags.DisableStreamUsage
 			}
 
 			s.handleOpenAIChatStreamingRequest(c, provider, transformedReq, responseModel, shouldIntercept, shouldStripTools, disableStreamUsage)
 		} else {
-			s.handleNonStreamingRequest(c, provider, transformedReq, responseModel, shouldIntercept, shouldStripTools)
+			s.handleNonStreamingRequest(c, provider, transformedReq, responseModel, shouldIntercept, shouldStripTools, cursorCompat)
 		}
 	}
 }
