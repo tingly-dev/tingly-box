@@ -1,4 +1,5 @@
 import { OpenAI, Anthropic, Claude, Telegram, Feishu, Lark, DingTalk, Weixin } from '../components/BrandIcons';
+import tingyIcon from '../assets/logos/icon.png';
 import {
     AccountCircle as AccountIcon,
     AutoAwesome,
@@ -349,14 +350,9 @@ const Layout = ({ children }: LayoutProps) => {
                         sx={{
                             width: 36,
                             height: 36,
-                            borderRadius: 2,
-                            background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            color: 'white',
-                            fontWeight: 'bold',
-                            fontSize: '1.1rem',
                             textDecoration: 'none',
                             cursor: 'pointer',
                             transition: 'transform 0.2s',
@@ -365,7 +361,7 @@ const Layout = ({ children }: LayoutProps) => {
                             },
                         }}
                     >
-                        T
+                        <img src={tingyIcon} alt="Tingly-Box" style={{ width: 36, height: 36, borderRadius: 8 }} />
                     </Box>
                 </Tooltip>
             </Box>
