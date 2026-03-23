@@ -16,6 +16,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -499,7 +500,7 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 	// Anthropic v1 only adapts request history; the shared runtime owns all
 	// enablement checks and hook wiring after this point.
 	session := s.guardrailsSessionFromContext(c, actualModel, provider)
-	s.attachGuardrailsHooks(c, hc, session, guardrailsMessagesFromAnthropicV1(req.System, req.Messages))
+	s.attachGuardrailsHooks(c, hc, session, serverguardrails.MessagesFromAnthropicV1(req.System, req.Messages))
 
 	usageStat, err := stream.HandleAnthropicV1Stream(hc, req, streamResp)
 	s.trackUsageWithTokenUsage(c, usageStat, err)

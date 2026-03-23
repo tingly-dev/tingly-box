@@ -10,6 +10,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -52,65 +53,6 @@ func (s *Server) loadActiveMaskCredentials(session guardrailsSession) ([]guardra
 	return s.getCachedGuardrailsMaskCredentials(session.Scenario), nil
 }
 
-func collectMaskCredentialRefs(cfg guardrails.Config, scenario string) []string {
-	if len(cfg.Policies) == 0 {
-		return nil
-	}
-	groupByID := make(map[string]guardrails.PolicyGroup, len(cfg.Groups))
-	for _, group := range cfg.Groups {
-		groupByID[group.ID] = group
-	}
-	refs := make([]string, 0)
-	seen := make(map[string]struct{})
-	for _, policy := range cfg.Policies {
-		if policy.Kind != guardrails.PolicyKindContent {
-			continue
-		}
-		group, hasGroup := groupByID[policy.Group]
-		if hasGroup && group.Enabled != nil && !*group.Enabled {
-			continue
-		}
-		if policy.Enabled != nil && !*policy.Enabled {
-			continue
-		}
-		verdict := policy.Verdict
-		if verdict == "" && hasGroup {
-			verdict = group.DefaultVerdict
-		}
-		if verdict != guardrails.VerdictMask {
-			continue
-		}
-		scenarios := policy.Scope.Scenarios
-		if len(scenarios) == 0 && hasGroup {
-			scenarios = group.DefaultScope.Scenarios
-		}
-		if len(scenarios) > 0 && !containsString(scenarios, scenario) {
-			continue
-		}
-		for _, ref := range policy.Match.CredentialRefs {
-			trimmed := strings.TrimSpace(ref)
-			if trimmed == "" {
-				continue
-			}
-			if _, ok := seen[trimmed]; ok {
-				continue
-			}
-			seen[trimmed] = struct{}{}
-			refs = append(refs, trimmed)
-		}
-	}
-	return refs
-}
-
-func containsString(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
-}
-
 func (s *Server) applyGuardrailsCredentialMasksToV1Request(c *gin.Context, session guardrailsSession, req *anthropic.MessageNewParams) {
 	//roundPreview := currentAnthropicV1RoundPreview(req.Messages)
 	//logGuardrailsCredentialMaskRequest("v1", session, len(req.System), len(req.Messages), roundPreview)
@@ -141,7 +83,7 @@ func (s *Server) applyGuardrailsCredentialMasksToV1Request(c *gin.Context, sessi
 		}
 	}
 	if changed && latestBlockChanged {
-		input := s.buildGuardrailsBaseInput(session, guardrails.DirectionRequest, guardrailsMessagesFromAnthropicV1(req.System, req.Messages))
+		input := s.buildGuardrailsBaseInput(session, guardrails.DirectionRequest, serverguardrails.MessagesFromAnthropicV1(req.System, req.Messages))
 		s.recordGuardrailsMaskHistory(c, session, input, "request_mask")
 		logrus.Debugf("Guardrails credential mask applied (v1) refs=%d", len(state.UsedRefs))
 	}
@@ -181,7 +123,7 @@ func (s *Server) applyGuardrailsCredentialMasksToV1BetaRequest(c *gin.Context, s
 	// keeps history focused on the user-visible turn instead of repeated context
 	// replay.
 	if changed && latestBlockChanged {
-		input := s.buildGuardrailsBaseInput(session, guardrails.DirectionRequest, guardrailsMessagesFromAnthropicV1Beta(req.System, req.Messages))
+		input := s.buildGuardrailsBaseInput(session, guardrails.DirectionRequest, serverguardrails.MessagesFromAnthropicV1Beta(req.System, req.Messages))
 		s.recordGuardrailsMaskHistory(c, session, input, "request_mask")
 		logrus.Debugf("Guardrails credential mask applied (v1beta) refs=%d", len(state.UsedRefs))
 	}

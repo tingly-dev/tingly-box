@@ -1,159 +1,22 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
-	"os"
-	"reflect"
-	"sort"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
+	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
 )
-
-type guardrailsHistoryEntry struct {
-	Time            time.Time                 `json:"time"`
-	Scenario        string                    `json:"scenario"`
-	Model           string                    `json:"model"`
-	Provider        string                    `json:"provider"`
-	Direction       string                    `json:"direction"`
-	Phase           string                    `json:"phase"`
-	Verdict         string                    `json:"verdict"`
-	BlockMessage    string                    `json:"block_message,omitempty"`
-	Preview         string                    `json:"preview,omitempty"`
-	CommandName     string                    `json:"command_name,omitempty"`
-	CredentialRefs  []string                  `json:"credential_refs,omitempty"`
-	CredentialNames []string                  `json:"credential_names,omitempty"`
-	AliasHits       []string                  `json:"alias_hits,omitempty"`
-	Reasons         []guardrails.PolicyResult `json:"reasons,omitempty"`
-}
-
-type guardrailsHistoryStore struct {
-	mu         sync.RWMutex
-	maxEntries int
-	path       string
-	entries    []guardrailsHistoryEntry
-}
-
-func newGuardrailsHistoryStore(maxEntries int, path string) *guardrailsHistoryStore {
-	if maxEntries <= 0 {
-		maxEntries = 200
-	}
-
-	store := &guardrailsHistoryStore{
-		maxEntries: maxEntries,
-		path:       path,
-	}
-	store.load()
-	return store
-}
-
-func (s *guardrailsHistoryStore) load() {
-	if s.path == "" {
-		return
-	}
-
-	data, err := os.ReadFile(s.path)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			logrus.WithError(err).Warnf("Guardrails history: failed to read %s", s.path)
-		}
-		return
-	}
-
-	var entries []guardrailsHistoryEntry
-	if err := json.Unmarshal(data, &entries); err != nil {
-		logrus.WithError(err).Warnf("Guardrails history: failed to decode %s", s.path)
-		return
-	}
-
-	if len(entries) > s.maxEntries {
-		entries = entries[:s.maxEntries]
-	}
-
-	s.entries = entries
-}
-
-func (s *guardrailsHistoryStore) Add(entry guardrailsHistoryEntry) {
-	s.mu.Lock()
-	if len(s.entries) > 0 && sameGuardrailsHistoryEntry(s.entries[0], entry) {
-		s.mu.Unlock()
-		return
-	}
-	s.entries = append([]guardrailsHistoryEntry{entry}, s.entries...)
-	if len(s.entries) > s.maxEntries {
-		s.entries = s.entries[:s.maxEntries]
-	}
-	snapshot := append([]guardrailsHistoryEntry(nil), s.entries...)
-	s.mu.Unlock()
-
-	s.persist(snapshot)
-}
-
-func sameGuardrailsHistoryEntry(a, b guardrailsHistoryEntry) bool {
-	return a.Scenario == b.Scenario &&
-		a.Model == b.Model &&
-		a.Provider == b.Provider &&
-		a.Direction == b.Direction &&
-		a.Phase == b.Phase &&
-		a.Verdict == b.Verdict &&
-		a.BlockMessage == b.BlockMessage &&
-		a.Preview == b.Preview &&
-		a.CommandName == b.CommandName &&
-		reflect.DeepEqual(a.CredentialRefs, b.CredentialRefs) &&
-		reflect.DeepEqual(a.CredentialNames, b.CredentialNames) &&
-		reflect.DeepEqual(a.AliasHits, b.AliasHits) &&
-		reflect.DeepEqual(a.Reasons, b.Reasons)
-}
-
-func (s *guardrailsHistoryStore) List(limit int) []guardrailsHistoryEntry {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if limit <= 0 || limit > len(s.entries) {
-		limit = len(s.entries)
-	}
-	out := make([]guardrailsHistoryEntry, limit)
-	copy(out, s.entries[:limit])
-	return out
-}
-
-func (s *guardrailsHistoryStore) Clear() {
-	s.mu.Lock()
-	s.entries = nil
-	s.mu.Unlock()
-
-	s.persist([]guardrailsHistoryEntry{})
-}
-
-// History writes are intentionally best-effort. Guardrails enforcement should
-// keep working even if the local history file cannot be updated.
-func (s *guardrailsHistoryStore) persist(entries []guardrailsHistoryEntry) {
-	if s.path == "" {
-		return
-	}
-
-	data, err := json.MarshalIndent(entries, "", "  ")
-	if err != nil {
-		logrus.WithError(err).Warn("Guardrails history: failed to encode entries")
-		return
-	}
-	if err := writeFileAtomic(s.path, data); err != nil {
-		logrus.WithError(err).Warnf("Guardrails history: failed to persist %s", s.path)
-	}
-}
 
 func (s *Server) recordGuardrailsHistory(c *gin.Context, session guardrailsSession, input guardrails.Input, result guardrails.Result, phase, blockMessage string) {
 	if s.guardrailsHistory == nil {
 		return
 	}
 
-	credentialRefs := collectGuardrailsHistoryCredentialRefs(result)
-	entry := guardrailsHistoryEntry{
+	credentialRefs := serverguardrails.CollectHistoryCredentialRefs(result)
+	entry := serverguardrails.HistoryEntry{
 		Time:            time.Now(),
 		Scenario:        session.Scenario,
 		Model:           session.Model,
@@ -170,18 +33,18 @@ func (s *Server) recordGuardrailsHistory(c *gin.Context, session guardrailsSessi
 	if input.Content.Command != nil {
 		entry.CommandName = input.Content.Command.Name
 	}
-	s.guardrailsHistory.Add(entry)
+	s.guardrailsHistory.Add(entry, writeFileAtomic)
 }
 
 func (s *Server) recordGuardrailsMaskHistory(c *gin.Context, session guardrailsSession, input guardrails.Input, phase string) {
 	if s.guardrailsHistory == nil {
 		return
 	}
-	credentialRefs, aliasHits := collectGuardrailsMaskHistoryCredentialData(c)
+	credentialRefs, aliasHits := serverguardrails.CollectMaskHistoryCredentialData(c)
 	if len(credentialRefs) == 0 && len(aliasHits) == 0 {
 		return
 	}
-	entry := guardrailsHistoryEntry{
+	entry := serverguardrails.HistoryEntry{
 		Time:            time.Now(),
 		Scenario:        session.Scenario,
 		Model:           session.Model,
@@ -197,75 +60,7 @@ func (s *Server) recordGuardrailsMaskHistory(c *gin.Context, session guardrailsS
 	if input.Content.Command != nil {
 		entry.CommandName = input.Content.Command.Name
 	}
-	s.guardrailsHistory.Add(entry)
-}
-
-func collectGuardrailsHistoryCredentialRefs(result guardrails.Result) []string {
-	refSet := make(map[string]struct{})
-
-	for _, reason := range result.Reasons {
-		rawRefs, ok := reason.Evidence["credential_refs"]
-		if !ok {
-			continue
-		}
-		switch typed := rawRefs.(type) {
-		case []string:
-			for _, ref := range typed {
-				if ref != "" {
-					refSet[ref] = struct{}{}
-				}
-			}
-		case []interface{}:
-			for _, item := range typed {
-				if ref, ok := item.(string); ok && ref != "" {
-					refSet[ref] = struct{}{}
-				}
-			}
-		}
-	}
-
-	return sortedKeys(refSet)
-}
-
-func collectGuardrailsMaskHistoryCredentialData(c *gin.Context) ([]string, []string) {
-	if c == nil {
-		return nil, nil
-	}
-
-	existing, ok := c.Get(guardrails.CredentialMaskStateContextKey)
-	if !ok {
-		return nil, nil
-	}
-	state, ok := existing.(*guardrails.CredentialMaskState)
-	if !ok || state == nil {
-		return nil, nil
-	}
-
-	refSet := make(map[string]struct{})
-	aliasSet := make(map[string]struct{})
-	for _, ref := range state.UsedRefs {
-		if ref != "" {
-			refSet[ref] = struct{}{}
-		}
-	}
-	for alias := range state.AliasToReal {
-		if alias != "" {
-			aliasSet[alias] = struct{}{}
-		}
-	}
-	return sortedKeys(refSet), sortedKeys(aliasSet)
-}
-
-func sortedKeys(values map[string]struct{}) []string {
-	if len(values) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(values))
-	for value := range values {
-		out = append(out, value)
-	}
-	sort.Strings(out)
-	return out
+	s.guardrailsHistory.Add(entry, writeFileAtomic)
 }
 
 func (s *Server) resolveGuardrailsCredentialNames(ids []string) []string {
@@ -276,7 +71,7 @@ func (s *Server) GetGuardrailsHistory(c *gin.Context) {
 	if s.guardrailsHistory == nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
-			"data":    []guardrailsHistoryEntry{},
+			"data":    []serverguardrails.HistoryEntry{},
 		})
 		return
 	}
@@ -288,7 +83,7 @@ func (s *Server) GetGuardrailsHistory(c *gin.Context) {
 
 func (s *Server) ClearGuardrailsHistory(c *gin.Context) {
 	if s.guardrailsHistory != nil {
-		s.guardrailsHistory.Clear()
+		s.guardrailsHistory.Clear(writeFileAtomic)
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

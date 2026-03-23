@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
+	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
 )
 
 type protectedCredentialResponse struct {
@@ -58,7 +59,7 @@ func (s *Server) guardrailsCredentialStore() (*guardrails.ProtectedCredentialSto
 	if s.config == nil || s.config.ConfigDir == "" {
 		return nil, errors.New("config directory not set")
 	}
-	return guardrails.NewProtectedCredentialStore(getGuardrailsDBPath(s.config.ConfigDir)), nil
+	return guardrails.NewProtectedCredentialStore(serverguardrails.GetGuardrailsDBPath(s.config.ConfigDir)), nil
 }
 
 func toProtectedCredentialResponse(credential guardrails.ProtectedCredential) protectedCredentialResponse {

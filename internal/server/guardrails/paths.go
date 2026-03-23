@@ -1,4 +1,4 @@
-package server
+package serverguardrails
 
 import (
 	"fmt"
@@ -14,28 +14,28 @@ const (
 	guardrailsHistoryFileName = "history.json"
 )
 
-func getGuardrailsDir(configDir string) string {
+func GetGuardrailsDir(configDir string) string {
 	return filepath.Join(configDir, guardrailsDirName)
 }
 
-func getGuardrailsConfigPath(configDir string) string {
-	return filepath.Join(getGuardrailsDir(configDir), guardrailsConfigBaseName+".yaml")
+func GetGuardrailsConfigPath(configDir string) string {
+	return filepath.Join(GetGuardrailsDir(configDir), guardrailsConfigBaseName+".yaml")
 }
 
-func getGuardrailsHistoryPath(configDir string) string {
-	return filepath.Join(getGuardrailsDir(configDir), guardrailsHistoryFileName)
+func GetGuardrailsHistoryPath(configDir string) string {
+	return filepath.Join(GetGuardrailsDir(configDir), guardrailsHistoryFileName)
 }
 
-func getGuardrailsDBDir(configDir string) string {
-	return filepath.Join(getGuardrailsDir(configDir), guardrailsDBDirName)
+func GetGuardrailsDBDir(configDir string) string {
+	return filepath.Join(GetGuardrailsDir(configDir), guardrailsDBDirName)
 }
 
-func getGuardrailsDBPath(configDir string) string {
-	return filepath.Join(getGuardrailsDBDir(configDir), guardrailsDBFileName)
+func GetGuardrailsDBPath(configDir string) string {
+	return filepath.Join(GetGuardrailsDBDir(configDir), guardrailsDBFileName)
 }
 
 func guardrailsConfigCandidates(configDir string) []string {
-	newDir := getGuardrailsDir(configDir)
+	newDir := GetGuardrailsDir(configDir)
 	return []string{
 		filepath.Join(newDir, guardrailsConfigBaseName+".yaml"),
 		filepath.Join(newDir, guardrailsConfigBaseName+".yml"),
@@ -48,7 +48,7 @@ func guardrailsConfigCandidates(configDir string) []string {
 	}
 }
 
-func findGuardrailsConfig(configDir string) (string, error) {
+func FindGuardrailsConfig(configDir string) (string, error) {
 	if configDir == "" {
 		return "", fmt.Errorf("config dir is empty")
 	}
@@ -59,5 +59,5 @@ func findGuardrailsConfig(configDir string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("no guardrails config in %s", getGuardrailsDir(configDir))
+	return "", fmt.Errorf("no guardrails config in %s", GetGuardrailsDir(configDir))
 }
