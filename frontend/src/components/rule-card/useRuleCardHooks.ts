@@ -111,6 +111,10 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
                     response_model: newConfigRecord.responseModel,
                     active: newConfigRecord.active,
                     description: newConfigRecord.description,
+                    flags: {
+                        cursor_compat: newConfigRecord.flags?.cursorCompat || false,
+                        cursor_compat_auto: newConfigRecord.flags?.cursorCompatAuto || false,
+                    },
                     services: newConfigRecord.providers
                         .filter((p) => p.provider && p.model)
                         .map((provider) => ({
@@ -133,6 +137,7 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
                         response_model: ruleData.response_model,
                         active: ruleData.active,
                         description: ruleData.description,
+                        flags: ruleData.flags,
                         services: ruleData.services,
                         smart_enabled: ruleData.smart_enabled,
                         smart_routing: ruleData.smart_routing,

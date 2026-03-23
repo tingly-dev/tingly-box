@@ -98,7 +98,7 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 					},
 				},
 			}
-			sendOpenAIStreamChunk(c, chunk)
+			sendOpenAIStreamChunk(c, chunk, disableStreamUsage)
 
 		case "content_block_start":
 			// Content block starting
@@ -136,7 +136,7 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 						},
 					},
 				}
-				sendOpenAIStreamChunk(c, chunk)
+				sendOpenAIStreamChunk(c, chunk, disableStreamUsage)
 			} else if event.ContentBlock.Type == "thinking" {
 				// Thinking block starting - reset thinking builder
 				thinkingText.Reset()
@@ -165,7 +165,7 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 						},
 					},
 				}
-				sendOpenAIStreamChunk(c, chunk)
+				sendOpenAIStreamChunk(c, chunk, disableStreamUsage)
 			} else if event.Delta.Type == "input_json_delta" && event.Delta.PartialJSON != "" {
 				// Tool call arguments delta
 				args := event.Delta.PartialJSON
@@ -192,7 +192,7 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 						},
 					},
 				}
-				sendOpenAIStreamChunk(c, chunk)
+				sendOpenAIStreamChunk(c, chunk, disableStreamUsage)
 			} else if event.Delta.Type == "thinking_delta" && event.Delta.Thinking != "" {
 				// Thinking content delta - convert to OpenAI's reasoning_content format
 				thinking := event.Delta.Thinking
@@ -200,7 +200,7 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 
 				// Send as reasoning_content - use custom chunk creation since reasoning_content is not a standard field
 				chunk := createReasoningContentChunk(chatID, created, responseModel, thinking)
-				sendOpenAIStreamChunk(c, chunk)
+				sendOpenAIStreamChunk(c, chunk, disableStreamUsage)
 			}
 			// Note: signature_delta is intentionally ignored as OpenAI doesn't have an equivalent
 
@@ -253,7 +253,7 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 				}
 			}
 
-			sendOpenAIStreamChunk(c, chunk)
+			sendOpenAIStreamChunk(c, chunk, disableStreamUsage)
 			// Send final [DONE] message
 			// MENTION: must keep extra space (matching openai_chat.go:462)
 			c.SSEvent("", " [DONE]")
@@ -289,8 +289,19 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 }
 
 // sendOpenAIStreamChunk sends a ChatCompletionChunk as SSE
-func sendOpenAIStreamChunk(c *gin.Context, chunk openai.ChatCompletionChunk) {
-	chunkJSON, err := json.Marshal(chunk)
+func sendOpenAIStreamChunk(c *gin.Context, chunk openai.ChatCompletionChunk, disableStreamUsage bool) {
+	chunkMap, err := chunkToMap(chunk)
+	if err != nil {
+		logrus.Errorf("Failed to convert chunk to map: %v", err)
+		return
+	}
+
+	// Cursor compatibility path must not expose usage in stream chunks.
+	if disableStreamUsage {
+		delete(chunkMap, "usage")
+	}
+
+	chunkJSON, err := json.Marshal(chunkMap)
 	if err != nil {
 		logrus.Errorf("Failed to marshal chunk: %v", err)
 		return
@@ -300,6 +311,18 @@ func sendOpenAIStreamChunk(c *gin.Context, chunk openai.ChatCompletionChunk) {
 	if flusher, ok := c.Writer.(http.Flusher); ok {
 		flusher.Flush()
 	}
+}
+
+func chunkToMap(chunk openai.ChatCompletionChunk) (map[string]interface{}, error) {
+	bytes, err := json.Marshal(chunk)
+	if err != nil {
+		return nil, err
+	}
+	var chunkMap map[string]interface{}
+	if err := json.Unmarshal(bytes, &chunkMap); err != nil {
+		return nil, err
+	}
+	return chunkMap, nil
 }
 
 // sendOpenAIStreamChunk helper function to send a chunk in OpenAI format

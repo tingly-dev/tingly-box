@@ -25,7 +25,7 @@ import (
 )
 
 // handleNonStreamingRequest handles non-streaming chat completion requests
-func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, shouldIntercept, shouldStripTools bool) {
+func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, shouldIntercept, shouldStripTools bool, stripUsage bool) {
 	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
 	req := originalReq
 	if shouldIntercept {
@@ -93,6 +93,9 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 				var responseMap map[string]interface{}
 				json.Unmarshal(responseJSON, &responseMap)
 				responseMap["model"] = responseModel
+				if stripUsage {
+					delete(responseMap, "usage")
+				}
 				c.JSON(http.StatusOK, responseMap)
 				return
 			}
@@ -133,6 +136,9 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 
 	// Update response model if configured
 	responseMap["model"] = responseModel
+	if stripUsage {
+		delete(responseMap, "usage")
+	}
 
 	if ShouldRoundtripResponse(c, "anthropic") {
 		roundtripped, err := RoundtripOpenAIResponseViaAnthropic(response, responseModel, provider, req.Model)
@@ -147,6 +153,9 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 		}
 		responseMap = roundtripped
 		responseMap["model"] = responseModel
+		if stripUsage {
+			delete(responseMap, "usage")
+		}
 	}
 
 	// Return modified response

@@ -5,6 +5,7 @@ import {
     Delete as DeleteIcon,
     Download as ExportIcon,
     Download as DownloadIcon,
+    Edit as EditIcon,
     PlayArrow as ProbeIcon,
     Settings as SettingsIcon,
     UnfoldMore as ExportMenuIcon,
@@ -22,11 +23,16 @@ export interface GraphSettingsMenuProps {
     active: boolean;
     allowToggleRule: boolean;
     saving: boolean;
+    cursorCompatEnabled?: boolean;
+    cursorCompatAutoEnabled?: boolean;
     onExport: (format: ExportFormat) => void;
     onExportAsJsonlToClipboard?: () => void;
     onExportAsBase64ToClipboard?: () => void;
     onDelete: () => void;
     onToggleActive: () => void;
+    onToggleCursorCompat?: () => void;
+    onToggleCursorCompatAuto?: () => void;
+    onEditFlags?: () => void;
     // Probe V2 props
     ruleUuid?: string;
     ruleName?: string;
@@ -39,11 +45,16 @@ export const GraphSettingsMenu = ({
     active,
     allowToggleRule,
     saving,
+    cursorCompatEnabled,
+    cursorCompatAutoEnabled,
     onExport,
     onExportAsJsonlToClipboard,
     onExportAsBase64ToClipboard,
     onDelete,
     onToggleActive,
+    onToggleCursorCompat,
+    onToggleCursorCompatAuto,
+    onEditFlags,
     ruleUuid,
     ruleName,
     scenario,
@@ -108,6 +119,40 @@ export const GraphSettingsMenu = ({
                         </>
                     )}
                 </MenuItem>
+
+                {onToggleCursorCompat && (
+                    <MenuItem onClick={() => { closeMenu(); onToggleCursorCompat(); }}>
+                        {cursorCompatEnabled ? (
+                            <>
+                                <ActiveIcon fontSize="small" sx={{ mr: 1 }} />Cursor Compatibility: On
+                            </>
+                        ) : (
+                            <>
+                                <InactiveIcon fontSize="small" sx={{ mr: 1 }} />Cursor Compatibility: Off
+                            </>
+                        )}
+                    </MenuItem>
+                )}
+
+                {onToggleCursorCompatAuto && (
+                    <MenuItem onClick={() => { closeMenu(); onToggleCursorCompatAuto(); }}>
+                        {cursorCompatAutoEnabled ? (
+                            <>
+                                <ActiveIcon fontSize="small" sx={{ mr: 1 }} />Cursor Auto-Detect: On
+                            </>
+                        ) : (
+                            <>
+                                <InactiveIcon fontSize="small" sx={{ mr: 1 }} />Cursor Auto-Detect: Off
+                            </>
+                        )}
+                    </MenuItem>
+                )}
+
+                {onEditFlags && (
+                    <MenuItem onClick={() => { closeMenu(); onEditFlags(); }}>
+                        <EditIcon fontSize="small" sx={{ mr: 1 }} />Edit flag
+                    </MenuItem>
+                )}
 
                 {allowDeleteRule && (
                     <MenuItem onClick={() => { closeMenu(); onDelete(); }} sx={{ color: 'error.main' }}>
