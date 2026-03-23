@@ -92,18 +92,17 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	}
 
 	// Ensure max_tokens is set (Anthropic API requires this)
-	// and cap it at the model's maximum allowed value
-	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
-		// for thinking, max tokens should be larger than thinking budget
-	} else {
-		if req.MaxTokens == 0 {
-			req.MaxTokens = int64(s.config.GetDefaultMaxTokens())
-		}
-		// Cap max_tokens at the model's maximum to prevent API errors
-		maxAllowed := s.templateManager.GetMaxTokensForModel(provider.Name, actualModel)
-		if req.MaxTokens > int64(maxAllowed) {
-			req.MaxTokens = int64(maxAllowed)
-		}
+	// and cap it at the model's maximum allowed value.
+	if req.MaxTokens == 0 {
+		req.MaxTokens = int64(s.config.GetDefaultMaxTokens())
+	}
+	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
+	if req.MaxTokens > int64(maxAllowed) {
+		req.MaxTokens = int64(maxAllowed)
+	}
+	// If thinking carries budget_tokens beyond model max, shrink budget to max_allowed/10.
+	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil && *thinkBudget > int64(maxAllowed) {
+		req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(int64(maxAllowed / 10))
 	}
 
 	// Set provider UUID in context (Service.Provider uses UUID, not name)
