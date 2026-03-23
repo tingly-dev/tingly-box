@@ -24,8 +24,8 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// ResponsesCreate handles POST /v1/responses
-func (s *Server) ResponsesCreate(c *gin.Context) {
+// HandleResponsesCreate handles POST /v1/responses
+func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	scenario := c.Param("scenario")
 
 	// Read raw body
@@ -141,6 +141,14 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 		}
 	}
 
+	req.ResponseNewParams = params
+	// req.Model is replaced with actualModel (resolved backend model) from this point on
+	req.Model = actualModel
+	s.ResponsesCreate(c, scenarioType, provider, req, rule.RequestModel)
+}
+
+func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, provider *typ.Provider, req protocol.ResponseCreateRequest, responseModel string) {
+
 	// Check provider API style - only OpenAI-style providers support Responses API
 	if provider.APIStyle != protocol.APIStyleOpenAI {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -155,11 +163,11 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 	// For direct /responses requests, verify that the selected provider actually
 	// supports the Responses API unless it's the known ChatGPT backend special case.
 	if provider.APIBase != protocol.CodexAPIBase {
-		preferredEndpoint := NewAdaptiveProbe(s).GetPreferredEndpoint(provider, actualModel)
+		preferredEndpoint := NewAdaptiveProbe(s).GetPreferredEndpoint(provider, req.Model)
 		if preferredEndpoint != "responses" {
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
-					Message: fmt.Sprintf("Selected provider '%s' for model '%s' does not support the Responses API; preferred endpoint is '%s'", provider.Name, actualModel, preferredEndpoint),
+					Message: fmt.Sprintf("Selected provider '%s' for model '%s' does not support the Responses API; preferred endpoint is '%s'", provider.Name, req.Model, preferredEndpoint),
 					Type:    "invalid_request_error",
 					Code:    "responses_not_supported",
 				},
@@ -183,8 +191,8 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 	}
 
 	transformCtx := &transform.TransformContext{
-		OriginalRequest: &params,
-		Request:         &params,
+		OriginalRequest: &req.ResponseNewParams,
+		Request:         &req.ResponseNewParams,
 		ProviderURL:     provider.APIBase,
 		ScenarioFlags:   scenarioFlags,
 		IsStreaming:     req.Stream,
@@ -207,9 +215,9 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 
 	// Handle streaming or non-streaming
 	if req.Stream {
-		s.handleResponsesStreamingRequest(c, provider, *transformedParams, req.Model, actualModel)
+		s.handleResponsesStreamingRequest(c, provider, *transformedParams, responseModel, req.Model)
 	} else {
-		s.handleResponsesNonStreamingRequest(c, provider, *transformedParams, req.Model, actualModel)
+		s.handleResponsesNonStreamingRequest(c, provider, *transformedParams, responseModel, req.Model)
 	}
 }
 

@@ -379,22 +379,6 @@ const BotPage = () => {
                 )}
             </UnifiedCard>
 
-
-            {/* Platform Guide Card */}
-            <UnifiedCard
-                title="Platform Configuration Guide"
-                subtitle="How to configure different IM platforms"
-                sx={{ mb: 2 }}
-                size="full"
-            >
-                <PlatformGuide
-                    expanded={guideExpanded}
-                    onChange={(panel: string) => (_event: React.SyntheticEvent, isExpanded: boolean) => {
-                        setGuideExpanded(isExpanded ? panel : false);
-                    }}
-                />
-            </UnifiedCard>
-
             {/* Bot Add/Edit Dialog */}
             <Modal open={botTokenDialogOpen} onClose={() => setBotTokenDialogOpen(false)}>
                 <Stack

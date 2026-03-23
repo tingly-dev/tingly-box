@@ -20,8 +20,8 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// anthropicMessagesV1 implements standard v1 messages API
-func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, provider *typ.Provider, actualModel string, rule *typ.Rule) {
+// AnthropicMessagesV1 implements standard v1 messages API
+func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, provider *typ.Provider, actualModel string, rule *typ.Rule) {
 	// Get or create recorder for dual-stage recording (when V2 flag is enabled)
 	var recorder *ProtocolRecorder
 	scenarioType := rule.GetScenario()
@@ -369,8 +369,8 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		}
 
 		transformCtx := &transform.TransformContext{
-			OriginalRequest: req.MessageNewParams,
-			Request:         req.MessageNewParams, // Original Anthropic request
+			OriginalRequest: &req.MessageNewParams,
+			Request:         &req.MessageNewParams, // Original Anthropic request
 			ProviderURL:     provider.APIBase,
 			ScenarioFlags:   scenarioFlags,
 			IsStreaming:     isStreaming,

@@ -1,4 +1,5 @@
-import { OpenAI, Anthropic, Claude } from '../components/BrandIcons';
+import { OpenAI, Anthropic, Claude, Telegram, Feishu, Lark, DingTalk, Weixin } from '../components/BrandIcons';
+import tingyIcon from '../assets/logos/icon.png';
 import {
     AccountCircle as AccountIcon,
     AutoAwesome,
@@ -20,7 +21,6 @@ import {
     Today as TodayIcon,
     Send as UserPromptIcon,
     Extension as VSCodeIcon,
-    Security,
     Rule,
     Storefront,
     History as HistoryIcon,
@@ -230,20 +230,42 @@ const Layout = ({ children }: LayoutProps) => {
                 icon: <RemoteIcon sx={{fontSize: 22}}/>,
                 label: 'Remote',
                 children: [
-                    // {
-                    //     path: '/remote-control',
-                    //     label: 'Overview',
-                    //     icon: <RemoteIcon sx={{fontSize: 20}}/>,
-                    // },
                     {
                         path: '/remote-control/bot',
-                        label: 'IM Bot',
+                        label: 'Overview',
                         icon: <ChatBubble sx={{fontSize: 20}}/>,
                     },
+                    // {
+                    //     path: '/remote-control/agent',
+                    //     label: 'Agent Assistant',
+                    //     icon: <AutoAwesome sx={{fontSize: 20}}/>,
+                    // },
+                    // {
+                    //     divider: true,
+                    //     path: '/remote-control/weixin',
+                    //     label: 'Weixin',
+                    //     icon: <Weixin size={20}/>,
+                    // },
                     {
-                        path: '/remote-control/agent',
-                        label: 'Agent Assistant',
-                        icon: <AutoAwesome sx={{fontSize: 20}}/>,
+                        divider: true,
+                        path: '/remote-control/telegram',
+                        label: 'Telegram',
+                        icon: <Telegram size={20}/>,
+                    },
+                    {
+                        path: '/remote-control/feishu',
+                        label: 'Feishu',
+                        icon: <Feishu size={20}/>,
+                    },
+                    {
+                        path: '/remote-control/lark',
+                        label: 'Lark',
+                        icon: <Lark size={20}/>,
+                    },
+                    {
+                        path: '/remote-control/dingtalk',
+                        label: 'DingTalk',
+                        icon: <DingTalk size={20}/>,
                     },
                 ],
             }] : []),
@@ -365,14 +387,9 @@ const Layout = ({ children }: LayoutProps) => {
                         sx={{
                             width: 36,
                             height: 36,
-                            borderRadius: 2,
-                            background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            color: 'white',
-                            fontWeight: 'bold',
-                            fontSize: '1.1rem',
                             textDecoration: 'none',
                             cursor: 'pointer',
                             transition: 'transform 0.2s',
@@ -381,7 +398,7 @@ const Layout = ({ children }: LayoutProps) => {
                             },
                         }}
                     >
-                        T
+                        <img src={tingyIcon} alt="Tingly-Box" style={{ width: 36, height: 36, borderRadius: 8 }} />
                     </Box>
                 </Tooltip>
             </Box>

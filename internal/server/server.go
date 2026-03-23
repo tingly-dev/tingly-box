@@ -140,6 +140,10 @@ type Server struct {
 	remoteCoderCancel context.CancelFunc
 	remoteCoderMu     sync.Mutex
 
+	// custom auth middleware (optional, for TBE integration)
+	customUserAuthMiddleware  gin.HandlerFunc // For Web UI routes
+	customModelAuthMiddleware gin.HandlerFunc // For Model API routes
+
 	version string
 }
 
@@ -870,51 +874,51 @@ func (s *Server) UseAIEndpoints() {
 
 func (s *Server) SetupMixinEndpoints(group *gin.RouterGroup) {
 	// Chat completions endpoint (OpenAI compatible)
-	group.POST("/chat/completions", s.authMW.ModelAuthMiddleware(), s.OpenAIChatCompletions)
+	group.POST("/chat/completions", s.getModelAuthMiddleware(), s.HandleOpenAIChatCompletions)
 
 	// Responses API endpoints (OpenAI compatible)
-	group.POST("/responses", s.authMW.ModelAuthMiddleware(), s.ResponsesCreate)
-	group.GET("/responses/:id", s.authMW.ModelAuthMiddleware(), s.ResponsesGet)
+	group.POST("/responses", s.getModelAuthMiddleware(), s.HandleResponsesCreate)
+	group.GET("/responses/:id", s.getModelAuthMiddleware(), s.ResponsesGet)
 
 	// Chat completions endpoint (Anthropic compatible)
-	group.POST("/messages", s.authMW.ModelAuthMiddleware(), s.AnthropicMessages)
+	group.POST("/messages", s.getModelAuthMiddleware(), s.HandleAnthropicMessages)
 	// Count tokens endpoint (Anthropic compatible)
-	group.POST("/messages/count_tokens", s.authMW.ModelAuthMiddleware(), s.AnthropicCountTokens)
+	group.POST("/messages/count_tokens", s.getModelAuthMiddleware(), s.AnthropicCountTokens)
 
 	// Models endpoint (routed by scenario: openai -> OpenAIListModels, anthropic/claude_code -> AnthropicListModels)
-	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.ListModelsByScenario)
+	group.GET("/models", s.getModelAuthMiddleware(), s.ListModelsByScenario)
 }
 
 func (s *Server) SetupOpenAIEndpoints(group *gin.RouterGroup) {
 	// Chat completions endpoint (OpenAI compatible)
-	group.POST("/chat/completions", s.authMW.ModelAuthMiddleware(), s.OpenAIChatCompletions)
+	group.POST("/chat/completions", s.getModelAuthMiddleware(), s.HandleOpenAIChatCompletions)
 	// Models endpoint (OpenAI compatible)
-	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.OpenAIListModels)
+	group.GET("/models", s.getModelAuthMiddleware(), s.OpenAIListModels)
 
 	// Responses API endpoints (OpenAI compatible)
-	group.POST("/responses", s.authMW.ModelAuthMiddleware(), s.ResponsesCreate)
-	group.GET("/responses/:id", s.authMW.ModelAuthMiddleware(), s.ResponsesGet)
+	group.POST("/responses", s.getModelAuthMiddleware(), s.HandleResponsesCreate)
+	group.GET("/responses/:id", s.getModelAuthMiddleware(), s.ResponsesGet)
 }
 
 func (s *Server) SetupAnthropicEndpoints(group *gin.RouterGroup) {
 	// Chat completions endpoint (Anthropic compatible)
-	group.POST("/messages", s.authMW.ModelAuthMiddleware(), s.AnthropicMessages)
+	group.POST("/messages", s.getModelAuthMiddleware(), s.HandleAnthropicMessages)
 	// Count tokens endpoint (Anthropic compatible)
-	group.POST("/messages/count_tokens", s.authMW.ModelAuthMiddleware(), s.AnthropicCountTokens)
+	group.POST("/messages/count_tokens", s.getModelAuthMiddleware(), s.AnthropicCountTokens)
 	// Models endpoint (Anthropic compatible)
-	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.AnthropicListModels)
+	group.GET("/models", s.getModelAuthMiddleware(), s.AnthropicListModels)
 }
 
 // SetupPassthroughOpenAIEndpoints sets up pass-through endpoints for OpenAI-style requests
 // These endpoints bypass request/response transformations and only replace the model name
 func (s *Server) SetupPassthroughOpenAIEndpoints(group *gin.RouterGroup) {
 	// POST endpoints that use passthrough (proxy with model replacement)
-	group.POST("/chat/completions", s.authMW.ModelAuthMiddleware(), s.PassthroughOpenAI)
-	group.POST("/responses", s.authMW.ModelAuthMiddleware(), s.PassthroughOpenAI)
+	group.POST("/chat/completions", s.getModelAuthMiddleware(), s.PassthroughOpenAI)
+	group.POST("/responses", s.getModelAuthMiddleware(), s.PassthroughOpenAI)
 	// GET responses/:id also uses passthrough
-	group.GET("/responses/*path", s.authMW.ModelAuthMiddleware(), s.PassthroughOpenAI)
+	group.GET("/responses/*path", s.getModelAuthMiddleware(), s.PassthroughOpenAI)
 	// Models endpoint returns tingly-box's model list (not passthrough)
-	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.OpenAIListModels)
+	group.GET("/models", s.getModelAuthMiddleware(), s.OpenAIListModels)
 }
 
 // contextMiddleware is a middleware that extracts the scenario parameter from the URL path
@@ -930,10 +934,10 @@ func contextMiddleware(c *gin.Context) {
 // These endpoints bypass request/response transformations and only replace the model name
 func (s *Server) SetupPassthroughAnthropicEndpoints(group *gin.RouterGroup) {
 	// POST endpoints that use passthrough (proxy with model replacement)
-	group.POST("/messages", s.authMW.ModelAuthMiddleware(), s.PassthroughAnthropic)
-	group.POST("/messages/count_tokens", s.authMW.ModelAuthMiddleware(), s.PassthroughAnthropic)
+	group.POST("/messages", s.getModelAuthMiddleware(), s.PassthroughAnthropic)
+	group.POST("/messages/count_tokens", s.getModelAuthMiddleware(), s.PassthroughAnthropic)
 	// Models endpoint returns tingly-box's model list (not passthrough)
-	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.AnthropicListModels)
+	group.GET("/models", s.getModelAuthMiddleware(), s.AnthropicListModels)
 }
 
 // UseVirtualModelEndpoints sets up virtual model endpoints for testing

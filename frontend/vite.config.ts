@@ -59,19 +59,34 @@ export default defineConfig(({ mode }) => {
                 output: {
                     manualChunks: (id) => {
                         if (id.includes('node_modules')) {
-                            // MUI packages - depend on react
+                            // MUI packages
                             if (id.includes('@mui/material') || id.includes('@mui/system') || id.includes('@mui/utils')) {
                                 return 'mui-vendor';
                             }
                             if (id.includes('@mui/icons-material')) {
                                 return 'mui-icons-vendor';
                             }
-                            // Recharts - depends on react and d3
+                            // Recharts + d3
                             if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-')) {
                                 return 'recharts-vendor';
                             }
                         }
-                        // Let Rollup handle non-node_modules modules automatically
+                        // App pages chunked by feature area
+                        if (id.includes('/pages/remote-control/')) {
+                            return 'pages-remote-control';
+                        }
+                        if (id.includes('/pages/remote-coder/')) {
+                            return 'pages-remote-coder';
+                        }
+                        if (id.includes('/pages/scenario/')) {
+                            return 'pages-scenario';
+                        }
+                        if (id.includes('/pages/prompt/')) {
+                            return 'pages-prompt';
+                        }
+                        if (id.includes('/pages/overview/') || id.includes('/pages/system/')) {
+                            return 'pages-misc';
+                        }
                         return undefined;
                     },
                 },

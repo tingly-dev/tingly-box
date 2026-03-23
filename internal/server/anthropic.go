@@ -32,9 +32,9 @@ type (
 	}
 )
 
-// AnthropicMessages handles Anthropic v1 messages API requests
+// HandleAnthropicMessages handles Anthropic v1 messages API requests
 // This is the entry point that delegates to the appropriate implementation (v1 or beta)
-func (s *Server) AnthropicMessages(c *gin.Context) {
+func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 	scenario := c.Param("scenario")
 	scenarioType := typ.RuleScenario(scenario)
 
@@ -76,13 +76,13 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
 	}
 
-	// Determine provider & model
+	// Determine provider & requestModel
 	var (
 		provider        *typ.Provider
 		selectedService *loadbalance.Service
 		rule            *typ.Rule
 	)
-	var model string
+	var requestModel string
 	var reqParams interface{} // For smart routing context extraction
 
 	var betaMessages protocol.AnthropicBetaMessagesRequest
@@ -101,7 +101,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 			})
 			return
 		}
-		model = string(betaMessages.Model)
+		requestModel = string(betaMessages.Model)
 		reqParams = &betaMessages.BetaMessageNewParams
 
 	} else {
@@ -119,12 +119,12 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 			return
 		}
 
-		model = string(messages.Model)
+		requestModel = string(messages.Model)
 		reqParams = &messages.MessageNewParams
 	}
 
-	// Check if this is the request model name first
-	rule, err = s.determineRuleWithScenario(c, scenarioType, model)
+	// Check if this is the request requestModel name first
+	rule, err = s.determineRuleWithScenario(c, scenarioType, requestModel)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -158,6 +158,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		c.Set("rule", rule)
 	}
 
+	actualModel := selectedService.Model
 	// Delegate to the appropriate implementation based on beta parameter
 	if beta {
 
@@ -167,7 +168,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 			tf.HandleV1Beta(&betaMessages.BetaMessageNewParams)
 			logrus.Infoln("smart compact triggered")
 		}
-		s.anthropicMessagesV1Beta(c, betaMessages, model, provider, selectedService.Model, rule)
+		s.AnthropicMessagesV1Beta(c, betaMessages, requestModel, provider, actualModel, rule)
 
 	} else {
 
@@ -177,7 +178,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 			tf.HandleV1(&messages.MessageNewParams)
 			logrus.Infoln("smart compact triggered")
 		}
-		s.anthropicMessagesV1(c, messages, model, provider, selectedService.Model, rule)
+		s.AnthropicMessagesV1(c, messages, requestModel, provider, actualModel, rule)
 	}
 }
 

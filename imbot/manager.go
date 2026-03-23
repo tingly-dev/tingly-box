@@ -176,6 +176,13 @@ func (m *Manager) GetBot(uuid string, platform Platform) core.Bot {
 	return bot
 }
 
+// GetBotByUUID returns a bot by its UUID without platform verification
+func (m *Manager) GetBotByUUID(uuid string) core.Bot {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.bots[uuid]
+}
+
 // Start starts the manager and connects all enabled bots
 func (m *Manager) Start(ctx context.Context) error {
 	m.mu.Lock()

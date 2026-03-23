@@ -65,17 +65,25 @@ func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNe
 				hasUsage = true
 			}
 
-			eventMap, err := toEventMap(evt, evt.Type)
-			if err != nil {
-				return err
-			}
-			restoreCredentialAliasesInEventMap(hc.GinContext, eventMap)
+			if shouldRewriteAnthropicEvent(hc.GinContext, evt.Type, evt.ContentBlock) {
+				eventMap, err := toEventMap(evt, evt.Type)
+				if err != nil {
+					return err
+				}
+				restoreCredentialAliasesInEventMap(hc.GinContext, eventMap)
 
-			if handleToolUseBuffer(hc.GinContext, false, evt.Type, int(evt.Index), evt.ContentBlock, eventMap) {
+				if handleToolUseBuffer(hc.GinContext, false, evt.Type, int(evt.Index), evt.ContentBlock, eventMap) {
+					return nil
+				}
+
+				sendAnthropicStreamEvent(hc.GinContext, evt.Type, eventMap, flusher)
 				return nil
 			}
 
-			sendAnthropicStreamEvent(hc.GinContext, evt.Type, eventMap, flusher)
+			// Use Anthropic's original SSE payload when no rewrite is needed so the
+			// passthrough path stays as close to upstream as possible.
+			hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+			hc.GinContext.Writer.Flush()
 			return nil
 		},
 	)
@@ -150,18 +158,25 @@ func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaM
 				hasUsage = true
 			}
 
-			// Send SSE event
-			eventMap, err := toEventMap(evt, evt.Type)
-			if err != nil {
-				return err
-			}
-			restoreCredentialAliasesInEventMap(hc.GinContext, eventMap)
+			if shouldRewriteAnthropicEvent(hc.GinContext, evt.Type, evt.ContentBlock) {
+				eventMap, err := toEventMap(evt, evt.Type)
+				if err != nil {
+					return err
+				}
+				restoreCredentialAliasesInEventMap(hc.GinContext, eventMap)
 
-			if handleToolUseBuffer(hc.GinContext, true, evt.Type, int(evt.Index), evt.ContentBlock, eventMap) {
+				if handleToolUseBuffer(hc.GinContext, true, evt.Type, int(evt.Index), evt.ContentBlock, eventMap) {
+					return nil
+				}
+
+				sendAnthropicBetaStreamEvent(hc.GinContext, evt.Type, eventMap, flusher)
 				return nil
 			}
 
-			sendAnthropicBetaStreamEvent(hc.GinContext, evt.Type, eventMap, flusher)
+			// Use Anthropic's original SSE payload when no rewrite is needed so the
+			// passthrough path stays as close to upstream as possible.
+			hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+			hc.GinContext.Writer.Flush()
 			return nil
 		},
 	)
@@ -202,6 +217,30 @@ func toEventMap(evt interface{}, eventType string) (map[string]interface{}, erro
 		payload["type"] = eventType
 	}
 	return payload, nil
+}
+
+func shouldRewriteAnthropicEvent(c *gin.Context, eventType string, block interface{}) bool {
+	switch eventType {
+	case eventTypeContentBlockStart:
+		blockType, _ := extractBlockTypeAndID(block)
+		if blockType == "tool_use" || blockType == "text" {
+			return true
+		}
+	case eventTypeContentBlockDelta:
+		state := getToolUseBufferState(c)
+		if len(state.ByIndex) > 0 {
+			return true
+		}
+		if maskState := getCredentialMaskState(c); maskState != nil && len(maskState.AliasToReal) > 0 {
+			return true
+		}
+	case eventTypeContentBlockStop:
+		state := getToolUseBufferState(c)
+		if len(state.ByIndex) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 type bufferedEvent struct {
