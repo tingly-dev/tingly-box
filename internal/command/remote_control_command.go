@@ -33,6 +33,7 @@ func RemoteCommand(appManager *AppManager) *cobra.Command {
 	cmd.AddCommand(remoteListCommand(appManager))
 	cmd.AddCommand(remoteStartCommand(appManager))
 	cmd.AddCommand(remoteConfigCommand(appManager))
+	cmd.AddCommand(remoteAddCommand(appManager))
 
 	return cmd
 }
@@ -696,6 +697,12 @@ func buildAuthConfigInternal(setting bot.BotSetting) imbot.AuthConfig {
 			Type:      "token",
 			Token:     auth["token"],
 			AccountID: auth["phoneNumberId"],
+		}
+	case "wechat":
+		return imbot.AuthConfig{
+			Type:      "qr",
+			Token:     auth["token"],
+			AccountID: auth["bot_id"],
 		}
 	default:
 		return imbot.AuthConfig{
