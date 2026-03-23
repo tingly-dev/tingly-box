@@ -217,6 +217,9 @@ func ApplyAnthropicMetadataTransform(req interface{}, extra map[string]any) inte
 	// Inject into request based on type
 	switch r := req.(type) {
 	case *anthropic.MessageNewParams:
+		if r == nil {
+			return req
+		}
 		if len(r.System) > 0 {
 			if strings.Contains(r.System[0].Text, "x-anthropic-billing-header") {
 				r.System[0].Text = fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ClaudeCodeVersion, GenHex4())
@@ -238,6 +241,9 @@ func ApplyAnthropicMetadataTransform(req interface{}, extra map[string]any) inte
 		}
 		return r
 	case *anthropic.BetaMessageNewParams:
+		if r == nil {
+			return req
+		}
 		if len(r.System) > 0 {
 			if strings.Contains(r.System[0].Text, "x-anthropic-billing-header") {
 				r.System[0].Text = fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ClaudeCodeVersion, GenHex4())
