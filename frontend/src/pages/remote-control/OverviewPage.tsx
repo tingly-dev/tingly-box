@@ -1,24 +1,27 @@
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
+import { getAllPlatforms } from '@/constants/platformGuides';
 import type { BotSettings } from '@/types/bot';
 import {
+    ArrowForward,
     ChatBubble,
     CheckCircle,
     InfoOutlined,
     SettingsRemote,
-    SmartToy,
-    AutoAwesome,
 } from '@mui/icons-material';
 import {
     Box,
+    Button,
     Card,
+    CardActionArea,
     CardContent,
+    Chip,
     Grid,
     Stack,
     Typography
 } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const RemoteControlOverviewPage = () => {
@@ -47,23 +50,13 @@ const RemoteControlOverviewPage = () => {
     const enabledBots = bots.filter(b => b.enabled);
     const disabledBots = bots.filter(b => !b.enabled);
 
-    const features = [
-        {
-            icon: <ChatBubble sx={{ fontSize: 32, color: 'primary.main' }} />,
-            title: 'IM Bot Integration',
-            description: 'Connect Telegram, WeChat, and other messaging platforms to control your AI assistant remotely.',
-        },
-        {
-            icon: <AutoAwesome sx={{ fontSize: 32, color: 'primary.main' }} />,
-            title: 'Agent Control',
-            description: 'Execute commands, manage sessions, and interact with AI agents from your favorite chat app.',
-        },
-        {
-            icon: <SettingsRemote sx={{ fontSize: 32, color: 'primary.main' }} />,
-            title: 'Remote Execution',
-            description: 'Run bash commands, manage projects, and control your development environment remotely.',
-        },
-    ];
+    // Get platforms from shared config and add bot counts
+    const platforms = useMemo(() => {
+        return getAllPlatforms().map(platform => ({
+            ...platform,
+            botCount: bots.filter(b => b.platform === platform.id).length,
+        }));
+    }, [bots]);
 
     return (
         <PageLayout loading={loading}>
@@ -173,20 +166,86 @@ const RemoteControlOverviewPage = () => {
                     </Grid>
                 </Grid>
 
-                {/* Features Section */}
-                <UnifiedCard title="Features" size="full">
-                    <Grid container spacing={3}>
-                        {features.map((feature, index) => (
-                            <Grid key={index} size={{ xs: 12, md: 4 }}>
-                                <Stack spacing={2} sx={{ textAlign: 'center', p: 2 }}>
-                                    {feature.icon}
-                                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                                        {feature.title}
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary">
-                                        {feature.description}
-                                    </Typography>
-                                </Stack>
+                {/* Platforms Section */}
+                <UnifiedCard title="Supported Platforms" subtitle="Select a platform to configure" size="full">
+                    <Grid container spacing={2}>
+                        {platforms.map((platform) => (
+                            <Grid key={platform.id} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+                                <Card
+                                    sx={{
+                                        height: '100%',
+                                        position: 'relative',
+                                        opacity: platform.status === 'coming-soon' ? 0.6 : 1,
+                                        cursor: platform.status === 'coming-soon' ? 'not-allowed' : 'pointer',
+                                        transition: 'transform 0.2s, box-shadow 0.2s',
+                                        '&:hover': platform.status !== 'coming-soon' ? {
+                                            transform: 'translateY(-4px)',
+                                            boxShadow: 4,
+                                        } : {},
+                                    }}
+                                >
+                                    <CardActionArea
+                                        disabled={platform.status === 'coming-soon'}
+                                        onClick={() => platform.status !== 'coming-soon' && navigate(platform.path)}
+                                        sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}
+                                    >
+                                        <CardContent sx={{ width: '100%', flexGrow: 1 }}>
+                                            <Stack spacing={2}>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                    <Typography variant="h3">{platform.icon}</Typography>
+                                                    {platform.status === 'coming-soon' && (
+                                                        <Chip
+                                                            label="Coming Soon"
+                                                            size="small"
+                                                            sx={{
+                                                                height: 20,
+                                                                fontSize: '0.65rem',
+                                                                bgcolor: 'grey.100',
+                                                                color: 'text.secondary',
+                                                            }}
+                                                        />
+                                                    )}
+                                                    {platform.status === 'beta' && (
+                                                        <Chip
+                                                            label="Beta"
+                                                            size="small"
+                                                            sx={{
+                                                                height: 20,
+                                                                fontSize: '0.65rem',
+                                                                bgcolor: 'warning.lighter',
+                                                                color: 'warning.dark',
+                                                            }}
+                                                        />
+                                                    )}
+                                                </Box>
+                                                <Box>
+                                                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
+                                                        {platform.name}
+                                                    </Typography>
+                                                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                                        {platform.description}
+                                                    </Typography>
+                                                    {(platform.status === 'available' || platform.status === 'beta') && (
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            {platform.botCount} bot{platform.botCount !== 1 ? 's' : ''} configured
+                                                        </Typography>
+                                                    )}
+                                                </Box>
+                                            </Stack>
+                                        </CardContent>
+                                        {(platform.status === 'available' || platform.status === 'beta') && (
+                                            <Box sx={{ p: 1.5, pt: 0 }}>
+                                                <Button
+                                                    size="small"
+                                                    endIcon={<ArrowForward />}
+                                                    sx={{ width: '100%' }}
+                                                >
+                                                    Configure
+                                                </Button>
+                                            </Box>
+                                        )}
+                                    </CardActionArea>
+                                </Card>
                             </Grid>
                         ))}
                     </Grid>

@@ -3,7 +3,7 @@ import BotPlatformSelector from '@/components/bot/BotPlatformSelector';
 import { BotCard, useBotModelDialog } from '@/components/bot';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import { PageLayout } from '@/components/PageLayout';
-import PlatformGuide from '@/components/remote-control/PlatformGuide';
+import PreviewNotice from '@/components/remote-control/PreviewNotice';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 import type { BotPlatformConfig, BotSettings } from '@/types/bot';
@@ -22,9 +22,16 @@ import {
 } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
 
-const BotPage = () => {
-    // Bot settings state
+interface PlatformBotPageProps {
+    platformId: string;
+    platformName: string;
+    platformGuide?: React.ReactNode;
+}
+
+const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBotPageProps) => {
+    // Bot settings state - filtered by platform
     const [bots, setBots] = useState<BotSettings[]>([]);
+    const [filteredBots, setFilteredBots] = useState<BotSettings[]>([]);
 
     // Bot platforms config state
     const [botPlatforms, setBotPlatforms] = useState<BotPlatformConfig[]>([]);
@@ -34,7 +41,7 @@ const BotPage = () => {
     const [botDialogMode, setBotDialogMode] = useState<'add' | 'edit'>('add');
     const [botEditUuid, setBotEditUuid] = useState<string | null>(null);
     const [botNameDraft, setBotNameDraft] = useState('');
-    const [botPlatformDraft, setBotPlatformDraft] = useState('telegram');
+    const [botPlatformDraft, setBotPlatformDraft] = useState(platformId);
     const [botAuthDraft, setBotAuthDraft] = useState<Record<string, string>>({});
     const [botProxyDraft, setBotProxyDraft] = useState('');
     const [botChatIdDraft, setBotChatIdDraft] = useState('');
@@ -44,7 +51,6 @@ const BotPage = () => {
     const [botSaving, setBotSaving] = useState(false);
     const [botPlatformsLoading, setBotPlatformsLoading] = useState(false);
     const [botTokenDialogOpen, setBotTokenDialogOpen] = useState(false);
-    const [guideExpanded, setGuideExpanded] = useState<string | false>(false);
 
     // Toggle loading state
     const [togglingBotUuid, setTogglingBotUuid] = useState<string | null>(null);
@@ -71,6 +77,12 @@ const BotPage = () => {
         loadProviders();
     }, []);
 
+    // Filter bots by platform
+    useEffect(() => {
+        const filtered = bots.filter(b => b.platform === platformId);
+        setFilteredBots(filtered);
+    }, [bots, platformId]);
+
     // Load bot platforms configuration
     const loadBotPlatforms = useCallback(async () => {
         try {
@@ -78,13 +90,18 @@ const BotPage = () => {
             const data = await api.getImBotPlatforms();
             if (data?.success && data?.platforms) {
                 setBotPlatforms(data.platforms);
+                // Set current platform config
+                const config = data.platforms.find(p => p.platform === platformId);
+                if (config) {
+                    setCurrentPlatformConfig(config);
+                }
             }
         } catch (err) {
             console.error('Failed to load bot platforms:', err);
         } finally {
             setBotPlatformsLoading(false);
         }
-    }, []);
+    }, [platformId]);
 
     const loadBotSettings = useCallback(async () => {
         try {
@@ -101,7 +118,7 @@ const BotPage = () => {
         } finally {
             setBotLoading(false);
         }
-    }, []);
+    }, [showNotification]);
 
     const loadProviders = useCallback(async () => {
         const data = await api.getProviders();
@@ -109,16 +126,6 @@ const BotPage = () => {
             setProviders(data.data);
         }
     }, []);
-
-    // Update current platform config when platform draft changes
-    useEffect(() => {
-        if (botPlatformDraft && botPlatforms.length > 0) {
-            const config = botPlatforms.find(p => p.platform === botPlatformDraft);
-            if (config) {
-                setCurrentPlatformConfig(config);
-            }
-        }
-    }, [botPlatformDraft, botPlatforms]);
 
     // Bot handlers
     const handleOpenBotTokenDialog = useCallback((editUuid?: string) => {
@@ -129,7 +136,7 @@ const BotPage = () => {
                 setBotDialogMode('edit');
                 setBotEditUuid(editUuid);
                 setBotNameDraft(bot.name || '');
-                setBotPlatformDraft(bot.platform || 'telegram');
+                setBotPlatformDraft(bot.platform || platformId);
                 setBotAuthDraft(bot.auth ? { ...bot.auth } : {});
                 setBotProxyDraft(bot.proxy_url || '');
                 setBotChatIdDraft(bot.chat_id || '');
@@ -141,23 +148,23 @@ const BotPage = () => {
                 }
             }
         } else {
-            // Add mode
+            // Add mode - pre-select the current platform
             setBotDialogMode('add');
             setBotEditUuid(null);
             setBotNameDraft('');
-            setBotPlatformDraft('telegram');
+            setBotPlatformDraft(platformId);
             setBotAuthDraft({});
             setBotProxyDraft('');
             setBotChatIdDraft('');
             setBotAllowlistDraft('');
             // Set default platform config
-            const config = botPlatforms.find(p => p.platform === 'telegram');
+            const config = botPlatforms.find(p => p.platform === platformId);
             if (config) {
                 setCurrentPlatformConfig(config);
             }
         }
         setBotTokenDialogOpen(true);
-    }, [bots, botPlatforms]);
+    }, [bots, botPlatforms, platformId]);
 
     const handleSaveBotToken = async () => {
         setBotSaving(true);
@@ -265,7 +272,7 @@ const BotPage = () => {
         } catch (err) {
             showNotification('Failed to update working directory', 'error');
         }
-    }, [loadBotSettings]);
+    }, [loadBotSettings, showNotification]);
 
     // SmartGuide dialog using the same pattern as RuleCard
     const handleBotModelUpdate = useCallback(async (uuid: string, provider: string, model: string) => {
@@ -305,36 +312,24 @@ const BotPage = () => {
 
     return (
         <PageLayout loading={false}>
+            {/* Platform-specific Guide */}
+            {platformGuide && (
+                <UnifiedCard
+                    title={`${platformName} Setup Guide`}
+                    subtitle="Follow these steps to configure your bot"
+                    size="full"
+                    sx={{ mb: 2 }}
+                >
+                    {platformGuide}
+                </UnifiedCard>
+            )}
+
             {/* Preview Notice Card */}
-            <UnifiedCard
-                title="Preview Version"
-                size="full"
-                sx={{ mb: 2 }}
-            >
-                <Alert severity="info" sx={{ mb: 2 }}>
-                    <Typography variant="body2">
-                        This feature is currently in <strong>preview</strong>. It is designed to work with{' '}
-                        <strong>Claude Code</strong> installed on your local machine with your config.
-                    </Typography>
-                </Alert>
-                <Typography variant="body2" color="text.secondary">
-                    The <strong>Remote Control</strong> Bot enables you to interact with <strong>Claude
-                    Code</strong> through instant messaging platforms
-                    like Telegram.
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                    Make sure you have <strong>Claude Code CLI</strong> installed and configured before using this
-                    feature.
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                    <strong>Once you enable a bot, the remote control is started with corresponding IM, and vice
-                        versa.</strong>
-                </Typography>
-            </UnifiedCard>
+            <PreviewNotice platformName={platformName} />
 
             <UnifiedCard
-                title="Bots"
-                subtitle={`${bots.length} bot${bots.length !== 1 ? 's' : ''} configured`}
+                title={`${platformName} Bots`}
+                subtitle={`${filteredBots.length} bot${filteredBots.length !== 1 ? 's' : ''} configured`}
                 size="full"
                 sx={{ mb: 2 }}
                 rightAction={
@@ -352,17 +347,17 @@ const BotPage = () => {
                     <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
                         <CircularProgress />
                     </Box>
-                ) : bots.length === 0 ? (
+                ) : filteredBots.length === 0 ? (
                     <EmptyStateGuide
-                        title="No Bots Configured"
-                        description="Configure bots to enable remote-control chat integration."
+                        title={`No ${platformName} Bots Configured`}
+                        description={`Configure ${platformName} bots to enable remote-control chat integration.`}
                         showOAuthButton={false}
                         showHeroIcon={false}
-                        primaryButtonLabel="Add Bot"
+                        primaryButtonLabel={`Add ${platformName} Bot`}
                         onAddApiKeyClick={() => handleOpenBotTokenDialog()}
                     />
                 ) : (
-                    bots.map((bot) => (
+                    filteredBots.map((bot) => (
                         <div key={bot.uuid}>
                             <BotCard
                                 bot={bot}
@@ -522,4 +517,4 @@ const BotPage = () => {
     );
 };
 
-export default BotPage;
+export default PlatformBotPage;
