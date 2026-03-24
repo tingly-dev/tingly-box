@@ -127,8 +127,8 @@ func (aa *AgentApply) createOrUpdateRule(
 		Description:   description,
 		Services:      []*loadbalance.Service{service},
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticAdaptive,
-			Params: typ.DefaultAdaptiveParams(),
+			Type:   loadbalance.TacticRandom,
+			Params: typ.DefaultRandomParams(),
 		},
 		Active: true,
 	}

@@ -395,8 +395,8 @@ func (r *Rule) GetTacticType() loadbalance.TacticType {
 	if r.LBTactic.Type != 0 {
 		return r.LBTactic.Type
 	}
-	// Default to adaptive
-	return loadbalance.TacticAdaptive
+	// Default to random
+	return loadbalance.TacticRandom
 }
 
 // GetUUID returns the rule UUID
