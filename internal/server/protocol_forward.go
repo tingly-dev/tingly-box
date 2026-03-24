@@ -118,7 +118,13 @@ func ForwardOpenAIChatStream(fc *ForwardContext, wrapper *client.OpenAIClient, r
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
 	}
-	logrus.Debugf("provider: %s (streaming)", fc.Provider.Name)
+	logrus.WithFields(logrus.Fields{
+		"provider":         fc.Provider.Name,
+		"api_base":         fc.Provider.APIBase,
+		"provider_timeout": fc.Provider.Timeout,
+		"forward_timeout":  fc.Timeout,
+		"model":            req.Model,
+	}).Info("Creating OpenAI chat streaming request")
 
 	ctx, cancel := fc.PrepareContext(req)
 
@@ -149,6 +155,14 @@ func ForwardOpenAIResponsesStream(fc *ForwardContext, wrapper *client.OpenAIClie
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"provider":         fc.Provider.Name,
+		"api_base":         fc.Provider.APIBase,
+		"provider_timeout": fc.Provider.Timeout,
+		"forward_timeout":  fc.Timeout,
+		"model":            params.Model,
+	}).Info("Creating OpenAI responses streaming request")
 
 	ctx, cancel := fc.PrepareContext(params)
 	stream := wrapper.ResponsesNewStreaming(ctx, params)
