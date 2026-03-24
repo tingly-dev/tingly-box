@@ -18,6 +18,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/crypto/sha3"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/constant"
@@ -47,6 +48,8 @@ type Config struct {
 	Scenarios         []typ.ScenarioConfig `yaml:"scenarios" json:"scenarios"`                     // Scenario-specific configurations
 	GUI               GUIConfig            `json:"gui"`                                            // GUI-specific settings
 	RemoteCoder       RemoteCoderConfig    `json:"remote_coder"`                                   // Remote-coder service settings
+	RandomUUID        string               `json:"random_uuid"`                                    // A random uuid to help protocol transform for some special provider
+	Random256         string               `json:"-"`                                              // Calc from random uuid with sha256
 
 	// Merged fields from Config struct
 	ProvidersV1 map[string]*typ.Provider `json:"providers"`
@@ -277,6 +280,15 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		cfg.ModelToken = modelToken
 		updated = true
 	}
+
+	if cfg.RandomUUID == "" {
+		cfg.RandomUUID = uuid.New().String()
+		hash := sha3.Sum256([]byte(cfg.RandomUUID))
+		hashString := hex.EncodeToString(hash[:])
+		cfg.Random256 = hashString
+		logrus.Info("Generated new random 256:", hashString)
+	}
+
 	// Generate internal API token for probe testing (always regenerated at startup)
 	cfg.InternalAPIToken = fmt.Sprintf("tb-internal-%s", uuid.New().String())
 	updated = true // Don't save to config file, but mark as updated for this session

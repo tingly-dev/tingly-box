@@ -480,7 +480,11 @@ func TestTransformChain_EdgeCase_NilContext(t *testing.T) {
 func TestTransformChain_EdgeCase_NilTransformInChain(t *testing.T) {
 	chain := NewTransformChain([]Transform{&mockTransform{name: "first"}, nil, &mockTransform{name: "second"}})
 	ctx := &TransformContext{Request: &openai.ChatCompletionNewParams{}}
-	assert.Panics(t, func() { _, _ = chain.Execute(ctx) })
+	result, err := chain.Execute(ctx)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	// Nil transform is ignored, so only "first" and "second" should be in steps
+	assert.Equal(t, []string{"first", "second"}, result.TransformSteps)
 }
 
 // Error propagation tests

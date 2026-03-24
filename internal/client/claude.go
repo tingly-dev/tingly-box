@@ -6,8 +6,44 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
 	"strings"
 )
+
+const (
+	// Claude Code client identification
+	claudeCLIUserAgent      = "claude-cli/2.1.81 (external, cli)"
+	claudeXApp              = "cli"
+	stainlessHelperMethod   = "stream"
+	stainlessRetryCount     = "0"
+	stainlessRuntimeVersion = "v25.3.0"
+	stainlessPackageVersion = "0.74.0"
+	stainlessRuntime        = "node"
+	stainlessLang           = "js"
+	stainlessTimeout        = "3000"
+
+	// Anthropic API headers
+	anthropicBeta                         = "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05"
+	anthropicOAuthBeta                    = "oauth-2025-04-20"
+	anthropicDangerousDirectBrowserAccess = "true"
+	anthropicVersion                      = "2023-06-01"
+
+	// Content negotiation
+	acceptHeader = "application/json"
+
+	// Buffer sizes
+	maxStreamingLineSize = 52_428_800 // 50MB max line size
+)
+
+// stainlessOS returns the OS name for the x-stainless-os header
+func stainlessOS() string {
+	return runtime.GOOS // e.g., "darwin", "linux", "windows"
+}
+
+// stainlessArch returns the architecture for the x-stainless-arch header
+func stainlessArch() string {
+	return runtime.GOARCH // e.g., "amd64", "arm64"
+}
 
 // claudeRoundTripper wraps an http.RoundTripper to handle Claude Code OAuth
 // specific request/response transformations:
@@ -123,33 +159,33 @@ func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthTo
 	}
 
 	// Set Claude Code specific headers
-	req.Header.Set("accept", "application/json")
+	req.Header.Set("accept", acceptHeader)
 
 	// Build beta header with all required flags
-	baseBetas := "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05"
+	baseBetas := anthropicBeta
 
 	// If user provides custom betas, merge them while ensuring oauth is included
 	if val := strings.TrimSpace(req.Header.Get("Anthropic-Beta")); val != "" {
 		baseBetas = val
 		if !strings.Contains(val, "oauth") {
-			baseBetas += ",oauth-2025-04-20"
+			baseBetas = fmt.Sprintf("%s,%s", val, anthropicOAuthBeta)
 		}
 	}
 
 	req.Header.Set("anthropic-beta", baseBetas)
-	req.Header.Set("anthropic-dangerous-direct-browser-access", "true")
-	req.Header.Set("anthropic-version", "2023-06-01")
-	req.Header.Set("user-agent", "claude-cli/2.0.76 (external, cli)")
-	req.Header.Set("x-app", "cli")
-	req.Header.Set("x-stainless-helper-method", "stream")
-	req.Header.Set("x-stainless-retry-count", "0")
-	req.Header.Set("x-stainless-runtime-version", "v25.2.1")
-	req.Header.Set("x-stainless-package-version", "0.70.0")
-	req.Header.Set("x-stainless-runtime", "node")
-	req.Header.Set("x-stainless-lang", "js")
-	req.Header.Set("x-stainless-arch", "arm64")
-	req.Header.Set("x-stainless-os", "MacOS")
-	req.Header.Set("x-stainless-timeout", "3000")
+	req.Header.Set("anthropic-dangerous-direct-browser-access", anthropicDangerousDirectBrowserAccess)
+	req.Header.Set("anthropic-version", anthropicVersion)
+	req.Header.Set("user-agent", claudeCLIUserAgent)
+	req.Header.Set("x-app", claudeXApp)
+	req.Header.Set("x-stainless-helper-method", stainlessHelperMethod)
+	req.Header.Set("x-stainless-retry-count", stainlessRetryCount)
+	req.Header.Set("x-stainless-runtime-version", stainlessRuntimeVersion)
+	req.Header.Set("x-stainless-package-version", stainlessPackageVersion)
+	req.Header.Set("x-stainless-runtime", stainlessRuntime)
+	req.Header.Set("x-stainless-lang", stainlessLang)
+	req.Header.Set("x-stainless-arch", stainlessArch())
+	req.Header.Set("x-stainless-os", stainlessOS())
+	req.Header.Set("x-stainless-timeout", stainlessTimeout)
 }
 
 // isStreamingResponse checks if the response is a streaming SSE response
@@ -185,7 +221,7 @@ func (w *claudeResponseWrapper) readStreaming(p []byte) (n int, err error) {
 	// Initialize scanner on first use
 	if w.scanner == nil {
 		w.scanner = bufio.NewScanner(w.ReadCloser)
-		w.scanner.Buffer(nil, 52_428_800) // 50MB max line size
+		w.scanner.Buffer(nil, maxStreamingLineSize)
 	}
 
 	// Scan next line

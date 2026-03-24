@@ -1,10 +1,16 @@
 package ops
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/packages/param"
 )
+
+const ClaudeCodeVersion = "2.1.81.c43"
 
 // ApplyAnthropicModelTransform applies Anthropic API provider-specific model filtering.
 // This handles model-specific limitations such as adaptive thinking only being supported by
@@ -187,4 +193,89 @@ func filterBetaThinkingBlocksInMessages(messages []anthropic.BetaMessageParam) [
 	}
 
 	return filtered
+}
+
+// =============================================
+// Metadata Injection Functions
+// =============================================
+
+// ApplyAnthropicMetadataTransform injects OAuth user_id into request metadata.
+// This adds metadata.user_id in JSON format for Anthropic API tracking.
+//
+// Parameters:
+//   - req: The request to transform (*anthropic.MessageNewParams or *anthropic.BetaMessageNewParams)
+//   - provider: The provider with OAuth credentials (can be nil)
+//
+// Returns the transformed request (same type as input) with metadata injected.
+//
+// Note: Only injects metadata when provider is OAuth and has valid UserID.
+func ApplyAnthropicMetadataTransform(req interface{}, extra map[string]any) interface{} {
+	if req == nil {
+		return req
+	}
+
+	// Inject into request based on type
+	switch r := req.(type) {
+	case *anthropic.MessageNewParams:
+		if r == nil {
+			return req
+		}
+		if len(r.System) > 0 {
+			if strings.Contains(r.System[0].Text, "x-anthropic-billing-header") {
+				r.System[0].Text = fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ClaudeCodeVersion, GenHex4())
+			}
+		}
+		if r.Metadata.UserID.Valid() {
+			m := ParseMetadataUserID(r.Metadata.UserID.String())
+			if m != nil {
+				m.Fix(extra)
+				s := m.Format()
+				r.Metadata.UserID = param.NewOpt(s)
+			}
+		} else {
+			m := BuildMetadataUserID(extra)
+			if m != nil {
+				s := FormatMetadataUserID(m)
+				r.Metadata.UserID = param.NewOpt(s)
+			}
+		}
+		return r
+	case *anthropic.BetaMessageNewParams:
+		if r == nil {
+			return req
+		}
+		if len(r.System) > 0 {
+			if strings.Contains(r.System[0].Text, "x-anthropic-billing-header") {
+				r.System[0].Text = fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ClaudeCodeVersion, GenHex4())
+			}
+		}
+		if r.Metadata.UserID.Valid() {
+			m := ParseMetadataUserID(r.Metadata.UserID.String())
+			if m != nil {
+				m.Fix(extra)
+				s := m.Format()
+				r.Metadata.UserID = param.NewOpt(s)
+			}
+		} else {
+			m := BuildMetadataUserID(extra)
+			if m != nil {
+				s := FormatMetadataUserID(m)
+				r.Metadata.UserID = param.NewOpt(s)
+			}
+		}
+		return r
+	default:
+		return req
+	}
+}
+
+func GenHex4() string {
+	bytes := make([]byte, 2)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "cc00"
+	}
+
+	hexStr := hex.EncodeToString(bytes)
+	return hexStr
 }

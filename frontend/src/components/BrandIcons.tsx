@@ -10,15 +10,15 @@ import GoogleSvg from '@lobehub/icons-static-svg/icons/google.svg?url';
 import OpenAISvg from '@lobehub/icons-static-svg/icons/openai.svg?url';
 import QwenSvg from '@lobehub/icons-static-svg/icons/qwen.svg?url';
 
-import DingTalkSvg from '../assets/icons/dingtalk.svg?url';
-import DiscordSvg from '../assets/icons/discord.svg?url';
-import FeishuSvg from '../assets/icons/feishu.svg?url';
-import LarkSvg from '../assets/icons/feishu.svg?url';
-import QQSvg from '../assets/icons/qq.svg?url';
-import SlackSvg from '../assets/icons/slack.svg?url';
-import TelegramSvg from '../assets/icons/telegram.svg?url';
-import WeComSvg from '../assets/icons/wecom.svg?url';
-import WeixinSvg from '../assets/icons/weixin.svg?url';
+import DingTalkSvg from '@/assets/icons/dingtalk.svg?url';
+import DiscordSvg from '@/assets/icons/discord.svg?url';
+import FeishuSvg from '@/assets/icons/feishu.svg?url';
+import LarkSvg from '@/assets/icons/feishu.svg?url';
+import QQSvg from '@/assets/icons/qq.svg?url';
+import SlackSvg from '@/assets/icons/slack.svg?url';
+import TelegramSvg from '@/assets/icons/telegram.svg?url';
+import WeComSvg from '@/assets/icons/wecom.svg?url';
+import WeixinSvg from '@/assets/icons/weixin.svg?url';
 
 interface BrandIconProps {
     size?: number;

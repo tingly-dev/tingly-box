@@ -67,17 +67,17 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
         <Paper
             elevation={0}
             sx={{
-                borderRadius: 2.5,
+                borderRadius: 2,
                 border: '1px solid',
                 borderColor: 'divider',
                 overflow: 'hidden',
                 backgroundColor: 'background.paper',
-                boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
             }}
         >
             <Box
                 sx={{
-                    p: 3,
+                    p: 2.5,
                     borderBottom: '1px solid',
                     borderColor: 'divider',
                     display: 'flex',
@@ -85,7 +85,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                     alignItems: 'center',
                 }}
             >
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
                     Usage by Model
                 </Typography>
             </Box>

@@ -186,12 +186,21 @@ export default function DashboardPage() {
         : 0;
 
     // Prepare chart data - include provider name to distinguish same model from different providers
-    const tokenChartData = stats.slice(0, 10).map((stat) => {
+    // Sort by total tokens first
+    const sortedStats = [...stats].sort((a, b) => {
+        const totalA = (a.total_input_tokens || 0) + (a.total_output_tokens || 0) + (a.cache_input_tokens || 0);
+        const totalB = (b.total_input_tokens || 0) + (b.total_output_tokens || 0) + (b.cache_input_tokens || 0);
+        return totalB - totalA;
+    });
+
+    const tokenChartData = sortedStats.slice(0, 10).map((stat) => {
         const provider = stat.provider_name || 'Unknown';
         const model = stat.model || stat.key || 'Unknown';
         const label = `${provider} - ${model}`;
         return {
-            name: label.length > 30 ? label.substring(0, 30) + '...' : label,
+            name: label,
+            provider: provider,
+            model: model,
             inputTokens: stat.total_input_tokens || 0,
             outputTokens: stat.total_output_tokens || 0,
             cacheTokens: stat.cache_input_tokens || 0,
@@ -216,23 +225,21 @@ export default function DashboardPage() {
     return (
         <Box
             sx={{
-                px: { xs: 3, sm: 4, md: 5 },
-                py: { xs: 4, sm: 5, md: 6 },
-                maxWidth: 1400,
-                mx: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1,
                 minHeight: '100vh',
-                backgroundColor: 'background.default',
             }}
         >
             {/* Header with Filters */}
             <Paper
                 sx={{
-                    p: { xs: 2, sm: 2.5 },
-                    mb: 4,
-                    borderRadius: 2.5,
+                    p: 2,
+                    mb: 3,
+                    borderRadius: 2,
                     border: '1px solid',
                     borderColor: 'divider',
-                    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
@@ -241,10 +248,10 @@ export default function DashboardPage() {
                 }}
             >
                 <Box>
-                    <Typography variant="h4" sx={{ fontWeight: 700, fontSize: '1.5rem', letterSpacing: '-0.02em' }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1rem', letterSpacing: '-0.01em' }}>
                         Usage Dashboard
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, fontSize: '0.875rem' }}>
                         {TIME_RANGE_CONFIG[timeRange].label}
                     </Typography>
                 </Box>
@@ -252,7 +259,7 @@ export default function DashboardPage() {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                     {/* Provider Selector */}
                     <FormControl size="small" sx={{ minWidth: 150 }}>
-                        <InputLabel sx={{ fontWeight: 500 }}>Provider</InputLabel>
+                        <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>Provider</InputLabel>
                         <Select
                             value={selectedProvider}
                             label="Provider"
@@ -284,7 +291,7 @@ export default function DashboardPage() {
                                     color="primary"
                                 />
                             }
-                            label={<Typography variant="body2">Auto</Typography>}
+                            label={<Typography variant="body2" sx={{ fontSize: '0.875rem' }}>Auto</Typography>}
                             sx={switchControlLabelStyle}
                         />
                         <Tooltip title="Refresh data">
@@ -305,68 +312,222 @@ export default function DashboardPage() {
                 </Box>
             </Paper>
 
-            {/* Stats Cards - Row 1 */}
-            <Grid container spacing={2.5} sx={{ mb: 4 }}>
-                <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
-                    <StatCard
-                        title={'Total\nRequests'}
-                        value={totalRequests.toLocaleString()}
-                        subtitle={TIME_RANGE_CONFIG[timeRange].label}
-                        icon={<CallMadeIcon />}
-                        color="primary"
-                    />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
-                    <StatCard
-                        title={'Total\nTokens'}
-                        value={formatNumber(totalTokens)}
-                        subtitle={`Input: ${formatNumber(totalInputTokens)}\nOutput: ${formatNumber(totalOutputTokens)}\nCache: ${formatNumber(totalCacheTokens)}`}
-                        icon={<PaidIcon />}
-                        color="success"
-                    />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
-                    <StatCard
-                        title={'Cache Hit\nRate'}
-                        value={`${cacheHitRate.toFixed(1)}%`}
-                        subtitle={`${formatNumber(totalCacheTokens)} cached`}
-                        icon={<CachedIcon />}
-                        color="warning"
-                    />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
-                    <StatCard
-                        title={'Error\nRate'}
-                        value={`${errorRate.toFixed(2)}%`}
-                        subtitle={`${totalErrors} errors`}
-                        icon={<ErrorOutlineIcon />}
-                        color={errorRate > 5 ? 'error' : 'success'}
-                    />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
-                    <StatCard
-                        title={'Streamed\nRate'}
-                        value={`${streamedRate.toFixed(1)}%`}
-                        subtitle={`${totalStreamed} streamed`}
-                        icon={<StreamIcon />}
-                        color="secondary"
-                    />
-                </Grid>
-            </Grid>
+            {/* Main Content: Two Column Layout */}
+            <Box
+                sx={{
+                    display: 'flex',
+                    gap: 2,
+                    mb: 3,
+                    flexDirection: { xs: 'column', md: 'row' },
+                }}
+            >
+                {/* Left Column (70%) */}
+                <Box sx={{ flex: { xs: 1, md: 7 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {/* Stat Cards Row - 5 cards */}
+                    <Grid container spacing={{ xs: 1.5, sm: 2 }}>
+                        <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
+                            <StatCard
+                                title={'Total\nRequests'}
+                                value={totalRequests.toLocaleString()}
+                                subtitle={TIME_RANGE_CONFIG[timeRange].label}
+                                icon={<CallMadeIcon />}
+                                color="primary"
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
+                            <StatCard
+                                title={'Total\nTokens'}
+                                value={formatNumber(totalTokens)}
+                                subtitle={`Input: ${formatNumber(totalInputTokens)}\nOutput: ${formatNumber(totalOutputTokens)}`}
+                                icon={<PaidIcon />}
+                                color="success"
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
+                            <StatCard
+                                title={'Cache Hit\nRate'}
+                                value={`${cacheHitRate.toFixed(1)}%`}
+                                subtitle={`${formatNumber(totalCacheTokens)} cached`}
+                                icon={<CachedIcon />}
+                                color={cacheHitRate >= 50 ? 'success' : cacheHitRate >= 20 ? 'info' : 'warning'}
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
+                            <StatCard
+                                title={'Error\nRate'}
+                                value={`${errorRate.toFixed(2)}%`}
+                                subtitle={`${totalErrors} errors`}
+                                icon={<ErrorOutlineIcon />}
+                                color={errorRate > 5 ? 'error' : errorRate > 1 ? 'warning' : 'info'}
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
+                            <StatCard
+                                title={'Streamed\nRate'}
+                                value={`${streamedRate.toFixed(1)}%`}
+                                subtitle={`${totalStreamed} streamed`}
+                                icon={<StreamIcon />}
+                                color="secondary"
+                            />
+                        </Grid>
+                    </Grid>
 
-            {/* Charts */}
-            <Grid container spacing={2.5} sx={{ mb: 4 }}>
-                <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
-                    {timeRange === 'today' || timeRange === 'yesterday' ? (
-                        <HourlyTokenHistoryChart data={timeSeries} />
-                    ) : (
-                        <DailyTokenHistoryChart data={timeSeries} />
-                    )}
-                </Grid>
-                <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
-                    <TokenUsageChart data={tokenChartData} />
-                </Grid>
-            </Grid>
+                    {/* Time Series Chart - Full Width */}
+                    <Box sx={{ display: 'flex' }}>
+                        {timeRange === 'today' || timeRange === 'yesterday' ? (
+                            <HourlyTokenHistoryChart data={timeSeries} />
+                        ) : (
+                            <DailyTokenHistoryChart data={timeSeries} />
+                        )}
+                    </Box>
+                </Box>
+
+                {/* Right Column (30%) - Token Usage List */}
+                <Box sx={{ flex: { xs: 1, md: 3 } }}>
+                    <Paper
+                        elevation={0}
+                        sx={{
+                            p: 2.5,
+                            borderRadius: 2,
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            backgroundColor: 'background.paper',
+                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                            height: '100%',
+                            display: 'flex',
+                            flexDirection: 'column',
+                        }}
+                    >
+                        <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '0.875rem', mb: 2 }}>
+                            Top Models by Token Usage
+                        </Typography>
+                        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                            {tokenChartData.slice(0, 6).map((item, index) => {
+                                const totalTokens = item.inputTokens + item.outputTokens + (item.cacheTokens || 0);
+                                const maxTokens = Math.max(...tokenChartData.slice(0, 6).map(d => d.inputTokens + d.outputTokens + (d.cacheTokens || 0)));
+                                const percentage = maxTokens > 0 ? (totalTokens / maxTokens) * 100 : 0;
+
+                                return (
+                                    <Tooltip
+                                        key={index}
+                                        componentsProps={{
+                                            tooltip: {
+                                                sx: {
+                                                    backgroundColor: '#1a1a1a',
+                                                    color: '#ffffff',
+                                                    fontSize: '0.75rem',
+                                                    p: 1.5,
+                                                    borderRadius: 1.5,
+                                                    '& .MuiTooltip-arrow': {
+                                                        color: '#1a1a1a',
+                                                    },
+                                                },
+                                            },
+                                        }}
+                                        title={
+                                            <Box>
+                                                <Typography sx={{ fontWeight: 600, fontSize: '0.8rem', mb: 0.5 }}>{item.model}</Typography>
+                                                <Typography sx={{ color: '#a0a0a0', fontSize: '0.75rem' }}>{item.provider}</Typography>
+                                                <Typography sx={{ color: '#a0a0a0', fontSize: '0.7rem', mt: 0.75 }}>
+                                                    Total: {formatNumber(totalTokens)} | Input: {formatNumber(item.inputTokens)} | Output: {formatNumber(item.outputTokens)}
+                                                </Typography>
+                                            </Box>
+                                        }
+                                        arrow
+                                        placement="left"
+                                    >
+                                        <Box
+                                            sx={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 1,
+                                                py: 1,
+                                                px: 1,
+                                                borderRadius: 1,
+                                                transition: 'all 0.15s ease',
+                                                cursor: 'pointer',
+                                                '&:hover': {
+                                                    backgroundColor: 'action.hover',
+                                                },
+                                            }}
+                                        >
+                                            {/* Rank Badge */}
+                                            <Box
+                                                sx={{
+                                                    minWidth: 20,
+                                                    height: 20,
+                                                    borderRadius: 1,
+                                                    backgroundColor: 'action.selected',
+                                                    color: 'text.secondary',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    fontSize: '0.7rem',
+                                                    fontWeight: 600,
+                                                }}
+                                            >
+                                                {index + 1}
+                                            </Box>
+
+                                            {/* Content */}
+                                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                {/* Model Name */}
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        fontWeight: 500,
+                                                        fontSize: '0.8rem',
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis',
+                                                        whiteSpace: 'nowrap',
+                                                        mb: 0.5,
+                                                    }}
+                                                >
+                                                    {item.model}
+                                                </Typography>
+
+                                                {/* Progress Bar + Value */}
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <Box
+                                                        sx={{
+                                                            flex: 1,
+                                                            height: 4,
+                                                            borderRadius: 2,
+                                                            backgroundColor: 'action.hover',
+                                                            overflow: 'hidden',
+                                                        }}
+                                                    >
+                                                        <Box
+                                                            sx={{
+                                                                height: '100%',
+                                                                width: `${percentage}%`,
+                                                                borderRadius: 2,
+                                                                backgroundColor: 'primary.main',
+                                                                transition: 'width 0.3s ease',
+                                                            }}
+                                                        />
+                                                    </Box>
+                                                    <Typography
+                                                        variant="caption"
+                                                        sx={{
+                                                            fontSize: '0.7rem',
+                                                            color: 'text.secondary',
+                                                            minWidth: 50,
+                                                            textAlign: 'right',
+                                                        }}
+                                                    >
+                                                        {formatNumber(totalTokens)}
+                                                    </Typography>
+                                                </Box>
+                                            </Box>
+                                        </Box>
+                                    </Tooltip>
+                                );
+                            })}
+                        </Box>
+                    </Paper>
+                </Box>
+            </Box>
 
             {/* Stats Table */}
             <ServiceStatsTable stats={stats} />
