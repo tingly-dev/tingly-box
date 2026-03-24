@@ -1,5 +1,6 @@
 name: "TEP: Tingly-Box Enhancement Proposal"
 description: Propose a significant enhancement, design change, or new capability for Tingly-Box
+title: "[TEP] "
 labels: ["tep", "enhancement"]
 body:
   - type: markdown
