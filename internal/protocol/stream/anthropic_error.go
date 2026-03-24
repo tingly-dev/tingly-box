@@ -2,7 +2,6 @@ package stream
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -96,70 +95,4 @@ func SendInternalError(c *gin.Context, errMsg string) {
 			Code:    "streaming_unsupported",
 		},
 	})
-}
-
-func injectGuardrailsBlock(c *gin.Context, beta bool) error {
-	val, exists := c.Get("guardrails_block_message")
-	if !exists {
-		return nil
-	}
-	message, ok := val.(string)
-	if !ok || message == "" {
-		return nil
-	}
-
-	index := 0
-	if raw, ok := c.Get("guardrails_block_index"); ok {
-		switch v := raw.(type) {
-		case int:
-			index = v
-		case int64:
-			index = int(v)
-		case float64:
-			index = int(v)
-		}
-	}
-	flusher, ok := c.Writer.(http.Flusher)
-	if !ok {
-		return errors.New("streaming not supported")
-	}
-
-	// injectGuardrailsBlock is the higher-level error-path bridge. It rebuilds a
-	// synthetic text block from guardrails data already stored on gin.Context and
-	// writes it directly to the client when normal tool-use passthrough is no
-	// longer driving the stream. In contrast, emitGuardrailsTextBlock is used from
-	// the normal passthrough path where the caller already has the block index,
-	// message, and flusher in hand.
-	start := map[string]interface{}{
-		"type":  eventTypeContentBlockStart,
-		"index": index,
-		"content_block": map[string]interface{}{
-			"type": "text",
-			"text": "",
-		},
-	}
-	delta := map[string]interface{}{
-		"type":  eventTypeContentBlockDelta,
-		"index": index,
-		"delta": map[string]interface{}{
-			"type": "text_delta",
-			"text": message,
-		},
-	}
-	stop := map[string]interface{}{
-		"type":  eventTypeContentBlockStop,
-		"index": index,
-	}
-
-	if beta {
-		sendAnthropicBetaStreamEvent(c, eventTypeContentBlockStart, start, flusher)
-		sendAnthropicBetaStreamEvent(c, eventTypeContentBlockDelta, delta, flusher)
-		sendAnthropicBetaStreamEvent(c, eventTypeContentBlockStop, stop, flusher)
-		return nil
-	}
-
-	sendAnthropicStreamEvent(c, eventTypeContentBlockStart, start, flusher)
-	sendAnthropicStreamEvent(c, eventTypeContentBlockDelta, delta, flusher)
-	sendAnthropicStreamEvent(c, eventTypeContentBlockStop, stop, flusher)
-	return nil
 }
