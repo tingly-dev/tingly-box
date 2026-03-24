@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -447,7 +448,9 @@ func (c *Config) Save() error {
 	if err := json.Unmarshal(data, &next); err != nil {
 		return err
 	}
-	if raw, err := os.ReadFile(c.ConfigFile); err == nil && len(raw) > 0 {
+	var raw []byte
+	if existingRaw, err := os.ReadFile(c.ConfigFile); err == nil && len(existingRaw) > 0 {
+		raw = existingRaw
 		var existing map[string]interface{}
 		if err := json.Unmarshal(raw, &existing); err == nil {
 			for k, v := range existing {
@@ -460,6 +463,9 @@ func (c *Config) Save() error {
 	out, err := json.MarshalIndent(next, "", "    ")
 	if err != nil {
 		return err
+	}
+	if len(raw) > 0 && bytes.Equal(raw, out) {
+		return nil
 	}
 	return os.WriteFile(c.ConfigFile, out, 0644)
 }
