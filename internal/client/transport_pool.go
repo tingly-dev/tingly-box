@@ -3,6 +3,7 @@ package client
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -14,23 +15,65 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
+// TransportConfig holds the configuration for HTTP transport connection pooling
+// All fields are pointers so that zero-value (nil) means "use Go default"
+type TransportConfig struct {
+	MaxIdleConns        *int  // nil = use Go default (100)
+	MaxIdleConnsPerHost *int  // nil = use Go default (2)
+	MaxConnsPerHost     *int  // nil = use Go default (0, no limit)
+	DisableKeepAlives   *bool // nil = use Go default (false)
+}
+
+// Go defaults for reference (not used directly, only for documentation)
+const (
+	DefaultMaxIdleConns        = 100
+	DefaultMaxIdleConnsPerHost = 2
+)
+
 // TransportPool manages shared HTTP transports for clients
 // Transports are keyed by: apiBaseURL + proxyURL + oauthType
 // This allows multiple clients to share the same connection pool
 // when they connect to the same API endpoint through the same proxy.
 type TransportPool struct {
 	transports map[string]*http.Transport
+	config     *TransportConfig // nil = use Go defaults
 	mutex      sync.RWMutex
 }
 
 // Global singleton transport pool
 var globalTransportPool = &TransportPool{
 	transports: make(map[string]*http.Transport),
+	config:     nil, // nil = use Go defaults (backward compatible with TB)
 }
 
 // GetGlobalTransportPool returns the global transport pool singleton
 func GetGlobalTransportPool() *TransportPool {
 	return globalTransportPool
+}
+
+// SetTransportConfig updates the transport pool configuration
+// Pass nil to reset to Go defaults (backward compatible)
+// This affects newly created transports only, existing transports are not modified
+func SetTransportConfig(config *TransportConfig) {
+	globalTransportPool.mutex.Lock()
+	defer globalTransportPool.mutex.Unlock()
+
+	globalTransportPool.config = config
+
+	if config == nil {
+		logrus.Info("Transport pool config reset to Go defaults")
+	} else {
+		maxIdle := "default"
+		maxIdlePerHost := "default"
+		if config.MaxIdleConns != nil {
+			maxIdle = fmt.Sprintf("%d", *config.MaxIdleConns)
+		}
+		if config.MaxIdleConnsPerHost != nil {
+			maxIdlePerHost = fmt.Sprintf("%d", *config.MaxIdleConnsPerHost)
+		}
+		logrus.Infof("Transport pool config updated: MaxIdleConns=%s, MaxIdleConnsPerHost=%s",
+			maxIdle, maxIdlePerHost)
+	}
 }
 
 // GetTransport returns or creates a shared HTTP transport for the given configuration
@@ -88,7 +131,9 @@ func (tp *TransportPool) generateTransportKey(apiBase, proxyURL string, oauthTyp
 func (tp *TransportPool) createTransport(proxyURL string) *http.Transport {
 	if proxyURL == "" {
 		// Return a copy of default transport to avoid mutation issues
-		return http.DefaultTransport.(*http.Transport).Clone()
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		tp.applyConfig(transport)
+		return transport
 	}
 
 	// Parse the proxy URL
@@ -124,7 +169,30 @@ func (tp *TransportPool) createTransport(proxyURL string) *http.Transport {
 		return http.DefaultTransport.(*http.Transport).Clone()
 	}
 
+	tp.applyConfig(transport)
 	return transport
+}
+
+// applyConfig applies custom configuration to transport if set
+// TB (tingly-box) will have tp.config == nil, so this is a no-op
+func (tp *TransportPool) applyConfig(transport *http.Transport) {
+	if tp.config == nil {
+		return
+	}
+	if tp.config.MaxIdleConns != nil {
+		transport.MaxIdleConns = *tp.config.MaxIdleConns
+	}
+	if tp.config.MaxIdleConnsPerHost != nil {
+		transport.MaxIdleConnsPerHost = *tp.config.MaxIdleConnsPerHost
+	}
+	if tp.config.MaxConnsPerHost != nil {
+		transport.MaxConnsPerHost = *tp.config.MaxConnsPerHost
+	}
+	if tp.config.DisableKeepAlives != nil {
+		transport.DisableKeepAlives = *tp.config.DisableKeepAlives
+	}
+	logrus.Debugf("Applied custom transport config: MaxIdleConns=%d, MaxIdleConnsPerHost=%d",
+		transport.MaxIdleConns, transport.MaxIdleConnsPerHost)
 }
 
 // Stats returns statistics about the transport pool

@@ -77,6 +77,9 @@ type Config struct {
 	// Enterprise context JWT validation settings for TBE->TB proxy calls.
 	EnterpriseContextJWT EnterpriseContextJWTConfig `json:"enterprise_context_jwt,omitempty" yaml:"enterprise_context_jwt,omitempty"`
 
+	// HTTP Transport settings for upstream API connections
+	HTTPTransport HTTPTransportConfig `json:"http_transport,omitempty" yaml:"http_transport,omitempty"`
+
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
 
@@ -122,6 +125,31 @@ type EnterpriseContextJWTConfig struct {
 	PublicKeys        []EnterpriseContextPublicKey `json:"public_keys,omitempty" yaml:"public_keys,omitempty"`
 	ClockSkewSeconds  int                          `json:"clock_skew_seconds,omitempty" yaml:"clock_skew_seconds,omitempty"`
 	RequireJTI        bool                         `json:"require_jti" yaml:"require_jti"`
+}
+
+// HTTPTransportConfig holds HTTP transport connection pool settings
+// These settings control the connection pooling behavior for upstream API requests
+// All fields use pointers so that omitting them means "use Go default" (backward compatible)
+type HTTPTransportConfig struct {
+	// MaxIdleConns is the maximum number of idle connections across all hosts
+	// Default (nil): 100 (Go stdlib default)
+	// Recommended for 200 concurrent users: 200-300
+	MaxIdleConns *int `json:"max_idle_conns,omitempty" yaml:"max_idle_conns,omitempty"`
+
+	// MaxIdleConnsPerHost is the maximum number of idle connections per host
+	// Default (nil): 2 (Go stdlib default)
+	// Recommended for 200 concurrent users: 20-50
+	MaxIdleConnsPerHost *int `json:"max_idle_conns_per_host,omitempty" yaml:"max_idle_conns_per_host,omitempty"`
+
+	// MaxConnsPerHost limits the total number of connections per host (active + idle)
+	// Default (nil): 0 (no limit)
+	// Set to control maximum concurrent connections to a single upstream host
+	MaxConnsPerHost *int `json:"max_conns_per_host,omitempty" yaml:"max_conns_per_host,omitempty"`
+
+	// DisableKeepAlives disables HTTP/1.1 keep-alive connections
+	// Default (nil): false
+	// WARNING: Setting this to true will significantly impact performance
+	DisableKeepAlives *bool `json:"disable_keep_alives,omitempty" yaml:"disable_keep_alives,omitempty"`
 }
 
 func enterpriseContextKeyPaths(configDir string) (string, string) {
@@ -2284,4 +2312,27 @@ func (c *Config) GetSmartGuideRule() *typ.Rule {
 		}
 	}
 	return nil
+}
+
+// ApplyHTTPTransportConfig applies the HTTP transport configuration to the global transport pool
+// This is called by TBE during initialization to configure connection pooling
+// For TB (tingly-box), this is a no-op since HTTPTransport will be empty (zero values)
+func (c *Config) ApplyHTTPTransportConfig() {
+	if c.HTTPTransport.MaxIdleConns == nil &&
+		c.HTTPTransport.MaxIdleConnsPerHost == nil &&
+		c.HTTPTransport.MaxConnsPerHost == nil &&
+		c.HTTPTransport.DisableKeepAlives == nil {
+		// No custom transport config, use Go defaults (backward compatible with TB)
+		return
+	}
+
+	// Import client package to set transport config
+	// We need to do this here to avoid circular dependency
+	config := &client.TransportConfig{
+		MaxIdleConns:        c.HTTPTransport.MaxIdleConns,
+		MaxIdleConnsPerHost: c.HTTPTransport.MaxIdleConnsPerHost,
+		MaxConnsPerHost:     c.HTTPTransport.MaxConnsPerHost,
+		DisableKeepAlives:   c.HTTPTransport.DisableKeepAlives,
+	}
+	client.SetTransportConfig(config)
 }
