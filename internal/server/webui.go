@@ -80,8 +80,8 @@ func (s *Server) UseUIEndpoints() {
 
 	// OAuth API routes - register from oauth module
 	apiV1 := manager.NewGroup("api", "v1", "")
-	apiV1.Router.Use(s.authMW.UserAuthMiddleware())
-	oauthmodule.RegisterRoutes(apiV1, s.authMW.UserAuthMiddleware(), s.oauthHandler)
+	apiV1.Router.Use(s.getUserAuthMiddleware())
+	oauthmodule.RegisterRoutes(apiV1, s.getUserAuthMiddleware(), s.oauthHandler)
 	// Register callback routes (unauthenticated)
 	oauthmodule.RegisterCallbackRoutes(manager, s.oauthHandler)
 

@@ -870,7 +870,7 @@ func (s *Server) UseVirtualModelEndpoints() {
 func (s *Server) UseLoadBalanceEndpoints() {
 	// API routes for load balancer management
 	api := s.engine.Group("/api/v1/load-balancer")
-	api.Use(s.authMW.UserAuthMiddleware()) // Require user authentication for management APIs
+	api.Use(s.getUserAuthMiddleware()) // Require user authentication for management APIs
 
 	// Load balancer API routes
 	s.loadBalancerAPI.RegisterRoutes(api)
