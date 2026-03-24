@@ -16,8 +16,10 @@ import {
 import { api } from '@/services/api';
 
 interface WeixinQRAuthProps {
-    botUUID: string;
+    botUUID?: string; // Optional - existing bot UUID for edit mode; omit for new bot flow
     platform: string;
+    botName?: string; // Optional display name for deferred bot creation
+    onComplete?: (botUUID: string) => void; // Callback with real bot UUID after binding
 }
 
 type QRState = 'idle' | 'loading' | 'show_qr' | 'scanned' | 'confirmed' | 'expired' | 'error';
@@ -33,27 +35,44 @@ interface QRStatusResponse {
     error?: string;
 }
 
-export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform }) => {
+export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform, botName, onComplete }) => {
     const [state, setState] = useState<QRState>('idle');
     const [qrData, setQrData] = useState<string>('');
     const [qrId, setQrId] = useState<string>('');
     const [error, setError] = useState<string>('');
     const [refreshCount, setRefreshCount] = useState(0);
+    const stoppedRef = React.useRef(false);
 
     const MAX_REFRESH = 3;
 
+    // Generate a temporary UUID for QR flow if botUUID is not provided
+    const [tempUUID] = useState(() => {
+        if (botUUID) return botUUID;
+        // Generate a simple temp UUID (format: temp-{timestamp}-{random})
+        return `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    });
+
+    const effectiveBotUUID = botUUID || tempUUID;
+
+    // Debug log to check what props we're receiving
+    console.log('[WeixinQRAuth] Render with botUUID:', botUUID, 'tempUUID:', tempUUID, 'effective:', effectiveBotUUID, 'state:', state);
+
     const startQRLogin = useCallback(async () => {
-        if (!botUUID) {
+        console.log('[WeixinQRAuth] startQRLogin called with effectiveBotUUID:', effectiveBotUUID);
+
+        if (!effectiveBotUUID) {
             setError('Bot UUID is required');
             setState('error');
             return;
         }
 
+        console.log('[WeixinQRAuth] Starting QR login for bot:', effectiveBotUUID);
         setState('loading');
         setError('');
+        stoppedRef.current = false;
 
         try {
-            const response = await api.weixinQRStart(botUUID);
+            const response = await api.weixinQRStart(effectiveBotUUID, platform, botName);
 
             if (response.success && response.data) {
                 setQrData(response.data.qrcode_data);
@@ -68,13 +87,13 @@ export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform })
             setError(err.message || 'Failed to start QR login');
             setState('error');
         }
-    }, [botUUID]);
+    }, [effectiveBotUUID, platform, botName]);
 
     const pollQRStatus = useCallback(async () => {
-        if (!botUUID || !qrId) return;
+        if (!effectiveBotUUID || !qrId) return;
 
         try {
-            const response = await api.weixinQRStatus(botUUID, qrId);
+            const response = await api.weixinQRStatus(effectiveBotUUID, qrId);
 
             if (!response.success) {
                 setError(response.error || 'Failed to check QR status');
@@ -92,8 +111,9 @@ export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform })
                     setState('scanned');
                     break;
                 case 'confirmed':
+                    stoppedRef.current = true;
                     setState('confirmed');
-                    // Stop polling on success
+                    onComplete?.(response.data?.bot_uuid || effectiveBotUUID);
                     return true;
                 case 'expired':
                     if (refreshCount < MAX_REFRESH) {
@@ -117,17 +137,20 @@ export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform })
             setState('error');
             return true;
         }
-    }, [botUUID, qrId, refreshCount, startQRLogin]);
+    }, [effectiveBotUUID, qrId, refreshCount, startQRLogin, onComplete]);
 
     // Start QR login when component mounts
     useEffect(() => {
-        if (state === 'idle' && botUUID) {
+        console.log('[WeixinQRAuth] useEffect triggered - state:', state, 'effectiveBotUUID:', effectiveBotUUID);
+        if (state === 'idle' && effectiveBotUUID) {
+            console.log('[WeixinQRAuth] Calling startQRLogin');
             startQRLogin();
         }
-    }, [state, botUUID, startQRLogin]);
+    }, [state, effectiveBotUUID, startQRLogin]);
 
     // Poll QR status every 2 seconds when showing QR or scanned
     useEffect(() => {
+        if (stoppedRef.current) return;
         if (state !== 'show_qr' && state !== 'scanned') return;
 
         const interval = setInterval(async () => {

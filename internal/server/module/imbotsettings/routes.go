@@ -1,6 +1,7 @@
 package imbotsettings
 
 import (
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/pkg/swagger"
 )
 
@@ -96,8 +97,12 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		),
 	)
 
-	// Weixin QR Login endpoints
-	qrHandler := NewWeChatQRLoginHandler(handler.store)
+	// Weixin QR Login endpoints - use handler's persistent QR login handler
+	qrHandler := handler.qrLoginHandler
+	if qrHandler == nil {
+		logrus.Warn("WeChat QR login handler is nil, QR login endpoints will not be available")
+		return
+	}
 
 	// POST /imbot-settings/:uuid/weixin/qr-start - Start QR login
 	router.POST("/imbot-settings/:uuid/weixin/qr-start", qrHandler.QRStart,

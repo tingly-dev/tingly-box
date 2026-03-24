@@ -1449,10 +1449,10 @@ export const api = {
     // ========== Weixin QR Login API ==========
 
     // Start Weixin QR login flow
-    weixinQRStart: async (botUUID: string): Promise<any> => {
+    weixinQRStart: async (botUUID: string, platform?: string, botName?: string): Promise<any> => {
         return fetchUIAPI(`/imbot-settings/${botUUID}/weixin/qr-start`, {
             method: 'POST',
-            body: JSON.stringify({ bot_uuid: botUUID }),
+            body: JSON.stringify({ bot_uuid: botUUID, bot_platform: platform, bot_name: botName }),
         });
     },
 
