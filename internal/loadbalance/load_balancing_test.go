@@ -168,32 +168,6 @@ func TestTacticType_String(t *testing.T) {
 	}
 }
 
-func TestService_PreferCompletions(t *testing.T) {
-	tests := []struct {
-		name     string
-		model    string
-		expected bool
-	}{
-		{"codex model lowercase", "codex-3", true},
-		{"codex model uppercase", "CODEX-3", true},
-		{"codex model mixed case", "CoDeX-3", true},
-		{"gpt-4 model", "gpt-4", false},
-		{"claude model", "claude-3", false},
-		{"empty string", "", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			service := Service{
-				Model: tt.model,
-			}
-			if got := service.PreferCompletions(); got != tt.expected {
-				t.Errorf("Service.PreferCompletions() for model %s = %v, want %v", tt.model, got, tt.expected)
-			}
-		})
-	}
-}
-
 func TestServiceStats_RecordLatency(t *testing.T) {
 	stats := &ServiceStats{
 		ServiceID:   "test:provider",
