@@ -148,6 +148,16 @@ export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform, b
         }
     }, [state, effectiveBotUUID, startQRLogin]);
 
+    // Cancel QR session on unmount (user navigates away or closes dialog)
+    useEffect(() => {
+        return () => {
+            if (!stoppedRef.current && effectiveBotUUID) {
+                api.weixinQRCancel(effectiveBotUUID).catch(() => {});
+            }
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     // Poll QR status every 2 seconds when showing QR or scanned
     useEffect(() => {
         if (stoppedRef.current) return;

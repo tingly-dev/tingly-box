@@ -21,7 +21,7 @@ import (
 type WeChatQRLoginHandler struct {
 	settingsStore *db.ImBotSettingsStore
 	sessions      map[string]*qrSession
-	mu            sync.Mutex
+	mu            sync.RWMutex
 }
 
 type qrSession struct {
@@ -158,10 +158,10 @@ func (h *WeChatQRLoginHandler) QRStatus(c *gin.Context) {
 		return
 	}
 
-	h.mu.Lock()
+	h.mu.RLock()
 	session, exists := h.sessions[botUUID]
 	totalSessions := len(h.sessions)
-	h.mu.Unlock()
+	h.mu.RUnlock()
 
 	logrus.WithFields(logrus.Fields{
 		"botUUID":        botUUID,
