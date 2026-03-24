@@ -22,7 +22,6 @@ import {
     Send as UserPromptIcon,
     Extension as VSCodeIcon,
     Rule,
-    Storefront,
     History as HistoryIcon,
     VpnKey as VpnKeyIcon,
     Security as AccessControlIcon
@@ -293,11 +292,6 @@ const Layout = ({ children }: LayoutProps) => {
                         path: '/guardrails/credentials',
                         label: 'Credentials',
                         icon: <VpnKeyIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/guardrails/market',
-                        label: 'Builtins',
-                        icon: <Storefront sx={{ fontSize: 20 }} />,
                     },
                     {
                         path: '/guardrails/history',

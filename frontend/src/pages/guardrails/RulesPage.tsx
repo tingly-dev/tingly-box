@@ -92,6 +92,22 @@ type GuardrailsPolicy = {
     reason?: string;
 };
 
+type BuiltinTemplate = {
+    id: string;
+    name: string;
+    summary?: string;
+    description?: string;
+    kind: 'resource_access' | 'command_execution' | 'content';
+    topic?: string;
+    tags?: string[];
+    policy: any;
+};
+
+type DisplayPolicy = GuardrailsPolicy & {
+    isBuiltin?: boolean;
+    builtinSummary?: string;
+};
+
 type EditorState = {
     id: string;
     name: string;
@@ -106,7 +122,6 @@ type EditorState = {
     resources: string;
     resourceMode: string;
     patterns: string;
-    credentialRefs: string[];
     patternMode: string;
     caseSensitive: boolean;
     reason: string;
@@ -155,6 +170,7 @@ const GuardrailsRulesPage = () => {
     const [supportedScenarios, setSupportedScenarios] = useState<string[]>([]);
     const [groups, setGroups] = useState<PolicyGroup[]>([]);
     const [policies, setPolicies] = useState<GuardrailsPolicy[]>([]);
+    const [builtins, setBuiltins] = useState<BuiltinTemplate[]>([]);
     const [pendingPolicyId, setPendingPolicyId] = useState<string | null>(null);
     const [pendingSave, setPendingSave] = useState(false);
     const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null);
@@ -190,7 +206,6 @@ const GuardrailsRulesPage = () => {
         resources: '',
         resourceMode: 'prefix',
         patterns: '',
-        credentialRefs: [],
         patternMode: 'substring',
         caseSensitive: false,
         reason: '',
@@ -258,6 +273,18 @@ const GuardrailsRulesPage = () => {
         return items.join('\n');
     };
 
+    const buildBuiltinPayload = (builtin: BuiltinTemplate, enabled: boolean): GuardrailsPolicy => ({
+        id: builtin.policy?.id || builtin.id,
+        name: builtin.policy?.name || builtin.name,
+        group: normalizeGroup(builtin.policy?.group),
+        kind: builtin.policy?.kind || builtin.kind,
+        enabled,
+        scope: builtin.policy?.scope || { scenarios: [] },
+        match: builtin.policy?.match || {},
+        verdict: builtin.policy?.verdict || 'block',
+        reason: builtin.policy?.reason || '',
+    });
+
     const isEditorDirty = useMemo(() => {
         if (!editorSnapshot) {
             return false;
@@ -281,17 +308,51 @@ const GuardrailsRulesPage = () => {
         () => new Map(groups.map((group) => [group.id, group])),
         [groups]
     );
+    const builtinMap = useMemo(() => new Map(builtins.map((builtin) => [builtin.id, builtin])), [builtins]);
+    const installedPolicyIds = useMemo(() => new Set(policies.map((policy) => policy.id)), [policies]);
+    const displayPolicies = useMemo(() => {
+        const merged: DisplayPolicy[] = policies.map((policy) => ({
+            ...policy,
+            isBuiltin: builtinMap.has(policy.id),
+            builtinSummary: builtinMap.get(policy.id)?.summary || builtinMap.get(policy.id)?.description,
+        }));
+        for (const builtin of builtins) {
+            if (installedPolicyIds.has(builtin.id)) {
+                continue;
+            }
+            merged.push({
+                id: builtin.id,
+                name: builtin.policy?.name || builtin.name,
+                group: '',
+                kind: builtin.kind,
+                enabled: false,
+                scope: builtin.policy?.scope,
+                match: builtin.policy?.match,
+                verdict: builtin.policy?.verdict || 'block',
+                reason: builtin.policy?.reason || '',
+                isBuiltin: true,
+                builtinSummary: builtin.summary || builtin.description,
+            });
+        }
+        const rank = (policy: DisplayPolicy) => (policy.enabled !== false ? 0 : 1);
+        merged.sort((a, b) => {
+            const rankDiff = rank(a) - rank(b);
+            if (rankDiff !== 0) return rankDiff;
+            return (a.name || a.id).localeCompare(b.name || b.id);
+        });
+        return merged;
+    }, [builtinMap, builtins, installedPolicyIds, policies]);
     const resourceAccessPolicies = useMemo(
-        () => policies.filter((policy) => policy.kind === 'resource_access' || policy.kind === 'operation'),
-        [policies]
+        () => displayPolicies.filter((policy) => policy.kind === 'resource_access' || policy.kind === 'operation'),
+        [displayPolicies]
     );
     const commandExecutionPolicies = useMemo(
-        () => policies.filter((policy) => policy.kind === 'command_execution'),
-        [policies]
+        () => displayPolicies.filter((policy) => policy.kind === 'command_execution'),
+        [displayPolicies]
     );
     const contentPolicies = useMemo(
-        () => policies.filter((policy) => policy.kind === 'content'),
-        [policies]
+        () => displayPolicies.filter((policy) => policy.kind === 'content'),
+        [displayPolicies]
     );
 
     const getEffectivePolicyState = (policy: GuardrailsPolicy) => {
@@ -391,7 +452,7 @@ const GuardrailsRulesPage = () => {
         return `This policy blocks content matching ${patterns.slice(0, 2).join(', ')}.`;
     };
 
-    const buildPolicySummary = (policy: GuardrailsPolicy) => {
+    const buildPolicySummary = (policy: DisplayPolicy) => {
         if (policy.kind === 'command_execution') {
             const terms = policy.match?.terms?.join(', ') || 'any command';
             const resources = policy.match?.resources?.values?.join(', ');
@@ -406,12 +467,15 @@ const GuardrailsRulesPage = () => {
         }
         const patterns = policy.match?.patterns || [];
         if (patterns.length === 0) {
+            if (policy.isBuiltin && policy.builtinSummary) {
+                return policy.builtinSummary;
+            }
             return 'No patterns configured';
         }
         return patterns.slice(0, 2).join(', ');
     };
 
-    const buildPolicyScope = (policy: GuardrailsPolicy) => {
+    const buildPolicyScope = (policy: DisplayPolicy) => {
         const scenarios = policy.scope?.scenarios?.join(', ') || 'all scenarios';
         return scenarios;
     };
@@ -472,7 +536,6 @@ const GuardrailsRulesPage = () => {
             resources: joinLines(policy?.match?.resources?.values),
             resourceMode: policy?.match?.resources?.mode || 'prefix',
             patterns: joinLines(policy?.match?.patterns),
-            credentialRefs: [],
             patternMode: policy?.match?.pattern_mode || 'substring',
             caseSensitive: !!policy?.match?.case_sensitive,
             reason: policy?.reason || '',
@@ -510,7 +573,6 @@ const GuardrailsRulesPage = () => {
             resources: draft.resources ?? baseState.resources,
             resourceMode: draft.resourceMode || baseState.resourceMode,
             patterns: draft.patterns ?? baseState.patterns,
-            credentialRefs: baseState.credentialRefs,
             patternMode: draft.patternMode || baseState.patternMode,
             caseSensitive: draft.caseSensitive ?? baseState.caseSensitive,
             reason: draft.reason ?? baseState.reason,
@@ -534,7 +596,10 @@ const GuardrailsRulesPage = () => {
             if (!silent) {
                 setLoading(true);
             }
-            const guardrailsConfig = await api.getGuardrailsConfig();
+            const [guardrailsConfig, builtinResponse] = await Promise.all([
+                api.getGuardrailsConfig(),
+                api.getGuardrailsBuiltins(),
+            ]);
             const config = guardrailsConfig?.config || {};
             const scenarios = Array.isArray(guardrailsConfig?.supported_scenarios)
                 ? guardrailsConfig.supported_scenarios.filter((value: string) => value && value !== '_global')
@@ -542,11 +607,13 @@ const GuardrailsRulesPage = () => {
             setSupportedScenarios(scenarios);
             setGroups(Array.isArray(config.groups) ? config.groups : []);
             setPolicies(Array.isArray(config.policies) ? config.policies : []);
+            setBuiltins(Array.isArray(builtinResponse?.templates) ? builtinResponse.templates : []);
             setLoadError(null);
         } catch (error) {
             console.error('Failed to load guardrails config:', error);
             setGroups([]);
             setPolicies([]);
+            setBuiltins([]);
             setSupportedScenarios([]);
             setLoadError('Failed to load guardrails config');
         } finally {
@@ -752,10 +819,12 @@ const GuardrailsRulesPage = () => {
         }
     };
 
-    const openPolicyEditor = (policy: GuardrailsPolicy) => {
-        const nextState = makeEditorState(policy);
-        setSelectedPolicyId(policy.id);
-        setIsNewPolicy(false);
+    const openPolicyEditor = (policy: DisplayPolicy) => {
+        const builtin = policy.isBuiltin ? builtinMap.get(policy.id) : undefined;
+        const isVirtualBuiltin = !!builtin && !policies.some((existing) => existing.id === policy.id);
+        const nextState = isVirtualBuiltin ? makeEditorState(buildBuiltinPayload(builtin, false)) : makeEditorState(policy);
+        setSelectedPolicyId(isVirtualBuiltin ? null : policy.id);
+        setIsNewPolicy(isVirtualBuiltin);
         setEditorOpen(true);
         setAdvancedOpen(false);
         setSelectedResourceRow(splitLines(nextState.resources).length > 0 ? 0 : -1);
@@ -928,7 +997,12 @@ const GuardrailsRulesPage = () => {
     const handleTogglePolicy = async (policyId: string, enabled: boolean) => {
         try {
             setPendingPolicyId(policyId);
-            const result = await api.updateGuardrailsPolicy(policyId, { enabled });
+            const builtin = builtinMap.get(policyId);
+            const installedPolicy = policies.find((policy) => policy.id === policyId);
+            const result =
+                !installedPolicy && builtin
+                    ? await api.createGuardrailsPolicy(buildBuiltinPayload(builtin, enabled))
+                    : await api.updateGuardrailsPolicy(policyId, { enabled });
             if (!result?.success) {
                 setActionMessage({ type: 'error', text: result?.error || 'Failed to update policy' });
                 return;
@@ -1006,7 +1080,7 @@ const GuardrailsRulesPage = () => {
     const renderPolicySection = (
         title: string,
         description: string,
-        items: GuardrailsPolicy[],
+        items: DisplayPolicy[],
         kind: 'resource_access' | 'command_execution' | 'content'
     ) => (
         <Box sx={{ mb: 3 }}>
@@ -1073,6 +1147,7 @@ const GuardrailsRulesPage = () => {
                                                 {policy.id}
                                             </Typography>
                                             {policy.group && <Chip size="small" label={policy.group} variant="outlined" />}
+                                            {policy.isBuiltin && <Chip size="small" label="Builtin" variant="outlined" />}
                                             {effectiveState.inheritedDisabled && (
                                                 <Chip size="small" label="Group disabled" variant="outlined" />
                                             )}
@@ -1120,20 +1195,24 @@ const GuardrailsRulesPage = () => {
                                             }
                                             label="Enabled"
                                         />
-                                        <Tooltip title="Delete policy" arrow>
-                                            <span>
-                                                <IconButton
-                                                    size="small"
-                                                    disabled={pendingPolicyId === policy.id}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setDeletePolicyId(policy.id);
-                                                    }}
-                                                >
-                                                    <DeleteOutline fontSize="small" />
-                                                </IconButton>
-                                            </span>
-                                        </Tooltip>
+                                        <Box sx={{ width: 32, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+                                            {!policy.isBuiltin && (
+                                                <Tooltip title="Delete policy" arrow>
+                                                    <span>
+                                                        <IconButton
+                                                            size="small"
+                                                            disabled={pendingPolicyId === policy.id}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setDeletePolicyId(policy.id);
+                                                            }}
+                                                        >
+                                                            <DeleteOutline fontSize="small" />
+                                                        </IconButton>
+                                                    </span>
+                                                </Tooltip>
+                                            )}
+                                        </Box>
                                     </Stack>
                                 </Box>
                             </ListItem>
