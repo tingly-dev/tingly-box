@@ -23,7 +23,7 @@ export default {
   },
   "layout": {
     "appTitle": "Tingly Box",
-    "slogan": "Smart and Ready for AI Agent Dev",
+    "slogan": "Your Intelligence, Orchestrated.",
     "version": "version {{version}}",
     "nav": {
       "home": "Scenario",

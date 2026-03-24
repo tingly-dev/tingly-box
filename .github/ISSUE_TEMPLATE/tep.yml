@@ -1,0 +1,124 @@
+name: "TEP: Tingly-Box Enhancement Proposal"
+description: Propose a significant enhancement, design change, or new capability for Tingly-Box
+title: "[TEP] "
+labels: ["tep", "enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A **TEP (Tingly-Box Enhancement Proposal)** is for proposals that require design discussion before implementation — new capabilities, architectural changes, or cross-cutting improvements.
+
+        For simple feature requests, use the [Feature Request](?template=feature_request.yml) template instead.
+
+  - type: input
+    id: title
+    attributes:
+      label: TEP Title
+      description: A short, descriptive title for this proposal
+      placeholder: "e.g. TEP-001: Multi-Provider Load Balancing Strategy"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Target Version
+      description: Which version is this proposal targeting?
+      placeholder: "e.g. v0.2.0 or TBD"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: Which area does this proposal primarily affect?
+      options:
+        - Protocol
+        - UI
+        - Remote Control
+        - Load Balancing
+        - Smart Routing
+        - Auth / OAuth
+        - Observability
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One or two sentences describing the proposal
+      placeholder: "This proposal introduces X in order to Y."
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation & Problem Statement
+      description: What problem does this solve? Why is it needed? Include current pain points or limitations.
+      placeholder: |
+        Currently, when X happens, the system does Y which causes Z.
+        Users are affected because...
+    validations:
+      required: true
+
+  - type: textarea
+    id: design
+    attributes:
+      label: Proposed Design
+      description: Describe the proposed solution. Include architecture, data flow, API changes, or component interactions as needed.
+      placeholder: |
+        ## Overview
+        ...
+
+        ## Components Affected
+        - `internal/xxx/` — ...
+        - `frontend/xxx/` — ...
+
+        ## Data Flow
+        ...
+
+        ## API Changes
+        ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What other approaches were considered and why were they rejected?
+      placeholder: |
+        **Alternative A**: ...
+        Rejected because: ...
+
+        **Alternative B**: ...
+        Rejected because: ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: tradeoffs
+    attributes:
+      label: Trade-offs & Risks
+      description: What are the downsides, risks, or open questions with this proposal?
+      placeholder: |
+        - Breaking change: ...
+        - Performance impact: ...
+        - Open question: ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: How do we know this proposal is successfully implemented?
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: false

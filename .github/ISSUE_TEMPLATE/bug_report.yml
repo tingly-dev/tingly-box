@@ -1,0 +1,67 @@
+name: Bug Report
+description: Report a bug in Tingly-Box
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Which version of Tingly-Box are you using?
+      placeholder: "e.g. v0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: system
+    attributes:
+      label: System Information
+      description: OS, architecture, and any relevant environment details
+      placeholder: "e.g. macOS 14.0 arm64 / Ubuntu 22.04 x86_64"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: Which area does this bug affect?
+      options:
+        - Protocol
+        - UI
+        - Remote Control
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Scenario
+      description: Describe the scenario in which the bug occurs — what you were doing and what you expected to happen
+      placeholder: |
+        I was doing X with model Y when...
+        Expected: ...
+        Actual: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Minimal steps to reproduce the issue
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Error Output
+      description: Paste any relevant logs or error messages
+      render: shell
+    validations:
+      required: false

@@ -564,7 +564,7 @@ const Layout = ({ children }: LayoutProps) => {
                     height: footerHeight,
                 }}
             >
-                <Tooltip title="About" placement="right" arrow>
+                <Tooltip title="Click" placement="right" arrow>
                     <ListItemButton
                         onClick={handleEasterEgg}
                         sx={{
@@ -741,18 +741,21 @@ const Layout = ({ children }: LayoutProps) => {
                     borderColor: 'divider',
                 }}
             >
-                <Typography
-                    variant="caption"
-                    sx={{
-                        color: 'text.secondary',
-                        fontSize: '0.7rem',
-                        textAlign: 'center',
-                        display: 'block',
-                        fontStyle: 'italic',
-                    }}
-                >
-                    {t('layout.slogan')}
-                </Typography>
+                <Tooltip title="For all Solo Builders, Dev Teams and Agents." placement="top" arrow>
+                    <Typography
+                        variant="caption"
+                        sx={{
+                            color: 'text.secondary',
+                            fontSize: '0.7rem',
+                            textAlign: 'center',
+                            display: 'block',
+                            fontStyle: 'italic',
+                            cursor: 'default',
+                        }}
+                    >
+                        {t('layout.slogan')}
+                    </Typography>
+                </Tooltip>
             </Box>
         </Box>
     );
@@ -884,7 +887,7 @@ const Layout = ({ children }: LayoutProps) => {
                     },
                 }}
             >
-                Hi, I'm Tingly-Box, Your Smart AI Proxy
+                Hi, I'm Tingly-Box, Your Smart AI Orchestrator · {currentVersion}
             </Popover>
         </Box>
     );
