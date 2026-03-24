@@ -169,7 +169,7 @@ const GuardrailsMarketPage = () => {
             case 'command_execution':
                 return 'Command Execution';
             case 'content':
-                return 'Content';
+                return 'Privacy';
             default:
                 return kind;
         }
@@ -215,7 +215,7 @@ const GuardrailsMarketPage = () => {
             case 'command_execution':
                 return 'Policies for risky shell execution, download-and-exec patterns, and outbound command flows.';
             case 'output_filtering':
-                return 'Policies for filtering sensitive content from model output or tool results.';
+                return 'Policies for filtering sensitive output from model responses or tool results.';
             default:
                 return 'Builtin policies grouped by topic.';
         }

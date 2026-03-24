@@ -1,9 +1,6 @@
 package server
 
 import (
-	"os"
-	"strings"
-
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
@@ -33,28 +30,14 @@ func (s *Server) refreshGuardrailsCredentialCache() error {
 	if err != nil {
 		return err
 	}
-	next.byID = serverguardrails.BuildCredentialCache(guardrails.Config{}, credentials, nil).ByID
+	built := serverguardrails.BuildCredentialCache(guardrails.Config{}, credentials, s.getGuardrailsSupportedScenarios())
+	next.byID = built.ByID
+	next.byScenario = built.ByScenario
 
 	if !s.guardrailsEnabled() {
 		s.storeGuardrailsCredentialCache(next)
 		return nil
 	}
-
-	configPath, err := serverguardrails.FindGuardrailsConfig(s.config.ConfigDir)
-	if err != nil {
-		if os.IsNotExist(err) || strings.Contains(err.Error(), "no guardrails config") {
-			s.storeGuardrailsCredentialCache(next)
-			return nil
-		}
-		return err
-	}
-	cfg, err := guardrails.LoadConfig(configPath)
-	if err != nil {
-		return err
-	}
-	built := serverguardrails.BuildCredentialCache(cfg, credentials, s.getGuardrailsSupportedScenarios())
-	next.byScenario = built.ByScenario
-	next.byID = built.ByID
 
 	s.storeGuardrailsCredentialCache(next)
 	return nil

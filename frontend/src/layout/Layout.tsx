@@ -280,6 +280,11 @@ const Layout = ({ children }: LayoutProps) => {
                         icon: <AccessControlIcon sx={{ fontSize: 20 }} />,
                     },
                     {
+                        path: '/guardrails/groups',
+                        label: 'Policy Groups',
+                        icon: <Rule sx={{ fontSize: 20 }} />,
+                    },
+                    {
                         path: '/guardrails/rules',
                         label: 'Policies',
                         icon: <Rule sx={{ fontSize: 20 }} />,

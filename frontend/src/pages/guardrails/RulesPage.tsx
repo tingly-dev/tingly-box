@@ -41,11 +41,12 @@ import {
     Add,
     ArticleOutlined,
     AutoAwesome,
+    CheckCircleRounded,
     Code as CodeIcon,
     DeleteOutline,
     ExpandMore,
+    HelpOutline,
     LaptopMac,
-    Refresh as RefreshIcon,
     Rule,
     Remove,
     Terminal,
@@ -89,15 +90,6 @@ type GuardrailsPolicy = {
     };
     verdict?: string;
     reason?: string;
-};
-
-type ProtectedCredentialSummary = {
-    id: string;
-    name: string;
-    type: 'api_key' | 'token' | 'private_key';
-    alias_token: string;
-    enabled: boolean;
-    secret_mask: string;
 };
 
 type EditorState = {
@@ -152,6 +144,8 @@ const resourceAccessActionOptions = [
     },
 ] as const;
 
+const DEFAULT_GROUP_ID = 'default';
+
 const GuardrailsRulesPage = () => {
     const location = useLocation();
     const navigate = useNavigate();
@@ -161,7 +155,6 @@ const GuardrailsRulesPage = () => {
     const [supportedScenarios, setSupportedScenarios] = useState<string[]>([]);
     const [groups, setGroups] = useState<PolicyGroup[]>([]);
     const [policies, setPolicies] = useState<GuardrailsPolicy[]>([]);
-    const [credentials, setCredentials] = useState<ProtectedCredentialSummary[]>([]);
     const [pendingPolicyId, setPendingPolicyId] = useState<string | null>(null);
     const [pendingSave, setPendingSave] = useState(false);
     const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null);
@@ -229,7 +222,7 @@ const GuardrailsRulesPage = () => {
     };
 
     const joinLines = (values?: string[]) => (Array.isArray(values) ? values.join('\n') : '');
-    const normalizeGroup = (value?: string) => value?.trim() || '';
+    const normalizeGroup = (value?: string) => value?.trim() || DEFAULT_GROUP_ID;
 
     const toggleValue = (values: string[], value: string) => {
         if (values.includes(value)) {
@@ -274,16 +267,15 @@ const GuardrailsRulesPage = () => {
 
     const scenarioOptions = useMemo(() => supportedScenarios.filter(Boolean), [supportedScenarios]);
     const groupOptions = useMemo(
-        () => groups.map((group) => ({ value: group.id, label: group.name || group.id })),
+        () => groups
+            .slice()
+            .sort((a, b) => {
+                if (a.id === DEFAULT_GROUP_ID) return -1;
+                if (b.id === DEFAULT_GROUP_ID) return 1;
+                return (a.name || a.id).localeCompare(b.name || b.id);
+            })
+            .map((group) => ({ value: group.id, label: group.name || group.id })),
         [groups]
-    );
-    const credentialOptions = useMemo(
-        () => credentials.filter((credential) => credential.enabled !== false),
-        [credentials]
-    );
-    const credentialsById = useMemo(
-        () => new Map(credentialOptions.map((credential) => [credential.id, credential])),
-        [credentialOptions]
     );
     const groupsById = useMemo(
         () => new Map(groups.map((group) => [group.id, group])),
@@ -393,9 +385,6 @@ const GuardrailsRulesPage = () => {
             return `This policy blocks attempts to ${actions} ${resourceLabel}.`;
         }
         const patterns = splitLines(state.patterns);
-        if (state.credentialRefs.length > 0) {
-            return `This policy masks ${state.credentialRefs.length} protected credential${state.credentialRefs.length > 1 ? 's' : ''} before content reaches the model.`;
-        }
         if (patterns.length === 0) {
             return 'This policy blocks prohibited content.';
         }
@@ -416,11 +405,7 @@ const GuardrailsRulesPage = () => {
             return `${toolNames} · ${actions} · ${resources}`;
         }
         const patterns = policy.match?.patterns || [];
-        const credentialRefs = policy.match?.credential_refs || [];
         if (patterns.length === 0) {
-            if (credentialRefs.length > 0) {
-                return `${credentialRefs.length} protected credential${credentialRefs.length > 1 ? 's' : ''}`;
-            }
             return 'No patterns configured';
         }
         return patterns.slice(0, 2).join(', ');
@@ -440,7 +425,7 @@ const GuardrailsRulesPage = () => {
 
     const getGroupByID = (groupID?: string) => groups.find((group) => group.id === groupID);
     const sanitizeVerdictForKind = (kind: EditorState['kind'], verdict?: string) => {
-        if (verdict === 'mask' && kind !== 'content') {
+        if (verdict === 'mask') {
             return 'block';
         }
         return verdict || 'block';
@@ -464,7 +449,7 @@ const GuardrailsRulesPage = () => {
     };
 
     const makeEditorState = (policy?: GuardrailsPolicy): EditorState => {
-        const group = policy?.group || '';
+        const group = normalizeGroup(policy?.group);
         const selectedGroup = getGroupByID(group);
         const scenarios =
             policy?.scope?.scenarios && policy.scope.scenarios.length > 0
@@ -487,7 +472,7 @@ const GuardrailsRulesPage = () => {
             resources: joinLines(policy?.match?.resources?.values),
             resourceMode: policy?.match?.resources?.mode || 'prefix',
             patterns: joinLines(policy?.match?.patterns),
-            credentialRefs: policy?.match?.credential_refs || [],
+            credentialRefs: [],
             patternMode: policy?.match?.pattern_mode || 'substring',
             caseSensitive: !!policy?.match?.case_sensitive,
             reason: policy?.reason || '',
@@ -508,7 +493,7 @@ const GuardrailsRulesPage = () => {
             ...draft,
             id: nextID,
             name: nextName,
-            group: normalizeGroup(draft.group),
+            group: normalizeGroup(draft.group || baseState.group),
             kind: nextKind,
             enabled: draft.enabled ?? baseState.enabled,
             verdict: sanitizeVerdictForKind(
@@ -525,7 +510,7 @@ const GuardrailsRulesPage = () => {
             resources: draft.resources ?? baseState.resources,
             resourceMode: draft.resourceMode || baseState.resourceMode,
             patterns: draft.patterns ?? baseState.patterns,
-            credentialRefs: draft.credentialRefs ?? baseState.credentialRefs,
+            credentialRefs: baseState.credentialRefs,
             patternMode: draft.patternMode || baseState.patternMode,
             caseSensitive: draft.caseSensitive ?? baseState.caseSensitive,
             reason: draft.reason ?? baseState.reason,
@@ -549,10 +534,7 @@ const GuardrailsRulesPage = () => {
             if (!silent) {
                 setLoading(true);
             }
-            const [guardrailsConfig, guardrailsCredentials] = await Promise.all([
-                api.getGuardrailsConfig(),
-                api.getGuardrailsCredentials(),
-            ]);
+            const guardrailsConfig = await api.getGuardrailsConfig();
             const config = guardrailsConfig?.config || {};
             const scenarios = Array.isArray(guardrailsConfig?.supported_scenarios)
                 ? guardrailsConfig.supported_scenarios.filter((value: string) => value && value !== '_global')
@@ -560,13 +542,11 @@ const GuardrailsRulesPage = () => {
             setSupportedScenarios(scenarios);
             setGroups(Array.isArray(config.groups) ? config.groups : []);
             setPolicies(Array.isArray(config.policies) ? config.policies : []);
-            setCredentials(Array.isArray(guardrailsCredentials?.data) ? guardrailsCredentials.data : []);
             setLoadError(null);
         } catch (error) {
             console.error('Failed to load guardrails config:', error);
             setGroups([]);
             setPolicies([]);
-            setCredentials([]);
             setSupportedScenarios([]);
             setLoadError('Failed to load guardrails config');
         } finally {
@@ -581,7 +561,10 @@ const GuardrailsRulesPage = () => {
     }, []);
 
     useEffect(() => {
-        if (loading || loadError || initializingDefaultGroup || groups.length > 0 || supportedScenarios.length === 0) {
+        if (loading || loadError || initializingDefaultGroup || supportedScenarios.length === 0) {
+            return;
+        }
+        if (groups.some((group) => group.id === DEFAULT_GROUP_ID)) {
             return;
         }
 
@@ -589,7 +572,7 @@ const GuardrailsRulesPage = () => {
             try {
                 setInitializingDefaultGroup(true);
                 const result = await api.createGuardrailsGroup({
-                    id: 'default',
+                    id: DEFAULT_GROUP_ID,
                     name: 'Default',
                     enabled: true,
                     severity: 'high',
@@ -611,7 +594,7 @@ const GuardrailsRulesPage = () => {
         };
 
         ensureDefaultGroup();
-    }, [groups.length, initializingDefaultGroup, loadError, loading, supportedScenarios]);
+    }, [groups, initializingDefaultGroup, loadError, loading, supportedScenarios]);
 
     useEffect(() => {
         const params = new URLSearchParams(location.search);
@@ -627,7 +610,7 @@ const GuardrailsRulesPage = () => {
         setSelectedPolicyId(policy.id);
         setIsNewPolicy(false);
         setEditorOpen(true);
-        setAdvancedOpen(nextState.group === '');
+        setAdvancedOpen(false);
         setEditorState(nextState);
         setEditorSnapshot(JSON.stringify(nextState));
         navigate('/guardrails/rules', { replace: true });
@@ -645,7 +628,7 @@ const GuardrailsRulesPage = () => {
         setSelectedPolicyId(null);
         setIsNewPolicy(true);
         setEditorOpen(true);
-        setAdvancedOpen(nextState.group === '');
+        setAdvancedOpen(false);
         setSelectedResourceRow(splitLines(nextState.resources).length > 0 ? 0 : -1);
         setSelectedCommandTermRow(splitLines(nextState.commandTerms).length > 0 ? 0 : -1);
         setSelectedPatternRow(splitLines(nextState.patterns).length > 0 ? 0 : -1);
@@ -653,23 +636,6 @@ const GuardrailsRulesPage = () => {
         setEditorSnapshot(JSON.stringify(nextState));
         navigate('/guardrails/rules', { replace: true, state: null });
     }, [location.state, navigate, supportedScenarios]);
-
-    const handleReload = async () => {
-        try {
-            setLoading(true);
-            const result = await api.reloadGuardrailsConfig();
-            if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to reload guardrails config' });
-                return;
-            }
-            await loadPolicies(true);
-            setActionMessage({ type: 'success', text: 'Guardrails reloaded successfully.' });
-        } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to reload guardrails config' });
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const openNewGroupDialog = () => {
         blurActiveElement();
@@ -742,7 +708,7 @@ const GuardrailsRulesPage = () => {
             }
             await loadPolicies(true);
             if (editorState.group === deleteGroupId) {
-                setEditorState((state) => ({ ...state, group: '' }));
+                setEditorState((state) => ({ ...state, group: DEFAULT_GROUP_ID }));
             }
             setDeleteGroupId(null);
             setActionMessage({ type: 'success', text: `Group "${deleteGroupId}" deleted.` });
@@ -791,7 +757,7 @@ const GuardrailsRulesPage = () => {
         setSelectedPolicyId(policy.id);
         setIsNewPolicy(false);
         setEditorOpen(true);
-        setAdvancedOpen(nextState.group === '');
+        setAdvancedOpen(false);
         setSelectedResourceRow(splitLines(nextState.resources).length > 0 ? 0 : -1);
         setSelectedCommandTermRow(splitLines(nextState.commandTerms).length > 0 ? 0 : -1);
         setSelectedPatternRow(splitLines(nextState.patterns).length > 0 ? 0 : -1);
@@ -805,7 +771,7 @@ const GuardrailsRulesPage = () => {
         setSelectedPolicyId(null);
         setIsNewPolicy(true);
         setEditorOpen(true);
-        setAdvancedOpen(nextState.group === '');
+        setAdvancedOpen(false);
         setSelectedResourceRow(splitLines(nextState.resources).length > 0 ? 0 : -1);
         setSelectedCommandTermRow(splitLines(nextState.commandTerms).length > 0 ? 0 : -1);
         setSelectedPatternRow(splitLines(nextState.patterns).length > 0 ? 0 : -1);
@@ -817,11 +783,11 @@ const GuardrailsRulesPage = () => {
         const selectedGroup = getGroupByID(groupID);
         setEditorState((state) => ({
             ...state,
-            group: groupID,
-            verdict: groupID ? getGroupDefaultVerdict(selectedGroup, state.kind) : sanitizeVerdictForKind(state.kind, state.verdict),
-            scenarios: groupID ? getGroupDefaultScenarios(selectedGroup) : state.scenarios,
+            group: normalizeGroup(groupID),
+            verdict: getGroupDefaultVerdict(selectedGroup, state.kind),
+            scenarios: getGroupDefaultScenarios(selectedGroup),
         }));
-        setAdvancedOpen(groupID === '');
+        setAdvancedOpen(false);
     };
 
     const buildPolicyPayload = (state: EditorState) => {
@@ -843,7 +809,7 @@ const GuardrailsRulesPage = () => {
         const payload = {
             id: state.id,
             name: state.name,
-            group: state.group,
+            group: normalizeGroup(state.group),
             kind: state.kind,
             enabled: state.enabled,
             scope: {
@@ -854,8 +820,7 @@ const GuardrailsRulesPage = () => {
             match:
                 state.kind === 'content'
                     ? {
-                          patterns: state.verdict === 'mask' ? [] : splitLines(state.patterns),
-                          credential_refs: state.verdict === 'mask' ? state.credentialRefs : [],
+                          patterns: splitLines(state.patterns),
                           pattern_mode: state.patternMode,
                           case_sensitive: state.caseSensitive,
                       }
@@ -880,12 +845,8 @@ const GuardrailsRulesPage = () => {
                       ...editorState,
                       id: generatePolicyId(editorState.name, editorState.kind, isNewPolicy ? undefined : selectedPolicyId || editorState.id),
                   };
-        if (editorState.kind === 'content' && editorState.verdict === 'mask' && editorState.credentialRefs.length === 0) {
-            setActionMessage({ type: 'error', text: 'Mask policies must reference at least one protected credential.' });
-            return false;
-        }
-        if (editorState.kind === 'content' && editorState.verdict !== 'mask' && splitLines(editorState.patterns).length === 0) {
-            setActionMessage({ type: 'error', text: 'Content policies require at least one pattern.' });
+        if (editorState.kind === 'content' && splitLines(editorState.patterns).length === 0) {
+            setActionMessage({ type: 'error', text: 'Privacy policies require at least one pattern.' });
             return false;
         }
         if (
@@ -1049,18 +1010,6 @@ const GuardrailsRulesPage = () => {
         kind: 'resource_access' | 'command_execution' | 'content'
     ) => (
         <Box sx={{ mb: 3 }}>
-            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
-                <Typography variant="subtitle1" fontWeight={500}>
-                    {title}
-                </Typography>
-                <Chip
-                    label={items.length}
-                    size="small"
-                    color="primary"
-                    variant="outlined"
-                    sx={{ height: 20, minWidth: 20, fontSize: '0.7rem' }}
-                />
-            </Stack>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                 {description}
             </Typography>
@@ -1072,14 +1021,14 @@ const GuardrailsRulesPage = () => {
                                 ? 'No resource access policies yet'
                                 : kind === 'command_execution'
                                   ? 'No command execution policies yet'
-                                  : 'No content policies yet'
+                                  : 'No privacy policies yet'
                         }
                         description={
                             kind === 'resource_access'
                                 ? 'Start with a guided resource access policy to control reads, writes, deletes, and protected paths.'
                                 : kind === 'command_execution'
                                   ? 'Start with a guided command execution policy to control dangerous or disallowed commands.'
-                                  : 'Start with a guided content policy to filter model output or tool results.'
+                                  : 'Start with a guided privacy policy to filter model output or tool results.'
                         }
                         showOAuthButton={false}
                         showHeroIcon={false}
@@ -1088,7 +1037,7 @@ const GuardrailsRulesPage = () => {
                     />
                 </Box>
             ) : (
-                <List dense sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, py: 0 }}>
+                <List dense sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, py: 0, overflow: 'hidden' }}>
                     {items.map((policy) => {
                         const effectiveState = getEffectivePolicyState(policy);
                         return (
@@ -1425,7 +1374,11 @@ const GuardrailsRulesPage = () => {
                                         <Typography variant="body2" fontWeight={600}>
                                             {presentation.label}
                                         </Typography>
-                                        {selected && <Chip size="small" color="primary" label="Selected" />}
+                                        {selected && (
+                                            <Tooltip title="Selected">
+                                                <CheckCircleRounded color="primary" sx={{ fontSize: 18 }} />
+                                            </Tooltip>
+                                        )}
                                     </Stack>
                                     <Typography variant="caption" color="text.secondary">
                                         {presentation.description}
@@ -1440,232 +1393,26 @@ const GuardrailsRulesPage = () => {
         </Box>
     );
 
-    const renderCredentialRefSelector = () => (
-        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
-            <Stack spacing={1.5}>
-                <Box>
-                    <Typography variant="subtitle2">Protected Credentials</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                        Mask policies only work with credentials already added in the Protected Credentials page. Select which aliases this policy should apply to.
-                    </Typography>
-                </Box>
-                {credentialOptions.length === 0 ? (
-                    <Alert
-                        severity="warning"
-                        action={
-                            <Button color="inherit" size="small" onClick={() => navigate('/guardrails/credentials')}>
-                                Open Credentials
-                            </Button>
-                        }
-                    >
-                        No protected credentials are available yet.
-                    </Alert>
-                ) : (
-                    <Stack spacing={1}>
-                        {credentialOptions.map((credential) => {
-                            const selected = editorState.credentialRefs.includes(credential.id);
-                            return (
-                                <Box
-                                    key={credential.id}
-                                    onClick={() =>
-                                        setEditorState((state) => ({
-                                            ...state,
-                                            credentialRefs: toggleValue(state.credentialRefs, credential.id),
-                                        }))
-                                    }
-                                    sx={{
-                                        border: '1px solid',
-                                        borderColor: selected ? 'primary.main' : 'divider',
-                                        bgcolor: selected ? 'action.selected' : 'background.paper',
-                                        borderRadius: 2,
-                                        p: 1.25,
-                                        cursor: 'pointer',
-                                        transition: 'all 0.15s ease',
-                                        '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
-                                    }}
-                                >
-                                    <Stack spacing={0.75}>
-                                        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-                                            <Typography variant="body2" fontWeight={600}>
-                                                {credential.name}
-                                            </Typography>
-                                            <Chip size="small" label={credential.type.replace('_', ' ')} variant="outlined" />
-                                            {selected && <Chip size="small" color="primary" label="Selected" />}
-                                        </Stack>
-                                        <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
-                                            {credential.alias_token}
-                                        </Typography>
-                                    </Stack>
-                                </Box>
-                            );
-                        })}
-                    </Stack>
-                )}
-                {editorState.credentialRefs.length > 0 && (
-                    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-                        {editorState.credentialRefs.map((credentialID) => {
-                            const credential = credentialsById.get(credentialID);
-                            if (!credential) {
-                                return null;
-                            }
-                            return (
-                                <Chip
-                                    key={credentialID}
-                                    label={credential.name}
-                                    onDelete={() =>
-                                        setEditorState((state) => ({
-                                            ...state,
-                                            credentialRefs: state.credentialRefs.filter((id) => id !== credentialID),
-                                        }))
-                                    }
-                                />
-                            );
-                        })}
-                    </Stack>
-                )}
-                <FormHelperText>
-                    {editorState.credentialRefs.length > 0
-                        ? `${editorState.credentialRefs.length} protected credential${editorState.credentialRefs.length > 1 ? 's are' : ' is'} selected for alias masking.`
-                        : 'Select one or more protected credentials.'}
-                </FormHelperText>
-            </Stack>
-        </Box>
-    );
-
     return (
         <PageLayout loading={loading}>
             <Stack spacing={3}>
                 <UnifiedCard
-                    title="Guardrails Policies"
-                    subtitle="Manage policy-based Guardrails configuration. Policies are grouped by risk or ownership, then compiled into the runtime engine."
+                    title="Policies"
+                    subtitle="Define individual Guardrails rules. Group membership is managed separately on the Policy Groups page."
                     size="full"
                     rightAction={
-                        <Tooltip title="Reload guardrails config">
-                            <IconButton onClick={handleReload} size="small" aria-label="Reload guardrails config">
-                                <RefreshIcon />
-                            </IconButton>
-                        </Tooltip>
+                        <Stack direction="row" spacing={1}>
+                            <Button variant="outlined" size="small" onClick={() => navigate('/guardrails/groups')}>
+                                Manage Groups
+                            </Button>
+                        </Stack>
                     }
                 >
                     <Stack spacing={1.5}>
-                        <Typography variant="body2" color="text.secondary">
-                            Use resource access policies to protect files and directories, command execution policies to control risky commands, and content policies to filter model or tool output.
-                        </Typography>
                         {loadError && <Alert severity="error">{loadError}</Alert>}
                         {actionMessage && !editorOpen && !groupDialogOpen && (
                             <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>
                         )}
-                        <Divider />
-                        <Stack spacing={1.5}>
-                            <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-                                <Typography variant="subtitle2">Groups</Typography>
-                                <Button size="small" variant="contained" onClick={openNewGroupDialog}>
-                                    New Group
-                                </Button>
-                            </Stack>
-                            <Typography variant="body2" color="text.secondary">
-                                Groups are a way to organize policies and share defaults. A group can define things like severity,
-                                default verdict, and default scope, so policies inside the group do not need to repeat those
-                                settings.
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                Use groups to separate high-risk policies from lower-risk ones, or to organize policies by team,
-                                scenario, or use case.
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                                {groups.length} group{groups.length === 1 ? '' : 's'} configured.
-                            </Typography>
-
-                            {groups.length === 0 ? (
-                                <Stack direction="row" spacing={1} alignItems="center">
-                                    <Chip size="small" label="No groups defined" variant="outlined" />
-                                    <Button size="small" variant="contained" onClick={openNewGroupDialog}>
-                                        New Group
-                                    </Button>
-                                </Stack>
-                            ) : (
-                                <List dense sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, py: 0 }}>
-                                    {groups.map((group) => (
-                                        <ListItem
-                                            key={group.id}
-                                            sx={{
-                                                px: 0,
-                                                py: 0,
-                                                borderBottom: '1px solid',
-                                                borderColor: 'divider',
-                                                '&:last-child': { borderBottom: 'none' },
-                                            }}
-                                        >
-                                            <Box
-                                                sx={{
-                                                    display: 'flex',
-                                                    alignItems: { xs: 'flex-start', md: 'center' },
-                                                    flexDirection: { xs: 'column', md: 'row' },
-                                                    gap: 1.5,
-                                                    width: '100%',
-                                                    px: 2,
-                                                    py: 1.5,
-                                                    cursor: 'pointer',
-                                                    '&:hover': { bgcolor: 'action.hover' },
-                                                }}
-                                                onClick={() => openEditGroupDialog(group)}
-                                            >
-                                                <Box sx={{ minWidth: { md: 220 }, flexShrink: 0 }}>
-                                                    <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-                                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                                            {group.name || group.id}
-                                                        </Typography>
-                                                        <Chip size="small" label={group.id} variant="outlined" />
-                                                    </Stack>
-                                                </Box>
-
-                                                <Box sx={{ flex: 1, minWidth: 0 }}>
-                                                    <Typography variant="body2" color="text.primary" sx={{ whiteSpace: 'normal' }}>
-                                                        {buildGroupSummary(group)}
-                                                    </Typography>
-                                                </Box>
-
-                                                <Stack
-                                                    direction="row"
-                                                    spacing={1}
-                                                    alignItems="center"
-                                                    sx={{ width: { xs: '100%', md: 'auto' }, justifyContent: { xs: 'space-between', md: 'flex-end' } }}
-                                                >
-                                                    <Chip size="small" label={group.enabled === false ? 'Disabled' : 'Enabled'} />
-                                                    <FormControlLabel
-                                                        sx={{ ml: 0 }}
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        control={
-                                                            <Switch
-                                                                size="small"
-                                                                checked={group.enabled !== false}
-                                                                disabled={pendingGroupId === group.id}
-                                                                onChange={(e) => handleToggleGroup(group.id, e.target.checked)}
-                                                            />
-                                                        }
-                                                        label="Enabled"
-                                                    />
-                                                    <Tooltip title="Delete group" arrow>
-                                                        <span>
-                                                            <IconButton
-                                                                size="small"
-                                                                disabled={pendingGroupId === group.id}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setDeleteGroupId(group.id);
-                                                                }}
-                                                            >
-                                                                <DeleteOutline fontSize="small" />
-                                                            </IconButton>
-                                                        </span>
-                                                    </Tooltip>
-                                                </Stack>
-                                            </Box>
-                                        </ListItem>
-                                    ))}
-                                </List>
-                            )}
-                        </Stack>
                     </Stack>
                 </UnifiedCard>
 
@@ -1687,9 +1434,6 @@ const GuardrailsRulesPage = () => {
                     }
                 >
                     <Stack spacing={2}>
-                        <Alert severity="info">
-                            Create or edit policies in a dialog. Resource access policies protect files and directories, command execution policies control commands, and content policies filter returned text.
-                        </Alert>
                         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                             <Tabs
                                 value={selectedPolicyTab}
@@ -1699,7 +1443,7 @@ const GuardrailsRulesPage = () => {
                             >
                                 <Tab value="resource_access" label={`Resource Access (${resourceAccessPolicies.length})`} />
                                 <Tab value="command_execution" label={`Command Execution (${commandExecutionPolicies.length})`} />
-                                <Tab value="content" label={`Content (${contentPolicies.length})`} />
+                                <Tab value="content" label={`Privacy (${contentPolicies.length})`} />
                             </Tabs>
                         </Box>
                         {selectedPolicyTab === 'resource_access' &&
@@ -1718,7 +1462,7 @@ const GuardrailsRulesPage = () => {
                             )}
                         {selectedPolicyTab === 'content' &&
                             renderPolicySection(
-                                'Content Policies',
+                                'Privacy Policies',
                                 'Use these to filter model output and tool results before they are shown or forwarded.',
                                 contentPolicies,
                                 'content'
@@ -1732,40 +1476,15 @@ const GuardrailsRulesPage = () => {
                 <DialogContent dividers>
                     <Stack spacing={2} sx={{ pt: 1 }}>
                         {actionMessage && <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>}
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Typography variant="subtitle2">Policy Editor</Typography>
-                            <Stack spacing={0} alignItems="flex-end">
-                                <FormControlLabel
-                                    control={
-                                        <Switch
-                                            size="small"
-                                            checked={editorState.enabled}
-                                            onChange={(e) => setEditorState((state) => ({ ...state, enabled: e.target.checked }))}
-                                        />
-                                    }
-                                    label="Enabled"
-                                />
-                                <Typography variant="caption" color="text.secondary">
-                                    Synced with the list toggle.
-                                </Typography>
-                            </Stack>
-                        </Box>
-
-                        <Alert severity="info">
-                            {editorState.kind === 'resource_access'
-                                ? 'Guided flow: choose the access action first, then define the protected resource.'
-                                : editorState.kind === 'command_execution'
-                                  ? 'Guided flow: describe the command you want to block or review, then add optional tool or resource filters.'
-                                : editorState.kind === 'content'
-                                  ? 'Guided flow: choose where the content appears, then add a few patterns that clearly describe what should be blocked or reviewed.'
-                                  : 'Start by choosing the policy kind. The editor will then show the relevant options.'}
-                        </Alert>
-
-                        <Typography variant="subtitle2">Basic Settings</Typography>
                         <Stack spacing={1}>
-                            <Typography variant="body2" color="text.secondary">
-                                Policy kind defines what the policy inspects. Choose one before filling the rest of the form.
-                            </Typography>
+                            <Stack direction="row" spacing={0.75} alignItems="center">
+                                <Typography variant="subtitle2">Basic Settings</Typography>
+                                <Tooltip title="Choose the policy type first, then fill in only the fields that apply to that type.">
+                                    <IconButton size="small" sx={{ p: 0.25 }}>
+                                        <HelpOutline fontSize="inherit" />
+                                    </IconButton>
+                                </Tooltip>
+                            </Stack>
                             <Box
                                 sx={{
                                     display: 'grid',
@@ -1786,18 +1505,21 @@ const GuardrailsRulesPage = () => {
                                         '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
                                     }}
                                 >
-                                    <Stack spacing={1.25}>
-                                        <Stack direction="row" spacing={1} alignItems="center">
+                                    <Stack spacing={1}>
+                                        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
                                             <Terminal fontSize="small" color={editorState.kind === 'resource_access' ? 'primary' : 'action'} />
                                             <Typography variant="subtitle2">Resource Access</Typography>
-                                            {editorState.kind === 'resource_access' && <Chip size="small" color="primary" label="Selected" />}
+                                            <Tooltip title="Inspect access to files, directories, and other resources. Best for reads, writes, deletes, and protected paths like ~/.ssh or .env.">
+                                                <IconButton size="small" sx={{ p: 0.25 }}>
+                                                    <HelpOutline fontSize="inherit" />
+                                                </IconButton>
+                                            </Tooltip>
+                                            {editorState.kind === 'resource_access' && (
+                                                <Tooltip title="Selected">
+                                                    <CheckCircleRounded color="primary" sx={{ fontSize: 18 }} />
+                                                </Tooltip>
+                                            )}
                                         </Stack>
-                                        <Typography variant="body2" color="text.secondary">
-                                            Inspect access to files, directories, and other resources. Use this for reads, writes, deletes, and other resource-oriented operations.
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Best for: `~/.ssh`, `.env`, secrets files, protected paths.
-                                        </Typography>
                                     </Stack>
                                 </Box>
 
@@ -1814,20 +1536,23 @@ const GuardrailsRulesPage = () => {
                                         '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
                                     }}
                                 >
-                                        <Stack spacing={1.25}>
+                                    <Stack spacing={1}>
                                         <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
                                             <Terminal fontSize="small" color={editorState.kind === 'command_execution' ? 'primary' : 'action'} />
                                             <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap' }}>
                                                 Command Execution
                                             </Typography>
-                                            {editorState.kind === 'command_execution' && <Chip size="small" color="primary" label="Selected" />}
+                                            <Tooltip title="Inspect commands the model wants to run. Best for dangerous shell commands, execution patterns, and risky programs like rm -rf or curl | sh.">
+                                                <IconButton size="small" sx={{ p: 0.25 }}>
+                                                    <HelpOutline fontSize="inherit" />
+                                                </IconButton>
+                                            </Tooltip>
+                                            {editorState.kind === 'command_execution' && (
+                                                <Tooltip title="Selected">
+                                                    <CheckCircleRounded color="primary" sx={{ fontSize: 18 }} />
+                                                </Tooltip>
+                                            )}
                                         </Stack>
-                                        <Typography variant="body2" color="text.secondary">
-                                            Inspect commands that the model wants to run. Use this for dangerous shell commands, execution patterns, or risky programs.
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Best for: `rm -rf`, `curl | sh`, shell execution, dangerous commands.
-                                        </Typography>
                                     </Stack>
                                 </Box>
 
@@ -1844,18 +1569,21 @@ const GuardrailsRulesPage = () => {
                                         '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
                                     }}
                                 >
-                                    <Stack spacing={1.25}>
-                                        <Stack direction="row" spacing={1} alignItems="center">
+                                    <Stack spacing={1}>
+                                        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
                                             <ArticleOutlined fontSize="small" color={editorState.kind === 'content' ? 'primary' : 'action'} />
-                                            <Typography variant="subtitle2">Content Policy</Typography>
-                                            {editorState.kind === 'content' && <Chip size="small" color="primary" label="Selected" />}
+                                            <Typography variant="subtitle2">Privacy Policy</Typography>
+                                            <Tooltip title="Inspect returned text from the model or tools. Use privacy patterns to review or block sensitive content.">
+                                                <IconButton size="small" sx={{ p: 0.25 }}>
+                                                    <HelpOutline fontSize="inherit" />
+                                                </IconButton>
+                                            </Tooltip>
+                                            {editorState.kind === 'content' && (
+                                                <Tooltip title="Selected">
+                                                    <CheckCircleRounded color="primary" sx={{ fontSize: 18 }} />
+                                                </Tooltip>
+                                            )}
                                         </Stack>
-                                        <Typography variant="body2" color="text.secondary">
-                                            Inspect returned text from the model or tools. Use this for secrets, unsafe phrases, sensitive file contents, or outputs that should be blocked.
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Best for: tool results, model output, text patterns, secret filtering.
-                                        </Typography>
                                     </Stack>
                                 </Box>
                             </Box>
@@ -1894,47 +1622,17 @@ const GuardrailsRulesPage = () => {
                         {editorState.kind ? (
                             <>
                                 <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
-                                    <Stack spacing={2}>
+                                    <Stack spacing={1.25}>
                                         <Box>
-                                            <Typography variant="subtitle2">
-                                                Assign Group
-                                            </Typography>
-                                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                                                Groups are mainly for ownership and shared defaults. Choose one when this policy belongs to a specific risk bucket, team, or scenario set.
-                                            </Typography>
+                                            <Typography variant="subtitle2">Assign Group</Typography>
                                             <Box
                                                 sx={{
                                                     display: 'grid',
-                                                    gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-                                                    gap: 1.5,
-                                                    mt: 1.5,
+                                                    gridTemplateColumns: { xs: '1fr', md: '1fr 1fr', lg: '1fr 1fr 1fr' },
+                                                    gap: 1,
+                                                    mt: 1,
                                                 }}
                                             >
-                                                <Box
-                                                    onClick={() => handleSelectPolicyGroup('')}
-                                                    sx={{
-                                                        border: '1px solid',
-                                                        borderColor: editorState.group === '' ? 'primary.main' : 'divider',
-                                                        bgcolor: editorState.group === '' ? 'action.selected' : 'background.paper',
-                                                        borderRadius: 2,
-                                                        p: 1.5,
-                                                        cursor: 'pointer',
-                                                        transition: 'all 0.15s ease',
-                                                        '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
-                                                    }}
-                                                >
-                                                    <Stack spacing={0.75}>
-                                                        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-                                                            <Typography variant="body2" fontWeight={600}>
-                                                                Ungrouped
-                                                            </Typography>
-                                                            {editorState.group === '' && <Chip size="small" color="primary" label="Selected" />}
-                                                        </Stack>
-                                                        <Typography variant="caption" color="text.secondary">
-                                                            Keep this policy standalone. It will not inherit any group defaults.
-                                                        </Typography>
-                                                    </Stack>
-                                                </Box>
                                                 {groupOptions.map((option) => {
                                                     const selected = editorState.group === option.value;
                                                     return (
@@ -1946,22 +1644,21 @@ const GuardrailsRulesPage = () => {
                                                                 borderColor: selected ? 'primary.main' : 'divider',
                                                                 bgcolor: selected ? 'action.selected' : 'background.paper',
                                                                 borderRadius: 2,
-                                                                p: 1.5,
+                                                                p: 1.25,
                                                                 cursor: 'pointer',
                                                                 transition: 'all 0.15s ease',
                                                                 '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
                                                             }}
                                                         >
-                                                            <Stack spacing={0.75}>
-                                                                <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-                                                                    <Typography variant="body2" fontWeight={600}>
-                                                                        {option.label}
-                                                                    </Typography>
-                                                                    {selected && <Chip size="small" color="primary" label="Selected" />}
-                                                                </Stack>
-                                                                <Typography variant="caption" color="text.secondary">
-                                                                    Policies in this group inherit its defaults when those fields are left empty.
+                                                            <Stack direction="row" spacing={0.75} alignItems="center" useFlexGap flexWrap="wrap">
+                                                                <Typography variant="subtitle2">
+                                                                    {option.label}
                                                                 </Typography>
+                                                                {selected && (
+                                                                    <Tooltip title="Selected">
+                                                                        <CheckCircleRounded color="primary" sx={{ fontSize: 18 }} />
+                                                                    </Tooltip>
+                                                                )}
                                                             </Stack>
                                                         </Box>
                                                     );
@@ -1981,10 +1678,14 @@ const GuardrailsRulesPage = () => {
                                     >
                                         <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
                                             <Stack spacing={1.5}>
-                                                <Typography variant="subtitle2">Choose Actions</Typography>
-                                                <Typography variant="caption" color="text.secondary">
-                                                    Choose the type of resource access you want to control. These actions focus on files, directories, and other protected paths.
-                                                </Typography>
+                                                <Stack direction="row" spacing={0.75} alignItems="center">
+                                                    <Typography variant="subtitle2">Choose Actions</Typography>
+                                                    <Tooltip title="Choose the type of resource access you want to control. These actions focus on files, directories, and other protected resources.">
+                                                        <IconButton size="small" sx={{ p: 0.25 }}>
+                                                            <HelpOutline fontSize="inherit" />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                </Stack>
                                                 <Box
                                                     sx={{
                                                         display: 'grid',
@@ -2019,7 +1720,11 @@ const GuardrailsRulesPage = () => {
                                                                         <Typography variant="body2" fontWeight={600}>
                                                                             {option.label}
                                                                         </Typography>
-                                                                        {selected && <Chip size="small" color="primary" label="Selected" />}
+                                                                        {selected && (
+                                                                            <Tooltip title="Selected">
+                                                                                <CheckCircleRounded color="primary" sx={{ fontSize: 18 }} />
+                                                                            </Tooltip>
+                                                                        )}
                                                                     </Stack>
                                                                     <Typography variant="caption" color="text.secondary">
                                                                         {option.description}
@@ -2131,54 +1836,43 @@ const GuardrailsRulesPage = () => {
                                     >
                                         <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
                                             <Stack spacing={1.5}>
-                                                {editorState.verdict === 'mask' ? (
-                                                    <>
-                                                        <Alert severity="info">
-                                                            Mask policies do not match arbitrary content. They replace only the protected credentials selected below with alias tokens before content reaches the model.
-                                                        </Alert>
-                                                        {renderCredentialRefSelector()}
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        {renderCompactListEditor({
-                                                            title: 'Content Patterns',
-                                                            description: 'Define the text you want to block or review. Each row becomes one pattern.',
-                                                            columnLabel: 'Pattern',
-                                                            value: editorState.patterns,
-                                                            selectedIndex: selectedPatternRow,
-                                                            onSelectedIndexChange: setSelectedPatternRow,
-                                                            onChange: (patterns) => setEditorState((state) => ({ ...state, patterns })),
-                                                            placeholder: 'BEGIN OPENSSH PRIVATE KEY',
-                                                            helperText: 'Use a few specific patterns instead of a long generic list.',
-                                                        })}
-                                                        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                                                            <FormControl size="small" fullWidth>
-                                                                <InputLabel id="pattern-mode">Pattern Mode</InputLabel>
-                                                                <Select
-                                                                    labelId="pattern-mode"
-                                                                    label="Pattern Mode"
-                                                                    value={editorState.patternMode}
-                                                                    onChange={(e) => setEditorState((state) => ({ ...state, patternMode: String(e.target.value) }))}
-                                                                >
-                                                                    <MenuItem value="substring">substring</MenuItem>
-                                                                    <MenuItem value="regex">regex</MenuItem>
-                                                                </Select>
-                                                                <FormHelperText>Use regex only when substring matching is not precise enough.</FormHelperText>
-                                                            </FormControl>
-                                                            <FormControlLabel
-                                                                sx={{ ml: 0, alignItems: 'center', minWidth: { md: 160 } }}
-                                                                control={
-                                                                    <Switch
-                                                                        size="small"
-                                                                        checked={editorState.caseSensitive}
-                                                                        onChange={(e) => setEditorState((state) => ({ ...state, caseSensitive: e.target.checked }))}
-                                                                    />
-                                                                }
-                                                                label="Case sensitive"
+                                                {renderCompactListEditor({
+                                                    title: 'Content Patterns',
+                                                    description: 'Define the text you want to block or review. Each row becomes one pattern.',
+                                                    columnLabel: 'Pattern',
+                                                    value: editorState.patterns,
+                                                    selectedIndex: selectedPatternRow,
+                                                    onSelectedIndexChange: setSelectedPatternRow,
+                                                    onChange: (patterns) => setEditorState((state) => ({ ...state, patterns })),
+                                                    placeholder: 'BEGIN OPENSSH PRIVATE KEY',
+                                                    helperText: 'Use a few specific patterns instead of a long generic list.',
+                                                })}
+                                                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+                                                    <FormControl size="small" fullWidth>
+                                                        <InputLabel id="pattern-mode">Pattern Mode</InputLabel>
+                                                        <Select
+                                                            labelId="pattern-mode"
+                                                            label="Pattern Mode"
+                                                            value={editorState.patternMode}
+                                                            onChange={(e) => setEditorState((state) => ({ ...state, patternMode: String(e.target.value) }))}
+                                                        >
+                                                            <MenuItem value="substring">substring</MenuItem>
+                                                            <MenuItem value="regex">regex</MenuItem>
+                                                        </Select>
+                                                        <FormHelperText>Use regex only when substring matching is not precise enough.</FormHelperText>
+                                                    </FormControl>
+                                                    <FormControlLabel
+                                                        sx={{ ml: 0, alignItems: 'center', minWidth: { md: 160 } }}
+                                                        control={
+                                                            <Switch
+                                                                size="small"
+                                                                checked={editorState.caseSensitive}
+                                                                onChange={(e) => setEditorState((state) => ({ ...state, caseSensitive: e.target.checked }))}
                                                             />
-                                                        </Stack>
-                                                    </>
-                                                )}
+                                                        }
+                                                        label="Case sensitive"
+                                                    />
+                                                </Stack>
                                             </Stack>
                                         </Box>
 
@@ -2240,7 +1934,7 @@ const GuardrailsRulesPage = () => {
                                             <Typography variant="caption" color="text.secondary">
                                                 {editorState.group
                                                     ? 'This policy starts from the selected group defaults. Expand to review or override verdict and scope.'
-                                                    : 'Configure verdict and scenario scope directly for this standalone policy.'}
+                                                    : 'Review or override the default verdict and scenario scope for this policy.'}
                                             </Typography>
                                         </Stack>
                                     </AccordionSummary>
@@ -2258,7 +1952,7 @@ const GuardrailsRulesPage = () => {
                                                         <Box
                                                             sx={{
                                                                 display: 'grid',
-                                                                gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr 1fr' },
+                                                                gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' },
                                                                 gap: 1.5,
                                                                 mt: 1.5,
                                                             }}
@@ -2274,15 +1968,6 @@ const GuardrailsRulesPage = () => {
                                                                     label: 'Review',
                                                                     description: 'Mark the result as needing attention without fully blocking it.',
                                                                 },
-                                                                ...(editorState.kind === 'content'
-                                                                    ? [
-                                                                          {
-                                                                              value: 'mask',
-                                                                              label: 'Mask',
-                                                                              description: 'Replace selected protected credentials with alias tokens and continue.',
-                                                                          },
-                                                                      ]
-                                                                    : []),
                                                                 {
                                                                     value: 'block',
                                                                     label: 'Block',
@@ -2310,7 +1995,11 @@ const GuardrailsRulesPage = () => {
                                                                                 <Typography variant="body2" fontWeight={600}>
                                                                                     {option.label}
                                                                                 </Typography>
-                                                                                {selected && <Chip size="small" color="primary" label="Selected" />}
+                                                                                {selected && (
+                                                                                    <Tooltip title="Selected">
+                                                                                        <CheckCircleRounded color="primary" sx={{ fontSize: 18 }} />
+                                                                                    </Tooltip>
+                                                                                )}
                                                                             </Stack>
                                                                             <Typography variant="caption" color="text.secondary">
                                                                                 {option.description}
@@ -2326,14 +2015,10 @@ const GuardrailsRulesPage = () => {
 
                                             {renderScenarioScopeSelector({
                                                 title: 'Scenario Scope',
-                                                description: editorState.group
-                                                    ? 'Defaults come from the selected group. Expand and change this only when the policy needs a narrower or broader scope.'
-                                                    : 'Choose where this policy applies. By default, standalone policies start enabled for every Guardrails-supported scenario.',
+                                                description: 'Defaults come from the selected group. Expand and change this only when the policy needs a narrower or broader scope.',
                                                 value: editorState.scenarios,
                                                 onChange: (scenarios) => setEditorState((state) => ({ ...state, scenarios })),
-                                                helperText: editorState.group
-                                                    ? 'The current selection was initialized from the chosen group.'
-                                                    : 'Leave every scenario selected unless this policy should only apply to a narrower workflow.',
+                                                helperText: 'The current selection was initialized from the chosen group.',
                                             })}
                                         </Stack>
                                     </AccordionDetails>
@@ -2489,7 +2174,6 @@ const GuardrailsRulesPage = () => {
                                         {[
                                             { value: 'allow', label: 'Allow' },
                                             { value: 'review', label: 'Review' },
-                                            { value: 'mask', label: 'Mask' },
                                             { value: 'block', label: 'Block' },
                                         ].map((option) => (
                                             <Chip

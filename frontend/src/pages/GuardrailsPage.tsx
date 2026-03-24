@@ -244,7 +244,7 @@ const GuardrailsPage = () => {
                                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                                     <Stack direction="row" spacing={1.25} alignItems="center">
                                         <ArticleOutlined color="primary" fontSize="small" />
-                                        <Typography variant="body2">Content</Typography>
+                                        <Typography variant="body2">Privacy</Typography>
                                     </Stack>
                                     <Chip size="small" label={`${stats.content}`} />
                                 </Stack>
