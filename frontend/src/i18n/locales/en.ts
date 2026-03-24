@@ -23,7 +23,7 @@ export default {
   },
   "layout": {
     "appTitle": "Tingly Box",
-    "slogan": "Your Intelligence, Orchestrated. For all Solo Builder, Dev Teams and Agents.",
+    "slogan": "Your Intelligence, Orchestrated.",
     "version": "version {{version}}",
     "nav": {
       "home": "Scenario",
