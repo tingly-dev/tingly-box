@@ -36,18 +36,16 @@ func (h *Handler) GetRules(c *gin.Context) {
 		return
 	}
 
-	rules := h.config.GetRequestConfigs()
-
-	// Filter by scenario if provided
 	scenario := c.Query("scenario")
 	if scenario != "" {
-		filteredRules := make([]typ.Rule, 0)
-		for _, rule := range rules {
-			if string(rule.GetScenario()) == scenario {
-				filteredRules = append(filteredRules, rule)
-			}
+		rules := h.config.GetRulesForScenarioPath(typ.RuleScenario(scenario))
+		response := RulesResponse{
+			Success: true,
+			Data:    rules,
 		}
-		rules = filteredRules
+
+		c.JSON(http.StatusOK, response)
+		return
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
@@ -55,13 +53,6 @@ func (h *Handler) GetRules(c *gin.Context) {
 		})
 		return
 	}
-
-	response := RulesResponse{
-		Success: true,
-		Data:    rules,
-	}
-
-	c.JSON(http.StatusOK, response)
 }
 
 // GetRule returns a specific rule by UUID
