@@ -884,7 +884,7 @@ const Layout = ({ children }: LayoutProps) => {
                     },
                 }}
             >
-                Hi, I'm Tingly-Box, Your Smart AI Proxy
+                Hi, I'm Tingly-Box, Your Smart AI Proxy · {currentVersion}
             </Popover>
         </Box>
     );
