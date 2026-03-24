@@ -6,9 +6,9 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
-// cleanSystemMessages removes billing header messages from system blocks
+// CleanSystemMessages removes billing header messages from system blocks
 // This is used for Claude Code scenario to filter out injected billing headers
-func cleanSystemMessages(blocks []anthropic.TextBlockParam) []anthropic.TextBlockParam {
+func CleanSystemMessages(blocks []anthropic.TextBlockParam) []anthropic.TextBlockParam {
 	if len(blocks) == 0 {
 		return blocks
 	}
@@ -23,8 +23,8 @@ func cleanSystemMessages(blocks []anthropic.TextBlockParam) []anthropic.TextBloc
 	return result
 }
 
-// cleanBetaSystemMessages removes billing header messages from beta system blocks
-func cleanBetaSystemMessages(blocks []anthropic.BetaTextBlockParam) []anthropic.BetaTextBlockParam {
+// CleanBetaSystemMessages removes billing header messages from beta system blocks
+func CleanBetaSystemMessages(blocks []anthropic.BetaTextBlockParam) []anthropic.BetaTextBlockParam {
 	if len(blocks) == 0 {
 		return blocks
 	}

@@ -88,7 +88,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 
 	// Clean system messages if clean_header flag is enabled (for Claude Code scenario)
 	if cleanHeader {
-		req.MessageNewParams.System = cleanSystemMessages(req.MessageNewParams.System)
+		req.MessageNewParams.System = CleanSystemMessages(req.MessageNewParams.System)
 	}
 
 	// Ensure max_tokens is set (Anthropic API requires this)
