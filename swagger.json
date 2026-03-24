@@ -68,6 +68,78 @@
         }
       }
     },
+    "/api/v1/auth/model-token/reset": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Reset model token to a new secure random value",
+        "description": "Reset model token to a new secure random value",
+        "operationId": "apiV1AuthModel-tokenResetPost",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/H"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/token": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Get current user token (masked)",
+        "description": "Get current user token (masked)",
+        "operationId": "apiV1AuthTokenGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/H"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/token/reset": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Reset user token to a new secure random value",
+        "description": "Reset user token to a new secure random value",
+        "operationId": "apiV1AuthTokenResetPost",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/H"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/validate": {
       "get": {
         "tags": [
@@ -206,7 +278,7 @@
           {
             "name": "platform",
             "in": "query",
-            "description": "Platform identifier (telegram, discord, slack, feishu, dingtalk, whatsapp)",
+            "description": "Platform identifier (telegram, discord, slack, feishu, dingtalk, whatsapp, weixin)",
             "required": true,
             "type": "string"
           }
@@ -482,6 +554,120 @@
             "description": "ImBot settings not found",
             "schema": {
               "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imbot-settings/{uuid}/weixin/qr-cancel": {
+      "post": {
+        "tags": [
+          "imbot-settings",
+          "weixin"
+        ],
+        "summary": "Cancels pending Weixin QR code login",
+        "description": "Cancels pending Weixin QR code login",
+        "operationId": "apiV1Imbot-settingsUuidWeixinQr-cancelPost",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "Unique identifier (UUID)",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imbot-settings/{uuid}/weixin/qr-start": {
+      "post": {
+        "tags": [
+          "imbot-settings",
+          "weixin"
+        ],
+        "summary": "Initiates Weixin QR code login flow",
+        "description": "Initiates Weixin QR code login flow",
+        "operationId": "apiV1Imbot-settingsUuidWeixinQr-startPost",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "Unique identifier (UUID)",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/QRStartRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/QRStartResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imbot-settings/{uuid}/weixin/qr-status": {
+      "get": {
+        "tags": [
+          "imbot-settings",
+          "weixin"
+        ],
+        "summary": "Polls Weixin QR code login status",
+        "description": "Polls Weixin QR code login status",
+        "operationId": "apiV1Imbot-settingsUuidWeixinQr-statusGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "Unique identifier (UUID)",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/QRStatusResponse"
             }
           }
         }
@@ -3416,6 +3602,10 @@
           "type": "string",
           "description": "Field description"
         },
+        "flags": {
+          "description": "Field flags",
+          "$ref": "#/definitions/RuleFlags"
+        },
         "lb_tactic": {
           "description": "Field lb_tactic",
           "$ref": "#/definitions/Tactic"
@@ -5434,6 +5624,57 @@
         "data"
       ]
     },
+    "QRStartRequest": {
+      "type": "object",
+      "properties": {
+        "bot_uuid": {
+          "type": "string",
+          "description": "Field bot_uuid"
+        }
+      },
+      "required": [
+        "bot_uuid"
+      ]
+    },
+    "QRStartResponse": {
+      "type": "object",
+      "properties": {
+        "expires_in": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field expires_in"
+        },
+        "qrcode_data": {
+          "type": "string",
+          "description": "Field qrcode_data"
+        },
+        "qrcode_id": {
+          "type": "string",
+          "description": "Field qrcode_id"
+        }
+      },
+      "required": [
+        "qrcode_id",
+        "qrcode_data",
+        "expires_in"
+      ]
+    },
+    "QRStatusResponse": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string",
+          "description": "Field error"
+        },
+        "status": {
+          "type": "string",
+          "description": "Field status"
+        }
+      },
+      "required": [
+        "status"
+      ]
+    },
     "RefreshSkillLocationResponse": {
       "type": "object",
       "properties": {
@@ -5491,6 +5732,10 @@
           "type": "string",
           "description": "Field description"
         },
+        "flags": {
+          "description": "Field flags",
+          "$ref": "#/definitions/RuleFlags"
+        },
         "lb_tactic": {
           "description": "Field lb_tactic",
           "$ref": "#/definitions/Tactic"
@@ -5542,6 +5787,19 @@
         "active",
         "smart_enabled"
       ]
+    },
+    "RuleFlags": {
+      "type": "object",
+      "properties": {
+        "cursor_compat": {
+          "type": "boolean",
+          "description": "Field cursor_compat"
+        },
+        "cursor_compat_auto": {
+          "type": "boolean",
+          "description": "Field cursor_compat_auto"
+        }
+      }
     },
     "RuleResponse": {
       "type": "object",
@@ -5707,6 +5965,10 @@
         "disable_stream_usage": {
           "type": "boolean",
           "description": "Field disable_stream_usage"
+        },
+        "record_v2": {
+          "type": "string",
+          "description": "Field record_v2"
         },
         "recording": {
           "type": "boolean",
@@ -6775,6 +7037,10 @@
           "type": "string",
           "description": "Field description"
         },
+        "flags": {
+          "description": "Field flags",
+          "$ref": "#/definitions/RuleFlags"
+        },
         "lb_tactic": {
           "description": "Field lb_tactic",
           "$ref": "#/definitions/Tactic"
@@ -7160,6 +7426,50 @@
   },
   "tags": [
     {
+      "name": "imbot-settings",
+      "description": "Operations related to imbot-settings"
+    },
+    {
+      "name": "weixin",
+      "description": "Operations related to weixin"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "skills",
+      "description": "Operations related to skills"
+    },
+    {
+      "name": "logs",
+      "description": "Operations related to logs"
+    },
+    {
+      "name": "system-logs",
+      "description": "Operations related to system-logs"
+    },
+    {
+      "name": "actions",
+      "description": "Operations related to actions"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
+      "name": "auth",
+      "description": "Operations related to auth"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
+    },
+    {
       "name": "info",
       "description": "Operations related to info"
     },
@@ -7168,68 +7478,28 @@
       "description": "Operations related to server"
     },
     {
-      "name": "testing",
-      "description": "Operations related to testing"
-    },
-    {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
-      "name": "skills",
-      "description": "Operations related to skills"
-    },
-    {
-      "name": "imbot-settings",
-      "description": "Operations related to imbot-settings"
-    },
-    {
-      "name": "system-logs",
-      "description": "Operations related to system-logs"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
       "name": "scenarios",
       "description": "Operations related to scenarios"
-    },
-    {
-      "name": "usage",
-      "description": "Operations related to usage"
-    },
-    {
-      "name": "auth",
-      "description": "Operations related to auth"
-    },
-    {
-      "name": "logs",
-      "description": "Operations related to logs"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
-      "name": "oauth",
-      "description": "Operations related to oauth"
-    },
-    {
-      "name": "actions",
-      "description": "Operations related to actions"
     },
     {
       "name": "models",
       "description": "Operations related to models"
     },
     {
+      "name": "usage",
+      "description": "Operations related to usage"
+    },
+    {
       "name": "config",
       "description": "Operations related to config"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "history",
+      "description": "Operations related to history"
     }
   ]
 }
