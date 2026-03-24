@@ -30,7 +30,8 @@ import { useScenarioPageData } from '@/pages/scenario/hooks/useScenarioPageData'
  * };
  * ```
  *
- * @param scenario - The scenario identifier (e.g., "agent", "openai", "anthropic", "codex", "vscode", "xcode", "opencode")
+ * @param scenario - The scenario identifier for an existing scenario page
+ *   (e.g., "agent", "openai", "anthropic", "codex", "vscode", "xcode", "opencode")
  * @returns All the data and handlers needed by TemplatePage and scenario pages
  *
  * @returns {boolean} showTokenModal - Whether the API key modal is open

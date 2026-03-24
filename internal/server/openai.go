@@ -42,13 +42,13 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 	}
 
 	rules := cfg.GetRequestConfigs()
+	if scenario != nil {
+		rules = cfg.GetRulesForScenarioPath(*scenario)
+	}
 
 	var models []OpenAIModel
 	for _, rule := range rules {
 		if !rule.Active {
-			continue
-		}
-		if scenario != nil && rule.GetScenario() != *scenario {
 			continue
 		}
 

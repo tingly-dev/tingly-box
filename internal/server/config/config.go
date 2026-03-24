@@ -499,9 +499,9 @@ func (c *Config) AddRule(rule typ.Rule) error {
 
 	// Guard name unique
 	for _, rc := range c.Rules {
-		if rc.RequestModel == rule.RequestModel {
+		if rc.RequestModel == rule.RequestModel && rc.GetScenario() == rule.Scenario {
 			if rc.UUID != rule.UUID {
-				return fmt.Errorf("rule with Name %s already exists", rule.RequestModel)
+				return fmt.Errorf("rule with Name %s already exists in same scenario", rule.RequestModel)
 			}
 		}
 	}
@@ -654,15 +654,7 @@ func (c *Config) GetUUIDByRequestModelAndScenario(requestModel string, scenario 
 
 // IsRequestModelInScenario checks if the given model name is a request model in the given scenario
 func (c *Config) IsRequestModelInScenario(modelName string, scenario typ.RuleScenario) bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	for _, rc := range c.Rules {
-		if rc.RequestModel == modelName && rc.GetScenario() == scenario {
-			return true
-		}
-	}
-	return false
+	return c.MatchRuleByModelAndScenario(modelName, scenario) != nil
 }
 
 // IsWildcardRuleName checks if the given rule name is a wildcard that matches any model
@@ -677,21 +669,43 @@ func (c *Config) MatchRuleByModelAndScenario(requestModel string, scenario typ.R
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	// First, try exact match
-	for _, rule := range c.Rules {
-		if rule.RequestModel == requestModel && rule.GetScenario() == scenario {
-			return &rule
+	for _, candidateScenario := range typ.RuleLookupScenariosForPath(scenario) {
+		// First, try exact match
+		for _, rule := range c.Rules {
+			if rule.RequestModel == requestModel && rule.GetScenario() == candidateScenario {
+				return &rule
+			}
 		}
-	}
 
-	// Then, try wildcard match
-	for _, rule := range c.Rules {
-		if IsWildcardRuleName(rule.RequestModel) && rule.GetScenario() == scenario {
-			return &rule
+		// Then, try wildcard match
+		for _, rule := range c.Rules {
+			if IsWildcardRuleName(rule.RequestModel) && rule.GetScenario() == candidateScenario {
+				return &rule
+			}
 		}
 	}
 
 	return nil
+}
+
+// GetRulesForScenarioPath returns all rules that participate in resolution for a given path scenario.
+// This includes direct matches and shared general rules when the path supports that fallback.
+func (c *Config) GetRulesForScenarioPath(scenario typ.RuleScenario) []typ.Rule {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	allowed := make(map[typ.RuleScenario]struct{})
+	for _, candidate := range typ.RuleLookupScenariosForPath(scenario) {
+		allowed[candidate] = struct{}{}
+	}
+
+	rules := make([]typ.Rule, 0, len(c.Rules))
+	for _, rule := range c.Rules {
+		if _, ok := allowed[rule.GetScenario()]; ok {
+			rules = append(rules, rule)
+		}
+	}
+	return rules
 }
 
 // SetRequestConfigs updates all Rules
@@ -1925,7 +1939,7 @@ func init() {
 	DefaultRules = []typ.Rule{
 		{
 			UUID:          "built-in-anthropic",
-			Scenario:      typ.ScenarioAnthropic,
+			Scenario:      typ.ScenarioGeneral,
 			RequestModel:  "tingly-claude",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with Anthropic",
@@ -1964,7 +1978,7 @@ func init() {
 		},
 		{
 			UUID:          "built-in-openai",
-			Scenario:      typ.ScenarioOpenAI,
+			Scenario:      typ.ScenarioGeneral,
 			RequestModel:  "tingly-gpt",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with OpenAI",
@@ -2098,6 +2112,10 @@ func (c *Config) EnsureDefaultScenarioConfigs() {
 	// xcode: DisableStreamUsage = true (to fix compatibility with Xcode client)
 	// others: DisableStreamUsage = false (default behavior, include usage in streaming)
 	defaultScenarios := []typ.ScenarioConfig{
+		{
+			Scenario: typ.ScenarioGeneral,
+			Flags:    typ.ScenarioFlags{},
+		},
 		{
 			Scenario: typ.ScenarioXcode,
 			Flags: typ.ScenarioFlags{

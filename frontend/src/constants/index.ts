@@ -12,6 +12,7 @@ export const API_STYLES = {
 export const SCENARIOS = {
   OPENAI: 'openai',
   ANTHROPIC: 'anthropic',
+  GENERAL: 'general',
   CODEX: 'codex',
   CLAUDE_CODE: 'claude_code',
   OPENCODE: 'opencode',

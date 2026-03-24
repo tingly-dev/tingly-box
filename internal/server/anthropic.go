@@ -205,13 +205,13 @@ func (s *Server) anthropicListModelsWithScenario(c *gin.Context, scenario *typ.R
 	}
 
 	rules := cfg.GetRequestConfigs()
+	if scenario != nil {
+		rules = cfg.GetRulesForScenarioPath(*scenario)
+	}
 
 	var models []AnthropicModel
 	for _, rule := range rules {
 		if !rule.Active {
-			continue
-		}
-		if scenario != nil && rule.GetScenario() != *scenario {
 			continue
 		}
 

@@ -52,6 +52,7 @@ type RuleScenario string
 const (
 	ScenarioOpenAI     RuleScenario = "openai"
 	ScenarioAnthropic  RuleScenario = "anthropic"
+	ScenarioGeneral    RuleScenario = "general"
 	ScenarioAgent      RuleScenario = "agent"
 	ScenarioCodex      RuleScenario = "codex"
 	ScenarioClaudeCode RuleScenario = "claude_code"
