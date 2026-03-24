@@ -626,7 +626,7 @@ func (st *SpeedBasedTactic) SelectService(rule *Rule) *loadbalance.Service {
 		return activeServices[0]
 	}
 
-	// Filter services with sufficient samples and find the one with highest speed
+	// Find service with highest speed, handling uninitialized services gracefully
 	var selectedService *loadbalance.Service
 	var highestSpeed float64 = -1
 	hasValidService := false
@@ -634,8 +634,16 @@ func (st *SpeedBasedTactic) SelectService(rule *Rule) *loadbalance.Service {
 	for _, service := range activeServices {
 		avgSpeed, sampleCount := service.Stats.GetTokenSpeedStats()
 
-		// Skip services with insufficient samples
+		// For services without enough samples, assign an exploratory score to allow cold-start
+		// This prevents starvation of new services that need initial traffic to collect metrics
 		if sampleCount < st.MinSamplesRequired {
+			// Use 50% of threshold as exploratory score - allows new services to compete
+			// without completely overriding services with proven performance data
+			exploratoryScore := st.SpeedThresholdTps * 0.5
+			if exploratoryScore > highestSpeed {
+				highestSpeed = exploratoryScore
+				selectedService = service
+			}
 			continue
 		}
 
@@ -653,9 +661,17 @@ func (st *SpeedBasedTactic) SelectService(rule *Rule) *loadbalance.Service {
 	if !hasValidService {
 		for _, service := range activeServices {
 			avgSpeed, sampleCount := service.Stats.GetTokenSpeedStats()
+
+			// Apply same exploratory logic for consistency
 			if sampleCount < st.MinSamplesRequired {
+				exploratoryScore := st.SpeedThresholdTps * 0.5
+				if exploratoryScore > highestSpeed {
+					highestSpeed = exploratoryScore
+					selectedService = service
+				}
 				continue
 			}
+
 			if avgSpeed > highestSpeed {
 				highestSpeed = avgSpeed
 				selectedService = service
@@ -663,7 +679,7 @@ func (st *SpeedBasedTactic) SelectService(rule *Rule) *loadbalance.Service {
 		}
 	}
 
-	// If still no service has enough samples, fall back to round-robin
+	// Final fallback (should rarely reach here due to exploratory scoring)
 	if selectedService == nil {
 		return activeServices[0]
 	}

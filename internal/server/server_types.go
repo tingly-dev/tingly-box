@@ -67,13 +67,13 @@ type OpenAIChatCompletionResponse struct {
 
 // UpdateRuleTacticRequest represents the request to update rule tactic
 type UpdateRuleTacticRequest struct {
-	Tactic string `json:"tactic" binding:"required,oneof=round_robin weighted_random least_tokens least_requests" description:"Load balancing tactic" example:"round_robin"`
+	Tactic string `json:"tactic" binding:"required,oneof=token_based random latency_based speed_based adaptive" description:"Load balancing tactic" example:"adaptive"`
 }
 
 // UpdateRuleTacticResponse represents the response for updating rule tactic
 type UpdateRuleTacticResponse struct {
 	Message string `json:"message" example:"Tactic updated successfully"`
-	Tactic  string `json:"tactic" example:"round_robin"`
+	Tactic  string `json:"tactic" example:"adaptive"`
 }
 
 // RuleStatsResponse represents the statistics response for a rule
@@ -98,7 +98,7 @@ type CurrentServiceResponse struct {
 	Rule      string                 `json:"rule" example:"gpt-4"`
 	Service   interface{}            `json:"service"`
 	ServiceID string                 `json:"service_id" example:"openai:gpt-4"`
-	Tactic    string                 `json:"tactic" example:"round_robin"`
+	Tactic    string                 `json:"tactic" example:"adaptive"`
 	Stats     map[string]interface{} `json:"stats,omitempty"`
 }
 
