@@ -413,6 +413,16 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel, actualModel string, provider *typ.Provider, recorder *ProtocolRecorder) {
 	hc := protocol.NewHandleContext(c, respModel)
 
+	// Record TTFT when the first streaming chunk arrives
+	firstTokenRecorded := false
+	hc.WithOnStreamEvent(func(_ interface{}) error {
+		if !firstTokenRecorded {
+			SetFirstTokenTime(c)
+			firstTokenRecorded = true
+		}
+		return nil
+	})
+
 	// Add recorder hooks if recorder is available
 	if recorder != nil {
 		onEvent, onComplete, onError := NewRecorderHooksWithModel(recorder, actualModel, provider)
