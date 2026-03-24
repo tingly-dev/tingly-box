@@ -615,8 +615,8 @@ func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, set
 		options["proxy"] = setting.ProxyURL
 	}
 
-	// Add WeChat-specific options
-	if setting.Platform == "wechat" {
+	// Add Weixin-specific options
+	if setting.Platform == "weixin" {
 		if userID, ok := setting.Auth["user_id"]; ok {
 			options["user_id"] = userID
 		}
@@ -698,7 +698,7 @@ func buildAuthConfigInternal(setting bot.BotSetting) imbot.AuthConfig {
 			Token:     auth["token"],
 			AccountID: auth["phoneNumberId"],
 		}
-	case "wechat":
+	case "weixin":
 		return imbot.AuthConfig{
 			Type:      "qr",
 			Token:     auth["token"],

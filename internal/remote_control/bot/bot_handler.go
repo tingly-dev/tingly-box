@@ -183,7 +183,7 @@ func NewBotHandler(
 
 // GetVerbose returns the current verbose mode setting for a chat
 // Checks chat store first, then bot setting default
-// Returns false for platforms that don't support verbose mode (e.g., WeChat)
+// Returns false for platforms that don't support verbose mode (e.g., Weixin)
 func (h *BotHandler) GetVerbose(chatID string) bool {
 	// Check if platform supports verbose mode
 	//if !SupportsVerboseMode(h.botSetting.Platform) {
@@ -485,7 +485,7 @@ func (h *BotHandler) SendText(hCtx HandlerContext, text string) {
 		Text:      text,
 		ParseMode: imbot.ParseModeMarkdown,
 	}
-	// Forward context_token from incoming message metadata (required by WeChat)
+	// Forward context_token from incoming message metadata (required by Weixin)
 	if hCtx.Message.Metadata != nil {
 		if ct, ok := hCtx.Message.Metadata["context_token"].(string); ok {
 			if opts.Metadata == nil {
@@ -509,7 +509,7 @@ func (h *BotHandler) sendTextWithReply(hCtx HandlerContext, text string, replyTo
 		ParseMode: imbot.ParseModeMarkdown,
 		ReplyTo:   replyTo,
 	}
-	// Forward context_token from incoming message metadata (required by WeChat)
+	// Forward context_token from incoming message metadata (required by Weixin)
 	if hCtx.Message.Metadata != nil {
 		if ct, ok := hCtx.Message.Metadata["context_token"].(string); ok {
 			if opts.Metadata == nil {
@@ -532,7 +532,7 @@ func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string
 	kb := BuildActionKeyboard()
 	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
-	// Extract context_token from incoming message metadata (required by WeChat)
+	// Extract context_token from incoming message metadata (required by Weixin)
 	var contextToken string
 	if hCtx.Message.Metadata != nil {
 		if ct, ok := hCtx.Message.Metadata["context_token"].(string); ok {
@@ -556,7 +556,7 @@ func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string
 				"_trackActionMenuID": true,
 			}
 		}
-		// Forward context_token for WeChat
+		// Forward context_token for Weixin
 		if contextToken != "" {
 			if opts.Metadata == nil {
 				opts.Metadata = make(map[string]interface{})

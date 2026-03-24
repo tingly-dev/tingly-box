@@ -47,8 +47,8 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 		options["proxy"] = setting.ProxyURL
 	}
 
-	// Add WeChat-specific options
-	if setting.Platform == "wechat" {
+	// Add Weixin-specific options
+	if setting.Platform == "weixin" {
 		if userID, ok := setting.Auth["user_id"]; ok {
 			options["user_id"] = userID
 		}
@@ -115,12 +115,12 @@ func buildAuthConfig(setting BotSetting) imbot.AuthConfig {
 			Token:     auth["token"],
 			AccountID: auth["phoneNumberId"],
 		}
-	case "wechat":
+	case "weixin":
 		return imbot.AuthConfig{
 			Type:      "qr",
 			Token:     auth["token"],
 			AccountID: auth["bot_id"],
-			AuthDir:   auth["user_id"], // Store user_id in AuthDir for WeChat
+			AuthDir:   auth["user_id"], // Store user_id in AuthDir for Weixin
 		}
 	default:
 		return imbot.AuthConfig{
@@ -246,8 +246,8 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	case "dingtalk", "feishu":
 		// OAuth platforms require clientId and clientSecret
 		hasValidAuth = auth["clientId"] != "" && auth["clientSecret"] != ""
-	case "wechat":
-		// WeChat QR requires token, bot_id, user_id, base_url
+	case "weixin":
+		// Weixin QR requires token, bot_id, user_id, base_url
 		hasValidAuth = auth["token"] != "" && auth["bot_id"] != ""
 	case "whatsapp":
 		// WhatsApp requires token, phoneNumberId is optional

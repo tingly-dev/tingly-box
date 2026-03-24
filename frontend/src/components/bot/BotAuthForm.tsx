@@ -10,7 +10,7 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff, OpenInNew } from '@mui/icons-material';
 import { type FieldSpec } from '@/types/bot.ts';
-import { WeChatQRAuth } from './WeChatQRAuth';
+import { WeixinQRAuth } from './WeixinQRAuth.tsx';
 
 interface BotAuthFormProps {
     platform: string;
@@ -51,9 +51,9 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
         setVisibleFields(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
-    // QR code auth for WeChat
+    // QR code auth for Weixin
     if (authType === 'qr') {
-        return <WeChatQRAuth botUUID={authData.bot_uuid || ''} platform={platform} />;
+        return <WeixinQRAuth botUUID={authData.bot_uuid || ''} platform={platform} />;
     }
 
     if (!fields || fields.length === 0) {

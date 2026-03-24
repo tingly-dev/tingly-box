@@ -1,5 +1,5 @@
-// Package wechat provides WeChat platform bot implementation for ImBot.
-package wechat
+// Package weixin provides Weixin platform bot implementation for ImBot.
+package weixin
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"github.com/tingly-dev/weixin"
 )
 
-// TestNewBot tests creating a new WeChat bot
+// TestNewBot tests creating a new Weixin bot
 func TestNewBot(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -19,7 +19,7 @@ func TestNewBot(t *testing.T) {
 		{
 			name: "valid config",
 			config: &core.Config{
-				Platform: core.PlatformWeChat,
+				Platform: core.PlatformWeixin,
 				Auth: core.AuthConfig{
 					Type: "qr",
 				},
@@ -33,7 +33,7 @@ func TestNewBot(t *testing.T) {
 		{
 			name: "minimal config",
 			config: &core.Config{
-				Platform: core.PlatformWeChat,
+				Platform: core.PlatformWeixin,
 				Auth: core.AuthConfig{
 					Type: "qr",
 				},
@@ -77,7 +77,7 @@ func TestBotConfigValidation(t *testing.T) {
 		{
 			name: "valid qr auth",
 			config: &core.Config{
-				Platform: core.PlatformWeChat,
+				Platform: core.PlatformWeixin,
 				Auth: core.AuthConfig{
 					Type: "qr",
 				},
@@ -87,7 +87,7 @@ func TestBotConfigValidation(t *testing.T) {
 		{
 			name: "invalid auth type",
 			config: &core.Config{
-				Platform: core.PlatformWeChat,
+				Platform: core.PlatformWeixin,
 				Auth: core.AuthConfig{
 					Type:  "token",
 					Token: "test",
@@ -110,7 +110,7 @@ func TestBotConfigValidation(t *testing.T) {
 // TestGetMessageLimit tests the message limit
 func TestGetMessageLimit(t *testing.T) {
 	config := &core.Config{
-		Platform: core.PlatformWeChat,
+		Platform: core.PlatformWeixin,
 		Auth: core.AuthConfig{
 			Type: "qr",
 		},
@@ -131,7 +131,7 @@ func TestGetMessageLimit(t *testing.T) {
 // TestPlatformInfo tests platform info
 func TestPlatformInfo(t *testing.T) {
 	config := &core.Config{
-		Platform: core.PlatformWeChat,
+		Platform: core.PlatformWeixin,
 		Auth: core.AuthConfig{
 			Type: "qr",
 		},
@@ -142,18 +142,18 @@ func TestPlatformInfo(t *testing.T) {
 	}
 
 	info := bot.PlatformInfo()
-	if info.ID != core.PlatformWeChat {
-		t.Errorf("PlatformInfo().ID = %s, want %s", info.ID, core.PlatformWeChat)
+	if info.ID != core.PlatformWeixin {
+		t.Errorf("PlatformInfo().ID = %s, want %s", info.ID, core.PlatformWeixin)
 	}
-	if info.Name != "WeChat" {
-		t.Errorf("PlatformInfo().Name = %s, want WeChat", info.Name)
+	if info.Name != "Weixin" {
+		t.Errorf("PlatformInfo().Name = %s, want Weixin", info.Name)
 	}
 }
 
 // TestBotState tests bot state management
 func TestBotState(t *testing.T) {
 	config := &core.Config{
-		Platform: core.PlatformWeChat,
+		Platform: core.PlatformWeixin,
 		Auth: core.AuthConfig{
 			Type: "qr",
 		},
@@ -178,7 +178,7 @@ func TestBotState(t *testing.T) {
 // TestAdapterPlatform tests adapter platform
 func TestAdapterPlatform(t *testing.T) {
 	config := &core.Config{
-		Platform: core.PlatformWeChat,
+		Platform: core.PlatformWeixin,
 		Auth: core.AuthConfig{
 			Type: "qr",
 		},
@@ -197,15 +197,15 @@ func TestAdapterPlatform(t *testing.T) {
 	}
 
 	adapter := NewAdapter(config, account)
-	if adapter.Platform() != core.PlatformWeChat {
-		t.Errorf("Adapter.Platform() = %s, want %s", adapter.Platform(), core.PlatformWeChat)
+	if adapter.Platform() != core.PlatformWeixin {
+		t.Errorf("Adapter.Platform() = %s, want %s", adapter.Platform(), core.PlatformWeixin)
 	}
 }
 
 // TestGetAccountInfo tests getting account information
 func TestGetAccountInfo(t *testing.T) {
 	config := &core.Config{
-		Platform: core.PlatformWeChat,
+		Platform: core.PlatformWeixin,
 		Auth: core.AuthConfig{
 			Type: "qr",
 		},
@@ -234,7 +234,7 @@ func TestGetAccountInfo(t *testing.T) {
 // TestNeedsPairing tests checking if account needs pairing
 func TestNeedsPairing(t *testing.T) {
 	config := &core.Config{
-		Platform: core.PlatformWeChat,
+		Platform: core.PlatformWeixin,
 		Auth: core.AuthConfig{
 			Type: "qr",
 		},
@@ -258,7 +258,7 @@ func TestNeedsPairing(t *testing.T) {
 // TestAdapterMessageLimit tests adapter message limit
 func TestAdapterMessageLimit(t *testing.T) {
 	config := &core.Config{
-		Platform: core.PlatformWeChat,
+		Platform: core.PlatformWeixin,
 		Auth: core.AuthConfig{
 			Type: "qr",
 		},
@@ -281,7 +281,7 @@ func TestAdapterMessageLimit(t *testing.T) {
 // TestAdapterShouldChunkText tests text chunking decision
 func TestAdapterShouldChunkText(t *testing.T) {
 	config := &core.Config{
-		Platform: core.PlatformWeChat,
+		Platform: core.PlatformWeixin,
 		Auth: core.AuthConfig{
 			Type: "qr",
 		},
@@ -329,7 +329,7 @@ func TestAdapterShouldChunkText(t *testing.T) {
 // TestUnsupportedOperations tests that unsupported operations return appropriate errors
 func TestUnsupportedOperations(t *testing.T) {
 	config := &core.Config{
-		Platform: core.PlatformWeChat,
+		Platform: core.PlatformWeixin,
 		Auth: core.AuthConfig{
 			Type: "qr",
 		},
@@ -379,7 +379,7 @@ func TestConfigOptionParsing(t *testing.T) {
 		{
 			name: "baseUrl option",
 			config: &core.Config{
-				Platform: core.PlatformWeChat,
+				Platform: core.PlatformWeixin,
 				Auth:     core.AuthConfig{Type: "qr"},
 				Options: map[string]interface{}{
 					"baseUrl": "https://api.example.com",
@@ -391,7 +391,7 @@ func TestConfigOptionParsing(t *testing.T) {
 		{
 			name: "botType option",
 			config: &core.Config{
-				Platform: core.PlatformWeChat,
+				Platform: core.PlatformWeixin,
 				Auth:     core.AuthConfig{Type: "qr"},
 				Options: map[string]interface{}{
 					"botType": "3",
@@ -403,7 +403,7 @@ func TestConfigOptionParsing(t *testing.T) {
 		{
 			name: "accountId option",
 			config: &core.Config{
-				Platform: core.PlatformWeChat,
+				Platform: core.PlatformWeixin,
 				Auth:     core.AuthConfig{Type: "qr"},
 				Options: map[string]interface{}{
 					"accountId": "my-account",
@@ -427,7 +427,7 @@ func TestConfigOptionParsing(t *testing.T) {
 // TestInteractionHandler tests interaction handler
 func TestInteractionHandler(t *testing.T) {
 	config := &core.Config{
-		Platform: core.PlatformWeChat,
+		Platform: core.PlatformWeixin,
 		Auth: core.AuthConfig{
 			Type: "qr",
 		},
@@ -454,7 +454,7 @@ func TestInteractionHandler(t *testing.T) {
 // TestMapContentType tests content type mapping
 func TestMapContentType(t *testing.T) {
 	config := &core.Config{
-		Platform: core.PlatformWeChat,
+		Platform: core.PlatformWeixin,
 		Auth:     core.AuthConfig{Type: "qr"},
 	}
 	account := &weixin.WeChatAccount{
@@ -492,7 +492,7 @@ func TestMapContentType(t *testing.T) {
 // TestBuildReplyTarget tests reply target building
 func TestBuildReplyTarget(t *testing.T) {
 	config := &core.Config{
-		Platform: core.PlatformWeChat,
+		Platform: core.PlatformWeixin,
 		Auth:     core.AuthConfig{Type: "qr"},
 	}
 	account := &weixin.WeChatAccount{

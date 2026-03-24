@@ -21,12 +21,12 @@ var defaultBashAllowlist = map[string]struct{}{
 
 // Platforms that do NOT support verbose mode (can only receive final messages)
 var nonVerbosePlatforms = map[string]struct{}{
-	"wechat": {},
+	"weixin": {},
 }
 
 // Platforms with low-frequency sending limitations (need rate limiting)
 var lowFrequencyPlatforms = map[string]struct{}{
-	"wechat": {},
+	"weixin": {},
 }
 
 // ResponseMeta contains metadata for response formatting
@@ -68,14 +68,14 @@ type runningBot struct {
 }
 
 // SupportsVerboseMode checks if the platform supports verbose mode
-// Some platforms (e.g., WeChat) can only receive final messages, not intermediate ones
+// Some platforms (e.g., Weixin) can only receive final messages, not intermediate ones
 func SupportsVerboseMode(platform string) bool {
 	_, nonVerbose := nonVerbosePlatforms[platform]
 	return !nonVerbose
 }
 
 // IsLowFrequencyPlatform checks if the platform has low-frequency sending limitations
-// Some platforms (e.g., WeChat) need rate limiting for message sending
+// Some platforms (e.g., Weixin) need rate limiting for message sending
 func IsLowFrequencyPlatform(platform string) bool {
 	_, isLowFreq := lowFrequencyPlatforms[platform]
 	return isLowFreq

@@ -147,12 +147,12 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 	kb := BuildActionKeyboard()
 	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
-	// Build metadata with context_token (required by WeChat)
+	// Build metadata with context_token (required by Weixin)
 	metadata := map[string]interface{}{
 		"replyMarkup":        tgKeyboard,
 		"_trackActionMenuID": true,
 	}
-	// Forward context_token from incoming message metadata (required by WeChat)
+	// Forward context_token from incoming message metadata (required by Weixin)
 	if c.hCtx.Message.Metadata != nil {
 		if ct, ok := c.hCtx.Message.Metadata["context_token"].(string); ok {
 			metadata["context_token"] = ct

@@ -63,7 +63,7 @@ func remoteAddCommand(appManager *AppManager) *cobra.Command {
 			case "dingtalk", "feishu":
 				authType = "oauth"
 				authConfig, err = promptForOAuthAuth(reader, platform)
-			case "wechat":
+			case "weixin":
 				authType = "qr"
 				authConfig, err = runWeChatQRFlow(cmd.Context(), reader)
 			default:
@@ -115,7 +115,7 @@ var supportedPlatforms = []platformInfo{
 	{"dingtalk", "oauth"},
 	{"feishu", "oauth"},
 	{"whatsapp", "token"},
-	{"wechat", "qr"},
+	{"weixin", "qr"},
 }
 
 // promptForPlatform prompts the user to select a platform
@@ -294,11 +294,11 @@ func readSecret(reader *bufio.Reader) (string, error) {
 	return strings.TrimSpace(secret.String()), nil
 }
 
-// runWeChatQRFlow handles the WeChat QR code authentication flow
+// runWeChatQRFlow handles the Weixin QR code authentication flow
 func runWeChatQRFlow(ctx context.Context, reader *bufio.Reader) (map[string]string, error) {
 	fmt.Println()
 	fmt.Println("╔═══════════════════════════════════════════════════════════════╗")
-	fmt.Println("║                    WeChat QR Authentication                      ║")
+	fmt.Println("║                    Weixin QR Authentication                      ║")
 	fmt.Println("╚═══════════════════════════════════════════════════════════════╝")
 	fmt.Println()
 
@@ -312,7 +312,7 @@ func runWeChatQRFlow(ctx context.Context, reader *bufio.Reader) (map[string]stri
 	qrClient := bot.NewWeChatQRClient("")
 
 	// Fetch QR code
-	PrintInfo("Fetching QR code from WeChat...")
+	PrintInfo("Fetching QR code from Weixin...")
 	qrResp, err := qrClient.GetBotQRCode(ctx, botType)
 	if err != nil {
 		PrintError(fmt.Sprintf("Failed to fetch QR code: %v", err))
@@ -351,7 +351,7 @@ func runWeChatQRFlow(ctx context.Context, reader *bufio.Reader) (map[string]stri
 		return nil, fmt.Errorf("failed to poll QR status: %w", err)
 	}
 
-	PrintSuccess("WeChat authentication successful!")
+	PrintSuccess("Weixin authentication successful!")
 	fmt.Println()
 
 	// Return auth config
@@ -369,7 +369,7 @@ func runWeChatQRFlow(ctx context.Context, reader *bufio.Reader) (map[string]stri
 	return authConfig, nil
 }
 
-// promptForWeChatBotType prompts for the WeChat bot type
+// promptForWeChatBotType prompts for the Weixin bot type
 func promptForWeChatBotType(reader *bufio.Reader) (string, error) {
 	fmt.Println("Select bot type:")
 	fmt.Println("  1. 官方小程序机器人 (Type 3) - Default")

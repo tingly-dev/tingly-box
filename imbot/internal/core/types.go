@@ -17,7 +17,7 @@ const (
 	PlatformLark        Platform = "lark"
 	PlatformWebChat     Platform = "webchat"
 	PlatformDingTalk    Platform = "dingtalk"
-	PlatformWeChat      Platform = "wechat"
+	PlatformWeixin      Platform = "weixin"
 )
 
 // ChatType represents the type of chat

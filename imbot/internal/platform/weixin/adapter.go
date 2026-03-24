@@ -1,5 +1,5 @@
-// Package wechat provides WeChat platform bot implementation for ImBot.
-package wechat
+// Package weixin provides Weixin platform bot implementation for ImBot.
+package weixin
 
 import (
 	"context"
@@ -12,13 +12,13 @@ import (
 	"github.com/tingly-dev/weixin/channel"
 )
 
-// Adapter adapts WeChat channel messages to core.Message
+// Adapter adapts Weixin channel messages to core.Message
 type Adapter struct {
 	*adapter.BaseAdapter
 	account *weixin.WeChatAccount
 }
 
-// NewAdapter creates a new WeChat adapter
+// NewAdapter creates a new Weixin adapter
 func NewAdapter(config *core.Config, account *weixin.WeChatAccount) *Adapter {
 	return &Adapter{
 		BaseAdapter: adapter.NewBaseAdapter(config),
@@ -26,9 +26,9 @@ func NewAdapter(config *core.Config, account *weixin.WeChatAccount) *Adapter {
 	}
 }
 
-// Platform returns core.PlatformWeChat
+// Platform returns core.PlatformWeixin
 func (a *Adapter) Platform() core.Platform {
-	return core.PlatformWeChat
+	return core.PlatformWeixin
 }
 
 // AdaptMessage converts a channel.Message to core.Message
@@ -43,7 +43,7 @@ func (a *Adapter) AdaptMessage(ctx context.Context, msg *channel.Message) (*core
 	messageState, _ := msg.Metadata["message_state"].(int)
 
 	// Build message using fluent builder
-	messageBuilder := builder.NewMessageBuilder(core.PlatformWeChat).
+	messageBuilder := builder.NewMessageBuilder(core.PlatformWeixin).
 		WithID(msg.MessageID).
 		WithTimestamp(msg.Timestamp.Unix()).
 		WithRecipient(msg.To, string(msg.ChatType), "").
@@ -68,7 +68,7 @@ func (a *Adapter) AdaptMessage(ctx context.Context, msg *channel.Message) (*core
 	return messageBuilder.Build(), nil
 }
 
-// ConvertToOutboundMessage converts SendMessageOptions to WeChat outbound message format
+// ConvertToOutboundMessage converts SendMessageOptions to Weixin outbound message format
 func (a *Adapter) ConvertToOutboundMessage(opts *core.SendMessageOptions) (*channel.OutboundMessage, string, []weixin.MessageItem) {
 	outbound := &channel.OutboundMessage{
 		To:           "", // Will be set by caller
@@ -138,7 +138,7 @@ func (a *Adapter) extractContent(msg *channel.Message) core.Content {
 	return core.NewSystemContent("unknown", nil)
 }
 
-// mapContentType maps WeChat content type to core media type
+// mapContentType maps Weixin content type to core media type
 func (a *Adapter) mapContentType(contentType string) string {
 	switch contentType {
 	case "image":
@@ -156,7 +156,7 @@ func (a *Adapter) mapContentType(contentType string) string {
 	}
 }
 
-// mediaToItem converts a core MediaAttachment to WeChat MessageItem
+// mediaToItem converts a core MediaAttachment to Weixin MessageItem
 func (a *Adapter) mediaToItem(media core.MediaAttachment) *weixin.MessageItem {
 	switch media.Type {
 	case "image":
@@ -223,7 +223,7 @@ func (a *Adapter) AdaptCoreToChannel(ctx context.Context, msg *core.Message) (*c
 
 // BuildReplyTarget builds the reply target from sender/recipient info
 func (a *Adapter) BuildReplyTarget(senderID, recipientID, sessionID string) string {
-	// For WeChat, use the other party's ID as reply target
+	// For Weixin, use the other party's ID as reply target
 	// If we're the sender (bot), reply to the recipient
 	// If we're the recipient, reply to the sender
 
@@ -235,9 +235,9 @@ func (a *Adapter) BuildReplyTarget(senderID, recipientID, sessionID string) stri
 	return senderID
 }
 
-// GetMessageLimit returns the message length limit for WeChat
+// GetMessageLimit returns the message length limit for Weixin
 func (a *Adapter) GetMessageLimit() int {
-	// WeChat message limit is typically 2048 bytes
+	// Weixin message limit is typically 2048 bytes
 	return 2048
 }
 

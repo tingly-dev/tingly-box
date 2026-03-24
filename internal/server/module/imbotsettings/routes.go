@@ -87,7 +87,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 			Name:        "platform",
 			Type:        "string",
 			Required:    true,
-			Description: "Platform identifier (telegram, discord, slack, feishu, dingtalk, whatsapp, wechat)",
+			Description: "Platform identifier (telegram, discord, slack, feishu, dingtalk, whatsapp, weixin)",
 		}),
 		swagger.WithResponseModel(PlatformConfigResponse{}),
 		swagger.WithErrorResponses(
@@ -96,27 +96,27 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		),
 	)
 
-	// WeChat QR Login endpoints
+	// Weixin QR Login endpoints
 	qrHandler := NewWeChatQRLoginHandler(handler.store)
 
-	// POST /imbot-settings/:uuid/wechat/qr-start - Start QR login
-	router.POST("/imbot-settings/:uuid/wechat/qr-start", qrHandler.QRStart,
-		swagger.WithTags("imbot-settings", "wechat"),
-		swagger.WithDescription("Initiates WeChat QR code login flow"),
+	// POST /imbot-settings/:uuid/weixin/qr-start - Start QR login
+	router.POST("/imbot-settings/:uuid/weixin/qr-start", qrHandler.QRStart,
+		swagger.WithTags("imbot-settings", "weixin"),
+		swagger.WithDescription("Initiates Weixin QR code login flow"),
 		swagger.WithRequestModel(QRStartRequest{}),
 		swagger.WithResponseModel(QRStartResponse{}),
 	)
 
-	// GET /imbot-settings/:uuid/wechat/qr-status - Poll QR login status
-	router.GET("/imbot-settings/:uuid/wechat/qr-status", qrHandler.QRStatus,
-		swagger.WithTags("imbot-settings", "wechat"),
-		swagger.WithDescription("Polls WeChat QR code login status"),
+	// GET /imbot-settings/:uuid/weixin/qr-status - Poll QR login status
+	router.GET("/imbot-settings/:uuid/weixin/qr-status", qrHandler.QRStatus,
+		swagger.WithTags("imbot-settings", "weixin"),
+		swagger.WithDescription("Polls Weixin QR code login status"),
 		swagger.WithResponseModel(QRStatusResponse{}),
 	)
 
-	// POST /imbot-settings/:uuid/wechat/qr-cancel - Cancel QR login
-	router.POST("/imbot-settings/:uuid/wechat/qr-cancel", qrHandler.QRCancel,
-		swagger.WithTags("imbot-settings", "wechat"),
-		swagger.WithDescription("Cancels pending WeChat QR code login"),
+	// POST /imbot-settings/:uuid/weixin/qr-cancel - Cancel QR login
+	router.POST("/imbot-settings/:uuid/weixin/qr-cancel", qrHandler.QRCancel,
+		swagger.WithTags("imbot-settings", "weixin"),
+		swagger.WithDescription("Cancels pending Weixin QR code login"),
 	)
 }

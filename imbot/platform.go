@@ -165,10 +165,10 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 			},
 		},
 	},
-	"wechat": {
-		Platform:    "wechat",
+	"weixin": {
+		Platform:    "weixin",
 		AuthType:    "qr",
-		DisplayName: "WeChat",
+		DisplayName: "Weixin",
 		Category:    "enterprise",
 		Fields:      []FieldSpec{}, // No fields - credentials set via QR flow
 	},

@@ -1,5 +1,5 @@
-// Package wechat provides WeChat platform bot implementation for ImBot.
-package wechat
+// Package weixin provides Weixin platform bot implementation for ImBot.
+package weixin
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"github.com/tingly-dev/weixin/contexttoken"
 )
 
-// InteractionHandler provides interaction handlers for WeChat
+// InteractionHandler provides interaction handlers for Weixin
 type InteractionHandler struct {
 	bot *Bot
 }
@@ -86,7 +86,7 @@ func (h *InteractionHandler) StartPairing(ctx context.Context) (*QRCodeResult, e
 		return nil, fmt.Errorf("failed to save account: %w", err)
 	}
 
-	h.bot.Logger().Info("WeChat pairing started for account: %s", h.bot.accountID)
+	h.bot.Logger().Info("Weixin pairing started for account: %s", h.bot.accountID)
 
 	return &QRCodeResult{
 		QrCodeID:   result.QrCodeID,
@@ -174,10 +174,10 @@ func (h *InteractionHandler) ReAuthenticate(ctx context.Context) (*QRCodeResult,
 		return nil, fmt.Errorf("failed to save account: %w", err)
 	}
 
-	h.bot.Logger().Info("WeChat account reset for re-authentication: %s", h.bot.account.ID)
+	h.bot.Logger().Info("Weixin account reset for re-authentication: %s", h.bot.account.ID)
 
 	// Emit session expired event
-	h.bot.EmitError(core.NewAuthFailedError(core.PlatformWeChat, "session expired, please re-authenticate", nil))
+	h.bot.EmitError(core.NewAuthFailedError(core.PlatformWeixin, "session expired, please re-authenticate", nil))
 
 	// Start new pairing
 	return h.StartPairing(ctx)
@@ -205,7 +205,7 @@ func (h *InteractionHandler) GetAccountInfo() *AccountInfo {
 	}
 }
 
-// AccountInfo represents information about a WeChat account
+// AccountInfo represents information about a Weixin account
 type AccountInfo struct {
 	AccountID   string
 	Name        string
@@ -254,17 +254,17 @@ func (h *InteractionHandler) SendMessage(ctx context.Context, userID string, tex
 		return "", fmt.Errorf("failed to send message: %w", err)
 	}
 
-	return fmt.Sprintf("wechat-%d", h.bot.Status().LastActivity), nil
+	return fmt.Sprintf("weixin-%d", h.bot.Status().LastActivity), nil
 }
 
 // GetContacts returns a list of contacts (not yet implemented)
 func (h *InteractionHandler) GetContacts(ctx context.Context) ([]Contact, error) {
-	// WeChat API doesn't provide a contacts endpoint
+	// Weixin API doesn't provide a contacts endpoint
 	// This would need to be implemented differently
 	return nil, core.NewBotError(core.ErrPlatformError, "contacts list not available", false)
 }
 
-// Contact represents a WeChat contact
+// Contact represents a Weixin contact
 type Contact struct {
 	ID       string
 	Name     string

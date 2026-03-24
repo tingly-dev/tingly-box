@@ -12,13 +12,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// QRCodeResponse represents the QR code response from WeChat API
+// QRCodeResponse represents the QR code response from Weixin API
 type QRCodeResponse struct {
 	Qrcode           string `json:"qrcode,omitempty"`
 	QrcodeImgContent string `json:"qrcode_img_content,omitempty"`
 }
 
-// QRStatusResponse represents the QR status response from WeChat API
+// QRStatusResponse represents the QR status response from Weixin API
 type QRStatusResponse struct {
 	Status      string `json:"status,omitempty"` // wait, scaned, confirmed, expired
 	BotToken    string `json:"bot_token,omitempty"`
@@ -27,13 +27,13 @@ type QRStatusResponse struct {
 	IlinkUserID string `json:"ilink_user_id,omitempty"`
 }
 
-// WeChatQRClient is a CLI-friendly wrapper for WeChat QR authentication
+// WeChatQRClient is a CLI-friendly wrapper for Weixin QR authentication
 type WeChatQRClient struct {
 	baseURL    string
 	httpClient *http.Client
 }
 
-// NewWeChatQRClient creates a new WeChat QR client
+// NewWeChatQRClient creates a new Weixin QR client
 func NewWeChatQRClient(baseURL string) *WeChatQRClient {
 	if baseURL == "" {
 		baseURL = "https://ilinkai.weixin.qq.com"
@@ -46,7 +46,7 @@ func NewWeChatQRClient(baseURL string) *WeChatQRClient {
 	}
 }
 
-// GetBotQRCode fetches a QR code for WeChat bot login
+// GetBotQRCode fetches a QR code for Weixin bot login
 func (c *WeChatQRClient) GetBotQRCode(ctx context.Context, botType string) (*QRCodeResponse, error) {
 	if botType == "" {
 		botType = "3" // Default bot type
@@ -166,7 +166,7 @@ func (c *WeChatQRClient) GetQRStatus(ctx context.Context, qrcode string) (*QRSta
 	return &result, nil
 }
 
-// buildHeaders creates the required headers for WeChat API
+// buildHeaders creates the required headers for Weixin API
 func (c *WeChatQRClient) buildHeaders() map[string]string {
 	// Simplified headers for QR flow (no auth token needed initially)
 	return map[string]string{

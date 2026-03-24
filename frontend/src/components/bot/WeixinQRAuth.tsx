@@ -15,7 +15,7 @@ import {
 } from '@mui/icons-material';
 import { api } from '@/services/api';
 
-interface WeChatQRAuthProps {
+interface WeixinQRAuthProps {
     botUUID: string;
     platform: string;
 }
@@ -33,7 +33,7 @@ interface QRStatusResponse {
     error?: string;
 }
 
-export const WeChatQRAuth: React.FC<WeChatQRAuthProps> = ({ botUUID, platform }) => {
+export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform }) => {
     const [state, setState] = useState<QRState>('idle');
     const [qrData, setQrData] = useState<string>('');
     const [qrId, setQrId] = useState<string>('');
@@ -53,7 +53,7 @@ export const WeChatQRAuth: React.FC<WeChatQRAuthProps> = ({ botUUID, platform })
         setError('');
 
         try {
-            const response = await api.wechatQRStart(botUUID);
+            const response = await api.weixinQRStart(botUUID);
 
             if (response.success && response.data) {
                 setQrData(response.data.qrcode_data);
@@ -74,7 +74,7 @@ export const WeChatQRAuth: React.FC<WeChatQRAuthProps> = ({ botUUID, platform })
         if (!botUUID || !qrId) return;
 
         try {
-            const response = await api.wechatQRStatus(botUUID, qrId);
+            const response = await api.weixinQRStatus(botUUID, qrId);
 
             if (!response.success) {
                 setError(response.error || 'Failed to check QR status');
@@ -153,7 +153,7 @@ export const WeChatQRAuth: React.FC<WeChatQRAuthProps> = ({ botUUID, platform })
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
                         <CircularProgress size={40} />
                         <Typography sx={{ mt: 2 }} color="text.secondary">
-                            Initializing WeChat QR binding...
+                            Initializing Weixin QR binding...
                         </Typography>
                     </Box>
                 );
@@ -167,7 +167,7 @@ export const WeChatQRAuth: React.FC<WeChatQRAuthProps> = ({ botUUID, platform })
                             <Box
                                 component="img"
                                 src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}`}
-                                alt="WeChat QR Code"
+                                alt="Weixin QR Code"
                                 sx={{
                                     width: 200,
                                     height: 200,
@@ -178,7 +178,7 @@ export const WeChatQRAuth: React.FC<WeChatQRAuthProps> = ({ botUUID, platform })
                             />
                         </Paper>
                         <Typography variant="body2" color="text.secondary" align="center">
-                            1. Open WeChat on your phone and scan the QR code
+                            1. Open Weixin on your phone and scan the QR code
                             <br />
                             2. Confirm to complete binding
                         </Typography>
@@ -198,7 +198,7 @@ export const WeChatQRAuth: React.FC<WeChatQRAuthProps> = ({ botUUID, platform })
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
                         <CircularProgress size={40} />
                         <Typography sx={{ mt: 2 }} color="text.secondary">
-                            QR code scanned! Please confirm on your WeChat...
+                            QR code scanned! Please confirm on your Weixin...
                         </Typography>
                     </Box>
                 );
@@ -208,10 +208,10 @@ export const WeChatQRAuth: React.FC<WeChatQRAuthProps> = ({ botUUID, platform })
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
                         <CheckCircleIcon sx={{ fontSize: 60, color: 'success.main', mb: 2 }} />
                         <Typography variant="h6" color="success.main">
-                            WeChat Binding Successful!
+                            Weixin Binding Successful!
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                            Your bot is now connected to WeChat.
+                            Your bot is now connected to Weixin.
                         </Typography>
                     </Box>
                 );
@@ -242,7 +242,7 @@ export const WeChatQRAuth: React.FC<WeChatQRAuthProps> = ({ botUUID, platform })
                             </Button>
                         }
                     >
-                        {error || 'An error occurred during WeChat binding'}
+                        {error || 'An error occurred during Weixin binding'}
                     </Alert>
                 );
 
@@ -254,7 +254,7 @@ export const WeChatQRAuth: React.FC<WeChatQRAuthProps> = ({ botUUID, platform })
     return (
         <Box sx={{ p: 2 }}>
             <Typography variant="subtitle2" gutterBottom>
-                WeChat QR Code Binding
+                Weixin QR Code Binding
             </Typography>
             <Box
                 sx={{
@@ -271,4 +271,4 @@ export const WeChatQRAuth: React.FC<WeChatQRAuthProps> = ({ botUUID, platform })
     );
 };
 
-export default WeChatQRAuth;
+export default WeixinQRAuth;

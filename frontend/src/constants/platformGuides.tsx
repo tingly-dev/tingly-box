@@ -197,7 +197,7 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
                     </Typography>
                     <Typography variant="body2" color="text.secondary" component="div">
                         <Box component="ul" sx={{ pl: 2, m: 0 }}>
-                            <li>Visit <Link href="https://mp.weixin.qq.com/" target="_blank">WeChat MP Platform <OpenInNew sx={{ fontSize: 10 }} /></Link></li>
+                            <li>Visit <Link href="https://mp.weixin.qq.com/" target="_blank">Weixin MP Platform <OpenInNew sx={{ fontSize: 10 }} /></Link></li>
                             <li>Register a Mini Program or Service Account</li>
                             <li>Enable Message Push capability</li>
                             <li>Configure server URL and token</li>
@@ -224,7 +224,7 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
     wecom: {
         id: 'wecom',
         name: 'WeCom (企业微信)',
-        description: 'Enterprise WeChat communication platform',
+        description: 'Enterprise Weixin communication platform',
         icon: '💼',
         status: 'coming-soon',
         path: '/remote-control/wecom',

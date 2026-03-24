@@ -1446,26 +1446,26 @@ export const api = {
         }
     },
 
-    // ========== WeChat QR Login API ==========
+    // ========== Weixin QR Login API ==========
 
-    // Start WeChat QR login flow
-    wechatQRStart: async (botUUID: string): Promise<any> => {
-        return fetchUIAPI(`/imbot-settings/${botUUID}/wechat/qr-start`, {
+    // Start Weixin QR login flow
+    weixinQRStart: async (botUUID: string): Promise<any> => {
+        return fetchUIAPI(`/imbot-settings/${botUUID}/weixin/qr-start`, {
             method: 'POST',
             body: JSON.stringify({ bot_uuid: botUUID }),
         });
     },
 
-    // Poll WeChat QR login status
-    wechatQRStatus: async (botUUID: string, qrCodeId: string): Promise<any> => {
-        return fetchUIAPI(`/imbot-settings/${botUUID}/wechat/qr-status?qrcode_id=${qrCodeId}`, {
+    // Poll Weixin QR login status
+    weixinQRStatus: async (botUUID: string, qrCodeId: string): Promise<any> => {
+        return fetchUIAPI(`/imbot-settings/${botUUID}/weixin/qr-status?qrcode_id=${qrCodeId}`, {
             method: 'GET',
         });
     },
 
-    // Cancel WeChat QR login flow
-    wechatQRCancel: async (botUUID: string): Promise<any> => {
-        return fetchUIAPI(`/imbot-settings/${botUUID}/wechat/qr-cancel`, {
+    // Cancel Weixin QR login flow
+    weixinQRCancel: async (botUUID: string): Promise<any> => {
+        return fetchUIAPI(`/imbot-settings/${botUUID}/weixin/qr-cancel`, {
             method: 'POST',
         });
     },

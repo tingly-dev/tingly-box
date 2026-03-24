@@ -1,8 +1,8 @@
-// Package wechat provides WeChat platform bot implementation for ImBot.
+// Package weixin provides Weixin platform bot implementation for ImBot.
 //
-// This package implements the core.Bot interface for WeChat messaging,
-// bridging the ImBot platform layer with the WeChat channel plugin.
-package wechat
+// This package implements the core.Bot interface for Weixin messaging,
+// bridging the ImBot platform layer with the Weixin channel plugin.
+package weixin
 
 import (
 	"context"
@@ -13,18 +13,18 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
 	"github.com/tingly-dev/weixin"
 	wechatadapters "github.com/tingly-dev/weixin/adapters"
-	wechatapi "github.com/tingly-dev/weixin/api"
+	weixinapi "github.com/tingly-dev/weixin/api"
 	"github.com/tingly-dev/weixin/channel"
 	"github.com/tingly-dev/weixin/contexttoken"
 )
 
-// Bot implements the WeChat platform bot
+// Bot implements the Weixin platform bot
 type Bot struct {
 	*core.BaseBot
 	plugin    *weixin.Plugin
 	accountID string
 	account   *weixin.WeChatAccount
-	client    *wechatapi.Client
+	client    *weixinapi.Client
 	adapter   *Adapter
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -32,24 +32,24 @@ type Bot struct {
 	mu        sync.RWMutex
 }
 
-// NewBot creates a new WeChat bot
+// NewBot creates a new Weixin bot
 func NewBot(config *core.Config) (*Bot, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	// Get WeChat credentials from AuthConfig
+	// Get Weixin credentials from AuthConfig
 	// Token format: "bot_id:token_key" (combined)
 	token := config.Auth.Token
-	botID := config.Auth.AccountID  // This contains bot_id
-	userID := config.Auth.AuthDir    // We're reusing AuthDir to store user_id
+	botID := config.Auth.AccountID // This contains bot_id
+	userID := config.Auth.AuthDir  // We're reusing AuthDir to store user_id
 
 	// Get base_url from options
 	baseURL := config.GetOptionString("baseUrl", "")
 	if baseURL == "" {
 		baseURL = config.GetOptionString("base_url", "")
 	}
-	// Default to WeChat's official iLink endpoint
+	// Default to Weixin's official iLink endpoint
 	if baseURL == "" {
 		baseURL = "https://ilinkai.weixin.qq.com"
 	}
@@ -60,7 +60,7 @@ func NewBot(config *core.Config) (*Bot, error) {
 		accountID = "default"
 	}
 
-	// Create WeChat plugin configuration
+	// Create Weixin plugin configuration
 	wcConfig := &weixin.WeChatConfig{
 		BaseURL: baseURL,
 		BotType: config.GetOptionString("botType", "3"),
@@ -75,15 +75,15 @@ func NewBot(config *core.Config) (*Bot, error) {
 
 	// Create account directly from auth config (no file storage needed)
 	account := &weixin.WeChatAccount{
-		ID:         accountID,
-		Name:       fmt.Sprintf("WeChat Account %s", accountID),
-		BotID:      botID,
-		UserID:     userID,
-		BotToken:   token,
-		BaseURL:    baseURL,
-		Enabled:    true,
-		Configured: token != "" && botID != "", // Consider configured if we have credentials
-		CreatedAt:  time.Now(),
+		ID:          accountID,
+		Name:        fmt.Sprintf("Weixin Account %s", accountID),
+		BotID:       botID,
+		UserID:      userID,
+		BotToken:    token,
+		BaseURL:     baseURL,
+		Enabled:     true,
+		Configured:  token != "" && botID != "", // Consider configured if we have credentials
+		CreatedAt:   time.Now(),
 		LastLoginAt: time.Now(),
 	}
 
@@ -106,20 +106,20 @@ func NewBot(config *core.Config) (*Bot, error) {
 	return bot, nil
 }
 
-// Connect connects to WeChat
+// Connect connects to Weixin
 func (b *Bot) Connect(ctx context.Context) error {
 	b.ctx, b.cancel = context.WithCancel(ctx)
 
 	// Get or load account
 	account, err := b.getAccount()
 	if err != nil {
-		return core.NewAuthFailedError(core.PlatformWeChat, "failed to get account", err)
+		return core.NewAuthFailedError(core.PlatformWeixin, "failed to get account", err)
 	}
 	b.account = account
 
 	// Check if account is configured
 	if !account.Configured {
-		return core.NewAuthFailedError(core.PlatformWeChat, "account not configured, please pair first", nil)
+		return core.NewAuthFailedError(core.PlatformWeixin, "account not configured, please pair first", nil)
 	}
 
 	// Check if account is enabled
@@ -128,7 +128,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 	}
 
 	// Create API client
-	b.client = wechatapi.NewClient(account.BaseURL, account.BotToken)
+	b.client = weixinapi.NewClient(account.BaseURL, account.BotToken)
 
 	// Initialize adapter for message conversion
 	b.adapter = NewAdapter(b.Config(), account)
@@ -137,7 +137,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 	b.UpdateConnected(true)
 	b.UpdateAuthenticated(true)
 	b.EmitConnected()
-	b.Logger().Info("WeChat bot connected: account=%s", account.ID)
+	b.Logger().Info("Weixin bot connected: account=%s", account.ID)
 
 	// Start receiving messages
 	b.wg.Add(1)
@@ -146,7 +146,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 	return nil
 }
 
-// Disconnect disconnects from WeChat
+// Disconnect disconnects from Weixin
 func (b *Bot) Disconnect(ctx context.Context) error {
 	if b.cancel != nil {
 		b.cancel()
@@ -165,7 +165,7 @@ func (b *Bot) Disconnect(ctx context.Context) error {
 	b.UpdateConnected(false)
 	b.UpdateReady(false)
 	b.EmitDisconnected()
-	b.Logger().Info("WeChat bot disconnected")
+	b.Logger().Info("Weixin bot disconnected")
 
 	return nil
 }
@@ -213,8 +213,8 @@ func (b *Bot) React(ctx context.Context, messageID string, emoji string) error {
 	if err := b.EnsureReady(); err != nil {
 		return err
 	}
-	// WeChat doesn't have a native reaction feature
-	return core.NewBotError(core.ErrPlatformError, "reactions not supported on WeChat", false)
+	// Weixin doesn't have a native reaction feature
+	return core.NewBotError(core.ErrPlatformError, "reactions not supported on Weixin", false)
 }
 
 // EditMessage edits a message
@@ -222,8 +222,8 @@ func (b *Bot) EditMessage(ctx context.Context, messageID string, text string) er
 	if err := b.EnsureReady(); err != nil {
 		return err
 	}
-	// WeChat doesn't support editing messages after sending
-	return core.NewBotError(core.ErrPlatformError, "editing messages not supported on WeChat", false)
+	// Weixin doesn't support editing messages after sending
+	return core.NewBotError(core.ErrPlatformError, "editing messages not supported on Weixin", false)
 }
 
 // DeleteMessage deletes a message
@@ -231,13 +231,13 @@ func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 	if err := b.EnsureReady(); err != nil {
 		return err
 	}
-	// WeChat doesn't support deleting messages via API
-	return core.NewBotError(core.ErrPlatformError, "deleting messages not supported on WeChat", false)
+	// Weixin doesn't support deleting messages via API
+	return core.NewBotError(core.ErrPlatformError, "deleting messages not supported on Weixin", false)
 }
 
 // PlatformInfo returns platform information
 func (b *Bot) PlatformInfo() *core.PlatformInfo {
-	return core.NewPlatformInfo(core.PlatformWeChat, "WeChat")
+	return core.NewPlatformInfo(core.PlatformWeixin, "Weixin")
 }
 
 // StartReceiving starts receiving messages (already started in Connect)
@@ -285,7 +285,7 @@ func (b *Bot) getAccount() (*weixin.WeChatAccount, error) {
 	// Account doesn't exist, create a new one
 	account = &weixin.WeChatAccount{
 		ID:          b.accountID,
-		Name:        fmt.Sprintf("WeChat Account %s", b.accountID),
+		Name:        fmt.Sprintf("Weixin Account %s", b.accountID),
 		Enabled:     true,
 		Configured:  false,
 		BaseURL:     b.Config().GetOptionString("baseUrl", ""),
@@ -322,13 +322,13 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 
 	// Send via API - use simple text message
 	if err := b.client.SendTextMessage(ctx, target, contextToken, opts.Text); err != nil {
-		return nil, core.WrapError(err, core.PlatformWeChat, core.ErrPlatformError)
+		return nil, core.WrapError(err, core.PlatformWeixin, core.ErrPlatformError)
 	}
 
 	b.UpdateLastActivity()
 	now := time.Now().Unix()
 	return &core.SendResult{
-		MessageID: fmt.Sprintf("wechat-%d", now),
+		MessageID: fmt.Sprintf("weixin-%d", now),
 		Timestamp: now,
 	}, nil
 }
@@ -366,7 +366,7 @@ func (b *Bot) receiveMessages() {
 	// Mark as ready
 	b.UpdateReady(true)
 	b.EmitReady()
-	b.Logger().Info("WeChat bot ready: account=%s", b.accountID)
+	b.Logger().Info("Weixin bot ready: account=%s", b.accountID)
 
 	// Use long-poll adapter to receive messages
 	longPoll := b.plugin.LongPoll()
@@ -410,9 +410,9 @@ func (b *Bot) receiveMessages() {
 
 			// Check for session expiration
 			if result.ErrCode == -14 { // SessionExpiredErrCode from adapters package
-				b.Logger().Error("WeChat session expired, need to re-authenticate")
+				b.Logger().Error("Weixin session expired, need to re-authenticate")
 				// Emit session expired event
-				b.EmitError(core.NewAuthFailedError(core.PlatformWeChat, "session expired", nil))
+				b.EmitError(core.NewAuthFailedError(core.PlatformWeixin, "session expired", nil))
 				return
 			}
 
@@ -420,7 +420,7 @@ func (b *Bot) receiveMessages() {
 			syncBuf = result.SyncBuf
 
 			// Process messages
-			b.Logger().Info("Processing %d messages from WeChat", len(result.Messages))
+			b.Logger().Info("Processing %d messages from Weixin", len(result.Messages))
 			for _, msg := range result.Messages {
 				b.Logger().Info("Handling message: ID=%s, From=%s, To=%s, Text=%s", msg.MessageID, msg.From, msg.To, msg.Text)
 				b.handleMessage(msg)
