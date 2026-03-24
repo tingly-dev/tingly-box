@@ -3,7 +3,6 @@ package virtualmodel_test
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -154,6 +155,8 @@ func TestDelayProvider_TTFTCaptured(t *testing.T) {
 	assert.Greater(t, stats.AvgTTFTMs, 0.0, "AvgTTFTMs should be recorded")
 	assert.GreaterOrEqual(t, stats.AvgTTFTMs, float64(delayMs)/2,
 		"AvgTTFTMs (%.1f) should reflect configured delay (%dms)", stats.AvgTTFTMs, delayMs)
+	t.Logf("metrics: TTFT avg=%.1fms p50=%.1fms p95=%.1fms p99=%.1fms (configured delay=%dms)",
+		stats.AvgTTFTMs, stats.P50TTFTMs, stats.P95TTFTMs, stats.P99TTFTMs, delayMs)
 }
 
 // TestDelayProvider_TPSCaptured verifies that TPS is recorded after a streaming request.
@@ -176,6 +179,8 @@ func TestDelayProvider_TPSCaptured(t *testing.T) {
 
 	stats := svc.Stats.GetStats()
 	assert.Greater(t, stats.AvgTokenSpeed, 0.0, "AvgTokenSpeed (TPS) should be recorded")
+	t.Logf("metrics: TPS avg=%.2f tok/s  latency avg=%.1fms  TTFT avg=%.1fms",
+		stats.AvgTokenSpeed, stats.AvgLatencyMs, stats.AvgTTFTMs)
 }
 
 // TestDelayProvider_LatencyPercentiles verifies P50/P95/P99 are populated and ordered
@@ -206,6 +211,8 @@ func TestDelayProvider_LatencyPercentiles(t *testing.T) {
 	assert.Greater(t, stats.P99LatencyMs, 0.0, "P99LatencyMs should be populated")
 	assert.LessOrEqual(t, stats.P50LatencyMs, stats.P95LatencyMs, "P50 <= P95")
 	assert.LessOrEqual(t, stats.P95LatencyMs, stats.P99LatencyMs, "P95 <= P99")
+	t.Logf("metrics (n=20): latency avg=%.1fms p50=%.1fms p95=%.1fms p99=%.1fms",
+		stats.AvgLatencyMs, stats.P50LatencyMs, stats.P95LatencyMs, stats.P99LatencyMs)
 }
 
 // TestDelayProvider_NonStreamingMetrics verifies latency is captured for non-streaming
@@ -225,6 +232,8 @@ func TestDelayProvider_NonStreamingMetrics(t *testing.T) {
 	stats := svc.Stats.GetStats()
 	assert.Greater(t, stats.AvgLatencyMs, 0.0, "AvgLatencyMs should be recorded")
 	assert.Equal(t, 0.0, stats.AvgTokenSpeed, "TPS should be 0 for non-streaming")
+	t.Logf("metrics: latency avg=%.1fms  TPS=%.2f tok/s  TTFT avg=%.1fms",
+		stats.AvgLatencyMs, stats.AvgTokenSpeed, stats.AvgTTFTMs)
 }
 
 // TestDelayProvider_MultiServiceLatencyRouting verifies that after warmup requests the
@@ -274,7 +283,9 @@ func TestDelayProvider_MultiServiceLatencyRouting(t *testing.T) {
 
 	fastStats := svcFast.Stats.GetStats()
 	slowStats := svcSlow.Stats.GetStats()
-	fmt.Printf("Fast avg latency: %.1fms  Slow avg latency: %.1fms\n", fastStats.AvgLatencyMs, slowStats.AvgLatencyMs)
+	t.Logf("metrics: fast avg=%.1fms (p50=%.1f p95=%.1f)  slow avg=%.1fms (p50=%.1f p95=%.1f)",
+		fastStats.AvgLatencyMs, fastStats.P50LatencyMs, fastStats.P95LatencyMs,
+		slowStats.AvgLatencyMs, slowStats.P50LatencyMs, slowStats.P95LatencyMs)
 
 	if fastStats.AvgLatencyMs > 0 && slowStats.AvgLatencyMs > 0 {
 		assert.Less(t, fastStats.AvgLatencyMs, slowStats.AvgLatencyMs,
@@ -286,8 +297,9 @@ func TestDelayProvider_MultiServiceLatencyRouting(t *testing.T) {
 
 // --- helpers ------------------------------------------------------------------
 
-// addProviderWithRule is used only in routing test above; kept local.
 func init() {
+	gin.SetMode(gin.TestMode)
+	logrus.SetOutput(io.Discard)
 	// ensure constant package is imported (for DefaultRequestTimeout used in delay_provider.go)
 	_ = constant.DefaultRequestTimeout
 }
