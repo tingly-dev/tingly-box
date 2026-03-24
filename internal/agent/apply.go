@@ -169,6 +169,7 @@ func (aa *AgentApply) generateClaudeCodeEnv(baseURL, apiKey, model string, unifi
 		"DISABLE_TELEMETRY":                        "1",
 		"DISABLE_ERROR_REPORTING":                  "1",
 		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+		"CLAUDE_CODE_MAX_OUTPUT_TOKENS":            "32000",
 		"API_TIMEOUT_MS":                           "3000000",
 		"ANTHROPIC_BASE_URL":                       baseURL + "/tingly/claude_code",
 		"ANTHROPIC_AUTH_TOKEN":                     apiKey,
