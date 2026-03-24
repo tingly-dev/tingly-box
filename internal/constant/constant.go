@@ -8,9 +8,8 @@ import (
 
 const (
 	// Default authentication tokens
-	DefaultUserToken         = "tingly-box-user-token"
-	DefaultModelToken        = "tingly-box-model-token"
-	DefaultVirtualModelToken = "tingly-virtual-model-token"
+	DefaultUserToken  = "tingly-box-user-token"
+	DefaultModelToken = "tingly-box-model-token"
 
 	// Default mode name
 	DefaultModeName = "tingly"
