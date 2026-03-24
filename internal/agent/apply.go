@@ -62,7 +62,7 @@ func (aa *AgentApply) applyClaudeCode(req *ApplyAgentRequest) (*ApplyAgentResult
 	baseURL, apiKey := aa.getBaseURLAndToken()
 
 	// Generate env vars for Claude settings
-	env := aa.generateClaudeCodeEnv(baseURL, apiKey, req.Model, req.Unified)
+	env := GenerateClaudeCodeEnv(baseURL, apiKey, req.Unified)
 
 	// Apply settings.json
 	settingsResult, err := aa.applyClaudeSettings(env, req.InstallStatusLine)
@@ -163,8 +163,9 @@ func (aa *AgentApply) getBaseURLAndToken() (string, string) {
 	return baseURL, apiKey
 }
 
-// generateClaudeCodeEnv generates environment variables for Claude Code settings
-func (aa *AgentApply) generateClaudeCodeEnv(baseURL, apiKey, model string, unified bool) map[string]string {
+// GenerateClaudeCodeEnv generates environment variables for Claude Code settings.
+// unified=true means all model slots point to "tingly/cc"; false uses separate cc-* models.
+func GenerateClaudeCodeEnv(baseURL, apiKey string, unified bool) map[string]string {
 	env := map[string]string{
 		"DISABLE_TELEMETRY":                        "1",
 		"DISABLE_ERROR_REPORTING":                  "1",
@@ -194,12 +195,16 @@ func (aa *AgentApply) generateClaudeCodeEnv(baseURL, apiKey, model string, unifi
 	return env
 }
 
-// generateOpenCodeConfigPayload generates the configuration payload for OpenCode
-// Uses the rule name (tingly-opencode) instead of actual model name
-func (aa *AgentApply) generateOpenCodeConfigPayload(configBaseURL, apiKey, _ string) map[string]interface{} {
-	// Use rule name as the model identifier
-	ruleName := "tingly-opencode"
-
+// GenerateOpenCodePayload generates the OpenCode configuration payload.
+// models is a map of model-name → model config object (map[string]interface{}).
+// Pass nil or empty map to use the default single-model layout.
+func GenerateOpenCodePayload(configBaseURL, apiKey string, models map[string]interface{}) map[string]interface{} {
+	if len(models) == 0 {
+		ruleName := "tingly-opencode"
+		models = map[string]interface{}{
+			ruleName: map[string]interface{}{"name": ruleName},
+		}
+	}
 	providerConfig := map[string]interface{}{
 		"tingly-box": map[string]interface{}{
 			"name": "tingly-box",
@@ -208,18 +213,19 @@ func (aa *AgentApply) generateOpenCodeConfigPayload(configBaseURL, apiKey, _ str
 				"baseURL": configBaseURL,
 				"apiKey":  apiKey,
 			},
-			"models": map[string]interface{}{
-				"model": map[string]interface{}{
-					"name": ruleName,
-				},
-			},
+			"models": models,
 		},
 	}
-
 	return map[string]interface{}{
 		"$schema":  "https://opencode.ai/config.json",
 		"provider": providerConfig,
 	}
+}
+
+// generateOpenCodeConfigPayload generates the configuration payload for OpenCode
+// Uses the rule name (tingly-opencode) instead of actual model name
+func (aa *AgentApply) generateOpenCodeConfigPayload(configBaseURL, apiKey, _ string) map[string]interface{} {
+	return GenerateOpenCodePayload(configBaseURL, apiKey, nil)
 }
 
 // applyClaudeSettings applies Claude Code settings.json

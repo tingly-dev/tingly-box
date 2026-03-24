@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -171,30 +172,8 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 	baseURL := fmt.Sprintf("http://%s:%d", h.host, port)
 
 	// Generate env vars based on mode
-	env := map[string]string{
-		"DISABLE_TELEMETRY":                        "1",
-		"DISABLE_ERROR_REPORTING":                  "1",
-		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-		"CLAUDE_CODE_MAX_OUTPUT_TOKENS":            "32000",
-		"API_TIMEOUT_MS":                           "3000000",
-		"ANTHROPIC_BASE_URL":                       baseURL + "/tingly/claude_code",
-		"ANTHROPIC_AUTH_TOKEN":                     h.config.GetModelToken(),
-	}
-
-	if req.Mode == "separate" {
-		env["ANTHROPIC_MODEL"] = "tingly/cc-default"
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "tingly/cc-haiku"
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "tingly/cc-opus"
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "tingly/cc-sonnet"
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = "tingly/cc-subagent"
-	} else {
-		// Unified mode - all point to same model
-		env["ANTHROPIC_MODEL"] = "tingly/cc"
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "tingly/cc"
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "tingly/cc"
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "tingly/cc"
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = "tingly/cc"
-	}
+	unified := req.Mode != "separate"
+	env := agent.GenerateClaudeCodeEnv(baseURL, h.config.GetModelToken(), unified)
 
 	// Install status line script if requested (before applying settings)
 	var statusLineInstalled bool
@@ -366,22 +345,7 @@ func (h *Handler) ApplyOpenCodeConfigFromState(c *gin.Context) {
 	}
 
 	// Generate OpenCode config with all models
-	providerConfig := map[string]interface{}{
-		"tingly-box": map[string]interface{}{
-			"name": "tingly-box",
-			"npm":  "@ai-sdk/anthropic",
-			"options": map[string]interface{}{
-				"baseURL": configBaseURL,
-				"apiKey":  apiKey,
-			},
-			"models": models,
-		},
-	}
-
-	payload := map[string]interface{}{
-		"$schema":  "https://opencode.ai/config.json",
-		"provider": providerConfig,
-	}
+	payload := agent.GenerateOpenCodePayload(configBaseURL, apiKey, models)
 
 	result, err := config.ApplyOpenCodeConfig(payload)
 	if err != nil {
@@ -474,22 +438,7 @@ func (h *Handler) GetOpenCodeConfigPreview(c *gin.Context) {
 	}
 
 	// Generate OpenCode config JSON
-	providerConfig := map[string]interface{}{
-		"tingly-box": map[string]interface{}{
-			"name": "tingly-box",
-			"npm":  "@ai-sdk/anthropic",
-			"options": map[string]interface{}{
-				"baseURL": configBaseURL,
-				"apiKey":  apiKey,
-			},
-			"models": models,
-		},
-	}
-
-	configPayload := map[string]interface{}{
-		"$schema":  "https://opencode.ai/config.json",
-		"provider": providerConfig,
-	}
+	configPayload := agent.GenerateOpenCodePayload(configBaseURL, apiKey, models)
 
 	configJSON, err := json.MarshalIndent(configPayload, "", "  ")
 	if err != nil {
