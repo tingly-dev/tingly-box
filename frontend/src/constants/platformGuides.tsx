@@ -193,16 +193,14 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
             <Stack spacing={2}>
                 <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                        1. Create a Weixin bot
+                        1. Install latest Weixin
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" component="div">
-                        <Box component="ul" sx={{ pl: 2, m: 0 }}>
-                            <li>Visit <Link href="https://mp.weixin.qq.com/" target="_blank">Weixin MP Platform <OpenInNew sx={{ fontSize: 10 }} /></Link></li>
-                            <li>Register a Mini Program or Service Account</li>
-                            <li>Enable Message Push capability</li>
-                            <li>Configure server URL and token</li>
-                            <li>Get App ID and App Secret from "Development Settings"</li>
-                        </Box>
+                    <Typography variant="body2" color="text.secondary">
+                        Make sure you have the latest version of{' '}
+                        <Link href="https://weixin.qq.com/" target="_blank">
+                            Weixin <OpenInNew sx={{ fontSize: 10 }} />
+                        </Link>{' '}
+                        installed on your device.
                     </Typography>
                 </Box>
                 <Box>
@@ -210,7 +208,7 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
                         2. Add bot
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        Click "Add Bot" button above and fill in App ID and App Secret to create your bot.
+                        Click "Add Bot" button above and scan the QR code with Weixin to bind your account.
                     </Typography>
                 </Box>
                 <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
