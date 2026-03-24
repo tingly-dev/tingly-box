@@ -117,7 +117,7 @@ const GuardrailsGroupsPage = () => {
         [groups, groupsById, selectedGroupId]
     );
 
-    const groupPolicyCount = (groupId: string) => policies.filter((policy) => effectivePolicyGroup(policy) === groupId).length;
+    const groupPolicyCount = (groupId: string) => policies.filter((policy) => policy.enabled !== false && effectivePolicyGroup(policy) === groupId).length;
 
     const buildGroupSummary = (group: PolicyGroup) => {
         const severity = group.severity || 'medium';
@@ -137,10 +137,6 @@ const GuardrailsGroupsPage = () => {
             return `${actions} · ${resources}`;
         }
         const patterns = policy.match?.patterns || [];
-        const credentialRefs = policy.match?.credential_refs || [];
-        if (credentialRefs.length > 0) {
-            return `${credentialRefs.length} protected credential${credentialRefs.length > 1 ? 's' : ''}`;
-        }
         return patterns.slice(0, 2).join(', ') || 'No patterns configured';
     };
 
@@ -516,8 +512,13 @@ const GuardrailsGroupsPage = () => {
     };
 
     const policiesInSelectedGroup = useMemo(
-        () => policies.filter((policy) => effectivePolicyGroup(policy) === (selectedGroup?.id || DEFAULT_GROUP_ID)),
+        () => policies.filter((policy) => policy.enabled !== false && effectivePolicyGroup(policy) === (selectedGroup?.id || DEFAULT_GROUP_ID)),
         [policies, selectedGroup]
+    );
+
+    const visiblePolicies = useMemo(
+        () => policies.filter((policy) => policy.enabled !== false),
+        [policies]
     );
 
     return (
@@ -652,14 +653,14 @@ const GuardrailsGroupsPage = () => {
                     size="full"
                 >
                     <List dense sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, py: 0, overflow: 'hidden' }}>
-                        {policies.length === 0 ? (
+                        {visiblePolicies.length === 0 ? (
                             <ListItem>
                                 <Typography variant="body2" color="text.secondary">
-                                    No policies configured yet.
+                                    No enabled policies are available.
                                 </Typography>
                             </ListItem>
                         ) : (
-                            policies.map((policy) => {
+                            visiblePolicies.map((policy) => {
                                 const checked = effectivePolicyGroup(policy) === selectedGroup?.id;
                                 return (
                                     <ListItem

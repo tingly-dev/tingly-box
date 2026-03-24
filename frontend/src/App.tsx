@@ -32,7 +32,6 @@ import GuardrailsPage from './pages/GuardrailsPage';
 import GuardrailsRulesPage from './pages/guardrails/RulesPage';
 import GuardrailsCredentialsPage from './pages/guardrails/CredentialsPage';
 import GuardrailsGroupsPage from './pages/guardrails/GroupsPage';
-import GuardrailsMarketPage from './pages/guardrails/MarketPage';
 import GuardrailsHistoryPage from './pages/guardrails/HistoryPage';
 import DashboardPage from './pages/DashboardPage';
 import OverviewPage from './pages/overview/OverviewPage';
@@ -335,7 +334,6 @@ function AppContent() {
                     <Route path="/guardrails/groups" element={<GuardrailsGroupsPage />} />
                     <Route path="/guardrails/rules" element={<GuardrailsRulesPage />} />
                     <Route path="/guardrails/credentials" element={<GuardrailsCredentialsPage />} />
-                    <Route path="/guardrails/market" element={<GuardrailsMarketPage />} />
                     <Route path="/guardrails/history" element={<GuardrailsHistoryPage />} />
                     {/* Catch-all redirect for unknown routes */}
                     <Route path="*" element={<Navigate to="/dashboard/7d" replace />} />
