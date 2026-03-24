@@ -640,7 +640,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIAssembly(c *gin.Context, req pr
 
 	// Handle the streaming response
 	// Use the dedicated stream handler to convert Responses API to Anthropic beta format
-	usage, err := stream.HandleResponsesToAnthropicBetaAssembly(c, streamResp, proxyModel)
+	usage, err := stream.HandleResponsesToAnthropicV1Assembly(c, streamResp, proxyModel)
 
 	// Track usage from stream handler
 	if err != nil {
