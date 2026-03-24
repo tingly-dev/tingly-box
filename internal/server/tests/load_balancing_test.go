@@ -25,7 +25,7 @@ import (
 // Load Balancer Unit Tests
 // =================================
 
-func TestLoadBalancer_RoundRobin(t *testing.T) {
+func TestLoadBalancer_TokenBased(t *testing.T) {
 	// Create a minimal config for testing
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
@@ -59,20 +59,19 @@ func TestLoadBalancer_RoundRobin(t *testing.T) {
 			},
 		},
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticRoundRobin,
-			Params: &typ.RoundRobinParams{RequestThreshold: 1},
+			Type:   loadbalance.TacticTokenBased,
+			Params: &typ.TokenBasedParams{TokenThreshold: 20},
 		},
 		Active: true,
 	}
 
-	// Test round-robin selection with threshold 1
-	// With threshold 1, we should see different providers on each request
-	// after the first request to each provider
+	// Test token_based selection with threshold 20
+	// With threshold 20, we should switch services after consuming 20 tokens
 	var selectedProviders []string
 	totalRequests := 6
 
-	// Test that the round-robin logic works with threshold 1
-	// We need to record usage directly on the services for the round-robin to work
+	// Test that the token_based logic works with threshold 20
+	// We need to record usage directly on the services for the token_based to work
 
 	for i := 0; i < totalRequests; i++ {
 		service, err := lb.SelectService(rule)
@@ -86,13 +85,13 @@ func TestLoadBalancer_RoundRobin(t *testing.T) {
 
 		selectedProviders = append(selectedProviders, service.Provider)
 
-		// Record usage directly on the service to trigger round-robin logic
+		// Record usage directly on the service to trigger token_based logic
 		service.RecordUsage(10, 10)
 
 		t.Logf("Request %d: Selected provider %s", i+1, service.Provider)
 	}
 
-	// Verify round-robin behavior with threshold 1
+	// Verify token_based behavior with threshold 20 (each request uses 20 tokens)
 	// Expected pattern: provider1, provider2, provider1, provider2, provider1, provider2
 	expectedPattern := []string{"provider1", "provider2", "provider1", "provider2", "provider1", "provider2"}
 
@@ -163,8 +162,8 @@ func TestLoadBalancer_EnabledFilter(t *testing.T) {
 			},
 		},
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticRoundRobin,
-			Params: typ.DefaultRoundRobinParams(),
+			Type:   loadbalance.TacticAdaptive,
+			Params: typ.DefaultAdaptiveParams(),
 		},
 		Active: true,
 	}
@@ -316,8 +315,8 @@ func TestLoadBalancer_GetRuleSummary(t *testing.T) {
 		RequestModel: "test",
 		UUID:         uuid.New().String(),
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticHybrid,
-			Params: typ.DefaultHybridParams(),
+			Type:   loadbalance.TacticTokenBased,
+			Params: typ.DefaultTokenBasedParams(),
 		},
 		Services: []*loadbalance.Service{
 			{
@@ -767,8 +766,8 @@ func TestLoadBalancerFunctionality(t *testing.T) {
 			},
 		},
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticRoundRobin,
-			Params: typ.DefaultRoundRobinParams(),
+			Type:   loadbalance.TacticAdaptive,
+			Params: typ.DefaultAdaptiveParams(),
 		},
 		Active: true,
 	}
@@ -982,7 +981,7 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 	}
 }
 
-func TestLoadBalancer_RoundRobinThreshold2(t *testing.T) {
+func TestLoadBalancer_TokenBasedThreshold2(t *testing.T) {
 	// Create a minimal config for testing
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
@@ -1023,18 +1022,18 @@ func TestLoadBalancer_RoundRobinThreshold2(t *testing.T) {
 			},
 		},
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticRoundRobin,
-			Params: &typ.RoundRobinParams{RequestThreshold: 2}, // Threshold of 2 requests
+			Type:   loadbalance.TacticTokenBased,
+			Params: &typ.TokenBasedParams{TokenThreshold: 20}, // Threshold of 20 tokens
 		},
 		Active: true,
 	}
 
-	// Test round-robin selection with threshold 2
-	// Expected pattern with threshold 2: A, A, B, B, C, C (2 requests per provider before rotation)
+	// Test token_based selection with threshold 20
+	// Expected pattern with threshold 20: A, A, B, B, C, C (2 requests per provider before rotation)
 	var selectedProviders []string
 	totalRequests := 6
 
-	t.Logf("Testing round-robin with threshold=2 and %d total requests", totalRequests)
+	t.Logf("Testing token_based with threshold=20 and %d total requests", totalRequests)
 
 	for i := 0; i < totalRequests; i++ {
 		service, err := lb.SelectService(rule)
@@ -1048,13 +1047,13 @@ func TestLoadBalancer_RoundRobinThreshold2(t *testing.T) {
 
 		selectedProviders = append(selectedProviders, service.Provider)
 
-		// Record usage directly on the service to trigger round-robin logic
+		// Record usage directly on the service to trigger token_based logic
 		service.RecordUsage(10, 10)
 
 		t.Logf("Request %d: Selected provider %s (service_id %s)", i+1, service.Provider, rule.CurrentServiceID)
 	}
 
-	// Expected pattern with threshold 2: A, A, B, B, C, C
+	// Expected pattern with threshold 20: A, A, B, B, C, C
 	expectedPattern := []string{"provider-A", "provider-A", "provider-B", "provider-B", "provider-C", "provider-C"}
 
 	for i, expected := range expectedPattern {

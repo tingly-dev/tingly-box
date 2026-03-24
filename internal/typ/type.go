@@ -96,9 +96,9 @@ const (
 type RecordingMode string
 
 const (
-	RecordingModeDisabled       RecordingMode = ""              // Recording disabled (default)
-	RecordingModeRequest        RecordingMode = "request"       // Record request only
-	RecordingModeResponse       RecordingMode = "response"      // Record response only
+	RecordingModeDisabled        RecordingMode = ""                 // Recording disabled (default)
+	RecordingModeRequest         RecordingMode = "request"          // Record request only
+	RecordingModeResponse        RecordingMode = "response"         // Record response only
 	RecordingModeRequestResponse RecordingMode = "request_response" // Record both request and response
 )
 
@@ -119,9 +119,9 @@ type ScenarioFlags struct {
 	Smart    bool `json:"smart" yaml:"smart"`       // Smart mode with automatic optimization
 
 	// Experimental feature flags (scenario-based opt-in)
-	SmartCompact bool `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"`   // Enable smart compact (remove thinking blocks)
-	Recording    bool `json:"recording,omitempty" yaml:"recording,omitempty"`           // Enable scenario recording (legacy boolean flag)
-	RecordV2     RecordingMode `json:"record_v2,omitempty" yaml:"record_v2,omitempty"` // Enable scenario recording V2 (request/response/request_response)
+	SmartCompact bool          `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"`   // Enable smart compact (remove thinking blocks)
+	Recording    bool          `json:"recording,omitempty" yaml:"recording,omitempty"`           // Enable scenario recording (legacy boolean flag)
+	RecordV2     RecordingMode `json:"record_v2,omitempty" yaml:"record_v2,omitempty"`           // Enable scenario recording V2 (request/response/request_response)
 	Beta         bool          `json:"anthropic_beta,omitempty" yaml:"anthropic_beta,omitempty"` // Enable Anthropic beta features (e.g. extended thinking)
 
 	// Stream configuration flags
@@ -313,7 +313,7 @@ type Rule struct {
 	Description   string                 `json:"description"`
 	Services      []*loadbalance.Service `json:"services" yaml:"services"`
 	// Per-rule feature flags (e.g. cursor_compat / cursor_compat_auto).
-	Flags         RuleFlags `json:"flags,omitempty" yaml:"flags,omitempty"`
+	Flags RuleFlags `json:"flags,omitempty" yaml:"flags,omitempty"`
 	// CurrentServiceID is persisted to SQLite, not JSON (provider:model format)
 	// This identifies the current service for round-robin load balancing
 	CurrentServiceID string `json:"-" yaml:"-"`
@@ -395,8 +395,8 @@ func (r *Rule) GetTacticType() loadbalance.TacticType {
 	if r.LBTactic.Type != 0 {
 		return r.LBTactic.Type
 	}
-	// Default to round robin
-	return loadbalance.TacticRoundRobin
+	// Default to random
+	return loadbalance.TacticRandom
 }
 
 // GetUUID returns the rule UUID

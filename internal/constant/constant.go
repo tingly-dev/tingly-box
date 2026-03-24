@@ -43,8 +43,53 @@ const (
 const DBFileName = "tingly.db" // Unified SQLite database file
 
 // Load balancing threshold defaults
-const DefaultRequestThreshold = int64(10)  // Default request threshold for round-robin and hybrid tactics
-const DefaultTokenThreshold = int64(10000) // Default token threshold for token-based and hybrid tactics
+const DefaultTokenThreshold = int64(10000) // Default token threshold for token-based tactics
+
+// Latency-based routing defaults
+const (
+	DefaultLatencyThresholdMs    = int64(2000) // Default latency threshold in milliseconds
+	DefaultLatencySampleWindow   = 100         // Default number of latency samples to keep
+	DefaultLatencyPercentile     = 0.95        // Default percentile for latency comparison (0.95 = p95)
+	DefaultLatencyComparisonMode = "avg"       // Default comparison mode: "avg", "p50", "p95", "p99"
+)
+
+// Token speed-based routing defaults
+const (
+	DefaultMinSpeedSamples   = 5    // Minimum samples required before making speed-based decisions
+	DefaultSpeedThresholdTps = 50.0 // Minimum acceptable tokens per second
+	DefaultSpeedSampleWindow = 100  // Default number of speed samples to keep
+)
+
+// TTFT (Time To First Token) based routing defaults
+const (
+	DefaultTTFTThresholdMs    = int64(500) // Default TTFT threshold in milliseconds
+	DefaultTTFTSampleWindow   = 100        // Default number of TTFT samples to keep
+	DefaultTTFTPercentile     = 0.95       // Default percentile for TTFT comparison (0.95 = p95)
+	DefaultTTFTComparisonMode = "p95"      // Default comparison mode: "avg", "p50", "p95", "p99"
+)
+
+// Cache-aware routing defaults
+const (
+	DefaultMinCacheHitRate = 0.3 // Minimum acceptable cache hit rate (30%)
+	DefaultMinCacheSamples = 10  // Minimum samples before using cache data
+)
+
+// Cost-optimized routing defaults
+const (
+	DefaultMaxCostTokens  = int64(50000) // Default max token cost per window
+	DefaultCostWindowSize = 3600         // Default cost window in seconds (1 hour)
+)
+
+// Adaptive routing defaults (updated with new dimensions)
+const (
+	DefaultLatencyWeight = 0.25           // Weight for total latency in adaptive scoring
+	DefaultTTFTWeight    = 0.20           // Weight for TTFT in adaptive scoring
+	DefaultCacheWeight   = 0.15           // Weight for cache hit rate in adaptive scoring
+	DefaultSpeedWeight   = 0.15           // Weight for token speed in adaptive scoring
+	DefaultTokenWeight   = 0.15           // Weight for token usage in adaptive scoring
+	DefaultHealthWeight  = 0.10           // Weight for health status in adaptive scoring
+	DefaultScoringMode   = "weighted_sum" // Default scoring mode: "weighted_sum", "multiplicative", "rank_based"
+)
 
 const ConfigDirName = ".tingly-box"
 
