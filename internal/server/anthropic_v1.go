@@ -338,7 +338,12 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 				req.Stream = true
 				s.handleAnthropicV1ViaResponsesAPIStreaming(c, req, proxyModel, actualModel, provider, *transformedReq)
 			} else {
-				s.handleAnthropicV1ViaResponsesAPINonStreaming(c, req, proxyModel, actualModel, provider, *transformedReq)
+				if provider.APIBase == protocol.CodexAPIBase {
+					req.Stream = true
+					s.handleAnthropicV1ViaResponsesAPIAssembly(c, req, proxyModel, actualModel, provider, *transformedReq)
+				} else {
+					s.handleAnthropicV1ViaResponsesAPINonStreaming(c, req, proxyModel, actualModel, provider, *transformedReq)
+				}
 			}
 			return
 		}
@@ -600,4 +605,60 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req p
 		streamRec.Finish(proxyModel, usage.InputTokens, usage.OutputTokens)
 		streamRec.RecordResponse(provider, actualModel)
 	}
+
+	// Success - usage tracking is handled inside the stream handler
+	// Note: The handler tracks usage when response.completed event is received
+}
+
+// handleAnthropicV1ViaResponsesAPIStreaming handles streaming Responses API request
+func (s *Server) handleAnthropicV1ViaResponsesAPIAssembly(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
+	// Get scenario recorder and set up stream recorder
+	var recorder *ProtocolRecorder
+	if r, exists := c.Get("scenario_recorder"); exists {
+		recorder = r.(*ProtocolRecorder)
+	}
+	streamRec := newStreamRecorder(recorder)
+	if streamRec != nil {
+		streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
+	}
+
+	// For standard OpenAI providers, use the OpenAI SDK
+	wrapper := s.clientPool.GetOpenAIClient(provider, responsesReq.Model)
+	fc := NewForwardContext(c.Request.Context(), provider)
+	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
+	if cancel != nil {
+		defer cancel()
+	}
+	if err != nil {
+		s.trackUsageFromContext(c, 0, 0, err)
+		stream.SendStreamingError(c, err)
+		if streamRec != nil {
+			streamRec.RecordError(err)
+		}
+		return
+	}
+
+	// Handle the streaming response
+	// Use the dedicated stream handler to convert Responses API to Anthropic beta format
+	usage, err := stream.HandleResponsesToAnthropicV1Assembly(c, streamResp, proxyModel)
+
+	// Track usage from stream handler
+	if err != nil {
+		s.trackUsageWithTokenUsage(c, usage, err)
+		if streamRec != nil {
+			streamRec.RecordError(err)
+		}
+		return
+	}
+
+	s.trackUsageWithTokenUsage(c, usage, nil)
+
+	// Finish recording and assemble response
+	if streamRec != nil {
+		streamRec.Finish(proxyModel, usage.InputTokens, usage.OutputTokens)
+		streamRec.RecordResponse(provider, actualModel)
+	}
+
+	// Success - usage tracking is handled inside the stream handler
+	// Note: The handler tracks usage when response.completed event is received
 }
