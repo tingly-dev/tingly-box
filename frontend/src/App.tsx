@@ -31,6 +31,7 @@ import LogsPage from './pages/system/LogsPage';
 import GuardrailsPage from './pages/GuardrailsPage';
 import GuardrailsRulesPage from './pages/guardrails/RulesPage';
 import GuardrailsCredentialsPage from './pages/guardrails/CredentialsPage';
+import GuardrailsGroupsPage from './pages/guardrails/GroupsPage';
 import GuardrailsMarketPage from './pages/guardrails/MarketPage';
 import GuardrailsHistoryPage from './pages/guardrails/HistoryPage';
 import DashboardPage from './pages/DashboardPage';
@@ -331,6 +332,7 @@ function AppContent() {
                     <Route path="/remote-control/slack" element={<SlackPage />} />
                     {/* Guardrails */}
                     <Route path="/guardrails" element={<GuardrailsPage />} />
+                    <Route path="/guardrails/groups" element={<GuardrailsGroupsPage />} />
                     <Route path="/guardrails/rules" element={<GuardrailsRulesPage />} />
                     <Route path="/guardrails/credentials" element={<GuardrailsCredentialsPage />} />
                     <Route path="/guardrails/market" element={<GuardrailsMarketPage />} />

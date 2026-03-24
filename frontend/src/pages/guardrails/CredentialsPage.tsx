@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Alert,
     Box,
@@ -9,7 +9,6 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
-    Grid,
     IconButton,
     Paper,
     Stack,
@@ -28,13 +27,10 @@ import {
     ContentCopy,
     DeleteOutline,
     Refresh as RefreshIcon,
-    Shield,
     Visibility,
     VisibilityOff,
     VpnKey,
-    CheckCircleOutline,
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
 import PageLayout from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
@@ -80,7 +76,6 @@ const emptyEditorState: CredentialEditorState = {
 };
 
 const GuardrailsCredentialsPage = () => {
-    const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [credentials, setCredentials] = useState<ProtectedCredential[]>([]);
     const [selectedIDs, setSelectedIDs] = useState<string[]>([]);
@@ -98,11 +93,6 @@ const GuardrailsCredentialsPage = () => {
     const [selectedProviderIDs, setSelectedProviderIDs] = useState<string[]>([]);
     const [editorState, setEditorState] = useState<CredentialEditorState>(emptyEditorState);
     const [editorMessage, setEditorMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-    const selectedCredentials = useMemo(
-        () => credentials.filter((credential) => selectedIDs.includes(credential.id)),
-        [credentials, selectedIDs]
-    );
 
     // Dialog-trigger buttons can keep MUI focus styling after the pointer leaves.
     // Blur the active element on open/close paths so toolbar actions return to a neutral state.
@@ -335,29 +325,6 @@ const GuardrailsCredentialsPage = () => {
         }
     };
 
-    const handleCreateMaskPolicyDraft = () => {
-        if (selectedCredentials.length === 0) {
-            return;
-        }
-        blurActiveElement();
-        navigate('/guardrails/rules', {
-            state: {
-                newPolicyDraft: {
-                    name: selectedCredentials.length === 1 ? `Mask ${selectedCredentials[0].name}` : 'Mask Protected Credentials',
-                    kind: 'content',
-                    enabled: true,
-                    verdict: 'mask',
-                    reason:
-                        selectedCredentials.length === 1
-                            ? `Replace ${selectedCredentials[0].name} with its alias token before content reaches the model.`
-                            : 'Replace protected credentials with alias tokens before content reaches the model.',
-                    credentialRefs: selectedCredentials.map((credential) => credential.id),
-                    patterns: '',
-                },
-            },
-        });
-    };
-
     const toggleSelected = (credentialId: string, checked: boolean) => {
         setSelectedIDs((current) => {
             if (checked) {
@@ -368,7 +335,6 @@ const GuardrailsCredentialsPage = () => {
     };
 
     const allSelected = credentials.length > 0 && selectedIDs.length === credentials.length;
-    const enabledCount = credentials.filter((credential) => credential.enabled).length;
     const allImportableSelected = importableProviders.length > 0 && selectedProviderIDs.length === importableProviders.length;
 
     const handleCopyAliasToken = async () => {
@@ -396,7 +362,7 @@ const GuardrailsCredentialsPage = () => {
         <PageLayout
             loading={loading}
             title="Protected Credentials"
-            subtitle="Keep real secrets local, give the model alias tokens, and generate mask policies from selected credentials."
+            subtitle="Keep real secrets local and replace them with alias tokens before content reaches the model."
             rightAction={
                 <Stack direction="row" spacing={1}>
                     <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadCredentials}>
@@ -408,59 +374,13 @@ const GuardrailsCredentialsPage = () => {
             <Stack spacing={3}>
                 {actionMessage && <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>}
 
-                <Grid container spacing={2}>
-                    <Grid size={{ xs: 12, sm: 4 }}>
-                        <UnifiedCard title="Total" size="full">
-                            <Stack direction="row" spacing={1.5} alignItems="center">
-                                <VpnKey color="primary" />
-                                <Box>
-                                    <Typography variant="h4" sx={{ fontWeight: 600 }}>{credentials.length}</Typography>
-                                    <Typography variant="body2" color="text.secondary">Protected credentials</Typography>
-                                </Box>
-                            </Stack>
-                        </UnifiedCard>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 4 }}>
-                        <UnifiedCard title="Enabled" size="full">
-                            <Stack direction="row" spacing={1.5} alignItems="center">
-                                <CheckCircleOutline color="success" />
-                                <Box>
-                                    <Typography variant="h4" sx={{ fontWeight: 600 }}>{enabledCount}</Typography>
-                                    <Typography variant="body2" color="text.secondary">Active for masking</Typography>
-                                </Box>
-                            </Stack>
-                        </UnifiedCard>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 4 }}>
-                        <UnifiedCard title="Selected" size="full">
-                            <Stack direction="row" spacing={1.5} alignItems="center">
-                                <Shield color="warning" />
-                                <Box>
-                                    <Typography variant="h4" sx={{ fontWeight: 600 }}>{selectedCredentials.length}</Typography>
-                                    <Typography variant="body2" color="text.secondary">Ready for one mask policy</Typography>
-                                </Box>
-                            </Stack>
-                        </UnifiedCard>
-                    </Grid>
-                </Grid>
-
                 <UnifiedCard
                     title="Protected Credentials"
                     subtitle="Add sensitive credentials here when you do not want the model to see them directly."
                     size="full"
                     rightAction={
                         <Stack direction="row" spacing={1}>
-                            {credentials.length > 0 && (
-                                <Button
-                                    variant="outlined"
-                                    startIcon={<Shield />}
-                                    disabled={selectedCredentials.length === 0}
-                                    onClick={handleCreateMaskPolicyDraft}
-                                >
-                                    Create Mask Policy
-                                </Button>
-                            )}
-                            {selectedCredentials.length > 0 && (
+                            {selectedIDs.length > 0 && (
                                 <Button
                                     variant="outlined"
                                     color="error"
@@ -483,7 +403,7 @@ const GuardrailsCredentialsPage = () => {
                     }
                 >
                     <Alert severity="info" sx={{ mb: 2 }}>
-                        Protected credentials are replaced with alias tokens before content reaches the model. When a tool needs the real value, Tingly restores it locally at execution time.
+                        Protected credentials are always masked before content reaches the model. When a tool needs the real value, Tingly restores it locally at execution time.
                     </Alert>
                     {credentials.length === 0 ? (
                         <Box sx={{ py: 8, textAlign: 'center' }}>
@@ -507,7 +427,7 @@ const GuardrailsCredentialsPage = () => {
                                         No protected credentials
                                     </Typography>
                                     <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 560 }}>
-                                        Add credentials here before wiring pseudonymization into policies.
+                                        Add credentials here to keep real secrets out of model-visible content.
                                     </Typography>
                                 </Stack>
                                 <Button variant="contained" startIcon={<Add />} onClick={openNewDialog}>
@@ -733,7 +653,7 @@ const GuardrailsCredentialsPage = () => {
                 <DialogTitle>Delete Protected Credential</DialogTitle>
                 <DialogContent>
                     <Typography variant="body2" color="text.secondary">
-                        Delete this protected credential? Existing mask policies will keep their credential refs and need to be updated manually.
+                        Delete this protected credential?
                     </Typography>
                 </DialogContent>
                 <DialogActions>
@@ -761,8 +681,8 @@ const GuardrailsCredentialsPage = () => {
                 <DialogContent>
                     <Typography variant="body2" color="text.secondary">
                         {selectedIDs.length === 1
-                            ? 'Delete the selected protected credential? Existing mask policies will keep their credential refs and need to be updated manually.'
-                            : `Delete ${selectedIDs.length} selected protected credentials? Existing mask policies will keep their credential refs and need to be updated manually.`}
+                            ? 'Delete the selected protected credential?'
+                            : `Delete ${selectedIDs.length} selected protected credentials?`}
                     </Typography>
                 </DialogContent>
                 <DialogActions>

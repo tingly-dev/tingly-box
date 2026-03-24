@@ -16,9 +16,9 @@ import (
 
 const guardrailsCredentialMaskPreviewLimit = 160
 
-// mask verdicts are request-side content rewrites, not terminal blocks. Resolve
-// them from config before the normal block/review path so the model only sees
-// alias tokens for registered protected credentials.
+// Protected credentials are request-side content rewrites, not terminal blocks.
+// Apply them before the normal block/review path so the model only sees alias
+// tokens instead of the real secret values.
 func (s *Server) applyGuardrailsCredentialMasksV1(c *gin.Context, req *anthropic.MessageNewParams, actualModel string, provider *typ.Provider) {
 	if req == nil {
 		return
