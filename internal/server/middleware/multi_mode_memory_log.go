@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -23,8 +24,12 @@ type MultiModeMemoryLogMiddleware struct {
 func NewMultiModeMemoryLogMiddleware(multiLogger *obs.MultiLogger) *MultiModeMemoryLogMiddleware {
 	if multiLogger == nil {
 		// Fallback for test environments where no multi-logger is configured.
+		l := logrus.New()
+		if gin.Mode() == gin.TestMode {
+			l.SetOutput(io.Discard)
+		}
 		return &MultiModeMemoryLogMiddleware{
-			logger:      logrus.New(),
+			logger:      l,
 			multiLogger: nil,
 		}
 	}
