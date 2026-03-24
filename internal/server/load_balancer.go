@@ -36,9 +36,7 @@ func NewLoadBalancer(cfg *config.Config, healthFilter *typ.HealthFilter) *LoadBa
 
 // initializeDefaultTactics initializes default load balancing tactics
 func (lb *LoadBalancer) initializeDefaultTactics() {
-	lb.tactics[loadbalance.TacticRoundRobin] = typ.NewRoundRobinTactic()
 	lb.tactics[loadbalance.TacticTokenBased] = typ.NewTokenBasedTactic(10000)
-	lb.tactics[loadbalance.TacticHybrid] = typ.NewHybridTactic(100, 10000)
 	lb.tactics[loadbalance.TacticRandom] = typ.NewRandomTactic()
 	lb.tactics[loadbalance.TacticLatencyBased] = typ.GetDefaultTactic(loadbalance.TacticLatencyBased)
 	lb.tactics[loadbalance.TacticSpeedBased] = typ.GetDefaultTactic(loadbalance.TacticSpeedBased)

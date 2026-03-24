@@ -449,9 +449,9 @@ func (ss *ServiceStats) GetCostMetrics() int64 {
 type TacticType int
 
 const (
-	TacticRoundRobin   TacticType = iota // Rotate by request count
+	_                  TacticType = iota // 0: deprecated round_robin → token_based
 	TacticTokenBased                     // Rotate by token consumption
-	TacticHybrid                         // Hybrid: request count or tokens, whichever comes first
+	_                                    // 2: deprecated hybrid → token_based
 	TacticRandom                         // Random selection with weighted probability
 	TacticLatencyBased                   // Route based on response latency
 	TacticSpeedBased                     // Route based on token generation speed
@@ -482,12 +482,8 @@ func (tt *TacticType) UnmarshalJSON(data []byte) error {
 // String returns string representation of TacticType
 func (tt TacticType) String() string {
 	switch tt {
-	case TacticRoundRobin:
-		return "round_robin"
 	case TacticTokenBased:
 		return "token_based"
-	case TacticHybrid:
-		return "hybrid"
 	case TacticRandom:
 		return "random"
 	case TacticLatencyBased:
@@ -497,19 +493,19 @@ func (tt TacticType) String() string {
 	case TacticAdaptive:
 		return "adaptive"
 	default:
-		return "unknown"
+		return "token_based"
 	}
 }
 
 // ParseTacticType parses string to TacticType
 func ParseTacticType(s string) TacticType {
 	switch s {
-	case "round_robin":
-		return TacticRoundRobin
+	case "round_robin": // deprecated, map to token_based
+		return TacticTokenBased
 	case "token_based":
 		return TacticTokenBased
-	case "hybrid":
-		return TacticHybrid
+	case "hybrid": // deprecated, map to token_based
+		return TacticTokenBased
 	case "random":
 		return TacticRandom
 	case "latency_based":
@@ -519,6 +515,6 @@ func ParseTacticType(s string) TacticType {
 	case "adaptive":
 		return TacticAdaptive
 	default:
-		return TacticRoundRobin // default
+		return TacticAdaptive // default to adaptive
 	}
 }

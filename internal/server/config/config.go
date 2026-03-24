@@ -1777,12 +1777,8 @@ func IsTacticValid(tactic *typ.Tactic) bool {
 
 	// Check for invalid zero values in params
 	switch p := tactic.Params.(type) {
-	case *typ.RoundRobinParams:
-		return p.RequestThreshold > 0
 	case *typ.TokenBasedParams:
 		return p.TokenThreshold > 0
-	case *typ.HybridParams:
-		return p.RequestThreshold > 0 && p.TokenThreshold > 0
 	case *typ.RandomParams:
 		// Random params has no fields, always valid if not nil
 		return true
@@ -1904,9 +1900,9 @@ func init() {
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with Anthropic",
 			Services:      []*loadbalance.Service{}, // Empty services initially
-			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
+			LBTactic: typ.Tactic{ // Initialize with default adaptive tactic
+				Type:   loadbalance.TacticAdaptive,
+				Params: typ.DefaultAdaptiveParams(),
 			},
 			Active: true,
 		},
@@ -1917,9 +1913,9 @@ func init() {
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for agent",
 			Services:      []*loadbalance.Service{}, // Empty services initially
-			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
+			LBTactic: typ.Tactic{ // Initialize with default adaptive tactic
+				Type:   loadbalance.TacticAdaptive,
+				Params: typ.DefaultAdaptiveParams(),
 			},
 			Active: true,
 		},
@@ -1931,8 +1927,8 @@ func init() {
 			Description:   "Built in model rule for agent - claw",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
+				Type:   loadbalance.TacticAdaptive,
+				Params: typ.DefaultAdaptiveParams(),
 			},
 			Active: true,
 		},
@@ -1943,9 +1939,9 @@ func init() {
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with OpenAI",
 			Services:      []*loadbalance.Service{}, // Empty services initially
-			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
+			LBTactic: typ.Tactic{ // Initialize with default adaptive tactic
+				Type:   loadbalance.TacticAdaptive,
+				Params: typ.DefaultAdaptiveParams(),
 			},
 			Active: true,
 		},
@@ -1957,8 +1953,8 @@ func init() {
 			Description:   "Default proxy rule for Codex",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
+				Type:   loadbalance.TacticAdaptive,
+				Params: typ.DefaultAdaptiveParams(),
 			},
 			Active: true,
 		},
@@ -1969,9 +1965,9 @@ func init() {
 			ResponseModel: "",
 			Description:   "Default proxy rule for Claude Code",
 			Services:      []*loadbalance.Service{}, // Empty services initially
-			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
+			LBTactic: typ.Tactic{ // Initialize with default adaptive tactic
+				Type:   loadbalance.TacticAdaptive,
+				Params: typ.DefaultAdaptiveParams(),
 			},
 			Active: true,
 		},
@@ -1983,8 +1979,8 @@ func init() {
 			Description:   "Claude Code - Haiku mode The model to use for haiku , or background functionality",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
+				Type:   loadbalance.TacticAdaptive,
+				Params: typ.DefaultAdaptiveParams(),
 			},
 			Active: true,
 		},
@@ -1996,8 +1992,8 @@ func init() {
 			Description:   "Claude Code - Sonnet model - model to use for sonnet , or for opusplan when Plan Mode is not active.",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
+				Type:   loadbalance.TacticAdaptive,
+				Params: typ.DefaultAdaptiveParams(),
 			},
 			Active: true,
 		},
@@ -2009,8 +2005,8 @@ func init() {
 			Description:   "Claude Code - Opus model - to use for opus , or for opusplan when Plan Mode is active.",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
+				Type:   loadbalance.TacticAdaptive,
+				Params: typ.DefaultAdaptiveParams(),
 			},
 			Active: true,
 		},
@@ -2022,8 +2018,8 @@ func init() {
 			Description:   "Claude Code - Default model - for general task",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
+				Type:   loadbalance.TacticAdaptive,
+				Params: typ.DefaultAdaptiveParams(),
 			},
 			Active: true,
 		},
@@ -2035,8 +2031,8 @@ func init() {
 			Description:   "Claude Code - Subagent model - model to use for subagents",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
+				Type:   loadbalance.TacticAdaptive,
+				Params: typ.DefaultAdaptiveParams(),
 			},
 			Active: true,
 		},
@@ -2048,8 +2044,8 @@ func init() {
 			Description:   "Default proxy rule for OpenCode - AI coding assistant",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
+				Type:   loadbalance.TacticAdaptive,
+				Params: typ.DefaultAdaptiveParams(),
 			},
 			Active: true,
 		},
@@ -2171,7 +2167,7 @@ func (c *Config) EnsureSmartGuideRuleForBot(botUUID, botName, providerUUID, mode
 				},
 			},
 			LBTactic: typ.Tactic{
-				Type: loadbalance.TacticRoundRobin,
+				Type: loadbalance.TacticAdaptive,
 			},
 			Active:       true,
 			SmartEnabled: false,

@@ -137,12 +137,12 @@ func TestParseTacticType(t *testing.T) {
 		input    string
 		expected TacticType
 	}{
-		{"round_robin", TacticRoundRobin},
+		{"round_robin", TacticTokenBased}, // deprecated → token_based
 		{"token_based", TacticTokenBased},
-		{"hybrid", TacticHybrid},
+		{"hybrid", TacticTokenBased}, // deprecated → token_based
 		{"random", TacticRandom},
-		{"invalid", TacticRoundRobin}, // Default fallback
-		{"", TacticRoundRobin},        // Empty string fallback
+		{"invalid", TacticAdaptive}, // Default fallback
+		{"", TacticAdaptive},        // Empty string fallback
 	}
 
 	for _, test := range tests {
@@ -154,11 +154,9 @@ func TestParseTacticType(t *testing.T) {
 
 func TestTacticType_String(t *testing.T) {
 	tests := map[TacticType]string{
-		TacticRoundRobin: "round_robin",
 		TacticTokenBased: "token_based",
-		TacticHybrid:     "hybrid",
 		TacticRandom:     "random",
-		TacticType(999):  "unknown", // Invalid type
+		TacticType(999):  "token_based", // Invalid type → token_based
 	}
 
 	for tacticType, expected := range tests {
@@ -266,8 +264,8 @@ func TestParseTacticType_LatencyBased(t *testing.T) {
 		expected TacticType
 	}{
 		{"latency_based", TacticLatencyBased},
-		{"LATENCY_BASED", TacticRoundRobin}, // Case sensitive, falls back to default
-		{"invalid", TacticRoundRobin},       // Default fallback
+		{"LATENCY_BASED", TacticAdaptive}, // Case sensitive, falls back to default
+		{"invalid", TacticAdaptive},       // Default fallback
 	}
 
 	for _, test := range tests {
@@ -359,8 +357,8 @@ func TestParseTacticType_SpeedBased(t *testing.T) {
 		expected TacticType
 	}{
 		{"speed_based", TacticSpeedBased},
-		{"SPEED_BASED", TacticRoundRobin}, // Case sensitive, falls back to default
-		{"invalid", TacticRoundRobin},     // Default fallback
+		{"SPEED_BASED", TacticAdaptive}, // Case sensitive, falls back to default
+		{"invalid", TacticAdaptive},     // Default fallback
 	}
 
 	for _, test := range tests {
@@ -382,8 +380,8 @@ func TestParseTacticType_Adaptive(t *testing.T) {
 		expected TacticType
 	}{
 		{"adaptive", TacticAdaptive},
-		{"ADAPTIVE", TacticRoundRobin}, // Case sensitive, falls back to default
-		{"invalid", TacticRoundRobin},  // Default fallback
+		{"ADAPTIVE", TacticAdaptive}, // Case sensitive, falls back to default
+		{"invalid", TacticAdaptive},  // Default fallback
 	}
 
 	for _, test := range tests {

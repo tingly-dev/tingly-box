@@ -280,8 +280,8 @@ func (ts *TestServer) AddTestRule(t *testing.T, requestModel, providerName, mode
 			},
 		},
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticRoundRobin,
-			Params: typ.DefaultRoundRobinParams(),
+			Type:   loadbalance.TacticAdaptive,
+			Params: typ.DefaultAdaptiveParams(),
 		},
 		Active: true,
 	}

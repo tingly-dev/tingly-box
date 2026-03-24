@@ -43,8 +43,7 @@ const (
 const DBFileName = "tingly.db" // Unified SQLite database file
 
 // Load balancing threshold defaults
-const DefaultRequestThreshold = int64(10)  // Default request threshold for round-robin and hybrid tactics
-const DefaultTokenThreshold = int64(10000) // Default token threshold for token-based and hybrid tactics
+const DefaultTokenThreshold = int64(10000) // Default token threshold for token-based tactics
 
 // Latency-based routing defaults
 const (

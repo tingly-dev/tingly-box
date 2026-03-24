@@ -56,8 +56,8 @@ func migrate20251220(c *Config) {
 		if !IsTacticValid(&c.Rules[i].LBTactic) {
 			// Set default tactic if params are invalid
 			c.Rules[i].LBTactic = typ.Tactic{
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
+				Type:   loadbalance.TacticAdaptive,
+				Params: typ.DefaultAdaptiveParams(),
 			}
 			needsSave = true
 		}
