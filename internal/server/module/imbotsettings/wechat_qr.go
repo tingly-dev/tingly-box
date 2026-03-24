@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,7 +23,16 @@ type WeChatQRLoginHandler struct {
 	settingsStore *db.ImBotSettingsStore
 	sessions      map[string]*qrSession
 	mu            sync.RWMutex
+	// Rate limiting: track recent QR requests per bot
+	rateLimitMap map[string][]time.Time // botUUID -> request timestamps
+	rateLimitMu  sync.RWMutex
 }
+
+// Rate limit constants
+const (
+	maxQRRequestsPerMinute = 5 // Max 5 QR requests per minute per bot
+	rateLimitWindow        = 1 * time.Minute
+)
 
 type qrSession struct {
 	botUUID   string
@@ -46,6 +56,7 @@ func NewWeChatQRLoginHandler(settingsStore *db.ImBotSettingsStore) *WeChatQRLogi
 	return &WeChatQRLoginHandler{
 		settingsStore: settingsStore,
 		sessions:      make(map[string]*qrSession),
+		rateLimitMap:  make(map[string][]time.Time),
 	}
 }
 
@@ -102,6 +113,32 @@ func (h *WeChatQRLoginHandler) QRStart(c *gin.Context) {
 	botType := req.BotType
 	if botType == "" {
 		botType = "3"
+	}
+
+	// Validate bot existence if not a temporary UUID (for new bot creation)
+	// Temp UUIDs start with "temp-" for deferred bot creation
+	if !strings.HasPrefix(botUUID, "temp-") {
+		existing, err := h.settingsStore.GetSettingsByUUID(botUUID)
+		if err != nil {
+			logrus.WithError(err).WithField("bot", botUUID).Error("Failed to check bot existence")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate bot"})
+			return
+		}
+		if existing.UUID == "" {
+			logrus.WithField("bot", botUUID).Warn("Bot not found for QR login")
+			c.JSON(http.StatusNotFound, gin.H{"error": "Bot not found"})
+			return
+		}
+	}
+
+	// Check rate limit
+	if !h.checkRateLimit(botUUID) {
+		logrus.WithField("bot", botUUID).Warn("QR request rate limit exceeded")
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"error":       "Too many QR code requests. Please wait a moment before trying again.",
+			"retry_after": int(rateLimitWindow.Seconds()),
+		})
+		return
 	}
 
 	// Create QR code client
@@ -455,4 +492,62 @@ func (c *wechatQRClient) GetQRStatus(ctx context.Context, qrcode string) (*qrSta
 	}
 
 	return &result, nil
+}
+
+// checkRateLimit checks if the bot has exceeded the QR code request rate limit
+// Returns true if the request is allowed, false if rate limited
+func (h *WeChatQRLoginHandler) checkRateLimit(botUUID string) bool {
+	now := time.Now()
+	windowStart := now.Add(-rateLimitWindow)
+
+	h.rateLimitMu.Lock()
+	defer h.rateLimitMu.Unlock()
+
+	// Get existing request timestamps for this bot
+	timestamps := h.rateLimitMap[botUUID]
+
+	// Filter out timestamps outside the current window
+	var validTimestamps []time.Time
+	for _, ts := range timestamps {
+		if ts.After(windowStart) {
+			validTimestamps = append(validTimestamps, ts)
+		}
+	}
+
+	// Check if we've exceeded the limit
+	if len(validTimestamps) >= maxQRRequestsPerMinute {
+		return false
+	}
+
+	// Add current request timestamp
+	validTimestamps = append(validTimestamps, now)
+	h.rateLimitMap[botUUID] = validTimestamps
+
+	return true
+}
+
+// cleanupRateLimitMap removes old entries from the rate limit map
+// This should be called periodically (e.g., via a background goroutine)
+func (h *WeChatQRLoginHandler) cleanupRateLimitMap() {
+	h.rateLimitMu.Lock()
+	defer h.rateLimitMu.Unlock()
+
+	now := time.Now()
+	windowStart := now.Add(-rateLimitWindow)
+
+	for botUUID, timestamps := range h.rateLimitMap {
+		var validTimestamps []time.Time
+		for _, ts := range timestamps {
+			if ts.After(windowStart) {
+				validTimestamps = append(validTimestamps, ts)
+			}
+		}
+
+		if len(validTimestamps) == 0 {
+			// Remove empty entries to save memory
+			delete(h.rateLimitMap, botUUID)
+		} else {
+			h.rateLimitMap[botUUID] = validTimestamps
+		}
+	}
 }

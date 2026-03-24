@@ -13,6 +13,7 @@ import {
     Refresh as RefreshIcon,
     CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
+import { QRCodeSVG } from 'qrcode.react';
 import { api } from '@/services/api';
 
 interface WeixinQRAuthProps {
@@ -54,19 +55,13 @@ export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform, b
 
     const effectiveBotUUID = botUUID || tempUUID;
 
-    // Debug log to check what props we're receiving
-    console.log('[WeixinQRAuth] Render with botUUID:', botUUID, 'tempUUID:', tempUUID, 'effective:', effectiveBotUUID, 'state:', state);
-
     const startQRLogin = useCallback(async () => {
-        console.log('[WeixinQRAuth] startQRLogin called with effectiveBotUUID:', effectiveBotUUID);
-
         if (!effectiveBotUUID) {
             setError('Bot UUID is required');
             setState('error');
             return;
         }
 
-        console.log('[WeixinQRAuth] Starting QR login for bot:', effectiveBotUUID);
         setState('loading');
         setError('');
         stoppedRef.current = false;
@@ -141,9 +136,7 @@ export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform, b
 
     // Start QR login when component mounts
     useEffect(() => {
-        console.log('[WeixinQRAuth] useEffect triggered - state:', state, 'effectiveBotUUID:', effectiveBotUUID);
         if (state === 'idle' && effectiveBotUUID) {
-            console.log('[WeixinQRAuth] Calling startQRLogin');
             startQRLogin();
         }
     }, [state, effectiveBotUUID, startQRLogin]);
@@ -196,19 +189,15 @@ export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform, b
                     <Stack spacing={2} alignItems="center">
                         <Typography variant="h6">Scan QR Code to Bind</Typography>
                         <Paper sx={{ p: 2, bgcolor: 'background.paper' }}>
-                            {/* QR code rendering - use a simple data URL for now */}
-                            <Box
-                                component="img"
-                                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}`}
-                                alt="Weixin QR Code"
-                                sx={{
-                                    width: 200,
-                                    height: 200,
-                                    border: '1px solid',
-                                    borderColor: 'divider',
-                                    borderRadius: 1,
-                                }}
-                            />
+                            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                <QRCodeSVG
+                                    value={qrData}
+                                    size={200}
+                                    level="M"
+                                    bgColor="#ffffff"
+                                    fgColor="#000000"
+                                />
+                            </Box>
                         </Paper>
                         <Typography variant="body2" color="text.secondary" align="center">
                             1. Open Weixin on your phone and scan the QR code

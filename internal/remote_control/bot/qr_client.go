@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -138,11 +139,18 @@ func (c *WeChatQRClient) GetQRStatus(ctx context.Context, qrcode string) (*QRSta
 	// Send request
 	resp, err := client.Do(req)
 	if err != nil {
-		// Timeout is normal, return "wait" status
-		if ctx.Err() == context.DeadlineExceeded {
+		// Check if this is a timeout error (either context deadline or client timeout)
+		// Network timeouts should be distinguished from other errors
+		if netErr, ok := err.(interface{ Timeout() bool }); ok && netErr.Timeout() {
+			// Timeout is expected for long-poll QR status checks
+			// Return wait status so caller can retry
 			return &QRStatusResponse{Status: "wait"}, nil
 		}
-		return nil, fmt.Errorf("send request: %w", err)
+		if ctx.Err() == context.DeadlineExceeded || ctx.Err() == context.Canceled {
+			return &QRStatusResponse{Status: "wait"}, nil
+		}
+		// Other network errors (connection refused, DNS failure, etc.) should be propagated
+		return nil, fmt.Errorf("network error: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -180,6 +188,10 @@ func PollQRStatus(ctx context.Context, client *WeChatQRClient, qrID string, poll
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 
+	// Retry counter for transient failures
+	const maxRetries = 3
+	retryCount := 0
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -188,8 +200,16 @@ func PollQRStatus(ctx context.Context, client *WeChatQRClient, qrID string, poll
 		case <-ticker.C:
 			status, err := client.GetQRStatus(ctx, qrID)
 			if err != nil {
-				return nil, err
+				// Check if this is a transient network error
+				if retryCount < maxRetries && isTransientError(err) {
+					retryCount++
+					logrus.WithError(err).WithField("retry", retryCount).Warn("Transient error polling QR status, retrying...")
+					continue
+				}
+				return nil, fmt.Errorf("failed to get QR status after %d retries: %w", retryCount, err)
 			}
+			// Reset retry count on success
+			retryCount = 0
 
 			switch status.Status {
 			case "wait", "scaned":
@@ -208,4 +228,17 @@ func PollQRStatus(ctx context.Context, client *WeChatQRClient, qrID string, poll
 			}
 		}
 	}
+}
+
+// isTransientError checks if an error is transient (retryable)
+func isTransientError(err error) bool {
+	if err == nil {
+		return false
+	}
+	// Check for network-related errors that are typically transient
+	errStr := err.Error()
+	return strings.Contains(errStr, "timeout") ||
+		strings.Contains(errStr, "connection reset") ||
+		strings.Contains(errStr, "temporary failure") ||
+		strings.Contains(errStr, "network")
 }
