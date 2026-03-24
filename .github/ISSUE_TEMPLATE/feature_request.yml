@@ -1,0 +1,52 @@
+name: Feature Request
+description: Suggest a new feature or improvement
+labels: ["enhancement"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Which version of Tingly-Box are you using?
+      placeholder: "e.g. v0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: system
+    attributes:
+      label: System Information
+      description: OS, architecture, and any relevant environment details
+      placeholder: "e.g. macOS 14.0 arm64 / Ubuntu 22.04 x86_64"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: Which area does this feature relate to?
+      options:
+        - Protocol
+        - UI
+        - Remote Control
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Scenario
+      description: Describe the use case or scenario that motivates this feature request
+      placeholder: |
+        When I do X, I'd like to be able to Y because...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: If you have an idea for how this could be implemented, describe it here
+    validations:
+      required: false
