@@ -34,7 +34,6 @@ func Migrate(c *Config) error {
 	migrate20260114(c)
 	migrate20260210(c)
 	migrate20260306(c)
-	migrate20260325(c)
 	return nil
 }
 
@@ -158,9 +157,9 @@ func migrate20260103(c *Config) {
 
 	// Map of default rule UUIDs to their scenarios
 	scenarioMap := map[string]typ.RuleScenario{
-		RuleUUIDTingly:            typ.ScenarioGeneral,
-		RuleUUIDBuiltinOpenAI:     typ.ScenarioGeneral,
-		RuleUUIDBuiltinAnthropic:  typ.ScenarioGeneral,
+		RuleUUIDTingly:            typ.ScenarioOpenAI,
+		RuleUUIDBuiltinOpenAI:     typ.ScenarioOpenAI,
+		RuleUUIDBuiltinAnthropic:  typ.ScenarioAnthropic,
 		RuleUUIDBuiltinCodex:      typ.ScenarioCodex,
 		RuleUUIDBuiltinCC:         typ.ScenarioClaudeCode,
 		RuleUUIDClaudeCode:        typ.ScenarioClaudeCode,
@@ -186,22 +185,6 @@ func migrate20260103(c *Config) {
 		}
 	}
 
-	if needsSave {
-		_ = c.Save()
-	}
-}
-
-func migrate20260325(c *Config) {
-	needsSave := false
-	for i := range c.Rules {
-		switch c.Rules[i].UUID {
-		case RuleUUIDTingly, RuleUUIDBuiltinOpenAI, RuleUUIDBuiltinAnthropic:
-			if c.Rules[i].Scenario != typ.ScenarioGeneral {
-				c.Rules[i].Scenario = typ.ScenarioGeneral
-				needsSave = true
-			}
-		}
-	}
 	if needsSave {
 		_ = c.Save()
 	}

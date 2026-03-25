@@ -1939,7 +1939,7 @@ func init() {
 	DefaultRules = []typ.Rule{
 		{
 			UUID:          "built-in-anthropic",
-			Scenario:      typ.ScenarioGeneral,
+			Scenario:      typ.ScenarioAnthropic,
 			RequestModel:  "tingly-claude",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with Anthropic",
@@ -1978,7 +1978,7 @@ func init() {
 		},
 		{
 			UUID:          "built-in-openai",
-			Scenario:      typ.ScenarioGeneral,
+			Scenario:      typ.ScenarioOpenAI,
 			RequestModel:  "tingly-gpt",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with OpenAI",

@@ -6,6 +6,21 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+func TestDefaultRules_KeepBuiltinScenariosSpecialized(t *testing.T) {
+	for _, rule := range DefaultRules {
+		switch rule.UUID {
+		case RuleUUIDTingly, RuleUUIDBuiltinOpenAI:
+			if rule.Scenario != typ.ScenarioOpenAI {
+				t.Fatalf("expected %s to stay openai, got %q", rule.UUID, rule.Scenario)
+			}
+		case RuleUUIDBuiltinAnthropic:
+			if rule.Scenario != typ.ScenarioAnthropic {
+				t.Fatalf("expected %s to stay anthropic, got %q", rule.UUID, rule.Scenario)
+			}
+		}
+	}
+}
+
 func TestMatchRuleByModelAndScenario_FallsBackToGeneralForOpenAIAndAnthropic(t *testing.T) {
 	cfg, err := NewConfigWithDir(t.TempDir())
 	if err != nil {
