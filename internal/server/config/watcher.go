@@ -18,6 +18,7 @@ type Watcher struct {
 	stopCh       chan struct{}
 	mu           sync.RWMutex
 	running      bool
+	paused       bool                 // Paused flag to prevent reload loops
 	watchFiles   []string             // List of files being watched
 	fileModTimes map[string]time.Time // ModTime for each watched file
 }
@@ -133,6 +134,11 @@ func (cw *Watcher) isConfigEvent(event fsnotify.Event) bool {
 	cw.mu.RLock()
 	defer cw.mu.RUnlock()
 
+	// Ignore events if watcher is paused (during reload)
+	if cw.paused {
+		return false
+	}
+
 	// Check if event file is in our watch list
 	for _, watchFile := range cw.watchFiles {
 		if event.Name == watchFile {
@@ -147,6 +153,26 @@ func (cw *Watcher) isConfigEvent(event fsnotify.Event) bool {
 func (cw *Watcher) handleConfigChange(event fsnotify.Event) {
 	changedFile := event.Name
 
+	// Pause watcher to prevent reload loop (migration may call Save())
+	cw.mu.Lock()
+	cw.paused = true
+	cw.mu.Unlock()
+
+	defer func() {
+		// Update ModTime for all watched files after reload
+		// This prevents migration-triggered Save() from causing another reload
+		cw.mu.Lock()
+		for _, file := range cw.watchFiles {
+			if stat, err := os.Stat(file); err == nil {
+				cw.fileModTimes[file] = stat.ModTime()
+			}
+		}
+		cw.paused = false
+		cw.mu.Unlock()
+
+		logrus.Debugf("Configuration reloaded successfully (triggered by %s)", changedFile)
+	}()
+
 	// Check if file actually changed via ModTime
 	cw.mu.Lock()
 	lastMod, exists := cw.fileModTimes[changedFile]
@@ -156,9 +182,6 @@ func (cw *Watcher) handleConfigChange(event fsnotify.Event) {
 		if exists && !stat.ModTime().After(lastMod) {
 			return // No actual change
 		}
-		cw.mu.Lock()
-		cw.fileModTimes[changedFile] = stat.ModTime()
-		cw.mu.Unlock()
 	} else {
 		// File doesn't exist, skip reload
 		return
@@ -186,8 +209,6 @@ func (cw *Watcher) handleConfigChange(event fsnotify.Event) {
 	for _, callback := range callbacks {
 		callback(config)
 	}
-
-	logrus.Debugf("Configuration reloaded successfully (triggered by %s)", changedFile)
 }
 
 // TriggerReload manually triggers a configuration reload
