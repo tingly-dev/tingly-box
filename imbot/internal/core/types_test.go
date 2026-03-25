@@ -58,6 +58,7 @@ func TestParseModeConstants(t *testing.T) {
 		want      string
 	}{
 		{"Markdown", ParseModeMarkdown, "markdown"},
+		{"MarkdownLegacy", ParseModeMarkdownLegacy, "markdown_legacy"},
 		{"HTML", ParseModeHTML, "html"},
 		{"None", ParseModeNone, "none"},
 	}

@@ -1,7 +1,8 @@
 package imbot
 
 import (
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	tgbot "github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
 )
 
@@ -79,24 +80,30 @@ func findBreakPoint(text string, limit int) int {
 	return limit
 }
 
-// BuildTelegramActionKeyboard converts imbot.InlineKeyboardMarkup to tgbotapi.InlineKeyboardMarkup
-func BuildTelegramActionKeyboard(kb InlineKeyboardMarkup) tgbotapi.InlineKeyboardMarkup {
-	var rows [][]tgbotapi.InlineKeyboardButton
+// BuildTelegramActionKeyboard converts imbot.InlineKeyboardMarkup to models.InlineKeyboardMarkup
+func BuildTelegramActionKeyboard(kb InlineKeyboardMarkup) models.InlineKeyboardMarkup {
+	var rows [][]models.InlineKeyboardButton
 	for _, row := range kb.InlineKeyboard {
-		var buttons []tgbotapi.InlineKeyboardButton
+		var buttons []models.InlineKeyboardButton
 		for _, btn := range row {
-			tgBtn := tgbotapi.InlineKeyboardButton{
+			tgBtn := models.InlineKeyboardButton{
 				Text: btn.Text,
 			}
 			if btn.CallbackData != "" {
-				tgBtn.CallbackData = &btn.CallbackData
+				tgBtn.CallbackData = btn.CallbackData
 			}
 			if btn.URL != "" {
-				tgBtn.URL = &btn.URL
+				tgBtn.URL = btn.URL
 			}
 			buttons = append(buttons, tgBtn)
 		}
 		rows = append(rows, buttons)
 	}
-	return tgbotapi.InlineKeyboardMarkup{InlineKeyboard: rows}
+	return models.InlineKeyboardMarkup{InlineKeyboard: rows}
+}
+
+// EscapeMarkdown escapes special characters for Telegram MarkdownV2
+// This is a convenience wrapper around tgbot.EscapeMarkdown
+func EscapeMarkdown(text string) string {
+	return tgbot.EscapeMarkdown(text)
 }

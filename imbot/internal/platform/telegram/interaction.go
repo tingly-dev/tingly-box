@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/go-telegram/bot/models"
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
 	itx "github.com/tingly-dev/tingly-box/imbot/internal/interaction"
 )
@@ -25,23 +25,23 @@ func NewInteractionAdapter() *InteractionAdapter {
 // BuildMarkup creates Telegram inline keyboard markup from interactions
 func (a *InteractionAdapter) BuildMarkup(interactions []itx.Interaction) (any, error) {
 	kb := &keyboardBuilder{
-		rows: make([][]tgbotapi.InlineKeyboardButton, 0),
+		rows: make([][]models.InlineKeyboardButton, 0),
 	}
 
 	for _, item := range interactions {
 		switch item.Type {
 		case itx.ActionSelect, itx.ActionConfirm, itx.ActionCancel:
 			callbackData := formatCallbackData("ia", item.ID, item.Value)
-			kb.AddRow(tgbotapi.InlineKeyboardButton{
+			kb.AddRow(models.InlineKeyboardButton{
 				Text:         item.Label,
-				CallbackData: &callbackData,
+				CallbackData: callbackData,
 			})
 
 		case itx.ActionNavigate:
 			callbackData := formatCallbackData("ia", item.ID, item.Value)
-			kb.AddButton(tgbotapi.InlineKeyboardButton{
+			kb.AddButton(models.InlineKeyboardButton{
 				Text:         item.Label,
-				CallbackData: &callbackData,
+				CallbackData: callbackData,
 			})
 
 		case itx.ActionInput:
@@ -50,7 +50,7 @@ func (a *InteractionAdapter) BuildMarkup(interactions []itx.Interaction) (any, e
 		}
 	}
 
-	return tgbotapi.NewInlineKeyboardMarkup(kb.rows...), nil
+	return models.InlineKeyboardMarkup{InlineKeyboard: kb.rows}, nil
 }
 
 // BuildFallbackText creates numbered text options for text mode
@@ -104,18 +104,18 @@ func (a *InteractionAdapter) UpdateMessage(ctx context.Context, bot core.Bot, ch
 
 // keyboardBuilder helps build Telegram inline keyboards
 type keyboardBuilder struct {
-	rows [][]tgbotapi.InlineKeyboardButton
+	rows [][]models.InlineKeyboardButton
 }
 
 // AddRow adds a new row with buttons
-func (b *keyboardBuilder) AddRow(buttons ...tgbotapi.InlineKeyboardButton) {
+func (b *keyboardBuilder) AddRow(buttons ...models.InlineKeyboardButton) {
 	b.rows = append(b.rows, buttons)
 }
 
 // AddButton adds a button to the last row
-func (b *keyboardBuilder) AddButton(button tgbotapi.InlineKeyboardButton) {
+func (b *keyboardBuilder) AddButton(button models.InlineKeyboardButton) {
 	if len(b.rows) == 0 {
-		b.rows = append(b.rows, []tgbotapi.InlineKeyboardButton{})
+		b.rows = append(b.rows, []models.InlineKeyboardButton{})
 	}
 	b.rows[len(b.rows)-1] = append(b.rows[len(b.rows)-1], button)
 }

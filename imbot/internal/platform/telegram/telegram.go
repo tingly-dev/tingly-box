@@ -10,22 +10,25 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	tgbot "github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
+	"github.com/tingly-dev/tingly-box/imbot/internal/markdown"
 	"golang.org/x/net/proxy"
 )
 
 // Bot implements the Telegram bot
 type Bot struct {
 	*core.BaseBot
-	api     *tgbotapi.BotAPI
-	adapter *Adapter // Local adapter for message conversion
-	updates tgbotapi.UpdatesChannel
-	ctx     context.Context
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
-	mu      sync.RWMutex
+	api          *tgbot.Bot
+	adapter      *Adapter // Local adapter for message conversion
+	ctx          context.Context
+	cancel       context.CancelFunc
+	wg           sync.WaitGroup
+	mu           sync.RWMutex
+	messageIDMap map[string]int // chatID -> last message ID
 }
 
 // NewTelegramBot creates a new Telegram bot
@@ -43,10 +46,11 @@ func NewTelegramBot(config *core.Config) (*Bot, error) {
 		return nil, core.NewAuthFailedError(config.Platform, "failed to get token", err)
 	}
 
-	apiEndpoint := config.GetOptionString("apiURL", tgbotapi.APIEndpoint)
 	proxyURL := config.GetOptionString("proxy", "")
+	debug := config.GetOptionBool("debug", false)
 
-	client := &http.Client{}
+	opts := []tgbot.Option{}
+
 	if proxyURL != "" {
 		parsed, err := url.Parse(proxyURL)
 		if err != nil {
@@ -58,33 +62,39 @@ func NewTelegramBot(config *core.Config) (*Bot, error) {
 			if err != nil {
 				return nil, core.NewAuthFailedError(core.PlatformTelegram, "invalid socks5 proxy", err)
 			}
-			client.Transport = &http.Transport{
-				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-					return dialer.Dial(network, addr)
+			client := &http.Client{
+				Transport: &http.Transport{
+					DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+						return dialer.Dial(network, addr)
+					},
 				},
 			}
+			opts = append(opts, tgbot.WithHTTPClient(time.Second*30, client))
 		case "http", "https":
-			client.Transport = &http.Transport{
-				Proxy: http.ProxyURL(parsed),
+			client := &http.Client{
+				Transport: &http.Transport{
+					Proxy: http.ProxyURL(parsed),
+				},
 			}
+			opts = append(opts, tgbot.WithHTTPClient(time.Second*30, client))
 		default:
 			return nil, core.NewAuthFailedError(core.PlatformTelegram, "unsupported proxy scheme", fmt.Errorf("%s", parsed.Scheme))
 		}
 	}
 
-	api, err := tgbotapi.NewBotAPIWithClient(token, apiEndpoint, client)
+	if debug {
+		opts = append(opts, tgbot.WithDebug())
+	}
+
+	api, err := tgbot.New(token, opts...)
 	if err != nil {
 		return nil, core.NewAuthFailedError(core.PlatformTelegram, "failed to create telegram bot", err)
 	}
 
 	bot := &Bot{
-		BaseBot: core.NewBaseBot(config),
-		api:     api,
-	}
-
-	// Set debug mode if enabled
-	if config.GetOptionBool("debug", false) {
-		api.Debug = true
+		BaseBot:      core.NewBaseBot(config),
+		api:          api,
+		messageIDMap: make(map[string]int),
 	}
 
 	return bot, nil
@@ -94,37 +104,85 @@ func NewTelegramBot(config *core.Config) (*Bot, error) {
 func (b *Bot) Connect(ctx context.Context) error {
 	b.ctx, b.cancel = context.WithCancel(ctx)
 
-	// Get update timeout
-	timeout := b.Config().GetOptionInt("updateTimeout", 30)
-
-	// Set up updates
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = timeout
-
-	b.updates = b.api.GetUpdatesChan(u)
-	b.UpdateConnected(true)
-	b.UpdateAuthenticated(true)
-	b.EmitConnected()
-	b.Logger().Info("Telegram bot connected: @%s", b.api.Self.UserName)
-
 	// Initialize adapter for message conversion
 	b.adapter = NewAdapter(b.Config(), b.api)
 
+	// Register handlers - use MatchTypePrefix with empty pattern to match all messages
+	b.api.RegisterHandler(tgbot.HandlerTypeMessageText, "", tgbot.MatchTypePrefix, b.handleMessageUpdate)
+	b.api.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "", tgbot.MatchTypePrefix, b.handleCallbackQueryUpdate)
+
+	b.UpdateConnected(true)
+	b.UpdateAuthenticated(true)
+	b.EmitConnected()
+
+	// Get bot info
+	me, err := b.api.GetMe(b.ctx)
+	if err != nil {
+		b.Logger().Error("Failed to get bot info: %v", err)
+	} else {
+		b.Logger().Info("Telegram bot connected: @%s", me.Username)
+	}
+
+	b.UpdateReady(true)
+	b.EmitReady()
+
 	// Start receiving messages
 	b.wg.Add(1)
-	go b.receiveUpdates()
+	go func() {
+		defer b.wg.Done()
+		b.api.Start(b.ctx)
+	}()
 
 	return nil
+}
+
+// handleMessageUpdate handles incoming message updates
+func (b *Bot) handleMessageUpdate(ctx context.Context, api *tgbot.Bot, update *models.Update) {
+	if update.Message == nil {
+		return
+	}
+
+	// Store chat ID for reaction
+	b.mu.Lock()
+	b.messageIDMap[strconv.FormatInt(update.Message.Chat.ID, 10)] = update.Message.ID
+	b.mu.Unlock()
+
+	coreMessage, err := b.adapter.AdaptMessage(b.ctx, update.Message)
+	if err != nil {
+		b.Logger().Error("Failed to adapt message: %v", err)
+		return
+	}
+
+	b.EmitMessage(*coreMessage)
+}
+
+// handleCallbackQueryUpdate handles incoming callback query updates
+func (b *Bot) handleCallbackQueryUpdate(ctx context.Context, api *tgbot.Bot, update *models.Update) {
+	if update.CallbackQuery == nil {
+		return
+	}
+
+	query := update.CallbackQuery
+	b.Logger().Debug("Received callback query from %d: %s", query.From.ID, query.Data)
+
+	coreMessage, err := b.adapter.AdaptCallback(b.ctx, query)
+	if err != nil {
+		b.Logger().Error("Failed to adapt callback: %v", err)
+		return
+	}
+
+	b.EmitMessage(*coreMessage)
+
+	// Answer the callback query to remove loading state
+	_, _ = b.api.AnswerCallbackQuery(b.ctx, &tgbot.AnswerCallbackQueryParams{
+		CallbackQueryID: query.ID,
+	})
 }
 
 // Disconnect disconnects from Telegram
 func (b *Bot) Disconnect(ctx context.Context) error {
 	if b.cancel != nil {
 		b.cancel()
-	}
-
-	if b.updates != nil {
-		b.api.StopReceivingUpdates()
 	}
 
 	b.wg.Wait()
@@ -182,19 +240,40 @@ func (b *Bot) React(ctx context.Context, messageID string, emoji string) error {
 		return err
 	}
 
-	// Parse message ID
-	_, err := strconv.Atoi(messageID)
+	// Get chat ID from context
+	b.mu.RLock()
+	var chatID int64
+	for k, v := range b.messageIDMap {
+		id, _ := strconv.ParseInt(k, 10, 64)
+		if v != 0 {
+			chatID = id
+			break
+		}
+	}
+	b.mu.RUnlock()
+
+	if chatID == 0 {
+		return core.NewBotError(core.ErrInvalidTarget, "chat ID not found", false)
+	}
+
+	msgID, err := strconv.Atoi(messageID)
 	if err != nil {
 		return core.NewBotError(core.ErrInvalidTarget, "invalid message ID", false)
 	}
 
-	// Get chat ID from context or use a default
-	// In a real implementation, you'd need to track chat IDs
-	chatID := int64(0) // This would need to be tracked
-
-	// Send reaction (note: Telegram uses setMessageReaction API)
-	// For now, we'll send the emoji as a message
-	_, err = b.api.Send(tgbotapi.NewMessage(chatID, emoji))
+	_, err = b.api.SetMessageReaction(b.ctx, &tgbot.SetMessageReactionParams{
+		ChatID:    chatID,
+		MessageID: msgID,
+		Reaction: []models.ReactionType{
+			{
+				Type: models.ReactionTypeTypeEmoji,
+				ReactionTypeEmoji: &models.ReactionTypeEmoji{
+					Type:  models.ReactionTypeTypeEmoji,
+					Emoji: emoji,
+				},
+			},
+		},
+	})
 	return err
 }
 
@@ -204,9 +283,6 @@ func (b *Bot) EditMessage(ctx context.Context, messageID string, text string) er
 		return err
 	}
 
-	// Parse message ID and chat ID
-	// In a real implementation, you'd need to track these
-	// For now, this is a placeholder
 	b.Logger().Debug("Edit message: %s", messageID)
 	return nil
 }
@@ -229,18 +305,21 @@ func (b *Bot) EditMessageWithKeyboard(ctx interface{}, chatID string, messageID 
 		return core.NewInvalidTargetError(core.PlatformTelegram, messageID, "invalid message ID")
 	}
 
-	// Create edit message config
-	editConfig := tgbotapi.NewEditMessageText(chatIDInt, msgIDInt, text)
-	editConfig.ParseMode = tgbotapi.ModeMarkdown
+	params := &tgbot.EditMessageTextParams{
+		ChatID:    chatIDInt,
+		MessageID: msgIDInt,
+		Text:      escapeMarkdownV2(text),   // Apply MarkdownV2 escaping
+		ParseMode: models.ParseModeMarkdown, // Use this for MarkdownV2
+	}
 
 	// Set keyboard if provided
 	if keyboard != nil {
-		if kb, ok := keyboard.(tgbotapi.InlineKeyboardMarkup); ok {
-			editConfig.ReplyMarkup = &kb
+		if kb, ok := keyboard.(models.InlineKeyboardMarkup); ok {
+			params.ReplyMarkup = &kb
 		}
 	}
 
-	_, err = b.api.Send(editConfig)
+	_, err = b.api.EditMessageText(b.ctx, params)
 	if err != nil {
 		return core.WrapError(err, core.PlatformTelegram, core.ErrPlatformError)
 	}
@@ -268,14 +347,15 @@ func (b *Bot) RemoveMessageKeyboard(ctx interface{}, chatID string, messageID st
 	}
 
 	// Create edit config with empty inline keyboard to remove existing keyboard
-	editConfig := tgbotapi.NewEditMessageReplyMarkup(
-		chatIDInt, msgIDInt,
-		tgbotapi.InlineKeyboardMarkup{
-			InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{},
+	params := &tgbot.EditMessageReplyMarkupParams{
+		ChatID:    chatIDInt,
+		MessageID: msgIDInt,
+		ReplyMarkup: &models.InlineKeyboardMarkup{
+			InlineKeyboard: [][]models.InlineKeyboardButton{},
 		},
-	)
+	}
 
-	_, err = b.api.Send(editConfig)
+	_, err = b.api.EditMessageReplyMarkup(b.ctx, params)
 	if err != nil {
 		return core.WrapError(err, core.PlatformTelegram, core.ErrPlatformError)
 	}
@@ -290,8 +370,7 @@ func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 		return err
 	}
 
-	// Parse message ID and chat ID
-	// In a real implementation, you'd need to track these
+	// Need chat ID and message ID - for now this is a placeholder
 	b.Logger().Debug("Delete message: %s", messageID)
 	return nil
 }
@@ -311,119 +390,94 @@ func (b *Bot) StopReceiving(ctx context.Context) error {
 	return nil // Already handled in Disconnect
 }
 
-// receiveUpdates receives and processes updates from Telegram
-func (b *Bot) receiveUpdates() {
-	defer b.wg.Done()
-
-	b.UpdateReady(true)
-	b.EmitReady()
-
-	for {
-		select {
-		case <-b.ctx.Done():
-			return
-		case update, ok := <-b.updates:
-			if !ok {
-				return
-			}
-
-			if update.Message != nil {
-				b.handleMessage(update.Message)
-			} else if update.CallbackQuery != nil {
-				b.handleCallbackQuery(update.CallbackQuery)
-			}
-		}
-	}
-}
-
-// handleMessage handles an incoming message
-func (b *Bot) handleMessage(msg *tgbotapi.Message) {
-	// Use adapter to convert platform message to core message
-	coreMessage, err := b.adapter.AdaptMessage(b.ctx, msg)
-	if err != nil {
-		b.Logger().Error("Failed to adapt message: %v", err)
-		return
-	}
-
-	b.EmitMessage(*coreMessage)
-}
-
-// handleCallbackQuery handles a callback query (button click)
-func (b *Bot) handleCallbackQuery(query *tgbotapi.CallbackQuery) {
-	b.Logger().Debug("Received callback query from %d: %s", query.From.ID, query.Data)
-
-	// Use adapter to convert callback to core message
-	coreMessage, err := b.adapter.AdaptCallback(b.ctx, query)
-	if err != nil {
-		b.Logger().Error("Failed to adapt callback: %v", err)
-		return
-	}
-
-	b.EmitMessage(*coreMessage)
-
-	// Answer the callback query to remove loading state
-	callbackCfg := tgbotapi.NewCallback(query.ID, "")
-	if _, err := b.api.Request(callbackCfg); err != nil {
-		b.Logger().Error("Failed to answer callback query: %v", err)
-	}
-}
-
 // sendText sends a text message
 func (b *Bot) sendText(ctx context.Context, chatID int64, opts *core.SendMessageOptions) (*core.SendResult, error) {
-	// Validate and chunk text if needed
-	if err := b.ValidateTextLength(opts.Text); err != nil {
-		return nil, err
-	}
-
-	var parseMode string
+	var parseMode models.ParseMode
 	var text string = opts.Text
-	// Set parse mode
-	if opts.ParseMode != "" {
+	var entities []models.MessageEntity
+
+	// Priority: Entities > ParseMode
+	// If entities are provided, use them directly (no parse_mode)
+	if len(opts.Entities) > 0 {
+		// Convert core.Entity to Telegram MessageEntity
+		entities = convertEntitiesToTelegram(opts.Entities)
+	} else if opts.ParseMode != "" {
+		// Fall back to parse_mode
 		switch opts.ParseMode {
 		case core.ParseModeMarkdown:
-			parseMode = tgbotapi.ModeMarkdown
-			text = tgbotapi.EscapeText(parseMode, text)
+			// 内部迁移：使用新的 markdown entity 模块
+			// 如果转换失败，降级到 MarkdownV2 escape
+			if result, err := markdown.Convert(text); err == nil {
+				text = result.Text
+				entities = convertEntitiesToTelegram(markdown.ToIMBotEntities(result.Entities))
+			} else {
+				// 转换失败，降级到 MarkdownV2 escape
+				parseMode = models.ParseModeMarkdown
+				text = escapeMarkdownV2(text)
+			}
+		case core.ParseModeMarkdownLegacy:
+			// Legacy: Use MarkdownV1 (backward compatibility)
+			parseMode = models.ParseModeMarkdownV1
 		case core.ParseModeHTML:
-			parseMode = tgbotapi.ModeHTML
-			text = tgbotapi.EscapeText(parseMode, text)
+			parseMode = models.ParseModeHTML
 		}
 	}
 
+	// Chunk text first (handles long messages)
 	chunks := b.ChunkText(text)
 
-	var lastResult *core.SendResult
+	// Validate each chunk length
 	for _, chunk := range chunks {
-		msg := tgbotapi.NewMessage(chatID, chunk)
-		msg.ParseMode = parseMode
+		if err := b.ValidateTextLength(chunk); err != nil {
+			return nil, err
+		}
+	}
 
-		// Set reply to
-		if opts.ReplyTo != "" {
+	var lastResult *core.SendResult
+	for i, chunk := range chunks {
+		params := &tgbot.SendMessageParams{
+			ChatID: chatID,
+			Text:   chunk,
+		}
+
+		// Set entities (if provided)
+		if len(entities) > 0 {
+			params.Entities = entities
+		} else if parseMode != "" {
+			// Otherwise use parse_mode
+			params.ParseMode = parseMode
+		}
+
+		// Set reply to only on first chunk
+		if opts.ReplyTo != "" && i == 0 {
 			if replyToID, err := strconv.Atoi(opts.ReplyTo); err == nil {
-				msg.ReplyToMessageID = replyToID
+				params.ReplyParameters = &models.ReplyParameters{
+					MessageID: replyToID,
+				}
 			}
 		}
 
 		// Disable notification if silent
 		if opts.Silent {
-			msg.DisableNotification = true
+			params.DisableNotification = true
 		}
 
-		// Set reply markup (inline keyboard) from metadata
-		if opts.Metadata != nil {
+		// Set reply markup (inline keyboard) only on last chunk
+		if opts.Metadata != nil && i == len(chunks)-1 {
 			if markup, ok := opts.Metadata["replyMarkup"]; ok {
-				if replyMarkup, ok := markup.(tgbotapi.InlineKeyboardMarkup); ok {
-					msg.ReplyMarkup = replyMarkup
+				if replyMarkup, ok := markup.(models.InlineKeyboardMarkup); ok {
+					params.ReplyMarkup = &replyMarkup
 				}
 			}
 		}
 
-		sentMsg, err := b.api.Send(msg)
+		sentMsg, err := b.api.SendMessage(b.ctx, params)
 		if err != nil {
 			return nil, core.WrapError(err, core.PlatformTelegram, core.ErrPlatformError)
 		}
 
 		lastResult = &core.SendResult{
-			MessageID: strconv.Itoa(sentMsg.MessageID),
+			MessageID: strconv.Itoa(sentMsg.ID),
 			Timestamp: int64(sentMsg.Date),
 		}
 	}
@@ -441,32 +495,38 @@ func (b *Bot) sendMedia(ctx context.Context, chatID int64, opts *core.SendMessag
 
 	media := opts.Media[0]
 
-	var msg tgbotapi.Chattable
+	var sentMsg *models.Message
+	var err error
 
 	if media.Type == "image" || media.Type == "sticker" {
 		// Send as photo
-		photoMsg := tgbotapi.NewPhoto(chatID, tgbotapi.FileURL(media.URL))
-		if opts.Text != "" {
-			photoMsg.Caption = opts.Text
+		params := &tgbot.SendPhotoParams{
+			ChatID: chatID,
+			Photo:  &models.InputFileString{Data: media.URL},
 		}
-		msg = photoMsg
+		if opts.Text != "" {
+			params.Caption = opts.Text
+		}
+		sentMsg, err = b.api.SendPhoto(b.ctx, params)
 	} else {
 		// Send as document
-		docMsg := tgbotapi.NewDocument(chatID, tgbotapi.FileURL(media.URL))
-		if opts.Text != "" {
-			docMsg.Caption = opts.Text
+		params := &tgbot.SendDocumentParams{
+			ChatID:   chatID,
+			Document: &models.InputFileString{Data: media.URL},
 		}
-		msg = docMsg
+		if opts.Text != "" {
+			params.Caption = opts.Text
+		}
+		sentMsg, err = b.api.SendDocument(b.ctx, params)
 	}
 
-	sentMsg, err := b.api.Send(msg)
 	if err != nil {
 		return nil, core.WrapError(err, core.PlatformTelegram, core.ErrPlatformError)
 	}
 
 	b.UpdateLastActivity()
 	return &core.SendResult{
-		MessageID: strconv.Itoa(sentMsg.MessageID),
+		MessageID: strconv.Itoa(sentMsg.ID),
 		Timestamp: int64(sentMsg.Date),
 	}, nil
 }
@@ -488,12 +548,9 @@ func (b *Bot) ResolveChatID(input string) (string, error) {
 	// Handle @username format
 	if strings.HasPrefix(input, "@") {
 		username := input[1:]
-		chatConfig := tgbotapi.ChatInfoConfig{
-			ChatConfig: tgbotapi.ChatConfig{
-				SuperGroupUsername: username,
-			},
-		}
-		chat, err := b.api.GetChat(chatConfig)
+		chat, err := b.api.GetChat(b.ctx, &tgbot.GetChatParams{
+			ChatID: username,
+		})
 		if err != nil {
 			return "", fmt.Errorf("failed to get chat by username @%s: %w", username, err)
 		}
@@ -513,12 +570,9 @@ func (b *Bot) ResolveChatID(input string) (string, error) {
 			parts := strings.Split(input, "t.me/")
 			if len(parts) == 2 {
 				username := strings.TrimSuffix(parts[1], "/")
-				chatConfig := tgbotapi.ChatInfoConfig{
-					ChatConfig: tgbotapi.ChatConfig{
-						SuperGroupUsername: username,
-					},
-				}
-				chat, err := b.api.GetChat(chatConfig)
+				chat, err := b.api.GetChat(b.ctx, &tgbot.GetChatParams{
+					ChatID: username,
+				})
 				if err != nil {
 					return "", fmt.Errorf("failed to get chat from link %s: %w", input, err)
 				}
@@ -542,22 +596,9 @@ func (b *Bot) ResolveChatID(input string) (string, error) {
 		}
 
 		if inviteHash != "" {
-			// Use MakeRequest to call joinChat API
-			params := tgbotapi.Params{}
-			params.AddNonEmpty("chat_id", inviteHash)
-			resp, err := b.api.MakeRequest("joinChat", params)
-			if err != nil {
-				return "", fmt.Errorf("failed to join chat via invite link: %w (bot may not have permission)", err)
-			}
-
-			// Parse the response to get chat ID
-			var chat struct {
-				ID int64 `json:"id"`
-			}
-			if err := json.Unmarshal(resp.Result, &chat); err != nil {
-				return "", fmt.Errorf("failed to parse join response: %w", err)
-			}
-			return strconv.FormatInt(chat.ID, 10), nil
+			// Note: joinChat requires raw API, skip for now
+			// A production implementation would need to use reflection or a wrapper
+			return "", fmt.Errorf("private invite links not supported: %s", input)
 		}
 
 		return "", fmt.Errorf("could not parse invite link: %s", input)
@@ -567,22 +608,22 @@ func (b *Bot) ResolveChatID(input string) (string, error) {
 }
 
 // SetCommandList sets the bot's command list (shown in the menu button)
-// Accepts either []tgbotapi.BotCommand or []map[string]string
+// Accepts either []models.BotCommand or []map[string]string
 func (b *Bot) SetCommandList(commands interface{}) error {
 	if err := b.EnsureReady(); err != nil {
 		return err
 	}
 
-	var botCommands []tgbotapi.BotCommand
+	var botCommands []models.BotCommand
 
 	switch v := commands.(type) {
-	case []tgbotapi.BotCommand:
+	case []models.BotCommand:
 		botCommands = v
 	case []map[string]string:
 		// Convert from map format to BotCommand
-		botCommands = make([]tgbotapi.BotCommand, 0, len(v))
+		botCommands = make([]models.BotCommand, 0, len(v))
 		for _, cmd := range v {
-			botCommands = append(botCommands, tgbotapi.BotCommand{
+			botCommands = append(botCommands, models.BotCommand{
 				Command:     cmd["command"],
 				Description: cmd["description"],
 			})
@@ -591,26 +632,9 @@ func (b *Bot) SetCommandList(commands interface{}) error {
 		return fmt.Errorf("invalid commands type: %T", commands)
 	}
 
-	_, err := b.api.Request(tgbotapi.NewSetMyCommands(botCommands...))
-	return err
-}
-
-// SetCommandListWithScope sets commands for a specific scope (e.g., all private chats, all group chats)
-func (b *Bot) SetCommandListWithScope(commands []tgbotapi.BotCommand, scope *tgbotapi.BotCommandScope, languageCode string) error {
-	if err := b.EnsureReady(); err != nil {
-		return err
-	}
-
-	var req tgbotapi.SetMyCommandsConfig
-	if scope != nil && languageCode != "" {
-		req = tgbotapi.NewSetMyCommandsWithScopeAndLanguage(*scope, languageCode, commands...)
-	} else if scope != nil {
-		req = tgbotapi.NewSetMyCommandsWithScope(*scope, commands...)
-	} else {
-		req = tgbotapi.NewSetMyCommands(commands...)
-	}
-
-	_, err := b.api.Request(req)
+	_, err := b.api.SetMyCommands(b.ctx, &tgbot.SetMyCommandsParams{
+		Commands: botCommands,
+	})
 	return err
 }
 
@@ -624,39 +648,32 @@ func (b *Bot) SetMenuButton(config interface{}) error {
 		return err
 	}
 
-	// Build the menu button request
-	params := tgbotapi.Params{}
+	var menuButton models.InputMenuButton
 
 	switch cfg := config.(type) {
 	case map[string]interface{}:
 		menuType, _ := cfg["type"].(string)
-		params.AddNonEmpty("menu_type", menuType)
-
-		if text, ok := cfg["text"].(string); ok && text != "" {
-			params.AddNonEmpty("text", text)
-		}
-		if url, ok := cfg["url"].(string); ok && url != "" {
-			params.AddNonEmpty("url", url)
-		}
-
-		// Handle commands list if provided
-		if commands, ok := cfg["commands"].([]map[string]string); ok {
-			for i, cmd := range commands {
-				if command, ok := cmd["command"]; ok {
-					params.AddNonEmpty(fmt.Sprintf("commands[%d].command", i), command)
-				}
-				if description, ok := cmd["description"]; ok {
-					params.AddNonEmpty(fmt.Sprintf("commands[%d].description", i), description)
-				}
+		switch menuType {
+		case "commands":
+			menuButton = &models.MenuButtonCommands{Type: models.MenuButtonTypeCommands}
+		case "web_app":
+			text, _ := cfg["text"].(string)
+			url, _ := cfg["url"].(string)
+			menuButton = &models.MenuButtonWebApp{
+				Type:   models.MenuButtonTypeWebApp,
+				Text:   text,
+				WebApp: models.WebAppInfo{URL: url},
 			}
+		default:
+			menuButton = &models.MenuButtonDefault{Type: models.MenuButtonTypeDefault}
 		}
-
 	default:
-		// Default to commands menu
-		params.AddNonEmpty("menu_type", "commands")
+		menuButton = &models.MenuButtonCommands{Type: models.MenuButtonTypeCommands}
 	}
 
-	_, err := b.api.MakeRequest("setChatMenuButton", params)
+	_, err := b.api.SetChatMenuButton(b.ctx, &tgbot.SetChatMenuButtonParams{
+		MenuButton: menuButton,
+	})
 	return err
 }
 
@@ -666,15 +683,56 @@ func (b *Bot) GetMenuButton() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	resp, err := b.api.MakeRequest("getChatMenuButton", tgbotapi.Params{})
+	resp, err := b.api.GetChatMenuButton(b.ctx, &tgbot.GetChatMenuButtonParams{})
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to map
+	data, err := json.Marshal(resp)
 	if err != nil {
 		return nil, err
 	}
 
 	var menuButton map[string]interface{}
-	if err := json.Unmarshal(resp.Result, &menuButton); err != nil {
+	if err := json.Unmarshal(data, &menuButton); err != nil {
 		return nil, err
 	}
 
 	return menuButton, nil
+}
+
+// escapeMarkdownV2 escapes special characters for Telegram MarkdownV2
+// MarkdownV2 requires escaping: _ * [ ] ( ) ~ ` > # + - = | { } . !
+func escapeMarkdownV2(text string) string {
+	// Use the library's built-in escape function
+	return tgbot.EscapeMarkdown(text)
+}
+
+// convertEntitiesToTelegram converts core.Entity to Telegram MessageEntity
+func convertEntitiesToTelegram(entities []core.Entity) []models.MessageEntity {
+	result := make([]models.MessageEntity, len(entities))
+	for i, ent := range entities {
+		msgEntity := models.MessageEntity{
+			Type:   models.MessageEntityType(ent.Type),
+			Offset: ent.Offset,
+			Length: ent.Length,
+		}
+
+		// Extract optional fields from Data map
+		if ent.Data != nil {
+			if url, ok := ent.Data["url"].(string); ok {
+				msgEntity.URL = url
+			}
+			if lang, ok := ent.Data["language"].(string); ok {
+				msgEntity.Language = lang
+			}
+			if emojiID, ok := ent.Data["custom_emoji_id"].(string); ok {
+				msgEntity.CustomEmojiID = emojiID
+			}
+		}
+
+		result[i] = msgEntity
+	}
+	return result
 }

@@ -33,9 +33,10 @@ const (
 type ParseMode string
 
 const (
-	ParseModeMarkdown ParseMode = "markdown"
-	ParseModeHTML     ParseMode = "html"
-	ParseModeNone     ParseMode = "none"
+	ParseModeMarkdown       ParseMode = "markdown"        // Default: MarkdownV2 (modern)
+	ParseModeMarkdownLegacy ParseMode = "markdown_legacy" // Legacy: MarkdownV1 (backward compatibility)
+	ParseModeHTML           ParseMode = "html"
+	ParseModeNone           ParseMode = "none"
 )
 
 // ErrorCode represents error codes
