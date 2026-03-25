@@ -11,6 +11,7 @@ require (
 	github.com/slack-go/slack v0.19.0
 	github.com/stretchr/testify v1.11.1
 	github.com/tingly-dev/weixin v0.0.1
+	github.com/yuin/goldmark v1.7.16
 	golang.org/x/net v0.52.0
 )
 
