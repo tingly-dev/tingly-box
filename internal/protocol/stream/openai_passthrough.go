@@ -331,10 +331,6 @@ func handleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 
 	var inputTokens, outputTokens, cacheTokens int64
 	var hasUsage bool
-	var eventCount int
-	var sawCompleted bool
-	var lastEventType string
-	var sawFailed bool
 
 	// Panic recovery
 	defer func() {
@@ -390,12 +386,6 @@ func handleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 			}
 			evt = stream.Current()
 		}
-		eventCount++
-		lastEventType = string(evt.Type)
-		if string(evt.Type) == "response.completed" {
-			sawCompleted = true
-		}
-
 		// Accumulate usage from completed events
 		if evt.Response.Usage.InputTokens > 0 {
 			inputTokens = evt.Response.Usage.InputTokens
@@ -417,40 +407,6 @@ func handleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 						}
 					}
 				}
-			}
-
-			if string(evt.Type) == "response.failed" {
-				sawFailed = true
-				fields := logrus.Fields{
-					"response_model": responseModel,
-					"event_count":    eventCount,
-					"last_event":     lastEventType,
-					"raw_json":       rawJSON,
-				}
-				if response, ok := evtParsed["response"].(map[string]interface{}); ok {
-					if id, ok := response["id"].(string); ok {
-						fields["response_id"] = id
-					}
-					if status, ok := response["status"].(string); ok {
-						fields["status"] = status
-					}
-					if model, ok := response["model"].(string); ok {
-						fields["upstream_model"] = model
-					}
-					if statusDetails, ok := response["status_details"].(map[string]interface{}); ok {
-						fields["status_details"] = statusDetails
-					}
-					if errObj, ok := response["error"].(map[string]interface{}); ok {
-						fields["response_error"] = errObj
-					}
-					if incomplete, ok := response["incomplete_details"].(map[string]interface{}); ok {
-						fields["incomplete_details"] = incomplete
-					}
-				}
-				if errObj, ok := evtParsed["error"].(map[string]interface{}); ok {
-					fields["event_error"] = errObj
-				}
-				logrus.WithFields(fields).Warn("Received response.failed event from upstream")
 			}
 		}
 
@@ -497,9 +453,6 @@ func handleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 			"output_tokens":  outputTokens,
 			"cache_tokens":   cacheTokens,
 			"has_usage":      hasUsage,
-			"event_count":    eventCount,
-			"last_event":     lastEventType,
-			"saw_completed":  sawCompleted,
 		}).Errorf("Responses stream error: %v", err)
 		if hasUsage {
 			return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), err
@@ -518,26 +471,6 @@ func handleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", string(errorJSON)))
 		flusher.Flush()
 		return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), err
-	}
-
-	logrus.WithFields(logrus.Fields{
-		"response_model": responseModel,
-		"input_tokens":   inputTokens,
-		"output_tokens":  outputTokens,
-		"cache_tokens":   cacheTokens,
-		"has_usage":      hasUsage,
-		"event_count":    eventCount,
-		"last_event":     lastEventType,
-		"saw_completed":  sawCompleted,
-		"saw_failed":     sawFailed,
-	}).Info("Responses stream ended without SDK error")
-	if !sawCompleted {
-		logrus.WithFields(logrus.Fields{
-			"response_model": responseModel,
-			"event_count":    eventCount,
-			"last_event":     lastEventType,
-			"saw_failed":     sawFailed,
-		}).Warn("Responses stream closed before response.completed")
 	}
 
 	// Send final [DONE] message

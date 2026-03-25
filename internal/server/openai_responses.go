@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
@@ -135,29 +134,8 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 		return
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"scenario":      scenarioType,
-		"request_model": string(req.Model),
-		"actual_model":  actualModel,
-		"params_model":  string(params.Model),
-		"provider":      provider.Name,
-		"provider_uuid": provider.UUID,
-		"api_base":      provider.APIBase,
-		"api_style":     provider.APIStyle,
-		"stream":        req.Stream,
-	}).Info("Resolved Responses request")
-
 	if scenarioType == typ.ScenarioCodex && provider.APIBase != protocol.CodexAPIBase {
 		preferredEndpoint := NewAdaptiveProbe(s).GetPreferredEndpoint(provider, actualModel)
-		logrus.WithFields(logrus.Fields{
-			"scenario":           scenarioType,
-			"request_model":      string(req.Model),
-			"actual_model":       actualModel,
-			"provider":           provider.Name,
-			"api_base":           provider.APIBase,
-			"stream":             req.Stream,
-			"preferred_endpoint": preferredEndpoint,
-		}).Info("Evaluating Codex responses routing")
 		if preferredEndpoint != "responses" {
 			s.handleCodexResponsesFallback(c, provider, params, req.Model, actualModel, maxAllowed, req.Stream)
 			return
@@ -240,17 +218,6 @@ func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Prov
 	switch provider.APIStyle {
 	case protocol.APIStyleOpenAI:
 		chatReq := request.ConvertOpenAIResponsesToChat(params, int64(maxAllowed))
-		logrus.WithFields(logrus.Fields{
-			"provider":        provider.Name,
-			"api_base":        provider.APIBase,
-			"api_style":       provider.APIStyle,
-			"stream":          isStreaming,
-			"max_allowed":     maxAllowed,
-			"response_model":  string(responseModel),
-			"actual_model":    actualModel,
-			"responses_model": string(params.Model),
-			"chat_model":      string(chatReq.Model),
-		}).Info("Using Codex responses fallback via OpenAI chat")
 		if isStreaming {
 			wrapper := s.clientPool.GetOpenAIClient(provider, chatReq.Model)
 			fc := NewForwardContext(c.Request.Context(), provider)
@@ -479,15 +446,6 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 
 // handleResponsesStreamingRequest handles streaming Responses API requests
 func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string) {
-	logrus.WithFields(logrus.Fields{
-		"provider":       provider.Name,
-		"api_base":       provider.APIBase,
-		"api_style":      provider.APIStyle,
-		"response_model": string(responseModel),
-		"actual_model":   actualModel,
-		"params_model":   string(params.Model),
-	}).Info("Forwarding streaming Responses request upstream")
-
 	// Create streaming request with request context for proper cancellation
 	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
@@ -512,14 +470,6 @@ func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.P
 		first := stream.Current()
 		initialEvent = &first
 		if shouldFallbackCodexStreamingResponse(provider, responseModel, first) {
-			logrus.WithFields(logrus.Fields{
-				"provider":       provider.Name,
-				"api_base":       provider.APIBase,
-				"response_model": string(responseModel),
-				"actual_model":   actualModel,
-				"params_model":   string(params.Model),
-				"first_event":    string(first.Type),
-			}).Warn("Falling back from streaming responses to chat after first response.failed event")
 			_ = stream.Close()
 			s.handleCodexResponsesFallback(c, provider, params, responseModel, actualModel, 0, true)
 			return
@@ -529,9 +479,6 @@ func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.P
 	// Handle the streaming response
 	hc := protocol.NewHandleContext(c, responseModel)
 	usage, err := HandleOpenAIResponsesStreamWithInitialEvent(hc, stream, responseModel, initialEvent)
-	if err != nil {
-		s.debugStreamingResponsesFailure(provider, params, responseModel, actualModel, err)
-	}
 
 	// Track usage from stream handler
 	s.trackUsageWithTokenUsage(c, usage, err)
@@ -573,75 +520,6 @@ func shouldFallbackCodexStreamingResponse(provider *typ.Provider, responseModel 
 	}
 
 	return false
-}
-
-func (s *Server) debugStreamingResponsesFailure(provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string, cause error) {
-	fields := logrus.Fields{
-		"provider":       provider.Name,
-		"provider_uuid":  provider.UUID,
-		"api_base":       provider.APIBase,
-		"api_style":      provider.APIStyle,
-		"response_model": string(responseModel),
-		"actual_model":   actualModel,
-		"params_model":   string(params.Model),
-		"stream_error":   cause.Error(),
-	}
-
-	if payload, err := json.Marshal(params); err == nil {
-		fields["responses_params_json"] = string(payload)
-	}
-
-	msg := strings.ToLower(cause.Error())
-	if capability, err := NewAdaptiveProbe(s).GetModelCapability(provider.UUID, actualModel); err == nil && capability != nil {
-		fields["capability_supports_chat"] = capability.SupportsChat
-		fields["capability_chat_error"] = capability.ChatError
-		fields["capability_supports_responses"] = capability.SupportsResponses
-		fields["capability_responses_error"] = capability.ResponsesError
-		fields["capability_preferred"] = capability.PreferredEndpoint
-	}
-
-	if strings.Contains(msg, "unsupported model") {
-		logrus.WithFields(fields).Warn("Streaming responses failed with unsupported model; running non-stream diagnostic")
-	} else {
-		logrus.WithFields(fields).Warn("Streaming responses failed; running non-stream diagnostic")
-	}
-
-	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
-	if wrapper == nil {
-		logrus.WithFields(fields).Warn("Non-stream diagnostic skipped: failed to get OpenAI client")
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-
-	resp, err := wrapper.ResponsesNew(ctx, params)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"provider":       provider.Name,
-			"api_base":       provider.APIBase,
-			"response_model": string(responseModel),
-			"actual_model":   actualModel,
-			"params_model":   string(params.Model),
-			"diag":           "responses_nonstream",
-			"diag_result":    "failed",
-			"diag_error":     err.Error(),
-		}).Warn("Non-stream responses diagnostic failed")
-		return
-	}
-
-	logrus.WithFields(logrus.Fields{
-		"provider":           provider.Name,
-		"api_base":           provider.APIBase,
-		"response_model":     string(responseModel),
-		"actual_model":       actualModel,
-		"params_model":       string(params.Model),
-		"diag":               "responses_nonstream",
-		"diag_result":        "success",
-		"diag_response_id":   resp.ID,
-		"diag_input_tokens":  resp.Usage.InputTokens,
-		"diag_output_tokens": resp.Usage.OutputTokens,
-	}).Warn("Non-stream responses diagnostic succeeded")
 }
 
 // handleResponsesStreamResponse processes the streaming response and sends it to the client
