@@ -290,6 +290,9 @@ func (s *Server) GetOrCreateScenarioSink(scenario typ.RuleScenario) *obs.Sink {
 
 // NewServer creates a new HTTP server instance with functional options
 func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Start with default options
 	allOpts := append([]ServerOption{WithDefault()}, opts...)
 
@@ -512,7 +515,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.setupMiddleware()
 
 	// Setup routes
-	server.setupRoutes()
+	server.setupRoutes(ctx)
 
 	// Setup configuration watcher
 	server.setupConfigWatcher()
@@ -754,10 +757,10 @@ func (s *Server) setupMiddleware() {
 }
 
 // setupRoutes configures server routes
-func (s *Server) setupRoutes() {
+func (s *Server) setupRoutes(ctx context.Context) {
 	// Integrate Web UI routes if enabled
 	if s.enableUI {
-		s.UseUIEndpoints()
+		s.UseUIEndpoints(ctx)
 	}
 
 	s.UseAIEndpoints()

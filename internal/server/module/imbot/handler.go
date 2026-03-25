@@ -1,4 +1,4 @@
-package imbotsettings
+package imbot
 
 import (
 	"context"
@@ -23,9 +23,9 @@ type Handler struct {
 }
 
 // NewHandler creates a new ImBot settings handler
-func NewHandler(cfg *config.Config) (*Handler, error) {
+func NewHandler(ctx context.Context, cfg *config.Config) (*Handler, error) {
 	sm := cfg.StoreManager()
-	botMgr, err := NewBotManager(cfg)
+	botMgr, err := NewBotManager(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}

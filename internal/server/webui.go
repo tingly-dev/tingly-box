@@ -19,7 +19,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
-	"github.com/tingly-dev/tingly-box/internal/server/module/imbotsettings"
+	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	"github.com/tingly-dev/tingly-box/internal/server/module/providertemplate"
 	rulemodule "github.com/tingly-dev/tingly-box/internal/server/module/rule"
@@ -54,7 +54,8 @@ func GetGlobalServer() *Server {
 }
 
 // Init sets up Server routes and templates on the main server engine
-func (s *Server) UseUIEndpoints() {
+func (s *Server) UseUIEndpoints(ctx context.Context) {
+
 	// SPA routes - serve index.html for all frontend routes (catch-all)
 	// This allows React Router to handle client-side routing
 	s.engine.GET("/:page", s.UseIndexHTML)
@@ -94,13 +95,13 @@ func (s *Server) UseUIEndpoints() {
 	}
 
 	// ImBot settings API routes - register from imbotsettings module
-	imbotSettingsHandler, err := imbotsettings.NewHandler(s.config)
+	imbotHandler, err := imbot.NewHandler(ctx, s.config)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to create imbotsettings handler, imbot settings APIs will not be available")
 	} else {
-		imbotsettings.RegisterRoutes(apiV1, imbotSettingsHandler)
+		imbot.RegisterRoutes(apiV1, imbotHandler)
 		// Store handler reference for shutdown
-		s.imbotSettingsHandler = imbotSettingsHandler
+		s.imbotSettingsHandler = imbotHandler
 	}
 
 	// Config apply API routes

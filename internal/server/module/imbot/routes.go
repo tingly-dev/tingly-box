@@ -1,4 +1,4 @@
-package imbotsettings
+package imbot
 
 import (
 	"github.com/sirupsen/logrus"
