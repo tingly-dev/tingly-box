@@ -135,10 +135,12 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 		return
 	}
 
-	// Resolve session ID for affinity
-	sessionID := ResolveSessionID(c, reqParams)
-
-	provider, selectedService, err = s.DetermineProviderAndModelWithScenario(scenarioType, rule, reqParams, sessionID)
+	// Select service using routing pipeline
+	type simpleSelector interface {
+		SelectService(c *gin.Context, scenario typ.RuleScenario, rule *typ.Rule, req interface{}) (*typ.Provider, *loadbalance.Service, error)
+	}
+	selector := s.routingSelector.(simpleSelector)
+	provider, selectedService, err = selector.SelectService(c, scenarioType, rule, reqParams)
 	if err != nil {
 		// Record error if recording is enabled
 		if recorder != nil {
@@ -162,8 +164,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 		c.Set("rule", rule)
 	}
 
-	// Store sessionID in tracking context for use in response handlers
-	c.Set(ContextKeySessionID, sessionID)
+	// sessionID is automatically stored by SelectService
 
 	actualModel := selectedService.Model
 	// Delegate to the appropriate implementation based on beta parameter

@@ -7,23 +7,36 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
-	"github.com/tingly-dev/tingly-box/internal/server"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+// AffinityStore interface defines operations for session-service affinity
+type AffinityStore interface {
+	Get(ruleUUID, sessionID string) (*AffinityEntry, bool)
+	Set(ruleUUID, sessionID string, entry *AffinityEntry)
+}
+
+// AffinityEntry represents a locked service for a session
+type AffinityEntry struct {
+	Service   *loadbalance.Service
+	MessageID string
+	LockedAt  time.Time
+	ExpiresAt time.Time
+}
 
 // ServiceSelector is the main entry point for service selection.
 // It orchestrates a pipeline of selection stages and validates the final result.
 type ServiceSelector struct {
 	config        *config.Config
-	affinityStore *server.AffinityStore
+	affinityStore AffinityStore
 	loadBalancer  interface{} // *server.LoadBalancer
 }
 
 // NewServiceSelector creates a new service selector
 func NewServiceSelector(
 	cfg *config.Config,
-	affinity *server.AffinityStore,
+	affinity AffinityStore,
 	lb interface{},
 ) *ServiceSelector {
 	return &ServiceSelector{
@@ -132,7 +145,7 @@ func (s *ServiceSelector) buildPipeline(rule *typ.Rule) []SelectionStage {
 func (s *ServiceSelector) postProcess(ctx *SelectionContext, result *SelectionResult) {
 	// Lock affinity if applicable
 	if result.Source == "smart_routing" && ctx.Rule.SmartAffinity && ctx.SessionID != "" {
-		s.affinityStore.Set(ctx.Rule.UUID, ctx.SessionID, &server.AffinityEntry{
+		s.affinityStore.Set(ctx.Rule.UUID, ctx.SessionID, &AffinityEntry{
 			Service:   result.Service,
 			LockedAt:  time.Now(),
 			ExpiresAt: time.Now().Add(2 * time.Hour), // TODO: make configurable

@@ -25,6 +25,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/hooks"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
+	"github.com/tingly-dev/tingly-box/internal/server/routing"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -99,6 +100,9 @@ type Server struct {
 
 	// affinity store for smart routing session-model locking
 	affinityStore *AffinityStore
+
+	// routing selector for service selection pipeline
+	routingSelector interface{} // *routing.SimpleSelector
 
 	// OTel meter setup for unified token tracking
 	meterSetup   *pkgotel.MeterSetup
@@ -421,6 +425,11 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize affinity store for smart routing
 	affinityStore := NewAffinityStore(0) // 0 = use default TTL
 
+	// Initialize routing selector with pipeline
+	affinityAdapter := newAffinityStoreAdapter(affinityStore)
+	serviceSelector := routing.NewServiceSelector(cfg, affinityAdapter, loadBalancer)
+	simpleSelector := routing.NewSimpleSelector(serviceSelector)
+
 	// Initialize load balancer API
 	loadBalancerAPI := NewLoadBalancerAPI(loadBalancer, cfg)
 
@@ -460,6 +469,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.oauthManager = oauthManager
 	server.oauthRefresher = tokenRefresher
 	server.affinityStore = affinityStore
+	server.routingSelector = simpleSelector
 
 	// Start affinity store background GC
 	affinityStore.StartGC()

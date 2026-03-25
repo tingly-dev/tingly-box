@@ -105,10 +105,12 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 		return
 	}
 
-	// Resolve session ID for affinity
-	sessionID := ResolveSessionID(c, req)
-
-	provider, selectedService, err = s.DetermineProviderAndModelWithScenario(scenarioType, rule, req, sessionID)
+	// Select service using routing pipeline
+	type simpleSelector interface {
+		SelectService(c *gin.Context, scenario typ.RuleScenario, rule *typ.Rule, req interface{}) (*typ.Provider, *loadbalance.Service, error)
+	}
+	selector := s.routingSelector.(simpleSelector)
+	provider, selectedService, err = selector.SelectService(c, scenarioType, rule, req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{

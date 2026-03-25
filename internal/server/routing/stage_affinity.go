@@ -2,19 +2,17 @@ package routing
 
 import (
 	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/internal/server"
 )
 
 // AffinityStage checks if a session has a locked service from previous requests.
 // If found and valid, returns the locked service; otherwise passes to next stage.
 type AffinityStage struct {
-	store *server.AffinityStore
+	store AffinityStore
 	scope string // "global" or "smart_rule"
 }
 
 // NewAffinityStage creates a new affinity stage with the given store and scope
-func NewAffinityStage(store *server.AffinityStore, scope string) *AffinityStage {
+func NewAffinityStage(store AffinityStore, scope string) *AffinityStage {
 	return &AffinityStage{
 		store: store,
 		scope: scope,
