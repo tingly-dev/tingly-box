@@ -231,15 +231,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 			logrus.Debug("Chat to Responses stream canceled by client")
 			return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
 		}
-		logrus.WithFields(logrus.Fields{
-			"response_model": responseModel,
-			"response_id":    state.responseID,
-			"text_len":       state.accumulatedText.Len(),
-			"tool_calls":     len(state.pendingToolCalls),
-			"input_tokens":   state.inputTokens,
-			"output_tokens":  state.outputTokens,
-			"cache_tokens":   state.cacheTokens,
-		}).Errorf("Chat to Responses stream error: %v", err)
+		logrus.Errorf("Chat to Responses stream error: %v", err)
 
 		// Send error event
 		errorEvent := map[string]interface{}{

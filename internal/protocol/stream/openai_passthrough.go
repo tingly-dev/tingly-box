@@ -447,13 +447,7 @@ func handleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 			return protocol.ZeroTokenUsage(), nil
 		}
 
-		logrus.WithFields(logrus.Fields{
-			"response_model": responseModel,
-			"input_tokens":   inputTokens,
-			"output_tokens":  outputTokens,
-			"cache_tokens":   cacheTokens,
-			"has_usage":      hasUsage,
-		}).Errorf("Responses stream error: %v", err)
+		logrus.Errorf("Responses stream error: %v", err)
 		if hasUsage {
 			return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), err
 		}
