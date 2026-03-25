@@ -88,12 +88,6 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 		executor = NewToolExecutor([]string{"cd", "ls", "pwd"})
 	}
 
-	// Set approval callback if handler is provided
-	if config.Handler != nil {
-		executor.SetApprovalCallback(tb.createApprovalCallback(&config))
-		logrus.WithField("chatID", config.ChatID).Info("Approval callback configured for ToolExecutor")
-	}
-
 	// Get model configuration from bot setting (required)
 	var modelConfig *anthropic.Config
 
@@ -158,12 +152,20 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 	// This will be set later via SetMessageHandler when ExecuteWithHandler is called
 	// For now, create the agent without hooks
 
-	return &TinglyBoxAgent{
+	tb := &TinglyBoxAgent{
 		ReActAgent: reactAgent,
 		config:     config.SmartGuideConfig,
 		executor:   executor,
 		toolkit:    toolkit,
-	}, nil
+	}
+
+	// Set approval callback if handler is provided (must be done after tb creation)
+	if config.Handler != nil {
+		executor.SetApprovalCallback(tb.createApprovalCallback(config))
+		logrus.WithField("chatID", config.ChatID).Info("Approval callback configured for ToolExecutor")
+	}
+
+	return tb, nil
 }
 
 // NewTinglyBoxAgentWithSession creates a new smart guide agent with conversation history from session
