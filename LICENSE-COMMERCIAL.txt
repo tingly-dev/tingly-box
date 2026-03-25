@@ -1,0 +1,5 @@
+# Commercial License
+
+Licensees holding valid commercial licenses from Tingly Inc. may use this software in accordance with the terms contained in a written agreement between the licensee and Tingly Inc. Alternatively, the terms and conditions accepted by the licensee when purchasing or obtaining the software apply.
+
+For commercial licensing inquiries, contact biz@tingly.dev.

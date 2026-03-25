@@ -192,6 +192,14 @@ npx tingly-box@latest
 - **Seamless integration** – Works with SDKs and CLI tools with minimal setup.
 
 
+## Contributing
+
+By contributing to this repository, you agree that your contributions may be
+included in this project under the MPL-2.0 and may also be used by Tingly Inc.
+under separate commercial licensing terms.
+
+See CONTRIBUTING.md and NOTICE for details.
+
 ## **How to Contribute**
 
 We welcome contributions! Follow these steps, inspired by popular open-source repositories:
@@ -253,6 +261,14 @@ Special badges are minted to recognize the contributions from following contribu
 <img width="144" height="144" alt="image" src="https://github.com/user-attachments/assets/2df1c253-94f8-4cef-b6b7-9fef11ac9ecc" />
 <img width="144" height="144" alt="image" src="https://github.com/user-attachments/assets/67b90687-780c-42f8-ad7f-e58e28752c91" />
 <img width="144" height="144" alt="image" src="https://github.com/user-attachments/assets/85281640-678c-4391-b96f-4ec759018846" />
+
+## License
+
+This project is available under:
+- **MPL-2.0** – See [LICENSE.txt](./LICENSE.txt)
+- **Commercial License** – See [LICENSE-COMMERCIAL.txt](./LICENSE-COMMERCIAL.txt)
+
+For commercial licensing inquiries, contact [biz@tingly.dev](mailto:biz@tingly.dev).
 
 ---
 
