@@ -1,6 +1,6 @@
 module github.com/tingly-dev/tingly-box/imbot
 
-go 1.25.0
+go 1.25.6
 
 require (
 	github.com/bwmarrin/discordgo v0.29.0
