@@ -23,6 +23,11 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
         color: '#0088cc',
         guide: (
             <Stack spacing={2}>
+                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                    <Typography variant="body2" color="info.dark">
+                        Tip: Configure traffic proxy as needed for network access.
+                    </Typography>
+                </Box>
                 <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                         1. Create a bot
@@ -45,11 +50,6 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
                         Click "Add Bot" button above and paste the token to create your bot.
                     </Typography>
                 </Box>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
-                    <Typography variant="body2" color="info.dark">
-                        Tip: Configure traffic proxy as needed for network access.
-                    </Typography>
-                </Box>
             </Stack>
         ),
     },
@@ -63,6 +63,11 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
         color: '#00d6b9',
         guide: (
             <Stack spacing={2}>
+                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                    <Typography variant="body2" color="info.dark">
+                        Tip: Feishu uses WebSocket - no public IP needed. Configure traffic proxy as needed.
+                    </Typography>
+                </Box>
                 <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                         1. Create a Feishu bot
@@ -87,11 +92,6 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
                         Click "Add Bot" button above and fill in App ID and App Secret to create your bot.
                     </Typography>
                 </Box>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
-                    <Typography variant="body2" color="info.dark">
-                        Tip: Feishu uses WebSocket - no public IP needed. Configure traffic proxy as needed.
-                    </Typography>
-                </Box>
             </Stack>
         ),
     },
@@ -105,6 +105,11 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
         color: '#00d6b9',
         guide: (
             <Stack spacing={2}>
+                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                    <Typography variant="body2" color="info.dark">
+                        Tip: Lark uses WebSocket - no public IP needed. Configure traffic proxy as needed.
+                    </Typography>
+                </Box>
                 <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                         1. Create a Lark bot
@@ -129,11 +134,6 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
                         Click "Add Bot" button above and fill in App ID and App Secret to create your bot.
                     </Typography>
                 </Box>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
-                    <Typography variant="body2" color="info.dark">
-                        Tip: Lark uses WebSocket - no public IP needed. Configure traffic proxy as needed.
-                    </Typography>
-                </Box>
             </Stack>
         ),
     },
@@ -147,6 +147,11 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
         color: '#0089ff',
         guide: (
             <Stack spacing={2}>
+                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                    <Typography variant="body2" color="info.dark">
+                        Tip: DingTalk uses Stream Mode - no public IP required. Configure traffic proxy as needed.
+                    </Typography>
+                </Box>
                 <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                         1. Create a DingTalk bot
@@ -173,11 +178,6 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
                         Click "Add Bot" button above and fill in App Key and App Secret to create your bot.
                     </Typography>
                 </Box>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
-                    <Typography variant="body2" color="info.dark">
-                        Tip: DingTalk uses Stream Mode - no public IP required. Configure traffic proxy as needed.
-                    </Typography>
-                </Box>
             </Stack>
         ),
     },
@@ -191,6 +191,11 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
         color: '#07c160',
         guide: (
             <Stack spacing={2}>
+                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                    <Typography variant="body2" color="info.dark">
+                        <strong>Beta:</strong> Weixin integration is in beta. Please provide feedback for any issues.
+                    </Typography>
+                </Box>
                 <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                         1. Install latest Weixin
@@ -209,11 +214,6 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                         Click "Add Bot" button above and scan the QR code with Weixin to bind your account.
-                    </Typography>
-                </Box>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
-                    <Typography variant="body2" color="info.dark">
-                        <strong>Beta:</strong> Weixin integration is in beta. Please provide feedback for any issues.
                     </Typography>
                 </Box>
             </Stack>

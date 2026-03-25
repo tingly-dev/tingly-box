@@ -243,7 +243,6 @@ const Layout = ({ children }: LayoutProps) => {
                         icon: <Weixin size={20}/>,
                     },
                     {
-                        divider: true,
                         path: '/remote-control/telegram',
                         label: 'Telegram',
                         icon: <Telegram size={20}/>,

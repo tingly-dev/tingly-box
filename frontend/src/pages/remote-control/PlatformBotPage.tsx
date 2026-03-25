@@ -3,7 +3,7 @@ import BotPlatformSelector from '@/components/bot/BotPlatformSelector';
 import { BotCard, useBotModelDialog } from '@/components/bot';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import { PageLayout } from '@/components/PageLayout';
-import PreviewNotice from '@/components/remote-control/PreviewNotice';
+import CollapsibleGuide from '@/components/remote-control/CollapsibleGuide';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 import type { BotPlatformConfig, BotSettings } from '@/types/bot';
@@ -322,20 +322,13 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
 
     return (
         <PageLayout loading={false}>
-            {/* Platform-specific Guide */}
+            {/* Platform-specific Guide with Preview Notice */}
             {platformGuide && (
-                <UnifiedCard
-                    title={`${platformName} Setup Guide`}
-                    subtitle="Follow these steps to configure your bot"
-                    size="full"
-                    sx={{ mb: 2 }}
-                >
-                    {platformGuide}
-                </UnifiedCard>
+                <CollapsibleGuide
+                    platformName={platformName}
+                    platformGuide={platformGuide}
+                />
             )}
-
-            {/* Preview Notice Card */}
-            <PreviewNotice platformName={platformName} />
 
             <UnifiedCard
                 title={`${platformName} Bots`}
