@@ -120,6 +120,7 @@ var PlatformNames = map[Platform]string{
 	PlatformLark:        "Lark",
 	PlatformWebChat:     "WebChat",
 	PlatformDingTalk:    "DingTalk",
+	PlatformWeixin:      "Weixin",
 }
 
 // GetPlatformName returns the human-readable name for a platform
@@ -136,7 +137,7 @@ func IsValidPlatform(platform string) bool {
 	case PlatformWhatsApp, PlatformTelegram, PlatformDiscord,
 		PlatformSlack, PlatformGoogleChat, PlatformSignal,
 		PlatformBlueBubbles, PlatformFeishu, PlatformLark,
-		PlatformWebChat, PlatformDingTalk:
+		PlatformWebChat, PlatformDingTalk, PlatformWeixin:
 		return true
 	default:
 		return false

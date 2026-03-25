@@ -1445,6 +1445,30 @@ export const api = {
             return { success: false, error: error.message };
         }
     },
+
+    // ========== Weixin QR Login API ==========
+
+    // Start Weixin QR login flow
+    weixinQRStart: async (botUUID: string, platform?: string, botName?: string): Promise<any> => {
+        return fetchUIAPI(`/imbot-settings/${botUUID}/weixin/qr-start`, {
+            method: 'POST',
+            body: JSON.stringify({ bot_uuid: botUUID, bot_platform: platform, bot_name: botName }),
+        });
+    },
+
+    // Poll Weixin QR login status
+    weixinQRStatus: async (botUUID: string, qrCodeId: string): Promise<any> => {
+        return fetchUIAPI(`/imbot-settings/${botUUID}/weixin/qr-status?qrcode_id=${qrCodeId}`, {
+            method: 'GET',
+        });
+    },
+
+    // Cancel Weixin QR login flow
+    weixinQRCancel: async (botUUID: string): Promise<any> => {
+        return fetchUIAPI(`/imbot-settings/${botUUID}/weixin/qr-cancel`, {
+            method: 'POST',
+        });
+    },
 };
 
 export default api;

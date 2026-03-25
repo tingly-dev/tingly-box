@@ -1,6 +1,7 @@
 package imbotsettings
 
 import (
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/pkg/swagger"
 )
 
@@ -87,12 +88,40 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 			Name:        "platform",
 			Type:        "string",
 			Required:    true,
-			Description: "Platform identifier (telegram, discord, slack, feishu, dingtalk, whatsapp)",
+			Description: "Platform identifier (telegram, discord, slack, feishu, dingtalk, whatsapp, weixin)",
 		}),
 		swagger.WithResponseModel(PlatformConfigResponse{}),
 		swagger.WithErrorResponses(
 			swagger.ErrorResponseConfig{Code: 400, Message: "Platform parameter is required"},
 			swagger.ErrorResponseConfig{Code: 404, Message: "Unknown platform"},
 		),
+	)
+
+	// Weixin QR Login endpoints - use handler's persistent QR login handler
+	qrHandler := handler.qrLoginHandler
+	if qrHandler == nil {
+		logrus.Warn("WeChat QR login handler is nil, QR login endpoints will not be available")
+		return
+	}
+
+	// POST /imbot-settings/:uuid/weixin/qr-start - Start QR login
+	router.POST("/imbot-settings/:uuid/weixin/qr-start", qrHandler.QRStart,
+		swagger.WithTags("imbot-settings", "weixin"),
+		swagger.WithDescription("Initiates Weixin QR code login flow"),
+		swagger.WithRequestModel(QRStartRequest{}),
+		swagger.WithResponseModel(QRStartResponse{}),
+	)
+
+	// GET /imbot-settings/:uuid/weixin/qr-status - Poll QR login status
+	router.GET("/imbot-settings/:uuid/weixin/qr-status", qrHandler.QRStatus,
+		swagger.WithTags("imbot-settings", "weixin"),
+		swagger.WithDescription("Polls Weixin QR code login status"),
+		swagger.WithResponseModel(QRStatusResponse{}),
+	)
+
+	// POST /imbot-settings/:uuid/weixin/qr-cancel - Cancel QR login
+	router.POST("/imbot-settings/:uuid/weixin/qr-cancel", qrHandler.QRCancel,
+		swagger.WithTags("imbot-settings", "weixin"),
+		swagger.WithDescription("Cancels pending Weixin QR code login"),
 	)
 }

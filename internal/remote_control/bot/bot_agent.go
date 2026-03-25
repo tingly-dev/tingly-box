@@ -147,12 +147,21 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 	kb := BuildActionKeyboard()
 	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
+	// Build metadata with context_token (required by Weixin)
+	metadata := map[string]interface{}{
+		"replyMarkup":        tgKeyboard,
+		"_trackActionMenuID": true,
+	}
+	// Forward context_token from incoming message metadata (required by Weixin)
+	if c.hCtx.Message.Metadata != nil {
+		if ct, ok := c.hCtx.Message.Metadata["context_token"].(string); ok {
+			metadata["context_token"] = ct
+		}
+	}
+
 	_, err := c.hCtx.Bot.SendMessage(context.Background(), c.hCtx.ChatID, &imbot.SendMessageOptions{
-		Text: "✅ Task done. \nContinue to chat with this session or /help.",
-		Metadata: map[string]interface{}{
-			"replyMarkup":        tgKeyboard,
-			"_trackActionMenuID": true,
-		},
+		Text:     "✅ Task done. \nContinue to chat with this session or /help.",
+		Metadata: metadata,
 	})
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to send action keyboard for SmartGuide")
@@ -542,10 +551,8 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 		AgentType:   AgentNameTinglyBox,
 	}
 
-	// 7. Send processing message (respects verbose mode)
-	if behavior.Verbose {
-		h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, IconProcess+" "+MsgProcessing, behavior), hCtx.MessageID)
-	}
+	// 7. Send processing message (always send, regardless of verbose mode)
+	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, IconProcess+" "+MsgProcessing, behavior), hCtx.MessageID)
 
 	// 8. Create streaming handler for message output
 	streamHandler := h.newStreamingMessageHandler(hCtx)

@@ -16,9 +16,10 @@ import (
 
 // Handler handles ImBot settings HTTP requests
 type Handler struct {
-	config *config.Config
-	store  *db.ImBotSettingsStore
-	botMgr *BotManager // Local bot manager, not global
+	config         *config.Config
+	store          *db.ImBotSettingsStore
+	botMgr         *BotManager           // Local bot manager, not global
+	qrLoginHandler *WeChatQRLoginHandler // WeChat QR login handler
 }
 
 // NewHandler creates a new ImBot settings handler
@@ -28,11 +29,14 @@ func NewHandler(cfg *config.Config) (*Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Handler{
+	h := &Handler{
 		config: cfg,
 		store:  sm.ImBotSettings(),
 		botMgr: botMgr,
-	}, nil
+	}
+	// Initialize QR login handler
+	h.qrLoginHandler = NewWeChatQRLoginHandler(h.store)
+	return h, nil
 }
 
 // ListSettings returns all ImBot configurations

@@ -1,23 +1,6 @@
-import { OpenInNew } from '@mui/icons-material';
+import {OpenInNew} from '@mui/icons-material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import {
-    Accordion,
-    AccordionDetails,
-    AccordionSummary,
-    Box,
-    Chip,
-    Link,
-    Stack,
-    Typography,
-} from '@mui/material';
-// Platform icons - keep for future use
-// import {
-//     IconBrandDingtalk,
-//     IconBrandDiscord,
-//     IconBrandSlack,
-//     IconBrandTelegram,
-//     IconBrandWechat
-// } from '@tabler/icons-react';
+import {Accordion, AccordionDetails, AccordionSummary, Box, Chip, Link, Stack, Typography,} from '@mui/material';
 
 interface PlatformGuideProps {
     expanded: string | false;
@@ -41,28 +24,34 @@ const platformConfigs: PlatformConfig[] = [
         steps: (
             <Stack spacing={2}>
                 <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                    <Typography variant="subtitle2" sx={{fontWeight: 600, mb: 1}}>
                         1. Create a bot
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                         Open Telegram, search{' '}
                         <Link href="https://t.me/BotFather" target="_blank">
-                            @BotFather <OpenInNew sx={{ fontSize: 10 }} />
+                            @BotFather <OpenInNew sx={{fontSize: 10}}/>
                         </Link>
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{mt: 0.5}}>
                         Send <code>/newbot</code>, follow the prompts, and copy the token
                     </Typography>
                 </Box>
                 <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                    <Typography variant="subtitle2" sx={{fontWeight: 600, mb: 1}}>
                         2. Add bot
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                         Click "Add Bot" button above and paste the token to create your bot.
                     </Typography>
                 </Box>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                <Box sx={{
+                    bgcolor: 'info.lighter',
+                    p: 1.5,
+                    borderRadius: 1,
+                    border: '1px solid',
+                    borderColor: 'info.light'
+                }}>
                     <Typography variant="body2" color="info.dark">
                         Tip: Configure traffic proxy as needed for network access.
                     </Typography>
@@ -78,30 +67,41 @@ const platformConfigs: PlatformConfig[] = [
         steps: (
             <Stack spacing={2}>
                 <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                    <Typography variant="subtitle2" sx={{fontWeight: 600, mb: 1}}>
                         1. Create a Feishu bot
                     </Typography>
                     <Typography variant="body2" color="text.secondary" component="div">
-                        <Box component="ul" sx={{ pl: 2, m: 0 }}>
-                            <li>Visit <Link href="https://open.feishu.cn/" target="_blank">Feishu Open Platform <OpenInNew sx={{ fontSize: 10 }} /></Link></li>
+                        <Box component="ul" sx={{pl: 2, m: 0}}>
+                            <li>Visit <Link href="https://open.feishu.cn/" target="_blank">Feishu Open
+                                Platform <OpenInNew sx={{fontSize: 10}}/></Link></li>
                             <li>Create a new app - Enable Bot capability</li>
-                            <li>Permissions: Add <code>im:message</code> (send messages) and <code>im:message.p2p_msg:readonly</code> (receive messages)</li>
+                            <li>Permissions: Add <code>im:message</code> (send messages)
+                                and <code>im:message.p2p_msg:readonly</code> (receive messages)
+                            </li>
                             <li>Events: Add <code>im.message.receive_v1</code> (receive messages)</li>
-                            <li>Select <strong>Long Connection</strong> mode (requires running nanobot first to establish connection)</li>
+                            <li>Select <strong>Long Connection</strong> mode (requires running nanobot first to
+                                establish connection)
+                            </li>
                             <li>Get App ID and App Secret from "Credentials & Basic Info"</li>
                             <li>Publish the app</li>
                         </Box>
                     </Typography>
                 </Box>
                 <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                    <Typography variant="subtitle2" sx={{fontWeight: 600, mb: 1}}>
                         2. Add bot
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                         Click "Add Bot" button above and fill in App ID and App Secret to create your bot.
                     </Typography>
                 </Box>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                <Box sx={{
+                    bgcolor: 'info.lighter',
+                    p: 1.5,
+                    borderRadius: 1,
+                    border: '1px solid',
+                    borderColor: 'info.light'
+                }}>
                     <Typography variant="body2" color="info.dark">
                         Tip: Feishu uses WebSocket - no public IP needed. Configure traffic proxy as needed.
                     </Typography>
@@ -117,30 +117,41 @@ const platformConfigs: PlatformConfig[] = [
         steps: (
             <Stack spacing={2}>
                 <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                    <Typography variant="subtitle2" sx={{fontWeight: 600, mb: 1}}>
                         1. Create a Lark bot
                     </Typography>
                     <Typography variant="body2" color="text.secondary" component="div">
-                        <Box component="ul" sx={{ pl: 2, m: 0 }}>
-                            <li>Visit <Link href="https://open.larksuite.com/" target="_blank">Lark Open Platform <OpenInNew sx={{ fontSize: 10 }} /></Link></li>
+                        <Box component="ul" sx={{pl: 2, m: 0}}>
+                            <li>Visit <Link href="https://open.larksuite.com/" target="_blank">Lark Open
+                                Platform <OpenInNew sx={{fontSize: 10}}/></Link></li>
                             <li>Create a new app - Enable Bot capability</li>
-                            <li>Permissions: Add <code>im:message</code> (send messages) and <code>im:message.p2p_msg:readonly</code> (receive messages)</li>
+                            <li>Permissions: Add <code>im:message</code> (send messages)
+                                and <code>im:message.p2p_msg:readonly</code> (receive messages)
+                            </li>
                             <li>Events: Add <code>im.message.receive_v1</code> (receive messages)</li>
-                            <li>Select <strong>Long Connection</strong> mode (requires running nanobot first to establish connection)</li>
+                            <li>Select <strong>Long Connection</strong> mode (requires running nanobot first to
+                                establish connection)
+                            </li>
                             <li>Get App ID and App Secret from "Credentials & Basic Info"</li>
                             <li>Publish the app</li>
                         </Box>
                     </Typography>
                 </Box>
                 <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                    <Typography variant="subtitle2" sx={{fontWeight: 600, mb: 1}}>
                         2. Add bot
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                         Click "Add Bot" button above and fill in App ID and App Secret to create your bot.
                     </Typography>
                 </Box>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                <Box sx={{
+                    bgcolor: 'info.lighter',
+                    p: 1.5,
+                    borderRadius: 1,
+                    border: '1px solid',
+                    borderColor: 'info.light'
+                }}>
                     <Typography variant="body2" color="info.dark">
                         Tip: Lark uses WebSocket - no public IP needed. Configure traffic proxy as needed.
                     </Typography>
@@ -156,15 +167,16 @@ const platformConfigs: PlatformConfig[] = [
         steps: (
             <Stack spacing={2}>
                 <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                    <Typography variant="subtitle2" sx={{fontWeight: 600, mb: 1}}>
                         1. Create a DingTalk bot
                     </Typography>
                     <Typography variant="body2" color="text.secondary" component="div">
-                        <Box component="ul" sx={{ pl: 2, m: 0 }}>
-                            <li>Visit <Link href="https://open.dingtalk.com/" target="_blank">DingTalk Open Platform <OpenInNew sx={{ fontSize: 10 }} /></Link></li>
+                        <Box component="ul" sx={{pl: 2, m: 0}}>
+                            <li>Visit <Link href="https://open.dingtalk.com/" target="_blank">DingTalk Open
+                                Platform <OpenInNew sx={{fontSize: 10}}/></Link></li>
                             <li>Create a new app - Add Robot capability</li>
                             <li>Configuration:</li>
-                            <Box component="ul" sx={{ pl: 2 }}>
+                            <Box component="ul" sx={{pl: 2}}>
                                 <li>Toggle <strong>Stream Mode</strong> ON</li>
                                 <li>Permissions: Add necessary permissions for sending messages</li>
                             </Box>
@@ -174,14 +186,20 @@ const platformConfigs: PlatformConfig[] = [
                     </Typography>
                 </Box>
                 <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                    <Typography variant="subtitle2" sx={{fontWeight: 600, mb: 1}}>
                         2. Add bot
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                         Click "Add Bot" button above and fill in App Key and App Secret to create your bot.
                     </Typography>
                 </Box>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                <Box sx={{
+                    bgcolor: 'info.lighter',
+                    p: 1.5,
+                    borderRadius: 1,
+                    border: '1px solid',
+                    borderColor: 'info.light'
+                }}>
                     <Typography variant="body2" color="info.dark">
                         Tip: DingTalk uses Stream Mode - no public IP required. Configure traffic proxy as needed.
                     </Typography>
@@ -235,7 +253,7 @@ const platformConfigs: PlatformConfig[] = [
     },
 ];
 
-const PlatformGuide: React.FC<PlatformGuideProps> = ({ expanded, onChange }) => {
+const PlatformGuide: React.FC<PlatformGuideProps> = ({expanded, onChange}) => {
     return (
         <Stack spacing={1}>
             {platformConfigs.map((platform) => (
@@ -245,7 +263,7 @@ const PlatformGuide: React.FC<PlatformGuideProps> = ({ expanded, onChange }) => 
                     onChange={onChange(platform.id)}
                     disableGutters
                     sx={{
-                        '&:before': { display: 'none' },
+                        '&:before': {display: 'none'},
                         border: '1px solid',
                         borderColor: 'divider',
                         borderRadius: 1,
@@ -253,7 +271,7 @@ const PlatformGuide: React.FC<PlatformGuideProps> = ({ expanded, onChange }) => 
                     }}
                 >
                     <AccordionSummary
-                        expandIcon={<ExpandMoreIcon />}
+                        expandIcon={<ExpandMoreIcon/>}
                         sx={{
                             '& .MuiAccordionSummary-content': {
                                 alignItems: 'center',
@@ -272,7 +290,7 @@ const PlatformGuide: React.FC<PlatformGuideProps> = ({ expanded, onChange }) => 
                             />
                             <Box>
                                 <Stack direction="row" spacing={1} alignItems="center">
-                                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                    <Typography variant="subtitle2" sx={{fontWeight: 600}}>
                                         {platform.name}
                                     </Typography>
                                     {platform.status === 'coming-soon' && (
@@ -292,7 +310,7 @@ const PlatformGuide: React.FC<PlatformGuideProps> = ({ expanded, onChange }) => 
                                             label="Beta"
                                             size="small"
                                             color="warning"
-                                            sx={{ height: 18, fontSize: '0.65rem' }}
+                                            sx={{height: 18, fontSize: '0.65rem'}}
                                         />
                                     )}
                                 </Stack>
@@ -302,7 +320,7 @@ const PlatformGuide: React.FC<PlatformGuideProps> = ({ expanded, onChange }) => 
                             </Box>
                         </Stack>
                     </AccordionSummary>
-                    <AccordionDetails sx={{ pt: 0, bgcolor: 'grey.50' }}>
+                    <AccordionDetails sx={{pt: 0, bgcolor: 'grey.50'}}>
                         {platform.steps}
                     </AccordionDetails>
                 </Accordion>

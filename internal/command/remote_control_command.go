@@ -33,6 +33,7 @@ func RemoteCommand(appManager *AppManager) *cobra.Command {
 	cmd.AddCommand(remoteListCommand(appManager))
 	cmd.AddCommand(remoteStartCommand(appManager))
 	cmd.AddCommand(remoteConfigCommand(appManager))
+	cmd.AddCommand(remoteAddCommand(appManager))
 
 	return cmd
 }
@@ -614,6 +615,16 @@ func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, set
 		options["proxy"] = setting.ProxyURL
 	}
 
+	// Add Weixin-specific options
+	if setting.Platform == "weixin" {
+		if userID, ok := setting.Auth["user_id"]; ok {
+			options["user_id"] = userID
+		}
+		if baseURL, ok := setting.Auth["base_url"]; ok {
+			options["base_url"] = baseURL
+		}
+	}
+
 	err = manager.AddBot(&imbot.Config{
 		UUID:     setting.UUID,
 		Platform: platform,
@@ -686,6 +697,12 @@ func buildAuthConfigInternal(setting bot.BotSetting) imbot.AuthConfig {
 			Type:      "token",
 			Token:     auth["token"],
 			AccountID: auth["phoneNumberId"],
+		}
+	case "weixin":
+		return imbot.AuthConfig{
+			Type:      "qr",
+			Token:     auth["token"],
+			AccountID: auth["bot_id"],
 		}
 	default:
 		return imbot.AuthConfig{

@@ -236,14 +236,13 @@ const Layout = ({ children }: LayoutProps) => {
                     //     label: 'Agent Assistant',
                     //     icon: <AutoAwesome sx={{fontSize: 20}}/>,
                     // },
-                    // {
-                    //     divider: true,
-                    //     path: '/remote-control/weixin',
-                    //     label: 'Weixin',
-                    //     icon: <Weixin size={20}/>,
-                    // },
                     {
                         divider: true,
+                        path: '/remote-control/weixin',
+                        label: 'Weixin',
+                        icon: <Weixin size={20}/>,
+                    },
+                    {
                         path: '/remote-control/telegram',
                         label: 'Telegram',
                         icon: <Telegram size={20}/>,

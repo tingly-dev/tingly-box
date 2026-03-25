@@ -7,9 +7,12 @@ import {
     InputAdornment,
     IconButton,
     Link,
+    Button,
+    Chip,
 } from '@mui/material';
-import { Visibility, VisibilityOff, OpenInNew } from '@mui/icons-material';
+import { Visibility, VisibilityOff, OpenInNew, CheckCircle as CheckCircleIcon, QrCode as QrCodeIcon } from '@mui/icons-material';
 import { type FieldSpec } from '@/types/bot.ts';
+import { WeixinQRAuth } from './WeixinQRAuth.tsx';
 
 interface BotAuthFormProps {
     platform: string;
@@ -18,6 +21,9 @@ interface BotAuthFormProps {
     authData: Record<string, string>;
     onChange: (key: string, value: string) => void;
     disabled?: boolean;
+    botUUID?: string;   // Existing bot UUID (edit mode); omit for new bot flow
+    botName?: string;   // Bot display name (for deferred creation in add mode)
+    onBindingComplete?: (botUUID: string) => void; // Callback with real bot UUID after QR binding
 }
 
 // OAuth platform help links
@@ -43,12 +49,85 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
     authData,
     onChange,
     disabled = false,
+    botUUID,
+    botName,
+    onBindingComplete,
 }) => {
     const [visibleFields, setVisibleFields] = React.useState<Record<string, boolean>>({});
+    const [showQR, setShowQR] = React.useState(false);
 
     const toggleVisibility = (key: string) => {
         setVisibleFields(prev => ({ ...prev, [key]: !prev[key] }));
     };
+
+    // QR code auth for Weixin
+    if (authType === 'qr') {
+        const isBound = !!authData?.token;
+
+        // Show credentials if already bound and not in re-bind mode
+        if (isBound && !showQR) {
+            return (
+                <Box sx={{ p: 2 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                        Weixin QR Code Binding
+                    </Typography>
+                    <Box
+                        sx={{
+                            border: 1,
+                            borderColor: 'divider',
+                            borderRadius: 1,
+                            p: 2,
+                            bgcolor: 'background.default',
+                        }}
+                    >
+                        <Stack spacing={1.5}>
+                            <Stack direction="row" alignItems="center" spacing={1}>
+                                <CheckCircleIcon sx={{ color: 'success.main', fontSize: 20 }} />
+                                <Typography variant="body2" color="success.main" fontWeight={500}>
+                                    Weixin account bound
+                                </Typography>
+                            </Stack>
+                            {authData.bot_id && (
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                    <Typography variant="caption" color="text.secondary" sx={{ minWidth: 60 }}>Bot ID:</Typography>
+                                    <Chip label={authData.bot_id} size="small" variant="outlined" />
+                                </Stack>
+                            )}
+                            {authData.user_id && (
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                    <Typography variant="caption" color="text.secondary" sx={{ minWidth: 60 }}>User ID:</Typography>
+                                    <Chip label={authData.user_id} size="small" variant="outlined" />
+                                </Stack>
+                            )}
+                            <Button
+                                startIcon={<QrCodeIcon />}
+                                size="small"
+                                variant="outlined"
+                                onClick={() => setShowQR(true)}
+                                disabled={disabled}
+                                sx={{ alignSelf: 'flex-start', mt: 0.5 }}
+                            >
+                                Re-bind Account
+                            </Button>
+                        </Stack>
+                    </Box>
+                </Box>
+            );
+        }
+
+        // Show QR scan (new bind or re-bind)
+        return (
+            <WeixinQRAuth
+                botUUID={botUUID}
+                platform={platform}
+                botName={botName}
+                onComplete={(realUUID) => {
+                    setShowQR(false);
+                    onBindingComplete?.(realUUID);
+                }}
+            />
+        );
+    }
 
     if (!fields || fields.length === 0) {
         return (

@@ -31,7 +31,7 @@ const BotPage = () => {
     const [currentPlatformConfig, setCurrentPlatformConfig] = useState<BotPlatformConfig | null>(null);
 
     // Bot form draft state for add/edit dialog
-    const [botDialogMode, setBotDialogMode] = useState<'add' | 'edit'>('add');
+    const [botDialogMode, setBotDialogMode] = useState<'add' | 'edit' | 'qr-binding'>('add');
     const [botEditUuid, setBotEditUuid] = useState<string | null>(null);
     const [botNameDraft, setBotNameDraft] = useState('');
     const [botPlatformDraft, setBotPlatformDraft] = useState('telegram');
@@ -175,7 +175,41 @@ const BotPage = () => {
                 return;
             }
 
-            // Validate required auth fields
+            // Special handling for QR auth type - create bot first, then bind with QR
+            if (platformConfig.auth_type === 'qr' && botDialogMode === 'add') {
+                // For QR auth, create bot without auth validation first
+                const data = {
+                    name: botNameDraft.trim() || `${botPlatformDraft} Bot`,
+                    platform: botPlatformDraft,
+                    auth_type: platformConfig.auth_type,
+                    auth: {}, // Empty auth, will be filled by QR flow
+                    proxy_url: botProxyDraft.trim(),
+                    chat_id: botChatIdDraft.trim(),
+                    bash_allowlist: allowlist,
+                    enabled: false, // Don't enable until QR binding completes
+                };
+
+                const result = await api.createImBotSetting(data);
+
+                if (result?.success === false) {
+                    showNotification(result.error || 'Failed to create bot', 'error');
+                    return;
+                }
+
+                // Reload bots to get the new UUID
+                await loadBotSettings();
+
+                // Switch to QR binding mode with the new bot's UUID
+                // Backend returns SettingsResponse with { settings: { uuid: ... } }
+                if (result?.settings?.uuid) {
+                    setBotDialogMode('qr-binding');
+                    setBotEditUuid(result.settings.uuid);
+                    showNotification('Bot created. Please scan the QR code to complete binding.', 'info');
+                }
+                return;
+            }
+
+            // Validate required auth fields for non-QR auth types
             const missingFields = platformConfig.fields
                 .filter(f => f.required && !botAuthDraft[f.key]?.trim())
                 .map(f => f.label);
@@ -251,6 +285,14 @@ const BotPage = () => {
         } catch (err) {
             showNotification('Failed to delete bot', 'error');
         }
+    }, [loadBotSettings, showNotification]);
+
+    const handleQRBindingComplete = useCallback(async () => {
+        // Reload bots to get the updated credentials
+        await loadBotSettings();
+        showNotification('Weixin bot bound successfully!', 'success');
+        // Close the dialog
+        setBotTokenDialogOpen(false);
     }, [loadBotSettings, showNotification]);
 
     const handleCWDChange = useCallback(async (botUuid: string, cwd: string) => {
@@ -380,7 +422,12 @@ const BotPage = () => {
             </UnifiedCard>
 
             {/* Bot Add/Edit Dialog */}
-            <Modal open={botTokenDialogOpen} onClose={() => setBotTokenDialogOpen(false)}>
+            <Modal open={botTokenDialogOpen} onClose={(e, reason) => {
+                // Don't allow closing when in QR binding mode - user must complete or cancel
+                if (botDialogMode !== 'qr-binding') {
+                    setBotTokenDialogOpen(false);
+                }
+            }}>
                 <Stack
                     sx={{
                         position: 'absolute',
@@ -399,8 +446,15 @@ const BotPage = () => {
                     }}
                 >
                     <Typography
-                        variant="h6">{botDialogMode === 'edit' ? 'Edit Bot Configuration' : 'Add Bot Configuration'}</Typography>
+                        variant="h6">
+                        {botDialogMode === 'edit' ? 'Edit Bot Configuration' :
+                         botDialogMode === 'qr-binding' ? 'Scan QR Code to Bind' :
+                         'Add Bot Configuration'}
+                    </Typography>
                     <Stack spacing={2}>
+                        {/* In QR binding mode, only show the QR auth form, hide other fields */}
+                        {botDialogMode !== 'qr-binding' && (
+                            <>
                         <Stack spacing={1}>
                             <Typography variant="body2" color="text.secondary">
                                 Platform
@@ -431,6 +485,8 @@ const BotPage = () => {
                                 authData={botAuthDraft}
                                 onChange={(key, value) => setBotAuthDraft(prev => ({ ...prev, [key]: value }))}
                                 disabled={botSaving}
+                                botUUID={botDialogMode === 'qr-binding' ? botEditUuid : undefined}
+                                onBindingComplete={botDialogMode === 'qr-binding' ? handleQRBindingComplete : undefined}
                             />
                         )}
 
@@ -479,23 +535,56 @@ const BotPage = () => {
                             helperText="Allowlisted /bash subcommands. Default: cd, ls, pwd."
                             disabled={botSaving}
                         />
+                            </>
+                        )}
+
+                        {/* In QR binding mode, show only the QR auth form */}
+                        {botDialogMode === 'qr-binding' && currentPlatformConfig && (
+                            <BotAuthForm
+                                platform={botPlatformDraft}
+                                authType={currentPlatformConfig.auth_type}
+                                fields={currentPlatformConfig.fields}
+                                authData={botAuthDraft}
+                                onChange={(key, value) => setBotAuthDraft(prev => ({ ...prev, [key]: value }))}
+                                disabled={botSaving}
+                                botUUID={botEditUuid || undefined}
+                                onBindingComplete={handleQRBindingComplete}
+                            />
+                        )}
                     </Stack>
 
                     <Stack direction="row" spacing={2} justifyContent="flex-end">
-                        <Button
-                            onClick={() => setBotTokenDialogOpen(false)}
-                            color="inherit"
-                            disabled={botSaving}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="contained"
-                            onClick={handleSaveBotToken}
-                            disabled={botSaving || botLoading}
-                        >
-                            {botSaving ? 'Saving...' : 'Save Configuration'}
-                        </Button>
+                        {botDialogMode === 'qr-binding' ? (
+                            <Button
+                                onClick={() => {
+                                    // Delete the incomplete bot and close
+                                    if (botEditUuid) {
+                                        api.deleteImBotSetting(botEditUuid);
+                                    }
+                                    setBotTokenDialogOpen(false);
+                                }}
+                                color="error"
+                            >
+                                Cancel Binding
+                            </Button>
+                        ) : (
+                            <>
+                                <Button
+                                    onClick={() => setBotTokenDialogOpen(false)}
+                                    color="inherit"
+                                    disabled={botSaving}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    variant="contained"
+                                    onClick={handleSaveBotToken}
+                                    disabled={botSaving || botLoading}
+                                >
+                                    {botSaving ? 'Saving...' : 'Save Configuration'}
+                                </Button>
+                            </>
+                        )}
                     </Stack>
                 </Stack>
             </Modal>
