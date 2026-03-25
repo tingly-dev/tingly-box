@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -129,43 +128,14 @@ func (cw *Watcher) watchLoop() {
 // isConfigEvent checks if an event is related to our config files
 func (cw *Watcher) isConfigEvent(event fsnotify.Event) bool {
 	configFile := cw.config.ConfigFile
-	configDir := filepath.Dir(configFile)
-	providerConfigFile := filepath.Join(configDir, "config.json")
-
-	// Direct config file events (Config)
-	if event.Name == configFile {
-		return event.Op&(fsnotify.Write|fsnotify.Create) != 0
-	}
-
-	// Provider config file events
-	if event.Name == providerConfigFile {
-		return event.Op&(fsnotify.Write|fsnotify.Create) != 0
-	}
-
-	// Check if it's a create/rename event in the config directory
-	if filepath.Dir(event.Name) == configDir {
-		return event.Op&(fsnotify.Create|fsnotify.Rename) != 0
-	}
-
-	return false
+	return event.Name == configFile && event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename) != 0
 }
 
 // handleConfigChange processes configuration changes
 func (cw *Watcher) handleConfigChange(event fsnotify.Event) {
 	configFile := cw.config.ConfigFile
-	configDir := filepath.Dir(configFile)
-	providerConfigFile := filepath.Join(configDir, "config.json")
 
-	// Determine which file changed and check if it actually changed
-	var checkFile string
-	if event.Name == configFile || event.Name == providerConfigFile {
-		checkFile = event.Name
-	} else {
-		// Directory event, check the main config file
-		checkFile = configFile
-	}
-
-	if stat, err := os.Stat(checkFile); err == nil {
+	if stat, err := os.Stat(configFile); err == nil {
 		if !stat.ModTime().After(cw.lastModTime) {
 			return
 		}
