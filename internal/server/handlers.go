@@ -119,6 +119,10 @@ func (s *Server) GetToken(c *gin.Context) {
 // DetermineProviderAndModelWithScenario determines the provider and service for a request
 // based on the rule's configuration, smart routing rules, and optional affinity locking.
 // sessionID is used for affinity locking when SmartAffinity is enabled.
+//
+// Deprecated: Use routing.SimpleSelector.SelectService() instead for cleaner code.
+// This method is kept for backward compatibility with anthropic_token.go and passthrough.go.
+// See internal/server/anthropic.go for migration example.
 func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario, rule *typ.Rule, req interface{}, sessionID string) (*typ.Provider, *loadbalance.Service, error) {
 	modelName := rule.RequestModel
 	c := s.config
@@ -220,6 +224,12 @@ func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario
 }
 
 // DetermineProviderAndModel resolves the model name and finds the appropriate provider using load balancing
+//
+// Deprecated: Use routing.SimpleSelector.SelectService() instead.
+// This method is kept for backward compatibility with anthropic_token.go and passthrough.go.
+// Currently used by:
+//   - internal/server/anthropic_token.go:89
+//   - internal/server/passthrough.go:81
 func (s *Server) DetermineProviderAndModel(rule *typ.Rule) (*typ.Provider, *loadbalance.Service, error) {
 	modelName := rule.RequestModel
 	c := s.config
