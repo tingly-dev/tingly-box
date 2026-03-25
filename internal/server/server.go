@@ -559,6 +559,12 @@ func (s *Server) setupConfigWatcher() {
 		return
 	}
 
+	// Add default watch file (main config file)
+	if err := watcher.AddWatchFile(s.config.ConfigFile); err != nil {
+		logrus.Debugf("Failed to add config file to watcher: %v", err)
+		return
+	}
+
 	s.watcher = watcher
 
 	// Add callback for configuration changes

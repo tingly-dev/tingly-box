@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -13,13 +12,15 @@ import (
 
 // Watcher monitors configuration changes and triggers reloads
 type Watcher struct {
-	config      *Config
-	watcher     *fsnotify.Watcher
-	callbacks   []func(*Config)
-	stopCh      chan struct{}
-	mu          sync.RWMutex
-	running     bool
-	lastModTime time.Time
+	config       *Config
+	watcher      *fsnotify.Watcher
+	callbacks    []func(*Config)
+	stopCh       chan struct{}
+	mu           sync.RWMutex
+	running      bool
+	paused       bool                 // Paused flag to prevent reload loops
+	watchFiles   []string             // List of files being watched
+	fileModTimes map[string]time.Time // ModTime for each watched file
 }
 
 // NewConfigWatcher creates a new configuration watcher
@@ -30,9 +31,11 @@ func NewConfigWatcher(config *Config) (*Watcher, error) {
 	}
 
 	cw := &Watcher{
-		config:  config,
-		watcher: watcher,
-		stopCh:  make(chan struct{}),
+		config:       config,
+		watcher:      watcher,
+		stopCh:       make(chan struct{}),
+		watchFiles:   []string{}, // Empty by default, must be configured explicitly
+		fileModTimes: make(map[string]time.Time),
 	}
 
 	return cw, nil
@@ -55,17 +58,17 @@ func (cw *Watcher) Start() error {
 		return fmt.Errorf("watcher is already running")
 	}
 
-	// Get config file path (Config uses ConfigFile)
-	configFile := cw.config.ConfigFile
+	// Add all watch files to watcher and record initial ModTime
+	for _, file := range cw.watchFiles {
+		if err := cw.watcher.Add(file); err != nil {
+			logrus.Warnf("Failed to watch file %s: %v", file, err)
+			continue
+		}
 
-	// Get initial modification time
-	if stat, err := os.Stat(configFile); err == nil {
-		cw.lastModTime = stat.ModTime()
-	}
-
-	// Add Config file to watcher
-	if err := cw.watcher.Add(configFile); err != nil {
-		return fmt.Errorf("failed to watch global config file: %w", err)
+		// Record initial modification time
+		if stat, err := os.Stat(file); err == nil {
+			cw.fileModTimes[file] = stat.ModTime()
+		}
 	}
 
 	cw.running = true
@@ -108,9 +111,9 @@ func (cw *Watcher) watchLoop() {
 				continue
 			}
 
-			// Debounce rapid file changes
+			// Debounce rapid file changes (1s to handle vim/editor multi-write)
 			debounceTimer.Stop()
-			debounceTimer = time.AfterFunc(500*time.Millisecond, func() {
+			debounceTimer = time.AfterFunc(1*time.Second, func() {
 				cw.handleConfigChange(event)
 			})
 
@@ -128,23 +131,19 @@ func (cw *Watcher) watchLoop() {
 
 // isConfigEvent checks if an event is related to our config files
 func (cw *Watcher) isConfigEvent(event fsnotify.Event) bool {
-	configFile := cw.config.ConfigFile
-	configDir := filepath.Dir(configFile)
-	providerConfigFile := filepath.Join(configDir, "config.json")
+	cw.mu.RLock()
+	defer cw.mu.RUnlock()
 
-	// Direct config file events (Config)
-	if event.Name == configFile {
-		return event.Op&(fsnotify.Write|fsnotify.Create) != 0
+	// Ignore events if watcher is paused (during reload)
+	if cw.paused {
+		return false
 	}
 
-	// Provider config file events
-	if event.Name == providerConfigFile {
-		return event.Op&(fsnotify.Write|fsnotify.Create) != 0
-	}
-
-	// Check if it's a create/rename event in the config directory
-	if filepath.Dir(event.Name) == configDir {
-		return event.Op&(fsnotify.Create|fsnotify.Rename) != 0
+	// Check if event file is in our watch list
+	for _, watchFile := range cw.watchFiles {
+		if event.Name == watchFile {
+			return event.Op&(fsnotify.Write|fsnotify.Create) != 0
+		}
 	}
 
 	return false
@@ -152,30 +151,43 @@ func (cw *Watcher) isConfigEvent(event fsnotify.Event) bool {
 
 // handleConfigChange processes configuration changes
 func (cw *Watcher) handleConfigChange(event fsnotify.Event) {
-	configFile := cw.config.ConfigFile
-	configDir := filepath.Dir(configFile)
-	providerConfigFile := filepath.Join(configDir, "config.json")
+	changedFile := event.Name
 
-	// Determine which file changed and check if it actually changed
-	var checkFile string
-	if event.Name == configFile || event.Name == providerConfigFile {
-		checkFile = event.Name
-	} else {
-		// Directory event, check the main config file
-		checkFile = configFile
-	}
+	// Pause watcher to prevent reload loop (migration may call Save())
+	cw.mu.Lock()
+	cw.paused = true
+	cw.mu.Unlock()
 
-	if stat, err := os.Stat(checkFile); err == nil {
-		if !stat.ModTime().After(cw.lastModTime) {
-			return
+	defer func() {
+		// Update ModTime for all watched files after reload
+		// This prevents migration-triggered Save() from causing another reload
+		cw.mu.Lock()
+		for _, file := range cw.watchFiles {
+			if stat, err := os.Stat(file); err == nil {
+				cw.fileModTimes[file] = stat.ModTime()
+			}
 		}
-		cw.lastModTime = stat.ModTime()
+		cw.paused = false
+		cw.mu.Unlock()
+
+		logrus.Debugf("Configuration reloaded successfully (triggered by %s)", changedFile)
+	}()
+
+	// Check if file actually changed via ModTime
+	cw.mu.Lock()
+	lastMod, exists := cw.fileModTimes[changedFile]
+	cw.mu.Unlock()
+
+	if stat, err := os.Stat(changedFile); err == nil {
+		if exists && !stat.ModTime().After(lastMod) {
+			return // No actual change
+		}
 	} else {
 		// File doesn't exist, skip reload
 		return
 	}
 
-	// Reload configuration (reload Config)
+	// Reload configuration
 	if err := cw.config.load(); err != nil {
 		logrus.Debugf("Failed to reload configuration: %v", err)
 		return
@@ -197,11 +209,85 @@ func (cw *Watcher) handleConfigChange(event fsnotify.Event) {
 	for _, callback := range callbacks {
 		callback(config)
 	}
-
-	logrus.Debugln("Configuration reloaded successfully")
 }
 
 // TriggerReload manually triggers a configuration reload
 func (cw *Watcher) TriggerReload() error {
 	return cw.config.load()
+}
+
+// AddWatchFile adds a file to the watch list
+// If the watcher is already running, the file will be added immediately
+func (cw *Watcher) AddWatchFile(filepath string) error {
+	cw.mu.Lock()
+	defer cw.mu.Unlock()
+
+	// Check if already watching
+	for _, f := range cw.watchFiles {
+		if f == filepath {
+			return nil // Already watching
+		}
+	}
+
+	// Add to watch list
+	cw.watchFiles = append(cw.watchFiles, filepath)
+
+	// If watcher is running, add to fsnotify immediately
+	if cw.running {
+		if err := cw.watcher.Add(filepath); err != nil {
+			// Remove from watch list if add fails
+			cw.watchFiles = cw.watchFiles[:len(cw.watchFiles)-1]
+			return fmt.Errorf("failed to watch file %s: %w", filepath, err)
+		}
+
+		// Record initial modification time
+		if stat, err := os.Stat(filepath); err == nil {
+			cw.fileModTimes[filepath] = stat.ModTime()
+		}
+
+		logrus.Debugf("Added watch file: %s", filepath)
+	}
+
+	return nil
+}
+
+// RemoveWatchFile removes a file from the watch list
+func (cw *Watcher) RemoveWatchFile(filepath string) error {
+	cw.mu.Lock()
+	defer cw.mu.Unlock()
+
+	// Find and remove from watch list
+	found := false
+	for i, f := range cw.watchFiles {
+		if f == filepath {
+			cw.watchFiles = append(cw.watchFiles[:i], cw.watchFiles[i+1:]...)
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("file %s is not being watched", filepath)
+	}
+
+	// If watcher is running, remove from fsnotify
+	if cw.running {
+		if err := cw.watcher.Remove(filepath); err != nil {
+			logrus.Warnf("Failed to remove watch for %s: %v", filepath, err)
+		}
+		delete(cw.fileModTimes, filepath)
+		logrus.Debugf("Removed watch file: %s", filepath)
+	}
+
+	return nil
+}
+
+// GetWatchFiles returns a copy of the current watch file list
+func (cw *Watcher) GetWatchFiles() []string {
+	cw.mu.RLock()
+	defer cw.mu.RUnlock()
+
+	files := make([]string, len(cw.watchFiles))
+	copy(files, cw.watchFiles)
+	return files
 }
