@@ -258,6 +258,8 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 			return nil, fmt.Errorf("failed to load global cfg: %w", err)
 		}
 	} else {
+		// Run migration only once at startup (not on every load/reload)
+		Migrate(cfg)
 		cfg.Save()
 	}
 
@@ -428,8 +430,8 @@ func (c *Config) load() error {
 	// Restore the config file path after unmarshaling
 	c.ConfigFile = configFile
 
-	// Migration: Ensure all rules have a tactic set
-	Migrate(c)
+	// Note: Migration is now only run at startup in NewConfigWithDir()
+	// Hot-reload (via watcher) does not trigger migration
 
 	return c.RefreshStatsFromStore()
 }
