@@ -22,6 +22,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/server/hooks"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
@@ -429,6 +430,12 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Initialize token refresher for OAuth auto-refresh
 	tokenRefresher := background.NewTokenRefresher(oauthManager, cfg)
+
+	// Register provider lifecycle hooks for automatic cache invalidation
+	poolHook := hooks.NewClientPoolInvalidationHook(server.clientPool)
+	cfg.RegisterProviderUpdateHook(poolHook)
+	cfg.RegisterProviderDeleteHook(poolHook)
+	logrus.Debug("Registered client pool invalidation hook for provider updates")
 
 	// Update server with dependencies
 	server.authMW = authMW
