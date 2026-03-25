@@ -56,6 +56,7 @@ type SendMessageOptions struct {
 	ReplyTo   string                 `json:"replyTo,omitempty"`
 	ThreadID  string                 `json:"threadId,omitempty"`
 	ParseMode ParseMode              `json:"parseMode,omitempty"`
+	Entities  []Entity               `json:"entities,omitempty"` // Telegram message entities (alternative to ParseMode)
 	Silent    bool                   `json:"silent,omitempty"`
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }

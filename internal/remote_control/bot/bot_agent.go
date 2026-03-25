@@ -94,7 +94,7 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 		}
 	}
 
-	// Save assistant message to session
+	// Save assistant message to session (for conversation history)
 	if c.tbSessionStore != nil && responseText != "" {
 		assistantMsg := message.NewMsg("assistant", responseText, types.RoleAssistant)
 		if err := c.tbSessionStore.AddMessage(c.hCtx.ChatID, assistantMsg); err != nil {
@@ -140,10 +140,8 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 		}
 	}
 
-	// Send the final response with meta header, then action keyboard
-	if responseText != "" {
-		c.botHandler.sendTextWithReply(c.hCtx, c.botHandler.formatResponseWithMeta(c.meta, responseText, c.behavior), c.hCtx.MessageID)
-	}
+	// NOTE: Don't send response text here - it's already sent via OnMessage callbacks from the hook
+	// Only send the completion action keyboard
 
 	// Send action keyboard on completion
 	kb := BuildActionKeyboard()

@@ -13,6 +13,7 @@ import (
 	"github.com/tingly-dev/tingly-agentscope/pkg/message"
 	"github.com/tingly-dev/tingly-agentscope/pkg/model/anthropic"
 	"github.com/tingly-dev/tingly-agentscope/pkg/tool"
+	"github.com/tingly-dev/tingly-agentscope/pkg/types"
 	"github.com/tingly-dev/tingly-box/agentboot"
 )
 
@@ -26,8 +27,20 @@ const (
 )
 
 // Summary prompt template
-const summaryPrompt = `Analyze the conversation and provide a clear summary to the user after completing tasks or running commands to user.
-Keep users informed - they should always understand what's happening and why.
+// Provides a concise, user-friendly summary of what was accomplished
+const summaryPrompt = `You are providing a brief task summary to the user.
+
+Based on the conversation history, provide a concise summary (2-3 sentences max) that includes:
+1. What was accomplished
+2. Key actions taken (commands executed, tools used, files modified)
+3. Current state or next step (if applicable)
+
+Keep it brief and informative. Use plain text or simple markdown. Focus on outcomes.
+
+Examples:
+- "I've listed the files in the current directory. Found 3 files: main.go, go.mod, and README.md."
+- "Cloned the repository successfully. You're now in the project directory. Type @cc to start coding."
+- "Updated the port from 3000 to 8080 in config.json. The change has been saved."
 `
 
 // TinglyBoxAgent is the smart guide agent (@tb)
@@ -77,34 +90,7 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 
 	// Set approval callback if handler is provided
 	if config.Handler != nil {
-		executor.SetApprovalCallback(func(ctx context.Context, req ApprovalRequest) (bool, error) {
-			// Call handler's OnApproval with proper context
-			result, err := config.Handler.OnApproval(ctx, agentboot.PermissionRequest{
-				RequestID: uuid.New().String(),
-				AgentType: AgentTypeTinglyBox,
-				ToolName:  "bash",
-				Input: map[string]interface{}{
-					"command": req.Command,
-					"args":    req.Args,
-				},
-				Reason:    req.Reason,
-				SessionID: config.ChatID, // Use chatID as session identifier
-				BotUUID:   config.BotUUID,
-				ChatID:    config.ChatID,
-				Platform:  config.Platform,
-			})
-			if err != nil {
-				logrus.WithError(err).WithField("command", req.Command).Error("Approval request failed")
-				return false, err
-			}
-
-			logrus.WithFields(logrus.Fields{
-				"command":  req.Command,
-				"approved": result.Approved,
-			}).Info("Approval result")
-
-			return result.Approved, nil
-		})
+		executor.SetApprovalCallback(tb.createApprovalCallback(&config))
 		logrus.WithField("chatID", config.ChatID).Info("Approval callback configured for ToolExecutor")
 	}
 
@@ -168,6 +154,10 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 
 	reactAgent := agent.NewReActAgent(reactConfig)
 
+	// Register hook to capture intermediate messages
+	// This will be set later via SetMessageHandler when ExecuteWithHandler is called
+	// For now, create the agent without hooks
+
 	return &TinglyBoxAgent{
 		ReActAgent: reactAgent,
 		config:     config.SmartGuideConfig,
@@ -220,6 +210,41 @@ func NewTinglyBoxAgentWithSession(config *AgentConfig, messages []*message.Msg) 
 	return tbAgent, nil
 }
 
+// createApprovalCallback creates an approval callback function for tool execution
+func (a *TinglyBoxAgent) createApprovalCallback(config *AgentConfig) func(context.Context, ApprovalRequest) (bool, error) {
+	return func(ctx context.Context, req ApprovalRequest) (bool, error) {
+		// Build permission request
+		permReq := agentboot.PermissionRequest{
+			RequestID: uuid.New().String(),
+			AgentType: AgentTypeTinglyBox,
+			ToolName:  "bash",
+			Input: map[string]interface{}{
+				"command": req.Command,
+				"args":    req.Args,
+			},
+			Reason:    req.Reason,
+			SessionID: config.ChatID, // Use chatID as session identifier
+			BotUUID:   config.BotUUID,
+			ChatID:    config.ChatID,
+			Platform:  config.Platform,
+		}
+
+		// Request approval from handler
+		result, err := config.Handler.OnApproval(ctx, permReq)
+		if err != nil {
+			logrus.WithError(err).WithField("command", req.Command).Error("Approval request failed")
+			return false, err
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"command":  req.Command,
+			"approved": result.Approved,
+		}).Info("Approval result")
+
+		return result.Approved, nil
+	}
+}
+
 // ReplyWithContext handles a user message with additional context
 func (a *TinglyBoxAgent) ReplyWithContext(ctx context.Context, text string, toolCtx *ToolContext) (*message.Msg, error) {
 	// Update executor working directory if project path is provided
@@ -241,46 +266,9 @@ func (a *TinglyBoxAgent) ReplyWithContext(ctx context.Context, text string, tool
 		return nil, fmt.Errorf("failed to get response: %w", err)
 	}
 
-	// Get memory for summary generation
-	mem := a.ReActAgent.GetMemory()
-
-	// Check if we need to generate summary by looking at the last message
-	// If the last message contains tool_use blocks, it means agent is still requesting tools
-	// In that case, we should generate a summary for the user
-	var summaryText string
-	var hist *memory.History
-
-	if mem != nil {
-		var ok bool
-		hist, ok = mem.(*memory.History)
-		if hist != nil && ok {
-			messages := hist.GetMessages()
-			if len(messages) > 0 {
-				lastMsg := messages[len(messages)-1]
-				// Generate summary UNLESS last message is assistant without tool_use
-				// (meaning agent returned text directly without requesting more tools)
-				if !(lastMsg.Role == "assistant" && !a.hasToolUseBlocks(lastMsg)) {
-					summaryText = a.generateSummary(ctx, hist)
-
-					// Generate summary if tools were called
-
-					// Add summary to memory as a special message
-					summaryMsg := message.NewMsg(
-						"summary",
-						summaryText,
-						"system",
-					)
-					if err := mem.Add(ctx, summaryMsg); err != nil {
-						logrus.WithError(err).Warn("Failed to add summary to memory")
-					}
-
-					// Use summary to response
-					response.Content = summaryMsg
-				}
-			}
-		}
-	}
-
+	// Return the original response directly
+	// Summary generation removed - user should see the actual agent response
+	// not a meta-summary of what happened
 	return response, nil
 }
 
@@ -582,6 +570,42 @@ func (a *TinglyBoxAgent) ExecuteWithHandler(
 			"status":  "processing",
 			"message": "Smart Guide is thinking...",
 		})
+	}
+
+	// Register hook to capture intermediate messages from ReAct loop
+	// This hook is called after each model response (including text and tool blocks)
+	hookName := fmt.Sprintf("stream_hook_%s", uuid.New().String())
+	if handler != nil {
+		streamHook := agent.LoopModelResponseHookFunc(func(ctx context.Context, ag agent.Agent, msg *message.Msg, hookCtx *agent.LoopModelResponseContext) error {
+			// Extract text content from the message
+			textContent := msg.GetTextContent()
+			if strings.TrimSpace(textContent) != "" {
+				// Send the intermediate message to the handler
+				handler.OnMessage(map[string]interface{}{
+					"type":      "assistant",
+					"message":   textContent,
+					"iteration": hookCtx.Iteration,
+				})
+				logrus.WithFields(logrus.Fields{
+					"iteration":  hookCtx.Iteration,
+					"textLength": len(textContent),
+					"toolBlocks": hookCtx.ToolBlocksCount,
+				}).Debug("SmartGuide: Sent intermediate message via hook")
+			}
+			return nil
+		})
+
+		// Register the hook
+		if err := a.ReActAgent.RegisterHook(types.HookTypeLoopModelResponse, hookName, streamHook); err != nil {
+			logrus.WithError(err).Warn("Failed to register loop hook for streaming")
+		} else {
+			// Ensure hook is cleaned up after execution
+			defer func() {
+				if err := a.ReActAgent.RemoveHook(types.HookTypeLoopModelResponse, hookName); err != nil {
+					logrus.WithError(err).Warn("Failed to remove loop hook")
+				}
+			}()
+		}
 	}
 
 	// Execute the agent

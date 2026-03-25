@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/go-telegram/bot/models"
 	"github.com/tingly-dev/tingly-box/imbot"
 )
 
@@ -460,17 +460,19 @@ func handleVoteCallback(ctx context.Context, bot imbot.Bot, msg imbot.Message, v
 func handleMenu(ctx context.Context, bot imbot.Bot, msg imbot.Message, args []string) error {
 	menuText := `🎛️ Please choose an option:`
 
-	// Create inline keyboard
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("📚 Help", "menu_help"),
-			tgbotapi.NewInlineKeyboardButtonData("ℹ️ About", "menu_about"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🕐 Time", "menu_time"),
-			tgbotapi.NewInlineKeyboardButtonData("📊 Status", "menu_status"),
-		),
-	)
+	// Create inline keyboard using new library
+	keyboard := models.InlineKeyboardMarkup{
+		InlineKeyboard: [][]models.InlineKeyboardButton{
+			{
+				{Text: "📚 Help", CallbackData: "menu_help"},
+				{Text: "ℹ️ About", CallbackData: "menu_about"},
+			},
+			{
+				{Text: "🕐 Time", CallbackData: "menu_time"},
+				{Text: "📊 Status", CallbackData: "menu_status"},
+			},
+		},
+	}
 
 	// Send message with keyboard using SendMessage
 	opts := &imbot.SendMessageOptions{
@@ -491,13 +493,15 @@ func handlePoll(ctx context.Context, bot imbot.Bot, msg imbot.Message, args []st
 Do you like this bot?`
 
 	// Create inline keyboard for voting
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("✅ Yes", "vote_yes"),
-			tgbotapi.NewInlineKeyboardButtonData("❌ No", "vote_no"),
-			tgbotapi.NewInlineKeyboardButtonData("❓ Maybe", "vote_maybe"),
-		),
-	)
+	keyboard := models.InlineKeyboardMarkup{
+		InlineKeyboard: [][]models.InlineKeyboardButton{
+			{
+				{Text: "✅ Yes", CallbackData: "vote_yes"},
+				{Text: "❌ No", CallbackData: "vote_no"},
+				{Text: "❓ Maybe", CallbackData: "vote_maybe"},
+			},
+		},
+	}
 
 	opts := &imbot.SendMessageOptions{
 		Text: pollText,

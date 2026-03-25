@@ -131,9 +131,10 @@ const (
 	ChatTypeThread  = core.ChatTypeThread
 
 	// Parse modes
-	ParseModeMarkdown = core.ParseModeMarkdown
-	ParseModeHTML     = core.ParseModeHTML
-	ParseModeNone     = core.ParseModeNone
+	ParseModeMarkdown       = core.ParseModeMarkdown       // Default: MarkdownV2 (modern)
+	ParseModeMarkdownLegacy = core.ParseModeMarkdownLegacy // Legacy: MarkdownV1 (backward compatibility)
+	ParseModeHTML           = core.ParseModeHTML
+	ParseModeNone           = core.ParseModeNone
 
 	// Error codes
 	ErrAuthFailed        = core.ErrAuthFailed

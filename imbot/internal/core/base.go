@@ -344,15 +344,65 @@ func (b *BaseBot) ChunkText(text string) []string {
 }
 
 // findBreakPoint finds a good break point for chunking
+// Avoids breaking inside code blocks (``` or `)
 func (b *BaseBot) findBreakPoint(text string, limit int) int {
-	// Try to break at newline
+	// First, check if we're inside a code block at the limit point
+	inCodeBlock := false
+	codeBlockChar := rune(0)
+
+	for i := 0; i < limit && i < len(text); i++ {
+		if text[i] == '`' {
+			if i+2 < len(text) && text[i:i+3] == "```" {
+				if !inCodeBlock {
+					// Start of code block
+					inCodeBlock = true
+					codeBlockChar = '`'
+					i += 2
+				} else if codeBlockChar == '`' {
+					// End of code block
+					inCodeBlock = false
+					codeBlockChar = 0
+					i += 2
+				}
+			} else if !inCodeBlock {
+				// Start of inline code
+				inCodeBlock = true
+				codeBlockChar = '`'
+			} else if codeBlockChar == '`' && (i == 0 || text[i-1] != '`') {
+				// End of inline code
+				inCodeBlock = false
+				codeBlockChar = 0
+			}
+		}
+	}
+
+	// If we're inside a code block at the limit, try to extend to find the end
+	if inCodeBlock {
+		// Look for the end of the code block (up to 50% beyond limit)
+		extendLimit := limit * 3 / 2
+		if extendLimit > len(text) {
+			extendLimit = len(text)
+		}
+		for i := limit; i < extendLimit; i++ {
+			if text[i] == '`' {
+				if i+2 < len(text) && text[i:i+3] == "```" && codeBlockChar == '`' {
+					return i + 3 // Break after code block end
+				} else if codeBlockChar == '`' {
+					return i + 1 // Break after inline code end
+				}
+			}
+		}
+		// If we can't find the end, just break at newline if possible
+	}
+
+	// Try to break at newline (within 30% to 100% of limit)
 	for i := limit - 1; i >= limit*7/10 && i >= 0; i-- {
 		if text[i] == '\n' {
 			return i + 1
 		}
 	}
 
-	// Try to break at space
+	// Try to break at space (within 70% to 100% of limit)
 	for i := limit - 1; i >= limit*7/10 && i >= 0; i-- {
 		if text[i] == ' ' {
 			return i + 1
