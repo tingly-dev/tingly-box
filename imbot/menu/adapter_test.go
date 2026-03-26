@@ -52,7 +52,7 @@ func TestBaseAdapterNormalizeMenuType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			menu := NewMenu("test", tt.input)
+			menu := NewMenuWithType("test", tt.input)
 			normalized := adapter.NormalizeMenuType(menu.Type)
 			if normalized != tt.expected {
 				t.Errorf("NormalizeMenuType() = %v, want %v", normalized, tt.expected)
@@ -64,7 +64,7 @@ func TestBaseAdapterNormalizeMenuType(t *testing.T) {
 func TestDefaultAdapter(t *testing.T) {
 	adapter := NewDefaultAdapter(core.PlatformDiscord)
 
-	menu := NewBuilder("test-menu", MenuTypeInlineKeyboard).
+	menu := NewBuilder("test-menu").
 		WithTitle("Test Menu").
 		AddRow(
 			CallbackItem("btn1", "Button 1", "val1"),
@@ -188,21 +188,21 @@ func TestMenuErrors(t *testing.T) {
 }
 
 func TestMenuValidateEmptyID(t *testing.T) {
-	menu := NewMenu("", MenuTypeInlineKeyboard)
+	menu := NewMenu("")
 	if err := menu.Validate(); err == nil {
 		t.Error("Expected validation error for empty ID")
 	}
 }
 
 func TestMenuValidateInvalidType(t *testing.T) {
-	menu := NewMenu("test", MenuType("invalid"))
+	menu := NewMenuWithType("test", MenuType("invalid"))
 	if err := menu.Validate(); err == nil {
 		t.Error("Expected validation error for invalid type")
 	}
 }
 
 func TestMenuValidateEmptyItems(t *testing.T) {
-	menu := NewMenu("test", MenuTypeInlineKeyboard)
+	menu := NewMenu("test")
 	if err := menu.Validate(); err == nil {
 		t.Error("Expected validation error for empty items")
 	}
@@ -377,7 +377,7 @@ func TestDefaultAdapterShowMenu(t *testing.T) {
 	adapter := NewDefaultAdapter(core.PlatformDiscord)
 	bot := newMockBot()
 
-	menu := NewBuilder("test-menu", MenuTypeInlineKeyboard).
+	menu := NewBuilder("test-menu").
 		WithTitle("Test Menu").
 		AddRow(
 			CallbackItem("btn1", "Button 1", "val1"),

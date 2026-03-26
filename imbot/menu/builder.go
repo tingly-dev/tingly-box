@@ -12,22 +12,32 @@ type Builder struct {
 }
 
 // NewBuilder creates a new menu builder
-func NewBuilder(id string, menuType MenuType) *Builder {
+// The menu type is automatically determined by the platform adapter
+func NewBuilder(id string) *Builder {
 	return &Builder{
-		menu: NewMenu(id, menuType),
+		menu: NewMenu(id),
 	}
 }
 
 // NewBuilderForPlatform creates a new menu builder optimized for a specific platform
-func NewBuilderForPlatform(id string, menuType MenuType, platform core.Platform) *Builder {
+// The menu type is automatically determined by the platform adapter
+func NewBuilderForPlatform(id string, platform core.Platform) *Builder {
 	return &Builder{
-		menu: NewMenuForPlatform(id, menuType, platform),
+		menu: NewMenuForPlatform(id, platform),
 	}
 }
 
 // WithPlatform sets the target platform
 func (b *Builder) WithPlatform(platform core.Platform) *Builder {
 	b.menu.Platform = platform
+	return b
+}
+
+// WithType sets a specific menu type hint for the platform adapter (optional)
+// Note: This is only a hint. The platform adapter may choose a different type if needed.
+// Deprecated: Menu type selection is now handled automatically by platform adapters.
+func (b *Builder) WithType(menuType menuType) *Builder {
+	b.menu.Type = menuType
 	return b
 }
 
@@ -204,8 +214,8 @@ func (b *ItemBuilder) Build() MenuItem {
 // Helper functions for common menu patterns
 
 // NewConfirmMenu creates a menu with Yes/No buttons
-func NewConfirmMenu(id string, menuType MenuType, platform core.Platform, message string) *Menu {
-	return NewBuilderForPlatform(id, menuType, platform).
+func NewConfirmMenu(id string, platform core.Platform, message string) *Menu {
+	return NewBuilderForPlatform(id, platform).
 		AddRow(
 			CallbackItem(id+"_yes", "✓ Yes", "true"),
 			CallbackItem(id+"_no", "✗ No", "false"),
@@ -215,19 +225,19 @@ func NewConfirmMenu(id string, menuType MenuType, platform core.Platform, messag
 }
 
 // NewActionMenu creates a menu with action buttons
-func NewActionMenu(id string, menuType MenuType, platform core.Platform, actions map[string]string) *Menu {
+func NewActionMenu(id string, platform core.Platform, actions map[string]string) *Menu {
 	items := make([]*ItemBuilder, 0, len(actions))
 	for actionID, label := range actions {
 		items = append(items, CallbackItem(id+"_"+actionID, label, actionID))
 	}
-	return NewBuilderForPlatform(id, menuType, platform).
+	return NewBuilderForPlatform(id, platform).
 		AddRow(items...).
 		Build()
 }
 
 // NewPaginationMenu creates a menu with pagination controls
-func NewPaginationMenu(id string, menuType MenuType, platform core.Platform, currentPage, totalPages int) *Menu {
-	builder := NewBuilderForPlatform(id, menuType, platform)
+func NewPaginationMenu(id string, platform core.Platform, currentPage, totalPages int) *Menu {
+	builder := NewBuilderForPlatform(id, platform)
 
 	// Previous button row
 	if currentPage > 1 {
@@ -260,7 +270,7 @@ func NewCommandMenu(id string, platform core.Platform, commands map[string]strin
 				WithMetadata("description", description),
 		)
 	}
-	return NewBuilderForPlatform(id, MenuTypeCommandMenu, platform).
+	return NewBuilderForPlatform(id, platform).
 		AddRow(items...).
 		Build()
 }
@@ -274,27 +284,27 @@ func NewQuickActionMenu(id string, platform core.Platform, actions map[string]st
 				WithMetadata("quick_action", "true"),
 		)
 	}
-	return NewBuilderForPlatform(id, MenuTypeQuickActions, platform).
+	return NewBuilderForPlatform(id, platform).
 		AddRow(items...).
 		Build()
 }
 
 // NewNavigationMenu creates a navigation menu with common options
-func NewNavigationMenu(id string, menuType MenuType, platform core.Platform, options []string) *Menu {
+func NewNavigationMenu(id string, platform core.Platform, options []string) *Menu {
 	items := make([]*ItemBuilder, 0, len(options))
 	for i, option := range options {
 		items = append(items,
 			CallbackItem(fmt.Sprintf("%s_%d", id, i), option, option),
 		)
 	}
-	return NewBuilderForPlatform(id, menuType, platform).
+	return NewBuilderForPlatform(id, platform).
 		AddRow(items...).
 		Build()
 }
 
 // NewGridMenu creates a grid-style menu with items arranged in columns
-func NewGridMenu(id string, menuType MenuType, platform core.Platform, items []string, columns int) *Menu {
-	builder := NewBuilderForPlatform(id, menuType, platform)
+func NewGridMenu(id string, platform core.Platform, items []string, columns int) *Menu {
+	builder := NewBuilderForPlatform(id, platform)
 
 	currentRow := make([]*ItemBuilder, 0, columns)
 	for i, itemLabel := range items {

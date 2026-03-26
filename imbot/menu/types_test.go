@@ -31,7 +31,17 @@ func TestMenuType(t *testing.T) {
 }
 
 func TestMenuCreation(t *testing.T) {
-	menu := NewMenu("test-menu", MenuTypeInlineKeyboard)
+	menu := NewMenu("test-menu")
+	if menu.ID != "test-menu" {
+		t.Errorf("Expected ID 'test-menu', got '%s'", menu.ID)
+	}
+	if menu.Type != MenuTypeAuto {
+		t.Errorf("Expected type Auto (default), got %v", menu.Type)
+	}
+}
+
+func TestMenuCreationWithType(t *testing.T) {
+	menu := NewMenuWithType("test-menu", MenuTypeInlineKeyboard)
 	if menu.ID != "test-menu" {
 		t.Errorf("Expected ID 'test-menu', got '%s'", menu.ID)
 	}
@@ -41,14 +51,28 @@ func TestMenuCreation(t *testing.T) {
 }
 
 func TestMenuWithPlatform(t *testing.T) {
-	menu := NewMenuForPlatform("test-menu", MenuTypeInlineKeyboard, core.PlatformTelegram)
+	menu := NewMenuForPlatform("test-menu", core.PlatformTelegram)
 	if menu.Platform != core.PlatformTelegram {
 		t.Errorf("Expected platform Telegram, got %v", menu.Platform)
+	}
+	if menu.Type != MenuTypeAuto {
+		t.Errorf("Expected type Auto (default), got %v", menu.Type)
+	}
+}
+
+func TestMenuWithPlatformAndType(t *testing.T) {
+	menu := NewMenuForPlatformWithType("test-menu", MenuTypeReplyKeyboard, core.PlatformTelegram)
+	if menu.Platform != core.PlatformTelegram {
+		t.Errorf("Expected platform Telegram, got %v", menu.Platform)
+	}
+	if menu.Type != MenuTypeReplyKeyboard {
+		t.Errorf("Expected type ReplyKeyboard, got %v", menu.Type)
 	}
 }
 
 func TestMenuBuilder(t *testing.T) {
-	menu := NewBuilder("test-menu", MenuTypeInlineKeyboard).
+	menu := NewBuilder("test-menu").
+		WithType(MenuTypeInlineKeyboard).
 		WithPlatform(core.PlatformTelegram).
 		WithTitle("Test Menu").
 		AddRow(
@@ -74,7 +98,7 @@ func TestMenuBuilder(t *testing.T) {
 }
 
 func TestMenuBuilderWithCallbacks(t *testing.T) {
-	menu := NewBuilder("confirm-menu", MenuTypeInlineKeyboard).
+	menu := NewBuilder("confirm-menu").
 		WithPlatform(core.PlatformTelegram).
 		AddRow(
 			CallbackItem("yes", "✓ Yes", "true"),
@@ -125,7 +149,7 @@ func TestMenuItemBuilder(t *testing.T) {
 }
 
 func TestConfirmMenu(t *testing.T) {
-	menu := NewConfirmMenu("confirm", MenuTypeInlineKeyboard, core.PlatformTelegram, "Are you sure?")
+	menu := NewConfirmMenu("confirm", core.PlatformTelegram, "Are you sure?")
 
 	if err := menu.Validate(); err != nil {
 		t.Errorf("Confirm menu validation failed: %v", err)
@@ -147,7 +171,7 @@ func TestActionMenu(t *testing.T) {
 		"action3": "Do Action 3",
 	}
 
-	menu := NewActionMenu("actions", MenuTypeInlineKeyboard, core.PlatformTelegram, actions)
+	menu := NewActionMenu("actions", core.PlatformTelegram, actions)
 
 	if err := menu.Validate(); err != nil {
 		t.Errorf("Action menu validation failed: %v", err)
@@ -159,7 +183,7 @@ func TestActionMenu(t *testing.T) {
 }
 
 func TestPaginationMenu(t *testing.T) {
-	menu := NewPaginationMenu("pages", MenuTypeInlineKeyboard, core.PlatformTelegram, 2, 5)
+	menu := NewPaginationMenu("pages", core.PlatformTelegram, 2, 5)
 
 	if err := menu.Validate(); err != nil {
 		t.Errorf("Pagination menu validation failed: %v", err)
@@ -182,7 +206,7 @@ func TestPaginationMenu(t *testing.T) {
 
 func TestGridMenu(t *testing.T) {
 	items := []string{"A", "B", "C", "D", "E"}
-	menu := NewGridMenu("grid", MenuTypeInlineKeyboard, core.PlatformTelegram, items, 2)
+	menu := NewGridMenu("grid", core.PlatformTelegram, items, 2)
 
 	if err := menu.Validate(); err != nil {
 		t.Errorf("Grid menu validation failed: %v", err)
@@ -209,7 +233,8 @@ func TestGridMenu(t *testing.T) {
 }
 
 func TestMenuClone(t *testing.T) {
-	original := NewBuilder("original", MenuTypeInlineKeyboard).
+	original := NewBuilder("original").
+		WithType(MenuTypeInlineKeyboard).
 		WithPlatform(core.PlatformTelegram).
 		WithTitle("Original Menu").
 		WithOneTime(true).
@@ -482,7 +507,7 @@ func TestQuickActionMenu(t *testing.T) {
 
 func TestNavigationMenu(t *testing.T) {
 	options := []string{"Home", "Profile", "Settings", "Help"}
-	menu := NewNavigationMenu("nav", MenuTypeInlineKeyboard, core.PlatformTelegram, options)
+	menu := NewNavigationMenu("nav", core.PlatformTelegram, options)
 
 	if err := menu.Validate(); err != nil {
 		t.Errorf("Navigation menu validation failed: %v", err)

@@ -15,39 +15,100 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
-// MenuType defines where and how a menu is displayed
-type MenuType string
+// menuType defines where and how a menu is displayed (internal use only)
+// Platform adapters use this to determine the best rendering approach.
+type menuType string
 
 const (
-	// MenuTypeInlineKeyboard displays buttons attached to a specific message
+	// menuTypeInlineKeyboard displays buttons attached to a specific message
 	// Supported: Telegram (inline keyboard), Lark/Feishu (card buttons), Discord (components)
-	MenuTypeInlineKeyboard MenuType = "inline_keyboard"
+	menuTypeInlineKeyboard menuType = "inline_keyboard"
 
-	// MenuTypeReplyKeyboard displays a persistent keyboard above the input field
+	// menuTypeReplyKeyboard displays a persistent keyboard above the input field
 	// Supported: Telegram (reply keyboard), some mobile platforms
-	MenuTypeReplyKeyboard MenuType = "reply_keyboard"
+	menuTypeReplyKeyboard menuType = "reply_keyboard"
 
-	// MenuTypeChatMenu displays in a menu button in the chat interface
+	// menuTypeChatMenu displays in a menu button in the chat interface
 	// Supported: Telegram (menu button), some platforms with similar UI
-	MenuTypeChatMenu MenuType = "chat_menu"
+	menuTypeChatMenu menuType = "chat_menu"
 
-	// MenuTypeQuickActions displays as quick action buttons
+	// menuTypeQuickActions displays as quick action buttons
 	// Supported: Lark/Feishu (quick actions in input area)
-	MenuTypeQuickActions MenuType = "quick_actions"
+	menuTypeQuickActions menuType = "quick_actions"
 
-	// MenuTypeCommandMenu displays as slash commands
+	// menuTypeCommandMenu displays as slash commands
 	// Supported: Most platforms (/, /command, etc.)
-	MenuTypeCommandMenu MenuType = "command_menu"
+	menuTypeCommandMenu menuType = "command_menu"
 
-	// MenuTypeAuto lets the platform choose the best available menu type
-	MenuTypeAuto MenuType = "auto"
+	// menuTypeAuto lets the platform choose the best available menu type (default)
+	menuTypeAuto menuType = "auto"
 )
 
-// IsValid checks if the menu type is valid
-func (m MenuType) IsValid() bool {
+// IsInlineKeyboard returns true if menu type is inline keyboard
+func (m *Menu) IsInlineKeyboard() bool {
+	return m.Type == menuTypeInlineKeyboard
+}
+
+// IsReplyKeyboard returns true if menu type is reply keyboard
+func (m *Menu) IsReplyKeyboard() bool {
+	return m.Type == menuTypeReplyKeyboard
+}
+
+// IsChatMenu returns true if menu type is chat menu
+func (m *Menu) IsChatMenu() bool {
+	return m.Type == menuTypeChatMenu
+}
+
+// IsQuickActions returns true if menu type is quick actions
+func (m *Menu) IsQuickActions() bool {
+	return m.Type == menuTypeQuickActions
+}
+
+// IsCommandMenu returns true if menu type is command menu
+func (m *Menu) IsCommandMenu() bool {
+	return m.Type == menuTypeCommandMenu
+}
+
+// IsAuto returns true if menu type is auto (platform chooses)
+func (m *Menu) IsAuto() bool {
+	return m.Type == menuTypeAuto
+}
+
+// SetInlineKeyboard sets the menu type to inline keyboard (internal use by adapters)
+func (m *Menu) SetInlineKeyboard() {
+	m.Type = menuTypeInlineKeyboard
+}
+
+// SetReplyKeyboard sets the menu type to reply keyboard (internal use by adapters)
+func (m *Menu) SetReplyKeyboard() {
+	m.Type = menuTypeReplyKeyboard
+}
+
+// SetChatMenu sets the menu type to chat menu (internal use by adapters)
+func (m *Menu) SetChatMenu() {
+	m.Type = menuTypeChatMenu
+}
+
+// SetQuickActions sets the menu type to quick actions (internal use by adapters)
+func (m *Menu) SetQuickActions() {
+	m.Type = menuTypeQuickActions
+}
+
+// SetCommandMenu sets the menu type to command menu (internal use by adapters)
+func (m *Menu) SetCommandMenu() {
+	m.Type = menuTypeCommandMenu
+}
+
+// SetAuto sets the menu type to auto (internal use by adapters)
+func (m *Menu) SetAuto() {
+	m.Type = menuTypeAuto
+}
+
+// isValid checks if the menu type is valid
+func (m menuType) isValid() bool {
 	switch m {
-	case MenuTypeInlineKeyboard, MenuTypeReplyKeyboard, MenuTypeChatMenu,
-		MenuTypeQuickActions, MenuTypeCommandMenu, MenuTypeAuto:
+	case menuTypeInlineKeyboard, menuTypeReplyKeyboard, menuTypeChatMenu,
+		menuTypeQuickActions, menuTypeCommandMenu, menuTypeAuto:
 		return true
 	default:
 		return false
@@ -55,7 +116,7 @@ func (m MenuType) IsValid() bool {
 }
 
 // String returns the string representation of the menu type
-func (m MenuType) String() string {
+func (m menuType) String() string {
 	return string(m)
 }
 
@@ -80,7 +141,7 @@ func (i *MenuItem) HasSubItems() bool {
 // Menu represents a complete menu structure
 type Menu struct {
 	ID        string                 `json:"id"`                  // Unique menu identifier
-	Type      MenuType               `json:"type"`                // Menu display type
+	Type      menuType               `json:"type"`                // Menu display type (internal, managed by adapters)
 	Platform  core.Platform          `json:"platform"`            // Target platform
 	Title     string                 `json:"title,omitempty"`     // Menu title (for some platforms)
 	Items     [][]MenuItem           `json:"items"`               // Menu items arranged in rows
@@ -89,19 +150,21 @@ type Menu struct {
 	Resizable bool                   `json:"resizable,omitempty"` // For some platforms: allow user to resize
 }
 
-// NewMenu creates a new menu with the given ID and type
-func NewMenu(id string, menuType MenuType) *Menu {
+// NewMenu creates a new menu with the given ID
+// The menu type is automatically determined by the platform adapter
+func NewMenu(id string) *Menu {
 	return &Menu{
 		ID:    id,
-		Type:  menuType,
+		Type:  menuTypeAuto,
 		Items: make([][]MenuItem, 0),
 		Meta:  make(map[string]interface{}),
 	}
 }
 
 // NewMenuForPlatform creates a new menu optimized for a specific platform
-func NewMenuForPlatform(id string, menuType MenuType, platform core.Platform) *Menu {
-	menu := NewMenu(id, menuType)
+// The menu type is automatically determined by the platform adapter
+func NewMenuForPlatform(id string, platform core.Platform) *Menu {
+	menu := NewMenu(id)
 	menu.Platform = platform
 	return menu
 }
@@ -144,7 +207,7 @@ func (m *Menu) Validate() error {
 	if m.ID == "" {
 		return fmt.Errorf("menu ID cannot be empty")
 	}
-	if !m.Type.IsValid() {
+	if !m.Type.isValid() {
 		return fmt.Errorf("invalid menu type: %s", m.Type)
 	}
 	if len(m.Items) == 0 {
@@ -182,8 +245,8 @@ func (m *Menu) Clone() *Menu {
 	return clone
 }
 
-// MenuCapability describes which menu types a platform supports
-type MenuCapability struct {
+// menuCapability describes which menu types a platform supports (internal use only)
+type menuCapability struct {
 	InlineKeyboard bool `json:"inlineKeyboard"`
 	ReplyKeyboard  bool `json:"replyKeyboard"`
 	ChatMenu       bool `json:"chatMenu"`
@@ -191,54 +254,54 @@ type MenuCapability struct {
 	CommandMenu    bool `json:"commandMenu"`
 }
 
-// SupportsMenuType checks if the capability supports a given menu type
-func (c *MenuCapability) SupportsMenuType(menuType MenuType) bool {
+// supportsMenuType checks if the capability supports a given menu type
+func (c *menuCapability) supportsMenuType(menuType menuType) bool {
 	switch menuType {
-	case MenuTypeInlineKeyboard:
+	case menuTypeInlineKeyboard:
 		return c.InlineKeyboard
-	case MenuTypeReplyKeyboard:
+	case menuTypeReplyKeyboard:
 		return c.ReplyKeyboard
-	case MenuTypeChatMenu:
+	case menuTypeChatMenu:
 		return c.ChatMenu
-	case MenuTypeQuickActions:
+	case menuTypeQuickActions:
 		return c.QuickActions
-	case MenuTypeCommandMenu:
+	case menuTypeCommandMenu:
 		return c.CommandMenu
-	case MenuTypeAuto:
+	case menuTypeAuto:
 		return c.InlineKeyboard || c.ReplyKeyboard || c.ChatMenu
 	default:
 		return false
 	}
 }
 
-// GetRecommendedMenuType returns the best menu type for a platform
+// getRecommendedMenuType returns the best menu type for a platform
 // given a preference and platform capabilities
-func (c *MenuCapability) GetRecommendedMenuType(preference MenuType) MenuType {
-	if preference != MenuTypeAuto && c.SupportsMenuType(preference) {
+func (c *menuCapability) getRecommendedMenuType(preference menuType) menuType {
+	if preference != menuTypeAuto && c.supportsMenuType(preference) {
 		return preference
 	}
 
 	// Default preference order
-	order := []MenuType{
-		MenuTypeInlineKeyboard,
-		MenuTypeChatMenu,
-		MenuTypeQuickActions,
-		MenuTypeReplyKeyboard,
-		MenuTypeCommandMenu,
+	order := []menuType{
+		menuTypeInlineKeyboard,
+		menuTypeChatMenu,
+		menuTypeQuickActions,
+		menuTypeReplyKeyboard,
+		menuTypeCommandMenu,
 	}
 
 	for _, mt := range order {
-		if c.SupportsMenuType(mt) {
+		if c.supportsMenuType(mt) {
 			return mt
 		}
 	}
 
-	return MenuTypeInlineKeyboard // Fallback
+	return menuTypeInlineKeyboard // Fallback
 }
 
-// GetPlatformMenuCapabilities returns the menu capabilities for a given platform
-func GetPlatformMenuCapabilities(platform core.Platform) *MenuCapability {
-	capabilities := map[core.Platform]*MenuCapability{
+// getPlatformMenuCapabilities is the internal implementation (for adapters)
+func getPlatformMenuCapabilities(platform core.Platform) *menuCapability {
+	capabilities := map[core.Platform]*menuCapability{
 		core.PlatformTelegram: {
 			InlineKeyboard: true,
 			ReplyKeyboard:  true,
@@ -281,7 +344,7 @@ func GetPlatformMenuCapabilities(platform core.Platform) *MenuCapability {
 	}
 
 	// Default minimal capabilities
-	return &MenuCapability{
+	return &menuCapability{
 		InlineKeyboard: false,
 		ReplyKeyboard:  false,
 		ChatMenu:       false,

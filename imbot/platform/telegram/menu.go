@@ -34,15 +34,13 @@ func (a *MenuAdapter) ConvertMenu(m *menu.Menu) (interface{}, error) {
 		return nil, menu.ErrInvalidContext
 	}
 
-	switch m.Type {
-	case menu.MenuTypeInlineKeyboard, menu.MenuTypeAuto:
-		return a.convertToInlineKeyboard(m)
-	case menu.MenuTypeReplyKeyboard:
+	// Use menu helper methods instead of direct type comparison
+	if m.IsReplyKeyboard() {
 		return a.convertToReplyKeyboard(m)
-	case menu.MenuTypeChatMenu:
+	} else if m.IsChatMenu() {
 		return a.convertToChatMenuButton(m)
-	default:
-		// Fallback to inline keyboard
+	} else {
+		// Default to inline keyboard (for IsInlineKeyboard, IsAuto, or any other type)
 		return a.convertToInlineKeyboard(m)
 	}
 }
@@ -138,14 +136,14 @@ func (a *MenuAdapter) ShowMenu(ctx context.Context, bot core.Bot, menuCtx *menu.
 	}
 
 	// Set reply markup based on menu type
-	switch m.Type {
-	case menu.MenuTypeInlineKeyboard, menu.MenuTypeAuto:
-		if kb, ok := markup.(builder.InlineKeyboardMarkup); ok {
-			opts.Metadata["replyMarkup"] = kb
-		}
-	case menu.MenuTypeReplyKeyboard:
+	if m.IsReplyKeyboard() {
 		if kb, ok := markup.(interface{}); ok {
 			opts.Metadata["replyKeyboard"] = kb
+		}
+	} else {
+		// Default to inline keyboard
+		if kb, ok := markup.(builder.InlineKeyboardMarkup); ok {
+			opts.Metadata["replyMarkup"] = kb
 		}
 	}
 
@@ -270,9 +268,7 @@ func (a *MenuAdapter) GetKeyboardMarkupForMessage(m *menu.Menu) (builder.InlineK
 // SendInlineMenu sends an inline keyboard menu to a chat
 func (a *MenuAdapter) SendInlineMenu(ctx context.Context, bot core.Bot, chatID, text string, m *menu.Menu) (*menu.MenuResult, error) {
 	// Ensure menu type is inline keyboard
-	if m.Type != menu.MenuTypeInlineKeyboard {
-		m.Type = menu.MenuTypeInlineKeyboard
-	}
+	m.SetInlineKeyboard()
 
 	menuCtx := menu.NewMenuContext(chatID, core.PlatformTelegram)
 	m.Title = text
@@ -283,7 +279,7 @@ func (a *MenuAdapter) SendInlineMenu(ctx context.Context, bot core.Bot, chatID, 
 // SendReplyMenu sends a reply keyboard menu to a chat
 func (a *MenuAdapter) SendReplyMenu(ctx context.Context, bot core.Bot, chatID, text string, m *menu.Menu) (*menu.MenuResult, error) {
 	// Ensure menu type is reply keyboard
-	m.Type = menu.MenuTypeReplyKeyboard
+	m.SetReplyKeyboard()
 
 	menuCtx := menu.NewMenuContext(chatID, core.PlatformTelegram)
 	menuCtx.Metadata["text"] = text

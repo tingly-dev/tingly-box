@@ -34,25 +34,20 @@ type Adapter interface {
 // BaseAdapter provides common functionality for menu adapters
 type BaseAdapter struct {
 	platform     core.Platform
-	capabilities *MenuCapability
+	capabilities *menuCapability
 }
 
 // NewBaseAdapter creates a new base adapter
 func NewBaseAdapter(platform core.Platform) *BaseAdapter {
 	return &BaseAdapter{
 		platform:     platform,
-		capabilities: GetPlatformMenuCapabilities(platform),
+		capabilities: getPlatformMenuCapabilities(platform),
 	}
 }
 
 // Supports checks if this adapter supports the given platform
 func (a *BaseAdapter) Supports(platform core.Platform) bool {
 	return a.platform == platform
-}
-
-// GetCapabilities returns the menu capabilities for this adapter's platform
-func (a *BaseAdapter) GetCapabilities() *MenuCapability {
-	return a.capabilities
 }
 
 // ConvertMenu converts a generic Menu to platform-specific format
@@ -81,25 +76,25 @@ func (a *BaseAdapter) ParseAction(msg *core.Message) (*MenuAction, error) {
 	return nil, ErrNotMenuAction
 }
 
-// NormalizeMenuType ensures the menu type is supported, falling back if needed
-func (a *BaseAdapter) NormalizeMenuType(menuType MenuType) MenuType {
-	if menuType == MenuTypeAuto {
-		return a.capabilities.GetRecommendedMenuType(menuType)
+// normalizeMenuType ensures the menu type is supported, falling back if needed
+func (a *BaseAdapter) normalizeMenuType(menuType menuType) menuType {
+	if menuType == menuTypeAuto {
+		return a.capabilities.getRecommendedMenuType(menuType)
 	}
-	if !a.capabilities.SupportsMenuType(menuType) {
-		return a.capabilities.GetRecommendedMenuType(MenuTypeAuto)
+	if !a.capabilities.supportsMenuType(menuType) {
+		return a.capabilities.getRecommendedMenuType(menuTypeAuto)
 	}
 	return menuType
 }
 
-// ValidateMenu validates a menu for this platform
-func (a *BaseAdapter) ValidateMenu(menu *Menu) error {
+// validateMenu validates a menu for this platform
+func (a *BaseAdapter) validateMenu(menu *Menu) error {
 	if err := menu.Validate(); err != nil {
 		return err
 	}
 
 	// Check if menu type is supported
-	normalizedType := a.NormalizeMenuType(menu.Type)
+	normalizedType := a.normalizeMenuType(menu.Type)
 	if normalizedType != menu.Type {
 		// Menu type was normalized, update the menu
 		menu.Type = normalizedType

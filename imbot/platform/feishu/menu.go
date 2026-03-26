@@ -42,13 +42,11 @@ func (a *MenuAdapter) ConvertMenu(m *menu.Menu) (interface{}, error) {
 		return nil, menu.ErrInvalidContext
 	}
 
-	switch m.Type {
-	case menu.MenuTypeInlineKeyboard, menu.MenuTypeAuto:
-		return a.convertToInteractiveCard(m)
-	case menu.MenuTypeQuickActions:
+	// Use menu helper methods
+	if m.IsQuickActions() {
 		return a.convertToQuickActions(m)
-	default:
-		// Fallback to interactive card
+	} else {
+		// Default to interactive card (for IsInlineKeyboard, IsAuto, or any other type)
 		return a.convertToInteractiveCard(m)
 	}
 }
@@ -270,9 +268,7 @@ func (a *MenuAdapter) ParseAction(msg *core.Message) (*menu.MenuAction, error) {
 
 // SendInteractiveCard sends an interactive card menu to a chat
 func (a *MenuAdapter) SendInteractiveCard(ctx context.Context, bot core.Bot, chatID, text string, m *menu.Menu) (*menu.MenuResult, error) {
-	if m.Type != menu.MenuTypeInlineKeyboard {
-		m.Type = menu.MenuTypeInlineKeyboard
-	}
+	m.SetInlineKeyboard()
 
 	m.Title = text
 	menuCtx := menu.NewMenuContext(chatID, core.PlatformFeishu)
@@ -282,8 +278,8 @@ func (a *MenuAdapter) SendInteractiveCard(ctx context.Context, bot core.Bot, cha
 
 // CreateQuickActionConfig creates a quick action configuration for Feishu
 func (a *MenuAdapter) CreateQuickActionConfig(m *menu.Menu) (map[string]interface{}, error) {
-	if m.Type != menu.MenuTypeQuickActions {
-		m.Type = menu.MenuTypeQuickActions
+	if !m.IsQuickActions() {
+		m.SetQuickActions()
 	}
 
 	result, err := a.ConvertMenu(m)
