@@ -1,5 +1,5 @@
 // Package imbotsettings provides handlers for ImBot settings management.
-package imbotsettings
+package imbot
 
 import (
 	"context"

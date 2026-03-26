@@ -1,4 +1,4 @@
-package imbotsettings
+package imbot
 
 import (
 	"context"
@@ -42,7 +42,7 @@ type BotStatus struct {
 }
 
 // NewBotManager creates a new BotManager with all required dependencies.
-func NewBotManager(cfg *config.Config) (*BotManager, error) {
+func NewBotManager(ctx context.Context, cfg *config.Config) (*BotManager, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
@@ -98,6 +98,8 @@ func NewBotManager(cfg *config.Config) (*BotManager, error) {
 		dataPath:   dataPath,
 		config:     cfg,
 	}
+
+	go bm.periodicBotSync(ctx)
 
 	logrus.Info("BotManager initialized successfully")
 	return bm, nil

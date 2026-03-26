@@ -1,4 +1,4 @@
-package imbotsettings
+package imbot
 
 import (
 	"net/http"
