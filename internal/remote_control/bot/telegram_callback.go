@@ -257,45 +257,6 @@ func (h *BotHandler) handlePermissionCallback(hCtx HandlerContext, parts []strin
 	var resultText string
 
 	switch subAction {
-	case "allow":
-		if err := h.imPrompter.SubmitDecision(requestID, true, false, ""); err != nil {
-			logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit permission decision")
-			h.SendText(hCtx, fmt.Sprintf("Failed to process permission response: %v", err))
-			return
-		}
-		resultText = "✅ Permission granted"
-		logrus.WithFields(logrus.Fields{
-			"request_id": requestID,
-			"tool_name":  pendingReq.ToolName,
-			"user_id":    hCtx.SenderID,
-		}).Info("User approved tool permission")
-
-	case "deny":
-		if err := h.imPrompter.SubmitDecision(requestID, false, false, ""); err != nil {
-			logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit permission decision")
-			h.SendText(hCtx, fmt.Sprintf("Failed to process permission response: %v", err))
-			return
-		}
-		resultText = "❌ Permission denied"
-		logrus.WithFields(logrus.Fields{
-			"request_id": requestID,
-			"tool_name":  pendingReq.ToolName,
-			"user_id":    hCtx.SenderID,
-		}).Info("User denied tool permission")
-
-	case "always":
-		if err := h.imPrompter.SubmitDecision(requestID, true, true, ""); err != nil {
-			logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit permission decision")
-			h.SendText(hCtx, fmt.Sprintf("Failed to process permission response: %v", err))
-			return
-		}
-		resultText = "🔄 Always allowed"
-		logrus.WithFields(logrus.Fields{
-			"request_id": requestID,
-			"tool_name":  pendingReq.ToolName,
-			"user_id":    hCtx.SenderID,
-		}).Info("User approved tool permission (always)")
-
 	case "option":
 		// Handle multi-option selection (e.g., AskUserQuestion)
 		if len(parts) < 4 {
@@ -341,8 +302,25 @@ func (h *BotHandler) handlePermissionCallback(hCtx HandlerContext, parts []strin
 		}).Info("User selected option")
 
 	default:
-		logrus.WithField("action", subAction).Warn("Unknown permission action")
-		return
+		// Look up permission action from shared config
+		permOpt := ask.FindPermissionByAction(subAction)
+		if permOpt == nil {
+			logrus.WithField("action", subAction).Warn("Unknown permission action")
+			return
+		}
+
+		if err := h.imPrompter.SubmitDecision(requestID, permOpt.Approved, permOpt.Remember, permOpt.Label); err != nil {
+			logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit permission decision")
+			h.SendText(hCtx, fmt.Sprintf("Failed to process permission response: %v", err))
+			return
+		}
+		resultText = fmt.Sprintf("%s %s", permOpt.Icon, permOpt.Label)
+		logrus.WithFields(logrus.Fields{
+			"request_id": requestID,
+			"tool_name":  pendingReq.ToolName,
+			"action":     subAction,
+			"user_id":    hCtx.SenderID,
+		}).Info("User responded to permission request")
 	}
 
 	// Send feedback to user

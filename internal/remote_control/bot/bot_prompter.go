@@ -324,20 +324,15 @@ func (p *IMPrompter) buildKeyboard(req ask.Request) imbot.InlineKeyboardMarkup {
 	return p.buildDefaultKeyboard(req.ID)
 }
 
-// buildDefaultKeyboard builds the default allow/deny keyboard
+// buildDefaultKeyboard builds the permission keyboard from shared PermissionOptions config
 func (p *IMPrompter) buildDefaultKeyboard(requestID string) imbot.InlineKeyboardMarkup {
 	kb := imbot.NewKeyboardBuilder()
 
-	// First row: Approve and Deny buttons
-	kb.AddRow(
-		imbot.CallbackButton("✅ Allow", imbot.FormatCallbackData("perm", "allow", requestID)),
-		imbot.CallbackButton("❌ Deny", imbot.FormatCallbackData("perm", "deny", requestID)),
-	)
-
-	// Second row: Always allow (remember decision)
-	kb.AddRow(
-		imbot.CallbackButton("🔄 Always Allow", imbot.FormatCallbackData("perm", "always", requestID)),
-	)
+	for _, opt := range ask.PermissionOptions {
+		buttonText := opt.Icon + " " + opt.Label
+		callbackData := imbot.FormatCallbackData("perm", opt.Action, requestID)
+		kb.AddRow(imbot.CallbackButton(buttonText, callbackData))
+	}
 
 	return kb.Build()
 }

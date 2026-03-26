@@ -273,20 +273,37 @@ func ParseDefaultResponse(req Request, response Response) (Result, error) {
 }
 
 // PermissionOption defines a single permission response option.
-// Inputs are the accepted text inputs (number or letter), Label is the display text.
+// This is the single source of truth for both keyboard buttons and text-based responses.
+//   - Action: callback action identifier (used in keyboard callback data)
+//   - Inputs: accepted text inputs for non-keyboard platforms (number | letter | word)
+//   - Label: display label for both keyboard button text and text instructions
+//   - Icon: emoji prefix for keyboard button
 type PermissionOption struct {
-	Inputs   []string // accepted inputs (e.g. ["1", "y", "yes"])
+	Action   string   // callback action (e.g. "allow", "deny", "always")
+	Inputs   []string // accepted text inputs (e.g. ["1", "y", "yes"])
 	Label    string   // display label (e.g. "Allow")
+	Icon     string   // emoji for keyboard button (e.g. "✅")
 	Approved bool
 	Remember bool
 }
 
 // PermissionOptions is the configurable list of permission response options.
-// Modify this to change accepted inputs and display text for all platforms.
+// Modify this slice to change inputs, display text, and keyboard buttons for all platforms.
 var PermissionOptions = []PermissionOption{
-	{Inputs: []string{"1", "y", "yes"}, Label: "Allow", Approved: true, Remember: false},
-	{Inputs: []string{"2", "n", "no", "0"}, Label: "Deny", Approved: false, Remember: false},
-	{Inputs: []string{"3", "a", "always"}, Label: "Always Allow", Approved: true, Remember: true},
+	{Action: "allow", Inputs: []string{"1", "y", "yes"}, Label: "Allow", Icon: "✅", Approved: true, Remember: false},
+	{Action: "deny", Inputs: []string{"2", "n", "no", "0"}, Label: "Deny", Icon: "❌", Approved: false, Remember: false},
+	{Action: "always", Inputs: []string{"3", "a", "always"}, Label: "Always Allow", Icon: "🔄", Approved: true, Remember: true},
+}
+
+// FindPermissionByAction finds a PermissionOption by its callback action string.
+// Returns nil if not found.
+func FindPermissionByAction(action string) *PermissionOption {
+	for i := range PermissionOptions {
+		if PermissionOptions[i].Action == action {
+			return &PermissionOptions[i]
+		}
+	}
+	return nil
 }
 
 // ParseTextResponse parses user text input as a permission response
