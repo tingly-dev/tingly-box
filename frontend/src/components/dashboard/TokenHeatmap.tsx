@@ -2,13 +2,13 @@ import { Box, Tooltip, Typography, tooltipClasses } from '@mui/material';
 import { useMemo } from 'react';
 import { format } from 'date-fns';
 
-// Orange color scale for GitHub-style heatmap (like GitHub's contribution graph)
+// Green color scale for GitHub-style heatmap (like GitHub's contribution graph)
 const HEATMAP_COLORS = [
-    '#fff7ed',  // Level 0: No activity (lightest cream)
-    '#fed7aa',  // Level 1: Low (light orange)
-    '#fdba74',  // Level 2: Medium (orange)
-    '#f97316',  // Level 3: High (dark orange)
-    '#c2410c',  // Level 4: Very high (darkest orange)
+    '#f0fdf4',  // Level 0: No activity (lightest green)
+    '#86efac',  // Level 1: Low (light green)
+    '#4ade80',  // Level 2: Medium (green)
+    '#22c55e',  // Level 3: High (dark green)
+    '#15803d',  // Level 4: Very high (darkest green)
 ];
 
 export interface DailyUsage {
@@ -416,7 +416,7 @@ export const TokenHeatmap = ({
                                                 sx={{
                                                     fontSize: '13px',
                                                     fontWeight: 600,
-                                                    color: '#fed7aa',
+                                                    color: '#86efac',
                                                     mb: 0.5,
                                                 }}
                                             >
