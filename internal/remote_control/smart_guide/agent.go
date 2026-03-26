@@ -162,7 +162,12 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 	// Set approval callback if handler is provided (must be done after tb creation)
 	if config.Handler != nil {
 		executor.SetApprovalCallback(tb.createApprovalCallback(config))
-		logrus.WithField("chatID", config.ChatID).Info("Approval callback configured for ToolExecutor")
+		logrus.WithFields(logrus.Fields{
+			"chatID":      config.ChatID,
+			"handlerType": fmt.Sprintf("%T", config.Handler),
+		}).Info("Approval callback configured for ToolExecutor")
+	} else {
+		logrus.WithField("chatID", config.ChatID).Warn("No handler provided - approval callback NOT set (non-whitelisted commands will fail)")
 	}
 
 	return tb, nil
@@ -215,6 +220,14 @@ func NewTinglyBoxAgentWithSession(config *AgentConfig, messages []*message.Msg) 
 // createApprovalCallback creates an approval callback function for tool execution
 func (a *TinglyBoxAgent) createApprovalCallback(config *AgentConfig) func(context.Context, ApprovalRequest) (bool, error) {
 	return func(ctx context.Context, req ApprovalRequest) (bool, error) {
+		logrus.WithFields(logrus.Fields{
+			"command":     req.Command,
+			"args":        req.Args,
+			"reason":      req.Reason,
+			"chatID":      config.ChatID,
+			"handlerType": fmt.Sprintf("%T", config.Handler),
+		}).Info("ToolExecutor approval callback invoked for non-whitelisted command")
+
 		// Build permission request
 		permReq := agentboot.PermissionRequest{
 			RequestID: uuid.New().String(),
@@ -231,17 +244,27 @@ func (a *TinglyBoxAgent) createApprovalCallback(config *AgentConfig) func(contex
 			Platform:  config.Platform,
 		}
 
+		logrus.WithFields(logrus.Fields{
+			"requestID": permReq.RequestID,
+			"chatID":    permReq.ChatID,
+			"platform":  permReq.Platform,
+		}).Debug("Calling handler.OnApproval with permission request")
+
 		// Request approval from handler
 		result, err := config.Handler.OnApproval(ctx, permReq)
 		if err != nil {
-			logrus.WithError(err).WithField("command", req.Command).Error("Approval request failed")
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"command":   req.Command,
+				"requestID": permReq.RequestID,
+			}).Error("Approval request failed - handler.OnApproval returned error")
 			return false, err
 		}
 
 		logrus.WithFields(logrus.Fields{
-			"command":  req.Command,
-			"approved": result.Approved,
-		}).Info("Approval result")
+			"command":   req.Command,
+			"approved":  result.Approved,
+			"requestID": permReq.RequestID,
+		}).Info("Approval result received from handler")
 
 		return result.Approved, nil
 	}
