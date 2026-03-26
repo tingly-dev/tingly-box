@@ -38,6 +38,19 @@ func setupTestRouter(cfg *config.Config) *gin.Engine {
 	return router
 }
 
+func registerTestRuleScenario(t *testing.T, scenario typ.RuleScenario) {
+	t.Helper()
+	err := typ.RegisterScenario(typ.ScenarioDescriptor{
+		ID:                 scenario,
+		SupportedTransport: []typ.ScenarioTransport{typ.TransportOpenAI},
+		AllowRuleBinding:   true,
+		AllowDirectPathUse: false,
+	})
+	if err != nil {
+		t.Fatalf("RegisterScenario(%q) error = %v", scenario, err)
+	}
+}
+
 func TestNewHandler(t *testing.T) {
 	actionLogger := setupTestActionLogger()
 	handler := NewHandler(nil, actionLogger)
@@ -205,6 +218,8 @@ func TestGetRule_NilConfig(t *testing.T) {
 }
 
 func TestCreateRule_Success(t *testing.T) {
+	registerTestRuleScenario(t, typ.RuleScenario("test-scenario"))
+
 	cfg := NewConfig(t)
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -265,6 +280,8 @@ func TestCreateRule_NoScenario(t *testing.T) {
 }
 
 func TestUpdateRule_Success(t *testing.T) {
+	registerTestRuleScenario(t, typ.RuleScenario("test-scenario"))
+
 	cfg := NewConfig(t)
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
