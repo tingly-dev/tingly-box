@@ -66,7 +66,8 @@ tasks:
         echo others: npm install @openapitools/openapi-generator-cli -g
         echo ref: https://openapi-generator.tech/docs/installation
       - |
-        openapi-generator-cli generate -g typescript-axios -i ./swagger.json -o ./frontend/src/client
+        openapi-generator-cli generate -g typescript-axios -i ./swagger.json -o ./frontend/src/client \
+            --global-property apiDocs=false,modelDocs=false
 
   go:build:
     env:

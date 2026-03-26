@@ -42,10 +42,10 @@
   "devDependencies": {
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react-swc": "^4.3.0",
+    "msw": "^2.12.14",
     "rollup-plugin-visualizer": "^7.0.1",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1",
-    "vite-plugin-mock": "^3.0.2"
+    "vite": "^7.3.1"
   },
   "overrides": {
     "d3-array": "^3.2.4",
@@ -53,5 +53,10 @@
   },
   "optionalDependencies": {
     "@wailsio/runtime": "3.0.0-alpha.79"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }
