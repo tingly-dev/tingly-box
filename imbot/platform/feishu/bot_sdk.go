@@ -13,6 +13,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
+	"github.com/tingly-dev/tingly-box/imbot/interaction"
 
 	"github.com/tingly-dev/tingly-box/imbot/adapter"
 	"github.com/tingly-dev/tingly-box/imbot/core"
@@ -515,7 +516,7 @@ func (b *Bot) buildInteractiveCard(text string, replyMarkup interface{}) *larkca
 	var buttons []larkcard.MessageCardActionElement
 
 	// Handle InlineKeyboardMarkup type
-	if kb, ok := replyMarkup.(adapter.InlineKeyboardMarkup); ok {
+	if kb, ok := replyMarkup.(interaction.InlineKeyboardMarkup); ok {
 		for _, row := range kb.InlineKeyboard {
 			for _, btn := range row {
 				button := larkcard.NewMessageCardEmbedButton().

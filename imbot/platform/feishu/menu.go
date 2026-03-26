@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	larkcard "github.com/larksuite/oapi-sdk-go/v3/card"
+	"github.com/tingly-dev/tingly-box/imbot/interaction"
 
-	"github.com/tingly-dev/tingly-box/imbot/adapter"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/tingly-box/imbot/menu"
 )
@@ -143,7 +143,7 @@ func (a *MenuAdapter) buildCardButton(menuID string, item menu.MenuItem) larkcar
 	}
 
 	// Set value/callback data
-	callbackData := adapter.FormatCallbackData(menuID, item.ID, item.Value)
+	callbackData := interaction.FormatCallbackData(menuID, item.ID, item.Value)
 	button.Value(map[string]interface{}{
 		"action": callbackData,
 		"menuId": menuID,
@@ -220,7 +220,7 @@ func (a *MenuAdapter) UpdateMenu(ctx context.Context, bot core.Bot, menuCtx *men
 func (a *MenuAdapter) ParseAction(msg *core.Message) (*menu.MenuAction, error) {
 	// Check if message has action callback data in metadata
 	if action, ok := msg.Metadata["action"].(string); ok {
-		parts := adapter.ParseCallbackData(action)
+		parts := interaction.ParseCallbackData(action)
 		if len(parts) >= 3 {
 			return &menu.MenuAction{
 				MenuID:    parts[0],
@@ -237,7 +237,7 @@ func (a *MenuAdapter) ParseAction(msg *core.Message) (*menu.MenuAction, error) {
 	// Check for card interaction in metadata
 	if cardAction, ok := msg.Metadata["card_action"].(map[string]interface{}); ok {
 		if action, ok := cardAction["action"].(string); ok {
-			parts := adapter.ParseCallbackData(action)
+			parts := interaction.ParseCallbackData(action)
 			if len(parts) >= 3 {
 				return &menu.MenuAction{
 					MenuID:    parts[0],

@@ -5,6 +5,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/imbot/adapter"
 	"github.com/tingly-dev/tingly-box/imbot/core"
+	"github.com/tingly-dev/tingly-box/imbot/interaction"
 	"github.com/tingly-dev/tingly-box/imbot/menu"
 )
 
@@ -39,7 +40,7 @@ func TestMenuAdapterConvertToInlineKeyboard(t *testing.T) {
 		t.Fatalf("ConvertMenu failed: %v", err)
 	}
 
-	kb, ok := markup.(adapter.InlineKeyboardMarkup)
+	kb, ok := markup.(interaction.InlineKeyboardMarkup)
 	if !ok {
 		t.Fatalf("Expected InlineKeyboardMarkup, got %T", markup)
 	}
