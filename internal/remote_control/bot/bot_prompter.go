@@ -383,11 +383,8 @@ func (p *IMPrompter) buildTextSelectionInstructions(req ask.Request) string {
 
 	questions, ok := req.Input["questions"].([]interface{})
 	if !ok || len(questions) == 0 {
-		// For permission prompts (not AskUserQuestion)
-		text.WriteString("• `1` - Allow\n")
-		text.WriteString("• `0` - Deny\n")
-		text.WriteString("• `a` - Always Allow")
-		return text.String()
+		// Fallback: use permission instructions from shared config
+		return ask.FormatPermissionInstructions()
 	}
 
 	// For AskUserQuestion - list the options
@@ -413,12 +410,9 @@ func (p *IMPrompter) buildTextSelectionInstructions(req ask.Request) string {
 }
 
 // buildTextPermissionInstructions builds text instructions for permission prompts
-// on platforms without keyboard support
+// on platforms without keyboard support. Delegates to the shared config in ask package.
 func (p *IMPrompter) buildTextPermissionInstructions() string {
-	return "*Reply to approve or deny:*\n\n" +
-		"• `y` or `yes` - Allow\n" +
-		"• `n` or `no` - Deny\n" +
-		"• `a` or `always` - Always Allow"
+	return ask.FormatPermissionInstructions()
 }
 
 // editPromptToResult edits the prompt message to show the result

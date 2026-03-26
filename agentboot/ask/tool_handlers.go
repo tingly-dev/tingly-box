@@ -272,21 +272,59 @@ func ParseDefaultResponse(req Request, response Response) (Result, error) {
 	}
 }
 
+// PermissionOption defines a single permission response option.
+// Inputs are the accepted text inputs (number or letter), Label is the display text.
+type PermissionOption struct {
+	Inputs   []string // accepted inputs (e.g. ["1", "y", "yes"])
+	Label    string   // display label (e.g. "Allow")
+	Approved bool
+	Remember bool
+}
+
+// PermissionOptions is the configurable list of permission response options.
+// Modify this to change accepted inputs and display text for all platforms.
+var PermissionOptions = []PermissionOption{
+	{Inputs: []string{"1", "y", "yes"}, Label: "Allow", Approved: true, Remember: false},
+	{Inputs: []string{"2", "n", "no", "0"}, Label: "Deny", Approved: false, Remember: false},
+	{Inputs: []string{"3", "a", "always"}, Label: "Always Allow", Approved: true, Remember: true},
+}
+
 // ParseTextResponse parses user text input as a permission response
 // Returns: (approved, remember, isValid)
 func ParseTextResponse(text string) (approved bool, remember bool, isValid bool) {
 	text = normalizeText(text)
 
-	switch text {
-	case "1", "y", "yes":
-		return true, false, true
-	case "0", "n", "no":
-		return false, false, true
-	case "a", "always":
-		return true, true, true
-	default:
-		return false, false, false
+	for _, opt := range PermissionOptions {
+		for _, input := range opt.Inputs {
+			if text == input {
+				return opt.Approved, opt.Remember, true
+			}
+		}
 	}
+	return false, false, false
+}
+
+// FormatPermissionInstructions returns formatted text instructions for text-based approval.
+// Used by platforms that don't support inline keyboards.
+func FormatPermissionInstructions() string {
+	var b strings.Builder
+	b.WriteString("*Reply to approve or deny:*\n\n")
+	for _, opt := range PermissionOptions {
+		// Format: • `1` | `y` - Allow
+		b.WriteString("• ")
+		for i, input := range opt.Inputs {
+			if i > 0 {
+				b.WriteString(" | ")
+			}
+			b.WriteString("`")
+			b.WriteString(input)
+			b.WriteString("`")
+		}
+		b.WriteString(" - ")
+		b.WriteString(opt.Label)
+		b.WriteString("\n")
+	}
+	return b.String()
 }
 
 // normalizeText normalizes user input for comparison
