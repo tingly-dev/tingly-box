@@ -249,10 +249,8 @@ func (a *TinglyBoxAgent) createApprovalCallback(config *AgentConfig) func(contex
 
 // ReplyWithContext handles a user message with additional context
 func (a *TinglyBoxAgent) ReplyWithContext(ctx context.Context, text string, toolCtx *ToolContext) (*message.Msg, error) {
-	// Update executor working directory if project path is provided
-	if toolCtx != nil && toolCtx.ProjectPath != "" {
-		a.executor.SetWorkingDirectory(toolCtx.ProjectPath)
-	}
+	// NOTE: Don't set working directory here - it's set in bot_agent.go before calling
+	// ExecuteWithHandler, and change_workdir tool updates it dynamically during execution.
 
 	// Create user message
 	userMsg := message.NewMsg(
@@ -559,10 +557,9 @@ func (a *TinglyBoxAgent) ExecuteWithHandler(
 		Metadata: make(map[string]interface{}),
 	}
 
-	// Update executor working directory if project path is provided
-	if toolCtx != nil && toolCtx.ProjectPath != "" {
-		a.executor.SetWorkingDirectory(toolCtx.ProjectPath)
-	}
+	// NOTE: Don't set working directory here - it should be set by bot_agent.go BEFORE
+	// calling ExecuteWithHandler (line 534), and change_workdir tool updates it dynamically.
+	// Setting it here would overwrite any changes made by change_workdir during execution.
 
 	// Send initial message callback if handler is provided
 	if handler != nil {
