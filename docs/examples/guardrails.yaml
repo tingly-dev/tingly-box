@@ -2,67 +2,66 @@ strategy: most_severe
 error_strategy: review
 
 groups:
-  - id: high-risk
-    name: High Risk
+  - id: default
+    name: Default
     enabled: true
     severity: high
     default_verdict: block
     default_scope:
-      scenarios: [claude_code]
+      scenarios: [claude_code, anthropic, openai]
 
-  - id: sensitive-output
-    name: Sensitive Output
+  - id: output-protection
+    name: Output Protection
     enabled: true
     severity: high
     default_verdict: block
     default_scope:
-      scenarios: [claude_code]
+      scenarios: [claude_code, anthropic, openai]
 
 policies:
   - id: block-ssh-read
     name: Block SSH directory reads
-    group: high-risk
+    group: default
     kind: resource_access
     enabled: true
     scope:
-      directions: [response]
+      scenarios: [claude_code]
     match:
-      tool_names: [bash]
       actions:
         include: [read]
       resources:
         type: path
         mode: prefix
         values: ["~/.ssh", "/etc/ssh"]
+    verdict: block
     reason: Reading SSH directory content is blocked.
 
-  - id: block-env-read
-    name: Block .env file reads
-    group: high-risk
-    kind: resource_access
+  - id: block-destructive-rm
+    name: Block destructive rm commands
+    group: default
+    kind: command_execution
     enabled: true
     scope:
-      directions: [response]
+      scenarios: [claude_code]
     match:
-      tool_names: [bash]
-      actions:
-        include: [read]
-      resources:
-        type: path
-        mode: contains
-        values: [".env", ".env.local", ".env.production"]
-    reason: Reading environment secret files is blocked.
+      terms:
+        - "rm -rf"
+        - "rm -f"
+    verdict: block
+    reason: Destructive remove commands are blocked.
 
   - id: block-secret-output
     name: Block sensitive output
-    group: sensitive-output
+    group: output-protection
     kind: content
     enabled: true
     scope:
-      directions: [request]
+      scenarios: [claude_code, anthropic, openai]
     match:
       patterns:
         - BEGIN OPENSSH PRIVATE KEY
         - AKIA[0-9A-Z]+
       pattern_mode: regex
+      case_sensitive: false
+    verdict: block
     reason: Sensitive credential material is blocked before it goes back to the model.

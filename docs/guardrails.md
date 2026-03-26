@@ -1,154 +1,176 @@
 # Guardrails
 
-Guardrails is a standalone safety engine under `/Users/seviezhou/github/tingly-box/internal/guardrails`. It loads policy-based config from YAML/JSON, evaluates normalized input, and can be tested independently from the proxy.
+Guardrails adds rule-based safety checks around model output, tool calls, tool results, and protected credentials.
 
-## Core model
+## What Guardrails manages
 
-Guardrails evaluates a normalized `Input`:
+Guardrails is organized into three user-facing areas:
 
-- `command`: tool or function-calling payloads
-- `text`: the current model output or tool result text
-- `messages`: message history
+- **Policies**: Define concrete rules.
+- **Policy Groups**: Organize policies and provide shared defaults.
+- **Protected Credentials**: Store secrets that should be masked before model access.
 
-Policies can scope themselves by:
+Built-in policies are shown directly inside the Policies page under the matching category. They start disabled and can be enabled manually.
 
-- scenario
-- direction
-- content target
+## Configuration location
 
-## Configuration model
+Guardrails configuration is stored under the app config directory:
 
-Guardrails config is organized around:
+- `guardrails/guardrails.yaml`
+- `guardrails/history.json`
+- `guardrails/db/guardrails.db`
 
-- `groups`: shared defaults and risk grouping
-- `policies`: individual safety policies
+The server still checks legacy flat config paths such as `guardrails.yaml` in the root config directory as a fallback, but the dedicated `guardrails/` directory is the current layout.
 
-There are two main policy kinds:
+## Config structure
 
-### Operation policies
-
-Use operation policies when you want to control tool behavior, commands, actions, or protected resources.
-
-Typical examples:
-
-- block reads of `~/.ssh`
-- block writes to `.env`
-- review delete operations on sensitive paths
-
-Main match fields:
-
-- `tool_names`
-- `command_kinds`
-- `actions.include`
-- `resources.values`
-- `resources.mode`
-
-### Content policies
-
-Use content policies when you want to filter model output or tool result text.
-
-Typical examples:
-
-- block private key material
-- block secret-looking output
-- review suspicious phrases in model responses
-
-Main match fields:
-
-- `patterns`
-- `pattern_mode`
-- `case_sensitive`
-- `applies_to`
-
-## Example configuration
-
-See `/Users/seviezhou/github/tingly-box/docs/examples/guardrails.yaml` for a complete sample.
-
-Minimal example:
+Guardrails config is policy-first:
 
 ```yaml
+strategy: most_severe
+error_strategy: review
+
 groups:
-  - id: high-risk
-    name: High Risk
+  - id: default
+    name: Default
+    enabled: true
+    severity: high
     default_verdict: block
+    default_scope:
+      scenarios: [claude_code, anthropic, openai]
 
 policies:
   - id: block-ssh-read
     name: Block SSH directory reads
-    group: high-risk
-    kind: operation
+    group: default
+    kind: resource_access
     enabled: true
-    applies_to: [command]
     scope:
       scenarios: [claude_code]
-      directions: [response]
     match:
-      tool_names: [bash]
-      command_kinds: [shell]
       actions:
         include: [read]
       resources:
         type: path
         mode: prefix
-        values: ["~/.ssh"]
-    reason: Reading SSH directory content is blocked.
-
-  - id: block-secret-output
-    name: Block secret output
-    group: high-risk
-    kind: content
-    enabled: true
-    applies_to: [tool_result, text]
-    match:
-      patterns:
-        - BEGIN OPENSSH PRIVATE KEY
-        - AKIA[0-9A-Z]+
-      pattern_mode: regex
-    reason: Secret-looking output is blocked.
+        values: ["~/.ssh", "/etc/ssh"]
+    verdict: block
+    reason: Reading SSH directories is blocked.
 ```
 
-## Loading config
+### Top-level fields
 
-```go
-cfg, err := guardrails.LoadConfig("guardrails.yaml")
-if err != nil {
-    // handle error
-}
-engine, err := guardrails.BuildEngine(cfg, guardrails.Dependencies{})
-```
+- `strategy`: How multiple policy results are merged.
+- `error_strategy`: Fallback behavior if a policy evaluation fails.
+- `groups`: Shared defaults and organization.
+- `policies`: Concrete guardrail rules.
 
-## Enabling guardrails in the server
+## Policy kinds
 
-Guardrails are loaded when the feature flag is enabled and a config file exists in the config directory. The server will look for:
+Guardrails supports three policy kinds.
 
-- `guardrails.yaml`
-- `guardrails.yml`
-- `guardrails.json`
+### `resource_access`
+Protects files, directories, URLs, or similar resources.
 
-Example scenario enablement:
+Typical use cases:
+- Block reads from `~/.ssh`
+- Block writes to `.env`
+- Restrict network access to specific endpoints
+
+Common match fields:
+- `actions.include`
+- `resources.type`
+- `resources.mode`
+- `resources.values`
+
+### `command_execution`
+Matches command content and execution intent.
+
+Typical use cases:
+- Block `rm -rf`
+- Review download-and-execute patterns
+- Restrict dangerous shell commands
+
+Common match fields:
+- `terms`
+- optional `resources`
+
+### `content`
+Used for privacy-oriented content filtering. In the UI this is presented as **Privacy Policy**.
+
+Typical use cases:
+- Block secrets in tool output
+- Review sensitive model output
+- Match private key or token patterns
+
+Common match fields:
+- `patterns`
+- `pattern_mode`
+- `case_sensitive`
+- `match_mode`
+- `min_matches`
+
+## Groups
+
+Policy Groups are used to manage a set of policies and define shared defaults.
+
+A group can provide:
+- enabled / disabled state
+- severity
+- default verdict
+- default scenario scope
+
+The UI also includes a non-deletable **Default** group, which acts as the fallback group for policies that are not assigned elsewhere.
+
+## Supported verdicts
+
+User-configurable policies use these verdicts:
+
+- `allow`
+- `review`
+- `block`
+
+Protected credential masking is handled separately by the Protected Credentials feature, not by a policy verdict.
+
+## Scope
+
+Scope is scenario-based.
+
+Example scenarios include:
+- `claude_code`
+- `anthropic`
+- `openai`
+
+A policy can narrow itself to specific scenarios with:
 
 ```yaml
-scenarios:
-  claude_code:
-    extensions:
-      guardrails: true
+scope:
+  scenarios: [claude_code, anthropic]
 ```
 
-## Integration path
+If omitted, the policy can inherit default scope from its group.
 
-Current integration is centered on Claude Code / Anthropic flows:
+## Protected Credentials
 
-1. **Response-side command interception**
-   - stream events are accumulated in `/Users/seviezhou/github/tingly-box/internal/server/guardrails_hooks.go`
-   - tool calls are normalized into `command`
-   - blocked commands are suppressed before reaching the client tool-execution path
+Protected Credentials are stored separately from policy definitions.
 
-2. **Request-side tool result filtering**
-   - implemented in `/Users/seviezhou/github/tingly-box/internal/server/guardrails_request.go`
-   - tool results are evaluated as `text`
-   - blocked results are replaced before being forwarded back to the model
+When a protected credential is enabled:
+- the real secret is replaced with an alias before content is sent to the model
+- the real value is restored locally when needed for tool execution or local handling
 
-## Limitations
+This means credential masking is driven directly by the Protected Credentials page, not by creating a dedicated mask policy.
 
-- If a client executes a tool locally and shows the result locally, the proxy cannot prevent local display.
-- Guardrails can still prevent sensitive tool output from being forwarded to the model.
+## Built-in policies
+
+Built-in policies are shipped as templates and appear directly inside the Policies page.
+
+Behavior:
+- built-ins start disabled
+- users can enable them manually
+- built-ins are not deletable from the UI
+
+## Example file
+
+See the full example config here:
+
+- `/Users/seviezhou/github/tingly-box/docs/examples/guardrails.yaml`
