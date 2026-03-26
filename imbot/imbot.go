@@ -2,7 +2,7 @@
 package imbot
 
 import (
-	"github.com/tingly-dev/tingly-box/imbot/builder"
+	"github.com/tingly-dev/tingly-box/imbot/adapter"
 	"github.com/tingly-dev/tingly-box/imbot/command"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/tingly-box/imbot/interaction"
@@ -96,9 +96,9 @@ type (
 	ConnectionDetails = core.ConnectionDetails
 
 	// Keyboard types
-	InlineKeyboardButton = builder.InlineKeyboardButton
-	InlineKeyboardMarkup = builder.InlineKeyboardMarkup
-	KeyboardBuilder      = builder.KeyboardBuilder
+	InlineKeyboardButton = adapter.InlineKeyboardButton
+	InlineKeyboardMarkup = adapter.InlineKeyboardMarkup
+	KeyboardBuilder      = adapter.KeyboardBuilder
 
 	// Command types
 	Command         = command.Command
@@ -255,38 +255,38 @@ func GetPlatformName(platform string) string {
 // Keyboard builder helpers
 
 // NewKeyboardBuilder creates a new keyboard builder
-func NewKeyboardBuilder() *builder.KeyboardBuilder {
-	return builder.NewKeyboardBuilder()
+func NewKeyboardBuilder() *adapter.KeyboardBuilder {
+	return adapter.NewKeyboardBuilder()
 }
 
 // CallbackButton creates a callback button
-func CallbackButton(text, callbackData string) builder.InlineKeyboardButton {
-	return builder.CallbackButton(text, callbackData)
+func CallbackButton(text, callbackData string) adapter.InlineKeyboardButton {
+	return adapter.CallbackButton(text, callbackData)
 }
 
 // FormatCallbackData formats action and data into a callback string
 func FormatCallbackData(action string, data ...string) string {
-	return builder.FormatCallbackData(action, data...)
+	return adapter.FormatCallbackData(action, data...)
 }
 
 // ParseCallbackData parses a callback data string into parts
 func ParseCallbackData(data string) []string {
-	return builder.ParseCallbackData(data)
+	return adapter.ParseCallbackData(data)
 }
 
 // FormatDirPath formats a directory path for callback data (handles colons in paths)
 func FormatDirPath(path string) string {
-	return builder.FormatDirPath(path)
+	return adapter.FormatDirPath(path)
 }
 
 // ParseDirPath parses a directory path from callback data
 func ParseDirPath(encoded string) string {
-	return builder.ParseDirPath(encoded)
+	return adapter.ParseDirPath(encoded)
 }
 
 // FormatDirButton formats a directory name for a button
 func FormatDirButton(name string, maxLen int) string {
-	return builder.FormatDirButton(name, maxLen)
+	return adapter.FormatDirButton(name, maxLen)
 }
 
 // Interaction types re-exported from internal/interaction package

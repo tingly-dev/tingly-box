@@ -5,7 +5,6 @@ import (
 )
 
 // MessageBuilder builds core.Message with a fluent API
-// This is a helper for adapters to construct messages from platform-specific events
 type MessageBuilder struct {
 	platform core.Platform
 	msg      core.Message

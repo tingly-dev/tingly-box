@@ -7,7 +7,6 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/tingly-dev/tingly-box/imbot/adapter"
-	"github.com/tingly-dev/tingly-box/imbot/builder"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
@@ -47,7 +46,7 @@ func (a *Adapter) AdaptMessage(ctx context.Context, m *discordgo.MessageCreate) 
 	chatType := a.getChatType(msg.ChannelID)
 
 	// Build message using fluent builder
-	messageBuilder := builder.NewMessageBuilder(core.PlatformDiscord).
+	messageBuilder := adapter.NewMessageBuilder(core.PlatformDiscord).
 		WithID(msg.ID).
 		WithTimestamp(msg.Timestamp.Unix()).
 		WithRecipient(msg.ChannelID, string(chatType), a.getChannelName(msg.ChannelID)).
@@ -56,11 +55,9 @@ func (a *Adapter) AdaptMessage(ctx context.Context, m *discordgo.MessageCreate) 
 		WithMetadata("raw_message", msg) // Store raw for platform-specific access
 
 	// Add thread context if reply
-	if msg.Reference != nil {
-		ref := msg.Reference()
-		if ref != nil && ref.MessageID != "" {
-			messageBuilder.WithReplyTo(ref.MessageID, ref.MessageID)
-		}
+	ref := msg.Reference()
+	if ref != nil && ref.MessageID != "" {
+		messageBuilder.WithReplyTo(ref.MessageID, ref.MessageID)
 	}
 
 	return messageBuilder.Build(), nil
@@ -82,7 +79,7 @@ func (a *Adapter) AdaptReaction(ctx context.Context, emoji *discordgo.MessageRea
 	channelID := emoji.ChannelID
 	messageID := emoji.MessageID
 
-	messageBuilder := builder.NewMessageBuilder(core.PlatformDiscord).
+	messageBuilder := adapter.NewMessageBuilder(core.PlatformDiscord).
 		WithID(messageID).
 		WithTimestamp(time.Now().Unix()).
 		WithRecipient(channelID, "direct", "").

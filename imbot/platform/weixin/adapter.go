@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/tingly-dev/tingly-box/imbot/adapter"
-	"github.com/tingly-dev/tingly-box/imbot/builder"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/weixin"
 	"github.com/tingly-dev/weixin/channel"
@@ -43,7 +42,7 @@ func (a *Adapter) AdaptMessage(ctx context.Context, msg *channel.Message) (*core
 	messageState, _ := msg.Metadata["message_state"].(int)
 
 	// Build message using fluent builder
-	messageBuilder := builder.NewMessageBuilder(core.PlatformWeixin).
+	messageBuilder := adapter.NewMessageBuilder(core.PlatformWeixin).
 		WithID(msg.MessageID).
 		WithTimestamp(msg.Timestamp.Unix()).
 		WithRecipient(msg.To, string(msg.ChatType), "").

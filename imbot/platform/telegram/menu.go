@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/tingly-dev/tingly-box/imbot/builder"
+	"github.com/tingly-dev/tingly-box/imbot/adapter"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/tingly-box/imbot/menu"
 )
@@ -47,16 +47,16 @@ func (a *MenuAdapter) ConvertMenu(m *menu.Menu) (interface{}, error) {
 
 // convertToInlineKeyboard converts menu to Telegram InlineKeyboardMarkup
 func (a *MenuAdapter) convertToInlineKeyboard(m *menu.Menu) (interface{}, error) {
-	kbBuilder := builder.NewKeyboardBuilder()
+	kbBuilder := adapter.NewKeyboardBuilder()
 
 	for _, row := range m.Items {
-		buttons := make([]builder.InlineKeyboardButton, len(row))
+		buttons := make([]adapter.InlineKeyboardButton, len(row))
 		for i, item := range row {
 			if item.URL != "" {
-				buttons[i] = builder.URLButton(item.Label, item.URL)
+				buttons[i] = adapter.URLButton(item.Label, item.URL)
 			} else {
-				callbackData := builder.FormatCallbackData(m.ID, item.ID, item.Value)
-				buttons[i] = builder.CallbackButton(item.Label, callbackData)
+				callbackData := adapter.FormatCallbackData(m.ID, item.ID, item.Value)
+				buttons[i] = adapter.CallbackButton(item.Label, callbackData)
 			}
 		}
 		kbBuilder.AddRow(buttons...)
@@ -142,7 +142,7 @@ func (a *MenuAdapter) ShowMenu(ctx context.Context, bot core.Bot, menuCtx *menu.
 		}
 	} else {
 		// Default to inline keyboard
-		if kb, ok := markup.(builder.InlineKeyboardMarkup); ok {
+		if kb, ok := markup.(adapter.InlineKeyboardMarkup); ok {
 			opts.Metadata["replyMarkup"] = kb
 		}
 	}
@@ -208,7 +208,7 @@ func (a *MenuAdapter) UpdateMenu(ctx context.Context, bot core.Bot, menuCtx *men
 			return err
 		}
 
-		if kb, ok := markup.(builder.InlineKeyboardMarkup); ok {
+		if kb, ok := markup.(adapter.InlineKeyboardMarkup); ok {
 			return tgBot.EditMessageWithKeyboard(ctx, menuCtx.ChatID, menuCtx.MessageID, m.Title, kb)
 		}
 	}
@@ -222,7 +222,7 @@ func (a *MenuAdapter) UpdateMenu(ctx context.Context, bot core.Bot, menuCtx *men
 func (a *MenuAdapter) ParseAction(msg *core.Message) (*menu.MenuAction, error) {
 	// Check if message has callback data in metadata
 	if callbackData, ok := msg.Metadata["callback_data"].(string); ok {
-		parts := builder.ParseCallbackData(callbackData)
+		parts := adapter.ParseCallbackData(callbackData)
 		if len(parts) >= 3 {
 			return &menu.MenuAction{
 				MenuID:    parts[0],
@@ -252,17 +252,17 @@ func (a *MenuAdapter) ParseAction(msg *core.Message) (*menu.MenuAction, error) {
 }
 
 // GetKeyboardMarkupForMessage returns an InlineKeyboardMarkup for a message
-func (a *MenuAdapter) GetKeyboardMarkupForMessage(m *menu.Menu) (builder.InlineKeyboardMarkup, error) {
+func (a *MenuAdapter) GetKeyboardMarkupForMessage(m *menu.Menu) (adapter.InlineKeyboardMarkup, error) {
 	markup, err := a.ConvertMenu(m)
 	if err != nil {
-		return builder.InlineKeyboardMarkup{}, err
+		return adapter.InlineKeyboardMarkup{}, err
 	}
 
-	if kb, ok := markup.(builder.InlineKeyboardMarkup); ok {
+	if kb, ok := markup.(adapter.InlineKeyboardMarkup); ok {
 		return kb, nil
 	}
 
-	return builder.InlineKeyboardMarkup{}, fmt.Errorf("menu is not an inline keyboard")
+	return adapter.InlineKeyboardMarkup{}, fmt.Errorf("menu is not an inline keyboard")
 }
 
 // SendInlineMenu sends an inline keyboard menu to a chat

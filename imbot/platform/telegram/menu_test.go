@@ -23,7 +23,7 @@ func TestMenuAdapterSupports(t *testing.T) {
 func TestMenuAdapterConvertToInlineKeyboard(t *testing.T) {
 	adapter := NewMenuAdapter()
 
-	m := menu.NewBuilder("test-menu", menu.MenuTypeInlineKeyboard).
+	m := menu.NewBuilder("test-menu").
 		AddRow(
 			menu.CallbackItem("btn1", "Button 1", "val1"),
 			menu.CallbackItem("btn2", "Button 2", "val2"),
@@ -33,6 +33,7 @@ func TestMenuAdapterConvertToInlineKeyboard(t *testing.T) {
 		).
 		Build()
 
+	// Default menu type is Auto, which converts to InlineKeyboard for Telegram
 	markup, err := adapter.ConvertMenu(m)
 	if err != nil {
 		t.Fatalf("ConvertMenu failed: %v", err)
@@ -63,12 +64,15 @@ func TestMenuAdapterConvertToInlineKeyboard(t *testing.T) {
 func TestMenuAdapterConvertToReplyKeyboard(t *testing.T) {
 	adapter := NewMenuAdapter()
 
-	m := menu.NewBuilder("test-menu", menu.MenuTypeReplyKeyboard).
+	m := menu.NewBuilder("test-menu").
 		AddRow(
 			menu.NewItem("btn1", "Button 1").WithIcon("1️⃣"),
 			menu.NewItem("btn2", "Button 2").WithIcon("2️⃣"),
 		).
 		Build()
+
+	// Set type explicitly for this test
+	m.SetReplyKeyboard()
 
 	markup, err := adapter.ConvertMenu(m)
 	if err != nil {

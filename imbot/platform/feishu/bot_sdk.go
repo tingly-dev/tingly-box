@@ -14,7 +14,7 @@ import (
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
 
-	"github.com/tingly-dev/tingly-box/imbot/builder"
+	"github.com/tingly-dev/tingly-box/imbot/adapter"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
@@ -233,7 +233,7 @@ func (b *Bot) convertLarkMessageToCore(event *larkim.P2MessageReceiveV1) *core.M
 	if event == nil {
 		b.Logger().Error("convertLarkMessageToCore: event is nil")
 		// Return a dummy error message
-		return builder.NewMessageBuilder(core.Platform(b.domain)).
+		return adapter.NewMessageBuilder(core.Platform(b.domain)).
 			WithID("error").
 			WithTimestamp(time.Now().Unix()).
 			WithSender("system", "", "").
@@ -326,7 +326,7 @@ func (b *Bot) convertLarkMessageToCore(event *larkim.P2MessageReceiveV1) *core.M
 
 	// Build core.Message using the builder
 	// For direct messages, Recipient.ID should be the user_id (not chat_id) for sending replies
-	messageBuilder := builder.NewMessageBuilder(core.Platform(b.domain)).
+	messageBuilder := adapter.NewMessageBuilder(core.Platform(b.domain)).
 		WithID(messageID).
 		WithTimestamp(time.Now().Unix()).
 		WithSender(senderID, "", "").
@@ -515,7 +515,7 @@ func (b *Bot) buildInteractiveCard(text string, replyMarkup interface{}) *larkca
 	var buttons []larkcard.MessageCardActionElement
 
 	// Handle InlineKeyboardMarkup type
-	if kb, ok := replyMarkup.(builder.InlineKeyboardMarkup); ok {
+	if kb, ok := replyMarkup.(adapter.InlineKeyboardMarkup); ok {
 		for _, row := range kb.InlineKeyboard {
 			for _, btn := range row {
 				button := larkcard.NewMessageCardEmbedButton().

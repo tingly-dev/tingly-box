@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/imbot/adapter"
-	"github.com/tingly-dev/tingly-box/imbot/builder"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
@@ -49,7 +48,7 @@ func (a *Adapter) AdaptMessage(ctx context.Context, event MessageEventDetail) (*
 	chatType := a.getChatType(event.ChatType)
 
 	// Build message using fluent builder
-	messageBuilder := builder.NewMessageBuilder(core.PlatformFeishu).
+	messageBuilder := adapter.NewMessageBuilder(core.PlatformFeishu).
 		WithID(event.MessageID).
 		WithTimestamp(parseFeishuTimestamp(event.CreateTime)).
 		WithRecipient(event.ChatID, string(chatType), "").
