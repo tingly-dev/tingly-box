@@ -123,21 +123,71 @@ type HTTPTransportConfig struct {
 	DisableKeepAlives *bool `json:"disable_keep_alives,omitempty" yaml:"disable_keep_alives,omitempty"`
 }
 
-// NewConfig creates a new global configuration manager
-func NewConfig() (*Config, error) {
-	// Use the same config directory as the main config
+// ConfigOption is a function that modifies a Config during initialization
+type ConfigOption func(*configOptions)
+
+// configOptions holds the options for creating a new Config
+type configOptions struct {
+	configDir       string
+	enableMigration bool
+	enableBuiltIn   bool
+}
+
+// WithConfigDir returns a ConfigOption that sets a custom config directory
+func WithConfigDir(dir string) ConfigOption {
+	return func(opts *configOptions) {
+		opts.configDir = dir
+	}
+}
+
+// WithDisableMigration returns a ConfigOption that disables the migration step
+// Useful when using tingly-box as a library in external projects
+func WithDisableMigration() ConfigOption {
+	return func(opts *configOptions) {
+		opts.enableMigration = false
+	}
+}
+
+// WithDisableBuiltIn returns a ConfigOption that disables the built-in rules creation
+func WithDisableBuiltIn() ConfigOption {
+	return func(opts *configOptions) {
+		opts.enableBuiltIn = false
+	}
+}
+
+// NewDefaultConfig creates a new global configuration manager with default settings
+// Uses the default tingly config directory and runs migrations
+func NewDefaultConfig() (*Config, error) {
 	configDir := constant.GetTinglyConfDir()
 	if configDir == "" {
 		return nil, fmt.Errorf("config directory is empty")
 	}
 
-	return NewConfigWithDir(configDir)
+	allOpts := []ConfigOption{}
+	allOpts = append(allOpts, WithConfigDir(configDir))
+	return NewConfig(allOpts...)
 }
 
-// NewConfigWithDir creates a new global configuration manager with a custom config directory
-func NewConfigWithDir(configDir string) (*Config, error) {
+// NewConfig creates a new global configuration manager with the given options
+// If no config directory is specified, uses the default tingly config directory
+func NewConfig(opts ...ConfigOption) (*Config, error) {
+	// Apply options
+	options := &configOptions{
+		configDir:       "", // Will be set to default if empty
+		enableMigration: true,
+		enableBuiltIn:   true,
+	}
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	// Use default config directory if not specified
+	configDir := options.configDir
 	if configDir == "" {
-		return nil, fmt.Errorf("cfg directory is empty")
+		configDir = constant.GetTinglyConfDir()
+		if configDir == "" {
+			return nil, fmt.Errorf("config directory is empty")
+		}
 	}
 
 	if err := os.MkdirAll(configDir, 0700); err != nil {
@@ -182,14 +232,25 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		}
 	} else {
 		// Run migration only once at startup (not on every load/reload)
-		Migrate(cfg)
-		cfg.Save()
+		// Skip migration if disabled (useful when using as a library)
+		if !options.enableMigration {
+			logrus.Warnf("migration disabled")
+		} else {
+			Migrate(cfg)
+			cfg.Save()
+		}
 	}
 
-	cfg.InsertDefaultRule()
-	if cfg.VirtualModelToken == "" {
-		cfg.VirtualModelToken = constant.DefaultVirtualModelToken
+	// Built-in rules setup
+	if !options.enableBuiltIn {
+		logrus.Warnf("built-in rules disabled")
+	} else {
+		cfg.InsertDefaultRule()
+		if cfg.VirtualModelToken == "" {
+			cfg.VirtualModelToken = constant.DefaultVirtualModelToken
+		}
 	}
+
 	// Ensure default scenario configs are set
 	cfg.EnsureDefaultScenarioConfigs()
 	cfg.Save()
@@ -334,6 +395,17 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// NewConfigWithDir creates a new global configuration manager with a custom config directory
+// This is a convenience function that calls NewConfig with WithConfigDir option
+// For backward compatibility with existing code
+func NewConfigWithDir(configDir string, opts ...ConfigOption) (*Config, error) {
+	// Prepend WithConfigDir to the options slice
+	allOpts := make([]ConfigOption, 0, len(opts)+1)
+	allOpts = append(allOpts, WithConfigDir(configDir))
+	allOpts = append(allOpts, opts...)
+	return NewConfig(allOpts...)
 }
 
 // load loads the global configuration from file
