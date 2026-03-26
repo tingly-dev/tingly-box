@@ -62,6 +62,21 @@ const (
 	ScenarioGlobal     RuleScenario = "_global" // Global flags that apply to all scenarios
 )
 
+func BuiltinScenarios() []RuleScenario {
+	return []RuleScenario{
+		ScenarioOpenAI,
+		ScenarioAnthropic,
+		ScenarioAgent,
+		ScenarioCodex,
+		ScenarioClaudeCode,
+		ScenarioOpenCode,
+		ScenarioXcode,
+		ScenarioVSCode,
+		ScenarioSmartGuide,
+		ScenarioGlobal,
+	}
+}
+
 // ThinkingEffortLevel represents the thinking effort level for extended thinking
 type ThinkingEffortLevel = string
 

@@ -117,6 +117,13 @@ func (h *Handler) CreateRule(c *gin.Context) {
 		})
 		return
 	}
+	if !typ.CanBindRulesToScenario(rule.Scenario) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Unknown scenario",
+		})
+		return
+	}
 	rule.UUID = uuid.NewString()
 
 	if h.config == nil {
@@ -184,6 +191,13 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Global config not available",
+		})
+		return
+	}
+	if !typ.CanBindRulesToScenario(rule.Scenario) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Unknown scenario",
 		})
 		return
 	}
