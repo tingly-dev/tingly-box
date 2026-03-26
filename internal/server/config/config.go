@@ -232,7 +232,9 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 	} else {
 		// Run migration only once at startup (not on every load/reload)
 		// Skip migration if the option is set (useful when using as a library)
-		if !options.skipMigration {
+		if options.skipMigration {
+			logrus.Warnf("skip migration enabled")
+		} else {
 			Migrate(cfg)
 			cfg.Save()
 		}
@@ -240,6 +242,8 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 
 	// allow to skip for some usage
 	if options.skipBuiltIn {
+		logrus.Warnf("skipping built in config")
+	} else {
 		cfg.InsertDefaultRule()
 		if cfg.VirtualModelToken == "" {
 			cfg.VirtualModelToken = constant.DefaultVirtualModelToken
