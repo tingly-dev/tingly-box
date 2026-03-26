@@ -4,8 +4,21 @@ import './index.css'
 import App from './App.tsx'
 import './i18n' // Initialize i18n
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+async function enableMocking() {
+  if (import.meta.env.VITE_USE_MOCK !== 'true') {
+    return
+  }
+
+  const { worker } = await import('./mocks/browser')
+  return worker.start({
+    onUnhandledRequest: 'bypass',
+  })
+}
+
+enableMocking().then(() => {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  )
+})
