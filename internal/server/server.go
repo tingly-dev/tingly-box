@@ -131,6 +131,10 @@ type Server struct {
 	remoteCoderCancel context.CancelFunc
 	remoteCoderMu     sync.Mutex
 
+	// module lifecycle management for long-lived background components created during setup
+	moduleCtx    context.Context
+	moduleCancel context.CancelFunc
+
 	// custom auth middleware (optional, for TBE integration)
 	customUserAuthMiddleware  gin.HandlerFunc // For Web UI routes
 	customModelAuthMiddleware gin.HandlerFunc // For Model API routes
@@ -290,15 +294,16 @@ func (s *Server) GetOrCreateScenarioSink(scenario typ.RuleScenario) *obs.Sink {
 
 // NewServer creates a new HTTP server instance with functional options
 func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	moduleCtx, moduleCancel := context.WithCancel(context.Background())
 
 	// Start with default options
 	allOpts := append([]ServerOption{WithDefault()}, opts...)
 
 	// Default options
 	server := &Server{
-		config: cfg,
+		config:       cfg,
+		moduleCtx:    moduleCtx,
+		moduleCancel: moduleCancel,
 	}
 
 	// Apply all options (defaults + provided)
@@ -515,7 +520,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.setupMiddleware()
 
 	// Setup routes
-	server.setupRoutes(ctx)
+	server.setupRoutes(server.moduleCtx)
 
 	// Setup configuration watcher
 	server.setupConfigWatcher()
@@ -1153,6 +1158,12 @@ func (s *Server) SyncRemoteCoderBots(ctx context.Context) error {
 
 // Stop gracefully stops the HTTP server
 func (s *Server) Stop(ctx context.Context) error {
+	if s.moduleCancel != nil {
+		s.moduleCancel()
+		s.moduleCancel = nil
+		s.moduleCtx = nil
+	}
+
 	if s.httpServer == nil {
 		return nil
 	}
