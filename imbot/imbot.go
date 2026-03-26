@@ -2,13 +2,11 @@
 package imbot
 
 import (
-	"github.com/tingly-dev/tingly-box/imbot/internal/builder"
-	"github.com/tingly-dev/tingly-box/imbot/internal/command"
-	"github.com/tingly-dev/tingly-box/imbot/internal/core"
-	"github.com/tingly-dev/tingly-box/imbot/internal/interaction"
-	"github.com/tingly-dev/tingly-box/imbot/internal/menu"
-	"github.com/tingly-dev/tingly-box/imbot/internal/platform/feishu"
-	"github.com/tingly-dev/tingly-box/imbot/internal/platform/telegram"
+	"github.com/tingly-dev/tingly-box/imbot/command"
+	"github.com/tingly-dev/tingly-box/imbot/core"
+	"github.com/tingly-dev/tingly-box/imbot/interaction"
+	"github.com/tingly-dev/tingly-box/imbot/platform/feishu"
+	"github.com/tingly-dev/tingly-box/imbot/platform/telegram"
 )
 
 // TelegramBot is an interface for Telegram-specific bot operations
@@ -97,9 +95,9 @@ type (
 	ConnectionDetails = core.ConnectionDetails
 
 	// Keyboard types
-	InlineKeyboardButton = builder.InlineKeyboardButton
-	InlineKeyboardMarkup = builder.InlineKeyboardMarkup
-	KeyboardBuilder      = builder.KeyboardBuilder
+	InlineKeyboardButton = interaction.InlineKeyboardButton
+	InlineKeyboardMarkup = interaction.InlineKeyboardMarkup
+	KeyboardBuilder      = interaction.KeyboardBuilder
 
 	// Command types
 	Command         = command.Command
@@ -256,38 +254,38 @@ func GetPlatformName(platform string) string {
 // Keyboard builder helpers
 
 // NewKeyboardBuilder creates a new keyboard builder
-func NewKeyboardBuilder() *builder.KeyboardBuilder {
-	return builder.NewKeyboardBuilder()
+func NewKeyboardBuilder() *interaction.KeyboardBuilder {
+	return interaction.NewKeyboardBuilder()
 }
 
 // CallbackButton creates a callback button
-func CallbackButton(text, callbackData string) builder.InlineKeyboardButton {
-	return builder.CallbackButton(text, callbackData)
+func CallbackButton(text, callbackData string) interaction.InlineKeyboardButton {
+	return interaction.CallbackButton(text, callbackData)
 }
 
 // FormatCallbackData formats action and data into a callback string
 func FormatCallbackData(action string, data ...string) string {
-	return builder.FormatCallbackData(action, data...)
+	return interaction.FormatCallbackData(action, data...)
 }
 
 // ParseCallbackData parses a callback data string into parts
 func ParseCallbackData(data string) []string {
-	return builder.ParseCallbackData(data)
+	return interaction.ParseCallbackData(data)
 }
 
 // FormatDirPath formats a directory path for callback data (handles colons in paths)
 func FormatDirPath(path string) string {
-	return builder.FormatDirPath(path)
+	return interaction.FormatDirPath(path)
 }
 
 // ParseDirPath parses a directory path from callback data
 func ParseDirPath(encoded string) string {
-	return builder.ParseDirPath(encoded)
+	return interaction.ParseDirPath(encoded)
 }
 
 // FormatDirButton formats a directory name for a button
 func FormatDirButton(name string, maxLen int) string {
-	return builder.FormatDirButton(name, maxLen)
+	return interaction.FormatDirButton(name, maxLen)
 }
 
 // Interaction types re-exported from internal/interaction package
@@ -362,175 +360,6 @@ var (
 	ErrChannelClosed          = interaction.ErrChannelClosed
 	ErrInvalidMode            = interaction.ErrInvalidMode
 	ErrPendingRequestNotFound = interaction.ErrPendingRequestNotFound
-)
-
-// Menu types re-exported from internal/menu package
-
-// Menu types
-type (
-	// MenuType defines where and how a menu is displayed
-	MenuType = menu.MenuType
-
-	// MenuItem represents a single item in a menu
-	MenuItem = menu.MenuItem
-
-	// Menu represents a complete menu structure
-	Menu = menu.Menu
-
-	// MenuContext provides context for menu rendering
-	MenuContext = menu.MenuContext
-
-	// MenuResult represents the result of a menu operation
-	MenuResult = menu.MenuResult
-
-	// MenuAction represents a user action on a menu item
-	MenuAction = menu.MenuAction
-
-	// MenuCapability describes which menu types a platform supports
-	MenuCapability = menu.MenuCapability
-
-	// MenuAdapter is the interface for platform-specific menu adapters
-	MenuAdapter = menu.Adapter
-
-	// MenuBuilder provides a fluent API for constructing menus
-	MenuBuilder = menu.Builder
-
-	// MenuItemBuilder provides a fluent API for constructing menu items
-	MenuItemBuilder = menu.ItemBuilder
-)
-
-// Menu constants
-const (
-	// Menu types
-	MenuTypeInlineKeyboard = menu.MenuTypeInlineKeyboard
-	MenuTypeReplyKeyboard  = menu.MenuTypeReplyKeyboard
-	MenuTypeChatMenu       = menu.MenuTypeChatMenu
-	MenuTypeQuickActions   = menu.MenuTypeQuickActions
-	MenuTypeCommandMenu    = menu.MenuTypeCommandMenu
-	MenuTypeAuto           = menu.MenuTypeAuto
-)
-
-// Menu constructors and helpers
-
-// NewMenu creates a new menu with the given ID and type
-func NewMenu(id string, menuType MenuType) *menu.Menu {
-	return menu.NewMenu(id, menuType)
-}
-
-// NewMenuForPlatform creates a new menu optimized for a specific platform
-func NewMenuForPlatform(id string, menuType MenuType, platform Platform) *menu.Menu {
-	return menu.NewMenuForPlatform(id, menuType, core.Platform(platform))
-}
-
-// NewMenuBuilder creates a new menu builder
-func NewMenuBuilder(id string, menuType MenuType) *menu.Builder {
-	return menu.NewBuilder(id, menuType)
-}
-
-// NewMenuBuilderForPlatform creates a new menu builder optimized for a platform
-func NewMenuBuilderForPlatform(id string, menuType MenuType, platform Platform) *menu.Builder {
-	return menu.NewBuilderForPlatform(id, menuType, core.Platform(platform))
-}
-
-// NewMenuItem creates a new menu item builder
-func NewMenuItem(id, label string) *menu.ItemBuilder {
-	return menu.NewItem(id, label)
-}
-
-// NewMenuContext creates a new menu context
-func NewMenuContext(chatID string, platform Platform) *menu.MenuContext {
-	return menu.NewMenuContext(chatID, core.Platform(platform))
-}
-
-// Menu helpers for common patterns
-
-// NewConfirmMenu creates a menu with Yes/No buttons
-func NewConfirmMenu(id string, menuType MenuType, platform Platform, message string) *menu.Menu {
-	return menu.NewConfirmMenu(id, menuType, core.Platform(platform), message)
-}
-
-// NewActionMenu creates a menu with action buttons
-func NewActionMenu(id string, menuType MenuType, platform Platform, actions map[string]string) *menu.Menu {
-	return menu.NewActionMenu(id, menuType, core.Platform(platform), actions)
-}
-
-// NewPaginationMenu creates a menu with pagination controls
-func NewPaginationMenu(id string, menuType MenuType, platform Platform, currentPage, totalPages int) *menu.Menu {
-	return menu.NewPaginationMenu(id, menuType, core.Platform(platform), currentPage, totalPages)
-}
-
-// NewCommandMenu creates a command menu (slash command list)
-func NewCommandMenu(id string, platform Platform, commands map[string]string) *menu.Menu {
-	return menu.NewCommandMenu(id, core.Platform(platform), commands)
-}
-
-// NewQuickActionMenu creates a quick action menu for Lark/Feishu
-func NewQuickActionMenu(id string, platform Platform, actions map[string]string) *menu.Menu {
-	return menu.NewQuickActionMenu(id, core.Platform(platform), actions)
-}
-
-// NewNavigationMenu creates a navigation menu with common options
-func NewNavigationMenu(id string, menuType MenuType, platform Platform, options []string) *menu.Menu {
-	return menu.NewNavigationMenu(id, menuType, core.Platform(platform), options)
-}
-
-// NewGridMenu creates a grid-style menu with items arranged in columns
-func NewGridMenu(id string, menuType MenuType, platform Platform, items []string, columns int) *menu.Menu {
-	return menu.NewGridMenu(id, menuType, core.Platform(platform), items, columns)
-}
-
-// MenuItem helpers
-
-// CallbackMenuItem creates a callback button item
-func CallbackMenuItem(id, label, value string) *menu.ItemBuilder {
-	return menu.CallbackItem(id, label, value)
-}
-
-// URLMenuItem creates a URL button item
-func URLMenuItem(id, label, url string) *menu.ItemBuilder {
-	return menu.URLItem(id, label, url)
-}
-
-// ToggleMenuItem creates a toggle/checkbox item
-func ToggleMenuItem(id, label string, checked bool) *menu.ItemBuilder {
-	return menu.ToggleItem(id, label, checked)
-}
-
-// GetPlatformMenuCapabilities returns the menu capabilities for a platform
-func GetPlatformMenuCapabilities(platform Platform) *menu.MenuCapability {
-	return menu.GetPlatformMenuCapabilities(core.Platform(platform))
-}
-
-// Menu adapter constructors
-//
-// Note: Platform-specific menu adapters are now located in their respective platform packages:
-//   - telegram: telegram.NewMenuAdapter()
-//   - lark:     lark.NewMenuAdapter()
-//   - feishu:   feishu.NewMenuAdapter()
-//
-// Use them directly by importing the platform packages, or use the registry below.
-
-// MenuAdapterRegistry provides access to platform menu adapters
-type MenuAdapterRegistry = menu.Registry
-
-// NewMenuAdapterRegistry creates a new menu adapter registry
-func NewMenuAdapterRegistry() *menu.Registry {
-	return menu.NewRegistry()
-}
-
-// RegisterPlatformMenuAdapters registers all available platform menu adapters
-func RegisterPlatformMenuAdapters(registry *menu.Registry) {
-	// This function would be called by each platform package's init()
-	// For now, it's a placeholder for the registry pattern
-}
-
-// Menu errors
-var (
-	ErrMenuConversionFailed = menu.ErrConversionFailed
-	ErrMenuNotSupported     = menu.ErrNotSupported
-	ErrMenuNotAction        = menu.ErrNotMenuAction
-	ErrMenuInvalidContext   = menu.ErrInvalidContext
-	ErrMenuNotFound         = menu.ErrMenuNotFound
 )
 
 // Command types re-exported from internal/command package

@@ -8,9 +8,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/tingly-dev/tingly-box/imbot/internal/core"
-	"github.com/tingly-dev/tingly-box/imbot/internal/markdown"
-	"github.com/tingly-dev/tingly-box/imbot/internal/platform/telegram"
+	"github.com/tingly-dev/tingly-box/imbot/core"
+	"github.com/tingly-dev/tingly-box/imbot/markdown"
+	"github.com/tingly-dev/tingly-box/imbot/platform/telegram"
 )
 
 // TestE2E_TelegramMarkdownEntity tests entity-based markdown rendering

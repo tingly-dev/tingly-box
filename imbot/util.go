@@ -3,7 +3,7 @@ package imbot
 import (
 	tgbot "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
-	"github.com/tingly-dev/tingly-box/imbot/internal/core"
+	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
 // DefaultMessageLimit is a fallback value for unknown platforms
