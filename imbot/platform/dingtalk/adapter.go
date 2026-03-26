@@ -6,19 +6,18 @@ import (
 	"time"
 
 	"github.com/open-dingtalk/dingtalk-stream-sdk-go/chatbot"
-	"github.com/tingly-dev/tingly-box/imbot/adapter"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
 // Adapter adapts DingTalk events to core.Message
 type Adapter struct {
-	*adapter.BaseAdapter
+	*core.BaseAdapter
 }
 
 // NewAdapter creates a new DingTalk adapter
 func NewAdapter(config *core.Config) *Adapter {
 	return &Adapter{
-		BaseAdapter: adapter.NewBaseAdapter(config),
+		BaseAdapter: core.NewBaseAdapter(config),
 	}
 }
 

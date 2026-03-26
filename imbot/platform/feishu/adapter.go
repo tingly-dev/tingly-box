@@ -6,19 +6,18 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tingly-dev/tingly-box/imbot/adapter"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
 // Adapter adapts Feishu/Lark events to core.Message
 type Adapter struct {
-	*adapter.BaseAdapter
+	*core.BaseAdapter
 }
 
 // NewAdapter creates a new Feishu adapter
 func NewAdapter(config *core.Config) *Adapter {
 	return &Adapter{
-		BaseAdapter: adapter.NewBaseAdapter(config),
+		BaseAdapter: core.NewBaseAdapter(config),
 	}
 }
 

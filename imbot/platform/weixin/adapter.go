@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tingly-dev/tingly-box/imbot/adapter"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/weixin"
 	"github.com/tingly-dev/weixin/channel"
@@ -13,14 +12,14 @@ import (
 
 // Adapter adapts Weixin channel messages to core.Message
 type Adapter struct {
-	*adapter.BaseAdapter
+	*core.BaseAdapter
 	account *weixin.WeChatAccount
 }
 
 // NewAdapter creates a new Weixin adapter
 func NewAdapter(config *core.Config, account *weixin.WeChatAccount) *Adapter {
 	return &Adapter{
-		BaseAdapter: adapter.NewBaseAdapter(config),
+		BaseAdapter: core.NewBaseAdapter(config),
 		account:     account,
 	}
 }

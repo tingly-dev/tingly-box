@@ -6,20 +6,19 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/tingly-dev/tingly-box/imbot/adapter"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
 // Adapter adapts Discord events to core.Message
 type Adapter struct {
-	*adapter.BaseAdapter
+	*core.BaseAdapter
 	session *discordgo.Session
 }
 
 // NewAdapter creates a new Discord adapter
 func NewAdapter(config *core.Config, session *discordgo.Session) *Adapter {
 	return &Adapter{
-		BaseAdapter: adapter.NewBaseAdapter(config),
+		BaseAdapter: core.NewBaseAdapter(config),
 		session:     session,
 	}
 }

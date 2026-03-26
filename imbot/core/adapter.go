@@ -1,66 +1,64 @@
-package adapter
+package core
 
 import (
 	"context"
 	"fmt"
-
-	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
 // EventAdapter converts platform-specific events to unified core.Message
 type EventAdapter[RawEventT any] interface {
 	// Adapt converts a raw platform event to core.Message
-	Adapt(ctx context.Context, event RawEventT) (*core.Message, error)
+	Adapt(ctx context.Context, event RawEventT) (*Message, error)
 
 	// Platform returns the platform this adapter is for
-	Platform() core.Platform
+	Platform() Platform
 }
 
 // MessageAdapter converts platform-specific messages to unified core.Message
 // This is a more specific version of EventAdapter for message types
 type MessageAdapter[RawMessageT any] interface {
 	// AdaptMessage converts a raw platform message to core.Message
-	AdaptMessage(ctx context.Context, msg RawMessageT) (*core.Message, error)
+	AdaptMessage(ctx context.Context, msg RawMessageT) (*Message, error)
 
 	// AdaptCallback converts a platform callback to core.Message (for button clicks, etc.)
-	AdaptCallback(ctx context.Context, callback RawMessageT) (*core.Message, error)
+	AdaptCallback(ctx context.Context, callback RawMessageT) (*Message, error)
 
 	// Platform returns the platform this adapter is for
-	Platform() core.Platform
+	Platform() Platform
 }
 
 // BaseAdapter provides common functionality for all adapters
 type BaseAdapter struct {
-	config *core.Config
-	logger core.Logger
+	config *Config
+	logger Logger
 }
 
 // NewBaseAdapter creates a new base adapter
-func NewBaseAdapter(config *core.Config) *BaseAdapter {
+func NewBaseAdapter(config *Config) *BaseAdapter {
 	return &BaseAdapter{
 		config: config,
-		logger: core.NewLogger(config.Logging),
+		logger: NewLogger(config.Logging),
 	}
 }
 
 // Config returns the adapter's config
-func (a *BaseAdapter) Config() *core.Config {
+func (a *BaseAdapter) Config() *Config {
 	return a.config
 }
 
 // Logger returns the adapter's logger
-func (a *BaseAdapter) Logger() core.Logger {
+func (a *BaseAdapter) Logger() Logger {
 	return a.logger
 }
 
 // Platform returns the platform from config
-func (a *BaseAdapter) Platform() core.Platform {
+func (a *BaseAdapter) Platform() Platform {
 	return a.config.Platform
 }
 
 // AdaptError represents an error during adaptation
 type AdaptError struct {
-	Platform  core.Platform
+	Platform  Platform
 	Operation string
 	Raw       interface{}
 	Cause     error
@@ -77,7 +75,7 @@ func (e *AdaptError) Unwrap() error {
 }
 
 // NewAdaptError creates a new adaptation error
-func NewAdaptError(platform core.Platform, operation string, raw interface{}, cause error) *AdaptError {
+func NewAdaptError(platform Platform, operation string, raw interface{}, cause error) *AdaptError {
 	return &AdaptError{
 		Platform:  platform,
 		Operation: operation,

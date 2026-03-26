@@ -8,21 +8,20 @@ import (
 
 	tgbot "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
-	"github.com/tingly-dev/tingly-box/imbot/adapter"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
 // Adapter adapts Telegram events to core.Message
 // It implements adapter.MessageAdapter interface
 type Adapter struct {
-	*adapter.BaseAdapter
+	*core.BaseAdapter
 	api *tgbot.Bot
 }
 
 // NewAdapter creates a new Telegram adapter
 func NewAdapter(config *core.Config, api *tgbot.Bot) *Adapter {
 	return &Adapter{
-		BaseAdapter: adapter.NewBaseAdapter(config),
+		BaseAdapter: core.NewBaseAdapter(config),
 		api:         api,
 	}
 }
