@@ -1,11 +1,9 @@
-package content
+package core
 
 import (
 	"context"
 	"fmt"
 	"strings"
-
-	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
 // Handler handles specific content types from raw platform data
@@ -14,7 +12,7 @@ type Handler[RawT any] interface {
 	CanHandle(raw RawT) bool
 
 	// Handle processes the raw data and returns unified content
-	Handle(ctx context.Context, raw RawT) (core.Content, error)
+	Handle(ctx context.Context, raw RawT) (Content, error)
 
 	// ContentType returns the content type this handler produces
 	ContentType() string
@@ -44,7 +42,7 @@ func (r *Registry[RawT]) SetDefault(handler Handler[RawT]) {
 }
 
 // Handle processes raw data using registered handlers
-func (r *Registry[RawT]) Handle(ctx context.Context, raw RawT) (core.Content, error) {
+func (r *Registry[RawT]) Handle(ctx context.Context, raw RawT) (Content, error) {
 	// Try each handler
 	for _, handler := range r.handlers {
 		if handler.CanHandle(raw) {
@@ -67,7 +65,7 @@ func (r *Registry[RawT]) Handle(ctx context.Context, raw RawT) (core.Content, er
 
 // TextHandler handles text content
 type TextHandler[RawT any] struct {
-	extractor func(RawT) (string, []core.Entity, bool)
+	extractor func(RawT) (string, []Entity, bool)
 }
 
 func (h *TextHandler[RawT]) CanHandle(raw RawT) bool {
@@ -75,9 +73,9 @@ func (h *TextHandler[RawT]) CanHandle(raw RawT) bool {
 	return ok
 }
 
-func (h *TextHandler[RawT]) Handle(ctx context.Context, raw RawT) (core.Content, error) {
+func (h *TextHandler[RawT]) Handle(ctx context.Context, raw RawT) (Content, error) {
 	text, entities, _ := h.extractor(raw)
-	return core.NewTextContent(text, entities...), nil
+	return NewTextContent(text, entities...), nil
 }
 
 func (h *TextHandler[RawT]) ContentType() string {
@@ -85,14 +83,14 @@ func (h *TextHandler[RawT]) ContentType() string {
 }
 
 // NewTextHandler creates a text content handler
-func NewTextHandler[RawT any](extractor func(RawT) (string, []core.Entity, bool)) Handler[RawT] {
+func NewTextHandler[RawT any](extractor func(RawT) (string, []Entity, bool)) Handler[RawT] {
 	return &TextHandler[RawT]{extractor: extractor}
 }
 
 // MediaHandler handles media content (photos, documents, stickers, etc.)
 type MediaHandler[RawT any] struct {
 	mediaType string // "image", "video", "audio", "document", "sticker"
-	extractor func(RawT) ([]core.MediaAttachment, string, bool)
+	extractor func(RawT) ([]MediaAttachment, string, bool)
 }
 
 func (h *MediaHandler[RawT]) CanHandle(raw RawT) bool {
@@ -100,12 +98,12 @@ func (h *MediaHandler[RawT]) CanHandle(raw RawT) bool {
 	return ok // Only handle if extractor returns true
 }
 
-func (h *MediaHandler[RawT]) Handle(ctx context.Context, raw RawT) (core.Content, error) {
+func (h *MediaHandler[RawT]) Handle(ctx context.Context, raw RawT) (Content, error) {
 	media, caption, _ := h.extractor(raw)
 	if len(media) == 0 {
 		return nil, fmt.Errorf("no media found")
 	}
-	return core.NewMediaContent(media, caption), nil
+	return NewMediaContent(media, caption), nil
 }
 
 func (h *MediaHandler[RawT]) ContentType() string {
@@ -113,13 +111,13 @@ func (h *MediaHandler[RawT]) ContentType() string {
 }
 
 // NewMediaHandler creates a media content handler
-func NewMediaHandler[RawT any](mediaType string, extractor func(RawT) ([]core.MediaAttachment, string, bool)) Handler[RawT] {
+func NewMediaHandler[RawT any](mediaType string, extractor func(RawT) ([]MediaAttachment, string, bool)) Handler[RawT] {
 	return &MediaHandler[RawT]{mediaType: mediaType, extractor: extractor}
 }
 
 // PollHandler handles poll content
 type PollHandler[RawT any] struct {
-	extractor func(RawT) (core.Poll, bool)
+	extractor func(RawT) (Poll, bool)
 }
 
 func (h *PollHandler[RawT]) CanHandle(raw RawT) bool {
@@ -127,9 +125,9 @@ func (h *PollHandler[RawT]) CanHandle(raw RawT) bool {
 	return ok
 }
 
-func (h *PollHandler[RawT]) Handle(ctx context.Context, raw RawT) (core.Content, error) {
+func (h *PollHandler[RawT]) Handle(ctx context.Context, raw RawT) (Content, error) {
 	poll, _ := h.extractor(raw)
-	return core.NewPollContent(poll), nil
+	return NewPollContent(poll), nil
 }
 
 func (h *PollHandler[RawT]) ContentType() string {
@@ -137,7 +135,7 @@ func (h *PollHandler[RawT]) ContentType() string {
 }
 
 // NewPollHandler creates a poll content handler
-func NewPollHandler[RawT any](extractor func(RawT) (core.Poll, bool)) Handler[RawT] {
+func NewPollHandler[RawT any](extractor func(RawT) (Poll, bool)) Handler[RawT] {
 	return &PollHandler[RawT]{extractor: extractor}
 }
 
@@ -152,9 +150,9 @@ func (h *SystemHandler[RawT]) CanHandle(raw RawT) bool {
 	return ok
 }
 
-func (h *SystemHandler[RawT]) Handle(ctx context.Context, raw RawT) (core.Content, error) {
+func (h *SystemHandler[RawT]) Handle(ctx context.Context, raw RawT) (Content, error) {
 	eventType, data, _ := h.extractor(raw)
-	return core.NewSystemContent(eventType, data), nil
+	return NewSystemContent(eventType, data), nil
 }
 
 func (h *SystemHandler[RawT]) ContentType() string {
@@ -180,7 +178,7 @@ func (h *CompoundHandler[RawT]) CanHandle(raw RawT) bool {
 	return false
 }
 
-func (h *CompoundHandler[RawT]) Handle(ctx context.Context, raw RawT) (core.Content, error) {
+func (h *CompoundHandler[RawT]) Handle(ctx context.Context, raw RawT) (Content, error) {
 	for _, handler := range h.handlers {
 		if handler.CanHandle(raw) {
 			return handler.Handle(ctx, raw)
@@ -201,8 +199,8 @@ func NewCompoundHandler[RawT any](handlers ...Handler[RawT]) Handler[RawT] {
 // Helper functions for common content extraction
 
 // ExtractText extracts text from a string field
-func ExtractText[T any](field func(T) string) func(T) (string, []core.Entity, bool) {
-	return func(raw T) (string, []core.Entity, bool) {
+func ExtractText[T any](field func(T) string) func(T) (string, []Entity, bool) {
+	return func(raw T) (string, []Entity, bool) {
 		text := field(raw)
 		if text == "" {
 			return "", nil, false
@@ -212,8 +210,8 @@ func ExtractText[T any](field func(T) string) func(T) (string, []core.Entity, bo
 }
 
 // ExtractTextFromMap extracts text from a map with a key
-func ExtractTextFromMap[T any](m map[string]interface{}, key string) func(T) (string, []core.Entity, bool) {
-	return func(raw T) (string, []core.Entity, bool) {
+func ExtractTextFromMap[T any](m map[string]interface{}, key string) func(T) (string, []Entity, bool) {
+	return func(raw T) (string, []Entity, bool) {
 		text, ok := m[key].(string)
 		if !ok || text == "" {
 			return "", nil, false

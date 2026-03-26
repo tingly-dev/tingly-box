@@ -8,7 +8,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/tingly-dev/tingly-box/imbot/adapter"
 	"github.com/tingly-dev/tingly-box/imbot/builder"
-	"github.com/tingly-dev/tingly-box/imbot/content"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
@@ -124,10 +123,10 @@ func (a *Adapter) extractSender(user *discordgo.User) core.Sender {
 // extractContent extracts content from a Discord message
 func (a *Adapter) extractContent(msg *discordgo.Message) core.Content {
 	// Create content registry
-	registry := content.NewRegistry[*discordgo.Message]()
+	registry := core.NewRegistry[*discordgo.Message]()
 
 	// Register handlers in priority order
-	registry.Register(content.NewTextHandler(func(m *discordgo.Message) (string, []core.Entity, bool) {
+	registry.Register(core.NewTextHandler(func(m *discordgo.Message) (string, []core.Entity, bool) {
 		if m.Content != "" {
 			// Discord uses markdown by default, extract it as text
 			return m.Content, nil, true
@@ -135,7 +134,7 @@ func (a *Adapter) extractContent(msg *discordgo.Message) core.Content {
 		return "", nil, false
 	}))
 
-	registry.Register(content.NewMediaHandler("embed", func(m *discordgo.Message) ([]core.MediaAttachment, string, bool) {
+	registry.Register(core.NewMediaHandler("embed", func(m *discordgo.Message) ([]core.MediaAttachment, string, bool) {
 		if len(m.Embeds) > 0 {
 			// Convert embeds to text representation
 			text := a.formatEmbeds(m.Embeds)
@@ -149,7 +148,7 @@ func (a *Adapter) extractContent(msg *discordgo.Message) core.Content {
 		return nil, "", false
 	}))
 
-	registry.Register(content.NewMediaHandler("attachment", func(m *discordgo.Message) ([]core.MediaAttachment, string, bool) {
+	registry.Register(core.NewMediaHandler("attachment", func(m *discordgo.Message) ([]core.MediaAttachment, string, bool) {
 		if len(m.Attachments) > 0 {
 			media := make([]core.MediaAttachment, len(m.Attachments))
 			for i, att := range m.Attachments {
@@ -166,7 +165,7 @@ func (a *Adapter) extractContent(msg *discordgo.Message) core.Content {
 	}))
 
 	// Set default for unknown content
-	registry.SetDefault(content.NewSystemHandler("unknown", func(m *discordgo.Message) (string, map[string]interface{}, bool) {
+	registry.SetDefault(core.NewSystemHandler("unknown", func(m *discordgo.Message) (string, map[string]interface{}, bool) {
 		return "unknown", map[string]interface{}{"message_type": "unsupported"}, true
 	}))
 

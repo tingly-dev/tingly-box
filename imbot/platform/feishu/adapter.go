@@ -8,7 +8,6 @@ import (
 
 	"github.com/tingly-dev/tingly-box/imbot/adapter"
 	"github.com/tingly-dev/tingly-box/imbot/builder"
-	"github.com/tingly-dev/tingly-box/imbot/content"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
@@ -79,10 +78,10 @@ func (a *Adapter) extractSender(detail SenderDetail) core.Sender {
 // extractContent extracts content from a Feishu message event
 func (a *Adapter) extractContent(event MessageEventDetail) core.Content {
 	// Create content registry
-	registry := content.NewRegistry[MessageEventDetail]()
+	registry := core.NewRegistry[MessageEventDetail]()
 
 	// Register handlers for different content types
-	registry.Register(content.NewTextHandler(func(e MessageEventDetail) (string, []core.Entity, bool) {
+	registry.Register(core.NewTextHandler(func(e MessageEventDetail) (string, []core.Entity, bool) {
 		if e.MsgType != "text" {
 			return "", nil, false
 		}
@@ -96,7 +95,7 @@ func (a *Adapter) extractContent(event MessageEventDetail) core.Content {
 		return "", nil, false
 	}))
 
-	registry.Register(content.NewMediaHandler("image", func(e MessageEventDetail) ([]core.MediaAttachment, string, bool) {
+	registry.Register(core.NewMediaHandler("image", func(e MessageEventDetail) ([]core.MediaAttachment, string, bool) {
 		if e.MsgType != "image" {
 			return nil, "", false
 		}
@@ -113,7 +112,7 @@ func (a *Adapter) extractContent(event MessageEventDetail) core.Content {
 		return nil, "", false
 	}))
 
-	registry.Register(content.NewMediaHandler("video", func(e MessageEventDetail) ([]core.MediaAttachment, string, bool) {
+	registry.Register(core.NewMediaHandler("video", func(e MessageEventDetail) ([]core.MediaAttachment, string, bool) {
 		if e.MsgType != "video" {
 			return nil, "", false
 		}
@@ -130,7 +129,7 @@ func (a *Adapter) extractContent(event MessageEventDetail) core.Content {
 		return nil, "", false
 	}))
 
-	registry.Register(content.NewMediaHandler("audio", func(e MessageEventDetail) ([]core.MediaAttachment, string, bool) {
+	registry.Register(core.NewMediaHandler("audio", func(e MessageEventDetail) ([]core.MediaAttachment, string, bool) {
 		if e.MsgType != "audio" {
 			return nil, "", false
 		}
@@ -147,7 +146,7 @@ func (a *Adapter) extractContent(event MessageEventDetail) core.Content {
 		return nil, "", false
 	}))
 
-	registry.Register(content.NewMediaHandler("file", func(e MessageEventDetail) ([]core.MediaAttachment, string, bool) {
+	registry.Register(core.NewMediaHandler("file", func(e MessageEventDetail) ([]core.MediaAttachment, string, bool) {
 		if e.MsgType != "file" {
 			return nil, "", false
 		}
@@ -165,7 +164,7 @@ func (a *Adapter) extractContent(event MessageEventDetail) core.Content {
 	}))
 
 	// Handle rich post content (Feishu's formatted messages)
-	registry.Register(content.NewTextHandler(func(e MessageEventDetail) (string, []core.Entity, bool) {
+	registry.Register(core.NewTextHandler(func(e MessageEventDetail) (string, []core.Entity, bool) {
 		if e.MsgType != "post" {
 			return "", nil, false
 		}
@@ -179,7 +178,7 @@ func (a *Adapter) extractContent(event MessageEventDetail) core.Content {
 	}))
 
 	// Set default for unknown content
-	registry.SetDefault(content.NewSystemHandler("unknown", func(e MessageEventDetail) (string, map[string]interface{}, bool) {
+	registry.SetDefault(core.NewSystemHandler("unknown", func(e MessageEventDetail) (string, map[string]interface{}, bool) {
 		return "unknown", map[string]interface{}{"msg_type": e.MsgType}, true
 	}))
 

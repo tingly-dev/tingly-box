@@ -10,7 +10,6 @@ import (
 	"github.com/go-telegram/bot/models"
 	"github.com/tingly-dev/tingly-box/imbot/adapter"
 	"github.com/tingly-dev/tingly-box/imbot/builder"
-	"github.com/tingly-dev/tingly-box/imbot/content"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
@@ -144,10 +143,10 @@ func (a *Adapter) extractSender(user *models.User) core.Sender {
 // extractContent extracts content from a Telegram message
 func (a *Adapter) extractContent(msg *models.Message) core.Content {
 	// Create content registry
-	registry := content.NewRegistry[*models.Message]()
+	registry := core.NewRegistry[*models.Message]()
 
 	// Register handlers
-	registry.Register(content.NewTextHandler(func(m *models.Message) (string, []core.Entity, bool) {
+	registry.Register(core.NewTextHandler(func(m *models.Message) (string, []core.Entity, bool) {
 		if m.Text != "" {
 			return m.Text, a.extractEntities(m.Entities), true
 		}
@@ -157,7 +156,7 @@ func (a *Adapter) extractContent(msg *models.Message) core.Content {
 		return "", nil, false
 	}))
 
-	registry.Register(content.NewMediaHandler("image", func(m *models.Message) ([]core.MediaAttachment, string, bool) {
+	registry.Register(core.NewMediaHandler("image", func(m *models.Message) ([]core.MediaAttachment, string, bool) {
 		if len(m.Photo) > 0 {
 			media := make([]core.MediaAttachment, len(m.Photo))
 			for i, photo := range m.Photo {
@@ -177,7 +176,7 @@ func (a *Adapter) extractContent(msg *models.Message) core.Content {
 		return nil, "", false
 	}))
 
-	registry.Register(content.NewMediaHandler("document", func(m *models.Message) ([]core.MediaAttachment, string, bool) {
+	registry.Register(core.NewMediaHandler("document", func(m *models.Message) ([]core.MediaAttachment, string, bool) {
 		if m.Document != nil {
 			return []core.MediaAttachment{{
 				Type:     "document",
@@ -191,7 +190,7 @@ func (a *Adapter) extractContent(msg *models.Message) core.Content {
 		return nil, "", false
 	}))
 
-	registry.Register(content.NewMediaHandler("sticker", func(m *models.Message) ([]core.MediaAttachment, string, bool) {
+	registry.Register(core.NewMediaHandler("sticker", func(m *models.Message) ([]core.MediaAttachment, string, bool) {
 		if m.Sticker != nil {
 			return []core.MediaAttachment{{
 				Type:   "sticker",
@@ -204,8 +203,8 @@ func (a *Adapter) extractContent(msg *models.Message) core.Content {
 		return nil, "", false
 	}))
 
-	registry.Register(content.NewCompoundHandler(
-		content.NewMediaHandler("video", func(m *models.Message) ([]core.MediaAttachment, string, bool) {
+	registry.Register(core.NewCompoundHandler(
+		core.NewMediaHandler("video", func(m *models.Message) ([]core.MediaAttachment, string, bool) {
 			if m.Video != nil {
 				return []core.MediaAttachment{{
 					Type:     "video",
@@ -218,7 +217,7 @@ func (a *Adapter) extractContent(msg *models.Message) core.Content {
 			}
 			return nil, "", false
 		}),
-		content.NewMediaHandler("audio", func(m *models.Message) ([]core.MediaAttachment, string, bool) {
+		core.NewMediaHandler("audio", func(m *models.Message) ([]core.MediaAttachment, string, bool) {
 			if m.Audio != nil {
 				return []core.MediaAttachment{{
 					Type:     "audio",
@@ -233,7 +232,7 @@ func (a *Adapter) extractContent(msg *models.Message) core.Content {
 	))
 
 	// Set default for unknown content
-	registry.SetDefault(content.NewSystemHandler("unknown", func(m *models.Message) (string, map[string]interface{}, bool) {
+	registry.SetDefault(core.NewSystemHandler("unknown", func(m *models.Message) (string, map[string]interface{}, bool) {
 		return "unknown", map[string]interface{}{"message_type": "unsupported"}, true
 	}))
 
