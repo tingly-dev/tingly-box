@@ -204,12 +204,11 @@ type StatusInfo struct {
 
 // BashParams defines the parameters for bash tool
 type BashParams struct {
-	Command string `json:"command" jsonschema:"description=The bash command to execute (e.g., 'ls -la', 'git status')"`
+	Command string `json:"command" required:"true" jsonschema:"description=The bash command to execute (e.g., 'ls -la', 'git status')"`
 }
 
 // BashTool wraps extension's BashTool with Smart Guide specific behavior
 type BashTool struct {
-	tool.DescriptiveTool
 	Executor        *ToolExecutor
 	AllowedCommands []string
 }
@@ -336,7 +335,7 @@ func (t *BashTool) executeCommand(ctx context.Context, command string, skipAllow
 	)
 
 	// Execute using extension tool
-	result, err := extBash.Bash(ctx, extTools.BashParams{Command: command})
+	result, err := extBash.Call(ctx, extTools.BashParams{Command: command})
 	if err != nil {
 		return result, err
 	}
@@ -387,7 +386,6 @@ type GetStatusParams struct {
 
 // GetStatusTool returns current bot status
 type GetStatusTool struct {
-	tool.DescriptiveTool
 	executor      *ToolExecutor
 	getStatusFunc func(chatID string) (*StatusInfo, error)
 }
@@ -460,7 +458,6 @@ type ChangeDirParams struct {
 
 // ChangeDirTool changes the bound project directory
 type ChangeDirTool struct {
-	tool.DescriptiveTool
 	executor          *ToolExecutor
 	updateProjectFunc func(chatID string, projectPath string) error
 }
@@ -528,11 +525,12 @@ func (t *ChangeDirTool) Call(ctx context.Context, params ChangeDirParams) (*tool
 // Handoff Tool (Hidden for now)
 // ============================================================================
 
+// HandoffParams defines the parameters for handoff_to_cc tool
+type HandoffParams struct{}
+
 // HandoffToCCTool provides handoff to Claude Code
 // Note: Currently not registered, kept for future use
-type HandoffToCCTool struct {
-	tool.DescriptiveTool
-}
+type HandoffToCCTool struct{}
 
 // NewHandoffToCCTool creates a new handoff tool
 func NewHandoffToCCTool() *HandoffToCCTool {
@@ -549,16 +547,8 @@ func (t *HandoffToCCTool) Description() string {
 	return "Hand off control to Claude Code (@cc) for coding tasks. Use this when the user is ready to start coding."
 }
 
-// Parameters returns the tool parameters schema
-func (t *HandoffToCCTool) Parameters() map[string]any {
-	return map[string]any{
-		"type":       "object",
-		"properties": map[string]any{},
-	}
-}
-
 // Call implements the tool interface
-func (t *HandoffToCCTool) Call(ctx context.Context, kwargs map[string]any) (*tool.ToolResponse, error) {
+func (t *HandoffToCCTool) Call(ctx context.Context, params HandoffParams) (*tool.ToolResponse, error) {
 	return tool.TextResponse("HANDOFF_TO_CC"), nil
 }
 
@@ -566,18 +556,12 @@ func (t *HandoffToCCTool) Call(ctx context.Context, kwargs map[string]any) (*too
 // Tool Registration
 // ============================================================================
 
-// ToolWithSchema is an interface for tools that can provide their own schema
-type ToolWithSchema interface {
-	tool.DescriptiveTool
-	Name() string
-	Description() string
-	Parameters() map[string]any
-}
-
 // RegisterTools registers all smart guide tools with a toolkit
-func RegisterTools(toolkit *tool.Toolkit, executor *ToolExecutor,
+func RegisterTools(
+	toolkit *tool.Toolkit, executor *ToolExecutor,
 	getStatusFunc func(chatID string) (*StatusInfo, error),
-	updateProjectFunc func(chatID string, projectPath string) error) error {
+	updateProjectFunc func(chatID string, projectPath string) error,
+) error {
 
 	// Create tool groups
 	if err := toolkit.CreateToolGroup("bash", "Bash commands for file system and git operations", true, ""); err != nil {
@@ -590,33 +574,21 @@ func RegisterTools(toolkit *tool.Toolkit, executor *ToolExecutor,
 		return fmt.Errorf("failed to create file_ops tool group: %w", err)
 	}
 
-	// Register bash tool (now uses standard pattern with extension wrapper)
+	// Register bash tool
 	bashTool := NewBashTool(executor, DefaultBashAllowlist)
-	if err := toolkit.Register(bashTool.Call, &tool.RegisterOptions{
-		GroupName:       "bash",
-		FuncName:        bashTool.Name(),
-		FuncDescription: bashTool.Description(),
-	}); err != nil {
+	if err := toolkit.RegisterAll(bashTool); err != nil {
 		return fmt.Errorf("failed to register bash tool: %w", err)
 	}
 
-	// Register get_status tool (refactored to use standard pattern)
+	// Register get_status tool
 	getStatusTool := NewGetStatusTool(executor, getStatusFunc)
-	if err := toolkit.Register(getStatusTool.Call, &tool.RegisterOptions{
-		GroupName:       "project",
-		FuncName:        getStatusTool.Name(),
-		FuncDescription: getStatusTool.Description(),
-	}); err != nil {
+	if err := toolkit.RegisterAll(getStatusTool); err != nil {
 		return fmt.Errorf("failed to register get_status tool: %w", err)
 	}
 
-	// Register change_workdir tool (refactored to use standard pattern)
+	// Register change_workdir tool
 	changeDirTool := NewChangeDirTool(executor, updateProjectFunc)
-	if err := toolkit.Register(changeDirTool.Call, &tool.RegisterOptions{
-		GroupName:       "project",
-		FuncName:        changeDirTool.Name(),
-		FuncDescription: changeDirTool.Description(),
-	}); err != nil {
+	if err := toolkit.RegisterAll(changeDirTool); err != nil {
 		return fmt.Errorf("failed to register change_workdir tool: %w", err)
 	}
 
