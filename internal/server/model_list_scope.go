@@ -1,0 +1,31 @@
+package server
+
+import "github.com/tingly-dev/tingly-box/internal/typ"
+
+func scenarioSupportsTransport(scenario typ.RuleScenario, transport typ.ScenarioTransport) bool {
+	descriptor, ok := typ.GetScenarioDescriptor(scenario)
+	if !ok {
+		return false
+	}
+	for _, supported := range descriptor.SupportedTransport {
+		if supported == transport {
+			return true
+		}
+	}
+	return false
+}
+
+func shouldIncludeRuleInModelList(requestedScenario typ.RuleScenario, ruleScenario typ.RuleScenario) bool {
+	if requestedScenario == ruleScenario {
+		return true
+	}
+
+	switch requestedScenario {
+	case typ.ScenarioOpenAI:
+		return scenarioSupportsTransport(ruleScenario, typ.TransportOpenAI)
+	case typ.ScenarioAnthropic:
+		return scenarioSupportsTransport(ruleScenario, typ.TransportAnthropic)
+	default:
+		return false
+	}
+}

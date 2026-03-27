@@ -48,7 +48,7 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 		if !rule.Active {
 			continue
 		}
-		if scenario != nil && rule.GetScenario() != *scenario {
+		if scenario != nil && !shouldIncludeRuleInModelList(*scenario, rule.GetScenario()) {
 			continue
 		}
 
