@@ -292,7 +292,13 @@ const Layout = ({ children }: LayoutProps) => {
                 key: 'credential',
                 icon: <LockIcon sx={{ fontSize: 22 }} />,
                 label: t('layout.nav.credential', { defaultValue: 'Credentials' }),
-                path: '/credentials',
+                children: [
+                    {
+                        path: '/credentials',
+                        label: 'Model API',
+                        icon: <LockIcon sx={{ fontSize: 20 }} />,
+                    },
+                ],
             },
             {
                 key: 'system',
