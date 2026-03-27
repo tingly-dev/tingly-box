@@ -204,7 +204,7 @@ type StatusInfo struct {
 
 // BashParams defines the parameters for bash tool
 type BashParams struct {
-	Command string `json:"command" jsonschema:"description=The bash command to execute (e.g., 'ls -la', 'git status')"`
+	Command string `json:"command" required:"true" jsonschema:"description=The bash command to execute (e.g., 'ls -la', 'git status')"`
 }
 
 // BashTool wraps extension's BashTool with Smart Guide specific behavior
@@ -335,7 +335,7 @@ func (t *BashTool) executeCommand(ctx context.Context, command string, skipAllow
 	)
 
 	// Execute using extension tool
-	result, err := extBash.Bash(ctx, extTools.BashParams{Command: command})
+	result, err := extBash.Call(ctx, extTools.BashParams{Command: command})
 	if err != nil {
 		return result, err
 	}
@@ -557,9 +557,11 @@ func (t *HandoffToCCTool) Call(ctx context.Context, params HandoffParams) (*tool
 // ============================================================================
 
 // RegisterTools registers all smart guide tools with a toolkit
-func RegisterTools(toolkit *tool.Toolkit, executor *ToolExecutor,
+func RegisterTools(
+	toolkit *tool.Toolkit, executor *ToolExecutor,
 	getStatusFunc func(chatID string) (*StatusInfo, error),
-	updateProjectFunc func(chatID string, projectPath string) error) error {
+	updateProjectFunc func(chatID string, projectPath string) error,
+) error {
 
 	// Create tool groups
 	if err := toolkit.CreateToolGroup("bash", "Bash commands for file system and git operations", true, ""); err != nil {
@@ -574,25 +576,19 @@ func RegisterTools(toolkit *tool.Toolkit, executor *ToolExecutor,
 
 	// Register bash tool
 	bashTool := NewBashTool(executor, DefaultBashAllowlist)
-	if err := toolkit.Register(bashTool, &tool.RegisterOptions{
-		GroupName: "bash",
-	}); err != nil {
+	if err := toolkit.RegisterAll(bashTool); err != nil {
 		return fmt.Errorf("failed to register bash tool: %w", err)
 	}
 
 	// Register get_status tool
 	getStatusTool := NewGetStatusTool(executor, getStatusFunc)
-	if err := toolkit.Register(getStatusTool, &tool.RegisterOptions{
-		GroupName: "project",
-	}); err != nil {
+	if err := toolkit.RegisterAll(getStatusTool); err != nil {
 		return fmt.Errorf("failed to register get_status tool: %w", err)
 	}
 
 	// Register change_workdir tool
 	changeDirTool := NewChangeDirTool(executor, updateProjectFunc)
-	if err := toolkit.Register(changeDirTool, &tool.RegisterOptions{
-		GroupName: "project",
-	}); err != nil {
+	if err := toolkit.RegisterAll(changeDirTool); err != nil {
 		return fmt.Errorf("failed to register change_workdir tool: %w", err)
 	}
 
