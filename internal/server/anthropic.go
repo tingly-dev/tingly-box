@@ -211,7 +211,7 @@ func (s *Server) anthropicListModelsWithScenario(c *gin.Context, scenario *typ.R
 		if !rule.Active {
 			continue
 		}
-		if scenario != nil && rule.GetScenario() != *scenario {
+		if scenario != nil && !shouldIncludeRuleInModelList(*scenario, rule.GetScenario()) {
 			continue
 		}
 
