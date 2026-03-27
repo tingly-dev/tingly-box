@@ -2044,8 +2044,9 @@ const GuardrailsRulesPage = () => {
                                                                 },
                                                                 {
                                                                     value: 'review',
-                                                                    label: 'Review',
-                                                                    description: 'Mark the result as needing attention without fully blocking it.',
+                                                                    label: 'Ask',
+                                                                    description: 'Reserved for a future interactive verdict. Not selectable yet.',
+                                                                    disabled: true,
                                                                 },
                                                                 {
                                                                     value: 'block',
@@ -2054,37 +2055,43 @@ const GuardrailsRulesPage = () => {
                                                                 },
                                                             ].map((option) => {
                                                                 const selected = editorState.verdict === option.value;
+                                                                const disabled = Boolean(option.disabled);
                                                                 return (
-                                                                    <Box
-                                                                        key={option.value}
-                                                                        onClick={() => setEditorState((state) => ({ ...state, verdict: option.value }))}
-                                                                        sx={{
-                                                                            border: '1px solid',
-                                                                            borderColor: selected ? 'primary.main' : 'divider',
-                                                                            bgcolor: selected ? 'action.selected' : 'background.paper',
-                                                                            borderRadius: 2,
-                                                                            p: 1.5,
-                                                                            cursor: 'pointer',
-                                                                            transition: 'all 0.15s ease',
-                                                                            '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
-                                                                        }}
-                                                                    >
-                                                                        <Stack spacing={0.75}>
-                                                                            <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-                                                                                <Typography variant="body2" fontWeight={600}>
-                                                                                    {option.label}
+                                                                    <Tooltip key={option.value} title={disabled ? option.description : ''} disableHoverListener={!disabled}>
+                                                                        <Box
+                                                                            onClick={() => {
+                                                                                if (disabled) return;
+                                                                                setEditorState((state) => ({ ...state, verdict: option.value }));
+                                                                            }}
+                                                                            sx={{
+                                                                                border: '1px solid',
+                                                                                borderColor: selected ? 'primary.main' : 'divider',
+                                                                                bgcolor: selected ? 'action.selected' : 'background.paper',
+                                                                                borderRadius: 2,
+                                                                                p: 1.5,
+                                                                                cursor: disabled ? 'not-allowed' : 'pointer',
+                                                                                opacity: disabled ? 0.5 : 1,
+                                                                                transition: 'all 0.15s ease',
+                                                                                '&:hover': disabled ? undefined : { borderColor: 'primary.main', bgcolor: 'action.hover' },
+                                                                            }}
+                                                                        >
+                                                                            <Stack spacing={0.75}>
+                                                                                <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                                                                    <Typography variant="body2" fontWeight={600}>
+                                                                                        {option.label}
+                                                                                    </Typography>
+                                                                                    {selected && (
+                                                                                        <Tooltip title="Selected">
+                                                                                            <CheckCircleRounded color="primary" sx={{ fontSize: 18 }} />
+                                                                                        </Tooltip>
+                                                                                    )}
+                                                                                </Stack>
+                                                                                <Typography variant="caption" color="text.secondary">
+                                                                                    {option.description}
                                                                                 </Typography>
-                                                                                {selected && (
-                                                                                    <Tooltip title="Selected">
-                                                                                        <CheckCircleRounded color="primary" sx={{ fontSize: 18 }} />
-                                                                                    </Tooltip>
-                                                                                )}
                                                                             </Stack>
-                                                                            <Typography variant="caption" color="text.secondary">
-                                                                                {option.description}
-                                                                            </Typography>
-                                                                        </Stack>
-                                                                    </Box>
+                                                                        </Box>
+                                                                    </Tooltip>
                                                                 );
                                                             })}
                                                         </Box>
@@ -2252,19 +2259,24 @@ const GuardrailsRulesPage = () => {
                                     <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
                                         {[
                                             { value: 'allow', label: 'Allow' },
-                                            { value: 'review', label: 'Review' },
+                                            { value: 'review', label: 'Ask', disabled: true },
                                             { value: 'block', label: 'Block' },
                                         ].map((option) => (
-                                            <Chip
-                                                key={option.value}
-                                                label={option.label}
-                                                clickable
-                                                color={groupEditorState.defaultVerdict === option.value ? 'primary' : 'default'}
-                                                variant={groupEditorState.defaultVerdict === option.value ? 'filled' : 'outlined'}
-                                                onClick={() =>
-                                                    setGroupEditorState((state) => ({ ...state, defaultVerdict: option.value }))
-                                                }
-                                            />
+                                            <Tooltip key={option.value} title={option.disabled ? 'Reserved for a future interactive verdict.' : ''} disableHoverListener={!option.disabled}>
+                                                <span>
+                                                    <Chip
+                                                        label={option.label}
+                                                        clickable={!option.disabled}
+                                                        disabled={option.disabled}
+                                                        color={groupEditorState.defaultVerdict === option.value ? 'primary' : 'default'}
+                                                        variant={groupEditorState.defaultVerdict === option.value ? 'filled' : 'outlined'}
+                                                        onClick={() => {
+                                                            if (option.disabled) return;
+                                                            setGroupEditorState((state) => ({ ...state, defaultVerdict: option.value }));
+                                                        }}
+                                                    />
+                                                </span>
+                                            </Tooltip>
                                         ))}
                                     </Stack>
                                     <FormHelperText sx={{ mt: 1 }}>
