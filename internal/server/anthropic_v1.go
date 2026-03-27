@@ -184,7 +184,12 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 				anthropicResp = roundtripped
 			}
 
-			s.restoreGuardrailsCredentialAliasesV1Response(c, anthropicResp)
+			session := s.guardrailsSessionFromContext(c, actualModel, provider)
+			messageHistory := serverguardrails.MessagesFromAnthropicV1(req.System, req.Messages)
+			blocked := s.applyGuardrailsToAnthropicV1NonStreamResponse(c, session, messageHistory, anthropicResp)
+			if !blocked {
+				s.restoreGuardrailsCredentialAliasesV1Response(c, anthropicResp)
+			}
 
 			// Record response if scenario recording is enabled
 			if recorder != nil {

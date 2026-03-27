@@ -184,7 +184,12 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			// FIXME: now we use req model as resp model
 			anthropicResp.Model = anthropic.Model(proxyModel)
 
-			s.restoreGuardrailsCredentialAliasesV1BetaResponse(c, anthropicResp)
+			session := s.guardrailsSessionFromContext(c, actualModel, provider)
+			messageHistory := serverguardrails.MessagesFromAnthropicV1Beta(req.System, req.Messages)
+			blocked := s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, session, messageHistory, anthropicResp)
+			if !blocked {
+				s.restoreGuardrailsCredentialAliasesV1BetaResponse(c, anthropicResp)
+			}
 
 			// Record response if scenario recording is enabled
 			if recorder != nil {
