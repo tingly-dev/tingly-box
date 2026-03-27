@@ -57,7 +57,7 @@ const headerHeight = 60;
 const footerHeight = 60;
 
 // --- Activity Bar Item Styles (extracted for easy tuning) ---
-const activityItemMinHeight = 72;       // was 56
+const activityItemMinHeight = 64;       // was 56
 const activityItemGap = 0.5;            // was 0.25
 const activityItemRadius = 1.25;
 const activityItemPaddingX = 1;
