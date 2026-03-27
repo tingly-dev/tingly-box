@@ -486,7 +486,7 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
                                     strokeWidth={0.5}
                                     strokeOpacity={0.8}
                                     isAnimationActive={true}
-                                    animationBegin={100}
+                                    animationBegin={0}
                                     animationDuration={800}
                                     animationEasing="ease-out"
                                 />
@@ -501,7 +501,7 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
                                     strokeWidth={0.5}
                                     strokeOpacity={0.8}
                                     isAnimationActive={true}
-                                    animationBegin={200}
+                                    animationBegin={0}
                                     animationDuration={800}
                                     animationEasing="ease-out"
                                 />
