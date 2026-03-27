@@ -37,7 +37,7 @@ func TestSanitizeErrorCode(t *testing.T) {
 func TestUpdateServiceStats(t *testing.T) {
 	s := &Server{}
 	// Minimal test - just verify it doesn't panic with nil inputs
-	s.updateServiceStats(nil, nil, "", 0, 0)
+	s.updateServiceStats(nil, nil, "", MetricsData{})
 
 	// Test with actual service but no config - should handle gracefully
 	rule := &typ.Rule{
@@ -53,7 +53,15 @@ func TestUpdateServiceStats(t *testing.T) {
 	provider := &typ.Provider{UUID: "test-provider", Name: "test"}
 
 	// Should not panic even without config set
-	s.updateServiceStats(rule, provider, "gpt-4", 100, 50)
+	metrics := MetricsData{
+		InputTokens:  100,
+		OutputTokens: 50,
+		LatencyMs:    1500,
+		TTFTMs:       200,
+		CacheHit:     true,
+		TPS:          75.5,
+	}
+	s.updateServiceStats(rule, provider, "gpt-4", metrics)
 }
 
 func TestTrackUsageFromContext_DoesNotPanic(t *testing.T) {

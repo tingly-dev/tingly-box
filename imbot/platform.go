@@ -165,6 +165,13 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 			},
 		},
 	},
+	"weixin": {
+		Platform:    "weixin",
+		AuthType:    "qr",
+		DisplayName: "Weixin",
+		Category:    "enterprise",
+		Fields:      []FieldSpec{}, // No fields - credentials set via QR flow
+	},
 }
 
 // GetPlatformConfig returns the auth config for a given platform

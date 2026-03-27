@@ -1,6 +1,6 @@
 // Token color palette with semantic meaning
 // Blue → Calm, foundation (input is always present)
-// Amber → Warm, highlights optimization (cache is savings)
+// Blue-Gray → Subtle, background optimization (cache is large but secondary)
 // Green → Success, result (output is what we get)
 export const TOKEN_COLORS = {
     input: {
@@ -12,12 +12,12 @@ export const TOKEN_COLORS = {
         gradientEnd: 'rgba(59, 130, 246, 0.6)',
     },
     cache: {
-        main: '#fdba74',   // Lighter orange
-        light: '#fed7aa',  // Even lighter orange
-        dark: '#fb923c',   // Darker orange
-        gradient: 'rgba(253, 186, 116, 0.85)',
-        gradientStart: 'rgba(253, 186, 116, 0.95)',
-        gradientEnd: 'rgba(253, 186, 116, 0.75)',
+        main: '#cbd5e1',   // Slate 300 - blue-gray, subtle
+        light: '#e2e8f0',  // Slate 200
+        dark: '#94a3b8',   // Slate 400
+        gradient: 'rgba(203, 213, 225, 0.7)',
+        gradientStart: 'rgba(203, 213, 225, 0.8)',
+        gradientEnd: 'rgba(203, 213, 225, 0.6)',
     },
     output: {
         main: '#10B981',  // Emerald 500
@@ -52,7 +52,7 @@ export const tooltipStyle = {
 };
 
 // Bar radius for rounded corners
-export const barRadius = [0, 0, 0, 0];
+export const barRadius: [number, number, number, number] = [4, 4, 0, 0];
 
 // Animation duration for chart transitions
 export const ANIMATION_DURATION = 600;

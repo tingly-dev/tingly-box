@@ -23,6 +23,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/server/hooks"
 	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
@@ -140,6 +141,10 @@ type Server struct {
 	remoteCoderCtx    context.Context
 	remoteCoderCancel context.CancelFunc
 	remoteCoderMu     sync.Mutex
+
+	// lifecycle management for long-lived background components created during setup
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	// custom auth middleware (optional, for TBE integration)
 	customUserAuthMiddleware  gin.HandlerFunc // For Web UI routes
@@ -362,12 +367,16 @@ func (s *Server) GetOrCreateScenarioSink(scenario typ.RuleScenario) *obs.Sink {
 
 // NewServer creates a new HTTP server instance with functional options
 func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
+	ctx, cancel := context.WithCancel(context.Background())
+
 	// Start with default options
 	allOpts := append([]ServerOption{WithDefault()}, opts...)
 
 	// Default options
 	server := &Server{
 		config: cfg,
+		ctx:    ctx,
+		cancel: cancel,
 	}
 
 	// Apply all options (defaults + provided)
@@ -508,6 +517,12 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize token refresher for OAuth auto-refresh
 	tokenRefresher := background.NewTokenRefresher(oauthManager, cfg)
 
+	// Register provider lifecycle hooks for automatic cache invalidation
+	poolHook := hooks.NewClientPoolInvalidationHook(server.clientPool)
+	cfg.RegisterProviderUpdateHook(poolHook)
+	cfg.RegisterProviderDeleteHook(poolHook)
+	logrus.Debug("Registered client pool invalidation hook for provider updates")
+
 	// Update server with dependencies
 	server.authMW = authMW
 	server.memoryLogMW = memoryLogMW
@@ -583,7 +598,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.setupMiddleware()
 
 	// Setup routes
-	server.setupRoutes()
+	server.setupRoutes(server.ctx)
 
 	// Setup configuration watcher
 	server.setupConfigWatcher()
@@ -634,6 +649,12 @@ func (s *Server) setupConfigWatcher() {
 	watcher, err := config.NewConfigWatcher(s.config)
 	if err != nil {
 		logrus.Debugf("Failed to create config watcher: %v", err)
+		return
+	}
+
+	// Add default watch file (main config file)
+	if err := watcher.AddWatchFile(s.config.ConfigFile); err != nil {
+		logrus.Debugf("Failed to add config file to watcher: %v", err)
 		return
 	}
 
@@ -822,10 +843,10 @@ func (s *Server) setupMiddleware() {
 }
 
 // setupRoutes configures server routes
-func (s *Server) setupRoutes() {
+func (s *Server) setupRoutes(ctx context.Context) {
 	// Integrate Web UI routes if enabled
 	if s.enableUI {
-		s.UseUIEndpoints()
+		s.UseUIEndpoints(ctx)
 	}
 
 	s.UseAIEndpoints()
@@ -951,7 +972,7 @@ func (s *Server) UseVirtualModelEndpoints() {
 func (s *Server) UseLoadBalanceEndpoints() {
 	// API routes for load balancer management
 	api := s.engine.Group("/api/v1/load-balancer")
-	api.Use(s.authMW.UserAuthMiddleware()) // Require user authentication for management APIs
+	api.Use(s.getUserAuthMiddleware()) // Require user authentication for management APIs
 
 	// Load balancer API routes
 	s.loadBalancerAPI.RegisterRoutes(api)
@@ -1218,6 +1239,12 @@ func (s *Server) SyncRemoteCoderBots(ctx context.Context) error {
 
 // Stop gracefully stops the HTTP server
 func (s *Server) Stop(ctx context.Context) error {
+	if s.cancel != nil {
+		s.cancel()
+		s.cancel = nil
+		s.ctx = nil
+	}
+
 	if s.httpServer == nil {
 		return nil
 	}

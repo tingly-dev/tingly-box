@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/imbot/internal/core"
-	"github.com/tingly-dev/tingly-box/imbot/internal/platform/telegram"
+	"github.com/tingly-dev/tingly-box/imbot/core"
+	"github.com/tingly-dev/tingly-box/imbot/platform/telegram"
 )
 
 // TestE2E_TelegramBot_RealBot creates a real bot for debugging purposes

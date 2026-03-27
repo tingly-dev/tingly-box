@@ -183,7 +183,13 @@ func NewBotHandler(
 
 // GetVerbose returns the current verbose mode setting for a chat
 // Checks chat store first, then bot setting default
+// Returns false for platforms that don't support verbose mode (e.g., Weixin)
 func (h *BotHandler) GetVerbose(chatID string) bool {
+	// Check if platform supports verbose mode
+	//if !SupportsVerboseMode(h.botSetting.Platform) {
+	//	return false
+	//}
+
 	// Try to get verbose from chat store
 	if h.chatStore != nil {
 		chat, err := h.chatStore.GetChat(chatID)
@@ -289,13 +295,19 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 		return
 	}
 
+	// HandleMediaContent checks if message is media content
 	// Handle text-only messages
+	logrus.Debugf("Message content check: IsMediaContent=%v, IsTextContent=%v",
+		msg.IsMediaContent(), msg.IsTextContent())
 	if !msg.IsTextContent() {
 		h.SendText(hCtx, "Only text and media messages are supported.")
 		return
 	}
 
+	text := hCtx.Text()
+	logrus.Debugf("Text content: text_len=%d, text=%q", len(text), text)
 	if hCtx.Text() == "" {
+		logrus.Warn("Text content is empty, returning")
 		return
 	}
 
@@ -469,10 +481,21 @@ func (h *BotHandler) handlePermissionTextResponse(hCtx HandlerContext) bool {
 // SendText sends a plain text message
 // Note: Platform handles chunking internally via BaseBot.ChunkText()
 func (h *BotHandler) SendText(hCtx HandlerContext, text string) {
-	_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
+	opts := &imbot.SendMessageOptions{
 		Text:      text,
 		ParseMode: imbot.ParseModeMarkdown,
-	})
+	}
+	// Forward context_token from incoming message metadata (required by Weixin)
+	if hCtx.Message.Metadata != nil {
+		if ct, ok := hCtx.Message.Metadata["context_token"].(string); ok {
+			if opts.Metadata == nil {
+				opts.Metadata = make(map[string]interface{})
+			}
+			opts.Metadata["context_token"] = ct
+		}
+	}
+	resp, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, opts)
+	_ = resp
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to send message")
 	}
@@ -481,11 +504,21 @@ func (h *BotHandler) SendText(hCtx HandlerContext, text string) {
 // sendTextWithReply sends a text message as a reply to another message
 // Note: Platform handles chunking internally via BaseBot.ChunkText()
 func (h *BotHandler) sendTextWithReply(hCtx HandlerContext, text string, replyTo string) {
-	_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
+	opts := &imbot.SendMessageOptions{
 		Text:      text,
 		ParseMode: imbot.ParseModeMarkdown,
 		ReplyTo:   replyTo,
-	})
+	}
+	// Forward context_token from incoming message metadata (required by Weixin)
+	if hCtx.Message.Metadata != nil {
+		if ct, ok := hCtx.Message.Metadata["context_token"].(string); ok {
+			if opts.Metadata == nil {
+				opts.Metadata = make(map[string]interface{})
+			}
+			opts.Metadata["context_token"] = ct
+		}
+	}
+	_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, opts)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to send message")
 	}
@@ -498,6 +531,14 @@ func (h *BotHandler) sendTextWithReply(hCtx HandlerContext, text string, replyTo
 func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string, replyTo string) {
 	kb := BuildActionKeyboard()
 	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
+
+	// Extract context_token from incoming message metadata (required by Weixin)
+	var contextToken string
+	if hCtx.Message.Metadata != nil {
+		if ct, ok := hCtx.Message.Metadata["context_token"].(string); ok {
+			contextToken = ct
+		}
+	}
 
 	// Use public ChunkText API with smart break-point detection
 	chunks := hCtx.Bot.ChunkText(text)
@@ -514,6 +555,13 @@ func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string
 				"replyMarkup":        tgKeyboard,
 				"_trackActionMenuID": true,
 			}
+		}
+		// Forward context_token for Weixin
+		if contextToken != "" {
+			if opts.Metadata == nil {
+				opts.Metadata = make(map[string]interface{})
+			}
+			opts.Metadata["context_token"] = contextToken
 		}
 
 		result, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, opts)

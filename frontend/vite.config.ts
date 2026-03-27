@@ -1,6 +1,5 @@
 import react from '@vitejs/plugin-react-swc';
 import { defineConfig } from 'vite';
-import { viteMockServe } from 'vite-plugin-mock';
 import { visualizer } from 'rollup-plugin-visualizer';
 import path from 'path';
 
@@ -14,11 +13,6 @@ export default defineConfig(({ mode }) => {
     return {
         plugins: [
             react(),
-            ...(useMock ? [viteMockServe({
-                mockPath: 'src/mock',
-                enable: useMock,
-                logger: true,
-            })] : []),
             // Bundle analyzer - generates dist/stats.html for analysis
             visualizer({
                 open: false,
@@ -27,6 +21,10 @@ export default defineConfig(({ mode }) => {
                 filename: 'dist/stats.html',
             }),
         ],
+        define: {
+            // Make USE_MOCK available to the app
+            'import.meta.env.VITE_USE_MOCK': JSON.stringify(useMock ? 'true' : 'false'),
+        },
         resolve: {
             alias: {
                 // Web mode: always use mock bindings

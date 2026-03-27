@@ -64,6 +64,11 @@ func (e *ToolExecutor) SetApprovalCallback(callback ApprovalCallback) {
 	e.onApproval = callback
 }
 
+// HasApprovalCallback returns true if an approval callback is set
+func (e *ToolExecutor) HasApprovalCallback() bool {
+	return e.onApproval != nil
+}
+
 // SetApprovalTimeout sets the timeout for approval requests
 func (e *ToolExecutor) SetApprovalTimeout(timeout time.Duration) {
 	e.approvalTimeout = timeout
@@ -258,9 +263,11 @@ func (t *BashTool) Call(ctx context.Context, params BashParams) (*tool.ToolRespo
 	// Command is NOT in allowlist - request approval
 	if t.Executor.onApproval != nil {
 		logrus.WithFields(logrus.Fields{
-			"command": baseCmd,
-			"full":    command,
-		}).Info("Command not in allowlist, requesting approval")
+			"command":         baseCmd,
+			"full":            command,
+			"callbackSet":     true,
+			"allowedCommands": t.AllowedCommands,
+		}).Info("BashTool: Command not in allowlist, requesting approval via callback")
 
 		// Parse command into base command and args
 		parts := strings.Fields(command)
@@ -271,23 +278,42 @@ func (t *BashTool) Call(ctx context.Context, params BashParams) (*tool.ToolRespo
 			args = parts[1:]
 		}
 
+		logrus.WithFields(logrus.Fields{
+			"cmd":  cmd,
+			"args": args,
+		}).Debug("BashTool: Calling Executor.onApproval callback")
+
 		approved, err := t.Executor.onApproval(ctx, ApprovalRequest{
 			Command: cmd,
 			Args:    args,
 			Reason:  fmt.Sprintf("Command '%s' is not in the allowlist", baseCmd),
 		})
+
+		logrus.WithFields(logrus.Fields{
+			"command":  cmd,
+			"approved": approved,
+			"error":    err,
+		}).Info("BashTool: onApproval callback returned")
+
 		if err != nil {
+			logrus.WithError(err).WithField("command", cmd).Error("BashTool: Approval callback failed with error")
 			return tool.TextResponse(fmt.Sprintf("Error: approval request failed: %v", err)), nil
 		}
 		if !approved {
+			logrus.WithField("command", cmd).Warn("BashTool: Command was NOT approved by user")
 			return tool.TextResponse(fmt.Sprintf("Error: command '%s' was not approved by user", baseCmd)), nil
 		}
-		logrus.WithField("command", baseCmd).Info("Command approved by user")
+		logrus.WithField("command", baseCmd).Info("BashTool: Command approved by user, executing")
 		// Execute approved command without allowlist restriction
 		return t.executeCommand(ctx, command, true)
 	}
 
 	// No approval callback - deny with error
+	logrus.WithFields(logrus.Fields{
+		"command":         baseCmd,
+		"callbackSet":     false,
+		"allowedCommands": t.AllowedCommands,
+	}).Warn("BashTool: Command not in allowlist AND no approval callback set - denying")
 	allowedList := strings.Join(t.AllowedCommands, ", ")
 	return tool.TextResponse(fmt.Sprintf("Error: command '%s' is not allowed. Allowed commands: %s", baseCmd, allowedList)), nil
 }

@@ -57,6 +57,9 @@ func (h *streamingMessageHandler) OnMessage(msg interface{}) error {
 
 	// Handle specific types
 	switch m := msg.(type) {
+	case string:
+		h.sendMessage(m)
+		return nil
 	case *claude.AssistantMessage:
 		meaningful := false
 		for _, c := range m.Message.Content {
@@ -318,8 +321,9 @@ func (h *streamingMessageHandler) GetOutput() string {
 // Note: Platform handles chunking internally via BaseBot.ChunkText()
 func (h *streamingMessageHandler) sendMessage(text string) {
 	_, err := h.bot.SendMessage(context.Background(), h.chatID, &imbot.SendMessageOptions{
-		Text:    text,
-		ReplyTo: h.replyTo,
+		Text:      text,
+		ParseMode: imbot.ParseModeMarkdown,
+		ReplyTo:   h.replyTo,
 	})
 	if err != nil {
 		logrus.WithFields(logrus.Fields{

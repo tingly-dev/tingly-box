@@ -53,18 +53,39 @@ const LegendItem = ({ label, color, visible, onToggle }: LegendItemProps) => (
         sx={{
             display: 'flex',
             alignItems: 'center',
-            gap: 1,
+            gap: 1.5,
             cursor: 'pointer',
             userSelect: 'none',
             opacity: visible ? 1 : 0.4,
-            transition: 'opacity 0.2s ease',
+            transition: 'all 0.2s ease',
+            px: 1.5,
+            py: 0.5,
+            borderRadius: 1.5,
             '&:hover': {
                 opacity: visible ? 0.8 : 0.5,
+                backgroundColor: 'action.hover',
             },
         }}
     >
-        <Box sx={{ width: 12, height: 12, borderRadius: 2, backgroundColor: color }} />
-        <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+        <Box
+            sx={{
+                width: 14,
+                height: 14,
+                borderRadius: 2.5,
+                backgroundColor: color,
+                border: '2px solid',
+                borderColor: visible ? color : 'transparent',
+                boxShadow: visible ? `0 0 0 3px ${alpha(color, 0.1)}` : 'none',
+            }}
+        />
+        <Typography
+            variant="caption"
+            sx={{
+                fontSize: '0.8rem',
+                color: 'text.secondary',
+                fontWeight: 500,
+            }}
+        >
             {label}
         </Typography>
     </Box>
@@ -299,6 +320,22 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
 
     const [visibleSeries, setVisibleSeries] = useState<SeriesVisibility>({ cache: true, input: true, output: true });
 
+    // Calculate adaptive bar configuration based on data length
+    const getBarConfig = (dataLength: number) => {
+        if (dataLength <= 7) {
+            return { barGap: 10, barCategoryGap: '15%' };
+        }
+        if (dataLength <= 14) {
+            return { barGap: 8, barCategoryGap: '12%' };
+        }
+        if (dataLength <= 30) {
+            return { barGap: 5, barCategoryGap: '8%' };
+        }
+        return { barGap: 3, barCategoryGap: '5%' };
+    };
+
+    const barConfig = getBarConfig(chartData.length);
+
     const toggleSeries = (key: SeriesKey) => {
         setVisibleSeries(prev => ({ ...prev, [key]: !prev[key] }));
     };
@@ -307,19 +344,27 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
         <Paper
             elevation={0}
             sx={{
-                p: 2.5,
-                borderRadius: 2,
+                p: 3,
+                borderRadius: 3,
                 border: '1px solid',
                 borderColor: 'divider',
                 flexGrow: 1,
                 backgroundColor: 'background.paper',
-                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
                 display: 'flex',
                 flexDirection: 'column',
             }}
         >
-            <Box sx={{ mb: 2 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+            <Box sx={{ mb: 2.5 }}>
+                <Typography
+                    variant="h6"
+                    sx={{
+                        fontWeight: 600,
+                        fontSize: '1rem',
+                        letterSpacing: '-0.01em',
+                        color: 'text.primary',
+                    }}
+                >
                     Token Usage Over Time (Daily)
                 </Typography>
             </Box>
@@ -368,35 +413,92 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
                 <>
                     <Box sx={{ flex: 1, minHeight: 280 }}>
                         <ResponsiveContainer width="100%" height={280}>
-                            <BarChart data={chartData} barCategoryGap={8}>
-                                <CartesianGrid strokeDasharray="4 4" stroke={gridStyle.stroke} strokeOpacity={gridStyle.strokeOpacity} />
+                            <BarChart
+                                data={chartData}
+                                barGap={barConfig.barGap}
+                                barCategoryGap={barConfig.barCategoryGap}
+                            >
+                                <defs>
+                                    <linearGradient id="colorInput" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor={TOKEN_COLORS.input.main} stopOpacity={0.95} />
+                                        <stop offset="95%" stopColor={TOKEN_COLORS.input.main} stopOpacity={0.75} />
+                                    </linearGradient>
+                                    <linearGradient id="colorOutput" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor={TOKEN_COLORS.output.main} stopOpacity={0.95} />
+                                        <stop offset="95%" stopColor={TOKEN_COLORS.output.main} stopOpacity={0.75} />
+                                    </linearGradient>
+                                    <linearGradient id="colorCache" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor={TOKEN_COLORS.cache.main} stopOpacity={0.95} />
+                                        <stop offset="95%" stopColor={TOKEN_COLORS.cache.main} stopOpacity={0.75} />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid
+                                    strokeDasharray="3 3"
+                                    stroke="#e2e8f0"
+                                    strokeOpacity={0.6}
+                                    vertical={false}
+                                />
                                 <XAxis
                                     dataKey="time"
-                                    tick={{ fontSize: 11, fill: '#64748b' }}
+                                    tick={{ fontSize: 12, fill: '#475569', fontWeight: 500 }}
                                     tickLine={false}
-                                    axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
+                                    axisLine={{ stroke: '#cbd5e1', strokeWidth: 1.5 }}
                                     interval={labelInterval}
+                                    height={50}
                                 />
                                 <YAxis
                                     tickFormatter={formatYAxis}
-                                    tick={{ fontSize: 11, fill: '#64748b' }}
+                                    tick={{ fontSize: 12, fill: '#475569', fontWeight: 500 }}
                                     tickLine={false}
-                                    axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
+                                    axisLine={{ stroke: '#cbd5e1', strokeWidth: 1.5 }}
+                                    width={60}
                                 />
                                 <Tooltip content={<CustomTooltip />} />
-                                <Bar dataKey="cacheTokens" name="Cache Tokens" fill={TOKEN_COLORS.cache.main} stackId="tokens" hide={!visibleSeries.cache}>
+                                <Bar
+                                    dataKey="cacheTokens"
+                                    name="Cache Tokens"
+                                    stackId="tokens"
+                                    hide={!visibleSeries.cache}
+                                    stroke={TOKEN_COLORS.cache.dark}
+                                    strokeWidth={0.5}
+                                    strokeOpacity={0.8}
+                                >
                                     {chartData.map((entry, index) => (
-                                        <Cell key={`cache-${index}`} fill={entry.cacheTokens > 0 ? TOKEN_COLORS.cache.gradient : 'transparent'} />
+                                        <Cell
+                                            key={`cache-${index}`}
+                                            fill={entry.cacheTokens > 0 ? 'url(#colorCache)' : 'transparent'}
+                                            stroke={entry.cacheTokens > 0 ? TOKEN_COLORS.cache.dark : 'transparent'}
+                                            strokeWidth={0.5}
+                                        />
                                     ))}
                                 </Bar>
-                                <Bar dataKey="inputTokens" name="Input Tokens" fill={TOKEN_COLORS.input.gradient} stackId="tokens" hide={!visibleSeries.input} />
-                                <Bar dataKey="outputTokens" name="Output Tokens" fill={TOKEN_COLORS.output.gradient} stackId="tokens" hide={!visibleSeries.output} />
+                                <Bar
+                                    dataKey="inputTokens"
+                                    name="Input Tokens"
+                                    fill="url(#colorInput)"
+                                    stackId="tokens"
+                                    hide={!visibleSeries.input}
+                                    stroke={TOKEN_COLORS.input.dark}
+                                    strokeWidth={0.5}
+                                    strokeOpacity={0.8}
+                                />
+                                <Bar
+                                    dataKey="outputTokens"
+                                    name="Output Tokens"
+                                    fill="url(#colorOutput)"
+                                    stackId="tokens"
+                                    hide={!visibleSeries.output}
+                                    radius={barRadius}
+                                    stroke={TOKEN_COLORS.output.dark}
+                                    strokeWidth={0.5}
+                                    strokeOpacity={0.8}
+                                />
 
                             </BarChart>
                         </ResponsiveContainer>
                     </Box>
                     {/* Legend replacement - inline indicator */}
-                    <Box sx={{ mt: 2, display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                    <Box sx={{ mt: 2.5, display: 'flex', gap: 3.5, flexWrap: 'wrap', justifyContent: 'center' }}>
                         <LegendItem
                             label="Cache"
                             color={TOKEN_COLORS.cache.main}

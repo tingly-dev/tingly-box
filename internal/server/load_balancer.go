@@ -36,9 +36,11 @@ func NewLoadBalancer(cfg *config.Config, healthFilter *typ.HealthFilter) *LoadBa
 
 // initializeDefaultTactics initializes default load balancing tactics
 func (lb *LoadBalancer) initializeDefaultTactics() {
-	lb.tactics[loadbalance.TacticRoundRobin] = typ.NewRoundRobinTactic()
 	lb.tactics[loadbalance.TacticTokenBased] = typ.NewTokenBasedTactic(10000)
-	lb.tactics[loadbalance.TacticHybrid] = typ.NewHybridTactic(100, 10000)
+	lb.tactics[loadbalance.TacticRandom] = typ.NewRandomTactic()
+	lb.tactics[loadbalance.TacticLatencyBased] = typ.GetDefaultTactic(loadbalance.TacticLatencyBased)
+	lb.tactics[loadbalance.TacticSpeedBased] = typ.GetDefaultTactic(loadbalance.TacticSpeedBased)
+	lb.tactics[loadbalance.TacticAdaptive] = typ.GetDefaultTactic(loadbalance.TacticAdaptive)
 }
 
 // RegisterTactic registers a custom tactic
@@ -331,6 +333,17 @@ func (lb *LoadBalancer) GetRuleSummary(rule *typ.Rule) map[string]interface{} {
 				"window_input_tokens":  stats.WindowInputTokens,
 				"window_output_tokens": stats.WindowOutputTokens,
 				"last_used":            stats.LastUsed,
+				"avg_latency_ms":       stats.AvgLatencyMs,
+				"p50_latency_ms":       stats.P50LatencyMs,
+				"p95_latency_ms":       stats.P95LatencyMs,
+				"p99_latency_ms":       stats.P99LatencyMs,
+				"avg_ttft_ms":          stats.AvgTTFTMs,
+				"p95_ttft_ms":          stats.P95TTFTMs,
+				"avg_token_speed":      stats.AvgTokenSpeed,
+				"cache_hit_rate":       stats.CacheHitRate,
+				"window_cache_hits":    stats.WindowCacheHits,
+				"window_cache_misses":  stats.WindowCacheMisses,
+				"window_cost_tokens":   stats.WindowCostTokens,
 			}
 		}
 

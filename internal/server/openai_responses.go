@@ -280,6 +280,14 @@ func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Prov
 			}
 
 			hc := protocol.NewHandleContext(c, responseModel)
+			firstTokenRecorded0 := false
+			hc.WithOnStreamEvent(func(_ interface{}) error {
+				if !firstTokenRecorded0 {
+					SetFirstTokenTime(c)
+					firstTokenRecorded0 = true
+				}
+				return nil
+			})
 			usage, err := HandleAnthropicToOpenAIResponsesStream(hc, anthropicStream, responseModel)
 			s.trackUsageWithTokenUsage(c, usage, err)
 			return
@@ -474,6 +482,14 @@ func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.P
 
 	// Handle the streaming response
 	hc := protocol.NewHandleContext(c, responseModel)
+	firstTokenRecorded := false
+	hc.WithOnStreamEvent(func(_ interface{}) error {
+		if !firstTokenRecorded {
+			SetFirstTokenTime(c)
+			firstTokenRecorded = true
+		}
+		return nil
+	})
 	usage, err := HandleOpenAIResponsesStream(hc, stream, responseModel)
 
 	// Track usage from stream handler

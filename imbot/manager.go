@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/imbot/internal/core"
+	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
 // Manager manages multiple bot instances

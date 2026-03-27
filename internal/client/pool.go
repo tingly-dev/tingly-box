@@ -1,9 +1,8 @@
 package client
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -202,19 +201,9 @@ func (p *ClientPool) GetGoogleClient(provider *typ.Provider, model string) *Goog
 }
 
 // generateProviderKey creates a unique key for a provider
+// Uses only UUID and model - token changes will be handled by explicit invalidation
 func (p *ClientPool) generateProviderKey(provider *typ.Provider, model string) string {
-	return fmt.Sprintf("%s:%s:%s", provider.UUID, model, hashToken(provider.Token))
-}
-
-// hashToken creates a secure hash of the token for key generation
-func hashToken(token string) string {
-	if token == "" {
-		return ""
-	}
-	h := sha256.New()
-	h.Write([]byte(token))
-	// Use first 16 characters, providing sufficient entropy while maintaining reasonable length
-	return hex.EncodeToString(h.Sum(nil))[:16]
+	return fmt.Sprintf("%s:%s", provider.UUID, model)
 }
 
 // Clear removes all clients from the pool
@@ -251,6 +240,45 @@ func (p *ClientPool) RemoveProvider(provider *typ.Provider, model string) {
 
 	if removed {
 		logrus.Infof("Removed client for provider: %s", provider.Name)
+	}
+}
+
+// InvalidateProvider removes all cached clients for a specific provider UUID
+// This should be called when provider credentials are updated (e.g., OAuth token refresh)
+func (p *ClientPool) InvalidateProvider(providerUUID string) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	count := 0
+
+	// Remove all OpenAI clients matching this provider UUID
+	for key := range p.openaiClients {
+		if strings.HasPrefix(key, providerUUID+":") {
+			delete(p.openaiClients, key)
+			count++
+		}
+	}
+
+	// Remove all Anthropic clients matching this provider UUID
+	for key := range p.anthropicClients {
+		if strings.HasPrefix(key, providerUUID+":") {
+			delete(p.anthropicClients, key)
+			count++
+		}
+	}
+
+	// Remove all Google clients matching this provider UUID
+	for key := range p.googleClients {
+		if strings.HasPrefix(key, providerUUID+":") {
+			delete(p.googleClients, key)
+			count++
+		}
+	}
+
+	if count > 0 {
+		logrus.Infof("Invalidated %d client(s) for provider UUID: %s", count, providerUUID)
+	} else {
+		logrus.Debugf("No clients found to invalidate for provider UUID: %s", providerUUID)
 	}
 }
 

@@ -63,8 +63,8 @@ func TestHealthCheck_Lifecycle(t *testing.T) {
 		Scenario:     typ.ScenarioOpenAI,
 		RequestModel: "test-model",
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticRoundRobin,
-			Params: typ.DefaultRoundRobinParams(),
+			Type:   loadbalance.TacticAdaptive,
+			Params: typ.DefaultAdaptiveParams(),
 		},
 		Services: []*loadbalance.Service{
 			{
@@ -174,8 +174,8 @@ func TestHealthCheck_ConsecutiveErrorsThenRecovery(t *testing.T) {
 		Scenario:     typ.ScenarioOpenAI,
 		RequestModel: "test-model",
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticRoundRobin,
-			Params: typ.DefaultRoundRobinParams(),
+			Type:   loadbalance.TacticAdaptive,
+			Params: typ.DefaultAdaptiveParams(),
 		},
 		Services: []*loadbalance.Service{
 			{
@@ -247,8 +247,8 @@ func TestHealthCheck_APIEndpoint(t *testing.T) {
 		Scenario:     typ.ScenarioOpenAI,
 		RequestModel: "test-health-api",
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticRoundRobin,
-			Params: typ.DefaultRoundRobinParams(),
+			Type:   loadbalance.TacticAdaptive,
+			Params: typ.DefaultAdaptiveParams(),
 		},
 		Services: []*loadbalance.Service{
 			{
@@ -365,8 +365,8 @@ func TestHealthCheck_MultipleServicesWithOneUnhealthy(t *testing.T) {
 		Scenario:     typ.ScenarioOpenAI,
 		RequestModel: "test-model",
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticRoundRobin,
-			Params: &typ.RoundRobinParams{RequestThreshold: 1}, // Switch after each request
+			Type:   loadbalance.TacticTokenBased,             // Use token_based for predictable rotation
+			Params: &typ.TokenBasedParams{TokenThreshold: 1}, // Switch after each token (low threshold)
 		},
 		Services: []*loadbalance.Service{
 			{

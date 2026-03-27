@@ -3,8 +3,8 @@ package imbot
 import (
 	"fmt"
 
-	"github.com/tingly-dev/tingly-box/imbot/internal/core"
-	"github.com/tingly-dev/tingly-box/imbot/internal/platform"
+	"github.com/tingly-dev/tingly-box/imbot/core"
+	"github.com/tingly-dev/tingly-box/imbot/platform"
 )
 
 // CreateBot creates a bot instance based on the configuration

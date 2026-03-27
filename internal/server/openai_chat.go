@@ -250,6 +250,17 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 	// Create handle context and handle stream
 	hc := protocol.NewHandleContext(c, responseModel)
 	hc.DisableStreamUsage = disableStreamUsage
+
+	// Record TTFT when the first streaming chunk arrives
+	firstTokenRecorded := false
+	hc.WithOnStreamEvent(func(_ interface{}) error {
+		if !firstTokenRecorded {
+			SetFirstTokenTime(c)
+			firstTokenRecorded = true
+		}
+		return nil
+	})
+
 	usage, err := stream.HandleOpenAIChatStream(hc, streamResp, req)
 
 	// Track usage from stream handler
@@ -671,16 +682,5 @@ func (s *Server) convertMessagesToResponseInputItems(messages []openai.ChatCompl
 
 // isValidRuleScenario checks if the given scenario is a valid RuleScenario
 func isValidRuleScenario(scenario typ.RuleScenario) bool {
-	switch scenario {
-	case typ.ScenarioOpenAI, typ.ScenarioAnthropic:
-		return true
-	case typ.ScenarioAgent:
-		return true
-	case typ.ScenarioCodex, typ.ScenarioClaudeCode, typ.ScenarioOpenCode, typ.ScenarioXcode, typ.ScenarioVSCode:
-		return true
-	case typ.ScenarioSmartGuide:
-		return true
-	default:
-		return false
-	}
+	return typ.CanUseScenarioInPath(scenario)
 }

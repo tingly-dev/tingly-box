@@ -3,7 +3,7 @@ import BotPlatformSelector from '@/components/bot/BotPlatformSelector';
 import { BotCard, useBotModelDialog } from '@/components/bot';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import { PageLayout } from '@/components/PageLayout';
-import PreviewNotice from '@/components/remote-control/PreviewNotice';
+import CollapsibleGuide from '@/components/remote-control/CollapsibleGuide';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 import type { BotPlatformConfig, BotSettings } from '@/types/bot';
@@ -128,7 +128,7 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
     }, []);
 
     // Bot handlers
-    const handleOpenBotTokenDialog = useCallback((editUuid?: string) => {
+    const handleOpenBotTokenDialog = useCallback(async (editUuid?: string) => {
         if (editUuid) {
             // Edit mode
             const bot = bots.find(b => b.uuid === editUuid);
@@ -161,10 +161,11 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
             const config = botPlatforms.find(p => p.platform === platformId);
             if (config) {
                 setCurrentPlatformConfig(config);
+                // QR auth: bot is created lazily after scan succeeds (no placeholder)
             }
         }
         setBotTokenDialogOpen(true);
-    }, [bots, botPlatforms, platformId]);
+    }, [bots, botPlatforms, platformId, showNotification, loadBotSettings]);
 
     const handleSaveBotToken = async () => {
         setBotSaving(true);
@@ -182,25 +183,34 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
                 return;
             }
 
-            // Validate required auth fields
-            const missingFields = platformConfig.fields
-                .filter(f => f.required && !botAuthDraft[f.key]?.trim())
-                .map(f => f.label);
+            // For QR auth type, auth is handled by QR flow, no validation needed
+            // For other auth types, validate required fields
+            if (platformConfig.auth_type === 'qr') {
+                // QR: bot must have been bound before saving
+                if (!botEditUuid) {
+                    showNotification('Please complete WeChat QR binding before saving', 'error');
+                    return;
+                }
+            } else {
+                const missingFields = platformConfig.fields
+                    .filter(f => f.required && !botAuthDraft[f.key]?.trim())
+                    .map(f => f.label);
 
-            if (missingFields.length > 0) {
-                showNotification(`Missing required fields: ${missingFields.join(', ')}`, 'error');
-                return;
+                if (missingFields.length > 0) {
+                    showNotification(`Missing required fields: ${missingFields.join(', ')}`, 'error');
+                    return;
+                }
             }
 
             const data = {
-                name: botNameDraft.trim(),
+                name: botNameDraft.trim() || `${botPlatformDraft} Bot`,
                 platform: botPlatformDraft,
                 auth_type: platformConfig.auth_type,
                 auth: botAuthDraft,
                 proxy_url: botProxyDraft.trim(),
                 chat_id: botChatIdDraft.trim(),
                 bash_allowlist: allowlist,
-                enabled: true,
+                enabled: true, // Enable the bot after saving
             };
 
             let result;
@@ -312,20 +322,13 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
 
     return (
         <PageLayout loading={false}>
-            {/* Platform-specific Guide */}
+            {/* Platform-specific Guide with Preview Notice */}
             {platformGuide && (
-                <UnifiedCard
-                    title={`${platformName} Setup Guide`}
-                    subtitle="Follow these steps to configure your bot"
-                    size="full"
-                    sx={{ mb: 2 }}
-                >
-                    {platformGuide}
-                </UnifiedCard>
+                <CollapsibleGuide
+                    platformName={platformName}
+                    platformGuide={platformGuide}
+                />
             )}
-
-            {/* Preview Notice Card */}
-            <PreviewNotice platformName={platformName} />
 
             <UnifiedCard
                 title={`${platformName} Bots`}
@@ -376,7 +379,7 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
 
             {/* Bot Add/Edit Dialog */}
             <Modal open={botTokenDialogOpen} onClose={() => setBotTokenDialogOpen(false)}>
-                <Stack
+                <Box
                     sx={{
                         position: 'absolute',
                         top: '50%',
@@ -385,12 +388,20 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
                         width: 600,
                         maxWidth: '80vw',
                         maxHeight: '80vh',
-                        overflowY: 'auto',
                         bgcolor: 'background.paper',
                         boxShadow: 24,
-                        p: 4,
                         borderRadius: 2,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden',
+                    }}
+                >
+                <Stack
+                    sx={{
+                        overflowY: 'auto',
+                        p: 4,
                         gap: 2,
+                        flex: 1,
                     }}
                 >
                     <Typography
@@ -426,6 +437,22 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
                                 authData={botAuthDraft}
                                 onChange={(key, value) => setBotAuthDraft(prev => ({ ...prev, [key]: value }))}
                                 disabled={botSaving}
+                                botUUID={botEditUuid ?? undefined}
+                                botName={botNameDraft || `${botPlatformDraft} Bot`}
+                                onBindingComplete={async (realUUID) => {
+                                    // After QR scan: set the real UUID and reload credentials
+                                    setBotEditUuid(realUUID);
+                                    setBotDialogMode('edit');
+                                    try {
+                                        const data = await api.getImBotSetting(realUUID);
+                                        if (data?.settings?.auth) {
+                                            setBotAuthDraft(data.settings.auth);
+                                        }
+                                    } catch (err) {
+                                        console.error('Failed to reload bot after binding:', err);
+                                    }
+                                    await loadBotSettings();
+                                }}
                             />
                         )}
 
@@ -493,6 +520,7 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
                         </Button>
                     </Stack>
                 </Stack>
+                </Box>
             </Modal>
 
             {/* SmartGuide Selector Dialog */}

@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/imbot/internal/core"
-	"github.com/tingly-dev/tingly-box/imbot/internal/interaction"
-	"github.com/tingly-dev/tingly-box/imbot/internal/platform/dingtalk"
-	"github.com/tingly-dev/tingly-box/imbot/internal/platform/discord"
-	"github.com/tingly-dev/tingly-box/imbot/internal/platform/feishu"
-	"github.com/tingly-dev/tingly-box/imbot/internal/platform/telegram"
+	"github.com/tingly-dev/tingly-box/imbot/core"
+	"github.com/tingly-dev/tingly-box/imbot/interaction"
+	"github.com/tingly-dev/tingly-box/imbot/platform/dingtalk"
+	"github.com/tingly-dev/tingly-box/imbot/platform/discord"
+	"github.com/tingly-dev/tingly-box/imbot/platform/feishu"
+	"github.com/tingly-dev/tingly-box/imbot/platform/telegram"
 )
 
 // Handler manages interaction requests and responses

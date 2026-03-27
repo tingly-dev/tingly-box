@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -21,6 +22,17 @@ type MultiModeMemoryLogMiddleware struct {
 
 // NewMultiModeMemoryLogMiddleware creates a new middleware with both persistent and memory logging
 func NewMultiModeMemoryLogMiddleware(multiLogger *obs.MultiLogger) *MultiModeMemoryLogMiddleware {
+	if multiLogger == nil {
+		// Fallback for test environments where no multi-logger is configured.
+		l := logrus.New()
+		if gin.Mode() == gin.TestMode {
+			l.SetOutput(io.Discard)
+		}
+		return &MultiModeMemoryLogMiddleware{
+			logger:      l,
+			multiLogger: nil,
+		}
+	}
 	// Get a logger scoped to HTTP source
 	httpLogger := multiLogger.GetLogrusLogger(obs.LogSourceHTTP)
 
@@ -85,14 +97,18 @@ func getLogLevel(statusCode int) logrus.Level {
 
 // GetEntries returns all log entries from memory in chronological order
 func (m *MultiModeMemoryLogMiddleware) GetEntries() []*logrus.Entry {
-	// Get the HTTP scoped memory sink from MultiLogger
+	if m.multiLogger == nil {
+		return []*logrus.Entry{}
+	}
 	httpLogger := m.multiLogger.WithSource(obs.LogSourceHTTP)
 	return httpLogger.GetMemoryEntries()
 }
 
 // GetLatestEntries returns the newest N log entries from memory
 func (m *MultiModeMemoryLogMiddleware) GetLatestEntries(n int) []*logrus.Entry {
-	// Get the HTTP scoped memory sink from MultiLogger
+	if m.multiLogger == nil {
+		return []*logrus.Entry{}
+	}
 	httpLogger := m.multiLogger.WithSource(obs.LogSourceHTTP)
 	return httpLogger.GetMemoryLatest(n)
 }
@@ -119,7 +135,9 @@ func (m *MultiModeMemoryLogMiddleware) GetEntriesByLevel(level logrus.Level) []*
 
 // Clear removes all log entries from memory
 func (m *MultiModeMemoryLogMiddleware) Clear() {
-	// Get the HTTP scoped memory sink from MultiLogger and clear it
+	if m.multiLogger == nil {
+		return
+	}
 	httpLogger := m.multiLogger.WithSource(obs.LogSourceHTTP)
 	httpLogger.ClearMemory()
 }
