@@ -457,11 +457,11 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
                                 <Bar
                                     dataKey="cacheTokens"
                                     name="Cache Tokens"
+                                    stackId="tokens"
                                     hide={!visibleSeries.cache}
                                     stroke={TOKEN_COLORS.cache.dark}
                                     strokeWidth={0.5}
                                     strokeOpacity={0.8}
-                                    radius={barRadius}
                                     isAnimationActive={true}
                                     animationBegin={0}
                                     animationDuration={800}
@@ -480,29 +480,24 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
                                     dataKey="inputTokens"
                                     name="Input Tokens"
                                     fill="url(#colorInput)"
+                                    stackId="tokens"
                                     hide={!visibleSeries.input}
                                     stroke={TOKEN_COLORS.input.dark}
                                     strokeWidth={0.5}
                                     strokeOpacity={0.8}
-                                    radius={barRadius}
-                                    isAnimationActive={true}
-                                    animationBegin={0}
-                                    animationDuration={800}
-                                    animationEasing="ease-out"
+                                    isAnimationActive={false}
                                 />
                                 <Bar
                                     dataKey="outputTokens"
                                     name="Output Tokens"
                                     fill="url(#colorOutput)"
+                                    stackId="tokens"
                                     hide={!visibleSeries.output}
                                     radius={barRadius}
                                     stroke={TOKEN_COLORS.output.dark}
                                     strokeWidth={0.5}
                                     strokeOpacity={0.8}
-                                    isAnimationActive={true}
-                                    animationBegin={0}
-                                    animationDuration={800}
-                                    animationEasing="ease-out"
+                                    isAnimationActive={false}
                                 />
 
                             </BarChart>
