@@ -465,7 +465,7 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
                                     strokeOpacity={0.8}
                                     isAnimationActive={true}
                                     animationBegin={0}
-                                    animationDuration={600}
+                                    animationDuration={800}
                                     animationEasing="ease-out"
                                 >
                                     {chartData.map((entry, index) => (
@@ -487,8 +487,8 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
                                     strokeWidth={0.5}
                                     strokeOpacity={0.8}
                                     isAnimationActive={true}
-                                    animationBegin={600}
-                                    animationDuration={600}
+                                    animationBegin={0}
+                                    animationDuration={800}
                                     animationEasing="ease-out"
                                 />
                                 <Bar
@@ -502,8 +502,8 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
                                     strokeWidth={0.5}
                                     strokeOpacity={0.8}
                                     isAnimationActive={true}
-                                    animationBegin={1200}
-                                    animationDuration={600}
+                                    animationBegin={0}
+                                    animationDuration={800}
                                     animationEasing="ease-out"
                                 />
 
