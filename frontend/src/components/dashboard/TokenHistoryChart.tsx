@@ -414,6 +414,7 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
                     <Box sx={{ flex: 1, minHeight: 280 }}>
                         <ResponsiveContainer width="100%" height={280}>
                             <BarChart
+                                key={chartData.length ? `${chartData.length}-${chartData[0].timestamp}` : 'empty'}
                                 data={chartData}
                                 barGap={barConfig.barGap}
                                 barCategoryGap={barConfig.barCategoryGap}
