@@ -100,9 +100,9 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	if req.MaxTokens > int64(maxAllowed) {
 		req.MaxTokens = int64(maxAllowed)
 	}
-	// If thinking carries budget_tokens beyond model max, shrink budget to max_allowed/10.
+	// If thinking carries budget_tokens beyond model max, shrink budget to max_allowed/10, but at leas 1024
 	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil && *thinkBudget > int64(maxAllowed) {
-		req.Thinking = anthropic.ThinkingConfigParamOfEnabled(int64(maxAllowed / 10))
+		req.Thinking = anthropic.ThinkingConfigParamOfEnabled(max(1024, int64(maxAllowed / 10)))
 	}
 
 	// Set provider UUID in context (Service.Provider uses UUID, not name)
