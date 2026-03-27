@@ -2,19 +2,13 @@ package config
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
-	"encoding/pem"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
@@ -77,6 +71,9 @@ type Config struct {
 	// Enterprise context JWT validation settings for TBE->TB proxy calls.
 	EnterpriseContextJWT EnterpriseContextJWTConfig `json:"enterprise_context_jwt,omitempty" yaml:"enterprise_context_jwt,omitempty"`
 
+	// HTTP Transport settings for upstream API connections
+	HTTPTransport HTTPTransportConfig `json:"http_transport,omitempty" yaml:"http_transport,omitempty"`
+
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
 
@@ -93,100 +90,104 @@ type Config struct {
 	imbotSettingsStore *db.ImBotSettingsStore
 	templateManager    *data.TemplateManager
 
+	// Provider lifecycle hooks
+	providerUpdateHooks []ProviderUpdateHook
+	providerDeleteHooks []ProviderDeleteHook
+	hookMu              sync.RWMutex
+
 	mu sync.RWMutex
 }
 
-// GUIConfig holds GUI-specific settings (slim/gui mode)
-type GUIConfig struct {
-	// Debug enables debug mode for GUI (gin debug logging, detailed logs)
-	Debug bool `json:"debug"`
-	// Port specifies the GUI server port. 0 means use ServerPort from global config
-	Port int `json:"port"`
-	// Verbose enables verbose logging for GUI
-	Verbose bool `json:"verbose"`
+// HTTPTransportConfig holds HTTP transport connection pool settings
+// These settings control the connection pooling behavior for upstream API requests
+// All fields use pointers so that omitting them means "use Go default" (backward compatible)
+type HTTPTransportConfig struct {
+	// MaxIdleConns is the maximum number of idle connections across all hosts
+	// Default (nil): 100 (Go stdlib default)
+	// Recommended for 200 concurrent users: 200-300
+	MaxIdleConns *int `json:"max_idle_conns,omitempty" yaml:"max_idle_conns,omitempty"`
+
+	// MaxIdleConnsPerHost is the maximum number of idle connections per host
+	// Default (nil): 2 (Go stdlib default)
+	// Recommended for 200 concurrent users: 20-50
+	MaxIdleConnsPerHost *int `json:"max_idle_conns_per_host,omitempty" yaml:"max_idle_conns_per_host,omitempty"`
+
+	// MaxConnsPerHost limits the total number of connections per host (active + idle)
+	// Default (nil): 0 (no limit)
+	// Set to control maximum concurrent connections to a single upstream host
+	MaxConnsPerHost *int `json:"max_conns_per_host,omitempty" yaml:"max_conns_per_host,omitempty"`
+
+	// DisableKeepAlives disables HTTP/1.1 keep-alive connections
+	// Default (nil): false
+	// WARNING: Setting this to true will significantly impact performance
+	DisableKeepAlives *bool `json:"disable_keep_alives,omitempty" yaml:"disable_keep_alives,omitempty"`
 }
 
-type EnterpriseContextPublicKey struct {
-	KID string `json:"kid" yaml:"kid"`
-	PEM string `json:"pem" yaml:"pem"`
+// ConfigOption is a function that modifies a Config during initialization
+type ConfigOption func(*configOptions)
+
+// configOptions holds the options for creating a new Config
+type configOptions struct {
+	configDir       string
+	enableMigration bool
+	enableBuiltIn   bool
 }
 
-type EnterpriseContextJWTConfig struct {
-	Enabled           bool                         `json:"enabled" yaml:"enabled"`
-	AllowedIssuers    []string                     `json:"allowed_issuers,omitempty" yaml:"allowed_issuers,omitempty"`
-	AllowedAudiences  []string                     `json:"allowed_audiences,omitempty" yaml:"allowed_audiences,omitempty"`
-	AlgAllowlist      []string                     `json:"alg_allowlist,omitempty" yaml:"alg_allowlist,omitempty"`
-	HS256SecretRef    string                       `json:"hs256_secret_ref,omitempty" yaml:"hs256_secret_ref,omitempty"`
-	RS256PublicKeyRef string                       `json:"rs256_public_key_ref,omitempty" yaml:"rs256_public_key_ref,omitempty"`
-	JWKSURL           string                       `json:"jwks_url,omitempty" yaml:"jwks_url,omitempty"`
-	PublicKeys        []EnterpriseContextPublicKey `json:"public_keys,omitempty" yaml:"public_keys,omitempty"`
-	ClockSkewSeconds  int                          `json:"clock_skew_seconds,omitempty" yaml:"clock_skew_seconds,omitempty"`
-	RequireJTI        bool                         `json:"require_jti" yaml:"require_jti"`
+// WithConfigDir returns a ConfigOption that sets a custom config directory
+func WithConfigDir(dir string) ConfigOption {
+	return func(opts *configOptions) {
+		opts.configDir = dir
+	}
 }
 
-func enterpriseContextKeyPaths(configDir string) (string, string) {
-	keyDir := filepath.Join(configDir, "keys")
-	return filepath.Join(keyDir, "enterprise_context_rs256_private.pem"),
-		filepath.Join(keyDir, "enterprise_context_rs256_public.pem")
+// WithDisableMigration returns a ConfigOption that disables the migration step
+// Useful when using tingly-box as a library in external projects
+func WithDisableMigration() ConfigOption {
+	return func(opts *configOptions) {
+		opts.enableMigration = false
+	}
 }
 
-func ensureEnterpriseContextRS256KeyPair(configDir string) (string, string, error) {
-	privatePath, publicPath := enterpriseContextKeyPaths(configDir)
-	privateOK := false
-	publicOK := false
-	if st, err := os.Stat(privatePath); err == nil && !st.IsDir() {
-		privateOK = true
+// WithDisableBuiltIn returns a ConfigOption that disables the built-in rules creation
+func WithDisableBuiltIn() ConfigOption {
+	return func(opts *configOptions) {
+		opts.enableBuiltIn = false
 	}
-	if st, err := os.Stat(publicPath); err == nil && !st.IsDir() {
-		publicOK = true
-	}
-	if privateOK && publicOK {
-		return "file:" + privatePath, "file:" + publicPath, nil
-	}
-
-	if err := os.MkdirAll(filepath.Dir(privatePath), 0700); err != nil {
-		return "", "", fmt.Errorf("create enterprise key dir failed: %w", err)
-	}
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return "", "", fmt.Errorf("generate rsa key failed: %w", err)
-	}
-	privatePEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(key),
-	})
-	pubDer, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
-	if err != nil {
-		return "", "", fmt.Errorf("marshal rsa public key failed: %w", err)
-	}
-	publicPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "PUBLIC KEY",
-		Bytes: pubDer,
-	})
-	if err := os.WriteFile(privatePath, privatePEM, 0600); err != nil {
-		return "", "", fmt.Errorf("write enterprise private key failed: %w", err)
-	}
-	if err := os.WriteFile(publicPath, publicPEM, 0644); err != nil {
-		return "", "", fmt.Errorf("write enterprise public key failed: %w", err)
-	}
-	return "file:" + privatePath, "file:" + publicPath, nil
 }
 
-// NewConfig creates a new global configuration manager
-func NewConfig() (*Config, error) {
-	// Use the same config directory as the main config
+// NewDefaultConfig creates a new global configuration manager with default settings
+// Uses the default tingly config directory and runs migrations
+func NewDefaultConfig() (*Config, error) {
 	configDir := constant.GetTinglyConfDir()
 	if configDir == "" {
 		return nil, fmt.Errorf("config directory is empty")
 	}
 
-	return NewConfigWithDir(configDir)
+	allOpts := []ConfigOption{}
+	allOpts = append(allOpts, WithConfigDir(configDir))
+	return NewConfig(allOpts...)
 }
 
-// NewConfigWithDir creates a new global configuration manager with a custom config directory
-func NewConfigWithDir(configDir string) (*Config, error) {
+// NewConfig creates a new global configuration manager with the given options
+// If no config directory is specified, uses the default tingly config directory
+func NewConfig(opts ...ConfigOption) (*Config, error) {
+	// Apply options
+	options := &configOptions{
+		configDir:       "", // Will be set to default if empty
+		enableMigration: true,
+		enableBuiltIn:   true,
+	}
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	// Use default config directory if not specified
+	configDir := options.configDir
 	if configDir == "" {
-		return nil, fmt.Errorf("cfg directory is empty")
+		configDir = constant.GetTinglyConfDir()
+		if configDir == "" {
+			return nil, fmt.Errorf("config directory is empty")
+		}
 	}
 
 	if err := os.MkdirAll(configDir, 0700); err != nil {
@@ -230,13 +231,26 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 			return nil, fmt.Errorf("failed to load global cfg: %w", err)
 		}
 	} else {
-		cfg.Save()
+		// Run migration only once at startup (not on every load/reload)
+		// Skip migration if disabled (useful when using as a library)
+		if !options.enableMigration {
+			logrus.Warnf("migration disabled")
+		} else {
+			Migrate(cfg)
+			cfg.Save()
+		}
 	}
 
-	cfg.InsertDefaultRule()
-	if cfg.VirtualModelToken == "" {
-		cfg.VirtualModelToken = constant.DefaultVirtualModelToken
+	// Built-in rules setup
+	if !options.enableBuiltIn {
+		logrus.Warnf("built-in rules disabled")
+	} else {
+		cfg.InsertDefaultRule()
+		if cfg.VirtualModelToken == "" {
+			cfg.VirtualModelToken = constant.DefaultVirtualModelToken
+		}
 	}
+
 	// Ensure default scenario configs are set
 	cfg.EnsureDefaultScenarioConfigs()
 	cfg.Save()
@@ -386,6 +400,17 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	return cfg, nil
 }
 
+// NewConfigWithDir creates a new global configuration manager with a custom config directory
+// This is a convenience function that calls NewConfig with WithConfigDir option
+// For backward compatibility with existing code
+func NewConfigWithDir(configDir string, opts ...ConfigOption) (*Config, error) {
+	// Prepend WithConfigDir to the options slice
+	allOpts := make([]ConfigOption, 0, len(opts)+1)
+	allOpts = append(allOpts, WithConfigDir(configDir))
+	allOpts = append(allOpts, opts...)
+	return NewConfig(allOpts...)
+}
+
 // load loads the global configuration from file
 func (c *Config) load() error {
 	// Store the config file path before unmarshaling
@@ -403,8 +428,8 @@ func (c *Config) load() error {
 	// Restore the config file path after unmarshaling
 	c.ConfigFile = configFile
 
-	// Migration: Ensure all rules have a tactic set
-	Migrate(c)
+	// Note: Migration is now only run at startup in NewConfigWithDir()
+	// Hot-reload (via watcher) does not trigger migration
 
 	return c.RefreshStatsFromStore()
 }
@@ -903,200 +928,6 @@ func (c *Config) HasToken() bool {
 	return c.HasUserToken()
 }
 
-// Provider-related methods (merged from AppConfig)
-
-// migrateProvidersToDB migrates providers from JSON config to database
-// This is a one-time migration that runs on startup if the database is empty
-// Note: Providers are kept in JSON config as backup for now, will be cleared in a future version
-func (c *Config) migrateProvidersToDB() error {
-	if c.providerStore == nil {
-		return nil // Provider store not initialized, skip migration
-	}
-
-	// Check if database already has providers
-	count, err := c.providerStore.Count()
-	if err != nil {
-		return fmt.Errorf("failed to check provider count: %w", err)
-	}
-
-	if count > 0 {
-		// Database already has providers, skip migration
-		logrus.Debugf("Database already has %d providers, skipping migration", count)
-		return nil
-	}
-
-	// Check if JSON config has providers to migrate
-	if len(c.Providers) == 0 {
-		return nil // No providers to migrate
-	}
-
-	logrus.Infof("Migrating %d providers from JSON config to database (keeping JSON as backup)...", len(c.Providers))
-
-	// Migrate each provider to database
-	for _, provider := range c.Providers {
-		if err := c.providerStore.Save(provider); err != nil {
-			return fmt.Errorf("failed to migrate provider %s: %w", provider.UUID, err)
-		}
-	}
-
-	logrus.Infof("Successfully migrated %d providers to database", len(c.Providers))
-	// Note: We keep c.Providers in JSON config as backup for now
-	// In a future version, we will clear: c.Providers = nil; c.ProvidersV1 = nil; c.Save()
-
-	return nil
-}
-
-// AddProviderByName adds a new AI provider configuration by name, API base, and token
-func (c *Config) AddProviderByName(name, apiBase, token string) error {
-	if name == "" {
-		return errors.New("provider name cannot be empty")
-	}
-	if apiBase == "" {
-		return errors.New("API base URL cannot be empty")
-	}
-
-	provider := &typ.Provider{
-		UUID:     GenerateUUID(), // Generate a new UUID for the provider
-		Name:     name,
-		APIBase:  apiBase,
-		APIStyle: protocol.APIStyleOpenAI, // default to openai
-		AuthType: typ.AuthTypeAPIKey,
-		Token:    token,
-		Enabled:  true,
-	}
-
-	return c.AddProvider(provider)
-}
-
-// GetProviderByUUID returns a provider from database
-func (c *Config) GetProviderByUUID(uuid string) (*typ.Provider, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	if c.providerStore == nil {
-		return nil, fmt.Errorf("provider store not initialized")
-	}
-
-	provider, err := c.providerStore.GetByUUID(uuid)
-	if err != nil {
-		return nil, fmt.Errorf("provider '%s' not found: %w", uuid, err)
-	}
-	return provider, nil
-}
-
-// GetProviderStore returns the provider store instance
-func (c *Config) GetProviderStore() *db.ProviderStore {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.providerStore
-}
-
-func (c *Config) GetProviderByName(name string) (*typ.Provider, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	// Try provider store first
-	if c.providerStore == nil {
-		panic("[db] Provider store missing")
-	}
-
-	if provider, err := c.providerStore.GetByName(name); err == nil {
-		return provider, nil
-	}
-
-	return nil, fmt.Errorf("provider with name '%s' not found", name)
-}
-
-// ListProviders returns all providers
-func (c *Config) ListProviders() []*typ.Provider {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	// Try provider store first (database is the source of truth)
-	if c.providerStore == nil {
-		panic("[db] Provider store missing")
-	}
-	providers, err := c.providerStore.List()
-	if err == nil {
-		return providers
-	}
-	// Database error - log warning and fall back to in-memory providers
-	logrus.Warnf("Failed to list providers from database store, falling back to config file: %v", err)
-
-	return nil
-}
-
-// ListOAuthProviders returns all OAuth-enabled providers
-func (c *Config) ListOAuthProviders() ([]*typ.Provider, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	// Try provider store first
-	if c.providerStore == nil {
-		panic("[db] Provider store missing")
-	}
-	providers, err := c.providerStore.ListOAuth()
-	if err == nil {
-		return providers, nil
-	}
-
-	return nil, nil
-}
-
-// AddProvider adds a new provider using Provider struct
-func (c *Config) AddProvider(provider *typ.Provider) error {
-	if provider.Name == "" {
-		return errors.New("provider name cannot be empty")
-	}
-	if provider.APIBase == "" {
-		return errors.New("API base URL cannot be empty")
-	}
-
-	// Use provider store if available
-	if c.providerStore != nil {
-		if provider.UUID == "" {
-			provider.UUID = GenerateUUID()
-		}
-		return c.providerStore.Save(provider)
-	}
-	return nil
-}
-
-// UpdateProvider updates an existing provider by UUID
-func (c *Config) UpdateProvider(uuid string, provider *typ.Provider) error {
-	// Use provider store if available
-	if c.providerStore != nil {
-		// Preserve the UUID
-		provider.UUID = uuid
-		return c.providerStore.Save(provider)
-	}
-
-	// Fallback to in-memory (for migration period)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	return fmt.Errorf("provider with UUID '%s' not found", uuid)
-}
-
-// DeleteProvider removes a provider by UUID
-func (c *Config) DeleteProvider(uuid string) error {
-	// Use provider store if available
-	if c.providerStore == nil {
-		panic("[db] Provider store missing")
-
-	}
-	if err := c.providerStore.Delete(uuid); err != nil {
-		return err
-	}
-
-	// Delete the associated model file
-	if c.modelManager != nil {
-		_ = c.modelManager.RemoveProvider(uuid)
-	}
-
-	return nil
-}
-
 // Server configuration methods (merged from AppConfig)
 
 // GetServerPort returns the configured server port
@@ -1394,55 +1225,6 @@ func (c *Config) SetErrorLogFilterExpression(expr string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.ErrorLogFilterExpression = expr
-	return c.Save()
-}
-
-// ============
-// GUI Configuration
-// ============
-
-// GetGUIDebug returns the GUI debug setting
-func (c *Config) GetGUIDebug() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.GUI.Debug
-}
-
-// SetGUIDebug updates the GUI debug setting
-func (c *Config) SetGUIDebug(debug bool) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.GUI.Debug = debug
-	return c.Save()
-}
-
-// GetGUIPort returns the GUI port setting (0 means use ServerPort)
-func (c *Config) GetGUIPort() int {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.GUI.Port
-}
-
-// SetGUIPort updates the GUI port setting
-func (c *Config) SetGUIPort(port int) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.GUI.Port = port
-	return c.Save()
-}
-
-// GetGUIVerbose returns the GUI verbose setting
-func (c *Config) GetGUIVerbose() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.GUI.Verbose
-}
-
-// SetGUIVerbose updates the GUI verbose setting
-func (c *Config) SetGUIVerbose(verbose bool) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.GUI.Verbose = verbose
 	return c.Save()
 }
 
@@ -1790,12 +1572,8 @@ func IsTacticValid(tactic *typ.Tactic) bool {
 
 	// Check for invalid zero values in params
 	switch p := tactic.Params.(type) {
-	case *typ.RoundRobinParams:
-		return p.RequestThreshold > 0
 	case *typ.TokenBasedParams:
 		return p.TokenThreshold > 0
-	case *typ.HybridParams:
-		return p.RequestThreshold > 0 && p.TokenThreshold > 0
 	case *typ.RandomParams:
 		// Random params has no fields, always valid if not nil
 		return true
@@ -1825,36 +1603,6 @@ func (c *Config) DeleteRule(ruleUUID string) error {
 
 	c.Rules = append(c.Rules[:index], c.Rules[index+1:]...)
 	return c.Save()
-}
-
-// generateSecret generates a random secret for JWT
-func generateSecret() string {
-	return fmt.Sprintf("%d", time.Now().UnixNano())
-}
-
-// GenerateSecureToken generates a cryptographically random token for user authentication
-// The token is a 256-bit (32 byte) random value, hex-encoded, with a "tingly-box-" prefix
-func GenerateSecureToken() (string, error) {
-	bytes := make([]byte, 32) // 256 bits
-	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("failed to generate random token: %w", err)
-	}
-	return "tb-user-" + hex.EncodeToString(bytes), nil
-}
-
-// IsDefaultToken checks if the given token is the default token
-func IsDefaultToken(token string) bool {
-	return token == constant.DefaultUserToken
-}
-
-// GenerateUUID generates a new UUID string
-func GenerateUUID() string {
-	id, err := uuid.NewUUID()
-	if err != nil {
-		// Fallback to timestamp-based UUID if generation fails
-		return fmt.Sprintf("uuid-%d", time.Now().UnixNano())
-	}
-	return id.String()
 }
 
 func (c *Config) CreateDefaultConfig() error {
@@ -1907,169 +1655,6 @@ func (c *Config) CreateDefaultConfig() error {
 	return nil
 }
 
-var DefaultRules []typ.Rule
-
-func init() {
-	DefaultRules = []typ.Rule{
-		{
-			UUID:          "built-in-anthropic",
-			Scenario:      typ.ScenarioAnthropic,
-			RequestModel:  "tingly-claude",
-			ResponseModel: "",
-			Description:   "Default proxy rule in tingly-box for general use with Anthropic",
-			Services:      []*loadbalance.Service{}, // Empty services initially
-			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
-			},
-			Active: true,
-		},
-		{
-			UUID:          "built-in-agent",
-			Scenario:      typ.ScenarioAgent,
-			RequestModel:  "tingly-agent",
-			ResponseModel: "",
-			Description:   "Default proxy rule in tingly-box for agent",
-			Services:      []*loadbalance.Service{}, // Empty services initially
-			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
-			},
-			Active: true,
-		},
-		{
-			UUID:          "built-in-agent-claw",
-			Scenario:      typ.ScenarioAgent,
-			RequestModel:  "tingly-claw",
-			ResponseModel: "",
-			Description:   "Built in model rule for agent - claw",
-			Services:      []*loadbalance.Service{},
-			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
-			},
-			Active: true,
-		},
-		{
-			UUID:          "built-in-openai",
-			Scenario:      typ.ScenarioOpenAI,
-			RequestModel:  "tingly-gpt",
-			ResponseModel: "",
-			Description:   "Default proxy rule in tingly-box for general use with OpenAI",
-			Services:      []*loadbalance.Service{}, // Empty services initially
-			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
-			},
-			Active: true,
-		},
-		{
-			UUID:          "built-in-codex",
-			Scenario:      typ.ScenarioCodex,
-			RequestModel:  "tingly-codex",
-			ResponseModel: "",
-			Description:   "Default proxy rule for Codex",
-			Services:      []*loadbalance.Service{},
-			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
-			},
-			Active: true,
-		},
-		{
-			UUID:          "built-in-cc",
-			Scenario:      typ.ScenarioClaudeCode,
-			RequestModel:  "tingly/cc",
-			ResponseModel: "",
-			Description:   "Default proxy rule for Claude Code",
-			Services:      []*loadbalance.Service{}, // Empty services initially
-			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
-			},
-			Active: true,
-		},
-		{
-			UUID:          "built-in-cc-haiku",
-			Scenario:      typ.ScenarioClaudeCode,
-			RequestModel:  "tingly/cc-haiku",
-			ResponseModel: "",
-			Description:   "Claude Code - Haiku mode The model to use for haiku , or background functionality",
-			Services:      []*loadbalance.Service{},
-			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
-			},
-			Active: true,
-		},
-		{
-			UUID:          "built-in-cc-sonnet",
-			Scenario:      typ.ScenarioClaudeCode,
-			RequestModel:  "tingly/cc-sonnet",
-			ResponseModel: "",
-			Description:   "Claude Code - Sonnet model - model to use for sonnet , or for opusplan when Plan Mode is not active.",
-			Services:      []*loadbalance.Service{},
-			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
-			},
-			Active: true,
-		},
-		{
-			UUID:          "built-in-cc-opus",
-			Scenario:      typ.ScenarioClaudeCode,
-			RequestModel:  "tingly/cc-opus",
-			ResponseModel: "",
-			Description:   "Claude Code - Opus model - to use for opus , or for opusplan when Plan Mode is active.",
-			Services:      []*loadbalance.Service{},
-			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
-			},
-			Active: true,
-		},
-		{
-			UUID:          "built-in-cc-default",
-			Scenario:      typ.ScenarioClaudeCode,
-			RequestModel:  "tingly/cc-default",
-			ResponseModel: "",
-			Description:   "Claude Code - Default model - for general task",
-			Services:      []*loadbalance.Service{},
-			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
-			},
-			Active: true,
-		},
-		{
-			UUID:          "built-in-cc-subagent",
-			Scenario:      typ.ScenarioClaudeCode,
-			RequestModel:  "tingly/cc-subagent",
-			ResponseModel: "",
-			Description:   "Claude Code - Subagent model - model to use for subagents",
-			Services:      []*loadbalance.Service{},
-			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
-			},
-			Active: true,
-		},
-		{
-			UUID:          "built-in-opencode",
-			Scenario:      typ.ScenarioOpenCode,
-			RequestModel:  "tingly-opencode",
-			ResponseModel: "",
-			Description:   "Default proxy rule for OpenCode - AI coding assistant",
-			Services:      []*loadbalance.Service{},
-			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
-			},
-			Active: true,
-		},
-	}
-}
-
 func (c *Config) InsertDefaultRule() error {
 	for _, r := range DefaultRules {
 		c.AddRule(r)
@@ -2113,189 +1698,25 @@ func (c *Config) EnsureDefaultScenarioConfigs() {
 	}
 }
 
-// SmartGuide rule management
-
-// SmartGuideRuleUUIDPrefix is the prefix for internal SmartGuide rules
-// Each bot will have its own rule: _internal_smart_guide_{botUUID}
-const SmartGuideRuleUUIDPrefix = "_internal_smart_guide_"
-
-// SmartGuideRuleUUID generates a unique rule UUID for a specific bot
-func SmartGuideRuleUUID(botUUID string) string {
-	return SmartGuideRuleUUIDPrefix + botUUID
-}
-
-// EnsureSmartGuideRuleForBot ensures the _smart_guide rule exists for a specific bot
-// If the rule doesn't exist, it creates it. If it exists but the configuration differs,
-// it updates the rule. The rule is persisted to config.json.
-//
-// Each bot gets its own rule with UUID: _internal_smart_guide_{botUUID}
-// The rule name uses the bot's name (if provided), otherwise uses botUUID
-func (c *Config) EnsureSmartGuideRuleForBot(botUUID, botName, providerUUID, modelID string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Generate rule UUID for this specific bot
-	ruleUUID := SmartGuideRuleUUID(botUUID)
-
-	// Use bot name for description, fallback to botUUID
-	displayName := botName
-	if displayName == "" {
-		displayName = botUUID
+// ApplyHTTPTransportConfig applies the HTTP transport configuration to the global transport pool
+// This is called by TBE during initialization to configure connection pooling
+// For TB (tingly-box), this is a no-op since HTTPTransport will be empty (zero values)
+func (c *Config) ApplyHTTPTransportConfig() {
+	if c.HTTPTransport.MaxIdleConns == nil &&
+		c.HTTPTransport.MaxIdleConnsPerHost == nil &&
+		c.HTTPTransport.MaxConnsPerHost == nil &&
+		c.HTTPTransport.DisableKeepAlives == nil {
+		// No custom transport config, use Go defaults (backward compatible with TB)
+		return
 	}
 
-	// Validate provider exists and is enabled
-	provider, err := c.providerStore.GetByUUID(providerUUID)
-	if err != nil || provider == nil {
-		logrus.WithFields(logrus.Fields{
-			"provider": providerUUID,
-			"bot":      botUUID,
-		}).Error("SmartGuide provider not found")
-		return fmt.Errorf("provider %s not found", providerUUID)
+	// Import client package to set transport config
+	// We need to do this here to avoid circular dependency
+	config := &client.TransportConfig{
+		MaxIdleConns:        c.HTTPTransport.MaxIdleConns,
+		MaxIdleConnsPerHost: c.HTTPTransport.MaxIdleConnsPerHost,
+		MaxConnsPerHost:     c.HTTPTransport.MaxConnsPerHost,
+		DisableKeepAlives:   c.HTTPTransport.DisableKeepAlives,
 	}
-	if !provider.Enabled {
-		logrus.WithFields(logrus.Fields{
-			"provider": providerUUID,
-			"bot":      botUUID,
-		}).Error("SmartGuide provider is disabled")
-		return fmt.Errorf("provider %s is disabled", providerUUID)
-	}
-
-	// Check if rule already exists for this bot
-	existingRuleIndex := -1
-	for i, rule := range c.Rules {
-		if rule.UUID == ruleUUID {
-			existingRuleIndex = i
-			break
-		}
-	}
-
-	// Create new rule if it doesn't exist
-	if existingRuleIndex == -1 {
-		newRule := typ.Rule{
-			UUID:          ruleUUID,
-			Scenario:      typ.ScenarioSmartGuide,
-			RequestModel:  WildcardRuleName,
-			ResponseModel: modelID,
-			Description:   fmt.Sprintf("Auto-generated rule for SmartGuide bot '%s' (DO NOT EDIT)", displayName),
-			Services: []*loadbalance.Service{
-				{
-					Provider: providerUUID,
-					Model:    modelID,
-					Active:   true,
-				},
-			},
-			LBTactic: typ.Tactic{
-				Type: loadbalance.TacticRoundRobin,
-			},
-			Active:       true,
-			SmartEnabled: false,
-		}
-
-		c.Rules = append(c.Rules, newRule)
-		if err := c.Save(); err != nil {
-			logrus.WithError(err).Error("Failed to save SmartGuide rule")
-			return fmt.Errorf("failed to save rule: %w", err)
-		}
-
-		logrus.WithFields(logrus.Fields{
-			"bot":            botUUID,
-			"bot_name":       botName,
-			"provider":       providerUUID,
-			"model":          modelID,
-			"rule_uuid":      ruleUUID,
-			"scenario":       typ.ScenarioSmartGuide,
-			"request_model":  WildcardRuleName,
-			"response_model": modelID,
-		}).Info("SmartGuide rule created")
-		return nil
-	}
-
-	// Update existing rule if configuration differs
-	existingRule := &c.Rules[existingRuleIndex]
-	needsUpdate := false
-
-	// Check if services need updating
-	if len(existingRule.Services) == 0 {
-		needsUpdate = true
-	} else {
-		firstService := existingRule.Services[0]
-		if firstService.Provider != providerUUID || firstService.Model != modelID {
-			needsUpdate = true
-		}
-	}
-
-	if needsUpdate {
-		existingRule.Services = []*loadbalance.Service{
-			{
-				Provider: providerUUID,
-				Model:    modelID,
-				Active:   true,
-			},
-		}
-		existingRule.ResponseModel = modelID
-		// Update description if bot name changed
-		if botName != "" {
-			existingRule.Description = fmt.Sprintf("Auto-generated rule for SmartGuide bot '%s' (DO NOT EDIT)", botName)
-		}
-
-		if err := c.Save(); err != nil {
-			logrus.WithError(err).Error("Failed to update SmartGuide rule")
-			return fmt.Errorf("failed to update rule: %w", err)
-		}
-
-		logrus.WithFields(logrus.Fields{
-			"bot":       botUUID,
-			"bot_name":  botName,
-			"provider":  providerUUID,
-			"model":     modelID,
-			"rule_uuid": ruleUUID,
-			"scenario":  typ.ScenarioSmartGuide,
-		}).Info("SmartGuide rule updated")
-	} else {
-		logrus.WithFields(logrus.Fields{
-			"bot":       botUUID,
-			"bot_name":  botName,
-			"provider":  providerUUID,
-			"model":     modelID,
-			"rule_uuid": ruleUUID,
-		}).Debug("SmartGuide rule already exists with correct configuration")
-	}
-
-	return nil
-}
-
-// EnsureSmartGuideRule ensures the _smart_guide rule exists (backward compatible)
-// This method creates a rule without bot-specific identification
-// Deprecated: Use EnsureSmartGuideRuleForBot for bot-specific rules
-func (c *Config) EnsureSmartGuideRule(providerUUID, modelID string) error {
-	return c.EnsureSmartGuideRuleForBot("", "", providerUUID, modelID)
-}
-
-// GetSmartGuideRuleForBot returns the _smart_guide rule for a specific bot
-func (c *Config) GetSmartGuideRuleForBot(botUUID string) *typ.Rule {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	ruleUUID := SmartGuideRuleUUID(botUUID)
-	for i, rule := range c.Rules {
-		if rule.UUID == ruleUUID {
-			return &c.Rules[i]
-		}
-	}
-	return nil
-}
-
-// GetSmartGuideRule returns the _smart_guide rule (backward compatible, non-bot-specific)
-// Deprecated: Use GetSmartGuideRuleForBot for bot-specific rules
-func (c *Config) GetSmartGuideRule() *typ.Rule {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	// Return first matching smart guide rule
-	for i, rule := range c.Rules {
-		if rule.Scenario == typ.ScenarioSmartGuide {
-			return &c.Rules[i]
-		}
-	}
-	return nil
+	client.SetTransportConfig(config)
 }

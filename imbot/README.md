@@ -6,23 +6,50 @@ A unified, extensible framework for building IM bots that work across multiple m
 
 - **Unified API** - Single interface for all platforms
 - **Type-Safe** - Full Go type safety with compile-time checks
-- **Extensible** - Easy to add new platforms
-- **Auto-Reconnect** - Built-in reconnection with configurable attempts and delay
+- **Extensible** - Easy to add new platforms via core interfaces
 - **Multi-Platform** - Manage multiple bots from different platforms in one manager
-- **Well-Tested** - Comprehensive test coverage with mock platform
-- **Production Ready** - Reliable and performant
+- **Rich Interactions** - Inline keyboards, commands, menus, and custom interactions
+- **Markdown Support** - Cross-platform markdown conversion with entity handling
+- **Well-Tested** - Comprehensive test coverage including E2E tests
+- **Production Ready** - Used in tingly-box AI orchestrator
 
 ## Supported Platforms
 
-- ✅ **Telegram** - Full support with inline keyboards, polls, and media
-- ✅ **Discord** - Basic support (in development)
-- ✅ **Slack** - Basic support (in development)
-- ✅ **Feishu/Lark** - Basic support (in development)
-- ✅ **WhatsApp** - Basic support (in development)
-- ✅ **WebChat** - Mock platform for testing
-- 🚧 Google Chat (coming soon)
-- 🚧 Signal (coming soon)
-- 🚧 BlueBubbles/iMessage (coming soon)
+- ✅ **Telegram** - Full support with inline keyboards, menus, commands, and media
+- ✅ **Feishu/Lark** - Full support with quick actions and interactive cards
+- ✅ **DingTalk** - Basic support with message handling
+- ✅ **Weixin** - Basic support
+- ✅ **WeWork** - Basic support (enterprise WeChat)
+- 🚧 **Discord** - Planned
+- 🚧 **Slack** - Planned
+- 🚧 **WhatsApp** - Planned
+- 🚧 **Google Chat** - Planned
+- 🚧 **Signal** - Planned
+
+## Architecture
+
+```
+imbot/
+├── core/              # Core abstractions and interfaces
+│   ├── bot.go         # Bot interface definition
+│   ├── message.go     # Message types and content
+│   ├── config.go      # Configuration structures
+│   ├── errors.go      # Error handling
+│   └── types.go       # Common types and constants
+├── platform/          # Platform-specific implementations
+│   ├── telegram/      # Telegram bot implementation
+│   ├── feishu/        # Feishu/Lark bot implementation
+│   ├── dingtalk/      # DingTalk bot implementation
+│   ├── discord/       # Discord bot implementation
+│   ├── slack/         # Slack bot implementation
+│   └── weixin/        # WeixinWork bot implementation
+├── interaction/       # Interactive elements (keyboards, buttons)
+├── command/           # Command registry and handling
+├── menu/              # Menu system (bot commands, quick actions)
+├── markdown/          # Markdown parser and converter
+├── manager.go         # Multi-bot manager
+└── factory.go         # Bot factory for creating platform instances
+```
 
 ## Installation
 
@@ -94,20 +121,15 @@ import (
     "os"
 
     "github.com/tingly-dev/tingly-box/imbot"
-    "github.com/tingly-dev/tingly-box/imbot/internal/core"
 )
 
 func main() {
-    manager := imbot.NewManager(
-        imbot.WithAutoReconnect(true),
-        imbot.WithMaxReconnectAttempts(5),
-        imbot.WithReconnectDelay(3000),
-    )
+    manager := imbot.NewManager()
 
     // Add multiple platforms
     configs := []*imbot.Config{
         {
-            Platform: core.PlatformTelegram,
+            Platform: imbot.PlatformTelegram,
             Enabled:  true,
             Auth: imbot.AuthConfig{
                 Type:  "token",
@@ -115,11 +137,12 @@ func main() {
             },
         },
         {
-            Platform: core.PlatformDiscord,
+            Platform: imbot.PlatformFeishu,
             Enabled:  true,
             Auth: imbot.AuthConfig{
-                Type:  "token",
-                Token: os.Getenv("DISCORD_TOKEN"),
+                Type:         "oauth",
+                ClientID:     os.Getenv("FEISHU_APP_ID"),
+                ClientSecret: os.Getenv("FEISHU_APP_SECRET"),
             },
         },
     }
@@ -129,7 +152,7 @@ func main() {
     }
 
     // Unified message handler
-    manager.OnMessage(func(msg imbot.Message, platform core.Platform) {
+    manager.OnMessage(func(msg imbot.Message, platform imbot.Platform) {
         log.Printf("[%-10s] %s: %s", platform, msg.Sender.DisplayName, msg.GetText())
 
         bot := manager.GetBot(platform)
@@ -156,14 +179,7 @@ config := &imbot.Config{
         Token: "your-bot-token",
     },
     Options: map[string]interface{}{
-        "webhookUrl":   "",     // Optional webhook URL
-        "useWebhook":   false,  // Use polling instead
-        "updateTimeout": 30,    // Polling timeout in seconds
-        "debug":        false,
-    },
-    Logging: &imbot.LoggingConfig{
-        Level:      "info",
-        Timestamps: true,
+        "debug": false,
     },
 }
 ```
@@ -173,38 +189,17 @@ config := &imbot.Config{
 The framework supports multiple authentication methods:
 
 ```go
-// Token authentication (most platforms)
+// Token authentication (Telegram, Discord)
 Auth: imbot.AuthConfig{
     Type:  "token",
     Token: "your-bot-token",
 }
 
-// Basic authentication
-Auth: imbot.AuthConfig{
-    Type:     "basic",
-    Username: "username",
-    Password: "password",
-}
-
-// OAuth authentication
+// OAuth authentication (Feishu, Slack)
 Auth: imbot.AuthConfig{
     Type:         "oauth",
     ClientID:     "client-id",
     ClientSecret: "client-secret",
-    RedirectURI:  "redirect-uri",
-}
-
-// Service Account (for Google Chat)
-Auth: imbot.AuthConfig{
-    Type:              "serviceAccount",
-    ServiceAccountJSON: "path/to/service-account.json",
-}
-
-// QR Code authentication (for WhatsApp)
-Auth: imbot.AuthConfig{
-    Type:      "qr",
-    AuthDir:   "./auth",
-    AccountID: "account-id",
 }
 ```
 
@@ -215,27 +210,9 @@ You can use environment variables in your config:
 ```go
 config := &imbot.Config{
     Auth: imbot.AuthConfig{
-        Token: "$TELEGRAM_BOT_TOKEN",  // Will be read from environment
+        Token: os.Getenv("TELEGRAM_BOT_TOKEN"),
     },
 }
-```
-
-Or use the `$ENV_VAR` syntax directly in config files:
-
-```yaml
-auth:
-  type: token
-  token: $TELEGRAM_BOT_TOKEN
-```
-
-### Manager Options
-
-```go
-manager := imbot.NewManager(
-    imbot.WithAutoReconnect(true),           // Enable auto-reconnect
-    imbot.WithMaxReconnectAttempts(10),      // Max reconnect attempts
-    imbot.WithReconnectDelay(5000),          // Delay in milliseconds
-)
 ```
 
 ## Message Handling
@@ -246,24 +223,28 @@ manager := imbot.NewManager(
 bot.SendText(ctx, "chat-id", "Hello, World!")
 ```
 
-### Send Message with Options
+### Send Message with Markdown
 
 ```go
 bot.SendMessage(ctx, "chat-id", &imbot.SendMessageOptions{
-    Text:      "Hello, World!",
+    Text:      "*Bold* _italic_ `code`",
     ParseMode: imbot.ParseModeMarkdown,
-    Silent:    false,
 })
 ```
 
-### Send Media
+### Send Message with Inline Keyboard
 
 ```go
-bot.SendMedia(ctx, "chat-id", []imbot.MediaAttachment{
-    {
-        Type: "image",
-        URL:  "https://example.com/image.jpg",
-    },
+keyboard := imbot.NewKeyboardBuilder().
+    AddRow(
+        imbot.CallbackButton("Option 1", "opt:1"),
+        imbot.CallbackButton("Option 2", "opt:2"),
+    ).
+    Build()
+
+bot.SendMessage(ctx, "chat-id", &imbot.SendMessageOptions{
+    Text:     "Choose an option:",
+    Keyboard: keyboard,
 })
 ```
 
@@ -273,19 +254,6 @@ bot.SendMedia(ctx, "chat-id", []imbot.MediaAttachment{
 bot.SendMessage(ctx, "chat-id", &imbot.SendMessageOptions{
     Text:    "Replying to your message",
     ReplyTo: messageID,
-})
-```
-
-### Send to Multiple Platforms
-
-```go
-targets := []imbot.Target{
-    imbot.NewTarget("telegram", "chat-id-1"),
-    imbot.NewTarget("discord", "channel-id-1"),
-}
-
-results := manager.Broadcast(targets, &imbot.SendMessageOptions{
-    Text: "Hello to all platforms!",
 })
 ```
 
@@ -306,150 +274,111 @@ manager.OnError(func(err error, platform imbot.Platform) {
 manager.OnConnected(func(platform imbot.Platform) {
     log.Printf("%s bot connected", platform)
 })
-
-// Bot disconnected
-manager.OnDisconnected(func(platform imbot.Platform) {
-    log.Printf("%s bot disconnected", platform)
-})
-
-// Bot ready
-manager.OnReady(func(platform imbot.Platform) {
-    log.Printf("%s bot is ready", platform)
-})
 ```
 
-## Content Types
+## Interactive Elements
 
-### Working with Message Content
+### Inline Keyboards
 
 ```go
-// Check content type
-if msg.IsTextContent() {
-    text := msg.GetText()
-}
+// Create inline keyboard
+keyboard := imbot.NewKeyboardBuilder().
+    AddRow(
+        imbot.CallbackButton("Approve", "action:approve"),
+        imbot.CallbackButton("Reject", "action:reject"),
+    ).
+    AddRow(
+        imbot.CallbackButton("Cancel", "action:cancel"),
+    ).
+    Build()
 
-if msg.IsMediaContent() {
-    media := msg.GetMedia()
-}
+// Send message with keyboard
+bot.SendMessage(ctx, chatID, &imbot.SendMessageOptions{
+    Text:     "Do you approve this action?",
+    Keyboard: keyboard,
+})
 
-if msg.IsPollContent() {
-    poll := msg.GetPoll()
-}
+// Handle callback
+manager.OnMessage(func(msg imbot.Message, platform imbot.Platform) {
+    if msg.IsCallbackQuery() {
+        parts := imbot.ParseCallbackData(msg.CallbackData)
+        action := parts[0]  // "action"
+        value := parts[1]   // "approve", "reject", or "cancel"
 
-if msg.IsReactionContent() {
-    reaction := msg.GetReaction()
-}
-
-if msg.IsSystemContent() {
-    // Handle system events
-}
+        // Process the callback
+        // ...
+    }
+})
 ```
 
-### Creating Content
+### Commands
 
 ```go
-// Text content with entities
-textContent := imbot.NewTextContent("Hello @user!", []imbot.Entity{
-    {Type: "mention", Offset: 6, Length: 5},
-})
+// Create command registry
+registry := imbot.NewCommandRegistry()
 
-// Media content
-mediaContent := imbot.NewMediaContent([]imbot.MediaAttachment{
-    {Type: "image", URL: "https://example.com/image.jpg"},
-}, "Check this out!")
+// Register commands
+registry.Register(
+    imbot.NewCommand("start", "/start", "Start the bot").
+        SetHandler(func(ctx *imbot.HandlerContext) error {
+            return ctx.Bot.SendText(ctx.Context(), ctx.ChatID, "Welcome!")
+        }).
+        Build(),
+)
 
-// Poll content
-pollContent := imbot.NewPollContent(imbot.Poll{
-    Question: "What's your favorite color?",
-    Options: []imbot.PollOption{
-        {ID: "1", Text: "Red"},
-        {ID: "2", Text: "Blue"},
-        {ID: "3", Text: "Green"},
-    },
+// Set command list on Telegram bot
+if tgBot, ok := imbot.AsTelegramBot(bot); ok {
+    tgBot.SetCommandList(registry.ToTelegramCommands())
+}
+```
+
+## Markdown Support
+
+The framework includes a powerful markdown converter that handles cross-platform differences:
+
+```go
+import "github.com/tingly-dev/tingly-box/imbot/markdown"
+
+// Parse markdown and convert to Telegram entities
+text, entities := markdown.ConvertToTelegram("*bold* _italic_ `code`")
+
+// Send with entities
+bot.SendMessage(ctx, chatID, &imbot.SendMessageOptions{
+    Text:     text,
+    Entities: entities,
 })
 ```
+
+See `markdown/USAGE.md` for detailed usage and supported formats.
 
 ## Platform-Specific Features
 
 ### Telegram
 
 ```go
-config := &imbot.Config{
-    Platform: imbot.PlatformTelegram,
-    Auth: imbot.AuthConfig{
-        Type:  "token",
-        Token: "your-telegram-bot-token",
-    },
-    Options: map[string]interface{}{
-        "updateTimeout": 30,  // Polling timeout in seconds
-        "debug":        false,
-    },
-}
+// Cast to TelegramBot for platform-specific features
+if tgBot, ok := imbot.AsTelegramBot(bot); ok {
+    // Resolve chat ID from username or invite link
+    chatID, err := tgBot.ResolveChatID("@username")
 
-// Use platform-specific features via Metadata
-bot.SendMessage(ctx, chatID, &imbot.SendMessageOptions{
-    Text: "Choose an option:",
-    Metadata: map[string]interface{}{
-        "replyMarkup": tgbotapi.NewInlineKeyboardMarkup(
-            tgbotapi.NewInlineKeyboardRow(
-                tgbotapi.NewInlineKeyboardButtonData("Option 1", "opt1"),
-                tgbotapi.NewInlineKeyboardButtonData("Option 2", "opt2"),
-            ),
-        ),
-    },
-})
-```
+    // Set bot commands
+    tgBot.SetCommandList(commands)
 
-### Discord
-
-```go
-config := &imbot.Config{
-    Platform: imbot.PlatformDiscord,
-    Auth: imbot.AuthConfig{
-        Type:  "token",
-        Token: "your-discord-bot-token",
-    },
-    Options: map[string]interface{}{
-        "intents": []string{"Guilds", "GuildMessages", "MessageContent"},
-    },
-}
-```
-
-### Slack
-
-```go
-config := &imbot.Config{
-    Platform: imbot.PlatformSlack,
-    Auth: imbot.AuthConfig{
-        Type:         "oauth",
-        ClientID:     "your-client-id",
-        ClientSecret: "your-client-secret",
-    },
-}
-```
-
-### WhatsApp
-
-```go
-config := &imbot.Config{
-    Platform: imbot.PlatformWhatsApp,
-    Auth: imbot.AuthConfig{
-        Type:    "qr",
-        AuthDir: "./auth",
-    },
+    // Edit message with keyboard
+    tgBot.EditMessageWithKeyboard(ctx, chatID, messageID, "Updated text", keyboard)
 }
 ```
 
 ### Feishu/Lark
 
 ```go
-config := &imbot.Config{
-    Platform: imbot.PlatformFeishu,
-    Auth: imbot.AuthConfig{
-        Type:         "oauth",
-        ClientID:     "your-app-id",
-        ClientSecret: "your-app-secret",
-    },
+// Cast to FeishuBot for platform-specific features
+if fsBot, ok := imbot.AsFeishuBot(bot); ok {
+    // Set quick actions (shown when typing /)
+    fsBot.SetQuickActions(actions)
+
+    // Get current quick actions
+    actions, err := fsBot.GetQuickActions()
 }
 ```
 
@@ -457,7 +386,7 @@ config := &imbot.Config{
 
 ```go
 manager.OnError(func(err error, platform imbot.Platform) {
-    // Check error type
+    // Check if it's a bot error
     if imbot.IsBotError(err) {
         botErr := err.(*imbot.BotError)
         code := imbot.GetErrorCode(err)
@@ -466,108 +395,79 @@ manager.OnError(func(err error, platform imbot.Platform) {
         case imbot.ErrAuthFailed:
             log.Printf("Authentication failed: %v", botErr)
         case imbot.ErrRateLimited:
-            log.Printf("Rate limited, retry after: %v", botErr)
+            log.Printf("Rate limited: %v", botErr)
         case imbot.ErrConnectionFailed:
-            if imbot.IsRecoverable(botErr) {
-                log.Printf("Connection failed but recoverable")
-            }
+            log.Printf("Connection failed: %v", botErr)
         }
     }
 })
 ```
 
-## Platform Capabilities
-
-```go
-// Check if platform supports a feature
-caps := imbot.GetPlatformCapabilities("telegram")
-
-if caps.SupportsFeature("polls") {
-    // Create poll
-}
-
-if caps.SupportsMediaType("image") {
-    // Send image
-}
-
-// Get text limit
-if len(text) > caps.TextLimit {
-    // Truncate message
-}
-```
-
-## Bot Status
-
-```go
-// Get status of all bots
-statuses := manager.GetStatus()
-for key, status := range statuses {
-    if status.IsHealthy() {
-        log.Printf("%s: Healthy", key)
-    } else {
-        log.Printf("%s: %v", key, status)
-    }
-}
-```
-
 ## Testing
 
-```go
-package main
+The framework includes comprehensive E2E tests for Telegram:
 
-import (
-    "context"
-    "testing"
+```bash
+# Set environment variables
+export TELEGRAM_BOT_TOKEN="your-bot-token"
+export TELEGRAM_TEST_CHAT_ID="your-chat-id"
 
-    "github.com/tingly-dev/tingly-box/imbot"
-    "github.com/tingly-dev/tingly-box/imbot/internal/platform"
-)
-
-func TestMockBot(t *testing.T) {
-    // Create mock bot
-    bot, err := platform.NewMockBot(&imbot.Config{
-        Platform: imbot.PlatformWebChat,
-    })
-    if err != nil {
-        t.Fatal(err)
-    }
-
-    // Connect
-    ctx := context.Background()
-    if err := bot.Connect(ctx); err != nil {
-        t.Fatal(err)
-    }
-
-    // Send message
-    result, err := bot.SendText(ctx, "test-user", "Hello!")
-    if err != nil {
-        t.Fatal(err)
-    }
-
-    if result.MessageID == "" {
-        t.Error("Expected message ID")
-    }
-
-    // Disconnect
-    if err := bot.Disconnect(ctx); err != nil {
-        t.Fatal(err)
-    }
-}
+# Run tests
+make test-telegram-e2e
 ```
+
+See `tests/TELEGRAM_E2E_TESTS.md` for detailed testing documentation.
 
 ## Examples
 
 See the `examples/` directory for complete examples:
 
-- `examples/basic/` - Basic Telegram bot with commands
+- `examples/telegram/` - Telegram bot with commands and keyboards
 - `examples/multi_platform/` - Multi-platform bot example
+- `examples/dingtalk/` - DingTalk bot example
 
 Run examples:
 
 ```bash
-cd examples/basic
+cd examples/telegram
 go run telegram-bot.go
 ```
+
+## Development
+
+### Building
+
+```bash
+make build
+```
+
+### Running Tests
+
+```bash
+# Unit tests
+make test
+
+# E2E tests (requires environment variables)
+make test-telegram-e2e
+```
+
+### Project Structure
+
+- **core/** - Core abstractions, independent of platform implementations
+- **platform/** - Platform-specific bot implementations
+- **interaction/** - Interactive elements (keyboards, buttons, forms)
+- **command/** - Command registry and handling system
+- **menu/** - Menu system for bot commands and quick actions
+- **markdown/** - Markdown parsing and cross-platform conversion
+- **tests/** - E2E and integration tests
+
+## Used In
+
+This framework is used in [tingly-box](https://github.com/tingly-dev/tingly-box), an AI orchestrator that provides:
+- LLM gateway with multi-provider support
+- Remote control via IM platforms
+- Smart routing and load balancing
+- Context optimization
 
 ## License
 

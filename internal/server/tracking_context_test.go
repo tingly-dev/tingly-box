@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -127,4 +128,183 @@ func TestExtractScenarioFromPath(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+// TestCalculateTPS_Streaming tests TPS calculation for streaming requests
+func TestCalculateTPS_Streaming(t *testing.T) {
+	c := &gin.Context{}
+
+	// Set up context: streaming request with first token time 500ms ago
+	c.Set(ContextKeyStreamed, true)
+	c.Set(ContextKeyFirstTokenTime, time.Now().Add(-500*time.Millisecond))
+
+	// Calculate TPS with 100 output tokens
+	tps := CalculateTPS(c, 100, true)
+
+	// Expected: 100 tokens / 0.5 seconds = 200 TPS
+	// Allow tolerance for execution time (180-220)
+	assert.GreaterOrEqual(t, tps, 180.0)
+	assert.LessOrEqual(t, tps, 220.0)
+}
+
+// TestCalculateTPS_NonStreaming tests that non-streaming requests return 0 TPS
+func TestCalculateTPS_NonStreaming(t *testing.T) {
+	c := &gin.Context{}
+
+	// Non-streaming request
+	tps := CalculateTPS(c, 100, false)
+
+	// Should return 0 for non-streaming
+	assert.Equal(t, 0.0, tps)
+}
+
+// TestCalculateTPS_NoFirstToken tests TPS calculation without first token time
+func TestCalculateTPS_NoFirstToken(t *testing.T) {
+	c := &gin.Context{}
+
+	// Streaming but no first token time set
+	tps := CalculateTPS(c, 100, true)
+
+	// Should return 0 when first token time is not available
+	assert.Equal(t, 0.0, tps)
+}
+
+// TestCalculateTPS_ZeroTokens tests TPS calculation with zero output tokens
+func TestCalculateTPS_ZeroTokens(t *testing.T) {
+	c := &gin.Context{}
+
+	c.Set(ContextKeyFirstTokenTime, time.Now().Add(-500*time.Millisecond))
+
+	// Zero output tokens
+	tps := CalculateTPS(c, 0, true)
+
+	// Should return 0 for zero tokens
+	assert.Equal(t, 0.0, tps)
+}
+
+// TestCalculateTPS_NegativeTokens tests TPS calculation with negative tokens (edge case)
+func TestCalculateTPS_NegativeTokens(t *testing.T) {
+	c := &gin.Context{}
+
+	c.Set(ContextKeyFirstTokenTime, time.Now().Add(-500*time.Millisecond))
+
+	// Negative tokens (shouldn't happen but test for safety)
+	tps := CalculateTPS(c, -10, true)
+
+	// Should return 0 for invalid token count
+	assert.Equal(t, 0.0, tps)
+}
+
+// TestDetectCacheHit tests cache hit detection
+func TestDetectCacheHit(t *testing.T) {
+	t.Run("cache hit", func(t *testing.T) {
+		usage := &protocol.TokenUsage{
+			InputTokens:      100,
+			OutputTokens:     50,
+			CacheInputTokens: 80, // Cache was used
+		}
+
+		cacheHit := detectCacheHit(usage)
+		assert.True(t, cacheHit)
+	})
+
+	t.Run("cache miss", func(t *testing.T) {
+		usage := &protocol.TokenUsage{
+			InputTokens:      100,
+			OutputTokens:     50,
+			CacheInputTokens: 0, // No cache
+		}
+
+		cacheHit := detectCacheHit(usage)
+		assert.False(t, cacheHit)
+	})
+
+	t.Run("nil usage", func(t *testing.T) {
+		cacheHit := detectCacheHit(nil)
+		assert.False(t, cacheHit)
+	})
+}
+
+// TestCalculateTTFT tests TTFT calculation
+func TestCalculateTTFT(t *testing.T) {
+	t.Run("streaming with first token time", func(t *testing.T) {
+		c := &gin.Context{}
+
+		startTime := time.Now().Add(-500 * time.Millisecond)
+		firstTokenTime := time.Now().Add(-200 * time.Millisecond)
+
+		c.Set(ContextKeyStartTime, startTime)
+		c.Set(ContextKeyFirstTokenTime, firstTokenTime)
+
+		ttft := CalculateTTFT(c)
+
+		// Expected: ~300ms (500ms - 200ms)
+		// Allow tolerance (250-350ms)
+		assert.GreaterOrEqual(t, ttft, int64(250))
+		assert.LessOrEqual(t, ttft, int64(350))
+	})
+
+	t.Run("non-streaming fallback to total latency", func(t *testing.T) {
+		c := &gin.Context{}
+
+		startTime := time.Now().Add(-500 * time.Millisecond)
+		c.Set(ContextKeyStartTime, startTime)
+		// No first token time set
+
+		ttft := CalculateTTFT(c)
+
+		// Should fallback to total latency (~500ms)
+		// Allow tolerance (450-550ms)
+		assert.GreaterOrEqual(t, ttft, int64(450))
+		assert.LessOrEqual(t, ttft, int64(550))
+	})
+
+	t.Run("no start time", func(t *testing.T) {
+		c := &gin.Context{}
+
+		ttft := CalculateTTFT(c)
+
+		// Should return 0 when no start time
+		assert.Equal(t, int64(0), ttft)
+	})
+}
+
+// TestSetGetFirstTokenTime tests first token time tracking
+func TestSetGetFirstTokenTime(t *testing.T) {
+	c := &gin.Context{}
+
+	// Initially should not exist
+	_, exists := GetFirstTokenTime(c)
+	assert.False(t, exists)
+
+	// Set first token time
+	now := time.Now()
+	SetFirstTokenTime(c)
+
+	// Should exist now
+	firstTokenTime, exists := GetFirstTokenTime(c)
+	assert.True(t, exists)
+	assert.False(t, firstTokenTime.IsZero())
+	assert.WithinDuration(t, now, firstTokenTime, 100*time.Millisecond)
+}
+
+// TestSetGetCacheHit tests cache hit tracking
+func TestSetGetCacheHit(t *testing.T) {
+	c := &gin.Context{}
+
+	// Initially should not exist
+	_, exists := GetCacheHit(c)
+	assert.False(t, exists)
+
+	// Set cache hit = true
+	SetCacheHit(c, true)
+	cacheHit, exists := GetCacheHit(c)
+	assert.True(t, exists)
+	assert.True(t, cacheHit)
+
+	// Set cache hit = false
+	SetCacheHit(c, false)
+	cacheHit, exists = GetCacheHit(c)
+	assert.True(t, exists)
+	assert.False(t, cacheHit)
 }

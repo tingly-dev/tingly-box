@@ -73,6 +73,36 @@ type SmartGuideCompletionCallback struct {
 	meta           ResponseMeta
 	behavior       OutputBehavior
 	botHandler     *BotHandler // Add reference to bot handler for formatting
+	messagesSent   int         // Track number of messages sent via hooks (for fallback)
+}
+
+// messageTrackingWrapper wraps a message handler and tracks assistant messages
+// This is used to detect silent completions (Issue #3)
+type messageTrackingWrapper struct {
+	delegate           *streamingMessageHandler // Concrete type, not interface
+	completionCallback *SmartGuideCompletionCallback
+}
+
+// OnMessage forwards to delegate and tracks assistant messages
+func (w *messageTrackingWrapper) OnMessage(msg interface{}) error {
+	// Track assistant messages
+	if m, ok := msg.(map[string]interface{}); ok {
+		if msgType, ok := m["type"].(string); ok && msgType == "assistant" {
+			w.completionCallback.messagesSent++
+		}
+	}
+	// Forward to delegate
+	return w.delegate.OnMessage(msg)
+}
+
+// OnError forwards to delegate
+func (w *messageTrackingWrapper) OnError(err error) {
+	w.delegate.OnError(err)
+}
+
+// GetOutput forwards to delegate
+func (w *messageTrackingWrapper) GetOutput() string {
+	return w.delegate.GetOutput()
 }
 
 // OnComplete implements agentboot.CompletionCallback
@@ -94,7 +124,7 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 		}
 	}
 
-	// Save assistant message to session
+	// Save assistant message to session (for conversation history)
 	if c.tbSessionStore != nil && responseText != "" {
 		assistantMsg := message.NewMsg("assistant", responseText, types.RoleAssistant)
 		if err := c.tbSessionStore.AddMessage(c.hCtx.ChatID, assistantMsg); err != nil {
@@ -140,21 +170,52 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 		}
 	}
 
-	// Send the final response with meta header, then action keyboard
-	if responseText != "" {
-		c.botHandler.sendTextWithReply(c.hCtx, c.botHandler.formatResponseWithMeta(c.meta, responseText, c.behavior), c.hCtx.MessageID)
+	// NOTE: Response should be sent via OnMessage callbacks from hooks
+	// However, if hooks failed to fire or agent completed without generating output,
+	// we need a fallback to prevent silent completion (Issue #3)
+
+	// Check if any assistant messages were sent via hooks
+	if c.messagesSent == 0 && responseText != "" {
+		logrus.WithFields(logrus.Fields{
+			"chatID":       c.hCtx.ChatID,
+			"responseLen":  len(responseText),
+			"messagesSent": c.messagesSent,
+		}).Warn("SmartGuide: No messages sent via hooks - using fallback to send response")
+
+		// Send the response as a fallback
+		formattedResponse := c.botHandler.formatResponseWithMeta(c.meta, responseText, c.behavior)
+		c.botHandler.SendText(c.hCtx, formattedResponse)
+	} else if c.messagesSent == 0 && responseText == "" {
+		logrus.WithFields(logrus.Fields{
+			"chatID":  c.hCtx.ChatID,
+			"success": result.Success,
+		}).Warn("SmartGuide: Agent completed with NO output (possible crash or empty response)")
+	} else {
+		logrus.WithFields(logrus.Fields{
+			"chatID":       c.hCtx.ChatID,
+			"messagesSent": c.messagesSent,
+		}).Debug("SmartGuide: Messages were sent via hooks - no fallback needed")
 	}
 
 	// Send action keyboard on completion
 	kb := BuildActionKeyboard()
 	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
+	// Build metadata with context_token (required by Weixin)
+	metadata := map[string]interface{}{
+		"replyMarkup":        tgKeyboard,
+		"_trackActionMenuID": true,
+	}
+	// Forward context_token from incoming message metadata (required by Weixin)
+	if c.hCtx.Message.Metadata != nil {
+		if ct, ok := c.hCtx.Message.Metadata["context_token"].(string); ok {
+			metadata["context_token"] = ct
+		}
+	}
+
 	_, err := c.hCtx.Bot.SendMessage(context.Background(), c.hCtx.ChatID, &imbot.SendMessageOptions{
-		Text: "✅ Task done. \nContinue to chat with this session or /help.",
-		Metadata: map[string]interface{}{
-			"replyMarkup":        tgKeyboard,
-			"_trackActionMenuID": true,
-		},
+		Text:     "✅ Task done. \nContinue to chat with this session or /help.",
+		Metadata: metadata,
 	})
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to send action keyboard for SmartGuide")
@@ -523,6 +584,15 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 		return nil
 	}
 
+	// Verify approval callback is set on the executor
+	executor := agent.GetExecutor()
+	if executor != nil {
+		logrus.WithFields(logrus.Fields{
+			"chatID":           hCtx.ChatID,
+			"approvalCallback": executor.HasApprovalCallback(),
+		}).Debug("SmartGuide agent created - verifying approval callback")
+	}
+
 	// Set working directory from stored project path
 	agent.GetExecutor().SetWorkingDirectory(projectPath)
 	logrus.WithField("workingDir", projectPath).Debug("Set executor working directory")
@@ -544,30 +614,38 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 		AgentType:   AgentNameTinglyBox,
 	}
 
-	// 7. Send processing message (respects verbose mode)
-	if behavior.Verbose {
-		h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, IconProcess+" "+MsgProcessing, behavior), hCtx.MessageID)
-	}
+	// 7. Send processing message (always send, regardless of verbose mode)
+	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, IconProcess+" "+MsgProcessing, behavior), hCtx.MessageID)
 
 	// 8. Create streaming handler for message output
 	streamHandler := h.newStreamingMessageHandler(hCtx)
 
-	// 9. Create composite handler that combines streaming + completion callback
-	compositeHandler := agentboot.NewCompositeHandler().
-		SetStreamer(streamHandler).
-		SetCompletionCallback(&SmartGuideCompletionCallback{
-			hCtx:           hCtx,
-			sessionID:      hCtx.ChatID,
-			chatStore:      h.chatStore,
-			tbSessionStore: h.tbSessionStore,
-			agent:          agent,
-			projectPath:    projectPath,
-			meta:           meta,
-			behavior:       behavior,
-			botHandler:     h,
-		})
+	// 9. Create completion callback (needs to track messages sent via hooks)
+	completionCallback := &SmartGuideCompletionCallback{
+		hCtx:           hCtx,
+		sessionID:      hCtx.ChatID,
+		chatStore:      h.chatStore,
+		tbSessionStore: h.tbSessionStore,
+		agent:          agent,
+		projectPath:    projectPath,
+		meta:           meta,
+		behavior:       behavior,
+		botHandler:     h,
+		messagesSent:   0, // Initialize counter
+	}
 
-	// 10. Execute with callback support
+	// 10. Create a wrapper handler that forwards messages to both streamHandler and completionCallback
+	messageTracker := &messageTrackingWrapper{
+		delegate:           streamHandler,
+		completionCallback: completionCallback,
+	}
+
+	// 11. Create composite handler that uses the wrapper
+	compositeHandler := agentboot.NewCompositeHandler().
+		SetStreamer(messageTracker).
+		SetCompletionCallback(completionCallback)
+
+	// 12. Execute with callback support
 	execCtx, cancel := context.WithCancel(context.Background())
 
 	// Store cancel function for /stop command

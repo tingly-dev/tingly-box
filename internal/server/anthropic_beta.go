@@ -89,7 +89,7 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 
 	// Clean system messages if clean_header flag is enabled (for Claude Code scenario)
 	if cleanHeader {
-		req.BetaMessageNewParams.System = cleanBetaSystemMessages(req.BetaMessageNewParams.System)
+		req.BetaMessageNewParams.System = CleanBetaSystemMessages(req.BetaMessageNewParams.System)
 	}
 
 	// Ensure max_tokens is set (Anthropic API requires this)
@@ -103,7 +103,7 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	}
 	// If thinking carries budget_tokens beyond model max, shrink budget to max_allowed/10.
 	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil && *thinkBudget > int64(maxAllowed) {
-		req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(int64(maxAllowed / 10))
+		req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(max(1024, int64(maxAllowed / 10)))
 	}
 
 	// Set provider UUID in context (Service.Provider uses UUID, not name)
@@ -420,6 +420,16 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 // handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming response and sends it to the client
 func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel, actualModel string, provider *typ.Provider, recorder *ProtocolRecorder) {
 	hc := protocol.NewHandleContext(c, respModel)
+
+	// Record TTFT when the first streaming chunk arrives
+	firstTokenRecorded := false
+	hc.WithOnStreamEvent(func(_ interface{}) error {
+		if !firstTokenRecorded {
+			SetFirstTokenTime(c)
+			firstTokenRecorded = true
+		}
+		return nil
+	})
 
 	// Add recorder hooks if recorder is available
 	if recorder != nil {

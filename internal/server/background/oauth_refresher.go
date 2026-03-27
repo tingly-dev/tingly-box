@@ -225,5 +225,6 @@ func (tr *OAuthRefresher) refreshProviderToken(provider *typ.Provider) {
 		return
 	}
 
+	// Note: Client pool invalidation is handled automatically by Config.UpdateProvider() via hooks
 	logger.WithField("expiresAt", provider.OAuthDetail.ExpiresAt).Info("Token refreshed successfully")
 }

@@ -15,6 +15,18 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
 )
 
+// MetricsData encapsulates all metrics collected for a request.
+// This structure is used to pass comprehensive metrics to updateServiceStats
+// without requiring frequent function signature changes.
+type MetricsData struct {
+	InputTokens  int     // Number of input/prompt tokens
+	OutputTokens int     // Number of output/completion tokens
+	LatencyMs    int64   // Total request latency in milliseconds
+	TTFTMs       int64   // Time To First Token in milliseconds (0 if not available/applicable)
+	CacheHit     bool    // Whether this request hit the cache
+	TPS          float64 // Tokens Per Second - generation speed (0 for non-streaming requests)
+}
+
 var enterpriseRateLimitHook struct {
 	mu       sync.RWMutex
 	reporter func(context.Context, string, string, string, string) error
@@ -66,8 +78,23 @@ func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens
 		}
 	}
 
-	// 1. Update service stats (inline, no UsageTracker allocation)
-	s.updateServiceStats(rule, provider, model, inputTokens, outputTokens)
+	// Collect all metrics from context
+	ttftMs := CalculateTTFT(c)
+	cacheHit, _ := GetCacheHit(c) // Default false if not set
+	tps := CalculateTPS(c, outputTokens, streamed)
+
+	// Build comprehensive metrics data
+	metrics := MetricsData{
+		InputTokens:  inputTokens,
+		OutputTokens: outputTokens,
+		LatencyMs:    int64(latencyMs),
+		TTFTMs:       ttftMs,
+		CacheHit:     cacheHit,
+		TPS:          tps,
+	}
+
+	// 1. Update service stats with comprehensive metrics
+	s.updateServiceStats(rule, provider, model, metrics)
 
 	// 2. Record to OTel (primary path for metrics)
 	if s.tokenTracker != nil {
@@ -97,6 +124,17 @@ func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens
 
 	// 4. Report to health monitor for service health tracking
 	s.reportHealthStatus(provider, model, err, errorCode)
+
+	// 5. Enterprise key-level 429 alerting hook (best-effort).
+	if err != nil && isRateLimitError(err) && strings.TrimSpace(c.GetString("enterprise_user_id")) != "" {
+		_ = reportEnterpriseRateLimitEvent(
+			c.Request.Context(),
+			c.GetString("enterprise_key_prefix"),
+			provider.UUID,
+			scenario,
+			c.GetString("enterprise_user_id"),
+		)
+	}
 }
 
 // trackUsageWithTokenUsage records comprehensive token usage using the TokenUsage structure.
@@ -141,8 +179,26 @@ func (s *Server) trackUsageWithTokenUsage(c *gin.Context, usage *protocol.TokenU
 		"latency_ms":    latencyMs,
 	}).Trace("trackUsageWithTokenUsage: recording token usage")
 
-	// 1. Update service stats (using total tokens)
-	s.updateServiceStats(rule, provider, model, usage.InputTokens, usage.OutputTokens)
+	// Detect cache hit from usage data and set in context
+	cacheHit := detectCacheHit(usage)
+	SetCacheHit(c, cacheHit)
+
+	// Collect all metrics from context and usage
+	ttftMs := CalculateTTFT(c)
+	tps := CalculateTPS(c, usage.OutputTokens, streamed)
+
+	// Build comprehensive metrics data
+	metrics := MetricsData{
+		InputTokens:  usage.InputTokens,
+		OutputTokens: usage.OutputTokens,
+		LatencyMs:    int64(latencyMs),
+		TTFTMs:       ttftMs,
+		CacheHit:     cacheHit,
+		TPS:          tps,
+	}
+
+	// 1. Update service stats with comprehensive metrics
+	s.updateServiceStats(rule, provider, model, metrics)
 
 	// 2. Record to OTel with comprehensive usage data
 	if s.tokenTracker != nil {
@@ -280,8 +336,8 @@ func (s *Server) recordDetailedUsageWithTokenUsage(c *gin.Context, rule *typ.Rul
 }
 
 // updateServiceStats updates the service-level statistics for load balancing.
-// This is inlined from the old UsageTracker.recordOnService to avoid unnecessary allocations.
-func (s *Server) updateServiceStats(rule *typ.Rule, provider *typ.Provider, model string, inputTokens, outputTokens int) {
+// This function records comprehensive metrics including tokens, latency, TTFT, cache, and TPS.
+func (s *Server) updateServiceStats(rule *typ.Rule, provider *typ.Provider, model string, metrics MetricsData) {
 	if rule == nil || provider == nil || s.config == nil {
 		return
 	}
@@ -290,7 +346,26 @@ func (s *Server) updateServiceStats(rule *typ.Rule, provider *typ.Provider, mode
 	for i := range rule.Services {
 		service := rule.Services[i]
 		if service.Active && service.Provider == provider.UUID && service.Model == model {
-			service.RecordUsage(inputTokens, outputTokens)
+			// Record basic token usage (also updates cost tokens internally)
+			service.RecordUsage(metrics.InputTokens, metrics.OutputTokens)
+
+			// Record latency metrics (always available)
+			if metrics.LatencyMs > 0 {
+				service.Stats.RecordLatency(metrics.LatencyMs, 100)
+			}
+
+			// Record TTFT if available (streaming requests)
+			if metrics.TTFTMs > 0 {
+				service.Stats.RecordTTFT(metrics.TTFTMs, 100)
+			}
+
+			// Record cache hit/miss
+			service.Stats.RecordCacheHit(metrics.CacheHit)
+
+			// Record TPS if available (streaming requests)
+			if metrics.TPS > 0 {
+				service.Stats.RecordTokenSpeed(metrics.TPS, 100)
+			}
 
 			// Persist to stats store
 			sm := s.config.StoreManager()

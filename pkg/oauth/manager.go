@@ -584,7 +584,12 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 		"grant_type":    "refresh_token",
 		"refresh_token": refreshToken,
 		"client_id":     config.ClientID,
-		"client_secret": config.ClientSecret,
+	}
+
+	// ref: https://github.com/openai/codex/blob/d807d44a/codex-rs/core/tests/suite/auth_refresh.rs#L35-L94
+	// codex DO NOT require client_secret
+	if providerType != ProviderCodex {
+		params["client_secret"] = config.ClientSecret
 	}
 
 	// Build request body first
