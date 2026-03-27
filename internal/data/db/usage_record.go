@@ -36,6 +36,8 @@ type UsageRecord struct {
 	Status       string `gorm:"column:status;index;not null"` // success, error, partial
 	ErrorCode    string `gorm:"column:error_code"`
 	LatencyMs    int    `gorm:"column:latency_ms"`
+	TTFTMs       int    `gorm:"column:ttft_ms;default:0"`
+	CacheHit     bool   `gorm:"column:cache_hit;type:integer;default:0"`
 	Streamed     bool   `gorm:"column:streamed;type:integer"`
 }
 
@@ -221,6 +223,9 @@ type AggregatedStat struct {
 	AvgInputTokens   float64 `json:"avg_input_tokens"`
 	AvgOutputTokens  float64 `json:"avg_output_tokens"`
 	AvgLatencyMs     float64 `json:"avg_latency_ms"`
+	AvgTTFTMs        float64 `json:"avg_ttft_ms"`
+	CacheHitCount    int64   `json:"cache_hit_count"`
+	CacheHitRate     float64 `json:"cache_hit_rate"`
 	ErrorCount       int64   `json:"error_count"`
 	ErrorRate        float64 `json:"error_rate"`
 	StreamedCount    int64   `json:"streamed_count"`
@@ -306,6 +311,8 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 		ErrorCount       int64
 		StreamedCount    int64
 		AvgLatency       float64
+		AvgTTFT          float64
+		CacheHitCount    int64
 	}
 
 	var results []result
@@ -322,10 +329,12 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 		COALESCE(SUM(output_tokens), 0) as output_tokens,
 		COALESCE(SUM(cache_input_tokens), 0) as cache_input_tokens,
 		COALESCE(SUM(system_tokens), 0) as system_tokens,
-		COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0) as error_count,
-		COALESCE(SUM(CASE WHEN streamed = true THEN 1 ELSE 0 END), 0) as streamed_count,
-		COALESCE(AVG(latency_ms), 0) as avg_latency
-	`, keyField)
+			COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0) as error_count,
+			COALESCE(SUM(CASE WHEN streamed = true THEN 1 ELSE 0 END), 0) as streamed_count,
+			COALESCE(AVG(latency_ms), 0) as avg_latency,
+			COALESCE(AVG(CASE WHEN ttft_ms > 0 THEN ttft_ms END), 0) as avg_ttft,
+			COALESCE(SUM(CASE WHEN cache_hit = true THEN 1 ELSE 0 END), 0) as cache_hit_count
+		`, keyField)
 
 	if err := db.
 		Select(selectClause).
@@ -355,6 +364,9 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 			AvgInputTokens:   avgFloat(float64(r.InputTokens), r.RequestCount),
 			AvgOutputTokens:  avgFloat(float64(r.OutputTokens), r.RequestCount),
 			AvgLatencyMs:     r.AvgLatency,
+			AvgTTFTMs:        r.AvgTTFT,
+			CacheHitCount:    r.CacheHitCount,
+			CacheHitRate:     rateFloat(r.CacheHitCount, r.RequestCount),
 			ErrorCount:       r.ErrorCount,
 			ErrorRate:        rateFloat(r.ErrorCount, r.RequestCount),
 			StreamedCount:    r.StreamedCount,
@@ -376,6 +388,9 @@ type TimeSeriesData struct {
 	SystemTokens     int64   `json:"system_tokens"`
 	ErrorCount       int64   `json:"error_count"`
 	AvgLatencyMs     float64 `json:"avg_latency_ms"`
+	AvgTTFTMs        float64 `json:"avg_ttft_ms"`
+	CacheHitCount    int64   `json:"cache_hit_count"`
+	CacheHitRate     float64 `json:"cache_hit_rate"`
 }
 
 // GetTimeSeries returns time-series data for usage
@@ -421,6 +436,8 @@ func (us *UsageStore) GetTimeSeries(interval string, startTime, endTime time.Tim
 		SystemTokens     int64
 		ErrorCount       int64
 		AvgLatency       float64
+		AvgTTFT          float64
+		CacheHitCount    int64
 	}
 
 	var results []result
@@ -433,9 +450,11 @@ func (us *UsageStore) GetTimeSeries(interval string, startTime, endTime time.Tim
 		COALESCE(SUM(output_tokens), 0) as output_tokens,
 		COALESCE(SUM(cache_input_tokens), 0) as cache_input_tokens,
 		COALESCE(SUM(system_tokens), 0) as system_tokens,
-		COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0) as error_count,
-		COALESCE(AVG(latency_ms), 0) as avg_latency
-	`, timeFormat)
+			COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0) as error_count,
+			COALESCE(AVG(latency_ms), 0) as avg_latency,
+			COALESCE(AVG(CASE WHEN ttft_ms > 0 THEN ttft_ms END), 0) as avg_ttft,
+			COALESCE(SUM(CASE WHEN cache_hit = true THEN 1 ELSE 0 END), 0) as cache_hit_count
+		`, timeFormat)
 
 	if err := db.
 		Select(selectClause).
@@ -458,6 +477,9 @@ func (us *UsageStore) GetTimeSeries(interval string, startTime, endTime time.Tim
 			SystemTokens:     r.SystemTokens,
 			ErrorCount:       r.ErrorCount,
 			AvgLatencyMs:     r.AvgLatency,
+			AvgTTFTMs:        r.AvgTTFT,
+			CacheHitCount:    r.CacheHitCount,
+			CacheHitRate:     rateFloat(r.CacheHitCount, r.RequestCount),
 		}
 	}
 
