@@ -151,23 +151,45 @@ func isCommandMatch(cmd string, primary string, aliases []string) bool {
 }
 
 // handleBotHelpCommand displays the bot help message
+// Help message always includes meta information for convenience
 func (h *BotHandler) handleBotHelpCommand(hCtx HandlerContext) {
 	// Try to use command registry for dynamic help generation
+	var helpText string
 	if h.commandRegistry != nil {
-		helpText := h.commandRegistry.BuildHelpText(hCtx.IsDirect())
+		helpText = h.commandRegistry.BuildHelpText(hCtx.IsDirect())
 		helpText += fmt.Sprintf("\nYour ID: %s", hCtx.SenderID)
-		h.SendText(hCtx, helpText)
-		return
+	} else {
+		// Fallback to hardcoded templates
+		if hCtx.IsDirect() {
+			helpText = fmt.Sprintf(directHelpTemplate, hCtx.SenderID)
+		} else {
+			helpText = fmt.Sprintf(groupHelpTemplate, hCtx.ChatID)
+		}
 	}
 
-	// Fallback to hardcoded templates
-	var helpText string
-	if hCtx.IsDirect() {
-		helpText = fmt.Sprintf(directHelpTemplate, hCtx.SenderID)
-	} else {
-		helpText = fmt.Sprintf(groupHelpTemplate, hCtx.ChatID)
+	// Format help with meta information (always shown)
+	formattedHelp := h.formatHelpWithMeta(hCtx, helpText)
+	h.SendText(hCtx, formattedHelp)
+}
+
+// formatHelpWithMeta formats help text with meta information
+// Help messages always show meta information
+func (h *BotHandler) formatHelpWithMeta(hCtx HandlerContext, helpText string) string {
+	// Get current project path for meta display
+	projectPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
+	currentAgent, _ := h.getCurrentAgent(hCtx.ChatID)
+
+	// Build meta (help always shows meta)
+	meta := ResponseMeta{
+		ProjectPath: projectPath,
+		AgentType:   string(currentAgent),
+		ChatID:      hCtx.ChatID,
+		UserID:      hCtx.SenderID,
+		SessionID:   hCtx.ChatID,
 	}
-	h.SendText(hCtx, helpText)
+
+	// Always show meta for help message
+	return h.formatResponseWithMeta(meta, helpText, true)
 }
 
 // isStopCommand checks if the text is a stop command

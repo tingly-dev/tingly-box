@@ -1,11 +1,18 @@
 package bot
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/pkg/jsonstore"
+)
+
+// Error definitions
+var (
+	ErrStoreNotInitialized = errors.New("chat store not initialized")
+	ErrChatNotFound        = errors.New("chat not found")
 )
 
 // BotSetting represents bot configuration with platform-specific auth
@@ -23,7 +30,6 @@ type BotSetting struct {
 	Enabled       bool              `json:"enabled"`                  // Whether this bot is enabled
 
 	// Output behavior settings
-	Debug   bool  `json:"debug,omitempty"`   // Show message IDs in output (chat_id, session_id, etc.)
 	Verbose *bool `json:"verbose,omitempty"` // Send intermediate messages (nil = true default)
 
 	// SmartGuide model configuration (required for @tb agent)

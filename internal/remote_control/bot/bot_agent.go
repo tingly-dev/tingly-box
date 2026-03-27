@@ -182,8 +182,8 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 			"messagesSent": c.messagesSent,
 		}).Warn("SmartGuide: No messages sent via hooks - using fallback to send response")
 
-		// Send the response as a fallback
-		formattedResponse := c.botHandler.formatResponseWithMeta(c.meta, responseText, c.behavior)
+		// Send the response as a fallback (no meta for regular messages)
+		formattedResponse := c.botHandler.formatResponseWithMeta(c.meta, responseText, false)
 		c.botHandler.SendText(c.hCtx, formattedResponse)
 	} else if c.messagesSent == 0 && responseText == "" {
 		logrus.WithFields(logrus.Fields{
@@ -343,14 +343,13 @@ func (h *BotHandler) handleClaudeCodeMessage(hCtx HandlerContext, text string, p
 	h.sessionMgr.SetRunning(sessionID)
 
 	// Send status message - differentiate between new and resumed sessions
-	behavior := h.getOutputBehavior()
 	var statusMsg string
 	if isNewSession {
 		statusMsg = "⏳ CC: Processing new session..."
 	} else {
 		statusMsg = "⏳ CC: Resuming session..."
 	}
-	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, statusMsg, behavior), hCtx.MessageID)
+	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, statusMsg, false), hCtx.MessageID)
 
 	// Execute with context.Background() to avoid cancellation on reconnect
 	execCtx, cancel := context.WithCancel(context.Background())
@@ -605,7 +604,7 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 	}
 
 	// 6. Build meta for response header
-	behavior := h.getOutputBehavior()
+	behavior := h.getOutputBehaviorForChat(hCtx.ChatID)
 	meta := ResponseMeta{
 		ProjectPath: projectPath,
 		ChatID:      hCtx.ChatID,
@@ -615,7 +614,7 @@ func (h *BotHandler) handleSmartGuideMessage(hCtx HandlerContext, text string) e
 	}
 
 	// 7. Send processing message (always send, regardless of verbose mode)
-	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, IconProcess+" "+MsgProcessing, behavior), hCtx.MessageID)
+	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, IconProcess+" "+MsgProcessing, false), hCtx.MessageID)
 
 	// 8. Create streaming handler for message output
 	streamHandler := h.newStreamingMessageHandler(hCtx)
@@ -755,14 +754,13 @@ func (h *BotHandler) handleMockAgentMessage(hCtx HandlerContext, text string, pr
 	h.sessionMgr.SetRunning(sessionID)
 
 	// Send status message - differentiate between new and resumed sessions
-	behavior := h.getOutputBehavior()
 	var statusMsg string
 	if isNewSession {
 		statusMsg = "🧪 Mock: Processing new session..."
 	} else {
 		statusMsg = "🧪 Mock: Resuming session..."
 	}
-	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, statusMsg, behavior), hCtx.MessageID)
+	h.sendTextWithReply(hCtx, h.formatResponseWithMeta(meta, statusMsg, false), hCtx.MessageID)
 
 	// Execute with context
 	execCtx, cancel := context.WithCancel(context.Background())
