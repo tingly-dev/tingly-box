@@ -87,6 +87,11 @@ func (a *botHandlerAdapter) SetVerbose(chatID string, enabled bool) {
 	a.handler.SetVerbose(chatID, enabled)
 }
 
+// GetVerbose gets verbose mode for a chat.
+func (a *botHandlerAdapter) GetVerbose(chatID string) bool {
+	return a.handler.GetVerbose(chatID)
+}
+
 // IsWhitelisted checks if a group is whitelisted.
 func (a *botHandlerAdapter) IsWhitelisted(groupID string) bool {
 	return a.handler.chatStore.IsWhitelisted(groupID)

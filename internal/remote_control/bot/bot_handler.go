@@ -580,37 +580,47 @@ func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string
 }
 
 // formatResponseWithMeta adds project/session/user metadata to the response
-// behavior.Verbose controls whether processing messages are sent
-func (h *BotHandler) formatResponseWithMeta(meta ResponseMeta, response string, behavior OutputBehavior) string {
+// Meta information includes: agent type, project path, chat_id, user_id, session_id
+// behavior.Debug controls whether meta information is shown
+// formatResponseWithMeta adds project/session/user metadata to the response
+// Meta information includes: agent type, project path, chat_id, user_id, session_id
+// Set showMeta=true to display meta (e.g., for help), false for regular messages
+// behavior.Verbose controls whether processing messages are sent (handled elsewhere)
+func (h *BotHandler) formatResponseWithMeta(meta ResponseMeta, response string, showMeta bool) string {
 	var buf strings.Builder
 
-	// Show agent indicator
-	if meta.AgentType != "" {
-		buf.WriteString(fmt.Sprintf(FormatAgentLine, GetAgentIcon(meta.AgentType), GetAgentDisplayName(meta.AgentType)))
+	// Show meta information only when explicitly requested
+	if showMeta {
+		// Show agent indicator
+		if meta.AgentType != "" {
+			buf.WriteString(fmt.Sprintf(FormatAgentLine, GetAgentIcon(meta.AgentType), GetAgentDisplayName(meta.AgentType)))
+		}
+
+		// Always show project path (shortened)
+		if meta.ProjectPath != "" {
+			buf.WriteString(fmt.Sprintf(FormatProjectLine, IconProject, ShortenPath(meta.ProjectPath)))
+		}
+
+		// Show IDs for transparency
+		if meta.ChatID != "" {
+			buf.WriteString(fmt.Sprintf(FormatDebugLine, IconChat, meta.ChatID))
+		}
+		if meta.UserID != "" {
+			buf.WriteString(fmt.Sprintf(FormatDebugLine, IconUser, meta.UserID))
+		}
+		if meta.SessionID != "" {
+			buf.WriteString(fmt.Sprintf(FormatDebugLine, IconSession, ShortenID(meta.SessionID, 8)))
+		}
+
+		buf.WriteString(SeparatorLine + "\n\n")
 	}
 
-	// Always show project path (shortened)
-	if meta.ProjectPath != "" {
-		buf.WriteString(fmt.Sprintf(FormatProjectLine, IconProject, ShortenPath(meta.ProjectPath)))
-	}
-
-	// Always show IDs for transparency
-	if meta.ChatID != "" {
-		buf.WriteString(fmt.Sprintf(FormatDebugLine, IconChat, meta.ChatID))
-	}
-	if meta.UserID != "" {
-		buf.WriteString(fmt.Sprintf(FormatDebugLine, IconUser, meta.UserID))
-	}
-	if meta.SessionID != "" {
-		buf.WriteString(fmt.Sprintf(FormatDebugLine, IconSession, ShortenID(meta.SessionID, 8)))
-	}
-
-	buf.WriteString(SeparatorLine + "\n\n")
 	return buf.String() + response
 }
 
-// getOutputBehavior returns the output behavior for this bot handler
-func (h *BotHandler) getOutputBehavior() OutputBehavior {
+// getOutputBehaviorForChat returns the output behavior for a specific chat
+// Combines bot-level defaults with chat-level overrides
+func (h *BotHandler) getOutputBehaviorForChat(chatID string) OutputBehavior {
 	return h.botSetting.GetOutputBehavior()
 }
 

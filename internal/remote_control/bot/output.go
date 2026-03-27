@@ -61,14 +61,12 @@ const (
 
 // OutputBehavior controls what is shown in bot messages
 type OutputBehavior struct {
-	Debug   bool // Show message IDs (chat_id, user_id, session_id)
 	Verbose bool // Send intermediate processing messages
 }
 
 // DefaultOutputBehavior returns the default output behavior
 func DefaultOutputBehavior() OutputBehavior {
 	return OutputBehavior{
-		Debug:   false,
 		Verbose: true,
 	}
 }
@@ -80,7 +78,6 @@ func (s BotSetting) GetOutputBehavior() OutputBehavior {
 		verbose = *s.Verbose
 	}
 	return OutputBehavior{
-		Debug:   s.Debug,
 		Verbose: verbose,
 	}
 }

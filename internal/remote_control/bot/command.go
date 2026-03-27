@@ -28,7 +28,7 @@ func RegisterBuiltinCommands(registry *imbot.CommandRegistry, botHandler BotHand
 		newJoinCommand(botHandler),
 		newYoloCommand(botHandler),
 		newVerboseCommand(botHandler),
-		newNoVerboseCommand(botHandler),
+		newQuietCommand(botHandler), // Renamed from noverbose
 		newMockCommand(botHandler),
 	}
 
@@ -71,6 +71,9 @@ type BotHandlerAdapter interface {
 
 	// SetVerbose sets verbose mode for a chat
 	SetVerbose(chatID string, enabled bool)
+
+	// GetVerbose gets verbose mode for a chat
+	GetVerbose(chatID string) bool
 
 	// IsWhitelisted checks if a group is whitelisted
 	IsWhitelisted(groupID string) bool
@@ -419,21 +422,54 @@ func newYoloCommand(adapter BotHandlerAdapter) imbot.Command {
 }
 
 func newVerboseCommand(adapter BotHandlerAdapter) imbot.Command {
-	return imbot.NewCommand("cmd-verbose", "verbose", "Show all message details (default)").
+	return imbot.NewCommand("cmd-verbose", "verbose", "Control message detail display").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
-			adapter.SetVerbose(ctx.ChatID, true)
-			return adapter.SendText(ctx.ChatID, "✅ Verbose mode enabled\n\nAll message details will be shown.")
+			// No args: show current status
+			if len(args) == 0 {
+				current := adapter.GetVerbose(ctx.ChatID)
+				status := "off"
+				if current {
+					status = "on"
+				}
+				return adapter.SendText(ctx.ChatID, fmt.Sprintf("📢 Verbose mode: %s\n\nUsage: /verbose <on|off>", status))
+			}
+
+			// Parse argument
+			arg := strings.ToLower(strings.TrimSpace(args[0]))
+			var enabled bool
+			var valid bool
+
+			switch arg {
+			case "on", "true", "1", "yes", "enable":
+				enabled = true
+				valid = true
+			case "off", "false", "0", "no", "disable":
+				enabled = false
+				valid = true
+			}
+
+			if !valid {
+				return adapter.SendText(ctx.ChatID, "Usage: /verbose <on|off>\n\nExample: /verbose on")
+			}
+
+			adapter.SetVerbose(ctx.ChatID, enabled)
+			if enabled {
+				return adapter.SendText(ctx.ChatID, "✅ Verbose mode enabled\n\nAll message details will be shown.")
+			}
+			return adapter.SendText(ctx.ChatID, "🔇 Quiet mode enabled\n\nOnly final results will be shown.")
 		}).
 		WithCategory("advanced").
 		WithPriority(5).
 		MustBuild()
 }
 
-func newNoVerboseCommand(adapter BotHandlerAdapter) imbot.Command {
-	return imbot.NewCommand("cmd-noverbose", "noverbose", "Hide intermediate messages").
+// newQuietCommand creates the /quiet command (alias for /verbose off)
+// This is a convenient shorthand to disable verbose mode
+func newQuietCommand(adapter BotHandlerAdapter) imbot.Command {
+	return imbot.NewCommand("cmd-quiet", "quiet", "Disable verbose mode (alias for /verbose off)").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
 			adapter.SetVerbose(ctx.ChatID, false)
-			return adapter.SendText(ctx.ChatID, "🔇 Quiet mode enabled\n\nOnly final results will be shown. Use /verbose to show all details.")
+			return adapter.SendText(ctx.ChatID, "🔇 Quiet mode enabled\n\nOnly final results will be shown. Use /verbose on to show all details.")
 		}).
 		WithCategory("advanced").
 		WithPriority(4).
