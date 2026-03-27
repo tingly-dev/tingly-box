@@ -489,7 +489,7 @@ func TestHandoffToCCTool_Call(t *testing.T) {
 	tool := NewHandoffToCCTool()
 
 	ctx := context.Background()
-	resp, err := tool.Call(ctx, map[string]any{})
+	resp, err := tool.Call(ctx, HandoffParams{})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
