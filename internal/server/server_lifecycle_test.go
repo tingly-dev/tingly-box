@@ -13,21 +13,21 @@ func TestNewServerKeepsModuleContextAlive(t *testing.T) {
 	}
 
 	s := NewServer(cfg, WithOpenBrowser(false))
-	if s.moduleCtx == nil {
-		t.Fatal("expected module context to be initialized")
+	if s.ctx == nil {
+		t.Fatal("expected context to be initialized")
 	}
-	if err := s.moduleCtx.Err(); err != nil {
-		t.Fatalf("expected module context to remain active after NewServer, got %v", err)
+	if err := s.ctx.Err(); err != nil {
+		t.Fatalf("expected context to remain active after NewServer, got %v", err)
 	}
 
-	if s.moduleCancel == nil {
-		t.Fatal("expected module cancel to be initialized")
+	if s.cancel == nil {
+		t.Fatal("expected cancel to be initialized")
 	}
-	s.moduleCancel()
+	s.cancel()
 
 	select {
-	case <-s.moduleCtx.Done():
+	case <-s.ctx.Done():
 	default:
-		t.Fatal("expected module context to be canceled by moduleCancel")
+		t.Fatal("expected context to be canceled by cancel")
 	}
 }
