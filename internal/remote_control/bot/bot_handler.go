@@ -32,6 +32,9 @@ type BotHandler struct {
 	interaction      *imbot.InteractionHandler // New interaction handler
 	tbClient         tbclient.TBClient         // TB Client for model configuration
 
+	// Agent router for delegating execution to agent executors
+	agentRouter *AgentRouter
+
 	// Handoff manager for agent switching
 	handoffManager *smart_guide.HandoffManager
 
@@ -160,7 +163,8 @@ func NewBotHandler(
 		}
 	}
 
-	return &BotHandler{
+	// Create the BotHandler instance first (needed for method references)
+	handler := &BotHandler{
 		ctx:                 ctx,
 		botSetting:          botSetting,
 		chatStore:           chatStore,
@@ -179,6 +183,30 @@ func NewBotHandler(
 		actionMenuMessageID: make(map[string]string),
 		verbose:             true, // Default to verbose mode
 	}
+
+	// Initialize AgentRouter with dependencies
+	deps := &ExecutorDependencies{
+		BotSetting:                 botSetting,
+		ChatStore:                  chatStore,
+		SessionMgr:                 sessionMgr,
+		AgentBoot:                  agentBoot,
+		IMPrompter:                 imPrompter,
+		FileStore:                  fileStore,
+		TBClient:                   tbClient,
+		TBSessionStore:             tbSessionStore,
+		HandoffManager:             handoffMgr,
+		RunningCancel:              handler.runningCancel,
+		RunningCancelMu:            &handler.runningCancelMu,
+		GetVerbose:                 handler.GetVerbose,
+		FormatResponse:             handler.formatResponseWithMeta,
+		SendText:                   handler.SendText,
+		SendTextWithReply:          handler.sendTextWithReply,
+		SendTextWithActionKeyboard: handler.sendTextWithActionKeyboard,
+		NewStreamingMessageHandler: handler.newStreamingMessageHandler,
+	}
+	handler.agentRouter = NewAgentRouter(deps)
+
+	return handler
 }
 
 // GetVerbose returns the current verbose mode setting for a chat
