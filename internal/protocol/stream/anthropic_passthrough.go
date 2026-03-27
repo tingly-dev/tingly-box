@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -38,10 +39,6 @@ func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNe
 		},
 		func(event interface{}) error {
 			evt := event.(*anthropic.MessageStreamEventUnion)
-			// Only set model for message_start events, as other events don't have a message field
-			if evt.Type == "message_start" {
-				evt.Message.Model = anthropic.Model(hc.ResponseModel)
-			}
 
 			if evt.Usage.InputTokens > 0 {
 				inputTokens = int(evt.Usage.InputTokens)
@@ -56,8 +53,24 @@ func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNe
 				hasUsage = true
 			}
 
-			// Send SSE event using RawJSON to preserve original API response
-			hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+			// For message_start events, modify the model in the raw JSON
+			// to preserve the original API response structure
+			if evt.Type == "message_start" {
+				var eventMap map[string]json.RawMessage
+				if err := json.Unmarshal([]byte(evt.RawJSON()), &eventMap); err == nil {
+					var msgMap map[string]json.RawMessage
+					if err := json.Unmarshal(eventMap["message"], &msgMap); err == nil {
+						msgMap["model"] = json.RawMessage(`"` + hc.ResponseModel + `"`)
+						eventMap["message"], _ = json.Marshal(msgMap)
+					}
+					modified, _ := json.Marshal(eventMap)
+					hc.GinContext.SSEvent(evt.Type, string(modified))
+				} else {
+					hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+				}
+			} else {
+				hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+			}
 			hc.GinContext.Writer.Flush()
 			return nil
 		},
@@ -106,10 +119,6 @@ func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaM
 		},
 		func(event interface{}) error {
 			evt := event.(*anthropic.BetaRawMessageStreamEventUnion)
-			// Only set model for message_start events, as other events don't have a message field
-			if evt.Type == "message_start" {
-				evt.Message.Model = anthropic.Model(hc.ResponseModel)
-			}
 
 			if evt.Usage.InputTokens > 0 {
 				inputTokens = int(evt.Usage.InputTokens)
@@ -124,8 +133,24 @@ func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaM
 				hasUsage = true
 			}
 
-			// MENTION: Send SSE event, should use evt.RawJSON()
-			hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+			// For message_start events, modify the model in the raw JSON
+			// to preserve the original API response structure
+			if evt.Type == "message_start" {
+				var eventMap map[string]json.RawMessage
+				if err := json.Unmarshal([]byte(evt.RawJSON()), &eventMap); err == nil {
+					var msgMap map[string]json.RawMessage
+					if err := json.Unmarshal(eventMap["message"], &msgMap); err == nil {
+						msgMap["model"] = json.RawMessage(`"` + hc.ResponseModel + `"`)
+						eventMap["message"], _ = json.Marshal(msgMap)
+					}
+					modified, _ := json.Marshal(eventMap)
+					hc.GinContext.SSEvent(evt.Type, string(modified))
+				} else {
+					hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+				}
+			} else {
+				hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+			}
 			hc.GinContext.Writer.Flush()
 			return nil
 		},
