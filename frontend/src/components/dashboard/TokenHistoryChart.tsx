@@ -453,7 +453,7 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
                                     axisLine={{ stroke: '#cbd5e1', strokeWidth: 1.5 }}
                                     width={60}
                                 />
-                                <Tooltip content={<CustomTooltip />} />
+                                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0, 0, 0, 0.05)' }} />
                                 <Bar
                                     dataKey="cacheTokens"
                                     name="Cache Tokens"
@@ -462,6 +462,10 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
                                     stroke={TOKEN_COLORS.cache.dark}
                                     strokeWidth={0.5}
                                     strokeOpacity={0.8}
+                                    isAnimationActive={true}
+                                    animationBegin={0}
+                                    animationDuration={800}
+                                    animationEasing="ease-out"
                                 >
                                     {chartData.map((entry, index) => (
                                         <Cell
@@ -481,6 +485,10 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
                                     stroke={TOKEN_COLORS.input.dark}
                                     strokeWidth={0.5}
                                     strokeOpacity={0.8}
+                                    isAnimationActive={true}
+                                    animationBegin={100}
+                                    animationDuration={800}
+                                    animationEasing="ease-out"
                                 />
                                 <Bar
                                     dataKey="outputTokens"
@@ -492,6 +500,10 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
                                     stroke={TOKEN_COLORS.output.dark}
                                     strokeWidth={0.5}
                                     strokeOpacity={0.8}
+                                    isAnimationActive={true}
+                                    animationBegin={200}
+                                    animationDuration={800}
+                                    animationEasing="ease-out"
                                 />
 
                             </BarChart>
