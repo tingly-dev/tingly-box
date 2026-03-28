@@ -662,7 +662,7 @@ func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, set
 	}
 
 	// Setup menu button after bot is connected
-	if err := bot.SetupMenuButtonForBot(manager, setting.UUID); err != nil {
+	if err := bot.SetupMenuButtonForBot(manager, setting.UUID, handler.GetCommandRegistry()); err != nil {
 		// Log warning but don't fail startup
 		logrus.WithError(err).WithField("platform", setting.Platform).Warn("Failed to setup menu button")
 	} else {

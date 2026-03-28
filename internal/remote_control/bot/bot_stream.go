@@ -22,7 +22,8 @@ type streamingMessageHandler struct {
 	replyTo   string
 	mu        sync.Mutex
 	formatter *claude.TextFormatter
-	verbose   bool // If false, only show final results (hide intermediate messages)
+	verbose   bool          // If false, only show final results (hide intermediate messages)
+	meta      *ResponseMeta // Pointer so OnComplete sees updates from SmartGuideCompletionCallback
 }
 
 // Ensure streamingMessageHandler implements required interfaces
@@ -30,13 +31,14 @@ var _ agentboot.MessageStreamer = (*streamingMessageHandler)(nil)
 var _ agentboot.CompletionCallback = (*streamingMessageHandler)(nil)
 
 // newStreamingMessageHandler creates a new streaming message handler
-func newStreamingMessageHandler(bot imbot.Bot, chatID, replyTo string, verbose bool) *streamingMessageHandler {
+func newStreamingMessageHandler(bot imbot.Bot, chatID, replyTo string, verbose bool, meta *ResponseMeta) *streamingMessageHandler {
 	return &streamingMessageHandler{
 		bot:       bot,
 		chatID:    chatID,
 		replyTo:   replyTo,
 		formatter: claude.NewTextFormatter(),
 		verbose:   verbose,
+		meta:      meta,
 	}
 }
 
@@ -123,9 +125,9 @@ func (f *streamingMessageHandler) OnComplete(result *agentboot.CompletionResult)
 	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
 	// Prepare completion message based on verbose mode
-	completionText := "✅ Task done. \nContinue to chat with this session or /help."
+	completionText := IconDone + " " + MsgTaskDone + ". \n" + MsgContinueOrHelp + BuildFooter(f.meta.AgentType, f.meta.ProjectPath)
 	if !f.verbose {
-		completionText = "✅ Task done. (Quiet mode: /verbose to show details)\nContinue to chat with this session or /help."
+		completionText = IconDone + " " + MsgTaskDone + ". (Quiet mode: /verbose to show details)\n" + MsgContinueOrHelp + BuildFooter(f.meta.AgentType, f.meta.ProjectPath)
 	}
 
 	_, err := f.bot.SendMessage(context.Background(), f.chatID, &imbot.SendMessageOptions{

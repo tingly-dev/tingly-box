@@ -2,8 +2,10 @@ package bot
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
 )
 
 // botHandlerAdapter implements command.BotHandlerAdapter by delegating to BotHandler.
@@ -46,6 +48,11 @@ func (a *botHandlerAdapter) SetProjectPath(chatID, path string) error {
 	return nil
 }
 
+// GetProjectPathForGroup gets project path with group fallback.
+func (a *botHandlerAdapter) GetProjectPathForGroup(chatID, platform string) (string, bool) {
+	return getProjectPathForGroup(a.handler.chatStore, chatID, platform)
+}
+
 // GetSession gets session info.
 func (a *botHandlerAdapter) GetSession(chatID, agentType, projectPath string) (*SessionInfo, error) {
 	sess := a.handler.sessionMgr.FindBy(chatID, agentType, projectPath)
@@ -59,7 +66,36 @@ func (a *botHandlerAdapter) GetSession(chatID, agentType, projectPath string) (*
 		Request:        sess.Request,
 		Error:          sess.Error,
 		PermissionMode: sess.PermissionMode,
+		LastActivity:   sess.LastActivity,
 	}, nil
+}
+
+// FindOrCreateSession finds an existing session or creates a new one.
+func (a *botHandlerAdapter) FindOrCreateSession(chatID, agentType, projectPath string) (*SessionInfo, error) {
+	sess := a.handler.sessionMgr.FindBy(chatID, agentType, projectPath)
+	if sess == nil {
+		sess = a.handler.sessionMgr.CreateWith(chatID, agentType, projectPath)
+		a.handler.sessionMgr.Update(sess.ID, func(s *session.Session) {
+			s.ExpiresAt = time.Time{} // Persistent session
+		})
+	}
+	return &SessionInfo{
+		ID:             sess.ID,
+		Status:         string(sess.Status),
+		Project:        sess.Project,
+		Request:        sess.Request,
+		Error:          sess.Error,
+		PermissionMode: sess.PermissionMode,
+		LastActivity:   sess.LastActivity,
+	}, nil
+}
+
+// UpdatePermissionMode updates the permission mode for a session.
+func (a *botHandlerAdapter) UpdatePermissionMode(sessionID, mode string) error {
+	a.handler.sessionMgr.Update(sessionID, func(s *session.Session) {
+		s.PermissionMode = mode
+	})
+	return nil
 }
 
 // ClearSession clears a session.
@@ -71,6 +107,22 @@ func (a *botHandlerAdapter) ClearSession(chatID, agentType string) error {
 	}
 	a.handler.handleClearCommand(hCtx)
 	return nil
+}
+
+// StopExecution cancels a running execution, returns true if one was running.
+func (a *botHandlerAdapter) StopExecution(chatID string) bool {
+	a.handler.runningCancelMu.Lock()
+	cancel, exists := a.handler.runningCancel[chatID]
+	if exists {
+		delete(a.handler.runningCancel, chatID)
+	}
+	a.handler.runningCancelMu.Unlock()
+
+	if exists && cancel != nil {
+		cancel()
+		return true
+	}
+	return false
 }
 
 // GetCurrentAgent gets the current agent for a chat.
@@ -113,9 +165,66 @@ func (a *botHandlerAdapter) SetBashCwd(chatID, path string) error {
 	return a.handler.chatStore.SetBashCwd(chatID, path)
 }
 
-// ResolveChatID resolves a chat ID (for Telegram join command).
+// ResolveChatID resolves a chat ID using the Telegram bot.
 func (a *botHandlerAdapter) ResolveChatID(input string) (string, error) {
 	return input, nil
+}
+
+// GetDefaultProjectPath returns the default project path.
+func (a *botHandlerAdapter) GetDefaultProjectPath() string {
+	return a.handler.getDefaultProjectPath()
+}
+
+// GetBashAllowlist returns the configured bash allowlist.
+func (a *botHandlerAdapter) GetBashAllowlist() map[string]struct{} {
+	allowlist := normalizeAllowlistToMap(a.handler.botSetting.BashAllowlist)
+	if len(allowlist) == 0 {
+		return defaultBashAllowlist
+	}
+	return allowlist
+}
+
+// ListProjectPaths lists all project paths for a user.
+func (a *botHandlerAdapter) ListProjectPaths(ownerID, platform string) ([]string, error) {
+	chats, err := a.handler.chatStore.ListChatsByOwner(ownerID, platform)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]bool)
+	var paths []string
+	for _, chat := range chats {
+		if chat.ProjectPath != "" && !seen[chat.ProjectPath] {
+			paths = append(paths, chat.ProjectPath)
+			seen[chat.ProjectPath] = true
+		}
+	}
+	return paths, nil
+}
+
+// SendMessageWithKeyboard sends a text message with an inline keyboard.
+// Note: For commands that need keyboards, use ctx.Bot directly in the handler.
+func (a *botHandlerAdapter) SendMessageWithKeyboard(chatID, text string, keyboard interface{}) error {
+	return fmt.Errorf("SendMessageWithKeyboard requires bot context, use ctx.Bot directly")
+}
+
+// FormatHelpWithHeader formats help text with meta information.
+func (a *botHandlerAdapter) FormatHelpWithHeader(chatID, senderID, text string, isDirect bool, platform string) string {
+	hCtx := HandlerContext{
+		ChatID:   chatID,
+		SenderID: senderID,
+		Platform: imbot.Platform(platform),
+	}
+	return a.handler.formatHelpWithHeader(hCtx, text)
+}
+
+// StartInteractiveBind starts an interactive directory browser for project binding.
+func (a *botHandlerAdapter) StartInteractiveBind(chatID string) error {
+	hCtx := HandlerContext{
+		ChatID:   chatID,
+		Platform: imbot.PlatformTelegram,
+	}
+	a.handler.handleBindInteractive(hCtx)
+	return nil
 }
 
 // InitCommandRegistry initializes the command registry with built-in commands.
@@ -154,4 +263,15 @@ func (h *BotHandler) HandleCommandViaRegistry(hCtx HandlerContext, cmdName strin
 // GetCommandRegistry returns the command registry.
 func (h *BotHandler) GetCommandRegistry() *imbot.CommandRegistry {
 	return h.commandRegistry
+}
+
+// resolveProjectPath is a helper that resolves project path with group fallback.
+func resolveProjectPath(adapter BotHandlerAdapter, chatID, platform string) string {
+	projectPath, _ := adapter.GetProjectPath(chatID)
+	if projectPath == "" {
+		if path, found := adapter.GetProjectPathForGroup(chatID, platform); found {
+			projectPath = path
+		}
+	}
+	return projectPath
 }
