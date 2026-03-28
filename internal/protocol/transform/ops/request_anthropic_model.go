@@ -244,10 +244,23 @@ func ApplyAnthropicMetadataTransform(req interface{}, extra map[string]any) inte
 		if r == nil {
 			return req
 		}
+
+		text := fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ClaudeCodeVersion, GenHex4())
 		if len(r.System) > 0 {
 			if strings.Contains(r.System[0].Text, "x-anthropic-billing-header") {
-				r.System[0].Text = fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ClaudeCodeVersion, GenHex4())
+				r.System[0].Text = text
+			} else {
+				r.System = append(
+					[]anthropic.BetaTextBlockParam{
+						{Text: text},
+					},
+					r.System...,
+				)
 			}
+		} else {
+			r.System = append(r.System, anthropic.BetaTextBlockParam{
+				Text: text,
+			})
 		}
 		if r.Metadata.UserID.Valid() {
 			m := ParseMetadataUserID(r.Metadata.UserID.String())
