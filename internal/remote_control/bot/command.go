@@ -20,7 +20,6 @@ func RegisterBuiltinCommands(registry *imbot.CommandRegistry, botHandler BotHand
 		newHelpCommand(botHandler),
 		newBindCommand(botHandler),
 		newClearCommand(botHandler),
-		newStopCommand(botHandler),
 		newInterruptCommand(botHandler),
 		newProjectCommand(botHandler),
 		newStatusCommand(botHandler),
@@ -191,21 +190,9 @@ func newClearCommand(adapter BotHandlerAdapter) imbot.Command {
 		MustBuild()
 }
 
-func newStopCommand(adapter BotHandlerAdapter) imbot.Command {
-	return imbot.NewCommand("cmd-stop", "stop", "Stop the current running task").
-		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
-			if adapter.StopExecution(ctx.ChatID) {
-				return adapter.SendText(ctx.ChatID, "🛑 Task stopped.")
-			}
-			return adapter.SendText(ctx.ChatID, "No running task to stop.")
-		}).
-		WithCategory("session").
-		WithPriority(75).
-		MustBuild()
-}
-
 func newInterruptCommand(adapter BotHandlerAdapter) imbot.Command {
-	return imbot.NewCommand("cmd-interrupt", "interrupt", "Alias for /stop").
+	return imbot.NewCommand("cmd-interrupt", "interrupt", "Interrupt / Stop current running task").
+		WithAliases("s", "i", "stop").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
 			if adapter.StopExecution(ctx.ChatID) {
 				return adapter.SendText(ctx.ChatID, "🛑 Task stopped.")
