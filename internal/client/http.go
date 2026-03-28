@@ -395,7 +395,7 @@ func CreateHTTPClientForProvider(provider *typ.Provider, model string) *http.Cli
 		providerType = oauth.ProviderType(provider.OAuthDetail.ProviderType)
 	}
 
-	// Get shared transport from transport pool (keyed by providerUUID + model + proxyURL)
+	// Get shared transport from transport pool (keyed by providerUUID + proxyURL)
 	transport := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, providerType)
 
 	client := &http.Client{
