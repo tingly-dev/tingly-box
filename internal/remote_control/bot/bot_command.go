@@ -98,10 +98,8 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 		}
 	}
 
-	// Unknown command: route to agent
-	if routeErr := h.routeToAgent(hCtx, input); routeErr != nil {
-		logrus.WithError(routeErr).Error("Failed to route command to agent")
-	}
+	// Unknown slash command: respond with help hint instead of routing to agent
+	h.SendText(hCtx, fmt.Sprintf("Unknown command: %s\nUse /help to see available commands.", cmd))
 }
 
 // handleClearCommand clears the current session context and creates a new one
