@@ -46,6 +46,7 @@ import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useHealth } from '../contexts/HealthContext';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
 import { isFullEdition } from '@/utils/edition';
+import { useProfileContext } from '@/contexts/ProfileContext';
 
 interface LayoutProps {
     children?: ReactNode;
@@ -84,6 +85,7 @@ interface NavItem {
     path: string;
     label: string;
     icon?: ReactNode;
+    subtitle?: string;
     divider?: boolean;
 }
 
@@ -104,6 +106,7 @@ const Layout = ({ children }: LayoutProps) => {
     const { skillUser, skillIde } = useFeatureFlags();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
+    const { profiles } = useProfileContext();
 
     const handleEasterEgg = (event: React.MouseEvent<HTMLElement>) => {
         setEasterEggAnchorEl(event.currentTarget);
@@ -143,6 +146,15 @@ const Layout = ({ children }: LayoutProps) => {
 
     // Activity bar items
     const activityItems: ActivityItem[] = useMemo(() => {
+        // Build profile sidebar items dynamically
+        const claudeCodeProfiles = profiles['claude_code'] || [];
+        const profileNavItems: NavItem[] = claudeCodeProfiles.map(p => ({
+            path: `/use-claude-code/profile/${p.id}`,
+            label: 'Claude Code',
+            subtitle: p.name,
+            icon: <Claude size={20} />,
+        }));
+
         const items: ActivityItem[] = [
             {
                 key: 'dashboard',
@@ -212,10 +224,13 @@ const Layout = ({ children }: LayoutProps) => {
                     {
                         divider: true,
                         path: '/use-claude-code',
+                        subtitle: "default",
                         label: t('layout.nav.useClaudeCode', { defaultValue: 'Claude Code' }),
                         icon: <Claude size={20} />,
                     },
+                    ...profileNavItems,
                     {
+                        divider: true,
                         path: '/use-codex',
                         label: t('layout.nav.useCodex', { defaultValue: 'Codex' }),
                         icon: <OpenAI size={20} />,
@@ -324,7 +339,7 @@ const Layout = ({ children }: LayoutProps) => {
             },
         ];
         return items;
-    }, [t, promptMenuItems]);
+    }, [t, promptMenuItems, profiles]);
 
     // Find current active activity
     const activeActivity = useMemo(() => {
@@ -707,10 +722,21 @@ const Layout = ({ children }: LayoutProps) => {
                                 )}
                                 <ListItemText
                                     primary={item.label}
+                                    secondary={item.subtitle}
                                     slotProps={{
                                         primary: {
                                             fontWeight: isActive(item.path) ? 600 : 400,
                                             fontSize: '0.875rem',
+                                            lineHeight: 1.3,
+                                        },
+                                        secondary: {
+                                            fontSize: '0.6875rem',
+                                            lineHeight: 1.2,
+                                        },
+                                    }}
+                                    sx={{
+                                        '& .MuiListItemText-secondary': {
+                                            color: isActive(item.path) ? 'rgba(255,255,255,0.7)' : 'text.secondary',
                                         },
                                     }}
                                 />

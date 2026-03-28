@@ -8,6 +8,7 @@ import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInt
 import {api} from '@/services/api';
 import {toggleButtonGroupStyle, toggleButtonStyle} from "@/styles/toggleStyles";
 import InfoIcon from '@mui/icons-material/Info';
+import AddIcon from '@mui/icons-material/Add';
 import {
     Box,
     Button,
@@ -16,6 +17,7 @@ import {
     DialogContent,
     DialogTitle,
     IconButton,
+    TextField,
     ToggleButton,
     ToggleButtonGroup,
     Tooltip,
@@ -23,35 +25,29 @@ import {
 } from '@mui/material';
 import React, {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
+import { useProfileContext } from '@/contexts/ProfileContext';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
-const MODEL_VARIANTS = ['default', 'haiku', 'sonnet', 'opus', 'subagent'] as const;
-
-// Configuration mode options
 const CONFIG_MODES: { value: ConfigMode; label: string; description: string; enabled: boolean }[] = [
     { value: 'unified', label: 'Unified Model', description: 'Config unified model for all claude code requests', enabled: true },
     { value: 'separate', label: 'Separate Model', description: 'Config different models for claude code scenario, like subagent, summary, default, ...', enabled: true },
     { value: 'smart', label: 'Smart', description: '(WIP) Smart routing according to request field / content / model feature / user intent / ...', enabled: false },
 ];
 
+const SCENARIO = 'claude_code';
+
 const UseClaudeCodePage: React.FC = () => {
     const { t } = useTranslation();
 
-    // Use common hook for shared data
     const {
-        showTokenModal,
         setShowTokenModal,
         token,
         showNotification,
-        providers,
         notification,
-        loadProviders,
         copyToClipboard,
-        headerHeight,
         baseUrl,
-        loadRules,
-    } = useScenarioPageInternal("claude_code");
+    } = useScenarioPageInternal(SCENARIO);
 
     // Custom state for this page
     const [rules, setRules] = useState<any[]>([]);
@@ -64,12 +60,40 @@ const UseClaudeCodePage: React.FC = () => {
     const [configModalOpen, setConfigModalOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
 
+    // Profile creation state
+    const { getProfiles, refresh: refreshProfiles } = useProfileContext();
+    const profileCount = getProfiles(SCENARIO).length;
+    const [createProfileOpen, setCreateProfileOpen] = useState(false);
+    const [newProfileName, setNewProfileName] = useState('');
+    const [isProfileMutating, setIsProfileMutating] = useState(false);
+
+    // Create profile handler
+    const handleCreateProfile = async () => {
+        if (!newProfileName.trim()) return;
+        try {
+            setIsProfileMutating(true);
+            const result = await api.createProfile(SCENARIO, newProfileName.trim());
+            if (result.success) {
+                showNotification(`Profile "${result.data.name}" created (ID: ${result.data.id})`, 'success');
+                setCreateProfileOpen(false);
+                setNewProfileName('');
+                refreshProfiles();
+            } else {
+                showNotification(`Failed to create profile: ${result.error || 'Unknown error'}`, 'error');
+            }
+        } catch {
+            showNotification('Failed to create profile', 'error');
+        } finally {
+            setIsProfileMutating(false);
+        }
+    };
+
     // Load scenario config to get config mode
     const loadScenarioConfig = async () => {
         try {
-            const result = await api.getScenarioConfig('claude_code');
+            const result = await api.getScenarioConfig(SCENARIO);
             if (result.success && result.data && result.data.flags) {
-                const { unified, separate, smart } = result.data.flags;
+                const { separate } = result.data.flags;
                 if (separate) {
                     setConfigMode('separate');
                 } else {
@@ -95,14 +119,14 @@ const UseClaudeCodePage: React.FC = () => {
         setConfirmDialogOpen(false);
         try {
             const config = {
-                scenario: 'claude_code',
+                scenario: SCENARIO,
                 flags: {
                     unified: pendingMode === 'unified',
                     separate: pendingMode === 'separate',
                     smart: false,
                 },
             };
-            const result = await api.setScenarioConfig('claude_code', config);
+            const result = await api.setScenarioConfig(SCENARIO, config);
 
             if (result.success) {
                 setConfigMode(pendingMode);
@@ -146,15 +170,11 @@ const UseClaudeCodePage: React.FC = () => {
                     setLoadingRule(false);
                 }
             } else {
-                // Load separate rules for each model variant
-                const loadedRules = await Promise.all(
-                    MODEL_VARIANTS.map(async (variant) => {
-                        const result = await api.getRule(`built-in-cc-${variant}`);
-                        return result.success ? result.data : null;
-                    })
-                );
+                const result = await api.getRules(SCENARIO);
                 if (isMounted) {
-                    setRules(loadedRules.filter((r): r is any => r !== null));
+                    // Filter out the unified rule in separate mode
+                    const filtered = (result.success ? result.data : []).filter((r: any) => r.uuid !== 'built-in-cc');
+                    setRules(filtered);
                     setLoadingRule(false);
                 }
             }
@@ -178,7 +198,6 @@ const UseClaudeCodePage: React.FC = () => {
             const result = await api.applyClaudeConfig(configMode, false);
 
             if (result.success) {
-                // Build success message from backend response
                 const createdFiles = result.createdFiles || [];
                 const updatedFiles = result.updatedFiles || [];
                 const backupPaths = result.backupPaths || [];
@@ -206,7 +225,6 @@ const UseClaudeCodePage: React.FC = () => {
             const result = await api.applyClaudeConfig(configMode, true);
 
             if (result.success) {
-                // Build success message from backend response
                 const createdFiles = result.createdFiles || [];
                 const updatedFiles = result.updatedFiles || [];
                 const backupPaths = result.backupPaths || [];
@@ -233,11 +251,22 @@ const UseClaudeCodePage: React.FC = () => {
                 <UnifiedCard
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-                            <span>Claude Code Configuration</span>
-                            <Tooltip title={`Base URL: ${baseUrl}/tingly/claude_code`}>
+                            <span>Claude Code</span>
+                            <Tooltip title={`Base URL: ${baseUrl}/tingly/${SCENARIO}`}>
                                 <IconButton size="small" sx={{ ml: 0.5 }}>
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                 </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Create a profile to configure a separate rule set for Claude Code (only supports separate model mode)">
+                                <Button
+                                    onClick={() => setCreateProfileOpen(true)}
+                                    variant="outlined"
+                                    color="primary"
+                                    size="small"
+                                    startIcon={<AddIcon />}
+                                >
+                                    Profile{profileCount > 0 ? ` (${profileCount})` : ''}
+                                </Button>
                             </Tooltip>
                         </Box>
                     }
@@ -274,13 +303,13 @@ const UseClaudeCodePage: React.FC = () => {
                     }
                 >
                     <ProviderConfigCard
-                        title="Claude Code Configuration"
-                        baseUrlPath="/tingly/claude_code"
+                        title="Claude Code"
+                        baseUrlPath={`/tingly/${SCENARIO}`}
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
                         token={token}
                         onShowTokenModal={() => setShowTokenModal(true)}
-                        scenario="claude_code"
+                        scenario={SCENARIO}
                         showApiKeyRow={true}
                         showBaseUrlRow={true}
                     />
@@ -288,7 +317,7 @@ const UseClaudeCodePage: React.FC = () => {
 
                 <TemplatePage
                     title="Models and Forwarding Rules"
-                    scenario="claude_code"
+                    scenario={SCENARIO}
                     rules={rules}
                     onRulesChange={setRules}
                     collapsible={true}
@@ -335,6 +364,53 @@ const UseClaudeCodePage: React.FC = () => {
                     onApplyWithStatusLine={handleApplyWithStatusLine}
                     isApplyLoading={isApplyLoading}
                 />
+
+                {/* Create profile dialog */}
+                <Dialog
+                    open={createProfileOpen}
+                    onClose={() => {
+                        setCreateProfileOpen(false);
+                        setNewProfileName('');
+                    }}
+                    maxWidth="xs"
+                    fullWidth
+                >
+                    <DialogTitle>Create New Profile</DialogTitle>
+                    <DialogContent>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                            Profiles allow you to create separate rule sets for Claude Code. Each profile gets its own URL path (e.g., /tingly/claude_code:p1) and only supports separate model mode.
+                        </Typography>
+                        <TextField
+                            autoFocus
+                            fullWidth
+                            label="Profile Name"
+                            value={newProfileName}
+                            onChange={(e) => setNewProfileName(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleCreateProfile()}
+                            placeholder="e.g., Premium, Economy, Testing"
+                            size="small"
+                        />
+                    </DialogContent>
+                    <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
+                        <Button
+                            onClick={() => {
+                                setCreateProfileOpen(false);
+                                setNewProfileName('');
+                            }}
+                            color="inherit"
+                            disabled={isProfileMutating}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleCreateProfile}
+                            variant="contained"
+                            disabled={!newProfileName.trim() || isProfileMutating}
+                        >
+                            Create
+                        </Button>
+                    </DialogActions>
+                </Dialog>
             </CardGrid>
         </PageLayout>
     );

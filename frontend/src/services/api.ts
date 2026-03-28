@@ -590,6 +590,31 @@ export const api = {
         });
     },
 
+    // Profile API
+    getProfiles: async (scenario: string): Promise<any> => {
+        return fetchUIAPI(`/scenario/${scenario}/profiles`);
+    },
+
+    createProfile: async (scenario: string, name: string): Promise<any> => {
+        return fetchUIAPI(`/scenario/${scenario}/profiles`, {
+            method: 'POST',
+            body: JSON.stringify({ name }),
+        });
+    },
+
+    updateProfile: async (scenario: string, id: string, name: string): Promise<any> => {
+        return fetchUIAPI(`/scenario/${scenario}/profiles/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ name }),
+        });
+    },
+
+    deleteProfile: async (scenario: string, id: string): Promise<any> => {
+        return fetchUIAPI(`/scenario/${scenario}/profiles/${id}`, {
+            method: 'DELETE',
+        });
+    },
+
     probeModel: async (uuid: string, model: string): Promise<ProbeResponse> => {
         try {
             const apiInstances = await getApiInstances();
