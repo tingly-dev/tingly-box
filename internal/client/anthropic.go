@@ -30,7 +30,7 @@ type AnthropicClient struct {
 }
 
 // defaultNewAnthropicClient creates a new Anthropic client wrapper
-func defaultNewAnthropicClient(provider *typ.Provider) (*AnthropicClient, error) {
+func defaultNewAnthropicClient(provider *typ.Provider, model string) (*AnthropicClient, error) {
 	// Handle API base URL - Anthropic SDK expects base without /v1
 	apiBase := strings.TrimRight(provider.APIBase, "/")
 	if strings.HasSuffix(apiBase, "/v1") {
@@ -46,7 +46,7 @@ func defaultNewAnthropicClient(provider *typ.Provider) (*AnthropicClient, error)
 	var httpClient *http.Client
 	// Add proxy and/or custom headers if configured
 	if provider.ProxyURL != "" || provider.AuthType == typ.AuthTypeOAuth {
-		httpClient = CreateHTTPClientForProvider(provider)
+		httpClient = CreateHTTPClientForProvider(provider, model)
 
 		if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
 			logrus.Infof("Using shared transport with custom headers/params for OAuth provider type: %s", provider.OAuthDetail.ProviderType)
@@ -78,7 +78,9 @@ func (c *AnthropicClient) APIStyle() protocol.APIStyle {
 
 // Close closes any resources held by the client
 func (c *AnthropicClient) Close() error {
-	// Anthropic client doesn't need explicit closing
+	if c.httpClient != nil && c.httpClient != http.DefaultClient {
+		c.httpClient.CloseIdleConnections()
+	}
 	return nil
 }
 

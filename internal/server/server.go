@@ -375,7 +375,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Create server struct first with applied options
 	server.jwtManager = jwtManager
 	server.engine = gin.New()
-	server.clientPool = client.NewClientPool() // Initialize client pool
+	server.clientPool = client.NewClientPool() // Initialize client pool (once mode with auto-cleanup via finalizer)
 	server.errorMW = errorMW
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
 
