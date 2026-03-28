@@ -459,13 +459,15 @@ type ChangeDirParams struct {
 // ChangeDirTool changes the bound project directory
 type ChangeDirTool struct {
 	executor          *ToolExecutor
+	chatID            string // ChatID injected from agent config (not from LLM params)
 	updateProjectFunc func(chatID string, projectPath string) error
 }
 
 // NewChangeDirTool creates a new ChangeDirTool
-func NewChangeDirTool(executor *ToolExecutor, updateProjectFunc func(chatID string, projectPath string) error) *ChangeDirTool {
+func NewChangeDirTool(executor *ToolExecutor, chatID string, updateProjectFunc func(chatID string, projectPath string) error) *ChangeDirTool {
 	return &ChangeDirTool{
 		executor:          executor,
+		chatID:            chatID,
 		updateProjectFunc: updateProjectFunc,
 	}
 }
@@ -483,7 +485,6 @@ func (t *ChangeDirTool) Name() string {
 // Call changes the working directory and persists the change
 func (t *ChangeDirTool) Call(ctx context.Context, params ChangeDirParams) (*tool.ToolResponse, error) {
 	path := params.Path
-	chatID := params.ChatID
 
 	if path == "" {
 		return tool.TextResponse("Error: 'path' parameter is required"), nil
@@ -504,10 +505,10 @@ func (t *ChangeDirTool) Call(ctx context.Context, params ChangeDirParams) (*tool
 	// Update working directory in executor
 	t.executor.SetWorkingDirectory(resolvedPath)
 
-	// Persist to chat store
-	if t.updateProjectFunc != nil && chatID != "" {
-		if err := t.updateProjectFunc(chatID, resolvedPath); err != nil {
-			logrus.WithError(err).WithField("chatID", chatID).Warn("Failed to update project path in chat store")
+	// Persist to chat store using injected chatID (not from LLM params)
+	if t.updateProjectFunc != nil && t.chatID != "" {
+		if err := t.updateProjectFunc(t.chatID, resolvedPath); err != nil {
+			logrus.WithError(err).WithField("chatID", t.chatID).Warn("Failed to update project path in chat store")
 			return tool.TextResponse(fmt.Sprintf("Warning: directory changed but persistence failed: %v\nNew directory: %s", err, resolvedPath)), nil
 		}
 	}
@@ -558,7 +559,7 @@ func (t *HandoffToCCTool) Call(ctx context.Context, params HandoffParams) (*tool
 
 // RegisterTools registers all smart guide tools with a toolkit
 func RegisterTools(
-	toolkit *tool.Toolkit, executor *ToolExecutor,
+	toolkit *tool.Toolkit, executor *ToolExecutor, chatID string,
 	getStatusFunc func(chatID string) (*StatusInfo, error),
 	updateProjectFunc func(chatID string, projectPath string) error,
 ) error {
@@ -587,7 +588,7 @@ func RegisterTools(
 	}
 
 	// Register change_workdir tool
-	changeDirTool := NewChangeDirTool(executor, updateProjectFunc)
+	changeDirTool := NewChangeDirTool(executor, chatID, updateProjectFunc)
 	if err := toolkit.RegisterAll(changeDirTool); err != nil {
 		return fmt.Errorf("failed to register change_workdir tool: %w", err)
 	}

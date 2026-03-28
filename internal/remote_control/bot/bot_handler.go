@@ -447,11 +447,18 @@ func (h *BotHandler) handlePermissionTextResponse(hCtx HandlerContext) bool {
 		return false
 	}
 
+	input := hCtx.Text()
+
+	// Never consume handoff commands (@cc, @tb, @mock, /cc, /tb, /mock) as permission responses
+	trimmed := strings.TrimSpace(input)
+	if strings.HasPrefix(trimmed, "@cc") || strings.HasPrefix(trimmed, "@tb") || strings.HasPrefix(trimmed, "@mock") ||
+		strings.HasPrefix(trimmed, "/cc") || strings.HasPrefix(trimmed, "/tb") || strings.HasPrefix(trimmed, "/mock") {
+		return false
+	}
+
 	// Get the most recent pending request for this chat
 	// (usually there's only one at a time)
 	latestReq := pendingReqs[0]
-
-	input := hCtx.Text()
 
 	// For AskUserQuestion, try to parse as option selection first
 	if latestReq.ToolName == "AskUserQuestion" {

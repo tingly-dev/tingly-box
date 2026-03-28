@@ -62,16 +62,17 @@ func (c *CompletionCallback) OnComplete(result *agentboot.CompletionResult) {
 // SmartGuideCompletionCallback handles completion events for SmartGuide agent
 // It saves messages to session, updates project path if changed, and sends response + action keyboard
 type SmartGuideCompletionCallback struct {
-	hCtx           HandlerContext
-	sessionID      string
-	chatStore      ChatStoreInterface
-	tbSessionStore *smart_guide.SessionStore
-	agent          *smart_guide.TinglyBoxAgent
-	projectPath    string
-	meta           *ResponseMeta
-	behavior       OutputBehavior
-	botHandler     *BotHandler // Add reference to bot handler for formatting
-	messagesSent   int         // Track number of messages sent via hooks (for fallback)
+	hCtx             HandlerContext
+	sessionID        string
+	chatStore        ChatStoreInterface
+	tbSessionStore   *smart_guide.SessionStore
+	agent            *smart_guide.TinglyBoxAgent
+	projectPath      string
+	meta             *ResponseMeta
+	behavior         OutputBehavior
+	formatResponse   func(meta ResponseMeta, response string, showMeta bool) string
+	sendText         func(hCtx HandlerContext, text string)
+	messagesSent     int // Track number of messages sent via hooks (for fallback)
 }
 
 // messageTrackingWrapper wraps a message handler and tracks assistant messages
@@ -184,8 +185,10 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 		}).Warn("SmartGuide: No messages sent via hooks - using fallback to send response")
 
 		// Send the response as a fallback (no meta for regular messages)
-		formattedResponse := c.botHandler.formatResponseWithHeader(*c.meta, responseText, false)
-		c.botHandler.SendText(c.hCtx, formattedResponse)
+		if c.formatResponse != nil && c.sendText != nil {
+			formattedResponse := c.formatResponse(*c.meta, responseText, false)
+			c.sendText(c.hCtx, formattedResponse)
+		}
 	} else if c.messagesSent == 0 && responseText == "" {
 		logrus.WithFields(logrus.Fields{
 			"chatID":  c.hCtx.ChatID,
@@ -326,8 +329,10 @@ func (h *BotHandler) handleHandoff(hCtx HandlerContext, toAgent agentboot.AgentT
 		"project":   projectPath,
 	}).Info("Agent handoff completed")
 
-	// Send handoff confirmation
-	h.SendText(hCtx, result.Message)
+	// Send handoff confirmation (skip empty messages from same-agent handoff)
+	if result.Message != "" {
+		h.SendText(hCtx, result.Message)
+	}
 
 	return nil
 }
