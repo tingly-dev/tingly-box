@@ -404,20 +404,20 @@ func TestGetStatusTool_Call_WithCallback(t *testing.T) {
 
 func TestChangeDirTool_Name(t *testing.T) {
 	executor := NewToolExecutor([]string{})
-	tool := NewChangeDirTool(executor, nil)
+	tool := NewChangeDirTool(executor, "", nil)
 	assert.Equal(t, "change_workdir", tool.Name())
 }
 
 func TestChangeDirTool_Description(t *testing.T) {
 	executor := NewToolExecutor([]string{})
-	tool := NewChangeDirTool(executor, nil)
+	tool := NewChangeDirTool(executor, "", nil)
 	desc := tool.Description()
 	assert.Contains(t, desc, "directory")
 }
 
 func TestChangeDirTool_Call_Success(t *testing.T) {
 	executor := NewToolExecutor([]string{})
-	tool := NewChangeDirTool(executor, nil)
+	tool := NewChangeDirTool(executor, "", nil)
 
 	ctx := context.Background()
 	resp, err := tool.Call(ctx, ChangeDirParams{Path: "/tmp"})
@@ -431,7 +431,7 @@ func TestChangeDirTool_Call_Success(t *testing.T) {
 
 func TestChangeDirTool_Call_RelativePath(t *testing.T) {
 	executor := NewToolExecutor([]string{})
-	tool := NewChangeDirTool(executor, nil)
+	tool := NewChangeDirTool(executor, "", nil)
 
 	ctx := context.Background()
 	// Use /tmp which exists
@@ -449,7 +449,7 @@ func TestChangeDirTool_Call_RelativePath(t *testing.T) {
 
 func TestChangeDirTool_Call_EmptyPath(t *testing.T) {
 	executor := NewToolExecutor([]string{})
-	tool := NewChangeDirTool(executor, nil)
+	tool := NewChangeDirTool(executor, "", nil)
 
 	ctx := context.Background()
 	resp, err := tool.Call(ctx, ChangeDirParams{})
@@ -462,7 +462,7 @@ func TestChangeDirTool_Call_EmptyPath(t *testing.T) {
 
 func TestChangeDirTool_Call_NotADirectory(t *testing.T) {
 	executor := NewToolExecutor([]string{})
-	tool := NewChangeDirTool(executor, nil)
+	tool := NewChangeDirTool(executor, "", nil)
 
 	ctx := context.Background()
 	// Use /etc/passwd which exists but is not a directory

@@ -136,7 +136,8 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		projectPath:    projectPath,
 		meta:           meta,
 		behavior:       e.deps.BotSetting.GetOutputBehavior(),
-		botHandler:     nil,
+		formatResponse: e.deps.FormatResponse,
+		sendText:       e.deps.SendText,
 		messagesSent:   0,
 	}
 
