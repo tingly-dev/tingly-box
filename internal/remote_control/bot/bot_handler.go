@@ -205,6 +205,7 @@ func NewBotHandler(
 		NewStreamingMessageHandler: handler.newStreamingMessageHandler,
 	}
 	handler.agentRouter = NewAgentRouter(deps)
+	handler.InitCommandRegistry()
 
 	return handler
 }
