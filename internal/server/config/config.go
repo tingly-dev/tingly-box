@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 
 	"github.com/google/uuid"
@@ -70,7 +71,7 @@ type Config struct {
 
 	// Profiles stores scenario profile metadata, keyed by base scenario name.
 	// Each entry is a list of profiles for that scenario.
-	Profiles map[string][]typ.ProfileMeta `json:"profiles,omitempty" yaml:"profiles,omitempty"`
+	Profiles map[string][]typ.ProfileMeta `json:"profiles" yaml:"profiles"`
 
 	// Enterprise context JWT validation settings for TBE->TB proxy calls.
 	EnterpriseContextJWT EnterpriseContextJWTConfig `json:"enterprise_context_jwt,omitempty" yaml:"enterprise_context_jwt,omitempty"`
@@ -1345,10 +1346,14 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string) (typ.
 
 	c.Profiles[base] = append(c.Profiles[base], meta)
 
-	// Clone rules from base scenario to the new profiled scenario
+	// Clone rules from base scenario to the new profiled scenario.
+	// For claude_code, profiles only support "separate" mode, so skip the unified rule.
 	profiledScenario := typ.ProfiledScenarioName(baseScenario, meta.ID)
 	for _, rule := range c.Rules {
 		if rule.Scenario == baseScenario {
+			if baseScenario == typ.ScenarioClaudeCode && rule.UUID == RuleUUIDBuiltinCC {
+				continue // skip unified rule for claude_code profiles
+			}
 			cloned := rule
 			cloned.UUID = uuid.New().String()
 			cloned.Scenario = profiledScenario
@@ -1392,7 +1397,7 @@ func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, 
 	return c.Save()
 }
 
-// DeleteProfile removes a profile by ID. Warns if rules reference this profile.
+// DeleteProfile removes a profile by ID and cleans up all associated rules.
 func (c *Config) DeleteProfile(baseScenario typ.RuleScenario, profileID string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -1414,19 +1419,17 @@ func (c *Config) DeleteProfile(baseScenario typ.RuleScenario, profileID string) 
 		return fmt.Errorf("profile '%s' not found in scenario '%s'", profileID, base)
 	}
 
-	// Check for rules referencing this profile
-	profiledScenario := typ.ProfiledScenarioName(baseScenario, profileID)
-	for _, rule := range c.Rules {
-		if rule.Scenario == profiledScenario && rule.Active {
-			return fmt.Errorf("cannot delete profile '%s': active rules exist for scenario '%s' (deactivate or reassign them first)", profileID, profiledScenario)
-		}
-	}
-
-	// Remove from slice
+	// Remove profile metadata
 	c.Profiles[base] = append(profiles[:idx], profiles[idx+1:]...)
 	if len(c.Profiles[base]) == 0 {
 		delete(c.Profiles, base)
 	}
+
+	// Remove all rules belonging to this profile
+	profiledScenario := typ.ProfiledScenarioName(baseScenario, profileID)
+	c.Rules = slices.DeleteFunc(c.Rules, func(r typ.Rule) bool {
+		return r.Scenario == profiledScenario
+	})
 
 	return c.Save()
 }
