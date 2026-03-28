@@ -370,7 +370,7 @@ jobs:
           FOOTER_EOF
 
           if [ "$PUBLISHED_BUNDLE" = 'true' ]; then
-            echo "          - 📦 [Bundle on npm](https://www.npmjs.com/package/tingly-box-bundle/v/$VERSION)" >> npx_release_notes.md
+            echo "- 📦 [Bundle on npm](https://www.npmjs.com/package/tingly-box-bundle/v/$VERSION)" >> npx_release_notes.md
           fi
 
           cat >> npx_release_notes.md << FOOTER2_EOF
