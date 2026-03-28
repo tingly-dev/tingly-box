@@ -430,6 +430,7 @@ func newBashCommand(adapter BotHandlerAdapter) imbot.Command {
 
 func newJoinCommand(adapter BotHandlerAdapter) imbot.Command {
 	return imbot.NewCommand("cmd-join", "join", "Add group to whitelist (Telegram only)").
+		WithPlatforms(imbot.PlatformTelegram).
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
 			if !ctx.IsDirectMessage {
 				return adapter.SendText(ctx.ChatID, "/join can only be used in general chat.")
