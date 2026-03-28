@@ -274,7 +274,6 @@ func (s *Server) recordDetailedUsage(c *gin.Context, rule *typ.Rule, provider *t
 	}
 
 	ttftMs := CalculateTTFT(c)
-	cacheHit, _ := GetCacheHit(c)
 
 	record := &db.UsageRecord{
 		ProviderUUID: provider.UUID,
@@ -290,7 +289,6 @@ func (s *Server) recordDetailedUsage(c *gin.Context, rule *typ.Rule, provider *t
 		ErrorCode:    errorCode,
 		LatencyMs:    latencyMs,
 		TTFTMs:       int(ttftMs),
-		CacheHit:     cacheHit,
 		Streamed:     streamed,
 	}
 
@@ -317,7 +315,6 @@ func (s *Server) recordDetailedUsageWithTokenUsage(c *gin.Context, rule *typ.Rul
 	}
 
 	ttftMs := CalculateTTFT(c)
-	cacheHit, _ := GetCacheHit(c)
 
 	record := &db.UsageRecord{
 		ProviderUUID:     provider.UUID,
@@ -334,7 +331,6 @@ func (s *Server) recordDetailedUsageWithTokenUsage(c *gin.Context, rule *typ.Rul
 		ErrorCode:        errorCode,
 		LatencyMs:        latencyMs,
 		TTFTMs:           int(ttftMs),
-		CacheHit:         cacheHit,
 		Streamed:         streamed,
 	}
 

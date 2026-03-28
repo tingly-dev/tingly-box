@@ -37,7 +37,6 @@ type UsageRecord struct {
 	ErrorCode    string `gorm:"column:error_code"`
 	LatencyMs    int    `gorm:"column:latency_ms"`
 	TTFTMs       int    `gorm:"column:ttft_ms;default:0"`
-	CacheHit     bool   `gorm:"column:cache_hit;type:integer;default:0"`
 	Streamed     bool   `gorm:"column:streamed;type:integer"`
 }
 
