@@ -386,16 +386,17 @@ func CreateHTTPClientWithProxy(proxyURL string) *http.Client {
 
 // CreateHTTPClientForProvider creates an HTTP client configured for the given provider
 // It handles proxy and OAuth hooks if applicable
+// The model parameter is used for transport pool keying (provider+model+proxy)
 //
 // Returns a configured http.Client
-func CreateHTTPClientForProvider(provider *typ.Provider) *http.Client {
+func CreateHTTPClientForProvider(provider *typ.Provider, model string) *http.Client {
 	var providerType oauth.ProviderType
 	if provider.OAuthDetail != nil {
 		providerType = oauth.ProviderType(provider.OAuthDetail.ProviderType)
 	}
 
-	// Get shared transport from transport pool
-	transport := GetGlobalTransportPool().GetTransport(provider.APIBase, provider.ProxyURL, providerType)
+	// Get shared transport from transport pool (keyed by providerUUID + model + proxyURL)
+	transport := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, providerType)
 
 	client := &http.Client{
 		Transport: transport,

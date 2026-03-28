@@ -140,20 +140,20 @@ func NewSharedClientPool() *ClientPool {
 func (p *ClientPool) GetOpenAIClient(provider *typ.Provider, model string) *OpenAIClient {
 	switch p.mode {
 	case PoolModeOnce:
-		return p.createOnceOpenAIClient(provider)
+		return p.createOnceOpenAIClient(provider, model)
 	case PoolModeShared:
 		return p.getOrCreateOpenAIClient(provider, model)
 	default:
 		logrus.Warnf("Unknown pool mode: %s, falling back to once mode", p.mode)
-		return p.createOnceOpenAIClient(provider)
+		return p.createOnceOpenAIClient(provider, "")
 	}
 }
 
 // createOnceOpenAIClient creates a fresh client without caching
-func (p *ClientPool) createOnceOpenAIClient(provider *typ.Provider) *OpenAIClient {
+func (p *ClientPool) createOnceOpenAIClient(provider *typ.Provider, model string) *OpenAIClient {
 	logrus.Debugf("Creating once-mode OpenAI client for provider: %s", provider.Name)
 
-	client, err := NewOpenAIClient(provider)
+	client, err := NewOpenAIClient(provider, model)
 	if err != nil {
 		logrus.Errorf("Failed to create OpenAI client for provider %s: %v", provider.Name, err)
 		return nil
@@ -207,7 +207,7 @@ func (p *ClientPool) getOrCreateOpenAIClient(provider *typ.Provider, model strin
 	// Create new client using factory
 	logrus.Infof("Creating new OpenAI client for provider: %s (API: %s)", provider.Name, provider.APIBase)
 
-	client, err := NewOpenAIClient(provider)
+	client, err := NewOpenAIClient(provider, model)
 	if err != nil {
 		logrus.Errorf("Failed to create OpenAI client for provider %s: %v", provider.Name, err)
 		return nil
@@ -230,20 +230,20 @@ func (p *ClientPool) getOrCreateOpenAIClient(provider *typ.Provider, model strin
 func (p *ClientPool) GetAnthropicClient(provider *typ.Provider, model string) *AnthropicClient {
 	switch p.mode {
 	case PoolModeOnce:
-		return p.createOnceAnthropicClient(provider)
+		return p.createOnceAnthropicClient(provider, model)
 	case PoolModeShared:
 		return p.getOrCreateAnthropicClient(provider, model)
 	default:
 		logrus.Warnf("Unknown pool mode: %s, falling back to once mode", p.mode)
-		return p.createOnceAnthropicClient(provider)
+		return p.createOnceAnthropicClient(provider, "")
 	}
 }
 
 // createOnceAnthropicClient creates a fresh client without caching
-func (p *ClientPool) createOnceAnthropicClient(provider *typ.Provider) *AnthropicClient {
+func (p *ClientPool) createOnceAnthropicClient(provider *typ.Provider, model string) *AnthropicClient {
 	logrus.Debugf("Creating once-mode Anthropic client for provider: %s", provider.Name)
 
-	client, err := NewAnthropicClient(provider)
+	client, err := NewAnthropicClient(provider, model)
 	if err != nil {
 		logrus.Errorf("Failed to create Anthropic client for provider %s: %v", provider.Name, err)
 		return nil
@@ -296,7 +296,7 @@ func (p *ClientPool) getOrCreateAnthropicClient(provider *typ.Provider, model st
 	// Create new client using factory
 	logrus.Infof("Creating new Anthropic client for provider: %s (API: %s) model: %s", provider.Name, provider.APIBase, model)
 
-	client, err := NewAnthropicClient(provider)
+	client, err := NewAnthropicClient(provider, model)
 	if err != nil {
 		logrus.Errorf("Failed to create Anthropic client for provider %s: %v", provider.Name, err)
 		return nil
@@ -319,20 +319,20 @@ func (p *ClientPool) getOrCreateAnthropicClient(provider *typ.Provider, model st
 func (p *ClientPool) GetGoogleClient(provider *typ.Provider, model string) *GoogleClient {
 	switch p.mode {
 	case PoolModeOnce:
-		return p.createOnceGoogleClient(provider)
+		return p.createOnceGoogleClient(provider, model)
 	case PoolModeShared:
 		return p.getOrCreateGoogleClient(provider, model)
 	default:
 		logrus.Warnf("Unknown pool mode: %s, falling back to once mode", p.mode)
-		return p.createOnceGoogleClient(provider)
+		return p.createOnceGoogleClient(provider, "")
 	}
 }
 
 // createOnceGoogleClient creates a fresh client without caching
-func (p *ClientPool) createOnceGoogleClient(provider *typ.Provider) *GoogleClient {
+func (p *ClientPool) createOnceGoogleClient(provider *typ.Provider, model string) *GoogleClient {
 	logrus.Debugf("Creating once-mode Google client for provider: %s", provider.Name)
 
-	client, err := NewGoogleClient(provider)
+	client, err := NewGoogleClient(provider, model)
 	if err != nil {
 		logrus.Errorf("Failed to create Google client for provider %s: %v", provider.Name, err)
 		return nil
@@ -385,7 +385,7 @@ func (p *ClientPool) getOrCreateGoogleClient(provider *typ.Provider, model strin
 	// Create new client using factory
 	logrus.Infof("Creating new Google client for provider: %s (API: %s)", provider.Name, provider.APIBase)
 
-	client, err := NewGoogleClient(provider)
+	client, err := NewGoogleClient(provider, "")
 	if err != nil {
 		logrus.Errorf("Failed to create Google client for provider %s: %v", provider.Name, err)
 		return nil

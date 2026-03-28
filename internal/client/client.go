@@ -6,10 +6,10 @@ import (
 )
 
 // NewOpenAIClient creates a new OpenAI client wrapper
-var NewOpenAIClient func(provider *typ.Provider) (*OpenAIClient, error) = defaultNewOpenAIClient
+var NewOpenAIClient func(provider *typ.Provider, model string) (*OpenAIClient, error) = defaultNewOpenAIClient
 
 // NewAnthropicClient creates a new Anthropic client wrapper
-var NewAnthropicClient func(provider *typ.Provider) (*AnthropicClient, error) = defaultNewAnthropicClient
+var NewAnthropicClient func(provider *typ.Provider, model string) (*AnthropicClient, error) = defaultNewAnthropicClient
 
 // CloseClient closes a client if it implements Close()
 func CloseClient(client protocol.Client) error {

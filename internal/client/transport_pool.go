@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 	"sync"
 
 	"github.com/sirupsen/logrus"
@@ -31,9 +30,9 @@ const (
 )
 
 // TransportPool manages shared HTTP transports for clients
-// Transports are keyed by: apiBaseURL + proxyURL + oauthType
+// Transports are keyed by: providerUUID + model + proxyURL
 // This allows multiple clients to share the same connection pool
-// when they connect to the same API endpoint through the same proxy.
+// when they use the same provider+model+proxy combination.
 type TransportPool struct {
 	transports map[string]*http.Transport
 	config     *TransportConfig // nil = use Go defaults
@@ -77,9 +76,10 @@ func SetTransportConfig(config *TransportConfig) {
 }
 
 // GetTransport returns or creates a shared HTTP transport for the given configuration
-// The transport key is based on: apiBaseURL + proxyURL + oauthType
-func (tp *TransportPool) GetTransport(apiBase, proxyURL string, oauthType oauth.ProviderType) *http.Transport {
-	key := tp.generateTransportKey(apiBase, proxyURL, oauthType)
+// The transport key is based on: providerUUID + model + proxyURL
+// oauthType is used for transport creation but not part of the key
+func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType) *http.Transport {
+	key := tp.generateTransportKey(providerUUID, model, proxyURL)
 
 	// Try to get existing transport with read lock first
 	tp.mutex.RLock()
@@ -101,7 +101,7 @@ func (tp *TransportPool) GetTransport(apiBase, proxyURL string, oauthType oauth.
 	}
 
 	// Create new transport
-	logrus.Infof("Creating new transport for API: %s, Proxy: %s, OAuth: %s", apiBase, proxyURL, oauthType)
+	logrus.Infof("Creating new transport for provider: %s, model: %s, proxy: %s, oauth: %s", providerUUID, model, proxyURL, oauthType)
 	transport := tp.createTransport(proxyURL)
 	tp.transports[key] = transport
 
@@ -109,17 +109,14 @@ func (tp *TransportPool) GetTransport(apiBase, proxyURL string, oauthType oauth.
 }
 
 // generateTransportKey creates a unique key for transport caching
-// The key is based on apiBaseURL + proxyURL + oauthType to ensure:
-// - Same API endpoint with same proxy = shared transport
-// - Different API endpoints = separate transports
-// - Same endpoint with different proxies = separate transports
-// - Different OAuth hooks = separate transports (since hooks modify requests)
-func (tp *TransportPool) generateTransportKey(apiBase, proxyURL string, oauthType oauth.ProviderType) string {
-	// Normalize API base URL
-	apiBase = strings.TrimRight(apiBase, "/")
-
+// The key is based on providerUUID + model + proxyURL to ensure:
+// - Same provider + same model + same proxy = shared transport
+// - Different providers = separate transports
+// - Same provider + different models = separate transports
+// - Same provider + same model + different proxies = separate transports
+func (tp *TransportPool) generateTransportKey(providerUUID, model, proxyURL string) string {
 	// Build key string
-	keyStr := apiBase + "|" + proxyURL + "|" + string(oauthType)
+	keyStr := providerUUID + "|" + model + "|" + proxyURL
 
 	// Hash the key to create a fixed-length identifier
 	h := sha256.New()
