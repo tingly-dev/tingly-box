@@ -127,7 +127,7 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 	toolkit := tool.NewToolkit()
 
 	// Register tools
-	if err := RegisterTools(toolkit, executor, config.GetStatusFunc, config.UpdateProjectFunc); err != nil {
+	if err := RegisterTools(toolkit, executor, config.ChatID, config.GetStatusFunc, config.UpdateProjectFunc); err != nil {
 		return nil, fmt.Errorf("failed to register tools: %w", err)
 	}
 
