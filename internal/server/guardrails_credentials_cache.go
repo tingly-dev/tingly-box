@@ -12,6 +12,9 @@ type guardrailsCredentialCache struct {
 	byID       map[string]guardrails.ProtectedCredential
 }
 
+// refreshGuardrailsCredentialCache rebuilds the in-memory credential view used by
+// request masking and history rendering. It is intentionally cheap to read and is
+// refreshed after config or credential mutations.
 func (s *Server) refreshGuardrailsCredentialCache() error {
 	next := guardrailsCredentialCache{
 		byScenario: make(map[string][]guardrails.ProtectedCredential),
@@ -43,12 +46,15 @@ func (s *Server) refreshGuardrailsCredentialCache() error {
 	return nil
 }
 
+// storeGuardrailsCredentialCache swaps the cache atomically under the server lock.
 func (s *Server) storeGuardrailsCredentialCache(cache guardrailsCredentialCache) {
 	s.guardrailsCredentialCacheMu.Lock()
 	s.guardrailsCredentialCache = cache
 	s.guardrailsCredentialCacheMu.Unlock()
 }
 
+// getCachedGuardrailsMaskCredentials returns a copy of the active protected
+// credentials for the given scenario so callers can read without holding locks.
 func (s *Server) getCachedGuardrailsMaskCredentials(scenario string) []guardrails.ProtectedCredential {
 	s.guardrailsCredentialCacheMu.RLock()
 	cached := s.guardrailsCredentialCache.byScenario[scenario]
@@ -61,6 +67,8 @@ func (s *Server) getCachedGuardrailsMaskCredentials(scenario string) []guardrail
 	return out
 }
 
+// getCachedGuardrailsCredentialNames resolves ids to display names from the same
+// cache used by request masking.
 func (s *Server) getCachedGuardrailsCredentialNames(ids []string) []string {
 	if len(ids) == 0 {
 		return nil
@@ -71,6 +79,8 @@ func (s *Server) getCachedGuardrailsCredentialNames(ids []string) []string {
 	return serverguardrails.ResolveCredentialNames(byID, ids)
 }
 
+// refreshGuardrailsCredentialCacheOrWarn keeps cache refresh failures out of the
+// main request path while still surfacing them in logs.
 func (s *Server) refreshGuardrailsCredentialCacheOrWarn(context string) {
 	if err := s.refreshGuardrailsCredentialCache(); err != nil {
 		logrus.WithError(err).Warnf("Guardrails credential cache refresh failed after %s", context)

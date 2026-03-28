@@ -12,6 +12,8 @@ import (
 	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
 )
 
+// applyGuardrailsToAnthropicV1NonStreamResponse evaluates a fully assembled
+// Anthropic v1 response and rewrites it to a text block when guardrails block it.
 func (s *Server) applyGuardrailsToAnthropicV1NonStreamResponse(c *gin.Context, session guardrailsSession, messageHistory []guardrails.Message, resp *anthropic.Message) bool {
 	if resp == nil || !s.guardrailsEnabledForSession(session) {
 		return false
@@ -55,6 +57,8 @@ func (s *Server) applyGuardrailsToAnthropicV1NonStreamResponse(c *gin.Context, s
 	return true
 }
 
+// applyGuardrailsToAnthropicV1BetaNonStreamResponse is the beta equivalent of
+// applyGuardrailsToAnthropicV1NonStreamResponse.
 func (s *Server) applyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Context, session guardrailsSession, messageHistory []guardrails.Message, resp *anthropic.BetaMessage) bool {
 	if resp == nil || !s.guardrailsEnabledForSession(session) {
 		return false
@@ -98,6 +102,9 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Contex
 	return true
 }
 
+// anthropicResponseText collects the response-side text payload used for content
+// policy evaluation. Thinking text is included because it is part of the returned
+// model output in non-stream mode.
 func anthropicResponseText(blocks []anthropic.ContentBlockUnion) string {
 	parts := make([]string, 0, len(blocks))
 	for _, block := range blocks {
@@ -108,6 +115,8 @@ func anthropicResponseText(blocks []anthropic.ContentBlockUnion) string {
 	return strings.Join(parts, "\n")
 }
 
+// anthropicBetaResponseText collects text and thinking content from beta
+// responses for privacy/content evaluation.
 func anthropicBetaResponseText(blocks []anthropic.BetaContentBlockUnion) string {
 	parts := make([]string, 0, len(blocks))
 	for _, block := range blocks {
@@ -125,6 +134,8 @@ func anthropicBetaResponseText(blocks []anthropic.BetaContentBlockUnion) string 
 	return strings.Join(parts, "\n")
 }
 
+// anthropicResponseCommand extracts the first tool_use-like block and adapts it
+// into the shared guardrails command shape.
 func anthropicResponseCommand(blocks []anthropic.ContentBlockUnion) *guardrails.Command {
 	for _, block := range blocks {
 		if block.Type != "tool_use" && block.Type != "server_tool_use" {
@@ -138,6 +149,8 @@ func anthropicResponseCommand(blocks []anthropic.ContentBlockUnion) *guardrails.
 	return nil
 }
 
+// anthropicBetaResponseCommand extracts the first beta tool_use-like block for
+// command evaluation.
 func anthropicBetaResponseCommand(blocks []anthropic.BetaContentBlockUnion) *guardrails.Command {
 	for _, block := range blocks {
 		if block.Type != "tool_use" && block.Type != "server_tool_use" {
@@ -151,6 +164,8 @@ func anthropicBetaResponseCommand(blocks []anthropic.BetaContentBlockUnion) *gua
 	return nil
 }
 
+// parseAnthropicInput best-effort decodes raw tool input into a map so command
+// policies can evaluate structured arguments.
 func parseAnthropicInput(raw json.RawMessage) map[string]interface{} {
 	if len(raw) == 0 {
 		return nil
@@ -162,6 +177,8 @@ func parseAnthropicInput(raw json.RawMessage) map[string]interface{} {
 	return map[string]interface{}{"_raw": string(raw)}
 }
 
+// overwriteAnthropicResponse replaces the original non-stream response content
+// with a single text block carrying the guardrails block message.
 func overwriteAnthropicResponse(resp *anthropic.Message, message string) {
 	resp.Content = []anthropic.ContentBlockUnion{{
 		Type: "text",
@@ -170,6 +187,8 @@ func overwriteAnthropicResponse(resp *anthropic.Message, message string) {
 	resp.StopReason = anthropic.StopReasonEndTurn
 }
 
+// overwriteAnthropicBetaResponse replaces the original beta non-stream response
+// content with a single text block carrying the guardrails block message.
 func overwriteAnthropicBetaResponse(resp *anthropic.BetaMessage, message string) {
 	resp.Content = []anthropic.BetaContentBlockUnion{{
 		Type: "text",
