@@ -126,7 +126,7 @@ func (e *MockAgentExecutor) Execute(ctx context.Context, req ExecutionRequest) (
 	}).Info("Starting mock agent execution")
 
 	// Create streaming handler
-	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, meta)
+	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, &meta)
 
 	// Create composite handler
 	compositeHandler := agentboot.NewCompositeHandler().
@@ -180,7 +180,7 @@ func (e *MockAgentExecutor) Execute(ctx context.Context, req ExecutionRequest) (
 			Success:      false,
 			Error:        err,
 			Response:     response,
-			Meta:         meta,
+			Meta:         &meta,
 			IsNewSession: isNewSession,
 			Duration:     duration,
 		}, err
@@ -199,7 +199,7 @@ func (e *MockAgentExecutor) Execute(ctx context.Context, req ExecutionRequest) (
 		SessionID:    sessionID,
 		Success:      true,
 		Response:     response,
-		Meta:         meta,
+		Meta:         &meta,
 		IsNewSession: isNewSession,
 		Duration:     duration,
 	}, nil

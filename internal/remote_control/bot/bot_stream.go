@@ -22,8 +22,8 @@ type streamingMessageHandler struct {
 	replyTo   string
 	mu        sync.Mutex
 	formatter *claude.TextFormatter
-	verbose   bool         // If false, only show final results (hide intermediate messages)
-	meta      ResponseMeta // For footer in OnComplete
+	verbose   bool          // If false, only show final results (hide intermediate messages)
+	meta      *ResponseMeta // Pointer so OnComplete sees updates from SmartGuideCompletionCallback
 }
 
 // Ensure streamingMessageHandler implements required interfaces
@@ -31,7 +31,7 @@ var _ agentboot.MessageStreamer = (*streamingMessageHandler)(nil)
 var _ agentboot.CompletionCallback = (*streamingMessageHandler)(nil)
 
 // newStreamingMessageHandler creates a new streaming message handler
-func newStreamingMessageHandler(bot imbot.Bot, chatID, replyTo string, verbose bool, meta ResponseMeta) *streamingMessageHandler {
+func newStreamingMessageHandler(bot imbot.Bot, chatID, replyTo string, verbose bool, meta *ResponseMeta) *streamingMessageHandler {
 	return &streamingMessageHandler{
 		bot:       bot,
 		chatID:    chatID,

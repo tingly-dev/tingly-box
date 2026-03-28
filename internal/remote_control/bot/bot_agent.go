@@ -20,7 +20,7 @@ type CompletionCallback struct {
 	hCtx       HandlerContext
 	sessionID  string
 	sessionMgr *session.Manager
-	meta       ResponseMeta
+	meta       *ResponseMeta
 }
 
 func (c *CompletionCallback) OnComplete(result *agentboot.CompletionResult) {
@@ -68,7 +68,7 @@ type SmartGuideCompletionCallback struct {
 	tbSessionStore *smart_guide.SessionStore
 	agent          *smart_guide.TinglyBoxAgent
 	projectPath    string
-	meta           ResponseMeta
+	meta           *ResponseMeta
 	behavior       OutputBehavior
 	botHandler     *BotHandler // Add reference to bot handler for formatting
 	messagesSent   int         // Track number of messages sent via hooks (for fallback)
@@ -168,6 +168,9 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 		}
 	}
 
+	// Update shared meta so footers reflect the new project path
+	c.meta.ProjectPath = newProjectPath
+
 	// NOTE: Response should be sent via OnMessage callbacks from hooks
 	// However, if hooks failed to fire or agent completed without generating output,
 	// we need a fallback to prevent silent completion (Issue #3)
@@ -181,7 +184,7 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 		}).Warn("SmartGuide: No messages sent via hooks - using fallback to send response")
 
 		// Send the response as a fallback (no meta for regular messages)
-		formattedResponse := c.botHandler.formatResponseWithHeader(c.meta, responseText, false)
+		formattedResponse := c.botHandler.formatResponseWithHeader(*c.meta, responseText, false)
 		c.botHandler.SendText(c.hCtx, formattedResponse)
 	} else if c.messagesSent == 0 && responseText == "" {
 		logrus.WithFields(logrus.Fields{

@@ -145,7 +145,7 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 			SessionID: sessionID,
 			Success:   false,
 			Error:     err,
-			Meta:      meta,
+			Meta:      &meta,
 		}, err
 	}
 
@@ -163,7 +163,7 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 	}).Info("Starting Claude Code execution")
 
 	// Create streaming handler
-	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, meta)
+	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, &meta)
 
 	// Check permission mode for this session
 	permissionMode := sess.PermissionMode
@@ -178,7 +178,7 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 			hCtx:       req.HCtx,
 			sessionID:  sessionID,
 			sessionMgr: e.deps.SessionMgr,
-			meta:       meta,
+			meta:       &meta,
 		})
 
 	if permissionMode != string(claude.PermissionModeAuto) {
@@ -239,7 +239,7 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 			Success:      false,
 			Error:        err,
 			Response:     response,
-			Meta:         meta,
+			Meta:         &meta,
 			IsNewSession: isNewSession,
 			Duration:     duration,
 		}, err
@@ -260,7 +260,7 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 		SessionID:    sessionID,
 		Success:      true,
 		Response:     response,
-		Meta:         meta,
+		Meta:         &meta,
 		IsNewSession: isNewSession,
 		Duration:     duration,
 	}, nil

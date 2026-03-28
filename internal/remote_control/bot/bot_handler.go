@@ -660,7 +660,7 @@ func (h *BotHandler) getOutputBehaviorForChat(chatID string) OutputBehavior {
 }
 
 // newStreamingMessageHandler creates a new streaming message handler
-func (h *BotHandler) newStreamingMessageHandler(hCtx HandlerContext, meta ResponseMeta) *streamingMessageHandler {
+func (h *BotHandler) newStreamingMessageHandler(hCtx HandlerContext, meta *ResponseMeta) *streamingMessageHandler {
 	return newStreamingMessageHandler(hCtx.Bot, hCtx.ChatID, hCtx.MessageID, h.GetVerbose(hCtx.ChatID), meta)
 }
 

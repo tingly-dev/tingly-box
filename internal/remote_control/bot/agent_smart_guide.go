@@ -114,17 +114,7 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 		},
 	}
 
-	// 4. Create agent with history
-	agent, err := smart_guide.NewTinglyBoxAgentWithSession(agentConfig, messages)
-	if err != nil {
-		return e.handleCreationError(ctx, req, projectPath, err)
-	}
-
-	// Set working directory from stored project path
-	agent.GetExecutor().SetWorkingDirectory(projectPath)
-	logrus.WithField("workingDir", projectPath).Debug("Set executor working directory")
-
-	// 5. Build meta for response header
+	// 4. Build meta for response header (before agent creation so handleCreationError can use it)
 	meta := ResponseMeta{
 		ProjectPath: projectPath,
 		ChatID:      req.HCtx.ChatID,
@@ -133,11 +123,21 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 		AgentType:   AgentNameTinglyBox,
 	}
 
+	// 5. Create agent with history
+	agent, err := smart_guide.NewTinglyBoxAgentWithSession(agentConfig, messages)
+	if err != nil {
+		return e.handleCreationError(ctx, req, &meta, err)
+	}
+
+	// Set working directory from stored project path
+	agent.GetExecutor().SetWorkingDirectory(projectPath)
+	logrus.WithField("workingDir", projectPath).Debug("Set executor working directory")
+
 	// 6. Send processing message
 	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponseWithFooter(meta, IconProcess+" "+MsgProcessing), req.HCtx.MessageID)
 
 	// 7. Create streaming handler
-	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, meta)
+	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, &meta)
 
 	// 8. Create completion callback
 	completionCallback := &SmartGuideCompletionCallback{
@@ -147,7 +147,7 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 		tbSessionStore: e.deps.TBSessionStore,
 		agent:          agent,
 		projectPath:    projectPath,
-		meta:           meta,
+		meta:           &meta,
 		behavior:       e.deps.BotSetting.GetOutputBehavior(),
 		botHandler:     nil, // Will be set later if needed
 		messagesSent:   0,
@@ -205,7 +205,7 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 			SessionID: req.HCtx.ChatID,
 			Success:   false,
 			Error:     err,
-			Meta:      meta,
+			Meta:      &meta,
 			Duration:  duration,
 		}, err
 	}
@@ -219,13 +219,13 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 	return &ExecutionResult{
 		SessionID: req.HCtx.ChatID,
 		Success:   true,
-		Meta:      meta,
+		Meta:      &meta,
 		Duration:  duration,
 	}, nil
 }
 
 // handleCreationError handles agent creation errors with fallback to Claude Code
-func (e *SmartGuideExecutor) handleCreationError(ctx context.Context, req ExecutionRequest, projectPath string, err error) (*ExecutionResult, error) {
+func (e *SmartGuideExecutor) handleCreationError(ctx context.Context, req ExecutionRequest, meta *ResponseMeta, err error) (*ExecutionResult, error) {
 	logrus.WithError(err).Warn("Failed to create Smart Guide agent, fallback handled by caller")
 
 	// Send warning notification to user
@@ -237,13 +237,7 @@ func (e *SmartGuideExecutor) handleCreationError(ctx context.Context, req Execut
 		SessionID: req.HCtx.ChatID,
 		Success:   false,
 		Error:     err,
-		Meta: ResponseMeta{
-			ProjectPath: projectPath,
-			ChatID:      req.HCtx.ChatID,
-			UserID:      req.HCtx.SenderID,
-			SessionID:   req.HCtx.ChatID,
-			AgentType:   AgentNameTinglyBox,
-		},
+		Meta:      meta,
 	}, err
 }
 

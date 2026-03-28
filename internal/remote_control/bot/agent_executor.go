@@ -60,7 +60,7 @@ type ExecutionResult struct {
 	Error error
 
 	// Metadata for response formatting
-	Meta ResponseMeta
+	Meta *ResponseMeta
 
 	// Whether this is a new session (vs resumed)
 	IsNewSession bool
@@ -122,7 +122,7 @@ type ExecutorDependencies struct {
 	SendTextWithActionKeyboard func(hCtx HandlerContext, text string, replyTo string)
 
 	// New streaming message handler
-	NewStreamingMessageHandler func(hCtx HandlerContext, meta ResponseMeta) *streamingMessageHandler
+	NewStreamingMessageHandler func(hCtx HandlerContext, meta *ResponseMeta) *streamingMessageHandler
 }
 
 // SessionManager is an alias to avoid import cycle
