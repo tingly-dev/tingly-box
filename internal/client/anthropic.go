@@ -78,7 +78,9 @@ func (c *AnthropicClient) APIStyle() protocol.APIStyle {
 
 // Close closes any resources held by the client
 func (c *AnthropicClient) Close() error {
-	// Anthropic client doesn't need explicit closing
+	if c.httpClient != nil && c.httpClient != http.DefaultClient {
+		c.httpClient.CloseIdleConnections()
+	}
 	return nil
 }
 

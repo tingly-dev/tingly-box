@@ -77,7 +77,9 @@ func (c *GoogleClient) APIStyle() protocol.APIStyle {
 
 // Close closes any resources held by the client
 func (c *GoogleClient) Close() error {
-	// genai.Client doesn't need explicit closing
+	if c.httpClient != nil && c.httpClient != http.DefaultClient {
+		c.httpClient.CloseIdleConnections()
+	}
 	return nil
 }
 
