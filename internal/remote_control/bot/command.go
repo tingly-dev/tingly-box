@@ -139,7 +139,7 @@ func newHelpCommand(adapter BotHandlerAdapter) imbot.Command {
 
 func newBindCommand(adapter BotHandlerAdapter) imbot.Command {
 	return imbot.NewCommand("cmd-bind", "cd", "Bind and cd into a project directory").
-		WithAliases("bind", "bot_bind", "bot_b").
+		WithAliases("bind").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
 			if len(args) < 1 {
 				return adapter.SendText(ctx.ChatID, "Usage: /cd <project_path>")

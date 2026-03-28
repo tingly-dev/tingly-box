@@ -76,8 +76,13 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 		cmdName := strings.TrimPrefix(cmd, "/")
 
 		// Special handling for help: build dynamic help text
-		if cmdName == "help" || cmdName == "h" || cmdName == "start" {
+		if cmdName == "" || cmdName == "help" || cmdName == "h" || cmdName == "start" {
 			helpText := h.commandRegistry.BuildHelpText(hCtx.IsDirect())
+
+			helpText += "\n\n"
+			helpText += "@cc to handoff control to Claude Code\n"
+			helpText += "@tb to handoff control to Tingly Box Smart Guide\n"
+
 			helpText += fmt.Sprintf("\nYour ID: %s", hCtx.SenderID)
 			formattedHelp := h.formatHelpWithMeta(hCtx, helpText)
 			h.SendText(hCtx, formattedHelp)
