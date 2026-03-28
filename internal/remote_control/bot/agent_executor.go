@@ -34,44 +34,45 @@ type ExecutionRequest struct {
 // PreparedRequest is the fully-resolved request built by AgentRouter.
 // All executors receive this — shared *ResponseMeta ensures path changes propagate.
 type PreparedRequest struct {
-	HCtx          HandlerContext
-	Text          string
-	ProjectPath   string        // fully resolved: override > ChatStore > default
-	Meta          *ResponseMeta // shared pointer, created by router
-	SessionID     string        // resolved session ID (chatID for SmartGuide)
-	IsNewSession  bool          // whether session was just created
-	ReplyTo       string
+	HCtx           HandlerContext
+	Text           string
+	ProjectPath    string        // fully resolved: override > ChatStore > default
+	Meta           *ResponseMeta // shared pointer, created by router
+	SessionID      string        // resolved session ID (chatID for SmartGuide)
+	IsNewSession   bool          // whether session was just created
+	PermissionMode string        // resolved from session (Claude Code / Mock)
+	ReplyTo        string
 }
 
 // ExecutionResult contains the outcome of agent execution
 type ExecutionResult struct {
-	Response    string
-	SessionID   string
-	Success     bool
-	Error       error
-	Meta        *ResponseMeta
+	Response     string
+	SessionID    string
+	Success      bool
+	Error        error
+	Meta         *ResponseMeta
 	IsNewSession bool
-	Duration    time.Duration
+	Duration     time.Duration
 }
 
 // ExecutorDependencies holds shared dependencies for agent executors and router.
 type ExecutorDependencies struct {
-	BotSetting          BotSetting
-	ChatStore           ChatStoreInterface
-	SessionMgr          *SessionManager
-	AgentBoot           *agentboot.AgentBoot
-	IMPrompter          *IMPrompter
-	FileStore           *FileStore
-	TBClient            TBClient
-	TBSessionStore      *SmartGuideSessionStore
-	HandoffManager      *smart_guide.HandoffManager
-	RunningCancel       map[string]context.CancelFunc
-	RunningCancelMu     *sync.RWMutex
-	GetVerbose          func(chatID string) bool
-	FormatResponse      func(meta ResponseMeta, response string, showMeta bool) string
-	FormatResponseWithFooter func(meta ResponseMeta, response string) string
-	SendText            func(hCtx HandlerContext, text string)
-	SendTextWithReply   func(hCtx HandlerContext, text string, replyTo string)
+	BotSetting                 BotSetting
+	ChatStore                  ChatStoreInterface
+	SessionMgr                 *SessionManager
+	AgentBoot                  *agentboot.AgentBoot
+	IMPrompter                 *IMPrompter
+	FileStore                  *FileStore
+	TBClient                   TBClient
+	TBSessionStore             *SmartGuideSessionStore
+	HandoffManager             *smart_guide.HandoffManager
+	RunningCancel              map[string]context.CancelFunc
+	RunningCancelMu            *sync.RWMutex
+	GetVerbose                 func(chatID string) bool
+	FormatResponse             func(meta ResponseMeta, response string, showMeta bool) string
+	FormatResponseWithFooter   func(meta ResponseMeta, response string) string
+	SendText                   func(hCtx HandlerContext, text string)
+	SendTextWithReply          func(hCtx HandlerContext, text string, replyTo string)
 	SendTextWithActionKeyboard func(hCtx HandlerContext, text string, replyTo string)
 	NewStreamingMessageHandler func(hCtx HandlerContext, meta *ResponseMeta) *streamingMessageHandler
 }
@@ -106,8 +107,8 @@ func (d *ExecutorDependencies) ResolveDefaultProjectPath() string {
 }
 
 // resolveSession finds or creates a session for session-based agents (Claude Code, Mock).
-// Returns (sessionID, isNew).
-func (d *ExecutorDependencies) resolveSession(chatID string, agentType string, projectPath string) (string, bool) {
+// Returns (sessionID, isNew, permissionMode).
+func (d *ExecutorDependencies) resolveSession(chatID string, agentType string, projectPath string) (string, bool, string) {
 	sess := d.SessionMgr.FindBy(chatID, agentType, projectPath)
 
 	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed || sess.Status == session.StatusPending {
@@ -116,14 +117,14 @@ func (d *ExecutorDependencies) resolveSession(chatID string, agentType string, p
 			s.ExpiresAt = time.Time{}
 			s.Status = session.StatusRunning
 		})
-		return sess.ID, true
+		return sess.ID, true, ""
 	}
 
 	d.SessionMgr.Update(sess.ID, func(s *session.Session) {
 		s.Status = session.StatusRunning
 		s.LastActivity = time.Now()
 	})
-	return sess.ID, false
+	return sess.ID, false, sess.PermissionMode
 }
 
 // agentTypeToName maps agent type constant to display name.

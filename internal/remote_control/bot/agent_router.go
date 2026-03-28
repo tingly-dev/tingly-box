@@ -50,8 +50,9 @@ func (r *AgentRouter) Execute(ctx context.Context, agentType agentboot.AgentType
 	// 2. Resolve session (session-based agents only; SmartGuide uses chatID)
 	var sessionID string
 	var isNewSession bool
+	var permissionMode string
 	if agentType != agentTinglyBox {
-		sessionID, isNewSession = r.deps.resolveSession(req.HCtx.ChatID, string(agentType), projectPath)
+		sessionID, isNewSession, permissionMode = r.deps.resolveSession(req.HCtx.ChatID, string(agentType), projectPath)
 	} else {
 		sessionID = req.HCtx.ChatID
 	}
@@ -73,13 +74,14 @@ func (r *AgentRouter) Execute(ctx context.Context, agentType agentboot.AgentType
 
 	// 5. Build prepared request
 	prepared := PreparedRequest{
-		HCtx:         req.HCtx,
-		Text:         req.Text,
-		ProjectPath:  projectPath,
-		Meta:         meta,
-		SessionID:    sessionID,
-		IsNewSession: isNewSession,
-		ReplyTo:      req.ReplyToMessageID,
+		HCtx:           req.HCtx,
+		Text:           req.Text,
+		ProjectPath:    projectPath,
+		Meta:           meta,
+		SessionID:      sessionID,
+		IsNewSession:   isNewSession,
+		PermissionMode: permissionMode,
+		ReplyTo:        req.ReplyToMessageID,
 	}
 
 	logrus.WithFields(logrus.Fields{

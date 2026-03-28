@@ -89,11 +89,10 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 	// Create streaming handler (shared meta pointer)
 	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, meta)
 
-	// Get session permission mode
-	sess := e.deps.SessionMgr.FindBy(req.HCtx.ChatID, "claude", projectPath)
-	permissionMode := string(claude.PermissionModeDefault)
-	if sess != nil && sess.PermissionMode != "" {
-		permissionMode = sess.PermissionMode
+	// Use resolved permission mode (default to manual if not set)
+	permissionMode := req.PermissionMode
+	if permissionMode == "" {
+		permissionMode = string(claude.PermissionModeDefault)
 	}
 
 	// Create composite handler
