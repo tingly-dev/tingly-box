@@ -207,14 +207,14 @@ func (a *botHandlerAdapter) SendMessageWithKeyboard(chatID, text string, keyboar
 	return fmt.Errorf("SendMessageWithKeyboard requires bot context, use ctx.Bot directly")
 }
 
-// FormatHelpWithMeta formats help text with meta information.
-func (a *botHandlerAdapter) FormatHelpWithMeta(chatID, senderID, text string, isDirect bool, platform string) string {
+// FormatHelpWithHeader formats help text with meta information.
+func (a *botHandlerAdapter) FormatHelpWithHeader(chatID, senderID, text string, isDirect bool, platform string) string {
 	hCtx := HandlerContext{
 		ChatID:   chatID,
 		SenderID: senderID,
 		Platform: imbot.Platform(platform),
 	}
-	return a.handler.formatHelpWithMeta(hCtx, text)
+	return a.handler.formatHelpWithHeader(hCtx, text)
 }
 
 // StartInteractiveBind starts an interactive directory browser for project binding.

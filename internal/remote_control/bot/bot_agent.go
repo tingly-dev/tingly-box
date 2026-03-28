@@ -20,6 +20,7 @@ type CompletionCallback struct {
 	hCtx       HandlerContext
 	sessionID  string
 	sessionMgr *session.Manager
+	meta       ResponseMeta
 }
 
 func (c *CompletionCallback) OnComplete(result *agentboot.CompletionResult) {
@@ -36,8 +37,9 @@ func (c *CompletionCallback) OnComplete(result *agentboot.CompletionResult) {
 	kb := BuildActionKeyboard()
 	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
+	doneText := IconDone + " " + MsgTaskDone + ". \n" + MsgContinueOrHelp + BuildFooter(c.meta.AgentType, c.meta.ProjectPath)
 	_, err := c.hCtx.Bot.SendMessage(context.Background(), c.hCtx.ChatID, &imbot.SendMessageOptions{
-		Text: "✅ Task done. \nContinue to chat with this session or /help.",
+		Text: doneText,
 		Metadata: map[string]interface{}{
 			"replyMarkup":        tgKeyboard,
 			"_trackActionMenuID": true,
@@ -179,7 +181,7 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 		}).Warn("SmartGuide: No messages sent via hooks - using fallback to send response")
 
 		// Send the response as a fallback (no meta for regular messages)
-		formattedResponse := c.botHandler.formatResponseWithMeta(c.meta, responseText, false)
+		formattedResponse := c.botHandler.formatResponseWithHeader(c.meta, responseText, false)
 		c.botHandler.SendText(c.hCtx, formattedResponse)
 	} else if c.messagesSent == 0 && responseText == "" {
 		logrus.WithFields(logrus.Fields{
@@ -209,8 +211,9 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 		}
 	}
 
+	sgDoneText := IconDone + " " + MsgTaskDone + ". \n" + MsgContinueOrHelp + BuildFooter(c.meta.AgentType, c.meta.ProjectPath)
 	_, err := c.hCtx.Bot.SendMessage(context.Background(), c.hCtx.ChatID, &imbot.SendMessageOptions{
-		Text:     "✅ Task done. \nContinue to chat with this session or /help.",
+		Text:     sgDoneText,
 		Metadata: metadata,
 	})
 	if err != nil {

@@ -90,7 +90,7 @@ func (e *MockAgentExecutor) Execute(ctx context.Context, req ExecutionRequest) (
 	} else {
 		statusMsg = "🧪 Mock: Resuming session..."
 	}
-	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponse(meta, statusMsg, false), req.HCtx.MessageID)
+	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponseWithFooter(meta, statusMsg), req.HCtx.MessageID)
 
 	// Execute with context
 	execCtx, cancel := context.WithCancel(context.Background())
@@ -126,7 +126,7 @@ func (e *MockAgentExecutor) Execute(ctx context.Context, req ExecutionRequest) (
 	}).Info("Starting mock agent execution")
 
 	// Create streaming handler
-	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx)
+	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, meta)
 
 	// Create composite handler
 	compositeHandler := agentboot.NewCompositeHandler().

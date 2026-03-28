@@ -109,6 +109,9 @@ type ExecutorDependencies struct {
 	// Format response helper
 	FormatResponse func(meta ResponseMeta, response string, showMeta bool) string
 
+	// Format response with footer (agent + path info)
+	FormatResponseWithFooter func(meta ResponseMeta, response string) string
+
 	// Send text helper
 	SendText func(hCtx HandlerContext, text string)
 
@@ -119,7 +122,7 @@ type ExecutorDependencies struct {
 	SendTextWithActionKeyboard func(hCtx HandlerContext, text string, replyTo string)
 
 	// New streaming message handler
-	NewStreamingMessageHandler func(hCtx HandlerContext) *streamingMessageHandler
+	NewStreamingMessageHandler func(hCtx HandlerContext, meta ResponseMeta) *streamingMessageHandler
 }
 
 // SessionManager is an alias to avoid import cycle

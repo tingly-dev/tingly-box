@@ -134,10 +134,10 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 	}
 
 	// 6. Send processing message
-	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponse(meta, IconProcess+" "+MsgProcessing, false), req.HCtx.MessageID)
+	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponseWithFooter(meta, IconProcess+" "+MsgProcessing), req.HCtx.MessageID)
 
 	// 7. Create streaming handler
-	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx)
+	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, meta)
 
 	// 8. Create completion callback
 	completionCallback := &SmartGuideCompletionCallback{

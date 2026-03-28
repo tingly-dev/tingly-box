@@ -118,7 +118,7 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 	} else {
 		statusMsg = "⏳ CC: Resuming session..."
 	}
-	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponse(meta, statusMsg, false), req.HCtx.MessageID)
+	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponseWithFooter(meta, statusMsg), req.HCtx.MessageID)
 
 	// Execute with cancellable context
 	execCtx, cancel := context.WithCancel(context.Background())
@@ -163,7 +163,7 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 	}).Info("Starting Claude Code execution")
 
 	// Create streaming handler
-	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx)
+	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, meta)
 
 	// Check permission mode for this session
 	permissionMode := sess.PermissionMode
@@ -178,6 +178,7 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 			hCtx:       req.HCtx,
 			sessionID:  sessionID,
 			sessionMgr: e.deps.SessionMgr,
+			meta:       meta,
 		})
 
 	if permissionMode != string(claude.PermissionModeAuto) {

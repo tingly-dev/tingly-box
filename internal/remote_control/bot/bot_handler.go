@@ -198,7 +198,8 @@ func NewBotHandler(
 		RunningCancel:              handler.runningCancel,
 		RunningCancelMu:            &handler.runningCancelMu,
 		GetVerbose:                 handler.GetVerbose,
-		FormatResponse:             handler.formatResponseWithMeta,
+		FormatResponse:             handler.formatResponseWithHeader,
+		FormatResponseWithFooter:   handler.formatResponseWithFooter,
 		SendText:                   handler.SendText,
 		SendTextWithReply:          handler.sendTextWithReply,
 		SendTextWithActionKeyboard: handler.sendTextWithActionKeyboard,
@@ -608,14 +609,14 @@ func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string
 	}
 }
 
-// formatResponseWithMeta adds project/session/user metadata to the response
+// formatResponseWithHeader adds project/session/user metadata to the response
 // Meta information includes: agent type, project path, chat_id, user_id, session_id
 // behavior.Debug controls whether meta information is shown
-// formatResponseWithMeta adds project/session/user metadata to the response
+// formatResponseWithHeader adds project/session/user metadata to the response
 // Meta information includes: agent type, project path, chat_id, user_id, session_id
 // Set showMeta=true to display meta (e.g., for help), false for regular messages
 // behavior.Verbose controls whether processing messages are sent (handled elsewhere)
-func (h *BotHandler) formatResponseWithMeta(meta ResponseMeta, response string, showMeta bool) string {
+func (h *BotHandler) formatResponseWithHeader(meta ResponseMeta, response string, showMeta bool) string {
 	var buf strings.Builder
 
 	// Show meta information only when explicitly requested
@@ -647,6 +648,11 @@ func (h *BotHandler) formatResponseWithMeta(meta ResponseMeta, response string, 
 	return buf.String() + response
 }
 
+// formatResponseWithFooter adds a compact footer (agent + path) to the response
+func (h *BotHandler) formatResponseWithFooter(meta ResponseMeta, response string) string {
+	return response + BuildFooter(meta.AgentType, meta.ProjectPath)
+}
+
 // getOutputBehaviorForChat returns the output behavior for a specific chat
 // Combines bot-level defaults with chat-level overrides
 func (h *BotHandler) getOutputBehaviorForChat(chatID string) OutputBehavior {
@@ -654,8 +660,8 @@ func (h *BotHandler) getOutputBehaviorForChat(chatID string) OutputBehavior {
 }
 
 // newStreamingMessageHandler creates a new streaming message handler
-func (h *BotHandler) newStreamingMessageHandler(hCtx HandlerContext) *streamingMessageHandler {
-	return newStreamingMessageHandler(hCtx.Bot, hCtx.ChatID, hCtx.MessageID, h.GetVerbose(hCtx.ChatID))
+func (h *BotHandler) newStreamingMessageHandler(hCtx HandlerContext, meta ResponseMeta) *streamingMessageHandler {
+	return newStreamingMessageHandler(hCtx.Bot, hCtx.ChatID, hCtx.MessageID, h.GetVerbose(hCtx.ChatID), meta)
 }
 
 // handleBindConfirm handles the bind confirmation callback

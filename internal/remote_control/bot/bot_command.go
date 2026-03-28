@@ -84,7 +84,7 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 			helpText += "@tb to handoff control to Tingly Box Smart Guide\n"
 
 			helpText += fmt.Sprintf("\nYour ID: %s", hCtx.SenderID)
-			formattedHelp := h.formatHelpWithMeta(hCtx, helpText)
+			formattedHelp := h.formatHelpWithHeader(hCtx, helpText)
 			h.SendText(hCtx, formattedHelp)
 			return
 		}
@@ -231,8 +231,8 @@ func (h *BotHandler) handleBotProjectCommand(hCtx HandlerContext) {
 	}
 }
 
-// formatHelpWithMeta formats help text with meta information
-func (h *BotHandler) formatHelpWithMeta(hCtx HandlerContext, helpText string) string {
+// formatHelpWithHeader formats help text with meta information
+func (h *BotHandler) formatHelpWithHeader(hCtx HandlerContext, helpText string) string {
 	projectPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
 	currentAgent, _ := h.getCurrentAgent(hCtx.ChatID)
 
@@ -244,7 +244,7 @@ func (h *BotHandler) formatHelpWithMeta(hCtx HandlerContext, helpText string) st
 		SessionID:   hCtx.ChatID,
 	}
 
-	return h.formatResponseWithMeta(meta, helpText, true)
+	return h.formatResponseWithHeader(meta, helpText, true)
 }
 
 // normalizeAllowlistToMap converts a string slice to a map for O(1) lookups
