@@ -3,7 +3,6 @@ package bot
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -30,29 +29,19 @@ func (e *SmartGuideExecutor) GetAgentType() agentboot.AgentType {
 }
 
 // Execute processes a user message through Smart Guide
-func (e *SmartGuideExecutor) Execute(ctx context.Context, req ExecutionRequest) (*ExecutionResult, error) {
-	// Get current project path from chat store
-	projectPath, hasPath, err := e.deps.ChatStore.GetProjectPath(req.HCtx.ChatID)
-	logrus.WithFields(logrus.Fields{
-		"chatID":      req.HCtx.ChatID,
-		"projectPath": projectPath,
-		"hasPath":     hasPath,
-	}).Info("Loaded project path from chat store")
-
-	if projectPath == "" {
-		projectPath = e.getDefaultProjectPath()
-		logrus.WithField("defaultPath", projectPath).Info("Using default project path")
-	}
+func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (*ExecutionResult, error) {
+	projectPath := req.ProjectPath
+	meta := req.Meta
 
 	// 1. Load messages from session store
 	var messages []*message.Msg
 	if e.deps.TBSessionStore != nil {
-		messages, err = e.deps.TBSessionStore.Load(req.HCtx.ChatID)
+		msgs, err := e.deps.TBSessionStore.Load(req.HCtx.ChatID)
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to load session, starting with empty history")
-			messages = nil
+		} else {
+			messages = msgs
 		}
-
 		logrus.WithFields(logrus.Fields{
 			"chatID":       req.HCtx.ChatID,
 			"historyCount": len(messages),
@@ -114,72 +103,55 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 		},
 	}
 
-	// 4. Build meta for response header (before agent creation so handleCreationError can use it)
-	meta := ResponseMeta{
-		ProjectPath: projectPath,
-		ChatID:      req.HCtx.ChatID,
-		UserID:      req.HCtx.SenderID,
-		SessionID:   req.HCtx.ChatID,
-		AgentType:   AgentNameTinglyBox,
-	}
-
-	// 5. Create agent with history
+	// 4. Create agent with history
 	agent, err := smart_guide.NewTinglyBoxAgentWithSession(agentConfig, messages)
 	if err != nil {
-		return e.handleCreationError(ctx, req, &meta, err)
+		e.deps.SendText(req.HCtx, "⚠️ Smart Guide (@tb) is currently unavailable due to configuration issues.\n"+
+			"Reason: "+err.Error()+"\n"+
+			"Type '/help' for available commands.")
+		return &ExecutionResult{
+			SessionID: req.SessionID,
+			Success:   false,
+			Error:     err,
+			Meta:      meta,
+		}, err
 	}
 
-	// Set working directory from stored project path
+	// Set working directory from resolved project path
 	agent.GetExecutor().SetWorkingDirectory(projectPath)
-	logrus.WithField("workingDir", projectPath).Debug("Set executor working directory")
 
-	// 6. Send processing message
-	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponseWithFooter(meta, IconProcess+" "+MsgProcessing), req.HCtx.MessageID)
+	// 5. Send processing message
+	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponseWithFooter(*meta, IconProcess+" "+MsgProcessing), req.ReplyTo)
 
-	// 7. Create streaming handler
-	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, &meta)
+	// 6. Create streaming handler (shared meta pointer)
+	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, meta)
 
-	// 8. Create completion callback
+	// 7. Create completion callback
 	completionCallback := &SmartGuideCompletionCallback{
 		hCtx:           req.HCtx,
-		sessionID:      req.HCtx.ChatID,
+		sessionID:      req.SessionID,
 		chatStore:      e.deps.ChatStore,
 		tbSessionStore: e.deps.TBSessionStore,
 		agent:          agent,
 		projectPath:    projectPath,
-		meta:           &meta,
+		meta:           meta,
 		behavior:       e.deps.BotSetting.GetOutputBehavior(),
-		botHandler:     nil, // Will be set later if needed
+		botHandler:     nil,
 		messagesSent:   0,
 	}
 
-	// 9. Create message tracker wrapper
+	// 8. Create message tracker wrapper
 	messageTracker := &messageTrackingWrapper{
 		delegate:           streamHandler,
 		completionCallback: completionCallback,
 	}
 
-	// 10. Create composite handler
+	// 9. Create composite handler
 	compositeHandler := agentboot.NewCompositeHandler().
 		SetStreamer(messageTracker).
 		SetCompletionCallback(completionCallback)
 
-	// 11. Execute with cancellable context
-	execCtx, cancel := context.WithCancel(context.Background())
-
-	// Store cancel function for /stop command
-	e.deps.RunningCancelMu.Lock()
-	e.deps.RunningCancel[req.HCtx.ChatID] = cancel
-	e.deps.RunningCancelMu.Unlock()
-
-	defer func() {
-		e.deps.RunningCancelMu.Lock()
-		delete(e.deps.RunningCancel, req.HCtx.ChatID)
-		e.deps.RunningCancelMu.Unlock()
-		cancel()
-	}()
-
-	// Save user message to session before execution
+	// 10. Save user message to session before execution
 	if e.deps.TBSessionStore != nil {
 		userMsg := message.NewMsg("user", req.Text, types.RoleUser)
 		if err := e.deps.TBSessionStore.AddMessage(req.HCtx.ChatID, userMsg); err != nil {
@@ -187,25 +159,25 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 		}
 	}
 
-	// 12. Execute
+	// 11. Execute
 	startTime := time.Now()
 	toolCtx := &smart_guide.ToolContext{
 		ChatID:      req.HCtx.ChatID,
 		ProjectPath: projectPath,
-		SessionID:   req.HCtx.ChatID,
+		SessionID:   req.SessionID,
 	}
 
-	result, err := agent.ExecuteWithHandler(execCtx, req.Text, toolCtx, compositeHandler)
+	result, err := agent.ExecuteWithHandler(ctx, req.Text, toolCtx, compositeHandler)
 	duration := time.Since(startTime)
 
 	if err != nil {
 		logrus.WithError(err).Error("Smart guide agent failed")
 		e.deps.SendText(req.HCtx, fmt.Sprintf("%s Error: %v", IconError, err))
 		return &ExecutionResult{
-			SessionID: req.HCtx.ChatID,
+			SessionID: req.SessionID,
 			Success:   false,
 			Error:     err,
-			Meta:      &meta,
+			Meta:      meta,
 			Duration:  duration,
 		}, err
 	}
@@ -217,42 +189,9 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 	}).Info("SmartGuide execution completed")
 
 	return &ExecutionResult{
-		SessionID: req.HCtx.ChatID,
+		SessionID: req.SessionID,
 		Success:   true,
-		Meta:      &meta,
+		Meta:      meta,
 		Duration:  duration,
 	}, nil
-}
-
-// handleCreationError handles agent creation errors with fallback to Claude Code
-func (e *SmartGuideExecutor) handleCreationError(ctx context.Context, req ExecutionRequest, meta *ResponseMeta, err error) (*ExecutionResult, error) {
-	logrus.WithError(err).Warn("Failed to create Smart Guide agent, fallback handled by caller")
-
-	// Send warning notification to user
-	e.deps.SendText(req.HCtx, "⚠️ Smart Guide (@tb) is currently unavailable due to configuration issues.\n"+
-		"Reason: "+err.Error()+"\n"+
-		"Type '/help' for available commands.")
-
-	return &ExecutionResult{
-		SessionID: req.HCtx.ChatID,
-		Success:   false,
-		Error:     err,
-		Meta:      meta,
-	}, err
-}
-
-// getDefaultProjectPath returns the default project path
-func (e *SmartGuideExecutor) getDefaultProjectPath() string {
-	if e.deps.BotSetting.DefaultCwd != "" {
-		if expanded, err := ExpandPath(e.deps.BotSetting.DefaultCwd); err == nil {
-			return expanded
-		}
-	}
-	if cwd, err := os.Getwd(); err == nil {
-		return cwd
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		return home
-	}
-	return "/"
 }

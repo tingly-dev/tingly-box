@@ -8,7 +8,9 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot"
 )
 
-// AgentRouter routes execution requests to the appropriate agent executor
+// AgentRouter routes execution requests to the appropriate agent executor.
+// It resolves common concerns (project path, session, meta, cancel context) once,
+// then delegates to the specific executor.
 type AgentRouter struct {
 	executors map[agentboot.AgentType]AgentExecutor
 	deps      *ExecutorDependencies
@@ -21,7 +23,6 @@ func NewAgentRouter(deps *ExecutorDependencies) *AgentRouter {
 		deps:      deps,
 	}
 
-	// Register default executors
 	router.RegisterExecutor(NewClaudeCodeExecutor(deps))
 	router.RegisterExecutor(NewSmartGuideExecutor(deps))
 	router.RegisterExecutor(NewMockAgentExecutor(deps))
@@ -35,20 +36,70 @@ func (r *AgentRouter) RegisterExecutor(executor AgentExecutor) {
 	logrus.WithField("agentType", executor.GetAgentType()).Debug("Registered agent executor")
 }
 
-// Execute routes the execution request to the appropriate agent executor
+// Execute routes the execution request to the appropriate agent executor.
+// It resolves project path, session, and builds shared *ResponseMeta before delegating.
 func (r *AgentRouter) Execute(ctx context.Context, agentType agentboot.AgentType, req ExecutionRequest) (*ExecutionResult, error) {
 	executor, exists := r.executors[agentType]
 	if !exists {
 		return nil, fmt.Errorf("no executor found for agent type: %s", agentType)
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"agentType": agentType,
-		"chatID":    req.HCtx.ChatID,
-		"textLen":   len(req.Text),
-	}).Info("Routing request to agent executor")
+	// 1. Resolve project path
+	projectPath := r.deps.resolveProjectPath(req.HCtx.ChatID, req.ProjectPath)
 
-	return executor.Execute(ctx, req)
+	// 2. Resolve session (session-based agents only; SmartGuide uses chatID)
+	var sessionID string
+	var isNewSession bool
+	if agentType != agentTinglyBox {
+		sessionID, isNewSession = r.deps.resolveSession(req.HCtx.ChatID, string(agentType), projectPath)
+	} else {
+		sessionID = req.HCtx.ChatID
+	}
+
+	// 3. Build shared meta
+	meta := &ResponseMeta{
+		ProjectPath: projectPath,
+		AgentType:   agentTypeToName(agentType),
+		SessionID:   sessionID,
+		ChatID:      req.HCtx.ChatID,
+		UserID:      req.HCtx.SenderID,
+	}
+
+	// 4. Setup cancellable context + /stop bookkeeping
+	execCtx, cancel := context.WithCancel(ctx)
+	r.deps.RunningCancelMu.Lock()
+	r.deps.RunningCancel[req.HCtx.ChatID] = cancel
+	r.deps.RunningCancelMu.Unlock()
+
+	// 5. Build prepared request
+	prepared := PreparedRequest{
+		HCtx:         req.HCtx,
+		Text:         req.Text,
+		ProjectPath:  projectPath,
+		Meta:         meta,
+		SessionID:    sessionID,
+		IsNewSession: isNewSession,
+		ReplyTo:      req.ReplyToMessageID,
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"agentType":   agentType,
+		"chatID":      req.HCtx.ChatID,
+		"sessionID":   sessionID,
+		"projectPath": projectPath,
+		"newSession":  isNewSession,
+	}).Info("Routing prepared request to executor")
+
+	// 6. Delegate to executor (it is responsible for calling defer cleanup)
+	result, err := executor.Execute(execCtx, prepared)
+
+	// Always cleanup cancel on return
+	r.deps.RunningCancelMu.Lock()
+	delete(r.deps.RunningCancel, req.HCtx.ChatID)
+	r.deps.RunningCancelMu.Unlock()
+	cancel()
+
+	return result, err
 }
 
 // GetExecutor returns the executor for a given agent type

@@ -3,7 +3,6 @@ package bot
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -29,78 +28,20 @@ func (e *ClaudeCodeExecutor) GetAgentType() agentboot.AgentType {
 }
 
 // Execute processes a user message through Claude Code
-func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req ExecutionRequest) (*ExecutionResult, error) {
-	// Validate input
+func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (*ExecutionResult, error) {
 	if strings.TrimSpace(req.Text) == "" {
 		e.deps.SendText(req.HCtx, "Please provide a message for Claude Code.")
 		return nil, fmt.Errorf("empty message text")
 	}
 
-	// Determine project path: priority is override > bound project > default cwd
+	sessionID := req.SessionID
 	projectPath := req.ProjectPath
-	if projectPath == "" {
-		boundPath, hasBound, _ := e.deps.ChatStore.GetProjectPath(req.HCtx.ChatID)
-		if hasBound && boundPath != "" {
-			projectPath = boundPath
-		}
-	}
-	if projectPath == "" {
-		projectPath = e.getDefaultProjectPath()
-		logrus.WithFields(logrus.Fields{
-			"chatID":     req.HCtx.ChatID,
-			"defaultCwd": projectPath,
-		}).Info("Using default cwd for Claude Code")
-	}
-
-	// Find or create session
-	agentType := "claude"
-	sess := e.deps.SessionMgr.FindBy(req.HCtx.ChatID, agentType, projectPath)
-
-	isNewSession := false
-	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed || sess.Status == session.StatusPending {
-		sess = e.deps.SessionMgr.CreateWith(req.HCtx.ChatID, agentType, projectPath)
-		// Clear expiration for persistent sessions
-		e.deps.SessionMgr.Update(sess.ID, func(s *session.Session) {
-			s.ExpiresAt = time.Time{}        // No expiration
-			s.Status = session.StatusRunning // Mark as running immediately
-		})
-		isNewSession = true
-
-		logrus.WithFields(logrus.Fields{
-			"chatID":    req.HCtx.ChatID,
-			"sessionID": sess.ID,
-			"project":   projectPath,
-			"agent":     agentType,
-		}).Info("Created new session for Claude Code")
-	} else {
-		// Reset status to running for reused sessions
-		e.deps.SessionMgr.Update(sess.ID, func(s *session.Session) {
-			s.Status = session.StatusRunning
-		})
-		logrus.WithFields(logrus.Fields{
-			"chatID":    req.HCtx.ChatID,
-			"sessionID": sess.ID,
-			"project":   projectPath,
-			"agent":     agentType,
-			"status":    sess.Status,
-		}).Info("Resumed existing session for Claude Code")
-	}
-
-	sessionID := sess.ID
+	meta := req.Meta
 
 	// Refresh session activity
 	e.deps.SessionMgr.Update(sessionID, func(s *session.Session) {
 		s.LastActivity = time.Now()
 	})
-
-	// Build meta
-	meta := ResponseMeta{
-		ProjectPath: projectPath,
-		AgentType:   string(agentboot.AgentTypeClaude),
-		SessionID:   sessionID,
-		ChatID:      req.HCtx.ChatID,
-		UserID:      req.HCtx.SenderID,
-	}
 
 	// Append user message to session
 	e.deps.SessionMgr.AppendMessage(sessionID, session.Message{
@@ -108,44 +49,27 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 		Content:   req.Text,
 		Timestamp: time.Now(),
 	})
-
 	e.deps.SessionMgr.SetRunning(sessionID)
 
 	// Send status message
 	var statusMsg string
-	if isNewSession {
+	if req.IsNewSession {
 		statusMsg = "⏳ CC: Processing new session..."
 	} else {
 		statusMsg = "⏳ CC: Resuming session..."
 	}
-	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponseWithFooter(meta, statusMsg), req.HCtx.MessageID)
-
-	// Execute with cancellable context
-	execCtx, cancel := context.WithCancel(context.Background())
-
-	// Store cancel function for /stop command
-	e.deps.RunningCancelMu.Lock()
-	e.deps.RunningCancel[req.HCtx.ChatID] = cancel
-	e.deps.RunningCancelMu.Unlock()
-
-	// Clean up cancel function when done
-	defer func() {
-		e.deps.RunningCancelMu.Lock()
-		delete(e.deps.RunningCancel, req.HCtx.ChatID)
-		e.deps.RunningCancelMu.Unlock()
-		cancel()
-	}()
+	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponseWithFooter(*meta, statusMsg), req.ReplyTo)
 
 	// Get agent instance
 	agent, err := e.deps.AgentBoot.GetDefaultAgent()
 	if err != nil {
 		e.deps.SessionMgr.SetFailed(sessionID, "agent not available: "+err.Error())
-		e.deps.SendTextWithReply(req.HCtx, "Agent not available", req.HCtx.MessageID)
+		e.deps.SendTextWithReply(req.HCtx, "Agent not available", req.ReplyTo)
 		return &ExecutionResult{
 			SessionID: sessionID,
 			Success:   false,
 			Error:     err,
-			Meta:      &meta,
+			Meta:      meta,
 		}, err
 	}
 
@@ -162,13 +86,14 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 		"shouldResume": shouldResume,
 	}).Info("Starting Claude Code execution")
 
-	// Create streaming handler
-	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, &meta)
+	// Create streaming handler (shared meta pointer)
+	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, meta)
 
-	// Check permission mode for this session
-	permissionMode := sess.PermissionMode
-	if permissionMode == "" {
-		permissionMode = string(claude.PermissionModeDefault)
+	// Get session permission mode
+	sess := e.deps.SessionMgr.FindBy(req.HCtx.ChatID, "claude", projectPath)
+	permissionMode := string(claude.PermissionModeDefault)
+	if sess != nil && sess.PermissionMode != "" {
+		permissionMode = sess.PermissionMode
 	}
 
 	// Create composite handler
@@ -178,18 +103,17 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 			hCtx:       req.HCtx,
 			sessionID:  sessionID,
 			sessionMgr: e.deps.SessionMgr,
-			meta:       &meta,
+			meta:       meta,
 		})
 
 	if permissionMode != string(claude.PermissionModeAuto) {
-		// Normal mode: use approval handler
 		compositeHandler.SetApprovalHandler(e.deps.IMPrompter).
 			SetAskHandler(e.deps.IMPrompter)
 	}
 
 	// Execute
 	startTime := time.Now()
-	result, err := agent.Execute(execCtx, req.Text, agentboot.ExecutionOptions{
+	result, err := agent.Execute(ctx, req.Text, agentboot.ExecutionOptions{
 		ProjectPath:          projectPath,
 		Handler:              compositeHandler,
 		SessionID:            sessionID,
@@ -233,14 +157,14 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 		if response == "" {
 			response = fmt.Sprintf("Execution failed: %v", err)
 		}
-		e.deps.SendTextWithReply(req.HCtx, response, req.HCtx.MessageID)
+		e.deps.SendTextWithReply(req.HCtx, response, req.ReplyTo)
 		return &ExecutionResult{
 			SessionID:    sessionID,
 			Success:      false,
 			Error:        err,
 			Response:     response,
-			Meta:         &meta,
-			IsNewSession: isNewSession,
+			Meta:         meta,
+			IsNewSession: req.IsNewSession,
 			Duration:     duration,
 		}, err
 	}
@@ -253,41 +177,14 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req ExecutionRequest) 
 		Timestamp: time.Now(),
 	})
 
-	// Send response with action keyboard
-	e.deps.SendTextWithActionKeyboard(req.HCtx, response, req.HCtx.MessageID)
+	e.deps.SendTextWithActionKeyboard(req.HCtx, response, req.ReplyTo)
 
 	return &ExecutionResult{
 		SessionID:    sessionID,
 		Success:      true,
 		Response:     response,
-		Meta:         &meta,
-		IsNewSession: isNewSession,
+		Meta:         meta,
+		IsNewSession: req.IsNewSession,
 		Duration:     duration,
 	}, nil
-}
-
-// getDefaultProjectPath returns the default project path
-// Priority: 1. DefaultCwd from bot setting, 2. Current working directory, 3. User home directory
-func (e *ClaudeCodeExecutor) getDefaultProjectPath() string {
-	// 1. Check bot setting's DefaultCwd
-	if e.deps.BotSetting.DefaultCwd != "" {
-		expanded, err := ExpandPath(e.deps.BotSetting.DefaultCwd)
-		if err == nil {
-			return expanded
-		}
-		logrus.WithError(err).Warnf("Failed to expand DefaultCwd: %s", e.deps.BotSetting.DefaultCwd)
-	}
-
-	// 2. Use current working directory
-	if cwd, err := os.Getwd(); err == nil {
-		return cwd
-	}
-
-	// 3. Fallback to user home directory
-	if home, err := os.UserHomeDir(); err == nil {
-		return home
-	}
-
-	// Ultimate fallback
-	return "/"
 }

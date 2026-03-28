@@ -362,12 +362,9 @@ func (h *BotHandler) routeToAgent(hCtx HandlerContext, text string) error {
 				"remainingText": remainingText,
 			}).Info("Processing remaining text after handoff")
 
-			// Route remaining text to the target agent
-			projectPath, _, _ := h.getProjectPathForChat(hCtx)
 			req := ExecutionRequest{
 				HCtx:             hCtx,
 				Text:             remainingText,
-				ProjectPath:      projectPath,
 				ReplyToMessageID: hCtx.MessageID,
 			}
 
@@ -386,11 +383,9 @@ func (h *BotHandler) routeToAgent(hCtx HandlerContext, text string) error {
 	}
 
 	// Route to current agent via AgentRouter
-	projectPath, _, _ := h.getProjectPathForChat(hCtx)
 	req := ExecutionRequest{
 		HCtx:             hCtx,
 		Text:             text,
-		ProjectPath:      projectPath,
 		ReplyToMessageID: hCtx.MessageID,
 	}
 

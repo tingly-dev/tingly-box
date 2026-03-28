@@ -3,7 +3,6 @@ package bot
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -29,88 +28,36 @@ func (e *MockAgentExecutor) GetAgentType() agentboot.AgentType {
 }
 
 // Execute processes a user message through Mock Agent
-func (e *MockAgentExecutor) Execute(ctx context.Context, req ExecutionRequest) (*ExecutionResult, error) {
+func (e *MockAgentExecutor) Execute(ctx context.Context, req PreparedRequest) (*ExecutionResult, error) {
 	if strings.TrimSpace(req.Text) == "" {
 		e.deps.SendText(req.HCtx, "Please provide a message for the mock agent.")
 		return nil, fmt.Errorf("empty message text")
 	}
 
-	// Get project path
+	sessionID := req.SessionID
 	projectPath := req.ProjectPath
-	if projectPath == "" {
-		boundPath, hasBound, _ := e.deps.ChatStore.GetProjectPath(req.HCtx.ChatID)
-		if hasBound && boundPath != "" {
-			projectPath = boundPath
-		}
-	}
-	if projectPath == "" {
-		projectPath = e.getDefaultProjectPath()
-	}
+	meta := req.Meta
 
-	// Find or create session for mock agent
-	agentType := "mock"
-	sess := e.deps.SessionMgr.FindBy(req.HCtx.ChatID, agentType, projectPath)
-
-	isNewSession := false
-	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed || sess.Status == session.StatusPending {
-		sess = e.deps.SessionMgr.CreateWith(req.HCtx.ChatID, agentType, projectPath)
-		e.deps.SessionMgr.Update(sess.ID, func(s *session.Session) {
-			s.ExpiresAt = time.Time{}
-			s.Status = session.StatusRunning
-		})
-		isNewSession = true
-	} else {
-		e.deps.SessionMgr.Update(sess.ID, func(s *session.Session) {
-			s.Status = session.StatusRunning
-		})
-	}
-	sessionID := sess.ID
-
-	// Build meta
-	meta := ResponseMeta{
-		ProjectPath: projectPath,
-		AgentType:   string(agentboot.AgentTypeMockAgent),
-		SessionID:   sessionID,
-		ChatID:      req.HCtx.ChatID,
-		UserID:      req.HCtx.SenderID,
-	}
-
+	// Append user message to session
 	e.deps.SessionMgr.AppendMessage(sessionID, session.Message{
 		Role:      "user",
 		Content:   req.Text,
 		Timestamp: time.Now(),
 	})
-
 	e.deps.SessionMgr.SetRunning(sessionID)
 
 	// Send status message
 	var statusMsg string
-	if isNewSession {
+	if req.IsNewSession {
 		statusMsg = "🧪 Mock: Processing new session..."
 	} else {
 		statusMsg = "🧪 Mock: Resuming session..."
 	}
-	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponseWithFooter(meta, statusMsg), req.HCtx.MessageID)
-
-	// Execute with context
-	execCtx, cancel := context.WithCancel(context.Background())
-
-	// Store cancel function for /stop command
-	e.deps.RunningCancelMu.Lock()
-	e.deps.RunningCancel[req.HCtx.ChatID] = cancel
-	e.deps.RunningCancelMu.Unlock()
-
-	defer func() {
-		e.deps.RunningCancelMu.Lock()
-		delete(e.deps.RunningCancel, req.HCtx.ChatID)
-		e.deps.RunningCancelMu.Unlock()
-		cancel()
-	}()
+	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponseWithFooter(*meta, statusMsg), req.ReplyTo)
 
 	// Get mock agent
 	mockAgent, err := e.deps.AgentBoot.GetAgent(agentboot.AgentTypeMockAgent)
 	if err != nil {
-		// Register mock agent if not exists
 		newMockAgent := mock.NewAgent(mock.Config{
 			MaxIterations: 3,
 			StepDelay:     2 * time.Second,
@@ -125,8 +72,8 @@ func (e *MockAgentExecutor) Execute(ctx context.Context, req ExecutionRequest) (
 		"agent":     "mock",
 	}).Info("Starting mock agent execution")
 
-	// Create streaming handler
-	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, &meta)
+	// Create streaming handler (shared meta pointer)
+	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, meta)
 
 	// Create composite handler
 	compositeHandler := agentboot.NewCompositeHandler().
@@ -135,7 +82,7 @@ func (e *MockAgentExecutor) Execute(ctx context.Context, req ExecutionRequest) (
 		SetAskHandler(e.deps.IMPrompter)
 
 	startTime := time.Now()
-	result, err := mockAgent.Execute(execCtx, req.Text, agentboot.ExecutionOptions{
+	result, err := mockAgent.Execute(ctx, req.Text, agentboot.ExecutionOptions{
 		ProjectPath: projectPath,
 		Handler:     compositeHandler,
 		SessionID:   sessionID,
@@ -174,14 +121,14 @@ func (e *MockAgentExecutor) Execute(ctx context.Context, req ExecutionRequest) (
 		if response == "" {
 			response = fmt.Sprintf("Execution failed: %v", err)
 		}
-		e.deps.SendTextWithReply(req.HCtx, response, req.HCtx.MessageID)
+		e.deps.SendTextWithReply(req.HCtx, response, req.ReplyTo)
 		return &ExecutionResult{
 			SessionID:    sessionID,
 			Success:      false,
 			Error:        err,
 			Response:     response,
-			Meta:         &meta,
-			IsNewSession: isNewSession,
+			Meta:         meta,
+			IsNewSession: req.IsNewSession,
 			Duration:     duration,
 		}, err
 	}
@@ -193,30 +140,14 @@ func (e *MockAgentExecutor) Execute(ctx context.Context, req ExecutionRequest) (
 		Timestamp: time.Now(),
 	})
 
-	e.deps.SendTextWithActionKeyboard(req.HCtx, response, req.HCtx.MessageID)
+	e.deps.SendTextWithActionKeyboard(req.HCtx, response, req.ReplyTo)
 
 	return &ExecutionResult{
 		SessionID:    sessionID,
 		Success:      true,
 		Response:     response,
-		Meta:         &meta,
-		IsNewSession: isNewSession,
+		Meta:         meta,
+		IsNewSession: req.IsNewSession,
 		Duration:     duration,
 	}, nil
-}
-
-// getDefaultProjectPath returns the default project path
-func (e *MockAgentExecutor) getDefaultProjectPath() string {
-	if e.deps.BotSetting.DefaultCwd != "" {
-		if expanded, err := ExpandPath(e.deps.BotSetting.DefaultCwd); err == nil {
-			return expanded
-		}
-	}
-	if cwd, err := os.Getwd(); err == nil {
-		return cwd
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		return home
-	}
-	return "/"
 }
