@@ -36,6 +36,8 @@ func (s *Server) recordGuardrailsHistory(c *gin.Context, session guardrailsSessi
 	s.guardrailsHistory.Add(entry, writeFileAtomic)
 }
 
+// recordGuardrailsMaskHistory stores a dedicated history row for credential
+// aliasing events so masking can be audited separately from block/review events.
 func (s *Server) recordGuardrailsMaskHistory(c *gin.Context, session guardrailsSession, input guardrails.Input, phase string) {
 	if s.guardrailsHistory == nil {
 		return
@@ -63,10 +65,13 @@ func (s *Server) recordGuardrailsMaskHistory(c *gin.Context, session guardrailsS
 	s.guardrailsHistory.Add(entry, writeFileAtomic)
 }
 
+// resolveGuardrailsCredentialNames maps credential ids to stable display names
+// for the history API.
 func (s *Server) resolveGuardrailsCredentialNames(ids []string) []string {
 	return s.getCachedGuardrailsCredentialNames(ids)
 }
 
+// GetGuardrailsHistory returns the most recent guardrails history rows.
 func (s *Server) GetGuardrailsHistory(c *gin.Context) {
 	if s.guardrailsHistory == nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -81,6 +86,7 @@ func (s *Server) GetGuardrailsHistory(c *gin.Context) {
 	})
 }
 
+// ClearGuardrailsHistory deletes all persisted guardrails history rows.
 func (s *Server) ClearGuardrailsHistory(c *gin.Context) {
 	if s.guardrailsHistory != nil {
 		s.guardrailsHistory.Clear(writeFileAtomic)

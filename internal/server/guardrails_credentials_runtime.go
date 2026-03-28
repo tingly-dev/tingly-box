@@ -35,6 +35,8 @@ func (s *Server) applyGuardrailsCredentialMasksV1Beta(c *gin.Context, req *anthr
 	s.applyGuardrailsCredentialMasksToV1BetaRequest(c, session, req)
 }
 
+// getGuardrailsCredentialMaskState returns the request-scoped alias map shared by
+// request masking, non-stream response restoration, and stream restoration.
 func (s *Server) getGuardrailsCredentialMaskState(c *gin.Context) *guardrails.CredentialMaskState {
 	if existing, ok := c.Get(guardrails.CredentialMaskStateContextKey); ok {
 		if state, ok := existing.(*guardrails.CredentialMaskState); ok {
@@ -46,6 +48,8 @@ func (s *Server) getGuardrailsCredentialMaskState(c *gin.Context) *guardrails.Cr
 	return state
 }
 
+// loadActiveMaskCredentials returns the enabled protected credentials for the
+// current scenario from the prebuilt cache.
 func (s *Server) loadActiveMaskCredentials(session guardrailsSession) ([]guardrails.ProtectedCredential, error) {
 	if !s.guardrailsEnabledForSession(session) {
 		return nil, nil
@@ -53,6 +57,8 @@ func (s *Server) loadActiveMaskCredentials(session guardrailsSession) ([]guardra
 	return s.getCachedGuardrailsMaskCredentials(session.Scenario), nil
 }
 
+// applyGuardrailsCredentialMasksToV1Request rewrites Anthropic v1 request content
+// in place so upstream models only receive alias tokens.
 func (s *Server) applyGuardrailsCredentialMasksToV1Request(c *gin.Context, session guardrailsSession, req *anthropic.MessageNewParams) {
 	//roundPreview := currentAnthropicV1RoundPreview(req.Messages)
 	//logGuardrailsCredentialMaskRequest("v1", session, len(req.System), len(req.Messages), roundPreview)
@@ -89,6 +95,8 @@ func (s *Server) applyGuardrailsCredentialMasksToV1Request(c *gin.Context, sessi
 	}
 }
 
+// applyGuardrailsCredentialMasksToV1BetaRequest applies the same request-side
+// masking to Anthropic beta payloads.
 func (s *Server) applyGuardrailsCredentialMasksToV1BetaRequest(c *gin.Context, session guardrailsSession, req *anthropic.BetaMessageNewParams) {
 	//roundPreview := currentAnthropicBetaRoundPreview(req.Messages)
 	//logGuardrailsCredentialMaskRequest("v1beta", session, len(req.System), len(req.Messages), roundPreview)
@@ -129,6 +137,8 @@ func (s *Server) applyGuardrailsCredentialMasksToV1BetaRequest(c *gin.Context, s
 	}
 }
 
+// aliasAnthropicMessageBlocks rewrites all supported block types in one message
+// and reports whether the trailing block changed for history suppression.
 func aliasAnthropicMessageBlocks(blocks []anthropic.ContentBlockParamUnion, credentials []guardrails.ProtectedCredential, state *guardrails.CredentialMaskState) (bool, bool) {
 	changed := false
 	tailChanged := false
@@ -170,6 +180,8 @@ func aliasAnthropicMessageBlocks(blocks []anthropic.ContentBlockParamUnion, cred
 	return changed, tailChanged
 }
 
+// aliasAnthropicBetaMessageBlocks is the beta equivalent of
+// aliasAnthropicMessageBlocks.
 func aliasAnthropicBetaMessageBlocks(blocks []anthropic.BetaContentBlockParamUnion, credentials []guardrails.ProtectedCredential, state *guardrails.CredentialMaskState) (bool, bool) {
 	changed := false
 	tailChanged := false
@@ -284,6 +296,8 @@ func (s *Server) restoreGuardrailsCredentialAliasesV1BetaResponse(c *gin.Context
 	return restoreAnthropicBetaResponseBlocks(resp.Content, s.getGuardrailsCredentialMaskState(c))
 }
 
+// restoreAnthropicResponseBlocks restores alias tokens inside non-stream
+// Anthropic v1 response blocks.
 func restoreAnthropicResponseBlocks(blocks []anthropic.ContentBlockUnion, state *guardrails.CredentialMaskState) bool {
 	if state == nil || len(state.AliasToReal) == 0 {
 		return false
@@ -322,6 +336,8 @@ func restoreAnthropicResponseBlocks(blocks []anthropic.ContentBlockUnion, state 
 	return changed
 }
 
+// restoreAnthropicBetaResponseBlocks restores alias tokens inside non-stream
+// Anthropic beta response blocks.
 func restoreAnthropicBetaResponseBlocks(blocks []anthropic.BetaContentBlockUnion, state *guardrails.CredentialMaskState) bool {
 	if state == nil || len(state.AliasToReal) == 0 {
 		return false
