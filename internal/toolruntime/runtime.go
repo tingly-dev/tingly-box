@@ -199,12 +199,17 @@ func mergeAnthropicBetaTools(existing []anthropic.BetaToolUnionParam, runtimeToo
 	return merged
 }
 
-func (r *Runtime) PrepareOpenAIRequest(ctx context.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, nativeTools NativeToolSupport) (*openai.ChatCompletionNewParams, bool) {
+func (r *Runtime) InjectOpenAITools(ctx context.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, nativeTools NativeToolSupport) *openai.ChatCompletionNewParams {
 	modifiedReq := originalReq
 	runtimeTools, _ := r.ListTools(ctx, provider, nativeTools)
 	if len(runtimeTools) > 0 {
 		modifiedReq.Tools = mergeOpenAITools(modifiedReq.Tools, runtimeTools)
 	}
+	return modifiedReq
+}
+
+func (r *Runtime) PrepareOpenAIRequest(ctx context.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, nativeTools NativeToolSupport) (*openai.ChatCompletionNewParams, bool) {
+	modifiedReq := r.InjectOpenAITools(ctx, provider, originalReq, nativeTools)
 
 	results := []ToolResult{}
 	for _, msgUnion := range modifiedReq.Messages {

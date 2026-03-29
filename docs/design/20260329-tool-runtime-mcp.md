@@ -85,7 +85,7 @@ Configuration is now expressed in terms of:
 - builtin source config
 - MCP source config
 
-No runtime fallback remains for the old `tool_interceptor` key.
+A transitional read-only fallback remains for the old `tool_interceptor` key so existing installs can be read and translated into `tool_runtime`.
 
 ## Migration
 
@@ -101,7 +101,7 @@ Existing configuration should be migrated as follows:
   - `fetch_timeout`
   - `max_url_length`
 
-There is no active compatibility reader for legacy `tool_interceptor` records after this cleanup. Existing deployments must rewrite persisted config before depending on the new code path.
+Legacy `tool_interceptor` config is still read for compatibility during the transition, but new writes should only use `tool_runtime`. Persisted installs should still be migrated forward so the fallback can be removed later.
 
 ## Testing
 

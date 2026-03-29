@@ -195,6 +195,41 @@ type OAuthDetail struct {
 	ExtraFields  map[string]interface{} `json:"extra_fields"`  // Any extra field for some special clients
 }
 
+// ToolInterceptorConfig is the legacy config shape for builtin search/fetch.
+// Deprecated: new writes should use ToolRuntimeConfig with a builtin source.
+type ToolInterceptorConfig struct {
+	PreferLocalSearch FlexibleBool `json:"prefer_local_search,omitempty"`
+	SearchAPI         string       `json:"search_api,omitempty"`
+	SearchKey         string       `json:"search_key,omitempty"`
+	MaxResults        int          `json:"max_results,omitempty"`
+	ProxyURL          string       `json:"proxy_url,omitempty"`
+	MaxFetchSize      int64        `json:"max_fetch_size,omitempty"`
+	FetchTimeout      int64        `json:"fetch_timeout,omitempty"`
+	MaxURLLength      int          `json:"max_url_length,omitempty"`
+}
+
+// ApplyToolInterceptorDefaults applies default values to the legacy config shape.
+func ApplyToolInterceptorDefaults(config *ToolInterceptorConfig) {
+	if config == nil {
+		return
+	}
+	if config.MaxResults == 0 {
+		config.MaxResults = 10
+	}
+	if config.MaxFetchSize == 0 {
+		config.MaxFetchSize = 1 * 1024 * 1024
+	}
+	if config.FetchTimeout == 0 {
+		config.FetchTimeout = 30
+	}
+	if config.MaxURLLength == 0 {
+		config.MaxURLLength = 2000
+	}
+	if config.SearchAPI == "" {
+		config.SearchAPI = "duckduckgo"
+	}
+}
+
 const (
 	ToolSourceTypeBuiltin = "builtin"
 	ToolSourceTypeMCP     = "mcp"
@@ -329,6 +364,38 @@ func DefaultToolRuntimeConfig() *ToolRuntimeConfig {
 	}
 	ApplyToolRuntimeDefaults(cfg)
 	return cfg
+}
+
+// ToolRuntimeConfigFromInterceptor converts the legacy builtin search/fetch config into
+// the current runtime format.
+// Deprecated: this is transitional read compatibility for existing installs only.
+func ToolRuntimeConfigFromInterceptor(config *ToolInterceptorConfig) *ToolRuntimeConfig {
+	if config == nil {
+		return DefaultToolRuntimeConfig()
+	}
+	ApplyToolInterceptorDefaults(config)
+	builtin := &BuiltinToolSourceConfig{
+		SearchAPI:    config.SearchAPI,
+		SearchKey:    config.SearchKey,
+		MaxResults:   config.MaxResults,
+		ProxyURL:     config.ProxyURL,
+		MaxFetchSize: config.MaxFetchSize,
+		FetchTimeout: config.FetchTimeout,
+		MaxURLLength: config.MaxURLLength,
+	}
+	ApplyBuiltinToolSourceDefaults(builtin)
+	runtimeConfig := &ToolRuntimeConfig{
+		Enabled:    true,
+		AutoExpose: true,
+		Sources: []ToolSourceConfig{{
+			ID:      "builtin",
+			Type:    ToolSourceTypeBuiltin,
+			Enabled: true,
+			Builtin: builtin,
+		}},
+	}
+	ApplyToolRuntimeDefaults(runtimeConfig)
+	return runtimeConfig
 }
 
 // IsExpired checks if the OAuth token is expired

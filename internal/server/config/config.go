@@ -964,6 +964,7 @@ func (c *Config) GetDefaultMaxTokens() int {
 }
 
 // GetToolRuntimeConfig returns the effective global tool runtime config.
+// Deprecated legacy tool_interceptor config is still read as a transitional fallback.
 func (c *Config) GetToolRuntimeConfig() *typ.ToolRuntimeConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -980,6 +981,15 @@ func (c *Config) GetToolRuntimeConfig() *typ.ToolRuntimeConfig {
 			if err := json.Unmarshal(data, &config); err == nil {
 				typ.ApplyToolRuntimeDefaults(&config)
 				return &config
+			}
+		}
+	}
+
+	if c.ToolConfigs != nil {
+		if data, ok := c.ToolConfigs[db.ToolTypeInterceptor]; ok {
+			var legacy typ.ToolInterceptorConfig
+			if err := json.Unmarshal(data, &legacy); err == nil {
+				return typ.ToolRuntimeConfigFromInterceptor(&legacy)
 			}
 		}
 	}
@@ -1045,6 +1055,14 @@ func (c *Config) GetToolRuntimeConfigForProvider(providerUUID string) (*typ.Tool
 	}
 	if providerConfig != nil {
 		return providerConfig, enabled && bool(providerConfig.Enabled)
+	}
+	if err == nil {
+		legacyProvider, legacyEnabled, legacyErr := c.toolConfigStore.GetToolInterceptorConfig(providerUUID)
+		if legacyErr != nil {
+			logrus.Warnf("Failed to get legacy tool interceptor config for provider %s: %v", providerUUID, legacyErr)
+		} else if legacyProvider != nil {
+			return typ.ToolRuntimeConfigFromInterceptor(legacyProvider), legacyEnabled
+		}
 	}
 
 	if global == nil {

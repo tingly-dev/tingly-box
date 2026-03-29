@@ -202,8 +202,7 @@ func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq 
 	followUpReq := *originalReq
 	followUpReq.Messages = newMessages
 	followUpReq.Tools = nil
-	preparedReq, _ := s.toolRuntime.PrepareOpenAIRequest(context.Background(), provider, &followUpReq, nativeTools)
-	followUpReq = *preparedReq
+	followUpReq.Tools = s.toolRuntime.InjectOpenAITools(context.Background(), provider, &followUpReq, nativeTools).Tools
 
 	// Forward to provider for final response (may contain more tool calls or final answer)
 	wrapper := s.clientPool.GetOpenAIClient(provider, string(followUpReq.Model))

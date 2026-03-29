@@ -21,7 +21,8 @@ import (
 
 // ToolType constants for different tool configuration types
 const (
-	ToolTypeRuntime = "tool_runtime" // Generic tool runtime configuration
+	ToolTypeInterceptor = "tool_interceptor" // Deprecated legacy builtin search/fetch config
+	ToolTypeRuntime     = "tool_runtime"     // Generic tool runtime configuration
 	// Future types: "code_execution", "database_query", etc.
 )
 
@@ -193,6 +194,25 @@ func (tcs *ToolConfigStore) DeleteByProvider(providerUUID string) error {
 
 	logrus.Debugf("Deleted %d tool configs for provider: %s", result.RowsAffected, providerUUID)
 	return nil
+}
+
+// GetToolInterceptorConfig returns the legacy builtin search/fetch config for a provider.
+// Deprecated: read compatibility only.
+func (tcs *ToolConfigStore) GetToolInterceptorConfig(providerUUID string) (*typ.ToolInterceptorConfig, bool, error) {
+	record, err := tcs.GetByProviderAndType(providerUUID, ToolTypeInterceptor)
+	if err != nil {
+		return nil, false, err
+	}
+	if record == nil || record.Disabled {
+		return nil, false, nil
+	}
+
+	var config typ.ToolInterceptorConfig
+	if err := json.Unmarshal([]byte(record.ConfigJSON), &config); err != nil {
+		return nil, false, fmt.Errorf("failed to unmarshal legacy tool interceptor config: %w", err)
+	}
+	typ.ApplyToolInterceptorDefaults(&config)
+	return &config, true, nil
 }
 
 // GetToolRuntimeConfig returns the tool runtime config for a provider.

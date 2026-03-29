@@ -20,6 +20,7 @@ const (
 )
 
 type builtinFetchResult struct {
+	Tool        string `json:"tool"`
 	URL         string `json:"url"`
 	FinalURL    string `json:"final_url"`
 	StatusCode  int    `json:"status_code"`
@@ -78,6 +79,7 @@ func (s *builtinSource) fetchURL(targetURL string) (*builtinFetchResult, error) 
 	}
 
 	result := &builtinFetchResult{
+		Tool:        BuiltinToolFetch,
 		URL:         targetURL,
 		FinalURL:    resp.Request.URL.String(),
 		StatusCode:  resp.StatusCode,

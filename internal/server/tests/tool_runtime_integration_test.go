@@ -74,6 +74,7 @@ func TestToolRuntimeE2E_OpenAIFollowUpViaMCP(t *testing.T) {
 	require.Len(t, history, 2)
 	assertOpenAIToolsContain(t, history[0], "mcp__test__greet")
 	assertOpenAIToolResultInjected(t, history[1], "call_1", "hello Tingly")
+	assertOpenAIToolResultCount(t, history[1], "call_1", 1)
 }
 
 func TestToolRuntimeE2E_AnthropicFollowUpViaMCP(t *testing.T) {
@@ -360,6 +361,7 @@ func TestToolRuntimeE2E_OpenAIFetchErrorFollowUp(t *testing.T) {
 	require.Len(t, history, 2)
 	assertOpenAIToolsContain(t, history[0], "web_fetch")
 	assertOpenAIToolResultInjected(t, history[1], "call_fetch_1", "blocked hostname")
+	assertOpenAIToolResultCount(t, history[1], "call_fetch_1", 1)
 }
 
 func configureMCPRuntime(t *testing.T, ts *TestServer) {
@@ -436,6 +438,18 @@ func assertOpenAIToolResultInjected(t *testing.T, request map[string]interface{}
 		}
 	}
 	assert.True(t, found, "expected injected OpenAI tool result message")
+}
+
+func assertOpenAIToolResultCount(t *testing.T, request map[string]interface{}, toolCallID string, expectedCount int) {
+	messages := request["messages"].([]interface{})
+	count := 0
+	for _, item := range messages {
+		msg := item.(map[string]interface{})
+		if msg["role"] == "tool" && msg["tool_call_id"] == toolCallID {
+			count++
+		}
+	}
+	assert.Equal(t, expectedCount, count, "unexpected number of injected OpenAI tool result messages")
 }
 
 func assertAnthropicToolsContain(t *testing.T, request map[string]interface{}, name string) {

@@ -145,6 +145,7 @@ func TestBuiltinFetchReturnsStructuredResultViaProxy(t *testing.T) {
 
 	var payload builtinFetchResult
 	require.NoError(t, json.Unmarshal([]byte(result.Content), &payload))
+	require.Equal(t, BuiltinToolFetch, payload.Tool)
 	require.Equal(t, "http://example.com/test", payload.URL)
 	require.Equal(t, "http://example.com/test", payload.FinalURL)
 	require.Equal(t, http.StatusOK, payload.StatusCode)
