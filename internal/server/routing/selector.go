@@ -7,9 +7,14 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
-	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+// ProviderResolver resolves providers by UUID and persists config state.
+type ProviderResolver interface {
+	GetProviderByUUID(uuid string) (*typ.Provider, error)
+	SaveCurrentServiceID(ruleUUID string, serviceID string) error
+}
 
 // LoadBalancer defines the interface for load balancing operations.
 // This avoids importing the server package (which would create circular imports).
@@ -44,7 +49,7 @@ const (
 // ServiceSelector is the main entry point for service selection.
 // It orchestrates a pipeline of selection stages and validates the final result.
 type ServiceSelector struct {
-	config        *config.Config
+	config        ProviderResolver
 	affinityStore AffinityStore
 	loadBalancer  LoadBalancer
 
@@ -54,7 +59,7 @@ type ServiceSelector struct {
 
 // NewServiceSelector creates a new service selector
 func NewServiceSelector(
-	cfg *config.Config,
+	cfg ProviderResolver,
 	affinity AffinityStore,
 	lb LoadBalancer,
 ) *ServiceSelector {
