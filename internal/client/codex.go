@@ -20,6 +20,10 @@ type codexRoundTripper struct {
 	http.RoundTripper
 }
 
+func (t *codexRoundTripper) Unwrap() http.RoundTripper {
+	return t.RoundTripper
+}
+
 func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	// codexHook applies ChatGPT/Codex OAuth specific request modifications:

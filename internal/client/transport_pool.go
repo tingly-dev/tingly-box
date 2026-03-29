@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -18,10 +19,11 @@ import (
 // TransportConfig holds the configuration for HTTP transport connection pooling
 // All fields are pointers so that zero-value (nil) means "use Go default"
 type TransportConfig struct {
-	MaxIdleConns        *int  // nil = use Go default (100)
-	MaxIdleConnsPerHost *int  // nil = use Go default (2)
-	MaxConnsPerHost     *int  // nil = use Go default (0, no limit)
-	DisableKeepAlives   *bool // nil = use Go default (false)
+	MaxIdleConns            *int   // nil = use Go default (100)
+	MaxIdleConnsPerHost     *int   // nil = use Go default (2)
+	MaxConnsPerHost         *int   // nil = use Go default (0, no limit)
+	DisableKeepAlives       *bool  // nil = use Go default (false)
+	MaxRequestsPerTransport *int64 // nil = disabled (pure TTL); 0 = disabled; >0 = rotate after N requests
 }
 
 // Go defaults for reference (not used directly, only for documentation)
@@ -32,14 +34,17 @@ const (
 
 // Constants for transport TTL and cleanup interval
 const (
-	DefaultTransportTTL             = 120 * time.Minute // Default time-to-live for cached transports
-	DefaultTransportCleanupInterval = 60 * time.Minute  // Default interval for cleanup task
+	DefaultTransportTTL             = 30 * time.Minute
+	DefaultTransportCleanupInterval = 10 * time.Minute
+	DefaultMaxRequestsPerTransport  = int64(20)
 )
 
-// pooledTransport wraps a transport with its last access timestamp for TTL tracking
+// pooledTransport wraps a transport with usage tracking for rotation
 type pooledTransport struct {
-	transport  *http.Transport
-	lastAccess time.Time
+	transport    *http.Transport
+	lastAccess   time.Time
+	requestCount atomic.Int64 // cumulative requests served through this transport
+	createdTime  time.Time
 }
 
 // TransportPool manages shared HTTP transports for clients
@@ -47,15 +52,19 @@ type pooledTransport struct {
 // This allows multiple clients to share the same connection pool
 // when they use the same provider+proxy combination.
 type TransportPool struct {
-	transports map[string]*pooledTransport
-	config     *TransportConfig // nil = use Go defaults
-	mutex      sync.RWMutex
+	transports    map[string]*pooledTransport
+	transportKeys map[*http.Transport]string // reverse lookup for ReportRequest
+	config        *TransportConfig           // nil = use Go defaults
+	mutex         sync.RWMutex
+	maxRequests   int64 // 0 = disabled
 }
 
 // Global singleton transport pool
 var globalTransportPool = &TransportPool{
-	transports: make(map[string]*pooledTransport),
-	config:     nil, // nil = use Go defaults (backward compatible with TB)
+	transports:    make(map[string]*pooledTransport),
+	transportKeys: make(map[*http.Transport]string),
+	config:        nil, // nil = use Go defaults (backward compatible with TB)
+	maxRequests:   DefaultMaxRequestsPerTransport,
 }
 
 func init() {
@@ -81,20 +90,31 @@ func SetTransportConfig(config *TransportConfig) {
 	} else {
 		maxIdle := "default"
 		maxIdlePerHost := "default"
+		maxReqs := "default"
 		if config.MaxIdleConns != nil {
 			maxIdle = fmt.Sprintf("%d", *config.MaxIdleConns)
 		}
 		if config.MaxIdleConnsPerHost != nil {
 			maxIdlePerHost = fmt.Sprintf("%d", *config.MaxIdleConnsPerHost)
 		}
-		logrus.Infof("Transport pool config updated: MaxIdleConns=%s, MaxIdleConnsPerHost=%s",
-			maxIdle, maxIdlePerHost)
+		if config.MaxRequestsPerTransport != nil {
+			maxReqs = fmt.Sprintf("%d", *config.MaxRequestsPerTransport)
+		}
+		logrus.Infof("Transport pool config updated: MaxIdleConns=%s, MaxIdleConnsPerHost=%s, MaxRequestsPerTransport=%s",
+			maxIdle, maxIdlePerHost, maxReqs)
+	}
+	if config != nil && config.MaxRequestsPerTransport != nil {
+		globalTransportPool.maxRequests = *config.MaxRequestsPerTransport
+	} else {
+		globalTransportPool.maxRequests = DefaultMaxRequestsPerTransport
 	}
 }
 
 // GetTransport returns or creates a shared HTTP transport for the given configuration
 // The transport key is based on: providerUUID + proxyURL
 // oauthType is used for logging only, not part of the key
+//
+// Transports are lazily rotated when requestCount >= maxRequestsPerTransport.
 func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType) *http.Transport {
 	key := tp.generateTransportKey(providerUUID, proxyURL)
 
@@ -102,11 +122,20 @@ func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oaut
 	tp.mutex.RLock()
 	if pooled, exists := tp.transports[key]; exists {
 		tp.mutex.RUnlock()
+
+		// Check if rotation is needed (request-count based)
+		if tp.maxRequests > 0 && pooled.requestCount.Load() >= tp.maxRequests {
+			logrus.Infof("Rotating transport for key: %s (requestCount=%d >= maxRequests=%d)",
+				key, pooled.requestCount.Load(), tp.maxRequests)
+			tp.rotateTransport(key)
+			return tp.createAndStoreTransport(key, providerUUID, model, proxyURL, oauthType)
+		}
+
 		// Update last access time
 		tp.mutex.Lock()
 		pooled.lastAccess = time.Now()
 		tp.mutex.Unlock()
-		logrus.Debugf("Using cached transport for key: %s", key)
+		logrus.Debugf("Using cached transport for key: %s (requestCount=%d)", key, pooled.requestCount.Load())
 		return pooled.transport
 	}
 	tp.mutex.RUnlock()
@@ -117,20 +146,95 @@ func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oaut
 
 	// Double-check after acquiring write lock to avoid race conditions
 	if pooled, exists := tp.transports[key]; exists {
+		if tp.maxRequests > 0 && pooled.requestCount.Load() >= tp.maxRequests {
+			logrus.Infof("Rotating transport for key: %s (requestCount=%d >= maxRequests=%d, double-check)",
+				key, pooled.requestCount.Load(), tp.maxRequests)
+			tp.rotateTransportLocked(key)
+			return tp.createAndStoreTransportLocked(key, providerUUID, model, proxyURL, oauthType)
+		}
 		pooled.lastAccess = time.Now()
-		logrus.Debugf("Using cached transport for key: %s (double-check)", key)
+		logrus.Debugf("Using cached transport for key: %s (requestCount=%d, double-check)", key, pooled.requestCount.Load())
 		return pooled.transport
 	}
 
-	// Create new transport
+	return tp.createAndStoreTransportLocked(key, providerUUID, model, proxyURL, oauthType)
+}
+
+// rotateTransport closes idle connections and removes a transport entry (caller must NOT hold write lock)
+func (tp *TransportPool) rotateTransport(key string) {
+	tp.mutex.Lock()
+	defer tp.mutex.Unlock()
+	tp.rotateTransportLocked(key)
+}
+
+// rotateTransportLocked closes idle connections and removes a transport entry (caller must hold write lock)
+func (tp *TransportPool) rotateTransportLocked(key string) {
+	if pooled, exists := tp.transports[key]; exists {
+		pooled.transport.CloseIdleConnections()
+		delete(tp.transportKeys, pooled.transport)
+		delete(tp.transports, key)
+		logrus.Infof("Rotated transport key: %s (served %d requests, lived %v)",
+			key, pooled.requestCount.Load(), time.Since(pooled.createdTime).Round(time.Second))
+	}
+}
+
+// createAndStoreTransport creates a new transport and stores it (caller must NOT hold write lock)
+func (tp *TransportPool) createAndStoreTransport(key, providerUUID, model, proxyURL string, oauthType oauth.ProviderType) *http.Transport {
+	tp.mutex.Lock()
+	defer tp.mutex.Unlock()
+	return tp.createAndStoreTransportLocked(key, providerUUID, model, proxyURL, oauthType)
+}
+
+// createAndStoreTransportLocked creates a new transport and stores it (caller must hold write lock)
+func (tp *TransportPool) createAndStoreTransportLocked(key, providerUUID, model, proxyURL string, oauthType oauth.ProviderType) *http.Transport {
+	// Double-check it wasn't created between the outer check and write lock
+	if pooled, exists := tp.transports[key]; exists {
+		pooled.lastAccess = time.Now()
+		return pooled.transport
+	}
+
 	logrus.Infof("Creating new transport for provider: %s, model: %s, proxy: %s, oauth: %s", providerUUID, model, proxyURL, oauthType)
 	transport := tp.createTransport(proxyURL)
 	tp.transports[key] = &pooledTransport{
-		transport:  transport,
-		lastAccess: time.Now(),
+		transport:   transport,
+		lastAccess:  time.Now(),
+		createdTime: time.Now(),
 	}
-
+	tp.transportKeys[transport] = key
 	return transport
+}
+
+// ReportRequest increments the request count for the given transport.
+// The transport pointer is unwrapped from any wrapper roundtrippers by the caller.
+func (tp *TransportPool) ReportRequest(transport *http.Transport) {
+	if transport == nil {
+		return
+	}
+	tp.mutex.Lock()
+	defer tp.mutex.Unlock()
+
+	if key, ok := tp.transportKeys[transport]; ok {
+		if pooled, ok := tp.transports[key]; ok {
+			pooled.requestCount.Add(1)
+		}
+	}
+}
+
+// UnwrapTransport walks through wrapper roundtrippers to find the base *http.Transport.
+func UnwrapTransport(rt http.RoundTripper) *http.Transport {
+	for {
+		if rt == nil {
+			return nil
+		}
+		if t, ok := rt.(*http.Transport); ok {
+			return t
+		}
+		if unwrapper, ok := rt.(interface{ Unwrap() http.RoundTripper }); ok {
+			rt = unwrapper.Unwrap()
+			continue
+		}
+		return nil
+	}
 }
 
 // generateTransportKey creates a unique key for transport caching
@@ -222,8 +326,28 @@ func (tp *TransportPool) Stats() map[string]interface{} {
 	defer tp.mutex.RUnlock()
 
 	return map[string]interface{}{
-		"transport_count": len(tp.transports),
+		"transport_count":     len(tp.transports),
+		"max_requests":        tp.maxRequests,
+		"max_requests_active": tp.maxRequests > 0,
 	}
+}
+
+// TransportStats returns per-transport detailed statistics
+func (tp *TransportPool) TransportStats() []map[string]interface{} {
+	tp.mutex.RLock()
+	defer tp.mutex.RUnlock()
+
+	stats := make([]map[string]interface{}, 0, len(tp.transports))
+	for key, pooled := range tp.transports {
+		stats = append(stats, map[string]interface{}{
+			"key":           key,
+			"request_count": pooled.requestCount.Load(),
+			"last_access":   pooled.lastAccess,
+			"created_time":  pooled.createdTime,
+			"age":           time.Since(pooled.createdTime).String(),
+		})
+	}
+	return stats
 }
 
 // Clear removes all transports from the pool and closes idle connections
@@ -233,9 +357,11 @@ func (tp *TransportPool) Clear() {
 
 	for key, pooled := range tp.transports {
 		pooled.transport.CloseIdleConnections()
+		delete(tp.transportKeys, pooled.transport)
 		logrus.Debugf("Closed idle connections for transport key: %s", key)
 	}
 	tp.transports = make(map[string]*pooledTransport)
+	tp.transportKeys = make(map[*http.Transport]string)
 	logrus.Info("Transport pool cleared")
 }
 
@@ -251,6 +377,7 @@ func (tp *TransportPool) cleanupExpiredTransports(ttl time.Duration) {
 	for key, pooled := range tp.transports {
 		if pooled.lastAccess.Before(expirationThreshold) {
 			pooled.transport.CloseIdleConnections()
+			delete(tp.transportKeys, pooled.transport)
 			delete(tp.transports, key)
 			removedCount++
 		}

@@ -78,12 +78,20 @@ func (t *requestModifier) RoundTrip(req *http.Request) (*http.Response, error) {
 	return t.RoundTripper.RoundTrip(req)
 }
 
+func (t *requestModifier) Unwrap() http.RoundTripper {
+	return t.RoundTripper
+}
+
 // antigravityRoundTripper wraps an http.RoundTripper to handle Antigravity's
 // custom request/response format
 type antigravityRoundTripper struct {
 	http.RoundTripper
 	project, model string
 	proxyURL       string
+}
+
+func (t *antigravityRoundTripper) Unwrap() http.RoundTripper {
+	return t.RoundTripper
 }
 
 // isStreamingRequest checks if the request is for streaming generate content

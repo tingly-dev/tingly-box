@@ -81,6 +81,11 @@ func (r *RecordRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	// Execute the request
 	resp, err := r.transport.RoundTrip(req)
 
+	// Report request to transport pool for usage-based rotation
+	if baseTransport := UnwrapTransport(r.transport); baseTransport != nil {
+		GetGlobalTransportPool().ReportRequest(baseTransport)
+	}
+
 	var respRecord *obs.RecordResponse
 	if resp != nil {
 		respRecord = &obs.RecordResponse{
