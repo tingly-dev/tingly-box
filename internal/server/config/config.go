@@ -1274,8 +1274,6 @@ func (c *Config) SetScenarioConfig(config typ.ScenarioConfig) error {
 	return c.Save()
 }
 
-// GetScenarioFlag returns a specific flag value for a scenario
-
 // --- Profile CRUD ---
 
 // GetProfiles returns all profiles for a base scenario.

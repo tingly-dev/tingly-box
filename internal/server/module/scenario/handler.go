@@ -388,7 +388,7 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	var req ProfileUpdateRequest
+	var req ProfileCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return

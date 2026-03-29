@@ -71,13 +71,6 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		swagger.WithRequestModel(ProfileCreateRequest{}),
 	)
 
-	// PUT /scenario/:scenario/profiles/:id - Update a profile name
-	router.PUT("/scenario/:scenario/profiles/:id", handler.UpdateProfile,
-		swagger.WithDescription("Update a profile name"),
-		swagger.WithTags("scenarios"),
-		swagger.WithRequestModel(ProfileUpdateRequest{}),
-	)
-
 	// DELETE /scenario/:scenario/profiles/:id - Delete a profile
 	router.DELETE("/scenario/:scenario/profiles/:id", handler.DeleteProfile,
 		swagger.WithDescription("Delete a profile"),

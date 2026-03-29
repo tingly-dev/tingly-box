@@ -18,13 +18,8 @@ type ScenarioUpdateRequest struct {
 	Flags    typ.ScenarioFlags `json:"flags" binding:"required"`
 }
 
-// ProfileCreateRequest represents the request to create a new profile
+// ProfileCreateRequest represents the request to create or rename a profile
 type ProfileCreateRequest struct {
-	Name string `json:"name" binding:"required"`
-}
-
-// ProfileUpdateRequest represents the request to update a profile name
-type ProfileUpdateRequest struct {
 	Name string `json:"name" binding:"required"`
 }
 
