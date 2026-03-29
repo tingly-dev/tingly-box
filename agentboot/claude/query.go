@@ -227,7 +227,7 @@ func (q *Query) request(request map[string]interface{}) error {
 
 	sdkRequest := map[string]interface{}{
 		"request_id": requestID,
-		"type":       MessageTypeControlRequest,
+		"type":       SDKControlRequestMessage,
 		"request":    request,
 	}
 
@@ -293,7 +293,7 @@ func (q *Query) readMessages() {
 		msgType, _ := raw["type"].(string)
 
 		// Log message types for debugging
-		if msgType == MessageTypeControlRequest || msgType == ControlMsgTypeResponse || msgType == ControlMsgTypeCancelRequest {
+		if msgType == SDKControlRequestMessage || msgType == ControlMsgTypeResponse || msgType == ControlMsgTypeCancelRequest {
 			logrus.Infof("[Control Message] Type: %s, Raw: %s", msgType, line)
 		}
 
@@ -301,7 +301,7 @@ func (q *Query) readMessages() {
 		switch msgType {
 		case ControlMsgTypeResponse:
 			q.handleControlResponse(raw)
-		case MessageTypeControlRequest:
+		case SDKControlRequestMessage:
 			q.handleControlRequest(raw)
 		case ControlMsgTypeCancelRequest:
 			q.handleControlCancelRequest(raw)

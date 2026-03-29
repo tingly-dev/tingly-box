@@ -13,73 +13,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// MessageType constants for Claude Code stream JSON
-// all of these types defined in python sdk: https://platform.claude.com/docs/en/agent-sdk/python#message-types
-// or TypeScript sdk: https://platform.claude.com/docs/en/agent-sdk/typescript#message-types
-// type SDKMessage =
-//
-//	| SDKAssistantMessage
-//	| SDKUserMessage
-//	| SDKUserMessageReplay
-//	| SDKResultMessage
-//	| SDKSystemMessage
-//	| SDKPartialAssistantMessage
-//	| SDKCompactBoundaryMessage
-//	| SDKStatusMessage
-//	| SDKLocalCommandOutputMessage
-//	| SDKHookStartedMessage
-//	| SDKHookProgressMessage
-//	| SDKHookResponseMessage
-//	| SDKToolProgressMessage
-//	| SDKAuthStatusMessage
-//	| SDKTaskNotificationMessage
-//	| SDKTaskStartedMessage
-//	| SDKTaskProgressMessage
-//	| SDKFilesPersistedEvent
-//	| SDKToolUseSummaryMessage
-//	| SDKRateLimitEvent
-//	| SDKPromptSuggestionMessage;
-const (
-	MessageTypeText               = "text"
-	MessageTypeSystem             = "system"
-	MessageTypeAssistant          = "assistant"
-	MessageTypeUser               = "user"
-	MessageTypeToolUse            = "tool_use"
-	MessageTypeToolResult         = "tool_result"
-	MessageTypeResult             = "result"
-	MessageTypeStreamEvent        = "stream_event"
-	MessageTypeControlRequest     = "control_request"
-	MessageTypeUserMessageReplay  = "user_message_replay"
-	MessageTypePartialAssistant   = "partial_assistant"
-	MessageTypeCompactBoundary    = "compact_boundary"
-	MessageTypeStatus             = "status"
-	MessageTypeLocalCommandOutput = "local_command_output"
-	MessageTypeHookStarted        = "hook_started"
-	MessageTypeHookProgress       = "hook_progress"
-	MessageTypeHookResponse       = "hook_response"
-	MessageTypeToolProgress       = "tool_progress"
-	MessageTypeAuthStatus         = "auth_status"
-	MessageTypeTaskNotification   = "task_notification"
-	MessageTypeTaskStarted        = "task_started"
-	MessageTypeTaskProgress       = "task_progress"
-	MessageTypeFilesPersisted     = "files_persisted"
-	MessageTypeToolUseSummary     = "tool_use_summary"
-	MessageTypeRateLimit          = "rate_limit"
-	MessageTypePromptSuggestion   = "prompt_suggestion"
-)
-
-// subtype of assistant error
-// ref: https://platform.claude.com/docs/en/agent-sdk/python#assistant-message-error
-const (
-	AssistantErrorAuthFailed     = "authentication_failed"
-	AssistantErrorBilling        = "billing_error"
-	AssistantErrorRateLimit      = "rate_limit"
-	AssistantErrorInvalidRequest = "invalid_request"
-	AssistantErrorServer         = "server_error"
-	AssistantErrorMaxTokens      = "max_output_tokens"
-	AssistantErrorUnknown        = "unknown"
-)
-
 // Message is the interface for all Claude message types
 type Message interface {
 	GetType() string
@@ -303,6 +236,15 @@ func (m *UserMessage) GetRawData() map[string]interface{} {
 	var result map[string]interface{}
 	_ = json.Unmarshal(data, &result)
 	return result
+}
+
+// ToolCallInfo represents a tool call
+type ToolCallInfo struct {
+	CallID    string      `json:"call_id"`
+	ToolName  string      `json:"tool_name"`
+	Input     interface{} `json:"input"`
+	Result    interface{} `json:"result"`
+	Completed bool        `json:"completed"`
 }
 
 // ToolUseMessage represents a standalone tool use message (from stream)

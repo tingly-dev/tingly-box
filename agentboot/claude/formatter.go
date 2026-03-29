@@ -147,11 +147,11 @@ func (f *TextFormatter) formatWithTemplate(tmpl *template.Template, msg Message)
 
 func (f *TextFormatter) formatSystem(m *SystemMessage) string {
 	switch m.SubType {
-	case SystemSubtypeTaskStarted:
+	case SDKTaskStartedMessage:
 		return f.formatTaskStarted(m)
 	case SystemSubtypeTaskCompleted:
 		return f.formatTaskCompleted(m)
-	case MessageTypeTaskNotification:
+	case SDKTaskNotificationMessage:
 		return f.formatTaskNotification(m)
 	case SystemSubtypeInit:
 		var b strings.Builder

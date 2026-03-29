@@ -256,7 +256,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 
 			switch {
 			// Check if this is a control request event (e.g., "control_request")
-			case strings.HasPrefix(event.Type, EventTypeControl):
+			case strings.HasPrefix(event.Type, SDKControlPrefix):
 
 				// Fall back to legacy handling
 				if controlData, ok := event.Data["request"].(map[string]interface{}); ok {
@@ -330,7 +330,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 
 					}
 				}
-			case event.Type == MessageTypeAssistant && opts.PermissionPromptTool == "":
+			case event.Type == SDKAssistantMessage && opts.PermissionPromptTool == "":
 				requestID := getString(event.Data, "request_id")
 
 				if assistant, ok := msg.(*AssistantMessage); ok {
@@ -368,7 +368,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 
 				}
 
-			case event.Type == MessageTypeResult:
+			case event.Type == SDKResultMessage:
 				handler.OnComplete(&agentboot.CompletionResult{
 					Success: resultSuccess,
 				})
