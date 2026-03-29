@@ -134,7 +134,9 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 		})
 		return
 	}
-	provider, selectedService, err = s.DetermineProviderAndModelWithScenario(scenarioType, rule, reqParams)
+
+	// Select service using routing pipeline
+	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, reqParams)
 	if err != nil {
 		// Record error if recording is enabled
 		if recorder != nil {
@@ -157,6 +159,8 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 	if rule != nil {
 		c.Set("rule", rule)
 	}
+
+	// sessionID is automatically stored by SelectService
 
 	actualModel := selectedService.Model
 	// Delegate to the appropriate implementation based on beta parameter
