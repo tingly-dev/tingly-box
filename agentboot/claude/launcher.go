@@ -288,9 +288,11 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 									result = agentboot.AskResult{ID: requestID, Approved: false}
 								}
 
-								// Send control response via stdin
+								// Send control response via stdin (use WriteWait to avoid silent drop)
 								input := l.sendAskResponseNew(requestID, result)
-								inputSource.Write(input)
+								if err := inputSource.WriteWait(ctx, input); err != nil {
+									logrus.WithError(err).Error("Failed to write ask control response to stdin")
+								}
 							} else {
 								logrus.Warn("Ask handler is nil, cannot process ask request")
 							}
@@ -313,9 +315,11 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 									result = agentboot.PermissionResult{Approved: false}
 								}
 
-								// Send control response via stdin
+								// Send control response via stdin (use WriteWait to avoid silent drop)
 								input := l.sendPermissionResponseNew(requestID, result, req.Input)
-								inputSource.Write(input)
+								if err := inputSource.WriteWait(ctx, input); err != nil {
+									logrus.WithError(err).Error("Failed to write permission response to stdin")
+								}
 							} else {
 								logrus.Warn("Permission handler is nil, cannot process permission request")
 							}
@@ -351,9 +355,11 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 									result = agentboot.AskResult{ID: requestID, Approved: false}
 								}
 
-								// Send control response via stdin
+								// Send control response via stdin (use WriteWait to avoid silent drop)
 								input := l.sendAskResponseNew(requestID, result)
-								inputSource.Write(input)
+								if err := inputSource.WriteWait(ctx, input); err != nil {
+									logrus.WithError(err).Error("Failed to write ask assistant response to stdin")
+								}
 							} else {
 								logrus.Warn("Ask handler is nil, cannot process ask request")
 							}
