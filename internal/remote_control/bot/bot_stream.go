@@ -63,18 +63,8 @@ func (h *streamingMessageHandler) OnMessage(msg interface{}) error {
 		h.sendMessage(m)
 		return nil
 	case *claude.AssistantMessage:
-		meaningful := false
-		for _, c := range m.Message.Content {
-			logrus.Info(c.Content)
-			if strings.TrimSpace(c.Text) != "" {
-				meaningful = true
-			}
-		}
-		if !meaningful {
-			logrus.Debugf("ignoring non-meaningful message from assistant")
-			return nil
-		}
-		logrus.Infof("assistant message from claude agent")
+		// Let TextFormatter decide what to display.
+		// If formatted output is empty (e.g. tool_use only), handleClaudeMessage skips it.
 		return h.handleClaudeMessage(m)
 
 	case claude.Message:

@@ -168,15 +168,9 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		}, err
 	}
 
-	// Success - update session
-	e.deps.SessionMgr.SetCompleted(sessionID, response)
-	e.deps.SessionMgr.AppendMessage(sessionID, session.Message{
-		Role:      "assistant",
-		Content:   response,
-		Timestamp: time.Now(),
-	})
-
-	e.deps.SendTextWithActionKeyboard(req.HCtx, response, req.ReplyTo)
+	// Success - session completion and "Task done" keyboard already handled by CompletionCallback.OnComplete()
+	// Response text was streamed to user via OnMessage during execution.
+	// No need to send again here.
 
 	return &ExecutionResult{
 		SessionID:    sessionID,
