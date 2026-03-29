@@ -221,15 +221,18 @@ func (f *TextFormatter) formatAssistant(m *AssistantMessage) string {
 		b.WriteString("[ASSISTANT]")
 	}
 
+	hasContent := false
 	for _, content := range m.Message.Content {
 		switch content.Type {
 		case ContentBlockTypeText:
 			if content.Text != "" {
+				hasContent = true
 				b.WriteString(content.Text)
 				b.WriteString("\n")
 			}
 		case ContentBlockTypeToolUse:
 			if f.ShowToolDetails {
+				hasContent = true
 				b.WriteString("[TOOL] ")
 				b.WriteString(content.Name)
 				switch content.Name {
@@ -241,12 +244,14 @@ func (f *TextFormatter) formatAssistant(m *AssistantMessage) string {
 			}
 		case ContentBlockTypeThinking:
 			if f.Verbose && content.Thinking != "" {
+				hasContent = true
 				b.WriteString("[THINKING] ")
 				b.WriteString(content.Thinking)
 				b.WriteString("\n")
 			}
 		case "web_search_tool_result":
 			if f.ShowToolDetails && content.ToolUseID != "" {
+				hasContent = true
 				b.WriteString("[TOOL_RESULT] ")
 				b.WriteString(content.ToolUseID)
 				b.WriteString("\n")
@@ -255,10 +260,15 @@ func (f *TextFormatter) formatAssistant(m *AssistantMessage) string {
 	}
 
 	if m.IsError() {
+		hasContent = true
 		b.WriteString(fmt.Sprintf("[ASSISTANT ERROR: %s] ", m.Error))
 	}
 
-	return strings.TrimRight(b.String(), "\n")
+	if hasContent {
+		return strings.TrimRight(b.String(), "\n")
+	}
+
+	return ""
 }
 
 func (f *TextFormatter) formatUser(m *UserMessage) string {
