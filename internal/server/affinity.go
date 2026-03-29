@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/server/routing"
 )
 
 const (
@@ -12,23 +12,11 @@ const (
 	gcInterval         = 30 * time.Minute
 )
 
-// AffinityEntry represents a locked service for a session
-type AffinityEntry struct {
-	Service   *loadbalance.Service
-	MessageID string // Last Anthropic message ID seen for this session
-	LockedAt  time.Time
-	ExpiresAt time.Time
-}
-
-// IsExpired checks if the affinity entry has expired
-func (e *AffinityEntry) IsExpired() bool {
-	return time.Now().After(e.ExpiresAt)
-}
-
-// AffinityStore maps (ruleUUID, sessionID) -> locked Service
+// AffinityStore maps (ruleUUID, sessionID) -> locked Service.
+// It directly implements routing.AffinityStore interface.
 type AffinityStore struct {
 	mu      sync.RWMutex
-	entries map[string]*AffinityEntry // key: ruleUUID+":"+sessionID
+	entries map[string]*routing.AffinityEntry // key: ruleUUID+":"+sessionID
 	ttl     time.Duration
 }
 
@@ -38,7 +26,7 @@ func NewAffinityStore(ttl time.Duration) *AffinityStore {
 		ttl = defaultAffinityTTL
 	}
 	return &AffinityStore{
-		entries: make(map[string]*AffinityEntry),
+		entries: make(map[string]*routing.AffinityEntry),
 		ttl:     ttl,
 	}
 }
@@ -49,7 +37,7 @@ func (s *AffinityStore) makeKey(ruleUUID, sessionID string) string {
 }
 
 // Get retrieves an affinity entry for the given rule and session
-func (s *AffinityStore) Get(ruleUUID, sessionID string) (*AffinityEntry, bool) {
+func (s *AffinityStore) Get(ruleUUID, sessionID string) (*routing.AffinityEntry, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -60,7 +48,7 @@ func (s *AffinityStore) Get(ruleUUID, sessionID string) (*AffinityEntry, bool) {
 	}
 
 	// Check if expired
-	if entry.IsExpired() {
+	if time.Now().After(entry.ExpiresAt) {
 		return nil, false
 	}
 
@@ -68,7 +56,7 @@ func (s *AffinityStore) Get(ruleUUID, sessionID string) (*AffinityEntry, bool) {
 }
 
 // Set stores an affinity entry for the given rule and session
-func (s *AffinityStore) Set(ruleUUID, sessionID string, entry *AffinityEntry) {
+func (s *AffinityStore) Set(ruleUUID, sessionID string, entry *routing.AffinityEntry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

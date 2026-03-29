@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/server/routing"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -166,7 +167,7 @@ func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario
 
 							// Lock the service for this session if affinity is enabled
 							if rule.SmartAffinity && sessionID != "" {
-								s.affinityStore.Set(rule.UUID, sessionID, &AffinityEntry{
+								s.affinityStore.Set(rule.UUID, sessionID, &routing.AffinityEntry{
 									Service:   selectedService,
 									LockedAt:  time.Now(),
 									ExpiresAt: time.Now().Add(s.affinityStore.ttl),

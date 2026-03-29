@@ -426,8 +426,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	affinityStore := NewAffinityStore(0) // 0 = use default TTL
 
 	// Initialize routing selector with pipeline
-	affinityAdapter := newAffinityStoreAdapter(affinityStore)
-	serviceSelector := routing.NewServiceSelector(cfg, affinityAdapter, loadBalancer)
+	serviceSelector := routing.NewServiceSelector(cfg, affinityStore, loadBalancer)
 	simpleSelector := routing.NewSimpleSelector(serviceSelector)
 
 	// Initialize load balancer API

@@ -51,14 +51,12 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext) (*SelectionResult, b
 		return nil, false
 	}
 
-	matchedServices, matched := router.EvaluateRequest(reqCtx)
+	matchedServices, matchedRuleIndex, matched := router.EvaluateRequestWithIndex(reqCtx)
 	if !matched || len(matchedServices) == 0 {
 		logrus.Debugf("[smart_routing] no rule matched")
 		return nil, false
 	}
 
-	// Find which smart rule matched (for smart_rule-scoped affinity)
-	matchedRuleIndex := s.findMatchedRuleIndex(rule.SmartRouting, matchedServices)
 	ctx.MatchedSmartRuleIndex = matchedRuleIndex
 
 	logrus.Debugf("[smart_routing] rule %d matched, selecting from %d services",
@@ -87,25 +85,6 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext) (*SelectionResult, b
 	result := NewResult(service, "smart_routing")
 	result.MatchedSmartRuleIndex = matchedRuleIndex
 	return result, true
-}
-
-// findMatchedRuleIndex finds which smart routing rule produced these services
-func (s *SmartRoutingStage) findMatchedRuleIndex(rules []smartrouting.SmartRouting, matchedServices []*loadbalance.Service) int {
-	if len(matchedServices) == 0 {
-		return -1
-	}
-
-	// Compare first matched service with each rule's services
-	firstMatched := matchedServices[0]
-	for i, rule := range rules {
-		for _, ruleService := range rule.Services {
-			if ruleService.Provider == firstMatched.Provider && ruleService.Model == firstMatched.Model {
-				return i
-			}
-		}
-	}
-
-	return -1
 }
 
 // selectFromServices applies load balancing to select one service from the matched set

@@ -2,7 +2,6 @@ package routing
 
 import (
 	"fmt"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -27,10 +26,12 @@ func NewSimpleSelector(selector *ServiceSelector) *SimpleSelector {
 // Migration is simple - just replace the method name:
 //
 // Before:
-//   provider, service, err := s.DetermineProviderAndModelWithScenario(scenario, rule, req, sessionID)
+//
+//	provider, service, err := s.DetermineProviderAndModelWithScenario(scenario, rule, req, sessionID)
 //
 // After:
-//   provider, service, err := s.selector.SelectService(c, scenario, rule, req)
+//
+//	provider, service, err := s.selector.SelectService(c, scenario, rule, req)
 //
 // sessionID is automatically resolved and stored in gin context.
 func (s *SimpleSelector) SelectService(
@@ -60,33 +61,3 @@ func (s *SimpleSelector) SelectService(
 
 	return result.Provider, result.Service, nil
 }
-
-// SelectServiceOrAbort selects a service and automatically handles errors.
-// If selection fails, it sends HTTP error and returns false.
-// This allows even simpler handler code.
-//
-// Usage:
-//   provider, service, ok := s.selector.SelectServiceOrAbort(c, scenario, rule, req)
-//   if !ok {
-//       return // error already sent
-//   }
-//   // continue with provider and service
-func (s *SimpleSelector) SelectServiceOrAbort(
-	c *gin.Context,
-	scenario typ.RuleScenario,
-	rule *typ.Rule,
-	req interface{},
-) (*typ.Provider, *loadbalance.Service, bool) {
-	provider, service, err := s.SelectService(c, scenario, rule, req)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": gin.H{
-				"message": err.Error(),
-				"type":    "invalid_request_error",
-			},
-		})
-		return nil, nil, false
-	}
-	return provider, service, true
-}
-
