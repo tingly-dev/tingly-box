@@ -116,7 +116,7 @@ func addProviderWithConfirmation(appManager *AppManager, reader *bufio.Reader, n
 	fmt.Printf("Token: %s\n", maskToken(token))
 	fmt.Println("---------------------------")
 
-	confirmed, err := promptForConfirmation(reader, "Do you want to save this configuration? (Y/n): ")
+	confirmed, err := promptForConfirmation(reader, "Do you want to save this configuration? (Y/n): ", true)
 	if err != nil {
 		return err
 	}
@@ -156,7 +156,7 @@ func promptForInput(reader *bufio.Reader, prompt string, required bool) (string,
 }
 
 // promptForConfirmation prompts the user for a yes/no confirmation
-func promptForConfirmation(reader *bufio.Reader, prompt string) (bool, error) {
+func promptForConfirmation(reader *bufio.Reader, prompt string, emptyAs bool) (bool, error) {
 	fmt.Print(prompt)
 	input, err := reader.ReadString('\n')
 	if err != nil {
@@ -164,8 +164,13 @@ func promptForConfirmation(reader *bufio.Reader, prompt string) (bool, error) {
 	}
 
 	input = strings.ToLower(strings.TrimSpace(input))
+
+	if emptyAs && input == "" {
+		return true, nil
+	}
+
 	// Default to Yes if user just presses Enter
-	return input == "" || input == "y" || input == "yes", nil
+	return input == "y" || input == "yes", nil
 }
 
 // maskToken masks the API token for display purposes

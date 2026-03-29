@@ -256,7 +256,7 @@ func quickstartAddFromTemplate(reader *bufio.Reader, appManager *AppManager, tmp
 	// Check if provider with this name already exists
 	if existing, err := appManager.GetProvider(name); err == nil && existing != nil {
 		fmt.Printf("Provider '%s' already exists.\n", name)
-		useExisting, err := promptForConfirmation(reader, "Use existing provider? (Y/n): ")
+		useExisting, err := promptForConfirmation(reader, "Use existing provider? (Y/n): ", true)
 		if err != nil {
 			return nil, err
 		}
@@ -557,7 +557,7 @@ func printComplete(appManager *AppManager, provider *typ.Provider, model string)
 
 func quickstartPromptStartServer(reader *bufio.Reader, appManager *AppManager) error {
 	fmt.Println()
-	start, err := promptForConfirmation(reader, "Start the server now? (Y/n): ")
+	start, err := promptForConfirmation(reader, "Start the server now? (Y/n): ", true)
 	if err != nil {
 		return err
 	}
