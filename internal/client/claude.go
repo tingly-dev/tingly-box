@@ -55,6 +55,10 @@ type claudeRoundTripper struct {
 	http.RoundTripper
 }
 
+func (t *claudeRoundTripper) Unwrap() http.RoundTripper {
+	return t.RoundTripper
+}
+
 func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	// claudeHook applies Claude Code OAuth specific request modifications:
 	// - Detects OAuth token (sk-ant-oat prefix)
