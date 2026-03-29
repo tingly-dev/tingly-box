@@ -11,11 +11,11 @@ import (
 // SmartRoutingStage evaluates smart routing rules and returns matched services.
 // If multiple services match, applies load balancing within the matched set.
 type SmartRoutingStage struct {
-	loadBalancer interface{} // Will be *server.LoadBalancer
+	loadBalancer LoadBalancer
 }
 
 // NewSmartRoutingStage creates a new smart routing stage
-func NewSmartRoutingStage(lb interface{}) *SmartRoutingStage {
+func NewSmartRoutingStage(lb LoadBalancer) *SmartRoutingStage {
 	return &SmartRoutingStage{
 		loadBalancer: lb,
 	}
@@ -123,21 +123,10 @@ func (s *SmartRoutingStage) selectFromServices(services []*loadbalance.Service, 
 	tempRule.Services = services
 	tempRule.CurrentServiceID = "" // Reset service ID for this sub-selection
 
-	// Type assert to LoadBalancer interface
-	type loadBalancer interface {
-		SelectService(rule *typ.Rule) (*loadbalance.Service, error)
+	service, err := s.loadBalancer.SelectService(&tempRule)
+	if err != nil {
+		logrus.Debugf("[smart_routing] load balancer selection failed: %v", err)
+		return nil
 	}
-
-	if lb, ok := s.loadBalancer.(loadBalancer); ok {
-		service, err := lb.SelectService(&tempRule)
-		if err != nil {
-			logrus.Debugf("[smart_routing] load balancer selection failed: %v", err)
-			return nil
-		}
-		return service
-	}
-
-	// Fallback: return first service
-	logrus.Debugf("[smart_routing] load balancer not available, using first service")
-	return services[0]
+	return service
 }

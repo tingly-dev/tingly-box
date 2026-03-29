@@ -11,6 +11,13 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// LoadBalancer defines the interface for load balancing operations.
+// This avoids importing the server package (which would create circular imports).
+type LoadBalancer interface {
+	SelectService(rule *typ.Rule) (*loadbalance.Service, error)
+	UpdateServiceIndex(rule *typ.Rule, service *loadbalance.Service)
+}
+
 // AffinityStore interface defines operations for session-service affinity
 type AffinityStore interface {
 	Get(ruleUUID, sessionID string) (*AffinityEntry, bool)
@@ -30,14 +37,14 @@ type AffinityEntry struct {
 type ServiceSelector struct {
 	config        *config.Config
 	affinityStore AffinityStore
-	loadBalancer  interface{} // *server.LoadBalancer
+	loadBalancer  LoadBalancer
 }
 
 // NewServiceSelector creates a new service selector
 func NewServiceSelector(
 	cfg *config.Config,
 	affinity AffinityStore,
-	lb interface{},
+	lb LoadBalancer,
 ) *ServiceSelector {
 	return &ServiceSelector{
 		config:        cfg,
@@ -157,19 +164,11 @@ func (s *ServiceSelector) postProcess(ctx *SelectionContext, result *SelectionRe
 	// TODO: Update metrics, persist CurrentServiceID, etc.
 }
 
-// UpdateServiceIndex updates the current service index for round-robin (legacy method)
-// This is called from the handler after selection to persist state
+// UpdateServiceIndex updates the current service index for round-robin.
+// This is called from the handler after selection to persist state.
 func (s *ServiceSelector) UpdateServiceIndex(rule *typ.Rule, service *loadbalance.Service) error {
-	// Type assert to LoadBalancer interface
-	type loadBalancer interface {
-		UpdateServiceIndex(rule *typ.Rule, service *loadbalance.Service)
-	}
+	s.loadBalancer.UpdateServiceIndex(rule, service)
 
-	if lb, ok := s.loadBalancer.(loadBalancer); ok {
-		lb.UpdateServiceIndex(rule, service)
-	}
-
-	// Persist to database
 	if err := s.config.SaveCurrentServiceID(rule.UUID, rule.CurrentServiceID); err != nil {
 		return fmt.Errorf("failed to persist CurrentServiceID: %w", err)
 	}

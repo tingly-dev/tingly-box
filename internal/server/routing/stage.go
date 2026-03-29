@@ -14,20 +14,3 @@ type SelectionStage interface {
 	//   - (nil, false) if this stage cannot select (continue to next stage)
 	Evaluate(ctx *SelectionContext) (*SelectionResult, bool)
 }
-
-// PipelineMode defines different pipeline configurations
-type PipelineMode string
-
-const (
-	// PipelineModeGlobalAffinity: Affinity → Smart Routing → Load Balancer
-	// Session-locked service bypasses smart routing evaluation
-	PipelineModeGlobalAffinity PipelineMode = "global_affinity"
-
-	// PipelineModeSmartAffinity: Smart Routing → Affinity → Load Balancer
-	// Smart routing evaluates first, then affinity locks within matched rule
-	PipelineModeSmartAffinity PipelineMode = "smart_affinity"
-
-	// PipelineModeNoAffinity: Smart Routing → Load Balancer
-	// No session locking, every request re-evaluates routing
-	PipelineModeNoAffinity PipelineMode = "no_affinity"
-)

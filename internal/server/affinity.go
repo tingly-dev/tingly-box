@@ -4,9 +4,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/gin-gonic/gin"
-
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 )
 
@@ -134,28 +131,4 @@ func (s *AffinityStore) StartGC() {
 			s.GC()
 		}
 	}()
-}
-
-// ResolveSessionID returns the best available session identifier from the request.
-// Priority: Anthropic metadata.user_id > X-Tingly-Session-ID header > ClientIP
-func ResolveSessionID(c *gin.Context, req interface{}) string {
-	// 1. Extract from Anthropic request metadata.user_id
-	switch r := req.(type) {
-	case *anthropic.MessageNewParams:
-		if r.Metadata.UserID.Valid() && r.Metadata.UserID.Value != "" {
-			return "user:" + r.Metadata.UserID.Value
-		}
-	case *anthropic.BetaMessageNewParams:
-		if r.Metadata.UserID.Valid() && r.Metadata.UserID.Value != "" {
-			return "user:" + r.Metadata.UserID.Value
-		}
-	}
-
-	// 2. X-Tingly-Session-ID header
-	if id := c.GetHeader("X-Tingly-Session-ID"); id != "" {
-		return "hdr:" + id
-	}
-
-	// 3. Fallback: client IP
-	return "ip:" + c.ClientIP()
 }

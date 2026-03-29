@@ -55,14 +55,3 @@ func (s *AffinityStage) Evaluate(ctx *SelectionContext) (*SelectionResult, bool)
 	result.MatchedSmartRuleIndex = ctx.MatchedSmartRuleIndex
 	return result, true
 }
-
-// makeGlobalKey creates a global affinity key
-func (s *AffinityStage) makeGlobalKey(ruleUUID, sessionID string) string {
-	return ruleUUID + ":" + sessionID
-}
-
-// makeSmartRuleKey creates a smart rule scoped affinity key
-func (s *AffinityStage) makeSmartRuleKey(ruleUUID, sessionID string, smartRuleIndex int) string {
-	// Format: ruleUUID:sessionID:sr{index}
-	return ruleUUID + ":" + sessionID + ":sr" + string(rune('0'+smartRuleIndex))
-}

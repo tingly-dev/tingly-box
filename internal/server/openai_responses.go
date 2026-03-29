@@ -106,11 +106,7 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	}
 
 	// Select service using routing pipeline
-	type simpleSelector interface {
-		SelectService(c *gin.Context, scenario typ.RuleScenario, rule *typ.Rule, req interface{}) (*typ.Provider, *loadbalance.Service, error)
-	}
-	selector := s.routingSelector.(simpleSelector)
-	provider, selectedService, err = selector.SelectService(c, scenarioType, rule, req)
+	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{

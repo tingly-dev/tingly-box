@@ -102,7 +102,7 @@ type Server struct {
 	affinityStore *AffinityStore
 
 	// routing selector for service selection pipeline
-	routingSelector interface{} // *routing.SimpleSelector
+	routingSelector *routing.SimpleSelector
 
 	// OTel meter setup for unified token tracking
 	meterSetup   *pkgotel.MeterSetup

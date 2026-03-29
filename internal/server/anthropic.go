@@ -136,11 +136,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 	}
 
 	// Select service using routing pipeline
-	type simpleSelector interface {
-		SelectService(c *gin.Context, scenario typ.RuleScenario, rule *typ.Rule, req interface{}) (*typ.Provider, *loadbalance.Service, error)
-	}
-	selector := s.routingSelector.(simpleSelector)
-	provider, selectedService, err = selector.SelectService(c, scenarioType, rule, reqParams)
+	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, reqParams)
 	if err != nil {
 		// Record error if recording is enabled
 		if recorder != nil {
