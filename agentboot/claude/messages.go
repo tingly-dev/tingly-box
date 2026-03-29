@@ -39,6 +39,13 @@ type SystemMessage struct {
 	SubType   string    `json:"subtype,omitempty"`
 	SessionID string    `json:"session_id"`
 	Timestamp time.Time `json:"timestamp"`
+
+	// Subagent task fields (populated when SubType is task_started/task_notification/task_completed)
+	Description string `json:"description,omitempty"`
+	Prompt      string `json:"prompt,omitempty"`
+	TaskID      string `json:"task_id,omitempty"`
+	TaskType    string `json:"task_type,omitempty"`
+	ToolUseID   string `json:"tool_use_id,omitempty"`
 }
 
 // GetType implements Message
