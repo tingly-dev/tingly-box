@@ -14,6 +14,31 @@ import (
 )
 
 // MessageType constants for Claude Code stream JSON
+// all of these types defined in python sdk: https://platform.claude.com/docs/en/agent-sdk/python#message-types
+// or TypeScript sdk: https://platform.claude.com/docs/en/agent-sdk/typescript#message-types
+// type SDKMessage =
+//
+//	| SDKAssistantMessage
+//	| SDKUserMessage
+//	| SDKUserMessageReplay
+//	| SDKResultMessage
+//	| SDKSystemMessage
+//	| SDKPartialAssistantMessage
+//	| SDKCompactBoundaryMessage
+//	| SDKStatusMessage
+//	| SDKLocalCommandOutputMessage
+//	| SDKHookStartedMessage
+//	| SDKHookProgressMessage
+//	| SDKHookResponseMessage
+//	| SDKToolProgressMessage
+//	| SDKAuthStatusMessage
+//	| SDKTaskNotificationMessage
+//	| SDKTaskStartedMessage
+//	| SDKTaskProgressMessage
+//	| SDKFilesPersistedEvent
+//	| SDKToolUseSummaryMessage
+//	| SDKRateLimitEvent
+//	| SDKPromptSuggestionMessage;
 const (
 	MessageTypeText           = "text"
 	MessageTypeSystem         = "system"
@@ -24,6 +49,18 @@ const (
 	MessageTypeResult         = "result"
 	MessageTypeStreamEvent    = "stream_event"
 	MessageTypeControlRequest = "control_request"
+)
+
+// subtype of assistant error
+// ref: https://platform.claude.com/docs/en/agent-sdk/python#assistant-message-error
+const (
+	AssistantErrorAuthFailed     = "authentication_failed"
+	AssistantErrorBilling        = "billing_error"
+	AssistantErrorRateLimit      = "rate_limit"
+	AssistantErrorInvalidRequest = "invalid_request"
+	AssistantErrorServer         = "server_error"
+	AssistantErrorMaxTokens      = "max_output_tokens"
+	AssistantErrorUnknown        = "unknown"
 )
 
 // Message is the interface for all Claude message types
@@ -74,6 +111,12 @@ type AssistantMessage struct {
 	SessionID       string            `json:"session_id"`
 	UUID            string            `json:"uuid"`
 	Timestamp       time.Time         `json:"timestamp,omitempty"`
+	Error           string            `json:"error,omitempty"`
+}
+
+// IsError returns true if the assistant message contains an error
+func (m *AssistantMessage) IsError() bool {
+	return m.Error != ""
 }
 
 // GetType implements Message

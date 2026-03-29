@@ -217,7 +217,7 @@ func (f *TextFormatter) formatAssistant(m *AssistantMessage) string {
 		b.WriteString("[ASSISTANT] ")
 		b.WriteString(m.Message.ID)
 		b.WriteString("\n")
-	} else {
+	} else if !m.IsError() {
 		b.WriteString("[ASSISTANT]")
 	}
 
@@ -252,6 +252,10 @@ func (f *TextFormatter) formatAssistant(m *AssistantMessage) string {
 				b.WriteString("\n")
 			}
 		}
+	}
+
+	if m.IsError() {
+		b.WriteString(fmt.Sprintf("[ASSISTANT ERROR: %s] ", m.Error))
 	}
 
 	return strings.TrimRight(b.String(), "\n")
