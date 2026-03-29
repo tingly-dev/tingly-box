@@ -256,7 +256,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 
 			switch {
 			// Check if this is a control request event (e.g., "control_request")
-			case strings.HasPrefix(event.Type, EventTypeControl):
+			case strings.HasPrefix(event.Type, SDKControlPrefix):
 
 				// Fall back to legacy handling
 				if controlData, ok := event.Data["request"].(map[string]interface{}); ok {
@@ -264,7 +264,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 					requestID := getString(event.Data, "request_id")
 
 					switch subtype {
-					case "can_use_tool":
+					case ControlRequestSubtypeCanUseTool:
 						toolName, _ := controlData["tool_name"].(string)
 
 						// Check if this is an AskUserQuestion tool
@@ -288,9 +288,11 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 									result = agentboot.AskResult{ID: requestID, Approved: false}
 								}
 
-								// Send control response via stdin
+								// Send control response via stdin (use WriteWait to avoid silent drop)
 								input := l.sendAskResponseNew(requestID, result)
-								inputSource.Write(input)
+								if err := inputSource.WriteWait(ctx, input); err != nil {
+									logrus.WithError(err).Error("Failed to write ask control response to stdin")
+								}
 							} else {
 								logrus.Warn("Ask handler is nil, cannot process ask request")
 							}
@@ -313,9 +315,11 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 									result = agentboot.PermissionResult{Approved: false}
 								}
 
-								// Send control response via stdin
+								// Send control response via stdin (use WriteWait to avoid silent drop)
 								input := l.sendPermissionResponseNew(requestID, result, req.Input)
-								inputSource.Write(input)
+								if err := inputSource.WriteWait(ctx, input); err != nil {
+									logrus.WithError(err).Error("Failed to write permission response to stdin")
+								}
 							} else {
 								logrus.Warn("Permission handler is nil, cannot process permission request")
 							}
@@ -326,7 +330,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 
 					}
 				}
-			case event.Type == EventTypeAssistant && opts.PermissionPromptTool == "":
+			case event.Type == SDKAssistantMessage && opts.PermissionPromptTool == "":
 				requestID := getString(event.Data, "request_id")
 
 				if assistant, ok := msg.(*AssistantMessage); ok {
@@ -351,9 +355,11 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 									result = agentboot.AskResult{ID: requestID, Approved: false}
 								}
 
-								// Send control response via stdin
+								// Send control response via stdin (use WriteWait to avoid silent drop)
 								input := l.sendAskResponseNew(requestID, result)
-								inputSource.Write(input)
+								if err := inputSource.WriteWait(ctx, input); err != nil {
+									logrus.WithError(err).Error("Failed to write ask assistant response to stdin")
+								}
 							} else {
 								logrus.Warn("Ask handler is nil, cannot process ask request")
 							}
@@ -362,7 +368,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 
 				}
 
-			case event.Type == EventTypeResult:
+			case event.Type == SDKResultMessage:
 				handler.OnComplete(&agentboot.CompletionResult{
 					Success: resultSuccess,
 				})
@@ -684,7 +690,7 @@ func (l *Launcher) parseAskRequestFromControl(controlData map[string]interface{}
 	input, _ := controlData["input"].(map[string]interface{})
 
 	return agentboot.AskRequest{
-		Type:      "tool_use",
+		Type:      ContentBlockTypeToolUse,
 		AgentType: agentboot.AgentTypeClaude,
 
 		Platform:  platform,
@@ -702,7 +708,7 @@ func (l *Launcher) parseAskRequestFromControl(controlData map[string]interface{}
 func (l *Launcher) sendAskResponse(stdin io.WriteCloser, requestID string, result agentboot.AskResult) error {
 	response := map[string]interface{}{
 		"request_id": requestID,
-		"type":       "control_response",
+		"type":       ControlMsgTypeResponse,
 	}
 
 	innerResponse := map[string]interface{}{
@@ -710,7 +716,7 @@ func (l *Launcher) sendAskResponse(stdin io.WriteCloser, requestID string, resul
 	}
 
 	if result.Approved {
-		innerResponse["subtype"] = "success"
+		innerResponse["subtype"] = ResultSubtypeSuccess
 		if result.UpdatedInput != nil {
 			innerResponse["response"] = map[string]interface{}{
 				"behavior":     "allow",
@@ -722,7 +728,7 @@ func (l *Launcher) sendAskResponse(stdin io.WriteCloser, requestID string, resul
 			}
 		}
 	} else {
-		innerResponse["subtype"] = "error"
+		innerResponse["subtype"] = ResultSubtypeError
 		innerResponse["error"] = result.Reason
 		if result.Reason == "" {
 			innerResponse["error"] = "User denied this request"
@@ -740,7 +746,7 @@ func (l *Launcher) sendAskResponse(stdin io.WriteCloser, requestID string, resul
 func (l *Launcher) sendAskResponseNew(requestID string, result agentboot.AskResult) map[string]any {
 	response := map[string]interface{}{
 		"request_id": requestID,
-		"type":       "control_response",
+		"type":       ControlMsgTypeResponse,
 	}
 
 	innerResponse := map[string]interface{}{
@@ -748,7 +754,7 @@ func (l *Launcher) sendAskResponseNew(requestID string, result agentboot.AskResu
 	}
 
 	if result.Approved {
-		innerResponse["subtype"] = "success"
+		innerResponse["subtype"] = ResultSubtypeSuccess
 		if result.UpdatedInput != nil {
 			innerResponse["response"] = map[string]interface{}{
 				"behavior":     "allow",
@@ -760,7 +766,7 @@ func (l *Launcher) sendAskResponseNew(requestID string, result agentboot.AskResu
 			}
 		}
 	} else {
-		innerResponse["subtype"] = "error"
+		innerResponse["subtype"] = ResultSubtypeError
 		innerResponse["error"] = result.Reason
 		if result.Reason == "" {
 			innerResponse["error"] = "User denied this request"
@@ -816,11 +822,11 @@ func (l *Launcher) parsePermissionRequest(data map[string]interface{}) agentboot
 func (l *Launcher) sendPermissionResponseNew(requestID string, result agentboot.PermissionResult, originalInput map[string]interface{}) map[string]any {
 	response := map[string]interface{}{
 		"request_id": requestID,
-		"type":       "control_response",
+		"type":       ControlMsgTypeResponse,
 	}
 
 	innerResponse := map[string]interface{}{
-		"subtype":    "success", // Always use "success" for control_response
+		"subtype":    ResultSubtypeSuccess, // Always use success for control_response
 		"request_id": requestID,
 	}
 
@@ -856,17 +862,17 @@ func (l *Launcher) sendPermissionResponseNew(requestID string, result agentboot.
 func (l *Launcher) sendPermissionResponse(stdin io.WriteCloser, requestID string, result agentboot.PermissionResult) error {
 	response := map[string]interface{}{
 		"request_id": requestID,
-		"type":       "control_response",
+		"type":       ControlMsgTypeResponse,
 	}
 
 	if result.Approved {
 		response["response"] = map[string]interface{}{
-			"subtype":    "success",
+			"subtype":    ResultSubtypeSuccess,
 			"request_id": requestID,
 		}
 	} else {
 		response["response"] = map[string]interface{}{
-			"subtype":    "error",
+			"subtype":    ResultSubtypeError,
 			"request_id": requestID,
 			"error":      result.Reason,
 		}
@@ -910,7 +916,7 @@ func (l *Launcher) SendPermissionRequest(ctx context.Context, req agentboot.Perm
 	// Parse response
 	result := agentboot.PermissionResult{Approved: true}
 	if resp.Response != nil {
-		if subtype, _ := resp.Response["subtype"].(string); subtype == "error" {
+		if subtype, _ := resp.Response["subtype"].(string); subtype == ResultSubtypeError {
 			result.Approved = false
 			result.Reason, _ = resp.Response["error"].(string)
 		}

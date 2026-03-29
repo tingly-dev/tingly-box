@@ -13,19 +13,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// MessageType constants for Claude Code stream JSON
-const (
-	MessageTypeText           = "text"
-	MessageTypeSystem         = "system"
-	MessageTypeAssistant      = "assistant"
-	MessageTypeUser           = "user"
-	MessageTypeToolUse        = "tool_use"
-	MessageTypeToolResult     = "tool_result"
-	MessageTypeResult         = "result"
-	MessageTypeStreamEvent    = "stream_event"
-	MessageTypeControlRequest = "control_request"
-)
-
 // Message is the interface for all Claude message types
 type Message interface {
 	GetType() string
@@ -39,6 +26,13 @@ type SystemMessage struct {
 	SubType   string    `json:"subtype,omitempty"`
 	SessionID string    `json:"session_id"`
 	Timestamp time.Time `json:"timestamp"`
+
+	// Subagent task fields (populated when SubType is task_started/task_notification/task_completed)
+	Description string `json:"description,omitempty"`
+	Prompt      string `json:"prompt,omitempty"`
+	TaskID      string `json:"task_id,omitempty"`
+	TaskType    string `json:"task_type,omitempty"`
+	ToolUseID   string `json:"tool_use_id,omitempty"`
 }
 
 // GetType implements Message
@@ -67,6 +61,12 @@ type AssistantMessage struct {
 	SessionID       string            `json:"session_id"`
 	UUID            string            `json:"uuid"`
 	Timestamp       time.Time         `json:"timestamp,omitempty"`
+	Error           string            `json:"error,omitempty"`
+}
+
+// IsError returns true if the assistant message contains an error
+func (m *AssistantMessage) IsError() bool {
+	return m.Error != ""
 }
 
 // GetType implements Message
@@ -161,25 +161,25 @@ func UnmarshalContentBlock(data []byte) (ContentBlock, error) {
 	}
 
 	switch typeDetect.Type {
-	case "text":
+	case ContentBlockTypeText:
 		var block TextBlock
 		if err := json.Unmarshal(data, &block); err != nil {
 			return nil, err
 		}
 		return &block, nil
-	case "tool_use":
+	case ContentBlockTypeToolUse:
 		var block ToolUseBlock
 		if err := json.Unmarshal(data, &block); err != nil {
 			return nil, err
 		}
 		return &block, nil
-	case "thinking":
+	case ContentBlockTypeThinking:
 		var block ThinkingBlock
 		if err := json.Unmarshal(data, &block); err != nil {
 			return nil, err
 		}
 		return &block, nil
-	case "tool_result":
+	case ContentBlockTypeToolResult:
 		var block ToolResultContentBlock
 		if err := json.Unmarshal(data, &block); err != nil {
 			return nil, err
@@ -236,6 +236,15 @@ func (m *UserMessage) GetRawData() map[string]interface{} {
 	var result map[string]interface{}
 	_ = json.Unmarshal(data, &result)
 	return result
+}
+
+// ToolCallInfo represents a tool call
+type ToolCallInfo struct {
+	CallID    string      `json:"call_id"`
+	ToolName  string      `json:"tool_name"`
+	Input     interface{} `json:"input"`
+	Result    interface{} `json:"result"`
+	Completed bool        `json:"completed"`
 }
 
 // ToolUseMessage represents a standalone tool use message (from stream)
@@ -346,7 +355,7 @@ func (m *ResultMessage) GetRawData() map[string]interface{} {
 
 // IsSuccess returns true if the result indicates success
 func (m *ResultMessage) IsSuccess() bool {
-	return m.SubType == "success" || !m.IsError
+	return m.SubType == ResultSubtypeSuccess || !m.IsError
 }
 
 // StreamEventMessage represents real-time streaming delta events
@@ -563,10 +572,10 @@ func (m *ControlManager) HandleControlMessage(data map[string]interface{}) error
 	}
 
 	switch {
-	case msgType == "control_response":
+	case msgType == ControlMsgTypeResponse:
 		return m.handleControlResponse(data)
 
-	case msgType == "cancel_notification":
+	case msgType == ControlMsgTypeCancelNotification:
 		return m.handleCancelNotification(data)
 
 	default:
@@ -585,7 +594,7 @@ func (m *ControlManager) handleControlResponse(data map[string]interface{}) erro
 
 	resp := ControlResponse{
 		RequestID: requestID,
-		Type:      "control_response",
+		Type:      ControlMsgTypeResponse,
 		Response:  response,
 	}
 
@@ -685,7 +694,7 @@ func (b *PermissionRequestBuilder) WithTool(name string, input map[string]interf
 func (b *PermissionRequestBuilder) Build() ControlRequest {
 	return ControlRequest{
 		RequestID: b.requestID,
-		Type:      "permission",
+		Type:      ControlRequestTypePermission,
 		Request: map[string]interface{}{
 			"tool_name": b.toolName,
 			"input":     b.input,
@@ -737,7 +746,7 @@ func (b *CancelRequestBuilder) Build() ControlRequest {
 
 	return ControlRequest{
 		RequestID: b.requestID,
-		Type:      "cancel",
+		Type:      ControlRequestTypeCancel,
 		Request:   request,
 	}
 }

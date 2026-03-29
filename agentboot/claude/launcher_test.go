@@ -91,10 +91,10 @@ func TestLauncherStreamJSONFormat(t *testing.T) {
 	hasAssistant := false
 	hasResult := false
 	for _, event := range result.Events {
-		if event.Type == MessageTypeAssistant {
+		if event.Type == SDKAssistantMessage {
 			hasAssistant = true
 		}
-		if event.Type == MessageTypeResult {
+		if event.Type == SDKResultMessage {
 			hasResult = true
 		}
 	}
@@ -143,10 +143,10 @@ func TestExecuteWithHandler(t *testing.T) {
 	hasAssistant := false
 	hasResult := false
 	for _, msg := range handler.messages {
-		if msg.GetType() == MessageTypeAssistant {
+		if msg.GetType() == SDKAssistantMessage {
 			hasAssistant = true
 		}
-		if msg.GetType() == MessageTypeResult {
+		if msg.GetType() == SDKResultMessage {
 			hasResult = true
 		}
 	}
@@ -262,26 +262,26 @@ func TestMessageAccumulator(t *testing.T) {
 	// Test system message
 	systemEventJSON := `{"type":"system","subtype":"init","session_id":"test-session-123","timestamp":"2024-01-01T12:00:00Z"}`
 	systemEvent := events.Event{
-		Type:      MessageTypeSystem,
+		Type:      SDKSystemMessage,
 		Data:      map[string]interface{}{"subtype": "init", "session_id": "test-session-123"},
 		Raw:       systemEventJSON,
 		Timestamp: time.Now(),
 	}
 	messages, _, _ := accumulator.AddEvent(systemEvent)
 	assert.Len(t, messages, 1, "should have 1 message")
-	assert.Equal(t, MessageTypeSystem, messages[0].GetType())
+	assert.Equal(t, SDKSystemMessage, messages[0].GetType())
 	assert.Equal(t, "test-session-123", accumulator.GetSessionID())
 
 	// Test assistant message with text content
 	assistantEventJSON := `{"type":"assistant","message":{"model":"claude-sonnet-4-6","id":"msg-123","type":"message","role":"assistant","content":[{"type":"text","text":"Hello, world!"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":5}},"session_id":"test-session-123","uuid":"msg-uuid-456","timestamp":"2024-01-01T12:00:00Z"}`
 	assistantEvent := events.Event{
-		Type:      MessageTypeAssistant,
+		Type:      SDKAssistantMessage,
 		Raw:       assistantEventJSON,
 		Timestamp: time.Now(),
 	}
 	messages, _, _ = accumulator.AddEvent(assistantEvent)
 	assert.Len(t, messages, 1, "should have 1 new message")
-	assert.Equal(t, MessageTypeAssistant, messages[0].GetType())
+	assert.Equal(t, SDKAssistantMessage, messages[0].GetType())
 
 	assistantMsg, ok := messages[0].(*AssistantMessage)
 	require.True(t, ok, "should be AssistantMessage")
@@ -291,7 +291,7 @@ func TestMessageAccumulator(t *testing.T) {
 	// Test result message
 	resultEventJSON := `{"type":"result","subtype":"success","result":"Done!","total_cost_usd":0.001,"duration_ms":1000,"session_id":"test-session-123","timestamp":"2024-01-01T12:00:00Z"}`
 	resultEvent := events.Event{
-		Type:      MessageTypeResult,
+		Type:      SDKResultMessage,
 		Raw:       resultEventJSON,
 		Timestamp: time.Now(),
 	}
@@ -306,7 +306,7 @@ func TestMessageAccumulator(t *testing.T) {
 	assert.Equal(t, "success", resultMsg.SubType)
 
 	// Test GetMessagesByType
-	assistantMessages := accumulator.GetMessagesByType(MessageTypeAssistant)
+	assistantMessages := accumulator.GetMessagesByType(SDKAssistantMessage)
 	assert.Len(t, assistantMessages, 1, "should have 1 assistant message")
 
 	// Test GetAssistantMessages
@@ -326,7 +326,7 @@ func TestResultCollector(t *testing.T) {
 
 	// Test OnMessage with assistant message
 	assistantMsg := &AssistantMessage{
-		Type: MessageTypeAssistant,
+		Type: SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "text", Text: "Hello from assistant"},
@@ -339,7 +339,7 @@ func TestResultCollector(t *testing.T) {
 
 	// Test OnMessage with result message
 	resultMsg := &ResultMessage{
-		Type:    MessageTypeResult,
+		Type:    SDKResultMessage,
 		SubType: "success",
 		Result:  "Final result",
 	}
@@ -396,20 +396,20 @@ func TestHelperFunctions(t *testing.T) {
 	assert.False(t, getBool(map[string]interface{}{}, "missing"))
 }
 
-// TestMessageTypes tests message type methods
-func TestMessageTypes(t *testing.T) {
+// TestSDKsMessage tests message type methods
+func TestSDKsMessage(t *testing.T) {
 	// Test SystemMessage
 	sysMsg := &SystemMessage{
-		Type:      MessageTypeSystem,
+		Type:      SDKSystemMessage,
 		SessionID: "session-123",
 		Timestamp: time.Now(),
 	}
-	assert.Equal(t, MessageTypeSystem, sysMsg.GetType())
+	assert.Equal(t, SDKSystemMessage, sysMsg.GetType())
 	assert.Equal(t, "session-123", sysMsg.SessionID)
 
 	// Test AssistantMessage
 	assistantMsg := &AssistantMessage{
-		Type:      MessageTypeAssistant,
+		Type:      SDKAssistantMessage,
 		SessionID: "session-123",
 		UUID:      "uuid-456",
 		Message: anthropic.Message{
@@ -418,7 +418,7 @@ func TestMessageTypes(t *testing.T) {
 			},
 		},
 	}
-	assert.Equal(t, MessageTypeAssistant, assistantMsg.GetType())
+	assert.Equal(t, SDKAssistantMessage, assistantMsg.GetType())
 
 	// Test ContentBlock types
 	textBlock := &TextBlock{Type: "text", Text: "Hello"}
@@ -435,12 +435,12 @@ func TestMessageTypes(t *testing.T) {
 
 	// Test ResultMessage
 	resultMsg := &ResultMessage{
-		Type:      MessageTypeResult,
+		Type:      SDKResultMessage,
 		SubType:   "success",
 		IsError:   false,
 		SessionID: "session-123",
 	}
-	assert.Equal(t, MessageTypeResult, resultMsg.GetType())
+	assert.Equal(t, SDKResultMessage, resultMsg.GetType())
 	assert.True(t, resultMsg.IsSuccess())
 }
 
