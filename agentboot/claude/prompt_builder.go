@@ -41,7 +41,7 @@ func (b *StreamPromptBuilder) Add(msg map[string]interface{}) error {
 // AddText adds a text message to the stream
 func (b *StreamPromptBuilder) AddText(text string) error {
 	msg := map[string]interface{}{
-		"type":    "text",
+		"type":    MessageTypeText,
 		"content": text,
 	}
 	return b.Add(msg)
@@ -50,7 +50,7 @@ func (b *StreamPromptBuilder) AddText(text string) error {
 // AddUserMessage adds a user message to the stream
 func (b *StreamPromptBuilder) AddUserMessage(content string) error {
 	msg := map[string]interface{}{
-		"type": "user",
+		"type": MessageTypeUser,
 		"message": map[string]interface{}{
 			"role":    "user",
 			"content": content,

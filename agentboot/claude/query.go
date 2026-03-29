@@ -215,7 +215,7 @@ func (q *Query) Interrupt() error {
 	}
 
 	request := map[string]interface{}{
-		"subtype": "interrupt",
+		"subtype": ControlRequestSubtypeInterrupt,
 	}
 
 	return q.request(request)
@@ -227,7 +227,7 @@ func (q *Query) request(request map[string]interface{}) error {
 
 	sdkRequest := map[string]interface{}{
 		"request_id": requestID,
-		"type":       "control_request",
+		"type":       MessageTypeControlRequest,
 		"request":    request,
 	}
 
@@ -258,7 +258,7 @@ func (q *Query) request(request map[string]interface{}) error {
 	// Wait for response
 	select {
 	case response := <-responseCh:
-		if subtype, _ := response["subtype"].(string); subtype == "error" {
+		if subtype, _ := response["subtype"].(string); subtype == ResultSubtypeError {
 			return fmt.Errorf("control request failed: %v", response["error"])
 		}
 		return nil
@@ -293,17 +293,17 @@ func (q *Query) readMessages() {
 		msgType, _ := raw["type"].(string)
 
 		// Log message types for debugging
-		if msgType == "control_request" || msgType == "control_response" || msgType == "control_cancel_request" {
+		if msgType == MessageTypeControlRequest || msgType == ControlMsgTypeResponse || msgType == ControlMsgTypeCancelRequest {
 			logrus.Infof("[Control Message] Type: %s, Raw: %s", msgType, line)
 		}
 
 		// Handle different message types
 		switch msgType {
-		case "control_response":
+		case ControlMsgTypeResponse:
 			q.handleControlResponse(raw)
-		case "control_request":
+		case MessageTypeControlRequest:
 			q.handleControlRequest(raw)
-		case "control_cancel_request":
+		case ControlMsgTypeCancelRequest:
 			q.handleControlCancelRequest(raw)
 		default:
 			// Regular SDK message
@@ -364,7 +364,7 @@ func (q *Query) handleControlRequest(raw map[string]interface{}) {
 	var err error
 
 	switch subtype {
-	case "can_use_tool":
+	case ControlRequestSubtypeCanUseTool:
 		logrus.Infof("[handleControlRequest] Processing can_use_tool request")
 		response, err = q.processCanUseTool(ctx, request, requestID)
 	default:
@@ -373,17 +373,17 @@ func (q *Query) handleControlRequest(raw map[string]interface{}) {
 
 	// Send response back to Claude
 	controlResponse := map[string]interface{}{
-		"type": "control_response",
+		"type": ControlMsgTypeResponse,
 		"response": map[string]interface{}{
 			"request_id": requestID,
 		},
 	}
 
 	if err != nil {
-		controlResponse["response"].(map[string]interface{})["subtype"] = "error"
+		controlResponse["response"].(map[string]interface{})["subtype"] = ResultSubtypeError
 		controlResponse["response"].(map[string]interface{})["error"] = err.Error()
 	} else {
-		controlResponse["response"].(map[string]interface{})["subtype"] = "success"
+		controlResponse["response"].(map[string]interface{})["subtype"] = ResultSubtypeSuccess
 		if response != nil {
 			controlResponse["response"].(map[string]interface{})["response"] = response
 		}

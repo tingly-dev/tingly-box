@@ -40,15 +40,32 @@ import (
 //	| SDKRateLimitEvent
 //	| SDKPromptSuggestionMessage;
 const (
-	MessageTypeText           = "text"
-	MessageTypeSystem         = "system"
-	MessageTypeAssistant      = "assistant"
-	MessageTypeUser           = "user"
-	MessageTypeToolUse        = "tool_use"
-	MessageTypeToolResult     = "tool_result"
-	MessageTypeResult         = "result"
-	MessageTypeStreamEvent    = "stream_event"
-	MessageTypeControlRequest = "control_request"
+	MessageTypeText               = "text"
+	MessageTypeSystem             = "system"
+	MessageTypeAssistant          = "assistant"
+	MessageTypeUser               = "user"
+	MessageTypeToolUse            = "tool_use"
+	MessageTypeToolResult         = "tool_result"
+	MessageTypeResult             = "result"
+	MessageTypeStreamEvent        = "stream_event"
+	MessageTypeControlRequest     = "control_request"
+	MessageTypeUserMessageReplay  = "user_message_replay"
+	MessageTypePartialAssistant   = "partial_assistant"
+	MessageTypeCompactBoundary    = "compact_boundary"
+	MessageTypeStatus             = "status"
+	MessageTypeLocalCommandOutput = "local_command_output"
+	MessageTypeHookStarted        = "hook_started"
+	MessageTypeHookProgress       = "hook_progress"
+	MessageTypeHookResponse       = "hook_response"
+	MessageTypeToolProgress       = "tool_progress"
+	MessageTypeAuthStatus         = "auth_status"
+	MessageTypeTaskNotification   = "task_notification"
+	MessageTypeTaskStarted        = "task_started"
+	MessageTypeTaskProgress       = "task_progress"
+	MessageTypeFilesPersisted     = "files_persisted"
+	MessageTypeToolUseSummary     = "tool_use_summary"
+	MessageTypeRateLimit          = "rate_limit"
+	MessageTypePromptSuggestion   = "prompt_suggestion"
 )
 
 // subtype of assistant error
@@ -211,25 +228,25 @@ func UnmarshalContentBlock(data []byte) (ContentBlock, error) {
 	}
 
 	switch typeDetect.Type {
-	case "text":
+	case ContentBlockTypeText:
 		var block TextBlock
 		if err := json.Unmarshal(data, &block); err != nil {
 			return nil, err
 		}
 		return &block, nil
-	case "tool_use":
+	case ContentBlockTypeToolUse:
 		var block ToolUseBlock
 		if err := json.Unmarshal(data, &block); err != nil {
 			return nil, err
 		}
 		return &block, nil
-	case "thinking":
+	case ContentBlockTypeThinking:
 		var block ThinkingBlock
 		if err := json.Unmarshal(data, &block); err != nil {
 			return nil, err
 		}
 		return &block, nil
-	case "tool_result":
+	case ContentBlockTypeToolResult:
 		var block ToolResultContentBlock
 		if err := json.Unmarshal(data, &block); err != nil {
 			return nil, err
@@ -396,7 +413,7 @@ func (m *ResultMessage) GetRawData() map[string]interface{} {
 
 // IsSuccess returns true if the result indicates success
 func (m *ResultMessage) IsSuccess() bool {
-	return m.SubType == "success" || !m.IsError
+	return m.SubType == ResultSubtypeSuccess || !m.IsError
 }
 
 // StreamEventMessage represents real-time streaming delta events
@@ -613,10 +630,10 @@ func (m *ControlManager) HandleControlMessage(data map[string]interface{}) error
 	}
 
 	switch {
-	case msgType == "control_response":
+	case msgType == ControlMsgTypeResponse:
 		return m.handleControlResponse(data)
 
-	case msgType == "cancel_notification":
+	case msgType == ControlMsgTypeCancelNotification:
 		return m.handleCancelNotification(data)
 
 	default:
@@ -635,7 +652,7 @@ func (m *ControlManager) handleControlResponse(data map[string]interface{}) erro
 
 	resp := ControlResponse{
 		RequestID: requestID,
-		Type:      "control_response",
+		Type:      ControlMsgTypeResponse,
 		Response:  response,
 	}
 
@@ -735,7 +752,7 @@ func (b *PermissionRequestBuilder) WithTool(name string, input map[string]interf
 func (b *PermissionRequestBuilder) Build() ControlRequest {
 	return ControlRequest{
 		RequestID: b.requestID,
-		Type:      "permission",
+		Type:      ControlRequestTypePermission,
 		Request: map[string]interface{}{
 			"tool_name": b.toolName,
 			"input":     b.input,
@@ -787,7 +804,7 @@ func (b *CancelRequestBuilder) Build() ControlRequest {
 
 	return ControlRequest{
 		RequestID: b.requestID,
-		Type:      "cancel",
+		Type:      ControlRequestTypeCancel,
 		Request:   request,
 	}
 }

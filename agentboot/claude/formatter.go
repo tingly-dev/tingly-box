@@ -147,13 +147,13 @@ func (f *TextFormatter) formatWithTemplate(tmpl *template.Template, msg Message)
 
 func (f *TextFormatter) formatSystem(m *SystemMessage) string {
 	switch m.SubType {
-	case "task_started":
+	case SystemSubtypeTaskStarted:
 		return f.formatTaskStarted(m)
-	case "task_completed":
+	case SystemSubtypeTaskCompleted:
 		return f.formatTaskCompleted(m)
-	case "task_notification":
+	case MessageTypeTaskNotification:
 		return f.formatTaskNotification(m)
-	case "init":
+	case SystemSubtypeInit:
 		var b strings.Builder
 		b.WriteString("[SYSTEM] ")
 		b.WriteString(m.SubType)
@@ -223,12 +223,12 @@ func (f *TextFormatter) formatAssistant(m *AssistantMessage) string {
 
 	for _, content := range m.Message.Content {
 		switch content.Type {
-		case "text":
+		case ContentBlockTypeText:
 			if content.Text != "" {
 				b.WriteString(content.Text)
 				b.WriteString("\n")
 			}
-		case "tool_use":
+		case ContentBlockTypeToolUse:
 			if f.ShowToolDetails {
 				b.WriteString("[TOOL] ")
 				b.WriteString(content.Name)
@@ -239,7 +239,7 @@ func (f *TextFormatter) formatAssistant(m *AssistantMessage) string {
 				}
 				b.WriteString("\n")
 			}
-		case "thinking":
+		case ContentBlockTypeThinking:
 			if f.Verbose && content.Thinking != "" {
 				b.WriteString("[THINKING] ")
 				b.WriteString(content.Thinking)
