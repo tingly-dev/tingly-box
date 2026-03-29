@@ -165,6 +165,9 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
 			s.trackUsageWithTokenUsage(c, usage, nil)
 
+			// Update affinity entry with message ID
+			s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
+
 			// FIXME: now we use req model as resp model
 			anthropicResp.Model = anthropic.Model(proxyModel)
 
@@ -255,6 +258,9 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			}
 			usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
 			s.trackUsageWithTokenUsage(c, usage, nil)
+
+			// Update affinity entry with message ID
+			s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
 
 			// Record resp if scenario recording is enabled
 			if recorder != nil {
@@ -671,4 +677,19 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIAssembly(c *gin.Context, req pr
 
 	// Success - usage tracking is handled inside the stream handler
 	// Note: The handler tracks usage when response.completed event is received
+}
+
+// updateAffinityMessageID updates the affinity entry with the latest message ID
+func (s *Server) updateAffinityMessageID(c *gin.Context, rule *typ.Rule, messageID string) {
+	if !rule.SmartAffinity || messageID == "" {
+		return
+	}
+
+	sessionID, exists := c.Get(ContextKeySessionID)
+	if !exists {
+		return
+	}
+
+	s.affinityStore.UpdateMessageID(rule.UUID, sessionID.(string), messageID)
+	logrus.Debugf("[affinity] updated message ID %s for session %s, rule %s", messageID, sessionID.(string), rule.UUID)
 }
