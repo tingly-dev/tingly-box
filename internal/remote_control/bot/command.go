@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/imbot"
 )
 
@@ -499,17 +500,17 @@ func newYoloCommand(adapter BotHandlerAdapter) imbot.Command {
 				return adapter.SendText(ctx.ChatID, fmt.Sprintf("Failed to get session: %v", err))
 			}
 
-			// Toggle permission mode
-			newMode := "auto"
-			if sess.PermissionMode == "auto" {
-				newMode = "manual"
+			// Toggle permission mode between bypassPermissions (yolo ON) and default (yolo OFF)
+			newMode := string(claude.PermissionModeBypassPermissions)
+			if sess.PermissionMode == string(claude.PermissionModeBypassPermissions) {
+				newMode = string(claude.PermissionModeDefault)
 			}
 
 			if err := adapter.UpdatePermissionMode(sess.ID, newMode); err != nil {
 				return adapter.SendText(ctx.ChatID, fmt.Sprintf("Failed to update permission mode: %v", err))
 			}
 
-			if newMode == "auto" {
+			if newMode == string(claude.PermissionModeBypassPermissions) {
 				return adapter.SendText(ctx.ChatID, fmt.Sprintf("🚀 **YOLO MODE ENABLED**\n\nAll permissions will be auto-approved for this session.\n⚠️ Use with caution!\n\nSession: %s\nProject: %s", sess.ID, projectPath))
 			}
 			return adapter.SendText(ctx.ChatID, fmt.Sprintf("🔒 **YOLO MODE DISABLED**\n\nBack to normal approval mode.\nAll permission requests will require confirmation.\n\nSession: %s\nProject: %s", sess.ID, projectPath))
