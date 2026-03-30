@@ -350,7 +350,7 @@ const Layout = ({ children }: LayoutProps) => {
                 children: [
                     {
                         path: '/credentials',
-                        label: 'Model API',
+                        label: 'Model Key',
                         icon: <LockIcon sx={{ fontSize: 20 }} />,
                     },
                 ],
