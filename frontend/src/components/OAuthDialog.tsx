@@ -14,7 +14,7 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import {Claude, Gemini, Google, OpenAI, Qwen} from './BrandIcons';
+import {ClaudeCode, Gemini, Google, OpenAI, Qwen} from './BrandIcons';
 import {useEffect, useState} from 'react';
 import api from "@/services/api.ts";
 import {getOAuthRedirectPath} from "@/utils/protocol";
@@ -38,7 +38,7 @@ const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         name: 'Claude Code',
         displayName: 'Anthropic Claude Code',
         description: 'Access Claude Code models via OAuth',
-        icon: <Claude size={32}/>,
+        icon: <ClaudeCode size={32}/>,
         color: '#D97757',
         enabled: true,
     },

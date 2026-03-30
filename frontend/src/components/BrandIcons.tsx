@@ -8,6 +8,7 @@ import ClaudeCodeSvg from '@lobehub/icons-static-svg/icons/claudecode.svg?url';
 import GeminiSvg from '@lobehub/icons-static-svg/icons/gemini.svg?url';
 import GoogleSvg from '@lobehub/icons-static-svg/icons/google.svg?url';
 import OpenAISvg from '@lobehub/icons-static-svg/icons/openai.svg?url';
+import OpenCodeSvg from '@lobehub/icons-static-svg/icons/opencode.svg?url';
 import QwenSvg from '@lobehub/icons-static-svg/icons/qwen.svg?url';
 
 import DingTalkSvg from '@/assets/icons/dingtalk.svg?url';
@@ -19,6 +20,8 @@ import SlackSvg from '@/assets/icons/slack.svg?url';
 import TelegramSvg from '@/assets/icons/telegram.svg?url';
 import WeComSvg from '@/assets/icons/wecom.svg?url';
 import WeixinSvg from '@/assets/icons/weixin.svg?url';
+import XcodeSvg from '@/assets/icons/xcode.svg?url';
+import VSCodeSvg from '@/assets/icons/vscode.svg?url';
 
 interface BrandIconProps {
     size?: number;
@@ -51,7 +54,7 @@ const createBrandIcon = (src: string, alt: string, defaultGrayscale = false) => 
                     width: '100%',
                     height: '100%',
                     objectFit: 'contain',
-                    filter: grayscale ? 'grayscale(100%)' : 'none',
+                    filter: grayscale ? 'grayscale(100%) brightness(1.15) contrast(1.1)' : 'none',
                     transition: 'filter 0.2s',
                 }}
             />
@@ -66,6 +69,9 @@ export const ClaudeCode = createBrandIcon(ClaudeCodeSvg, 'Claude Code');
 export const Gemini = createBrandIcon(GeminiSvg, 'Gemini');
 export const Google = createBrandIcon(GoogleSvg, 'Google');
 export const Qwen = createBrandIcon(QwenSvg, 'Qwen');
+export const OpenCode = createBrandIcon(OpenCodeSvg, 'OpenCode');
+export const Xcode = createBrandIcon(XcodeSvg, 'Xcode', true);
+export const VSCode = createBrandIcon(VSCodeSvg, 'VS Code', true);
 
 export const Telegram = createBrandIcon(TelegramSvg, 'Telegram', true);
 export const Feishu = createBrandIcon(FeishuSvg, 'Feishu', true);
