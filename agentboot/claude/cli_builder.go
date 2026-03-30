@@ -3,6 +3,7 @@ package claude
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 )
 
@@ -64,12 +65,17 @@ func BuildCommonArgs(config Config, opts CommonOptions) []string {
 		args = append(args, "--append-system-prompt", opts.AppendSystemPrompt)
 	}
 
-	// Permission mode - both config and opts can contribute
-	if config.PermissionMode != "" {
-		args = append(args, "--permission-mode", string(config.PermissionMode))
-	}
+	// Permission mode - opts overrides config, emit only once
+	mode := string(config.PermissionMode)
 	if opts.PermissionMode != "" {
-		args = append(args, "--permission-mode", opts.PermissionMode)
+		mode = opts.PermissionMode
+	}
+	if mode != "" {
+		if !IsValidPermissionMode(mode) {
+			log.Printf("[WARN] invalid permission mode %q, skipping --permission-mode flag", mode)
+		} else {
+			args = append(args, "--permission-mode", mode)
+		}
 	}
 
 	// Conversation control - both config and opts can set --continue

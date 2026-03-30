@@ -89,7 +89,7 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 	// Create streaming handler (shared meta pointer)
 	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, meta)
 
-	// Use resolved permission mode (default to manual if not set)
+	// Use resolved permission mode (default to "default" if not set)
 	permissionMode := req.PermissionMode
 	if permissionMode == "" {
 		permissionMode = string(claude.PermissionModeDefault)
@@ -105,7 +105,16 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 			meta:       meta,
 		})
 
-	if permissionMode != string(claude.PermissionModeAuto) {
+	// Modes that don't need interactive approval handlers
+	// auto, bypassPermissions, dontAsk: fully auto-approve
+	// plan: read-only, no tool execution
+	noApprovalModes := map[string]bool{
+		string(claude.PermissionModeAuto):              true,
+		string(claude.PermissionModeBypassPermissions): true,
+		string(claude.PermissionModeDontAsk):           true,
+		string(claude.PermissionModePlan):              true,
+	}
+	if !noApprovalModes[permissionMode] {
 		compositeHandler.SetApprovalHandler(e.deps.IMPrompter).
 			SetAskHandler(e.deps.IMPrompter)
 	}
