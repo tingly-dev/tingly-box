@@ -38,7 +38,7 @@ export const ApiConfigRow: React.FC<ApiConfigRowProps> = ({
                 fontWeight: 500
             }}
         >
-            {label}:
+            {label}
         </Typography>
         <Typography
             variant="subtitle2"

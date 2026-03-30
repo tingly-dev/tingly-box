@@ -8,6 +8,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -67,6 +69,10 @@ type Config struct {
 
 	// Health monitor settings
 	HealthMonitor loadbalance.HealthMonitorConfig `json:"health_monitor,omitempty" yaml:"health_monitor,omitempty"`
+
+	// Profiles stores scenario profile metadata, keyed by base scenario name.
+	// Each entry is a list of profiles for that scenario.
+	Profiles map[string][]typ.ProfileMeta `json:"profiles" yaml:"profiles"`
 
 	// Enterprise context JWT validation settings for TBE->TB proxy calls.
 	EnterpriseContextJWT EnterpriseContextJWTConfig `json:"enterprise_context_jwt,omitempty" yaml:"enterprise_context_jwt,omitempty"`
@@ -1269,7 +1275,193 @@ func (c *Config) SetScenarioConfig(config typ.ScenarioConfig) error {
 	return c.Save()
 }
 
-// GetScenarioFlag returns a specific flag value for a scenario
+// --- Profile CRUD ---
+
+// GetProfiles returns all profiles for a base scenario.
+func (c *Config) GetProfiles(baseScenario typ.RuleScenario) []typ.ProfileMeta {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.Profiles == nil {
+		return nil
+	}
+	profiles := c.Profiles[string(baseScenario)]
+	if profiles == nil {
+		return nil
+	}
+	result := make([]typ.ProfileMeta, len(profiles))
+	copy(result, profiles)
+	return result
+}
+
+// GetProfile returns a single profile by base scenario and profile ID.
+func (c *Config) GetProfile(baseScenario typ.RuleScenario, profileID string) (typ.ProfileMeta, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.Profiles == nil {
+		return typ.ProfileMeta{}, false
+	}
+	profiles := c.Profiles[string(baseScenario)]
+	for _, p := range profiles {
+		if p.ID == profileID {
+			return p, true
+		}
+	}
+	return typ.ProfileMeta{}, false
+}
+
+// CreateProfile adds a new profile to a base scenario. Returns the created ProfileMeta.
+func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string) (typ.ProfileMeta, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	base := string(baseScenario)
+
+	if c.Profiles == nil {
+		c.Profiles = make(map[string][]typ.ProfileMeta)
+	}
+
+	profiles := c.Profiles[base]
+
+	// Validate name uniqueness within this scenario
+	for _, p := range profiles {
+		if p.Name == name {
+			return typ.ProfileMeta{}, fmt.Errorf("profile name '%s' already exists in scenario '%s'", name, base)
+		}
+	}
+
+	// Generate next profile ID: p{maxExisting + 1}
+	nextID := 1
+	for _, p := range profiles {
+		var num int
+		if _, err := fmt.Sscanf(p.ID, "p%d", &num); err == nil && num >= nextID {
+			nextID = num + 1
+		}
+	}
+
+	meta := typ.ProfileMeta{
+		ID:   fmt.Sprintf("p%d", nextID),
+		Name: name,
+	}
+
+	c.Profiles[base] = append(c.Profiles[base], meta)
+
+	// Clone rules from base scenario to the new profiled scenario.
+	// For claude_code, profiles only support "separate" mode, so skip the unified rule.
+	profiledScenario := typ.ProfiledScenarioName(baseScenario, meta.ID)
+	for _, rule := range c.Rules {
+		if rule.Scenario == baseScenario {
+			if baseScenario == typ.ScenarioClaudeCode && rule.UUID == RuleUUIDBuiltinCC {
+				continue // skip unified rule for claude_code profiles
+			}
+			cloned := rule
+			cloned.UUID = uuid.New().String()
+			cloned.Scenario = profiledScenario
+			// Strip "tingly/cc-" prefix for profile rules (e.g. "tingly/cc-default" -> "default")
+			if strings.HasPrefix(cloned.RequestModel, "tingly/cc-") {
+				cloned.RequestModel = strings.TrimPrefix(cloned.RequestModel, "tingly/cc-")
+			} else if cloned.RequestModel == "tingly/cc" {
+				continue // skip unified model name
+			}
+			c.Rules = append(c.Rules, cloned)
+		}
+	}
+
+	return meta, c.Save()
+}
+
+// UpdateProfile updates the name of an existing profile.
+func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, name string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	base := string(baseScenario)
+	if c.Profiles == nil {
+		return fmt.Errorf("no profiles found for scenario '%s'", base)
+	}
+
+	profiles := c.Profiles[base]
+	idx := -1
+	for i, p := range profiles {
+		if p.ID == profileID {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return fmt.Errorf("profile '%s' not found in scenario '%s'", profileID, base)
+	}
+
+	// Validate name uniqueness (excluding current profile)
+	for i, p := range profiles {
+		if i != idx && p.Name == name {
+			return fmt.Errorf("profile name '%s' already exists in scenario '%s'", name, base)
+		}
+	}
+
+	profiles[idx].Name = name
+	return c.Save()
+}
+
+// DeleteProfile removes a profile by ID and cleans up all associated rules.
+func (c *Config) DeleteProfile(baseScenario typ.RuleScenario, profileID string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	base := string(baseScenario)
+	if c.Profiles == nil {
+		return fmt.Errorf("no profiles found for scenario '%s'", base)
+	}
+
+	profiles := c.Profiles[base]
+	idx := -1
+	for i, p := range profiles {
+		if p.ID == profileID {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return fmt.Errorf("profile '%s' not found in scenario '%s'", profileID, base)
+	}
+
+	// Remove profile metadata
+	c.Profiles[base] = append(profiles[:idx], profiles[idx+1:]...)
+	if len(c.Profiles[base]) == 0 {
+		delete(c.Profiles, base)
+	}
+
+	// Remove all rules belonging to this profile
+	profiledScenario := typ.ProfiledScenarioName(baseScenario, profileID)
+	c.Rules = slices.DeleteFunc(c.Rules, func(r typ.Rule) bool {
+		return r.Scenario == profiledScenario
+	})
+
+	return c.Save()
+}
+
+// ResolveProfileNameOrID resolves a profile identifier to a profile ID.
+// If the input matches an existing ID (e.g. "p1"), returns it directly.
+// If the input matches an existing name, returns the corresponding ID.
+func (c *Config) ResolveProfileNameOrID(baseScenario typ.RuleScenario, input string) (string, error) {
+	if input == "" {
+		return "", nil
+	}
+
+	// Direct ID match
+	if _, ok := c.GetProfile(baseScenario, input); ok {
+		return input, nil
+	}
+
+	// Name match
+	profiles := c.GetProfiles(baseScenario)
+	for _, p := range profiles {
+		if p.Name == input {
+			return p.ID, nil
+		}
+	}
+
+	return "", fmt.Errorf("profile '%s' not found in scenario '%s'", input, baseScenario)
+}
 func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
