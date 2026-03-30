@@ -2,6 +2,7 @@ import { OpenAI, Anthropic, Claude, Telegram, Feishu, Lark, DingTalk, Weixin } f
 import tingyIcon from '../assets/logos/icon.png';
 import {
     AccountCircle as AccountIcon,
+    Add as AddIcon,
     AutoAwesome,
     BarChart as BarChartIcon,
     CalendarToday as CalendarIcon,
@@ -26,6 +27,7 @@ import {
 import LockIcon from '@mui/icons-material/Lock';
 import {
     Box,
+    Button,
     Divider,
     Drawer,
     IconButton,
@@ -35,11 +37,12 @@ import {
     ListItemIcon,
     ListItemText,
     Popover,
+    TextField,
     Tooltip,
     Typography,
 } from '@mui/material';
 import type { ReactNode } from 'react';
-import React, { useMemo, useState } from 'react';
+import React, {useCallback, useMemo, useRef, useState} from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
@@ -47,6 +50,7 @@ import { useHealth } from '../contexts/HealthContext';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
 import { isFullEdition } from '@/utils/edition';
 import { useProfileContext } from '@/contexts/ProfileContext';
+import { api } from '@/services/api';
 
 interface LayoutProps {
     children?: ReactNode;
@@ -106,7 +110,40 @@ const Layout = ({ children }: LayoutProps) => {
     const { skillUser, skillIde } = useFeatureFlags();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
-    const { profiles } = useProfileContext();
+    const { profiles, refresh } = useProfileContext();
+
+    // Add Profile popover state
+    const [addProfileAnchorEl, setAddProfileAnchorEl] = useState<HTMLElement | null>(null);
+    const [newProfileName, setNewProfileName] = useState('');
+    const [isCreating, setIsCreating] = useState(false);
+    const addProfileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleAddProfileClick = useCallback((e: React.MouseEvent<HTMLElement>) => {
+        setAddProfileAnchorEl(e.currentTarget);
+        setNewProfileName('');
+        setTimeout(() => addProfileInputRef.current?.focus(), 100);
+    }, []);
+
+    const handleAddProfileClose = useCallback(() => {
+        setAddProfileAnchorEl(null);
+        setNewProfileName('');
+    }, []);
+
+    const handleCreateProfile = useCallback(async () => {
+        if (!newProfileName.trim()) return;
+        try {
+            setIsCreating(true);
+            const result = await api.createProfile('claude_code', newProfileName.trim());
+            if (result.success) {
+                handleAddProfileClose();
+                refresh();
+            }
+        } catch {
+            // silent fail - could add a snackbar here
+        } finally {
+            setIsCreating(false);
+        }
+    }, [newProfileName, refresh, handleAddProfileClose]);
 
     const handleEasterEgg = (event: React.MouseEvent<HTMLElement>) => {
         setEasterEggAnchorEl(event.currentTarget);
@@ -229,6 +266,11 @@ const Layout = ({ children }: LayoutProps) => {
                         icon: <Claude size={20} />,
                     },
                     ...profileNavItems,
+                    {
+                        path: '#add-profile',
+                        label: 'Add Profile',
+                        icon: <AddIcon sx={{ fontSize: 20 }} />,
+                    },
                     {
                         divider: true,
                         path: '/use-codex',
@@ -662,14 +704,17 @@ const Layout = ({ children }: LayoutProps) => {
                     '&:hover': { backgroundColor: 'grey.400' }
                 }
             }}>
-                {sidebarItems.map((item) => (
+                {sidebarItems.map((item) => {
+                    const isAddProfile = item.path === '#add-profile';
+                    return (
                     <React.Fragment key={item.path}>
                         {item.divider && <Divider sx={{ mx: 2, my: 1 }} />}
                         <ListItem disablePadding>
                             <ListItemButton
-                                component={RouterLink}
-                                to={item.path}
-                                onClick={() => setMobileOpen(false)}
+                                {...(isAddProfile
+                                    ? { onClick: handleAddProfileClick }
+                                    : { component: RouterLink, to: item.path, onClick: () => setMobileOpen(false) }
+                                )}
                                 sx={{
                                     mx: 1.5,
                                     borderRadius: 1.25,
@@ -677,7 +722,7 @@ const Layout = ({ children }: LayoutProps) => {
                                     px: 2,
                                     color: 'text.secondary',
                                     position: 'relative',
-                                    ...(isActive(item.path) && {
+                                    ...(!isAddProfile && isActive(item.path) && {
                                         backgroundColor: 'primary.main',
                                         color: 'primary.contrastText',
                                         '&::before': {
@@ -704,8 +749,8 @@ const Layout = ({ children }: LayoutProps) => {
                                         },
                                     }),
                                     '&:hover': {
-                                        backgroundColor: isActive(item.path) ? 'primary.dark' : 'action.hover',
-                                        color: isActive(item.path) ? 'primary.contrastText' : 'text.primary',
+                                        backgroundColor: (!isAddProfile && isActive(item.path)) ? 'primary.dark' : 'action.hover',
+                                        color: (!isAddProfile && isActive(item.path)) ? 'primary.contrastText' : 'text.primary',
                                     },
                                 }}
                             >
@@ -725,7 +770,7 @@ const Layout = ({ children }: LayoutProps) => {
                                     secondary={item.subtitle}
                                     slotProps={{
                                         primary: {
-                                            fontWeight: isActive(item.path) ? 600 : 400,
+                                            fontWeight: (!isAddProfile && isActive(item.path)) ? 600 : 400,
                                             fontSize: '0.875rem',
                                             lineHeight: 1.3,
                                         },
@@ -736,15 +781,42 @@ const Layout = ({ children }: LayoutProps) => {
                                     }}
                                     sx={{
                                         '& .MuiListItemText-secondary': {
-                                            color: isActive(item.path) ? 'rgba(255,255,255,0.7)' : 'text.secondary',
+                                            color: (!isAddProfile && isActive(item.path)) ? 'rgba(255,255,255,0.7)' : 'text.secondary',
                                         },
                                     }}
                                 />
                             </ListItemButton>
                         </ListItem>
                     </React.Fragment>
-                ))}
+                    );
+                })}
             </List>
+
+            {/* Add Profile Popover */}
+            <Popover
+                open={Boolean(addProfileAnchorEl)}
+                anchorEl={addProfileAnchorEl}
+                onClose={handleAddProfileClose}
+                anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                slotProps={{ paper: { sx: { p: 2, width: 220, mt: -0.5 } } }}
+            >
+                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>New Profile</Typography>
+                <TextField
+                    inputRef={addProfileInputRef}
+                    fullWidth
+                    size="small"
+                    placeholder="Profile name"
+                    value={newProfileName}
+                    onChange={(e) => setNewProfileName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreateProfile()}
+                    disabled={isCreating}
+                />
+                <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                    <Button size="small" onClick={handleAddProfileClose} disabled={isCreating}>Cancel</Button>
+                    <Button size="small" variant="contained" onClick={handleCreateProfile} disabled={!newProfileName.trim() || isCreating}>Create</Button>
+                </Box>
+            </Popover>
 
             {/* Bottom Slogan */}
             <Box

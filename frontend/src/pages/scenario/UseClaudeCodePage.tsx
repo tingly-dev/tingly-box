@@ -8,8 +8,6 @@ import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInt
 import {api} from '@/services/api';
 import {toggleButtonGroupStyle, toggleButtonStyle} from "@/styles/toggleStyles";
 import InfoIcon from '@mui/icons-material/Info';
-import AddIcon from '@mui/icons-material/Add';
-import Chip from '@mui/material/Chip';
 import {
     Box,
     Button,
@@ -26,7 +24,6 @@ import {
 } from '@mui/material';
 import React, {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import { useProfileContext } from '@/contexts/ProfileContext';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -60,34 +57,6 @@ const UseClaudeCodePage: React.FC = () => {
     // Claude Code config modal state
     const [configModalOpen, setConfigModalOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
-
-    // Profile creation state
-    const { getProfiles, refresh: refreshProfiles } = useProfileContext();
-    const profileCount = getProfiles(SCENARIO).length;
-    const [createProfileOpen, setCreateProfileOpen] = useState(false);
-    const [newProfileName, setNewProfileName] = useState('');
-    const [isProfileMutating, setIsProfileMutating] = useState(false);
-
-    // Create profile handler
-    const handleCreateProfile = async () => {
-        if (!newProfileName.trim()) return;
-        try {
-            setIsProfileMutating(true);
-            const result = await api.createProfile(SCENARIO, newProfileName.trim());
-            if (result.success) {
-                showNotification(`Profile "${result.data.name}" created (ID: ${result.data.id})`, 'success');
-                setCreateProfileOpen(false);
-                setNewProfileName('');
-                refreshProfiles();
-            } else {
-                showNotification(`Failed to create profile: ${result.error || 'Unknown error'}`, 'error');
-            }
-        } catch {
-            showNotification('Failed to create profile', 'error');
-        } finally {
-            setIsProfileMutating(false);
-        }
-    };
 
     // Load scenario config to get config mode
     const loadScenarioConfig = async () => {
@@ -253,16 +222,6 @@ const UseClaudeCodePage: React.FC = () => {
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
                             <span>Claude Code</span>
-                            <Tooltip title="Create a profile to configure a separate rule set for Claude Code (only supports separate model mode)">
-                                <Chip
-                                    icon={<AddIcon />}
-                                    label={profileCount > 0 ? `Profile (${profileCount})` : 'Profile'}
-                                    onClick={() => setCreateProfileOpen(true)}
-                                    size="small"
-                                    variant="outlined"
-                                    color="primary"
-                                />
-                            </Tooltip>
                             <Tooltip title={`Base URL: ${baseUrl}/tingly/${SCENARIO}`}>
                                 <IconButton size="small" sx={{ ml: 0.5 }}>
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
@@ -365,52 +324,6 @@ const UseClaudeCodePage: React.FC = () => {
                     isApplyLoading={isApplyLoading}
                 />
 
-                {/* Create profile dialog */}
-                <Dialog
-                    open={createProfileOpen}
-                    onClose={() => {
-                        setCreateProfileOpen(false);
-                        setNewProfileName('');
-                    }}
-                    maxWidth="xs"
-                    fullWidth
-                >
-                    <DialogTitle>Create New Profile</DialogTitle>
-                    <DialogContent>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                            Profiles allow you to create separate rule sets for Claude Code. Each profile gets its own URL path (e.g., /tingly/claude_code:p1) and only supports separate model mode.
-                        </Typography>
-                        <TextField
-                            autoFocus
-                            fullWidth
-                            label="Profile Name"
-                            value={newProfileName}
-                            onChange={(e) => setNewProfileName(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleCreateProfile()}
-                            placeholder="e.g., Premium, Economy, Testing"
-                            size="small"
-                        />
-                    </DialogContent>
-                    <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
-                        <Button
-                            onClick={() => {
-                                setCreateProfileOpen(false);
-                                setNewProfileName('');
-                            }}
-                            color="inherit"
-                            disabled={isProfileMutating}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleCreateProfile}
-                            variant="contained"
-                            disabled={!newProfileName.trim() || isProfileMutating}
-                        >
-                            Create
-                        </Button>
-                    </DialogActions>
-                </Dialog>
             </CardGrid>
         </PageLayout>
     );
