@@ -143,21 +143,28 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 	promptText := p.buildPromptText(req, supportsKeyboard)
 	keyboard := p.buildKeyboard(req)
 
-	// For platforms without keyboard support, replace "Click a button" with text instructions
-	if !supportsKeyboard && req.ToolName == "AskUserQuestion" {
-		// Replace the "Click a button" text with text-only instructions
-		promptText = strings.Replace(promptText, "*Click a button below to select*",
-			p.buildTextSelectionInstructions(req), 1)
+	// For platforms without keyboard support, append text-based instructions
+	if !supportsKeyboard {
+		if req.ToolName == "AskUserQuestion" {
+			// Append option selection instructions
+			promptText += "\n\n" + p.buildTextSelectionInstructions(req)
+		} else {
+			// Append permission response instructions
+			promptText += "\n\n" + p.buildTextPermissionInstructions()
+		}
 	}
 
-	// Send the prompt message
-	msg, err := bot.SendMessage(context.Background(), chatID, &imbot.SendMessageOptions{
+	// Send the prompt message (only include keyboard markup if platform supports it)
+	opts := &imbot.SendMessageOptions{
 		Text:      promptText,
 		ParseMode: imbot.ParseModeMarkdown,
-		Metadata: map[string]interface{}{
+	}
+	if supportsKeyboard {
+		opts.Metadata = map[string]interface{}{
 			"replyMarkup": imbot.BuildTelegramActionKeyboard(keyboard),
-		},
-	})
+		}
+	}
+	msg, err := bot.SendMessage(context.Background(), chatID, opts)
 	if err != nil {
 		p.cleanup(req.ID)
 		logrus.WithError(err).WithField("id", req.ID).Error("Failed to send prompt")
@@ -317,20 +324,15 @@ func (p *IMPrompter) buildKeyboard(req ask.Request) imbot.InlineKeyboardMarkup {
 	return p.buildDefaultKeyboard(req.ID)
 }
 
-// buildDefaultKeyboard builds the default allow/deny keyboard
+// buildDefaultKeyboard builds the permission keyboard from shared PermissionOptions config
 func (p *IMPrompter) buildDefaultKeyboard(requestID string) imbot.InlineKeyboardMarkup {
 	kb := imbot.NewKeyboardBuilder()
 
-	// First row: Approve and Deny buttons
-	kb.AddRow(
-		imbot.CallbackButton("✅ Allow", imbot.FormatCallbackData("perm", "allow", requestID)),
-		imbot.CallbackButton("❌ Deny", imbot.FormatCallbackData("perm", "deny", requestID)),
-	)
-
-	// Second row: Always allow (remember decision)
-	kb.AddRow(
-		imbot.CallbackButton("🔄 Always Allow", imbot.FormatCallbackData("perm", "always", requestID)),
-	)
+	for _, opt := range ask.PermissionOptions {
+		buttonText := opt.Icon + " " + opt.Label
+		callbackData := imbot.FormatCallbackData("perm", opt.Action, requestID)
+		kb.AddRow(imbot.CallbackButton(buttonText, callbackData))
+	}
 
 	return kb.Build()
 }
@@ -376,11 +378,8 @@ func (p *IMPrompter) buildTextSelectionInstructions(req ask.Request) string {
 
 	questions, ok := req.Input["questions"].([]interface{})
 	if !ok || len(questions) == 0 {
-		// For permission prompts (not AskUserQuestion)
-		text.WriteString("• `1` - Allow\n")
-		text.WriteString("• `0` - Deny\n")
-		text.WriteString("• `a` - Always Allow")
-		return text.String()
+		// Fallback: use permission instructions from shared config
+		return ask.FormatPermissionInstructions()
 	}
 
 	// For AskUserQuestion - list the options
@@ -403,6 +402,12 @@ func (p *IMPrompter) buildTextSelectionInstructions(req ask.Request) string {
 	text.WriteString("\n_Just type the number to reply_")
 
 	return text.String()
+}
+
+// buildTextPermissionInstructions builds text instructions for permission prompts
+// on platforms without keyboard support. Delegates to the shared config in ask package.
+func (p *IMPrompter) buildTextPermissionInstructions() string {
+	return ask.FormatPermissionInstructions()
 }
 
 // editPromptToResult edits the prompt message to show the result

@@ -42,13 +42,13 @@ func (a *MessageAccumulator) AddEvent(event events.Event) ([]Message, bool, bool
 	var resultSuccess bool
 
 	switch event.Type {
-	case MessageTypeControlRequest:
+	case SDKControlRequestMessage:
 		var msg ControlRequest
 		if err := unmarshalEvent(event, &msg); err == nil {
 			a.messages = append(a.messages, &msg)
 			newMessages = append(newMessages, &msg)
 		}
-	case MessageTypeText:
+	case SDKTextMessage:
 		var msg ResultMessage
 		if err := unmarshalEvent(event, &msg); err == nil {
 			msg.Type = event.Type
@@ -59,38 +59,38 @@ func (a *MessageAccumulator) AddEvent(event events.Event) ([]Message, bool, bool
 			resultSuccess = true
 		}
 
-	case MessageTypeSystem:
+	case SDKSystemMessage:
 		if msg := a.parseSystemMessage(event); msg != nil {
 			a.messages = append(a.messages, msg)
 			newMessages = append(newMessages, msg)
 		}
 
-	case MessageTypeAssistant:
+	case SDKAssistantMessage:
 		if msg := a.parseAssistantMessage(event); msg != nil {
 			a.messages = append(a.messages, msg)
 			newMessages = append(newMessages, msg)
 		}
 
-	case MessageTypeUser:
+	case SDKUserMessage:
 		if msg := a.parseUserMessage(event); msg != nil {
 			a.messages = append(a.messages, msg)
 			newMessages = append(newMessages, msg)
 		}
 
-	case MessageTypeToolUse:
+	case SDKToolUseMessage:
 		if msg := a.parseToolUseMessage(event); msg != nil {
 			a.messages = append(a.messages, msg)
 			newMessages = append(newMessages, msg)
 		}
 
-	case MessageTypeToolResult:
+	case SDKToolResultMessage:
 		if msg := a.parseToolResultMessage(event); msg != nil {
 			a.messages = append(a.messages, msg)
 			newMessages = append(newMessages, msg)
 			a.completePendingToolUse(msg)
 		}
 
-	case MessageTypeResult:
+	case SDKResultMessage:
 		if msg := a.parseResultMessage(event); msg != nil {
 			a.messages = append(a.messages, msg)
 			newMessages = append(newMessages, msg)
@@ -98,7 +98,7 @@ func (a *MessageAccumulator) AddEvent(event events.Event) ([]Message, bool, bool
 			resultSuccess = msg.IsSuccess()
 		}
 
-	case MessageTypeStreamEvent:
+	case SDKStreamEventMessage:
 		if msg := a.parseStreamEventMessage(event); msg != nil {
 			a.messages = append(a.messages, msg)
 			newMessages = append(newMessages, msg)

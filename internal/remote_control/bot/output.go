@@ -53,22 +53,18 @@ const (
 	FormatAgentLine   = "%s %s\n" // icon + agent name
 	FormatDebugLine   = "%s %s\n" // icon + id value
 
-	// Completion message formats
-	FormatDoneWithCtx  = "%s %s done | %s %s\n%s" // icon + agent + path_icon + path + continue_msg
-	FormatDoneSimple   = "%s %s done\n%s"         // icon + agent + continue_msg
-	FormatDoneWithProj = "%s %s done | %s %s"     // icon + agent + path_icon + path (single line)
+	// Footer format (separator + agent + path)
+	FormatFooter = "\n%s\n%s %s\n📁 %s" // separator + icon + agent + path
 )
 
 // OutputBehavior controls what is shown in bot messages
 type OutputBehavior struct {
-	Debug   bool // Show message IDs (chat_id, user_id, session_id)
 	Verbose bool // Send intermediate processing messages
 }
 
 // DefaultOutputBehavior returns the default output behavior
 func DefaultOutputBehavior() OutputBehavior {
 	return OutputBehavior{
-		Debug:   false,
 		Verbose: true,
 	}
 }
@@ -80,7 +76,6 @@ func (s BotSetting) GetOutputBehavior() OutputBehavior {
 		verbose = *s.Verbose
 	}
 	return OutputBehavior{
-		Debug:   s.Debug,
 		Verbose: verbose,
 	}
 }
@@ -121,16 +116,14 @@ func ShortenID(id string, maxLen int) string {
 	return id[:maxLen]
 }
 
-// BuildDoneMessage creates a completion message with optional context
-func BuildDoneMessage(agentType, projectPath string, behavior OutputBehavior) string {
+// BuildFooter creates a compact footer line with agent and path info
+// Format: separator + "📁 path · icon agent"
+// Path is always present (defaults are resolved before calling this)
+func BuildFooter(agentType, projectPath string) string {
 	icon := GetAgentIcon(agentType)
 	agentName := GetAgentDisplayName(agentType)
-
-	if projectPath != "" {
-		shortPath := ShortenPath(projectPath)
-		return fmt.Sprintf(FormatDoneWithProj, IconDone, icon+" "+agentName, IconProject, shortPath)
-	}
-	return fmt.Sprintf("%s %s %s", IconDone, agentName, MsgTaskDone)
+	shortPath := ShortenPath(projectPath)
+	return fmt.Sprintf(FormatFooter, SeparatorLine, icon, agentName, shortPath)
 }
 
 // Helper functions for path handling (avoiding filepath import issues)

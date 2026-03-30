@@ -27,6 +27,7 @@ import (
 	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
+	"github.com/tingly-dev/tingly-box/internal/server/routing"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -107,6 +108,12 @@ type Server struct {
 	// scenario-specific recording sinks (created on-demand when recording flag is enabled)
 	scenarioRecordSinks   map[typ.RuleScenario]*obs.Sink
 	scenarioRecordSinksMu sync.RWMutex
+
+	// affinity store for smart routing session-model locking
+	affinityStore *AffinityStore
+
+	// routing selector for service selection pipeline
+	routingSelector *routing.SimpleSelector
 
 	// OTel meter setup for unified token tracking
 	meterSetup   *pkgotel.MeterSetup
@@ -448,7 +455,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Create server struct first with applied options
 	server.jwtManager = jwtManager
 	server.engine = gin.New()
-	server.clientPool = client.NewClientPool() // Initialize client pool
+	server.clientPool = client.NewClientPool() // Initialize client pool (once mode with auto-cleanup via finalizer)
 	server.errorMW = errorMW
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
 	server.guardrailsHistory = serverguardrails.NewHistoryStore(200, serverguardrails.GetGuardrailsHistoryPath(cfg.ConfigDir))
@@ -493,6 +500,13 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize load balancer
 	loadBalancer := NewLoadBalancer(cfg, healthFilter)
 
+	// Initialize affinity store for smart routing
+	affinityStore := NewAffinityStore(0) // 0 = use default TTL
+
+	// Initialize routing selector with pipeline
+	serviceSelector := routing.NewServiceSelector(cfg, affinityStore, loadBalancer)
+	simpleSelector := routing.NewSimpleSelector(serviceSelector)
+
 	// Initialize load balancer API
 	loadBalancerAPI := NewLoadBalancerAPI(loadBalancer, cfg)
 
@@ -531,6 +545,11 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.healthMonitor = healthMonitor
 	server.oauthManager = oauthManager
 	server.oauthRefresher = tokenRefresher
+	server.affinityStore = affinityStore
+	server.routingSelector = simpleSelector
+
+	// Start affinity store background GC
+	affinityStore.StartGC()
 
 	// Initialize OAuth handler
 	server.oauthHandler = oauthmodule.NewHandler(oauthManager, cfg)

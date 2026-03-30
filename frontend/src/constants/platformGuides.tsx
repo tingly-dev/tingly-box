@@ -1,11 +1,15 @@
+import { Telegram, Feishu, Lark, DingTalk, Weixin, WeCom, QQ, Discord, Slack } from '@/components/BrandIcons';
 import { OpenInNew } from '@mui/icons-material';
 import { Box, Link, Stack, Typography } from '@mui/material';
+import type { ComponentType } from 'react';
 
 export interface PlatformGuideConfig {
     id: string;
     name: string;
     description: string;
     icon: string;
+    /** BrandIcon component for consistent SVG rendering */
+    BrandIcon?: ComponentType<{ size?: number; sx?: any }>;
     status: 'available' | 'coming-soon' | 'beta';
     path: string;
     color: string;
@@ -18,6 +22,7 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
         name: 'Telegram',
         description: 'Popular cloud-based instant messaging service',
         icon: '📱',
+        BrandIcon: Telegram,
         status: 'available',
         path: '/remote-control/telegram',
         color: '#0088cc',
@@ -58,6 +63,7 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
         name: 'Feishu (飞书)',
         description: 'Enterprise collaboration platform',
         icon: '🚀',
+        BrandIcon: Feishu,
         status: 'available',
         path: '/remote-control/feishu',
         color: '#00d6b9',
@@ -100,6 +106,7 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
         name: 'Lark',
         description: 'Global version of Feishu',
         icon: '🐦',
+        BrandIcon: Lark,
         status: 'available',
         path: '/remote-control/lark',
         color: '#00d6b9',
@@ -142,6 +149,7 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
         name: 'DingTalk (钉钉)',
         description: 'Enterprise communication and collaboration',
         icon: '💬',
+        BrandIcon: DingTalk,
         status: 'available',
         path: '/remote-control/dingtalk',
         color: '#0089ff',
@@ -186,6 +194,7 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
         name: 'Weixin (微信)',
         description: 'China\'s most popular messaging platform',
         icon: '💚',
+        BrandIcon: Weixin,
         status: 'beta',
         path: '/remote-control/weixin',
         color: '#07c160',
@@ -224,6 +233,7 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
         name: 'WeCom (企业微信)',
         description: 'Enterprise Weixin communication platform',
         icon: '💼',
+        BrandIcon: WeCom,
         status: 'coming-soon',
         path: '/remote-control/wecom',
         color: '#888',
@@ -242,6 +252,7 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
         name: 'QQ',
         description: 'Tencent instant messaging platform',
         icon: '🐧',
+        BrandIcon: QQ,
         status: 'coming-soon',
         path: '/remote-control/qq',
         color: '#888',
@@ -260,6 +271,7 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
         name: 'Discord',
         description: 'Voice, video, and text communication',
         icon: '🎮',
+        BrandIcon: Discord,
         status: 'coming-soon',
         path: '/remote-control/discord',
         color: '#888',
@@ -278,6 +290,7 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
         name: 'Slack',
         description: 'Business communication platform',
         icon: '💳',
+        BrandIcon: Slack,
         status: 'coming-soon',
         path: '/remote-control/slack',
         color: '#888',

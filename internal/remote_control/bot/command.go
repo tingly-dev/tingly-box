@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/imbot"
 )
 
@@ -20,7 +21,6 @@ func RegisterBuiltinCommands(registry *imbot.CommandRegistry, botHandler BotHand
 		newHelpCommand(botHandler),
 		newBindCommand(botHandler),
 		newClearCommand(botHandler),
-		newStopCommand(botHandler),
 		newInterruptCommand(botHandler),
 		newProjectCommand(botHandler),
 		newStatusCommand(botHandler),
@@ -28,7 +28,7 @@ func RegisterBuiltinCommands(registry *imbot.CommandRegistry, botHandler BotHand
 		newJoinCommand(botHandler),
 		newYoloCommand(botHandler),
 		newVerboseCommand(botHandler),
-		newNoVerboseCommand(botHandler),
+		newQuietCommand(botHandler), // Renamed from noverbose
 		newMockCommand(botHandler),
 	}
 
@@ -60,17 +60,32 @@ type BotHandlerAdapter interface {
 	// SetProjectPath sets the project path for a chat
 	SetProjectPath(chatID, path string) error
 
+	// GetProjectPathForGroup gets project path with group fallback
+	GetProjectPathForGroup(chatID, platform string) (string, bool)
+
 	// GetSession gets session info
 	GetSession(chatID, agentType, projectPath string) (*SessionInfo, error)
 
+	// FindOrCreateSession finds an existing session or creates a new one
+	FindOrCreateSession(chatID, agentType, projectPath string) (*SessionInfo, error)
+
+	// UpdatePermissionMode updates the permission mode for a session
+	UpdatePermissionMode(sessionID, mode string) error
+
 	// ClearSession clears a session
 	ClearSession(chatID, agentType string) error
+
+	// StopExecution cancels a running execution, returns true if one was running
+	StopExecution(chatID string) bool
 
 	// GetCurrentAgent gets the current agent for a chat
 	GetCurrentAgent(chatID string) (string, error)
 
 	// SetVerbose sets verbose mode for a chat
 	SetVerbose(chatID string, enabled bool)
+
+	// GetVerbose gets verbose mode for a chat
+	GetVerbose(chatID string) bool
 
 	// IsWhitelisted checks if a group is whitelisted
 	IsWhitelisted(groupID string) bool
@@ -86,6 +101,15 @@ type BotHandlerAdapter interface {
 
 	// ResolveChatID resolves a chat ID (for Telegram join command)
 	ResolveChatID(input string) (string, error)
+
+	// GetDefaultProjectPath returns the default project path
+	GetDefaultProjectPath() string
+
+	// GetBashAllowlist returns the configured bash allowlist
+	GetBashAllowlist() map[string]struct{}
+
+	// ListProjectPaths lists all project paths for a user
+	ListProjectPaths(ownerID, platform string) ([]string, error)
 }
 
 // SessionInfo holds session information.
@@ -96,6 +120,7 @@ type SessionInfo struct {
 	Request        string
 	Error          string
 	PermissionMode string
+	LastActivity   time.Time
 }
 
 // Command implementations
@@ -104,7 +129,8 @@ func newHelpCommand(adapter BotHandlerAdapter) imbot.Command {
 	return imbot.NewCommand("cmd-help", "help", "Show available commands and help").
 		WithAliases("h", "start").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
-			return adapter.SendText(ctx.ChatID, ctx.Text)
+			// Help will be built by the registry's BuildHelpText, then formatted with meta
+			return nil // Handled specially in handleSlashCommands
 		}).
 		WithCategory("session").
 		WithPriority(100).
@@ -165,20 +191,14 @@ func newClearCommand(adapter BotHandlerAdapter) imbot.Command {
 		MustBuild()
 }
 
-func newStopCommand(adapter BotHandlerAdapter) imbot.Command {
-	return imbot.NewCommand("cmd-stop", "stop", "Stop the current running task").
-		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
-			return adapter.SendText(ctx.ChatID, "🛑 Task stopped.")
-		}).
-		WithCategory("session").
-		WithPriority(75).
-		MustBuild()
-}
-
 func newInterruptCommand(adapter BotHandlerAdapter) imbot.Command {
-	return imbot.NewCommand("cmd-interrupt", "interrupt", "Alias for /stop").
+	return imbot.NewCommand("cmd-interrupt", "interrupt", "Interrupt / Stop current running task").
+		WithAliases("s", "i", "stop").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
-			return adapter.SendText(ctx.ChatID, "🛑 Task stopped.")
+			if adapter.StopExecution(ctx.ChatID) {
+				return adapter.SendText(ctx.ChatID, "🛑 Task stopped.")
+			}
+			return adapter.SendText(ctx.ChatID, "No running task to stop.")
 		}).
 		Hidden().
 		MustBuild()
@@ -187,21 +207,59 @@ func newInterruptCommand(adapter BotHandlerAdapter) imbot.Command {
 func newProjectCommand(adapter BotHandlerAdapter) imbot.Command {
 	return imbot.NewCommand("cmd-project", "project", "Show and switch between projects").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
-			currentPath, err := adapter.GetProjectPath(ctx.ChatID)
-			if err != nil {
-				currentPath = ""
-			}
+			currentPath, _ := adapter.GetProjectPath(ctx.ChatID)
 
-			var text strings.Builder
+			var buf strings.Builder
 			if currentPath != "" {
-				text.WriteString(fmt.Sprintf("Current Project:\n📁 %s\n\n", currentPath))
+				buf.WriteString(fmt.Sprintf("Current Project:\n📁 %s\n\n", currentPath))
 			} else {
-				text.WriteString("No project bound to this chat.\n\n")
+				buf.WriteString("No project bound to this chat.\n\n")
 			}
 
-			text.WriteString("Use /cd <path> to bind a project.")
+			// Get all projects for user (direct messages only)
+			if ctx.IsDirectMessage {
+				projectPaths, err := adapter.ListProjectPaths(ctx.SenderID, string(ctx.Platform))
+				if err == nil && len(projectPaths) > 0 {
+					buf.WriteString("Your Projects:\n")
+					// Build inline keyboard with projects
+					var rows [][]imbot.InlineKeyboardButton
+					for _, path := range projectPaths {
+						marker := ""
+						if path == currentPath {
+							marker = " ✓"
+						}
+						btn := imbot.InlineKeyboardButton{
+							Text:         fmt.Sprintf("📁 %s%s", filepath.Base(path), marker),
+							CallbackData: imbot.FormatCallbackData("project", "switch", path),
+						}
+						rows = append(rows, []imbot.InlineKeyboardButton{btn})
+					}
+					// Add "Bind New" button
+					rows = append(rows, []imbot.InlineKeyboardButton{{
+						Text:         "📁 Bind New Project",
+						CallbackData: imbot.FormatCallbackData("action", "bind"),
+					}})
 
-			return adapter.SendText(ctx.ChatID, text.String())
+					keyboard := imbot.InlineKeyboardMarkup{InlineKeyboard: rows}
+					tgKeyboard := imbot.BuildTelegramActionKeyboard(keyboard)
+
+					_, err := ctx.Bot.SendMessage(context.Background(), ctx.ChatID, &imbot.SendMessageOptions{
+						Text:      buf.String(),
+						ParseMode: imbot.ParseModeMarkdown,
+						Metadata: map[string]interface{}{
+							"replyMarkup":        tgKeyboard,
+							"_trackActionMenuID": true,
+						},
+					})
+					if err != nil {
+						logrus.WithError(err).Error("Failed to send project list")
+					}
+					return nil
+				}
+			}
+
+			buf.WriteString("Use /cd <path> to bind a project.")
+			return adapter.SendText(ctx.ChatID, buf.String())
 		}).
 		WithCategory("project").
 		WithPriority(60).
@@ -211,23 +269,29 @@ func newProjectCommand(adapter BotHandlerAdapter) imbot.Command {
 func newStatusCommand(adapter BotHandlerAdapter) imbot.Command {
 	return imbot.NewCommand("cmd-status", "status", "Show current session status").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
-			agentType, err := adapter.GetCurrentAgent(ctx.ChatID)
-			if err != nil {
-				return adapter.SendText(ctx.ChatID, fmt.Sprintf("Failed to get agent: %v", err))
+			agentType, _ := adapter.GetCurrentAgent(ctx.ChatID)
+
+			// Smart Guide is stateless
+			if agentType == AgentNameTinglyBox {
+				projectPath := resolveProjectPath(adapter, ctx.ChatID, string(ctx.Platform))
+				var parts []string
+				parts = append(parts, "Agent: Smart Guide (@tb)")
+				parts = append(parts, "Status: Stateless (no session)")
+				if projectPath != "" {
+					parts = append(parts, fmt.Sprintf("Project: %s", projectPath))
+				}
+				return adapter.SendText(ctx.ChatID, strings.Join(parts, "\n"))
 			}
 
-			projectPath, err := adapter.GetProjectPath(ctx.ChatID)
-			if err != nil {
-				projectPath = ""
-			}
-
+			// For other agents (claude, mock), find the session
+			projectPath := resolveProjectPath(adapter, ctx.ChatID, string(ctx.Platform))
 			if projectPath == "" {
 				return adapter.SendText(ctx.ChatID, "No project bound. Use /cd <project_path> first.")
 			}
 
 			sess, err := adapter.GetSession(ctx.ChatID, agentType, projectPath)
 			if err != nil {
-				return adapter.SendText(ctx.ChatID, fmt.Sprintf("No session found: %v", err))
+				return adapter.SendText(ctx.ChatID, fmt.Sprintf("No session found for agent %s in project %s", agentType, projectPath))
 			}
 
 			var parts []string
@@ -235,8 +299,33 @@ func newStatusCommand(adapter BotHandlerAdapter) imbot.Command {
 			parts = append(parts, fmt.Sprintf("Session: %s", sess.ID))
 			parts = append(parts, fmt.Sprintf("Status: %s", sess.Status))
 
+			// Show running duration if running
+			if sess.Status == "running" && !sess.LastActivity.IsZero() {
+				runningFor := time.Since(sess.LastActivity).Round(time.Second)
+				parts = append(parts, fmt.Sprintf("Running for: %s", runningFor))
+			}
+
+			// Show current request if any
+			if sess.Request != "" {
+				reqPreview := sess.Request
+				if len(reqPreview) > 100 {
+					reqPreview = reqPreview[:100] + "..."
+				}
+				parts = append(parts, fmt.Sprintf("Current task: %s", reqPreview))
+			}
+
+			// Show project path
 			if sess.Project != "" {
 				parts = append(parts, fmt.Sprintf("Project: %s", sess.Project))
+			}
+
+			// Show error if failed
+			if sess.Status == "failed" && sess.Error != "" {
+				errPreview := sess.Error
+				if len(errPreview) > 100 {
+					errPreview = errPreview[:100] + "..."
+				}
+				parts = append(parts, fmt.Sprintf("Error: %s", errPreview))
 			}
 
 			return adapter.SendText(ctx.ChatID, strings.Join(parts, "\n"))
@@ -254,9 +343,7 @@ func newBashCommand(adapter BotHandlerAdapter) imbot.Command {
 			}
 
 			subcommand := strings.ToLower(strings.TrimSpace(args[0]))
-			allowlist := map[string]struct{}{
-				"pwd": {}, "cd": {}, "ls": {},
-			}
+			allowlist := adapter.GetBashAllowlist()
 
 			if _, ok := allowlist[subcommand]; !ok {
 				return adapter.SendText(ctx.ChatID, "Command not allowed.")
@@ -344,7 +431,12 @@ func newBashCommand(adapter BotHandlerAdapter) imbot.Command {
 
 func newJoinCommand(adapter BotHandlerAdapter) imbot.Command {
 	return imbot.NewCommand("cmd-join", "join", "Add group to whitelist (Telegram only)").
+		WithPlatforms(imbot.PlatformTelegram).
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
+			if !ctx.IsDirectMessage {
+				return adapter.SendText(ctx.ChatID, "/join can only be used in general chat.")
+			}
+
 			if !ctx.IsPlatform(imbot.PlatformTelegram) {
 				return adapter.SendText(ctx.ChatID, "Join command is only supported for Telegram bot.")
 			}
@@ -358,11 +450,16 @@ func newJoinCommand(adapter BotHandlerAdapter) imbot.Command {
 				return adapter.SendText(ctx.ChatID, "Usage: /join <group_id|@username|invite_link>")
 			}
 
-			// Resolve the chat ID
-			groupID, err := adapter.ResolveChatID(input)
+			// Resolve the chat ID via Telegram bot
+			tgBot, ok := imbot.AsTelegramBot(ctx.Bot)
+			if !ok {
+				return adapter.SendText(ctx.ChatID, "Join command is only supported for Telegram bot.")
+			}
+
+			groupID, err := tgBot.ResolveChatID(input)
 			if err != nil {
 				logrus.WithError(err).Error("Failed to resolve chat ID")
-				return adapter.SendText(ctx.ChatID, fmt.Sprintf("Failed to resolve chat ID: %v", err))
+				return adapter.SendText(ctx.ChatID, fmt.Sprintf("Failed to resolve chat ID: %v\n\nNote: Bot must already be a member of the group to add it to whitelist.", err))
 			}
 
 			// Check if already whitelisted
@@ -376,6 +473,7 @@ func newJoinCommand(adapter BotHandlerAdapter) imbot.Command {
 				return adapter.SendText(ctx.ChatID, fmt.Sprintf("Failed to add group to whitelist: %v", err))
 			}
 
+			logrus.Infof("Group %s added to whitelist by %s", groupID, ctx.SenderID)
 			return adapter.SendText(ctx.ChatID, fmt.Sprintf("Successfully added group to whitelist.\nGroup ID: %s", groupID))
 		}).
 		WithCategory("system").
@@ -386,29 +484,33 @@ func newJoinCommand(adapter BotHandlerAdapter) imbot.Command {
 func newYoloCommand(adapter BotHandlerAdapter) imbot.Command {
 	return imbot.NewCommand("cmd-yolo", "yolo", "Toggle auto-approve mode (Claude Code only)").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
-			agentType, err := adapter.GetCurrentAgent(ctx.ChatID)
-			if err != nil || agentType != "claude" {
+			agentType, _ := adapter.GetCurrentAgent(ctx.ChatID)
+			if agentType != AgentNameClaude {
 				return adapter.SendText(ctx.ChatID, "⚠️ Auto-approve mode is only available for Claude Code (@cc).\n\nSwitch to Claude Code first with: @cc")
 			}
 
-			projectPath, _ := adapter.GetProjectPath(ctx.ChatID)
+			projectPath := resolveProjectPath(adapter, ctx.ChatID, string(ctx.Platform))
 			if projectPath == "" {
 				return adapter.SendText(ctx.ChatID, "No project path found. Use /cd <project_path> to create a session first.")
 			}
 
-			sess, err := adapter.GetSession(ctx.ChatID, "claude", projectPath)
+			// Find or create session
+			sess, err := adapter.FindOrCreateSession(ctx.ChatID, AgentNameClaude, projectPath)
 			if err != nil {
 				return adapter.SendText(ctx.ChatID, fmt.Sprintf("Failed to get session: %v", err))
 			}
 
-			newMode := "auto"
-			if sess.PermissionMode == "auto" {
-				newMode = "manual"
+			// Toggle permission mode between bypassPermissions (yolo ON) and default (yolo OFF)
+			newMode := string(claude.PermissionModeBypassPermissions)
+			if sess.PermissionMode == string(claude.PermissionModeBypassPermissions) {
+				newMode = string(claude.PermissionModeDefault)
 			}
 
-			// Update permission mode (this would need to be added to adapter)
-			// For now, just send the message
-			if newMode == "auto" {
+			if err := adapter.UpdatePermissionMode(sess.ID, newMode); err != nil {
+				return adapter.SendText(ctx.ChatID, fmt.Sprintf("Failed to update permission mode: %v", err))
+			}
+
+			if newMode == string(claude.PermissionModeBypassPermissions) {
 				return adapter.SendText(ctx.ChatID, fmt.Sprintf("🚀 **YOLO MODE ENABLED**\n\nAll permissions will be auto-approved for this session.\n⚠️ Use with caution!\n\nSession: %s\nProject: %s", sess.ID, projectPath))
 			}
 			return adapter.SendText(ctx.ChatID, fmt.Sprintf("🔒 **YOLO MODE DISABLED**\n\nBack to normal approval mode.\nAll permission requests will require confirmation.\n\nSession: %s\nProject: %s", sess.ID, projectPath))
@@ -419,21 +521,55 @@ func newYoloCommand(adapter BotHandlerAdapter) imbot.Command {
 }
 
 func newVerboseCommand(adapter BotHandlerAdapter) imbot.Command {
-	return imbot.NewCommand("cmd-verbose", "verbose", "Show all message details (default)").
+	return imbot.NewCommand("cmd-verbose", "verbose", "Control message detail display").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
-			adapter.SetVerbose(ctx.ChatID, true)
-			return adapter.SendText(ctx.ChatID, "✅ Verbose mode enabled\n\nAll message details will be shown.")
+			// No args: show current status
+			if len(args) == 0 {
+				current := adapter.GetVerbose(ctx.ChatID)
+				status := "off"
+				if current {
+					status = "on"
+				}
+				return adapter.SendText(ctx.ChatID, fmt.Sprintf("📢 Verbose mode: %s\n\nUsage: /verbose <on|off>", status))
+			}
+
+			// Parse argument
+			arg := strings.ToLower(strings.TrimSpace(args[0]))
+			var enabled bool
+			var valid bool
+
+			switch arg {
+			case "on", "true", "1", "yes", "enable":
+				enabled = true
+				valid = true
+			case "off", "false", "0", "no", "disable":
+				enabled = false
+				valid = true
+			}
+
+			if !valid {
+				return adapter.SendText(ctx.ChatID, "Usage: /verbose <on|off>\n\nExample: /verbose on")
+			}
+
+			adapter.SetVerbose(ctx.ChatID, enabled)
+			if enabled {
+				return adapter.SendText(ctx.ChatID, "✅ Verbose mode enabled\n\nAll message details will be shown.")
+			}
+			return adapter.SendText(ctx.ChatID, "🔇 Quiet mode enabled\n\nOnly final results will be shown.")
 		}).
 		WithCategory("advanced").
 		WithPriority(5).
 		MustBuild()
 }
 
-func newNoVerboseCommand(adapter BotHandlerAdapter) imbot.Command {
-	return imbot.NewCommand("cmd-noverbose", "noverbose", "Hide intermediate messages").
+// newQuietCommand creates the /quiet command (alias for /verbose off)
+// This is a convenient shorthand to disable verbose mode
+func newQuietCommand(adapter BotHandlerAdapter) imbot.Command {
+	return imbot.NewCommand("cmd-quiet", "quiet", "Disable verbose mode (alias for /verbose off)").
+		WithAliases("noverbose").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
 			adapter.SetVerbose(ctx.ChatID, false)
-			return adapter.SendText(ctx.ChatID, "🔇 Quiet mode enabled\n\nOnly final results will be shown. Use /verbose to show all details.")
+			return adapter.SendText(ctx.ChatID, "🔇 Quiet mode enabled\n\nOnly final results will be shown. Use /verbose on to show all details.")
 		}).
 		WithCategory("advanced").
 		WithPriority(4).

@@ -181,6 +181,9 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
 			s.trackUsageWithTokenUsage(c, usage, nil)
 
+			// Update affinity entry with message ID
+			s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
+
 			// FIXME: now we use req model as resp model
 			anthropicResp.Model = anthropic.Model(proxyModel)
 
@@ -261,6 +264,9 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			}
 			usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
 			s.trackUsageWithTokenUsage(c, usage, nil)
+
+			// Update affinity entry with message ID
+			s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
 
 			// Record response if scenario recording is enabled
 			if recorder != nil {
@@ -407,6 +413,9 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
 			s.trackUsageWithTokenUsage(c, usage, nil)
 
+			// Update affinity entry with message ID
+			s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
+
 			// Record response if scenario recording is enabled
 			if recorder != nil {
 				recorder.SetAssembledResponse(anthropicResp)
@@ -467,6 +476,12 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context
 		recorder = r.(*ScenarioRecorder)
 	}
 
+	// Get rule from context for affinity
+	var rule *typ.Rule
+	if r, exists := c.Get(ContextKeyRule); exists {
+		rule = r.(*typ.Rule)
+	}
+
 	var response *responses.Response
 	var err error
 	var cancel context.CancelFunc
@@ -499,6 +514,10 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context
 	s.trackUsageWithTokenUsage(c, usage, nil)
 
 	anthropicResp := nonstream.ConvertResponsesToAnthropicBetaResponse(response, proxyModel)
+
+	// Update affinity entry with message ID
+	s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
+
 	// Record response if scenario recording is enabled
 	if recorder != nil {
 		recorder.SetAssembledResponse(anthropicResp)

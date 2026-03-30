@@ -127,7 +127,6 @@ require (
 	github.com/mattn/go-runewidth v0.0.21 // indirect
 	github.com/mattn/go-sqlite3 v1.14.34 // indirect
 	github.com/mdp/qrterminal/v3 v3.2.1 // indirect
-	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
@@ -149,8 +148,7 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/tiktoken-go/tokenizer v0.7.0 // indirect
-	github.com/tingly-dev/tingly-agentscope v0.260325.1 // indirect
-	github.com/tingly-dev/tingly-agentscope/extension v0.260325.2 // indirect
+	github.com/tingly-dev/tingly-agentscope v0.260327.1030 // indirect
 	github.com/tingly-dev/tingly-box/imbot v0.1.0 // indirect
 	github.com/tingly-dev/weixin v0.0.1 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect

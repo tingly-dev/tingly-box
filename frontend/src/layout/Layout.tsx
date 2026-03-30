@@ -59,6 +59,30 @@ const sidebarWidth = 200;
 const headerHeight = 60;
 const footerHeight = 60;
 
+// --- Activity Bar Item Styles (extracted for easy tuning) ---
+const activityItemMinHeight = 64;       // was 56
+const activityItemGap = 0.5;            // was 0.25
+const activityItemRadius = 1.25;
+const activityItemPaddingX = 1;
+const activityItemPaddingY = 1.25;      // was 1
+const activityContainerPaddingY = 1;    // was 0.5
+
+const activityItemSx = (extra?: Record<string, unknown>) => ({
+    minHeight: activityItemMinHeight,
+    mx: 0.5,
+    px: activityItemPaddingX,
+    py: activityItemPaddingY,
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: activityItemGap,
+    position: 'relative' as const,
+    color: 'text.secondary',
+    borderRadius: activityItemRadius,
+    cursor: 'pointer',
+    ...extra,
+});
+
 interface NavItem {
     path: string;
     label: string;
@@ -230,7 +254,7 @@ const Layout = ({ children }: LayoutProps) => {
                 label: 'Remote',
                 children: [
                     {
-                        path: '/remote-control/bot',
+                        path: '/remote-control',
                         label: 'Overview',
                         icon: <ChatBubble sx={{fontSize: 20}}/>,
                     },
@@ -303,7 +327,13 @@ const Layout = ({ children }: LayoutProps) => {
                 key: 'credential',
                 icon: <LockIcon sx={{ fontSize: 22 }} />,
                 label: t('layout.nav.credential', { defaultValue: 'Credentials' }),
-                path: '/credentials',
+                children: [
+                    {
+                        path: '/credentials',
+                        label: 'Model API',
+                        icon: <LockIcon sx={{ fontSize: 20 }} />,
+                    },
+                ],
             },
             {
                 key: 'system',
@@ -402,7 +432,7 @@ const Layout = ({ children }: LayoutProps) => {
             </Box>
 
             {/* Activity Icons */}
-            <Box sx={{ flex: 1, py: 0.5, overflowY: 'auto' }}>
+            <Box sx={{ flex: 1, py: activityContainerPaddingY, overflowY: 'auto' }}>
                 {activityItems.map((item) => {
                     const isActiveItem = activeActivity === item.key;
 
@@ -425,19 +455,7 @@ const Layout = ({ children }: LayoutProps) => {
                             component={item.path && !item.children ? RouterLink : 'div'}
                             to={item.path && !item.children ? item.path : undefined}
                             onClick={handleClick}
-                            sx={{
-                                minHeight: 56,
-                                mx: 0.5,
-                                px: 1,
-                                py: 1,
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: 0.25,
-                                position: 'relative',
-                                color: 'text.secondary',
-                                borderRadius: 1.25,
-                                cursor: 'pointer',
+                            sx={activityItemSx({
                                 '&:hover': {
                                     bgcolor: isActiveItem ? 'primary.dark' : 'action.hover',
                                     color: isActiveItem ? 'primary.contrastText' : 'primary.main',
@@ -458,7 +476,7 @@ const Layout = ({ children }: LayoutProps) => {
                                         boxShadow: '0 0 8px rgba(37, 99, 235, 0.5)',
                                     },
                                 }),
-                            }}
+                            })}
                         >
                             <ListItemIcon
                                 sx={{
@@ -497,21 +515,12 @@ const Layout = ({ children }: LayoutProps) => {
                     <Tooltip title={import.meta.env.DEV && isHealthy ? 'Disconnected (Debug)' : 'Disconnected'} placement="right" arrow>
                         <ListItemButton
                             onClick={showDisconnectDialog}
-                            sx={{
-                                minHeight: 56,
-                                mx: 0.5,
-                                px: 1,
-                                py: 1,
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: 0.25,
+                            sx={activityItemSx({
                                 color: 'error.main',
-                                borderRadius: 1.25,
                                 '&:hover': {
                                     bgcolor: 'action.hover',
                                 },
-                            }}
+                            })}
                         >
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
                                 <ErrorOutline sx={{ fontSize: 22 }} />
@@ -544,21 +553,12 @@ const Layout = ({ children }: LayoutProps) => {
                     >
                         <ListItemButton
                             onClick={showUpdateDialog}
-                            sx={{
-                                minHeight: 56,
-                                mx: 0.5,
-                                px: 1,
-                                py: 1,
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: 0.25,
+                            sx={activityItemSx({
                                 color: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main',
-                                borderRadius: 1.25,
                                 '&:hover': {
                                     bgcolor: 'action.hover',
                                 },
-                            }}
+                            })}
                         >
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
                                 <NewReleases sx={{ fontSize: 22 }} />
@@ -601,22 +601,12 @@ const Layout = ({ children }: LayoutProps) => {
                 <Tooltip title="Click" placement="right" arrow>
                     <ListItemButton
                         onClick={handleEasterEgg}
-                        sx={{
-                            minHeight: 56,
-                            mx: 0.5,
-                            px: 1,
-                            py: 1,
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 0.25,
-                            color: 'text.secondary',
-                            borderRadius: 1.25,
+                        sx={activityItemSx({
                             '&:hover': {
                                 bgcolor: 'action.hover',
                                 color: 'text.primary',
                             },
-                        }}
+                        })}
                     >
                         <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
                             <AccountIcon sx={{ fontSize: 22 }} />

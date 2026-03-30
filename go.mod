@@ -11,7 +11,6 @@ replace google.golang.org/genai => ./libs/go-genai
 replace github.com/tingly-dev/tingly-box/imbot => ./imbot
 
 //replace github.com/tingly-dev/tingly-agentscope => ./tingly-scope
-//replace github.com/tingly-dev/tingly-agentscope/extension => ./tingly-scope/extension
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.26.0
@@ -37,8 +36,7 @@ require (
 	github.com/tidwall/gjson v1.18.0
 	github.com/tidwall/sjson v1.2.5
 	github.com/tiktoken-go/tokenizer v0.7.0
-	github.com/tingly-dev/tingly-agentscope v0.260325.1
-	github.com/tingly-dev/tingly-agentscope/extension v0.260325.2
+	github.com/tingly-dev/tingly-agentscope v0.260327.1030
 	github.com/tingly-dev/tingly-box/imbot v0.1.0
 	go.opentelemetry.io/otel v1.42.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.42.0
@@ -124,7 +122,6 @@ require (
 	github.com/mattn/go-localereader v0.0.1 // indirect
 	github.com/mattn/go-runewidth v0.0.21 // indirect
 	github.com/mdp/qrterminal/v3 v3.2.1 // indirect
-	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect

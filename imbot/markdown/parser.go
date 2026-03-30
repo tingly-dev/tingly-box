@@ -239,6 +239,10 @@ func (w *walker) walkNode(node ast.Node, entering bool) (ast.WalkStatus, error) 
 				w.writeText("\n\n")
 			}
 			w.writeText("────────")
+			// Ensure trailing newlines after the break
+			if node.NextSibling() != nil {
+				w.writeText("\n\n")
+			}
 		}
 		return ast.WalkSkipChildren, nil
 	}

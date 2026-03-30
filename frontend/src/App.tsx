@@ -41,7 +41,6 @@ import SkillPage from './pages/prompt/SkillPage';
 import CommandPage from './pages/prompt/CommandPage';
 import RemoteCoderPage from './pages/remote-coder/RemoteCoderPage';
 import RemoteCoderSessionsPage from './pages/remote-coder/RemoteCoderSessionsPage';
-import BotPage from './pages/remote-control/BotPage';
 import AgentPage from './pages/remote-control/AgentPage';
 import RemoteControlOverviewPage from './pages/remote-control/OverviewPage';
 import TelegramPage from './pages/remote-control/TelegramPage';
@@ -317,7 +316,6 @@ function AppContent() {
                     <Route path="/remote-coder/sessions" element={<RemoteCoderSessionsPage />} />
                     {/* Remote Control routes */}
                     <Route path="/remote-control" element={<RemoteControlOverviewPage />} />
-                    <Route path="/remote-control/bot" element={<BotPage />} />
                     <Route path="/remote-control/agent" element={<AgentPage />} />
                     {/* Platform-specific bot pages */}
                     <Route path="/remote-control/telegram" element={<TelegramPage />} />

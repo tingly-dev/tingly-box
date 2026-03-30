@@ -48,7 +48,7 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 		if !rule.Active {
 			continue
 		}
-		if scenario != nil && rule.GetScenario() != *scenario {
+		if scenario != nil && !shouldIncludeRuleInModelList(*scenario, rule.GetScenario()) {
 			continue
 		}
 
@@ -180,7 +180,9 @@ func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
 		})
 		return
 	}
-	provider, selectedService, err = s.DetermineProviderAndModelWithScenario(scenarioType, rule, &req.ChatCompletionNewParams)
+
+	// Select service using routing pipeline
+	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, &req.ChatCompletionNewParams)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{

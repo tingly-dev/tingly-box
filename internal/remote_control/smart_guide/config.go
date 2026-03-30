@@ -43,7 +43,7 @@ type ModelConfig struct {
 func DefaultSmartGuideConfig() *SmartGuideConfig {
 	return &SmartGuideConfig{
 		Enabled:       true, // Now enabled by default as the entry point
-		MaxIterations: 5,
+		MaxIterations: 20,
 		Temperature:   0.7,
 		ToolsEnabled: map[string]bool{
 			"get_status":    true,

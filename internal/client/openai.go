@@ -34,7 +34,7 @@ type OpenAIClient struct {
 }
 
 // defaultNewOpenAIClient creates a new OpenAI client wrapper
-func defaultNewOpenAIClient(provider *typ.Provider) (*OpenAIClient, error) {
+func defaultNewOpenAIClient(provider *typ.Provider, model string) (*OpenAIClient, error) {
 	options := []option.RequestOption{
 		option.WithAPIKey(provider.GetAccessToken()),
 		option.WithBaseURL(provider.APIBase),
@@ -53,7 +53,7 @@ func defaultNewOpenAIClient(provider *typ.Provider) (*OpenAIClient, error) {
 	var httpClient *http.Client
 	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
 		// Use CreateHTTPClientForProvider which applies OAuth hooks and uses shared transport
-		httpClient = CreateHTTPClientForProvider(provider)
+		httpClient = CreateHTTPClientForProvider(provider, model)
 		providerType := oauth.ProviderType(provider.OAuthDetail.ProviderType)
 		if providerType == oauth.ProviderCodex {
 			logrus.Infof("[Codex] Using hook-based transport for ChatGPT backend API path rewriting")
@@ -88,7 +88,9 @@ func (c *OpenAIClient) APIStyle() protocol.APIStyle {
 
 // Close closes any resources held by the client
 func (c *OpenAIClient) Close() error {
-	// OpenAI client doesn't need explicit closing
+	if c.httpClient != nil && c.httpClient != http.DefaultClient {
+		c.httpClient.CloseIdleConnections()
+	}
 	return nil
 }
 

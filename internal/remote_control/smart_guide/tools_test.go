@@ -174,7 +174,7 @@ func TestGetStatusTool_Call(t *testing.T) {
 func TestNewChangeDirTool(t *testing.T) {
 	executor := NewToolExecutor([]string{})
 	updateProjectFunc := func(chatID string, projectPath string) error { return nil }
-	changeDirTool := NewChangeDirTool(executor, updateProjectFunc)
+	changeDirTool := NewChangeDirTool(executor, "", updateProjectFunc)
 
 	assert.NotNil(t, changeDirTool)
 	assert.Equal(t, "change_workdir", changeDirTool.Name())
@@ -182,7 +182,7 @@ func TestNewChangeDirTool(t *testing.T) {
 
 func TestChangeDirTool_NameDescription(t *testing.T) {
 	executor := NewToolExecutor([]string{})
-	changeDirTool := NewChangeDirTool(executor, nil)
+	changeDirTool := NewChangeDirTool(executor, "", nil)
 
 	assert.Equal(t, "change_workdir", changeDirTool.Name())
 	assert.Contains(t, changeDirTool.Description(), "Change the bound project directory")
@@ -209,10 +209,10 @@ func TestChangeDirTool_Call(t *testing.T) {
 		updatedProjectPath = projectPath
 		return nil
 	}
-	changeDirTool := NewChangeDirTool(executor, mockUpdateProjectFunc)
+	changeDirTool := NewChangeDirTool(executor, "chat123", mockUpdateProjectFunc)
 
 	// Test changing to an absolute path
-	resp, err := changeDirTool.Call(ctx, ChangeDirParams{Path: subDir1, ChatID: "chat123"})
+	resp, err := changeDirTool.Call(ctx, ChangeDirParams{Path: subDir1})
 	assert.NoError(t, err)
 	text := extractTextFromResponse(resp)
 	assert.Contains(t, text, "Changed directory to:")
@@ -223,7 +223,7 @@ func TestChangeDirTool_Call(t *testing.T) {
 	assert.Equal(t, subDir1, updatedProjectPath)
 
 	// Test changing to a relative path
-	resp, err = changeDirTool.Call(ctx, ChangeDirParams{Path: "../sub2", ChatID: "chat123"})
+	resp, err = changeDirTool.Call(ctx, ChangeDirParams{Path: "../sub2"})
 	assert.NoError(t, err)
 	text = extractTextFromResponse(resp)
 	assert.Contains(t, text, "Changed directory to:")
@@ -256,8 +256,8 @@ func TestChangeDirTool_Call(t *testing.T) {
 	errorUpdateProjectFunc := func(chatID string, projectPath string) error {
 		return errors.New("persistence error")
 	}
-	changeDirTool = NewChangeDirTool(executor, errorUpdateProjectFunc)
-	resp, err = changeDirTool.Call(ctx, ChangeDirParams{Path: subDir1, ChatID: "chat123"})
+	changeDirTool = NewChangeDirTool(executor, "chat123", errorUpdateProjectFunc)
+	resp, err = changeDirTool.Call(ctx, ChangeDirParams{Path: subDir1})
 	assert.NoError(t, err)
 	text = extractTextFromResponse(resp)
 	assert.Contains(t, text, "Warning: directory changed but persistence failed")
@@ -270,7 +270,7 @@ func TestRegisterTools(t *testing.T) {
 	getStatusFunc := func(chatID string) (*StatusInfo, error) { return nil, nil }
 	updateProjectFunc := func(chatID string, projectPath string) error { return nil }
 
-	err := RegisterTools(toolkit, executor, getStatusFunc, updateProjectFunc)
+	err := RegisterTools(toolkit, executor, "test-chat", getStatusFunc, updateProjectFunc)
 	assert.NoError(t, err)
 
 	// Verify schemas are registered (tools should be available)

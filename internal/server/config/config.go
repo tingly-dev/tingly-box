@@ -1488,14 +1488,14 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	var lister client.ModelLister
 	switch provider.APIStyle {
 	case protocol.APIStyleAnthropic:
-		aClient, err := client.NewAnthropicClient(provider)
+		aClient, err := client.NewAnthropicClient(provider, "")
 		if err == nil {
 			defer aClient.Close()
 			lister = aClient
 		}
 		apiErr = err
 	case protocol.APIStyleGoogle:
-		gClient, err := client.NewGoogleClient(provider)
+		gClient, err := client.NewGoogleClient(provider, "")
 		if err == nil {
 			defer gClient.Close()
 			lister = gClient
@@ -1504,7 +1504,7 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	case protocol.APIStyleOpenAI:
 		fallthrough
 	default:
-		oClient, err := client.NewOpenAIClient(provider)
+		oClient, err := client.NewOpenAIClient(provider, "")
 		if err == nil {
 			defer oClient.Close()
 			lister = oClient

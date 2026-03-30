@@ -336,8 +336,9 @@ type Rule struct {
 	LBTactic Tactic `json:"lb_tactic" yaml:"lb_tactic"`
 	Active   bool   `json:"active" yaml:"active"`
 	// Smart Routing Configuration
-	SmartEnabled bool                        `json:"smart_enabled" yaml:"smart_enabled"`
-	SmartRouting []smartrouting.SmartRouting `json:"smart_routing,omitempty" yaml:"smart_routing,omitempty"`
+	SmartEnabled  bool                        `json:"smart_enabled" yaml:"smart_enabled"`
+	SmartAffinity bool                        `json:"smart_affinity,omitempty" yaml:"smart_affinity,omitempty"`
+	SmartRouting  []smartrouting.SmartRouting `json:"smart_routing,omitempty" yaml:"smart_routing,omitempty"`
 }
 
 // ToJSON implementation
@@ -356,6 +357,7 @@ func (r *Rule) ToJSON() interface{} {
 		"lb_tactic":      r.LBTactic,
 		"active":         r.Active,
 		"smart_enabled":  r.SmartEnabled,
+		"smart_affinity": r.SmartAffinity,
 		"smart_routing":  r.SmartRouting,
 	}
 
