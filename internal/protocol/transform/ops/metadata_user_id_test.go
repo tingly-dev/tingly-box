@@ -602,7 +602,7 @@ func TestFormatMetadataUserID(t *testing.T) {
 // ApplyAnthropicMetadataTransform Tests
 // =============================================
 
-func TestApplyAnthropicMetadataTransform_V1(t *testing.T) {
+func TestApplyAnthropicV1MetadataTransform(t *testing.T) {
 	userID := "16d97292-8713-438b-ad2e-76f495717258"
 
 	tests := []struct {
@@ -656,36 +656,30 @@ func TestApplyAnthropicMetadataTransform_V1(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ApplyAnthropicMetadataTransform(tt.req, tt.extra)
+			result := ApplyAnthropicV1MetadataTransform(tt.req, tt.extra)
 
 			if tt.wantNoMetadata {
 				if result != tt.req {
-					t.Errorf("ApplyAnthropicMetadataTransform() should return same request")
+					t.Errorf("ApplyAnthropicV1MetadataTransform() should return same request")
 				}
 				return
 			}
 
-			typedResult, ok := result.(*anthropic.MessageNewParams)
-			if !ok {
-				t.Errorf("ApplyAnthropicMetadataTransform() wrong type")
-				return
-			}
-
-			if !typedResult.Metadata.UserID.Valid() {
-				t.Errorf("ApplyAnthropicMetadataTransform() metadata.UserID not set")
+			if !result.Metadata.UserID.Valid() {
+				t.Errorf("ApplyAnthropicV1MetadataTransform() metadata.UserID not set")
 				return
 			}
 
 			if tt.checkMetadata != nil {
-				if !tt.checkMetadata(typedResult.Metadata.UserID.Value) {
-					t.Errorf("ApplyAnthropicMetadataTransform() metadata check failed, got %v", typedResult.Metadata.UserID.Value)
+				if !tt.checkMetadata(result.Metadata.UserID.Value) {
+					t.Errorf("ApplyAnthropicV1MetadataTransform() metadata check failed, got %v", result.Metadata.UserID.Value)
 				}
 			}
 		})
 	}
 }
 
-func TestApplyAnthropicMetadataTransform_Beta(t *testing.T) {
+func TestApplyAnthropicBetaMetadataTransform(t *testing.T) {
 	userID := "16d97292-8713-438b-ad2e-76f495717258"
 
 	tests := []struct {
@@ -720,22 +714,16 @@ func TestApplyAnthropicMetadataTransform_Beta(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ApplyAnthropicMetadataTransform(tt.req, tt.extra)
+			result := ApplyAnthropicBetaMetadataTransform(tt.req, tt.extra)
 
-			typedResult, ok := result.(*anthropic.BetaMessageNewParams)
-			if !ok {
-				t.Errorf("ApplyAnthropicMetadataTransform() wrong type")
-				return
-			}
-
-			if !typedResult.Metadata.UserID.Valid() {
-				t.Errorf("ApplyAnthropicMetadataTransform() metadata.UserID not set")
+			if !result.Metadata.UserID.Valid() {
+				t.Errorf("ApplyAnthropicBetaMetadataTransform() metadata.UserID not set")
 				return
 			}
 
 			if tt.checkMetadata != nil {
-				if !tt.checkMetadata(typedResult.Metadata.UserID.Value) {
-					t.Errorf("ApplyAnthropicMetadataTransform() metadata check failed, got %v", typedResult.Metadata.UserID.Value)
+				if !tt.checkMetadata(result.Metadata.UserID.Value) {
+					t.Errorf("ApplyAnthropicBetaMetadataTransform() metadata check failed, got %v", result.Metadata.UserID.Value)
 				}
 			}
 		})

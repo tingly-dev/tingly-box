@@ -102,7 +102,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	}
 	// If thinking carries budget_tokens beyond model max, shrink budget to max_allowed/10, but at leas 1024
 	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil && *thinkBudget > int64(maxAllowed) {
-		req.Thinking = anthropic.ThinkingConfigParamOfEnabled(max(1024, int64(maxAllowed / 10)))
+		req.Thinking = anthropic.ThinkingConfigParamOfEnabled(max(1024, int64(maxAllowed/10)))
 	}
 
 	// Set provider UUID in context (Service.Provider uses UUID, not name)
@@ -310,13 +310,12 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 				scenarioFlags = &scenarioConfig.Flags
 			}
 
-			transformCtx := &transform.TransformContext{
-				OriginalRequest: &req.MessageNewParams,
-				Request:         &req.MessageNewParams, // Original Anthropic v1 request
-				ProviderURL:     provider.APIBase,
-				ScenarioFlags:   scenarioFlags,
-				IsStreaming:     isStreaming,
-			}
+			transformCtx := transform.NewTransformContext(
+				&req.MessageNewParams,
+				transform.WithProviderURL(provider.APIBase),
+				transform.WithScenarioFlags(scenarioFlags),
+				transform.WithStreaming(isStreaming),
+			)
 
 			// Execute transform chain
 			finalCtx, err := chain.Execute(transformCtx)
@@ -370,13 +369,12 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			scenarioFlags = &scenarioConfig.Flags
 		}
 
-		transformCtx := &transform.TransformContext{
-			OriginalRequest: &req.MessageNewParams,
-			Request:         &req.MessageNewParams, // Original Anthropic request
-			ProviderURL:     provider.APIBase,
-			ScenarioFlags:   scenarioFlags,
-			IsStreaming:     isStreaming,
-		}
+		transformCtx := transform.NewTransformContext(
+			&req.MessageNewParams,
+			transform.WithProviderURL(provider.APIBase),
+			transform.WithScenarioFlags(scenarioFlags),
+			transform.WithStreaming(isStreaming),
+		)
 
 		// Execute transform chain
 		finalCtx, err := chain.Execute(transformCtx)

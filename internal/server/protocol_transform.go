@@ -27,14 +27,13 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 	}
 	extra["device"] = s.config.Random256
 
-	transformCtx := &transform.TransformContext{
-		OriginalRequest: &req.BetaMessageNewParams,
-		Request:         &req.BetaMessageNewParams, // Original Anthropic beta request
-		ProviderURL:     provider.APIBase,
-		ScenarioFlags:   scenarioFlags,
-		IsStreaming:     isStreaming,
-		Extra:           extra,
-	}
+	transformCtx := transform.NewTransformContext(
+		&req.BetaMessageNewParams,
+		transform.WithProviderURL(provider.APIBase),
+		transform.WithScenarioFlags(scenarioFlags),
+		transform.WithStreaming(isStreaming),
+		transform.WithExtra(extra),
+	)
 
 	// Execute transform chain
 	finalCtx, err := chain.Execute(transformCtx)
