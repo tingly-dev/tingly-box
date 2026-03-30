@@ -526,7 +526,7 @@ const GuardrailsGroupsPage = () => {
             <Stack spacing={3}>
                 <UnifiedCard
                     title="Policy Groups"
-                    subtitle="Use groups to manage shared defaults and assign policies without editing each rule individually."
+                    subtitle="Groups organize policies and shared defaults. Built-in is a policy label, not a group type."
                     size="full"
                     rightAction={
                         <Stack direction="row" spacing={1}>
@@ -581,8 +581,7 @@ const GuardrailsGroupsPage = () => {
                                                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                                     {group.name || group.id}
                                                 </Typography>
-                                                <Chip size="small" label={group.id} variant="outlined" />
-                                                {isDefaultGroup && <Chip size="small" label="Default" icon={<LockOutlined />} />}
+                                                {isDefaultGroup && <LockOutlined sx={{ fontSize: 16, color: 'text.secondary' }} />}
                                                 {selected && <Chip size="small" color="primary" label="Selected" />}
                                             </Stack>
                                         </Box>
@@ -596,7 +595,17 @@ const GuardrailsGroupsPage = () => {
                                             </Typography>
                                         </Box>
 
-                                        <Stack direction="row" spacing={1} alignItems="center" sx={{ width: { xs: '100%', md: 'auto' }, justifyContent: { xs: 'space-between', md: 'flex-end' } }}>
+                                        <Stack
+                                            direction="row"
+                                            spacing={1}
+                                            alignItems="center"
+                                            sx={{
+                                                width: { xs: '100%', md: 220 },
+                                                minWidth: { md: 220 },
+                                                justifyContent: { xs: 'space-between', md: 'flex-end' },
+                                                flexShrink: 0,
+                                            }}
+                                        >
                                             <Chip size="small" label={group.enabled === false ? 'Disabled' : 'Enabled'} />
                                             <Switch
                                                 size="small"
@@ -619,22 +628,24 @@ const GuardrailsGroupsPage = () => {
                                                     </Button>
                                                 </span>
                                             </Tooltip>
-                                            {!isDefaultGroup && (
-                                                <Tooltip title="Delete group" arrow>
-                                                    <span>
-                                                        <IconButton
-                                                            size="small"
-                                                            disabled={pendingGroupId === group.id}
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setDeleteGroupId(group.id);
-                                                            }}
-                                                        >
-                                                            <DeleteOutline fontSize="small" />
-                                                        </IconButton>
-                                                    </span>
-                                                </Tooltip>
-                                            )}
+                                            <Box sx={{ width: 32, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+                                                {!isDefaultGroup && (
+                                                    <Tooltip title="Delete group" arrow>
+                                                        <span>
+                                                            <IconButton
+                                                                size="small"
+                                                                disabled={pendingGroupId === group.id}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setDeleteGroupId(group.id);
+                                                                }}
+                                                            >
+                                                                <DeleteOutline fontSize="small" />
+                                                            </IconButton>
+                                                        </span>
+                                                    </Tooltip>
+                                                )}
+                                            </Box>
                                         </Stack>
                                     </Box>
                                 </ListItem>
@@ -648,7 +659,7 @@ const GuardrailsGroupsPage = () => {
                     subtitle={
                         selectedGroup?.id === DEFAULT_GROUP_ID
                             ? 'Turn a policy on to move it into Default. To move a policy out of Default, assign it from another group.'
-                            : 'Check a policy to assign it to this group. Unchecking moves it back to Default.'
+                            : 'Check a policy to assign it to this group. Only enabled policies appear here.'
                     }
                     size="full"
                 >
@@ -677,10 +688,19 @@ const GuardrailsGroupsPage = () => {
                                                 <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
                                                     <Typography variant="body2" sx={{ fontWeight: 600 }}>{policy.name || policy.id}</Typography>
                                                     <Chip size="small" label={buildPolicyKindLabel(policy)} variant="outlined" />
-                                                    <Chip size="small" label={`Current: ${groupsById.get(effectivePolicyGroup(policy))?.name || effectivePolicyGroup(policy)}`} variant="outlined" />
                                                 </Stack>
                                                 <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                                                    {buildPolicySummary(policy)}
+                                                    <Box
+                                                        component="span"
+                                                        sx={{
+                                                            display: 'block',
+                                                            whiteSpace: 'nowrap',
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis',
+                                                        }}
+                                                    >
+                                                        {buildPolicySummary(policy)}
+                                                    </Box>
                                                 </Typography>
                                             </Box>
                                         </Stack>

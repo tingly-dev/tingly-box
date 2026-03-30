@@ -1146,8 +1146,7 @@ const GuardrailsRulesPage = () => {
                                             <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                                 {policy.id}
                                             </Typography>
-                                            {policy.group && <Chip size="small" label={policy.group} variant="outlined" />}
-                                            {policy.isBuiltin && <Chip size="small" label="Builtin" variant="outlined" />}
+                                            {policy.isBuiltin && <Chip size="small" label="Built-in" variant="outlined" />}
                                             {effectiveState.inheritedDisabled && (
                                                 <Chip size="small" label="Group disabled" variant="outlined" />
                                             )}
@@ -1158,7 +1157,15 @@ const GuardrailsRulesPage = () => {
                                     </Box>
 
                                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                                        <Typography variant="body2" color="text.primary" sx={{ whiteSpace: 'normal' }}>
+                                        <Typography
+                                            variant="body2"
+                                            color="text.primary"
+                                            sx={{
+                                                whiteSpace: 'nowrap',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                            }}
+                                        >
                                             {buildPolicySummary(policy)}
                                         </Typography>
                                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, whiteSpace: 'normal' }}>
@@ -1170,7 +1177,12 @@ const GuardrailsRulesPage = () => {
                                         direction={{ xs: 'row', sm: 'row' }}
                                         spacing={1}
                                         alignItems="center"
-                                        sx={{ width: { xs: '100%', lg: 'auto' }, justifyContent: { xs: 'space-between', lg: 'flex-end' } }}
+                                        sx={{
+                                            width: { xs: '100%', lg: 220 },
+                                            minWidth: { lg: 220 },
+                                            justifyContent: { xs: 'space-between', lg: 'flex-end' },
+                                            flexShrink: 0,
+                                        }}
                                     >
                                         <Chip
                                             size="small"
@@ -1477,7 +1489,7 @@ const GuardrailsRulesPage = () => {
             <Stack spacing={3}>
                 <UnifiedCard
                     title="Policies"
-                    subtitle="Define individual Guardrails rules. Group membership is managed separately on the Policy Groups page."
+                    subtitle="Policies define concrete rules. Groups are managed separately and organize those policies with shared defaults. Built-in policies are marked directly in the list."
                     size="full"
                     rightAction={
                         <Stack direction="row" spacing={1}>
