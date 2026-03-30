@@ -16,7 +16,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -35,11 +34,8 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
 	SetTrackingContext(c, rule, provider, actualModel, proxyModel, isStreaming)
 
-	// === Check if provider has built-in web_search ===
-	hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
-
-	// === Tool Interceptor: Check if enabled and should be used ===
-	shouldIntercept, shouldStripTools, _ := s.resolveToolInterceptor(provider, hasBuiltInWebSearch)
+	toolRuntimeEnabled := s.resolveToolRuntime(provider)
+	nativeTools := s.nativeToolSupport(provider)
 
 	// Get scenario config for flags
 	cleanHeader := false
@@ -102,19 +98,17 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	}
 	// If thinking carries budget_tokens beyond model max, shrink budget to max_allowed/10.
 	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil && *thinkBudget > int64(maxAllowed) {
-		req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(max(1024, int64(maxAllowed / 10)))
+		req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(max(1024, int64(maxAllowed/10)))
 	}
 
 	// Set provider UUID in context (Service.Provider uses UUID, not name)
 	c.Set("provider", provider.UUID)
 	c.Set("model", actualModel)
 
-	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
-	if shouldIntercept {
-		preparedReq, _ := s.toolInterceptor.PrepareAnthropicBetaRequest(provider, &req.BetaMessageNewParams)
+	// === PRE-REQUEST TOOL RUNTIME ===
+	if toolRuntimeEnabled {
+		preparedReq, _ := s.toolRuntime.PrepareAnthropicBetaRequest(c.Request.Context(), provider, &req.BetaMessageNewParams, nativeTools)
 		req.BetaMessageNewParams = *preparedReq
-	} else if shouldStripTools {
-		req.BetaMessageNewParams.Tools = toolinterceptor.StripSearchFetchToolsAnthropicBeta(req.BetaMessageNewParams.Tools)
 	}
 
 	// Check provider's API style to decide which path to take
@@ -166,6 +160,17 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 					recorder.RecordError(err)
 				}
 				return
+			}
+
+			if toolRuntimeEnabled {
+				anthropicResp, err = s.continueAnthropicBetaRuntimeTools(c.Request.Context(), provider, &req.BetaMessageNewParams, anthropicResp)
+				if err != nil {
+					stream.SendForwardingError(c, err)
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
 			}
 
 			// Track usage from response
@@ -235,6 +240,17 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 					recorder.RecordError(err)
 				}
 				return
+			}
+
+			if toolRuntimeEnabled {
+				resp, err = s.continueGoogleAnthropicBetaRuntimeTools(c.Request.Context(), provider, &req.BetaMessageNewParams, resp, proxyModel)
+				if err != nil {
+					stream.SendForwardingError(c, err)
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
 			}
 
 			// Convert Google response to Anthropic beta format

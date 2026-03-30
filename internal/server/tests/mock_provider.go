@@ -21,9 +21,11 @@ import (
 type MockProviderServer struct {
 	server             *httptest.Server
 	responses          map[string]MockResponse
+	responseSequences  map[string][]MockResponse
 	streamingResponses map[string]MockStreamingResponse
 	callCount          map[string]int
 	lastRequest        map[string]interface{}
+	requestHistory     map[string][]map[string]interface{}
 	mutex              sync.RWMutex
 }
 
@@ -99,9 +101,11 @@ type MockStreamingResponse struct {
 // NewMockProviderServer creates a new mock provider server
 func NewMockProviderServer() *MockProviderServer {
 	mock := &MockProviderServer{
-		responses:   make(map[string]MockResponse),
-		callCount:   make(map[string]int),
-		lastRequest: make(map[string]interface{}),
+		responses:         make(map[string]MockResponse),
+		responseSequences: make(map[string][]MockResponse),
+		callCount:         make(map[string]int),
+		lastRequest:       make(map[string]interface{}),
+		requestHistory:    make(map[string][]map[string]interface{}),
 	}
 
 	mux := http.NewServeMux()
@@ -112,6 +116,7 @@ func NewMockProviderServer() *MockProviderServer {
 	mux.HandleFunc("/chat/completions", mock.handleChatCompletions)
 	mux.HandleFunc("/v1/messages", mock.handleMessages)
 	mux.HandleFunc("/messages", mock.handleMessages)
+	mux.HandleFunc("/", mock.handleGeneric)
 
 	return mock
 }
@@ -131,6 +136,13 @@ func (m *MockProviderServer) SetStreamingResponse(endpoint string, response Mock
 	m.streamingResponses[key] = response
 }
 
+// SetResponseSequence configures a sequence of responses for an endpoint.
+func (m *MockProviderServer) SetResponseSequence(endpoint string, responses []MockResponse) {
+	key := strings.TrimPrefix(endpoint, "/")
+	m.responses[key] = MockResponse{}
+	m.responseSequences[key] = append([]MockResponse(nil), responses...)
+}
+
 // handleChatCompletions handles mock chat completion requests
 func (m *MockProviderServer) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	endpoint := strings.TrimPrefix(r.URL.Path, "/")
@@ -144,6 +156,7 @@ func (m *MockProviderServer) handleChatCompletions(w http.ResponseWriter, r *htt
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err == nil {
 		m.mutex.Lock()
 		m.lastRequest[endpoint] = reqBody
+		m.requestHistory[endpoint] = append(m.requestHistory[endpoint], reqBody)
 		m.mutex.Unlock()
 
 		// Debug: log the received request
@@ -156,7 +169,7 @@ func (m *MockProviderServer) handleChatCompletions(w http.ResponseWriter, r *htt
 		}
 	}
 
-	response, exists := m.responses[endpoint]
+	response, exists := m.getResponseForCall(endpoint)
 	if !exists {
 		// Default successful response
 		fmt.Printf("No configured response for %s, using default\n", endpoint)
@@ -206,6 +219,7 @@ func (m *MockProviderServer) handleMessages(w http.ResponseWriter, r *http.Reque
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err == nil {
 		m.mutex.Lock()
 		m.lastRequest[endpoint] = reqBody
+		m.requestHistory[endpoint] = append(m.requestHistory[endpoint], reqBody)
 		m.mutex.Unlock()
 
 		// Debug: log the received request body
@@ -224,7 +238,7 @@ func (m *MockProviderServer) handleMessages(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	response, exists := m.responses[endpoint]
+	response, exists := m.getResponseForCall(endpoint)
 	if !exists {
 		// Default successful response for messages endpoint
 		response = MockResponse{
@@ -251,6 +265,74 @@ func (m *MockProviderServer) handleMessages(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Handle error responses
+	if response.Error != "" {
+		w.WriteHeader(response.StatusCode)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": map[string]interface{}{
+				"message": response.Error,
+				"type":    "api_error",
+			},
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	json.NewEncoder(w).Encode(response.Body)
+}
+
+func (m *MockProviderServer) handleGeneric(w http.ResponseWriter, r *http.Request) {
+	if strings.Contains(r.URL.Path, ":generateContent") {
+		m.handleGenerateContent(w, r)
+		return
+	}
+	http.NotFound(w, r)
+}
+
+func (m *MockProviderServer) handleGenerateContent(w http.ResponseWriter, r *http.Request) {
+	endpoint := strings.TrimPrefix(r.URL.Path, "/")
+
+	m.mutex.Lock()
+	m.callCount[endpoint]++
+	m.mutex.Unlock()
+
+	var reqBody map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err == nil {
+		m.mutex.Lock()
+		m.lastRequest[endpoint] = reqBody
+		m.requestHistory[endpoint] = append(m.requestHistory[endpoint], reqBody)
+		m.mutex.Unlock()
+	}
+
+	response, exists := m.getResponseForCall(endpoint)
+	if !exists {
+		response = MockResponse{
+			StatusCode: 200,
+			Body: map[string]interface{}{
+				"candidates": []map[string]interface{}{
+					{
+						"content": map[string]interface{}{
+							"role": "model",
+							"parts": []map[string]interface{}{
+								{"text": "Mock Google response from provider"},
+							},
+						},
+						"finishReason": "STOP",
+						"index":        0,
+					},
+				},
+				"usageMetadata": map[string]interface{}{
+					"promptTokenCount":     10,
+					"candidatesTokenCount": 5,
+					"totalTokenCount":      15,
+				},
+			},
+		}
+	}
+
+	if response.Delay > 0 {
+		time.Sleep(response.Delay)
+	}
 	if response.Error != "" {
 		w.WriteHeader(response.StatusCode)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -335,6 +417,19 @@ func (m *MockProviderServer) GetLastRequest(endpoint string) map[string]interfac
 	return nil
 }
 
+// GetRequestHistory returns all requests observed for an endpoint.
+func (m *MockProviderServer) GetRequestHistory(endpoint string) []map[string]interface{} {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	history := m.requestHistory[strings.TrimPrefix(endpoint, "/")]
+	result := make([]map[string]interface{}, 0, len(history))
+	for _, item := range history {
+		result = append(result, item)
+	}
+	return result
+}
+
 // Close closes the mock server
 func (m *MockProviderServer) Close() {
 	m.server.Close()
@@ -346,6 +441,26 @@ func (m *MockProviderServer) Reset() {
 	defer m.mutex.Unlock()
 	m.callCount = make(map[string]int)
 	m.lastRequest = make(map[string]interface{})
+	m.requestHistory = make(map[string][]map[string]interface{})
+}
+
+func (m *MockProviderServer) getResponseForCall(endpoint string) (MockResponse, bool) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if seq := m.responseSequences[endpoint]; len(seq) > 0 {
+		idx := m.callCount[endpoint] - 1
+		if idx < 0 {
+			idx = 0
+		}
+		if idx >= len(seq) {
+			return seq[len(seq)-1], true
+		}
+		return seq[idx], true
+	}
+
+	response, exists := m.responses[endpoint]
+	return response, exists
 }
 
 // MockProviderTestSuite provides a comprehensive test suite for provider testing

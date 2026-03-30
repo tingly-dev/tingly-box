@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -78,6 +79,9 @@ func createTestServer(t *testing.T, appConfig *config.AppConfig) *TestServer {
 	// Create server instance but don't start it
 	// Note: adapter is disabled by default in tests to test the fallback behavior
 	httpServer := server.NewServer(appConfig.GetGlobalConfig(), server.WithAdaptor(false))
+	t.Cleanup(func() {
+		_ = httpServer.Stop(context.Background())
+	})
 
 	return &TestServer{
 		appConfig: appConfig,
@@ -106,6 +110,9 @@ func NewTestServerWithAdaptor(t *testing.T) *TestServer {
 
 	// Create server instance with adaptor flag
 	httpServer := server.NewServer(appConfig.GetGlobalConfig())
+	t.Cleanup(func() {
+		_ = httpServer.Stop(context.Background())
+	})
 
 	return &TestServer{
 		appConfig: appConfig,

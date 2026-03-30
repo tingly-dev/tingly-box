@@ -50,7 +50,7 @@ type ProviderTemplate struct {
 	ID                     string            `json:"id"`
 	Name                   string            `json:"name"`
 	Alias                  string            `json:"alias,omitempty"` // Display name with locale information
-	Status                 string            `json:"status"` // "active", "deprecated", etc.
+	Status                 string            `json:"status"`          // "active", "deprecated", etc.
 	Valid                  bool              `json:"valid"`
 	Website                string            `json:"website"`
 	Description            string            `json:"description"`
@@ -658,13 +658,26 @@ func (tm *TemplateManager) GetWebSearchSchemaForProvider(provider *typ.Provider)
 	return nil
 }
 
-// ProviderHasBuiltInWebSearch checks if a provider has built-in web_search capability
-// Returns true if the provider has a web_search_schema with BuiltIn=true
+// ProviderHasBuiltInWebSearch checks if a provider has built-in web_search capability.
+// Deprecated: use ProviderSupportsNativeTool(provider, "web_search") for new code.
 func (tm *TemplateManager) ProviderHasBuiltInWebSearch(provider *typ.Provider) bool {
+	return tm.ProviderSupportsNativeTool(provider, "web_search")
+}
+
+// ProviderSupportsNativeTool reports whether a provider has a native implementation
+// for a stable tool-runtime tool name.
+func (tm *TemplateManager) ProviderSupportsNativeTool(provider *typ.Provider, toolName string) bool {
 	if tm == nil || provider == nil {
 		return false
 	}
 
-	schema := tm.GetWebSearchSchemaForProvider(provider)
-	return schema != nil && schema.BuiltIn
+	switch toolName {
+	case "web_search":
+		schema := tm.GetWebSearchSchemaForProvider(provider)
+		return schema != nil && schema.BuiltIn
+	case "web_fetch":
+		return false
+	default:
+		return false
+	}
 }

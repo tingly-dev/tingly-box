@@ -20,19 +20,16 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
-	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
+	"github.com/tingly-dev/tingly-box/internal/toolruntime"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // handleNonStreamingRequest handles non-streaming chat completion requests
-func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, shouldIntercept, shouldStripTools bool, stripUsage bool) {
-	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
+func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, runtimeEnabled bool, nativeTools toolruntime.NativeToolSupport, stripUsage bool) {
 	req := originalReq
-	if shouldIntercept {
-		preparedReq, _ := s.toolInterceptor.PrepareOpenAIRequest(provider, originalReq)
+	if runtimeEnabled {
+		preparedReq, _ := s.toolRuntime.PrepareOpenAIRequest(c.Request.Context(), provider, originalReq, nativeTools)
 		req = preparedReq
-	} else if shouldStripTools {
-		req = toolinterceptor.StripSearchFetchToolsOpenAI(originalReq)
 	}
 
 	// Forward request to provider
@@ -53,14 +50,14 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	}
 
 	// === POST-RESPONSE INTERCEPTION: Handle tool calls from provider ===
-	if shouldIntercept && len(response.Choices) > 0 {
+	if runtimeEnabled && len(response.Choices) > 0 {
 		choice := response.Choices[0]
 		if len(choice.Message.ToolCalls) > 0 {
 			// Check if any tool calls should be intercepted
 			hasInterceptedCalls := false
 			for _, tc := range choice.Message.ToolCalls {
 				fn := tc.Function
-				if fn.Name != "" && toolinterceptor.ShouldInterceptTool(fn.Name) {
+				if fn.Name != "" && s.toolRuntime.IsRuntimeTool(provider, fn.Name) {
 					hasInterceptedCalls = true
 					break
 				}
@@ -68,7 +65,7 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 
 			if hasInterceptedCalls {
 				// Execute intercepted tool calls locally and get final response
-				finalResponse, err := s.handleInterceptedToolCalls(provider, originalReq, response)
+				finalResponse, err := s.handleInterceptedToolCalls(provider, originalReq, response, nativeTools)
 				if err != nil {
 					usage := protocol.NewTokenUsageWithCache(0, 0, 0)
 					s.trackUsageWithTokenUsage(c, usage, err)
@@ -163,7 +160,7 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 }
 
 // handleInterceptedToolCalls executes intercepted tool calls locally and returns final response
-func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, toolCallResponse *openai.ChatCompletion) (*openai.ChatCompletion, error) {
+func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, toolCallResponse *openai.ChatCompletion, nativeTools toolruntime.NativeToolSupport) (*openai.ChatCompletion, error) {
 	logrus.Debugf("Handling %d intercepted tool calls for provider %s", len(toolCallResponse.Choices[0].Message.ToolCalls), provider.Name)
 
 	// Build new messages list with original messages
@@ -177,12 +174,12 @@ func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq 
 	for _, tc := range toolCallResponse.Choices[0].Message.ToolCalls {
 		fn := tc.Function
 		// Check if this tool should be intercepted
-		if !toolinterceptor.ShouldInterceptTool(fn.Name) {
+		if !s.toolRuntime.IsRuntimeTool(provider, fn.Name) {
 			continue
 		}
 
 		// Execute the tool using the interceptor
-		result := s.toolInterceptor.ExecuteTool(provider, fn.Name, fn.Arguments)
+		result := s.toolRuntime.ExecuteTool(context.Background(), provider, fn.Name, fn.Arguments)
 
 		// Add tool result message
 		var toolResultMsg openai.ChatCompletionMessageParamUnion
@@ -204,7 +201,8 @@ func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq 
 	// Create new request with updated messages
 	followUpReq := *originalReq
 	followUpReq.Messages = newMessages
-	followUpReq = *toolinterceptor.StripSearchFetchToolsOpenAI(&followUpReq)
+	followUpReq.Tools = nil
+	followUpReq.Tools = s.toolRuntime.InjectOpenAITools(context.Background(), provider, &followUpReq, nativeTools).Tools
 
 	// Forward to provider for final response (may contain more tool calls or final answer)
 	wrapper := s.clientPool.GetOpenAIClient(provider, string(followUpReq.Model))
@@ -218,14 +216,11 @@ func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq 
 }
 
 // handleOpenAIChatStreamingRequest handles streaming chat completion requests
-func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, shouldIntercept, shouldStripTools bool, disableStreamUsage bool) {
-	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
+func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, runtimeEnabled bool, nativeTools toolruntime.NativeToolSupport, disableStreamUsage bool) {
 	req := originalReq
-	if shouldIntercept {
-		preparedReq, _ := s.toolInterceptor.PrepareOpenAIRequest(provider, originalReq)
+	if runtimeEnabled {
+		preparedReq, _ := s.toolRuntime.PrepareOpenAIRequest(c.Request.Context(), provider, originalReq, nativeTools)
 		req = preparedReq
-	} else if shouldStripTools {
-		req = toolinterceptor.StripSearchFetchToolsOpenAI(originalReq)
 	}
 
 	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -237,7 +238,7 @@ func TestTemplateManagerGetModelsForProvider(t *testing.T) {
 				APIStyle: protocol.APIStyleOpenAI,
 			},
 			expectError:    false,
-			expectModels:   false, // Empty models list, but no error
+			expectModels:   false,
 			expectedSource: TemplateSourceLocal,
 		},
 		{
@@ -410,7 +411,6 @@ func TestTemplateManagerConcurrentAccess(t *testing.T) {
 
 	done := make(chan bool)
 
-	// Concurrent readers
 	for i := 0; i < 10; i++ {
 		go func() {
 			defer func() { done <- true }()
@@ -422,12 +422,10 @@ func TestTemplateManagerConcurrentAccess(t *testing.T) {
 		}()
 	}
 
-	// Wait for all goroutines to complete
 	for i := 0; i < 10; i++ {
 		<-done
 	}
 
-	// Verify data integrity
 	templates := tm.GetAllTemplates()
 	if len(templates) == 0 {
 		t.Error("Templates map should not be empty after concurrent access")
@@ -436,7 +434,6 @@ func TestTemplateManagerConcurrentAccess(t *testing.T) {
 
 // TestTemplateManagerHTTPTimeout tests HTTP client timeout
 func TestTemplateManagerHTTPTimeout(t *testing.T) {
-	// Create a server that delays response
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(100 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
@@ -448,8 +445,32 @@ func TestTemplateManagerHTTPTimeout(t *testing.T) {
 		t.Fatal("httpClient should be initialized")
 	}
 
-	// Verify timeout is set
 	if tm.httpClient.Timeout <= 0 {
 		t.Error("Expected positive timeout, got", tm.httpClient.Timeout)
 	}
+}
+
+func TestProviderSupportsNativeTool(t *testing.T) {
+	tm := NewEmbeddedOnlyTemplateManager()
+	tm.templates = map[string]*ProviderTemplate{
+		"demo": {
+			ID:              "demo",
+			BaseURLOpenAI:   "https://api.example.com",
+			WebSearchSchema: "builtin_search",
+		},
+	}
+	tm.capabilitySchemas = map[string]*CapabilitySchema{
+		"builtin_search": {
+			BuiltIn: true,
+		},
+	}
+
+	provider := &typ.Provider{
+		APIBase:  "https://api.example.com",
+		APIStyle: protocol.APIStyleOpenAI,
+	}
+
+	require.True(t, tm.ProviderSupportsNativeTool(provider, "web_search"))
+	require.False(t, tm.ProviderSupportsNativeTool(provider, "web_fetch"))
+	require.False(t, tm.ProviderSupportsNativeTool(provider, "unknown_tool"))
 }

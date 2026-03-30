@@ -210,11 +210,8 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, isStreaming)
 
 	apiStyle := provider.APIStyle
-	// === Check if provider has built-in web_search ===
-	hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
-
-	// === Tool Interceptor: Check if enabled and should be used ===
-	shouldIntercept, shouldStripTools, _ := s.resolveToolInterceptor(provider, hasBuiltInWebSearch)
+	toolRuntimeEnabled := s.resolveToolRuntime(provider)
+	nativeTools := s.nativeToolSupport(provider)
 
 	switch apiStyle {
 	default:
@@ -301,6 +298,20 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 					},
 				})
 				return
+			}
+
+			if toolRuntimeEnabled {
+				anthropicResp, err = s.continueAnthropicRuntimeTools(c.Request.Context(), provider, &anthropicReq, anthropicResp)
+				if err != nil {
+					s.trackUsageFromContext(c, 0, 0, err)
+					c.JSON(http.StatusInternalServerError, ErrorResponse{
+						Error: ErrorDetail{
+							Message: "Failed to handle Anthropic tool calls: " + err.Error(),
+							Type:    "api_error",
+						},
+					})
+					return
+				}
 			}
 
 			// Track usage from response
@@ -392,9 +403,9 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 				disableStreamUsage = disableStreamUsage || scenarioConfig.Flags.DisableStreamUsage
 			}
 
-			s.handleOpenAIChatStreamingRequest(c, provider, transformedReq, responseModel, shouldIntercept, shouldStripTools, disableStreamUsage)
+			s.handleOpenAIChatStreamingRequest(c, provider, transformedReq, responseModel, toolRuntimeEnabled, nativeTools, disableStreamUsage)
 		} else {
-			s.handleNonStreamingRequest(c, provider, transformedReq, responseModel, shouldIntercept, shouldStripTools, cursorCompat)
+			s.handleNonStreamingRequest(c, provider, transformedReq, responseModel, toolRuntimeEnabled, nativeTools, cursorCompat)
 		}
 	}
 }
