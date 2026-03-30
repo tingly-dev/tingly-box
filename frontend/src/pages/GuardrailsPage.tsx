@@ -215,52 +215,29 @@ const GuardrailsPage = () => {
                             }
                         >
                             <Stack spacing={1.75}>
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                    <Typography variant="body2" color="text.secondary">
-                                        Total Policies
-                                    </Typography>
-                                    <Stack direction="row" spacing={1} alignItems="center">
-                                        <Chip size="small" label={`${stats.total}`} />
-                                        <Typography variant="caption" color="text.secondary">
-                                            {`${stats.enabled} on / ${stats.disabled} off`}
-                                        </Typography>
-                                    </Stack>
-                                </Stack>
+                                <Typography variant="caption" color="text.secondary">
+                                    Format: enabled / total
+                                </Typography>
                                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                                     <Stack direction="row" spacing={1.25} alignItems="center">
                                         <FolderOpen color="primary" fontSize="small" />
                                         <Typography variant="body2">Resource Access</Typography>
                                     </Stack>
-                                    <Stack direction="row" spacing={1} alignItems="center">
-                                        <Chip size="small" label={`${stats.resourceAccess}`} />
-                                        <Typography variant="caption" color="text.secondary">
-                                            {`${stats.resourceAccessEnabled} on / ${stats.resourceAccessDisabled} off`}
-                                        </Typography>
-                                    </Stack>
+                                    <Chip size="small" label={`${stats.resourceAccessEnabled}/${stats.resourceAccess}`} />
                                 </Stack>
                                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                                     <Stack direction="row" spacing={1.25} alignItems="center">
                                         <Terminal color="primary" fontSize="small" />
                                         <Typography variant="body2">Command Execution</Typography>
                                     </Stack>
-                                    <Stack direction="row" spacing={1} alignItems="center">
-                                        <Chip size="small" label={`${stats.commandExecution}`} />
-                                        <Typography variant="caption" color="text.secondary">
-                                            {`${stats.commandExecutionEnabled} on / ${stats.commandExecutionDisabled} off`}
-                                        </Typography>
-                                    </Stack>
+                                    <Chip size="small" label={`${stats.commandExecutionEnabled}/${stats.commandExecution}`} />
                                 </Stack>
                                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                                     <Stack direction="row" spacing={1.25} alignItems="center">
                                         <ArticleOutlined color="primary" fontSize="small" />
                                         <Typography variant="body2">Privacy</Typography>
                                     </Stack>
-                                    <Stack direction="row" spacing={1} alignItems="center">
-                                        <Chip size="small" label={`${stats.content}`} />
-                                        <Typography variant="caption" color="text.secondary">
-                                            {`${stats.contentEnabled} on / ${stats.contentDisabled} off`}
-                                        </Typography>
-                                    </Stack>
+                                    <Chip size="small" label={`${stats.contentEnabled}/${stats.content}`} />
                                 </Stack>
                             </Stack>
                         </UnifiedCard>
