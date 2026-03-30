@@ -251,7 +251,7 @@ const Layout = ({ children }: LayoutProps) => {
                 label: 'Remote',
                 children: [
                     {
-                        path: '/remote-control/bot',
+                        path: '/remote-control',
                         label: 'Overview',
                         icon: <ChatBubble sx={{fontSize: 20}}/>,
                     },
