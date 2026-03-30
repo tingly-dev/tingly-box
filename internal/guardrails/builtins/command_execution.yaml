@@ -8,7 +8,6 @@ templates:
     tags: [shell, deletion, rm, destructive]
     policy:
       enabled: true
-      group: ""
       kind: command_execution
       verdict: block
       reason: This policy blocks destructive recursive deletion commands.
@@ -29,7 +28,6 @@ templates:
     tags: [shell, network, execution, supply-chain]
     policy:
       enabled: true
-      group: ""
       kind: command_execution
       verdict: block
       reason: This policy blocks download-and-execute command patterns.
@@ -50,7 +48,6 @@ templates:
     tags: [network, upload, exfiltration]
     policy:
       enabled: true
-      group: ""
       kind: command_execution
       verdict: review
       reason: This policy marks outbound upload or POST commands for review.
