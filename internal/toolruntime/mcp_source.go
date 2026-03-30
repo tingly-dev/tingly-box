@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -58,25 +59,88 @@ func (s *mcpSource) ensureSession(ctx context.Context) (*mcp.ClientSession, erro
 	if s.session != nil {
 		return s.session, nil
 	}
-	if s.config == nil || s.config.Command == "" {
-		return nil, fmt.Errorf("mcp source %s missing command", s.id)
+	if s.config == nil {
+		return nil, fmt.Errorf("mcp source %s missing config", s.id)
 	}
 
-	cmd := exec.CommandContext(ctx, s.config.Command, s.config.Args...)
-	if s.config.Cwd != "" {
-		cmd.Dir = s.config.Cwd
-	}
-	cmd.Env = os.Environ()
-	for key, value := range s.config.Env {
-		cmd.Env = append(cmd.Env, key+"="+value)
-	}
 	client := mcp.NewClient(&mcp.Implementation{Name: "tingly-box", Version: "v1"}, nil)
-	session, err := client.Connect(ctx, &mcp.CommandTransport{Command: cmd}, nil)
+	transport, err := s.newTransport(ctx)
+	if err != nil {
+		return nil, err
+	}
+	session, err := client.Connect(ctx, transport, nil)
 	if err != nil {
 		return nil, err
 	}
 	s.session = session
 	return s.session, nil
+}
+
+func (s *mcpSource) newTransport(ctx context.Context) (mcp.Transport, error) {
+	transport := s.config.Transport
+	if transport == "" {
+		transport = typ.MCPTransportStdio
+		if s.config.Endpoint != "" {
+			transport = typ.MCPTransportHTTP
+		}
+	}
+
+	switch transport {
+	case typ.MCPTransportStdio:
+		if s.config.Command == "" {
+			return nil, fmt.Errorf("mcp source %s missing command", s.id)
+		}
+		cmd := exec.CommandContext(ctx, s.config.Command, s.config.Args...)
+		if s.config.Cwd != "" {
+			cmd.Dir = s.config.Cwd
+		}
+		cmd.Env = os.Environ()
+		for key, value := range s.config.Env {
+			cmd.Env = append(cmd.Env, key+"="+value)
+		}
+		return &mcp.CommandTransport{Command: cmd}, nil
+	case typ.MCPTransportHTTP:
+		if s.config.Endpoint == "" {
+			return nil, fmt.Errorf("mcp source %s missing endpoint", s.id)
+		}
+		return &mcp.StreamableClientTransport{
+			Endpoint:   s.config.Endpoint,
+			HTTPClient: newMCPHTTPClient(s.config.Headers),
+		}, nil
+	default:
+		return nil, fmt.Errorf("mcp source %s unsupported transport: %s", s.id, transport)
+	}
+}
+
+func newMCPHTTPClient(headers map[string]string) *http.Client {
+	if len(headers) == 0 {
+		return http.DefaultClient
+	}
+	return &http.Client{
+		Transport: mcpHeaderRoundTripper{
+			base:    http.DefaultTransport,
+			headers: headers,
+		},
+	}
+}
+
+type mcpHeaderRoundTripper struct {
+	base    http.RoundTripper
+	headers map[string]string
+}
+
+func (rt mcpHeaderRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	cloned := req.Clone(req.Context())
+	for key, value := range rt.headers {
+		if cloned.Header.Get(key) == "" {
+			cloned.Header.Set(key, value)
+		}
+	}
+	base := rt.base
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	return base.RoundTrip(cloned)
 }
 
 func (s *mcpSource) ListTools(ctx context.Context) ([]ToolDescriptor, error) {

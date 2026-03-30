@@ -31,6 +31,15 @@ func New(configProvider ConfigProvider) *Runtime {
 	}
 }
 
+func (r *Runtime) Close() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for id, source := range r.mcpSources {
+		source.close()
+		delete(r.mcpSources, id)
+	}
+}
+
 func (r *Runtime) IsEnabledForProvider(provider *typ.Provider) bool {
 	cfg := r.GetConfigForProvider(provider)
 	return cfg != nil && bool(cfg.Enabled)

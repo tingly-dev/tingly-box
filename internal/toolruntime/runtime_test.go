@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/openai/openai-go/v3"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -76,6 +77,7 @@ func TestMCPSourceListAndCall(t *testing.T) {
 			},
 		}, true
 	})
+	defer rt.Close()
 	provider := &typ.Provider{UUID: "provider-1", Name: "test"}
 
 	tools, err := rt.ListTools(context.Background(), provider, nil)
@@ -93,6 +95,54 @@ func TestMCPSourceListAndCall(t *testing.T) {
 	result := rt.ExecuteTool(context.Background(), provider, "mcp__hello__greet", `{"name":"Tingly"}`)
 	require.False(t, result.IsError, result.Error)
 	require.Contains(t, result.Content, "hello Tingly")
+}
+
+func TestHTTPMCPSourceListAndCall(t *testing.T) {
+	var authSeen bool
+	server := newHTTPMCPTestServer(t, func(r *http.Request) {
+		if r.Header.Get("X-Test-Auth") == "token-123" {
+			authSeen = true
+		}
+	})
+	defer server.Close()
+
+	rt := New(func(providerUUID string) (*typ.ToolRuntimeConfig, bool) {
+		return &typ.ToolRuntimeConfig{
+			Enabled:    true,
+			AutoExpose: true,
+			Sources: []typ.ToolSourceConfig{{
+				ID:      "remote",
+				Type:    typ.ToolSourceTypeMCP,
+				Enabled: true,
+				MCP: &typ.MCPToolSourceConfig{
+					Transport: typ.MCPTransportHTTP,
+					Endpoint:  server.URL,
+					Headers: map[string]string{
+						"X-Test-Auth": "token-123",
+					},
+				},
+			}},
+		}, true
+	})
+	defer rt.Close()
+	provider := &typ.Provider{UUID: "provider-1", Name: "test"}
+
+	tools, err := rt.ListTools(context.Background(), provider, nil)
+	require.NoError(t, err)
+
+	var found bool
+	for _, tool := range tools {
+		if tool.Name == "mcp__remote__greet" {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "expected greet MCP tool to be exposed")
+
+	result := rt.ExecuteTool(context.Background(), provider, "mcp__remote__greet", `{"name":"Tingly"}`)
+	require.False(t, result.IsError, result.Error)
+	require.Contains(t, result.Content, "hello Tingly")
+	require.True(t, authSeen, "expected HTTP MCP headers to be forwarded")
 }
 
 func TestParseMCPToolName(t *testing.T) {
@@ -206,4 +256,27 @@ func serverTestFilePath(t *testing.T) string {
 	_, file, _, ok := runtime.Caller(0)
 	require.True(t, ok)
 	return file
+}
+
+func newHTTPMCPTestServer(t *testing.T, onRequest func(*http.Request)) *httptest.Server {
+	t.Helper()
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test-http-server", Version: "1.0.0"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "greet", Description: "return a greeting"}, func(_ context.Context, _ *mcp.CallToolRequest, in greetInput) (*mcp.CallToolResult, any, error) {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "hello " + in.Name}},
+		}, nil, nil
+	})
+
+	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+		if onRequest != nil {
+			onRequest(r)
+		}
+		return server
+	}, nil)
+	return httptest.NewServer(handler)
+}
+
+type greetInput struct {
+	Name string `json:"name"`
 }

@@ -1182,10 +1182,6 @@ func (s *Server) Stop(ctx context.Context) error {
 		s.ctx = nil
 	}
 
-	if s.httpServer == nil {
-		return nil
-	}
-
 	// Stop remote control if running
 	s.StopRemoteCoder()
 
@@ -1212,6 +1208,14 @@ func (s *Server) Stop(ctx context.Context) error {
 	if s.watcher != nil {
 		s.watcher.Stop()
 		log.Println("Configuration watcher stopped")
+	}
+
+	if s.toolRuntime != nil {
+		s.toolRuntime.Close()
+	}
+
+	if s.httpServer == nil {
+		return nil
 	}
 
 	// Close all scenario recording sinks

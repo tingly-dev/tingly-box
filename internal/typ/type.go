@@ -233,6 +233,8 @@ func ApplyToolInterceptorDefaults(config *ToolInterceptorConfig) {
 const (
 	ToolSourceTypeBuiltin = "builtin"
 	ToolSourceTypeMCP     = "mcp"
+	MCPTransportStdio     = "stdio"
+	MCPTransportHTTP      = "http"
 )
 
 // ToolRuntimeConfig defines the generic runtime configuration for local and MCP-backed tools.
@@ -262,12 +264,15 @@ type BuiltinToolSourceConfig struct {
 	MaxURLLength int    `json:"max_url_length,omitempty"`
 }
 
-// MCPToolSourceConfig defines a stdio-backed MCP server source.
+// MCPToolSourceConfig defines an MCP server source.
 type MCPToolSourceConfig struct {
-	Command string            `json:"command,omitempty"`
-	Args    []string          `json:"args,omitempty"`
-	Env     map[string]string `json:"env,omitempty"`
-	Cwd     string            `json:"cwd,omitempty"`
+	Transport string            `json:"transport,omitempty"`
+	Command   string            `json:"command,omitempty"`
+	Args      []string          `json:"args,omitempty"`
+	Env       map[string]string `json:"env,omitempty"`
+	Cwd       string            `json:"cwd,omitempty"`
+	Endpoint  string            `json:"endpoint,omitempty"`
+	Headers   map[string]string `json:"headers,omitempty"`
 }
 
 // ApplyToolRuntimeDefaults fills runtime defaults in-place.
@@ -317,6 +322,21 @@ func ApplyToolSourceDefaults(source *ToolSourceConfig) {
 			source.Builtin = cfg.Builtin
 		} else {
 			ApplyBuiltinToolSourceDefaults(source.Builtin)
+		}
+	} else if source.Type == ToolSourceTypeMCP && source.MCP != nil {
+		ApplyMCPToolSourceDefaults(source.MCP)
+	}
+}
+
+// ApplyMCPToolSourceDefaults fills MCP source defaults in-place.
+func ApplyMCPToolSourceDefaults(config *MCPToolSourceConfig) {
+	if config == nil {
+		return
+	}
+	if config.Transport == "" {
+		config.Transport = MCPTransportStdio
+		if config.Endpoint != "" {
+			config.Transport = MCPTransportHTTP
 		}
 	}
 }

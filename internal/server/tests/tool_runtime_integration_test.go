@@ -1,11 +1,13 @@
 package tests
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -75,6 +77,75 @@ func TestToolRuntimeE2E_OpenAIFollowUpViaMCP(t *testing.T) {
 	assertOpenAIToolsContain(t, history[0], "mcp__test__greet")
 	assertOpenAIToolResultInjected(t, history[1], "call_1", "hello Tingly")
 	assertOpenAIToolResultCount(t, history[1], "call_1", 1)
+}
+
+func TestToolRuntimeE2E_OpenAIFollowUpViaHTTPMCP(t *testing.T) {
+	ts := NewTestServer(t)
+	mock := NewMockProviderServer()
+	defer mock.Close()
+
+	httpMCP := newHTTPMCPToolServer(t, func(r *http.Request) {
+		require.Equal(t, "token-123", r.Header.Get("X-Test-Auth"))
+	})
+
+	configureHTTPMCPRuntime(t, ts, httpMCP.URL)
+	t.Cleanup(func() {
+		_ = ts.server.Stop(context.Background())
+		httpMCP.Close()
+	})
+	ts.AddTestProviderWithURL(t, "mock-openai-runtime-http", mock.GetURL(), "openai", true)
+	addScenarioRule(t, ts, "runtime-openai-http", typ.ScenarioOpenAI, "mock-openai-runtime-http", "gpt-4.1")
+
+	mock.SetResponseSequence("/chat/completions", []MockResponse{
+		{
+			StatusCode: 200,
+			Body: CreateMockChatCompletionResponseWithToolCalls(
+				"chatcmpl-tool-http",
+				"gpt-4.1",
+				"",
+				[]map[string]interface{}{
+					{
+						"id":   "call_http_1",
+						"type": "function",
+						"function": map[string]interface{}{
+							"name":      "mcp__remote__greet",
+							"arguments": `{"name":"Tingly"}`,
+						},
+					},
+				},
+			),
+		},
+		{
+			StatusCode: 200,
+			Body:       CreateMockChatCompletionResponse("chatcmpl-final-http", "gpt-4.1", "Final answer from HTTP runtime"),
+		},
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/tingly/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
+		"model": "runtime-openai-http",
+		"messages": []map[string]interface{}{
+			{"role": "user", "content": "Say hi using your tools"},
+		},
+	}))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+ts.appConfig.GetGlobalConfig().GetModelToken())
+	ts.ginEngine.ServeHTTP(w, req)
+
+	require.Equal(t, 200, w.Code, w.Body.String())
+	assert.Equal(t, 2, mock.GetCallCount("/chat/completions"))
+
+	var response map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	choices := response["choices"].([]interface{})
+	message := choices[0].(map[string]interface{})["message"].(map[string]interface{})
+	assert.Equal(t, "Final answer from HTTP runtime", message["content"])
+
+	history := mock.GetRequestHistory("/chat/completions")
+	require.Len(t, history, 2)
+	assertOpenAIToolsContain(t, history[0], "mcp__remote__greet")
+	assertOpenAIToolResultInjected(t, history[1], "call_http_1", "hello Tingly")
+	assertOpenAIToolResultCount(t, history[1], "call_http_1", 1)
 }
 
 func TestToolRuntimeE2E_AnthropicFollowUpViaMCP(t *testing.T) {
@@ -385,6 +456,26 @@ func configureMCPRuntime(t *testing.T, ts *TestServer) {
 	require.NoError(t, ts.appConfig.GetGlobalConfig().SetToolConfig(db.ToolTypeRuntime, runtimeCfg))
 }
 
+func configureHTTPMCPRuntime(t *testing.T, ts *TestServer, endpoint string) {
+	runtimeCfg := &typ.ToolRuntimeConfig{
+		Enabled:    true,
+		AutoExpose: true,
+		Sources: []typ.ToolSourceConfig{{
+			ID:      "remote",
+			Type:    typ.ToolSourceTypeMCP,
+			Enabled: true,
+			MCP: &typ.MCPToolSourceConfig{
+				Transport: typ.MCPTransportHTTP,
+				Endpoint:  endpoint,
+				Headers: map[string]string{
+					"X-Test-Auth": "token-123",
+				},
+			},
+		}},
+	}
+	require.NoError(t, ts.appConfig.GetGlobalConfig().SetToolConfig(db.ToolTypeRuntime, runtimeCfg))
+}
+
 func configureBuiltinRuntime(t *testing.T, ts *TestServer) {
 	runtimeCfg := typ.DefaultToolRuntimeConfig()
 	require.NoError(t, ts.appConfig.GetGlobalConfig().SetToolConfig(db.ToolTypeRuntime, runtimeCfg))
@@ -542,4 +633,27 @@ func assertGoogleFunctionResponseInjected(t *testing.T, request map[string]inter
 		}
 	}
 	assert.True(t, found, "expected injected Google functionResponse part")
+}
+
+func newHTTPMCPToolServer(t *testing.T, onRequest func(*http.Request)) *httptest.Server {
+	t.Helper()
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test-http-server", Version: "1.0.0"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "greet", Description: "return a greeting"}, func(_ context.Context, _ *mcp.CallToolRequest, in httpGreetInput) (*mcp.CallToolResult, any, error) {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "hello " + in.Name}},
+		}, nil, nil
+	})
+
+	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+		if onRequest != nil {
+			onRequest(r)
+		}
+		return server
+	}, nil)
+	return httptest.NewServer(handler)
+}
+
+type httpGreetInput struct {
+	Name string `json:"name"`
 }
