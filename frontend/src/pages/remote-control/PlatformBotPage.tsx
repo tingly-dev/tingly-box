@@ -425,7 +425,7 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
                                 }}
                                 platforms={botPlatforms}
                                 loading={botPlatformsLoading}
-                                disabled={botSaving}
+                                disabled={botSaving || botDialogMode === 'add'}
                             />
                         </Stack>
 
