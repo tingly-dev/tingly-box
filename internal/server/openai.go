@@ -262,7 +262,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 				disableStreamUsage = disableStreamUsage || scenarioConfig.Flags.DisableStreamUsage
 			}
 
-			inputTokens, outputTokens, err := stream.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, streamResp, responseModel, disableStreamUsage)
+			inputTokens, outputTokens, err := stream.HandleAnthropicToOpenAIStreamResponse(c, anthropicReq, streamResp, responseModel, disableStreamUsage)
 			if err != nil {
 				// Track usage with error status
 				if inputTokens > 0 || outputTokens > 0 {
@@ -352,7 +352,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 		// Note: Base transform is not needed since the request is already in OpenAI Chat format
 		// Chain: Consistency Transform → Vendor Transform
 		chain := transform.NewTransformChain([]transform.Transform{
-			transform.NewConsistencyTransform(transform.TargetAPIStyleOpenAIChat),
+			transform.NewConsistencyTransform(protocol.TypeOpenAIChat),
 			transform.NewVendorTransform(provider.APIBase),
 		})
 

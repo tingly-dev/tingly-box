@@ -6,6 +6,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -15,7 +16,7 @@ import (
 type RequestUnionConstraint interface {
 	*anthropic.MessageNewParams | *anthropic.BetaMessageNewParams |
 		*openai.ChatCompletionNewParams | *responses.ResponseNewParams |
-		*GoogleRequest
+		*protocol.GoogleRequest
 }
 
 // TransformOption configures a TransformContext
@@ -58,6 +59,12 @@ type Transform interface {
 
 // TransformContext carries state through the transform chain
 type TransformContext struct {
+	SourceAPI protocol.APIType
+	TargetAPI protocol.APIType
+
+	RequestModel  string
+	ResponseModel string
+
 	// Request is the request being transformed.
 	// Use SetRequest[T]() to update — only types satisfying RequestUnionConstraint are accepted.
 	Request interface{}

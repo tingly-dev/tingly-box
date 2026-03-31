@@ -107,7 +107,7 @@ func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNe
 
 // HandleAnthropicV1BetaStream handles Anthropic v1 beta streaming response.
 // Returns (UsageStat, error)
-func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, req anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion]) (*protocol.TokenUsage, error) {
+func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion]) (*protocol.TokenUsage, error) {
 	defer streamResp.Close()
 
 	hc.SetupSSEHeaders()

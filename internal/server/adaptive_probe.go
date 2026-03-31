@@ -200,7 +200,7 @@ func (ap *AdaptiveProbe) probeAnthropicChatEndpointWithSDK(ctx context.Context, 
 		anthropic.NewUserMessage(anthropic.NewTextBlock("Hi")),
 	}
 
-	params := anthropic.MessageNewParams{
+	params := &anthropic.MessageNewParams{
 		Model:     anthropic.Model(modelID),
 		MaxTokens: 5,
 		Messages:  messages,
