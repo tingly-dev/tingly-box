@@ -192,13 +192,12 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 		scenarioFlags = &scenarioConfig.Flags
 	}
 
-	transformCtx := &transform.TransformContext{
-		OriginalRequest: &req.ResponseNewParams,
-		Request:         &req.ResponseNewParams,
-		ProviderURL:     provider.APIBase,
-		ScenarioFlags:   scenarioFlags,
-		IsStreaming:     req.Stream,
-	}
+	transformCtx := transform.NewTransformContext(
+		&req.ResponseNewParams,
+		transform.WithProviderURL(provider.APIBase),
+		transform.WithScenarioFlags(scenarioFlags),
+		transform.WithStreaming(req.Stream),
+	)
 
 	// Execute transform chain
 	finalCtx, err := chain.Execute(transformCtx)
