@@ -1,10 +1,9 @@
 package ops
 
 import (
+	"regexp"
 	"strings"
 	"testing"
-
-	"regexp"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
@@ -299,5 +298,119 @@ func TestGenHex5_IsRandom(t *testing.T) {
 }
 
 func TestClaudeCodeVersion(t *testing.T) {
-	assert.Equal(t, "2.1.86.d9e", ClaudeCodeVersion)
+	assert.Equal(t, "2.1.86", ClaudeCodeVersion)
+}
+
+func TestComputeFingerprint(t *testing.T) {
+	tests := []struct {
+		name        string
+		messageText string
+		wantLen     int
+		wantPrefix  string
+	}{
+		{
+			name:        "short message 'hi' - all indices fallback to '0'",
+			messageText: "hi",
+			wantLen:     3,
+			wantPrefix:  "", // just verify length and hex format
+		},
+		{
+			name:        "empty string",
+			messageText: "",
+			wantLen:     3,
+		},
+		{
+			name:        "exactly 5 chars",
+			messageText: "hello",
+			wantLen:     3,
+		},
+		{
+			name:        "long message",
+			messageText: "this is a longer message that exceeds index 20",
+			wantLen:     3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fp := computeFingerprint(tt.messageText, ClaudeCodeVersion)
+
+			// Must be exactly 3 hex chars
+			assert.Len(t, fp, 3, "fingerprint must be 3 chars")
+			assert.Regexp(t, `^[0-9a-f]{3}$`, fp, "fingerprint must be lowercase hex")
+
+			// Deterministic: same input always produces same output
+			fp2 := computeFingerprint(tt.messageText, ClaudeCodeVersion)
+			assert.Equal(t, fp, fp2, "fingerprint must be deterministic")
+
+			if tt.wantPrefix != "" {
+				assert.True(t, strings.HasPrefix(fp, tt.wantPrefix), "fingerprint should start with %q, got %q", tt.wantPrefix, fp)
+			}
+
+			// Log for manual inspection
+			t.Logf("messageText=%q len=%d chars=[%c%c%c] fingerprint=%s cc_version=%s.%s",
+				tt.messageText, len(tt.messageText),
+				func() byte {
+					if 4 < len(tt.messageText) {
+						return tt.messageText[4]
+					}
+					return '0'
+				}(),
+				func() byte {
+					if 7 < len(tt.messageText) {
+						return tt.messageText[7]
+					}
+					return '0'
+				}(),
+				func() byte {
+					if 20 < len(tt.messageText) {
+						return tt.messageText[20]
+					}
+					return '0'
+				}(),
+				fp, ClaudeCodeVersion, fp)
+		})
+	}
+}
+
+func TestComputeCCVersion(t *testing.T) {
+	tests := []struct {
+		name        string
+		messageText string
+	}{
+		{name: "hi", messageText: "hi"},
+		{name: "empty", messageText: ""},
+		{name: "long message", messageText: "this is a longer message that exceeds index 20"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ccVersion := computeCCVersion(tt.messageText)
+
+			// Must start with base version
+			assert.True(t, strings.HasPrefix(ccVersion, ClaudeCodeVersion+"."),
+				"cc_version must start with %s., got %s", ClaudeCodeVersion, ccVersion)
+
+			// Suffix must be exactly 3 hex chars
+			suffix := strings.TrimPrefix(ccVersion, ClaudeCodeVersion+".")
+			assert.Len(t, suffix, 3, "suffix must be 3 chars")
+			assert.Regexp(t, `^[0-9a-f]{3}$`, suffix, "suffix must be lowercase hex")
+
+			t.Logf("cc_version=%s", ccVersion)
+		})
+	}
+}
+
+func TestExtractFirstUserMessageText(t *testing.T) {
+	req := &anthropic.MessageNewParams{
+		Messages: []anthropic.MessageParam{
+			{Role: "system", Content: []anthropic.ContentBlockParamUnion{{OfText: &anthropic.TextBlockParam{Text: "system msg"}}}},
+			{Role: "user", Content: []anthropic.ContentBlockParamUnion{{OfText: &anthropic.TextBlockParam{Text: "hello world"}}}},
+			{Role: "assistant", Content: []anthropic.ContentBlockParamUnion{{OfText: &anthropic.TextBlockParam{Text: "hi"}}}},
+			{Role: "user", Content: []anthropic.ContentBlockParamUnion{{OfText: &anthropic.TextBlockParam{Text: "second user msg"}}}},
+		},
+	}
+
+	text := extractFirstUserMessageText(req.Messages)
+	assert.Equal(t, "hello world", text, "should extract first user message text")
 }
