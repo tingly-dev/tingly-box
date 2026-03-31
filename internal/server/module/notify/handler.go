@@ -73,35 +73,50 @@ func (h *Handler) Notify(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
-// buildMessage maps Claude Code hook events to notification title/message
+// buildMessage maps Claude Code hook events to notification title/message.
+// Title line: event + shortened cwd (last 2 segments).
+// Body line: context from the event (assistant message, tool name, etc).
 func buildMessage(input ClaudeCodeHookInput) (string, string) {
+	cwd := shortenPath(input.Cwd, 2)
+
 	switch input.HookEventName {
 	case "Stop":
+		title := "Claude Code · " + cwd
 		msg := "Task completed"
 		if input.LastAssistantMessage != "" {
-			// Truncate long messages for notification display
-			summary := truncate(input.LastAssistantMessage, 120)
-			msg = summary
+			msg = truncate(input.LastAssistantMessage, 120)
 		}
-		return "Claude Code", msg
+		return title, msg
 
 	case "Notification":
+		title := "Claude Code · " + cwd
 		msg := "Needs attention"
 		if input.NotificationMessage != "" {
 			msg = input.NotificationMessage
 		}
-		return "Claude Code", msg
+		return title, msg
 
 	case "PostToolUse":
+		title := "Claude Code · " + cwd
 		msg := input.ToolName
 		if msg == "" {
 			msg = "Tool call finished"
 		}
-		return "Claude Code", msg
+		return title, msg
 
 	default:
-		return "Claude Code", input.HookEventName
+		return "Claude Code · " + cwd, input.HookEventName
 	}
+}
+
+// shortenPath keeps at most the last n segments of a path, e.g. shortenPath("/a/b/c/d", 2) → "c/d"
+func shortenPath(p string, n int) string {
+	p = strings.TrimRight(p, "/")
+	segments := strings.Split(p, "/")
+	if len(segments) <= n {
+		return p
+	}
+	return strings.Join(segments[len(segments)-n:], "/")
 }
 
 func truncate(s string, maxLen int) string {
