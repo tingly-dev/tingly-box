@@ -42,13 +42,30 @@ import { getIdeSourceLabel } from '@/constants/ideSources';
 import { api } from '@/services/api';
 import AddSkillLocationDialog from '@/components/prompt/skill/AddSkillLocationDialog';
 import AutoDiscoveryDialog from '@/components/prompt/skill/AutoDiscoveryDialog';
-import uPath from 'upath';
 
 interface AddSkillLocationData {
     name: string;
     path: string;
     ide_source: IDESource;
 }
+
+const normalizePathLike = (value: string): string => {
+    if (!value) return '';
+    return value
+        .replace(/\\/g, '/')
+        .replace(/\/+/g, '/')
+        .replace(/(^|\/)\.(?=\/|$)/g, '$1');
+};
+
+const splitPathSegments = (value: string): string[] => {
+    const normalized = normalizePathLike(value);
+    if (normalized === '') return [];
+    return normalized.split('/').filter(part => part !== '' && part !== '.');
+};
+
+const normalizePatternForMatch = (value: string): string => {
+    return splitPathSegments(value).join('/');
+};
 
 const SkillPage = () => {
     const [locations, setLocations] = useState<SkillLocation[]>([]);
@@ -305,8 +322,7 @@ const SkillPage = () => {
 
     const getSkillDisplayName = (skill: Skill, location: SkillLocation): string => {
         const relativePath = getRelativePath(skill, location);
-        const normalizedPath = uPath.normalize(relativePath);
-        const parts = uPath.split(normalizedPath);
+        const parts = splitPathSegments(relativePath);
         // If file is in a subdirectory, include parent directory
         if (parts.length > 1) {
             const parentDir = parts[parts.length - 2];
@@ -320,8 +336,7 @@ const SkillPage = () => {
     // Get a two-level display name (last two levels) for flat mode
     const getTwoLevelDisplayName = (skill: Skill, location: SkillLocation): string => {
         const relativePath = getRelativePath(skill, location);
-        const normalizedPath = uPath.normalize(relativePath);
-        const parts = uPath.split(normalizedPath);
+        const parts = splitPathSegments(relativePath);
 
         // Get last two levels: file and its parent
         if (parts.length >= 2) {
@@ -340,7 +355,10 @@ const SkillPage = () => {
     const getGroupKeyFromPattern = (pattern: string, pathParts: string[]): { groupKey: string; matched: boolean } => {
         // Build path string and find pattern
         const pathStr = pathParts.join('/');
-        const normalizedPattern = uPath.normalize(pattern);
+        const normalizedPattern = normalizePatternForMatch(pattern);
+        if (normalizedPattern === '') {
+            return { groupKey: '', matched: false };
+        }
         const patternIndex = pathStr.indexOf(normalizedPattern);
 
         if (patternIndex === -1) {
@@ -386,8 +404,7 @@ const SkillPage = () => {
 
             for (const skill of skills) {
                 const relativePath = getRelativePath(skill, location);
-                const normalizedPath = uPath.normalize(relativePath);
-                const parts = uPath.split(normalizedPath);
+                const parts = splitPathSegments(relativePath);
 
                 const { groupKey, matched } = getGroupKeyFromPattern(pattern, parts);
 
@@ -443,8 +460,7 @@ const SkillPage = () => {
 
         for (const skill of skills) {
             const relativePath = getRelativePath(skill, location);
-            const normalizedPath = uPath.normalize(relativePath);
-            const parts = uPath.split(normalizedPath);
+            const parts = splitPathSegments(relativePath);
 
             if (parts.length === 1) {
                 rootFiles.push(skill);
@@ -498,8 +514,7 @@ const SkillPage = () => {
         const subGroups: Record<string, Skill[]> = {};
         for (const skill of groupSkills) {
             const relativePath = getRelativePath(skill, location);
-            const normalizedPath = uPath.normalize(relativePath);
-            const parts = uPath.split(normalizedPath);
+            const parts = splitPathSegments(relativePath);
             if (parts.length >= 2) {
                 const secondLevelDir = parts[1];
                 if (!subGroups[secondLevelDir]) {
@@ -518,8 +533,7 @@ const SkillPage = () => {
 
         for (const skill of groupSkills) {
             const relativePath = getRelativePath(skill, location);
-            const normalizedPath = uPath.normalize(relativePath);
-            const parts = uPath.split(normalizedPath);
+            const parts = splitPathSegments(relativePath);
 
             if (parts.length >= 2) {
                 const secondLevelDir = parts[1];
