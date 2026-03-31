@@ -339,11 +339,11 @@ func (s *Server) dispatchChainResultToResponses(
 	case protocol.APIAnthropicV1:
 		logrus.Debugf("[AnthropicV1] Using Transform Chain for Responses API for model=%s", actualModel)
 		if isStreaming {
-			s.handleAnthropicV1ViaResponsesAPIStreaming(c, protocol.AnthropicMessagesRequest{}, responseModel, actualModel, provider, *req)
+			s.handleAnthropicV1ViaResponsesAPIStreaming(c, responseModel, actualModel, provider, *req)
 		} else if provider.APIBase == protocol.CodexAPIBase {
-			s.handleAnthropicV1ViaResponsesAPIAssembly(c, protocol.AnthropicMessagesRequest{}, responseModel, actualModel, provider, *req)
+			s.handleAnthropicV1ViaResponsesAPIAssembly(c, responseModel, actualModel, provider, *req)
 		} else {
-			s.handleAnthropicV1ViaResponsesAPINonStreaming(c, protocol.AnthropicMessagesRequest{}, responseModel, actualModel, provider, *req)
+			s.handleAnthropicV1ViaResponsesAPINonStreaming(c, responseModel, actualModel, provider, *req)
 		}
 	case protocol.APIAnthropicBeta:
 		logrus.Debugf("[Anthropic Beta] Using Transform Chain for Responses API for model=%s", actualModel)
