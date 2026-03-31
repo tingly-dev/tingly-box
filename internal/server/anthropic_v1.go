@@ -258,7 +258,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			logrus.Debugf("[AnthropicV1] Using Transform Chain for Responses API for model=%s", actualModel)
 
 			// Build transform chain with recording support
-			chain, err := s.BuildTransformChain(c, transform.TargetAPIStyleOpenAIResponses, provider.APIBase, nil, recorder)
+			chain, err := s.BuildTransformChain(c, protocol.APIOpenAIResponses, provider.APIBase, nil, recorder)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				if recorder != nil {
@@ -317,7 +317,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		}
 
 		// Build transform chain with recording support
-		chain, err := s.BuildTransformChain(c, transform.TargetAPIStyleOpenAIChat, provider.APIBase, nil, recorder)
+		chain, err := s.BuildTransformChain(c, protocol.APIOpenAIChat, provider.APIBase, nil, recorder)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			if recorder != nil {
