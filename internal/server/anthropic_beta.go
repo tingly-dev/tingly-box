@@ -381,7 +381,7 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 }
 
 // handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming response and sends it to the client
-func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel, actualModel string, provider *typ.Provider, recorder *ProtocolRecorder) {
+func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req *anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel string, provider *typ.Provider, recorder *ProtocolRecorder) {
 	hc := protocol.NewHandleContext(c, respModel)
 
 	// Record TTFT when the first streaming chunk arrives
@@ -413,12 +413,12 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 	session := s.guardrailsSessionFromContext(c, actualModel, provider)
 	s.attachGuardrailsHooks(c, hc, session, serverguardrails.MessagesFromAnthropicV1Beta(req.System, req.Messages))
 
-	usageStat, err := stream.HandleAnthropicV1BetaStream(hc, req, streamResp)
+	usageStat, err := stream.HandleAnthropicV1BetaStream(hc, streamResp)
 	s.trackUsageWithTokenUsage(c, usageStat, err)
 }
 
 // handleAnthropicV1BetaViaResponsesAPINonStreaming handles non-streaming Responses API request
-func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
+func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
 	// Get scenario recorder if exists
 	var recorder *ScenarioRecorder
 	if r, exists := c.Get("scenario_recorder"); exists {
@@ -477,7 +477,7 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context
 }
 
 // handleAnthropicV1BetaViaResponsesAPIStreaming handles streaming Responses API request
-func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
+func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
 	// Get scenario recorder and set up stream recorder
 	var recorder *ProtocolRecorder
 	if r, exists := c.Get("scenario_recorder"); exists {
@@ -530,7 +530,7 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, r
 }
 
 // handleAnthropicV1BetaViaResponsesAPIStreaming handles streaming Responses API request
-func (s *Server) handleAnthropicV1BetaViaResponsesAPIAssembly(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
+func (s *Server) handleAnthropicV1BetaViaResponsesAPIAssembly(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
 	// Get scenario recorder and set up stream recorder
 	var recorder *ProtocolRecorder
 	if r, exists := c.Get("scenario_recorder"); exists {
