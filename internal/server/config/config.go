@@ -308,6 +308,12 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 		cfg.Random256 = hashString
 		logrus.Info("Generated new random 256:", hashString)
 	}
+	if cfg.Random256 == "" {
+		hash := sha3.Sum256([]byte(cfg.RandomUUID))
+		hashString := hex.EncodeToString(hash[:])
+		cfg.Random256 = hashString
+		logrus.Info("Generated new random 256:", hashString)
+	}
 
 	// Generate internal API token for probe testing (always regenerated at startup)
 	cfg.InternalAPIToken = fmt.Sprintf("tb-internal-%s", uuid.New().String())
