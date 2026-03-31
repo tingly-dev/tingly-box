@@ -3,12 +3,15 @@ package client
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"runtime"
 	"strings"
+
+	"github.com/tidwall/gjson"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
 )
 
 const (
@@ -66,18 +69,28 @@ func supportsContext1M(model string) bool {
 	return false
 }
 
-// extractModelFromBody parses the "model" field from JSON body without full unmarshal.
-func extractModelFromBody(body []byte) string {
+// extractSessionIDFromBody extracts the session_id from the request body's
+// metadata.user_id field. The user_id field has two variants:
+//   - JSON: {"device_id":"...","account_uuid":"...","session_id":"..."}
+//   - Legacy string: user_{64hex}_account_{uuid}_session_{uuid}
+func extractSessionIDFromBody(body []byte) string {
 	if len(body) == 0 {
 		return ""
 	}
-	var msg struct {
-		Model string `json:"model"`
-	}
-	if err := json.Unmarshal(body, &msg); err != nil {
+	raw := gjson.GetBytes(body, "metadata.user_id").String()
+	if raw == "" {
 		return ""
 	}
-	return msg.Model
+	m := ops.ParseMetadataUserID(raw)
+	if m == nil {
+		return ""
+	}
+	return m.SessionID
+}
+
+// extractModelFromBody parses the "model" field from JSON body without full unmarshal.
+func extractModelFromBody(body []byte) string {
+	return gjson.GetBytes(body, "model").String()
 }
 
 // claudeRoundTripper wraps an http.RoundTripper to handle Claude Code OAuth
@@ -143,11 +156,12 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 		}
 	}
 
-	// Extract model from request body for model-dependent beta flags
+	// Extract model and session ID from request body
 	model := extractModelFromBody(originalBody)
+	sessionID := extractSessionIDFromBody(originalBody)
 
 	// Set Claude Code specific headers
-	t.applyClaudeCodeHeaders(req, isOAuthToken, model)
+	t.applyClaudeCodeHeaders(req, isOAuthToken, model, sessionID)
 
 	// Add beta query parameter if not already present
 	q := req.URL.Query()
@@ -176,7 +190,7 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 }
 
 // applyClaudeCodeHeaders sets all Claude Code specific headers
-func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthToken bool, model string) {
+func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthToken bool, model string, sessionID string) {
 	key := req.Header.Get("X-Api-Key")
 	if key == "" {
 		return
@@ -184,26 +198,13 @@ func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthTo
 
 	// Check if target is Anthropic's API
 	isAnthropicBase := req.URL != nil && strings.Contains(strings.ToLower(req.URL.Host), "api.anthropic.com")
-	// /models endpoint should always use x-api-key header
-	isModelsEndpoint := req.URL != nil && strings.HasSuffix(req.URL.Path, "/models")
 
 	if isAnthropicBase && !isOAuthToken {
-		// Use x-api-key header for API keys to Anthropic, or for /models endpoint
 		req.Header.Del("X-Api-Key")
-		// may force lower, but ok now
 		req.Header.Set("X-Api-Key", key)
 	} else {
-		// Use Bearer for OAuth tokens (except /models endpoint) or non-Anthropic endpoints
 		req.Header.Del("X-Api-Key")
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
-	}
-
-	if isModelsEndpoint {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
-		// Use x-api-key header for /models endpoint
-		req.Header.Del("X-Api-Key")
-		// may force lower, but ok now
-		req.Header.Set("X-Api-Key", key)
 	}
 
 	// Set Claude Code specific headers
@@ -240,6 +241,9 @@ func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthTo
 	req.Header.Set("x-stainless-arch", stainlessArch())
 	req.Header.Set("x-stainless-os", stainlessOS())
 	req.Header.Set("x-stainless-timeout", stainlessTimeout)
+	if sessionID != "" {
+		req.Header.Set("X-Claude-Code-Session-Id", sessionID)
+	}
 }
 
 // isStreamingResponse checks if the response is a streaming SSE response
