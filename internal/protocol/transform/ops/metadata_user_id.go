@@ -1,13 +1,11 @@
 package ops
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"regexp"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/crypto/sha3"
 )
 
 // =============================================
@@ -82,11 +80,9 @@ func (m *MetadataUserID) Fix(extras map[string]any) {
 		}
 	}
 
+	// force to guard
 	if m.DeviceID == "" {
-		id := uuid.NewString()
-		hash := sha3.Sum256([]byte(id))
-		hashString := hex.EncodeToString(hash[:])
-		m.DeviceID = hashString
+		panic("missing device id")
 	}
 
 	// Set account id if given
@@ -94,6 +90,10 @@ func (m *MetadataUserID) Fix(extras map[string]any) {
 		if v, ok := extras["user_id"]; ok {
 			m.AccountUUID = v.(string)
 		}
+	}
+
+	if m.AccountUUID == "" {
+		panic("missing account uuid")
 	}
 
 	// Ensure session_id is set
