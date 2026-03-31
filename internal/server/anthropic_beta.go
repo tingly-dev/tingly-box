@@ -99,7 +99,10 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		return
 	}
 
-	s.dispatchAnthropicBetaChainResult(c, reqCtx, rule, provider, isStreaming, recorder, actualModel, proxyModel)
+	reqCtx.RequestModel = actualModel
+	reqCtx.ResponseModel = proxyModel
+
+	s.dispatchChainResult(c, reqCtx, rule, provider, isStreaming, recorder)
 }
 
 // handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming response and sends it to the client

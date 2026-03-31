@@ -22,19 +22,18 @@ func (s *Server) dispatchChainResult(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
 	isStreaming bool, recorder *ProtocolRecorder,
-	actualModel, proxyModel string,
 ) {
 	switch reqCtx.TargetAPI {
 	case protocol.APIAnthropicV1:
-		//s.dispatchChainResultToAnthropic(c, reqCtx, rule, provider, isStreaming, recorder, actualModel, proxyModel)
+		//s.dispatchChainResultToAnthropic(c, reqCtx, rule, provider, isStreaming, recorder, )
 	case protocol.APIAnthropicBeta:
-		s.dispatchChainResultToAnthropicBeta(c, reqCtx, rule, provider, isStreaming, recorder, actualModel, proxyModel)
+		s.dispatchChainResultToAnthropicBeta(c, reqCtx, rule, provider, isStreaming, recorder)
 	case protocol.APIGoogle:
-		s.dispatchChainResultToGoogle(c, reqCtx, rule, provider, isStreaming, recorder, actualModel, proxyModel)
+		s.dispatchChainResultToGoogle(c, reqCtx, rule, provider, isStreaming, recorder)
 	case protocol.APIOpenAIResponses:
-		s.dispatchChainResultToResponses(c, reqCtx, rule, provider, isStreaming, recorder, actualModel, proxyModel)
+		s.dispatchChainResultToResponses(c, reqCtx, rule, provider, isStreaming, recorder)
 	case protocol.APIOpenAIChat:
-		s.dispatchChainResultToOpenAIChat(c, reqCtx, rule, provider, isStreaming, recorder, actualModel, proxyModel)
+		s.dispatchChainResultToOpenAIChat(c, reqCtx, rule, provider, isStreaming, recorder)
 	default:
 		c.JSON(http.StatusBadRequest, "tingly-box: invalid api style")
 		if recorder != nil {
@@ -47,8 +46,10 @@ func (s *Server) dispatchChainResultToAnthropicBeta(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
 	isStreaming bool, recorder *ProtocolRecorder,
-	actualModel, proxyModel string,
+
 ) {
+	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
+
 	// Get final transformed request
 	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 
@@ -71,7 +72,7 @@ func (s *Server) dispatchChainResultToAnthropicBeta(
 			return
 		}
 		// Handle the streaming response
-		s.handleAnthropicStreamResponseV1Beta(c, req, streamResp, proxyModel, provider, recorder)
+		s.handleAnthropicStreamResponseV1Beta(c, req, streamResp, responseModel, provider, recorder)
 	} else {
 		// Handle non-streaming request
 		anthropicResp, cancel, err := ForwardAnthropicV1Beta(fc, wrapper, req)
@@ -98,7 +99,7 @@ func (s *Server) dispatchChainResultToAnthropicBeta(
 		s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
 
 		// FIXME: now we use req model as resp model
-		anthropicResp.Model = anthropic.Model(proxyModel)
+		anthropicResp.Model = anthropic.Model(responseModel)
 
 		session := s.guardrailsSessionFromContext(c, actualModel, provider)
 		messageHistory := serverguardrails.MessagesFromAnthropicV1Beta(req.System, req.Messages)
@@ -120,8 +121,10 @@ func (s *Server) dispatchChainResultToGoogle(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
 	isStreaming bool, recorder *ProtocolRecorder,
-	actualModel, proxyModel string,
+
 ) {
+	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
+
 	// Get final transformed request
 	req := reqCtx.Request.(*protocol.GoogleRequest)
 
@@ -143,7 +146,7 @@ func (s *Server) dispatchChainResultToGoogle(
 			return
 		}
 
-		usage, err := stream.HandleGoogleToAnthropicBetaStreamResponse(c, streamResp, proxyModel)
+		usage, err := stream.HandleGoogleToAnthropicBetaStreamResponse(c, streamResp, responseModel)
 		if err != nil {
 			s.trackUsageWithTokenUsage(c, usage, err)
 			stream.SendInternalError(c, err.Error())
@@ -167,7 +170,7 @@ func (s *Server) dispatchChainResultToGoogle(
 		}
 
 		// Convert Google response to Anthropic beta format
-		anthropicResp := nonstream.ConvertGoogleToAnthropicBetaResponse(resp, proxyModel)
+		anthropicResp := nonstream.ConvertGoogleToAnthropicBetaResponse(resp, responseModel)
 
 		// Track usage from response
 		inputTokens := 0
@@ -197,8 +200,10 @@ func (s *Server) dispatchChainResultToResponses(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
 	isStreaming bool, recorder *ProtocolRecorder,
-	actualModel, proxyModel string,
+
 ) {
+	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
+
 	// Use Responses API path with Transform Chain
 	// Set the rule and provider in context so middleware can use the same rule
 	if rule != nil {
@@ -218,12 +223,12 @@ func (s *Server) dispatchChainResultToResponses(
 	req := reqCtx.Request.(*responses.ResponseNewParams)
 
 	if isStreaming {
-		s.handleAnthropicV1BetaViaResponsesAPIStreaming(c, proxyModel, actualModel, provider, *req)
+		s.handleAnthropicV1BetaViaResponsesAPIStreaming(c, responseModel, actualModel, provider, *req)
 	} else {
 		if provider.APIBase == protocol.CodexAPIBase {
-			s.handleAnthropicV1BetaViaResponsesAPIAssembly(c, proxyModel, actualModel, provider, *req)
+			s.handleAnthropicV1BetaViaResponsesAPIAssembly(c, responseModel, actualModel, provider, *req)
 		} else {
-			s.handleAnthropicV1BetaViaResponsesAPINonStreaming(c, proxyModel, actualModel, provider, *req)
+			s.handleAnthropicV1BetaViaResponsesAPINonStreaming(c, responseModel, actualModel, provider, *req)
 		}
 	}
 }
@@ -232,8 +237,11 @@ func (s *Server) dispatchChainResultToOpenAIChat(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
 	isStreaming bool, recorder *ProtocolRecorder,
-	actualModel, proxyModel string,
+
 ) {
+
+	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
+
 	// Set the rule and provider in context so middleware can use the same rule
 	if rule != nil {
 		c.Set("rule", rule)
@@ -271,7 +279,7 @@ func (s *Server) dispatchChainResultToOpenAIChat(
 		}
 
 		// Handle the streaming response
-		usage, err := stream.HandleOpenAIToAnthropicBetaStream(c, req, streamResp, proxyModel)
+		usage, err := stream.HandleOpenAIToAnthropicBetaStream(c, req, streamResp, responseModel)
 		if err != nil {
 			s.trackUsageWithTokenUsage(c, usage, err)
 			stream.SendInternalError(c, err.Error())
@@ -286,7 +294,7 @@ func (s *Server) dispatchChainResultToOpenAIChat(
 
 		// Finish recording and assemble response
 		if streamRec != nil {
-			streamRec.Finish(proxyModel, usage.InputTokens, usage.OutputTokens)
+			streamRec.Finish(responseModel, usage.InputTokens, usage.OutputTokens)
 			streamRec.RecordResponse(provider, actualModel)
 		}
 	} else {
@@ -301,7 +309,7 @@ func (s *Server) dispatchChainResultToOpenAIChat(
 			return
 		}
 		// Convert OpenAI response back to Anthropic beta format
-		anthropicResp := nonstream.ConvertOpenAIToAnthropicBetaResponse(resp, proxyModel)
+		anthropicResp := nonstream.ConvertOpenAIToAnthropicBetaResponse(resp, responseModel)
 
 		// Track usage from response
 		inputTokens := int(resp.Usage.PromptTokens)
