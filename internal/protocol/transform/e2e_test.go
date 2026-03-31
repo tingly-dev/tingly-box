@@ -117,7 +117,7 @@ func TestE2E_ProtocolConversions(t *testing.T) {
 				case protocol.APIOpenAIResponses:
 					_, correctType = finalCtx.Request.(*responses.ResponseNewParams)
 				case protocol.APIGoogle:
-					_, correctType = finalCtx.Request.(*GoogleRequest)
+					_, correctType = finalCtx.Request.(*protocol.GoogleRequest)
 				}
 
 				if correctType {
@@ -197,7 +197,7 @@ func TestE2E_FullChain(t *testing.T) {
 		require.NotNil(t, finalCtx)
 
 		// Verify final request type
-		finalReq, ok := finalCtx.Request.(*GoogleRequest)
+		finalReq, ok := finalCtx.Request.(*protocol.GoogleRequest)
 		require.True(t, ok, "expected *GoogleRequest")
 
 		// Verify the model was converted

@@ -8,7 +8,6 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
-	"google.golang.org/genai"
 )
 
 // BaseTransform handles protocol conversion from original format to target API style
@@ -234,14 +233,6 @@ func (t *BaseTransform) convertToAnthropicBeta(ctx *TransformContext) error {
 	}
 }
 
-// GoogleRequest wraps Google API request parameters
-// Google's SDK uses separate parameters rather than a single request struct
-type GoogleRequest struct {
-	Model    string
-	Contents []*genai.Content
-	Config   *genai.GenerateContentConfig
-}
-
 // convertToGoogle converts the request to Google Gemini API format
 func (t *BaseTransform) convertToGoogle(ctx *TransformContext) error {
 	// Detect request type and convert accordingly
@@ -252,7 +243,7 @@ func (t *BaseTransform) convertToGoogle(ctx *TransformContext) error {
 			req,
 			4096, // defaultMaxTokens - this could be made configurable
 		)
-		ctx.Request = &GoogleRequest{
+		ctx.Request = &protocol.GoogleRequest{
 			Model:    model,
 			Contents: contents,
 			Config:   config,
@@ -264,7 +255,7 @@ func (t *BaseTransform) convertToGoogle(ctx *TransformContext) error {
 			req,
 			4096, // defaultMaxTokens - this could be made configurable
 		)
-		ctx.Request = &GoogleRequest{
+		ctx.Request = &protocol.GoogleRequest{
 			Model:    model,
 			Contents: contents,
 			Config:   config,
@@ -276,7 +267,7 @@ func (t *BaseTransform) convertToGoogle(ctx *TransformContext) error {
 			req,
 			4096, // defaultMaxTokens
 		)
-		ctx.Request = &GoogleRequest{
+		ctx.Request = &protocol.GoogleRequest{
 			Model:    model,
 			Contents: contents,
 			Config:   config,
@@ -286,7 +277,7 @@ func (t *BaseTransform) convertToGoogle(ctx *TransformContext) error {
 		// OpenAI Responses API to Google conversion is not yet implemented
 		return fmt.Errorf("OpenAI Responses to Google conversion is not yet implemented")
 
-	case *GoogleRequest:
+	case *protocol.GoogleRequest:
 		// Already in Google format, no conversion needed
 		return nil
 

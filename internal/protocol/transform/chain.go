@@ -16,7 +16,7 @@ import (
 type RequestUnionConstraint interface {
 	*anthropic.MessageNewParams | *anthropic.BetaMessageNewParams |
 		*openai.ChatCompletionNewParams | *responses.ResponseNewParams |
-		*GoogleRequest
+		*protocol.GoogleRequest
 }
 
 // TransformOption configures a TransformContext
