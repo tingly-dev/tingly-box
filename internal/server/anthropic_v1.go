@@ -16,6 +16,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -65,6 +66,12 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	} else if shouldStripTools {
 		req.MessageNewParams.Tools = toolinterceptor.StripSearchFetchToolsAnthropic(req.MessageNewParams.Tools)
 	}
+
+	s.applyGuardrailsToToolResultV1(c, &req.MessageNewParams, actualModel, provider)
+	// Run credential masking after terminal tool_result filtering so block/review
+	// decisions still inspect the original tool output while the upstream model
+	// only receives alias tokens.
+	s.applyGuardrailsCredentialMasksV1(c, &req.MessageNewParams, actualModel, provider)
 
 	// Check provider's API style to decide which path to take
 	apiStyle := provider.APIStyle
@@ -127,6 +134,13 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 					return
 				}
 				anthropicResp = roundtripped
+			}
+
+			session := s.guardrailsSessionFromContext(c, actualModel, provider)
+			messageHistory := serverguardrails.MessagesFromAnthropicV1(req.System, req.Messages)
+			blocked := s.applyGuardrailsToAnthropicV1NonStreamResponse(c, session, messageHistory, anthropicResp)
+			if !blocked {
+				s.restoreGuardrailsCredentialAliasesV1Response(c, anthropicResp)
 			}
 
 			// Record response if scenario recording is enabled
@@ -455,6 +469,11 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 			hc.WithOnStreamError(onError)
 		}
 	}
+
+	// Anthropic v1 only adapts request history; the shared runtime owns all
+	// enablement checks and hook wiring after this point.
+	session := s.guardrailsSessionFromContext(c, actualModel, provider)
+	s.attachGuardrailsHooks(c, hc, session, serverguardrails.MessagesFromAnthropicV1(req.System, req.Messages))
 
 	usageStat, err := stream.HandleAnthropicV1Stream(hc, req, streamResp)
 	s.trackUsageWithTokenUsage(c, usageStat, err)

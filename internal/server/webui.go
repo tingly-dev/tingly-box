@@ -730,6 +730,76 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	scenarioHandler := scenario.NewHandler(s.config, s)
 	scenario.RegisterRoutes(apiV1, scenarioHandler)
 
+	// Guardrails Management
+	apiV1.GET("/guardrails/config", s.GetGuardrailsConfig,
+		swagger.WithDescription("Get guardrails config content and parsed config"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.GET("/guardrails/builtins", s.GetGuardrailsBuiltins,
+		swagger.WithDescription("Get curated builtin guardrails policy templates"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.GET("/guardrails/credentials", s.GetGuardrailsCredentials,
+		swagger.WithDescription("List protected credentials used by guardrails pseudonymization"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.GET("/guardrails/credential/:id", s.GetGuardrailsCredential,
+		swagger.WithDescription("Get a protected credential for the local editor dialog"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.POST("/guardrails/credential", s.CreateGuardrailsCredential,
+		swagger.WithDescription("Create a protected credential for guardrails pseudonymization"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.PUT("/guardrails/credential/:id", s.UpdateGuardrailsCredential,
+		swagger.WithDescription("Update a protected credential for guardrails pseudonymization"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.DELETE("/guardrails/credential/:id", s.DeleteGuardrailsCredential,
+		swagger.WithDescription("Delete a protected credential for guardrails pseudonymization"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.PUT("/guardrails/config", s.UpdateGuardrailsConfig,
+		swagger.WithDescription("Update guardrails config and reload engine"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.PUT("/guardrails/policy/:id", s.UpdateGuardrailsPolicy,
+		swagger.WithDescription("Update a guardrails policy and reload engine"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.DELETE("/guardrails/policy/:id", s.DeleteGuardrailsPolicy,
+		swagger.WithDescription("Delete a guardrails policy and reload engine"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.POST("/guardrails/policy", s.CreateGuardrailsPolicy,
+		swagger.WithDescription("Create a new guardrails policy and reload engine"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.PUT("/guardrails/group/:id", s.UpdateGuardrailsGroup,
+		swagger.WithDescription("Update a guardrails group and reload engine"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.DELETE("/guardrails/group/:id", s.DeleteGuardrailsGroup,
+		swagger.WithDescription("Delete a guardrails group and reload engine"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.POST("/guardrails/group", s.CreateGuardrailsGroup,
+		swagger.WithDescription("Create a new guardrails group and reload engine"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.POST("/guardrails/reload", s.ReloadGuardrailsConfig,
+		swagger.WithDescription("Reload guardrails config from disk"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.GET("/guardrails/history", s.GetGuardrailsHistory,
+		swagger.WithDescription("Get recent guardrails interception history"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.DELETE("/guardrails/history", s.ClearGuardrailsHistory,
+		swagger.WithDescription("Clear guardrails interception history"),
+		swagger.WithTags("guardrails"),
+	)
+
 	// History
 	apiV1.GET("/history", s.GetHistory,
 		swagger.WithDescription("Get request history"),

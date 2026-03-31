@@ -5,6 +5,7 @@ import { useAuth } from './AuthContext';
 interface FeatureFlagsContextType {
     skillUser: boolean;
     skillIde: boolean;
+    enableGuardrails: boolean;
     loading: boolean;
     refresh: () => void;
 }
@@ -27,16 +28,19 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
     const { isLoading: isAuthLoading } = useAuth();
     const [skillUser, setSkillUser] = useState(false);
     const [skillIde, setSkillIde] = useState(false);
+    const [enableGuardrails, setEnableGuardrails] = useState(false);
     const [loading, setLoading] = useState(true);
 
     const loadFlags = async () => {
         try {
-            const [skillUserResult, skillIdeResult] = await Promise.all([
+            const [skillUserResult, skillIdeResult, guardrailsResult] = await Promise.all([
                 api.getScenarioFlag('_global', 'skill_user'),
                 api.getScenarioFlag('_global', 'skill_ide'),
+                api.getScenarioFlag('_global', 'guardrails'),
             ]);
             setSkillUser(skillUserResult?.data?.value || false);
             setSkillIde(skillIdeResult?.data?.value || false);
+            setEnableGuardrails(guardrailsResult?.data?.value || false);
         } catch (error) {
             // Silently fail - flags will default to false
             // Don't log to console to avoid noise during initial auth
@@ -58,7 +62,7 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
     };
 
     return (
-        <FeatureFlagsContext.Provider value={{ skillUser, skillIde, loading, refresh }}>
+        <FeatureFlagsContext.Provider value={{ skillUser, skillIde, enableGuardrails, loading, refresh }}>
             {children}
         </FeatureFlagsContext.Provider>
     );

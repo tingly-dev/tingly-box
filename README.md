@@ -185,6 +185,8 @@ npx tingly-box@latest
 
 **[User Manual](./docs/user-manual.md)** – Installation, configuration, and operational guide
 
+**[Guardrails](./docs/guardrails.md)** – Policy-based safety checks, built-in protections, and protected credential masking
+
 
 ## **Philosophy**
 

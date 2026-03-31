@@ -1,0 +1,61 @@
+strategy: most_severe
+error_strategy: review
+
+groups:
+  - id: default
+    name: Default
+    enabled: true
+    severity: high
+
+  - id: output-protection
+    name: Output Protection
+    enabled: true
+    severity: high
+
+policies:
+  - id: block-ssh-read
+    name: Block SSH directory reads
+    groups: [default]
+    kind: resource_access
+    enabled: true
+    scope:
+      scenarios: [claude_code]
+    match:
+      actions:
+        include: [read]
+      resources:
+        type: path
+        mode: prefix
+        values: ["~/.ssh", "/etc/ssh"]
+    verdict: block
+    reason: Reading SSH directory content is blocked.
+
+  - id: block-destructive-rm
+    name: Block destructive rm commands
+    groups: [default]
+    kind: command_execution
+    enabled: true
+    scope:
+      scenarios: [claude_code]
+    match:
+      terms:
+        - "rm -rf"
+        - "rm -f"
+    verdict: block
+    reason: Destructive remove commands are blocked.
+
+  - id: block-secret-output
+    name: Block sensitive output
+    groups: [default, output-protection]
+    kind: content
+    enabled: true
+    scope:
+      scenarios: [claude_code, anthropic, openai]
+    match:
+      patterns:
+        - BEGIN OPENSSH PRIVATE KEY
+        - AKIA[0-9A-Z]+
+      pattern_mode: regex
+      case_sensitive: false
+    verdict: block
+    reason: Sensitive credential material is blocked before it goes back to the model.
