@@ -60,8 +60,10 @@ type Transform interface {
 // TransformContext carries state through the transform chain
 type TransformContext struct {
 	SourceAPI protocol.APIType
-
 	TargetAPI protocol.APIType
+
+	RequestModel  string
+	ResponseModel string
 
 	// Request is the request being transformed.
 	// Use SetRequest[T]() to update — only types satisfying RequestUnionConstraint are accepted.
