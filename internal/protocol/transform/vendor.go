@@ -175,13 +175,15 @@ func (t *VendorTransform) applyAnthropicV1Vendor(ctx *TransformContext, req *ant
 		return nil
 	}
 
-	// Apply Anthropic model-specific transforms
-	req = ops.ApplyAnthropicV1ModelTransform(req, string(model))
+	if strings.Contains(t.ProviderURL, "api.anthropic.com") || strings.Contains(t.ProviderURL, "claude.ai") {
+		// Apply Anthropic model-specific transforms
+		req = ops.ApplyAnthropicV1ModelTransform(req, string(model))
 
-	// Inject OAuth user_id metadata if provider is available
-	req = ops.ApplyAnthropicV1MetadataTransform(req, ctx.Extra)
+		// Inject OAuth user_id metadata if provider is available
+		req = ops.ApplyAnthropicV1MetadataTransform(req, ctx.Extra)
 
-	ctx.Request = req
+		ctx.Request = req
+	}
 
 	return nil
 }
@@ -196,13 +198,15 @@ func (t *VendorTransform) applyAnthropicBetaVendor(ctx *TransformContext, req *a
 		return nil
 	}
 
-	// Apply Anthropic model-specific transforms
-	req = ops.ApplyAnthropicBetaModelTransform(req, string(model))
+	if strings.Contains(t.ProviderURL, "api.anthropic.com") || strings.Contains(t.ProviderURL, "claude.ai") {
+		// Apply Anthropic model-specific transforms
+		req = ops.ApplyAnthropicBetaModelTransform(req, string(model))
 
-	// Inject OAuth user_id metadata if provider is available
-	req = ops.ApplyAnthropicBetaMetadataTransform(req, ctx.Extra)
+		// Inject OAuth user_id metadata if provider is available
+		req = ops.ApplyAnthropicBetaMetadataTransform(req, ctx.Extra)
 
-	ctx.Request = req
+		ctx.Request = req
+	}
 
 	return nil
 }
