@@ -64,6 +64,10 @@ type Config struct {
 	// Value is the JSON-encoded config for that tool type
 	ToolConfigs map[string]json.RawMessage `json:"tool_configs,omitempty"`
 
+	// ToolInterceptorConfig is a shortcut for tool_interceptor config at top level
+	// This allows using "tool_interceptor" directly in config file
+	ToolInterceptorConfig *typ.ToolInterceptorConfig `json:"tool_interceptor,omitempty"`
+
 	// Error log settings
 	ErrorLogFilterExpression string `json:"error_log_filter_expression"` // Expression for filtering error log entries (default: "StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')")
 
@@ -974,6 +978,12 @@ func (c *Config) GetToolInterceptorConfig() *typ.ToolInterceptorConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
+	// First check the top-level tool_interceptor field
+	if c.ToolInterceptorConfig != nil {
+		return c.ToolInterceptorConfig
+	}
+
+	// Then check the tool_configs map
 	var config typ.ToolInterceptorConfig
 	if c.ToolConfigs != nil {
 		if data, ok := c.ToolConfigs[db.ToolTypeInterceptor]; ok {
