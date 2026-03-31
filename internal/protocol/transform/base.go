@@ -181,22 +181,20 @@ func (t *BaseTransform) convertToAnthropicV1(ctx *TransformContext) error {
 
 	case *openai.ChatCompletionNewParams:
 		// OpenAI Chat to Anthropic v1 conversion
-		anthropicReq := request.ConvertOpenAIToAnthropicRequest(
+		ctx.Request = request.ConvertOpenAIToAnthropicRequest(
 			req,
 			4096, // defaultMaxTokens - this could be made configurable
 		)
-		ctx.Request = &anthropicReq
 		return nil
 
 	case *responses.ResponseNewParams:
 		// OpenAI Responses to Anthropic v1 conversion
 		// Convert Responses to Chat first, then to Anthropic
 		chatReq := request.ConvertOpenAIResponsesToChat(*req, 0)
-		anthropicReq := request.ConvertOpenAIToAnthropicRequest(
+		ctx.Request = request.ConvertOpenAIToAnthropicRequest(
 			chatReq,
 			4096, // defaultMaxTokens
 		)
-		ctx.Request = &anthropicReq
 		return nil
 
 	default:

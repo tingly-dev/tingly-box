@@ -418,7 +418,7 @@ func TestConvertResponsesToolChoiceToAnthropic(t *testing.T) {
 				OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptionsNone),
 			},
 			expected: anthropic.ToolChoiceUnionParam{
-				OfAny: &anthropic.ToolChoiceAnyParam{},
+				OfAuto: &anthropic.ToolChoiceAutoParam{},
 			},
 		},
 	}
