@@ -34,6 +34,8 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 		transform.WithStreaming(isStreaming),
 		transform.WithExtra(extra),
 	)
+	transformCtx.SourceAPI = protocol.APIAnthropicBeta
+	transformCtx.TargetAPI = target
 
 	// Execute transform chain
 	finalCtx, err := chain.Execute(transformCtx)
