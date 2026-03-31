@@ -25,7 +25,7 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 	if provider.AuthType == typ.AuthTypeOAuth {
 		extra["user_id"] = provider.OAuthDetail.UserID
 	}
-	extra["device"] = s.config.Random256
+	extra["device"] = s.config.ClaudeCodeDeviceID
 
 	transformCtx := transform.NewTransformContext(
 		&req.BetaMessageNewParams,
@@ -72,7 +72,7 @@ func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMess
 	if provider.AuthType == typ.AuthTypeOAuth {
 		extra["user_id"] = provider.OAuthDetail.UserID
 	}
-	extra["device"] = s.config.Random256
+	extra["device"] = s.config.ClaudeCodeDeviceID
 
 	transformCtx := transform.NewTransformContext(
 		&req.MessageNewParams,
