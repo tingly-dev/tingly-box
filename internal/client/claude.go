@@ -3,6 +3,7 @@ package client
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,10 +24,13 @@ const (
 	stainlessTimeout        = "3000"
 
 	// Anthropic API headers
-	anthropicBeta                         = "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05"
+	anthropicBeta                         = "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,effort-2025-11-24,"
 	anthropicOAuthBeta                    = "oauth-2025-04-20"
 	anthropicDangerousDirectBrowserAccess = "true"
 	anthropicVersion                      = "2023-06-01"
+
+	// Model-specific beta flags
+	anthropicContext1m = "context-1m-2025-08-07"
 
 	// Content negotiation
 	acceptHeader = "application/json"
@@ -43,6 +47,37 @@ func stainlessOS() string {
 // stainlessArch returns the architecture for the x-stainless-arch header
 func stainlessArch() string {
 	return runtime.GOARCH // e.g., "amd64", "arm64"
+}
+
+// claudeModelPrefixes that support context-1m beta flag.
+var context1mModelPrefixes = []string{
+	"claude-sonnet-4-6",
+	"claude-opus-4-6",
+}
+
+// supportsContext1M checks if the model supports the context-1m-2025-08-07 beta flag.
+func supportsContext1M(model string) bool {
+	m := strings.ToLower(model)
+	for _, prefix := range context1mModelPrefixes {
+		if strings.HasPrefix(m, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// extractModelFromBody parses the "model" field from JSON body without full unmarshal.
+func extractModelFromBody(body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+	var msg struct {
+		Model string `json:"model"`
+	}
+	if err := json.Unmarshal(body, &msg); err != nil {
+		return ""
+	}
+	return msg.Model
 }
 
 // claudeRoundTripper wraps an http.RoundTripper to handle Claude Code OAuth
@@ -98,8 +133,11 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 		}
 	}
 
+	// Extract model from request body for model-dependent beta flags
+	model := extractModelFromBody(originalBody)
+
 	// Set Claude Code specific headers
-	t.applyClaudeCodeHeaders(req, isOAuthToken)
+	t.applyClaudeCodeHeaders(req, isOAuthToken, model)
 
 	// Add beta query parameter if not already present
 	q := req.URL.Query()
@@ -128,7 +166,7 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 }
 
 // applyClaudeCodeHeaders sets all Claude Code specific headers
-func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthToken bool) {
+func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthToken bool, model string) {
 	key := req.Header.Get("X-Api-Key")
 	if key == "" {
 		return
@@ -164,11 +202,17 @@ func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthTo
 	// Build beta header with all required flags
 	baseBetas := anthropicBeta
 
+	// Add context-1m for models that support it (Sonnet/Opus, not Haiku)
+	if model != "" && supportsContext1M(model) {
+		baseBetas = strings.TrimRight(baseBetas, ",") + "," + anthropicContext1m
+	}
+	baseBetas = strings.TrimRight(baseBetas, ",")
+
 	// If user provides custom betas, merge them while ensuring oauth is included
 	if val := strings.TrimSpace(req.Header.Get("Anthropic-Beta")); val != "" {
 		baseBetas = val
 		if !strings.Contains(val, "oauth") {
-			baseBetas = fmt.Sprintf("%s,%s", val, anthropicOAuthBeta)
+			baseBetas = fmt.Sprintf("%s,%s", baseBetas, anthropicOAuthBeta)
 		}
 	}
 
