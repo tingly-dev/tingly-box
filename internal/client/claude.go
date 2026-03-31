@@ -91,6 +91,16 @@ type claudeRoundTripper struct {
 }
 
 func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Reject /models endpoint for Claude Code OAuth (by design)
+	if req.URL != nil && strings.HasSuffix(req.URL.Path, "/models") && req.Method == http.MethodGet {
+		return &http.Response{
+			StatusCode: http.StatusNotFound,
+			Status:     http.StatusText(http.StatusNotFound),
+			Header:     make(http.Header),
+			Body:       io.NopCloser(bytes.NewReader([]byte(`{"error":{"type":"not_found_error","message":"models endpoint is not supported for Claude Code"}}`))),
+		}, nil
+	}
+
 	// claudeHook applies Claude Code OAuth specific request modifications:
 	// - Detects OAuth token (sk-ant-oat prefix)
 	// - Applies tool prefix to request body for OAuth tokens
