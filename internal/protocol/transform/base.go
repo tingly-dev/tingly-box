@@ -49,15 +49,15 @@ func (t *BaseTransform) Apply(ctx *TransformContext) error {
 
 	// Determine if conversion is needed by checking BOTH input type AND target type
 	switch t.targetType {
-	case protocol.APIOpenAIChat:
+	case protocol.TypeOpenAIChat:
 		return t.convertToOpenAIChat(ctx, disableStreamUsage)
-	case protocol.APIOpenAIResponses:
+	case protocol.TypeOpenAIResponses:
 		return t.convertToOpenAIResponses(ctx, disableStreamUsage)
-	case protocol.APIAnthropicV1:
+	case protocol.TypeAnthropicV1:
 		return t.convertToAnthropicV1(ctx)
-	case protocol.APIAnthropicBeta:
+	case protocol.TypeAnthropicBeta:
 		return t.convertToAnthropicBeta(ctx)
-	case protocol.APIGoogle:
+	case protocol.TypeGoogle:
 		return t.convertToGoogle(ctx)
 	default:
 		return fmt.Errorf("unknown target API style: %s", t.targetType)

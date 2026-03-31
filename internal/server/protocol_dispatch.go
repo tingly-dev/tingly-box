@@ -24,15 +24,15 @@ func (s *Server) dispatchChainResult(
 	isStreaming bool, recorder *ProtocolRecorder,
 ) {
 	switch reqCtx.TargetAPI {
-	case protocol.APIAnthropicV1:
+	case protocol.TypeAnthropicV1:
 		s.dispatchChainResultToAnthropicV1(c, reqCtx, rule, provider, isStreaming, recorder)
-	case protocol.APIAnthropicBeta:
+	case protocol.TypeAnthropicBeta:
 		s.dispatchChainResultToAnthropicBeta(c, reqCtx, rule, provider, isStreaming, recorder)
-	case protocol.APIGoogle:
+	case protocol.TypeGoogle:
 		s.dispatchChainResultToGoogle(c, reqCtx, rule, provider, isStreaming, recorder)
-	case protocol.APIOpenAIResponses:
+	case protocol.TypeOpenAIResponses:
 		s.dispatchChainResultToResponses(c, reqCtx, rule, provider, isStreaming, recorder)
-	case protocol.APIOpenAIChat:
+	case protocol.TypeOpenAIChat:
 		s.dispatchChainResultToOpenAIChat(c, reqCtx, rule, provider, isStreaming, recorder)
 	default:
 		c.JSON(http.StatusBadRequest, "tingly-box: invalid api style")
@@ -244,9 +244,9 @@ func (s *Server) dispatchChainResultToGoogle(
 
 		var usage *protocol.TokenUsage
 		switch reqCtx.SourceAPI {
-		case protocol.APIAnthropicV1:
+		case protocol.TypeAnthropicV1:
 			usage, err = stream.HandleGoogleToAnthropicStreamResponse(c, streamResp, responseModel)
-		case protocol.APIAnthropicBeta:
+		case protocol.TypeAnthropicBeta:
 			usage, err = stream.HandleGoogleToAnthropicBetaStreamResponse(c, streamResp, responseModel)
 		}
 		if err != nil {
@@ -282,7 +282,7 @@ func (s *Server) dispatchChainResultToGoogle(
 		s.trackUsageWithTokenUsage(c, usage, nil)
 
 		switch reqCtx.SourceAPI {
-		case protocol.APIAnthropicV1:
+		case protocol.TypeAnthropicV1:
 			anthropicResp := nonstream.ConvertGoogleToAnthropicResponse(resp, responseModel)
 			if ShouldRoundtripResponse(c, "openai") {
 				roundtripped, err := RoundtripAnthropicResponseViaOpenAI(&anthropicResp, responseModel, provider, actualModel)
@@ -298,7 +298,7 @@ func (s *Server) dispatchChainResultToGoogle(
 				recorder.RecordResponse(provider, actualModel)
 			}
 			c.JSON(http.StatusOK, anthropicResp)
-		case protocol.APIAnthropicBeta:
+		case protocol.TypeAnthropicBeta:
 			anthropicResp := nonstream.ConvertGoogleToAnthropicBetaResponse(resp, responseModel)
 			s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
 			if recorder != nil {
@@ -336,7 +336,7 @@ func (s *Server) dispatchChainResultToResponses(
 	req := reqCtx.Request.(*responses.ResponseNewParams)
 
 	switch reqCtx.SourceAPI {
-	case protocol.APIAnthropicV1:
+	case protocol.TypeAnthropicV1:
 		logrus.Debugf("[AnthropicV1] Using Transform Chain for Responses API for model=%s", actualModel)
 		if isStreaming {
 			s.handleAnthropicV1ViaResponsesAPIStreaming(c, responseModel, actualModel, provider, *req)
@@ -345,7 +345,7 @@ func (s *Server) dispatchChainResultToResponses(
 		} else {
 			s.handleAnthropicV1ViaResponsesAPINonStreaming(c, responseModel, actualModel, provider, *req)
 		}
-	case protocol.APIAnthropicBeta:
+	case protocol.TypeAnthropicBeta:
 		logrus.Debugf("[Anthropic Beta] Using Transform Chain for Responses API for model=%s", actualModel)
 		if isStreaming {
 			s.handleAnthropicV1BetaViaResponsesAPIStreaming(c, responseModel, actualModel, provider, *req)
@@ -377,7 +377,7 @@ func (s *Server) dispatchChainResultToOpenAIChat(
 
 	if isStreaming {
 		switch reqCtx.SourceAPI {
-		case protocol.APIAnthropicV1:
+		case protocol.TypeAnthropicV1:
 			wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
 			fc := NewForwardContext(c.Request.Context(), provider)
 			streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, req)
@@ -402,7 +402,7 @@ func (s *Server) dispatchChainResultToOpenAIChat(
 				return
 			}
 			s.trackUsageWithTokenUsage(c, usage, nil)
-		case protocol.APIAnthropicBeta:
+		case protocol.TypeAnthropicBeta:
 			streamRec := newStreamRecorder(recorder)
 			if streamRec != nil {
 				streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
@@ -457,7 +457,7 @@ func (s *Server) dispatchChainResultToOpenAIChat(
 		s.trackUsageWithTokenUsage(c, usage, nil)
 
 		switch reqCtx.SourceAPI {
-		case protocol.APIAnthropicV1:
+		case protocol.TypeAnthropicV1:
 			anthropicResp := nonstream.ConvertOpenAIToAnthropicResponse(resp, responseModel)
 			if ShouldRoundtripResponse(c, "openai") {
 				roundtripped, err := RoundtripAnthropicResponseViaOpenAI(&anthropicResp, responseModel, provider, actualModel)
@@ -473,7 +473,7 @@ func (s *Server) dispatchChainResultToOpenAIChat(
 				recorder.RecordResponse(provider, actualModel)
 			}
 			c.JSON(http.StatusOK, anthropicResp)
-		case protocol.APIAnthropicBeta:
+		case protocol.TypeAnthropicBeta:
 			anthropicResp := nonstream.ConvertOpenAIToAnthropicBetaResponse(resp, responseModel)
 			s.updateAffinityMessageID(c, rule, anthropicResp.ID)
 			if recorder != nil {

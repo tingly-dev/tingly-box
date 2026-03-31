@@ -39,13 +39,13 @@ func (t *ConsistencyTransform) Name() string {
 // Modifies ctx.Request in place and returns an error if transformation fails.
 func (t *ConsistencyTransform) Apply(ctx *TransformContext) error {
 	switch t.targetAPIStyle {
-	case protocol.APIOpenAIChat:
+	case protocol.TypeOpenAIChat:
 		return t.normalizeChatCompletion(ctx)
-	case protocol.APIOpenAIResponses:
+	case protocol.TypeOpenAIResponses:
 		return t.normalizeResponses(ctx)
-	case protocol.APIAnthropicV1:
+	case protocol.TypeAnthropicV1:
 		return t.normalizeAnthropicV1(ctx)
-	case protocol.APIAnthropicBeta:
+	case protocol.TypeAnthropicBeta:
 		return t.normalizeAnthropicBeta(ctx)
 	default:
 		// No transformation for unknown API styles

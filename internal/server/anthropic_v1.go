@@ -70,20 +70,20 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	// Check provider's API style to decide which path to take
 	apiStyle := provider.APIStyle
 
-	target := protocol.APIAnthropicV1
+	target := protocol.TypeAnthropicV1
 	switch apiStyle {
 	case protocol.APIStyleAnthropic:
-		target = protocol.APIAnthropicV1
+		target = protocol.TypeAnthropicV1
 	case protocol.APIStyleGoogle:
-		target = protocol.APIGoogle
+		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
 		preferredEndpoint := s.GetPreferredEndpointForModel(provider, actualModel)
 		logrus.Debugf("[AnthropicV1] Probe cache preferred endpoint for model=%s: %s", actualModel, preferredEndpoint)
 		useResponsesAPI := preferredEndpoint == "responses"
 		if useResponsesAPI {
-			target = protocol.APIOpenAIResponses
+			target = protocol.TypeOpenAIResponses
 		} else {
-			target = protocol.APIOpenAIChat
+			target = protocol.TypeOpenAIChat
 		}
 	}
 

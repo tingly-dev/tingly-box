@@ -72,12 +72,12 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	// Check provider's API style to decide which path to take
 	apiStyle := provider.APIStyle
 
-	target := protocol.APIAnthropicBeta
+	target := protocol.TypeAnthropicBeta
 	switch apiStyle {
 	case protocol.APIStyleAnthropic:
-		target = protocol.APIAnthropicBeta
+		target = protocol.TypeAnthropicBeta
 	case protocol.APIStyleGoogle:
-		target = protocol.APIGoogle
+		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
 		// Check if model prefers Responses API (for models like Codex)
 		// This is used for ChatGPT backend API which only supports Responses API
@@ -85,9 +85,9 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		logrus.Debugf("[AnthropicV1] Probe cache preferred endpoint for model=%s: %s", actualModel, preferredEndpoint)
 		useResponsesAPI := preferredEndpoint == "responses"
 		if useResponsesAPI {
-			target = protocol.APIOpenAIResponses
+			target = protocol.TypeOpenAIResponses
 		} else {
-			target = protocol.APIOpenAIChat
+			target = protocol.TypeOpenAIChat
 		}
 	}
 

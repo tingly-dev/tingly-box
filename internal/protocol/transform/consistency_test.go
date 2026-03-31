@@ -15,13 +15,13 @@ import (
 )
 
 func TestNewConsistencyTransform(t *testing.T) {
-	ct := NewConsistencyTransform(protocol.APIOpenAIChat)
+	ct := NewConsistencyTransform(protocol.TypeOpenAIChat)
 	assert.Equal(t, "consistency_normalize", ct.Name())
-	assert.Equal(t, protocol.APIOpenAIChat, ct.targetAPIStyle)
+	assert.Equal(t, protocol.TypeOpenAIChat, ct.targetAPIStyle)
 }
 
 func TestConsistencyTransform_Apply_OpenAIChat(t *testing.T) {
-	ct := NewConsistencyTransform(protocol.APIOpenAIChat)
+	ct := NewConsistencyTransform(protocol.TypeOpenAIChat)
 
 	req := newOpenAIRequest("gpt-4", 1024)
 	req.Temperature = param.Opt[float64]{Value: 0.7}
@@ -87,7 +87,7 @@ func TestConsistencyTransform_normalizeToolSchemas(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ct := NewConsistencyTransform(protocol.APIOpenAIChat)
+			ct := NewConsistencyTransform(protocol.TypeOpenAIChat)
 			req := newOpenAIRequest("gpt-4", 1024)
 			req.Tools = tt.tools
 			ctx := &TransformContext{Request: req}
@@ -106,7 +106,7 @@ func TestConsistencyTransform_normalizeToolSchemas(t *testing.T) {
 }
 
 func TestConsistencyTransform_normalizeToolSchemas_MultipleTools(t *testing.T) {
-	ct := NewConsistencyTransform(protocol.APIOpenAIChat)
+	ct := NewConsistencyTransform(protocol.TypeOpenAIChat)
 
 	tool1 := openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{
 		Name: "tool1",
@@ -202,7 +202,7 @@ func TestConsistencyTransform_validateChat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ct := NewConsistencyTransform(protocol.APIOpenAIChat)
+			ct := NewConsistencyTransform(protocol.TypeOpenAIChat)
 			req := newOpenAIRequest("gpt-4", tt.maxTokens)
 			req.Temperature = param.Opt[float64]{Value: tt.temperature}
 			req.TopP = param.Opt[float64]{Value: tt.topP}
@@ -226,7 +226,7 @@ func TestConsistencyTransform_validateChat(t *testing.T) {
 }
 
 func TestConsistencyTransform_applyScenarioFlags_DisableStreamUsage(t *testing.T) {
-	ct := NewConsistencyTransform(protocol.APIOpenAIChat)
+	ct := NewConsistencyTransform(protocol.TypeOpenAIChat)
 
 	req := newOpenAIRequest("gpt-4", 1024)
 	req.StreamOptions = openai.ChatCompletionStreamOptionsParam{
@@ -245,7 +245,7 @@ func TestConsistencyTransform_applyScenarioFlags_DisableStreamUsage(t *testing.T
 }
 
 func TestConsistencyTransform_applyScenarioFlags_NonStreaming(t *testing.T) {
-	ct := NewConsistencyTransform(protocol.APIOpenAIChat)
+	ct := NewConsistencyTransform(protocol.TypeOpenAIChat)
 
 	req := newOpenAIRequest("gpt-4", 1024)
 	req.StreamOptions = openai.ChatCompletionStreamOptionsParam{
@@ -264,7 +264,7 @@ func TestConsistencyTransform_applyScenarioFlags_NonStreaming(t *testing.T) {
 }
 
 func TestConsistencyTransform_applyScenarioFlags_StoresInExtraFields(t *testing.T) {
-	ct := NewConsistencyTransform(protocol.APIOpenAIChat)
+	ct := NewConsistencyTransform(protocol.TypeOpenAIChat)
 	flags := &typ.ScenarioFlags{DisableStreamUsage: true}
 
 	req := newOpenAIRequest("gpt-4", 1024)
@@ -289,7 +289,7 @@ func TestConsistencyTransform_applyScenarioFlags_StoresInExtraFields(t *testing.
 }
 
 func TestConsistencyTransform_normalizeMessages_NoMessages(t *testing.T) {
-	ct := NewConsistencyTransform(protocol.APIOpenAIChat)
+	ct := NewConsistencyTransform(protocol.TypeOpenAIChat)
 	req := newOpenAIRequest("gpt-4", 1024)
 	req.Messages = []openai.ChatCompletionMessageParamUnion{}
 	ctx := &TransformContext{Request: req}
@@ -299,7 +299,7 @@ func TestConsistencyTransform_normalizeMessages_NoMessages(t *testing.T) {
 }
 
 func TestConsistencyTransform_WrongRequestType(t *testing.T) {
-	ct := NewConsistencyTransform(protocol.APIOpenAIChat)
+	ct := NewConsistencyTransform(protocol.TypeOpenAIChat)
 	ctx := &TransformContext{Request: "not a chat completion"}
 
 	err := ct.Apply(ctx)
@@ -318,14 +318,14 @@ func TestConsistencyTransform_Placeholders(t *testing.T) {
 	}{
 		{
 			"Responses API",
-			protocol.APIOpenAIResponses,
+			protocol.TypeOpenAIResponses,
 			&responses.ResponseNewParams{
 				Model: "gpt-4o",
 			},
 		},
 		{
 			"Anthropic V1",
-			protocol.APIAnthropicV1,
+			protocol.TypeAnthropicV1,
 			&anthropic.MessageNewParams{
 				Model:     anthropic.Model("claude-3-5-sonnet-20241022"),
 				MaxTokens: int64(1024),
@@ -334,7 +334,7 @@ func TestConsistencyTransform_Placeholders(t *testing.T) {
 		},
 		{
 			"Anthropic Beta",
-			protocol.APIAnthropicBeta,
+			protocol.TypeAnthropicBeta,
 			&anthropic.BetaMessageNewParams{
 				Model:     anthropic.Model("claude-3-5-sonnet-20241022"),
 				MaxTokens: int64(1024),

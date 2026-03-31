@@ -59,11 +59,11 @@ func TestE2E_ProtocolConversions(t *testing.T) {
 
 	// Define all target API styles
 	targetStyles := map[string]protocol.APIType{
-		"anthropic_v1":     protocol.APIAnthropicV1,
-		"anthropic_beta":   protocol.APIAnthropicBeta,
-		"openai_chat":      protocol.APIOpenAIChat,
-		"openai_responses": protocol.APIOpenAIResponses,
-		"google":           protocol.APIGoogle,
+		"anthropic_v1":     protocol.TypeAnthropicV1,
+		"anthropic_beta":   protocol.TypeAnthropicBeta,
+		"openai_chat":      protocol.TypeOpenAIChat,
+		"openai_responses": protocol.TypeOpenAIResponses,
+		"google":           protocol.TypeGoogle,
 	}
 
 	// Test all combinations: source -> target
@@ -108,15 +108,15 @@ func TestE2E_ProtocolConversions(t *testing.T) {
 				// Verify the request was transformed to the correct type
 				var correctType bool
 				switch targetStyle {
-				case protocol.APIAnthropicV1:
+				case protocol.TypeAnthropicV1:
 					_, correctType = finalCtx.Request.(*anthropic.MessageNewParams)
-				case protocol.APIAnthropicBeta:
+				case protocol.TypeAnthropicBeta:
 					_, correctType = finalCtx.Request.(*anthropic.BetaMessageNewParams)
-				case protocol.APIOpenAIChat:
+				case protocol.TypeOpenAIChat:
 					_, correctType = finalCtx.Request.(*openai.ChatCompletionNewParams)
-				case protocol.APIOpenAIResponses:
+				case protocol.TypeOpenAIResponses:
 					_, correctType = finalCtx.Request.(*responses.ResponseNewParams)
-				case protocol.APIGoogle:
+				case protocol.TypeGoogle:
 					_, correctType = finalCtx.Request.(*protocol.GoogleRequest)
 				}
 
@@ -144,8 +144,8 @@ func TestE2E_FullChain(t *testing.T) {
 		}
 
 		chain := NewTransformChain([]Transform{
-			NewBaseTransform(protocol.APIOpenAIChat),
-			NewConsistencyTransform(protocol.APIOpenAIChat),
+			NewBaseTransform(protocol.TypeOpenAIChat),
+			NewConsistencyTransform(protocol.TypeOpenAIChat),
 			NewVendorTransform("api.openai.com"),
 		})
 
@@ -183,7 +183,7 @@ func TestE2E_FullChain(t *testing.T) {
 		}
 
 		chain := NewTransformChain([]Transform{
-			NewBaseTransform(protocol.APIGoogle),
+			NewBaseTransform(protocol.TypeGoogle),
 		})
 
 		ctx := &TransformContext{
@@ -222,8 +222,8 @@ func TestE2E_FullChain(t *testing.T) {
 		}
 
 		chain := NewTransformChain([]Transform{
-			NewBaseTransform(protocol.APIOpenAIResponses),
-			NewConsistencyTransform(protocol.APIOpenAIResponses),
+			NewBaseTransform(protocol.TypeOpenAIResponses),
+			NewConsistencyTransform(protocol.TypeOpenAIResponses),
 			NewVendorTransform("api.openai.com"),
 		})
 
@@ -260,7 +260,7 @@ func TestE2E_PointerTypeValidation(t *testing.T) {
 	}
 
 	chain := NewTransformChain([]Transform{
-		NewBaseTransform(protocol.APIAnthropicV1),
+		NewBaseTransform(protocol.TypeAnthropicV1),
 	})
 
 	ctx := &TransformContext{
@@ -285,8 +285,8 @@ func TestE2E_TransformStepsRecorded(t *testing.T) {
 	}
 
 	chain := NewTransformChain([]Transform{
-		NewBaseTransform(protocol.APIOpenAIChat),
-		NewConsistencyTransform(protocol.APIOpenAIChat),
+		NewBaseTransform(protocol.TypeOpenAIChat),
+		NewConsistencyTransform(protocol.TypeOpenAIChat),
 		NewVendorTransform("api.openai.com"),
 	})
 
