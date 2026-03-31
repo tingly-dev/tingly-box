@@ -21,8 +21,8 @@ import (
 func ConvertOpenAIResponsesToAnthropicRequest(
 	params responses.ResponseNewParams,
 	defaultMaxTokens int64,
-) anthropic.MessageNewParams {
-	anthropicParams := anthropic.MessageNewParams{}
+) *anthropic.MessageNewParams {
+	anthropicParams := &anthropic.MessageNewParams{}
 
 	// Convert model
 	if params.Model != "" {

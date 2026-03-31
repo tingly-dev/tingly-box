@@ -262,7 +262,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 				disableStreamUsage = disableStreamUsage || scenarioConfig.Flags.DisableStreamUsage
 			}
 
-			inputTokens, outputTokens, err := stream.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, streamResp, responseModel, disableStreamUsage)
+			inputTokens, outputTokens, err := stream.HandleAnthropicToOpenAIStreamResponse(c, anthropicReq, streamResp, responseModel, disableStreamUsage)
 			if err != nil {
 				// Track usage with error status
 				if inputTokens > 0 || outputTokens > 0 {
