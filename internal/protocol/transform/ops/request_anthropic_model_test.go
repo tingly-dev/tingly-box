@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"regexp"
+
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
 )
@@ -276,4 +278,26 @@ func TestApplyAnthropicMetadataTransform(t *testing.T) {
 	assert.True(t, strings.Contains(result.Metadata.UserID.String(), deviceID))
 	assert.True(t, strings.Contains(result.Metadata.UserID.String(), accountID))
 	assert.True(t, strings.Contains(result.Metadata.UserID.String(), "session_id"))
+}
+
+func TestGenHex5_LengthAndChars(t *testing.T) {
+	hexPattern := regexp.MustCompile(`^[0-9a-f]{5}$`)
+	for i := 0; i < 100; i++ {
+		result := GenHex5()
+		assert.Len(t, result, 5, "GenHex5 should return exactly 5 chars")
+		assert.True(t, hexPattern.MatchString(result), "GenHex5 should return lowercase hex: %q", result)
+	}
+}
+
+func TestGenHex5_IsRandom(t *testing.T) {
+	seen := make(map[string]bool, 100)
+	for i := 0; i < 100; i++ {
+		seen[GenHex5()] = true
+	}
+	// 20 bits = 1048576 possible values, 100 samples should have high uniqueness
+	assert.Greater(t, len(seen), 90, "GenHex5 should produce mostly unique values")
+}
+
+func TestClaudeCodeVersion(t *testing.T) {
+	assert.Equal(t, "2.1.86.d9e", ClaudeCodeVersion)
 }

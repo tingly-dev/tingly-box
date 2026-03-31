@@ -2,7 +2,6 @@ package ops
 
 import (
 	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -10,7 +9,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
 )
 
-const ClaudeCodeVersion = "2.1.81.c43"
+const ClaudeCodeVersion = "2.1.86.d9e"
 
 // ApplyAnthropicV1ModelTransform applies Anthropic API v1 model-specific filtering.
 // This handles model-specific limitations such as adaptive thinking only being supported by
@@ -201,7 +200,7 @@ func ApplyAnthropicV1MetadataTransform(req *anthropic.MessageNewParams, extra ma
 		return req
 	}
 
-	text := fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ClaudeCodeVersion, GenHex4())
+	text := fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ClaudeCodeVersion, GenHex5())
 	if len(req.System) > 0 {
 		if strings.Contains(req.System[0].Text, "x-anthropic-billing-header") {
 			req.System[0].Text = text
@@ -244,7 +243,7 @@ func ApplyAnthropicBetaMetadataTransform(req *anthropic.BetaMessageNewParams, ex
 		return req
 	}
 
-	text := fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ClaudeCodeVersion, GenHex4())
+	text := fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ClaudeCodeVersion, GenHex5())
 	if len(req.System) > 0 {
 		if strings.Contains(req.System[0].Text, "x-anthropic-billing-header") {
 			req.System[0].Text = text
@@ -278,13 +277,13 @@ func ApplyAnthropicBetaMetadataTransform(req *anthropic.BetaMessageNewParams, ex
 	return req
 }
 
-func GenHex4() string {
-	bytes := make([]byte, 2)
-	_, err := rand.Read(bytes)
+func GenHex5() string {
+	// 5 hex chars = 20 bits
+	b := make([]byte, 3)
+	_, err := rand.Read(b)
 	if err != nil {
-		return "cc00"
+		return "cc000"
 	}
-
-	hexStr := hex.EncodeToString(bytes)
-	return hexStr
+	val := int(b[0])<<16 | int(b[1])<<8 | int(b[2])
+	return fmt.Sprintf("%05x", val%(1<<20))
 }
