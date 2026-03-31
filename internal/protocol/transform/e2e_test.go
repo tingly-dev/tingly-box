@@ -245,7 +245,10 @@ func TestE2E_FullChain(t *testing.T) {
 	})
 }
 
-// TestE2E_PointerTypeValidation tests that non-pointer requests are rejected
+// TestE2E_PointerTypeValidation tests that non-pointer requests are rejected by transforms.
+// With the generic NewTransformContext, only pointer types satisfying RequestUnionConstraint
+// can be used — this test verifies the BaseTransform also rejects value types when the
+// context is constructed directly (e.g., in internal tests).
 func TestE2E_PointerTypeValidation(t *testing.T) {
 	valueReq := anthropic.MessageNewParams{
 		Model:     anthropic.Model("claude-3-5-sonnet-20241022"),
@@ -267,7 +270,7 @@ func TestE2E_PointerTypeValidation(t *testing.T) {
 
 	_, err := chain.Execute(ctx)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "must be a pointer type")
+	assert.Contains(t, err.Error(), "unsupported request type")
 }
 
 // TestE2E_TransformStepsRecorded tests that transform steps are properly recorded

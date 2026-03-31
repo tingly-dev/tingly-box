@@ -176,12 +176,12 @@ func (t *VendorTransform) applyAnthropicV1Vendor(ctx *TransformContext, req *ant
 	}
 
 	// Apply Anthropic model-specific transforms
-	transformed := ops.ApplyAnthropicModelTransform(req, string(model))
+	req = ops.ApplyAnthropicV1ModelTransform(req, string(model))
 
 	// Inject OAuth user_id metadata if provider is available
-	transformed = ops.ApplyAnthropicMetadataTransform(transformed, ctx.Extra)
+	req = ops.ApplyAnthropicV1MetadataTransform(req, ctx.Extra)
 
-	ctx.Request = transformed
+	ctx.Request = req
 
 	return nil
 }
@@ -197,12 +197,12 @@ func (t *VendorTransform) applyAnthropicBetaVendor(ctx *TransformContext, req *a
 	}
 
 	// Apply Anthropic model-specific transforms
-	transformed := ops.ApplyAnthropicModelTransform(req, string(model))
+	req = ops.ApplyAnthropicBetaModelTransform(req, string(model))
 
 	// Inject OAuth user_id metadata if provider is available
-	transformed = ops.ApplyAnthropicMetadataTransform(transformed, ctx.Extra)
+	req = ops.ApplyAnthropicBetaMetadataTransform(req, ctx.Extra)
 
-	ctx.Request = transformed
+	ctx.Request = req
 
 	return nil
 }

@@ -362,13 +362,12 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 			scenarioFlags = &scenarioConfig.Flags
 		}
 
-		transformCtx := &transform.TransformContext{
-			OriginalRequest: &req.ChatCompletionNewParams,
-			Request:         &req.ChatCompletionNewParams,
-			ProviderURL:     provider.APIBase,
-			ScenarioFlags:   scenarioFlags,
-			IsStreaming:     isStreaming,
-		}
+		transformCtx := transform.NewTransformContext(
+			&req.ChatCompletionNewParams,
+			transform.WithProviderURL(provider.APIBase),
+			transform.WithScenarioFlags(scenarioFlags),
+			transform.WithStreaming(isStreaming),
+		)
 
 		// Execute transform chain
 		finalCtx, err := chain.Execute(transformCtx)

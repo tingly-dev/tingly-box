@@ -42,67 +42,16 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	shouldIntercept, shouldStripTools, _ := s.resolveToolInterceptor(provider, hasBuiltInWebSearch)
 
 	// Get scenario config for flags
-	cleanHeader := false
-	if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
-		cleanHeader = scenarioConfig.Flags.CleanHeader
+	scenarioConfig := s.config.GetScenarioConfig(scenarioType)
 
-		// Apply thinking mode from scenario config
-		// The thinking mode controls how extended thinking is enabled
-		thinkingMode := scenarioConfig.Flags.ThinkingMode
-		if thinkingMode != "" {
-			// Map effort level to budget_tokens
-			effort := scenarioConfig.Flags.ThinkingEffort
-			if effort == typ.ThinkingEffortDefault {
-				effort = typ.ThinkingEffortMedium // fallback to medium
-			}
-			budgetTokens, ok := typ.ThinkingBudgetMapping[effort]
-			if !ok {
-				budgetTokens = typ.ThinkingBudgetMapping[typ.ThinkingEffortMedium]
-			}
-			if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
-				budgetTokens = *thinkBudget
-			}
-
-			switch typ.ThinkingMode(thinkingMode) {
-			case typ.ThinkingModeForce:
-				// Force mode: always enable thinking regardless of client config
-				req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budgetTokens)
-			case typ.ThinkingModeAdaptive:
-				// Adaptive mode: convert any existing thinking config to OfEnabled
-				switch {
-				case req.Thinking.OfEnabled != nil:
-					req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budgetTokens)
-				case req.Thinking.OfAdaptive != nil:
-					req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budgetTokens)
-				}
-			case typ.ThinkingModeDefault:
-				// Default mode: only handle OfEnabled, don't touch OfAdaptive
-				if req.Thinking.OfEnabled != nil {
-					req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budgetTokens)
-				}
-			default:
-				req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
-			}
-		}
-	}
-
-	// Clean system messages if clean_header flag is enabled (for Claude Code scenario)
-	if cleanHeader {
-		req.BetaMessageNewParams.System = CleanBetaSystemMessages(req.BetaMessageNewParams.System)
-	}
-
-	// Ensure max_tokens is set (Anthropic API requires this)
-	// and cap it at the model's maximum allowed value.
-	if req.MaxTokens == 0 {
-		req.MaxTokens = int64(s.config.GetDefaultMaxTokens())
-	}
+	// Build and run server-side pre-transform chain (scenario-driven flags)
 	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
-	if req.MaxTokens > int64(maxAllowed) {
-		req.MaxTokens = int64(maxAllowed)
-	}
-	// If thinking carries budget_tokens beyond model max, shrink budget to max_allowed/10.
-	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil && *thinkBudget > int64(maxAllowed) {
-		req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(max(1024, int64(maxAllowed / 10)))
+	if err := executeAnthropicBetaPreChain(
+		&req.BetaMessageNewParams, scenarioConfig,
+		s.config.GetDefaultMaxTokens(), maxAllowed, isStreaming,
+	); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	// Set provider UUID in context (Service.Provider uses UUID, not name)
