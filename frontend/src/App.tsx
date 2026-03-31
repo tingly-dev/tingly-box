@@ -11,6 +11,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
 import { HealthProvider, useHealth } from './contexts/HealthContext';
 import { useVersion, VersionProvider } from './contexts/VersionContext';
+import { ProfileProvider } from './contexts/ProfileContext';
 import Layout from './layout/Layout';
 import theme from './theme';
 
@@ -20,6 +21,7 @@ import UseOpenAIPage from './pages/scenario/UseOpenAIPage';
 import UseAnthropicPage from './pages/scenario/UseAnthropicPage';
 import UseCodexPage from './pages/scenario/UseCodexPage';
 import UseClaudeCodePage from './pages/scenario/UseClaudeCodePage';
+import ClaudeCodeProfilePage from './pages/scenario/ClaudeCodeProfilePage';
 import UseAgentPage from './pages/scenario/UseAgentPage';
 import UseOpenCodePage from './pages/scenario/UseOpenCodePage';
 import UseXcodePage from './pages/scenario/UseXcodePage';
@@ -281,6 +283,7 @@ function AppContent() {
                     <Route path="/use-anthropic" element={<UseAnthropicPage />} />
                     <Route path="/use-codex" element={<UseCodexPage />} />
                     <Route path="/use-claude-code" element={<UseClaudeCodePage />} />
+                    <Route path="/use-claude-code/profile/:profileId" element={<ClaudeCodeProfilePage />} />
                     <Route path="/use-agent" element={<UseAgentPage />} />
                     <Route path="/use-opencode" element={<UseOpenCodePage />} />
                     <Route path="/use-xcode" element={<UseXcodePage />} />
@@ -349,8 +352,10 @@ function App() {
                     <VersionProvider>
                         <AuthProvider>
                             <FeatureFlagsProvider>
-                                <AppContent />
-                                <AppDialogs />
+                                <ProfileProvider>
+                                    <AppContent />
+                                    <AppDialogs />
+                                </ProfileProvider>
                             </FeatureFlagsProvider>
                         </AuthProvider>
                     </VersionProvider>

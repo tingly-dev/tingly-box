@@ -3,6 +3,7 @@ package typ
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 )
 
@@ -135,6 +136,12 @@ func RegisteredScenarioDescriptors() []ScenarioDescriptor {
 }
 
 func GetScenarioDescriptor(scenario RuleScenario) (ScenarioDescriptor, bool) {
+	base, profileID := ParseScenarioProfile(scenario)
+	if profileID != "" {
+		// Profiled scenario: resolve from base scenario's descriptor
+		return getBaseScenarioDescriptor(base)
+	}
+
 	scenarioRegistryMu.RLock()
 	defer scenarioRegistryMu.RUnlock()
 
@@ -153,4 +160,38 @@ func CanBindRulesToScenario(scenario RuleScenario) bool {
 func CanUseScenarioInPath(scenario RuleScenario) bool {
 	descriptor, ok := GetScenarioDescriptor(scenario)
 	return ok && descriptor.AllowDirectPathUse
+}
+
+// ProfileSeparator is used to split "scenario:profile_id" strings.
+const ProfileSeparator = ":"
+
+// ParseScenarioProfile splits "claude_code:p1" into base scenario and profile ID.
+// "claude_code" returns ("claude_code", "").
+func ParseScenarioProfile(raw RuleScenario) (base RuleScenario, profileID string) {
+	rawStr := string(raw)
+	if idx := strings.Index(rawStr, ProfileSeparator); idx >= 0 {
+		return RuleScenario(rawStr[:idx]), rawStr[idx+1:]
+	}
+	return raw, ""
+}
+
+// IsProfiledScenario returns true if the scenario string contains a profile suffix.
+func IsProfiledScenario(raw RuleScenario) bool {
+	return strings.Contains(string(raw), ProfileSeparator)
+}
+
+// ProfiledScenarioName combines base scenario and profile ID into "base:profileID".
+func ProfiledScenarioName(base RuleScenario, profileID string) RuleScenario {
+	return RuleScenario(string(base) + ProfileSeparator + profileID)
+}
+
+// getBaseScenarioDescriptor resolves the descriptor for a plain (non-profiled) scenario.
+func getBaseScenarioDescriptor(base RuleScenario) (ScenarioDescriptor, bool) {
+	scenarioRegistryMu.RLock()
+	defer scenarioRegistryMu.RUnlock()
+	descriptor, ok := scenarioRegistry[base]
+	if !ok {
+		return ScenarioDescriptor{}, false
+	}
+	return cloneScenarioDescriptor(descriptor), true
 }

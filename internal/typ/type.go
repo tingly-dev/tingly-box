@@ -161,6 +161,14 @@ type RuleFlags struct {
 	CursorCompatAuto bool `json:"cursor_compat_auto,omitempty" yaml:"cursor_compat_auto,omitempty"`
 }
 
+// ProfileMeta stores metadata for a scenario profile.
+// Profiles allow multiple Rule + ScenarioFlags configurations per base scenario.
+// A profile is identified by a short service-generated ID (e.g. "p1", "p2").
+type ProfileMeta struct {
+	ID   string `json:"id" yaml:"id"`     // Profile ID (e.g. "p1")
+	Name string `json:"name" yaml:"name"` // Human-readable name (unique within base scenario)
+}
+
 // ScenarioConfig represents configuration for a specific scenario
 type ScenarioConfig struct {
 	Scenario   RuleScenario           `json:"scenario" yaml:"scenario"`

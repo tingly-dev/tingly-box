@@ -61,7 +61,7 @@ export const BaseUrlRow: React.FC<BaseUrlRowProps> = ({
                     fontWeight: 500
                 }}
             >
-                {rowLabel}:
+                {rowLabel}
             </Typography>
             <Typography
                 variant="subtitle2"

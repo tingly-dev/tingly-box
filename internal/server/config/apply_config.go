@@ -92,15 +92,10 @@ type KV struct {
 	Value any
 }
 
-// ApplyClaudeSettingsFromEnv applies Claude settings configuration with env vars
-// This is the safe version - env map is controlled by backend
-func ApplyClaudeSettingsFromEnv(env map[string]string, extras ...KV) (*ApplyResult, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get home directory: %w", err)
-	}
-
-	targetPath := filepath.Join(homeDir, ".claude", "settings.json")
+// ApplyClaudeSettingsToPath applies Claude settings env vars to a specific target file.
+// If the file exists, it merges the env section into the existing config (with backup).
+// If not, it creates a new file with only the env section.
+func ApplyClaudeSettingsToPath(targetPath string, env map[string]string, extras ...KV) (*ApplyResult, error) {
 	result := &ApplyResult{
 		Success: false,
 		Message: "",
@@ -113,25 +108,22 @@ func ApplyClaudeSettingsFromEnv(env map[string]string, extras ...KV) (*ApplyResu
 	}
 
 	// Check if file exists
-	_, err = os.Stat(targetPath)
+	_, err := os.Stat(targetPath)
 	fileExists := err == nil
 
 	var existingConfig map[string]interface{}
 	if fileExists {
-		// Read existing file
 		data, err := os.ReadFile(targetPath)
 		if err != nil {
 			result.Message = fmt.Sprintf("Failed to read existing file: %v", err)
 			return result, nil
 		}
 
-		// Parse existing config
 		if err := json.Unmarshal(data, &existingConfig); err != nil {
 			result.Message = fmt.Sprintf("Failed to parse existing JSON: %v", err)
 			return result, nil
 		}
 
-		// Create backup
 		backupPath, err := backupFile(targetPath)
 		if err != nil {
 			result.Message = fmt.Sprintf("Failed to create backup: %v", err)
@@ -177,6 +169,18 @@ func ApplyClaudeSettingsFromEnv(env map[string]string, extras ...KV) (*ApplyResu
 	}
 
 	return result, nil
+}
+
+// ApplyClaudeSettingsFromEnv applies Claude settings configuration with env vars
+// This is the safe version - env map is controlled by backend
+func ApplyClaudeSettingsFromEnv(env map[string]string, extras ...KV) (*ApplyResult, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	targetPath := filepath.Join(homeDir, ".claude", "settings.json")
+	return ApplyClaudeSettingsToPath(targetPath, env, extras...)
 }
 
 // InstallStatusLineScript installs the tingly-statusline.sh script to ~/.claude/

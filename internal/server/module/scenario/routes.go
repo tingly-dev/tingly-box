@@ -55,4 +55,25 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		swagger.WithRequestModel(ScenarioStringFlagUpdateRequest{}),
 		swagger.WithResponseModel(ScenarioFlagResponse{}),
 	)
+
+	// --- Profile endpoints ---
+
+	// GET /scenario/:scenario/profiles - List profiles for a scenario
+	router.GET("/scenario/:scenario/profiles", handler.GetProfiles,
+		swagger.WithDescription("List profiles for a scenario"),
+		swagger.WithTags("scenarios"),
+	)
+
+	// POST /scenario/:scenario/profiles - Create a new profile
+	router.POST("/scenario/:scenario/profiles", handler.CreateProfile,
+		swagger.WithDescription("Create a new profile for a scenario"),
+		swagger.WithTags("scenarios"),
+		swagger.WithRequestModel(ProfileCreateRequest{}),
+	)
+
+	// DELETE /scenario/:scenario/profiles/:id - Delete a profile
+	router.DELETE("/scenario/:scenario/profiles/:id", handler.DeleteProfile,
+		swagger.WithDescription("Delete a profile"),
+		swagger.WithTags("scenarios"),
+	)
 }
