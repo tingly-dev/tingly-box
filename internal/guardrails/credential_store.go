@@ -1,7 +1,6 @@
 package guardrails
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -9,12 +8,64 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 var ErrProtectedCredentialNotFound = errors.New("protected credential not found")
 
+type protectedCredentialRecord struct {
+	ID          string    `gorm:"primaryKey;column:id"`
+	Name        string    `gorm:"column:name;not null;index"`
+	Type        string    `gorm:"column:type;not null"`
+	Secret      string    `gorm:"column:secret;not null"`
+	AliasToken  string    `gorm:"column:alias_token;not null;uniqueIndex"`
+	Description string    `gorm:"column:description"`
+	Tags        string    `gorm:"column:tags;type:text"`
+	Enabled     bool      `gorm:"column:enabled;default:true"`
+	CreatedAt   time.Time `gorm:"column:created_at"`
+	UpdatedAt   time.Time `gorm:"column:updated_at"`
+}
+
+func (protectedCredentialRecord) TableName() string {
+	return "protected_credentials"
+}
+
+func (r protectedCredentialRecord) toCredential() ProtectedCredential {
+	return ProtectedCredential{
+		ID:          r.ID,
+		Name:        r.Name,
+		Type:        r.Type,
+		Secret:      r.Secret,
+		AliasToken:  r.AliasToken,
+		Description: r.Description,
+		Tags:        normalizeStringSlice(strings.Split(r.Tags, "\n")),
+		Enabled:     r.Enabled,
+		CreatedAt:   r.CreatedAt,
+		UpdatedAt:   r.UpdatedAt,
+	}
+}
+
+func protectedCredentialRecordFromValue(credential ProtectedCredential) protectedCredentialRecord {
+	return protectedCredentialRecord{
+		ID:          credential.ID,
+		Name:        credential.Name,
+		Type:        credential.Type,
+		Secret:      credential.Secret,
+		AliasToken:  credential.AliasToken,
+		Description: credential.Description,
+		Tags:        strings.Join(normalizeStringSlice(credential.Tags), "\n"),
+		Enabled:     credential.Enabled,
+		CreatedAt:   credential.CreatedAt,
+		UpdatedAt:   credential.UpdatedAt,
+	}
+}
+
 type ProtectedCredentialStore struct {
 	path string
+	db   *gorm.DB
 	mu   sync.Mutex
 }
 
@@ -25,94 +76,111 @@ func NewProtectedCredentialStore(path string) *ProtectedCredentialStore {
 func (s *ProtectedCredentialStore) List() ([]ProtectedCredential, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.load()
+
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+
+	var records []protectedCredentialRecord
+	if err := db.Order("created_at desc").Find(&records).Error; err != nil {
+		return nil, fmt.Errorf("list protected credentials: %w", err)
+	}
+
+	credentials := make([]ProtectedCredential, 0, len(records))
+	for _, record := range records {
+		credentials = append(credentials, record.toCredential())
+	}
+	return credentials, nil
 }
 
 func (s *ProtectedCredentialStore) Create(credential ProtectedCredential) (ProtectedCredential, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	credentials, err := s.load()
+	db, err := s.ensureDB()
 	if err != nil {
 		return ProtectedCredential{}, err
 	}
-	for _, existing := range credentials {
-		if existing.ID == credential.ID {
-			return ProtectedCredential{}, fmt.Errorf("protected credential already exists")
-		}
-		if existing.AliasToken == credential.AliasToken {
-			return ProtectedCredential{}, fmt.Errorf("protected credential alias token already exists")
-		}
+
+	record := protectedCredentialRecordFromValue(credential)
+	if err := db.Create(&record).Error; err != nil {
+		return ProtectedCredential{}, fmt.Errorf("create protected credential: %w", err)
 	}
-	credentials = append(credentials, credential)
-	if err := s.save(credentials); err != nil {
-		return ProtectedCredential{}, err
-	}
-	return credential, nil
+	return record.toCredential(), nil
 }
 
 func (s *ProtectedCredentialStore) Update(id string, update func(*ProtectedCredential) error) (ProtectedCredential, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	credentials, err := s.load()
+	db, err := s.ensureDB()
 	if err != nil {
 		return ProtectedCredential{}, err
 	}
-	for i := range credentials {
-		if credentials[i].ID != id {
-			continue
+
+	var record protectedCredentialRecord
+	if err := db.Where("id = ?", id).First(&record).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ProtectedCredential{}, ErrProtectedCredentialNotFound
 		}
-		if err := update(&credentials[i]); err != nil {
-			return ProtectedCredential{}, err
-		}
-		credentials[i].UpdatedAt = time.Now().UTC()
-		if err := s.save(credentials); err != nil {
-			return ProtectedCredential{}, err
-		}
-		return credentials[i], nil
+		return ProtectedCredential{}, fmt.Errorf("load protected credential: %w", err)
 	}
-	return ProtectedCredential{}, ErrProtectedCredentialNotFound
+
+	credential := record.toCredential()
+	if err := update(&credential); err != nil {
+		return ProtectedCredential{}, err
+	}
+	credential.UpdatedAt = time.Now().UTC()
+	record = protectedCredentialRecordFromValue(credential)
+	if err := db.Save(&record).Error; err != nil {
+		return ProtectedCredential{}, fmt.Errorf("update protected credential: %w", err)
+	}
+	return record.toCredential(), nil
 }
 
 func (s *ProtectedCredentialStore) Delete(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	credentials, err := s.load()
+	db, err := s.ensureDB()
 	if err != nil {
 		return err
 	}
-	next := make([]ProtectedCredential, 0, len(credentials))
-	found := false
-	for _, credential := range credentials {
-		if credential.ID == id {
-			found = true
-			continue
-		}
-		next = append(next, credential)
+
+	result := db.Where("id = ?", id).Delete(&protectedCredentialRecord{})
+	if result.Error != nil {
+		return fmt.Errorf("delete protected credential: %w", result.Error)
 	}
-	if !found {
+	if result.RowsAffected == 0 {
 		return ErrProtectedCredentialNotFound
 	}
-	return s.save(next)
+	return nil
 }
 
 func (s *ProtectedCredentialStore) Resolve(ids []string) ([]ProtectedCredential, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	credentials, err := s.load()
-	if err != nil {
-		return nil, err
-	}
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	byID := make(map[string]ProtectedCredential, len(credentials))
-	for _, credential := range credentials {
-		byID[credential.ID] = credential
+
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
 	}
+
+	var records []protectedCredentialRecord
+	if err := db.Where("id IN ?", ids).Find(&records).Error; err != nil {
+		return nil, fmt.Errorf("resolve protected credentials: %w", err)
+	}
+
+	byID := make(map[string]ProtectedCredential, len(records))
+	for _, record := range records {
+		byID[record.ID] = record.toCredential()
+	}
+
 	resolved := make([]ProtectedCredential, 0, len(ids))
 	for _, id := range ids {
 		credential, ok := byID[id]
@@ -124,40 +192,29 @@ func (s *ProtectedCredentialStore) Resolve(ids []string) ([]ProtectedCredential,
 	return resolved, nil
 }
 
-func (s *ProtectedCredentialStore) load() ([]ProtectedCredential, error) {
+func (s *ProtectedCredentialStore) ensureDB() (*gorm.DB, error) {
+	if s.db != nil {
+		return s.db, nil
+	}
 	if s.path == "" {
 		return nil, fmt.Errorf("protected credential store path is empty")
 	}
-	data, err := os.ReadFile(s.path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return []ProtectedCredential{}, nil
-		}
-		return nil, err
-	}
-	var credentials []ProtectedCredential
-	if err := json.Unmarshal(data, &credentials); err != nil {
-		return nil, fmt.Errorf("decode protected credentials: %w", err)
-	}
-	return credentials, nil
-}
-
-func (s *ProtectedCredentialStore) save(credentials []ProtectedCredential) error {
-	if s.path == "" {
-		return fmt.Errorf("protected credential store path is empty")
-	}
-	data, err := json.MarshalIndent(credentials, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode protected credentials: %w", err)
-	}
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
-		return err
+		return nil, fmt.Errorf("create protected credential db dir: %w", err)
 	}
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return err
+
+	db, err := gorm.Open(sqlite.Open(s.path), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("open protected credential db: %w", err)
 	}
-	return os.Rename(tmp, s.path)
+	if err := db.AutoMigrate(&protectedCredentialRecord{}); err != nil {
+		return nil, fmt.Errorf("migrate protected credential db: %w", err)
+	}
+
+	s.db = db
+	return s.db, nil
 }
 
 func UpdateProtectedCredential(existing *ProtectedCredential, name, credentialType, secret, description string, tags []string, enabled bool) error {

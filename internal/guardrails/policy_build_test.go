@@ -7,21 +7,20 @@ func TestBuildEvaluatorsCreatesResourceAccessPolicyEvaluator(t *testing.T) {
 	evaluators, err := BuildEvaluators(Config{
 		Groups: []PolicyGroup{
 			{
-				ID:             "high-risk",
-				Enabled:        &enabled,
-				DefaultVerdict: VerdictBlock,
-				DefaultScope: Scope{
-					Scenarios:  []string{"claude_code"},
-					Directions: []Direction{DirectionResponse},
-				},
+				ID:      "high-risk",
+				Enabled: &enabled,
 			},
 		},
 		Policies: []Policy{
 			{
 				ID:      "block-ssh-read",
 				Kind:    PolicyKindResourceAccess,
-				Group:   "high-risk",
+				Groups:  []string{"high-risk"},
 				Enabled: &enabled,
+				Scope: Scope{
+					Scenarios:  []string{"claude_code"},
+					Directions: []Direction{DirectionResponse},
+				},
 				Match: PolicyMatch{
 					ToolNames: []string{"bash"},
 					Actions: &ActionSelector{

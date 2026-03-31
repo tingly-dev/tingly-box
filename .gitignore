@@ -109,3 +109,4 @@ wheels/
 *.egg
 MANIFEST
 /tests/test_results/
+go.work.sum

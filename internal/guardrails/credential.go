@@ -29,7 +29,7 @@ const (
 	ProtectedCredentialTypeAPIKey     = "api_key"
 	ProtectedCredentialTypeToken      = "token"
 	ProtectedCredentialTypePrivateKey = "private_key"
-	AliasTokenPrefix                  = "TINGLY_SECRET_"
+	AliasTokenPrefix                  = "TINGLY_CRED_"
 )
 
 var protectedCredentialTypes = map[string]struct{}{
@@ -54,7 +54,7 @@ func NewProtectedCredential(name, credentialType, secret, description string, ta
 		return ProtectedCredential{}, fmt.Errorf("credential secret is required")
 	}
 
-	aliasToken, err := GenerateAliasToken()
+	aliasToken, err := GenerateAliasToken(credentialType)
 	if err != nil {
 		return ProtectedCredential{}, err
 	}
@@ -74,12 +74,16 @@ func NewProtectedCredential(name, credentialType, secret, description string, ta
 	}, nil
 }
 
-func GenerateAliasToken() (string, error) {
-	buf := make([]byte, 8)
+func GenerateAliasToken(credentialType string) (string, error) {
+	buf := make([]byte, 16)
 	if _, err := rand.Read(buf); err != nil {
 		return "", fmt.Errorf("generate alias token: %w", err)
 	}
-	return AliasTokenPrefix + strings.ToUpper(hex.EncodeToString(buf)), nil
+	typeLabel := strings.ToUpper(strings.TrimSpace(credentialType))
+	if typeLabel == "" {
+		typeLabel = "CREDENTIAL"
+	}
+	return AliasTokenPrefix + typeLabel + "_" + strings.ToUpper(hex.EncodeToString(buf)), nil
 }
 
 func normalizeStringSlice(values []string) []string {

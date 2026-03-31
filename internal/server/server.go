@@ -18,11 +18,13 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/hooks"
+	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
@@ -90,6 +92,15 @@ type Server struct {
 
 	// tool interceptor for local tool execution
 	toolInterceptor *toolinterceptor.Interceptor
+
+	// guardrails engine (optional)
+	guardrailsEngine  guardrails.Guardrails
+	guardrailsHistory *serverguardrails.HistoryStore
+
+	// Protected credential aliasing needs a fast request-path lookup from
+	// scenario -> active mask credentials, plus ID -> credential metadata.
+	guardrailsCredentialCache   guardrailsCredentialCache
+	guardrailsCredentialCacheMu sync.RWMutex
 
 	// recording sinks
 	recordSink *obs.Sink
@@ -159,6 +170,61 @@ func (s *Server) UsageStore() *db.UsageStore {
 		return nil
 	}
 	return sm.Usage()
+}
+
+func (s *Server) initGuardrailsEngine() {
+	if s.guardrailsEngine != nil || s.config == nil {
+		return
+	}
+
+	if !s.guardrailsEnabled() {
+		return
+	}
+
+	cfgPath, err := serverguardrails.FindGuardrailsConfig(s.config.ConfigDir)
+	if err != nil {
+		logrus.WithError(err).Warn("Guardrails config not found; guardrails disabled")
+		return
+	}
+
+	cfg, err := guardrails.LoadConfig(cfgPath)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to load guardrails config")
+		return
+	}
+
+	engine, err := guardrails.BuildEngine(cfg, guardrails.Dependencies{})
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to build guardrails engine")
+		return
+	}
+
+	s.setGuardrailsEngine(engine, "guardrails init")
+	logrus.Infof("Guardrails enabled with config: %s", cfgPath)
+}
+
+func (s *Server) guardrailsEnabled() bool {
+	if s.config == nil {
+		return false
+	}
+	return s.config.GetScenarioFlag(typ.ScenarioGlobal, "guardrails") ||
+		s.config.GetScenarioFlag(typ.ScenarioClaudeCode, "guardrails")
+}
+
+func (s *Server) syncGuardrailsFromConfig() {
+	if s.config == nil {
+		return
+	}
+
+	if !s.guardrailsEnabled() {
+		s.setGuardrailsEngine(nil, "guardrails disable")
+		logrus.Debug("Guardrails disabled via config")
+		return
+	}
+
+	if s.guardrailsEngine == nil {
+		s.initGuardrailsEngine()
+	}
 }
 
 // ServerOption defines a functional option for Server configuration
@@ -247,6 +313,13 @@ func WithRecordDir(dir string) ServerOption {
 func WithRecording(enabled bool) ServerOption {
 	return func(s *Server) {
 		s.enableRecording = enabled
+	}
+}
+
+// WithGuardrails sets a guardrails engine for stream evaluation.
+func WithGuardrails(engine guardrails.Guardrails) ServerOption {
+	return func(s *Server) {
+		s.guardrailsEngine = engine
 	}
 }
 
@@ -385,6 +458,11 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.clientPool = client.NewClientPool() // Initialize client pool (once mode with auto-cleanup via finalizer)
 	server.errorMW = errorMW
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
+	server.guardrailsHistory = serverguardrails.NewHistoryStore(200, serverguardrails.GetGuardrailsHistoryPath(cfg.ConfigDir))
+
+	// Auto-load guardrails if enabled and not injected explicitly.
+	server.initGuardrailsEngine()
+	server.refreshGuardrailsCredentialCacheOrWarn("server init")
 
 	// Initialize record sink if recording is enabled
 	switch server.recordMode {
@@ -619,6 +697,9 @@ func (s *Server) setupConfigWatcher() {
 				}
 			}
 		}
+
+		// Re-sync guardrails based on updated config flags.
+		s.syncGuardrailsFromConfig()
 	})
 }
 
