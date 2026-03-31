@@ -12,11 +12,11 @@ import (
 
 const (
 	// Claude Code client identification
-	claudeCLIUserAgent      = "claude-cli/2.1.81 (external, cli)"
+	claudeCLIUserAgent      = "claude-cli/2.1.86 (external, cli)"
 	claudeXApp              = "cli"
 	stainlessHelperMethod   = "stream"
 	stainlessRetryCount     = "0"
-	stainlessRuntimeVersion = "v25.3.0"
+	stainlessRuntimeVersion = "v24.3.0"
 	stainlessPackageVersion = "0.74.0"
 	stainlessRuntime        = "node"
 	stainlessLang           = "js"
