@@ -83,7 +83,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// Handle streaming request with request context for proper cancellation
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(req.MessageNewParams.Model))
 			fc := NewForwardContext(c.Request.Context(), provider)
-			streamResp, cancel, err := ForwardAnthropicV1Stream(fc, wrapper, req.MessageNewParams)
+			streamResp, cancel, err := ForwardAnthropicV1Stream(fc, wrapper, &req.MessageNewParams)
 			if cancel != nil {
 				defer cancel()
 			}
@@ -101,7 +101,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// Handle non-streaming request
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(req.MessageNewParams.Model))
 			fc := NewForwardContext(nil, provider)
-			anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, req.MessageNewParams)
+			anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, &req.MessageNewParams)
 			if cancel != nil {
 				defer cancel()
 			}
