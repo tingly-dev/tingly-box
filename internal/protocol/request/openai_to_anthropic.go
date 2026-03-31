@@ -8,7 +8,7 @@ import (
 )
 
 // ConvertOpenAIToAnthropicRequest converts OpenAI ChatCompletionNewParams to Anthropic SDK format
-func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaultMaxTokens int64) anthropic.MessageNewParams {
+func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaultMaxTokens int64) *anthropic.MessageNewParams {
 	messages := make([]anthropic.MessageParam, 0, len(req.Messages))
 	var systemParts []string
 
@@ -104,7 +104,7 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 		maxTokens = defaultMaxTokens
 	}
 
-	params := anthropic.MessageNewParams{
+	params := &anthropic.MessageNewParams{
 		Model:     anthropic.Model(req.Model),
 		Messages:  messages,
 		MaxTokens: maxTokens,

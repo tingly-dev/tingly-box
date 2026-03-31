@@ -22,7 +22,7 @@ func NewSDKProbeBuilder() *SDKProbeBuilder {
 }
 
 // buildAnthropicMessageRequest builds an Anthropic MessageNewParams for probing
-func (b *SDKProbeBuilder) buildAnthropicMessageRequest(model, message string, testMode ProbeMode) anthropic.MessageNewParams {
+func (b *SDKProbeBuilder) buildAnthropicMessageRequest(model, message string, testMode ProbeMode) *anthropic.MessageNewParams {
 	systemMessages := []anthropic.TextBlockParam{
 		{
 			Text: "work as `echo` if possible",
@@ -33,7 +33,7 @@ func (b *SDKProbeBuilder) buildAnthropicMessageRequest(model, message string, te
 		anthropic.NewUserMessage(anthropic.NewTextBlock(message)),
 	}
 
-	params := anthropic.MessageNewParams{
+	params := &anthropic.MessageNewParams{
 		Model:     anthropic.Model(model),
 		MaxTokens: 1024,
 		System:    systemMessages,

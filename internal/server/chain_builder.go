@@ -3,6 +3,7 @@ package server
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -13,7 +14,7 @@ func (s *Server) ShouldRecording(recorder *ProtocolRecorder) bool {
 }
 
 // BuildTransformChain builds the appropriate transform chain based on recording configuration
-func (s *Server) BuildTransformChain(c *gin.Context, targetType transform.TargetAPIStyle, providerURL string, scenarioFlags *typ.ScenarioFlags, recorder *ProtocolRecorder) (*transform.TransformChain, error) {
+func (s *Server) BuildTransformChain(c *gin.Context, targetType protocol.APIType, providerURL string, scenarioFlags *typ.ScenarioFlags, recorder *ProtocolRecorder) (*transform.TransformChain, error) {
 
 	recordMode := s.recordMode
 	shouldRecord := s.ShouldRecording(recorder)

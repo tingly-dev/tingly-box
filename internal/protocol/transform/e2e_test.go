@@ -9,6 +9,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 // TestE2E_ProtocolConversions tests end-to-end protocol conversions
@@ -57,12 +58,12 @@ func TestE2E_ProtocolConversions(t *testing.T) {
 	}
 
 	// Define all target API styles
-	targetStyles := map[string]TargetAPIStyle{
-		"anthropic_v1":     TargetAPIStyleAnthropicV1,
-		"anthropic_beta":   TargetAPIStyleAnthropicBeta,
-		"openai_chat":      TargetAPIStyleOpenAIChat,
-		"openai_responses": TargetAPIStyleOpenAIResponses,
-		"google":           TargetAPIStyleGoogle,
+	targetStyles := map[string]protocol.APIType{
+		"anthropic_v1":     protocol.TypeAnthropicV1,
+		"anthropic_beta":   protocol.TypeAnthropicBeta,
+		"openai_chat":      protocol.TypeOpenAIChat,
+		"openai_responses": protocol.TypeOpenAIResponses,
+		"google":           protocol.TypeGoogle,
 	}
 
 	// Test all combinations: source -> target
@@ -107,16 +108,16 @@ func TestE2E_ProtocolConversions(t *testing.T) {
 				// Verify the request was transformed to the correct type
 				var correctType bool
 				switch targetStyle {
-				case TargetAPIStyleAnthropicV1:
+				case protocol.TypeAnthropicV1:
 					_, correctType = finalCtx.Request.(*anthropic.MessageNewParams)
-				case TargetAPIStyleAnthropicBeta:
+				case protocol.TypeAnthropicBeta:
 					_, correctType = finalCtx.Request.(*anthropic.BetaMessageNewParams)
-				case TargetAPIStyleOpenAIChat:
+				case protocol.TypeOpenAIChat:
 					_, correctType = finalCtx.Request.(*openai.ChatCompletionNewParams)
-				case TargetAPIStyleOpenAIResponses:
+				case protocol.TypeOpenAIResponses:
 					_, correctType = finalCtx.Request.(*responses.ResponseNewParams)
-				case TargetAPIStyleGoogle:
-					_, correctType = finalCtx.Request.(*GoogleRequest)
+				case protocol.TypeGoogle:
+					_, correctType = finalCtx.Request.(*protocol.GoogleRequest)
 				}
 
 				if correctType {
@@ -143,8 +144,8 @@ func TestE2E_FullChain(t *testing.T) {
 		}
 
 		chain := NewTransformChain([]Transform{
-			NewBaseTransform(TargetAPIStyleOpenAIChat),
-			NewConsistencyTransform(TargetAPIStyleOpenAIChat),
+			NewBaseTransform(protocol.TypeOpenAIChat),
+			NewConsistencyTransform(protocol.TypeOpenAIChat),
 			NewVendorTransform("api.openai.com"),
 		})
 
@@ -182,7 +183,7 @@ func TestE2E_FullChain(t *testing.T) {
 		}
 
 		chain := NewTransformChain([]Transform{
-			NewBaseTransform(TargetAPIStyleGoogle),
+			NewBaseTransform(protocol.TypeGoogle),
 		})
 
 		ctx := &TransformContext{
@@ -196,7 +197,7 @@ func TestE2E_FullChain(t *testing.T) {
 		require.NotNil(t, finalCtx)
 
 		// Verify final request type
-		finalReq, ok := finalCtx.Request.(*GoogleRequest)
+		finalReq, ok := finalCtx.Request.(*protocol.GoogleRequest)
 		require.True(t, ok, "expected *GoogleRequest")
 
 		// Verify the model was converted
@@ -221,8 +222,8 @@ func TestE2E_FullChain(t *testing.T) {
 		}
 
 		chain := NewTransformChain([]Transform{
-			NewBaseTransform(TargetAPIStyleOpenAIResponses),
-			NewConsistencyTransform(TargetAPIStyleOpenAIResponses),
+			NewBaseTransform(protocol.TypeOpenAIResponses),
+			NewConsistencyTransform(protocol.TypeOpenAIResponses),
 			NewVendorTransform("api.openai.com"),
 		})
 
@@ -259,7 +260,7 @@ func TestE2E_PointerTypeValidation(t *testing.T) {
 	}
 
 	chain := NewTransformChain([]Transform{
-		NewBaseTransform(TargetAPIStyleAnthropicV1),
+		NewBaseTransform(protocol.TypeAnthropicV1),
 	})
 
 	ctx := &TransformContext{
@@ -284,8 +285,8 @@ func TestE2E_TransformStepsRecorded(t *testing.T) {
 	}
 
 	chain := NewTransformChain([]Transform{
-		NewBaseTransform(TargetAPIStyleOpenAIChat),
-		NewConsistencyTransform(TargetAPIStyleOpenAIChat),
+		NewBaseTransform(protocol.TypeOpenAIChat),
+		NewConsistencyTransform(protocol.TypeOpenAIChat),
 		NewVendorTransform("api.openai.com"),
 	})
 
