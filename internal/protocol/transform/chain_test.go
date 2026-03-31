@@ -279,7 +279,7 @@ func TestTransformChain_Length(t *testing.T) {
 
 // Integration tests with real transforms
 func TestTransformChain_Integration_RealTransforms(t *testing.T) {
-	baseTransform := NewBaseTransform(TargetAPIStyleOpenAIChat)
+	baseTransform := NewBaseTransform(protocol.APIOpenAIChat)
 	vendorTransform := NewVendorTransform("api.openai.com")
 
 	chain := NewTransformChain([]Transform{baseTransform, vendorTransform})
@@ -305,8 +305,8 @@ func TestTransformChain_Integration_RealTransforms(t *testing.T) {
 func TestTransformChain_Integration_WithScenarioFlags(t *testing.T) {
 	flags := &typ.ScenarioFlags{DisableStreamUsage: true}
 
-	baseTransform := NewBaseTransform(TargetAPIStyleOpenAIChat)
-	consistencyTransform := NewConsistencyTransform(TargetAPIStyleOpenAIChat)
+	baseTransform := NewBaseTransform(protocol.APIOpenAIChat)
+	consistencyTransform := NewConsistencyTransform(protocol.APIOpenAIChat)
 
 	chain := NewTransformChain([]Transform{baseTransform, consistencyTransform})
 
@@ -331,8 +331,8 @@ func TestTransformChain_Integration_WithScenarioFlags(t *testing.T) {
 }
 
 func TestTransformChain_Integration_FullChain(t *testing.T) {
-	baseTransform := NewBaseTransform(TargetAPIStyleOpenAIChat)
-	consistencyTransform := NewConsistencyTransform(TargetAPIStyleOpenAIChat)
+	baseTransform := NewBaseTransform(protocol.APIOpenAIChat)
+	consistencyTransform := NewConsistencyTransform(protocol.APIOpenAIChat)
 	vendorTransform := NewVendorTransform("api.openai.com")
 
 	chain := NewTransformChain([]Transform{
@@ -364,8 +364,8 @@ func TestTransformChain_Integration_FullChain(t *testing.T) {
 }
 
 func TestTransformChain_Integration_WithTools(t *testing.T) {
-	baseTransform := NewBaseTransform(TargetAPIStyleOpenAIChat)
-	consistencyTransform := NewConsistencyTransform(TargetAPIStyleOpenAIChat)
+	baseTransform := NewBaseTransform(protocol.APIOpenAIChat)
+	consistencyTransform := NewConsistencyTransform(protocol.APIOpenAIChat)
 	vendorTransform := NewVendorTransform("api.openai.com")
 
 	chain := NewTransformChain([]Transform{baseTransform, consistencyTransform, vendorTransform})
@@ -402,7 +402,7 @@ func TestTransformChain_Integration_WithTools(t *testing.T) {
 }
 
 func TestTransformChain_Integration_ResponsesAPI(t *testing.T) {
-	baseTransform := NewBaseTransform(TargetAPIStyleOpenAIResponses)
+	baseTransform := NewBaseTransform(protocol.APIOpenAIResponses)
 	vendorTransform := NewVendorTransform("api.openai.com")
 
 	chain := NewTransformChain([]Transform{baseTransform, vendorTransform})

@@ -15,11 +15,11 @@ import (
 // This is the first transform in the chain, converting the request format before
 // consistency normalization and vendor-specific adjustments.
 type BaseTransform struct {
-	targetType TargetAPIStyle
+	targetType protocol.APIType
 }
 
 // NewBaseTransform creates a new BaseTransform with the specified target API style
-func NewBaseTransform(targetType TargetAPIStyle) *BaseTransform {
+func NewBaseTransform(targetType protocol.APIType) *BaseTransform {
 	return &BaseTransform{
 		targetType: targetType,
 	}
@@ -50,15 +50,15 @@ func (t *BaseTransform) Apply(ctx *TransformContext) error {
 
 	// Determine if conversion is needed by checking BOTH input type AND target type
 	switch t.targetType {
-	case TargetAPIStyleOpenAIChat:
+	case protocol.APIOpenAIChat:
 		return t.convertToOpenAIChat(ctx, disableStreamUsage)
-	case TargetAPIStyleOpenAIResponses:
+	case protocol.APIOpenAIResponses:
 		return t.convertToOpenAIResponses(ctx, disableStreamUsage)
-	case TargetAPIStyleAnthropicV1:
+	case protocol.APIAnthropicV1:
 		return t.convertToAnthropicV1(ctx)
-	case TargetAPIStyleAnthropicBeta:
+	case protocol.APIAnthropicBeta:
 		return t.convertToAnthropicBeta(ctx)
-	case TargetAPIStyleGoogle:
+	case protocol.APIGoogle:
 		return t.convertToGoogle(ctx)
 	default:
 		return fmt.Errorf("unknown target API style: %s", t.targetType)
