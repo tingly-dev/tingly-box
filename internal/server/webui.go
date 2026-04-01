@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"mime"
 	"net/http"
 	"strings"
 	"sync"
@@ -943,25 +944,6 @@ func (s *Server) useWebStaticEndpoints(engine *gin.Engine) {
 	st, _ := fs.Sub(assets.WebDistAssets, "web/dist/assets")
 	engine.StaticFS("/assets", http.FS(st))
 
-	// Serve individual static files from embedded filesystem
-	engine.GET("/icon.svg", func(c *gin.Context) {
-		data, err := assets.WebDistAssets.ReadFile("web/dist/icon.svg")
-		if err != nil {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		c.Data(http.StatusOK, "image/svg+xml", data)
-	})
-
-	engine.GET("/icon.png", func(c *gin.Context) {
-		data, err := assets.WebDistAssets.ReadFile("web/dist/icon.png")
-		if err != nil {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		c.Data(http.StatusOK, "image/png", data)
-	})
-
 	// SPA catch-all - must be registered LAST
 	// Serves index.html for all non-API frontend routes, letting React Router handle navigation
 	// NoRoute handles unmatched paths including nested routes like /provider/settings/detail/123
@@ -989,4 +971,9 @@ func (s *Server) useWebStaticEndpoints(engine *gin.Engine) {
 // GetShutdownChannel returns the shutdown channel for the main process to listen on
 func GetShutdownChannel() <-chan struct{} {
 	return shutdownChan
+}
+
+func init() {
+	mime.AddExtensionType(".svg", "image/svg+xml")
+	mime.AddExtensionType(".png", "image/png")
 }
