@@ -36,7 +36,7 @@ func RoundtripOpenAIMapViaAnthropic(openaiResp map[string]interface{}, responseM
 	return RoundtripOpenAIResponseViaAnthropic(&parsed, responseModel, provider, actualModel)
 }
 
-func RoundtripAnthropicResponseViaOpenAI(anthropicResp *anthropic.BetaMessage, responseModel string, provider *typ.Provider, actualModel string) (*anthropic.BetaMessage, error) {
+func RoundtripAnthropicBetaResponseViaOpenAI(anthropicResp *anthropic.BetaMessage, responseModel string, provider *typ.Provider, actualModel string) (*anthropic.BetaMessage, error) {
 	openaiResp := ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
 	raw, err := json.Marshal(openaiResp)
 	if err != nil {
