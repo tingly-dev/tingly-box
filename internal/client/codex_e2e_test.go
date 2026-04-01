@@ -59,7 +59,7 @@ func TestE2E_CodexRoundTripper(t *testing.T) {
 
 	t.Run("streaming_with_tools", func(t *testing.T) {
 		// Create OpenAI client which already has the proper transport configured
-		client, err := NewOpenAIClient(provider)
+		client, err := NewOpenAIClient(provider, model)
 		require.NoError(t, err)
 		defer client.Close()
 
@@ -127,7 +127,7 @@ func TestE2E_CodexRoundTripper(t *testing.T) {
 
 	t.Run("streaming_simple", func(t *testing.T) {
 		// Create OpenAI client which already has the proper transport configured
-		client, err := NewOpenAIClient(provider)
+		client, err := NewOpenAIClient(provider, model)
 		require.NoError(t, err)
 		defer client.Close()
 
@@ -225,7 +225,7 @@ func TestE2E_CodexRoundTripper(t *testing.T) {
 
 	t.Run("parameter_filtering", func(t *testing.T) {
 		// Test that unsupported parameters are filtered out by the OpenAI client
-		client, err := NewOpenAIClient(provider)
+		client, err := NewOpenAIClient(provider, model)
 		require.NoError(t, err)
 		defer client.Close()
 
@@ -265,7 +265,7 @@ func TestE2E_CodexRoundTripper(t *testing.T) {
 
 	t.Run("simple", func(t *testing.T) {
 		// Simple test using OpenAI client
-		client, err := NewOpenAIClient(provider)
+		client, err := NewOpenAIClient(provider, model)
 		require.NoError(t, err)
 		defer client.Close()
 

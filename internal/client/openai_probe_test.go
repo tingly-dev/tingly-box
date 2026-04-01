@@ -33,7 +33,7 @@ func TestOpenAIClient_ProbeChatEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client, err := NewOpenAIClient(tt.provider)
+			client, err := NewOpenAIClient(tt.provider, tt.model)
 			if err != nil {
 				t.Fatalf("NewOpenAIClient() error = %v", err)
 			}
@@ -55,6 +55,7 @@ func TestOpenAIClient_ProbeModelsEndpoint(t *testing.T) {
 	tests := []struct {
 		name     string
 		provider *typ.Provider
+		model    string
 		wantErr  bool
 	}{
 		{
@@ -65,13 +66,14 @@ func TestOpenAIClient_ProbeModelsEndpoint(t *testing.T) {
 				APIStyle: protocol.APIStyleOpenAI,
 				Token:    "sk-test-key",
 			},
+			model:   "gpt-3.5-turbo",
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client, err := NewOpenAIClient(tt.provider)
+			client, err := NewOpenAIClient(tt.provider, tt.model)
 			if err != nil {
 				t.Fatalf("NewOpenAIClient() error = %v", err)
 			}
@@ -93,6 +95,7 @@ func TestOpenAIClient_ProbeOptionsEndpoint(t *testing.T) {
 	tests := []struct {
 		name     string
 		provider *typ.Provider
+		model    string
 		wantErr  bool
 	}{
 		{
@@ -103,13 +106,14 @@ func TestOpenAIClient_ProbeOptionsEndpoint(t *testing.T) {
 				APIStyle: protocol.APIStyleOpenAI,
 				Token:    "sk-test-key",
 			},
+			model:   "gpt-3.5-turbo",
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client, err := NewOpenAIClient(tt.provider)
+			client, err := NewOpenAIClient(tt.provider, tt.model)
 			if err != nil {
 				t.Fatalf("NewOpenAIClient() error = %v", err)
 			}

@@ -2,7 +2,7 @@ package ops
 
 import (
 	"crypto/rand"
-	"encoding/hex"
+	"crypto/sha256"
 	"fmt"
 	"strings"
 
@@ -10,7 +10,11 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
 )
 
-const ClaudeCodeVersion = "2.1.81.c43"
+const ClaudeCodeVersion = "2.1.86"
+
+// FingerprintSalt is the salt used in computeFingerprint.
+// IMPORTANT: Must stay in sync with Claude Code's FINGERPRINT_SALT constant.
+const FingerprintSalt = "59cf53e54c78"
 
 // ApplyAnthropicV1ModelTransform applies Anthropic API v1 model-specific filtering.
 // This handles model-specific limitations such as adaptive thinking only being supported by
@@ -201,7 +205,9 @@ func ApplyAnthropicV1MetadataTransform(req *anthropic.MessageNewParams, extra ma
 		return req
 	}
 
-	text := fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ClaudeCodeVersion, GenHex4())
+	firstUserMsg := extractFirstUserMessageText(req.Messages)
+	ccVersion := computeCCVersion(firstUserMsg)
+	text := fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ccVersion, GenHex5())
 	if len(req.System) > 0 {
 		if strings.Contains(req.System[0].Text, "x-anthropic-billing-header") {
 			req.System[0].Text = text
@@ -244,7 +250,9 @@ func ApplyAnthropicBetaMetadataTransform(req *anthropic.BetaMessageNewParams, ex
 		return req
 	}
 
-	text := fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ClaudeCodeVersion, GenHex4())
+	firstBetaUserMsg := extractFirstBetaUserMessageText(req.Messages)
+	ccVersion := computeCCVersion(firstBetaUserMsg)
+	text := fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ccVersion, GenHex5())
 	if len(req.System) > 0 {
 		if strings.Contains(req.System[0].Text, "x-anthropic-billing-header") {
 			req.System[0].Text = text
@@ -278,13 +286,67 @@ func ApplyAnthropicBetaMetadataTransform(req *anthropic.BetaMessageNewParams, ex
 	return req
 }
 
-func GenHex4() string {
-	bytes := make([]byte, 2)
-	_, err := rand.Read(bytes)
+func GenHex5() string {
+	// 5 hex chars = 20 bits
+	b := make([]byte, 3)
+	_, err := rand.Read(b)
 	if err != nil {
-		return "cc00"
+		return "cc000"
+	}
+	val := int(b[0])<<16 | int(b[1])<<8 | int(b[2])
+	return fmt.Sprintf("%05x", val%(1<<20))
+}
+
+// computeFingerprint computes 3-char hex fingerprint matching Claude Code's algorithm:
+// SHA256(SALT + msg[4] + msg[7] + msg[20] + version)[:3]
+func computeFingerprint(messageText, version string) string {
+	indices := []int{4, 7, 20}
+	chars := make([]byte, 0, 3)
+	for _, i := range indices {
+		if i < len(messageText) {
+			chars = append(chars, messageText[i])
+		} else {
+			chars = append(chars, '0')
+		}
 	}
 
-	hexStr := hex.EncodeToString(bytes)
-	return hexStr
+	input := FingerprintSalt + string(chars) + version
+	hash := sha256.Sum256([]byte(input))
+	return fmt.Sprintf("%x", hash[:2])[:3]
+}
+
+// computeCCVersion returns the full cc_version string with fingerprint suffix.
+func computeCCVersion(messageText string) string {
+	fingerprint := computeFingerprint(messageText, ClaudeCodeVersion)
+	return fmt.Sprintf("%s.%s", ClaudeCodeVersion, fingerprint)
+}
+
+// extractFirstUserMessageText extracts the text content of the first user message.
+// Returns empty string if not found.
+func extractFirstUserMessageText(messages []anthropic.MessageParam) string {
+	for _, msg := range messages {
+		if msg.Role == "user" {
+			for _, block := range msg.Content {
+				if block.OfText != nil {
+					fmt.Printf("Block ofText: %s", block.OfText.Text)
+					return block.OfText.Text
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// extractFirstBetaUserMessageText extracts the text content of the first user message (beta API).
+func extractFirstBetaUserMessageText(messages []anthropic.BetaMessageParam) string {
+	for _, msg := range messages {
+		if msg.Role == "user" {
+			for _, block := range msg.Content {
+				if block.OfText != nil {
+					return block.OfText.Text
+				}
+			}
+		}
+	}
+	return ""
 }

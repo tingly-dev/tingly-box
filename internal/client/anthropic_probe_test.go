@@ -31,7 +31,7 @@ func TestAnthropicClient_ProbeChatEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client, err := NewAnthropicClient(tt.provider)
+			client, err := NewAnthropicClient(tt.provider, tt.model)
 			if err != nil {
 				t.Fatalf("NewAnthropicClient() error = %v", err)
 			}
@@ -53,6 +53,7 @@ func TestAnthropicClient_ProbeModelsEndpoint(t *testing.T) {
 	tests := []struct {
 		name     string
 		provider *typ.Provider
+		model    string
 		wantErr  bool
 	}{
 		{
@@ -63,13 +64,14 @@ func TestAnthropicClient_ProbeModelsEndpoint(t *testing.T) {
 				APIStyle: protocol.APIStyleAnthropic,
 				Token:    "sk-test-key",
 			},
+			model:   "claude-3-haiku-20240307",
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client, err := NewAnthropicClient(tt.provider)
+			client, err := NewAnthropicClient(tt.provider, tt.model)
 			if err != nil {
 				t.Fatalf("NewAnthropicClient() error = %v", err)
 			}
@@ -91,6 +93,7 @@ func TestAnthropicClient_ProbeOptionsEndpoint(t *testing.T) {
 	tests := []struct {
 		name     string
 		provider *typ.Provider
+		model    string
 		wantErr  bool
 	}{
 		{
@@ -101,13 +104,14 @@ func TestAnthropicClient_ProbeOptionsEndpoint(t *testing.T) {
 				APIStyle: protocol.APIStyleAnthropic,
 				Token:    "sk-test-key",
 			},
+			model:   "claude-3-haiku-20240307",
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client, err := NewAnthropicClient(tt.provider)
+			client, err := NewAnthropicClient(tt.provider, tt.model)
 			if err != nil {
 				t.Fatalf("NewAnthropicClient() error = %v", err)
 			}
