@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -55,10 +56,6 @@ func GetGlobalServer() *Server {
 
 // Init sets up Server routes and templates on the main server engine
 func (s *Server) UseUIEndpoints(ctx context.Context) {
-
-	// SPA routes - serve index.html for all frontend routes (catch-all)
-	// This allows React Router to handle client-side routing
-	s.engine.GET("/:page", s.UseIndexHTML)
 
 	// API endpoints are handled separately and won't match this pattern
 	// Admin/backend routes that need their own pages:
@@ -267,7 +264,24 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 }
 
 func (s *Server) UseIndexHTML(c *gin.Context) {
-	c.FileFromFS("web/dist/index.html", http.FS(assets.WebDistAssets))
+	c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+	c.Header("Pragma", "no-cache")
+	c.Header("Expires", "0")
+
+	f, err := assets.WebDistAssets.Open("web/dist/index.html")
+	if err != nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+	defer f.Close()
+
+	data, err := io.ReadAll(f)
+	if err != nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	c.Data(http.StatusOK, "text/html; charset=utf-8", data)
 }
 
 func (s *Server) GetStatus(c *gin.Context) {
@@ -939,6 +953,18 @@ func (s *Server) useWebStaticEndpoints(engine *gin.Engine) {
 		c.Data(http.StatusOK, "image/svg+xml", data)
 	})
 
+	engine.GET("/icon.png", func(c *gin.Context) {
+		data, err := assets.WebDistAssets.ReadFile("web/dist/icon.png")
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.Data(http.StatusOK, "image/png", data)
+	})
+
+	// SPA catch-all - must be registered LAST
+	// Serves index.html for all non-API frontend routes, letting React Router handle navigation
+	// NoRoute handles unmatched paths including nested routes like /provider/settings/detail/123
 	engine.NoRoute(func(c *gin.Context) {
 		// Don't serve index.html for API routes - let them return 404s
 		path := c.Request.URL.Path
@@ -956,13 +982,7 @@ func (s *Server) useWebStaticEndpoints(engine *gin.Engine) {
 			return
 		}
 
-		// For all other routes, serve the SPA index.html
-		data, err := assets.WebDistAssets.ReadFile("web/dist/index.html")
-		if err != nil {
-			c.AbortWithError(http.StatusInternalServerError, err)
-			return
-		}
-		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
+		s.UseIndexHTML(c)
 	})
 }
 
