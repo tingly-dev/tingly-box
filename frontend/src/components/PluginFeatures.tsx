@@ -55,6 +55,9 @@ const RECORD_V2_MODES = [
 ] as const;
 
 const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
+    // Extract base scenario for profiled scenarios (e.g., "claude_code:p1" -> "claude_code")
+    const baseScenario = scenario.includes(':') ? scenario.split(':')[0] : scenario;
+
     const [features, setFeatures] = useState<Record<string, boolean>>({});
     const [effort, setEffort] = useState<string>('');
     const [thinkingMode, setThinkingMode] = useState<string>('default');
@@ -63,8 +66,8 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
     const [updating, setUpdating] = useState<Record<string, boolean>>({});
     const [menuAnchor, setMenuAnchor] = useState<Record<string, HTMLElement | null>>({});
 
-    // Filter features based on scenario (if scenarios are specified, only show for those scenarios)
-    const visibleFeatures = PLUGIN_FEATURES.filter(f => !f.scenarios || f.scenarios.includes(scenario as any));
+    // Filter features based on base scenario (if scenarios are specified, only show for those scenarios)
+    const visibleFeatures = PLUGIN_FEATURES.filter(f => !f.scenarios || f.scenarios.includes(baseScenario as any));
 
     const loadData = async () => {
         try {
@@ -76,7 +79,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
             }
 
             // Load thinking mode (for claude_code scenario)
-            if (scenario === 'claude_code') {
+            if (baseScenario === 'claude_code') {
                 const thinkingModeResult = await api.getScenarioStringFlag(scenario, 'thinking_mode');
                 if (thinkingModeResult?.success && thinkingModeResult?.data?.value !== undefined) {
                     setThinkingMode(thinkingModeResult.data.value);
@@ -287,7 +290,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                     </Menu>
 
                     {/* Thinking Mode (claude_code only) */}
-                    {scenario === 'claude_code' && (
+                    {baseScenario === 'claude_code' && (
                         <>
                             <Tooltip title={`Mode: ${THINKING_MODES.find(m => m.value === thinkingMode)?.label || 'Default'}`} placement="right" arrow>
                                 <Button

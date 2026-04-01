@@ -30,7 +30,7 @@ type AnthropicClient struct {
 }
 
 // defaultNewAnthropicClient creates a new Anthropic client wrapper
-func defaultNewAnthropicClient(provider *typ.Provider) (*AnthropicClient, error) {
+func defaultNewAnthropicClient(provider *typ.Provider, model string) (*AnthropicClient, error) {
 	// Handle API base URL - Anthropic SDK expects base without /v1
 	apiBase := strings.TrimRight(provider.APIBase, "/")
 	if strings.HasSuffix(apiBase, "/v1") {
@@ -46,7 +46,7 @@ func defaultNewAnthropicClient(provider *typ.Provider) (*AnthropicClient, error)
 	var httpClient *http.Client
 	// Add proxy and/or custom headers if configured
 	if provider.ProxyURL != "" || provider.AuthType == typ.AuthTypeOAuth {
-		httpClient = CreateHTTPClientForProvider(provider)
+		httpClient = CreateHTTPClientForProvider(provider, model)
 
 		if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
 			logrus.Infof("Using shared transport with custom headers/params for OAuth provider type: %s", provider.OAuthDetail.ProviderType)
@@ -78,7 +78,9 @@ func (c *AnthropicClient) APIStyle() protocol.APIStyle {
 
 // Close closes any resources held by the client
 func (c *AnthropicClient) Close() error {
-	// Anthropic client doesn't need explicit closing
+	if c.httpClient != nil && c.httpClient != http.DefaultClient {
+		c.httpClient.CloseIdleConnections()
+	}
 	return nil
 }
 
@@ -93,32 +95,32 @@ func (c *AnthropicClient) HttpClient() *http.Client {
 }
 
 // MessagesNew creates a new message request
-func (c *AnthropicClient) MessagesNew(ctx context.Context, req anthropic.MessageNewParams) (*anthropic.Message, error) {
-	return c.client.Messages.New(ctx, req)
+func (c *AnthropicClient) MessagesNew(ctx context.Context, req *anthropic.MessageNewParams) (*anthropic.Message, error) {
+	return c.client.Messages.New(ctx, *req)
 }
 
 // MessagesNewStreaming creates a new streaming message request
-func (c *AnthropicClient) MessagesNewStreaming(ctx context.Context, req anthropic.MessageNewParams) *anthropicstream.Stream[anthropic.MessageStreamEventUnion] {
-	return c.client.Messages.NewStreaming(ctx, req)
+func (c *AnthropicClient) MessagesNewStreaming(ctx context.Context, req *anthropic.MessageNewParams) *anthropicstream.Stream[anthropic.MessageStreamEventUnion] {
+	return c.client.Messages.NewStreaming(ctx, *req)
 }
 
 // MessagesCountTokens counts tokens for a message request
-func (c *AnthropicClient) MessagesCountTokens(ctx context.Context, req anthropic.MessageCountTokensParams) (*anthropic.MessageTokensCount, error) {
-	return c.client.Messages.CountTokens(ctx, req)
+func (c *AnthropicClient) MessagesCountTokens(ctx context.Context, req *anthropic.MessageCountTokensParams) (*anthropic.MessageTokensCount, error) {
+	return c.client.Messages.CountTokens(ctx, *req)
 }
 
-func (c *AnthropicClient) BetaMessagesCountTokens(ctx context.Context, req anthropic.BetaMessageCountTokensParams) (*anthropic.BetaMessageTokensCount, error) {
-	return c.client.Beta.Messages.CountTokens(ctx, req)
+func (c *AnthropicClient) BetaMessagesCountTokens(ctx context.Context, req *anthropic.BetaMessageCountTokensParams) (*anthropic.BetaMessageTokensCount, error) {
+	return c.client.Beta.Messages.CountTokens(ctx, *req)
 }
 
 // BetaMessagesNew creates a new beta message request
-func (c *AnthropicClient) BetaMessagesNew(ctx context.Context, req anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, error) {
-	return c.client.Beta.Messages.New(ctx, req)
+func (c *AnthropicClient) BetaMessagesNew(ctx context.Context, req *anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, error) {
+	return c.client.Beta.Messages.New(ctx, *req)
 }
 
 // BetaMessagesNewStreaming creates a new beta streaming message request
-func (c *AnthropicClient) BetaMessagesNewStreaming(ctx context.Context, req anthropic.BetaMessageNewParams) *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion] {
-	return c.client.Beta.Messages.NewStreaming(ctx, req)
+func (c *AnthropicClient) BetaMessagesNewStreaming(ctx context.Context, req *anthropic.BetaMessageNewParams) *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion] {
+	return c.client.Beta.Messages.NewStreaming(ctx, *req)
 }
 
 // SetRecordSink sets the record sink for the client

@@ -128,8 +128,6 @@ const GuardrailsMarketPage = () => {
         return nextID;
     };
 
-    const normalizeGroup = (value?: string) => value?.trim() || '';
-
     const buildDraftFromTemplate = (template: BuiltinTemplate) => {
         const payload = template.policy || {};
         const match = payload.match || {};
@@ -137,7 +135,7 @@ const GuardrailsMarketPage = () => {
         return {
             id: buildUniquePolicyID(baseID),
             name: payload.name || template.name,
-            group: normalizeGroup(payload.group),
+            groups: Array.isArray(payload.groups) ? payload.groups : [],
             kind: payload.kind || template.kind,
             enabled: payload.enabled !== false,
             verdict: payload.verdict || 'block',

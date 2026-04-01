@@ -38,6 +38,10 @@ type Command struct {
 
 	// Priority determines display order (higher = first)
 	Priority int
+
+	// Platforms restricts this command to specific platforms.
+	// If nil/empty, the command is available on all platforms.
+	Platforms []core.Platform
 }
 
 // Match checks if a name matches this command (name or alias).
@@ -188,16 +192,31 @@ func (r *CommandRegistry) ForCategory(category string) []*Command {
 }
 
 // ForPlatform returns commands visible for a specific platform.
-// Currently returns non-hidden commands (platform filtering can be added later).
+// Commands with no platform restriction are always included.
+// Commands with specific platforms are only included if the platform matches.
 func (r *CommandRegistry) ForPlatform(platform core.Platform) []*Command {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	result := make([]*Command, 0)
 	for _, cmd := range r.commands {
-		if !cmd.Hidden {
-			result = append(result, cmd)
+		if cmd.Hidden {
+			continue
 		}
+		// If platforms are specified, check if the requested platform is in the list
+		if len(cmd.Platforms) > 0 {
+			found := false
+			for _, p := range cmd.Platforms {
+				if p == platform {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+		result = append(result, cmd)
 	}
 
 	sortByPriority(result)
@@ -278,4 +297,19 @@ func (r *CommandRegistry) BuildHelpText(isDirectMessage bool) string {
 	}
 
 	return text.String()
+}
+
+// BuildPlatformCommands returns commands formatted as []map[string]string
+// for platform-specific command list APIs (e.g., Telegram BotCommand).
+// Each entry has "command" (with leading slash) and "description" keys.
+func (r *CommandRegistry) BuildPlatformCommands(platform core.Platform) []map[string]string {
+	commands := r.ForPlatform(platform)
+	result := make([]map[string]string, 0, len(commands))
+	for _, cmd := range commands {
+		result = append(result, map[string]string{
+			"command":     "/" + cmd.Name,
+			"description": cmd.Description,
+		})
+	}
+	return result
 }

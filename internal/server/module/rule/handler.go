@@ -154,6 +154,7 @@ func (h *Handler) CreateRule(c *gin.Context) {
 		Message: "Rule saved successfully",
 	}
 	response.Data.UUID = rule.UUID
+	response.Data.Scenario = string(rule.Scenario)
 	response.Data.RequestModel = rule.RequestModel
 	response.Data.ResponseModel = rule.ResponseModel
 	response.Data.Description = rule.Description
@@ -222,6 +223,7 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 		Message: "Rule saved successfully",
 	}
 	response.Data.UUID = rule.UUID
+	response.Data.Scenario = string(rule.Scenario)
 	response.Data.RequestModel = rule.RequestModel
 	response.Data.ResponseModel = rule.ResponseModel
 	response.Data.Description = rule.Description

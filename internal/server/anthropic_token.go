@@ -143,7 +143,7 @@ func (s *Server) anthropicCountTokensViaAPI(c *gin.Context, ctx context.Context,
 			return
 		}
 		req.Model = anthropic.Model(model)
-		message, err := wrapper.(*client.AnthropicClient).BetaMessagesCountTokens(ctx, req)
+		message, err := wrapper.(*client.AnthropicClient).BetaMessagesCountTokens(ctx, &req)
 		if err != nil {
 			stream.SendInvalidRequestBodyError(c, err)
 			return
@@ -157,7 +157,7 @@ func (s *Server) anthropicCountTokensViaAPI(c *gin.Context, ctx context.Context,
 			return
 		}
 		req.Model = anthropic.Model(model)
-		message, err := wrapper.(*client.AnthropicClient).MessagesCountTokens(ctx, req)
+		message, err := wrapper.(*client.AnthropicClient).MessagesCountTokens(ctx, &req)
 		if err != nil {
 			stream.SendInvalidRequestBodyError(c, err)
 			return

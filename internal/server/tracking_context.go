@@ -22,6 +22,7 @@ const (
 	ContextKeyStartTime      = "tracking_start_time"       // time.Time
 	ContextKeyFirstTokenTime = "tracking_first_token_time" // time.Time (for TTFT calculation)
 	ContextKeyCacheHit       = "tracking_cache_hit"        // bool (cache hit status)
+	ContextKeySessionID      = "tracking_session_id"       // string (resolved session ID for affinity)
 )
 
 // SetTrackingContext sets all tracking metadata in the gin context.

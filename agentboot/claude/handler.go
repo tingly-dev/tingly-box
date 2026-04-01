@@ -2,9 +2,11 @@ package claude
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/agentboot"
 )
 
@@ -46,6 +48,12 @@ func (r *ResultCollector) OnMessage(msg any) error {
 			r.result.Output += block.Text
 		}
 		r.result.Format = agentboot.OutputFormatStreamJSON
+		// Handle assistant error (e.g. rate_limit, authentication_failed, etc.)
+		if m.IsError() {
+			logrus.WithField("error_type", m.Error).Warn("assistant message error")
+			r.result.ExitCode = 1
+			r.result.Error = fmt.Sprintf("assistant error: %s", m.Error)
+		}
 	case *ResultMessage:
 		// Extract final result
 		if m.Result != "" {
@@ -151,6 +159,9 @@ func (r *ResultCollector) BuildTextOutput() string {
 	for _, msg := range r.messages {
 		switch m := msg.(type) {
 		case *AssistantMessage:
+			if m.IsError() {
+				output.WriteString(fmt.Sprintf("[ASSISTANT ERROR: %s]\n", m.Error))
+			}
 			for _, block := range m.Message.Content {
 				output.WriteString(block.Text)
 			}

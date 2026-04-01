@@ -48,7 +48,7 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 		if !rule.Active {
 			continue
 		}
-		if scenario != nil && rule.GetScenario() != *scenario {
+		if scenario != nil && !shouldIncludeRuleInModelList(*scenario, rule.GetScenario()) {
 			continue
 		}
 
@@ -180,7 +180,9 @@ func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
 		})
 		return
 	}
-	provider, selectedService, err = s.DetermineProviderAndModelWithScenario(scenarioType, rule, &req.ChatCompletionNewParams)
+
+	// Select service using routing pipeline
+	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, &req.ChatCompletionNewParams)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -260,7 +262,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 				disableStreamUsage = disableStreamUsage || scenarioConfig.Flags.DisableStreamUsage
 			}
 
-			inputTokens, outputTokens, err := stream.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, streamResp, responseModel, disableStreamUsage)
+			inputTokens, outputTokens, err := stream.HandleAnthropicToOpenAIStreamResponse(c, anthropicReq, streamResp, responseModel, disableStreamUsage)
 			if err != nil {
 				// Track usage with error status
 				if inputTokens > 0 || outputTokens > 0 {
@@ -350,7 +352,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 		// Note: Base transform is not needed since the request is already in OpenAI Chat format
 		// Chain: Consistency Transform → Vendor Transform
 		chain := transform.NewTransformChain([]transform.Transform{
-			transform.NewConsistencyTransform(transform.TargetAPIStyleOpenAIChat),
+			transform.NewConsistencyTransform(protocol.TypeOpenAIChat),
 			transform.NewVendorTransform(provider.APIBase),
 		})
 
@@ -360,13 +362,12 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 			scenarioFlags = &scenarioConfig.Flags
 		}
 
-		transformCtx := &transform.TransformContext{
-			OriginalRequest: &req.ChatCompletionNewParams,
-			Request:         &req.ChatCompletionNewParams,
-			ProviderURL:     provider.APIBase,
-			ScenarioFlags:   scenarioFlags,
-			IsStreaming:     isStreaming,
-		}
+		transformCtx := transform.NewTransformContext(
+			&req.ChatCompletionNewParams,
+			transform.WithProviderURL(provider.APIBase),
+			transform.WithScenarioFlags(scenarioFlags),
+			transform.WithStreaming(isStreaming),
+		)
 
 		// Execute transform chain
 		finalCtx, err := chain.Execute(transformCtx)

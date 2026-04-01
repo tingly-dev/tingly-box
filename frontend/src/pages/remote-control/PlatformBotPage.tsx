@@ -161,7 +161,17 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
             const config = botPlatforms.find(p => p.platform === platformId);
             if (config) {
                 setCurrentPlatformConfig(config);
-                // QR auth: bot is created lazily after scan succeeds (no placeholder)
+                // For QR auth: reuse an existing orphan bot (one that was created by a
+                // previous QR binding but whose frontend session failed before cleanup)
+                if (config.auth_type === 'qr') {
+                    const orphan = bots.find(
+                        b => b.platform === platformId && b.auth_type === 'qr' && !b.auth?.token
+                    );
+                    if (orphan?.uuid) {
+                        setBotEditUuid(orphan.uuid);
+                        showNotification('Found an unbound bot, reusing it for QR binding', 'info');
+                    }
+                }
             }
         }
         setBotTokenDialogOpen(true);
@@ -425,7 +435,7 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
                                 }}
                                 platforms={botPlatforms}
                                 loading={botPlatformsLoading}
-                                disabled={botSaving}
+                                disabled={botSaving || botDialogMode === 'add'}
                             />
                         </Stack>
 

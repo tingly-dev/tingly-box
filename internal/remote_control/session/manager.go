@@ -41,7 +41,7 @@ type Session struct {
 	ExpiresAt      time.Time              // Session expiration timestamp
 	Context        map[string]interface{} // Request context for continued communication
 	Messages       []Message              // Chat message history
-	PermissionMode string                 // Permission mode: "auto" (yolo), "manual", "skip"
+	PermissionMode string                 // Claude CLI permission mode: "default", "plan", "auto", "acceptEdits", "dontAsk", "bypassPermissions"
 }
 
 // Message represents a chat message within a session

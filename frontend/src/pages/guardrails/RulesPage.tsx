@@ -63,16 +63,12 @@ type PolicyGroup = {
     name?: string;
     severity?: string;
     enabled?: boolean;
-    default_verdict?: string;
-    default_scope?: {
-        scenarios?: string[];
-    };
 };
 
 type GuardrailsPolicy = {
     id: string;
     name?: string;
-    group?: string;
+    groups?: string[];
     kind: 'resource_access' | 'command_execution' | 'content' | 'operation';
     enabled?: boolean;
     scope?: {
@@ -111,7 +107,7 @@ type DisplayPolicy = GuardrailsPolicy & {
 type EditorState = {
     id: string;
     name: string;
-    group: string;
+    groups: string[];
     kind: 'resource_access' | 'command_execution' | 'content' | '';
     enabled: boolean;
     verdict: string;
@@ -125,15 +121,6 @@ type EditorState = {
     patternMode: string;
     caseSensitive: boolean;
     reason: string;
-};
-
-type GroupEditorState = {
-    id: string;
-    name: string;
-    enabled: boolean;
-    severity: string;
-    defaultVerdict: string;
-    scenarios: string[];
 };
 
 const resourceAccessActionOptions = [
@@ -179,11 +166,6 @@ const GuardrailsRulesPage = () => {
     const [editorSnapshot, setEditorSnapshot] = useState('');
     const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
     const [deletePolicyId, setDeletePolicyId] = useState<string | null>(null);
-    const [groupDialogOpen, setGroupDialogOpen] = useState(false);
-    const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
-    const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null);
-    const [pendingGroupId, setPendingGroupId] = useState<string | null>(null);
-    const [pendingGroupSave, setPendingGroupSave] = useState(false);
     const [initializingDefaultGroup, setInitializingDefaultGroup] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [selectedPolicyTab, setSelectedPolicyTab] = useState<'resource_access' | 'command_execution' | 'content'>(
@@ -195,7 +177,7 @@ const GuardrailsRulesPage = () => {
     const [editorState, setEditorState] = useState<EditorState>({
         id: '',
         name: '',
-        group: '',
+        groups: [DEFAULT_GROUP_ID],
         kind: '',
         enabled: true,
         verdict: 'block',
@@ -209,14 +191,6 @@ const GuardrailsRulesPage = () => {
         patternMode: 'substring',
         caseSensitive: false,
         reason: '',
-    });
-    const [groupEditorState, setGroupEditorState] = useState<GroupEditorState>({
-        id: '',
-        name: '',
-        enabled: true,
-        severity: 'medium',
-        defaultVerdict: 'block',
-        scenarios: [],
     });
 
     const splitLines = (value: string) =>
@@ -238,6 +212,19 @@ const GuardrailsRulesPage = () => {
 
     const joinLines = (values?: string[]) => (Array.isArray(values) ? values.join('\n') : '');
     const normalizeGroup = (value?: string) => value?.trim() || DEFAULT_GROUP_ID;
+    const normalizePolicyGroups = (values?: string[]) => {
+        const seen = new Set<string>();
+        const out: string[] = [];
+        [...(Array.isArray(values) ? values : [])].forEach((value) => {
+            const next = normalizeGroup(value);
+            if (!next || seen.has(next)) {
+                return;
+            }
+            seen.add(next);
+            out.push(next);
+        });
+        return out;
+    };
 
     const toggleValue = (values: string[], value: string) => {
         if (values.includes(value)) {
@@ -276,7 +263,7 @@ const GuardrailsRulesPage = () => {
     const buildBuiltinPayload = (builtin: BuiltinTemplate, enabled: boolean): GuardrailsPolicy => ({
         id: builtin.policy?.id || builtin.id,
         name: builtin.policy?.name || builtin.name,
-        group: normalizeGroup(builtin.policy?.group),
+        groups: normalizePolicyGroups(builtin.policy?.groups),
         kind: builtin.policy?.kind || builtin.kind,
         enabled,
         scope: builtin.policy?.scope || { scenarios: [] },
@@ -323,7 +310,7 @@ const GuardrailsRulesPage = () => {
             merged.push({
                 id: builtin.id,
                 name: builtin.policy?.name || builtin.name,
-                group: '',
+                groups: [],
                 kind: builtin.kind,
                 enabled: false,
                 scope: builtin.policy?.scope,
@@ -356,11 +343,11 @@ const GuardrailsRulesPage = () => {
     );
 
     const getEffectivePolicyState = (policy: GuardrailsPolicy) => {
-        const group = policy.group ? groupsById.get(policy.group) : undefined;
-        const inheritedDisabled = !!group && group.enabled === false;
+        const policyGroups = normalizePolicyGroups(policy.groups);
+        const noActiveGroup = policyGroups.length === 0 || policyGroups.every((groupID) => groupsById.get(groupID)?.enabled === false);
         return {
-            inheritedDisabled,
-            visibleEnabled: policy.enabled !== false && !inheritedDisabled,
+            inheritedDisabled: noActiveGroup,
+            visibleEnabled: policy.enabled !== false && !noActiveGroup,
         };
     };
 
@@ -375,24 +362,6 @@ const GuardrailsRulesPage = () => {
         const existingIds = new Set(
             policies.map((policy) => policy.id).filter((policyId) => policyId && policyId !== currentId)
         );
-
-        let candidate = baseId;
-        let suffix = 2;
-        while (existingIds.has(candidate)) {
-            candidate = `${baseId}-${suffix}`;
-            suffix += 1;
-        }
-        return candidate;
-    };
-
-    const generateGroupId = (name: string, currentId?: string) => {
-        const normalizedName = name
-            .toLowerCase()
-            .trim()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '');
-        const baseId = normalizedName || 'group';
-        const existingIds = new Set(groups.map((group) => group.id).filter((groupId) => groupId && groupId !== currentId));
 
         let candidate = baseId;
         let suffix = 2;
@@ -480,28 +449,12 @@ const GuardrailsRulesPage = () => {
         return scenarios;
     };
 
-    const buildGroupSummary = (group: PolicyGroup) => {
-        const severity = group.severity || 'medium';
-        const verdict = group.default_verdict || 'block';
-        const scenarios = group.default_scope?.scenarios?.join(', ') || 'all scenarios';
-        return `${severity} · ${verdict} · ${scenarios}`;
-    };
-
-    const getGroupByID = (groupID?: string) => groups.find((group) => group.id === groupID);
     const sanitizeVerdictForKind = (kind: EditorState['kind'], verdict?: string) => {
         if (verdict === 'mask') {
             return 'block';
         }
         return verdict || 'block';
     };
-
-    const getGroupDefaultScenarios = (group?: PolicyGroup) => {
-        const scenarios = group?.default_scope?.scenarios;
-        return scenarios && scenarios.length > 0 ? scenarios : scenarioOptions;
-    };
-
-    const getGroupDefaultVerdict = (group?: PolicyGroup, kind?: EditorState['kind']) =>
-        sanitizeVerdictForKind(kind || '', group?.default_verdict || 'block');
 
     // MUI restores focus to the trigger after a dialog closes. Blur it so toolbar buttons
     // do not keep the white focus overlay after closing policy/group dialogs.
@@ -513,21 +466,19 @@ const GuardrailsRulesPage = () => {
     };
 
     const makeEditorState = (policy?: GuardrailsPolicy): EditorState => {
-        const group = normalizeGroup(policy?.group);
-        const selectedGroup = getGroupByID(group);
         const scenarios =
             policy?.scope?.scenarios && policy.scope.scenarios.length > 0
                 ? policy.scope.scenarios
-                : getGroupDefaultScenarios(selectedGroup);
+                : scenarioOptions;
         const nextState: EditorState = {
             id: policy?.id || '',
             name: policy?.name || '',
-            group,
+            groups: normalizePolicyGroups(policy?.groups),
             kind: policy?.kind === 'operation' ? 'resource_access' : policy?.kind || '',
             enabled: policy?.enabled !== false,
             verdict: sanitizeVerdictForKind(
                 policy?.kind === 'operation' ? 'resource_access' : policy?.kind || '',
-                policy?.verdict || getGroupDefaultVerdict(selectedGroup, policy?.kind === 'operation' ? 'resource_access' : policy?.kind || '')
+                policy?.verdict || 'block'
             ),
             scenarios,
             toolNames: joinLines(policy?.match?.tool_names),
@@ -545,7 +496,6 @@ const GuardrailsRulesPage = () => {
 
     const makeEditorStateFromDraft = (draft: Partial<EditorState>): EditorState => {
         const baseState = makeEditorState();
-        const selectedGroup = getGroupByID(normalizeGroup(draft.group));
         const nextKind = draft.kind || baseState.kind;
         const nextName = draft.name || baseState.name;
         const nextID =
@@ -556,17 +506,14 @@ const GuardrailsRulesPage = () => {
             ...draft,
             id: nextID,
             name: nextName,
-            group: normalizeGroup(draft.group || baseState.group),
+            groups: normalizePolicyGroups(draft.groups).length > 0 ? normalizePolicyGroups(draft.groups) : baseState.groups,
             kind: nextKind,
             enabled: draft.enabled ?? baseState.enabled,
-            verdict: sanitizeVerdictForKind(
-                nextKind,
-                draft.verdict || getGroupDefaultVerdict(selectedGroup, nextKind) || baseState.verdict
-            ),
+            verdict: sanitizeVerdictForKind(nextKind, draft.verdict || baseState.verdict),
             scenarios:
                 draft.scenarios && draft.scenarios.length > 0
                     ? draft.scenarios
-                    : getGroupDefaultScenarios(selectedGroup),
+                    : baseState.scenarios,
             toolNames: draft.toolNames ?? baseState.toolNames,
             actions: draft.actions ?? baseState.actions,
             commandTerms: draft.commandTerms ?? baseState.commandTerms,
@@ -578,18 +525,6 @@ const GuardrailsRulesPage = () => {
             reason: draft.reason ?? baseState.reason,
         };
     };
-
-    const makeGroupEditorState = (group?: PolicyGroup): GroupEditorState => ({
-        id: group?.id || '',
-        name: group?.name || '',
-        enabled: group?.enabled !== false,
-        severity: group?.severity || 'medium',
-        defaultVerdict: group?.default_verdict || 'block',
-        scenarios:
-            group?.default_scope?.scenarios && group.default_scope.scenarios.length > 0
-                ? group.default_scope.scenarios
-                : scenarioOptions,
-    });
 
     const loadPolicies = async (silent = false) => {
         try {
@@ -643,10 +578,6 @@ const GuardrailsRulesPage = () => {
                     name: 'Default',
                     enabled: true,
                     severity: 'high',
-                    default_verdict: 'block',
-                    default_scope: {
-                        scenarios: supportedScenarios,
-                    },
                 });
                 if (!result?.success) {
                     setActionMessage({ type: 'error', text: result?.error || 'Failed to create default group' });
@@ -704,121 +635,6 @@ const GuardrailsRulesPage = () => {
         navigate('/guardrails/rules', { replace: true, state: null });
     }, [location.state, navigate, supportedScenarios]);
 
-    const openNewGroupDialog = () => {
-        blurActiveElement();
-        setEditingGroupId(null);
-        setGroupEditorState(makeGroupEditorState());
-        setGroupDialogOpen(true);
-    };
-
-    const openEditGroupDialog = (group: PolicyGroup) => {
-        blurActiveElement();
-        setEditingGroupId(group.id);
-        setGroupEditorState(makeGroupEditorState(group));
-        setGroupDialogOpen(true);
-    };
-
-    const handleSaveGroup = async () => {
-        if (!groupEditorState.name.trim()) {
-            setActionMessage({ type: 'error', text: 'Group name is required before saving.' });
-            return;
-        }
-        if (!groupEditorState.id.trim()) {
-            setActionMessage({ type: 'error', text: 'Group ID could not be generated.' });
-            return;
-        }
-
-        const payload = {
-            id: groupEditorState.id,
-            name: groupEditorState.name,
-            enabled: groupEditorState.enabled,
-            severity: groupEditorState.severity,
-            default_verdict: groupEditorState.defaultVerdict,
-            default_scope: {
-                scenarios: groupEditorState.scenarios,
-            },
-        };
-
-        try {
-            setPendingGroupSave(true);
-            const result = editingGroupId
-                ? await api.updateGuardrailsGroup(editingGroupId, payload)
-                : await api.createGuardrailsGroup(payload);
-            if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to save group' });
-                return;
-            }
-            await loadPolicies(true);
-            if (editingGroupId && editingGroupId !== groupEditorState.id && editorState.group === editingGroupId) {
-                setEditorState((state) => ({ ...state, group: groupEditorState.id }));
-            }
-            setGroupDialogOpen(false);
-            blurActiveElement();
-            setActionMessage({ type: 'success', text: `Group "${groupEditorState.id}" saved.` });
-        } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to save group' });
-        } finally {
-            setPendingGroupSave(false);
-        }
-    };
-
-    const handleDeleteGroup = async () => {
-        if (!deleteGroupId) {
-            return;
-        }
-        try {
-            setPendingGroupId(deleteGroupId);
-            const result = await api.deleteGuardrailsGroup(deleteGroupId);
-            if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to delete group' });
-                return;
-            }
-            await loadPolicies(true);
-            if (editorState.group === deleteGroupId) {
-                setEditorState((state) => ({ ...state, group: DEFAULT_GROUP_ID }));
-            }
-            setDeleteGroupId(null);
-            setActionMessage({ type: 'success', text: `Group "${deleteGroupId}" deleted.` });
-        } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to delete group' });
-        } finally {
-            setPendingGroupId(null);
-        }
-    };
-
-    const handleToggleGroup = async (groupId: string, enabled: boolean) => {
-        const group = groups.find((item) => item.id === groupId);
-        if (!group) {
-            return;
-        }
-
-        const payload = {
-            id: group.id,
-            name: group.name || group.id,
-            enabled,
-            severity: group.severity || 'medium',
-            default_verdict: group.default_verdict || 'block',
-            default_scope: {
-                scenarios: group.default_scope?.scenarios || [],
-            },
-        };
-
-        try {
-            setPendingGroupId(groupId);
-            const result = await api.updateGuardrailsGroup(groupId, payload);
-            if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to update group' });
-                return;
-            }
-            await loadPolicies(true);
-            setActionMessage({ type: 'success', text: `Group "${groupId}" updated.` });
-        } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to update group' });
-        } finally {
-            setPendingGroupId(null);
-        }
-    };
-
     const openPolicyEditor = (policy: DisplayPolicy) => {
         const builtin = policy.isBuiltin ? builtinMap.get(policy.id) : undefined;
         const isVirtualBuiltin = !!builtin && !policies.some((existing) => existing.id === policy.id);
@@ -849,14 +665,10 @@ const GuardrailsRulesPage = () => {
     };
 
     const handleSelectPolicyGroup = (groupID: string) => {
-        const selectedGroup = getGroupByID(groupID);
         setEditorState((state) => ({
             ...state,
-            group: normalizeGroup(groupID),
-            verdict: getGroupDefaultVerdict(selectedGroup, state.kind),
-            scenarios: getGroupDefaultScenarios(selectedGroup),
+            groups: state.groups.includes(groupID) ? state.groups.filter((value) => value !== groupID) : [...state.groups, groupID],
         }));
-        setAdvancedOpen(false);
     };
 
     const buildPolicyPayload = (state: EditorState) => {
@@ -878,7 +690,7 @@ const GuardrailsRulesPage = () => {
         const payload = {
             id: state.id,
             name: state.name,
-            group: normalizeGroup(state.group),
+            groups: normalizePolicyGroups(state.groups),
             kind: state.kind,
             enabled: state.enabled,
             scope: {
@@ -1146,10 +958,9 @@ const GuardrailsRulesPage = () => {
                                             <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                                 {policy.id}
                                             </Typography>
-                                            {policy.group && <Chip size="small" label={policy.group} variant="outlined" />}
-                                            {policy.isBuiltin && <Chip size="small" label="Builtin" variant="outlined" />}
+                                            {policy.isBuiltin && <Chip size="small" label="Built-in" variant="outlined" />}
                                             {effectiveState.inheritedDisabled && (
-                                                <Chip size="small" label="Group disabled" variant="outlined" />
+                                                <Chip size="small" label="No active group" variant="outlined" />
                                             )}
                                         </Stack>
                                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
@@ -1158,7 +969,15 @@ const GuardrailsRulesPage = () => {
                                     </Box>
 
                                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                                        <Typography variant="body2" color="text.primary" sx={{ whiteSpace: 'normal' }}>
+                                        <Typography
+                                            variant="body2"
+                                            color="text.primary"
+                                            sx={{
+                                                whiteSpace: 'nowrap',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                            }}
+                                        >
                                             {buildPolicySummary(policy)}
                                         </Typography>
                                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, whiteSpace: 'normal' }}>
@@ -1170,13 +989,18 @@ const GuardrailsRulesPage = () => {
                                         direction={{ xs: 'row', sm: 'row' }}
                                         spacing={1}
                                         alignItems="center"
-                                        sx={{ width: { xs: '100%', lg: 'auto' }, justifyContent: { xs: 'space-between', lg: 'flex-end' } }}
+                                        sx={{
+                                            width: { xs: '100%', lg: 220 },
+                                            minWidth: { lg: 220 },
+                                            justifyContent: { xs: 'space-between', lg: 'flex-end' },
+                                            flexShrink: 0,
+                                        }}
                                     >
                                         <Chip
                                             size="small"
                                             label={
                                                 effectiveState.inheritedDisabled
-                                                    ? 'Inherited disabled'
+                                                    ? 'No active group'
                                                     : policy.enabled === false
                                                       ? 'Disabled'
                                                       : 'Enabled'
@@ -1477,7 +1301,7 @@ const GuardrailsRulesPage = () => {
             <Stack spacing={3}>
                 <UnifiedCard
                     title="Policies"
-                    subtitle="Define individual Guardrails rules. Group membership is managed separately on the Policy Groups page."
+                    subtitle="Policies define concrete rules. Groups are managed separately and control which policy sets are active. Built-in policies are marked directly in the list."
                     size="full"
                     rightAction={
                         <Stack direction="row" spacing={1}>
@@ -1489,7 +1313,7 @@ const GuardrailsRulesPage = () => {
                 >
                     <Stack spacing={1.5}>
                         {loadError && <Alert severity="error">{loadError}</Alert>}
-                        {actionMessage && !editorOpen && !groupDialogOpen && (
+                        {actionMessage && !editorOpen && (
                             <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>
                         )}
                     </Stack>
@@ -1703,7 +1527,7 @@ const GuardrailsRulesPage = () => {
                                 <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
                                     <Stack spacing={1.25}>
                                         <Box>
-                                            <Typography variant="subtitle2">Assign Group</Typography>
+                                            <Typography variant="subtitle2">Assign Groups</Typography>
                                             <Box
                                                 sx={{
                                                     display: 'grid',
@@ -1713,7 +1537,7 @@ const GuardrailsRulesPage = () => {
                                                 }}
                                             >
                                                 {groupOptions.map((option) => {
-                                                    const selected = editorState.group === option.value;
+                                                    const selected = editorState.groups.includes(option.value);
                                                     return (
                                                         <Box
                                                             key={option.value}
@@ -2011,9 +1835,7 @@ const GuardrailsRulesPage = () => {
                                         <Stack spacing={0.5}>
                                             <Typography variant="subtitle2">Advanced Settings</Typography>
                                             <Typography variant="caption" color="text.secondary">
-                                                {editorState.group
-                                                    ? 'This policy starts from the selected group defaults. Expand to review or override verdict and scope.'
-                                                    : 'Review or override the default verdict and scenario scope for this policy.'}
+                                                Review or override the default verdict and scenario scope for this policy.
                                             </Typography>
                                         </Stack>
                                     </AccordionSummary>
@@ -2024,9 +1846,7 @@ const GuardrailsRulesPage = () => {
                                                     <Box>
                                                         <Typography variant="subtitle2">Set Verdict</Typography>
                                                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                                                            {editorState.group
-                                                                ? 'Defaults come from the selected group. Change this only when the policy needs a different decision.'
-                                                                : 'The verdict defines what Guardrails should do once this policy matches.'}
+                                                            The verdict defines what Guardrails should do once this policy matches.
                                                         </Typography>
                                                         <Box
                                                             sx={{
@@ -2101,10 +1921,10 @@ const GuardrailsRulesPage = () => {
 
                                             {renderScenarioScopeSelector({
                                                 title: 'Scenario Scope',
-                                                description: 'Defaults come from the selected group. Expand and change this only when the policy needs a narrower or broader scope.',
+                                                description: 'Select the scenarios where this policy should apply.',
                                                 value: editorState.scenarios,
                                                 onChange: (scenarios) => setEditorState((state) => ({ ...state, scenarios })),
-                                                helperText: 'The current selection was initialized from the chosen group.',
+                                                helperText: 'Policies own their own scope. Groups only control organization and activation.',
                                             })}
                                         </Stack>
                                     </AccordionDetails>
@@ -2165,172 +1985,6 @@ const GuardrailsRulesPage = () => {
                 </DialogActions>
             </Dialog>
 
-            <Dialog
-                open={groupDialogOpen}
-                onClose={() => {
-                    if (!pendingGroupSave) {
-                        setGroupDialogOpen(false);
-                        blurActiveElement();
-                    }
-                }}
-                disableRestoreFocus
-                fullWidth
-                maxWidth="sm"
-            >
-                <DialogTitle>{editingGroupId ? 'Edit group' : 'New group'}</DialogTitle>
-                <DialogContent>
-                    <Stack spacing={2} sx={{ pt: 1 }}>
-                        {actionMessage && <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>}
-                        <Alert severity="info">
-                            Groups are used to organize policies and provide shared defaults like severity, default verdict, and scope.
-                        </Alert>
-
-                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
-                            <Stack spacing={2}>
-                                <Typography variant="subtitle2">Basic Settings</Typography>
-                                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                                    <TextField
-                                        label="Name"
-                                        size="small"
-                                        fullWidth
-                                        value={groupEditorState.name}
-                                        onChange={(e) =>
-                                            setGroupEditorState((state) => {
-                                                const name = e.target.value;
-                                                return {
-                                                    ...state,
-                                                    name,
-                                                    id: editingGroupId ? state.id : generateGroupId(name),
-                                                };
-                                            })
-                                        }
-                                        helperText="Human-friendly label shown in UI."
-                                    />
-                                </Stack>
-                                <FormHelperText>
-                                    A stable group ID is generated automatically from the name and used by policies internally.
-                                </FormHelperText>
-                                <FormControlLabel
-                                    control={
-                                        <Switch
-                                            size="small"
-                                            checked={groupEditorState.enabled}
-                                            onChange={(e) => setGroupEditorState((state) => ({ ...state, enabled: e.target.checked }))}
-                                        />
-                                    }
-                                    label="Enabled"
-                                />
-                            </Stack>
-                        </Box>
-
-                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
-                            <Stack spacing={2}>
-                                <Typography variant="subtitle2">Defaults</Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    Defaults are inherited by policies in this group when those policies leave the field empty. They help you define a common baseline once instead of repeating it in every policy.
-                                </Typography>
-                                <Box>
-                                    <Typography variant="caption" color="text.secondary">
-                                        Severity
-                                    </Typography>
-                                    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
-                                        {[
-                                            { value: 'low', label: 'Low' },
-                                            { value: 'medium', label: 'Medium' },
-                                            { value: 'high', label: 'High' },
-                                        ].map((option) => (
-                                            <Chip
-                                                key={option.value}
-                                                label={option.label}
-                                                clickable
-                                                color={groupEditorState.severity === option.value ? 'primary' : 'default'}
-                                                variant={groupEditorState.severity === option.value ? 'filled' : 'outlined'}
-                                                onClick={() => setGroupEditorState((state) => ({ ...state, severity: option.value }))}
-                                            />
-                                        ))}
-                                    </Stack>
-                                    <FormHelperText sx={{ mt: 1 }}>Used for risk grouping and UI labeling.</FormHelperText>
-                                </Box>
-
-                                <Box>
-                                    <Typography variant="caption" color="text.secondary">
-                                        Default Verdict
-                                    </Typography>
-                                    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
-                                        {[
-                                            { value: 'allow', label: 'Allow' },
-                                            { value: 'review', label: 'Ask', disabled: true },
-                                            { value: 'block', label: 'Block' },
-                                        ].map((option) => (
-                                            <Tooltip key={option.value} title={option.disabled ? 'Reserved for a future interactive verdict.' : ''} disableHoverListener={!option.disabled}>
-                                                <span>
-                                                    <Chip
-                                                        label={option.label}
-                                                        clickable={!option.disabled}
-                                                        disabled={option.disabled}
-                                                        color={groupEditorState.defaultVerdict === option.value ? 'primary' : 'default'}
-                                                        variant={groupEditorState.defaultVerdict === option.value ? 'filled' : 'outlined'}
-                                                        onClick={() => {
-                                                            if (option.disabled) return;
-                                                            setGroupEditorState((state) => ({ ...state, defaultVerdict: option.value }));
-                                                        }}
-                                                    />
-                                                </span>
-                                            </Tooltip>
-                                        ))}
-                                    </Stack>
-                                    <FormHelperText sx={{ mt: 1 }}>
-                                        Used when a policy does not set its own verdict.
-                                    </FormHelperText>
-                                </Box>
-                            </Stack>
-                        </Box>
-
-                        {renderScenarioScopeSelector({
-                            title: 'Default Scenario Scope',
-                            description:
-                                'Policies in this group inherit these scenarios unless they explicitly set their own scope.',
-                            value: groupEditorState.scenarios,
-                            onChange: (scenarios) => setGroupEditorState((state) => ({ ...state, scenarios })),
-                            helperText: 'New groups start with every supported scenario selected so their policies apply broadly by default.',
-                        })}
-                    </Stack>
-                </DialogContent>
-                <DialogActions>
-                    <Button
-                        variant="text"
-                        onClick={() => {
-                            setGroupDialogOpen(false);
-                            blurActiveElement();
-                        }}
-                        disabled={pendingGroupSave}
-                    >
-                        Cancel
-                    </Button>
-                    <Button variant="contained" onClick={handleSaveGroup} disabled={pendingGroupSave}>
-                        {pendingGroupSave ? 'Saving…' : 'Save'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            <Dialog open={!!deleteGroupId} onClose={() => setDeleteGroupId(null)} disableRestoreFocus>
-                <DialogTitle>Delete group</DialogTitle>
-                <DialogContent>
-                    <Typography variant="body2" color="text.secondary">
-                        {deleteGroupId
-                            ? `Delete group "${deleteGroupId}"? This only works when no policies still reference the group.`
-                            : 'Delete this group?'}
-                    </Typography>
-                </DialogContent>
-                <DialogActions>
-                    <Button variant="text" onClick={() => setDeleteGroupId(null)}>
-                        Cancel
-                    </Button>
-                    <Button variant="contained" color="error" onClick={handleDeleteGroup}>
-                        Delete
-                    </Button>
-                </DialogActions>
-            </Dialog>
         </PageLayout>
     );
 };

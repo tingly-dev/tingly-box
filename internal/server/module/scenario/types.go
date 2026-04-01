@@ -18,6 +18,11 @@ type ScenarioUpdateRequest struct {
 	Flags    typ.ScenarioFlags `json:"flags" binding:"required"`
 }
 
+// ProfileCreateRequest represents the request to create or rename a profile
+type ProfileCreateRequest struct {
+	Name string `json:"name" binding:"required"`
+}
+
 // ScenariosResponse represents the response for getting all scenarios
 type ScenariosResponse struct {
 	Success bool                 `json:"success" example:"true"`

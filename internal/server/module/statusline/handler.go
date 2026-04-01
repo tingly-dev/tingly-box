@@ -121,15 +121,34 @@ func (h *Handler) GetClaudeCodeStatusLine(c *gin.Context) {
 		bar += "░"
 	}
 
-	// Build output
-	output := fmt.Sprintf("[%s]", ccModel)
-
-	// Query Tingly Box model mapping and add info if available
-	if mapping := h.getTBModelMapping(merged.Model.ID, typ.RuleScenario(scenario)); mapping != nil && mapping.model != "" {
-		output += fmt.Sprintf(" → %s @ %s", mapping.model, mapping.providerName)
+	// Build profile label: "p1:name" or empty
+	profileLabel := ""
+	base, profileID := typ.ParseScenarioProfile(typ.RuleScenario(scenario))
+	if profileID != "" {
+		profileName := profileID
+		if meta, ok := h.config.GetProfile(base, profileID); ok {
+			profileName = profileID + ":" + meta.Name
+		}
+		profileLabel = profileName
 	}
 
-	// Add context bar and cost
+	// Query Tingly Box model mapping
+	mapping := h.getTBModelMapping(merged.Model.ID, typ.RuleScenario(scenario))
+
+	// Build output: [ruleModel @ p1:name] -> realModel @ providerName | bar pct | cost
+	ruleModel := merged.Model.ID
+	if ruleModel == "" {
+		ruleModel = ccModel
+	}
+
+	output := fmt.Sprintf("[%s", ruleModel)
+	if profileLabel != "" {
+		output += fmt.Sprintf(" @ %s", profileLabel)
+	}
+	output += "]"
+	if mapping != nil && mapping.model != "" {
+		output += fmt.Sprintf(" → %s @ %s", mapping.model, mapping.providerName)
+	}
 	output += fmt.Sprintf(" | %s %d%% | $%.2f", bar, usedPct, cost)
 
 	c.String(http.StatusOK, output)

@@ -82,12 +82,10 @@ func TestApplyAnthropicModelTransform_V1_Opus46_Adaptive(t *testing.T) {
 		},
 	}
 
-	result := ApplyAnthropicModelTransform(req, "claude-opus-4-6")
+	result := ApplyAnthropicV1ModelTransform(req, "claude-opus-4-6")
 
 	assert.NotNil(t, result)
-	typedResult, ok := result.(*anthropic.MessageNewParams)
-	assert.True(t, ok)
-	assert.NotNil(t, typedResult.Thinking.OfAdaptive, "Thinking.OfAdaptive should be preserved for Opus 4.6")
+	assert.NotNil(t, result.Thinking.OfAdaptive, "Thinking.OfAdaptive should be preserved for Opus 4.6")
 }
 
 func TestApplyAnthropicModelTransform_V1_Sonnet46_Adaptive(t *testing.T) {
@@ -103,12 +101,10 @@ func TestApplyAnthropicModelTransform_V1_Sonnet46_Adaptive(t *testing.T) {
 		},
 	}
 
-	result := ApplyAnthropicModelTransform(req, "claude-sonnet-4-6")
+	result := ApplyAnthropicV1ModelTransform(req, "claude-sonnet-4-6")
 
 	assert.NotNil(t, result)
-	typedResult, ok := result.(*anthropic.MessageNewParams)
-	assert.True(t, ok)
-	assert.NotNil(t, typedResult.Thinking.OfAdaptive, "Thinking.OfAdaptive should be preserved for Sonnet 4.6")
+	assert.NotNil(t, result.Thinking.OfAdaptive, "Thinking.OfAdaptive should be preserved for Sonnet 4.6")
 }
 
 func TestApplyAnthropicModelTransform_V1_Haiku_Adaptive(t *testing.T) {
@@ -124,13 +120,11 @@ func TestApplyAnthropicModelTransform_V1_Haiku_Adaptive(t *testing.T) {
 		},
 	}
 
-	result := ApplyAnthropicModelTransform(req, "claude-3-5-haiku-20241022")
+	result := ApplyAnthropicV1ModelTransform(req, "claude-3-5-haiku-20241022")
 
 	assert.NotNil(t, result)
-	typedResult, ok := result.(*anthropic.MessageNewParams)
-	assert.True(t, ok)
-	assert.True(t, typedResult.Thinking.OfAdaptive == nil, "Thinking.OfAdaptive should be nil for Haiku")
-	assert.True(t, typedResult.Thinking.OfEnabled == nil, "Thinking.OfEnabled should be nil for Haiku")
+	assert.True(t, result.Thinking.OfAdaptive == nil, "Thinking.OfAdaptive should be nil for Haiku")
+	assert.True(t, result.Thinking.OfEnabled == nil, "Thinking.OfEnabled should be nil for Haiku")
 }
 
 func TestApplyAnthropicModelTransform_V1_Sonnet35_Adaptive(t *testing.T) {
@@ -146,13 +140,11 @@ func TestApplyAnthropicModelTransform_V1_Sonnet35_Adaptive(t *testing.T) {
 		},
 	}
 
-	result := ApplyAnthropicModelTransform(req, "claude-3-5-sonnet-20241022")
+	result := ApplyAnthropicV1ModelTransform(req, "claude-3-5-sonnet-20241022")
 
 	assert.NotNil(t, result)
-	typedResult, ok := result.(*anthropic.MessageNewParams)
-	assert.True(t, ok)
-	assert.True(t, typedResult.Thinking.OfAdaptive == nil, "Thinking.OfAdaptive should be nil for Sonnet 3.5")
-	assert.True(t, typedResult.Thinking.OfEnabled == nil, "Thinking.OfEnabled should be nil for Sonnet 3.5")
+	assert.True(t, result.Thinking.OfAdaptive == nil, "Thinking.OfAdaptive should be nil for Sonnet 3.5")
+	assert.True(t, result.Thinking.OfEnabled == nil, "Thinking.OfEnabled should be nil for Sonnet 3.5")
 }
 
 func TestApplyAnthropicModelTransform_V1_Opus37_Adaptive(t *testing.T) {
@@ -168,13 +160,11 @@ func TestApplyAnthropicModelTransform_V1_Opus37_Adaptive(t *testing.T) {
 		},
 	}
 
-	result := ApplyAnthropicModelTransform(req, "claude-3-7-opus-20250214")
+	result := ApplyAnthropicV1ModelTransform(req, "claude-3-7-opus-20250214")
 
 	assert.NotNil(t, result)
-	typedResult, ok := result.(*anthropic.MessageNewParams)
-	assert.True(t, ok)
-	assert.True(t, typedResult.Thinking.OfAdaptive == nil, "Thinking.OfAdaptive should be nil for Opus 3.7")
-	assert.True(t, typedResult.Thinking.OfEnabled == nil, "Thinking.OfEnabled should be nil for Opus 3.7")
+	assert.True(t, result.Thinking.OfAdaptive == nil, "Thinking.OfAdaptive should be nil for Opus 3.7")
+	assert.True(t, result.Thinking.OfEnabled == nil, "Thinking.OfEnabled should be nil for Opus 3.7")
 }
 
 func TestApplyAnthropicModelTransform_V1_Haiku_Enabled(t *testing.T) {
@@ -190,12 +180,10 @@ func TestApplyAnthropicModelTransform_V1_Haiku_Enabled(t *testing.T) {
 		},
 	}
 
-	result := ApplyAnthropicModelTransform(req, "claude-3-5-haiku-20241022")
+	result := ApplyAnthropicV1ModelTransform(req, "claude-3-5-haiku-20241022")
 
 	assert.NotNil(t, result)
-	typedResult, ok := result.(*anthropic.MessageNewParams)
-	assert.True(t, ok)
-	assert.NotNil(t, typedResult.Thinking.OfEnabled, "Thinking.OfEnabled should be preserved")
+	assert.NotNil(t, result.Thinking.OfEnabled, "Thinking.OfEnabled should be preserved")
 }
 
 func TestApplyAnthropicModelTransform_V1_NoThinking(t *testing.T) {
@@ -209,18 +197,16 @@ func TestApplyAnthropicModelTransform_V1_NoThinking(t *testing.T) {
 		},
 	}
 
-	result := ApplyAnthropicModelTransform(req, "claude-3-5-haiku-20241022")
+	result := ApplyAnthropicV1ModelTransform(req, "claude-3-5-haiku-20241022")
 
 	assert.NotNil(t, result)
-	typedResult, ok := result.(*anthropic.MessageNewParams)
-	assert.True(t, ok)
-	assert.True(t, typedResult.Thinking.OfAdaptive == nil, "Thinking.OfAdaptive should be nil")
-	assert.True(t, typedResult.Thinking.OfEnabled == nil, "Thinking.OfEnabled should be nil")
+	assert.True(t, result.Thinking.OfAdaptive == nil, "Thinking.OfAdaptive should be nil")
+	assert.True(t, result.Thinking.OfEnabled == nil, "Thinking.OfEnabled should be nil")
 }
 
 func TestApplyAnthropicModelTransform_NilRequest(t *testing.T) {
 	// Test case: nil request
-	result := ApplyAnthropicModelTransform(nil, "claude-3-5-haiku-20241022")
+	result := ApplyAnthropicV1ModelTransform(nil, "claude-3-5-haiku-20241022")
 	assert.Nil(t, result)
 }
 
@@ -271,7 +257,7 @@ func TestApplyAnthropicMetadataTransform(t *testing.T) {
 	deviceID := "ddd"
 	accountID := "uuu"
 
-	result := ApplyAnthropicMetadataTransform(req, map[string]any{
+	result := ApplyAnthropicV1MetadataTransform(req, map[string]any{
 		"device":  deviceID,
 		"user_id": accountID,
 	})
@@ -285,11 +271,9 @@ func TestApplyAnthropicMetadataTransform(t *testing.T) {
 	t.Logf("%#v", m)
 
 	assert.NotNil(t, result)
-	typedResult, ok := result.(*anthropic.MessageNewParams)
-	assert.True(t, ok)
-	t.Logf("%#v", typedResult.Metadata.UserID)
-	t.Logf("%#v", typedResult.System[0].Text)
-	assert.True(t, strings.Contains(typedResult.Metadata.UserID.String(), deviceID))
-	assert.True(t, strings.Contains(typedResult.Metadata.UserID.String(), accountID))
-	assert.True(t, strings.Contains(typedResult.Metadata.UserID.String(), "session_id"))
+	t.Logf("%#v", result.Metadata.UserID)
+	t.Logf("%#v", result.System[0].Text)
+	assert.True(t, strings.Contains(result.Metadata.UserID.String(), deviceID))
+	assert.True(t, strings.Contains(result.Metadata.UserID.String(), accountID))
+	assert.True(t, strings.Contains(result.Metadata.UserID.String(), "session_id"))
 }

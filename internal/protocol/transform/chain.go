@@ -2,10 +2,50 @@ package transform
 
 import (
 	"fmt"
-	"reflect"
 
+	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/responses"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+// RequestUnionConstraint defines the exact set of request types accepted by the transform chain.
+// This is a compile-time type constraint enforced via generic functions.
+// Any attempt to pass a type not in this union will fail at compile time.
+type RequestUnionConstraint interface {
+	*anthropic.MessageNewParams | *anthropic.BetaMessageNewParams |
+		*openai.ChatCompletionNewParams | *responses.ResponseNewParams |
+		*protocol.GoogleRequest
+}
+
+// TransformOption configures a TransformContext
+type TransformOption func(*TransformContext)
+
+// WithProviderURL sets the provider URL in the transform context.
+func WithProviderURL(url string) TransformOption {
+	return func(ctx *TransformContext) { ctx.ProviderURL = url }
+}
+
+// WithProviderType sets the provider type (e.g., "claude_code", "codex") in the transform context.
+func WithProviderType(providerType string) TransformOption {
+	return func(ctx *TransformContext) { ctx.ProviderType = providerType }
+}
+
+// WithScenarioFlags sets the scenario flags in the transform context.
+func WithScenarioFlags(flags *typ.ScenarioFlags) TransformOption {
+	return func(ctx *TransformContext) { ctx.ScenarioFlags = flags }
+}
+
+// WithStreaming sets the streaming flag in the transform context.
+func WithStreaming(isStreaming bool) TransformOption {
+	return func(ctx *TransformContext) { ctx.IsStreaming = isStreaming }
+}
+
+// WithExtra sets initial extra data in the transform context.
+func WithExtra(extra map[string]interface{}) TransformOption {
+	return func(ctx *TransformContext) { ctx.Extra = extra }
+}
 
 // Transform defines the interface for a single transformation step
 type Transform interface {
@@ -19,7 +59,14 @@ type Transform interface {
 
 // TransformContext carries state through the transform chain
 type TransformContext struct {
-	// Request is the request being transformed
+	SourceAPI protocol.APIType
+	TargetAPI protocol.APIType
+
+	RequestModel  string
+	ResponseModel string
+
+	// Request is the request being transformed.
+	// Use SetRequest[T]() to update — only types satisfying RequestUnionConstraint are accepted.
 	Request interface{}
 
 	// ProviderURL identifies the provider (e.g., "api.deepseek.com")
@@ -45,6 +92,36 @@ type TransformContext struct {
 	Extra map[string]interface{}
 }
 
+// NewTransformContext creates a TransformContext with type-safe request validation.
+// The generic type parameter T is constrained to RequestUnionConstraint, ensuring
+// only valid request types can be used. Invalid types will cause a compile-time error.
+//
+// Example:
+//
+//	ctx := transform.NewTransformContext(&anthropicReq,
+//	    transform.WithProviderURL("api.deepseek.com"),
+//	    transform.WithStreaming(true),
+//	)
+func NewTransformContext[T RequestUnionConstraint](request T, opts ...TransformOption) *TransformContext {
+	ctx := &TransformContext{
+		Request:         request,
+		OriginalRequest: request,
+	}
+
+	for _, opt := range opts {
+		opt(ctx)
+	}
+
+	return ctx
+}
+
+// SetRequest updates the request in the context.
+// Only types satisfying RequestUnionConstraint are accepted — passing any other type
+// will result in a compile-time error.
+func SetRequest[T RequestUnionConstraint](ctx *TransformContext, req T) {
+	ctx.Request = req
+}
+
 // TransformChain manages an ordered sequence of transforms
 type TransformChain struct {
 	// transforms are the ordered transformation steps
@@ -63,11 +140,6 @@ func NewTransformChain(transforms []Transform) *TransformChain {
 // in TransformSteps. Returns the final TransformContext or an error if
 // any transform fails with a descriptive error message.
 func (c *TransformChain) Execute(ctx *TransformContext) (*TransformContext, error) {
-	// Validate request type: must be a pointer type for consistency
-	if err := validateRequestPointerType(ctx.Request); err != nil {
-		return nil, fmt.Errorf("invalid request type: %w", err)
-	}
-
 	// Initialize TransformSteps if not already initialized
 	if ctx.TransformSteps == nil {
 		ctx.TransformSteps = []string{}
@@ -119,19 +191,4 @@ func (c *TransformChain) GetTransforms() []Transform {
 	transforms := make([]Transform, len(c.transforms))
 	copy(transforms, c.transforms)
 	return transforms
-}
-
-// validateRequestPointerType ensures the request is a pointer type
-// This is required for consistent behavior across the transform chain
-func validateRequestPointerType(req interface{}) error {
-	if req == nil {
-		return fmt.Errorf("request cannot be nil")
-	}
-
-	reqType := reflect.TypeOf(req)
-	if reqType.Kind() != reflect.Ptr {
-		return fmt.Errorf("request must be a pointer type, got %T (value type)", req)
-	}
-
-	return nil
 }

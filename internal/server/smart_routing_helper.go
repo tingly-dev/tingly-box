@@ -1,5 +1,9 @@
 package server
 
+// Deprecated: This file contains legacy smart routing helpers.
+// New code should use internal/server/routing package instead.
+// These methods are kept for backward compatibility with DetermineProviderAndModelWithScenario.
+
 import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -11,6 +15,8 @@ import (
 )
 
 // ExtractRequestContext extracts RequestContext from request based on type
+//
+// Deprecated: Use routing/smart_routing_helper.go ExtractRequestContext() instead.
 func (s *Server) ExtractRequestContext(req interface{}) (*smartrouting.RequestContext, error) {
 	switch r := req.(type) {
 	case *openai.ChatCompletionNewParams:
@@ -27,6 +33,8 @@ func (s *Server) ExtractRequestContext(req interface{}) (*smartrouting.RequestCo
 
 // SelectServiceFromSmartRouting selects a service from matched smart routing services
 // Creates a temporary rule with the matched services and uses the configured load balancing tactic
+//
+// Deprecated: Use routing.SmartRoutingStage instead.
 func (s *Server) SelectServiceFromSmartRouting(matchedServices []*loadbalance.Service, rule *typ.Rule) (*loadbalance.Service, error) {
 	if len(matchedServices) == 0 {
 		return nil, nil

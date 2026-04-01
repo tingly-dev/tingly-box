@@ -14,7 +14,7 @@ func TestTextFormatter_FormatSystemMessage(t *testing.T) {
 
 	// Test "init" subtype - should be rendered
 	initMsg := &SystemMessage{
-		Type:      MessageTypeSystem,
+		Type:      SDKSystemMessage,
 		SubType:   "init",
 		SessionID: "test-session-123",
 		Timestamp: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC),
@@ -35,7 +35,7 @@ func TestTextFormatter_FormatSystemMessage(t *testing.T) {
 
 	// Test non-"init" subtype - should be hidden
 	otherMsg := &SystemMessage{
-		Type:      MessageTypeSystem,
+		Type:      SDKSystemMessage,
 		SubType:   "other",
 		SessionID: "test-session-456",
 		Timestamp: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC),
@@ -52,7 +52,7 @@ func TestTextFormatter_FormatAssistantMessage(t *testing.T) {
 	formatter.SetShowToolDetails(true)
 
 	msg := &AssistantMessage{
-		Type: MessageTypeAssistant,
+		Type: SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "text", Text: "Hello, world!"},
@@ -77,7 +77,7 @@ func TestTextFormatter_FormatUserMessage(t *testing.T) {
 	formatter := NewTextFormatter()
 
 	msg := &UserMessage{
-		Type:    MessageTypeUser,
+		Type:    SDKUserMessage,
 		Message: "What is the weather?",
 	}
 
@@ -98,7 +98,7 @@ func TestTextFormatter_FormatToolUseMessage(t *testing.T) {
 	formatter := NewTextFormatter()
 
 	msg := &ToolUseMessage{
-		Type:      MessageTypeToolUse,
+		Type:      SDKToolUseMessage,
 		ToolUseID: "toolu-123",
 		Name:      "Bash",
 		Input: map[string]interface{}{
@@ -126,7 +126,7 @@ func TestTextFormatter_FormatToolResultMessage(t *testing.T) {
 	formatter := NewTextFormatter()
 
 	msg := &ToolResultMessage{
-		Type:      MessageTypeToolResult,
+		Type:      SDKToolResultMessage,
 		ToolUseID: "toolu-123",
 		Output:    "file1.txt\nfile2.txt",
 		IsError:   false,
@@ -149,7 +149,7 @@ func TestTextFormatter_FormatResultMessage(t *testing.T) {
 	formatter := NewTextFormatter()
 
 	msg := &ResultMessage{
-		Type:         MessageTypeResult,
+		Type:         SDKResultMessage,
 		SubType:      "success",
 		DurationMS:   1234,
 		TotalCostUSD: 0.0123,
@@ -180,7 +180,7 @@ func TestTextFormatter_FormatStreamEventMessage(t *testing.T) {
 	formatter := NewTextFormatter()
 
 	msg := &StreamEventMessage{
-		Type: MessageTypeStreamEvent,
+		Type: SDKStreamEventMessage,
 		Event: StreamEvent{
 			Type: "content_block_delta",
 			Delta: &TextDelta{
@@ -208,13 +208,13 @@ func TestTextFormatter_SetTemplate(t *testing.T) {
 
 	// Set custom template
 	customTmpl := "[CUSTOM] {{if .SessionID}}{{.SessionID}}{{end}}"
-	err := formatter.SetTemplate(MessageTypeSystem, customTmpl)
+	err := formatter.SetTemplate(SDKSystemMessage, customTmpl)
 	if err != nil {
 		t.Fatalf("Failed to set template: %v", err)
 	}
 
 	msg := &SystemMessage{
-		Type:      MessageTypeSystem,
+		Type:      SDKSystemMessage,
 		SessionID: "custom-test-123",
 	}
 
@@ -232,7 +232,7 @@ func TestTextFormatter_VerboseMode(t *testing.T) {
 	formatter.SetVerbose(true)
 
 	msg := &AssistantMessage{
-		Type: MessageTypeAssistant,
+		Type: SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "thinking", Thinking: "Let me think..."},
@@ -251,7 +251,7 @@ func TestTextFormatter_ShowToolDetails(t *testing.T) {
 	formatter.SetShowToolDetails(true)
 
 	msg := &AssistantMessage{
-		Type: MessageTypeAssistant,
+		Type: SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "tool_use", ID: "toolu-123", Name: "Bash"},
@@ -277,7 +277,7 @@ func TestTextFormatter_ShowToolDetailsWithInput(t *testing.T) {
 	// Create tool_use with input
 	inputJSON := `{"command":"ls -la","description":"List files"}`
 	msg := &AssistantMessage{
-		Type: MessageTypeAssistant,
+		Type: SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{
@@ -306,7 +306,7 @@ func TestTextFormatter_EmptyFieldsNoOutput(t *testing.T) {
 	formatter := NewTextFormatter()
 
 	msg := &AssistantMessage{
-		Type: MessageTypeAssistant,
+		Type: SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "text", Text: ""}, // Empty text
@@ -327,7 +327,7 @@ func TestTextFormatter_MultipleContentBlocks(t *testing.T) {
 	formatter.SetVerbose(true)
 
 	msg := &AssistantMessage{
-		Type: MessageTypeAssistant,
+		Type: SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "text", Text: "Let me check."},
@@ -357,7 +357,7 @@ func TestTextFormatter_ToolUseWithEmptyInput(t *testing.T) {
 	formatter.SetShowToolDetails(true)
 
 	msg := &AssistantMessage{
-		Type: MessageTypeAssistant,
+		Type: SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "tool_use", ID: "call_123", Name: "Bash"},
@@ -379,7 +379,7 @@ func TestTextFormatter_ThinkingBlock(t *testing.T) {
 	formatter.SetVerbose(true)
 
 	msg := &AssistantMessage{
-		Type: MessageTypeAssistant,
+		Type: SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "thinking", Thinking: "Let me analyze this..."},
@@ -401,7 +401,7 @@ func TestTextFormatter_ThinkingBlockNonVerbose(t *testing.T) {
 	// Verbose is false by default
 
 	msg := &AssistantMessage{
-		Type: MessageTypeAssistant,
+		Type: SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "thinking", Thinking: "Let me analyze this..."},

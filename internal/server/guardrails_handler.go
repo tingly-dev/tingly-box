@@ -47,7 +47,7 @@ type guardrailsBuiltinsResponse struct {
 type guardrailsPolicyUpdateRequest struct {
 	ID      *string                 `json:"id,omitempty"`
 	Name    *string                 `json:"name,omitempty"`
-	Group   *string                 `json:"group,omitempty"`
+	Groups  *[]string               `json:"groups,omitempty"`
 	Kind    *string                 `json:"kind,omitempty"`
 	Enabled *bool                   `json:"enabled,omitempty"`
 	Scope   *guardrails.Scope       `json:"scope,omitempty"`
@@ -59,7 +59,7 @@ type guardrailsPolicyUpdateRequest struct {
 type guardrailsPolicyCreateRequest struct {
 	ID      string                 `json:"id" binding:"required"`
 	Name    string                 `json:"name,omitempty"`
-	Group   string                 `json:"group,omitempty"`
+	Groups  []string               `json:"groups,omitempty"`
 	Kind    string                 `json:"kind" binding:"required"`
 	Enabled *bool                  `json:"enabled,omitempty"`
 	Scope   guardrails.Scope       `json:"scope,omitempty"`
@@ -75,21 +75,17 @@ type guardrailsPolicyUpdateResponse struct {
 }
 
 type guardrailsGroupUpdateRequest struct {
-	ID             *string           `json:"id,omitempty"`
-	Name           *string           `json:"name,omitempty"`
-	Enabled        *bool             `json:"enabled,omitempty"`
-	Severity       *string           `json:"severity,omitempty"`
-	DefaultVerdict *string           `json:"default_verdict,omitempty"`
-	DefaultScope   *guardrails.Scope `json:"default_scope,omitempty"`
+	ID       *string `json:"id,omitempty"`
+	Name     *string `json:"name,omitempty"`
+	Enabled  *bool   `json:"enabled,omitempty"`
+	Severity *string `json:"severity,omitempty"`
 }
 
 type guardrailsGroupCreateRequest struct {
-	ID             string           `json:"id" binding:"required"`
-	Name           string           `json:"name,omitempty"`
-	Enabled        *bool            `json:"enabled,omitempty"`
-	Severity       string           `json:"severity,omitempty"`
-	DefaultVerdict string           `json:"default_verdict,omitempty"`
-	DefaultScope   guardrails.Scope `json:"default_scope,omitempty"`
+	ID       string `json:"id" binding:"required"`
+	Name     string `json:"name,omitempty"`
+	Enabled  *bool  `json:"enabled,omitempty"`
+	Severity string `json:"severity,omitempty"`
 }
 
 type guardrailsGroupUpdateResponse struct {
@@ -132,13 +128,34 @@ func guardrailsGroupExists(groups []guardrails.PolicyGroup, id string) bool {
 	return false
 }
 
-func marshalGuardrailsConfig(cfg guardrails.Config) ([]byte, error) {
-	return yaml.Marshal(guardrails.StorageConfig(cfg))
+func normalizeGuardrailsPolicyGroups(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }
 
-func normalizeGuardrailsGroupScope(scope guardrails.Scope, supportedScenarios []string) guardrails.Scope {
-	scope.Scenarios = filterSupportedGuardrailsScenarios(scope.Scenarios, supportedScenarios)
-	return scope
+func guardrailsGroupsExist(groups []guardrails.PolicyGroup, ids []string) bool {
+	for _, id := range normalizeGuardrailsPolicyGroups(ids) {
+		if !guardrailsGroupExists(groups, id) {
+			return false
+		}
+	}
+	return true
+}
+
+func marshalGuardrailsConfig(cfg guardrails.Config) ([]byte, error) {
+	return yaml.Marshal(guardrails.StorageConfig(cfg))
 }
 
 func countGuardrailsPolicies(cfg guardrails.Config) int {
@@ -344,12 +361,13 @@ func (s *Server) UpdateGuardrailsPolicy(c *gin.Context) {
 		if req.Name != nil {
 			cfg.Policies[i].Name = *req.Name
 		}
-		if req.Group != nil {
-			if !guardrailsGroupExists(cfg.Groups, *req.Group) {
-				c.JSON(400, gin.H{"success": false, "error": "policy group does not exist"})
+		if req.Groups != nil {
+			nextGroups := normalizeGuardrailsPolicyGroups(*req.Groups)
+			if !guardrailsGroupsExist(cfg.Groups, nextGroups) {
+				c.JSON(400, gin.H{"success": false, "error": "one or more policy groups do not exist"})
 				return
 			}
-			cfg.Policies[i].Group = *req.Group
+			cfg.Policies[i].Groups = nextGroups
 		}
 		if req.Kind != nil && strings.TrimSpace(*req.Kind) != "" {
 			cfg.Policies[i].Kind = guardrails.PolicyKind(*req.Kind)
@@ -452,15 +470,16 @@ func (s *Server) CreateGuardrailsPolicy(c *gin.Context) {
 			return
 		}
 	}
-	if !guardrailsGroupExists(cfg.Groups, req.Group) {
-		c.JSON(400, gin.H{"success": false, "error": "policy group does not exist"})
+	policyGroups := normalizeGuardrailsPolicyGroups(req.Groups)
+	if !guardrailsGroupsExist(cfg.Groups, policyGroups) {
+		c.JSON(400, gin.H{"success": false, "error": "one or more policy groups do not exist"})
 		return
 	}
 
 	cfg.Policies = append(cfg.Policies, guardrails.Policy{
 		ID:      req.ID,
 		Name:    req.Name,
-		Group:   req.Group,
+		Groups:  policyGroups,
 		Kind:    guardrails.PolicyKind(req.Kind),
 		Enabled: req.Enabled,
 		Scope:   normalizeGuardrailsPolicyScope(req.Scope, s.getGuardrailsSupportedScenarios()),
@@ -614,7 +633,6 @@ func (s *Server) UpdateGuardrailsGroup(c *gin.Context) {
 
 	found := false
 	renamed := false
-	supportedScenarios := s.getGuardrailsSupportedScenarios()
 	for i := range cfg.Groups {
 		if cfg.Groups[i].ID != groupID {
 			continue
@@ -638,12 +656,6 @@ func (s *Server) UpdateGuardrailsGroup(c *gin.Context) {
 		if req.Severity != nil {
 			cfg.Groups[i].Severity = *req.Severity
 		}
-		if req.DefaultVerdict != nil {
-			cfg.Groups[i].DefaultVerdict = guardrails.Verdict(*req.DefaultVerdict)
-		}
-		if req.DefaultScope != nil {
-			cfg.Groups[i].DefaultScope = normalizeGuardrailsGroupScope(*req.DefaultScope, supportedScenarios)
-		}
 		groupID = cfg.Groups[i].ID
 		found = true
 		break
@@ -655,8 +667,10 @@ func (s *Server) UpdateGuardrailsGroup(c *gin.Context) {
 
 	if renamed && req.ID != nil {
 		for i := range cfg.Policies {
-			if cfg.Policies[i].Group == c.Param("id") {
-				cfg.Policies[i].Group = *req.ID
+			for j, groupID := range cfg.Policies[i].Groups {
+				if groupID == c.Param("id") {
+					cfg.Policies[i].Groups[j] = *req.ID
+				}
 			}
 		}
 	}
@@ -737,12 +751,10 @@ func (s *Server) CreateGuardrailsGroup(c *gin.Context) {
 	}
 
 	cfg.Groups = append(cfg.Groups, guardrails.PolicyGroup{
-		ID:             req.ID,
-		Name:           req.Name,
-		Enabled:        req.Enabled,
-		Severity:       req.Severity,
-		DefaultVerdict: guardrails.Verdict(req.DefaultVerdict),
-		DefaultScope:   normalizeGuardrailsGroupScope(req.DefaultScope, s.getGuardrailsSupportedScenarios()),
+		ID:       req.ID,
+		Name:     req.Name,
+		Enabled:  req.Enabled,
+		Severity: req.Severity,
 	})
 
 	engine, err := guardrails.BuildEngine(cfg, guardrails.Dependencies{})
@@ -783,6 +795,10 @@ func (s *Server) DeleteGuardrailsGroup(c *gin.Context) {
 		c.JSON(400, gin.H{"success": false, "error": "group id is required"})
 		return
 	}
+	if groupID == guardrails.DefaultPolicyGroupID {
+		c.JSON(400, gin.H{"success": false, "error": "default group cannot be deleted"})
+		return
+	}
 
 	path, err := ensureGuardrailsPath(s.config.ConfigDir)
 	if err != nil {
@@ -807,9 +823,11 @@ func (s *Server) DeleteGuardrailsGroup(c *gin.Context) {
 	}
 
 	for _, policy := range cfg.Policies {
-		if policy.Group == groupID {
-			c.JSON(400, gin.H{"success": false, "error": "group is still referenced by one or more policies"})
-			return
+		for _, policyGroupID := range normalizeGuardrailsPolicyGroups(policy.Groups) {
+			if policyGroupID == groupID {
+				c.JSON(400, gin.H{"success": false, "error": "group is still referenced by one or more policies"})
+				return
+			}
 		}
 	}
 

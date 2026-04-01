@@ -20,6 +20,7 @@ set -e
 
 # Configuration
 TINGLY_API_URL="${TINGLY_API_URL:-http://localhost:12580}"
+TINGLY_SCENARIO="${TINGLY_SCENARIO:-claude_code}"
 
 # Read Claude Code JSON from stdin
 CC_INPUT=$(cat)
@@ -29,7 +30,7 @@ CC_INPUT=$(cat)
 echo "$CC_INPUT" | curl -s -X POST \
 	-H "Content-Type: application/json" \
 	-d @- \
-	"${TINGLY_API_URL}/tingly/claude_code/statusline" 2>/dev/null || echo "⚠ Tingly Box service stopped"
+	"${TINGLY_API_URL}/tingly/${TINGLY_SCENARIO}/statusline" 2>/dev/null || echo "⚠ Tingly Box service stopped"
 
 # We may config more like below
 # echo -e

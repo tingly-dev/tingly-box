@@ -4,7 +4,30 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	protocoltransform "github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
+
+// CleanHeaderTransform strips injected billing header blocks from system messages.
+// Used by Claude Code scenarios to remove upstream-injected x-anthropic-billing-header blocks.
+// Only added to the chain when CleanHeader flag is true.
+type CleanHeaderTransform struct{}
+
+// NewCleanHeaderTransform creates a CleanHeaderTransform.
+func NewCleanHeaderTransform() *CleanHeaderTransform {
+	return &CleanHeaderTransform{}
+}
+
+func (t *CleanHeaderTransform) Name() string { return "clean_header" }
+
+func (t *CleanHeaderTransform) Apply(ctx *protocoltransform.TransformContext) error {
+	switch req := ctx.Request.(type) {
+	case *anthropic.MessageNewParams:
+		req.System = CleanSystemMessages(req.System)
+	case *anthropic.BetaMessageNewParams:
+		req.System = CleanBetaSystemMessages(req.System)
+	}
+	return nil
+}
 
 // CleanSystemMessages removes billing header messages from system blocks
 // This is used for Claude Code scenario to filter out injected billing headers

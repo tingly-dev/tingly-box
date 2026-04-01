@@ -6,22 +6,16 @@ groups:
     name: Default
     enabled: true
     severity: high
-    default_verdict: block
-    default_scope:
-      scenarios: [claude_code, anthropic, openai]
 
   - id: output-protection
     name: Output Protection
     enabled: true
     severity: high
-    default_verdict: block
-    default_scope:
-      scenarios: [claude_code, anthropic, openai]
 
 policies:
   - id: block-ssh-read
     name: Block SSH directory reads
-    group: default
+    groups: [default]
     kind: resource_access
     enabled: true
     scope:
@@ -38,7 +32,7 @@ policies:
 
   - id: block-destructive-rm
     name: Block destructive rm commands
-    group: default
+    groups: [default]
     kind: command_execution
     enabled: true
     scope:
@@ -52,7 +46,7 @@ policies:
 
   - id: block-secret-output
     name: Block sensitive output
-    group: output-protection
+    groups: [default, output-protection]
     kind: content
     enabled: true
     scope:

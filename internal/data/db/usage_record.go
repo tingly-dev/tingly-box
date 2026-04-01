@@ -36,6 +36,7 @@ type UsageRecord struct {
 	Status       string `gorm:"column:status;index;not null"` // success, error, partial
 	ErrorCode    string `gorm:"column:error_code"`
 	LatencyMs    int    `gorm:"column:latency_ms"`
+	TTFTMs       int    `gorm:"column:ttft_ms;default:0"`
 	Streamed     bool   `gorm:"column:streamed;type:integer"`
 }
 
@@ -499,6 +500,32 @@ func (us *UsageStore) GetRecords(startTime, endTime time.Time, filters map[strin
 	}
 
 	return records, total, nil
+}
+
+// GetRecordsAfterID returns usage records with id greater than lastID.
+// On initial sync, startTime can be used to cap the historical backfill window.
+func (us *UsageStore) GetRecordsAfterID(lastID uint, startTime time.Time, limit int) ([]UsageRecord, error) {
+	us.mu.Lock()
+	defer us.mu.Unlock()
+
+	if limit <= 0 {
+		limit = 100
+	}
+
+	db := us.db.Model(&UsageRecord{}).Where("id > ?", lastID)
+	if !startTime.IsZero() {
+		db = db.Where("timestamp >= ?", startTime)
+	}
+
+	var records []UsageRecord
+	if err := db.
+		Order("id ASC").
+		Limit(limit).
+		Find(&records).Error; err != nil {
+		return nil, err
+	}
+
+	return records, nil
 }
 
 // DeleteOlderThan deletes records older than the specified date

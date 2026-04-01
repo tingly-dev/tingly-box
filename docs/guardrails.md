@@ -7,7 +7,7 @@ Guardrails adds rule-based safety checks around model output, tool calls, tool r
 Guardrails is organized into three user-facing areas:
 
 - **Policies**: Define concrete rules.
-- **Policy Groups**: Organize policies and provide shared defaults.
+- **Policy Groups**: Organize policies and control which policy sets are active.
 - **Protected Credentials**: Store secrets that should be masked before model access.
 
 Built-in policies are shown directly inside the Policies page under the matching category. They start disabled and can be enabled manually.
@@ -35,14 +35,11 @@ groups:
     name: Default
     enabled: true
     severity: high
-    default_verdict: block
-    default_scope:
-      scenarios: [claude_code, anthropic, openai]
 
 policies:
   - id: block-ssh-read
     name: Block SSH directory reads
-    group: default
+    groups: [default]
     kind: resource_access
     enabled: true
     scope:
@@ -62,7 +59,7 @@ policies:
 
 - `strategy`: How multiple policy results are merged.
 - `error_strategy`: Fallback behavior if a policy evaluation fails.
-- `groups`: Shared defaults and organization.
+- `groups`: Policy collections and activation buckets.
 - `policies`: Concrete guardrail rules.
 
 ## Policy kinds
@@ -112,15 +109,17 @@ Common match fields:
 
 ## Groups
 
-Policy Groups are used to manage a set of policies and define shared defaults.
+Policy Groups are used to manage sets of policies.
 
 A group can provide:
 - enabled / disabled state
 - severity
-- default verdict
-- default scenario scope
 
-The UI also includes a non-deletable **Default** group, which acts as the fallback group for policies that are not assigned elsewhere.
+A policy can belong to more than one group. A policy is active only when:
+- the policy itself is enabled
+- and at least one of its assigned groups is enabled
+
+The UI also includes a non-deletable **Default** group.
 
 ## Supported verdicts
 
@@ -148,7 +147,7 @@ scope:
   scenarios: [claude_code, anthropic]
 ```
 
-If omitted, the policy can inherit default scope from its group.
+If omitted, the policy applies to all supported scenarios.
 
 ## Protected Credentials
 

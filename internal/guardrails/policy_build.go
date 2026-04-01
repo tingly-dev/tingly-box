@@ -4,6 +4,7 @@ import "fmt"
 
 // ResolveConfig validates and normalizes policy-based guardrails configs.
 func ResolveConfig(cfg Config) (Config, error) {
+	cfg = normalizePolicyConfig(cfg)
 	if !usesPolicyConfig(cfg) {
 		return Config{}, fmt.Errorf("guardrails config must define groups or policies")
 	}
@@ -20,11 +21,41 @@ func IsPolicyConfig(cfg Config) bool {
 
 // StorageConfig normalizes configs before persisting them back to disk.
 func StorageConfig(cfg Config) Config {
-	return cfg
+	return normalizePolicyConfig(cfg)
 }
 
 func usesPolicyConfig(cfg Config) bool {
 	return len(cfg.Policies) > 0 || len(cfg.Groups) > 0
+}
+
+func normalizePolicyConfig(cfg Config) Config {
+	next := cfg
+	if usesPolicyConfig(cfg) {
+		hasDefaultGroup := false
+		for _, group := range cfg.Groups {
+			if group.ID == DefaultPolicyGroupID {
+				hasDefaultGroup = true
+				break
+			}
+		}
+		if !hasDefaultGroup {
+			next.Groups = append(append([]PolicyGroup(nil), cfg.Groups...), PolicyGroup{
+				ID:      DefaultPolicyGroupID,
+				Name:    "Default",
+				Enabled: boolPtr(true),
+			})
+		}
+	}
+	if len(cfg.Policies) == 0 {
+		return next
+	}
+
+	next.Policies = make([]Policy, len(cfg.Policies))
+	for i, policy := range cfg.Policies {
+		policy.Groups = normalizedPolicyGroups(policy)
+		next.Policies[i] = policy
+	}
+	return next
 }
 
 func validatePolicyConfig(cfg Config) error {
@@ -53,36 +84,57 @@ func buildPolicyEvaluator(policy Policy, groups map[string]PolicyGroup) (Evaluat
 		return nil, fmt.Errorf("policy id is required")
 	}
 
-	group, err := resolvePolicyGroup(policy, groups)
+	policyGroups, err := resolvePolicyGroups(policy, groups)
 	if err != nil {
 		return nil, err
 	}
 
 	switch policy.Kind {
 	case PolicyKindResourceAccess, PolicyKindOperationLegacy:
-		return buildResourceAccessPolicyEvaluator(policy, group)
+		return buildResourceAccessPolicyEvaluator(policy, policyGroups)
 	case PolicyKindCommandExecution:
-		return buildCommandExecutionPolicyEvaluator(policy, group)
+		return buildCommandExecutionPolicyEvaluator(policy, policyGroups)
 	case PolicyKindContent:
-		return buildContentPolicyEvaluator(policy, group)
+		return buildContentPolicyEvaluator(policy, policyGroups)
 	default:
 		return nil, fmt.Errorf("policy %s: unsupported kind %q", policy.ID, policy.Kind)
 	}
 }
 
-func resolvePolicyGroup(policy Policy, groups map[string]PolicyGroup) (*PolicyGroup, error) {
-	if policy.Group == "" {
-		return nil, nil
+func normalizedPolicyGroups(policy Policy) []string {
+	seen := make(map[string]struct{}, len(policy.Groups))
+	out := make([]string, 0, len(policy.Groups))
+	for _, groupID := range policy.Groups {
+		if groupID == "" {
+			continue
+		}
+		if _, exists := seen[groupID]; exists {
+			continue
+		}
+		seen[groupID] = struct{}{}
+		out = append(out, groupID)
 	}
-	group, ok := groups[policy.Group]
-	if !ok {
-		return nil, fmt.Errorf("policy %s: unknown group %q", policy.ID, policy.Group)
-	}
-	return &group, nil
+	return out
 }
 
-func buildResourceAccessPolicyEvaluator(policy Policy, group *PolicyGroup) (Evaluator, error) {
-	scope := mergePolicyScope(group, policy.Scope)
+func resolvePolicyGroups(policy Policy, groups map[string]PolicyGroup) ([]PolicyGroup, error) {
+	ids := normalizedPolicyGroups(policy)
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	resolved := make([]PolicyGroup, 0, len(ids))
+	for _, groupID := range ids {
+		group, ok := groups[groupID]
+		if !ok {
+			return nil, fmt.Errorf("policy %s: unknown group %q", policy.ID, groupID)
+		}
+		resolved = append(resolved, group)
+	}
+	return resolved, nil
+}
+
+func buildResourceAccessPolicyEvaluator(policy Policy, groups []PolicyGroup) (Evaluator, error) {
+	scope := mergePolicyScope(policy.Scope)
 	scope.Content = []ContentType{ContentTypeCommand}
 
 	params := CommandPolicyConfig{
@@ -96,20 +148,20 @@ func buildResourceAccessPolicyEvaluator(policy Policy, group *PolicyGroup) (Eval
 		params.Resources = append([]string(nil), policy.Match.Resources.Values...)
 		params.ResourceMatch = ResourceMatchMode(policy.Match.Resources.Mode)
 	}
-	params.Verdict = resolvePolicyVerdict(policy, group, VerdictBlock)
+	params.Verdict = resolvePolicyVerdict(policy, VerdictBlock)
 	params.Reason = policy.Reason
 
 	return NewOperationPolicy(
 		policy.ID,
 		policyName(policy),
-		resolvePolicyEnabled(policy, group),
+		resolvePolicyEnabled(policy, groups),
 		scope,
 		params,
 	)
 }
 
-func buildCommandExecutionPolicyEvaluator(policy Policy, group *PolicyGroup) (Evaluator, error) {
-	scope := mergePolicyScope(group, policy.Scope)
+func buildCommandExecutionPolicyEvaluator(policy Policy, groups []PolicyGroup) (Evaluator, error) {
+	scope := mergePolicyScope(policy.Scope)
 	scope.Content = []ContentType{ContentTypeCommand}
 
 	params := CommandPolicyConfig{
@@ -124,32 +176,32 @@ func buildCommandExecutionPolicyEvaluator(policy Policy, group *PolicyGroup) (Ev
 		params.Resources = append([]string(nil), policy.Match.Resources.Values...)
 		params.ResourceMatch = ResourceMatchMode(policy.Match.Resources.Mode)
 	}
-	params.Verdict = resolvePolicyVerdict(policy, group, VerdictBlock)
+	params.Verdict = resolvePolicyVerdict(policy, VerdictBlock)
 	params.Reason = policy.Reason
 
 	return NewOperationPolicy(
 		policy.ID,
 		policyName(policy),
-		resolvePolicyEnabled(policy, group),
+		resolvePolicyEnabled(policy, groups),
 		scope,
 		params,
 	)
 }
 
-func buildContentPolicyEvaluator(policy Policy, group *PolicyGroup) (Evaluator, error) {
+func buildContentPolicyEvaluator(policy Policy, groups []PolicyGroup) (Evaluator, error) {
 	if len(policy.Match.Patterns) == 0 && len(policy.Match.CredentialRefs) == 0 {
 		return nil, fmt.Errorf("policy %s: content policies require patterns or credential refs", policy.ID)
 	}
 
 	contentTypes := []ContentType{ContentTypeText}
-	scope := mergePolicyScope(group, policy.Scope)
+	scope := mergePolicyScope(policy.Scope)
 	scope.Content = contentTypes
 
 	params := TextMatchConfig{
 		Patterns:       append([]string(nil), policy.Match.Patterns...),
 		CredentialRefs: append([]string(nil), policy.Match.CredentialRefs...),
 		Targets:        contentTypes,
-		Verdict:        resolvePolicyVerdict(policy, group, VerdictBlock),
+		Verdict:        resolvePolicyVerdict(policy, VerdictBlock),
 		Mode:           MatchMode(policy.Match.MatchMode),
 		MinMatches:     policy.Match.MinMatches,
 		CaseSensitive:  policy.Match.CaseSensitive,
@@ -162,52 +214,42 @@ func buildContentPolicyEvaluator(policy Policy, group *PolicyGroup) (Evaluator, 
 	return NewContentPolicy(
 		policy.ID,
 		policyName(policy),
-		resolvePolicyEnabled(policy, group),
+		resolvePolicyEnabled(policy, groups),
 		scope,
 		params,
 	)
 }
 
-func mergePolicyScope(group *PolicyGroup, policyScope Scope) Scope {
-	if group == nil {
-		return policyScope
-	}
-	scope := policyScope
-	if len(scope.Scenarios) == 0 {
-		scope.Scenarios = append([]string(nil), group.DefaultScope.Scenarios...)
-	}
-	if len(scope.Models) == 0 {
-		scope.Models = append([]string(nil), group.DefaultScope.Models...)
-	}
-	if len(scope.Directions) == 0 {
-		scope.Directions = append([]Direction(nil), group.DefaultScope.Directions...)
-	}
-	if len(scope.Tags) == 0 {
-		scope.Tags = append([]string(nil), group.DefaultScope.Tags...)
-	}
-	if len(scope.Content) == 0 {
-		scope.Content = append([]ContentType(nil), group.DefaultScope.Content...)
-	}
-	return scope
+func mergePolicyScope(policyScope Scope) Scope {
+	return policyScope
 }
 
-func resolvePolicyEnabled(policy Policy, group *PolicyGroup) bool {
+func resolvePolicyEnabled(policy Policy, groups []PolicyGroup) bool {
 	policyEnabled := true
 	if policy.Enabled != nil {
 		policyEnabled = *policy.Enabled
 	}
-	if group == nil || group.Enabled == nil {
-		return policyEnabled
+	if !policyEnabled {
+		return false
 	}
-	return *group.Enabled && policyEnabled
+	if len(groups) == 0 {
+		return false
+	}
+	for _, group := range groups {
+		if group.Enabled == nil || *group.Enabled {
+			return true
+		}
+	}
+	return false
 }
 
-func resolvePolicyVerdict(policy Policy, group *PolicyGroup, fallback Verdict) Verdict {
+func boolPtr(value bool) *bool {
+	return &value
+}
+
+func resolvePolicyVerdict(policy Policy, fallback Verdict) Verdict {
 	if policy.Verdict != "" {
 		return policy.Verdict
-	}
-	if group != nil && group.DefaultVerdict != "" {
-		return group.DefaultVerdict
 	}
 	return fallback
 }

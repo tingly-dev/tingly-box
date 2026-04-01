@@ -43,7 +43,7 @@ func (s *Server) guardrailsSessionFromContext(c *gin.Context, actualModel string
 // guardrailsEnabledForSession centralizes feature-flag checks so protocol handlers
 // do not repeat scenario/global guardrails gating logic.
 func (s *Server) guardrailsEnabledForSession(session guardrailsSession) bool {
-	if s.guardrailsEngine == nil || s.config == nil {
+	if s.guardrailsEngine == nil || s.config == nil || !s.guardrailsHasActivePolicies {
 		return false
 	}
 	if !s.guardrailsSupportsScenario(session.Scenario) {
@@ -51,6 +51,35 @@ func (s *Server) guardrailsEnabledForSession(session guardrailsSession) bool {
 	}
 	return s.config.GetScenarioFlag(typ.RuleScenario(session.Scenario), "guardrails") ||
 		s.config.GetScenarioFlag(typ.ScenarioGlobal, "guardrails")
+}
+
+func hasActiveGuardrailsPolicies(cfg guardrails.Config) bool {
+	if len(cfg.Policies) == 0 || len(cfg.Groups) == 0 {
+		return false
+	}
+
+	enabledGroups := make(map[string]struct{}, len(cfg.Groups))
+	for _, group := range cfg.Groups {
+		if group.Enabled != nil && !*group.Enabled {
+			continue
+		}
+		enabledGroups[group.ID] = struct{}{}
+	}
+	if len(enabledGroups) == 0 {
+		return false
+	}
+
+	for _, policy := range cfg.Policies {
+		if policy.Enabled != nil && !*policy.Enabled {
+			continue
+		}
+		for _, groupID := range policy.Groups {
+			if _, ok := enabledGroups[groupID]; ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (s *Server) guardrailsSupportsScenario(scenario string) bool {

@@ -2,12 +2,117 @@ package client
 
 import (
 	"testing"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func TestClientPool_GetClient(t *testing.T) {
+// Test once mode - no caching
+func TestClientPool_OnceMode(t *testing.T) {
+	pool := NewClientPoolBuilder().
+		WithOnceMode().
+		Build()
+
+	provider := &typ.Provider{
+		UUID:    "test-uuid-1",
+		Name:    "test-provider",
+		Token:   "test-token-12345678",
+		APIBase: "https://api.openai.com/v1",
+	}
+
+	// First call should create new client
+	client1 := pool.GetOpenAIClient(provider, "gpt-4")
+	if client1 == nil {
+		t.Fatal("Expected non-nil client")
+	}
+
+	// Second call should create different client (no caching)
+	client2 := pool.GetOpenAIClient(provider, "gpt-4")
+	if client2 == nil {
+		t.Fatal("Expected non-nil client")
+	}
+
+	// Clients should be different instances
+	if client1 == client2 {
+		t.Error("Expected different client instances in once mode")
+	}
+
+	// Pool size should be 0 (no caching)
+	if pool.Size() != 0 {
+		t.Errorf("Expected pool size 0 in once mode, got %d", pool.Size())
+	}
+
+	// Stats should show once mode
+	stats := pool.Stats()
+	if stats["mode"] != string(PoolModeOnce) {
+		t.Errorf("Expected mode 'once', got %v", stats["mode"])
+	}
+}
+
+// Test shared mode - with caching
+func TestClientPool_SharedMode(t *testing.T) {
+	pool := NewClientPoolBuilder().
+		WithSharedMode().
+		WithClientTTL(10 * time.Minute).
+		Build()
+
+	provider := &typ.Provider{
+		UUID:    "test-uuid-1",
+		Name:    "test-provider",
+		Token:   "test-token-12345678",
+		APIBase: "https://api.openai.com/v1",
+	}
+
+	// First call should create new client
+	client1 := pool.GetOpenAIClient(provider, "gpt-4")
+	if client1 == nil {
+		t.Fatal("Expected non-nil client")
+	}
+
+	// Second call should return same client (cached)
+	client2 := pool.GetOpenAIClient(provider, "gpt-4")
+	if client1 != client2 {
+		t.Error("Expected same client instance in shared mode")
+	}
+
+	// Pool size should be 1
+	if pool.Size() != 1 {
+		t.Errorf("Expected pool size 1, got %d", pool.Size())
+	}
+
+	// Stats should show shared mode
+	stats := pool.Stats()
+	if stats["mode"] != string(PoolModeShared) {
+		t.Errorf("Expected mode 'shared', got %v", stats["mode"])
+	}
+}
+
+// Test default NewClientPool uses once mode
+func TestClientPool_DefaultIsOnceMode(t *testing.T) {
 	pool := NewClientPool()
+
+	stats := pool.Stats()
+	if stats["mode"] != string(PoolModeOnce) {
+		t.Errorf("Expected default mode 'once', got %v", stats["mode"])
+	}
+
+	if pool.Size() != 0 {
+		t.Errorf("Expected pool size 0 for once mode, got %d", pool.Size())
+	}
+}
+
+// Test NewSharedClientPool uses shared mode
+func TestClientPool_SharedPoolConstructor(t *testing.T) {
+	pool := NewSharedClientPool()
+
+	stats := pool.Stats()
+	if stats["mode"] != string(PoolModeShared) {
+		t.Errorf("Expected mode 'shared', got %v", stats["mode"])
+	}
+}
+
+func TestClientPool_GetClient(t *testing.T) {
+	pool := NewSharedClientPool() // Use shared mode for backward compatibility tests
 
 	// Create test provider
 	provider := &typ.Provider{
@@ -36,7 +141,7 @@ func TestClientPool_GetClient(t *testing.T) {
 }
 
 func TestClientPool_DifferentProviders(t *testing.T) {
-	pool := NewClientPool()
+	pool := NewSharedClientPool() // Use shared mode for caching test
 
 	// Create different providers
 	provider1 := &typ.Provider{
@@ -68,7 +173,7 @@ func TestClientPool_DifferentProviders(t *testing.T) {
 }
 
 func TestClientPool_ConcurrentAccess(t *testing.T) {
-	pool := NewClientPool()
+	pool := NewSharedClientPool() // Use shared mode for concurrency test
 
 	provider := &typ.Provider{
 		UUID:    "concurrent-uuid",
@@ -112,7 +217,7 @@ func TestClientPool_ConcurrentAccess(t *testing.T) {
 }
 
 func TestClientPool_Clear(t *testing.T) {
-	pool := NewClientPool()
+	pool := NewSharedClientPool()
 
 	// Add some clients
 	provider1 := &typ.Provider{
@@ -147,7 +252,7 @@ func TestClientPool_Clear(t *testing.T) {
 }
 
 func TestClientPool_RemoveProvider(t *testing.T) {
-	pool := NewClientPool()
+	pool := NewSharedClientPool()
 
 	provider1 := &typ.Provider{
 		UUID:    "remove-uuid-1",
@@ -188,7 +293,7 @@ func TestClientPool_RemoveProvider(t *testing.T) {
 }
 
 func TestClientPool_Stats(t *testing.T) {
-	pool := NewClientPool()
+	pool := NewSharedClientPool()
 
 	provider := &typ.Provider{
 		UUID:    "stats-uuid",
@@ -215,5 +320,91 @@ func TestClientPool_Stats(t *testing.T) {
 		t.Error("Expected provider_keys to be a string slice")
 	} else if len(keys) != 1 {
 		t.Errorf("Expected 1 provider key, got %d", len(keys))
+	}
+
+	mode, ok := stats["mode"].(string)
+	if !ok {
+		t.Error("Expected mode to be a string")
+	} else if mode != string(PoolModeShared) {
+		t.Errorf("Expected mode 'shared', got %s", mode)
+	}
+}
+
+// Test InvalidateProvider in both modes
+func TestClientPool_InvalidateProvider_OnceMode(t *testing.T) {
+	pool := NewClientPoolBuilder().WithOnceMode().Build()
+
+	provider := &typ.Provider{
+		UUID:    "invalidate-uuid",
+		Name:    "invalidate-provider",
+		Token:   "token-12345678",
+		APIBase: "https://api.openai.com/v1",
+	}
+
+	// Create a client (but it won't be cached)
+	client := pool.GetOpenAIClient(provider, "gpt-4")
+	if client == nil {
+		t.Fatal("Expected non-nil client")
+	}
+
+	// Invalidate should be no-op in once mode
+	pool.InvalidateProvider(provider.UUID)
+
+	// Size should still be 0
+	if pool.Size() != 0 {
+		t.Errorf("Expected pool size 0 after invalidate in once mode, got %d", pool.Size())
+	}
+}
+
+func TestClientPool_InvalidateProvider_SharedMode(t *testing.T) {
+	pool := NewClientPoolBuilder().WithSharedMode().Build()
+
+	provider := &typ.Provider{
+		UUID:    "invalidate-uuid",
+		Name:    "invalidate-provider",
+		Token:   "token-12345678",
+		APIBase: "https://api.openai.com/v1",
+	}
+
+	// Create clients
+	pool.GetOpenAIClient(provider, "gpt-4")
+	pool.GetAnthropicClient(provider, "claude-3")
+
+	// Size should be 2
+	if pool.Size() != 2 {
+		t.Errorf("Expected pool size 2 before invalidate, got %d", pool.Size())
+	}
+
+	// Invalidate all clients for this provider
+	pool.InvalidateProvider(provider.UUID)
+
+	// Size should be 0
+	if pool.Size() != 0 {
+		t.Errorf("Expected pool size 0 after invalidate, got %d", pool.Size())
+	}
+}
+
+// Test builder patterns
+func TestClientPoolBuilder_FluentAPI(t *testing.T) {
+	pool := NewClientPoolBuilder().
+		WithSharedMode().
+		WithClientTTL(30 * time.Minute).
+		WithCleanupInterval(15 * time.Minute).
+		Build()
+
+	stats := pool.Stats()
+	if stats["mode"] != string(PoolModeShared) {
+		t.Errorf("Expected mode 'shared', got %v", stats["mode"])
+	}
+}
+
+func TestClientPoolBuilder_WithMode(t *testing.T) {
+	pool := NewClientPoolBuilder().
+		WithMode(PoolModeShared).
+		Build()
+
+	stats := pool.Stats()
+	if stats["mode"] != string(PoolModeShared) {
+		t.Errorf("Expected mode 'shared', got %v", stats["mode"])
 	}
 }

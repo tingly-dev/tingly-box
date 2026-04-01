@@ -323,3 +323,110 @@ func (h *Handler) SetScenarioStringFlag(c *gin.Context) {
 		},
 	})
 }
+
+// GetProfiles returns all profiles for a base scenario
+func (h *Handler) GetProfiles(c *gin.Context) {
+	scenario := typ.RuleScenario(c.Param("scenario"))
+	if scenario == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "scenario parameter is required"})
+		return
+	}
+	if h.config == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "config not available"})
+		return
+	}
+
+	profiles := h.config.GetProfiles(scenario)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": profiles})
+}
+
+// CreateProfile creates a new profile for a base scenario
+func (h *Handler) CreateProfile(c *gin.Context) {
+	scenario := typ.RuleScenario(c.Param("scenario"))
+	if scenario == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "scenario parameter is required"})
+		return
+	}
+	if h.config == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "config not available"})
+		return
+	}
+
+	var req ProfileCreateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	if req.Name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "name is required"})
+		return
+	}
+
+	meta, err := h.config.CreateProfile(scenario, req.Name)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": meta})
+}
+
+// UpdateProfile updates a profile's name
+func (h *Handler) UpdateProfile(c *gin.Context) {
+	scenario := typ.RuleScenario(c.Param("scenario"))
+	if scenario == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "scenario parameter is required"})
+		return
+	}
+	profileID := c.Param("id")
+	if profileID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "profile id is required"})
+		return
+	}
+	if h.config == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "config not available"})
+		return
+	}
+
+	var req ProfileCreateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	if req.Name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "name is required"})
+		return
+	}
+
+	if err := h.config.UpdateProfile(scenario, profileID, req.Name); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "profile updated"})
+}
+
+// DeleteProfile deletes a profile by ID
+func (h *Handler) DeleteProfile(c *gin.Context) {
+	scenario := typ.RuleScenario(c.Param("scenario"))
+	if scenario == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "scenario parameter is required"})
+		return
+	}
+	profileID := c.Param("id")
+	if profileID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "profile id is required"})
+		return
+	}
+	if h.config == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "config not available"})
+		return
+	}
+
+	if err := h.config.DeleteProfile(scenario, profileID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "profile deleted"})
+}

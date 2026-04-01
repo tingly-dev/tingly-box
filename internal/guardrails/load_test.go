@@ -17,7 +17,7 @@ policies:
   - id: "test"
     name: "Test"
     kind: "content"
-    group: "default"
+    groups: ["default"]
     enabled: true
     match:
       patterns: ["rm -rf"]
@@ -40,7 +40,7 @@ func TestLoadConfigJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "guardrails.json")
 
-	data := []byte(`{"groups":[{"id":"default","name":"Default"}],"policies":[{"id":"test","name":"Test","kind":"content","group":"default","enabled":true,"match":{"patterns":["rm -rf"]}}]}`)
+	data := []byte(`{"groups":[{"id":"default","name":"Default"}],"policies":[{"id":"test","name":"Test","kind":"content","groups":["default"],"enabled":true,"match":{"patterns":["rm -rf"]}}]}`)
 
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatalf("write file: %v", err)

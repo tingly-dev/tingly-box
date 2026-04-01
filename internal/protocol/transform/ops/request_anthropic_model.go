@@ -12,39 +12,32 @@ import (
 
 const ClaudeCodeVersion = "2.1.81.c43"
 
-// ApplyAnthropicModelTransform applies Anthropic API provider-specific model filtering.
+// ApplyAnthropicV1ModelTransform applies Anthropic API v1 model-specific filtering.
 // This handles model-specific limitations such as adaptive thinking only being supported by
 // Claude Opus 4.6 (claude-opus-4-6) and Claude Sonnet 4.6 (claude-sonnet-4-6).
 //
 // Parameters:
-//   - req: The request to transform (can be *anthropic.MessageNewParams or *anthropic.BetaMessageNewParams)
+//   - req: The Anthropic v1 request to transform
 //   - model: The target model name
 //
 // Returns the transformed request (same type as input).
 //
 // Note: This applies to ALL Anthropic API requests, regardless of authentication method
 // (API key or OAuth token). The limitation is in the Anthropic API itself, not the auth method.
-func ApplyAnthropicModelTransform(req interface{}, model string) interface{} {
-
-	// Adaptive thinking
-	// https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking
-	//
-	// Only Claude Opus 4.6 (claude-opus-4-6) and Claude Sonnet 4.6 (claude-sonnet-4-6)
-	// support adaptive thinking. For all other models, thinking configuration must be removed.
-
+func ApplyAnthropicV1ModelTransform(req *anthropic.MessageNewParams, model string) *anthropic.MessageNewParams {
 	if isThinkingSupportedModel(model) {
 		return req
 	}
+	return applyAnthropicV1ThinkingFilter(req)
+}
 
-	// Handle different request types
-	switch r := req.(type) {
-	case *anthropic.MessageNewParams:
-		return applyAnthropicV1ThinkingFilter(r)
-	case *anthropic.BetaMessageNewParams:
-		return applyAnthropicBetaThinkingFilter(r)
-	default:
+// ApplyAnthropicBetaModelTransform applies Anthropic API beta model-specific filtering.
+// Same rules as V1 but for BetaMessageNewParams.
+func ApplyAnthropicBetaModelTransform(req *anthropic.BetaMessageNewParams, model string) *anthropic.BetaMessageNewParams {
+	if isThinkingSupportedModel(model) {
 		return req
 	}
+	return applyAnthropicBetaThinkingFilter(req)
 }
 
 // isThinkingSupportedModel checks if the model supports adaptive thinking.
@@ -199,74 +192,90 @@ func filterBetaThinkingBlocksInMessages(messages []anthropic.BetaMessageParam) [
 // Metadata Injection Functions
 // =============================================
 
-// ApplyAnthropicMetadataTransform injects OAuth user_id into request metadata.
+// ApplyAnthropicV1MetadataTransform injects OAuth user_id into Anthropic v1 request metadata.
 // This adds metadata.user_id in JSON format for Anthropic API tracking.
 //
-// Parameters:
-//   - req: The request to transform (*anthropic.MessageNewParams or *anthropic.BetaMessageNewParams)
-//   - provider: The provider with OAuth credentials (can be nil)
-//
-// Returns the transformed request (same type as input) with metadata injected.
-//
 // Note: Only injects metadata when provider is OAuth and has valid UserID.
-func ApplyAnthropicMetadataTransform(req interface{}, extra map[string]any) interface{} {
+func ApplyAnthropicV1MetadataTransform(req *anthropic.MessageNewParams, extra map[string]any) *anthropic.MessageNewParams {
 	if req == nil {
 		return req
 	}
 
-	// Inject into request based on type
-	switch r := req.(type) {
-	case *anthropic.MessageNewParams:
-		if r == nil {
-			return req
-		}
-		if len(r.System) > 0 {
-			if strings.Contains(r.System[0].Text, "x-anthropic-billing-header") {
-				r.System[0].Text = fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ClaudeCodeVersion, GenHex4())
-			}
-		}
-		if r.Metadata.UserID.Valid() {
-			m := ParseMetadataUserID(r.Metadata.UserID.String())
-			if m != nil {
-				m.Fix(extra)
-				s := m.Format()
-				r.Metadata.UserID = param.NewOpt(s)
-			}
+	text := fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ClaudeCodeVersion, GenHex4())
+	if len(req.System) > 0 {
+		if strings.Contains(req.System[0].Text, "x-anthropic-billing-header") {
+			req.System[0].Text = text
 		} else {
-			m := BuildMetadataUserID(extra)
-			if m != nil {
-				s := FormatMetadataUserID(m)
-				r.Metadata.UserID = param.NewOpt(s)
-			}
+			req.System = append(
+				[]anthropic.TextBlockParam{
+					{Text: text},
+				},
+				req.System...,
+			)
 		}
-		return r
-	case *anthropic.BetaMessageNewParams:
-		if r == nil {
-			return req
+	} else {
+		req.System = append(req.System, anthropic.TextBlockParam{
+			Text: text,
+		})
+	}
+	if req.Metadata.UserID.Valid() {
+		m := ParseMetadataUserID(req.Metadata.UserID.String())
+		if m != nil {
+			m.Fix(extra)
+			s := m.Format()
+			req.Metadata.UserID = param.NewOpt(s)
 		}
-		if len(r.System) > 0 {
-			if strings.Contains(r.System[0].Text, "x-anthropic-billing-header") {
-				r.System[0].Text = fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ClaudeCodeVersion, GenHex4())
-			}
+	} else {
+		m := BuildMetadataUserID(extra)
+		if m != nil {
+			s := FormatMetadataUserID(m)
+			req.Metadata.UserID = param.NewOpt(s)
 		}
-		if r.Metadata.UserID.Valid() {
-			m := ParseMetadataUserID(r.Metadata.UserID.String())
-			if m != nil {
-				m.Fix(extra)
-				s := m.Format()
-				r.Metadata.UserID = param.NewOpt(s)
-			}
-		} else {
-			m := BuildMetadataUserID(extra)
-			if m != nil {
-				s := FormatMetadataUserID(m)
-				r.Metadata.UserID = param.NewOpt(s)
-			}
-		}
-		return r
-	default:
+	}
+	return req
+}
+
+// ApplyAnthropicBetaMetadataTransform injects OAuth user_id into Anthropic beta request metadata.
+// This adds metadata.user_id in JSON format for Anthropic API tracking.
+//
+// Note: Only injects metadata when provider is OAuth and has valid UserID.
+func ApplyAnthropicBetaMetadataTransform(req *anthropic.BetaMessageNewParams, extra map[string]any) *anthropic.BetaMessageNewParams {
+	if req == nil {
 		return req
 	}
+
+	text := fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ClaudeCodeVersion, GenHex4())
+	if len(req.System) > 0 {
+		if strings.Contains(req.System[0].Text, "x-anthropic-billing-header") {
+			req.System[0].Text = text
+		} else {
+			req.System = append(
+				[]anthropic.BetaTextBlockParam{
+					{Text: text},
+				},
+				req.System...,
+			)
+		}
+	} else {
+		req.System = append(req.System, anthropic.BetaTextBlockParam{
+			Text: text,
+		})
+	}
+	if req.Metadata.UserID.Valid() {
+		m := ParseMetadataUserID(req.Metadata.UserID.String())
+		if m != nil {
+			m.Fix(extra)
+			s := m.Format()
+			req.Metadata.UserID = param.NewOpt(s)
+		}
+	} else {
+		m := BuildMetadataUserID(extra)
+		if m != nil {
+			s := FormatMetadataUserID(m)
+			req.Metadata.UserID = param.NewOpt(s)
+		}
+	}
+	return req
 }
 
 func GenHex4() string {
