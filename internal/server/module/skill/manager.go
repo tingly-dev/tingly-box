@@ -288,6 +288,60 @@ func getDefaultScanPatterns() []string {
 	return []string{"**/*.md"}
 }
 
+func isSkillEntryFile(path string) bool {
+	return strings.EqualFold(filepath.Base(path), "SKILL.md")
+}
+
+func buildSkillFromEntry(entryPath string, info os.FileInfo, content string) typ.Skill {
+	entryExt := filepath.Ext(info.Name())
+	skillPath := entryPath
+	displayName := info.Name()
+	idSeed := entryPath
+	if entryExt != "" {
+		displayName = displayName[:len(displayName)-len(entryExt)]
+	}
+
+	if isSkillEntryFile(entryPath) {
+		skillPath = filepath.Dir(entryPath)
+		displayName = filepath.Base(skillPath)
+		idSeed = skillPath
+	}
+
+	hash := sha256.Sum256([]byte(idSeed))
+	stableID := hex.EncodeToString(hash[:])[:16]
+
+	return typ.Skill{
+		ID:          stableID,
+		Name:        displayName,
+		Filename:    filepath.Base(entryPath),
+		Path:        skillPath,
+		EntryPath:   entryPath,
+		LocationID:  "", // Set by caller
+		FileType:    entryExt,
+		Description: parseSkillDescription(content),
+		Size:        info.Size(),
+		ModifiedAt:  info.ModTime(),
+	}
+}
+
+func resolveSkillContentPath(skillPath string) (string, error) {
+	info, err := os.Stat(skillPath)
+	if err != nil {
+		return "", err
+	}
+
+	if !info.IsDir() {
+		return skillPath, nil
+	}
+
+	entryPath := filepath.Join(skillPath, "SKILL.md")
+	if _, err := os.Stat(entryPath); err == nil {
+		return entryPath, nil
+	}
+
+	return "", fmt.Errorf("skill entry file not found in directory: %s", skillPath)
+}
+
 // scanDirectoryForSkills scans a directory for skill files using glob patterns
 func scanDirectoryForSkills(dirPath string, patterns []string) ([]typ.Skill, error) {
 	var skills []typ.Skill
@@ -307,6 +361,7 @@ func scanDirectoryForSkills(dirPath string, patterns []string) ([]typ.Skill, err
 
 	// Track files we've already added to avoid duplicates
 	seenFiles := make(map[string]bool)
+	seenSkills := make(map[string]bool)
 
 	// Use doublestar.FilepathGlob for each pattern (works with OS filesystem directly)
 	for _, pattern := range patterns {
@@ -358,13 +413,6 @@ func scanDirectoryForSkills(dirPath string, patterns []string) ([]typ.Skill, err
 
 			seenFiles[fullPath] = true
 
-			ext := filepath.Ext(info.Name())
-			nameWithoutExt := info.Name()[:len(info.Name())-len(ext)]
-
-			// Generate stable ID from file path (SHA256 hash, truncated to 16 chars for brevity)
-			hash := sha256.Sum256([]byte(fullPath))
-			stableID := hex.EncodeToString(hash[:])[:16]
-
 			// Read file content to extract description
 			content, err := os.ReadFile(fullPath)
 			description := ""
@@ -372,17 +420,15 @@ func scanDirectoryForSkills(dirPath string, patterns []string) ([]typ.Skill, err
 				description = parseSkillDescription(string(content))
 			}
 
-			skill := typ.Skill{
-				ID:          stableID,
-				Name:        nameWithoutExt,
-				Filename:    info.Name(),
-				Path:        fullPath,
-				LocationID:  "", // Set by caller
-				FileType:    ext,
-				Description: description,
-				Size:        info.Size(),
-				ModifiedAt:  info.ModTime(),
+			skill := buildSkillFromEntry(fullPath, info, string(content))
+			if description != "" {
+				skill.Description = description
 			}
+
+			if seenSkills[skill.Path] {
+				continue
+			}
+			seenSkills[skill.Path] = true
 
 			skills = append(skills, skill)
 		}
@@ -687,42 +733,26 @@ func (sm *SkillManager) GetSkillContent(locationID, skillID, skillPath string) (
 
 	// If skillPath is provided, use it directly
 	if skillPath != "" {
-		// Verify the file exists
-		if _, err := os.Stat(skillPath); os.IsNotExist(err) {
-			return nil, fmt.Errorf("skill file not found at path: %s", skillPath)
+		contentPath, err := resolveSkillContentPath(skillPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, fmt.Errorf("skill file not found at path: %s", skillPath)
+			}
+			return nil, err
 		}
 
 		// Read file content
-		content, err := os.ReadFile(skillPath)
+		content, err := os.ReadFile(contentPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read skill file: %w", err)
 		}
 
 		// Get file info
-		info, _ := os.Stat(skillPath)
-		ext := filepath.Ext(skillPath)
-		nameWithoutExt := filepath.Base(skillPath)
-		if ext != "" {
-			nameWithoutExt = nameWithoutExt[:len(nameWithoutExt)-len(ext)]
-		}
-
-		// Generate stable ID
-		hash := sha256.Sum256([]byte(skillPath))
-		stableID := hex.EncodeToString(hash[:])[:16]
-
-		skill := &typ.Skill{
-			ID:          stableID,
-			Name:        nameWithoutExt,
-			Filename:    filepath.Base(skillPath),
-			Path:        skillPath,
-			LocationID:  locationID,
-			FileType:    ext,
-			Description: parseSkillDescription(string(content)),
-			Size:        info.Size(),
-			ModifiedAt:  info.ModTime(),
-			Content:     string(content),
-		}
-		return skill, nil
+		info, _ := os.Stat(contentPath)
+		skill := buildSkillFromEntry(contentPath, info, string(content))
+		skill.LocationID = locationID
+		skill.Content = string(content)
+		return &skill, nil
 	}
 
 	// Otherwise, scan location to find by ID
@@ -744,8 +774,13 @@ func (sm *SkillManager) GetSkillContent(locationID, skillID, skillPath string) (
 		return nil, fmt.Errorf("skill with ID '%s' not found", skillID)
 	}
 
+	contentPath := targetSkill.EntryPath
+	if contentPath == "" {
+		contentPath = targetSkill.Path
+	}
+
 	// Read file content
-	content, err := os.ReadFile(targetSkill.Path)
+	content, err := os.ReadFile(contentPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read skill file: %w", err)
 	}

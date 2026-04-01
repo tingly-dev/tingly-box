@@ -102,7 +102,8 @@ const SkillListDialog = ({ open, location, onClose, onSkillClick }: SkillListDia
     const filteredSkills = skills.filter(
         (skill) =>
             skill.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            skill.filename.toLowerCase().includes(searchQuery.toLowerCase())
+            skill.filename.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            skill.path.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     if (!location) return null;
@@ -235,7 +236,7 @@ const SkillListDialog = ({ open, location, onClose, onSkillClick }: SkillListDia
                                                                 variant="caption"
                                                                 color="text.secondary"
                                                             >
-                                                                {skill.filename}
+                                                                {skill.path}
                                                             </Typography>
                                                             <Typography
                                                                 variant="caption"

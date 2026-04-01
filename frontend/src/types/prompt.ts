@@ -73,9 +73,10 @@ export interface SkillLocation {
 
 export interface Skill {
   id: string;
-  name: string;              // From filename
-  filename: string;          // Full filename with extension
-  path: string;              // Full file path
+  name: string;              // Directory name for bundled skills, filename stem for standalone files
+  filename: string;          // Entry filename with extension
+  path: string;              // Skill directory path or standalone file path
+  entry_path?: string;       // Entry markdown file path when skill is directory-backed
   location_id: string;       // Backend uses snake_case
   file_type: string;         // Backend uses snake_case
   description?: string;

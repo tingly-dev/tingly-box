@@ -58,7 +58,7 @@ const SkillDetailDialog = ({ open, skill, location, onClose }: SkillDetailDialog
             const result = await api.getSkillContent(
                 location.id,
                 skill.id,
-                skill.path
+                skill.entry_path || skill.path
             );
             if (result.success && result.data) {
                 setContent(result.data.content || '');
@@ -130,7 +130,7 @@ const SkillDetailDialog = ({ open, skill, location, onClose }: SkillDetailDialog
                                 {skill.name}
                             </Typography>
                             <Typography variant="caption" color="text.secondary" noWrap>
-                                {skill.filename}
+                                {skill.path}
                             </Typography>
                         </Box>
                     </Box>

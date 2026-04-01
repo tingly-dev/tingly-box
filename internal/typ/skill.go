@@ -67,12 +67,13 @@ type SkillLocation struct {
 	GroupingStrategy *GroupingStrategy `json:"grouping_strategy,omitempty"`
 }
 
-// Skill represents a single skill file
+// Skill represents one logical skill, typically backed by a directory with an entry markdown file.
 type Skill struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
 	Filename    string    `json:"filename"`
 	Path        string    `json:"path"`
+	EntryPath   string    `json:"entry_path,omitempty"`
 	LocationID  string    `json:"location_id"`
 	FileType    string    `json:"file_type"`
 	Description string    `json:"description,omitempty"`
