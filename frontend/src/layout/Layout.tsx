@@ -1,5 +1,4 @@
 import { OpenAI, Anthropic, Claude, OpenCode, Xcode, VSCode, Telegram, Feishu, Lark, DingTalk, Weixin } from '../components/BrandIcons';
-import tingyIcon from '../assets/logos/icon.png';
 import {
     AccountCircle as AccountIcon,
     Add as AddIcon,
@@ -500,9 +499,14 @@ const Layout = ({ children }: LayoutProps) => {
                             },
                         }}
                     >
-                        <img src={tingyIcon} alt="Tingly-Box" style={{ width: 36, height: 36, borderRadius: 8 }} />
-                    </Box>
-                </Tooltip>
+                        <Box
+                            component="img"
+                            src="/icon.svg"
+                            alt="Tingly-Box"
+                            sx={{ width: 36, height: 36, borderRadius: 8 }}
+                        />
+                        </Box>
+                    </Tooltip>
             </Box>
 
             {/* Activity Icons */}
