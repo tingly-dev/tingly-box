@@ -211,6 +211,9 @@ tasks:
             cd - > /dev/null
           fi
         done
+      - |
+        git submodule sync
+        git submodule update --remote
 
   changelog:
     cmds:
