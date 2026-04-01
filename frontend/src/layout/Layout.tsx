@@ -646,11 +646,14 @@ const Layout = ({ children }: LayoutProps) => {
             {/* Bottom Section: User/About Icon */}
             <Box
                 sx={{
-                    py: 1,
+                    py: 0.5,
                     borderTop: '1px solid',
                     borderColor: 'divider',
                     display: 'flex',
                     flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
                     gap: 0.5,
                     height: footerHeight,
                 }}
@@ -658,31 +661,28 @@ const Layout = ({ children }: LayoutProps) => {
                 <Tooltip title="Click" placement="right" arrow>
                     <ListItemButton
                         onClick={handleEasterEgg}
-                        sx={activityItemSx({
+                        sx={{
+                            minHeight: 48,
+                            mx: 0.5,
+                            px: activityItemPaddingX,
+                            py: 0.75,
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 0.25,
+                            position: 'relative',
+                            color: 'text.secondary',
+                            borderRadius: activityItemRadius,
+                            cursor: 'pointer',
                             '&:hover': {
                                 bgcolor: 'action.hover',
                                 color: 'text.primary',
                             },
-                        })}
+                        }}
                     >
                         <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                            <AccountIcon sx={{ fontSize: 22 }} />
+                            <AccountIcon sx={{ fontSize: 20 }} />
                         </ListItemIcon>
-                        <Typography
-                            variant="caption"
-                            sx={{
-                                fontSize: '0.65rem',
-                                fontWeight: 400,
-                                color: 'inherit',
-                                textAlign: 'center',
-                                lineHeight: 1.2,
-                                maxWidth: '100%',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                            }}
-                        >
-                        </Typography>
                     </ListItemButton>
                 </Tooltip>
             </Box>
@@ -905,9 +905,9 @@ const Layout = ({ children }: LayoutProps) => {
     );
 
     return (
-        <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
+        <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', backgroundColor: '#f8f9fa' }}>
             {/* Desktop Layout */}
-            <Box component="nav" sx={{ display: { xs: 'none', md: 'block' } }}>
+            <Box component="nav" sx={{ display: { xs: 'none', md: 'flex' }, height: '100%' }}>
                 {desktopNavigation}
             </Box>
 
