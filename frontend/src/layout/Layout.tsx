@@ -14,12 +14,10 @@ import {
     ListAlt as LogsIcon,
     Menu as MenuIcon,
     NewReleases,
-    Psychology as PromptIcon,
     Lan as RemoteIcon,
     Bolt as SkillIcon,
     Settings as SystemIcon,
     Today as TodayIcon,
-    Send as UserPromptIcon,
     Extension as VSCodeIcon,
     Rule,
     History as HistoryIcon,
@@ -109,7 +107,7 @@ const Layout = ({ children }: LayoutProps) => {
     const navigate = useNavigate();
     const { hasUpdate, currentVersion, showUpdateDialog } = useAppVersion();
     const { isHealthy, showDisconnectDialog } = useHealth();
-    const { skillUser, skillIde, enableGuardrails} = useFeatureFlags();
+    const { enableGuardrails } = useFeatureFlags();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
     const { profiles, refresh } = useProfileContext();
@@ -162,26 +160,6 @@ const Layout = ({ children }: LayoutProps) => {
     const isChildActive = (children?: NavItem[]) => {
         return children?.some(item => isActive(item.path)) ?? false;
     };
-
-    // Build prompt menu items based on feature flags
-    const promptMenuItems = useMemo(() => {
-        const items: NavItem[] = [];
-        if (skillUser) {
-            items.push({
-                path: '/prompt/user',
-                label: 'User Request',
-                icon: <UserPromptIcon sx={{ fontSize: 20 }} />,
-            });
-        }
-        if (skillIde) {
-            items.push({
-                path: '/prompt/skill',
-                label: 'Skills',
-                icon: <SkillIcon sx={{ fontSize: 20 }} />,
-            });
-        }
-        return items;
-    }, [skillUser, skillIde]);
 
     // Activity bar items
     const activityItems: ActivityItem[] = useMemo(() => {
@@ -297,13 +275,6 @@ const Layout = ({ children }: LayoutProps) => {
                     },
                 ],
             },
-            // Only add Prompt menu if full edition
-            ...(isFullEdition && promptMenuItems.length > 0 ? [{
-                key: 'prompt' as const,
-                icon: <PromptIcon sx={{ fontSize: 22 }} />,
-                label: 'Prompt',
-                children: promptMenuItems,
-            }] : []),
             // Only add Remote menu if full edition
             ...(isFullEdition ? [{
                 key: 'remote-control' as const,
@@ -357,6 +328,11 @@ const Layout = ({ children }: LayoutProps) => {
                         path: '/guardrails',
                         label: 'Overview',
                         icon: <AccessControlIcon sx={{ fontSize: 20 }} />,
+                    },
+                    {
+                        path: '/guardrails/skill-scan',
+                        label: 'Skill Scan',
+                        icon: <SkillIcon sx={{ fontSize: 20 }} />,
                     },
                     {
                         path: '/guardrails/groups',
@@ -416,7 +392,7 @@ const Layout = ({ children }: LayoutProps) => {
             },
         ];
         return items;
-    }, [t, promptMenuItems, enableGuardrails, profiles]);
+    }, [t, enableGuardrails, profiles]);
 
     // Find current active activity
     const activeActivity = useMemo(() => {

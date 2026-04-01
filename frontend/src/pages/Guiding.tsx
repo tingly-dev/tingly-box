@@ -4,8 +4,7 @@ import { OpenAI, Anthropic, ClaudeCode } from '../components/BrandIcons';
 import { Settings as SystemIcon, Code as CodeIcon, BarChart as BarChartIcon, Lock as LockIcon, AutoAwesome } from '@mui/icons-material';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useTranslation } from 'react-i18next';
-import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
-import { Send as UserPromptIcon, Bolt as SkillIcon } from '@mui/icons-material';
+import { Bolt as SkillIcon, Security as GuardrailsIcon } from '@mui/icons-material';
 
 interface NavCard {
     title: string;
@@ -23,28 +22,16 @@ interface CardGroup {
 const Guiding = () => {
     const navigate = useNavigate();
     const { t } = useTranslation();
-    const { skillUser, skillIde } = useFeatureFlags();
 
-    // Build prompt cards based on feature flags
-    const promptCards: NavCard[] = [];
-    if (skillUser) {
-        promptCards.push({
-            title: 'User Request',
-            description: 'Manage user prompt templates',
-            path: '/prompt/user',
-            icon: <UserPromptIcon sx={{ fontSize: 40 }} />,
-            color: '#9333ea',
-        });
-    }
-    if (skillIde) {
-        promptCards.push({
-            title: 'Skills',
-            description: 'Configure AI skills and commands',
-            path: '/prompt/skill',
+    const guardrailsCards: NavCard[] = [
+        {
+            title: 'Skill Scan',
+            description: 'Scan local AI skills and review their contents',
+            path: '/guardrails/skill-scan',
             icon: <SkillIcon sx={{ fontSize: 40 }} />,
             color: '#e11d48',
-        });
-    }
+        },
+    ];
 
     const cardGroups: CardGroup[] = [
         {
@@ -106,9 +93,18 @@ const Guiding = () => {
                 },
             ],
         },
-        ...(promptCards.length > 0 ? [{
-            categoryLabel: 'Prompt',
-            cards: promptCards,
+        ...(guardrailsCards.length > 0 ? [{
+            categoryLabel: 'Guardrails',
+            cards: [
+                {
+                    title: 'Guardrails',
+                    description: 'Manage guardrail policies and review enforcement state',
+                    path: '/guardrails',
+                    icon: <GuardrailsIcon sx={{ fontSize: 40 }} />,
+                    color: '#0f766e',
+                },
+                ...guardrailsCards,
+            ],
         }] : []),
         {
             categoryLabel: 'Credentials',

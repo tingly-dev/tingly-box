@@ -38,8 +38,7 @@ import GuardrailsHistoryPage from './pages/guardrails/HistoryPage';
 import DashboardPage from './pages/DashboardPage';
 import OverviewPage from './pages/overview/OverviewPage';
 import ModelTestPage from './pages/ModelTestPage';
-import UserPage from './pages/prompt/UserPage';
-import SkillPage from './pages/prompt/SkillPage';
+import SkillScanPage from './pages/guardrails/SkillScanPage';
 import CommandPage from './pages/prompt/CommandPage';
 import RemoteCoderPage from './pages/remote-coder/RemoteCoderPage';
 import RemoteCoderSessionsPage from './pages/remote-coder/RemoteCoderSessionsPage';
@@ -310,8 +309,7 @@ function AppContent() {
                     <Route path="/overview/:timeRange" element={<OverviewPage />} />
                     <Route path="/model-test/:providerUuid" element={<ModelTestPage />} />
                     {/* Prompt routes */}
-                    <Route path="/prompt/user" element={<UserPage />} />
-                    <Route path="/prompt/skill" element={<SkillPage />} />
+                    <Route path="/prompt/skill" element={<Navigate to="/guardrails/skill-scan" replace />} />
                     <Route path="/prompt/command" element={<CommandPage />} />
                     {/* Remote Control routes */}
                     <Route path="/remote-coder" element={<Navigate to="/remote-coder/chat" replace />} />
@@ -332,6 +330,7 @@ function AppContent() {
                     <Route path="/remote-control/slack" element={<SlackPage />} />
                     {/* Guardrails */}
                     <Route path="/guardrails" element={<GuardrailsPage />} />
+                    <Route path="/guardrails/skill-scan" element={<SkillScanPage />} />
                     <Route path="/guardrails/groups" element={<GuardrailsGroupsPage />} />
                     <Route path="/guardrails/rules" element={<GuardrailsRulesPage />} />
                     <Route path="/guardrails/credentials" element={<GuardrailsCredentialsPage />} />
