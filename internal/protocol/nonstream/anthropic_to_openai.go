@@ -8,10 +8,7 @@ import (
 )
 
 // ConvertAnthropicToOpenAIResponse converts an Anthropic response to OpenAI format
-func ConvertAnthropicToOpenAIResponse(
-	anthropicResp *anthropic.Message,
-	responseModel string,
-) map[string]interface{} {
+func ConvertAnthropicToOpenAIResponse(anthropicResp *anthropic.BetaMessage, responseModel string) map[string]interface{} {
 
 	message := make(map[string]interface{})
 	var toolCalls []map[string]interface{}
