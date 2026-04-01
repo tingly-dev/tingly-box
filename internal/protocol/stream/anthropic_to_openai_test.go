@@ -41,11 +41,11 @@ func TestHandleAnthropicToOpenAIStreamResponse(t *testing.T) {
 	}
 
 	// Create a streaming request
-	stream := client.Messages.NewStreaming(context.Background(), anthropic.MessageNewParams{
+	stream := client.Beta.Messages.NewStreaming(context.Background(), anthropic.BetaMessageNewParams{
 		Model:     anthropic.Model(model),
 		MaxTokens: int64(100),
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock("What's the weather like in London?")),
+		Messages: []anthropic.BetaMessageParam{
+			anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("What's the weather like in London?")),
 		},
 		Tools: request.ConvertOpenAIToAnthropicTools([]openai.ChatCompletionToolUnionParam{NewExampleTool()}),
 	})
@@ -56,7 +56,7 @@ func TestHandleAnthropicToOpenAIStreamResponse(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 
 	// Run the handler
-	_, _, err := HandleAnthropicToOpenAIStreamResponse(c, nil, stream, model, false)
+	_, _, err := AnthropicToOpenAIStream(c, nil, stream, model, false)
 	require.NoError(t, err)
 
 	// Verify the response

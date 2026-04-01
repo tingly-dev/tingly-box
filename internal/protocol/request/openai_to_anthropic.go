@@ -8,8 +8,8 @@ import (
 )
 
 // ConvertOpenAIToAnthropicRequest converts OpenAI ChatCompletionNewParams to Anthropic SDK format
-func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaultMaxTokens int64) *anthropic.MessageNewParams {
-	messages := make([]anthropic.MessageParam, 0, len(req.Messages))
+func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaultMaxTokens int64) *anthropic.BetaMessageNewParams {
+	messages := make([]anthropic.BetaMessageParam, 0, len(req.Messages))
 	var systemParts []string
 
 	for _, msg := range req.Messages {
@@ -32,33 +32,33 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 
 		case "user":
 			// User message
-			var blocks []anthropic.ContentBlockParamUnion
+			var blocks []anthropic.BetaContentBlockParamUnion
 
 			if content, ok := m["content"].(string); ok && content != "" {
 				// Simple text content
-				blocks = append(blocks, anthropic.NewTextBlock(content))
+				blocks = append(blocks, anthropic.NewBetaTextBlock(content))
 			} else if contentParts, ok := m["content"].([]interface{}); ok {
 				// Array of content parts (multimodal)
 				for _, part := range contentParts {
 					if partMap, ok := part.(map[string]interface{}); ok {
 						if text, ok := partMap["text"].(string); ok {
-							blocks = append(blocks, anthropic.NewTextBlock(text))
+							blocks = append(blocks, anthropic.NewBetaTextBlock(text))
 						}
 					}
 				}
 			}
 
 			if len(blocks) > 0 {
-				messages = append(messages, anthropic.NewUserMessage(blocks...))
+				messages = append(messages, anthropic.NewBetaUserMessage(blocks...))
 			}
 
 		case "assistant":
 			// Assistant message
-			var blocks []anthropic.ContentBlockParamUnion
+			var blocks []anthropic.BetaContentBlockParamUnion
 
 			// Add text content if present
 			if content, ok := m["content"].(string); ok && content != "" {
-				blocks = append(blocks, anthropic.NewTextBlock(content))
+				blocks = append(blocks, anthropic.NewBetaTextBlock(content))
 			}
 
 			// Convert tool calls to tool_use blocks
@@ -75,7 +75,7 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 							}
 
 							blocks = append(blocks,
-								anthropic.NewToolUseBlock(id, argsInput, name),
+								anthropic.NewBetaToolUseBlock(id, argsInput, name),
 							)
 						}
 					}
@@ -83,7 +83,10 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 			}
 
 			if len(blocks) > 0 {
-				messages = append(messages, anthropic.NewAssistantMessage(blocks...))
+				messages = append(messages, anthropic.BetaMessageParam{
+					Content: blocks,
+					Role:    anthropic.BetaMessageParamRoleAssistant,
+				})
 			}
 
 		case "tool":
@@ -91,10 +94,10 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 			toolCallID, _ := m["tool_call_id"].(string)
 			content, _ := m["content"].(string)
 
-			blocks := []anthropic.ContentBlockParamUnion{
-				anthropic.NewToolResultBlock(toolCallID, content, false),
+			blocks := []anthropic.BetaContentBlockParamUnion{
+				anthropic.NewBetaToolResultBlock(toolCallID, content, false),
 			}
-			messages = append(messages, anthropic.NewUserMessage(blocks...))
+			messages = append(messages, anthropic.NewBetaUserMessage(blocks...))
 		}
 	}
 
@@ -104,7 +107,7 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 		maxTokens = defaultMaxTokens
 	}
 
-	params := &anthropic.MessageNewParams{
+	params := &anthropic.BetaMessageNewParams{
 		Model:     anthropic.Model(req.Model),
 		Messages:  messages,
 		MaxTokens: maxTokens,
@@ -112,9 +115,9 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 
 	// Add system parts if any
 	if len(systemParts) > 0 {
-		params.System = make([]anthropic.TextBlockParam, len(systemParts))
+		params.System = make([]anthropic.BetaTextBlockParam, len(systemParts))
 		for i, part := range systemParts {
-			params.System[i] = anthropic.TextBlockParam{Text: part}
+			params.System[i] = anthropic.BetaTextBlockParam{Text: part}
 		}
 	}
 
@@ -129,13 +132,13 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 	return params
 }
 
-func ConvertOpenAIToAnthropicTools(tools []openai.ChatCompletionToolUnionParam) []anthropic.ToolUnionParam {
+func ConvertOpenAIToAnthropicTools(tools []openai.ChatCompletionToolUnionParam) []anthropic.BetaToolUnionParam {
 
 	if len(tools) == 0 {
 		return nil
 	}
 
-	out := make([]anthropic.ToolUnionParam, 0, len(tools))
+	out := make([]anthropic.BetaToolUnionParam, 0, len(tools))
 
 	for _, t := range tools {
 		fn := t.GetFunction()
@@ -149,14 +152,14 @@ func ConvertOpenAIToAnthropicTools(tools []openai.ChatCompletionToolUnionParam) 
 			if bytes, err := json.Marshal(fn.Parameters); err == nil {
 				if err := json.Unmarshal(bytes, &inputSchema); err == nil {
 					// Create tool with input schema
-					var tool anthropic.ToolUnionParam
+					var tool anthropic.BetaToolUnionParam
 					if inputSchema != nil {
 						// Convert map[string]interface{} to the proper structure
 						if schemaBytes, err := json.Marshal(inputSchema); err == nil {
-							var schemaParam anthropic.ToolInputSchemaParam
+							var schemaParam anthropic.BetaToolInputSchemaParam
 							if err := json.Unmarshal(schemaBytes, &schemaParam); err == nil {
-								tool = anthropic.ToolUnionParam{
-									OfTool: &anthropic.ToolParam{
+								tool = anthropic.BetaToolUnionParam{
+									OfTool: &anthropic.BetaToolParam{
 										Name:        fn.Name,
 										InputSchema: schemaParam,
 									},
@@ -164,8 +167,8 @@ func ConvertOpenAIToAnthropicTools(tools []openai.ChatCompletionToolUnionParam) 
 							}
 						}
 					} else {
-						tool = anthropic.ToolUnionParam{
-							OfTool: &anthropic.ToolParam{
+						tool = anthropic.BetaToolUnionParam{
+							OfTool: &anthropic.BetaToolParam{
 								Name: fn.Name,
 							},
 						}
@@ -184,39 +187,39 @@ func ConvertOpenAIToAnthropicTools(tools []openai.ChatCompletionToolUnionParam) 
 	return out
 }
 
-func ConvertOpenAIToAnthropicToolChoice(tc *openai.ChatCompletionToolChoiceOptionUnionParam) anthropic.ToolChoiceUnionParam {
+func ConvertOpenAIToAnthropicToolChoice(tc *openai.ChatCompletionToolChoiceOptionUnionParam) anthropic.BetaToolChoiceUnionParam {
 
 	// Check the different variants
 	if auto := tc.OfAuto.Value; auto != "" {
 		if auto == "auto" {
-			return anthropic.ToolChoiceUnionParam{
-				OfAuto: &anthropic.ToolChoiceAutoParam{},
+			return anthropic.BetaToolChoiceUnionParam{
+				OfAuto: &anthropic.BetaToolChoiceAutoParam{},
 			}
 		}
 	}
 
 	if tc.OfAllowedTools != nil {
 		// Default to auto for allowed tools
-		return anthropic.ToolChoiceUnionParam{
-			OfAuto: &anthropic.ToolChoiceAutoParam{},
+		return anthropic.BetaToolChoiceUnionParam{
+			OfAuto: &anthropic.BetaToolChoiceAutoParam{},
 		}
 	}
 
 	if funcChoice := tc.OfFunctionToolChoice; funcChoice != nil {
 		if name := funcChoice.Function.Name; name != "" {
-			return anthropic.ToolChoiceParamOfTool(name)
+			return anthropic.BetaToolChoiceParamOfTool(name)
 		}
 	}
 
 	if tc.OfCustomToolChoice != nil {
 		// Default to auto for custom tool choice
-		return anthropic.ToolChoiceUnionParam{
-			OfAuto: &anthropic.ToolChoiceAutoParam{},
+		return anthropic.BetaToolChoiceUnionParam{
+			OfAuto: &anthropic.BetaToolChoiceAutoParam{},
 		}
 	}
 
 	// Default to auto
-	return anthropic.ToolChoiceUnionParam{
-		OfAuto: &anthropic.ToolChoiceAutoParam{},
+	return anthropic.BetaToolChoiceUnionParam{
+		OfAuto: &anthropic.BetaToolChoiceAutoParam{},
 	}
 }
