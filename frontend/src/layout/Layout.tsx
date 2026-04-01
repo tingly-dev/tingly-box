@@ -741,19 +741,17 @@ const Layout = ({ children }: LayoutProps) => {
             }}>
                 {sidebarItems.map((item) => {
                     const isAddProfile = item.path === '#add-profile';
-                    return (
-                    <React.Fragment key={item.path}>
-                        {item.divider && <Divider sx={{ mx: 2, my: 1 }} />}
-                        <ListItem disablePadding>
-                            <ListItemButton
-                                {...(isAddProfile
-                                    ? { onClick: handleAddProfileClick }
-                                    : { component: RouterLink, to: item.path, onClick: () => setMobileOpen(false) }
-                                )}
-                                sx={{
-                                    mx: 1.5,
-                                    borderRadius: 1.25,
-                                    py: 1.25,
+                    const button = (
+                    <ListItem disablePadding>
+                        <ListItemButton
+                            {...(isAddProfile
+                                ? { onClick: handleAddProfileClick }
+                                : { component: RouterLink, to: item.path, onClick: () => setMobileOpen(false) }
+                            )}
+                            sx={{
+                                mx: 1.5,
+                                borderRadius: 1.25,
+                                py: 1.25,
                                     px: 2,
                                     color: 'text.secondary',
                                     position: 'relative',
@@ -828,6 +826,15 @@ const Layout = ({ children }: LayoutProps) => {
                                 />
                             </ListItemButton>
                         </ListItem>
+                    );
+                    return (
+                    <React.Fragment key={item.path}>
+                        {item.divider && <Divider sx={{ mx: 2, my: 1 }} />}
+                        {isAddProfile ? (
+                            <Tooltip title="Create a new Claude Code profile with custom settings" arrow placement="right">
+                                {button}
+                            </Tooltip>
+                        ) : button}
                     </React.Fragment>
                     );
                 })}
