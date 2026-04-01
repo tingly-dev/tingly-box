@@ -6,8 +6,8 @@ import { Cancel, ContentCopy, Delete, Edit, ListAlt, Route, Visibility } from '@
 import {
     Box,
     Button,
+    Chip,
     Divider,
-    FormControlLabel,
     IconButton,
     Modal,
     Paper,
@@ -176,15 +176,15 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification }: 
 
     return (
         <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
-            <Table>
+            <Table sx={{ tableLayout: 'fixed' }}>
                 <TableHead>
                     <TableRow>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Status</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>Name</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>API Style</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120, maxWidth: 120 }}>API Base URL</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120, maxWidth: 120 }}>API Key</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 80 }}>Proxy</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 90 }}>Status</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 140 }}>Name</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 120 }}>API Style</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 200 }}>API Base URL</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 140 }}>API Key</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 60 }}>Proxy</TableCell>
                         <TableCell sx={{ fontWeight: 600, width: 240 }}>Actions</TableCell>
                     </TableRow>
                 </TableHead>
@@ -194,20 +194,19 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification }: 
                             {/* Status */}
                             <TableCell>
                                 <Stack direction="row" alignItems="center" spacing={1}>
-                                    <FormControlLabel
-                                        control={
-                                            <Switch
-                                                checked={provider.enabled}
-                                                onChange={() => onToggle?.(provider.uuid)}
-                                                size="small"
-                                                color="success"
-                                            />
-                                        }
-                                        label=""
+                                    <Switch
+                                        checked={provider.enabled}
+                                        onChange={() => onToggle?.(provider.uuid)}
+                                        size="small"
+                                        color="success"
                                     />
-                                    <Typography variant="body2" color={provider.enabled ? 'success.main' : 'error.main'}>
-                                        {provider.enabled ? 'Enabled' : 'Disabled'}
-                                    </Typography>
+                                    <Chip
+                                        label={provider.enabled ? 'On' : 'Off'}
+                                        size="small"
+                                        color={provider.enabled ? 'success' : 'default'}
+                                        variant={provider.enabled ? 'filled' : 'outlined'}
+                                        sx={{ height: 22, fontSize: '0.7rem', minWidth: 32 }}
+                                    />
                                 </Stack>
                             </TableCell>
                             {/* Name */}

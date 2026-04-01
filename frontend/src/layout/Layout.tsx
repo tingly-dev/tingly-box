@@ -1,5 +1,4 @@
 import { OpenAI, Anthropic, Claude, OpenCode, Xcode, VSCode, Telegram, Feishu, Lark, DingTalk, Weixin } from '../components/BrandIcons';
-import tingyIcon from '../assets/logos/icon.png';
 import {
     AccountCircle as AccountIcon,
     Add as AddIcon,
@@ -44,7 +43,7 @@ import {
     Typography,
 } from '@mui/material';
 import type { ReactNode } from 'react';
-import React, {useCallback, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useMemo, useRef, useState, useEffect} from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
@@ -87,13 +86,19 @@ const activityItemSx = (extra?: Record<string, unknown>) => ({
     ...extra,
 });
 
-interface NavItem {
+interface NavItemBase {
+    type?: undefined;
     path: string;
     label: string;
     icon?: ReactNode;
     subtitle?: string;
-    divider?: boolean;
 }
+
+interface NavDivider {
+    type: 'divider';
+}
+
+type NavItem = NavItemBase | NavDivider;
 
 interface ActivityItem {
     key: string;
@@ -160,7 +165,7 @@ const Layout = ({ children }: LayoutProps) => {
     };
 
     const isChildActive = (children?: NavItem[]) => {
-        return children?.some(item => isActive(item.path)) ?? false;
+        return children?.some(item => item.type !== 'divider' && isActive(item.path)) ?? false;
     };
 
     // Build prompt menu items based on feature flags
@@ -206,8 +211,8 @@ const Layout = ({ children }: LayoutProps) => {
                         label: 'Heatmap',
                         icon: <GridOnIcon sx={{ fontSize: 20 }} />,
                     },
+                    { type: 'divider' },
                     {
-                        divider: true,
                         path: '/dashboard/today',
                         label: 'Today',
                         icon: <TodayIcon sx={{ fontSize: 20 }} />,
@@ -245,7 +250,6 @@ const Layout = ({ children }: LayoutProps) => {
                 label: t('layout.nav.home'),
                 children: [
                     {
-                        // divider: true,
                         path: '/use-claude-code',
                         subtitle: "default",
                         label: t('layout.nav.useClaudeCode', { defaultValue: 'Claude Code' }),
@@ -257,8 +261,8 @@ const Layout = ({ children }: LayoutProps) => {
                         label: 'Add Profile',
                         icon: <AddIcon sx={{ fontSize: 20 }} />,
                     },
+                    { type: 'divider' },
                     {
-                        divider: true,
                         path: '/use-codex',
                         label: t('layout.nav.useCodex', { defaultValue: 'Codex' }),
                         icon: <OpenAI size={20} />,
@@ -278,8 +282,8 @@ const Layout = ({ children }: LayoutProps) => {
                         label: t('layout.nav.useVSCode', { defaultValue: 'VS Code' }),
                         icon: <VSCode size={20} />,
                     },
+                    { type: 'divider' },
                     {
-                        divider: true,
                         path: '/use-openai',
                         label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }),
                         icon: <OpenAI size={20} />,
@@ -289,8 +293,8 @@ const Layout = ({ children }: LayoutProps) => {
                         label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }),
                         icon: <Anthropic size={20} />,
                     },
+                    { type: 'divider' },
                     {
-                        divider: true,
                         path: '/use-agent',
                         label: 'OpenClaw',
                         icon: <AutoAwesome sx={{ fontSize: 20 }} />,
@@ -303,7 +307,7 @@ const Layout = ({ children }: LayoutProps) => {
                 icon: <PromptIcon sx={{ fontSize: 22 }} />,
                 label: 'Prompt',
                 children: promptMenuItems,
-            }] : []),
+            }] as ActivityItem[] : []),
             // Only add Remote menu if full edition
             ...(isFullEdition ? [{
                 key: 'remote-control' as const,
@@ -320,8 +324,8 @@ const Layout = ({ children }: LayoutProps) => {
                     //     label: 'Agent Assistant',
                     //     icon: <AutoAwesome sx={{fontSize: 20}}/>,
                     // },
+                    { type: 'divider' } as NavDivider,
                     {
-                        divider: true,
                         path: '/remote-control/weixin',
                         label: 'Weixin',
                         icon: <Weixin size={20}/>,
@@ -346,8 +350,8 @@ const Layout = ({ children }: LayoutProps) => {
                         label: 'DingTalk',
                         icon: <DingTalk size={20}/>,
                     },
-                ],
-            }] : []),
+                ] as NavItem[],
+            }] as ActivityItem[] : []),
             ...(enableGuardrails ? [{
                 key: 'guardrails',
                 icon: <AccessControlIcon sx={{ fontSize: 22 }} />,
@@ -378,8 +382,8 @@ const Layout = ({ children }: LayoutProps) => {
                         label: 'History',
                         icon: <HistoryIcon sx={{ fontSize: 20 }} />,
                     },
-                ],
-            }] : []),
+                ] as NavItem[],
+            }] as ActivityItem[] : []),
             {
                 key: 'credential',
                 icon: <LockIcon sx={{ fontSize: 22 }} />,
@@ -418,14 +422,26 @@ const Layout = ({ children }: LayoutProps) => {
         return items;
     }, [t, promptMenuItems, enableGuardrails, profiles]);
 
-    // Find current active activity
+    // Find current active activity (path-based, with sessionStorage fallback)
     const activeActivity = useMemo(() => {
+        // Check path-based match first
         for (const item of activityItems) {
             if (item.path && isActive(item.path)) return item.key;
             if (item.children && isChildActive(item.children)) return item.key;
         }
+        // Fallback: restore last selected activity from sessionStorage
+        const saved = sessionStorage.getItem('layout.activeActivity');
+        if (saved && activityItems.some(item => item.key === saved)) return saved;
         return 'dashboard';
     }, [activityItems, location.pathname]);
+
+    // Persist activity selection + last visited path per activity to sessionStorage
+    useEffect(() => {
+        sessionStorage.setItem('layout.activeActivity', activeActivity);
+        // Save current path as last visited for this activity
+        const key = `layout.activityPath.${activeActivity}`;
+        sessionStorage.setItem(key, location.pathname);
+    }, [activeActivity, location.pathname]);
 
     // Get sidebar items for active activity
     const sidebarItems = useMemo(() => {
@@ -483,9 +499,14 @@ const Layout = ({ children }: LayoutProps) => {
                             },
                         }}
                     >
-                        <img src={tingyIcon} alt="Tingly-Box" style={{ width: 36, height: 36, borderRadius: 8 }} />
-                    </Box>
-                </Tooltip>
+                        <Box
+                            component="img"
+                            src="/icon.svg"
+                            alt="Tingly-Box"
+                            sx={{ width: 36, height: 36, borderRadius: 8 }}
+                        />
+                        </Box>
+                    </Tooltip>
             </Box>
 
             {/* Activity Icons */}
@@ -493,13 +514,16 @@ const Layout = ({ children }: LayoutProps) => {
                 {activityItems.map((item) => {
                     const isActiveItem = activeActivity === item.key;
 
-                    // Handle click: if has path, navigate to path; otherwise navigate to first child
+                    // Handle click: navigate to last visited child, or first nav child as fallback
                     const handleClick = () => {
                         setMobileOpen(false);
-                        if (item.path) {
-                            navigate(item.path);
-                        } else if (item.children && item.children.length > 0) {
-                            navigate(item.children[0].path);
+                        sessionStorage.setItem('layout.activeActivity', item.key);
+                        const firstNavChild = item.children?.find(c => c.type !== 'divider');
+                        const targetPath = item.path
+                            || sessionStorage.getItem(`layout.activityPath.${item.key}`)
+                            || firstNavChild?.path;
+                        if (targetPath) {
+                            navigate(targetPath);
                         }
                     };
 
@@ -646,11 +670,14 @@ const Layout = ({ children }: LayoutProps) => {
             {/* Bottom Section: User/About Icon */}
             <Box
                 sx={{
-                    py: 1,
+                    py: 0.5,
                     borderTop: '1px solid',
                     borderColor: 'divider',
                     display: 'flex',
                     flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
                     gap: 0.5,
                     height: footerHeight,
                 }}
@@ -658,31 +685,28 @@ const Layout = ({ children }: LayoutProps) => {
                 <Tooltip title="Click" placement="right" arrow>
                     <ListItemButton
                         onClick={handleEasterEgg}
-                        sx={activityItemSx({
+                        sx={{
+                            minHeight: 48,
+                            mx: 0.5,
+                            px: activityItemPaddingX,
+                            py: 0.75,
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 0.25,
+                            position: 'relative',
+                            color: 'text.secondary',
+                            borderRadius: activityItemRadius,
+                            cursor: 'pointer',
                             '&:hover': {
                                 bgcolor: 'action.hover',
                                 color: 'text.primary',
                             },
-                        })}
+                        }}
                     >
                         <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                            <AccountIcon sx={{ fontSize: 22 }} />
+                            <AccountIcon sx={{ fontSize: 20 }} />
                         </ListItemIcon>
-                        <Typography
-                            variant="caption"
-                            sx={{
-                                fontSize: '0.65rem',
-                                fontWeight: 400,
-                                color: 'inherit',
-                                textAlign: 'center',
-                                lineHeight: 1.2,
-                                maxWidth: '100%',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                            }}
-                        >
-                        </Typography>
                     </ListItemButton>
                 </Tooltip>
             </Box>
@@ -739,21 +763,22 @@ const Layout = ({ children }: LayoutProps) => {
                     '&:hover': { backgroundColor: 'grey.400' }
                 }
             }}>
-                {sidebarItems.map((item) => {
+                {sidebarItems.map((item, index) => {
+                    if (item.type === 'divider') {
+                        return <Divider key={`divider-${index}`} sx={{ mx: 2, my: 1 }} />;
+                    }
                     const isAddProfile = item.path === '#add-profile';
-                    return (
-                    <React.Fragment key={item.path}>
-                        {item.divider && <Divider sx={{ mx: 2, my: 1 }} />}
-                        <ListItem disablePadding>
-                            <ListItemButton
-                                {...(isAddProfile
-                                    ? { onClick: handleAddProfileClick }
-                                    : { component: RouterLink, to: item.path, onClick: () => setMobileOpen(false) }
-                                )}
-                                sx={{
-                                    mx: 1.5,
-                                    borderRadius: 1.25,
-                                    py: 1.25,
+                    const button = (
+                    <ListItem disablePadding>
+                        <ListItemButton
+                            {...(isAddProfile
+                                ? { onClick: handleAddProfileClick }
+                                : { component: RouterLink, to: item.path, onClick: () => setMobileOpen(false) }
+                            )}
+                            sx={{
+                                mx: 1.5,
+                                borderRadius: 1.25,
+                                py: 1.25,
                                     px: 2,
                                     color: 'text.secondary',
                                     position: 'relative',
@@ -828,6 +853,14 @@ const Layout = ({ children }: LayoutProps) => {
                                 />
                             </ListItemButton>
                         </ListItem>
+                    );
+                    return (
+                    <React.Fragment key={item.path}>
+                        {isAddProfile ? (
+                            <Tooltip title="Create a new Claude Code profile with custom settings" arrow placement="right">
+                                {button}
+                            </Tooltip>
+                        ) : button}
                     </React.Fragment>
                     );
                 })}
@@ -905,9 +938,9 @@ const Layout = ({ children }: LayoutProps) => {
     );
 
     return (
-        <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
+        <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', backgroundColor: '#f8f9fa' }}>
             {/* Desktop Layout */}
-            <Box component="nav" sx={{ display: { xs: 'none', md: 'block' } }}>
+            <Box component="nav" sx={{ display: { xs: 'none', md: 'flex' }, height: '100%' }}>
                 {desktopNavigation}
             </Box>
 
