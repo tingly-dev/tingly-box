@@ -94,8 +94,9 @@ type Server struct {
 	toolInterceptor *toolinterceptor.Interceptor
 
 	// guardrails engine (optional)
-	guardrailsEngine  guardrails.Guardrails
-	guardrailsHistory *serverguardrails.HistoryStore
+	guardrailsEngine            guardrails.Guardrails
+	guardrailsHasActivePolicies bool
+	guardrailsHistory           *serverguardrails.HistoryStore
 
 	// Protected credential aliasing needs a fast request-path lookup from
 	// scenario -> active mask credentials, plus ID -> credential metadata.
