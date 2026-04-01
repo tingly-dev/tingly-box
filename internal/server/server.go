@@ -186,8 +186,15 @@ func (s *Server) initGuardrailsEngine() {
 
 	cfgPath, err := serverguardrails.FindGuardrailsConfig(s.config.ConfigDir)
 	if err != nil {
-		logrus.WithError(err).Warn("Guardrails config not found; guardrails disabled")
-		return
+		if !strings.Contains(err.Error(), "no guardrails config") {
+			logrus.WithError(err).Warn("Failed to locate guardrails config")
+			return
+		}
+		cfgPath, err = s.ensureDefaultGuardrailsConfig()
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to create default guardrails config")
+			return
+		}
 	}
 
 	cfg, err := guardrails.LoadConfig(cfgPath)
@@ -204,6 +211,35 @@ func (s *Server) initGuardrailsEngine() {
 
 	s.setGuardrailsEngine(engine, "guardrails init")
 	logrus.Infof("Guardrails enabled with config: %s", cfgPath)
+}
+
+func (s *Server) ensureDefaultGuardrailsConfig() (string, error) {
+	if s == nil || s.config == nil || s.config.ConfigDir == "" {
+		return "", fmt.Errorf("config directory not set")
+	}
+
+	path := serverguardrails.GetGuardrailsConfigPath(s.config.ConfigDir)
+	enabled := true
+	cfg := guardrails.Config{
+		Groups: []guardrails.PolicyGroup{
+			{
+				ID:      guardrails.DefaultPolicyGroupID,
+				Name:    "Default",
+				Enabled: &enabled,
+			},
+		},
+	}
+
+	data, err := marshalGuardrailsConfig(cfg)
+	if err != nil {
+		return "", err
+	}
+	if err := writeFileAtomic(path, data); err != nil {
+		return "", err
+	}
+
+	logrus.Infof("Created default guardrails config: %s", path)
+	return path, nil
 }
 
 func (s *Server) guardrailsEnabled() bool {
