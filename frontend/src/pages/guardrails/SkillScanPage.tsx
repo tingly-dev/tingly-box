@@ -3,9 +3,7 @@ import {
     AutoFixHigh,
     Code,
     ContentCopy,
-    Delete,
     Description,
-    Edit,
     ExpandLess,
     ExpandMore,
     FolderOpen,
@@ -23,6 +21,7 @@ import {
     Divider,
     IconButton,
     InputAdornment,
+    LinearProgress,
     List,
     ListItem,
     ListItemButton,
@@ -42,7 +41,6 @@ import { getIdeSourceLabel } from '@/constants/ideSources';
 import { api } from '@/services/api';
 import AddSkillLocationDialog from '@/components/prompt/skill/AddSkillLocationDialog';
 import AutoDiscoveryDialog from '@/components/prompt/skill/AutoDiscoveryDialog';
-import uPath from 'upath';
 
 interface AddSkillLocationData {
     name: string;
@@ -50,7 +48,45 @@ interface AddSkillLocationData {
     ide_source: IDESource;
 }
 
-const SkillPage = () => {
+type SourceScanStatus = 'idle' | 'queued' | 'scanning' | 'done' | 'failed';
+
+interface SourceScanState {
+    status: SourceScanStatus;
+    progress: number;
+    scannedSkills?: number;
+    durationMs?: number;
+    lastScannedAt?: number;
+    error?: string;
+}
+
+interface ScanRunState {
+    active: boolean;
+    total: number;
+    completed: number;
+    currentLocationId?: string;
+    startedAt?: number;
+    finishedAt?: number;
+}
+
+const normalizePathLike = (value: string): string => {
+    if (!value) return '';
+    return value
+        .replace(/\\/g, '/')
+        .replace(/\/+/g, '/')
+        .replace(/(^|\/)\.(?=\/|$)/g, '$1');
+};
+
+const splitPathSegments = (value: string): string[] => {
+    const normalized = normalizePathLike(value);
+    if (normalized === '') return [];
+    return normalized.split('/').filter(part => part !== '' && part !== '.');
+};
+
+const normalizePatternForMatch = (value: string): string => {
+    return splitPathSegments(value).join('/');
+};
+
+const SkillScanPage = () => {
     const [locations, setLocations] = useState<SkillLocation[]>([]);
     const [loading, setLoading] = useState(true);
     const [notification, setNotification] = useState<{
@@ -78,9 +114,13 @@ const SkillPage = () => {
 
     // Dialog states
     const [addDialogOpen, setAddDialogOpen] = useState(false);
-    const [addDialogMode, setAddDialogMode] = useState<'add' | 'edit'>('add');
-    const [editLocation, setEditLocation] = useState<SkillLocation | null>(null);
     const [discoveryDialogOpen, setDiscoveryDialogOpen] = useState(false);
+    const [sourceScanStates, setSourceScanStates] = useState<Record<string, SourceScanState>>({});
+    const [scanRun, setScanRun] = useState<ScanRunState>({
+        active: false,
+        total: 0,
+        completed: 0,
+    });
 
     useEffect(() => {
         loadLocations();
@@ -117,7 +157,18 @@ const SkillPage = () => {
         setLoading(true);
         const result = await api.getSkillLocations();
         if (result.success) {
-            setLocations(result.data || []);
+            const nextLocations = result.data || [];
+            setLocations(nextLocations);
+            setSourceScanStates(prev => {
+                const next: Record<string, SourceScanState> = {};
+                nextLocations.forEach((location: SkillLocation) => {
+                    next[location.id] = prev[location.id] || {
+                        status: 'idle',
+                        progress: 0,
+                    };
+                });
+                return next;
+            });
         } else {
             showNotification(`Failed to load locations: ${result.error}`, 'error');
         }
@@ -161,79 +212,20 @@ const SkillPage = () => {
     };
 
     const handleAddClick = () => {
-        setAddDialogMode('add');
-        setEditLocation(null);
         setAddDialogOpen(true);
-    };
-
-    const handleEditClick = (location: SkillLocation, e: React.MouseEvent) => {
-        e.stopPropagation();
-        setAddDialogMode('edit');
-        setEditLocation(location);
-        setAddDialogOpen(true);
-    };
-
-    const handleDeleteClick = (id: string, e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (!confirm('Are you sure you want to delete this location?')) {
-            return;
-        }
-
-        api.removeSkillLocation(id).then((result) => {
-            if (result.success) {
-                showNotification('Location deleted successfully!', 'success');
-                if (selectedLocation?.id === id) {
-                    setSelectedLocation(null);
-                }
-                loadLocations();
-            } else {
-                showNotification(`Failed to delete location: ${result.error}`, 'error');
-            }
-        });
-    };
-
-    const handleRefreshClick = (id: string, e: React.MouseEvent) => {
-        e.stopPropagation();
-        api.refreshSkillLocation(id).then((result) => {
-            if (result.success) {
-                showNotification('Location refreshed successfully!', 'success');
-                loadLocations();
-            } else {
-                showNotification(`Failed to refresh location: ${result.error}`, 'error');
-            }
-        });
     };
 
     const handleAddSubmit = async (data: AddSkillLocationData) => {
-        if (addDialogMode === 'add') {
-            const result = await api.addSkillLocation({
-                name: data.name,
-                path: data.path,
-                ide_source: data.ide_source,
-            });
-            if (result.success) {
-                showNotification('Location added successfully!', 'success');
-                loadLocations();
-            } else {
-                showNotification(`Failed to add location: ${result.error}`, 'error');
-            }
-        } else if (editLocation) {
-            const deleteResult = await api.removeSkillLocation(editLocation.id);
-            if (deleteResult.success) {
-                const addResult = await api.addSkillLocation({
-                    name: data.name,
-                    path: data.path,
-                    ide_source: data.ide_source,
-                });
-                if (addResult.success) {
-                    showNotification('Location updated successfully!', 'success');
-                    loadLocations();
-                } else {
-                    showNotification(`Failed to update location: ${addResult.error}`, 'error');
-                }
-            } else {
-                showNotification(`Failed to update location: ${deleteResult.error}`, 'error');
-            }
+        const result = await api.addSkillLocation({
+            name: data.name,
+            path: data.path,
+            ide_source: data.ide_source,
+        });
+        if (result.success) {
+            showNotification('Location added successfully!', 'success');
+            loadLocations();
+        } else {
+            showNotification(`Failed to add location: ${result.error}`, 'error');
         }
     };
 
@@ -260,6 +252,169 @@ const SkillPage = () => {
             navigator.clipboard.writeText(selectedSkill.path);
             showNotification('Path copied to clipboard!', 'success');
         }
+    };
+
+    const updateLocationSkillCount = (locationId: string, count: number) => {
+        setLocations(prev =>
+            prev.map(loc =>
+                loc.id === locationId
+                    ? { ...loc, skill_count: count }
+                    : loc
+            )
+        );
+    };
+
+    const scanSingleLocation = async (location: SkillLocation, notify = false): Promise<boolean> => {
+        const startedAt = Date.now();
+        let progress = 8;
+        setSourceScanStates(prev => ({
+            ...prev,
+            [location.id]: {
+                ...(prev[location.id] || { status: 'idle', progress: 0 }),
+                status: 'scanning',
+                progress,
+                error: undefined,
+            },
+        }));
+
+        const timer = window.setInterval(() => {
+            progress = Math.min(progress + 7, 88);
+            setSourceScanStates(prev => ({
+                ...prev,
+                [location.id]: {
+                    ...(prev[location.id] || { status: 'scanning', progress }),
+                    status: 'scanning',
+                    progress,
+                },
+            }));
+        }, 160);
+
+        try {
+            const result = await api.refreshSkillLocation(location.id);
+            window.clearInterval(timer);
+
+            if (result.success && result.data) {
+                const scannedSkills = result.data.skills || [];
+                updateLocationSkillCount(location.id, scannedSkills.length);
+
+                if (selectedLocation?.id === location.id) {
+                    setSkills(scannedSkills);
+                }
+
+                setSourceScanStates(prev => ({
+                    ...prev,
+                    [location.id]: {
+                        status: 'done',
+                        progress: 100,
+                        scannedSkills: scannedSkills.length,
+                        durationMs: Date.now() - startedAt,
+                        lastScannedAt: Date.now(),
+                    },
+                }));
+
+                if (notify) {
+                    showNotification('Location scanned successfully!', 'success');
+                }
+                return true;
+            }
+
+                setSourceScanStates(prev => ({
+                    ...prev,
+                    [location.id]: {
+                        status: 'failed',
+                        progress: 100,
+                        error: result.error || 'Scan failed',
+                        durationMs: Date.now() - startedAt,
+                        lastScannedAt: Date.now(),
+                    },
+                }));
+
+            if (notify) {
+                showNotification(`Failed to scan location: ${result.error}`, 'error');
+            }
+            return false;
+        } catch (error) {
+            window.clearInterval(timer);
+            const message = error instanceof Error ? error.message : 'Scan failed';
+            setSourceScanStates(prev => ({
+                ...prev,
+                [location.id]: {
+                    status: 'failed',
+                    progress: 100,
+                    error: message,
+                    durationMs: Date.now() - startedAt,
+                    lastScannedAt: Date.now(),
+                },
+            }));
+            if (notify) {
+                showNotification(`Failed to scan location: ${message}`, 'error');
+            }
+            return false;
+        }
+    };
+
+    const handleScanAll = async () => {
+        if (scanRun.active) {
+            return;
+        }
+
+        if (locations.length === 0) {
+            showNotification('Add or discover at least one location first.', 'error');
+            return;
+        }
+
+        const targets = [...locations];
+        setSourceScanStates(prev => {
+            const next = { ...prev };
+            targets.forEach((location) => {
+                next[location.id] = {
+                    ...(prev[location.id] || { progress: 0 }),
+                    status: 'queued',
+                    progress: 0,
+                    error: undefined,
+                };
+            });
+            return next;
+        });
+        setScanRun({
+            active: true,
+            total: targets.length,
+            completed: 0,
+            currentLocationId: targets[0]?.id,
+            startedAt: Date.now(),
+        });
+
+        let completed = 0;
+        for (const location of targets) {
+            setScanRun(prev => ({
+                ...prev,
+                active: true,
+                total: targets.length,
+                completed,
+                currentLocationId: location.id,
+                startedAt: prev.startedAt || Date.now(),
+            }));
+            await scanSingleLocation(location, false);
+            completed += 1;
+            setScanRun(prev => ({
+                ...prev,
+                active: true,
+                total: targets.length,
+                completed,
+                currentLocationId: location.id,
+                startedAt: prev.startedAt || Date.now(),
+            }));
+        }
+
+        setScanRun(prev => ({
+            ...prev,
+            active: false,
+            total: targets.length,
+            completed,
+            currentLocationId: undefined,
+            finishedAt: Date.now(),
+        }));
+        showNotification(`Scan complete: ${completed} source(s) processed.`, 'success');
     };
 
     // Filter locations
@@ -295,6 +450,28 @@ const SkillPage = () => {
         return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     };
 
+    const formatRelativeTime = (value?: number | Date) => {
+        if (!value) return 'Not scanned yet';
+        const date = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(date.getTime())) return 'Not scanned yet';
+        return date.toLocaleString();
+    };
+
+    const getSourceStatusMeta = (status: SourceScanStatus) => {
+        switch (status) {
+            case 'scanning':
+                return { label: 'Scanning', color: 'warning' as const };
+            case 'queued':
+                return { label: 'Queued', color: 'default' as const };
+            case 'done':
+                return { label: 'Scanned', color: 'success' as const };
+            case 'failed':
+                return { label: 'Failed', color: 'error' as const };
+            default:
+                return { label: 'Ready', color: 'default' as const };
+        }
+    };
+
     const getRelativePath = (skill: Skill, location: SkillLocation): string => {
         const basePath = location.path.endsWith('/') ? location.path : location.path + '/';
         if (skill.path.startsWith(basePath)) {
@@ -305,8 +482,7 @@ const SkillPage = () => {
 
     const getSkillDisplayName = (skill: Skill, location: SkillLocation): string => {
         const relativePath = getRelativePath(skill, location);
-        const normalizedPath = uPath.normalize(relativePath);
-        const parts = uPath.split(normalizedPath);
+        const parts = splitPathSegments(relativePath);
         // If file is in a subdirectory, include parent directory
         if (parts.length > 1) {
             const parentDir = parts[parts.length - 2];
@@ -320,8 +496,7 @@ const SkillPage = () => {
     // Get a two-level display name (last two levels) for flat mode
     const getTwoLevelDisplayName = (skill: Skill, location: SkillLocation): string => {
         const relativePath = getRelativePath(skill, location);
-        const normalizedPath = uPath.normalize(relativePath);
-        const parts = uPath.split(normalizedPath);
+        const parts = splitPathSegments(relativePath);
 
         // Get last two levels: file and its parent
         if (parts.length >= 2) {
@@ -340,7 +515,10 @@ const SkillPage = () => {
     const getGroupKeyFromPattern = (pattern: string, pathParts: string[]): { groupKey: string; matched: boolean } => {
         // Build path string and find pattern
         const pathStr = pathParts.join('/');
-        const normalizedPattern = uPath.normalize(pattern);
+        const normalizedPattern = normalizePatternForMatch(pattern);
+        if (normalizedPattern === '') {
+            return { groupKey: '', matched: false };
+        }
         const patternIndex = pathStr.indexOf(normalizedPattern);
 
         if (patternIndex === -1) {
@@ -386,8 +564,7 @@ const SkillPage = () => {
 
             for (const skill of skills) {
                 const relativePath = getRelativePath(skill, location);
-                const normalizedPath = uPath.normalize(relativePath);
-                const parts = uPath.split(normalizedPath);
+                const parts = splitPathSegments(relativePath);
 
                 const { groupKey, matched } = getGroupKeyFromPattern(pattern, parts);
 
@@ -443,8 +620,7 @@ const SkillPage = () => {
 
         for (const skill of skills) {
             const relativePath = getRelativePath(skill, location);
-            const normalizedPath = uPath.normalize(relativePath);
-            const parts = uPath.split(normalizedPath);
+            const parts = splitPathSegments(relativePath);
 
             if (parts.length === 1) {
                 rootFiles.push(skill);
@@ -498,8 +674,7 @@ const SkillPage = () => {
         const subGroups: Record<string, Skill[]> = {};
         for (const skill of groupSkills) {
             const relativePath = getRelativePath(skill, location);
-            const normalizedPath = uPath.normalize(relativePath);
-            const parts = uPath.split(normalizedPath);
+            const parts = splitPathSegments(relativePath);
             if (parts.length >= 2) {
                 const secondLevelDir = parts[1];
                 if (!subGroups[secondLevelDir]) {
@@ -518,8 +693,7 @@ const SkillPage = () => {
 
         for (const skill of groupSkills) {
             const relativePath = getRelativePath(skill, location);
-            const normalizedPath = uPath.normalize(relativePath);
-            const parts = uPath.split(normalizedPath);
+            const parts = splitPathSegments(relativePath);
 
             if (parts.length >= 2) {
                 const secondLevelDir = parts[1];
@@ -576,19 +750,40 @@ const SkillPage = () => {
         return expandedGroups.has(groupKey);
     };
 
+    const currentSourceState = scanRun.currentLocationId ? sourceScanStates[scanRun.currentLocationId] : undefined;
+    const globalProgress = scanRun.total > 0
+        ? ((scanRun.completed + ((currentSourceState?.status === 'scanning' ? (currentSourceState.progress / 100) : 0))) / scanRun.total) * 100
+        : 0;
+    const currentLocationName = scanRun.currentLocationId
+        ? locations.find(location => location.id === scanRun.currentLocationId)?.name
+        : undefined;
+    const completedSources = Object.values(sourceScanStates).filter(state => state.status === 'done').length;
+    const failedSources = Object.values(sourceScanStates).filter(state => state.status === 'failed').length;
+    const activeSources = Object.values(sourceScanStates).filter(state => state.status === 'scanning' || state.status === 'queued').length;
+
     return (
         <PageLayout loading={loading} notification={notification}>
             {/* Header */}
             <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
                     <Typography variant="h4" sx={{ fontWeight: 600, mb: 0.5 }}>
-                        Skill Management
+                        Skill Scan
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        Manage your AI skill locations from various IDEs and tools
+                        Scan and review local AI skill locations from various IDEs and tools
                     </Typography>
                 </Box>
                 <Stack direction="row" spacing={1}>
+                    <Button
+                        variant="contained"
+                        color="warning"
+                        startIcon={scanRun.active ? <CircularProgress size={14} color="inherit" /> : <Refresh />}
+                        onClick={handleScanAll}
+                        size="small"
+                        disabled={scanRun.active || locations.length === 0}
+                    >
+                        {scanRun.active ? 'Scanning…' : 'Scan All'}
+                    </Button>
                     <Button
                         variant="outlined"
                         startIcon={<AutoFixHigh />}
@@ -608,20 +803,63 @@ const SkillPage = () => {
                 </Stack>
             </Box>
 
+            {locations.length > 0 && (
+                <Paper
+                    sx={{
+                        mb: 2,
+                        p: 2,
+                        border: 1,
+                        borderColor: scanRun.active ? 'warning.light' : 'divider',
+                        borderRadius: 2,
+                        background: scanRun.active
+                            ? 'linear-gradient(135deg, rgba(245,158,11,0.10) 0%, rgba(255,255,255,0.96) 100%)'
+                            : 'background.paper',
+                    }}
+                >
+                    <Stack spacing={1.5}>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
+                            <Box>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                                    {scanRun.active ? 'Scanning local skill sources' : 'Scan workspace'}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    {scanRun.active
+                                        ? `Processing ${scanRun.completed + 1} of ${scanRun.total} sources${currentLocationName ? ` · ${currentLocationName}` : ''}`
+                                        : scanRun.finishedAt
+                                            ? `Last scan completed at ${formatRelativeTime(scanRun.finishedAt)}`
+                                            : 'Run a scan to refresh local skill metadata and review source health.'}
+                                </Typography>
+                            </Box>
+                            <Stack direction="row" spacing={1} flexWrap="wrap">
+                                <MuiChip size="small" label={`Sources ${locations.length}`} variant="outlined" />
+                                <MuiChip size="small" label={`Scanned ${completedSources}`} color="success" variant={completedSources > 0 ? 'filled' : 'outlined'} />
+                                <MuiChip size="small" label={`Active ${activeSources}`} color="warning" variant={activeSources > 0 ? 'filled' : 'outlined'} />
+                                <MuiChip size="small" label={`Failed ${failedSources}`} color="error" variant={failedSources > 0 ? 'filled' : 'outlined'} />
+                            </Stack>
+                        </Stack>
+                        <LinearProgress
+                            variant={scanRun.active ? 'determinate' : 'determinate'}
+                            value={scanRun.active ? globalProgress : completedSources > 0 || failedSources > 0 ? 100 : 0}
+                            sx={{ height: 10, borderRadius: 999 }}
+                        />
+                    </Stack>
+                </Paper>
+            )}
+
             {/* Empty State */}
             {locations.length === 0 && !loading && (
                 <UnifiedCard
                     title="No Skill Locations"
-                    subtitle="Get started by discovering or adding your first skill location"
+                    subtitle="Get started by discovering or adding your first local skill location"
                     size="large"
                 >
                     <Box textAlign="center" py={3}>
                         <Alert severity="info" sx={{ mb: 2, display: 'inline-block', textAlign: 'left' }}>
                             <Typography variant="body2">
-                                <strong>About Skills</strong><br />
+                                <strong>About Skill Scan</strong><br />
                                 Skills are reusable AI prompts stored as markdown files in your IDE
-                                configuration directories. Tingly Box can discover and manage these
-                                skills from multiple sources.
+                                configuration directories. Tingly Box can discover, inspect, and
+                                review these local skills from multiple sources.
                             </Typography>
                         </Alert>
                         <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 2 }}>
@@ -656,7 +894,7 @@ const SkillPage = () => {
                     >
                         <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
                             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-                                Locations ({locations.length})
+                                Scan Sources ({locations.length})
                             </Typography>
                             <TextField
                                 placeholder="Search..."
@@ -688,15 +926,24 @@ const SkillPage = () => {
                                         <ListItemButton
                                             onClick={() => setSelectedLocation(location)}
                                             dense
-                                            sx={{ py: 1.5 }}
+                                            sx={{ py: 1.5, alignItems: 'flex-start' }}
                                         >
                                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, flex: 1, minWidth: 0 }}>
-                                                <Typography
-                                                    variant="subtitle2"
-                                                    sx={{ fontWeight: 500 }}
-                                                >
-                                                    {location.name}
-                                                </Typography>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                                                    <Typography
+                                                        variant="subtitle2"
+                                                        sx={{ fontWeight: 600 }}
+                                                    >
+                                                        {location.name}
+                                                    </Typography>
+                                                    <MuiChip
+                                                        label={getSourceStatusMeta(sourceScanStates[location.id]?.status || 'idle').label}
+                                                        size="small"
+                                                        color={getSourceStatusMeta(sourceScanStates[location.id]?.status || 'idle').color}
+                                                        variant={sourceScanStates[location.id]?.status === 'done' ? 'filled' : 'outlined'}
+                                                        sx={{ height: 20, fontSize: '0.68rem' }}
+                                                    />
+                                                </Box>
                                                 <Typography
                                                     variant="caption"
                                                     color="text.secondary"
@@ -715,32 +962,30 @@ const SkillPage = () => {
                                                     variant="outlined"
                                                     sx={{ alignSelf: 'flex-start', height: 20, fontSize: '0.7rem' }}
                                                 />
-                                            </Box>
-                                            <Stack direction="row" spacing={0.25} alignItems="center">
-                                                <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
-                                                    {location.skill_count}
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {sourceScanStates[location.id]?.status === 'done'
+                                                        ? `Last run ${formatRelativeTime(sourceScanStates[location.id]?.lastScannedAt || location.last_scanned_at || scanRun.finishedAt)}`
+                                                        : sourceScanStates[location.id]?.status === 'failed'
+                                                            ? sourceScanStates[location.id]?.error || 'Scan failed'
+                                                            : scanRun.currentLocationId === location.id && scanRun.active
+                                                                ? 'Scanning source…'
+                                                                : 'Ready to scan'}
                                                 </Typography>
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={(e) => handleRefreshClick(location.id, e)}
-                                                    disabled={skillsLoading}
-                                                >
-                                                    <Refresh fontSize="small" />
-                                                </IconButton>
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={(e) => handleEditClick(location, e)}
-                                                >
-                                                    <Edit fontSize="small" />
-                                                </IconButton>
-                                                <IconButton
-                                                    size="small"
-                                                    color="error"
-                                                    onClick={(e) => handleDeleteClick(location.id, e)}
-                                                >
-                                                    <Delete fontSize="small" />
-                                                </IconButton>
-                                            </Stack>
+                                                {(sourceScanStates[location.id]?.status === 'scanning' || sourceScanStates[location.id]?.status === 'done' || sourceScanStates[location.id]?.status === 'failed') && (
+                                                    <LinearProgress
+                                                        variant="determinate"
+                                                        value={sourceScanStates[location.id]?.progress || 0}
+                                                        color={
+                                                            sourceScanStates[location.id]?.status === 'failed'
+                                                                ? 'error'
+                                                                : sourceScanStates[location.id]?.status === 'done'
+                                                                    ? 'success'
+                                                                    : 'warning'
+                                                        }
+                                                        sx={{ mt: 0.5, height: 6, borderRadius: 999 }}
+                                                    />
+                                                )}
+                                            </Box>
                                         </ListItemButton>
                                     </ListItem>
                                 );
@@ -1215,21 +1460,11 @@ const SkillPage = () => {
                 </Stack>
             )}
 
-            {/* Add/Edit Location Dialog */}
+            {/* Add Location Dialog */}
             <AddSkillLocationDialog
                 open={addDialogOpen}
                 onClose={() => setAddDialogOpen(false)}
                 onSubmit={handleAddSubmit}
-                initialData={
-                    editLocation
-                        ? {
-                              name: editLocation.name,
-                              path: editLocation.path,
-                              ide_source: editLocation.ide_source,
-                          }
-                        : undefined
-                }
-                mode={addDialogMode}
             />
 
             {/* Auto Discovery Dialog */}
@@ -1242,4 +1477,4 @@ const SkillPage = () => {
     );
 };
 
-export default SkillPage;
+export default SkillScanPage;

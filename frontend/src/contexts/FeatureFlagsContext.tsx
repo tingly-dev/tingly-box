@@ -3,8 +3,6 @@ import { api } from '@/services/api';
 import { useAuth } from './AuthContext';
 
 interface FeatureFlagsContextType {
-    skillUser: boolean;
-    skillIde: boolean;
     enableGuardrails: boolean;
     loading: boolean;
     refresh: () => void;
@@ -26,20 +24,12 @@ interface FeatureFlagsProviderProps {
 
 export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ children }) => {
     const { isLoading: isAuthLoading } = useAuth();
-    const [skillUser, setSkillUser] = useState(false);
-    const [skillIde, setSkillIde] = useState(false);
     const [enableGuardrails, setEnableGuardrails] = useState(false);
     const [loading, setLoading] = useState(true);
 
     const loadFlags = async () => {
         try {
-            const [skillUserResult, skillIdeResult, guardrailsResult] = await Promise.all([
-                api.getScenarioFlag('_global', 'skill_user'),
-                api.getScenarioFlag('_global', 'skill_ide'),
-                api.getScenarioFlag('_global', 'guardrails'),
-            ]);
-            setSkillUser(skillUserResult?.data?.value || false);
-            setSkillIde(skillIdeResult?.data?.value || false);
+            const guardrailsResult = await api.getScenarioFlag('_global', 'guardrails');
             setEnableGuardrails(guardrailsResult?.data?.value || false);
         } catch (error) {
             // Silently fail - flags will default to false
@@ -62,7 +52,7 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
     };
 
     return (
-        <FeatureFlagsContext.Provider value={{ skillUser, skillIde, enableGuardrails, loading, refresh }}>
+        <FeatureFlagsContext.Provider value={{ enableGuardrails, loading, refresh }}>
             {children}
         </FeatureFlagsContext.Provider>
     );

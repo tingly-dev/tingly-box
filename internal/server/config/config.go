@@ -1488,16 +1488,6 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 		return flags.DisableStreamUsage
 	case "clean_header":
 		return flags.CleanHeader
-	case "skill_user":
-		if val, ok := config.Extensions["skill_user"].(bool); ok {
-			return val
-		}
-		return false
-	case "skill_ide":
-		if val, ok := config.Extensions["skill_ide"].(bool); ok {
-			return val
-		}
-		return false
 	case "guardrails":
 		if val, ok := config.Extensions["guardrails"].(bool); ok {
 			return val
@@ -1549,18 +1539,6 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 		config.Flags.DisableStreamUsage = value
 	case "clean_header":
 		config.Flags.CleanHeader = value
-	case "skill_user":
-		// Store in Extensions
-		if config.Extensions == nil {
-			config.Extensions = make(map[string]interface{})
-		}
-		config.Extensions["skill_user"] = value
-	case "skill_ide":
-		// Store in Extensions
-		if config.Extensions == nil {
-			config.Extensions = make(map[string]interface{})
-		}
-		config.Extensions["skill_ide"] = value
 	case "guardrails":
 		if config.Extensions == nil {
 			config.Extensions = make(map[string]interface{})
