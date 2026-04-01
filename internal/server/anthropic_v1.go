@@ -61,11 +61,14 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		req.MessageNewParams.Tools = toolinterceptor.StripSearchFetchToolsAnthropic(req.MessageNewParams.Tools)
 	}
 
-	s.applyGuardrailsToToolResultV1(c, &req.MessageNewParams, actualModel, provider)
-	// Run credential masking after terminal tool_result filtering so block/review
-	// decisions still inspect the original tool output while the upstream model
-	// only receives alias tokens.
-	s.applyGuardrailsCredentialMasksV1(c, &req.MessageNewParams, actualModel, provider)
+	session := s.guardrailsSessionFromContext(c, actualModel, provider)
+	if s.guardrailsEnabledForSession(session) {
+		s.applyGuardrailsToToolResultV1(c, &req.MessageNewParams, session)
+		// Run credential masking after terminal tool_result filtering so block/review
+		// decisions still inspect the original tool output while the upstream model
+		// only receives alias tokens.
+		s.applyGuardrailsCredentialMasksV1WithSession(c, &req.MessageNewParams, session)
+	}
 
 	// Check provider's API style to decide which path to take
 	apiStyle := provider.APIStyle
