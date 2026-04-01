@@ -22,6 +22,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
+	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	"github.com/tingly-dev/tingly-box/internal/server/module/providertemplate"
 	rulemodule "github.com/tingly-dev/tingly-box/internal/server/module/rule"
@@ -70,6 +71,10 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 	// These must be registered before the /tingly/:scenario routes
 	statusHandler := statusline.NewHandler(s.config, s.loadBalancer, statusline.NewCache())
 	statusline.RegisterRoutes(s.engine, statusHandler)
+
+	// Claude Code notification hook endpoint (no auth required)
+	notifyHandler := notifymodule.NewHandler()
+	notifymodule.RegisterRoutes(s.engine, notifyHandler)
 
 	// Create route manager
 	manager := swagger.NewRouteManager(s.engine)
