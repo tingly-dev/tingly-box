@@ -272,21 +272,76 @@ func ParseDefaultResponse(req Request, response Response) (Result, error) {
 	}
 }
 
+// PermissionOption defines a single permission response option.
+// This is the single source of truth for both keyboard buttons and text-based responses.
+//   - Action: callback action identifier (used in keyboard callback data)
+//   - Inputs: accepted text inputs for non-keyboard platforms (number | letter | word)
+//   - Label: display label for both keyboard button text and text instructions
+//   - Icon: emoji prefix for keyboard button
+type PermissionOption struct {
+	Action   string   // callback action (e.g. "allow", "deny", "always")
+	Inputs   []string // accepted text inputs (e.g. ["1", "y", "yes"])
+	Label    string   // display label (e.g. "Allow")
+	Icon     string   // emoji for keyboard button (e.g. "✅")
+	Approved bool
+	Remember bool
+}
+
+// PermissionOptions is the configurable list of permission response options.
+// Modify this slice to change inputs, display text, and keyboard buttons for all platforms.
+var PermissionOptions = []PermissionOption{
+	{Action: "allow", Inputs: []string{"1", "y", "yes"}, Label: "Allow", Icon: "✅", Approved: true, Remember: false},
+	{Action: "deny", Inputs: []string{"2", "n", "no", "0"}, Label: "Deny", Icon: "❌", Approved: false, Remember: false},
+	{Action: "always", Inputs: []string{"3", "a", "always"}, Label: "Always Allow", Icon: "🔄", Approved: true, Remember: true},
+}
+
+// FindPermissionByAction finds a PermissionOption by its callback action string.
+// Returns nil if not found.
+func FindPermissionByAction(action string) *PermissionOption {
+	for i := range PermissionOptions {
+		if PermissionOptions[i].Action == action {
+			return &PermissionOptions[i]
+		}
+	}
+	return nil
+}
+
 // ParseTextResponse parses user text input as a permission response
 // Returns: (approved, remember, isValid)
 func ParseTextResponse(text string) (approved bool, remember bool, isValid bool) {
 	text = normalizeText(text)
 
-	switch text {
-	case "1", "y", "yes":
-		return true, false, true
-	case "0", "n", "no":
-		return false, false, true
-	case "a", "always":
-		return true, true, true
-	default:
-		return false, false, false
+	for _, opt := range PermissionOptions {
+		for _, input := range opt.Inputs {
+			if text == input {
+				return opt.Approved, opt.Remember, true
+			}
+		}
 	}
+	return false, false, false
+}
+
+// FormatPermissionInstructions returns formatted text instructions for text-based approval.
+// Used by platforms that don't support inline keyboards.
+func FormatPermissionInstructions() string {
+	var b strings.Builder
+	b.WriteString("*Reply to approve or deny:*\n\n")
+	for _, opt := range PermissionOptions {
+		// Format: • `1` | `y` - Allow
+		b.WriteString("• ")
+		for i, input := range opt.Inputs {
+			if i > 0 {
+				b.WriteString(" | ")
+			}
+			b.WriteString("`")
+			b.WriteString(input)
+			b.WriteString("`")
+		}
+		b.WriteString(" - ")
+		b.WriteString(opt.Label)
+		b.WriteString("\n")
+	}
+	return b.String()
 }
 
 // normalizeText normalizes user input for comparison

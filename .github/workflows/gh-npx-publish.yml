@@ -102,19 +102,27 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
-  # Publish CLI NPX package
-  publish-cli:
+  # Publish CLI and Bundle NPX packages (merged)
+  publish-cli-bundle:
     needs: setup
-    name: Publish CLI Package
+    name: Publish ${{ matrix.type == 'cli' && 'CLI' || 'Bundle' }} Package
     runs-on: ubuntu-latest
     permissions:
       contents: write
       id-token: write
-    if: needs.setup.outputs.publish_cli == 'true'
-    env:
-      PKG_NAME: tingly-box
-      PKG_DIR: build/npx/tingly-box
-      PKG_TYPE: cli
+    if: >-
+      needs.setup.outputs.publish_cli == 'true' ||
+      needs.setup.outputs.publish_bundle == 'true'
+    strategy:
+      matrix:
+        type: [cli, bundle]
+        include:
+          - type: cli
+            pkg_name: tingly-box
+            pkg_dir: build/npx/tingly-box
+          - type: bundle
+            pkg_name: tingly-box-bundle
+            pkg_dir: build/npx/tingly-box-bundle
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -128,7 +136,7 @@ jobs:
           registry-url: "https://registry.npmjs.org"
           cache: "npm"
           cache-dependency-path: |
-            build/npx/tingly-box/package-lock.json
+            ${{ matrix.pkg_dir }}/package-lock.json
             build/npx/*/package-lock.json
 
       - name: Configure Git
@@ -139,28 +147,31 @@ jobs:
       - name: Update NPX package.json with new version
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
-          cd $PKG_DIR
+          cd ${{ matrix.pkg_dir }}
           npm version "$VERSION" --no-git-tag-version
-          echo "Updated $PKG_NAME to version: $VERSION"
+          echo "Updated ${{ matrix.pkg_name }} to version: $VERSION"
           cd ..
 
       - name: Update bin.js to reference the correct release
         run: |
           RELEASE_TAG="${{ needs.setup.outputs.release_tag }}"
           echo "Updating bin.js to reference release tag: $RELEASE_TAG"
-          cd $PKG_DIR
+          cd ${{ matrix.pkg_dir }}
           sed -i.bak "s|const BINARY_RELEASE_BRANCH = .*|const BINARY_RELEASE_BRANCH = '$RELEASE_TAG';|g" bin.js
           echo "Updated bin.js content:"
           head -20 bin.js
           rm -f bin.js.bak
           cd ..
 
+      # CLI-only steps
       - name: Install dependencies
-        working-directory: ${{ env.PKG_DIR }}
+        if: matrix.type == 'cli'
+        working-directory: ${{ matrix.pkg_dir }}
         run: npm ci
 
       - name: Run tests
-        working-directory: ${{ env.PKG_DIR }}
+        if: matrix.type == 'cli'
+        working-directory: ${{ matrix.pkg_dir }}
         run: |
           if [ -f "package.json" ] && npm run | grep -q "test"; then
             echo "🧪 Running tests..."
@@ -169,78 +180,91 @@ jobs:
             echo "⏭️ No tests found, skipping..."
           fi
 
+      # Bundle-only steps
+      - name: Download release zip files
+        if: matrix.type == 'bundle'
+        env:
+          RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          mkdir -p "${{ matrix.pkg_dir }}/zip"
+
+          echo "📥 Downloading zip files from release $RELEASE_TAG..."
+          gh release download "$RELEASE_TAG" --repo "$REPO" --pattern "tingly-box-*.zip" --dir "${{ matrix.pkg_dir }}/zip"
+
+          echo "✅ Downloaded zip files:"
+          ls -lh "${{ matrix.pkg_dir }}/zip/"
+
+          # Remove unwanted packages to reduce size
+          echo "🗑️ Removing unwanted packages..."
+          rm -rf "${{ matrix.pkg_dir }}"/zip/tingly-box-gui-*.zip
+          rm -f "${{ matrix.pkg_dir }}"/zip/tingly-box-linux-arm64.zip
+          rm -f "${{ matrix.pkg_dir }}"/zip/tingly-box-macos-amd64.zip
+
+          echo "✅ Remaining zip files after cleanup:"
+          ls -lh "${{ matrix.pkg_dir }}/zip/"
+
+      - name: Verify bundle structure
+        if: matrix.type == 'bundle'
+        run: |
+          PKG_DIR="${{ matrix.pkg_dir }}"
+          echo "🔍 Verifying bundle package structure..."
+
+          if [ ! -f "$PKG_DIR/package.json" ]; then
+            echo "❌ package.json not found"
+            exit 1
+          fi
+
+          if [ ! -f "$PKG_DIR/bin.js" ]; then
+            echo "❌ bin.js not found"
+            exit 1
+          fi
+
+          if [ ! -d "$PKG_DIR/zip" ]; then
+            echo "❌ zip directory not found"
+            exit 1
+          fi
+
+          for zip in tingly-box-macos-arm64.zip tingly-box-linux-amd64.zip tingly-box-windows-amd64.zip; do
+            if [ ! -f "$PKG_DIR/zip/$zip" ]; then
+              echo "❌ Zip file not found: $zip"
+              exit 1
+            fi
+            echo "✅ Found: $zip"
+          done
+
+          echo "✅ Bundle structure verified"
+
+      - name: Calculate package size
+        if: matrix.type == 'bundle'
+        run: |
+          echo "📦 Package size information:"
+          du -sh "${{ matrix.pkg_dir }}"
+          du -sh "${{ matrix.pkg_dir }}/zip/"*.zip
+
+      # Shared publish step
       - name: Publish to npm
-        working-directory: ${{ env.PKG_DIR }}
+        if: >-
+          (matrix.type == 'cli' && needs.setup.outputs.publish_cli == 'true') ||
+          (matrix.type == 'bundle' && needs.setup.outputs.publish_bundle == 'true')
+        working-directory: ${{ matrix.pkg_dir }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
 
-          echo "📦 Publishing $PKG_NAME@${VERSION} to npm..."
+          echo "📦 Publishing ${{ matrix.pkg_name }}@${VERSION} to npm..."
 
-          if npm view $PKG_NAME@"${VERSION}" version >/dev/null 2>&1; then
-            echo "ℹ️ $PKG_NAME@${VERSION} already exists on npm. Skipping publish."
+          if npm view "${{ matrix.pkg_name }}@${VERSION}" version >/dev/null 2>&1; then
+            echo "ℹ️ ${{ matrix.pkg_name }}@${VERSION} already exists on npm. Skipping publish."
           else
             npm publish --provenance --access public
           fi
 
-      - name: Create NPX tag and release
-        env:
-          VERSION: ${{ needs.setup.outputs.npx_version }}
-          RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
-          PKG_TYPE: ${{ env.PKG_TYPE }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          FULL_TAG="npx-${PKG_TYPE}-$VERSION"
-
-          echo "Creating NPX tag and release for $FULL_TAG"
-
-          if git rev-parse "$FULL_TAG" >/dev/null 2>&1; then
-            echo "Tag $FULL_TAG already exists"
-          else
-            git tag "$FULL_TAG"
-            git push origin "$FULL_TAG"
-          fi
-
-          cat > npx_release_notes.md << EOF
-          ## 📦 NPX Package Release - $VERSION ($PKG_TYPE)
-
-          Based on GitHub Release: [${RELEASE_TAG}](https://github.com/tingly-dev/tingly-box/releases/tag/${RELEASE_TAG})
-
-          ### 🚀 Installation
-
-          \`\`\`bash
-          # Use with npx (recommended)
-          npx $PKG_NAME@$VERSION start
-
-          # Or install globally
-          npm install -g $PKG_NAME@$VERSION
-          \`\`\`
-
-          ### 🔗 Links
-          - 📦 [View on npm](https://www.npmjs.com/package/$PKG_NAME/v/$VERSION)
-          - 🏷️ [Source Release](https://github.com/tingly-dev/tingly-box/releases/tag/$RELEASE_TAG)
-
-          ---
-          _This NPX package was automatically published based on release $RELEASE_TAG_
-          EOF
-
-          if gh release view "$FULL_TAG" >/dev/null 2>&1; then
-            echo "Release $FULL_TAG already exists, updating..."
-            gh release edit "$FULL_TAG" --notes-file npx_release_notes.md --title "NPX Package $VERSION ($PKG_TYPE)"
-          else
-            PRERELEASE_FLAG=""
-            if [[ "$VERSION" == *-* ]]; then
-              PRERELEASE_FLAG="--prerelease"
-            fi
-            gh release create "$FULL_TAG" \
-              --title "NPX Package $VERSION ($PKG_TYPE)" \
-              --notes-file npx_release_notes.md \
-              ${PRERELEASE_FLAG}
-          fi
-
+      # CLI-only: trigger Docker NPX build
       - name: Trigger Docker NPX build
-        if: success()
+        if: success() && matrix.type == 'cli' && needs.setup.outputs.publish_cli == 'true'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -250,6 +274,126 @@ jobs:
             --ref "${{ needs.setup.outputs.release_tag }}" \
             -f release_tag="${{ needs.setup.outputs.release_tag }}"
           echo "Triggered docker-npx.yml workflow"
+
+  # Create a single NPX tag and release for CLI + Bundle
+  create-release:
+    needs: [setup, publish-cli-bundle]
+    name: Create NPX Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: >-
+      needs.setup.result == 'success' &&
+      (needs.publish-cli-bundle.result == 'success' || needs.publish-cli-bundle.result == 'skipped')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create NPX tag and release
+        env:
+          VERSION: ${{ needs.setup.outputs.npx_version }}
+          RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FULL_TAG="npx-$VERSION"
+
+          # Determine which packages were published
+          PUBLISHED_CLI="${{ needs.setup.outputs.publish_cli }}"
+          PUBLISHED_BUNDLE="${{ needs.setup.outputs.publish_bundle }}"
+
+          echo "Creating NPX tag and release for $FULL_TAG"
+          echo "  - CLI: $PUBLISHED_CLI"
+          echo "  - Bundle: $PUBLISHED_BUNDLE"
+
+          # Only proceed if at least one package was requested
+          if [ "$PUBLISHED_CLI" != 'true' ] && [ "$PUBLISHED_BUNDLE" != 'true' ]; then
+            echo "⏭️ No packages to release, skipping..."
+            exit 0
+          fi
+
+          # Create git tag
+          if git rev-parse "$FULL_TAG" >/dev/null 2>&1; then
+            echo "Tag $FULL_TAG already exists"
+          else
+            git tag "$FULL_TAG"
+            git push origin "$FULL_TAG"
+          fi
+
+          # Build release notes
+          cat > npx_release_notes.md << NOTES_EOF
+          ## 📦 NPX Package Release - $VERSION
+
+          Based on GitHub Release: [${RELEASE_TAG}](https://github.com/tingly-dev/tingly-box/releases/tag/${RELEASE_TAG})
+
+          ### 🚀 Installation
+
+          \`\`\`bash
+          # Use with npx (recommended)
+          npx tingly-box@$VERSION
+
+          # Or install globally
+          npm install -g tingly-box@$VERSION
+          \`\`\`
+          NOTES_EOF
+
+          if [ "$PUBLISHED_BUNDLE" = 'true' ]; then
+            cat >> npx_release_notes.md << 'BUNDLE_EOF'
+
+          ### ✨ Bundle Package Features
+
+          - **Offline-ready**: Binaries bundled, no download required
+          - **Fast startup**: No network latency
+          - **Self-contained**: Works without GitHub access
+          - **Multi-platform**: Supports macOS (ARM64/AMD64), Linux (x64/ARM64), Windows (x64)
+
+          \`\`\`bash
+          # Use the bundle package (includes pre-built binaries, ~70MB)
+          npx tingly-box-bundle@$VERSION
+          \`\`\`
+
+          > For a smaller package with download-on-demand, use \`tingly-box\` instead.
+          BUNDLE_EOF
+          fi
+
+          cat >> npx_release_notes.md << FOOTER_EOF
+
+          ### 🔗 Links
+
+          - 📦 [CLI on npm](https://www.npmjs.com/package/tingly-box/v/$VERSION)
+          FOOTER_EOF
+
+          if [ "$PUBLISHED_BUNDLE" = 'true' ]; then
+            echo "- 📦 [Bundle on npm](https://www.npmjs.com/package/tingly-box-bundle/v/$VERSION)" >> npx_release_notes.md
+          fi
+
+          cat >> npx_release_notes.md << FOOTER2_EOF
+          - 🏷️ [Source Release](https://github.com/tingly-dev/tingly-box/releases/tag/$RELEASE_TAG)
+
+          ---
+          _NPX package automatically published based on release $RELEASE_TAG_
+          FOOTER2_EOF
+
+          # Create or update GitHub release
+          if gh release view "$FULL_TAG" >/dev/null 2>&1; then
+            echo "Release $FULL_TAG already exists, updating..."
+            gh release edit "$FULL_TAG" --notes-file npx_release_notes.md --title "NPX Package $VERSION"
+          else
+            PRERELEASE_FLAG=""
+            if [[ "$VERSION" == *-* ]]; then
+              PRERELEASE_FLAG="--prerelease"
+            fi
+            gh release create "$FULL_TAG" \
+              --title "NPX Package $VERSION" \
+              --notes-file npx_release_notes.md \
+              ${PRERELEASE_FLAG}
+          fi
 
   # Publish GUI NPX package
   publish-gui:
@@ -327,7 +471,7 @@ jobs:
 
           echo "📦 Publishing $PKG_NAME@${VERSION} to npm..."
 
-          if npm view $PKG_NAME@"${VERSION}" version >/dev/null 2>&1; then
+          if npm view "$PKG_NAME@${VERSION}" version >/dev/null 2>&1; then
             echo "ℹ️ $PKG_NAME@${VERSION} already exists on npm. Skipping publish."
           else
             npm publish --provenance --access public
@@ -384,207 +528,6 @@ jobs:
             fi
             gh release create "$FULL_TAG" \
               --title "NPX Package $VERSION ($PKG_TYPE)" \
-              --notes-file npx_release_notes.md \
-              ${PRERELEASE_FLAG}
-          fi
-
-  # Publish Bundle NPX package (with pre-built binaries)
-  publish-bundle:
-    needs: setup
-    name: Publish Bundle Package
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write
-    if: needs.setup.outputs.publish_bundle == 'true'
-    env:
-      PKG_NAME: tingly-box-bundle
-      PKG_DIR: build/npx/tingly-box-bundle
-      PKG_TYPE: bundle
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          registry-url: "https://registry.npmjs.org"
-          cache: "npm"
-          cache-dependency-path: |
-            build/npx/tingly-box-bundle/package-lock.json
-            build/npx/*/package-lock.json
-
-      - name: Configure Git
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Update NPX package.json with new version
-        run: |
-          VERSION="${{ needs.setup.outputs.npx_version }}"
-          cd $PKG_DIR
-          npm version "$VERSION" --no-git-tag-version
-          echo "Updated $PKG_NAME to version: $VERSION"
-          cd ..
-
-      - name: Update bin.js to reference the correct release
-        run: |
-          RELEASE_TAG="${{ needs.setup.outputs.release_tag }}"
-          echo "Updating bin.js to reference release tag: $RELEASE_TAG"
-          cd $PKG_DIR
-          sed -i.bak "s|const BINARY_RELEASE_BRANCH = .*|const BINARY_RELEASE_BRANCH = '$RELEASE_TAG';|g" bin.js
-          echo "Updated bin.js content:"
-          head -20 bin.js
-          rm -f bin.js.bak
-          cd ..
-
-      - name: Download release zip files
-        env:
-          RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-        run: |
-          # Create zip directory
-          mkdir -p "$PKG_DIR/zip"
-
-          # Download release assets
-          echo "📥 Downloading zip files from release $RELEASE_TAG..."
-          gh release download "$RELEASE_TAG" --repo "$REPO" --pattern "tingly-box-*.zip" --dir "$PKG_DIR/zip"
-
-          echo "✅ Downloaded zip files:"
-          ls -lh "$PKG_DIR/zip/"
-
-          # Remove unwanted packages to reduce size
-          # We exclude: GUI packages, linux arm64, macos amd64
-          echo "🗑️ Removing unwanted packages..."
-          rm -rf "$PKG_DIR"/zip/tingly-box-gui-*.zip
-          rm -f "$PKG_DIR"/zip/tingly-box-linux-arm64.zip
-          rm -f "$PKG_DIR"/zip/tingly-box-macos-amd64.zip
-
-          echo "✅ Remaining zip files after cleanup:"
-          ls -lh "$PKG_DIR/zip/"
-
-      - name: Verify bundle structure
-        run: |
-          echo "🔍 Verifying bundle package structure..."
-
-          if [ ! -f "$PKG_DIR/package.json" ]; then
-            echo "❌ package.json not found"
-            exit 1
-          fi
-
-          if [ ! -f "$PKG_DIR/bin.js" ]; then
-            echo "❌ bin.js not found"
-            exit 1
-          fi
-
-          # Check for zip directory and files
-          if [ ! -d "$PKG_DIR/zip" ]; then
-            echo "❌ zip directory not found"
-            exit 1
-          fi
-
-          # Expected zip files
-          # for zip in tingly-box-macos-arm64.zip tingly-box-macos-amd64.zip tingly-box-linux-amd64.zip tingly-box-linux-arm64.zip tingly-box-windows-amd64.zip; do
-          # to reduce size, we remove linux arm and macos amd
-          for zip in tingly-box-macos-arm64.zip tingly-box-linux-amd64.zip tingly-box-windows-amd64.zip; do
-            if [ ! -f "$PKG_DIR/zip/$zip" ]; then
-              echo "❌ Zip file not found: $zip"
-              exit 1
-            fi
-            echo "✅ Found: $zip"
-          done
-
-          echo "✅ Bundle structure verified"
-
-      - name: Calculate package size
-        run: |
-          echo "📦 Package size information:"
-          du -sh "$PKG_DIR"
-          du -sh "$PKG_DIR"/zip/*.zip
-
-      - name: Publish to npm
-        working-directory: ${{ env.PKG_DIR }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          VERSION="${{ needs.setup.outputs.npx_version }}"
-
-          echo "📦 Publishing $PKG_NAME@${VERSION} to npm..."
-
-          if npm view "$PKG_NAME@${VERSION}" version >/dev/null 2>&1; then
-            echo "ℹ️ $PKG_NAME@${VERSION} already exists on npm. Skipping publish."
-          else
-            npm publish --provenance --access public
-          fi
-
-      - name: Create NPX tag and release
-        env:
-          VERSION: ${{ needs.setup.outputs.npx_version }}
-          RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
-          PKG_TYPE: ${{ env.PKG_TYPE }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          FULL_TAG="npx-${PKG_TYPE}-$VERSION"
-
-          echo "Creating NPX tag and release for $FULL_TAG"
-
-          if git rev-parse "$FULL_TAG" >/dev/null 2>&1; then
-            echo "Tag $FULL_TAG already exists"
-          else
-            git tag "$FULL_TAG"
-            git push origin "$FULL_TAG"
-          fi
-
-          cat > npx_release_notes.md << EOF
-          ## 📦 NPX Bundle Package Release - $VERSION
-
-          Based on GitHub Release: [${RELEASE_TAG}](https://github.com/tingly-dev/tingly-box/releases/tag/${RELEASE_TAG})
-
-          ### 🚀 Installation
-
-          \`\`\`bash
-          # Use with npx (recommended)
-          npx $PKG_NAME@$VERSION start
-
-          # Or install globally
-          npm install -g $PKG_NAME@$VERSION
-          \`\`\`
-
-          ### ✨ Features
-
-          - **Offline-ready**: Binaries bundled, no download required
-          - **Fast startup**: No network latency
-          - **Self-contained**: Works without GitHub access
-          - **Multi-platform**: Supports macOS (ARM64/AMD64), Linux (x64/ARM64), Windows (x64)
-
-          ### 📦 Package Size
-
-          This package includes pre-built binaries for all platforms (~150MB).
-          For a smaller package with download-on-demand, use \`tingly-box\` instead.
-
-          ### 🔗 Links
-
-          - 📦 [View on npm](https://www.npmjs.com/package/$PKG_NAME/v/$VERSION)
-          - 🏷️ [Source Release](https://github.com/tingly-dev/tingly-box/releases/tag/$RELEASE_TAG)
-
-          ---
-          _Bundle package - includes pre-built binaries_
-          EOF
-
-          if gh release view "$FULL_TAG" >/dev/null 2>&1; then
-            echo "Release $FULL_TAG already exists, updating..."
-            gh release edit "$FULL_TAG" --notes-file npx_release_notes.md --title "NPX Bundle Package $VERSION"
-          else
-            PRERELEASE_FLAG=""
-            if [[ "$VERSION" == *-* ]]; then
-              PRERELEASE_FLAG="--prerelease"
-            fi
-            gh release create "$FULL_TAG" \
-              --title "NPX Bundle Package $VERSION" \
               --notes-file npx_release_notes.md \
               ${PRERELEASE_FLAG}
           fi

@@ -435,7 +435,7 @@ func GetMenuForPlatform(platform imbot.Platform, context *MenuContext) *MenuButt
 
 // SetupMenuButtonForBot configures the menu button for a bot
 // This should be called when the bot starts or when settings change
-func SetupMenuButtonForBot(manager *imbot.Manager, uuid string) error {
+func SetupMenuButtonForBot(manager *imbot.Manager, uuid string, cmdRegistry *imbot.CommandRegistry) error {
 	// Get the bot to check its platform (no platform filter)
 	bot := manager.GetBotByUUID(uuid)
 	if bot == nil {
@@ -446,9 +446,9 @@ func SetupMenuButtonForBot(manager *imbot.Manager, uuid string) error {
 
 	switch platform {
 	case imbot.PlatformTelegram:
-		return setupTelegramMenuButton(bot)
+		return setupTelegramMenuButton(bot, cmdRegistry)
 	case imbot.PlatformFeishu, imbot.PlatformLark:
-		return setupFeishuMenuButton(bot)
+		return setupFeishuMenuButton(bot, cmdRegistry)
 	default:
 		// Other platforms don't support menu buttons, log and continue
 		return nil
@@ -456,25 +456,17 @@ func SetupMenuButtonForBot(manager *imbot.Manager, uuid string) error {
 }
 
 // setupTelegramMenuButton configures the Telegram bot menu button
-func setupTelegramMenuButton(bot imbot.Bot) error {
+func setupTelegramMenuButton(bot imbot.Bot, cmdRegistry *imbot.CommandRegistry) error {
 	// Cast to TelegramBot interface to access Telegram-specific methods
 	tgBot, ok := imbot.AsTelegramBot(bot)
 	if !ok {
 		return fmt.Errorf("bot is not a Telegram bot: %T", bot)
 	}
 
-	// First, set the command list from command_menu.go
-	cmdRegistry := GetCommandRegistry()
-	telegramCommands := cmdRegistry.BuildTelegramCommands()
+	// Build command list from the imbot command registry
+	telegramCommands := cmdRegistry.BuildPlatformCommands(imbot.PlatformTelegram)
 
-	// Convert to slice of maps for SetCommandList
-	// The telegram bot implementation will convert these to BotCommand
-	botCommands := make([]map[string]string, 0, len(telegramCommands))
-	for _, cmd := range telegramCommands {
-		botCommands = append(botCommands, cmd)
-	}
-
-	if err := tgBot.SetCommandList(botCommands); err != nil {
+	if err := tgBot.SetCommandList(telegramCommands); err != nil {
 		return fmt.Errorf("failed to set bot commands: %w", err)
 	}
 
@@ -488,25 +480,23 @@ func setupTelegramMenuButton(bot imbot.Bot) error {
 }
 
 // setupFeishuMenuButton configures the Feishu/Lark quick actions
-func setupFeishuMenuButton(bot imbot.Bot) error {
+func setupFeishuMenuButton(bot imbot.Bot, cmdRegistry *imbot.CommandRegistry) error {
 	// Cast to FeishuBot interface to access Feishu-specific methods
 	fsBot, ok := imbot.AsFeishuBot(bot)
 	if !ok {
 		return fmt.Errorf("bot is not a Feishu/Lark bot: %T", bot)
 	}
 
-	// Get command list from command_menu.go
-	cmdRegistry := GetCommandRegistry()
+	// Build quick actions from the imbot command registry
 	commands := cmdRegistry.ForPlatform(imbot.PlatformFeishu)
 
-	// Build quick actions in Feishu format
 	quickActions := make([]map[string]string, 0, len(commands))
 	for _, cmd := range commands {
 		quickActions = append(quickActions, map[string]string{
-			"id":          cmd.Command,
-			"label":       buildFeishuActionLabel(cmd.Command, cmd.Aliases),
+			"id":          cmd.Name,
+			"label":       buildFeishuActionLabel(cmd.Name, cmd.Aliases),
 			"description": cmd.Description,
-			"command":     "/" + cmd.Command,
+			"command":     "/" + cmd.Name,
 		})
 	}
 

@@ -104,7 +104,9 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 		})
 		return
 	}
-	provider, selectedService, err = s.DetermineProviderAndModelWithScenario(scenarioType, rule, req)
+
+	// Select service using routing pipeline
+	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -190,13 +192,12 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 		scenarioFlags = &scenarioConfig.Flags
 	}
 
-	transformCtx := &transform.TransformContext{
-		OriginalRequest: &req.ResponseNewParams,
-		Request:         &req.ResponseNewParams,
-		ProviderURL:     provider.APIBase,
-		ScenarioFlags:   scenarioFlags,
-		IsStreaming:     req.Stream,
-	}
+	transformCtx := transform.NewTransformContext(
+		&req.ResponseNewParams,
+		transform.WithProviderURL(provider.APIBase),
+		transform.WithScenarioFlags(scenarioFlags),
+		transform.WithStreaming(req.Stream),
+	)
 
 	// Execute transform chain
 	finalCtx, err := chain.Execute(transformCtx)

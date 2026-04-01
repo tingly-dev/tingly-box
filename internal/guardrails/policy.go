@@ -10,21 +10,21 @@ const (
 	PolicyKindOperationLegacy  PolicyKind = "operation"
 )
 
-// PolicyGroup provides shared defaults and risk grouping for policies.
+const DefaultPolicyGroupID = "default"
+
+// PolicyGroup groups policies for organization and activation.
 type PolicyGroup struct {
-	ID             string  `json:"id" yaml:"id"`
-	Name           string  `json:"name,omitempty" yaml:"name,omitempty"`
-	Enabled        *bool   `json:"enabled,omitempty" yaml:"enabled,omitempty"`
-	Severity       string  `json:"severity,omitempty" yaml:"severity,omitempty"`
-	DefaultVerdict Verdict `json:"default_verdict,omitempty" yaml:"default_verdict,omitempty"`
-	DefaultScope   Scope   `json:"default_scope,omitempty" yaml:"default_scope,omitempty"`
+	ID       string `json:"id" yaml:"id"`
+	Name     string `json:"name,omitempty" yaml:"name,omitempty"`
+	Enabled  *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Severity string `json:"severity,omitempty" yaml:"severity,omitempty"`
 }
 
 // Policy is the top-level user-facing policy definition.
 type Policy struct {
 	ID      string      `json:"id" yaml:"id"`
 	Name    string      `json:"name,omitempty" yaml:"name,omitempty"`
-	Group   string      `json:"group,omitempty" yaml:"group,omitempty"`
+	Groups  []string    `json:"groups,omitempty" yaml:"groups,omitempty"`
 	Kind    PolicyKind  `json:"kind" yaml:"kind"`
 	Enabled *bool       `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	Scope   Scope       `json:"scope,omitempty" yaml:"scope,omitempty"`

@@ -51,12 +51,7 @@ func (f *TextFormatter) Format(msg Message) string {
 
 	switch m := msg.(type) {
 	case *SystemMessage:
-		// Only render system messages with "init" subtype, skip others
-		if m.SubType == "init" {
-			return f.formatSystem(m)
-		}
-		logrus.Debugf("system message, subtype: %s", m.SubType)
-		return ""
+		return f.formatSystem(m)
 	case *AssistantMessage:
 		return f.formatAssistant(m)
 	case *UserMessage:
@@ -151,17 +146,66 @@ func (f *TextFormatter) formatWithTemplate(tmpl *template.Template, msg Message)
 }
 
 func (f *TextFormatter) formatSystem(m *SystemMessage) string {
-	var b strings.Builder
-	b.WriteString("[SYSTEM]")
-	if m.SubType != "" {
-		b.WriteString(" ")
+	switch m.SubType {
+	case SDKTaskStartedMessage:
+		return f.formatTaskStarted(m)
+	case SystemSubtypeTaskCompleted:
+		return f.formatTaskCompleted(m)
+	case SDKTaskNotificationMessage:
+		return f.formatTaskNotification(m)
+	case SystemSubtypeInit:
+		var b strings.Builder
+		b.WriteString("[SYSTEM] ")
 		b.WriteString(m.SubType)
+		b.WriteString(" Session: ")
+		b.WriteString(m.SessionID)
+		if f.IncludeTimestamp && !m.Timestamp.IsZero() {
+			b.WriteString(" at ")
+			b.WriteString(m.Timestamp.Format("2006-01-02 15:04:05"))
+		}
+		return b.String()
+	default:
+		logrus.Debugf("system message, subtype: %s", m.SubType)
+		return ""
 	}
-	b.WriteString(" Session: ")
-	b.WriteString(m.SessionID)
-	if f.IncludeTimestamp && !m.Timestamp.IsZero() {
-		b.WriteString(" at ")
-		b.WriteString(m.Timestamp.Format("2006-01-02 15:04:05"))
+}
+
+func (f *TextFormatter) formatTaskStarted(m *SystemMessage) string {
+	var b strings.Builder
+	b.WriteString("[SUBAGENT] ")
+	if m.Description != "" {
+		b.WriteString(m.Description)
+	} else if m.Prompt != "" {
+		prompt := m.Prompt
+		if len(prompt) > 100 {
+			prompt = prompt[:100] + "..."
+		}
+		b.WriteString(prompt)
+	}
+	if m.TaskType != "" {
+		b.WriteString(" (")
+		b.WriteString(m.TaskType)
+		b.WriteString(")")
+	}
+	return b.String()
+}
+
+func (f *TextFormatter) formatTaskCompleted(m *SystemMessage) string {
+	var b strings.Builder
+	b.WriteString("[SUBAGENT DONE]")
+	if m.Description != "" {
+		b.WriteString(" ")
+		b.WriteString(m.Description)
+	}
+	return b.String()
+}
+
+func (f *TextFormatter) formatTaskNotification(m *SystemMessage) string {
+	var b strings.Builder
+	b.WriteString("[SUBAGENT] Done")
+	if m.Description != "" {
+		b.WriteString("\n")
+		b.WriteString(m.Description)
 	}
 	return b.String()
 }
@@ -173,19 +217,22 @@ func (f *TextFormatter) formatAssistant(m *AssistantMessage) string {
 		b.WriteString("[ASSISTANT] ")
 		b.WriteString(m.Message.ID)
 		b.WriteString("\n")
-	} else {
+	} else if !m.IsError() {
 		b.WriteString("[ASSISTANT]")
 	}
 
+	hasContent := false
 	for _, content := range m.Message.Content {
 		switch content.Type {
-		case "text":
+		case ContentBlockTypeText:
 			if content.Text != "" {
+				hasContent = true
 				b.WriteString(content.Text)
 				b.WriteString("\n")
 			}
-		case "tool_use":
+		case ContentBlockTypeToolUse:
 			if f.ShowToolDetails {
+				hasContent = true
 				b.WriteString("[TOOL] ")
 				b.WriteString(content.Name)
 				switch content.Name {
@@ -195,14 +242,16 @@ func (f *TextFormatter) formatAssistant(m *AssistantMessage) string {
 				}
 				b.WriteString("\n")
 			}
-		case "thinking":
+		case ContentBlockTypeThinking:
 			if f.Verbose && content.Thinking != "" {
+				hasContent = true
 				b.WriteString("[THINKING] ")
 				b.WriteString(content.Thinking)
 				b.WriteString("\n")
 			}
 		case "web_search_tool_result":
 			if f.ShowToolDetails && content.ToolUseID != "" {
+				hasContent = true
 				b.WriteString("[TOOL_RESULT] ")
 				b.WriteString(content.ToolUseID)
 				b.WriteString("\n")
@@ -210,7 +259,16 @@ func (f *TextFormatter) formatAssistant(m *AssistantMessage) string {
 		}
 	}
 
-	return strings.TrimRight(b.String(), "\n")
+	if m.IsError() {
+		hasContent = true
+		b.WriteString(fmt.Sprintf("[ASSISTANT ERROR: %s] ", m.Error))
+	}
+
+	if hasContent {
+		return strings.TrimRight(b.String(), "\n")
+	}
+
+	return ""
 }
 
 func (f *TextFormatter) formatUser(m *UserMessage) string {

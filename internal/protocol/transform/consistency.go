@@ -7,6 +7,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -19,11 +20,11 @@ import (
 //   - Messages Normalization - Truncate tool_call_id to 40 chars
 //   - Validation - Check max_tokens, temperature ranges
 type ConsistencyTransform struct {
-	targetAPIStyle TargetAPIStyle
+	targetAPIStyle protocol.APIType
 }
 
 // NewConsistencyTransform creates a new ConsistencyTransform for the given target API style.
-func NewConsistencyTransform(targetAPIStyle TargetAPIStyle) *ConsistencyTransform {
+func NewConsistencyTransform(targetAPIStyle protocol.APIType) *ConsistencyTransform {
 	return &ConsistencyTransform{
 		targetAPIStyle: targetAPIStyle,
 	}
@@ -38,13 +39,13 @@ func (t *ConsistencyTransform) Name() string {
 // Modifies ctx.Request in place and returns an error if transformation fails.
 func (t *ConsistencyTransform) Apply(ctx *TransformContext) error {
 	switch t.targetAPIStyle {
-	case TargetAPIStyleOpenAIChat:
+	case protocol.TypeOpenAIChat:
 		return t.normalizeChatCompletion(ctx)
-	case TargetAPIStyleOpenAIResponses:
+	case protocol.TypeOpenAIResponses:
 		return t.normalizeResponses(ctx)
-	case TargetAPIStyleAnthropicV1:
+	case protocol.TypeAnthropicV1:
 		return t.normalizeAnthropicV1(ctx)
-	case TargetAPIStyleAnthropicBeta:
+	case protocol.TypeAnthropicBeta:
 		return t.normalizeAnthropicBeta(ctx)
 	default:
 		// No transformation for unknown API styles

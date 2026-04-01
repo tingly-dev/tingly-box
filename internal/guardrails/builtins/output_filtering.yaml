@@ -8,7 +8,6 @@ templates:
     tags: [output, secrets, private-key]
     policy:
       enabled: true
-      group: ""
       kind: content
       verdict: block
       reason: This policy blocks private key material from being returned.
@@ -26,7 +25,6 @@ templates:
     tags: [output, token, api-key, secrets]
     policy:
       enabled: true
-      group: ""
       kind: content
       verdict: block
       reason: This policy blocks token-like credential output.
@@ -47,7 +45,6 @@ templates:
     tags: [output, env, dotenv]
     policy:
       enabled: true
-      group: ""
       kind: content
       verdict: block
       reason: This policy blocks environment variable output that may contain secrets.

@@ -23,10 +23,11 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
-	"github.com/tingly-dev/tingly-box/internal/server/hooks"
 	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
+	"github.com/tingly-dev/tingly-box/internal/server/hooks"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
+	"github.com/tingly-dev/tingly-box/internal/server/routing"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -93,8 +94,9 @@ type Server struct {
 	toolInterceptor *toolinterceptor.Interceptor
 
 	// guardrails engine (optional)
-	guardrailsEngine  guardrails.Guardrails
-	guardrailsHistory *serverguardrails.HistoryStore
+	guardrailsEngine            guardrails.Guardrails
+	guardrailsHasActivePolicies bool
+	guardrailsHistory           *serverguardrails.HistoryStore
 
 	// Protected credential aliasing needs a fast request-path lookup from
 	// scenario -> active mask credentials, plus ID -> credential metadata.
@@ -107,6 +109,12 @@ type Server struct {
 	// scenario-specific recording sinks (created on-demand when recording flag is enabled)
 	scenarioRecordSinks   map[typ.RuleScenario]*obs.Sink
 	scenarioRecordSinksMu sync.RWMutex
+
+	// affinity store for smart routing session-model locking
+	affinityStore *AffinityStore
+
+	// routing selector for service selection pipeline
+	routingSelector *routing.SimpleSelector
 
 	// OTel meter setup for unified token tracking
 	meterSetup   *pkgotel.MeterSetup
@@ -176,8 +184,15 @@ func (s *Server) initGuardrailsEngine() {
 
 	cfgPath, err := serverguardrails.FindGuardrailsConfig(s.config.ConfigDir)
 	if err != nil {
-		logrus.WithError(err).Warn("Guardrails config not found; guardrails disabled")
-		return
+		if !strings.Contains(err.Error(), "no guardrails config") {
+			logrus.WithError(err).Warn("Failed to locate guardrails config")
+			return
+		}
+		cfgPath, err = s.ensureDefaultGuardrailsConfig()
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to create default guardrails config")
+			return
+		}
 	}
 
 	cfg, err := guardrails.LoadConfig(cfgPath)
@@ -194,6 +209,35 @@ func (s *Server) initGuardrailsEngine() {
 
 	s.setGuardrailsEngine(engine, "guardrails init")
 	logrus.Infof("Guardrails enabled with config: %s", cfgPath)
+}
+
+func (s *Server) ensureDefaultGuardrailsConfig() (string, error) {
+	if s == nil || s.config == nil || s.config.ConfigDir == "" {
+		return "", fmt.Errorf("config directory not set")
+	}
+
+	path := serverguardrails.GetGuardrailsConfigPath(s.config.ConfigDir)
+	enabled := true
+	cfg := guardrails.Config{
+		Groups: []guardrails.PolicyGroup{
+			{
+				ID:      guardrails.DefaultPolicyGroupID,
+				Name:    "Default",
+				Enabled: &enabled,
+			},
+		},
+	}
+
+	data, err := marshalGuardrailsConfig(cfg)
+	if err != nil {
+		return "", err
+	}
+	if err := writeFileAtomic(path, data); err != nil {
+		return "", err
+	}
+
+	logrus.Infof("Created default guardrails config: %s", path)
+	return path, nil
 }
 
 func (s *Server) guardrailsEnabled() bool {
@@ -448,7 +492,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Create server struct first with applied options
 	server.jwtManager = jwtManager
 	server.engine = gin.New()
-	server.clientPool = client.NewClientPool() // Initialize client pool
+	server.clientPool = client.NewClientPool() // Initialize client pool (once mode with auto-cleanup via finalizer)
 	server.errorMW = errorMW
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
 	server.guardrailsHistory = serverguardrails.NewHistoryStore(200, serverguardrails.GetGuardrailsHistoryPath(cfg.ConfigDir))
@@ -493,6 +537,13 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize load balancer
 	loadBalancer := NewLoadBalancer(cfg, healthFilter)
 
+	// Initialize affinity store for smart routing
+	affinityStore := NewAffinityStore(0) // 0 = use default TTL
+
+	// Initialize routing selector with pipeline
+	serviceSelector := routing.NewServiceSelector(cfg, affinityStore, loadBalancer)
+	simpleSelector := routing.NewSimpleSelector(serviceSelector)
+
 	// Initialize load balancer API
 	loadBalancerAPI := NewLoadBalancerAPI(loadBalancer, cfg)
 
@@ -531,6 +582,11 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.healthMonitor = healthMonitor
 	server.oauthManager = oauthManager
 	server.oauthRefresher = tokenRefresher
+	server.affinityStore = affinityStore
+	server.routingSelector = simpleSelector
+
+	// Start affinity store background GC
+	affinityStore.StartGC()
 
 	// Initialize OAuth handler
 	server.oauthHandler = oauthmodule.NewHandler(oauthManager, cfg)
@@ -885,12 +941,12 @@ func (s *Server) UseAIEndpoints() {
 
 	// scenario routes with middleware to inject scenario into context
 	scenario := s.engine.Group("/tingly/:scenario")
-	scenario.Use(contextMiddleware)
+	scenario.Use(s.contextMiddleware)
 	s.SetupMixinEndpoints(scenario)
 
 	// scenario v1 routes with middleware
 	scenarioV1 := s.engine.Group("/tingly/:scenario/v1")
-	scenarioV1.Use(contextMiddleware)
+	scenarioV1.Use(s.contextMiddleware)
 	s.SetupMixinEndpoints(scenarioV1)
 }
 
@@ -945,10 +1001,47 @@ func (s *Server) SetupPassthroughOpenAIEndpoints(group *gin.RouterGroup) {
 
 // contextMiddleware is a middleware that extracts the scenario parameter from the URL path
 // and injects it into the request context for use by downstream components (e.g., RecordRoundTripper).
-func contextMiddleware(c *gin.Context) {
-	scenario := c.Param("scenario")
-	ctx := context.WithValue(c.Request.Context(), client.ScenarioContextKey, scenario)
+// It also validates profile suffixes (e.g., "claude_code:p1") if present.
+func (s *Server) contextMiddleware(c *gin.Context) {
+	rawScenario := c.Param("scenario")
+	ctx := context.WithValue(c.Request.Context(), client.ScenarioContextKey, rawScenario)
 	c.Request = c.Request.WithContext(ctx)
+
+	// Validate profile if present (e.g., "claude_code:p1")
+	if typ.IsProfiledScenario(typ.RuleScenario(rawScenario)) {
+		base, profileID := typ.ParseScenarioProfile(typ.RuleScenario(rawScenario))
+		if base == "" || profileID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   fmt.Sprintf("invalid scenario format: '%s'", rawScenario),
+			})
+			c.Abort()
+			return
+		}
+
+		// Check base scenario exists in registry
+		if _, ok := typ.GetScenarioDescriptor(typ.RuleScenario(rawScenario)); !ok {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   fmt.Sprintf("unknown scenario '%s'", base),
+			})
+			c.Abort()
+			return
+		}
+
+		// Check profile exists in config
+		if s.config != nil {
+			if _, ok := s.config.GetProfile(typ.RuleScenario(base), profileID); !ok {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"error":   fmt.Sprintf("unknown profile '%s' for scenario '%s'", profileID, base),
+				})
+				c.Abort()
+				return
+			}
+		}
+	}
+
 	c.Next()
 }
 

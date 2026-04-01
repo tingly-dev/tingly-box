@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/proxy"
@@ -30,20 +30,36 @@ const (
 	DefaultMaxIdleConnsPerHost = 2
 )
 
+// Constants for transport TTL and cleanup interval
+const (
+	DefaultTransportTTL             = 120 * time.Minute // Default time-to-live for cached transports
+	DefaultTransportCleanupInterval = 60 * time.Minute  // Default interval for cleanup task
+)
+
+// pooledTransport wraps a transport with its last access timestamp for TTL tracking
+type pooledTransport struct {
+	transport  *http.Transport
+	lastAccess time.Time
+}
+
 // TransportPool manages shared HTTP transports for clients
-// Transports are keyed by: apiBaseURL + proxyURL + oauthType
+// Transports are keyed by: providerUUID + proxyURL
 // This allows multiple clients to share the same connection pool
-// when they connect to the same API endpoint through the same proxy.
+// when they use the same provider+proxy combination.
 type TransportPool struct {
-	transports map[string]*http.Transport
+	transports map[string]*pooledTransport
 	config     *TransportConfig // nil = use Go defaults
 	mutex      sync.RWMutex
 }
 
 // Global singleton transport pool
 var globalTransportPool = &TransportPool{
-	transports: make(map[string]*http.Transport),
+	transports: make(map[string]*pooledTransport),
 	config:     nil, // nil = use Go defaults (backward compatible with TB)
+}
+
+func init() {
+	globalTransportPool.StartCleanupTask(DefaultTransportCleanupInterval, DefaultTransportTTL)
 }
 
 // GetGlobalTransportPool returns the global transport pool singleton
@@ -77,16 +93,21 @@ func SetTransportConfig(config *TransportConfig) {
 }
 
 // GetTransport returns or creates a shared HTTP transport for the given configuration
-// The transport key is based on: apiBaseURL + proxyURL + oauthType
-func (tp *TransportPool) GetTransport(apiBase, proxyURL string, oauthType oauth.ProviderType) *http.Transport {
-	key := tp.generateTransportKey(apiBase, proxyURL, oauthType)
+// The transport key is based on: providerUUID + proxyURL
+// oauthType is used for logging only, not part of the key
+func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType) *http.Transport {
+	key := tp.generateTransportKey(providerUUID, proxyURL)
 
 	// Try to get existing transport with read lock first
 	tp.mutex.RLock()
-	if transport, exists := tp.transports[key]; exists {
+	if pooled, exists := tp.transports[key]; exists {
 		tp.mutex.RUnlock()
+		// Update last access time
+		tp.mutex.Lock()
+		pooled.lastAccess = time.Now()
+		tp.mutex.Unlock()
 		logrus.Debugf("Using cached transport for key: %s", key)
-		return transport
+		return pooled.transport
 	}
 	tp.mutex.RUnlock()
 
@@ -95,31 +116,31 @@ func (tp *TransportPool) GetTransport(apiBase, proxyURL string, oauthType oauth.
 	defer tp.mutex.Unlock()
 
 	// Double-check after acquiring write lock to avoid race conditions
-	if transport, exists := tp.transports[key]; exists {
+	if pooled, exists := tp.transports[key]; exists {
+		pooled.lastAccess = time.Now()
 		logrus.Debugf("Using cached transport for key: %s (double-check)", key)
-		return transport
+		return pooled.transport
 	}
 
 	// Create new transport
-	logrus.Infof("Creating new transport for API: %s, Proxy: %s, OAuth: %s", apiBase, proxyURL, oauthType)
+	logrus.Infof("Creating new transport for provider: %s, model: %s, proxy: %s, oauth: %s", providerUUID, model, proxyURL, oauthType)
 	transport := tp.createTransport(proxyURL)
-	tp.transports[key] = transport
+	tp.transports[key] = &pooledTransport{
+		transport:  transport,
+		lastAccess: time.Now(),
+	}
 
 	return transport
 }
 
 // generateTransportKey creates a unique key for transport caching
-// The key is based on apiBaseURL + proxyURL + oauthType to ensure:
-// - Same API endpoint with same proxy = shared transport
-// - Different API endpoints = separate transports
-// - Same endpoint with different proxies = separate transports
-// - Different OAuth hooks = separate transports (since hooks modify requests)
-func (tp *TransportPool) generateTransportKey(apiBase, proxyURL string, oauthType oauth.ProviderType) string {
-	// Normalize API base URL
-	apiBase = strings.TrimRight(apiBase, "/")
-
+// The key is based on providerUUID + proxyURL to ensure:
+// - Same provider + same proxy = shared transport (connection reuse)
+// - Different providers = separate transports
+// - Same provider + different proxies = separate transports
+func (tp *TransportPool) generateTransportKey(providerUUID, proxyURL string) string {
 	// Build key string
-	keyStr := apiBase + "|" + proxyURL + "|" + string(oauthType)
+	keyStr := providerUUID + "|" + proxyURL
 
 	// Hash the key to create a fixed-length identifier
 	h := sha256.New()
@@ -205,11 +226,48 @@ func (tp *TransportPool) Stats() map[string]interface{} {
 	}
 }
 
-// Clear removes all transports from the pool
+// Clear removes all transports from the pool and closes idle connections
 func (tp *TransportPool) Clear() {
 	tp.mutex.Lock()
 	defer tp.mutex.Unlock()
 
-	tp.transports = make(map[string]*http.Transport)
+	for key, pooled := range tp.transports {
+		pooled.transport.CloseIdleConnections()
+		logrus.Debugf("Closed idle connections for transport key: %s", key)
+	}
+	tp.transports = make(map[string]*pooledTransport)
 	logrus.Info("Transport pool cleared")
+}
+
+// cleanupExpiredTransports removes transports that haven't been accessed within the TTL period
+func (tp *TransportPool) cleanupExpiredTransports(ttl time.Duration) {
+	tp.mutex.Lock()
+	defer tp.mutex.Unlock()
+
+	now := time.Now()
+	expirationThreshold := now.Add(-ttl)
+
+	removedCount := 0
+	for key, pooled := range tp.transports {
+		if pooled.lastAccess.Before(expirationThreshold) {
+			pooled.transport.CloseIdleConnections()
+			delete(tp.transports, key)
+			removedCount++
+		}
+	}
+
+	if removedCount > 0 {
+		logrus.Infof("Cleaned up %d expired transports from pool", removedCount)
+	}
+}
+
+// StartCleanupTask starts a periodic cleanup task that removes expired transports
+func (tp *TransportPool) StartCleanupTask(interval, ttl time.Duration) {
+	ticker := time.NewTicker(interval)
+	go func() {
+		for range ticker.C {
+			tp.cleanupExpiredTransports(ttl)
+		}
+	}()
+	logrus.Infof("Started transport pool cleanup task with interval: %v, TTL: %v", interval, ttl)
 }

@@ -14,6 +14,26 @@ const (
 	APIStyleGoogle    APIStyle = "google"
 )
 
+// APIType represents the target API style for protocol conversion
+type APIType string
+
+const (
+	// TypeOpenAIChat converts requests to OpenAI Chat Completions format
+	TypeOpenAIChat APIType = "openai_chat"
+
+	// TypeOpenAIResponses converts requests to OpenAI Responses API format
+	TypeOpenAIResponses APIType = "openai_responses"
+
+	// TypeAnthropicV1 converts requests to Anthropic v1 Messages API format
+	TypeAnthropicV1 APIType = "anthropic_v1"
+
+	// TypeAnthropicBeta converts requests to Anthropic v1beta Messages API format
+	TypeAnthropicBeta APIType = "anthropic_beta"
+
+	// TypeGoogle converts requests to Google Gemini API format
+	TypeGoogle APIType = "google"
+)
+
 // CodexAPIBase is the API base URL for ChatGPT/Codex OAuth provider
 const CodexAPIBase = "https://chatgpt.com/backend-api"
 

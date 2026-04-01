@@ -77,9 +77,9 @@ const GuardrailsPage = () => {
         const total = policies.length;
         const enabled = policies.filter((item) => item?.enabled !== false).length;
         const disabled = policies.filter((item) => item?.enabled === false).length;
-        const resourceAccess = policies.filter((item) => item?.kind === 'resource_access').length;
-        const commandExecution = policies.filter((item) => item?.kind === 'command_execution').length;
-        const content = policies.filter((item) => item?.kind === 'content').length;
+        const resourceAccessPolicies = policies.filter((item) => item?.kind === 'resource_access');
+        const commandExecutionPolicies = policies.filter((item) => item?.kind === 'command_execution');
+        const contentPolicies = policies.filter((item) => item?.kind === 'content');
         const blockedEvents = historyEntries.filter((entry) => entry?.verdict === 'block').length;
         const maskedEvents = historyEntries.filter((entry) => entry?.verdict === 'mask').length;
         const reviewedEvents = historyEntries.filter((entry) => entry?.verdict === 'review').length;
@@ -88,9 +88,15 @@ const GuardrailsPage = () => {
             total,
             enabled,
             disabled,
-            resourceAccess,
-            commandExecution,
-            content,
+            resourceAccess: resourceAccessPolicies.length,
+            resourceAccessEnabled: resourceAccessPolicies.filter((item) => item?.enabled !== false).length,
+            resourceAccessDisabled: resourceAccessPolicies.filter((item) => item?.enabled === false).length,
+            commandExecution: commandExecutionPolicies.length,
+            commandExecutionEnabled: commandExecutionPolicies.filter((item) => item?.enabled !== false).length,
+            commandExecutionDisabled: commandExecutionPolicies.filter((item) => item?.enabled === false).length,
+            content: contentPolicies.length,
+            contentEnabled: contentPolicies.filter((item) => item?.enabled !== false).length,
+            contentDisabled: contentPolicies.filter((item) => item?.enabled === false).length,
             historyCount: historyEntries.length,
             allowedEvents,
             reviewedEvents,
@@ -209,44 +215,29 @@ const GuardrailsPage = () => {
                             }
                         >
                             <Stack spacing={1.75}>
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                    <Typography variant="body2" color="text.secondary">
-                                        Total Policies
-                                    </Typography>
-                                    <Chip size="small" label={`${stats.total}`} />
-                                </Stack>
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                    <Typography variant="body2" color="text.secondary">
-                                        Enabled
-                                    </Typography>
-                                    <Chip size="small" color="success" label={`${stats.enabled}`} />
-                                </Stack>
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                    <Typography variant="body2" color="text.secondary">
-                                        Disabled
-                                    </Typography>
-                                    <Chip size="small" variant="outlined" label={`${stats.disabled}`} />
-                                </Stack>
+                                <Typography variant="caption" color="text.secondary">
+                                    Format: enabled / total
+                                </Typography>
                                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                                     <Stack direction="row" spacing={1.25} alignItems="center">
                                         <FolderOpen color="primary" fontSize="small" />
                                         <Typography variant="body2">Resource Access</Typography>
                                     </Stack>
-                                    <Chip size="small" label={`${stats.resourceAccess}`} />
+                                    <Chip size="small" label={`${stats.resourceAccessEnabled}/${stats.resourceAccess}`} />
                                 </Stack>
                                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                                     <Stack direction="row" spacing={1.25} alignItems="center">
                                         <Terminal color="primary" fontSize="small" />
                                         <Typography variant="body2">Command Execution</Typography>
                                     </Stack>
-                                    <Chip size="small" label={`${stats.commandExecution}`} />
+                                    <Chip size="small" label={`${stats.commandExecutionEnabled}/${stats.commandExecution}`} />
                                 </Stack>
                                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                                     <Stack direction="row" spacing={1.25} alignItems="center">
                                         <ArticleOutlined color="primary" fontSize="small" />
                                         <Typography variant="body2">Privacy</Typography>
                                     </Stack>
-                                    <Chip size="small" label={`${stats.content}`} />
+                                    <Chip size="small" label={`${stats.contentEnabled}/${stats.content}`} />
                                 </Stack>
                             </Stack>
                         </UnifiedCard>

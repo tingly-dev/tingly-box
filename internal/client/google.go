@@ -27,12 +27,12 @@ type GoogleClient struct {
 }
 
 // NewGoogleClient creates a new Google client wrapper
-func NewGoogleClient(provider *typ.Provider) (*GoogleClient, error) {
+func NewGoogleClient(provider *typ.Provider, model string) (*GoogleClient, error) {
 	// Create HTTP client with proper OAuth/proxy configuration
 	var httpClient *http.Client
 	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
 		// Use CreateHTTPClientForProvider which applies OAuth hooks and uses shared transport
-		httpClient = CreateHTTPClientForProvider(provider)
+		httpClient = CreateHTTPClientForProvider(provider, model)
 		providerType := oauth.ProviderType(provider.OAuthDetail.ProviderType)
 		logrus.Infof("Using shared transport for OAuth provider type: %s", providerType)
 	} else {
@@ -77,7 +77,9 @@ func (c *GoogleClient) APIStyle() protocol.APIStyle {
 
 // Close closes any resources held by the client
 func (c *GoogleClient) Close() error {
-	// genai.Client doesn't need explicit closing
+	if c.httpClient != nil && c.httpClient != http.DefaultClient {
+		c.httpClient.CloseIdleConnections()
+	}
 	return nil
 }
 

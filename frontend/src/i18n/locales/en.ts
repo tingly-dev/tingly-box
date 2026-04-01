@@ -425,6 +425,25 @@ export default {
       "title": "Claude Code Configuration Guide",
       "subtitle": "Follow these steps to configure Claude Code to use Tingly Box as your AI proxy",
       "dontRemindAgain": "Do not remind again"
+    },
+    "profile": {
+      "renameProfile": "Rename profile",
+      "deleteProfile": "Delete profile",
+      "quickStart": "Quick Start",
+      "switchToGlobal": "Switch to global command",
+      "switchToNpm": "Switch to npm command",
+      "copyCommand": "Copy command",
+      "clickToCopy": "Click to copy command",
+      "renameTitle": "Rename Profile",
+      "profileName": "Profile Name",
+      "save": "Save",
+      "deleteTitle": "Delete Profile",
+      "deleteConfirm": "Are you sure you want to delete profile <strong>{{name}}</strong>?",
+      "deleteWarning": "This will remove the profile and all its associated rules and flags. This action cannot be undone.",
+      "profileRenamed": "Profile renamed",
+      "profileDeleted": "Profile deleted",
+      "renameFailed": "Failed to rename profile",
+      "deleteFailed": "Failed to delete profile"
     }
   },
   "prompt": {

@@ -32,6 +32,9 @@ type BotHandler struct {
 	interaction      *imbot.InteractionHandler // New interaction handler
 	tbClient         tbclient.TBClient         // TB Client for model configuration
 
+	// Agent router for delegating execution to agent executors
+	agentRouter *AgentRouter
+
 	// Handoff manager for agent switching
 	handoffManager *smart_guide.HandoffManager
 
@@ -160,7 +163,8 @@ func NewBotHandler(
 		}
 	}
 
-	return &BotHandler{
+	// Create the BotHandler instance first (needed for method references)
+	handler := &BotHandler{
 		ctx:                 ctx,
 		botSetting:          botSetting,
 		chatStore:           chatStore,
@@ -179,6 +183,32 @@ func NewBotHandler(
 		actionMenuMessageID: make(map[string]string),
 		verbose:             true, // Default to verbose mode
 	}
+
+	// Initialize AgentRouter with dependencies
+	deps := &ExecutorDependencies{
+		BotSetting:                 botSetting,
+		ChatStore:                  chatStore,
+		SessionMgr:                 sessionMgr,
+		AgentBoot:                  agentBoot,
+		IMPrompter:                 imPrompter,
+		FileStore:                  fileStore,
+		TBClient:                   tbClient,
+		TBSessionStore:             tbSessionStore,
+		HandoffManager:             handoffMgr,
+		RunningCancel:              handler.runningCancel,
+		RunningCancelMu:            &handler.runningCancelMu,
+		GetVerbose:                 handler.GetVerbose,
+		FormatResponse:             handler.formatResponseWithHeader,
+		FormatResponseWithFooter:   handler.formatResponseWithFooter,
+		SendText:                   handler.SendText,
+		SendTextWithReply:          handler.sendTextWithReply,
+		SendTextWithActionKeyboard: handler.sendTextWithActionKeyboard,
+		NewStreamingMessageHandler: handler.newStreamingMessageHandler,
+	}
+	handler.agentRouter = NewAgentRouter(deps)
+	handler.InitCommandRegistry()
+
+	return handler
 }
 
 // GetVerbose returns the current verbose mode setting for a chat
@@ -417,11 +447,18 @@ func (h *BotHandler) handlePermissionTextResponse(hCtx HandlerContext) bool {
 		return false
 	}
 
+	input := hCtx.Text()
+
+	// Never consume handoff commands (@cc, @tb, @mock, /cc, /tb, /mock) as permission responses
+	trimmed := strings.TrimSpace(input)
+	if strings.HasPrefix(trimmed, "@cc") || strings.HasPrefix(trimmed, "@tb") || strings.HasPrefix(trimmed, "@mock") ||
+		strings.HasPrefix(trimmed, "/cc") || strings.HasPrefix(trimmed, "/tb") || strings.HasPrefix(trimmed, "/mock") {
+		return false
+	}
+
 	// Get the most recent pending request for this chat
 	// (usually there's only one at a time)
 	latestReq := pendingReqs[0]
-
-	input := hCtx.Text()
 
 	// For AskUserQuestion, try to parse as option selection first
 	if latestReq.ToolName == "AskUserQuestion" {
@@ -579,44 +616,59 @@ func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string
 	}
 }
 
-// formatResponseWithMeta adds project/session/user metadata to the response
-// behavior.Verbose controls whether processing messages are sent
-func (h *BotHandler) formatResponseWithMeta(meta ResponseMeta, response string, behavior OutputBehavior) string {
+// formatResponseWithHeader adds project/session/user metadata to the response
+// Meta information includes: agent type, project path, chat_id, user_id, session_id
+// behavior.Debug controls whether meta information is shown
+// formatResponseWithHeader adds project/session/user metadata to the response
+// Meta information includes: agent type, project path, chat_id, user_id, session_id
+// Set showMeta=true to display meta (e.g., for help), false for regular messages
+// behavior.Verbose controls whether processing messages are sent (handled elsewhere)
+func (h *BotHandler) formatResponseWithHeader(meta ResponseMeta, response string, showMeta bool) string {
 	var buf strings.Builder
 
-	// Show agent indicator
-	if meta.AgentType != "" {
-		buf.WriteString(fmt.Sprintf(FormatAgentLine, GetAgentIcon(meta.AgentType), GetAgentDisplayName(meta.AgentType)))
+	// Show meta information only when explicitly requested
+	if showMeta {
+		// Show agent indicator
+		if meta.AgentType != "" {
+			buf.WriteString(fmt.Sprintf(FormatAgentLine, GetAgentIcon(meta.AgentType), GetAgentDisplayName(meta.AgentType)))
+		}
+
+		// Always show project path (shortened)
+		if meta.ProjectPath != "" {
+			buf.WriteString(fmt.Sprintf(FormatProjectLine, IconProject, ShortenPath(meta.ProjectPath)))
+		}
+
+		// Show IDs for transparency
+		if meta.ChatID != "" {
+			buf.WriteString(fmt.Sprintf(FormatDebugLine, IconChat, meta.ChatID))
+		}
+		if meta.UserID != "" {
+			buf.WriteString(fmt.Sprintf(FormatDebugLine, IconUser, meta.UserID))
+		}
+		if meta.SessionID != "" {
+			buf.WriteString(fmt.Sprintf(FormatDebugLine, IconSession, ShortenID(meta.SessionID, 8)))
+		}
+
+		buf.WriteString(SeparatorLine + "\n\n")
 	}
 
-	// Always show project path (shortened)
-	if meta.ProjectPath != "" {
-		buf.WriteString(fmt.Sprintf(FormatProjectLine, IconProject, ShortenPath(meta.ProjectPath)))
-	}
-
-	// Always show IDs for transparency
-	if meta.ChatID != "" {
-		buf.WriteString(fmt.Sprintf(FormatDebugLine, IconChat, meta.ChatID))
-	}
-	if meta.UserID != "" {
-		buf.WriteString(fmt.Sprintf(FormatDebugLine, IconUser, meta.UserID))
-	}
-	if meta.SessionID != "" {
-		buf.WriteString(fmt.Sprintf(FormatDebugLine, IconSession, ShortenID(meta.SessionID, 8)))
-	}
-
-	buf.WriteString(SeparatorLine + "\n\n")
 	return buf.String() + response
 }
 
-// getOutputBehavior returns the output behavior for this bot handler
-func (h *BotHandler) getOutputBehavior() OutputBehavior {
+// formatResponseWithFooter adds a compact footer (agent + path) to the response
+func (h *BotHandler) formatResponseWithFooter(meta ResponseMeta, response string) string {
+	return response + BuildFooter(meta.AgentType, meta.ProjectPath)
+}
+
+// getOutputBehaviorForChat returns the output behavior for a specific chat
+// Combines bot-level defaults with chat-level overrides
+func (h *BotHandler) getOutputBehaviorForChat(chatID string) OutputBehavior {
 	return h.botSetting.GetOutputBehavior()
 }
 
 // newStreamingMessageHandler creates a new streaming message handler
-func (h *BotHandler) newStreamingMessageHandler(hCtx HandlerContext) *streamingMessageHandler {
-	return newStreamingMessageHandler(hCtx.Bot, hCtx.ChatID, hCtx.MessageID, h.GetVerbose(hCtx.ChatID))
+func (h *BotHandler) newStreamingMessageHandler(hCtx HandlerContext, meta *ResponseMeta) *streamingMessageHandler {
+	return newStreamingMessageHandler(hCtx.Bot, hCtx.ChatID, hCtx.MessageID, h.GetVerbose(hCtx.ChatID), meta)
 }
 
 // handleBindConfirm handles the bind confirmation callback

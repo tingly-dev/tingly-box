@@ -33,6 +33,7 @@ type UpdateRuleResponse struct {
 	Message string `json:"message" example:"Rule saved successfully"`
 	Data    struct {
 		UUID          string                      `json:"uuid"`
+		Scenario      string                      `json:"scenario" example:"openai"`
 		RequestModel  string                      `json:"request_model" example:"gpt-3.5-turbo"`
 		ResponseModel string                      `json:"response_model" example:"gpt-3.5-turbo"`
 		Description   string                      `json:"description" example:"My rule description"`
