@@ -100,3 +100,50 @@ func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMess
 	}
 	return finalCtx, nil
 }
+
+func (s *Server) transformOpenAIChat(c *gin.Context, req protocol.OpenAIChatCompletionRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
+	// Build transform chain with recording support
+	chain, err := s.BuildTransformChain(c, target, provider.APIBase, nil, protocolRecorder)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create transform context
+	var scenarioFlags *typ.ScenarioFlags
+	if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
+		scenarioFlags = &scenarioConfig.Flags
+	}
+
+	extra := map[string]any{}
+
+	if provider.AuthType == typ.AuthTypeOAuth {
+		extra["user_id"] = provider.OAuthDetail.UserID
+	}
+	extra["device"] = s.config.ClaudeCodeDeviceID
+
+	transformCtx := transform.NewTransformContext(
+		&req.ChatCompletionNewParams,
+		transform.WithProviderURL(provider.APIBase),
+		transform.WithScenarioFlags(scenarioFlags),
+		transform.WithStreaming(isStreaming),
+		transform.WithExtra(extra),
+	)
+	transformCtx.SourceAPI = protocol.TypeOpenAIChat
+	transformCtx.TargetAPI = target
+
+	// Execute transform chain
+	finalCtx, err := chain.Execute(transformCtx)
+	if err != nil {
+		if protocolRecorder != nil {
+			protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
+			protocolRecorder.RecordError(err)
+		}
+		return nil, err
+	}
+
+	// Store transform steps in V2 recorder
+	if protocolRecorder != nil {
+		protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
+	}
+	return finalCtx, nil
+}
