@@ -322,6 +322,7 @@ func (s *Server) recordDetailedUsageWithTokenUsage(c *gin.Context, rule *typ.Rul
 		Model:            model,
 		Scenario:         scenario,
 		RequestModel:     requestModel,
+		UserID:           c.GetString("enterprise_user_id"),
 		InputTokens:      usage.InputTokens,
 		OutputTokens:     usage.OutputTokens,
 		CacheInputTokens: usage.CacheInputTokens,
