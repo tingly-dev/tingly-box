@@ -44,7 +44,7 @@ import {
     Typography,
 } from '@mui/material';
 import type { ReactNode } from 'react';
-import React, {useCallback, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useMemo, useRef, useState, useEffect} from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
@@ -418,14 +418,26 @@ const Layout = ({ children }: LayoutProps) => {
         return items;
     }, [t, promptMenuItems, enableGuardrails, profiles]);
 
-    // Find current active activity
+    // Find current active activity (path-based, with sessionStorage fallback)
     const activeActivity = useMemo(() => {
+        // Check path-based match first
         for (const item of activityItems) {
             if (item.path && isActive(item.path)) return item.key;
             if (item.children && isChildActive(item.children)) return item.key;
         }
+        // Fallback: restore last selected activity from sessionStorage
+        const saved = sessionStorage.getItem('layout.activeActivity');
+        if (saved && activityItems.some(item => item.key === saved)) return saved;
         return 'dashboard';
     }, [activityItems, location.pathname]);
+
+    // Persist activity selection + last visited path per activity to sessionStorage
+    useEffect(() => {
+        sessionStorage.setItem('layout.activeActivity', activeActivity);
+        // Save current path as last visited for this activity
+        const key = `layout.activityPath.${activeActivity}`;
+        sessionStorage.setItem(key, location.pathname);
+    }, [activeActivity, location.pathname]);
 
     // Get sidebar items for active activity
     const sidebarItems = useMemo(() => {
@@ -493,13 +505,15 @@ const Layout = ({ children }: LayoutProps) => {
                 {activityItems.map((item) => {
                     const isActiveItem = activeActivity === item.key;
 
-                    // Handle click: if has path, navigate to path; otherwise navigate to first child
+                    // Handle click: navigate to last visited child, or first child as fallback
                     const handleClick = () => {
                         setMobileOpen(false);
-                        if (item.path) {
-                            navigate(item.path);
-                        } else if (item.children && item.children.length > 0) {
-                            navigate(item.children[0].path);
+                        sessionStorage.setItem('layout.activeActivity', item.key);
+                        const targetPath = item.path
+                            || sessionStorage.getItem(`layout.activityPath.${item.key}`)
+                            || (item.children && item.children.length > 0 && item.children[0].path);
+                        if (targetPath) {
+                            navigate(targetPath);
                         }
                     };
 
