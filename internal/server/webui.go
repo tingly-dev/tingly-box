@@ -929,7 +929,15 @@ func (s *Server) useWebStaticEndpoints(engine *gin.Engine) {
 	st, _ := fs.Sub(assets.WebDistAssets, "web/dist/assets")
 	engine.StaticFS("/assets", http.FS(st))
 
-	engine.StaticFile("/icon.svg", "web/dist/icon.svg")
+	// Serve individual static files from embedded filesystem
+	engine.GET("/icon.svg", func(c *gin.Context) {
+		data, err := assets.WebDistAssets.ReadFile("web/dist/icon.svg")
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.Data(http.StatusOK, "image/svg+xml", data)
+	})
 
 	engine.NoRoute(func(c *gin.Context) {
 		// Don't serve index.html for API routes - let them return 404s
