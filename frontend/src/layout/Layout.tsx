@@ -87,13 +87,19 @@ const activityItemSx = (extra?: Record<string, unknown>) => ({
     ...extra,
 });
 
-interface NavItem {
+interface NavItemBase {
+    type?: undefined;
     path: string;
     label: string;
     icon?: ReactNode;
     subtitle?: string;
-    divider?: boolean;
 }
+
+interface NavDivider {
+    type: 'divider';
+}
+
+type NavItem = NavItemBase | NavDivider;
 
 interface ActivityItem {
     key: string;
@@ -160,7 +166,7 @@ const Layout = ({ children }: LayoutProps) => {
     };
 
     const isChildActive = (children?: NavItem[]) => {
-        return children?.some(item => isActive(item.path)) ?? false;
+        return children?.some(item => item.type !== 'divider' && isActive(item.path)) ?? false;
     };
 
     // Build prompt menu items based on feature flags
@@ -206,8 +212,8 @@ const Layout = ({ children }: LayoutProps) => {
                         label: 'Heatmap',
                         icon: <GridOnIcon sx={{ fontSize: 20 }} />,
                     },
+                    { type: 'divider' },
                     {
-                        divider: true,
                         path: '/dashboard/today',
                         label: 'Today',
                         icon: <TodayIcon sx={{ fontSize: 20 }} />,
@@ -245,7 +251,6 @@ const Layout = ({ children }: LayoutProps) => {
                 label: t('layout.nav.home'),
                 children: [
                     {
-                        // divider: true,
                         path: '/use-claude-code',
                         subtitle: "default",
                         label: t('layout.nav.useClaudeCode', { defaultValue: 'Claude Code' }),
@@ -257,8 +262,8 @@ const Layout = ({ children }: LayoutProps) => {
                         label: 'Add Profile',
                         icon: <AddIcon sx={{ fontSize: 20 }} />,
                     },
+                    { type: 'divider' },
                     {
-                        divider: true,
                         path: '/use-codex',
                         label: t('layout.nav.useCodex', { defaultValue: 'Codex' }),
                         icon: <OpenAI size={20} />,
@@ -278,8 +283,8 @@ const Layout = ({ children }: LayoutProps) => {
                         label: t('layout.nav.useVSCode', { defaultValue: 'VS Code' }),
                         icon: <VSCode size={20} />,
                     },
+                    { type: 'divider' },
                     {
-                        divider: true,
                         path: '/use-openai',
                         label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }),
                         icon: <OpenAI size={20} />,
@@ -289,8 +294,8 @@ const Layout = ({ children }: LayoutProps) => {
                         label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }),
                         icon: <Anthropic size={20} />,
                     },
+                    { type: 'divider' },
                     {
-                        divider: true,
                         path: '/use-agent',
                         label: 'OpenClaw',
                         icon: <AutoAwesome sx={{ fontSize: 20 }} />,
@@ -303,7 +308,7 @@ const Layout = ({ children }: LayoutProps) => {
                 icon: <PromptIcon sx={{ fontSize: 22 }} />,
                 label: 'Prompt',
                 children: promptMenuItems,
-            }] : []),
+            }] as ActivityItem[] : []),
             // Only add Remote menu if full edition
             ...(isFullEdition ? [{
                 key: 'remote-control' as const,
@@ -320,8 +325,8 @@ const Layout = ({ children }: LayoutProps) => {
                     //     label: 'Agent Assistant',
                     //     icon: <AutoAwesome sx={{fontSize: 20}}/>,
                     // },
+                    { type: 'divider' } as NavDivider,
                     {
-                        divider: true,
                         path: '/remote-control/weixin',
                         label: 'Weixin',
                         icon: <Weixin size={20}/>,
@@ -346,8 +351,8 @@ const Layout = ({ children }: LayoutProps) => {
                         label: 'DingTalk',
                         icon: <DingTalk size={20}/>,
                     },
-                ],
-            }] : []),
+                ] as NavItem[],
+            }] as ActivityItem[] : []),
             ...(enableGuardrails ? [{
                 key: 'guardrails',
                 icon: <AccessControlIcon sx={{ fontSize: 22 }} />,
@@ -378,8 +383,8 @@ const Layout = ({ children }: LayoutProps) => {
                         label: 'History',
                         icon: <HistoryIcon sx={{ fontSize: 20 }} />,
                     },
-                ],
-            }] : []),
+                ] as NavItem[],
+            }] as ActivityItem[] : []),
             {
                 key: 'credential',
                 icon: <LockIcon sx={{ fontSize: 22 }} />,
@@ -505,13 +510,14 @@ const Layout = ({ children }: LayoutProps) => {
                 {activityItems.map((item) => {
                     const isActiveItem = activeActivity === item.key;
 
-                    // Handle click: navigate to last visited child, or first child as fallback
+                    // Handle click: navigate to last visited child, or first nav child as fallback
                     const handleClick = () => {
                         setMobileOpen(false);
                         sessionStorage.setItem('layout.activeActivity', item.key);
+                        const firstNavChild = item.children?.find(c => c.type !== 'divider');
                         const targetPath = item.path
                             || sessionStorage.getItem(`layout.activityPath.${item.key}`)
-                            || (item.children && item.children.length > 0 && item.children[0].path);
+                            || firstNavChild?.path;
                         if (targetPath) {
                             navigate(targetPath);
                         }
@@ -753,7 +759,10 @@ const Layout = ({ children }: LayoutProps) => {
                     '&:hover': { backgroundColor: 'grey.400' }
                 }
             }}>
-                {sidebarItems.map((item) => {
+                {sidebarItems.map((item, index) => {
+                    if (item.type === 'divider') {
+                        return <Divider key={`divider-${index}`} sx={{ mx: 2, my: 1 }} />;
+                    }
                     const isAddProfile = item.path === '#add-profile';
                     const button = (
                     <ListItem disablePadding>
@@ -843,7 +852,6 @@ const Layout = ({ children }: LayoutProps) => {
                     );
                     return (
                     <React.Fragment key={item.path}>
-                        {item.divider && <Divider sx={{ mx: 2, my: 1 }} />}
                         {isAddProfile ? (
                             <Tooltip title="Create a new Claude Code profile with custom settings" arrow placement="right">
                                 {button}
