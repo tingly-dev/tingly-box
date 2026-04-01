@@ -1,947 +1,88 @@
-import { OpenAI, Anthropic, Claude, OpenCode, Xcode, VSCode, Telegram, Feishu, Lark, DingTalk, Weixin } from '../components/BrandIcons';
-import {
-    AccountCircle as AccountIcon,
-    Add as AddIcon,
-    AutoAwesome,
-    BarChart as BarChartIcon,
-    CalendarToday as CalendarIcon,
-    ChatBubble,
-    Code as CodeIcon,
-    DateRange as DateRangeIcon,
-    ErrorOutline,
-    GridOn as GridOnIcon,
-    ListAlt as LogsIcon,
-    Menu as MenuIcon,
-    NewReleases,
-    Psychology as PromptIcon,
-    Lan as RemoteIcon,
-    Bolt as SkillIcon,
-    Settings as SystemIcon,
-    Today as TodayIcon,
-    Send as UserPromptIcon,
-    Extension as VSCodeIcon,
-    Rule,
-    History as HistoryIcon,
-    VpnKey as VpnKeyIcon,
-    Security as AccessControlIcon
-} from '@mui/icons-material';
-import LockIcon from '@mui/icons-material/Lock';
-import {
-    Box,
-    Button,
-    Divider,
-    Drawer,
-    IconButton,
-    List,
-    ListItem,
-    ListItemButton,
-    ListItemIcon,
-    ListItemText,
-    Popover,
-    TextField,
-    Tooltip,
-    Typography,
-} from '@mui/material';
-import type { ReactNode } from 'react';
-import React, {useCallback, useMemo, useRef, useState, useEffect} from 'react';
-import { useTranslation } from 'react-i18next';
-import { Link as RouterLink, useLocation, useNavigate, Outlet } from 'react-router-dom';
-import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
-import { useHealth } from '../contexts/HealthContext';
+import { Box, Drawer, IconButton, Popover, Typography } from '@mui/material';
+import { Menu as MenuIcon } from '@mui/icons-material';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
-import { isFullEdition } from '@/utils/edition';
-import { useProfileContext } from '@/contexts/ProfileContext';
-import { api } from '@/services/api';
-
-interface LayoutProps {
-    children?: ReactNode;
-}
-
-const activityBarWidth = 88;
-const sidebarWidth = 200;
-const headerHeight = 60;
-const footerHeight = 60;
-
-// --- Activity Bar Item Styles (extracted for easy tuning) ---
-const activityItemMinHeight = 64;       // was 56
-const activityItemGap = 0.5;            // was 0.25
-const activityItemRadius = 1.25;
-const activityItemPaddingX = 1;
-const activityItemPaddingY = 1.25;      // was 1
-const activityContainerPaddingY = 1;    // was 0.5
-
-const activityItemSx = (extra?: Record<string, unknown>) => ({
-    minHeight: activityItemMinHeight,
-    mx: 0.5,
-    px: activityItemPaddingX,
-    py: activityItemPaddingY,
-    flexDirection: 'column' as const,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: activityItemGap,
-    position: 'relative' as const,
-    color: 'text.secondary',
-    borderRadius: activityItemRadius,
-    cursor: 'pointer',
-    ...extra,
-});
-
-interface NavItemBase {
-    type?: undefined;
-    path: string;
-    label: string;
-    icon?: ReactNode;
-    subtitle?: string;
-}
-
-interface NavDivider {
-    type: 'divider';
-}
-
-type NavItem = NavItemBase | NavDivider;
-
-interface ActivityItem {
-    key: string;
-    icon: ReactNode;
-    label: string;
-    path?: string; // Direct navigation if no children
-    children?: NavItem[];
-}
+import { activityBarWidth, sidebarWidth } from './constants';
+import { ActivityBar } from './ActivityBar';
+import { Sidebar } from './Sidebar';
+import { useActivityItems } from './useActivityItems.tsx';
+import type { ActivityItem, LayoutProps } from './types';
 
 const Layout = ({ children }: LayoutProps) => {
-    const { t } = useTranslation();
     const location = useLocation();
     const navigate = useNavigate();
-    const { hasUpdate, currentVersion, showUpdateDialog } = useAppVersion();
-    const { isHealthy, showDisconnectDialog } = useHealth();
-    const { skillUser, skillIde, enableGuardrails} = useFeatureFlags();
+    const { currentVersion } = useAppVersion();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
-    const { profiles, refresh } = useProfileContext();
 
-    // Add Profile popover state
-    const [addProfileAnchorEl, setAddProfileAnchorEl] = useState<HTMLElement | null>(null);
-    const [newProfileName, setNewProfileName] = useState('');
-    const [isCreating, setIsCreating] = useState(false);
-    const addProfileInputRef = useRef<HTMLInputElement>(null);
+    const activityItems = useActivityItems();
 
-    const handleAddProfileClick = useCallback((e: React.MouseEvent<HTMLElement>) => {
-        setAddProfileAnchorEl(e.currentTarget);
-        setNewProfileName('');
-        setTimeout(() => addProfileInputRef.current?.focus(), 100);
-    }, []);
+    const isActive = (path: string) => location.pathname === path;
+    const isChildActive = (children?: ActivityItem['children']) =>
+        children?.some(item => item.type !== 'divider' && isActive(item.path)) ?? false;
 
-    const handleAddProfileClose = useCallback(() => {
-        setAddProfileAnchorEl(null);
-        setNewProfileName('');
-    }, []);
-
-    const handleCreateProfile = useCallback(async () => {
-        if (!newProfileName.trim()) return;
-        try {
-            setIsCreating(true);
-            const result = await api.createProfile('claude_code', newProfileName.trim());
-            if (result.success) {
-                handleAddProfileClose();
-                refresh();
-            }
-        } catch {
-            // silent fail - could add a snackbar here
-        } finally {
-            setIsCreating(false);
-        }
-    }, [newProfileName, refresh, handleAddProfileClose]);
-
-    const handleEasterEgg = (event: React.MouseEvent<HTMLElement>) => {
-        setEasterEggAnchorEl(event.currentTarget);
-    };
-
-    const handleEasterEggClose = () => {
-        setEasterEggAnchorEl(null);
-    };
-
-    const isActive = (path: string) => {
-        return location.pathname === path;
-    };
-
-    const isChildActive = (children?: NavItem[]) => {
-        return children?.some(item => item.type !== 'divider' && isActive(item.path)) ?? false;
-    };
-
-    // Build prompt menu items based on feature flags
-    const promptMenuItems = useMemo(() => {
-        const items: NavItem[] = [];
-        if (skillUser) {
-            items.push({
-                path: '/prompt/user',
-                label: 'User Request',
-                icon: <UserPromptIcon sx={{ fontSize: 20 }} />,
-            });
-        }
-        if (skillIde) {
-            items.push({
-                path: '/prompt/skill',
-                label: 'Skills',
-                icon: <SkillIcon sx={{ fontSize: 20 }} />,
-            });
-        }
-        return items;
-    }, [skillUser, skillIde]);
-
-    // Activity bar items
-    const activityItems: ActivityItem[] = useMemo(() => {
-        // Build profile sidebar items dynamically
-        const claudeCodeProfiles = profiles['claude_code'] || [];
-        const profileNavItems: NavItem[] = claudeCodeProfiles.map(p => ({
-            path: `/use-claude-code/profile/${p.id}`,
-            label: 'Claude Code',
-            subtitle: `${p.id} - ${p.name}`,
-            icon: <Claude size={20} />,
-        }));
-
-        const items: ActivityItem[] = [
-            {
-                key: 'dashboard',
-                icon: <BarChartIcon sx={{ fontSize: 22 }} />,
-                label: 'Dashboard',
-                path: '/dashboard/7d',
-                children: [
-                    {
-                        path: '/overview/90d',
-                        label: 'Heatmap',
-                        icon: <GridOnIcon sx={{ fontSize: 20 }} />,
-                    },
-                    { type: 'divider' },
-                    {
-                        path: '/dashboard/today',
-                        label: 'Today',
-                        icon: <TodayIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/dashboard/yesterday',
-                        label: 'Yesterday',
-                        icon: <CalendarIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/dashboard/3d',
-                        label: '3 Days',
-                        icon: <DateRangeIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/dashboard/7d',
-                        label: '7 Days',
-                        icon: <DateRangeIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/dashboard/30d',
-                        label: '30 Days',
-                        icon: <DateRangeIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/dashboard/90d',
-                        label: '90 Days',
-                        icon: <DateRangeIcon sx={{ fontSize: 20 }} />,
-                    },
-                ],
-            },
-            {
-                key: 'scenario',
-                icon: <CodeIcon sx={{ fontSize: 22 }} />,
-                label: t('layout.nav.home'),
-                children: [
-                    {
-                        path: '/use-claude-code',
-                        subtitle: "default",
-                        label: t('layout.nav.useClaudeCode', { defaultValue: 'Claude Code' }),
-                        icon: <Claude size={20} />,
-                    },
-                    ...profileNavItems,
-                    {
-                        path: '#add-profile',
-                        label: 'Add Profile',
-                        icon: <AddIcon sx={{ fontSize: 20 }} />,
-                    },
-                    { type: 'divider' },
-                    {
-                        path: '/use-codex',
-                        label: t('layout.nav.useCodex', { defaultValue: 'Codex' }),
-                        icon: <OpenAI size={20} />,
-                    },
-                    {
-                        path: '/use-opencode',
-                        label: t('layout.nav.useOpenCode', { defaultValue: 'OpenCode' }),
-                        icon: <OpenCode size={20} />,
-                    },
-                    {
-                        path: '/use-xcode',
-                        label: t('layout.nav.useXcode', { defaultValue: 'Xcode' }),
-                        icon: <Xcode size={20} />,
-                    },
-                    {
-                        path: '/use-vscode',
-                        label: t('layout.nav.useVSCode', { defaultValue: 'VS Code' }),
-                        icon: <VSCode size={20} />,
-                    },
-                    { type: 'divider' },
-                    {
-                        path: '/use-openai',
-                        label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }),
-                        icon: <OpenAI size={20} />,
-                    },
-                    {
-                        path: '/use-anthropic',
-                        label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }),
-                        icon: <Anthropic size={20} />,
-                    },
-                    { type: 'divider' },
-                    {
-                        path: '/use-agent',
-                        label: 'OpenClaw',
-                        icon: <AutoAwesome sx={{ fontSize: 20 }} />,
-                    },
-                ],
-            },
-            // Only add Prompt menu if full edition
-            ...(isFullEdition && promptMenuItems.length > 0 ? [{
-                key: 'prompt' as const,
-                icon: <PromptIcon sx={{ fontSize: 22 }} />,
-                label: 'Prompt',
-                children: promptMenuItems,
-            }] as ActivityItem[] : []),
-            // Only add Remote menu if full edition
-            ...(isFullEdition ? [{
-                key: 'remote-control' as const,
-                icon: <RemoteIcon sx={{fontSize: 22}}/>,
-                label: 'Remote',
-                children: [
-                    {
-                        path: '/remote-control',
-                        label: 'Overview',
-                        icon: <ChatBubble sx={{fontSize: 20}}/>,
-                    },
-                    // {
-                    //     path: '/remote-control/agent',
-                    //     label: 'Agent Assistant',
-                    //     icon: <AutoAwesome sx={{fontSize: 20}}/>,
-                    // },
-                    { type: 'divider' } as NavDivider,
-                    {
-                        path: '/remote-control/weixin',
-                        label: 'Weixin',
-                        icon: <Weixin size={20}/>,
-                    },
-                    {
-                        path: '/remote-control/telegram',
-                        label: 'Telegram',
-                        icon: <Telegram size={20}/>,
-                    },
-                    {
-                        path: '/remote-control/feishu',
-                        label: 'Feishu',
-                        icon: <Feishu size={20}/>,
-                    },
-                    {
-                        path: '/remote-control/lark',
-                        label: 'Lark',
-                        icon: <Lark size={20}/>,
-                    },
-                    {
-                        path: '/remote-control/dingtalk',
-                        label: 'DingTalk',
-                        icon: <DingTalk size={20}/>,
-                    },
-                ] as NavItem[],
-            }] as ActivityItem[] : []),
-            ...(enableGuardrails ? [{
-                key: 'guardrails',
-                icon: <AccessControlIcon sx={{ fontSize: 22 }} />,
-                label: 'Guardrails',
-                children: [
-                    {
-                        path: '/guardrails',
-                        label: 'Overview',
-                        icon: <AccessControlIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/guardrails/groups',
-                        label: 'Policy Groups',
-                        icon: <Rule sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/guardrails/rules',
-                        label: 'Policies',
-                        icon: <Rule sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/guardrails/credentials',
-                        label: 'Credentials',
-                        icon: <VpnKeyIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/guardrails/history',
-                        label: 'History',
-                        icon: <HistoryIcon sx={{ fontSize: 20 }} />,
-                    },
-                ] as NavItem[],
-            }] as ActivityItem[] : []),
-            {
-                key: 'credential',
-                icon: <LockIcon sx={{ fontSize: 22 }} />,
-                label: t('layout.nav.credential', { defaultValue: 'Credentials' }),
-                children: [
-                    {
-                        path: '/credentials',
-                        label: 'Model Key',
-                        icon: <LockIcon sx={{ fontSize: 20 }} />,
-                    },
-                ],
-            },
-            {
-                key: 'system',
-                icon: <SystemIcon sx={{ fontSize: 22 }} />,
-                label: 'System',
-                children: [
-                     {
-                        path: '/access-control',
-                        label: 'Access Control',
-                        icon: <AccessControlIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/system',
-                        label: 'Status',
-                        icon: <SystemIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/system/logs',
-                        label: 'Logs',
-                        icon: <LogsIcon sx={{ fontSize: 20 }} />,
-                    },
-                ],
-            },
-        ];
-        return items;
-    }, [t, promptMenuItems, enableGuardrails, profiles]);
-
-    // Find current active activity (path-based, with sessionStorage fallback)
+    // Determine active activity from current path, falling back to sessionStorage
     const activeActivity = useMemo(() => {
-        // Check path-based match first
         for (const item of activityItems) {
             if (item.path && isActive(item.path)) return item.key;
             if (item.children && isChildActive(item.children)) return item.key;
         }
-        // Fallback: restore last selected activity from sessionStorage
         const saved = sessionStorage.getItem('layout.activeActivity');
         if (saved && activityItems.some(item => item.key === saved)) return saved;
         return 'dashboard';
     }, [activityItems, location.pathname]);
 
-    // Persist activity selection + last visited path per activity to sessionStorage
+    // Persist active activity + last visited path
     useEffect(() => {
         sessionStorage.setItem('layout.activeActivity', activeActivity);
-        // Save current path as last visited for this activity
-        const key = `layout.activityPath.${activeActivity}`;
-        sessionStorage.setItem(key, location.pathname);
+        sessionStorage.setItem(`layout.activityPath.${activeActivity}`, location.pathname);
     }, [activeActivity, location.pathname]);
 
-    // Get sidebar items for active activity
     const sidebarItems = useMemo(() => {
         const activity = activityItems.find(item => item.key === activeActivity);
         return activity?.children || [];
     }, [activityItems, activeActivity]);
 
-    // Get current activity label
     const activeActivityLabel = useMemo(() => {
         const activity = activityItems.find(item => item.key === activeActivity);
         return activity?.label || '';
     }, [activityItems, activeActivity]);
 
-    // Activity bar content (first column - icon only)
-    const activityBarContent = (
-        <Box
-            sx={{
-                width: activityBarWidth,
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                bgcolor: 'background.paper',
-                borderRight: '1px solid',
-                borderColor: 'divider',
-            }}
-        >
-            {/* Logo */}
-            <Box
-                sx={{
-                    height: headerHeight,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                }}
-            >
-                <Tooltip title={`Tingly-Box v${currentVersion}`} placement="right" arrow>
-                    <Box
-                        component="a"
-                        href="https://github.com/tingly-dev/tingly-box"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        sx={{
-                            width: 36,
-                            height: 36,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            textDecoration: 'none',
-                            cursor: 'pointer',
-                            transition: 'transform 0.2s',
-                            '&:hover': {
-                                transform: 'scale(1.08)',
-                            },
-                        }}
-                    >
-                        <Box
-                            component="img"
-                            src="/icon.svg"
-                            alt="Tingly-Box"
-                            sx={{ width: 36, height: 36, borderRadius: 8 }}
-                        />
-                        </Box>
-                    </Tooltip>
-            </Box>
+    const handleActivityClick = (item: ActivityItem) => {
+        setMobileOpen(false);
+        sessionStorage.setItem('layout.activeActivity', item.key);
+        const firstNavChild = item.children?.find(c => c.type !== 'divider');
+        const targetPath =
+            item.path ||
+            sessionStorage.getItem(`layout.activityPath.${item.key}`) ||
+            firstNavChild?.path;
+        if (targetPath) navigate(targetPath);
+    };
 
-            {/* Activity Icons */}
-            <Box sx={{ flex: 1, py: activityContainerPaddingY, overflowY: 'auto' }}>
-                {activityItems.map((item) => {
-                    const isActiveItem = activeActivity === item.key;
-
-                    // Handle click: navigate to last visited child, or first nav child as fallback
-                    const handleClick = () => {
-                        setMobileOpen(false);
-                        sessionStorage.setItem('layout.activeActivity', item.key);
-                        const firstNavChild = item.children?.find(c => c.type !== 'divider');
-                        const targetPath = item.path
-                            || sessionStorage.getItem(`layout.activityPath.${item.key}`)
-                            || firstNavChild?.path;
-                        if (targetPath) {
-                            navigate(targetPath);
-                        }
-                    };
-
-                    // Short label for display (max 8 chars)
-                    const shortLabel = item.label.length > 12 ? item.label.slice(0, 7) + '…' : item.label;
-
-                    return (
-                        <ListItemButton
-                            key={item.key}
-                            component={item.path && !item.children ? RouterLink : 'div'}
-                            to={item.path && !item.children ? item.path : undefined}
-                            onClick={handleClick}
-                            sx={activityItemSx({
-                                '&:hover': {
-                                    bgcolor: isActiveItem ? 'primary.dark' : 'action.hover',
-                                    color: isActiveItem ? 'primary.contrastText' : 'primary.main',
-                                },
-                                ...(isActiveItem && {
-                                    bgcolor: 'primary.main',
-                                    color: 'primary.contrastText',
-                                    '&::before': {
-                                        content: '""',
-                                        position: 'absolute',
-                                        left: 0,
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        width: 3,
-                                        height: 28,
-                                        bgcolor: 'primary.light',
-                                        borderRadius: '0 2px 2px 0',
-                                        boxShadow: '0 0 8px rgba(37, 99, 235, 0.5)',
-                                    },
-                                }),
-                            })}
-                        >
-                            <ListItemIcon
-                                sx={{
-                                    minWidth: 0,
-                                    color: 'inherit',
-                                    justifyContent: 'center',
-                                }}
-                            >
-                                {item.icon}
-                            </ListItemIcon>
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    fontSize: '0.65rem',
-                                    fontWeight: isActiveItem ? 600 : 400,
-                                    color: 'inherit',
-                                    textAlign: 'center',
-                                    lineHeight: 1.2,
-                                    maxWidth: '100%',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                }}
-                            >
-                                {shortLabel}
-                            </Typography>
-                        </ListItemButton>
-                    );
-                })}
-
-                {/* Divider before status icons */}
-                <Divider sx={{ mx: 2, my: 1 }} />
-
-                {/* Status Indicators - Inline with other icons */}
-                {(!isHealthy || import.meta.env.DEV) && (
-                    <Tooltip title={import.meta.env.DEV && isHealthy ? 'Disconnected (Debug)' : 'Disconnected'} placement="right" arrow>
-                        <ListItemButton
-                            onClick={showDisconnectDialog}
-                            sx={activityItemSx({
-                                color: 'error.main',
-                                '&:hover': {
-                                    bgcolor: 'action.hover',
-                                },
-                            })}
-                        >
-                            <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                                <ErrorOutline sx={{ fontSize: 22 }} />
-                            </ListItemIcon>
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    fontSize: '0.65rem',
-                                    fontWeight: 400,
-                                    color: 'inherit',
-                                    textAlign: 'center',
-                                    lineHeight: 1.2,
-                                    maxWidth: '100%',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                }}
-                            >
-                                Error
-                            </Typography>
-                        </ListItemButton>
-                    </Tooltip>
-                )}
-
-                {(hasUpdate || import.meta.env.DEV) && (
-                    <Tooltip
-                        title={import.meta.env.DEV && !hasUpdate ? 'Dev Mode' : 'New Version Available'}
-                        placement="right"
-                        arrow
-                    >
-                        <ListItemButton
-                            onClick={showUpdateDialog}
-                            sx={activityItemSx({
-                                color: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main',
-                                '&:hover': {
-                                    bgcolor: 'action.hover',
-                                },
-                            })}
-                        >
-                            <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                                <NewReleases sx={{ fontSize: 22 }} />
-                            </ListItemIcon>
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    fontSize: '0.65rem',
-                                    fontWeight: 400,
-                                    color: 'inherit',
-                                    textAlign: 'center',
-                                    lineHeight: 1.2,
-                                    maxWidth: '100%',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                }}
-                            >
-                                {import.meta.env.DEV && !hasUpdate ? 'Dev' : 'Update'}
-                            </Typography>
-                        </ListItemButton>
-                    </Tooltip>
-                )}
-
-                {/* User Icon - Inline with other icons */}
-            </Box>
-
-            {/* Bottom Section: User/About Icon */}
-            <Box
-                sx={{
-                    py: 0.5,
-                    borderTop: '1px solid',
-                    borderColor: 'divider',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    gap: 0.5,
-                    height: footerHeight,
-                }}
-            >
-                <Tooltip title="Click" placement="right" arrow>
-                    <ListItemButton
-                        onClick={handleEasterEgg}
-                        sx={{
-                            minHeight: 48,
-                            mx: 0.5,
-                            px: activityItemPaddingX,
-                            py: 0.75,
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 0.25,
-                            position: 'relative',
-                            color: 'text.secondary',
-                            borderRadius: activityItemRadius,
-                            cursor: 'pointer',
-                            '&:hover': {
-                                bgcolor: 'action.hover',
-                                color: 'text.primary',
-                            },
-                        }}
-                    >
-                        <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                            <AccountIcon sx={{ fontSize: 20 }} />
-                        </ListItemIcon>
-                    </ListItemButton>
-                </Tooltip>
-            </Box>
-        </Box>
-    );
-
-    // Sidebar panel content (second column - shows sub-items)
-    const sidebarContent = (
-        <Box
-            sx={{
-                width: sidebarWidth,
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                bgcolor: 'background.paper',
-                borderRight: '1px solid',
-                borderColor: 'divider',
-                overflow: 'hidden',
-            }}
-        >
-            {/* Sidebar Header */}
-            <Box
-                sx={{
-                    height: headerHeight,
-                    px: 2,
-                    display: 'flex',
-                    alignItems: 'center',
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                }}
-            >
-                <Typography
-                    variant="subtitle2"
-                    sx={{
-                        color: 'text.primary',
-                        fontWeight: 600,
-                        fontSize: '0.875rem',
-                    }}
-                >
-                    {activeActivityLabel}
-                </Typography>
-            </Box>
-
-            {/* Sidebar Items */}
-            <List sx={{
-                flex: 1,
-                py: 1,
-                overflowY: 'auto',
-                '&::-webkit-scrollbar': { width: 6 },
-                '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
-                '&::-webkit-scrollbar-thumb': {
-                    backgroundColor: 'grey.300',
-                    borderRadius: 1,
-                    '&:hover': { backgroundColor: 'grey.400' }
-                }
-            }}>
-                {sidebarItems.map((item, index) => {
-                    if (item.type === 'divider') {
-                        return <Divider key={`divider-${index}`} sx={{ mx: 2, my: 1 }} />;
-                    }
-                    const isAddProfile = item.path === '#add-profile';
-                    const button = (
-                    <ListItem disablePadding>
-                        <ListItemButton
-                            {...(isAddProfile
-                                ? { onClick: handleAddProfileClick }
-                                : { component: RouterLink, to: item.path, onClick: () => setMobileOpen(false) }
-                            )}
-                            sx={{
-                                mx: 1.5,
-                                borderRadius: 1.25,
-                                py: 1.25,
-                                    px: 2,
-                                    color: 'text.secondary',
-                                    position: 'relative',
-                                    ...(!isAddProfile && isActive(item.path) && {
-                                        backgroundColor: 'primary.main',
-                                        color: 'primary.contrastText',
-                                        '& img': { filter: 'none !important' },
-                                        '& .MuiListItemIcon-root > div': {
-                                            bgcolor: 'white',
-                                            borderRadius: 0.5,
-                                            p: 0.25,
-                                        },
-                                        '&::before': {
-                                            content: '""',
-                                            position: 'absolute',
-                                            left: 0,
-                                            top: '50%',
-                                            transform: 'translateY(-50%)',
-                                            width: 3,
-                                            height: 28,
-                                            backgroundColor: 'primary.light',
-                                            borderRadius: '0 2px 2px 0',
-                                            boxShadow: '0 0 8px rgba(37, 99, 235, 0.5)',
-                                        },
-                                        '&:hover': {
-                                            backgroundColor: 'primary.dark',
-                                        },
-                                        '& .MuiListItemIcon-root': {
-                                            color: 'primary.contrastText',
-                                        },
-                                        '& .MuiListItemText-primary': {
-                                            color: 'primary.contrastText',
-                                            fontWeight: 600,
-                                        },
-                                    }),
-                                    '&:hover': {
-                                        backgroundColor: (!isAddProfile && isActive(item.path)) ? 'primary.dark' : 'action.hover',
-                                        color: (!isAddProfile && isActive(item.path)) ? 'primary.contrastText' : 'text.primary',
-                                    },
-                                }}
-                            >
-                                {item.icon && (
-                                    <ListItemIcon
-                                        sx={{
-                                            minWidth: 32,
-                                            color: 'inherit',
-                                            '& svg': { fontSize: 20 },
-                                        }}
-                                    >
-                                        {item.icon}
-                                    </ListItemIcon>
-                                )}
-                                <ListItemText
-                                    primary={item.label}
-                                    secondary={item.subtitle}
-                                    slotProps={{
-                                        primary: {
-                                            fontWeight: (!isAddProfile && isActive(item.path)) ? 600 : 400,
-                                            fontSize: '0.875rem',
-                                            lineHeight: 1.3,
-                                        },
-                                        secondary: {
-                                            fontSize: '0.6875rem',
-                                            lineHeight: 1.2,
-                                        },
-                                    }}
-                                    sx={{
-                                        '& .MuiListItemText-secondary': {
-                                            color: (!isAddProfile && isActive(item.path)) ? 'rgba(255,255,255,0.7)' : 'text.secondary',
-                                        },
-                                    }}
-                                />
-                            </ListItemButton>
-                        </ListItem>
-                    );
-                    return (
-                    <React.Fragment key={item.path}>
-                        {isAddProfile ? (
-                            <Tooltip title="Create a new Claude Code profile with custom settings" arrow placement="right">
-                                {button}
-                            </Tooltip>
-                        ) : button}
-                    </React.Fragment>
-                    );
-                })}
-            </List>
-
-            {/* Add Profile Popover */}
-            <Popover
-                open={Boolean(addProfileAnchorEl)}
-                anchorEl={addProfileAnchorEl}
-                onClose={handleAddProfileClose}
-                anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-                transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-                slotProps={{ paper: { sx: { p: 2, width: 220, mt: -0.5 } } }}
-            >
-                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>New Profile</Typography>
-                <TextField
-                    inputRef={addProfileInputRef}
-                    fullWidth
-                    size="small"
-                    placeholder="Profile name"
-                    value={newProfileName}
-                    onChange={(e) => setNewProfileName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleCreateProfile()}
-                    disabled={isCreating}
-                />
-                <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                    <Button size="small" onClick={handleAddProfileClose} disabled={isCreating}>Cancel</Button>
-                    <Button size="small" variant="contained" onClick={handleCreateProfile} disabled={!newProfileName.trim() || isCreating}>Create</Button>
-                </Box>
-            </Popover>
-
-            {/* Bottom Slogan */}
-            <Box
-                sx={{
-                    height: footerHeight,
-                    py: 1.5,
-                    px: 2,
-                    borderTop: '1px solid',
-                    borderColor: 'divider',
-                }}
-            >
-                <Tooltip title="For all Solo Builders, Dev Teams and Agents." placement="top" arrow>
-                    <Typography
-                        variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            fontSize: '0.7rem',
-                            textAlign: 'center',
-                            display: 'block',
-                            fontStyle: 'italic',
-                            cursor: 'default',
-                        }}
-                    >
-                        {t('layout.slogan')}
-                    </Typography>
-                </Tooltip>
-            </Box>
-        </Box>
-    );
-
-    // Combined navigation for desktop (activity bar + conditional sidebar)
-    const desktopNavigation = (
-        <Box sx={{ display: 'flex', height: '100vh' }}>
-            {activityBarContent}
-            {sidebarItems.length > 0 && sidebarContent}
-        </Box>
-    );
-
-    // Mobile drawer content
-    const mobileDrawerContent = (
+    const navigationContent = (
         <Box sx={{ display: 'flex', height: '100%' }}>
-            {activityBarContent}
-            {sidebarItems.length > 0 && sidebarContent}
+            <ActivityBar
+                activityItems={activityItems}
+                activeActivity={activeActivity}
+                onActivityClick={handleActivityClick}
+                onUserClick={(e) => setEasterEggAnchorEl(e.currentTarget)}
+            />
+            {sidebarItems.length > 0 && (
+                <Sidebar
+                    sidebarItems={sidebarItems}
+                    activeActivityLabel={activeActivityLabel}
+                    onClose={() => setMobileOpen(false)}
+                />
+            )}
         </Box>
     );
 
     return (
         <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', backgroundColor: '#f8f9fa' }}>
-            {/* Desktop Layout */}
+            {/* Desktop nav */}
             <Box component="nav" sx={{ display: { xs: 'none', md: 'flex' }, height: '100%' }}>
-                {desktopNavigation}
+                {navigationContent}
             </Box>
 
             {/* Mobile Drawer */}
@@ -959,10 +100,10 @@ const Layout = ({ children }: LayoutProps) => {
                     },
                 }}
             >
-                {mobileDrawerContent}
+                {navigationContent}
             </Drawer>
 
-            {/* Mobile Toggle Button */}
+            {/* Mobile toggle */}
             <IconButton
                 color="primary"
                 aria-label="Open navigation menu"
@@ -977,26 +118,17 @@ const Layout = ({ children }: LayoutProps) => {
                     boxShadow: 3,
                     width: 44,
                     height: 44,
-                    '&:hover': {
-                        bgcolor: 'action.hover',
-                        transform: 'scale(1.05)',
-                    },
+                    '&:hover': { bgcolor: 'action.hover', transform: 'scale(1.05)' },
                     transition: 'all 0.15s',
                 }}
             >
                 <MenuIcon />
             </IconButton>
 
-            {/* Main Content */}
+            {/* Main content */}
             <Box
                 component="main"
-                sx={{
-                    flexGrow: 1,
-                    height: '100vh',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    overflowX: 'hidden',
-                }}
+                sx={{ flexGrow: 1, height: '100vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden' }}
             >
                 <Box
                     sx={{
@@ -1004,19 +136,12 @@ const Layout = ({ children }: LayoutProps) => {
                         p: 3,
                         overflowY: 'auto',
                         scrollBehavior: 'smooth',
-                        '&::-webkit-scrollbar': {
-                            width: 8,
-                        },
-                        '&::-webkit-scrollbar-track': {
-                            backgroundColor: 'grey.100',
-                            borderRadius: 1,
-                        },
+                        '&::-webkit-scrollbar': { width: 8 },
+                        '&::-webkit-scrollbar-track': { backgroundColor: 'grey.100', borderRadius: 1 },
                         '&::-webkit-scrollbar-thumb': {
                             backgroundColor: 'grey.300',
                             borderRadius: 1,
-                            '&:hover': {
-                                backgroundColor: 'grey.400',
-                            },
+                            '&:hover': { backgroundColor: 'grey.400' },
                         },
                     }}
                 >
@@ -1028,25 +153,10 @@ const Layout = ({ children }: LayoutProps) => {
             <Popover
                 open={Boolean(easterEggAnchorEl)}
                 anchorEl={easterEggAnchorEl}
-                onClose={handleEasterEggClose}
-                anchorOrigin={{
-                    vertical: 'top',
-                    horizontal: 'center',
-                }}
-                transformOrigin={{
-                    vertical: 'bottom',
-                    horizontal: 'center',
-                }}
-                sx={{
-                    '& .MuiPopover-paper': {
-                        bgcolor: 'primary.main',
-                        color: 'white',
-                        borderRadius: 2,
-                        px: 2,
-                        py: 1,
-                        fontSize: '0.875rem',
-                    },
-                }}
+                onClose={() => setEasterEggAnchorEl(null)}
+                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+                transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                sx={{ '& .MuiPopover-paper': { bgcolor: 'primary.main', color: 'white', borderRadius: 2, px: 2, py: 1, fontSize: '0.875rem' } }}
             >
                 Hi, I'm Tingly-Box, Your Smart AI Orchestrator · {currentVersion}
             </Popover>

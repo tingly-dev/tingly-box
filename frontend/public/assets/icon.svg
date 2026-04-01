@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg
+   width="100mm"
+   height="100mm"
+   viewBox="0 0 100 100"
+   version="1.1"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs/>
+  <g>
+    <g transform="matrix(1.2906226,0,0,1.2906226,-14.53113,-14.53113)">
+      <rect
+        style="opacity:0.98;fill:#242424;fill-opacity:1;stroke:#232323;stroke-width:2.00801;stroke-opacity:1"
+        width="65.448418"
+        height="65.448418"
+        x="17.275791"
+        y="17.275791"
+        ry="22.318815"/>
+      <text
+        style="font-weight:600;font-size:30.0835px;line-height:1;font-family:'Alibaba PuHuiTi 3.0',sans-serif;text-align:center;letter-spacing:0.284271px;text-anchor:middle;opacity:0.98;fill:#ffffff;fill-opacity:1;stroke:#ffffff;stroke-width:2.15743;stroke-opacity:1"
+        x="46.194283"
+        y="64.575851"
+        transform="scale(1.0827376,0.92358481)">
+        <tspan
+          x="46.336418"
+          y="64.575851"
+          style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:30.0835px;font-family:'Alibaba PuHuiTi 3.0',sans-serif;fill:#ffffff;fill-opacity:1;stroke:#ffffff;stroke-width:2.15743;stroke-opacity:1">T</tspan>
+      </text>
+    </g>
+  </g>
+</svg>
