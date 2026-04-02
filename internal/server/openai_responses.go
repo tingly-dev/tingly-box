@@ -116,6 +116,7 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	}
 
 	actualModel := selectedService.Model
+	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
 
 	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
 	SetTrackingContext(c, rule, provider, actualModel, req.Model, req.Stream)
@@ -135,10 +136,10 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	req.ResponseNewParams = params
 	// req.Model is replaced with actualModel (resolved backend model) from this point on
 	req.Model = actualModel
-	s.ResponsesCreate(c, scenarioType, provider, req, rule.RequestModel)
+	s.ResponsesCreate(c, scenarioType, provider, req, rule.RequestModel, maxAllowed)
 }
 
-func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, provider *typ.Provider, req protocol.ResponseCreateRequest, responseModel string) {
+func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, provider *typ.Provider, req protocol.ResponseCreateRequest, responseModel string, maxAllowed int) {
 	actualModel := req.Model
 	isStreaming := req.Stream
 
@@ -174,7 +175,7 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 	}
 
 	// Execute transform chain
-	reqCtx, err := s.transformOpenAIResponses(c, req, target, provider, isStreaming, nil, scenarioType)
+	reqCtx, err := s.transformOpenAIResponses(c, req, target, provider, isStreaming, nil, scenarioType, maxAllowed)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{

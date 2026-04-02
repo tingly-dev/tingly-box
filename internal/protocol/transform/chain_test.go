@@ -358,8 +358,7 @@ func TestTransformChain_Integration_FullChain(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"base_convert", "consistency_normalize", "vendor_adjust"}, result.TransformSteps)
 
-	config, ok := result.Extra["openaiConfig"].(*protocol.OpenAIConfig)
-	assert.True(t, ok)
+	config := result.Config.OpenAIConfig
 	assert.NotNil(t, config)
 }
 
