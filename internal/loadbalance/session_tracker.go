@@ -247,6 +247,21 @@ func (t *SessionTracker) GetAvailableCapacity(svc *Service) int64 {
 	return providerRemaining
 }
 
+// StartCleanup starts a background goroutine that periodically cleans up idle sessions.
+// The interval determines how often CleanupIdleSessions is called.
+func (t *SessionTracker) StartCleanup(interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				t.CleanupIdleSessions()
+			}
+		}
+	}()
+}
+
 // GetSessionInfo returns the session info for a given session ID.
 func (t *SessionTracker) GetSessionInfo(sessionID string) *ServiceInfo {
 	t.mu.RLock()

@@ -509,6 +509,26 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize session tracker for capacity-based load balancing
 	sessionTracker := loadbalance.NewSessionTracker(2 * time.Hour)
 
+	// Build provider capacity map (providerUUID -> total capacity)
+	providerCaps := make(map[string]int64)
+	for _, provider := range cfg.Providers {
+		if provider.TotalCapacity != nil && *provider.TotalCapacity > 0 {
+			providerCaps[provider.UUID] = int64(*provider.TotalCapacity)
+		}
+	}
+
+	// Collect all services from rules
+	allServices := []*loadbalance.Service{}
+	for _, rule := range cfg.Rules {
+		allServices = append(allServices, rule.Services...)
+	}
+
+	// Initialize capacities
+	sessionTracker.InitializeCapacities(allServices, providerCaps)
+
+	// Start background cleanup for idle sessions
+	sessionTracker.StartCleanup(5 * time.Minute)
+
 	// Initialize capacity stage for capacity-based selection
 	capacityStage := routing.NewCapacityStage(sessionTracker, affinityStore)
 
