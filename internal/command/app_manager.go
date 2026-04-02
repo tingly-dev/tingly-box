@@ -153,6 +153,11 @@ func (am *AppManager) ListProviders() []*typ.Provider {
 	return am.appConfig.ListProviders()
 }
 
+// GetProviderByUUID returns a provider by UUID (implements quota.ProviderManager interface)
+func (am *AppManager) GetProviderByUUID(uuid string) (*typ.Provider, error) {
+	return am.GetProvider(uuid)
+}
+
 // GetProvider returns a provider by UUID, or nil if not found.
 func (am *AppManager) GetProvider(uuid string) (*typ.Provider, error) {
 	return am.appConfig.GetProviderByUUID(uuid)

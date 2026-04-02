@@ -181,11 +181,11 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification }: 
                     <TableRow>
                         <TableCell sx={{ fontWeight: 600, width: 90 }}>Status</TableCell>
                         <TableCell sx={{ fontWeight: 600, width: 140 }}>Name</TableCell>
-                        <TableCell sx={{ fontWeight: 600, width: 120 }}>API Style</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 140 }}>API Style</TableCell>
                         <TableCell sx={{ fontWeight: 600, width: 200 }}>API Base URL</TableCell>
                         <TableCell sx={{ fontWeight: 600, width: 140 }}>API Key</TableCell>
                         <TableCell sx={{ fontWeight: 600, width: 60 }}>Proxy</TableCell>
-                        <TableCell sx={{ fontWeight: 600, width: 240 }}>Actions</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 200 }}>Actions</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -205,7 +205,7 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification }: 
                                         size="small"
                                         color={provider.enabled ? 'success' : 'default'}
                                         variant={provider.enabled ? 'filled' : 'outlined'}
-                                        sx={{ height: 22, fontSize: '0.7rem', minWidth: 32 }}
+                                        sx={{ height: 22, fontSize: '0.7rem', minWidth: 40 }}
                                     />
                                 </Stack>
                             </TableCell>
@@ -286,7 +286,7 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification }: 
                                         borderRadius: 1.5,
                                         p: 0.5,
                                         pr: 1,
-                                        width: 240,
+                                        width: 200,
                                     }}
                                 >
                                     <ProviderExportMenu

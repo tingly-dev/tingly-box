@@ -29,6 +29,15 @@ export const TOKEN_COLORS = {
     },
 };
 
+// Quota bar colors based on usage percentage
+export const QUOTA_COLORS = {
+    success: '#10b981',  // emerald-500 - < 50%
+    warning: '#f59e0b',  // amber-500 - 50-80%
+    error: '#ef4444',    // red-500 - > 80%
+    secondary: '#94a3b8', // slate-400 - secondary quota
+    background: '#f1f5f9', // slate-100 - background bar
+};
+
 // Common grid style - very subtle
 export const gridStyle = {
     stroke: '#f1f5f9',
@@ -49,6 +58,26 @@ export const tooltipStyle = {
     boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
     backgroundColor: 'white',
     padding: '12px',
+    minWidth: 200,
+};
+
+// Tooltip text styles
+export const tooltipTextStyles = {
+    title: {
+        fontWeight: 600,
+        mb: 1,
+        fontSize: '0.875rem',
+        color: '#0f172a',
+    },
+    body: {
+        color: '#0f172a',
+        fontSize: '0.875rem',
+    },
+    caption: {
+        color: '#64748b',
+        fontSize: '0.75rem',
+    },
+    divider: '1px solid #e2e8f0',
 };
 
 // Bar radius for rounded corners
@@ -56,3 +85,10 @@ export const barRadius: [number, number, number, number] = [4, 4, 0, 0];
 
 // Animation duration for chart transitions
 export const ANIMATION_DURATION = 600;
+
+// Format numbers (50K, 1M, etc.)
+export const formatNumber = (n: number): string => {
+    if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+    if (n >= 1000) return `${(n / 1000).toFixed(0)}K`;
+    return n.toString();
+};
