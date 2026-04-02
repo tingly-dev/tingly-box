@@ -198,6 +198,7 @@ jobs:
           # Build with optimized ldflags
           # -s: strip symbol table
           # -w: strip DWARF debug info
+          # -X: for metadata
           LDFLAGS="-s -w"
           LDFLAGS+=" -X main.version=${VERSION}"
           LDFLAGS+=" -X main.gitCommit=${GIT_COMMIT}"
