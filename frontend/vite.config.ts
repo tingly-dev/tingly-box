@@ -13,14 +13,15 @@ export default defineConfig(({ mode }) => {
     return {
         plugins: [
             react(),
-            // Bundle analyzer - generates dist/stats.html for analysis
-            visualizer({
-                open: false,
+            // Bundle analyzer - only in analyze mode for development
+            // Run with: pnpm build -- --mode analyze
+            mode === 'analyze' && visualizer({
+                open: true,
                 gzipSize: true,
                 brotliSize: true,
                 filename: 'dist/stats.html',
             }),
-        ],
+        ].filter(Boolean),
         define: {
             // Make USE_MOCK available to the app
             'import.meta.env.VITE_USE_MOCK': JSON.stringify(useMock ? 'true' : 'false'),
