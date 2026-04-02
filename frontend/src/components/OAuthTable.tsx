@@ -222,7 +222,7 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                                             size="small"
                                             color={provider.enabled ? 'success' : 'default'}
                                             variant={provider.enabled ? 'filled' : 'outlined'}
-                                            sx={{ height: 22, fontSize: '0.7rem', minWidth: 32 }}
+                                            sx={{ height: 22, fontSize: '0.7rem', minWidth: 40 }}
                                         />
                                     </Stack>
                                 </TableCell>
