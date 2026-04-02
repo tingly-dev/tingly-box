@@ -225,6 +225,7 @@ jobs:
           [ "${{ matrix.goos }}" != "windows" ] && chmod +x ./dist/tingly-box${{ matrix.exe }} || true
 
       - name: Install UPX 5.1.1
+        shell: bash
         run: |
           if [ "${{ runner.os }}" == "Windows" ]; then
             choco install upx -y
