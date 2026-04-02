@@ -90,7 +90,7 @@ jobs:
 
       - name: Run codegen and build frontend
         run: |
-          openapi-generator-cli generate -g typescript-axios -i ../swagger.json -o ./src/client
+          openapi-generator-cli generate -g typescript-axios -i ../swagger.json -o ./src/client --global-property apiDocs=false,modelDocs=false
           pnpm build && mkdir -p ../internal/web/dist && cp -R dist/* ../internal/web/dist/
         working-directory: ./frontend
 
