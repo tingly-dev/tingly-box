@@ -14,8 +14,9 @@ import {
     Stack,
     TextField,
     Typography,
+    Divider,
 } from '@mui/material';
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import type { Provider } from '@/types/provider';
 import { getModelTypeInfo } from '@/utils/modelUtils';
 import { useCustomModels } from '@/hooks/useCustomModels';
@@ -28,6 +29,7 @@ import CustomModelCard from './CustomModelCard';
 import ModelCard from './ModelCard';
 import RecentModelsSection from './RecentModelsSection';
 import NewModelsSection from './NewModelsSection';
+import { QuotaBar } from './QuotaBar';
 
 export interface ModelsPanelProps {
     provider: Provider;
@@ -59,6 +61,16 @@ export function ModelsPanel({
     const { isModelProbing, refreshTrigger } = useModelSelectContext();
     const { recentModels } = useRecentModels();
     const { newModels, clearNewModels } = useNewModels();
+
+    // Get quota data for this provider
+    const providerQuota = useMemo(() => {
+        return providerModels?.[provider.uuid]?.quota;
+    }, [providerModels, provider.uuid]);
+
+    // Prepare quota prop for ModelCard
+    const quotaProp = useMemo(() => {
+        return providerQuota;  // Pass full quota object, QuotaBar will handle breakdowns
+    }, [providerQuota]);
 
     // Re-fetch provider models when refresh trigger changes (e.g., after custom model deletion)
     useEffect(() => {
@@ -153,8 +165,10 @@ export function ModelsPanel({
     }, [provider.uuid, providerModels]);
 
     return (
-        <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
-            <Stack spacing={2}>
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {/* Scrollable content area */}
+            <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
+                <Stack spacing={2}>
                 {/* Controls */}
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                     <Stack direction="row" alignItems="center" spacing={1}>
@@ -343,6 +357,45 @@ export function ModelsPanel({
                     </Box>
                 )}
             </Stack>
+            </Box>
+
+            {/* Provider Quota Bars - fixed at the bottom */}
+            {quotaProp && quotaProp.primary && (
+                <Box sx={{ p: 2, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: 'block', fontWeight: 500 }}>
+                        Provider Quota
+                    </Typography>
+                    <Stack spacing={1.5}>
+                        {/* Primary quota */}
+                        <Box>
+                            <Typography variant="caption" sx={{ mb: 0.5, display: 'block', color: '#64748b' }}>
+                                {quotaProp.primary.label}
+                            </Typography>
+                            <QuotaBar quota={quotaProp} windowIndex={0} />
+                        </Box>
+
+                        {/* Secondary quota */}
+                        {quotaProp.secondary && (
+                            <Box>
+                                <Typography variant="caption" sx={{ mb: 0.5, display: 'block', color: '#64748b' }}>
+                                    {quotaProp.secondary.label}
+                                </Typography>
+                                <QuotaBar quota={quotaProp} windowIndex={1} />
+                            </Box>
+                        )}
+
+                        {/* Tertiary quota */}
+                        {quotaProp.tertiary && (
+                            <Box>
+                                <Typography variant="caption" sx={{ mb: 0.5, display: 'block', color: '#64748b' }}>
+                                    {quotaProp.tertiary.label}
+                                </Typography>
+                                <QuotaBar quota={quotaProp} windowIndex={2} />
+                            </Box>
+                        )}
+                    </Stack>
+                </Box>
+            )}
         </Box>
     );
 }
