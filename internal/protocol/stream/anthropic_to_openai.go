@@ -17,9 +17,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// HandleAnthropicToOpenAIStreamResponse processes Anthropic streaming events and converts them to OpenAI format
+// AnthropicToOpenAIStream processes Anthropic streaming events and converts them to OpenAI format
 // Returns inputTokens, outputTokens, and error for usage tracking
-func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.MessageNewParams, stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion], responseModel string, disableStreamUsage bool) (int, int, error) {
+func AnthropicToOpenAIStream(c *gin.Context, req *anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], responseModel string, disableStreamUsage bool) (int, int, error) {
 	logrus.Info("Starting Anthropic to OpenAI streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
@@ -51,7 +51,7 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 		chatID       = fmt.Sprintf("chatcmpl-%d", time.Now().Unix())
 		created      = time.Now().Unix()
 		contentText  = strings.Builder{}
-		usage        *anthropic.MessageDeltaUsage
+		usage        *anthropic.BetaMessageDeltaUsage
 		inputTokens  int
 		outputTokens int
 		finished     bool

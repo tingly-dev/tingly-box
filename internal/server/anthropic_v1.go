@@ -144,14 +144,16 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, pr
 
 	// Convert Responses API response back to Anthropic v1 format
 	anthropicResp := nonstream.ConvertResponsesToAnthropicV1Response(response, proxyModel)
-	if ShouldRoundtripResponse(c, "openai") {
-		roundtripped, err := RoundtripAnthropicResponseViaOpenAI(&anthropicResp, proxyModel, provider, actualModel)
-		if err != nil {
-			stream.SendInternalError(c, "Failed to roundtrip response: "+err.Error())
-			return
-		}
-		anthropicResp = *roundtripped
-	}
+
+	// TODO: require anthropic <-> anthropic beta
+	//if ShouldRoundtripResponse(c, "openai") {
+	//	roundtripped, err := RoundtripAnthropicBetaResponseViaOpenAI(&anthropicResp, proxyModel, provider, actualModel)
+	//	if err != nil {
+	//		stream.SendInternalError(c, "Failed to roundtrip response: "+err.Error())
+	//		return
+	//	}
+	//	anthropicResp = *roundtripped
+	//}
 
 	// Record response if scenario recording is enabled
 	if recorder != nil {

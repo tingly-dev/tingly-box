@@ -118,9 +118,9 @@ func MapGoogleFinishReasonToOpenAI(reason genai.FinishReason) string {
 }
 
 // ConvertGoogleToAnthropicResponse converts Google GenerateContentResponse to Anthropic format
-func ConvertGoogleToAnthropicResponse(googleResp *genai.GenerateContentResponse, responseModel string) anthropic.Message {
+func ConvertGoogleToAnthropicResponse(googleResp *genai.GenerateContentResponse, responseModel string) *anthropic.BetaMessage {
 	if googleResp == nil {
-		return anthropic.Message{}
+		return &anthropic.BetaMessage{}
 	}
 
 	// Build response JSON
@@ -180,10 +180,10 @@ func ConvertGoogleToAnthropicResponse(googleResp *genai.GenerateContentResponse,
 
 	// Marshal and unmarshal to create proper Message struct
 	jsonBytes, _ := json.Marshal(responseJSON)
-	var msg anthropic.Message
+	var msg anthropic.BetaMessage
 	json.Unmarshal(jsonBytes, &msg)
 
-	return msg
+	return &msg
 }
 
 func MapGoogleFinishReasonToAnthropic(reason genai.FinishReason) string {

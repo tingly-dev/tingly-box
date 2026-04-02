@@ -25,15 +25,15 @@ func (s *Server) dispatchChainResult(
 ) {
 	switch reqCtx.TargetAPI {
 	case protocol.TypeAnthropicV1:
-		s.dispatchChainResultToAnthropicV1(c, reqCtx, rule, provider, isStreaming, recorder)
+		s.dispatchChainFromAnthropicV1(c, reqCtx, rule, provider, isStreaming, recorder)
 	case protocol.TypeAnthropicBeta:
-		s.dispatchChainResultToAnthropicBeta(c, reqCtx, rule, provider, isStreaming, recorder)
+		s.dispatchChainFromAnthropicBeta(c, reqCtx, rule, provider, isStreaming, recorder)
 	case protocol.TypeGoogle:
-		s.dispatchChainResultToGoogle(c, reqCtx, rule, provider, isStreaming, recorder)
+		s.dispatchChainFromGoogle(c, reqCtx, rule, provider, isStreaming, recorder)
 	case protocol.TypeOpenAIResponses:
-		s.dispatchChainResultToResponses(c, reqCtx, rule, provider, isStreaming, recorder)
+		s.dispatchChainFromResponses(c, reqCtx, rule, provider, isStreaming, recorder)
 	case protocol.TypeOpenAIChat:
-		s.dispatchChainResultToOpenAIChat(c, reqCtx, rule, provider, isStreaming, recorder)
+		s.dispatchChainFromOpenAIChat(c, reqCtx, rule, provider, isStreaming, recorder)
 	default:
 		c.JSON(http.StatusBadRequest, "tingly-box: invalid api style")
 		if recorder != nil {
@@ -44,7 +44,7 @@ func (s *Server) dispatchChainResult(
 
 // ── Anthropic direct ────────────────────────────────────────────────────
 
-func (s *Server) dispatchChainResultToAnthropicV1(
+func (s *Server) dispatchChainFromAnthropicV1(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
 	isStreaming bool, recorder *ProtocolRecorder,
@@ -127,14 +127,15 @@ func (s *Server) dispatchChainResultToAnthropicV1(
 		// FIXME: now we use req model as resp model
 		anthropicResp.Model = anthropic.Model(responseModel)
 
-		if ShouldRoundtripResponse(c, "openai") {
-			roundtripped, err := RoundtripAnthropicResponseViaOpenAI(anthropicResp, responseModel, provider, actualModel)
-			if err != nil {
-				stream.SendInternalError(c, "Failed to roundtrip response: "+err.Error())
-				return
-			}
-			anthropicResp = roundtripped
-		}
+		// TODO: anthropic <-> anthropic beta
+		//if ShouldRoundtripResponse(c, "openai") {
+		//	roundtripped, err := RoundtripAnthropicBetaResponseViaOpenAI(anthropicResp, responseModel, provider, actualModel)
+		//	if err != nil {
+		//		stream.SendInternalError(c, "Failed to roundtrip response: "+err.Error())
+		//		return
+		//	}
+		//	anthropicResp = roundtripped
+		//}
 
 		session := s.guardrailsSessionFromContext(c, actualModel, provider)
 		messageHistory := serverguardrails.MessagesFromAnthropicV1(req.System, req.Messages)
@@ -151,7 +152,7 @@ func (s *Server) dispatchChainResultToAnthropicV1(
 	}
 }
 
-func (s *Server) dispatchChainResultToAnthropicBeta(
+func (s *Server) dispatchChainFromAnthropicBeta(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
 	isStreaming bool, recorder *ProtocolRecorder,
@@ -218,7 +219,7 @@ func (s *Server) dispatchChainResultToAnthropicBeta(
 
 // ── Google ──────────────────────────────────────────────────────────────
 
-func (s *Server) dispatchChainResultToGoogle(
+func (s *Server) dispatchChainFromGoogle(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
 	isStreaming bool, recorder *ProtocolRecorder,
@@ -285,12 +286,12 @@ func (s *Server) dispatchChainResultToGoogle(
 		case protocol.TypeAnthropicV1:
 			anthropicResp := nonstream.ConvertGoogleToAnthropicResponse(resp, responseModel)
 			if ShouldRoundtripResponse(c, "openai") {
-				roundtripped, err := RoundtripAnthropicResponseViaOpenAI(&anthropicResp, responseModel, provider, actualModel)
+				roundtripped, err := RoundtripAnthropicBetaResponseViaOpenAI(anthropicResp, responseModel, provider, actualModel)
 				if err != nil {
 					stream.SendInternalError(c, "Failed to roundtrip resp: "+err.Error())
 					return
 				}
-				anthropicResp = *roundtripped
+				anthropicResp = roundtripped
 			}
 			s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
 			if recorder != nil {
@@ -312,7 +313,7 @@ func (s *Server) dispatchChainResultToGoogle(
 
 // ── OpenAI Responses API ────────────────────────────────────────────────
 
-func (s *Server) dispatchChainResultToResponses(
+func (s *Server) dispatchChainFromResponses(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
 	isStreaming bool, recorder *ProtocolRecorder,
@@ -359,7 +360,7 @@ func (s *Server) dispatchChainResultToResponses(
 
 // ── OpenAI Chat Completions ─────────────────────────────────────────────
 
-func (s *Server) dispatchChainResultToOpenAIChat(
+func (s *Server) dispatchChainFromOpenAIChat(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
 	isStreaming bool, recorder *ProtocolRecorder,
@@ -460,12 +461,12 @@ func (s *Server) dispatchChainResultToOpenAIChat(
 		case protocol.TypeAnthropicV1:
 			anthropicResp := nonstream.ConvertOpenAIToAnthropicResponse(resp, responseModel)
 			if ShouldRoundtripResponse(c, "openai") {
-				roundtripped, err := RoundtripAnthropicResponseViaOpenAI(&anthropicResp, responseModel, provider, actualModel)
+				roundtripped, err := RoundtripAnthropicBetaResponseViaOpenAI(anthropicResp, responseModel, provider, actualModel)
 				if err != nil {
 					stream.SendInternalError(c, "Failed to roundtrip resp: "+err.Error())
 					return
 				}
-				anthropicResp = *roundtripped
+				anthropicResp = roundtripped
 			}
 			s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
 			if recorder != nil {

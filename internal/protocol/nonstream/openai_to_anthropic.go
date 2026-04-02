@@ -11,7 +11,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 )
 
-func ConvertOpenAIToAnthropicResponse(openaiResp *openai.ChatCompletion, model string) anthropic.Message {
+func ConvertOpenAIToAnthropicResponse(openaiResp *openai.ChatCompletion, model string) *anthropic.BetaMessage {
 	// Create the response as JSON first, then unmarshal into Message
 	// This is a workaround for the complex union types
 	responseJSON := map[string]interface{}{
@@ -73,10 +73,10 @@ func ConvertOpenAIToAnthropicResponse(openaiResp *openai.ChatCompletion, model s
 
 	// Marshal and unmarshal to create proper Message struct
 	jsonBytes, _ := json.Marshal(responseJSON)
-	var msg anthropic.Message
+	var msg anthropic.BetaMessage
 	json.Unmarshal(jsonBytes, &msg)
 
-	return msg
+	return &msg
 }
 
 // ConvertOpenAIToAnthropicBetaResponse converts OpenAI response to Anthropic beta format
