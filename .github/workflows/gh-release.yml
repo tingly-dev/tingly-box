@@ -184,6 +184,10 @@ jobs:
           # Create build directory
           mkdir -p dist
 
+          # Remove dev-only files before embedding
+          rm -f internal/web/dist/stats.html
+          rm -f internal/web/dist/mockServiceWorker.js
+
           # Get build info
           VERSION="${{ env.RELEASE_TAG }}"
           GIT_COMMIT="$(git rev-parse HEAD 2>/dev/null || echo 'unknown')"
@@ -191,8 +195,18 @@ jobs:
           GO_VERSION="$(go version | awk '{print $3}' | sed 's/go//' 2>/dev/null || echo 'unknown')"
           PLATFORM="${{ matrix.goos }}/${{ matrix.goarch }}"
 
-          # Build with ldflags
-          LDFLAGS="-s -w -X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME} -X main.goVersion=${GO_VERSION} -X main.platform=${PLATFORM}"
+          # Build with optimized ldflags
+          # -s: strip symbol table
+          # -w: strip DWARF debug info
+          LDFLAGS="-s -w"
+          LDFLAGS+=" -X main.version=${VERSION}"
+          LDFLAGS+=" -X main.gitCommit=${GIT_COMMIT}"
+          LDFLAGS+=" -X main.buildTime=${BUILD_TIME}"
+          LDFLAGS+=" -X main.goVersion=${GO_VERSION}"
+          LDFLAGS+=" -X main.platform=${PLATFORM}"
+
+          # Trim file system paths and build info
+          LDFLAGS+=" -trimpath"
 
           # Use zig for cross-compilation if needed
           if [ "${{ matrix.cross_compile }}" == "true" ]; then
@@ -201,13 +215,60 @@ jobs:
             export CC CXX
           fi
 
-          CGO_ENABLED=1 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build \
+          # Build with optimizations
+          CGO_ENABLED=1 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+            go build \
             -ldflags="${LDFLAGS}" \
+            -trimpath \
             -o ./dist/tingly-box${{ matrix.exe }} \
             ./cli/tingly-box
 
           # Make binary executable for non-Windows
           [ "${{ matrix.goos }}" != "windows" ] && chmod +x ./dist/tingly-box${{ matrix.exe }} || true
+
+      - name: Install UPX 5.1.1
+        run: |
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            choco install upx -y
+          else
+            case "${{ matrix.goos }}" in
+              darwin)
+                # macOS: use brew
+                if ! command -v upx &> /dev/null; then
+                  brew install upx
+                fi
+                ;;
+              *)
+                # Linux: download UPX 5.1.1
+                wget -q https://github.com/upx/upx/releases/download/v5.1.1/upx-5.1.1-amd64_linux.tar.xz
+                tar -xf upx-5.1.1-amd64_linux.tar.xz
+                export PATH="$PWD/upx-5.1.1-amd64_linux:$PATH"
+                ;;
+            esac
+          fi
+
+      - name: Compress binary with UPX
+        shell: bash
+        run: |
+          if command -v upx &> /dev/null || [ -f "./upx-5.1.1-amd64_linux/upx" ]; then
+            UPX_CMD="upx"
+            [ -f "./upx-5.1.1-amd64_linux/upx" ] && UPX_CMD="./upx-5.1.1-amd64_linux/upx"
+
+            # Use best compression with LZMA (slower but smaller)
+            # macOS requires --force-macos flag
+            case "${{ matrix.goos }}" in
+              darwin)
+                $UPX_CMD --best --lzma --force-macos ./dist/tingly-box${{ matrix.exe }} || \
+                $UPX_CMD --best --force-macos ./dist/tingly-box${{ matrix.exe }}
+                ;;
+              *)
+                $UPX_CMD --best --lzma ./dist/tingly-box${{ matrix.exe }} || \
+                $UPX_CMD --best ./dist/tingly-box${{ matrix.exe }}
+                ;;
+            esac
+          else
+            echo "UPX not available, skipping compression"
+          fi
 
       - name: Upload build artifact (${{ matrix.suffix }})
         uses: actions/upload-artifact@v4
