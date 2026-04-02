@@ -19,8 +19,6 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/request"
-	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -135,99 +133,73 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 		return
 	}
 
-	if scenarioType == typ.ScenarioCodex && provider.APIBase != protocol.CodexAPIBase {
-		preferredEndpoint := NewAdaptiveProbe(s).GetPreferredEndpoint(provider, actualModel)
-		if preferredEndpoint != "responses" {
-			s.handleCodexResponsesFallback(c, provider, params, req.Model, actualModel, maxAllowed, req.Stream)
-			return
-		}
-	}
-
 	req.ResponseNewParams = params
 	// req.Model is replaced with actualModel (resolved backend model) from this point on
 	req.Model = actualModel
-	s.ResponsesCreate(c, scenarioType, provider, req, rule.RequestModel)
+	s.ResponsesCreate(c, scenarioType, provider, req, rule.RequestModel, maxAllowed)
 }
 
-func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, provider *typ.Provider, req protocol.ResponseCreateRequest, responseModel string) {
+func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, provider *typ.Provider, req protocol.ResponseCreateRequest, responseModel string, maxAllowed int) {
+	actualModel := req.Model
+	isStreaming := req.Stream
 
-	// Check provider API style - only OpenAI-style providers support Responses API
-	if provider.APIStyle != protocol.APIStyleOpenAI {
+	// Determine target API type based on provider API style
+	target := protocol.TypeOpenAIResponses
+	switch provider.APIStyle {
+	case protocol.APIStyleAnthropic:
+		target = protocol.TypeAnthropicV1
+	case protocol.APIStyleGoogle:
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
-				Message: fmt.Sprintf("Responses API is only supported by OpenAI-style providers. Provider '%s' has API style: %s", provider.Name, provider.APIStyle),
+				Message: fmt.Sprintf("Responses API does not support Google-style providers yet. Provider: %s", provider.Name),
+				Type:    "invalid_request_error",
+				Code:    "unsupported_provider_style",
+			},
+		})
+		return
+	case protocol.APIStyleOpenAI:
+		if provider.APIBase != protocol.CodexAPIBase {
+			preferredEndpoint := NewAdaptiveProbe(s).GetPreferredEndpoint(provider, actualModel)
+			if preferredEndpoint != "responses" {
+				target = protocol.TypeOpenAIChat
+			}
+		}
+	default:
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: fmt.Sprintf("Unsupported provider API style: %s", provider.APIStyle),
 				Type:    "invalid_request_error",
 			},
 		})
 		return
 	}
 
-	// For direct /responses requests, verify that the selected provider actually
-	// supports the Responses API unless it's the known ChatGPT backend special case.
-	if provider.APIBase != protocol.CodexAPIBase {
-		preferredEndpoint := NewAdaptiveProbe(s).GetPreferredEndpoint(provider, req.Model)
-		if preferredEndpoint != "responses" {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: fmt.Sprintf("Selected provider '%s' for model '%s' does not support the Responses API; preferred endpoint is '%s'", provider.Name, req.Model, preferredEndpoint),
-					Type:    "invalid_request_error",
-					Code:    "responses_not_supported",
-				},
-			})
-			return
-		}
-	}
-
-	// Use Transform Chain for request transformation (Consistency + Vendor transforms)
-	// Note: Base transform is not needed since the request is already in Responses API format
-	// Chain: Consistency Transform → Vendor Transform
-	chain := transform.NewTransformChain([]transform.Transform{
-		//transform.NewConsistencyTransform(transform.TargetAPIStyleOpenAIResponses),
-		transform.NewVendorTransform(provider.APIBase),
-	})
-
-	// Create transform context
-	var scenarioFlags *typ.ScenarioFlags
-	if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
-		scenarioFlags = &scenarioConfig.Flags
-	}
-
-	transformCtx := transform.NewTransformContext(
-		&req.ResponseNewParams,
-		transform.WithProviderURL(provider.APIBase),
-		transform.WithScenarioFlags(scenarioFlags),
-		transform.WithStreaming(req.Stream),
-	)
-
 	// Execute transform chain
-	finalCtx, err := chain.Execute(transformCtx)
+	reqCtx, err := s.transformOpenAIResponses(c, req, target, provider, isStreaming, nil, scenarioType, maxAllowed)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
-				Message: "Transform chain failed: " + err.Error(),
+				Message: "Transform failed: " + err.Error(),
 				Type:    "invalid_request_error",
 			},
 		})
 		return
 	}
 
-	// Get final transformed request
-	transformedParams := finalCtx.Request.(*responses.ResponseNewParams)
-
-	// Handle streaming or non-streaming
-	if req.Stream {
-		s.handleResponsesStreamingRequest(c, provider, *transformedParams, responseModel, req.Model)
-	} else {
-		s.handleResponsesNonStreamingRequest(c, provider, *transformedParams, responseModel, req.Model)
-	}
-}
-
-func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string, maxAllowed int, isStreaming bool) {
-	switch provider.APIStyle {
-	case protocol.APIStyleOpenAI:
-		chatReq := request.ConvertOpenAIResponsesToChat(params, int64(maxAllowed))
+	// Dispatch based on target
+	switch target {
+	case protocol.TypeOpenAIResponses:
+		params := reqCtx.Request.(*responses.ResponseNewParams)
 		if isStreaming {
-			wrapper := s.clientPool.GetOpenAIClient(provider, chatReq.Model)
+			s.handleResponsesStreamingRequest(c, provider, *params, responseModel, actualModel)
+		} else {
+			s.handleResponsesNonStreamingRequest(c, provider, *params, responseModel, actualModel)
+		}
+
+	case protocol.TypeOpenAIChat:
+		chatReq := reqCtx.Request.(*openai.ChatCompletionNewParams)
+		if isStreaming {
+			wrapper := s.clientPool.GetOpenAIClient(provider, string(chatReq.Model))
 			fc := NewForwardContext(c.Request.Context(), provider)
 			chatStream, cancel, err := ForwardOpenAIChatStream(fc, wrapper, chatReq)
 			if cancel != nil {
@@ -242,29 +214,26 @@ func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Prov
 			}
 			usage, err := HandleOpenAIChatToResponsesStream(c, chatStream, responseModel)
 			s.trackUsageWithTokenUsage(c, usage, err)
-			return
+		} else {
+			wrapper := s.clientPool.GetOpenAIClient(provider, string(chatReq.Model))
+			fc := NewForwardContext(nil, provider)
+			chatResp, _, err := ForwardOpenAIChat(fc, wrapper, chatReq)
+			if err != nil {
+				s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
+				c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Error: ErrorDetail{Message: "Failed to forward request: " + err.Error(), Type: "api_error"},
+				})
+				return
+			}
+			inputTokens := chatResp.Usage.PromptTokens
+			outputTokens := chatResp.Usage.CompletionTokens
+			cacheTokens := chatResp.Usage.PromptTokensDetails.CachedTokens
+			s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil)
+			c.JSON(http.StatusOK, buildResponsesPayloadFromChat(chatResp, responseModel, actualModel))
 		}
 
-		wrapper := s.clientPool.GetOpenAIClient(provider, string(chatReq.Model))
-		fc := NewForwardContext(nil, provider)
-		chatResp, _, err := ForwardOpenAIChat(fc, wrapper, chatReq)
-		if err != nil {
-			s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-			c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Error: ErrorDetail{Message: "Failed to forward request: " + err.Error(), Type: "api_error"},
-			})
-			return
-		}
-
-		inputTokens := int64(chatResp.Usage.PromptTokens)
-		outputTokens := int64(chatResp.Usage.CompletionTokens)
-		cacheTokens := int64(0) // Chat API doesn't provide cache information
-		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil)
-		c.JSON(http.StatusOK, buildResponsesPayloadFromChat(chatResp, responseModel, actualModel))
-		return
-
-	case protocol.APIStyleAnthropic:
-		anthropicReq := request.ConvertOpenAIResponsesToAnthropicRequest(params, int64(maxAllowed))
+	case protocol.TypeAnthropicV1:
+		anthropicReq := reqCtx.Request.(*anthropic.MessageNewParams)
 		if isStreaming {
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
 			fc := NewForwardContext(c.Request.Context(), provider)
@@ -281,46 +250,35 @@ func (s *Server) handleCodexResponsesFallback(c *gin.Context, provider *typ.Prov
 			}
 
 			hc := protocol.NewHandleContext(c, responseModel)
-			firstTokenRecorded0 := false
+			firstTokenRecorded := false
 			hc.WithOnStreamEvent(func(_ interface{}) error {
-				if !firstTokenRecorded0 {
+				if !firstTokenRecorded {
 					SetFirstTokenTime(c)
-					firstTokenRecorded0 = true
+					firstTokenRecorded = true
 				}
 				return nil
 			})
 			usage, err := HandleAnthropicToOpenAIResponsesStream(hc, anthropicStream, responseModel)
 			s.trackUsageWithTokenUsage(c, usage, err)
-			return
-		}
+		} else {
+			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
+			fc := NewForwardContext(nil, provider)
+			anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, anthropicReq)
+			if cancel != nil {
+				defer cancel()
+			}
+			if err != nil {
+				s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
+				c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Error: ErrorDetail{Message: "Failed to forward request: " + err.Error(), Type: "api_error"},
+				})
+				return
+			}
 
-		wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
-		fc := NewForwardContext(nil, provider)
-		anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, anthropicReq)
-		if cancel != nil {
-			defer cancel()
+			cacheTokens := int(anthropicResp.Usage.CacheReadInputTokens)
+			s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(anthropicResp.Usage.InputTokens), int(anthropicResp.Usage.OutputTokens), cacheTokens), nil)
+			c.JSON(http.StatusOK, buildResponsesPayloadFromAnthropic(anthropicResp, responseModel, actualModel))
 		}
-		if err != nil {
-			s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-			c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Error: ErrorDetail{Message: "Failed to forward request: " + err.Error(), Type: "api_error"},
-			})
-			return
-		}
-
-		cacheTokens := int(anthropicResp.Usage.CacheReadInputTokens)
-		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(anthropicResp.Usage.InputTokens), int(anthropicResp.Usage.OutputTokens), cacheTokens), nil)
-		c.JSON(http.StatusOK, buildResponsesPayloadFromAnthropic(anthropicResp, responseModel, actualModel))
-		return
-
-	default:
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: fmt.Sprintf("Codex fallback does not support provider API style: %s", provider.APIStyle),
-				Type:    "invalid_request_error",
-				Code:    "codex_fallback_unsupported_provider",
-			},
-		})
 	}
 }
 

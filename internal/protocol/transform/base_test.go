@@ -65,8 +65,8 @@ func TestBaseTransform_ConvertAnthropicV1ToOpenAIChat(t *testing.T) {
 	assert.Equal(t, "claude-3-5-sonnet-20241022", string(openaiReq.Model))
 	assert.Equal(t, int64(1024), openaiReq.MaxTokens.Value)
 
-	config, ok := ctx.Extra["openaiConfig"].(*protocol.OpenAIConfig)
-	require.True(t, ok)
+	config := ctx.Config.OpenAIConfig
+	require.NotNil(t, config)
 	assert.False(t, config.HasThinking)
 	assert.Equal(t, "low", string(config.ReasoningEffort))
 }
@@ -96,8 +96,8 @@ func TestBaseTransform_AlreadyOpenAIChat(t *testing.T) {
 	require.NoError(t, err)
 	assert.Same(t, ctx.Request, ctx.Request)
 
-	config, ok := ctx.Extra["openaiConfig"].(*protocol.OpenAIConfig)
-	require.True(t, ok)
+	config := ctx.Config.OpenAIConfig
+	require.NotNil(t, config)
 	assert.False(t, config.HasThinking)
 	assert.Equal(t, "none", string(config.ReasoningEffort))
 }

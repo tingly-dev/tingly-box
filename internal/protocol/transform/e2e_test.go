@@ -166,10 +166,9 @@ func TestE2E_FullChain(t *testing.T) {
 		// Verify the model was converted
 		assert.NotEmpty(t, finalReq.Model)
 
-		// Verify Extra has openaiConfig set by BaseTransform
-		config, ok := finalCtx.Extra["openaiConfig"]
-		require.True(t, ok, "expected openaiConfig in Extra")
-		require.NotNil(t, config)
+		// Verify Config has OpenAIConfig set by BaseTransform
+		config := finalCtx.Config.OpenAIConfig
+		require.NotNil(t, config, "expected OpenAIConfig in Config")
 	})
 
 	// Test Anthropic v1 -> Google with full chain
