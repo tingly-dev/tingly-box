@@ -486,7 +486,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string, useV1Format bool) (*protocol.TokenUsage, error) {
 	defer stream.Close()
 
-	logrus.Info("[ChatGPT] Starting OpenAI Responses to Anthropic streaming handler")
+	logrus.Debug("[ChatGPT] Starting OpenAI Responses to Anthropic streaming handler")
 	defer func() {
 		if r := recover(); r != nil {
 			logrus.Errorf("[ChatGPT] Panic in streaming handler: %v", r)

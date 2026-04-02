@@ -24,7 +24,7 @@ import (
 // HandleOpenAIToAnthropicStreamResponse processes OpenAI streaming events and converts them to Anthropic format.
 // Returns UsageStat containing token usage information for tracking.
 func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (*protocol.TokenUsage, error) {
-	logrus.Info("Starting OpenAI to Anthropic streaming response handler")
+	logrus.Debug("Starting OpenAI to Anthropic streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
 			logrus.Errorf("Panic in OpenAI to Anthropic streaming handler: %v", r)

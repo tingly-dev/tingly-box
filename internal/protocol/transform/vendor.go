@@ -54,9 +54,9 @@ func (t *VendorTransform) applyChatCompletionVendor(ctx *TransformContext, req *
 	// Extract model from request
 	model := string(req.Model)
 
-	// Extract OpenAIConfig from Extra (set by BaseTransform)
-	config, ok := ctx.Extra["openaiConfig"].(*protocol.OpenAIConfig)
-	if !ok {
+	// Extract OpenAIConfig from Config (set by BaseTransform)
+	config := ctx.Config.OpenAIConfig
+	if config == nil {
 		config = &protocol.OpenAIConfig{} // Use default config if not available
 	}
 
@@ -88,9 +88,9 @@ func (t *VendorTransform) applyResponsesVendor(ctx *TransformContext, req *respo
 		}
 	}
 
-	// Extract OpenAIConfig from Extra (set by BaseTransform)
-	config, ok := ctx.Extra["openaiConfig"].(*protocol.OpenAIConfig)
-	if !ok {
+	// Extract OpenAIConfig from Config (set by BaseTransform)
+	config := ctx.Config.OpenAIConfig
+	if config == nil {
 		config = &protocol.OpenAIConfig{} // Use default config if not available
 	}
 
@@ -180,7 +180,7 @@ func (t *VendorTransform) applyAnthropicV1Vendor(ctx *TransformContext, req *ant
 		req = ops.ApplyAnthropicV1ModelTransform(req, string(model))
 
 		// Inject OAuth user_id metadata if provider is available
-		req = ops.ApplyAnthropicV1MetadataTransform(req, ctx.Extra)
+		req = ops.ApplyAnthropicV1MetadataTransform(req, ctx.configExtraForMetadata())
 
 		ctx.Request = req
 	}
@@ -203,7 +203,7 @@ func (t *VendorTransform) applyAnthropicBetaVendor(ctx *TransformContext, req *a
 		req = ops.ApplyAnthropicBetaModelTransform(req, string(model))
 
 		// Inject OAuth user_id metadata if provider is available
-		req = ops.ApplyAnthropicBetaMetadataTransform(req, ctx.Extra)
+		req = ops.ApplyAnthropicBetaMetadataTransform(req, ctx.configExtraForMetadata())
 
 		ctx.Request = req
 	}
