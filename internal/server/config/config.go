@@ -80,6 +80,12 @@ type Config struct {
 	// HTTP Transport settings for upstream API connections
 	HTTPTransport HTTPTransportConfig `json:"http_transport,omitempty" yaml:"http_transport,omitempty"`
 
+	// ProviderTemplateSource supports three modes:
+	// 1. Empty/default -> use embedded templates (default GitHub sync behavior)
+	// 2. file:///path/to/template.json -> load from local file
+	// 3. https://example.com/template.json -> load from HTTP URL
+	ProviderTemplateSource string `yaml:"provider_template_source,omitempty" json:"provider_template_source,omitempty"`
+
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
 
