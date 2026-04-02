@@ -189,12 +189,7 @@ func (t *BaseTransform) convertToAnthropicV1(ctx *TransformContext) error {
 
 	case *responses.ResponseNewParams:
 		// OpenAI Responses to Anthropic v1 conversion
-		// Convert Responses to Chat first, then to Anthropic
-		chatReq := request.ConvertOpenAIResponsesToChat(*req, 0)
-		ctx.Request = request.ConvertOpenAIToAnthropicRequest(
-			chatReq,
-			4096, // defaultMaxTokens
-		)
+		ctx.Request = request.ConvertOpenAIResponsesToAnthropicRequest(*req, 4096)
 		return nil
 
 	default:
@@ -205,7 +200,7 @@ func (t *BaseTransform) convertToAnthropicV1(ctx *TransformContext) error {
 // convertToAnthropicBeta converts the request to Anthropic beta format
 func (t *BaseTransform) convertToAnthropicBeta(ctx *TransformContext) error {
 	// Detect request type and convert accordingly
-	switch ctx.Request.(type) {
+	switch req := ctx.Request.(type) {
 	case *anthropic.BetaMessageNewParams:
 		// Already in Anthropic beta format, no conversion needed
 		// Consistency transform will handle normalization
@@ -218,13 +213,14 @@ func (t *BaseTransform) convertToAnthropicBeta(ctx *TransformContext) error {
 
 	case *openai.ChatCompletionNewParams:
 		// OpenAI Chat to Anthropic beta conversion
-		// This conversion is not yet implemented
-		return fmt.Errorf("OpenAI Chat to Anthropic beta conversion is not yet implemented")
+		ctx.Request = request.ConvertOpenAIToAnthropicRequest(req, 4096)
+		return nil
 
 	case *responses.ResponseNewParams:
 		// OpenAI Responses to Anthropic beta conversion
-		// This conversion is not yet implemented
-		return fmt.Errorf("OpenAI Responses to Anthropic beta conversion is not yet implemented")
+		anthropicReq := request.ConvertOpenAIResponsesToAnthropicBetaRequest(*req, 4096)
+		ctx.Request = &anthropicReq
+		return nil
 
 	default:
 		return fmt.Errorf("unsupported request type for Anthropic beta conversion: %T", ctx.Request)
