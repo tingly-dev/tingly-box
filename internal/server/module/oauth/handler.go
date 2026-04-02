@@ -263,6 +263,7 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 	if proxyURL == "" {
 		providerToBase := map[oauth2.ProviderType]string{
 			oauth2.ProviderCodex:       "openai",
+			oauth2.ProviderKimi:        "moonshot",
 			oauth2.ProviderOpenAI:      "openai",
 			oauth2.ProviderClaudeCode:  "anthropic",
 			oauth2.ProviderGemini:      "google",
@@ -976,6 +977,9 @@ func (h *Handler) createProviderFromToken(token *oauth2.Token, providerType oaut
 			apiStyle = protocol.APIStyleOpenAI
 		case oauth2.ProviderCodex:
 			apiBase = protocol.CodexAPIBase
+			apiStyle = protocol.APIStyleOpenAI
+		case oauth2.ProviderKimi:
+			apiBase = "https://api.moonshot.cn/v1"
 			apiStyle = protocol.APIStyleOpenAI
 		default:
 			apiBase = "mock"
