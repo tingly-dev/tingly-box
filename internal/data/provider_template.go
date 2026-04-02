@@ -68,6 +68,15 @@ type ProviderTemplate struct {
 	OAuthProvider          string            `json:"oauth_provider,omitempty"`    // OAuth provider type for oauth type providers
 	AuthType               string            `json:"auth_type,omitempty"`         // "oauth", "key"
 	WebSearchSchema        string            `json:"web_search_schema,omitempty"` // Reference to capability schema for web_search
+
+	// Capacity configuration for TacticCapacityBased load balancing
+	// TotalCapacity is the total seat count for this provider (shared across all models)
+	TotalCapacity *int `json:"total_capacity,omitempty"`
+	// DefaultModelCapacity is the default seat count per model (template)
+	// Each model inherits this unless overridden
+	DefaultModelCapacity *int `json:"default_model_capacity,omitempty"`
+	// ModelCapacities allows per-model capacity overrides
+	ModelCapacities map[string]int `json:"model_capacities,omitempty"` // model name -> capacity
 }
 
 // ProviderTemplateRegistry represents the provider template registry structure from GitHub

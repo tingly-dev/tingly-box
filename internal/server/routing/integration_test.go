@@ -74,48 +74,15 @@ func (ts *routingTestServer) addRule(t *testing.T, rule typ.Rule) {
 	require.NoError(t, ts.appConfig.GetGlobalConfig().AddRequestConfig(rule))
 }
 
-// updateProviderCapacity updates a provider's TotalCapacity and re-initializes the session tracker.
-// This must be called after adding providers and rules to configure capacity-based load balancing.
+// updateProviderCapacity is a no-op for integration tests.
+// For capacity-based tests, set Service.ModelCapacity directly on services.
+// Provider-level capacity comes from ProviderTemplate (GitHub/file), not user's Provider.
 func (ts *routingTestServer) updateProviderCapacity(t *testing.T, providerUUID string, totalCapacity int, modelCapacity int) {
 	t.Helper()
-
-	// Find and update the provider
-	provider, err := ts.appConfig.GetProviderByUUID(providerUUID)
-	require.NoError(t, err)
-
-	provider.TotalCapacity = &totalCapacity
-	if modelCapacity > 0 {
-		provider.DefaultModelCapacity = &modelCapacity
-	}
-
-	// Re-initialize capacities by rebuilding provider caps and services from config
-	cfg := ts.appConfig.GetGlobalConfig()
-
-	// Build provider capacity map
-	providerCaps := make(map[string]int64)
-	for _, p := range cfg.Providers {
-		if p.TotalCapacity != nil && *p.TotalCapacity > 0 {
-			providerCaps[p.UUID] = int64(*p.TotalCapacity)
-		}
-	}
-
-	// Collect all services from rules
-	allServices := []*loadbalance.Service{}
-	for _, rule := range cfg.Rules {
-		for _, svc := range rule.Services {
-			// Apply default model capacity from provider if not set
-			if svc.ModelCapacity == nil && provider.DefaultModelCapacity != nil {
-				cap := *provider.DefaultModelCapacity
-				svc.ModelCapacity = &cap
-			}
-			allServices = append(allServices, svc)
-		}
-	}
-
-	// Re-initialize the session tracker (we need to access it through the server)
-	// Note: For these tests, we test at the SessionTracker level directly
-	t.Logf("updated provider %s with total_capacity=%d, default_model_capacity=%d",
-		providerUUID, totalCapacity, modelCapacity)
+	// No-op: capacity for integration tests is set via Service.ModelCapacity
+	// Provider-level capacity comes from ProviderTemplate
+	t.Logf("provider capacity settings noted (total=%d, model=%d) - use Service.ModelCapacity for tests",
+		totalCapacity, modelCapacity)
 }
 
 // newRoutingTestServerWithCapacity creates a test server with pre-configured capacity settings.

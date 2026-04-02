@@ -511,6 +511,20 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize health filter
 	healthFilter := typ.NewHealthFilter(healthMonitor)
 
+	// Initialize template manager first (needed for capacity config)
+	var templateURL string
+	if cfg.ProviderTemplateSource != "" {
+		templateURL = cfg.ProviderTemplateSource
+	} else {
+		templateURL = data.TemplateGitHubURL
+	}
+	templateManager := data.NewTemplateManager(templateURL)
+	if err := templateManager.Initialize(context.Background()); err != nil {
+		logrus.Debugf("Failed to fetch from GitHub, using embedded provider templates: %v", err)
+	} else {
+		logrus.Debugf("Provider templates initialized (version: %s)", templateManager.GetVersion())
+	}
+
 	// Initialize load balancer
 	loadBalancer := NewLoadBalancer(cfg, healthFilter)
 
@@ -520,11 +534,12 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize session tracker for capacity-based load balancing
 	sessionTracker := loadbalance.NewSessionTracker(2 * time.Hour)
 
-	// Build provider capacity map (providerUUID -> total capacity)
+	// Build provider capacity map from ProviderTemplate (from GitHub/file)
 	providerCaps := make(map[string]int64)
-	for _, provider := range cfg.Providers {
-		if provider.TotalCapacity != nil && *provider.TotalCapacity > 0 {
-			providerCaps[provider.UUID] = int64(*provider.TotalCapacity)
+	allTemplates := templateManager.GetAllTemplates()
+	for _, tmpl := range allTemplates {
+		if tmpl.TotalCapacity != nil && *tmpl.TotalCapacity > 0 {
+			providerCaps[tmpl.ID] = int64(*tmpl.TotalCapacity)
 		}
 	}
 
@@ -534,7 +549,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		allServices = append(allServices, rule.Services...)
 	}
 
-	// Initialize capacities
+	// Initialize capacities from ProviderTemplate
 	sessionTracker.InitializeCapacities(allServices, providerCaps)
 
 	// Start background cleanup for idle sessions
@@ -596,19 +611,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Set callback server manager (the server itself implements this interface)
 	server.oauthHandler.SetCallbackServerManager(server)
 
-	// Initialize template manager with configured template source (defaults to GitHub)
-	var templateURL string
-	if cfg.ProviderTemplateSource != "" {
-		templateURL = cfg.ProviderTemplateSource
-	} else {
-		templateURL = data.TemplateGitHubURL
-	}
-	templateManager := data.NewTemplateManager(templateURL)
-	if err := templateManager.Initialize(context.Background()); err != nil {
-		logrus.Debugf("Failed to fetch from GitHub, using embedded provider templates: %v", err)
-	} else {
-		logrus.Debugf("Provider templates initialized (version: %s)", templateManager.GetVersion())
-	}
 	server.templateManager = templateManager
 
 	// Set template manager in config for model fetching fallback
