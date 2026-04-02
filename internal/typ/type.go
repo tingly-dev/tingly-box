@@ -276,6 +276,13 @@ type Provider struct {
 	Models        []string          `json:"models,omitempty"`       // Available models for this provider (cached)
 	LastUpdated   string            `json:"last_updated,omitempty"` // Last update timestamp
 
+	// Capacity configuration for TacticCapacityBased load balancing
+	// TotalCapacity is the total seat count for this provider (shared across all models)
+	TotalCapacity *int `yaml:"total_capacity,omitempty" json:"total_capacity,omitempty"`
+	// DefaultModelCapacity is the default seat count per model (template)
+	// Each model inherits this unless overridden
+	DefaultModelCapacity *int `yaml:"default_model_capacity,omitempty" json:"default_model_capacity,omitempty"`
+
 	// Auth configuration
 	AuthType    AuthType     `json:"auth_type"`              // api_key or oauth
 	OAuthDetail *OAuthDetail `json:"oauth_detail,omitempty"` // OAuth credentials (only for oauth auth type)
