@@ -161,37 +161,13 @@ func runQuotaList(appManager *AppManager) error {
 		return fmt.Errorf("failed to get quota data: %w", err)
 	}
 
-	// Build a lookup from store data
-	usageMap := make(map[string]*quota.ProviderUsage, len(usages))
-	for _, u := range usages {
-		usageMap[u.ProviderUUID] = u
-	}
-
 	providers := appManager.ListProviders()
 	if len(providers) == 0 {
 		fmt.Println("No providers configured.")
 		return nil
 	}
 
-	fmt.Println("\nProvider Quota Overview")
-	fmt.Println(strings.Repeat("=", 80))
-
-	for _, p := range providers {
-		if u, ok := usageMap[p.UUID]; ok {
-			printQuotaOverview(u)
-		} else {
-			// No data yet — show provider with "not fetched" status
-			printQuotaOverview(&quota.ProviderUsage{
-				ProviderUUID: p.UUID,
-				ProviderName: p.Name,
-				ProviderType: quota.ProviderType(p.APIStyle),
-				LastError:    "no data — run 'quota refresh' to fetch",
-			})
-		}
-		fmt.Println(strings.Repeat("-", 80))
-	}
-
-	return nil
+	return displayQuotaForProviders(providers, usages, qm, ctx, true)
 }
 
 // runQuotaGet displays detailed quota for a specific provider
@@ -227,6 +203,36 @@ func runQuotaGet(appManager *AppManager, providerName string, refresh bool) erro
 	}
 
 	printQuotaDetails(usage)
+	return nil
+}
+
+// displayQuotaForProviders displays quota info for given providers
+func displayQuotaForProviders(providers []*typ.Provider, usages []*quota.ProviderUsage, qm *quota.Manager, ctx context.Context, showSeparator bool) error {
+	// Build a lookup from store data
+	usageMap := make(map[string]*quota.ProviderUsage, len(usages))
+	for _, u := range usages {
+		usageMap[u.ProviderUUID] = u
+	}
+
+	for i, p := range providers {
+		if u, ok := usageMap[p.UUID]; ok {
+			printQuotaDetails(u)
+		} else {
+			// No data yet — show provider with "not fetched" status
+			printQuotaDetails(&quota.ProviderUsage{
+				ProviderUUID: p.UUID,
+				ProviderName: p.Name,
+				ProviderType: quota.ProviderType(p.APIStyle),
+				LastError:    "no data — run 'quota refresh' to fetch",
+			})
+		}
+
+		// Empty line between providers (except after last one)
+		if showSeparator && i < len(providers)-1 {
+			fmt.Println()
+		}
+	}
+
 	return nil
 }
 
@@ -285,12 +291,8 @@ func runQuotaRefresh(appManager *AppManager) error {
 
 	fmt.Printf("✅ Refreshed %d provider(s)\n\n", len(usages))
 
-	for _, usage := range usages {
-		printQuotaOverview(usage)
-		fmt.Println()
-	}
-
-	return nil
+	providers := appManager.ListProviders()
+	return displayQuotaForProviders(providers, usages, qm, ctx, true)
 }
 
 // runQuotaRefreshProvider refreshes a specific provider
@@ -361,11 +363,17 @@ func printQuotaOverview(usage *quota.ProviderUsage) {
 		primaryInfo = fmt.Sprintf(" | %s: %.1f%%", usage.Primary.Label, usage.Primary.UsedPercent)
 	}
 
+	// Add secondary indicator if exists
+	secondaryIndicator := ""
+	if usage.Secondary != nil {
+		secondaryIndicator = " +"
+	}
+
 	if usage.LastError != "" {
-		fmt.Printf("  %-20s%s\n", usage.ProviderName, primaryInfo)
+		fmt.Printf("  %-20s%s%s\n", usage.ProviderName, primaryInfo, secondaryIndicator)
 		fmt.Printf("  %-20s%s\n", "", "  error: "+usage.LastError)
 	} else {
-		fmt.Printf("  %-20s%s\n", usage.ProviderName, primaryInfo)
+		fmt.Printf("  %-20s%s%s\n", usage.ProviderName, primaryInfo, secondaryIndicator)
 	}
 }
 
@@ -398,22 +406,57 @@ func printQuotaDetails(usage *quota.ProviderUsage) {
 		}
 	}
 
-	// Primary window
+	// Display all quota groups (breakdowns + aggregate)
+	fmt.Println("\n📊 Quota:")
+
+	// First, display breakdowns if available
+	if len(usage.Breakdowns) > 0 {
+		// Group breakdowns by their Group field
+		grouped := make(map[string][]*quota.UsageBreakdown)
+		for _, bd := range usage.Breakdowns {
+			grouped[bd.Group] = append(grouped[bd.Group], bd)
+		}
+
+		// Display each group with appropriate header
+		for group, bds := range grouped {
+			var groupHeader string
+			switch group {
+			case "model":
+				groupHeader = "By Model"
+			case "type":
+				groupHeader = "By Type"
+			case "region":
+				groupHeader = "By Region"
+			case "tier":
+				groupHeader = "By Tier"
+			default:
+				groupHeader = "By " + strings.ToUpper(group[:1]) + group[1:]
+			}
+
+			fmt.Printf("\n  📦 %s:\n", groupHeader)
+			for _, bd := range bds {
+				fmt.Printf("    • %s:\n", bd.Label)
+				for _, w := range bd.Windows {
+					printUsageWindowInline(w, 4)
+				}
+			}
+		}
+		fmt.Println() // separator before aggregate
+	}
+
+	// Then display aggregate (primary/secondary/tertiary as "Total" group)
+	aggregateLabel := "Total"
+	if usage.Primary != nil || usage.Secondary != nil || usage.Tertiary != nil {
+		fmt.Printf("  📊 %s:\n", aggregateLabel)
+	}
 	if usage.Primary != nil {
-		fmt.Println("\n📊 Primary Quota:")
-		printUsageWindow(usage.Primary, 1)
+		printUsageWindowInline(usage.Primary, 3)
 	}
-
-	// Secondary window
 	if usage.Secondary != nil {
-		fmt.Println("\n📊 Secondary Quota:")
-		printUsageWindow(usage.Secondary, 2)
+		printUsageWindowInline(usage.Secondary, 3)
 	}
-
-	// Tertiary window
 	if usage.Tertiary != nil {
-		fmt.Println("\n📊 Tertiary Quota:")
-		printUsageWindow(usage.Tertiary, 3)
+		printUsageWindowInline(usage.Tertiary, 3)
 	}
 
 	// Cost
@@ -449,6 +492,18 @@ func printUsageWindow(w *quota.UsageWindow, indent int) {
 			fmt.Printf("%sResets at: %s\n", prefix, w.ResetsAt.Format("2006-01-02 15:04"))
 		}
 	}
+}
+
+// printUsageWindowInline prints a usage window on a single line (for breakdowns)
+func printUsageWindowInline(w *quota.UsageWindow, indent int) {
+	prefix := strings.Repeat("  ", indent)
+	fmt.Printf("%s%s: %s / %s (%.1f%%)", prefix, w.Label, formatUsageValue(w.Used, w.Unit), formatUsageValue(w.Limit, w.Unit), w.UsedPercent)
+	if w.ResetsAt != nil {
+		if time.Until(*w.ResetsAt) > 0 {
+			fmt.Printf(" — resets in %s", formatDuration(time.Until(*w.ResetsAt)))
+		}
+	}
+	fmt.Println()
 }
 
 // formatUsageValue formats a usage value with appropriate unit
