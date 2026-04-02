@@ -206,9 +206,6 @@ jobs:
           LDFLAGS+=" -X main.goVersion=${GO_VERSION}"
           LDFLAGS+=" -X main.platform=${PLATFORM}"
 
-          # Trim file system paths and build info
-          LDFLAGS+=" -trimpath"
-
           # Use zig for cross-compilation if needed
           if [ "${{ matrix.cross_compile }}" == "true" ]; then
             CC="zig cc -target aarch64-linux-gnu"
