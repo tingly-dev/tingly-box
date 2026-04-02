@@ -187,6 +187,21 @@ func DefaultRegistry() *Registry {
 		Hook:               &CodexHook{},
 	})
 
+	registry.Register(&ProviderConfig{
+		Type:               ProviderKimi,
+		DisplayName:        "Kimi CLI",
+		ClientID:           "17e5f671-d194-4dfb-9706-5516cb48c098",
+		ClientSecret:       "", // No ClientSecret for Device Authorization Flow
+		DeviceCodeURL:      "https://auth.kimi.com/api/oauth/device_authorization",
+		TokenURL:           "https://auth.kimi.com/api/oauth/token",
+		Scopes:             []string{"kimi-code"},
+		AuthStyle:          AuthStyleInNone,
+		OAuthMethod:        OAuthMethodDeviceCode,
+		TokenRequestFormat: TokenRequestFormatForm,
+		ConsoleURL:         "https://www.kimi.com/code",
+		Hook:               &KimiHook{},
+	})
+
 	return registry
 }
 

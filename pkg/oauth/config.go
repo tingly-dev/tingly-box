@@ -24,6 +24,7 @@ const (
 	ProviderIFlow       ProviderType = "iflow"
 	ProviderCodex       ProviderType = "codex"
 	ProviderMock        ProviderType = "mock"
+	ProviderKimi        ProviderType = "kimi_code"
 )
 
 // DefaultSessionExpiry is the default expiration time for OAuth sessions
@@ -35,7 +36,7 @@ func ParseProviderType(s string) (ProviderType, error) {
 	p := ProviderType(s)
 	// Validate by checking against known providers
 	switch p {
-	case ProviderClaudeCode, ProviderOpenAI, ProviderGoogle, ProviderGemini, ProviderGitHub, ProviderQwenCode, ProviderAntigravity, ProviderIFlow, ProviderCodex, ProviderMock:
+	case ProviderClaudeCode, ProviderOpenAI, ProviderGoogle, ProviderGemini, ProviderGitHub, ProviderQwenCode, ProviderAntigravity, ProviderIFlow, ProviderCodex, ProviderMock, ProviderKimi:
 		return p, nil
 	default:
 		return "", fmt.Errorf("unknown provider type: %s", s)
@@ -78,12 +79,12 @@ type Config struct {
 // DefaultConfig returns a default OAuth configuration
 func DefaultConfig() *Config {
 	cfg := &Config{
-		BaseURL:         "http://localhost:12580",
-		ProviderConfigs: make(map[ProviderType]*ProviderConfig),
-		TokenStorage:    NewMemoryTokenStorage(),
-		StateStorage:    NewMemoryStateStorage(),
-		SessionStorage:  NewMemorySessionStorage(),
-		StateExpiry:     10 * time.Minute,
+		BaseURL:           "http://localhost:12580",
+		ProviderConfigs:   make(map[ProviderType]*ProviderConfig),
+		TokenStorage:      NewMemoryTokenStorage(),
+		StateStorage:      NewMemoryStateStorage(),
+		SessionStorage:    NewMemorySessionStorage(),
+		StateExpiry:       10 * time.Minute,
 		TokenExpiryBuffer: 5 * time.Minute,
 	}
 
