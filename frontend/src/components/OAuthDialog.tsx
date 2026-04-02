@@ -14,7 +14,7 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import {ClaudeCode, Gemini, Google, OpenAI, Qwen} from './BrandIcons';
+import {ClaudeCode, Gemini, Google, Kimi, OpenAI, Qwen} from './BrandIcons';
 import {useEffect, useState} from 'react';
 import api from "@/services/api.ts";
 import {getOAuthRedirectPath} from "@/utils/protocol";
@@ -78,6 +78,16 @@ const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         icon: <OpenAI size={32}/>,
         color: '#10A37F',
         enabled: true,
+    },
+    {
+        id: 'kimi_code',
+        name: 'Kimi Code',
+        displayName: 'Kimi CLI',
+        description: 'Access Kimi Code via device code flow',
+        icon: <Kimi size={32}/>,
+        color: '#6366F1',
+        enabled: true,
+        deviceCodeFlow: true,
     },
     {
         id: 'mock',

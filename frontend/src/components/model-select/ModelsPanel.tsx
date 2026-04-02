@@ -58,7 +58,7 @@ export function ModelsPanel({
 }: ModelsPanelProps) {
     const { customModels } = useCustomModels();
     const { providerModels, refreshingProviders, refreshModels, fetchModels } = useProviderModels();
-    const { isModelProbing, refreshTrigger } = useModelSelectContext();
+    const { refreshTrigger } = useModelSelectContext();
     const { recentModels } = useRecentModels();
     const { newModels, clearNewModels } = useNewModels();
 
@@ -271,7 +271,6 @@ export function ModelsPanel({
                                     isSelected={isProviderSelected && selectedModel === starModel}
                                     onClick={() => onModelSelect(provider, starModel)}
                                     variant="starred"
-                                    loading={provider.auth_type === 'oauth' && isModelProbing(`${provider.uuid}-${starModel}`)}
                                 />
                             ))}
                         </Box>
@@ -304,7 +303,6 @@ export function ModelsPanel({
                                         onDelete={() => onCustomModelDelete(provider, model)}
                                         onSelect={() => onModelSelect(provider, model)}
                                         variant={variant}
-                                        loading={provider.auth_type === 'oauth' && isModelProbing(`${provider.uuid}-${model}`)}
                                     />
                                 );
                             } else {
@@ -315,7 +313,6 @@ export function ModelsPanel({
                                         isSelected={isModelSelected}
                                         onClick={() => onModelSelect(provider, model)}
                                         variant="standard"
-                                        loading={provider.auth_type === 'oauth' && isModelProbing(`${provider.uuid}-${model}`)}
                                     />
                                 );
                             }
