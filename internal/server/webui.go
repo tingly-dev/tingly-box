@@ -24,6 +24,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
+	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
 	"github.com/tingly-dev/tingly-box/internal/server/module/providertemplate"
 	rulemodule "github.com/tingly-dev/tingly-box/internal/server/module/rule"
 	"github.com/tingly-dev/tingly-box/internal/server/module/scenario"
@@ -110,6 +111,15 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 	// Config apply API routes
 	configapplyHandler := configapply.NewHandler(s.config, s.host)
 	configapply.RegisterRoutes(apiV1, configapplyHandler)
+
+	// Provider quota API routes
+	if s.quotaManager != nil {
+		if qm, ok := s.quotaManager.(providerQuotaModule.Manager); ok {
+			quotaHandler := providerQuotaModule.NewHandler(qm, logrus.StandardLogger())
+			quotaHandler.RegisterRoutes(apiV1.Router)
+			logrus.Info("Provider quota API routes registered")
+		}
+	}
 
 	// Static files and templates - try embedded assets first, fallback to filesystem
 	s.useWebStaticEndpoints(s.engine)

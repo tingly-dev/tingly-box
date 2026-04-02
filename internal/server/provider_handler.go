@@ -1,12 +1,15 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+
+	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
@@ -464,6 +467,17 @@ func (s *Server) UpdateProviderModelsByUUID(c *gin.Context) {
 		Models: models,
 	}
 
+	// Attach quota information if quota manager is available
+	if s.quotaManager != nil {
+		if qm, ok := s.quotaManager.(providerQuotaModule.Manager); ok {
+			var ctx context.Context = c.Request.Context()
+			quotaData, err := qm.GetQuota(ctx, uid)
+			if err == nil && quotaData != nil {
+				providerModels.Quota = quotaData
+			}
+		}
+	}
+
 	response := ProviderModelsResponse{
 		Success: true,
 		Message: fmt.Sprintf("Successfully fetched %d models for provider %s", len(models), uid),
@@ -488,6 +502,18 @@ func (s *Server) GetProviderModelsByUUID(c *gin.Context) {
 	models := providerModelManager.GetModels(uid)
 	providerModels := ProviderModelInfo{
 		Models: models,
+	}
+
+	// Attach quota information if quota manager is available
+	if s.quotaManager != nil {
+		if qm, ok := s.quotaManager.(providerQuotaModule.Manager); ok {
+			var ctx context.Context = c.Request.Context()
+			quotaData, err := qm.GetQuota(ctx, uid)
+			if err == nil && quotaData != nil {
+				providerModels.Quota = quotaData
+			}
+			// Silently ignore quota errors - models should work without quota
+		}
 	}
 
 	response := ProviderModelsResponse{
