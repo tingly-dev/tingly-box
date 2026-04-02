@@ -144,22 +144,9 @@ func HandleResponsesToOpenAIChatStream(
 
 		case "response.completed":
 			// Response is complete, send final chunk with usage
-			state.inputTokens = int64(evt.Response.Usage.InputTokens)
-			state.outputTokens = int64(evt.Response.Usage.OutputTokens)
-
-			// Check for cache tokens in raw JSON
-			var evtParsed map[string]interface{}
-			if err := json.Unmarshal([]byte(evt.RawJSON()), &evtParsed); err == nil {
-				if response, ok := evtParsed["response"].(map[string]interface{}); ok {
-					if usage, ok := response["usage"].(map[string]interface{}); ok {
-						if details, ok := usage["input_tokens_details"].(map[string]interface{}); ok {
-							if cached, ok := details["cached_tokens"].(float64); ok {
-								state.cacheTokens = int64(cached)
-							}
-						}
-					}
-				}
-			}
+			state.inputTokens = evt.Response.Usage.InputTokens
+			state.outputTokens = evt.Response.Usage.OutputTokens
+			state.cacheTokens = evt.Response.Usage.InputTokensDetails.CachedTokens
 
 			// Send final chunk with finish_reason and usage
 			finalChunk := map[string]interface{}{

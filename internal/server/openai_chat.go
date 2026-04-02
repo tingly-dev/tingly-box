@@ -267,7 +267,6 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 	s.trackUsageWithTokenUsage(c, usage, err)
 }
 
-// ListModelsByScenario handles the /v1/models endpoint for scenario-based routing
 func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
 	// Accumulate usage from stream chunks
 	var inputTokens, outputTokens int
