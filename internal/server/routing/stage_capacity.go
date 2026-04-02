@@ -163,3 +163,9 @@ func (s *CapacityStage) SelectService(rule *typ.Rule) (*loadbalance.Service, err
 
 	return s.weightedRandomSelect(available), nil
 }
+
+// UpdateServiceIndex is a no-op for capacity-based selection.
+// Capacity is managed by SessionTracker, not by service index.
+func (s *CapacityStage) UpdateServiceIndex(rule *typ.Rule, service *loadbalance.Service) {
+	// No-op: capacity-based selection doesn't use service index
+}

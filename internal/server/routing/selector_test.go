@@ -23,7 +23,7 @@ func TestSelect_NoAffinity_FallsToLoadBalancer(t *testing.T) {
 	services := []*loadbalance.Service{svc}
 	rule := testRule("rule-1", "gpt-4", services)
 
-	sel := NewServiceSelector(cfg, store, lb)
+	sel := NewServiceSelector(cfg, store, lb, nil)
 	result, err := sel.Select(testContext(rule, ""))
 	require.NoError(t, err)
 	require.Equal(t, "load_balancer", result.Source)
@@ -46,7 +46,7 @@ func TestSelect_GlobalAffinity_Hit(t *testing.T) {
 	rule.SmartEnabled = true
 	rule.SmartAffinity = true
 
-	sel := NewServiceSelector(cfg, store, lb)
+	sel := NewServiceSelector(cfg, store, lb, nil)
 	result, err := sel.Select(testContext(rule, "session-1"))
 	require.NoError(t, err)
 	require.Equal(t, "affinity", result.Source)
@@ -66,7 +66,7 @@ func TestSelect_GlobalAffinity_Miss_SmartHit(t *testing.T) {
 	services := []*loadbalance.Service{svc}
 	rule := testSmartRule("rule-1", "gpt-4", services, testModelContainsOp("gpt"))
 
-	sel := NewServiceSelector(cfg, store, lb)
+	sel := NewServiceSelector(cfg, store, lb, nil)
 	ctx := testContext(rule, "session-1")
 	ctx.Request = testOpenAIRequest("gpt-4o")
 
@@ -89,7 +89,7 @@ func TestSelect_GlobalAffinity_Miss_SmartMiss(t *testing.T) {
 	services := []*loadbalance.Service{svc}
 	rule := testSmartRule("rule-1", "gpt-4", services, testModelContainsOp("claude"))
 
-	sel := NewServiceSelector(cfg, store, lb)
+	sel := NewServiceSelector(cfg, store, lb, nil)
 	ctx := testContext(rule, "session-1")
 	ctx.Request = testOpenAIRequest("gpt-4o")
 
@@ -116,7 +116,7 @@ func TestSelect_ValidatesActiveService(t *testing.T) {
 	rule.SmartEnabled = true
 	rule.SmartAffinity = true
 
-	sel := NewServiceSelector(cfg, store, lb)
+	sel := NewServiceSelector(cfg, store, lb, nil)
 	result, err := sel.Select(testContext(rule, "session-1"))
 	require.NoError(t, err)
 	require.Equal(t, "load_balancer", result.Source, "inactive service should be skipped")
@@ -141,7 +141,7 @@ func TestSelect_ValidatesProvider(t *testing.T) {
 	rule.SmartEnabled = true
 	rule.SmartAffinity = true
 
-	sel := NewServiceSelector(cfg, store, lb)
+	sel := NewServiceSelector(cfg, store, lb, nil)
 	result, err := sel.Select(testContext(rule, "session-1"))
 	require.NoError(t, err)
 	require.Equal(t, "load_balancer", result.Source, "disabled provider should be skipped")
@@ -161,7 +161,7 @@ func TestSelect_PostProcess_LocksAffinity(t *testing.T) {
 	rule := testSmartRule("rule-1", "gpt-4", services, testModelContainsOp("gpt"))
 	rule.SmartAffinity = true
 
-	sel := NewServiceSelector(cfg, store, lb)
+	sel := NewServiceSelector(cfg, store, lb, nil)
 	ctx := testContext(rule, "session-1")
 	ctx.Request = testOpenAIRequest("gpt-4o")
 
@@ -189,7 +189,7 @@ func TestSelect_PostProcess_NoLockOnAffinitySource(t *testing.T) {
 	rule.SmartEnabled = true
 	rule.SmartAffinity = true
 
-	sel := NewServiceSelector(cfg, store, lb)
+	sel := NewServiceSelector(cfg, store, lb, nil)
 	_, err := sel.Select(testContext(rule, "session-1"))
 	require.NoError(t, err)
 	require.Len(t, store.sets, 1, "should NOT lock again when source is affinity (only setup set)")
@@ -210,7 +210,7 @@ func TestSelect_PostProcess_LocksOnLoadBalancer(t *testing.T) {
 	rule := testSmartRule("rule-1", "gpt-4", services, testModelContainsOp("claude"))
 	rule.SmartAffinity = true
 
-	sel := NewServiceSelector(cfg, store, lb)
+	sel := NewServiceSelector(cfg, store, lb, nil)
 	ctx := testContext(rule, "session-1")
 	ctx.Request = testOpenAIRequest("gpt-4o")
 
@@ -234,7 +234,7 @@ func TestSelect_PostProcess_NoLockWithoutAffinity(t *testing.T) {
 	rule := testSmartRule("rule-1", "gpt-4", services, testModelContainsOp("gpt"))
 	// SmartAffinity=false (default from testSmartRule which doesn't set it)
 
-	sel := NewServiceSelector(cfg, store, lb)
+	sel := NewServiceSelector(cfg, store, lb, nil)
 	ctx := testContext(rule, "session-1")
 	ctx.Request = testOpenAIRequest("gpt-4o")
 
@@ -250,7 +250,7 @@ func TestSelect_NoServiceAvailable(t *testing.T) {
 
 	rule := testRule("rule-1", "gpt-4", nil)
 
-	sel := NewServiceSelector(cfg, store, lb)
+	sel := NewServiceSelector(cfg, store, lb, nil)
 	_, err := sel.Select(testContext(rule, ""))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no service available")
@@ -268,7 +268,7 @@ func TestSelect_PipelineCaching(t *testing.T) {
 
 	rule := testRule("rule-1", "gpt-4", []*loadbalance.Service{svc})
 
-	sel := NewServiceSelector(cfg, store, lb)
+	sel := NewServiceSelector(cfg, store, lb, nil)
 	ctx := testContext(rule, "")
 
 	// Call twice — should use cached pipelines without panic
@@ -286,7 +286,7 @@ func TestUpdateServiceIndex(t *testing.T) {
 	svc := testService("provider-a", "gpt-4", true)
 	rule := testRule("rule-1", "gpt-4", []*loadbalance.Service{svc})
 
-	sel := NewServiceSelector(&mockConfig{}, store, lb)
+	sel := NewServiceSelector(&mockConfig{}, store, lb, nil)
 	err := sel.UpdateServiceIndex(rule, svc)
 	require.NoError(t, err)
 	require.True(t, lb.updateIndexCalled, "UpdateServiceIndex should call LB")

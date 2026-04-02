@@ -506,8 +506,14 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize affinity store for smart routing
 	affinityStore := NewAffinityStore(0) // 0 = use default TTL
 
+	// Initialize session tracker for capacity-based load balancing
+	sessionTracker := loadbalance.NewSessionTracker(2 * time.Hour)
+
+	// Initialize capacity stage for capacity-based selection
+	capacityStage := routing.NewCapacityStage(sessionTracker, affinityStore)
+
 	// Initialize routing selector with pipeline
-	serviceSelector := routing.NewServiceSelector(cfg, affinityStore, loadBalancer)
+	serviceSelector := routing.NewServiceSelector(cfg, affinityStore, loadBalancer, capacityStage)
 	simpleSelector := routing.NewSimpleSelector(serviceSelector)
 
 	// Initialize load balancer API
