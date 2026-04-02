@@ -1,0 +1,422 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  PROXY: ""
+
+tasks:
+  anthropic:
+    cmds:
+      - |
+        curl https://api.anthropic.com/api/oauth/usage \
+        -H "Authorization: Bearer {{.ANTHROPIC_TOKEN}}" \
+        -H "Accept: application/json" \
+        -H "Content-Type: application/json" \
+        -H "anthropic-beta: oauth-2025-04-20" \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
+      - |
+        cat << EOF
+        {
+          "five_hour": {
+            "utilization": 12.5,
+            "resets_at": "2026-04-02T15:00:00Z"
+          },
+          "seven_day": {
+            "utilization": 34.2,
+            "resets_at": "2026-04-09T00:00:00Z"
+          },
+          "extra_usage": {
+            "is_enabled": false,
+            "utilization": 0,
+            "used_credits": 0,
+            "monthly_limit": 0
+          }
+        }
+        EOF
+
+  openai:
+    cmds:
+      - |
+        curl https://api.openai.com/v1/usage \
+        -H "Authorization: Bearer {{.OPENAI_KEY}}" \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
+      - |
+        cat << EOF
+        NOTE: OpenAI usage API often returns 404.
+        Check https://platform.openai.com/usage for usage details.
+        EOF
+
+  gemini:
+    cmds:
+      - |
+        curl -X POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota \
+        -H "Authorization: Bearer {{.GEMINI_TOKEN}}" \
+        -H "Content-Type: application/json" \
+        -d '{}' \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
+      - |
+        cat << EOF
+        {
+          "buckets": [
+            {
+              "modelId": "gemini-2.5-pro",
+              "remainingFraction": 0.75,
+              "resetTime": "2026-04-03T00:00:00Z"
+            },
+            {
+              "modelId": "gemini-2.5-flash",
+              "remainingFraction": 0.90,
+              "resetTime": "2026-04-03T00:00:00Z"
+            }
+          ]
+        }
+        EOF
+
+  openrouter:
+    aliases:
+      - cli:dev
+    cmds:
+      - |
+        curl https://openrouter.ai/api/v1/key \
+        -H "Authorization: Bearer {{.OPENROUTER_KEY}}" \
+        -H "Accept: application/json" \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
+      - |
+        cat << EOF
+        {
+          "data": {
+            "label": "sk-or-v1-c1a...5a2",
+            "is_management_key": false,
+            "is_provisioning_key": false,
+            "limit": null,
+            "limit_reset": null,
+            "limit_remaining": null,
+            "include_byok_in_limit": false,
+            "usage": 0,
+            "usage_daily": 0,
+            "usage_weekly": 0,
+            "usage_monthly": 0,
+            "byok_usage": 0,
+            "byok_usage_daily": 0,
+            "byok_usage_weekly": 0,
+            "byok_usage_monthly": 0,
+            "is_free_tier": true,
+            "expires_at": null,
+            "creator_user_id": "user_xxx",
+            "rate_limit": {
+              "requests": -1,
+              "interval": "10s",
+              "note": "This field is deprecated and safe to ignore."
+            }
+          }
+        }
+        EOF
+
+  codex:
+    cmds:
+      - |
+        curl https://chatgpt.com/backend-api/wham/usage \
+        -H "Authorization: Bearer {{.CODEX_KEY}}" \
+        -H "Accept: application/json" \
+        -H "User-Agent: codex-cli" \
+        {{ if .CODEX_ACCOUNT_ID }}-H "ChatGPT-Account-Id: {{.CODEX_ACCOUNT_ID}}"{{ end }} \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
+      - |
+        cat << EOF
+        {
+          "user_id": "user-I9Ki---jrzi2",
+          "account_id": "user-I9Ki---zi2",
+          "email": "@gmail.com",
+          "plan_type": "free",
+          "rate_limit": {
+            "allowed": true,
+            "limit_reached": false,
+            "primary_window": {
+              "used_percent": 0,
+              "limit_window_seconds": 604800,
+              "reset_after_seconds": 208892,
+              "reset_at": 1775310144
+            },
+            "secondary_window": null
+          },
+          "code_review_rate_limit": {
+            "allowed": true,
+            "limit_reached": false,
+            "primary_window": {
+              "used_percent": 0,
+              "limit_window_seconds": 604800,
+              "reset_after_seconds": 604800,
+              "reset_at": 1775706052
+            },
+            "secondary_window": null
+          },
+          "additional_rate_limits": null,
+          "credits": {
+            "has_credits": false,
+            "unlimited": false,
+            "balance": null,
+            "approx_local_messages": null,
+            "approx_cloud_messages": null
+          },
+          "spend_control": {
+            "reached": false
+          },
+          "promo": null
+        }
+        EOF
+
+  kimi-k2:
+    cmds:
+      - |
+        curl https://kimi-k2.ai/api/user/credits \
+        -H "Authorization: Bearer {{.KIMI_KEY}}" \
+        -H "Accept: application/json" \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
+      - |
+        cat << EOF
+        {
+          "consumed": 150,
+          "remaining": 350
+        }
+        EOF
+
+  minimax:
+    cmds:
+      - |
+        curl https://api.minimax.io/v1/api/openplatform/coding_plan/remains \
+        -H "Authorization: Bearer {{.MINIMAX_KEY}}" \
+        -H "Accept: application/json" \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
+      - |
+        cat << EOF
+        {
+          "model_remains": [
+            {
+              "start_time": 1775113200000,
+              "end_time": 1775131200000,
+              "remains_time": 16061196,
+              "current_interval_total_count": 1500,
+              "current_interval_usage_count": 1482,
+              "model_name": "MiniMax-M*",
+              "current_weekly_total_count": 0,
+              "current_weekly_usage_count": 0,
+              "weekly_start_time": 1774800000000,
+              "weekly_end_time": 1775404800000,
+              "weekly_remains_time": 289661196
+            },
+            {
+              "start_time": 1775059200000,
+              "end_time": 1775145600000,
+              "remains_time": 30461196,
+              "current_interval_total_count": 4000,
+              "current_interval_usage_count": 4000,
+              "model_name": "speech-hd",
+              "current_weekly_total_count": 28000,
+              "current_weekly_usage_count": 28000,
+              "weekly_start_time": 1774800000000,
+              "weekly_end_time": 1775404800000,
+              "weekly_remains_time": 289661196
+            }
+          ],
+          "base_resp": {
+            "status_code": 0,
+            "status_msg": "success"
+          }
+        }
+        EOF
+        
+  minimax-cn:
+    cmds:
+      - |
+        curl https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains \
+        -H "Authorization: Bearer {{.MINIMAX_KEY}}" \
+        -H "Accept: application/json" \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
+      - |
+        cat << EOF
+        {
+          "model_remains": [
+            {
+              "start_time": 1775113200000,
+              "end_time": 1775131200000,
+              "remains_time": 16061196,
+              "current_interval_total_count": 1500,
+              "current_interval_usage_count": 1482,
+              "model_name": "MiniMax-M*",
+              "current_weekly_total_count": 0,
+              "current_weekly_usage_count": 0,
+              "weekly_start_time": 1774800000000,
+              "weekly_end_time": 1775404800000,
+              "weekly_remains_time": 289661196
+            },
+            {
+              "start_time": 1775059200000,
+              "end_time": 1775145600000,
+              "remains_time": 30461196,
+              "current_interval_total_count": 4000,
+              "current_interval_usage_count": 4000,
+              "model_name": "speech-hd",
+              "current_weekly_total_count": 28000,
+              "current_weekly_usage_count": 28000,
+              "weekly_start_time": 1774800000000,
+              "weekly_end_time": 1775404800000,
+              "weekly_remains_time": 289661196
+            },
+            {
+              "start_time": 1775059200000,
+              "end_time": 1775145600000,
+              "remains_time": 30461196,
+              "current_interval_total_count": 0,
+              "current_interval_usage_count": 0,
+              "model_name": "MiniMax-Hailuo-2.3-Fast-6s-768p",
+              "current_weekly_total_count": 0,
+              "current_weekly_usage_count": 0,
+              "weekly_start_time": 1774800000000,
+              "weekly_end_time": 1775404800000,
+              "weekly_remains_time": 289661196
+            },
+            {
+              "start_time": 1775059200000,
+              "end_time": 1775145600000,
+              "remains_time": 30461196,
+              "current_interval_total_count": 0,
+              "current_interval_usage_count": 0,
+              "model_name": "MiniMax-Hailuo-2.3-6s-768p",
+              "current_weekly_total_count": 0,
+              "current_weekly_usage_count": 0,
+              "weekly_start_time": 1774800000000,
+              "weekly_end_time": 1775404800000,
+              "weekly_remains_time": 289661196
+            },
+            {
+              "start_time": 1775059200000,
+              "end_time": 1775145600000,
+              "remains_time": 30461196,
+              "current_interval_total_count": 0,
+              "current_interval_usage_count": 0,
+              "model_name": "music-2.5",
+              "current_weekly_total_count": 0,
+              "current_weekly_usage_count": 0,
+              "weekly_start_time": 1774800000000,
+              "weekly_end_time": 1775404800000,
+              "weekly_remains_time": 289661196
+            },
+            {
+              "start_time": 1775059200000,
+              "end_time": 1775145600000,
+              "remains_time": 30461196,
+              "current_interval_total_count": 50,
+              "current_interval_usage_count": 50,
+              "model_name": "image-01",
+              "current_weekly_total_count": 350,
+              "current_weekly_usage_count": 350,
+              "weekly_start_time": 1774800000000,
+              "weekly_end_time": 1775404800000,
+              "weekly_remains_time": 289661196
+            }
+          ],
+          "base_resp": {
+            "status_code": 0,
+            "status_msg": "success"
+          }
+        }
+        EOF
+
+  zai:
+    cmds:
+      - |
+        curl https://api.z.ai/api/monitor/usage/quota/limit \
+        -H "Authorization: Bearer {{.ZAI_KEY}}" \
+        -H "Accept: application/json" \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
+      - |
+        cat << EOF
+        {
+          "code": 0,
+          "data": {
+            "planName": "Pro",
+            "limits": [
+              {
+                "type": "TOKENS_LIMIT",
+                "used": 50000,
+                "total": 200000,
+                "unit": "tokens",
+                "nextResetTime": 1743696000000
+              },
+              {
+                "type": "TIME_LIMIT",
+                "used": 30,
+                "total": 120,
+                "unit": "minutes",
+                "nextResetTime": 1743696000000
+              }
+            ]
+          }
+        }
+        EOF
+
+  glm:
+    cmds:
+      - |
+        curl https://open.bigmodel.cn/api/monitor/usage/quota/limit \
+        -H "Authorization: Bearer {{.GLM_KEY}}" \
+        -H "Accept: application/json" \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
+      - |
+        cat << EOF
+        {
+          "code": 200,
+          "msg": "操作成功",
+          "data": {
+            "limits": [
+              {
+                "type": "TIME_LIMIT",
+                "unit": 5,
+                "number": 1,
+                "usage": 4000,
+                "currentValue": 557,
+                "remaining": 3443,
+                "percentage": 13,
+                "nextResetTime": 1775309163998,
+                "usageDetails": [
+                  {
+                    "modelCode": "search-prime",
+                    "usage": 426
+                  },
+                  {
+                    "modelCode": "web-reader",
+                    "usage": 131
+                  },
+                  {
+                    "modelCode": "zread",
+                    "usage": 0
+                  }
+                ]
+              },
+              {
+                "type": "TOKENS_LIMIT",
+                "unit": 3,
+                "number": 5,
+                "percentage": 2,
+                "nextResetTime": 1775126846418
+              }
+            ],
+            "level": "max"
+          },
+          "success": true
+        }
+        EOF
+
+  # copilot, cursor, vertex_ai: no public quota API
+  copilot:
+    cmds:
+      - echo "GitHub Copilot has no public quota API."
+
+  cursor:
+    cmds:
+      - echo "Cursor has no public quota API."
+
+  vertex-ai:
+    cmds:
+      - echo "Vertex AI quota is managed via Google Cloud Console."
