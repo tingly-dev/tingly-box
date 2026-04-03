@@ -1,4 +1,4 @@
-import { Box, Paper, Typography, alpha } from '@mui/material';
+import { Box, Paper, Typography, alpha, useTheme } from '@mui/material';
 import type { ReactNode } from 'react';
 
 interface StatCardProps {
@@ -10,15 +10,48 @@ interface StatCardProps {
 }
 
 export default function StatCard({ title, value, subtitle, icon, color = 'primary' }: StatCardProps) {
-    const colorMap = {
-        primary: { bg: 'rgba(37, 99, 235, 0.08)', text: '#2563eb', hover: 'rgba(37, 99, 235, 0.12)' },
-        success: { bg: 'rgba(5, 150, 105, 0.08)', text: '#059669', hover: 'rgba(5, 150, 105, 0.12)' },
-        info: { bg: 'rgba(14, 165, 233, 0.08)', text: '#0ea5e9', hover: 'rgba(14, 165, 233, 0.12)' },
-        warning: { bg: 'rgba(245, 158, 11, 0.08)', text: '#f59e0b', hover: 'rgba(245, 158, 11, 0.12)' },
-        error: { bg: 'rgba(220, 38, 38, 0.08)', text: '#dc2626', hover: 'rgba(220, 38, 38, 0.12)' },
-        secondary: { bg: 'rgba(100, 116, 139, 0.08)', text: '#64748b', hover: 'rgba(100, 116, 139, 0.12)' },
+    const theme = useTheme();
+
+    // Get theme-aware colors for stat cards
+    const getColorMap = () => {
+        const palette = theme.palette;
+
+        // For sunlit theme, use warmer tones
+        if ((palette as any).mode === 'light' && palette.primary.main === '#f59e0b') {
+            return {
+                primary: { bg: 'rgba(245, 158, 11, 0.08)', text: '#f59e0b', hover: 'rgba(245, 158, 11, 0.12)' },
+                success: { bg: 'rgba(5, 150, 105, 0.08)', text: '#059669', hover: 'rgba(5, 150, 105, 0.12)' },
+                info: { bg: 'rgba(14, 165, 233, 0.08)', text: '#0ea5e9', hover: 'rgba(14, 165, 233, 0.12)' },
+                warning: { bg: 'rgba(245, 158, 11, 0.08)', text: '#f59e0b', hover: 'rgba(245, 158, 11, 0.12)' },
+                error: { bg: 'rgba(220, 38, 38, 0.08)', text: '#dc2626', hover: 'rgba(220, 38, 38, 0.12)' },
+                secondary: { bg: 'rgba(100, 116, 139, 0.08)', text: '#64748b', hover: 'rgba(100, 116, 139, 0.12)' },
+            };
+        }
+
+        // For dark theme
+        if (palette.mode === 'dark') {
+            return {
+                primary: { bg: 'rgba(96, 165, 250, 0.15)', text: '#60A5FA', hover: 'rgba(96, 165, 250, 0.25)' },
+                success: { bg: 'rgba(52, 211, 153, 0.15)', text: '#34D399', hover: 'rgba(52, 211, 153, 0.25)' },
+                info: { bg: 'rgba(14, 165, 233, 0.15)', text: '#0ea5e9', hover: 'rgba(14, 165, 233, 0.25)' },
+                warning: { bg: 'rgba(245, 158, 11, 0.15)', text: '#f59e0b', hover: 'rgba(245, 158, 11, 0.25)' },
+                error: { bg: 'rgba(248, 113, 113, 0.15)', text: '#f87171', hover: 'rgba(248, 113, 113, 0.25)' },
+                secondary: { bg: 'rgba(148, 163, 184, 0.15)', text: '#94a3b8', hover: 'rgba(148, 163, 184, 0.25)' },
+            };
+        }
+
+        // Default light theme
+        return {
+            primary: { bg: 'rgba(37, 99, 235, 0.08)', text: '#2563eb', hover: 'rgba(37, 99, 235, 0.12)' },
+            success: { bg: 'rgba(5, 150, 105, 0.08)', text: '#059669', hover: 'rgba(5, 150, 105, 0.12)' },
+            info: { bg: 'rgba(14, 165, 233, 0.08)', text: '#0ea5e9', hover: 'rgba(14, 165, 233, 0.12)' },
+            warning: { bg: 'rgba(245, 158, 11, 0.08)', text: '#f59e0b', hover: 'rgba(245, 158, 11, 0.12)' },
+            error: { bg: 'rgba(220, 38, 38, 0.08)', text: '#dc2626', hover: 'rgba(220, 38, 38, 0.12)' },
+            secondary: { bg: 'rgba(100, 116, 139, 0.08)', text: '#64748b', hover: 'rgba(100, 116, 139, 0.12)' },
+        };
     };
 
+    const colorMap = getColorMap();
     const colors = colorMap[color];
 
     return (

@@ -19,6 +19,87 @@ const SUNLIT_PALETTE = {
     paper: 'rgba(255, 255, 255, 0.7)',
     paperSolid: 'rgba(255, 255, 255, 0.9)',
   },
+  // Dashboard token colors for sunlit theme
+  dashboard: {
+    token: {
+      input: {
+        main: '#3B82F6',
+        gradient: 'rgba(59, 130, 246, 0.8)',
+      },
+      output: {
+        main: '#10B981',
+        gradient: 'rgba(16, 185, 129, 0.8)',
+      },
+      cache: {
+        main: '#d4a373', // Warmer cache color for sunlit
+        gradient: 'rgba(212, 163, 115, 0.7)',
+      },
+    },
+    chart: {
+      grid: 'rgba(0, 0, 0, 0.06)',
+      axis: 'rgba(0, 0, 0, 0.1)',
+      tooltipBg: 'rgba(255, 255, 255, 0.95)',
+      tooltipBorder: 'rgba(0, 0, 0, 0.08)',
+    },
+    statCard: {
+      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.08)',
+      emptyIconBg: 'rgba(245, 158, 11, 0.1)',
+    },
+  },
+};
+
+const DARK_DASHBOARD_COLORS = {
+  token: {
+    input: {
+      main: '#60A5FA',
+      gradient: 'rgba(96, 165, 250, 0.8)',
+    },
+    output: {
+      main: '#34D399',
+      gradient: 'rgba(52, 211, 153, 0.8)',
+    },
+    cache: {
+      main: '#94a3b8',
+      gradient: 'rgba(148, 163, 184, 0.7)',
+    },
+  },
+  chart: {
+    grid: 'rgba(255, 255, 255, 0.08)',
+    axis: 'rgba(255, 255, 255, 0.15)',
+    tooltipBg: '#1e293b',
+    tooltipBorder: '#334155',
+  },
+  statCard: {
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+    emptyIconBg: 'rgba(148, 163, 184, 0.1)',
+  },
+};
+
+const LIGHT_DASHBOARD_COLORS = {
+  token: {
+    input: {
+      main: '#3B82F6',
+      gradient: 'rgba(59, 130, 246, 0.8)',
+    },
+    output: {
+      main: '#10B981',
+      gradient: 'rgba(16, 185, 129, 0.8)',
+    },
+    cache: {
+      main: '#cbd5e1',
+      gradient: 'rgba(203, 213, 225, 0.7)',
+    },
+  },
+  chart: {
+    grid: '#f1f5f9',
+    axis: '#e2e8f0',
+    tooltipBg: '#ffffff',
+    tooltipBorder: '#e2e8f0',
+  },
+  statCard: {
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+    emptyIconBg: 'rgba(100, 116, 139, 0.1)',
+  },
 };
 
 const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
@@ -51,6 +132,11 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
   const textDisabled = isSunlit ? '#a8a29e' : (isDark ? '#64748b' : '#94a3b8');
 
   const dividerColor = isSunlit ? 'rgba(0, 0, 0, 0.06)' : (isDark ? '#334155' : '#e2e8f0');
+
+  // Dashboard-specific colors
+  const dashboardColors = isSunlit
+    ? SUNLIT_PALETTE.dashboard
+    : (isDark ? DARK_DASHBOARD_COLORS : LIGHT_DASHBOARD_COLORS);
 
   return {
     palette: {
@@ -86,6 +172,12 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
         hover: isSunlit ? 'rgba(0, 0, 0, 0.04)' : (isDark ? '#1e293b' : '#f1f5f9'),
         selected: isSunlit ? 'rgba(217, 119, 6, 0.12)' : (isDark ? '#1e3a8a' : '#e0e7ff'),
         disabled: isSunlit ? 'rgba(0, 0, 0, 0.04)' : (isDark ? '#1e293b' : '#f1f5f9'),
+      },
+      // Dashboard colors palette
+      dashboard: {
+        token: dashboardColors.token,
+        chart: dashboardColors.chart,
+        statCard: dashboardColors.statCard,
       },
     },
     typography: {
