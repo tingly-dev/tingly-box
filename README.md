@@ -1,4 +1,4 @@
-**Announcement:** We have identified a critical bug in protocol and remote control in v0.260306.0. Please update to the latest version to resolve this issue. Thank you for your continued support.
+**Announcement:** Here is [fault record](https://github.com/tingly-dev/tingly-box/discussions/626). Please update to the latest version to resolve known issues. Thank you for your continued support.
 
 ---
 
