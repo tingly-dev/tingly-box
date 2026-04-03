@@ -41,6 +41,8 @@ func (tc *Tactic) UnmarshalJSON(data []byte) error {
 		tc.Params = &SpeedBasedParams{}
 	case loadbalance.TacticAdaptive:
 		tc.Params = &AdaptiveParams{}
+	case loadbalance.TacticCapacityBased:
+		tc.Params = &CapacityBasedParams{}
 	default:
 		return nil
 	}
@@ -110,6 +112,8 @@ func ParseTacticFromMap(tacticType loadbalance.TacticType, params map[string]int
 		} else {
 			tacticParams = DefaultAdaptiveParams()
 		}
+	case loadbalance.TacticCapacityBased:
+		tacticParams = DefaultCapacityBasedParams()
 	default:
 		tacticParams = DefaultAdaptiveParams()
 	}
@@ -259,9 +263,14 @@ func NewAdaptiveParams(latencyWeight, tokenWeight, speedWeight, healthWeight flo
 	}
 }
 
+// RoundRobinParams is an alias for TokenBasedParams (deprecated)
+type RoundRobinParams struct{}
+
+func (r RoundRobinParams) isTacticParams() {}
+
 // DefaultParams returns default parameters for each tactic type
 func DefaultRoundRobinParams() TacticParams {
-	return DefaultTokenBasedParams()
+	return &RoundRobinParams{}
 }
 
 func DefaultTokenBasedParams() TacticParams {
@@ -934,6 +943,8 @@ func CreateTacticWithTypedParams(tacticType loadbalance.TacticType, params Tacti
 			return NewAdaptiveTactic(ap.LatencyWeight, ap.TokenWeight, ap.SpeedWeight, ap.HealthWeight, ap.MaxLatencyMs, ap.MaxTokenUsage, ap.MinSpeedTps, ap.ScoringMode)
 		}
 		return defaultAdaptiveTactic
+	case loadbalance.TacticCapacityBased:
+		return GetCapacityBasedTactic()
 	}
 	return GetDefaultTactic(tacticType)
 }
@@ -950,7 +961,101 @@ func GetDefaultTactic(tType loadbalance.TacticType) LoadBalancingTactic {
 		return defaultSpeedBasedTactic
 	case loadbalance.TacticAdaptive:
 		return defaultAdaptiveTactic
+	case loadbalance.TacticCapacityBased:
+		return GetCapacityBasedTactic()
 	default:
 		return defaultAdaptiveTactic
 	}
+}
+
+// CapacityBasedParams holds parameters for capacity-based load balancing
+type CapacityBasedParams struct{}
+
+// isTacticParams implements TacticParams interface
+func (c CapacityBasedParams) isTacticParams() {}
+
+// DefaultCapacityBasedParams returns default capacity-based parameters
+func DefaultCapacityBasedParams() TacticParams {
+	return &CapacityBasedParams{}
+}
+
+// CapacityBasedTactic implements capacity-based load balancing
+// It selects services based on available capacity (weighted random)
+type CapacityBasedTactic struct{}
+
+// NewCapacityBasedTactic creates a new capacity-based tactic
+func NewCapacityBasedTactic() *CapacityBasedTactic {
+	return &CapacityBasedTactic{}
+}
+
+// SelectService selects a service using capacity-based weighted random.
+// Capacity is determined by Service.ModelCapacity (from rule config).
+// Higher capacity = higher probability of selection.
+func (cbt *CapacityBasedTactic) SelectService(rule *Rule) *loadbalance.Service {
+	activeServices := rule.GetActiveServices()
+	if len(activeServices) == 0 {
+		return nil
+	}
+
+	if len(activeServices) == 1 {
+		return activeServices[0]
+	}
+
+	// Calculate weights based on ModelCapacity
+	// Higher capacity = higher weight = higher probability
+	var totalWeight int64
+	type weightedService struct {
+		service *loadbalance.Service
+		weight  int64
+	}
+	weighted := make([]weightedService, 0, len(activeServices))
+
+	for _, svc := range activeServices {
+		// Use ModelCapacity if set, otherwise use Weight as fallback
+		weight := int64(100) // default weight
+		if svc.ModelCapacity != nil && *svc.ModelCapacity > 0 {
+			weight = int64(*svc.ModelCapacity)
+		} else if svc.Weight > 0 {
+			weight = int64(svc.Weight)
+		}
+		weighted = append(weighted, weightedService{svc, weight})
+		totalWeight += weight
+	}
+
+	if totalWeight == 0 {
+		return activeServices[0]
+	}
+
+	// Weighted random selection
+	r := rand.Int63n(totalWeight)
+	cumulative := int64(0)
+	for _, ws := range weighted {
+		cumulative += ws.weight
+		if r < cumulative {
+			return ws.service
+		}
+	}
+
+	return weighted[len(weighted)-1].service
+}
+
+// GetName returns the tactic name
+func (cbt *CapacityBasedTactic) GetName() string {
+	return "Capacity Based"
+}
+
+// GetType returns the tactic type
+func (cbt *CapacityBasedTactic) GetType() loadbalance.TacticType {
+	return loadbalance.TacticCapacityBased
+}
+
+// GetCapacityBasedTactic returns a singleton capacity-based tactic
+var capacityBasedTactic *CapacityBasedTactic
+
+// GetCapacityBasedTactic returns the capacity-based tactic singleton
+func GetCapacityBasedTactic() *CapacityBasedTactic {
+	if capacityBasedTactic == nil {
+		capacityBasedTactic = NewCapacityBasedTactic()
+	}
+	return capacityBasedTactic
 }

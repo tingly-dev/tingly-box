@@ -44,7 +44,6 @@ const (
 	pipelineModeNoAffinity     pipelineMode = iota // Smart Routing -> Load Balancer
 	pipelineModeGlobalAffinity                     // Affinity -> Smart Routing -> Load Balancer
 	pipelineModeSmartAffinity                      // Smart Routing -> Affinity -> Load Balancer
-	pipelineModeCapacity                           // Capacity-based selection (uses CapacityStage)
 )
 
 // ServiceSelector is the main entry point for service selection.
@@ -53,7 +52,6 @@ type ServiceSelector struct {
 	config        ProviderResolver
 	affinityStore AffinityStore
 	loadBalancer  LoadBalancer
-	capacityStage *CapacityStage
 
 	// Pre-built pipelines keyed by mode, built once at construction
 	pipelines map[pipelineMode][]SelectionStage
@@ -64,13 +62,11 @@ func NewServiceSelector(
 	cfg ProviderResolver,
 	affinity AffinityStore,
 	lb LoadBalancer,
-	capacityStage *CapacityStage,
 ) *ServiceSelector {
 	s := &ServiceSelector{
 		config:        cfg,
 		affinityStore: affinity,
 		loadBalancer:  lb,
-		capacityStage: capacityStage,
 		pipelines:     make(map[pipelineMode][]SelectionStage),
 	}
 
@@ -88,14 +84,6 @@ func NewServiceSelector(
 		NewSmartRoutingStage(lb),
 		NewAffinityStage(affinity, "smart_rule"),
 		NewLoadBalancerStage(lb),
-	}
-
-	// Build capacity-based pipeline if capacity stage is provided
-	if capacityStage != nil {
-		s.pipelines[pipelineModeCapacity] = []SelectionStage{
-			capacityStage,
-			NewLoadBalancerStage(capacityStage), // Fallback to capacity-based LB
-		}
 	}
 
 	return s
@@ -166,11 +154,6 @@ func (s *ServiceSelector) Select(ctx *SelectionContext) (*SelectionResult, error
 
 // selectPipeline picks the appropriate pre-built pipeline based on rule configuration.
 func (s *ServiceSelector) selectPipeline(rule *typ.Rule) []SelectionStage {
-	// Check for capacity-based tactic first
-	if rule.GetTacticType() == loadbalance.TacticCapacityBased && s.capacityStage != nil {
-		return s.pipelines[pipelineModeCapacity]
-	}
-
 	if !rule.SmartAffinity {
 		return s.pipelines[pipelineModeNoAffinity]
 	}

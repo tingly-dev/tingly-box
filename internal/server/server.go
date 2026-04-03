@@ -531,35 +531,8 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize affinity store for smart routing
 	affinityStore := NewAffinityStore(0) // 0 = use default TTL
 
-	// Initialize session tracker for capacity-based load balancing
-	sessionTracker := loadbalance.NewSessionTracker(2 * time.Hour)
-
-	// Build provider capacity map from ProviderTemplate (from GitHub/file)
-	providerCaps := make(map[string]int64)
-	allTemplates := templateManager.GetAllTemplates()
-	for _, tmpl := range allTemplates {
-		if tmpl.TotalCapacity != nil && *tmpl.TotalCapacity > 0 {
-			providerCaps[tmpl.ID] = int64(*tmpl.TotalCapacity)
-		}
-	}
-
-	// Collect all services from rules
-	allServices := []*loadbalance.Service{}
-	for _, rule := range cfg.Rules {
-		allServices = append(allServices, rule.Services...)
-	}
-
-	// Initialize capacities from ProviderTemplate
-	sessionTracker.InitializeCapacities(allServices, providerCaps)
-
-	// Start background cleanup for idle sessions
-	sessionTracker.StartCleanup(5 * time.Minute)
-
-	// Initialize capacity stage for capacity-based selection
-	capacityStage := routing.NewCapacityStage(sessionTracker, affinityStore)
-
 	// Initialize routing selector with pipeline
-	serviceSelector := routing.NewServiceSelector(cfg, affinityStore, loadBalancer, capacityStage)
+	serviceSelector := routing.NewServiceSelector(cfg, affinityStore, loadBalancer)
 	simpleSelector := routing.NewSimpleSelector(serviceSelector)
 
 	// Initialize load balancer API
