@@ -225,28 +225,20 @@ jobs:
           [ "${{ matrix.goos }}" != "windows" ] && chmod +x ./dist/tingly-box${{ matrix.exe }} || true
 
       - name: Install UPX 5.1.1
+        if: matrix.goos != 'darwin'
         shell: bash
         run: |
           if [ "${{ runner.os }}" == "Windows" ]; then
             choco install upx -y
           else
-            case "${{ matrix.goos }}" in
-              darwin)
-                # macOS: use brew
-                if ! command -v upx &> /dev/null; then
-                  brew install upx
-                fi
-                ;;
-              *)
-                # Linux: download UPX 5.1.1
-                wget -q https://github.com/upx/upx/releases/download/v5.1.1/upx-5.1.1-amd64_linux.tar.xz
-                tar -xf upx-5.1.1-amd64_linux.tar.xz
-                export PATH="$PWD/upx-5.1.1-amd64_linux:$PATH"
-                ;;
-            esac
+            # Linux: download UPX 5.1.1
+            wget -q https://github.com/upx/upx/releases/download/v5.1.1/upx-5.1.1-amd64_linux.tar.xz
+            tar -xf upx-5.1.1-amd64_linux.tar.xz
+            export PATH="$PWD/upx-5.1.1-amd64_linux:$PATH"
           fi
 
       - name: Compress binary with UPX
+        if: matrix.goos != 'darwin'
         shell: bash
         run: |
           if command -v upx &> /dev/null || [ -f "./upx-5.1.1-amd64_linux/upx" ]; then
@@ -254,17 +246,8 @@ jobs:
             [ -f "./upx-5.1.1-amd64_linux/upx" ] && UPX_CMD="./upx-5.1.1-amd64_linux/upx"
 
             # Use best compression with LZMA (slower but smaller)
-            # macOS requires --force-macos flag
-            case "${{ matrix.goos }}" in
-              darwin)
-                $UPX_CMD --best --lzma --force-macos ./dist/tingly-box${{ matrix.exe }} || \
-                $UPX_CMD --best --force-macos ./dist/tingly-box${{ matrix.exe }}
-                ;;
-              *)
-                $UPX_CMD --best --lzma ./dist/tingly-box${{ matrix.exe }} || \
-                $UPX_CMD --best ./dist/tingly-box${{ matrix.exe }}
-                ;;
-            esac
+            $UPX_CMD --best --lzma ./dist/tingly-box${{ matrix.exe }} || \
+            $UPX_CMD --best ./dist/tingly-box${{ matrix.exe }}
           else
             echo "UPX not available, skipping compression"
           fi
