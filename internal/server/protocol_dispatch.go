@@ -1,3 +1,5 @@
+// Package server
+// since we do refactoring and migrating step by step, some api names are not unified, this will be updated in future
 package server
 
 import (
