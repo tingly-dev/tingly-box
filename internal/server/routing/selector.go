@@ -57,6 +57,23 @@ type ServiceSelector struct {
 	pipelines map[pipelineMode][]SelectionStage
 }
 
+type healthFilterProvider interface {
+	HealthFilter() *typ.HealthFilter
+}
+
+type selectionState struct {
+	candidateServices []*loadbalance.Service
+}
+
+func newSelectionState(rule *typ.Rule) *selectionState {
+	var services []*loadbalance.Service
+	if rule != nil && rule.Services != nil {
+		services = make([]*loadbalance.Service, len(rule.Services))
+		copy(services, rule.Services)
+	}
+	return &selectionState{candidateServices: services}
+}
+
 // NewServiceSelector creates a new service selector
 func NewServiceSelector(
 	cfg ProviderResolver,
@@ -70,6 +87,11 @@ func NewServiceSelector(
 		pipelines:     make(map[pipelineMode][]SelectionStage),
 	}
 
+	var healthFilter *typ.HealthFilter
+	if p, ok := lb.(healthFilterProvider); ok {
+		healthFilter = p.HealthFilter()
+	}
+
 	// Pre-build all pipeline variants
 	s.pipelines[pipelineModeNoAffinity] = []SelectionStage{
 		NewSmartRoutingStage(lb),
@@ -81,8 +103,9 @@ func NewServiceSelector(
 		NewLoadBalancerStage(lb),
 	}
 	s.pipelines[pipelineModeSmartAffinity] = []SelectionStage{
-		NewSmartRoutingStage(lb),
+		NewHealthStage(healthFilter),
 		NewAffinityStage(affinity, "smart_rule"),
+		NewSmartRoutingStage(lb),
 		NewLoadBalancerStage(lb),
 	}
 
@@ -93,6 +116,7 @@ func NewServiceSelector(
 // It picks a pre-built pipeline based on rule configuration and executes it.
 func (s *ServiceSelector) Select(ctx *SelectionContext) (*SelectionResult, error) {
 	pipeline := s.selectPipeline(ctx.Rule)
+	state := newSelectionState(ctx.Rule)
 
 	logrus.Debugf("[selector] executing pipeline with %d stages for rule %s",
 		len(pipeline), ctx.Rule.UUID)
@@ -102,11 +126,14 @@ func (s *ServiceSelector) Select(ctx *SelectionContext) (*SelectionResult, error
 		stageName := stage.Name()
 		logrus.Debugf("[selector] evaluating stage: %s", stageName)
 
-		result, handled := stage.Evaluate(ctx)
+		result, handled := stage.Evaluate(ctx, state)
 
 		// Track that this stage was evaluated
 		if result != nil {
 			result.AddEvaluatedStage(stageName)
+			if result.FilteredServices != nil {
+				state.candidateServices = result.FilteredServices
+			}
 		}
 
 		if handled {

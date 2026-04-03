@@ -68,6 +68,15 @@ type ProviderTemplate struct {
 	OAuthProvider          string            `json:"oauth_provider,omitempty"`    // OAuth provider type for oauth type providers
 	AuthType               string            `json:"auth_type,omitempty"`         // "oauth", "key"
 	WebSearchSchema        string            `json:"web_search_schema,omitempty"` // Reference to capability schema for web_search
+
+	// Capacity configuration for TacticCapacityBased load balancing
+	// TotalCapacity is the total seat count for this provider (shared across all models)
+	TotalCapacity *int `json:"total_capacity,omitempty"`
+	// DefaultModelCapacity is the default seat count per model (template)
+	// Each model inherits this unless overridden
+	DefaultModelCapacity *int `json:"default_model_capacity,omitempty"`
+	// ModelCapacities allows per-model capacity overrides
+	ModelCapacities map[string]int `json:"model_capacities,omitempty"` // model name -> capacity
 }
 
 // ProviderTemplateRegistry represents the provider template registry structure from GitHub
@@ -185,11 +194,49 @@ func (tm *TemplateManager) GetVersion() string {
 	return tm.version
 }
 
-// FetchFromGitHub fetches templates from GitHub and updates the storage
-func (tm *TemplateManager) FetchFromGitHub(ctx context.Context) (*ProviderTemplateRegistry, error) {
-	// If no GitHub URL is configured, return error immediately
+// FetchTemplates fetches templates from URL (http://, https://, or file://)
+func (tm *TemplateManager) FetchTemplates(ctx context.Context) (*ProviderTemplateRegistry, error) {
 	if tm.githubURL == "" {
-		return nil, fmt.Errorf("no GitHub URL configured")
+		return nil, fmt.Errorf("no template source configured")
+	}
+
+	if strings.HasPrefix(tm.githubURL, "file://") {
+		return tm.fetchFromFile(tm.githubURL[7:])
+	}
+
+	return tm.fetchFromHTTP(ctx)
+}
+
+// fetchFromFile loads templates from a local file
+func (tm *TemplateManager) fetchFromFile(filePath string) (*ProviderTemplateRegistry, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read template file: %w", err)
+	}
+
+	var registry ProviderTemplateRegistry
+	if err := json.Unmarshal(data, &registry); err != nil {
+		return nil, fmt.Errorf("failed to parse template JSON: %w", err)
+	}
+
+	tm.mu.Lock()
+	tm.templates = registry.Providers
+	tm.capabilitySchemas = registry.CapabilitySchemas
+	tm.version = registry.Version
+	tm.lastUpdated = time.Now()
+	tm.sourceMu.Lock()
+	tm.source = TemplateSourceLocal
+	tm.sourceMu.Unlock()
+	tm.mu.Unlock()
+
+	return &registry, nil
+}
+
+// fetchFromHTTP fetches templates from HTTP/HTTPS URL
+func (tm *TemplateManager) fetchFromHTTP(ctx context.Context) (*ProviderTemplateRegistry, error) {
+	// If no URL is configured, return error immediately
+	if tm.githubURL == "" {
+		return nil, fmt.Errorf("no template URL configured")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", tm.githubURL, nil)
@@ -378,7 +425,7 @@ func (tm *TemplateManager) Initialize(ctx context.Context) error {
 				return nil
 			}
 			// Cache miss or expired - try GitHub
-			registry, err := tm.FetchFromGitHub(ctx)
+			registry, err := tm.FetchTemplates(ctx)
 			if err == nil {
 				// GitHub fetch successful - save to cache
 				_ = tm.saveCache(registry) // Ignore save errors, we have the data

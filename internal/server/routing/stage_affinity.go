@@ -25,7 +25,7 @@ func (s *AffinityStage) Name() string {
 }
 
 // Evaluate checks for locked service affinity
-func (s *AffinityStage) Evaluate(ctx *SelectionContext) (*SelectionResult, bool) {
+func (s *AffinityStage) Evaluate(ctx *SelectionContext, state *selectionState) (*SelectionResult, bool) {
 	rule := ctx.Rule
 
 	// Skip if affinity not enabled
@@ -50,6 +50,12 @@ func (s *AffinityStage) Evaluate(ctx *SelectionContext) (*SelectionResult, bool)
 
 	logrus.Infof("[affinity] using locked service for session %s: %s",
 		ctx.SessionID, entry.Service.Model)
+
+	if state != nil && len(state.candidateServices) > 0 && !ContainsService(state.candidateServices, entry.Service) {
+		logrus.Debugf("[affinity] locked service %s not in candidate set, skipping",
+			entry.Service.ServiceID())
+		return nil, false
+	}
 
 	result := NewResult(entry.Service, "affinity")
 	result.MatchedSmartRuleIndex = ctx.MatchedSmartRuleIndex

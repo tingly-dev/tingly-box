@@ -347,6 +347,17 @@ func WithMultiLogger(logger *pkgobs.MultiLogger) ServerOption {
 	}
 }
 
+// WithTemplateManager allows TBE to inject a custom TemplateManager.
+// This follows the same pattern as WithAuthMiddleware for consistency.
+func WithTemplateManager(tm *data.TemplateManager) ServerOption {
+	return func(s *Server) {
+		s.templateManager = tm
+		if s.config != nil {
+			s.config.SetTemplateManager(tm)
+		}
+	}
+}
+
 // IsFeatureEnabled checks if a specific feature is enabled
 func (s *Server) IsFeatureEnabled(feature string) bool {
 	return s.experimentalFeatures[feature]
@@ -500,6 +511,20 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize health filter
 	healthFilter := typ.NewHealthFilter(healthMonitor)
 
+	// Initialize template manager first (needed for capacity config)
+	var templateURL string
+	if cfg.ProviderTemplateSource != "" {
+		templateURL = cfg.ProviderTemplateSource
+	} else {
+		templateURL = data.TemplateGitHubURL
+	}
+	templateManager := data.NewTemplateManager(templateURL)
+	if err := templateManager.Initialize(context.Background()); err != nil {
+		logrus.Debugf("Failed to fetch from GitHub, using embedded provider templates: %v", err)
+	} else {
+		logrus.Debugf("Provider templates initialized (version: %s)", templateManager.GetVersion())
+	}
+
 	// Initialize load balancer
 	loadBalancer := NewLoadBalancer(cfg, healthFilter)
 
@@ -559,13 +584,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Set callback server manager (the server itself implements this interface)
 	server.oauthHandler.SetCallbackServerManager(server)
 
-	// Initialize template manager with GitHub URL for template sync
-	templateManager := data.NewTemplateManager(data.TemplateGitHubURL)
-	if err := templateManager.Initialize(context.Background()); err != nil {
-		logrus.Debugf("Failed to fetch from GitHub, using embedded provider templates: %v", err)
-	} else {
-		logrus.Debugf("Provider templates initialized (version: %s)", templateManager.GetVersion())
-	}
 	server.templateManager = templateManager
 
 	// Set template manager in config for model fetching fallback

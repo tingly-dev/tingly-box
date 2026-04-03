@@ -85,7 +85,7 @@ func (h *Handler) RefreshProviderTemplates(c *gin.Context) {
 		return
 	}
 
-	registry, err := h.templateManager.FetchFromGitHub(context.Background())
+	registry, err := h.templateManager.FetchTemplates(context.Background())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, TemplateResponse{
 			Success: false,
