@@ -49,6 +49,18 @@ func (s *Server) dispatchChainFromAnthropicV1(
 	rule *typ.Rule, provider *typ.Provider,
 	isStreaming bool, recorder *ProtocolRecorder,
 ) {
+	switch reqCtx.SourceAPI {
+	default:
+		s.dispatchAnthropicToAnthropicV1(c, reqCtx, rule, provider, isStreaming, recorder)
+	}
+}
+
+// dispatchAnthropicToAnthropicV1 handles Anthropic→Anthropic v1 passthrough (original behavior)
+func (s *Server) dispatchAnthropicToAnthropicV1(
+	c *gin.Context, reqCtx *transform.TransformContext,
+	rule *typ.Rule, provider *typ.Provider,
+	isStreaming bool, recorder *ProtocolRecorder,
+) {
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 	req := reqCtx.Request.(*anthropic.MessageNewParams)
 
@@ -127,7 +139,7 @@ func (s *Server) dispatchChainFromAnthropicV1(
 		// FIXME: now we use req model as resp model
 		anthropicResp.Model = anthropic.Model(responseModel)
 
-		// TODO: anthropic <-> anthropic beta
+		// TODO: disable this round trip until we support anthropic <-> anthropic beta
 		//if ShouldRoundtripResponse(c, "openai") {
 		//	roundtripped, err := RoundtripAnthropicBetaResponseViaOpenAI(anthropicResp, responseModel, provider, actualModel)
 		//	if err != nil {
@@ -152,7 +164,9 @@ func (s *Server) dispatchChainFromAnthropicV1(
 	}
 }
 
-func (s *Server) dispatchChainFromAnthropicBeta(
+// dispatchOpenAIChatFromAnthropicV1 handles OpenAI→Anthropic v1 conversion.
+// The client expects OpenAI format, so responses are converted back.
+func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
 	isStreaming bool, recorder *ProtocolRecorder,
@@ -170,13 +184,48 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 		}
 		if err != nil {
 			s.trackUsageFromContext(c, 0, 0, err)
-			stream.SendStreamingError(c, err)
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Failed to create streaming request: " + err.Error(),
+					Type:    "api_error",
+				},
+			})
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
 			return
 		}
-		s.handleAnthropicStreamResponseV1Beta(c, req, streamResp, responseModel, provider, recorder)
+
+		disableStreamUsage := false
+		if v, ok := reqCtx.Extra["cursor_compat"]; ok {
+			disableStreamUsage = v.(bool)
+		}
+		if reqCtx.ScenarioFlags != nil {
+			disableStreamUsage = disableStreamUsage || reqCtx.ScenarioFlags.DisableStreamUsage
+		}
+
+		inputTokens, outputTokens, err := stream.AnthropicToOpenAIStream(c, req, streamResp, responseModel, disableStreamUsage)
+		if err != nil {
+			if inputTokens > 0 || outputTokens > 0 {
+				tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
+				s.trackUsageWithTokenUsage(c, tokenUsage, err)
+			}
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Failed to create streaming request: " + err.Error(),
+					Type:    "api_error",
+				},
+			})
+			if recorder != nil {
+				recorder.RecordError(err)
+			}
+			return
+		}
+
+		if inputTokens > 0 || outputTokens > 0 {
+			tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
+			s.trackUsageWithTokenUsage(c, tokenUsage, nil)
+		}
 	} else {
 		anthropicResp, cancel, err := ForwardAnthropicV1Beta(fc, wrapper, req)
 		if cancel != nil {
@@ -184,7 +233,12 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 		}
 		if err != nil {
 			s.trackUsageFromContext(c, 0, 0, err)
-			stream.SendForwardingError(c, err)
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Failed to forward Anthropic request: " + err.Error(),
+					Type:    "api_error",
+				},
+			})
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -193,27 +247,107 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 
 		inputTokens := int(anthropicResp.Usage.InputTokens)
 		outputTokens := int(anthropicResp.Usage.OutputTokens)
-		cacheTokens := int(anthropicResp.Usage.CacheReadInputTokens)
-		usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
-		s.trackUsageWithTokenUsage(c, usage, nil)
+		cacheTokens := int(anthropicResp.Usage.CacheReadInputTokens + anthropicResp.Usage.CacheCreationInputTokens)
+		tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
+		s.trackUsageWithTokenUsage(c, tokenUsage, nil)
 
-		s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
-
-		// FIXME: now we use req model as resp model
-		anthropicResp.Model = anthropic.Model(responseModel)
-
-		session := s.guardrailsSessionFromContext(c, actualModel, provider)
-		messageHistory := serverguardrails.MessagesFromAnthropicV1Beta(req.System, req.Messages)
-		blocked := s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, session, messageHistory, anthropicResp)
-		if !blocked {
-			s.restoreGuardrailsCredentialAliasesV1BetaResponse(c, anthropicResp)
+		openaiResp := ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
+		if ShouldRoundtripResponse(c, "anthropic") {
+			roundtripped, err := RoundtripOpenAIMapViaAnthropic(openaiResp, responseModel, provider, actualModel)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Error: ErrorDetail{
+						Message: "Failed to roundtrip response: " + err.Error(),
+						Type:    "api_error",
+					},
+				})
+				return
+			}
+			openaiResp = roundtripped
+		}
+		cursorCompat := false
+		if v, ok := reqCtx.Extra["cursor_compat"]; ok {
+			cursorCompat = v.(bool)
+		}
+		if cursorCompat {
+			delete(openaiResp, "usage")
 		}
 
 		if recorder != nil {
 			recorder.SetAssembledResponse(anthropicResp)
 			recorder.RecordResponse(provider, actualModel)
 		}
-		c.JSON(http.StatusOK, anthropicResp)
+		c.JSON(http.StatusOK, openaiResp)
+	}
+}
+
+func (s *Server) dispatchChainFromAnthropicBeta(
+	c *gin.Context, reqCtx *transform.TransformContext,
+	rule *typ.Rule, provider *typ.Provider,
+	isStreaming bool, recorder *ProtocolRecorder,
+) {
+	switch reqCtx.SourceAPI {
+	case protocol.TypeOpenAIChat:
+		s.dispatchOpenAIChatFromAnthropicBeta(c, reqCtx, rule, provider, isStreaming, recorder)
+	default:
+		actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
+		req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
+
+		wrapper := s.clientPool.GetAnthropicClient(provider, actualModel)
+		fc := NewForwardContext(c.Request.Context(), provider)
+
+		if isStreaming {
+			streamResp, cancel, err := ForwardAnthropicV1BetaStream(fc, wrapper, req)
+			if cancel != nil {
+				defer cancel()
+			}
+			if err != nil {
+				s.trackUsageFromContext(c, 0, 0, err)
+				stream.SendStreamingError(c, err)
+				if recorder != nil {
+					recorder.RecordError(err)
+				}
+				return
+			}
+			s.handleAnthropicStreamResponseV1Beta(c, req, streamResp, responseModel, provider, recorder)
+		} else {
+			anthropicResp, cancel, err := ForwardAnthropicV1Beta(fc, wrapper, req)
+			if cancel != nil {
+				defer cancel()
+			}
+			if err != nil {
+				s.trackUsageFromContext(c, 0, 0, err)
+				stream.SendForwardingError(c, err)
+				if recorder != nil {
+					recorder.RecordError(err)
+				}
+				return
+			}
+
+			inputTokens := int(anthropicResp.Usage.InputTokens)
+			outputTokens := int(anthropicResp.Usage.OutputTokens)
+			cacheTokens := int(anthropicResp.Usage.CacheReadInputTokens)
+			usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
+			s.trackUsageWithTokenUsage(c, usage, nil)
+
+			s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
+
+			// FIXME: now we use req model as resp model
+			anthropicResp.Model = anthropic.Model(responseModel)
+
+			session := s.guardrailsSessionFromContext(c, actualModel, provider)
+			messageHistory := serverguardrails.MessagesFromAnthropicV1Beta(req.System, req.Messages)
+			blocked := s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, session, messageHistory, anthropicResp)
+			if !blocked {
+				s.restoreGuardrailsCredentialAliasesV1BetaResponse(c, anthropicResp)
+			}
+
+			if recorder != nil {
+				recorder.SetAssembledResponse(anthropicResp)
+				recorder.RecordResponse(provider, actualModel)
+			}
+			c.JSON(http.StatusOK, anthropicResp)
+		}
 	}
 }
 
@@ -355,6 +489,10 @@ func (s *Server) dispatchChainFromResponses(
 		} else {
 			s.handleAnthropicV1BetaViaResponsesAPINonStreaming(c, responseModel, actualModel, provider, *req)
 		}
+	case protocol.TypeOpenAIChat:
+		// Client sent Responses API, but provider needs Chat format
+		// Forward as Chat, then convert response back to Responses format
+		s.dispatchOpenAIChatFromResponses(c, reqCtx, rule, provider, isStreaming, recorder)
 	}
 }
 
@@ -438,8 +576,38 @@ func (s *Server) dispatchChainFromOpenAIChat(
 				streamRec.Finish(responseModel, usage.InputTokens, usage.OutputTokens)
 				streamRec.RecordResponse(provider, actualModel)
 			}
+		case protocol.TypeOpenAIChat:
+			// OpenAI passthrough: source and target are both OpenAI Chat format
+			shouldIntercept, _ := reqCtx.Extra["should_intercept"].(bool)
+			shouldStripTools, _ := reqCtx.Extra["should_strip_tools"].(bool)
+
+			disableStreamUsage := false
+			if v, ok := reqCtx.Extra["cursor_compat"]; ok {
+				disableStreamUsage = v.(bool)
+			}
+			if reqCtx.ScenarioFlags != nil {
+				disableStreamUsage = disableStreamUsage || reqCtx.ScenarioFlags.DisableStreamUsage
+			}
+
+			s.handleOpenAIChatStreamingRequest(c, provider, req, responseModel, shouldIntercept, shouldStripTools, disableStreamUsage)
 		}
 	} else {
+		switch reqCtx.SourceAPI {
+		case protocol.TypeOpenAIChat:
+			// OpenAI passthrough: delegate to handleNonStreamingRequest for tool interceptor support
+			shouldIntercept, _ := reqCtx.Extra["should_intercept"].(bool)
+			shouldStripTools, _ := reqCtx.Extra["should_strip_tools"].(bool)
+			stripUsage := false
+			if v, ok := reqCtx.Extra["cursor_compat"]; ok {
+				stripUsage = v.(bool)
+			}
+
+			s.handleNonStreamingRequest(c, provider, req, responseModel, shouldIntercept, shouldStripTools, stripUsage)
+			return
+		default:
+			// Forward request to provider for format conversion
+		}
+
 		wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
 		fc := NewForwardContext(nil, provider)
 		resp, _, err := ForwardOpenAIChat(fc, wrapper, req)
@@ -483,5 +651,85 @@ func (s *Server) dispatchChainFromOpenAIChat(
 			}
 			c.JSON(http.StatusOK, anthropicResp)
 		}
+	}
+}
+
+// dispatchOpenAIChatFromResponses handles Chat→Responses→Chat conversion.
+// Client expects Chat format, provider uses Responses format.
+func (s *Server) dispatchOpenAIChatFromResponses(
+	c *gin.Context, reqCtx *transform.TransformContext,
+	rule *typ.Rule, provider *typ.Provider,
+	isStreaming bool, recorder *ProtocolRecorder,
+) {
+	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
+	req := reqCtx.Request.(*responses.ResponseNewParams)
+
+	wrapper := s.clientPool.GetOpenAIClient(provider, actualModel)
+	fc := NewForwardContext(c.Request.Context(), provider)
+
+	if isStreaming {
+		responsesStream, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, *req)
+		if cancel != nil {
+			defer cancel()
+		}
+		if err != nil {
+			s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Failed to create streaming request: " + err.Error(),
+					Type:    "api_error",
+				},
+			})
+			if recorder != nil {
+				recorder.RecordError(err)
+			}
+			return
+		}
+
+		hc := protocol.NewHandleContext(c, responseModel)
+		firstTokenRecorded := false
+		hc.WithOnStreamEvent(func(_ interface{}) error {
+			if !firstTokenRecorded {
+				SetFirstTokenTime(c)
+				firstTokenRecorded = true
+			}
+			return nil
+		})
+		usage, err := stream.HandleResponsesToOpenAIChatStream(hc, responsesStream, responseModel)
+		s.trackUsageWithTokenUsage(c, usage, err)
+		if recorder != nil {
+			recorder.RecordResponse(provider, actualModel)
+		}
+	} else {
+		responsesResp, cancel, err := ForwardOpenAIResponses(fc, wrapper, *req)
+		if cancel != nil {
+			defer cancel()
+		}
+		if err != nil {
+			s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Failed to forward request: " + err.Error(),
+					Type:    "api_error",
+				},
+			})
+			if recorder != nil {
+				recorder.RecordError(err)
+			}
+			return
+		}
+
+		inputTokens := int(responsesResp.Usage.InputTokens)
+		outputTokens := int(responsesResp.Usage.OutputTokens)
+		cacheTokens := int(responsesResp.Usage.InputTokensDetails.CachedTokens)
+		tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
+		s.trackUsageWithTokenUsage(c, tokenUsage, nil)
+
+		chatResp := nonstream.OpenAIResponsesToChat(responsesResp, responseModel)
+		if recorder != nil {
+			recorder.SetAssembledResponse(chatResp)
+			recorder.RecordResponse(provider, actualModel)
+		}
+		c.JSON(http.StatusOK, chatResp)
 	}
 }

@@ -7,14 +7,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -265,122 +260,8 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	reqCtx.Extra["should_intercept"] = shouldIntercept
 	reqCtx.Extra["should_strip_tools"] = shouldStripTools
 
-	// === Dispatch based on target ===
-	switch target {
-	case protocol.TypeAnthropicBeta:
-		anthropicReq := reqCtx.Request.(*anthropic.BetaMessageNewParams)
-		if isStreaming {
-			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
-			fc := NewForwardContext(c.Request.Context(), provider)
-			streamResp, cancel, err := ForwardAnthropicV1BetaStream(fc, wrapper, anthropicReq)
-			if cancel != nil {
-				defer cancel()
-			}
-			if err != nil {
-				// Track error with no usage
-				s.trackUsageFromContext(c, 0, 0, err)
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Failed to create streaming request: " + err.Error(),
-						Type:    "api_error",
-					},
-				})
-				return
-			}
-
-			// Get scenario config for DisableStreamUsage flag
-			disableStreamUsage := cursorCompat
-			if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
-				disableStreamUsage = disableStreamUsage || scenarioConfig.Flags.DisableStreamUsage
-			}
-
-			inputTokens, outputTokens, err := stream.AnthropicToOpenAIStream(c, anthropicReq, streamResp, responseModel, disableStreamUsage)
-			if err != nil {
-				// Track usage with error status
-				if inputTokens > 0 || outputTokens > 0 {
-					tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
-					s.trackUsageWithTokenUsage(c, tokenUsage, err)
-				}
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Failed to create streaming request: " + err.Error(),
-						Type:    "api_error",
-					},
-				})
-				return
-			}
-
-			// Track successful streaming completion
-			if inputTokens > 0 || outputTokens > 0 {
-				tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
-				s.trackUsageWithTokenUsage(c, tokenUsage, nil)
-			}
-			return
-		} else {
-			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
-			fc := NewForwardContext(nil, provider)
-			anthropicResp, cancel, err := ForwardAnthropicV1Beta(fc, wrapper, anthropicReq)
-			if cancel != nil {
-				defer cancel()
-			}
-			if err != nil {
-				// Track error with no usage
-				s.trackUsageFromContext(c, 0, 0, err)
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Failed to forward Anthropic request: " + err.Error(),
-						Type:    "api_error",
-					},
-				})
-				return
-			}
-
-			// Track usage from response
-			inputTokens := int(anthropicResp.Usage.InputTokens)
-			outputTokens := int(anthropicResp.Usage.OutputTokens)
-			cacheTokens := int(anthropicResp.Usage.CacheReadInputTokens + anthropicResp.Usage.CacheCreationInputTokens)
-			tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
-			s.trackUsageWithTokenUsage(c, tokenUsage, nil)
-
-			// Use provider-aware conversion for provider-specific handling
-			openaiResp := ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
-			if ShouldRoundtripResponse(c, "anthropic") {
-				roundtripped, err := RoundtripOpenAIMapViaAnthropic(openaiResp, responseModel, provider, actualModel)
-				if err != nil {
-					c.JSON(http.StatusInternalServerError, ErrorResponse{
-						Error: ErrorDetail{
-							Message: "Failed to roundtrip response: " + err.Error(),
-							Type:    "api_error",
-						},
-					})
-					return
-				}
-				openaiResp = roundtripped
-			}
-			if cursorCompat {
-				delete(openaiResp, "usage")
-			}
-			c.JSON(http.StatusOK, openaiResp)
-			return
-		}
-	case protocol.TypeOpenAIChat:
-		transformedReq := reqCtx.Request.(*openai.ChatCompletionNewParams)
-		if isStreaming {
-			disableStreamUsage := cursorCompat
-			if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
-				disableStreamUsage = disableStreamUsage || scenarioConfig.Flags.DisableStreamUsage
-			}
-
-			s.handleOpenAIChatStreamingRequest(c, provider, transformedReq, responseModel, shouldIntercept, shouldStripTools, disableStreamUsage)
-		} else {
-			s.handleNonStreamingRequest(c, provider, transformedReq, responseModel, shouldIntercept, shouldStripTools, cursorCompat)
-		}
-	case protocol.TypeOpenAIResponses:
-		responsesReq := reqCtx.Request.(*responses.ResponseNewParams)
-		if isStreaming {
-			s.handleResponsesStreamingRequest(c, provider, *responsesReq, responseModel, actualModel)
-		} else {
-			s.handleResponsesNonStreamingRequest(c, provider, *responsesReq, responseModel, actualModel)
-		}
-	}
+	// === Dispatch via transform chain ===
+	reqCtx.RequestModel = actualModel
+	reqCtx.ResponseModel = responseModel
+	s.dispatchChainResult(c, reqCtx, rule, provider, isStreaming, nil)
 }

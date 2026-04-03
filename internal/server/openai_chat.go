@@ -16,15 +16,15 @@ import (
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
-	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// handleNonStreamingRequest handles non-streaming chat completion requests
+// handleNonStreamingRequest handles non-streaming chat completion requests with tool interceptor support
 func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, shouldIntercept, shouldStripTools bool, stripUsage bool) {
 	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
 	req := originalReq
@@ -217,7 +217,7 @@ func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq 
 	return finalResponse, nil
 }
 
-// handleOpenAIChatStreamingRequest handles streaming chat completion requests
+// handleOpenAIChatStreamingRequest handles streaming chat completion requests with tool interceptor support
 func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, shouldIntercept, shouldStripTools bool, disableStreamUsage bool) {
 	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
 	req := originalReq
@@ -267,7 +267,6 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 	s.trackUsageWithTokenUsage(c, usage, err)
 }
 
-// handleOpenAIStreamResponse processes the streaming response and sends it to the client
 func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
 	// Accumulate usage from stream chunks
 	var inputTokens, outputTokens int
