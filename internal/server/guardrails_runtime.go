@@ -20,6 +20,17 @@ var guardrailsSupportedScenarios = []string{
 	string(typ.ScenarioClaudeCode),
 }
 
+type guardrailsContextSetter struct {
+	ctx *gin.Context
+}
+
+func (s guardrailsContextSetter) Set(key string, value any) {
+	if s.ctx == nil {
+		return
+	}
+	s.ctx.Set(key, value)
+}
+
 // guardrailsEnabledForScenario centralizes feature-flag checks so protocol handlers
 // do not repeat scenario/global guardrails gating logic.
 func (s *Server) guardrailsEnabledForScenario(scenario string) bool {
@@ -180,6 +191,9 @@ func (s *Server) buildGuardrailsBaseInput(c *gin.Context, actualModel string, pr
 			"provider":      providerName,
 			"request_model": requestModel,
 		},
+		Runtime: guardrailscore.InputRuntime{
+			ContextSetter: guardrailsContextSetter{ctx: c},
+		},
 	}
 }
 
@@ -259,7 +273,6 @@ func (s *Server) applyGuardrailsToAnthropicV1Request(c *gin.Context, req *anthro
 		s.getGuardrailsCredentialMaskState(c),
 	)
 	if err != nil {
-		c.Set("guardrails_error", err.Error())
 		return
 	}
 
@@ -267,8 +280,6 @@ func (s *Server) applyGuardrailsToAnthropicV1Request(c *gin.Context, req *anthro
 		s.recordGuardrailsHistory(c, mutation.ToolResult.Input, mutation.ToolResult.Evaluation.Result, "tool_result", "")
 	}
 	if mutation.ToolResult.Changed {
-		c.Set("guardrails_block_message", mutation.ToolResult.Message)
-		c.Set("guardrails_block_index", 0)
 		logrus.Debugf("Guardrails: tool_result replaced (v1) len=%d", len(mutation.ToolResult.Message))
 	}
 	if mutation.CredentialMask.Changed && mutation.CredentialMask.LatestTurnChanged {
@@ -299,7 +310,6 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaRequest(c *gin.Context, req *an
 		s.getGuardrailsCredentialMaskState(c),
 	)
 	if err != nil {
-		c.Set("guardrails_error", err.Error())
 		return
 	}
 
@@ -307,8 +317,6 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaRequest(c *gin.Context, req *an
 		s.recordGuardrailsHistory(c, mutation.ToolResult.Input, mutation.ToolResult.Evaluation.Result, "tool_result", "")
 	}
 	if mutation.ToolResult.Changed {
-		c.Set("guardrails_block_message", mutation.ToolResult.Message)
-		c.Set("guardrails_block_index", 0)
 		logrus.Debugf("Guardrails: tool_result replaced (v1beta) len=%d", len(mutation.ToolResult.Message))
 	}
 	if mutation.CredentialMask.Changed && mutation.CredentialMask.LatestTurnChanged {

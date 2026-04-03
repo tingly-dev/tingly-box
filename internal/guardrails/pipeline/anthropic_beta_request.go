@@ -63,9 +63,14 @@ func ProcessAnthropicBetaRequest(
 		initialInput,
 	)
 	if err != nil {
+		initialInput.SetContextValue("guardrails_error", err.Error())
 		return AnthropicBetaRequestMutation{}, err
 	}
 	out.ToolResult = toolResult
+	if toolResult.Changed {
+		toolResult.Input.SetContextValue("guardrails_block_message", toolResult.Message)
+		toolResult.Input.SetContextValue("guardrails_block_index", 0)
+	}
 
 	postToolResult := refreshAnthropicBetaRequestInput(initialInput)
 	out.PostToolResult = postToolResult

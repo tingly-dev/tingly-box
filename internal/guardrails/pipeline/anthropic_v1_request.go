@@ -44,9 +44,14 @@ func ProcessAnthropicV1Request(
 
 	toolResult, err := EvaluateAnthropicV1ToolResultRequest(ctx, runtime, initialInput)
 	if err != nil {
+		initialInput.SetContextValue("guardrails_error", err.Error())
 		return AnthropicV1RequestMutation{}, err
 	}
 	out.ToolResult = toolResult
+	if toolResult.Changed {
+		toolResult.Input.SetContextValue("guardrails_block_message", toolResult.Message)
+		toolResult.Input.SetContextValue("guardrails_block_index", 0)
+	}
 
 	postToolResult := refreshAnthropicV1RequestInput(initialInput)
 	out.PostToolResult = postToolResult
