@@ -9,10 +9,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
-	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -64,12 +64,10 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		req.BetaMessageNewParams.Tools = toolinterceptor.StripSearchFetchToolsAnthropicBeta(req.BetaMessageNewParams.Tools)
 	}
 
-	session := s.guardrailsSessionFromContext(c, actualModel, provider)
-	if s.guardrailsEnabledForSession(session) {
-		s.applyGuardrailsToToolResultV1Beta(c, &req.BetaMessageNewParams, session)
-		// Apply alias masking after terminal tool_result filtering so the decision
-		// engine sees original tool output and the upstream model sees aliases.
-		s.applyGuardrailsCredentialMasksV1BetaWithSession(c, &req.BetaMessageNewParams, session)
+	// request guardrails
+	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+	if s.guardrailsEnabledForScenario(scenario) {
+		s.applyGuardrailsToAnthropicV1BetaRequest(c, &req.BetaMessageNewParams, actualModel, provider)
 	}
 
 	// Check provider's API style to decide which path to take
@@ -140,8 +138,7 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req *anthro
 
 	// Anthropic beta only adapts request history; the shared runtime owns all
 	// enablement checks and hook wiring after this point.
-	session := s.guardrailsSessionFromContext(c, actualModel, provider)
-	s.attachGuardrailsHooks(c, hc, session, serverguardrails.MessagesFromAnthropicV1Beta(req.System, req.Messages))
+	s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages))
 
 	usageStat, err := stream.HandleAnthropicV1BetaStream(hc, streamResp)
 	s.trackUsageWithTokenUsage(c, usageStat, err)

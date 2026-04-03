@@ -9,12 +9,12 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -97,8 +97,7 @@ func (s *Server) dispatchChainResultToAnthropicV1(
 
 		// Anthropic v1 only adapts request history; the shared runtime owns all
 		// enablement checks and hook wiring after this point.
-		session := s.guardrailsSessionFromContext(c, actualModel, provider)
-		s.attachGuardrailsHooks(c, hc, session, serverguardrails.MessagesFromAnthropicV1(req.System, req.Messages))
+		s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1(req.System, req.Messages))
 
 		usageStat, err := stream.HandleAnthropicV1Stream(hc, *req, streamResp)
 		s.trackUsageWithTokenUsage(c, usageStat, err)
@@ -136,9 +135,8 @@ func (s *Server) dispatchChainResultToAnthropicV1(
 			anthropicResp = roundtripped
 		}
 
-		session := s.guardrailsSessionFromContext(c, actualModel, provider)
-		messageHistory := serverguardrails.MessagesFromAnthropicV1(req.System, req.Messages)
-		blocked := s.applyGuardrailsToAnthropicV1NonStreamResponse(c, session, messageHistory, anthropicResp)
+		messageHistory := guardrailsadapter.AdaptMessagesFromAnthropicV1(req.System, req.Messages)
+		blocked := s.applyGuardrailsToAnthropicV1NonStreamResponse(c, actualModel, provider, messageHistory, anthropicResp)
 		if !blocked {
 			s.restoreGuardrailsCredentialAliasesV1Response(c, anthropicResp)
 		}
@@ -201,9 +199,8 @@ func (s *Server) dispatchChainResultToAnthropicBeta(
 		// FIXME: now we use req model as resp model
 		anthropicResp.Model = anthropic.Model(responseModel)
 
-		session := s.guardrailsSessionFromContext(c, actualModel, provider)
-		messageHistory := serverguardrails.MessagesFromAnthropicV1Beta(req.System, req.Messages)
-		blocked := s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, session, messageHistory, anthropicResp)
+		messageHistory := guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages)
+		blocked := s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, actualModel, provider, messageHistory, anthropicResp)
 		if !blocked {
 			s.restoreGuardrailsCredentialAliasesV1BetaResponse(c, anthropicResp)
 		}
