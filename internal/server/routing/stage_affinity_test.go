@@ -21,7 +21,7 @@ func TestAffinity_LockedSession(t *testing.T) {
 	stage := NewAffinityStage(store, "global")
 	ctx := testContext(rule, "session-1")
 
-	result, handled := stage.Evaluate(ctx)
+	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.True(t, handled, "should return handled=true for locked session")
 	require.NotNil(t, result)
 	require.Equal(t, "gpt-4", result.Service.Model)
@@ -38,7 +38,7 @@ func TestAffinity_NoLock(t *testing.T) {
 	stage := NewAffinityStage(store, "global")
 	ctx := testContext(rule, "session-1")
 
-	result, handled := stage.Evaluate(ctx)
+	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.False(t, handled, "should pass to next stage when no lock")
 	require.Nil(t, result)
 }
@@ -55,7 +55,7 @@ func TestAffinity_AffinityDisabled(t *testing.T) {
 	stage := NewAffinityStage(store, "global")
 	ctx := testContext(rule, "session-1")
 
-	_, handled := stage.Evaluate(ctx)
+	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.False(t, handled, "should pass when affinity disabled")
 }
 
@@ -68,7 +68,7 @@ func TestAffinity_SmartDisabled(t *testing.T) {
 	stage := NewAffinityStage(store, "global")
 	ctx := testContext(rule, "session-1")
 
-	_, handled := stage.Evaluate(ctx)
+	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.False(t, handled, "should pass when smart disabled")
 }
 
@@ -84,7 +84,7 @@ func TestAffinity_EmptySession(t *testing.T) {
 	stage := NewAffinityStage(store, "global")
 	ctx := testContext(rule, "") // empty session
 
-	_, handled := stage.Evaluate(ctx)
+	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.False(t, handled, "should pass when session is empty")
 }
 
@@ -101,7 +101,7 @@ func TestAffinity_SmartRuleScope_NoIndex(t *testing.T) {
 	ctx := testContext(rule, "session-1")
 	ctx.MatchedSmartRuleIndex = -1 // smart routing hasn't run yet
 
-	_, handled := stage.Evaluate(ctx)
+	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.False(t, handled, "should pass when smart_rule scope but no index")
 }
 
@@ -123,7 +123,7 @@ func TestAffinity_MatchedSmartRuleIndex_Propagated(t *testing.T) {
 	ctx := testContext(rule, "session-1")
 	ctx.MatchedSmartRuleIndex = 2
 
-	result, handled := stage.Evaluate(ctx)
+	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.True(t, handled)
 	require.Equal(t, 2, result.MatchedSmartRuleIndex)
 }
@@ -161,13 +161,13 @@ func TestAffinity_MultipleSessions(t *testing.T) {
 
 	// Session A should get provider A
 	ctxA := testContext(rule, "session-a")
-	resultA, handledA := stage.Evaluate(ctxA)
+	resultA, handledA := stage.Evaluate(ctxA, newSelectionState(ctxA.Rule))
 	require.True(t, handledA)
 	require.Equal(t, "provider-a", resultA.Service.Provider)
 
 	// Session B should get provider B
 	ctxB := testContext(rule, "session-b")
-	resultB, handledB := stage.Evaluate(ctxB)
+	resultB, handledB := stage.Evaluate(ctxB, newSelectionState(ctxB.Rule))
 	require.True(t, handledB)
 	require.Equal(t, "provider-b", resultB.Service.Provider)
 }

@@ -27,7 +27,7 @@ func (s *SmartRoutingStage) Name() string {
 }
 
 // Evaluate evaluates smart routing rules and selects a service
-func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext) (*SelectionResult, bool) {
+func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionState) (*SelectionResult, bool) {
 	rule := ctx.Rule
 
 	// Skip if smart routing not enabled
@@ -54,6 +54,14 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext) (*SelectionResult, b
 	matchedServices, matchedRuleIndex, matched := router.EvaluateRequestWithIndex(reqCtx)
 	if !matched || len(matchedServices) == 0 {
 		logrus.Debugf("[smart_routing] no rule matched")
+		return nil, false
+	}
+
+	if state != nil && len(state.candidateServices) > 0 {
+		matchedServices = IntersectServices(matchedServices, state.candidateServices)
+	}
+	if len(matchedServices) == 0 {
+		logrus.Debugf("[smart_routing] matched rule has no services in current candidate set")
 		return nil, false
 	}
 

@@ -11,6 +11,10 @@ type SelectionResult struct {
 	// Service is the selected load-balanced service
 	Service *loadbalance.Service
 
+	// FilteredServices contains a narrowed candidate set produced by filter stages.
+	// When set, selector updates SelectionContext.CandidateServices with this value.
+	FilteredServices []*loadbalance.Service
+
 	// Provider is the resolved provider for the service
 	Provider *typ.Provider
 
@@ -30,6 +34,16 @@ type SelectionResult struct {
 func NewResult(service *loadbalance.Service, source string) *SelectionResult {
 	return &SelectionResult{
 		Service:               service,
+		Source:                source,
+		EvaluatedStages:       []string{},
+		MatchedSmartRuleIndex: -1,
+	}
+}
+
+// NewFilterResult creates a non-terminal result for filtering stages.
+func NewFilterResult(source string, services []*loadbalance.Service) *SelectionResult {
+	return &SelectionResult{
+		FilteredServices:      services,
 		Source:                source,
 		EvaluatedStages:       []string{},
 		MatchedSmartRuleIndex: -1,

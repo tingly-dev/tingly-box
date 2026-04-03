@@ -17,7 +17,7 @@ func TestLoadBalancer_SelectsService(t *testing.T) {
 	stage := NewLoadBalancerStage(lb)
 	ctx := testContext(rule, "")
 
-	result, handled := stage.Evaluate(ctx)
+	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.True(t, handled)
 	require.NotNil(t, result)
 	require.Equal(t, "gpt-4", result.Service.Model)
@@ -31,7 +31,7 @@ func TestLoadBalancer_Error(t *testing.T) {
 	stage := NewLoadBalancerStage(lb)
 	ctx := testContext(rule, "")
 
-	result, handled := stage.Evaluate(ctx)
+	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.False(t, handled, "should pass on LB error")
 	require.Nil(t, result)
 }
@@ -43,7 +43,7 @@ func TestLoadBalancer_NilResult(t *testing.T) {
 	stage := NewLoadBalancerStage(lb)
 	ctx := testContext(rule, "")
 
-	result, handled := stage.Evaluate(ctx)
+	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.False(t, handled, "should pass when LB returns nil")
 	require.Nil(t, result)
 }
