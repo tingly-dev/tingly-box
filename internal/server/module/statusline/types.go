@@ -103,4 +103,12 @@ type CombinedStatusData struct {
 	TBModel        string `json:"tb_model,omitempty" example:"gpt-4"`
 	TBRequestModel string `json:"tb_request_model,omitempty" example:"gpt-4"`
 	TBScenario     string `json:"tb_scenario,omitempty" example:"openai"`
+	// Provider quota information
+	TBQuotaAvailable bool   `json:"tb_quota_available" example:"true"`                           // Whether quota is available
+	TBQuotaUsed      int    `json:"tb_quota_used,omitempty" example:"40000"`                     // Quota used
+	TBQuotaLimit     int    `json:"tb_quota_limit,omitempty" example:"100000"`                   // Quota limit
+	TBQuotaPercent   int    `json:"tb_quota_percent,omitempty" example:"40"`                     // Quota percentage
+	TBQuotaWindow    string `json:"tb_quota_window,omitempty" example:"daily"`                   // Window type
+	TBQuotaUnit      string `json:"tb_quota_unit,omitempty" example:"tokens"`                    // Unit
+	TBQuotaResetsAt  string `json:"tb_quota_resets_at,omitempty" example:"2026-04-03T00:00:00Z"` // ISO 8601 reset time
 }
