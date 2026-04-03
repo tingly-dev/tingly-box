@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/guardrails"
+	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 )
 
 // rewriteAnthropicGuardrailsEvent keeps the main Anthropic passthrough loop
@@ -265,9 +265,9 @@ func handleToolUseBuffer(c *gin.Context, beta bool, eventType string, index int,
 	return false
 }
 
-func getCredentialMaskState(c *gin.Context) *guardrails.CredentialMaskState {
-	if existing, ok := c.Get(guardrails.CredentialMaskStateContextKey); ok {
-		if state, ok := existing.(*guardrails.CredentialMaskState); ok {
+func getCredentialMaskState(c *gin.Context) *guardrailscore.CredentialMaskState {
+	if existing, ok := c.Get(guardrailscore.CredentialMaskStateContextKey); ok {
+		if state, ok := existing.(*guardrailscore.CredentialMaskState); ok {
 			return state
 		}
 	}
@@ -286,10 +286,10 @@ func restoreCredentialAliasesInEventMap(c *gin.Context, eventMap map[string]inte
 		deltaType, _ := delta["type"].(string)
 		if deltaType == deltaTypeTextDelta {
 			if text, ok := delta["text"].(string); ok {
-				if !guardrails.MayContainAliasToken(text) {
+				if !guardrailscore.MayContainAliasToken(text) {
 					return
 				}
-				if restored, changed := guardrails.RestoreText(text, state); changed {
+				if restored, changed := guardrailscore.RestoreText(text, state); changed {
 					delta["text"] = restored
 				}
 			}
@@ -298,10 +298,10 @@ func restoreCredentialAliasesInEventMap(c *gin.Context, eventMap map[string]inte
 		contentBlock, _ := eventMap["content_block"].(map[string]interface{})
 		if blockType, _ := contentBlock["type"].(string); blockType == "text" {
 			if text, ok := contentBlock["text"].(string); ok {
-				if !guardrails.MayContainAliasToken(text) {
+				if !guardrailscore.MayContainAliasToken(text) {
 					return
 				}
-				if restored, changed := guardrails.RestoreText(text, state); changed {
+				if restored, changed := guardrailscore.RestoreText(text, state); changed {
 					contentBlock["text"] = restored
 				}
 			}
@@ -324,7 +324,7 @@ func rebuildBufferedToolUseEvents(c *gin.Context, events []bufferedEvent) ([]buf
 	hasDeltaJSON := false
 	hasAliasCandidate := false
 	if input, ok := startBlock["input"]; ok && input != nil {
-		if payload, err := json.Marshal(input); err == nil && guardrails.MayContainAliasToken(string(payload)) {
+		if payload, err := json.Marshal(input); err == nil && guardrailscore.MayContainAliasToken(string(payload)) {
 			hasAliasCandidate = true
 		}
 		// Anthropic often starts tool_use input with an empty object and streams the
@@ -345,7 +345,7 @@ func rebuildBufferedToolUseEvents(c *gin.Context, events []bufferedEvent) ([]buf
 		if deltaType, _ := delta["type"].(string); deltaType == deltaTypeInputJSONDelta {
 			hasDeltaJSON = true
 			if partial, ok := delta["partial_json"].(string); ok {
-				if guardrails.MayContainAliasToken(partial) {
+				if guardrailscore.MayContainAliasToken(partial) {
 					hasAliasCandidate = true
 				}
 				rawArgs += partial
@@ -360,7 +360,7 @@ func rebuildBufferedToolUseEvents(c *gin.Context, events []bufferedEvent) ([]buf
 		stopPayload := cloneEventPayload(events[len(events)-1].payload)
 		contentBlock, _ := startPayload["content_block"].(map[string]interface{})
 		if input, ok := contentBlock["input"]; ok && input != nil {
-			if restored, changed := guardrails.RestoreStructuredValue(input, state); changed {
+			if restored, changed := guardrailscore.RestoreStructuredValue(input, state); changed {
 				contentBlock["input"] = restored
 				return []bufferedEvent{
 					{eventType: eventTypeContentBlockStart, payload: startPayload},
@@ -379,7 +379,7 @@ func rebuildBufferedToolUseEvents(c *gin.Context, events []bufferedEvent) ([]buf
 		return nil, false
 	}
 
-	restoredValue, changed := guardrails.RestoreStructuredValue(parsed, state)
+	restoredValue, changed := guardrailscore.RestoreStructuredValue(parsed, state)
 	if !changed {
 		return nil, false
 	}

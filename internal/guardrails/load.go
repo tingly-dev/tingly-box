@@ -7,12 +7,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
+	guardrailsevaluate "github.com/tingly-dev/tingly-box/internal/guardrails/evaluate"
 	"gopkg.in/yaml.v3"
 )
 
 // LoadConfig reads guardrails configuration from a JSON or YAML file.
-func LoadConfig(path string) (Config, error) {
-	var cfg Config
+func LoadConfig(path string) (guardrailscore.Config, error) {
+	var cfg guardrailscore.Config
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -30,13 +32,13 @@ func LoadConfig(path string) (Config, error) {
 		}
 	default:
 		if err := json.Unmarshal(data, &cfg); err == nil {
-			return ResolveConfig(cfg)
+			return guardrailsevaluate.ResolveConfig(cfg)
 		}
 		if err := yaml.Unmarshal(data, &cfg); err == nil {
-			return ResolveConfig(cfg)
+			return guardrailsevaluate.ResolveConfig(cfg)
 		}
 		return cfg, fmt.Errorf("unsupported config file extension: %s", filepath.Ext(path))
 	}
 
-	return ResolveConfig(cfg)
+	return guardrailsevaluate.ResolveConfig(cfg)
 }

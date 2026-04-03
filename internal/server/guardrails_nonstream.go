@@ -9,29 +9,34 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
-	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
+	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // applyGuardrailsToAnthropicV1NonStreamResponse evaluates a fully assembled
 // Anthropic v1 response and rewrites it to a text block when guardrails block it.
-func (s *Server) applyGuardrailsToAnthropicV1NonStreamResponse(c *gin.Context, session guardrailsSession, messageHistory []guardrails.Message, resp *anthropic.Message) bool {
-	if resp == nil || !s.guardrailsEnabledForSession(session) {
+func (s *Server) applyGuardrailsToAnthropicV1NonStreamResponse(c *gin.Context, actualModel string, provider *typ.Provider, messageHistory []guardrailscore.Message, resp *anthropic.Message) bool {
+	if resp == nil {
+		return false
+	}
+	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+	if !s.guardrailsEnabledForScenario(scenario) {
 		return false
 	}
 
-	input := s.buildGuardrailsBaseInput(session, guardrails.DirectionResponse, messageHistory)
-	input.Content = guardrails.Content{
+	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messageHistory)
+	input.Content = guardrailscore.Content{
 		Messages: messageHistory,
 		Text:     anthropicResponseText(resp.Content),
 		Command:  anthropicResponseCommand(resp.Content),
 	}
 
-	var hookResult serverguardrails.GuardrailsHookResult
-	done := serverguardrails.NewNonStreamGuardrailsHook(
-		s.guardrailsEngine,
+	var hookResult GuardrailsHookResult
+	done := NewNonStreamGuardrailsHook(
+		s.guardrailsRuntime,
 		input,
-		serverguardrails.WithGuardrailsContext(context.Background()),
-		serverguardrails.WithGuardrailsOnVerdict(func(result serverguardrails.GuardrailsHookResult) {
+		WithGuardrailsContext(context.Background()),
+		WithGuardrailsOnVerdict(func(result GuardrailsHookResult) {
 			hookResult = result
 		}),
 	)
@@ -43,40 +48,44 @@ func (s *Server) applyGuardrailsToAnthropicV1NonStreamResponse(c *gin.Context, s
 		return false
 	}
 	c.Set("guardrails_result", hookResult.Result)
-	if hookResult.Result.Verdict != guardrails.VerdictBlock {
+	if hookResult.Result.Verdict != guardrailscore.VerdictBlock {
 		return false
 	}
 
-	blockMessage := serverguardrails.BlockMessageWithSnippet(hookResult.Result, input.Content.Preview(120))
+	blockMessage := BlockMessageWithSnippet(hookResult.Result, input.Content.Preview(120))
 	if input.Content.Command != nil {
-		blockMessage = serverguardrails.BlockMessageForCommand(hookResult.Result, input.Content.Command.Name, input.Content.Command.Arguments)
+		blockMessage = BlockMessageForCommand(hookResult.Result, input.Content.Command.Name, input.Content.Command.Arguments)
 	}
 	c.Set("guardrails_block_message", blockMessage)
-	s.recordGuardrailsHistory(c, session, input, hookResult.Result, "response", blockMessage)
+	s.recordGuardrailsHistory(c, input, hookResult.Result, "response", blockMessage)
 	overwriteAnthropicResponse(resp, blockMessage)
 	return true
 }
 
 // applyGuardrailsToAnthropicV1BetaNonStreamResponse is the beta equivalent of
 // applyGuardrailsToAnthropicV1NonStreamResponse.
-func (s *Server) applyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Context, session guardrailsSession, messageHistory []guardrails.Message, resp *anthropic.BetaMessage) bool {
-	if resp == nil || !s.guardrailsEnabledForSession(session) {
+func (s *Server) applyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Context, actualModel string, provider *typ.Provider, messageHistory []guardrailscore.Message, resp *anthropic.BetaMessage) bool {
+	if resp == nil {
+		return false
+	}
+	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+	if !s.guardrailsEnabledForScenario(scenario) {
 		return false
 	}
 
-	input := s.buildGuardrailsBaseInput(session, guardrails.DirectionResponse, messageHistory)
-	input.Content = guardrails.Content{
+	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messageHistory)
+	input.Content = guardrailscore.Content{
 		Messages: messageHistory,
 		Text:     anthropicBetaResponseText(resp.Content),
 		Command:  anthropicBetaResponseCommand(resp.Content),
 	}
 
-	var hookResult serverguardrails.GuardrailsHookResult
-	done := serverguardrails.NewNonStreamGuardrailsHook(
-		s.guardrailsEngine,
+	var hookResult GuardrailsHookResult
+	done := NewNonStreamGuardrailsHook(
+		s.guardrailsRuntime,
 		input,
-		serverguardrails.WithGuardrailsContext(context.Background()),
-		serverguardrails.WithGuardrailsOnVerdict(func(result serverguardrails.GuardrailsHookResult) {
+		WithGuardrailsContext(context.Background()),
+		WithGuardrailsOnVerdict(func(result GuardrailsHookResult) {
 			hookResult = result
 		}),
 	)
@@ -88,16 +97,16 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Contex
 		return false
 	}
 	c.Set("guardrails_result", hookResult.Result)
-	if hookResult.Result.Verdict != guardrails.VerdictBlock {
+	if hookResult.Result.Verdict != guardrailscore.VerdictBlock {
 		return false
 	}
 
-	blockMessage := serverguardrails.BlockMessageWithSnippet(hookResult.Result, input.Content.Preview(120))
+	blockMessage := BlockMessageWithSnippet(hookResult.Result, input.Content.Preview(120))
 	if input.Content.Command != nil {
-		blockMessage = serverguardrails.BlockMessageForCommand(hookResult.Result, input.Content.Command.Name, input.Content.Command.Arguments)
+		blockMessage = BlockMessageForCommand(hookResult.Result, input.Content.Command.Name, input.Content.Command.Arguments)
 	}
 	c.Set("guardrails_block_message", blockMessage)
-	s.recordGuardrailsHistory(c, session, input, hookResult.Result, "response", blockMessage)
+	s.recordGuardrailsHistory(c, input, hookResult.Result, "response", blockMessage)
 	overwriteAnthropicBetaResponse(resp, blockMessage)
 	return true
 }
@@ -136,12 +145,12 @@ func anthropicBetaResponseText(blocks []anthropic.BetaContentBlockUnion) string 
 
 // anthropicResponseCommand extracts the first tool_use-like block and adapts it
 // into the shared guardrails command shape.
-func anthropicResponseCommand(blocks []anthropic.ContentBlockUnion) *guardrails.Command {
+func anthropicResponseCommand(blocks []anthropic.ContentBlockUnion) *guardrailscore.Command {
 	for _, block := range blocks {
 		if block.Type != "tool_use" && block.Type != "server_tool_use" {
 			continue
 		}
-		return &guardrails.Command{
+		return &guardrailscore.Command{
 			Name:      block.Name,
 			Arguments: parseAnthropicInput(block.Input),
 		}
@@ -151,12 +160,12 @@ func anthropicResponseCommand(blocks []anthropic.ContentBlockUnion) *guardrails.
 
 // anthropicBetaResponseCommand extracts the first beta tool_use-like block for
 // command evaluation.
-func anthropicBetaResponseCommand(blocks []anthropic.BetaContentBlockUnion) *guardrails.Command {
+func anthropicBetaResponseCommand(blocks []anthropic.BetaContentBlockUnion) *guardrailscore.Command {
 	for _, block := range blocks {
 		if block.Type != "tool_use" && block.Type != "server_tool_use" {
 			continue
 		}
-		return &guardrails.Command{
+		return &guardrailscore.Command{
 			Name:      block.Name,
 			Arguments: parseAnthropicInput(block.Input),
 		}

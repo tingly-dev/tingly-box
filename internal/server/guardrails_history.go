@@ -1,26 +1,67 @@
 package server
 
 import (
-	"net/http"
+	"sort"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/tingly-dev/tingly-box/internal/guardrails"
-	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
+	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
+	guardrailsutils "github.com/tingly-dev/tingly-box/internal/guardrails/utils"
 )
 
-func (s *Server) recordGuardrailsHistory(c *gin.Context, session guardrailsSession, input guardrails.Input, result guardrails.Result, phase, blockMessage string) {
-	if s.guardrailsHistory == nil {
+func CollectMaskHistoryCredentialData(c *gin.Context) ([]string, []string) {
+	if c == nil {
+		return nil, nil
+	}
+
+	existing, ok := c.Get(guardrailscore.CredentialMaskStateContextKey)
+	if !ok {
+		return nil, nil
+	}
+	state, ok := existing.(*guardrailscore.CredentialMaskState)
+	if !ok || state == nil {
+		return nil, nil
+	}
+
+	refSet := make(map[string]struct{})
+	aliasSet := make(map[string]struct{})
+	for _, ref := range state.UsedRefs {
+		if ref != "" {
+			refSet[ref] = struct{}{}
+		}
+	}
+	for alias := range state.AliasToReal {
+		if alias != "" {
+			aliasSet[alias] = struct{}{}
+		}
+	}
+	return sortedMaskHistoryKeys(refSet), sortedMaskHistoryKeys(aliasSet)
+}
+
+func sortedMaskHistoryKeys(values map[string]struct{}) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for value := range values {
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func (s *Server) recordGuardrailsHistory(c *gin.Context, input guardrailscore.Input, result guardrailscore.Result, phase, blockMessage string) {
+	if s.guardrailsRuntime == nil || s.guardrailsRuntime.History == nil {
 		return
 	}
 
-	credentialRefs := serverguardrails.CollectHistoryCredentialRefs(result)
-	entry := serverguardrails.HistoryEntry{
+	credentialRefs := guardrailsutils.CollectCredentialRefs(result)
+	entry := guardrailsutils.Entry{
 		Time:            time.Now(),
-		Scenario:        session.Scenario,
-		Model:           session.Model,
-		Provider:        session.ProviderName,
+		Scenario:        input.Scenario,
+		Model:           input.Model,
+		Provider:        input.ProviderName(),
 		Direction:       string(input.Direction),
 		Phase:           phase,
 		Verdict:         string(result.Verdict),
@@ -28,32 +69,32 @@ func (s *Server) recordGuardrailsHistory(c *gin.Context, session guardrailsSessi
 		Preview:         input.Content.LatestPreview(160),
 		CredentialRefs:  credentialRefs,
 		CredentialNames: s.resolveGuardrailsCredentialNames(credentialRefs),
-		Reasons:         append([]guardrails.PolicyResult(nil), result.Reasons...),
+		Reasons:         append([]guardrailscore.PolicyResult(nil), result.Reasons...),
 	}
 	if input.Content.Command != nil {
 		entry.CommandName = input.Content.Command.Name
 	}
-	s.guardrailsHistory.Add(entry, writeFileAtomic)
+	s.guardrailsRuntime.History.Add(entry, writeFileAtomic)
 }
 
 // recordGuardrailsMaskHistory stores a dedicated history row for credential
 // aliasing events so masking can be audited separately from block/review events.
-func (s *Server) recordGuardrailsMaskHistory(c *gin.Context, session guardrailsSession, input guardrails.Input, phase string) {
-	if s.guardrailsHistory == nil {
+func (s *Server) recordGuardrailsMaskHistory(c *gin.Context, input guardrailscore.Input, phase string) {
+	if s.guardrailsRuntime == nil || s.guardrailsRuntime.History == nil {
 		return
 	}
-	credentialRefs, aliasHits := serverguardrails.CollectMaskHistoryCredentialData(c)
+	credentialRefs, aliasHits := CollectMaskHistoryCredentialData(c)
 	if len(credentialRefs) == 0 && len(aliasHits) == 0 {
 		return
 	}
-	entry := serverguardrails.HistoryEntry{
+	entry := guardrailsutils.Entry{
 		Time:            time.Now(),
-		Scenario:        session.Scenario,
-		Model:           session.Model,
-		Provider:        session.ProviderName,
+		Scenario:        input.Scenario,
+		Model:           input.Model,
+		Provider:        input.ProviderName(),
 		Direction:       string(input.Direction),
 		Phase:           phase,
-		Verdict:         string(guardrails.VerdictMask),
+		Verdict:         string(guardrailscore.VerdictMask),
 		Preview:         input.Content.LatestPreview(160),
 		CredentialRefs:  credentialRefs,
 		CredentialNames: s.resolveGuardrailsCredentialNames(credentialRefs),
@@ -62,36 +103,11 @@ func (s *Server) recordGuardrailsMaskHistory(c *gin.Context, session guardrailsS
 	if input.Content.Command != nil {
 		entry.CommandName = input.Content.Command.Name
 	}
-	s.guardrailsHistory.Add(entry, writeFileAtomic)
+	s.guardrailsRuntime.History.Add(entry, writeFileAtomic)
 }
 
 // resolveGuardrailsCredentialNames maps credential ids to stable display names
 // for the history API.
 func (s *Server) resolveGuardrailsCredentialNames(ids []string) []string {
 	return s.getCachedGuardrailsCredentialNames(ids)
-}
-
-// GetGuardrailsHistory returns the most recent guardrails history rows.
-func (s *Server) GetGuardrailsHistory(c *gin.Context) {
-	if s.guardrailsHistory == nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"data":    []serverguardrails.HistoryEntry{},
-		})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    s.guardrailsHistory.List(200),
-	})
-}
-
-// ClearGuardrailsHistory deletes all persisted guardrails history rows.
-func (s *Server) ClearGuardrailsHistory(c *gin.Context) {
-	if s.guardrailsHistory != nil {
-		s.guardrailsHistory.Clear(writeFileAtomic)
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-	})
 }

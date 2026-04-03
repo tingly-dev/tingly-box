@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	"gopkg.in/yaml.v3"
 )
 
@@ -16,14 +17,14 @@ var builtinTemplatesFS embed.FS
 
 // BuiltinPolicyTemplate is a curated starter policy shown in the Builtins page.
 type BuiltinPolicyTemplate struct {
-	ID          string     `json:"id" yaml:"id"`
-	Name        string     `json:"name" yaml:"name"`
-	Summary     string     `json:"summary,omitempty" yaml:"summary,omitempty"`
-	Description string     `json:"description,omitempty" yaml:"description,omitempty"`
-	Kind        PolicyKind `json:"kind" yaml:"kind"`
-	Topic       string     `json:"topic,omitempty" yaml:"topic,omitempty"`
-	Tags        []string   `json:"tags,omitempty" yaml:"tags,omitempty"`
-	Policy      Policy     `json:"policy" yaml:"policy"`
+	ID          string                    `json:"id" yaml:"id"`
+	Name        string                    `json:"name" yaml:"name"`
+	Summary     string                    `json:"summary,omitempty" yaml:"summary,omitempty"`
+	Description string                    `json:"description,omitempty" yaml:"description,omitempty"`
+	Kind        guardrailscore.PolicyKind `json:"kind" yaml:"kind"`
+	Topic       string                    `json:"topic,omitempty" yaml:"topic,omitempty"`
+	Tags        []string                  `json:"tags,omitempty" yaml:"tags,omitempty"`
+	Policy      guardrailscore.Policy     `json:"policy" yaml:"policy"`
 }
 
 type builtinTemplateFile struct {
@@ -105,7 +106,7 @@ func LoadBuiltinPolicyTemplates() ([]BuiltinPolicyTemplate, error) {
 
 func validateBuiltinTemplate(filename string, tpl BuiltinPolicyTemplate) error {
 	switch tpl.Kind {
-	case PolicyKindResourceAccess, PolicyKindCommandExecution, PolicyKindContent:
+	case guardrailscore.PolicyKindResourceAccess, guardrailscore.PolicyKindCommandExecution, guardrailscore.PolicyKindContent:
 	default:
 		return fmt.Errorf("builtin file %s has template %q with unsupported kind %q", filename, tpl.ID, tpl.Kind)
 	}
