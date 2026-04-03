@@ -152,7 +152,9 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
             backgroundColor: isSunlit
               ? 'rgba(255, 255, 255, 0.65)'
               : (isDark ? '#1e293b' : '#ffffff'),
-            backdropFilter: isSunlit ? 'blur(12px)' : 'none',
+            // Use lighter blur for better performance
+            backdropFilter: isSunlit ? 'blur(8px)' : 'none',
+            willChange: isSunlit ? 'auto' : undefined,
           },
         },
       },
@@ -268,7 +270,9 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
           paper: {
             borderRight: isSunlit ? '1px solid rgba(0, 0, 0, 0.08)' : (isDark ? '1px solid #334155' : '1px solid #e2e8f0'),
             backgroundColor: isSunlit ? 'rgba(255, 255, 255, 0.7)' : undefined,
-            backdropFilter: isSunlit ? 'blur(12px)' : 'none',
+            // Use lighter blur for better performance
+            backdropFilter: isSunlit ? 'blur(8px)' : 'none',
+            willChange: 'auto',
           },
         },
       },
@@ -285,7 +289,9 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
         styleOverrides: {
           root: {
             backgroundColor: isSunlit ? 'rgba(255, 255, 255, 0.6)' : undefined,
-            backdropFilter: isSunlit ? 'blur(12px)' : 'none',
+            // Use lighter blur for better performance
+            backdropFilter: isSunlit ? 'blur(8px)' : 'none',
+            willChange: 'auto',
           },
         },
       },
