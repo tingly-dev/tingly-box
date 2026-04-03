@@ -12,8 +12,6 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/client"
-	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
 	"google.golang.org/genai"
 )
 
@@ -88,16 +86,14 @@ func ForwardAnthropicV1BetaStream(fc *ForwardContext, wrapper *client.AnthropicC
 // ===================================================================
 
 // ForwardOpenAIChat sends a non-streaming OpenAI chat completion request.
+// IMPORTANT: All transformations (protocol conversion + vendor-specific) should
+// be applied by the transform chain BEFORE calling this function.
 func ForwardOpenAIChat(fc *ForwardContext, wrapper *client.OpenAIClient, req *openai.ChatCompletionNewParams) (*openai.ChatCompletion, context.CancelFunc, error) {
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
 	}
 
 	ctx, cancel := fc.PrepareContext(req)
-	// Apply provider-specific transformations
-	config := buildOpenAIConfig(req)
-	transformedReq := ops.ApplyProviderTransforms(req, fc.Provider.APIBase, req.Model, config)
-	*req = *transformedReq
 
 	// Clear empty tools array
 	if len(req.Tools) == 0 {
@@ -113,6 +109,8 @@ func ForwardOpenAIChat(fc *ForwardContext, wrapper *client.OpenAIClient, req *op
 }
 
 // ForwardOpenAIChatStream sends a streaming OpenAI chat completion request.
+// IMPORTANT: All transformations (protocol conversion + vendor-specific) should
+// be applied by the transform chain BEFORE calling this function.
 // Note: Pass request context (c.Request.Context()) as baseCtx in NewForwardContext for client cancellation support.
 func ForwardOpenAIChatStream(fc *ForwardContext, wrapper *client.OpenAIClient, req *openai.ChatCompletionNewParams) (*openaistream.Stream[openai.ChatCompletionChunk], context.CancelFunc, error) {
 	if wrapper == nil {
@@ -121,11 +119,6 @@ func ForwardOpenAIChatStream(fc *ForwardContext, wrapper *client.OpenAIClient, r
 	logrus.Debugf("provider: %s (streaming)", fc.Provider.Name)
 
 	ctx, cancel := fc.PrepareContext(req)
-
-	// Apply provider-specific transformations
-	config := buildOpenAIConfig(req)
-	transformedReq := ops.ApplyProviderTransforms(req, fc.Provider.APIBase, string(req.Model), config)
-	*req = *transformedReq
 
 	stream := wrapper.ChatCompletionsNewStreaming(ctx, *req)
 	return stream, cancel, nil
@@ -182,38 +175,4 @@ func ForwardGoogleStream(fc *ForwardContext, wrapper *client.GoogleClient, model
 	logrus.Debugln("Creating Google streaming request")
 	stream := wrapper.GenerateContentStream(ctx, model, contents, config)
 	return stream, cancel, nil
-}
-
-// ===================================================================
-// Helper Functions
-// ===================================================================
-
-// buildOpenAIConfig builds the OpenAIConfig for provider transformations.
-func buildOpenAIConfig(req *openai.ChatCompletionNewParams) *protocol.OpenAIConfig {
-	config := &protocol.OpenAIConfig{
-		HasThinking:     false,
-		ReasoningEffort: "",
-	}
-
-	// Check if request has thinking configuration in extra_fields
-	extraFields := req.ExtraFields()
-	if extraFields == nil {
-		extraFields = map[string]interface{}{}
-	}
-	if cursorCompatRaw, ok := extraFields[cursorCompatExtraField]; ok {
-		if enabled, ok := cursorCompatRaw.(bool); ok && enabled {
-			config.CursorCompat = true
-		}
-		delete(extraFields, cursorCompatExtraField)
-		req.SetExtraFields(extraFields)
-	}
-	if thinking, ok := extraFields["thinking"]; ok {
-		if _, ok := thinking.(map[string]interface{}); ok {
-			config.HasThinking = true
-			// Set default reasoning effort to "low" for OpenAI-compatible APIs
-			config.ReasoningEffort = "low"
-		}
-	}
-
-	return config
 }
