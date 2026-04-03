@@ -711,6 +711,9 @@ export function HourlyTokenHistoryChart({ data }: HourlyTokenHistoryChartProps) 
 
 // Original TokenHistoryChart - kept for backward compatibility
 export default function TokenHistoryChart({ data, interval = 'hour' }: TokenHistoryChartProps) {
+    const theme = useTheme();
+    const chartStyles = getThemeChartStyles(theme);
+
     const isDayMode = interval === 'day' || interval === 'week';
 
     // Format timestamp based on aggregation interval
@@ -916,42 +919,42 @@ export default function TokenHistoryChart({ data, interval = 'hour' }: TokenHist
                         {isDayMode ? (
                             // Bar chart for day mode
                             <BarChart data={chartData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                <CartesianGrid strokeDasharray="3 3" stroke={chartStyles.chart.grid} />
                                 <XAxis
                                     dataKey="time"
-                                    tick={{ fontSize: 11 }}
+                                    tick={{ fontSize: 11, fill: 'text.secondary' }}
                                     tickLine={false}
-                                    axisLine={{ stroke: '#e0e0e0' }}
+                                    axisLine={{ stroke: chartStyles.chart.axis }}
                                     interval={labelInterval}
                                 />
                                 <YAxis
                                     tickFormatter={formatYAxis}
-                                    tick={{ fontSize: 11 }}
+                                    tick={{ fontSize: 11, fill: 'text.secondary' }}
                                     tickLine={false}
-                                    axisLine={{ stroke: '#e0e0e0' }}
+                                    axisLine={{ stroke: chartStyles.chart.axis }}
                                 />
                                 <Tooltip content={<CustomTooltip />} />
                                 <Legend />
-                                <Bar dataKey="cacheTokens" name="Cache Tokens" fill="#ed6c02" />
-                                <Bar dataKey="inputTokens" name="Input Tokens" fill="#1976d2" stackId="stack" />
-                                <Bar dataKey="outputTokens" name="Output Tokens" fill="#2e7d32" stackId="stack" />
+                                <Bar dataKey="cacheTokens" name="Cache Tokens" fill={chartStyles.token.cache.main} />
+                                <Bar dataKey="inputTokens" name="Input Tokens" fill={chartStyles.token.input.main} stackId="stack" />
+                                <Bar dataKey="outputTokens" name="Output Tokens" fill={chartStyles.token.output.main} stackId="stack" />
                             </BarChart>
                         ) : (
                             // Area chart for hour/minute mode
                             <ComposedChart data={chartData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                <CartesianGrid strokeDasharray="3 3" stroke={chartStyles.chart.grid} />
                                 <XAxis
                                     dataKey="time"
-                                    tick={{ fontSize: 11 }}
+                                    tick={{ fontSize: 11, fill: 'text.secondary' }}
                                     tickLine={false}
-                                    axisLine={{ stroke: '#e0e0e0' }}
+                                    axisLine={{ stroke: chartStyles.chart.axis }}
                                     interval={labelInterval}
                                 />
                                 <YAxis
                                     tickFormatter={formatYAxis}
-                                    tick={{ fontSize: 11 }}
+                                    tick={{ fontSize: 11, fill: 'text.secondary' }}
                                     tickLine={false}
-                                    axisLine={{ stroke: '#e0e0e0' }}
+                                    axisLine={{ stroke: chartStyles.chart.axis }}
                                 />
                                 <Tooltip content={<CustomTooltip />} />
                                 <Legend />
@@ -960,23 +963,23 @@ export default function TokenHistoryChart({ data, interval = 'hour' }: TokenHist
                                     dataKey="inputTokens"
                                     name="Input Tokens"
                                     stackId="1"
-                                    stroke="#1976d2"
-                                    fill="#bbdefb"
+                                    stroke={chartStyles.token.input.main}
+                                    fill={chartStyles.token.input.gradient}
                                 />
                                 <Area
                                     type="monotone"
                                     dataKey="outputTokens"
                                     name="Output Tokens"
                                     stackId="1"
-                                    stroke="#2e7d32"
-                                    fill="#c8e6c9"
+                                    stroke={chartStyles.token.output.main}
+                                    fill={chartStyles.token.output.gradient}
                                 />
                                 <Area
                                     type="monotone"
                                     dataKey="cacheTokens"
                                     name="Cache Tokens"
-                                    stroke="#ed6c02"
-                                    fill="#ffe0b2"
+                                    stroke={chartStyles.token.cache.main}
+                                    fill={chartStyles.token.cache.gradient}
                                 />
                             </ComposedChart>
                         )}
