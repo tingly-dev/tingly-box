@@ -98,7 +98,9 @@ tasks:
       - |
         python -m tests.test_automation
 
-  web:dev:
+  web:
+    aliases:
+      - web:dev
     cmds:
       - |
         echo "This is only for frontend dev, please start your tingly-box server too"

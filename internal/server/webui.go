@@ -19,6 +19,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/quota"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
@@ -70,7 +71,13 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 
 	// Claude Code status line endpoints (no auth required) - register from claudecode module
 	// These must be registered before the /tingly/:scenario routes
-	statusHandler := statusline.NewHandler(s.config, s.loadBalancer, statusline.NewCache())
+	var quotaMgr statusline.QuotaManager
+	if qm, ok := s.quotaManager.(interface {
+		GetQuota(ctx context.Context, providerUUID string) (*quota.ProviderUsage, error)
+	}); ok {
+		quotaMgr = qm
+	}
+	statusHandler := statusline.NewHandler(s.config, s.loadBalancer, statusline.NewCache(), quotaMgr)
 	statusline.RegisterRoutes(s.engine, statusHandler)
 
 	// Claude Code notification hook endpoint (no auth required)

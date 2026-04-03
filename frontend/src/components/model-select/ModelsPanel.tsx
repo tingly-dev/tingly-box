@@ -16,7 +16,7 @@ import {
     Typography,
     Divider,
 } from '@mui/material';
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Provider } from '@/types/provider';
 import { getModelTypeInfo } from '@/utils/modelUtils';
 import { useCustomModels } from '@/hooks/useCustomModels';
@@ -30,6 +30,28 @@ import ModelCard from './ModelCard';
 import RecentModelsSection from './RecentModelsSection';
 import NewModelsSection from './NewModelsSection';
 import { QuotaBar } from './QuotaBar';
+
+async function fetchUIAPI(url: string, options: RequestInit = {}): Promise<any> {
+    const basePath = window.location.origin;
+    const fullUrl = `${basePath}/api/v1${url}`;
+
+    const token = localStorage.getItem('user_auth_token');
+
+    const response = await fetch(fullUrl, {
+        ...options,
+        headers: {
+            'Content-Type': 'application/json',
+            ...(token && { Authorization: `Bearer ${token}` }),
+            ...options.headers,
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+    }
+
+    return response.json();
+}
 
 export interface ModelsPanelProps {
     provider: Provider;
@@ -61,6 +83,9 @@ export function ModelsPanel({
     const { refreshTrigger } = useModelSelectContext();
     const { recentModels } = useRecentModels();
     const { newModels, clearNewModels } = useNewModels();
+
+    // Quota refresh state
+    const [isRefreshingQuota, setIsRefreshingQuota] = useState(false);
 
     // Get quota data for this provider
     const providerQuota = useMemo(() => {
@@ -163,6 +188,22 @@ export function ModelsPanel({
             detail: { providerUuid: provider.uuid, diff: data[provider.uuid] }
         }));
     }, [provider.uuid, providerModels]);
+
+    // Refresh quota for this provider
+    const refreshQuota = useCallback(async (providerUuid: string) => {
+        setIsRefreshingQuota(true);
+        try {
+            await fetchUIAPI(`/provider-quota/${providerUuid}/refresh`, {
+                method: 'POST',
+            });
+            // Refresh provider models to get updated quota
+            await fetchModels(providerUuid);
+        } catch (error) {
+            console.error('Failed to refresh quota:', error);
+        } finally {
+            setIsRefreshingQuota(false);
+        }
+    }, [fetchModels]);
 
     return (
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -359,9 +400,37 @@ export function ModelsPanel({
             {/* Provider Quota Bars - fixed at the bottom */}
             {quotaProp && quotaProp.primary && (
                 <Box sx={{ p: 2, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
-                    <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: 'block', fontWeight: 500 }}>
-                        Provider Quota
-                    </Typography>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+                            Provider Quota
+                        </Typography>
+                        <IconButton
+                            size="small"
+                            onClick={() => refreshQuota(provider.uuid)}
+                            disabled={isRefreshingQuota}
+                            sx={{
+                                p: 0.5,
+                                color: 'text.primary',
+                                '&:hover': {
+                                    bgcolor: 'action.hover',
+                                },
+                            }}
+                            title="Refresh quota"
+                        >
+                            <RefreshIcon
+                                sx={{
+                                    fontSize: 16,
+                                    ...(isRefreshingQuota && {
+                                        '@keyframes spin': {
+                                            '0%': { transform: 'rotate(0deg)' },
+                                            '100%': { transform: 'rotate(360deg)' },
+                                        },
+                                        animation: 'spin 1s linear infinite',
+                                    }),
+                                }}
+                            />
+                        </IconButton>
+                    </Stack>
                     <Stack spacing={1.5}>
                         {/* Primary quota */}
                         <Box>
