@@ -79,7 +79,7 @@ const Layout = ({ children }: LayoutProps) => {
     );
 
     return (
-        <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', backgroundColor: '#f8f9fa' }}>
+        <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', backgroundColor: 'f8f9fa' }}>
             {/* Desktop nav */}
             <Box component="nav" sx={{ display: { xs: 'none', md: 'flex' }, height: '100%' }}>
                 {navigationContent}

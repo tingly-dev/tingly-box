@@ -1,13 +1,16 @@
 import {
     AccountCircle as AccountIcon,
+    DarkMode,
     ErrorOutline,
+    LightMode,
     NewReleases,
 } from '@mui/icons-material';
-import { Box, Divider, ListItemButton, ListItemIcon, Tooltip, Typography } from '@mui/material';
-import React from 'react';
+import { Box, Divider, ListItemButton, ListItemIcon, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
+import React, { useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useHealth } from '../contexts/HealthContext';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
+import { useThemeMode } from '../contexts/ThemeContext';
 import {
     activityBarWidth,
     activityContainerPaddingY,
@@ -35,6 +38,16 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
     const { currentVersion } = useAppVersion();
     const { hasUpdate, showUpdateDialog } = useAppVersion();
     const { isHealthy, showDisconnectDialog } = useHealth();
+    const { mode, setTheme } = useThemeMode();
+    const [themeMenuAnchorEl, setThemeMenuAnchorEl] = useState<HTMLElement | null>(null);
+
+    const handleThemeMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+        setThemeMenuAnchorEl(event.currentTarget);
+    };
+
+    const handleThemeMenuClose = () => {
+        setThemeMenuAnchorEl(null);
+    };
 
     return (
         <Box
@@ -191,6 +204,68 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                         </ListItemButton>
                     </Tooltip>
                 )}
+
+                {/* Theme toggle button */}
+                <Tooltip title="Theme" placement="right" arrow>
+                    <ListItemButton
+                        onClick={handleThemeMenuClick}
+                        sx={activityItemSx({
+                            '&:hover': { bgcolor: 'action.hover' },
+                        })}
+                    >
+                        <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
+                            {mode === 'dark' ? (
+                                <DarkMode sx={{ fontSize: 22 }} />
+                            ) : (
+                                <LightMode sx={{ fontSize: 22 }} />
+                            )}
+                        </ListItemIcon>
+                        <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
+                            Theme
+                        </Typography>
+                    </ListItemButton>
+                </Tooltip>
+
+                {/* Theme menu */}
+                <Menu
+                    anchorEl={themeMenuAnchorEl}
+                    open={Boolean(themeMenuAnchorEl)}
+                    onClose={handleThemeMenuClose}
+                    anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                    transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                    slotProps={{
+                        paper: {
+                            sx: {
+                                minWidth: 160,
+                                mt: 1,
+                            },
+                        },
+                    }}
+                >
+                    <MenuItem
+                        selected={mode === 'light'}
+                        onClick={() => {
+                            setTheme('light');
+                            handleThemeMenuClose();
+                        }}
+                        sx={{ gap: 1.5 }}
+                    >
+                        <LightMode fontSize="small" />
+                        <Typography>Light</Typography>
+                    </MenuItem>
+                    <MenuItem
+                        selected={mode === 'dark'}
+                        onClick={() => {
+                            setTheme('dark');
+                            handleThemeMenuClose();
+                        }}
+                        sx={{ gap: 1.5 }}
+                    >
+                        <DarkMode fontSize="small" />
+                        <Typography>Dark</Typography>
+                    </MenuItem>
+                    {/* More themes can be added here in the future */}
+                </Menu>
             </Box>
 
             {/* Bottom: User icon */}
@@ -208,6 +283,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                     height: footerHeight,
                 }}
             >
+                {/* User icon */}
                 <Tooltip title="Click" placement="right" arrow>
                     <ListItemButton
                         onClick={onUserClick}
