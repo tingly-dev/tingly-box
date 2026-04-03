@@ -136,10 +136,10 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	req.ResponseNewParams = params
 	// req.Model is replaced with actualModel (resolved backend model) from this point on
 	req.Model = actualModel
-	s.ResponsesCreate(c, scenarioType, provider, req, rule.RequestModel, maxAllowed)
+	s.ResponsesCreate(c, scenarioType, provider, rule, req, rule.RequestModel, maxAllowed)
 }
 
-func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, provider *typ.Provider, req protocol.ResponseCreateRequest, responseModel string, maxAllowed int) {
+func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, provider *typ.Provider, rule *typ.Rule, req protocol.ResponseCreateRequest, responseModel string, maxAllowed int) {
 	actualModel := req.Model
 	isStreaming := req.Stream
 
@@ -186,100 +186,8 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 		return
 	}
 
-	// Dispatch based on target
-	switch target {
-	case protocol.TypeOpenAIResponses:
-		params := reqCtx.Request.(*responses.ResponseNewParams)
-		if isStreaming {
-			s.handleResponsesStreamingRequest(c, provider, *params, responseModel, actualModel)
-		} else {
-			s.handleResponsesNonStreamingRequest(c, provider, *params, responseModel, actualModel)
-		}
-
-	case protocol.TypeOpenAIChat:
-		chatReq := reqCtx.Request.(*openai.ChatCompletionNewParams)
-		if isStreaming {
-			wrapper := s.clientPool.GetOpenAIClient(provider, string(chatReq.Model))
-			fc := NewForwardContext(c.Request.Context(), provider)
-			chatStream, cancel, err := ForwardOpenAIChatStream(fc, wrapper, chatReq)
-			if cancel != nil {
-				defer cancel()
-			}
-			if err != nil {
-				s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{Message: "Failed to create streaming request: " + err.Error(), Type: "api_error"},
-				})
-				return
-			}
-			usage, err := HandleOpenAIChatToResponsesStream(c, chatStream, responseModel)
-			s.trackUsageWithTokenUsage(c, usage, err)
-		} else {
-			wrapper := s.clientPool.GetOpenAIClient(provider, string(chatReq.Model))
-			fc := NewForwardContext(nil, provider)
-			chatResp, _, err := ForwardOpenAIChat(fc, wrapper, chatReq)
-			if err != nil {
-				s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{Message: "Failed to forward request: " + err.Error(), Type: "api_error"},
-				})
-				return
-			}
-			inputTokens := chatResp.Usage.PromptTokens
-			outputTokens := chatResp.Usage.CompletionTokens
-			cacheTokens := chatResp.Usage.PromptTokensDetails.CachedTokens
-			s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil)
-			c.JSON(http.StatusOK, buildResponsesPayloadFromChat(chatResp, responseModel, actualModel))
-		}
-
-	case protocol.TypeAnthropicV1:
-		anthropicReq := reqCtx.Request.(*anthropic.MessageNewParams)
-		if isStreaming {
-			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
-			fc := NewForwardContext(c.Request.Context(), provider)
-			anthropicStream, cancel, err := ForwardAnthropicV1Stream(fc, wrapper, anthropicReq)
-			if cancel != nil {
-				defer cancel()
-			}
-			if err != nil {
-				s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{Message: "Failed to create streaming request: " + err.Error(), Type: "api_error"},
-				})
-				return
-			}
-
-			hc := protocol.NewHandleContext(c, responseModel)
-			firstTokenRecorded := false
-			hc.WithOnStreamEvent(func(_ interface{}) error {
-				if !firstTokenRecorded {
-					SetFirstTokenTime(c)
-					firstTokenRecorded = true
-				}
-				return nil
-			})
-			usage, err := HandleAnthropicToOpenAIResponsesStream(hc, anthropicStream, responseModel)
-			s.trackUsageWithTokenUsage(c, usage, err)
-		} else {
-			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
-			fc := NewForwardContext(nil, provider)
-			anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, anthropicReq)
-			if cancel != nil {
-				defer cancel()
-			}
-			if err != nil {
-				s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{Message: "Failed to forward request: " + err.Error(), Type: "api_error"},
-				})
-				return
-			}
-
-			cacheTokens := int(anthropicResp.Usage.CacheReadInputTokens)
-			s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(anthropicResp.Usage.InputTokens), int(anthropicResp.Usage.OutputTokens), cacheTokens), nil)
-			c.JSON(http.StatusOK, buildResponsesPayloadFromAnthropic(anthropicResp, responseModel, actualModel))
-		}
-	}
+	// Use unified dispatch
+	s.dispatchChainFromResponses(c, reqCtx, rule, provider, isStreaming, nil)
 }
 
 func buildResponsesPayloadFromChat(resp *openai.ChatCompletion, responseModel, actualModel string) map[string]any {
