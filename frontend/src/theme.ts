@@ -18,6 +18,11 @@ const SUNLIT_PALETTE = {
     default: 'transparent',
     paper: 'rgba(255, 255, 255, 0.75)',
     paperSolid: 'rgba(255, 255, 255, 0.92)',
+    gradient: {
+      start: '#e0f2fe', // sky-50 - lightest sky blue
+      middle: '#bae6fd', // sky-200 - medium sky blue
+      end: '#7dd3fc', // sky-300 - deeper sky blue
+    },
   },
   // Dashboard token colors for sunlit theme - sky and cloud inspired
   dashboard: {
@@ -148,6 +153,8 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
       mode: isSunlit ? 'light' : mode,
       primary: primaryColor,
       secondary: secondaryColor,
+      // Add identifier for sunlit theme
+      isSunlit: isSunlit,
       success: {
         main: isSunlit ? '#22c55e' : '#059669',
         light: isSunlit ? '#4ade80' : '#10b981',

@@ -59,7 +59,7 @@ const statusColors: Record<string, string> = {
     running: '#0891b2',
     completed: '#10b981',
     failed: '#ef4444',
-    pending: '#f59e0b',
+    pending: '#0ea5e9',
     closed: '#6b7280',
     expired: '#9ca3af',
 };

@@ -1,3 +1,4 @@
+import { useTheme } from '@mui/material/styles';
 import { useThemeMode } from '../contexts/ThemeContext';
 import { useEffect, useRef } from 'react';
 import { Z_INDEX } from '../constants/zIndex';
@@ -7,6 +8,7 @@ import { Z_INDEX } from '../constants/zIndex';
  * Minimal overhead, just leaves with subtle shadows
  */
 export const SunlitBackground: React.FC = () => {
+    const theme = useTheme();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const { mode } = useThemeMode();
     const isDark = mode === 'dark';
@@ -31,9 +33,11 @@ export const SunlitBackground: React.FC = () => {
             bgGradient.addColorStop(0, '#0f172a');
             bgGradient.addColorStop(1, '#1e293b');
         } else {
-            bgGradient.addColorStop(0, '#fff7ed');
-            bgGradient.addColorStop(0.5, '#fef3c7');
-            bgGradient.addColorStop(1, '#fde68a');
+            // Read gradient colors from theme palette
+            const gradientColors = (theme.palette.background as any).gradient;
+            bgGradient.addColorStop(0, gradientColors.start);
+            bgGradient.addColorStop(0.5, gradientColors.middle);
+            bgGradient.addColorStop(1, gradientColors.end);
         }
         ctx.fillStyle = bgGradient;
         ctx.fillRect(0, 0, w, h);
@@ -100,7 +104,7 @@ export const SunlitBackground: React.FC = () => {
                 cancelAnimationFrame(animationFrameRef.current);
             }
         };
-    }, [isDark]);
+    }, [isDark, theme]);
 
     return (
         <canvas

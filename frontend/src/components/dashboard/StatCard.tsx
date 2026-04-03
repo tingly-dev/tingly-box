@@ -14,17 +14,17 @@ export default function StatCard({ title, value, subtitle, icon, color = 'primar
 
     // Get theme-aware colors for stat cards
     const getColorMap = () => {
-        const palette = theme.palette;
+        const palette = theme.palette as any;
 
-        // For sunlit theme, use warmer tones
-        if ((palette as any).mode === 'light' && palette.primary.main === '#f59e0b') {
+        // For sunlit theme, use sky blue tones
+        if (palette.isSunlit || palette.mode === 'light' && palette.primary.main === '#0ea5e9') {
             return {
-                primary: { bg: 'rgba(245, 158, 11, 0.08)', text: '#f59e0b', hover: 'rgba(245, 158, 11, 0.12)' },
-                success: { bg: 'rgba(5, 150, 105, 0.08)', text: '#059669', hover: 'rgba(5, 150, 105, 0.12)' },
-                info: { bg: 'rgba(14, 165, 233, 0.08)', text: '#0ea5e9', hover: 'rgba(14, 165, 233, 0.12)' },
-                warning: { bg: 'rgba(245, 158, 11, 0.08)', text: '#f59e0b', hover: 'rgba(245, 158, 11, 0.12)' },
-                error: { bg: 'rgba(220, 38, 38, 0.08)', text: '#dc2626', hover: 'rgba(220, 38, 38, 0.12)' },
-                secondary: { bg: 'rgba(100, 116, 139, 0.08)', text: '#64748b', hover: 'rgba(100, 116, 139, 0.12)' },
+                primary: { bg: 'rgba(14, 165, 233, 0.1)', text: '#0ea5e9', hover: 'rgba(14, 165, 233, 0.15)' },
+                success: { bg: 'rgba(34, 197, 94, 0.1)', text: '#22c55e', hover: 'rgba(34, 197, 94, 0.15)' },
+                info: { bg: 'rgba(6, 182, 212, 0.1)', text: '#06b6d4', hover: 'rgba(6, 182, 212, 0.15)' },
+                warning: { bg: 'rgba(245, 158, 11, 0.1)', text: '#f59e0b', hover: 'rgba(245, 158, 11, 0.15)' },
+                error: { bg: 'rgba(239, 68, 68, 0.1)', text: '#ef4444', hover: 'rgba(239, 68, 68, 0.15)' },
+                secondary: { bg: 'rgba(99, 102, 241, 0.1)', text: '#6366f1', hover: 'rgba(99, 102, 241, 0.15)' },
             };
         }
 

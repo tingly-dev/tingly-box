@@ -102,7 +102,7 @@ const Guiding = () => {
                     description: 'Use OpenCode for AI coding workflows',
                     path: '/use-opencode',
                     icon: <CodeIcon sx={{ fontSize: 40 }} />,
-                    color: '#f59e0b',
+                    color: '#0ea5e9',
                 },
             ],
         },
