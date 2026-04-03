@@ -1,23 +1,23 @@
 import { createTheme, type ThemeOptions } from '@mui/material/styles';
 
-// Sunlit theme palette - warm, natural tones that complement the blinds effect
+// Sunlit theme palette - warm, sunny tones
 const SUNLIT_PALETTE = {
   primary: {
-    main: '#d97706', // Warm amber/orange for sunlit theme
-    light: '#f59e0b',
-    dark: '#b45309',
+    main: '#f59e0b', // Warm amber - softer
+    light: '#fbbf24',
+    dark: '#d97706',
     contrastText: '#ffffff',
   },
   secondary: {
-    main: '#78716c', // Warm stone gray
-    light: '#a8a29e',
-    dark: '#57534e',
+    main: '#059669', // Fresh green - matches leaves
+    light: '#10b981',
+    dark: '#047857',
     contrastText: '#ffffff',
   },
   background: {
     default: 'transparent',
-    paper: 'rgba(255, 255, 255, 0.6)', // Semi-transparent white
-    paperSolid: 'rgba(255, 255, 255, 0.85)', // Less transparent for important cards
+    paper: 'rgba(255, 255, 255, 0.7)',
+    paperSolid: 'rgba(255, 255, 255, 0.9)',
   },
 };
 
@@ -45,12 +45,12 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
     paper: isDark ? '#1e293b' : '#ffffff',
   };
 
-  // Text colors - darker for sunlit theme to be readable on light backgrounds
-  const textPrimary = isSunlit ? '#1c1917' : (isDark ? '#f1f5f9' : '#1e293b');
-  const textSecondary = isSunlit ? '#57534e' : (isDark ? '#94a3b8' : '#64748b');
+  // Text colors - warm tones for sunlit theme
+  const textPrimary = isSunlit ? '#292524' : (isDark ? '#f1f5f9' : '#1e293b');
+  const textSecondary = isSunlit ? '#78716c' : (isDark ? '#94a3b8' : '#64748b');
   const textDisabled = isSunlit ? '#a8a29e' : (isDark ? '#64748b' : '#94a3b8');
 
-  const dividerColor = isSunlit ? 'rgba(0, 0, 0, 0.08)' : (isDark ? '#334155' : '#e2e8f0');
+  const dividerColor = isSunlit ? 'rgba(0, 0, 0, 0.06)' : (isDark ? '#334155' : '#e2e8f0');
 
   return {
     palette: {
@@ -141,20 +141,18 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
         styleOverrides: {
           root: {
             boxShadow: isSunlit
-              ? '0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05)'
+              ? '0 4px 16px rgba(245, 158, 11, 0.15), 0 2px 6px rgba(0, 0, 0, 0.08)'
               : (isDark
                 ? '0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px 0 rgba(0, 0, 0, 0.2)'
                 : '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)'),
-            borderRadius: 8,
+            borderRadius: 12,
             border: isSunlit
-              ? '1px solid rgba(255, 255, 255, 0.3)'
+              ? '1px solid rgba(245, 158, 11, 0.2)'
               : (isDark ? '1px solid #334155' : '1px solid #e2e8f0'),
             backgroundColor: isSunlit
-              ? 'rgba(255, 255, 255, 0.65)'
+              ? 'rgba(255, 255, 255, 0.75)'
               : (isDark ? '#1e293b' : '#ffffff'),
-            // Use lighter blur for better performance
-            backdropFilter: isSunlit ? 'blur(8px)' : 'none',
-            willChange: isSunlit ? 'auto' : undefined,
+            backdropFilter: isSunlit ? 'blur(12px)' : 'none',
           },
         },
       },
@@ -162,10 +160,10 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
         styleOverrides: {
           root: {
             '&.nav-item-active': {
-              backgroundColor: isSunlit ? '#d97706' : '#2563eb',
+              backgroundColor: isSunlit ? '#f59e0b' : '#2563eb',
               color: '#ffffff',
               '&:hover': {
-                backgroundColor: isSunlit ? '#b45309' : '#1d4ed8',
+                backgroundColor: isSunlit ? '#d97706' : '#1d4ed8',
               },
               '& .MuiListItemIcon-root': {
                 color: '#ffffff',
@@ -195,11 +193,11 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
           },
           contained: {
             background: isSunlit
-              ? 'linear-gradient(135deg, #d97706 0%, #b45309 100%)'
+              ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
               : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
             '&:hover': {
               background: isSunlit
-                ? 'linear-gradient(135deg, #b45309 0%, #92400e 100%)'
+                ? 'linear-gradient(135deg, #d97706 0%, #b45309 100%)'
                 : 'linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)',
             },
           },
@@ -226,7 +224,7 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
                 borderColor: isSunlit ? 'rgba(0, 0, 0, 0.25)' : (isDark ? '#64748b' : '#9ca3af'),
               },
               '&.Mui-focused fieldset': {
-                borderColor: isSunlit ? '#d97706' : '#2563eb',
+                borderColor: isSunlit ? '#f59e0b' : '#2563eb',
                 borderWidth: 1,
               },
             },
@@ -243,7 +241,7 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
               borderColor: isSunlit ? 'rgba(0, 0, 0, 0.25)' : (isDark ? '#64748b' : '#9ca3af'),
             },
             '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: isSunlit ? '#d97706' : '#2563eb',
+              borderColor: isSunlit ? '#f59e0b' : '#2563eb',
               borderWidth: 1,
             },
           },
@@ -281,7 +279,7 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
           indicator: {
             height: 4,
             borderRadius: 2,
-            backgroundColor: isSunlit ? '#d97706' : '#2563eb',
+            backgroundColor: isSunlit ? '#f59e0b' : '#2563eb',
           },
         },
       },
