@@ -56,6 +56,19 @@ type Payload struct {
 	Response any    `json:"-" yaml:"-"`
 }
 
+// ContextSetter is a narrow request-scoped side-effect surface used by
+// pipelines that need to publish runtime metadata without depending on a
+// concrete transport such as gin.
+type ContextSetter interface {
+	Set(key string, value any)
+}
+
+// InputRuntime stores request-scoped runtime integrations for one processing
+// run. These hooks are optional and should not be used by policy evaluators.
+type InputRuntime struct {
+	ContextSetter ContextSetter `json:"-" yaml:"-"`
+}
+
 // InputState stores runtime-only state associated with one guardrails
 // processing run. Policy evaluators should rely on the semantic fields on Input
 // and not depend on these mutable runtime details.
@@ -75,6 +88,7 @@ type Input struct {
 	Metadata  map[string]interface{} `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 	Payload   Payload                `json:"-" yaml:"-"`
 	State     InputState             `json:"-" yaml:"-"`
+	Runtime   InputRuntime           `json:"-" yaml:"-"`
 }
 
 // Text returns the combined text for guardrails matching.
@@ -103,6 +117,15 @@ func (i Input) RequestModel() string {
 		return model
 	}
 	return ""
+}
+
+// SetContextValue publishes a request-scoped runtime value when an optional
+// context setter is attached to the input.
+func (i Input) SetContextValue(key string, value any) {
+	if i.Runtime.ContextSetter == nil {
+		return
+	}
+	i.Runtime.ContextSetter.Set(key, value)
 }
 
 // PolicyType identifies a policy evaluator implementation.
