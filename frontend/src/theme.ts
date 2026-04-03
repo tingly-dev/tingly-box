@@ -65,7 +65,7 @@ const DARK_DASHBOARD_COLORS = {
   },
   chart: {
     grid: 'rgba(255, 255, 255, 0.08)',
-    axis: 'rgba(255, 255, 255, 0.15)',
+    axis: 'rgba(255, 255, 255, 0.2)',
     tooltipBg: '#1e293b',
     tooltipBorder: '#334155',
   },
@@ -127,9 +127,9 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
   };
 
   // Text colors - warm tones for sunlit theme
-  const textPrimary = isSunlit ? '#292524' : (isDark ? '#f1f5f9' : '#1e293b');
-  const textSecondary = isSunlit ? '#78716c' : (isDark ? '#94a3b8' : '#64748b');
-  const textDisabled = isSunlit ? '#a8a29e' : (isDark ? '#64748b' : '#94a3b8');
+  const textPrimary = isSunlit ? '#292524' : (isDark ? '#f8fafc' : '#1e293b');
+  const textSecondary = isSunlit ? '#78716c' : (isDark ? '#cbd5e1' : '#64748b');
+  const textDisabled = isSunlit ? '#a8a29e' : (isDark ? '#94a3b8' : '#94a3b8');
 
   const dividerColor = isSunlit ? 'rgba(0, 0, 0, 0.06)' : (isDark ? '#334155' : '#e2e8f0');
 
