@@ -478,10 +478,16 @@ func (s *Server) dispatchChainFromResponses(
 
 	logrus.Debugf("[Anthropic Beta] Using Transform Chain for Responses API for model=%s", actualModel)
 
-	req := reqCtx.Request.(*responses.ResponseNewParams)
-
 	switch reqCtx.SourceAPI {
 	case protocol.TypeAnthropicV1:
+		req, ok := reqCtx.Request.(*responses.ResponseNewParams)
+		if !ok {
+			stream.SendInternalError(c, fmt.Sprintf("invalid request type for Responses dispatch: expected *responses.ResponseNewParams, got %T", reqCtx.Request))
+			if recorder != nil {
+				recorder.RecordError(fmt.Errorf("invalid request type for Responses dispatch: %T", reqCtx.Request))
+			}
+			return
+		}
 		logrus.Debugf("[AnthropicV1] Using Transform Chain for Responses API for model=%s", actualModel)
 		if isStreaming {
 			s.streamAnthropicV1ToResponses(c, reqCtx, rule, provider, isStreaming, recorder)
@@ -491,6 +497,14 @@ func (s *Server) dispatchChainFromResponses(
 			s.nonstreamAnthropicV1ToResponses(c, reqCtx, rule, provider, isStreaming, recorder)
 		}
 	case protocol.TypeAnthropicBeta:
+		req, ok := reqCtx.Request.(*responses.ResponseNewParams)
+		if !ok {
+			stream.SendInternalError(c, fmt.Sprintf("invalid request type for Responses dispatch: expected *responses.ResponseNewParams, got %T", reqCtx.Request))
+			if recorder != nil {
+				recorder.RecordError(fmt.Errorf("invalid request type for Responses dispatch: %T", reqCtx.Request))
+			}
+			return
+		}
 		logrus.Debugf("[Anthropic Beta] Using Transform Chain for Responses API for model=%s", actualModel)
 		if isStreaming {
 			s.handleAnthropicV1BetaViaResponsesAPIStreaming(c, responseModel, actualModel, provider, *req)
@@ -504,11 +518,24 @@ func (s *Server) dispatchChainFromResponses(
 		// Forward as Chat, then convert response back to Responses format
 		s.dispatchOpenAIChatFromResponses(c, reqCtx, rule, provider, isStreaming, recorder)
 	case protocol.TypeOpenAIResponses:
-		// Responses API passthrough
-		if isStreaming {
-			s.streamOpenAIResponses(c, reqCtx, rule, provider, isStreaming, recorder)
-		} else {
-			s.nonstreamOpenAIResponses(c, reqCtx, rule, provider, isStreaming, recorder)
+		switch reqCtx.Request.(type) {
+		case *responses.ResponseNewParams:
+			if isStreaming {
+				s.streamOpenAIResponses(c, reqCtx, rule, provider, isStreaming, recorder)
+			} else {
+				s.nonstreamOpenAIResponses(c, reqCtx, rule, provider, isStreaming, recorder)
+			}
+		case *openai.ChatCompletionNewParams:
+			if isStreaming {
+				s.streamOpenAIChatToResponses(c, reqCtx, rule, provider, isStreaming, recorder)
+			} else {
+				s.nonstreamOpenAIChatToResponses(c, reqCtx, rule, provider, isStreaming, recorder)
+			}
+		default:
+			stream.SendInternalError(c, fmt.Sprintf("invalid request type for OpenAI Responses dispatch: got %T", reqCtx.Request))
+			if recorder != nil {
+				recorder.RecordError(fmt.Errorf("invalid request type for OpenAI Responses dispatch: %T", reqCtx.Request))
+			}
 		}
 	}
 }
@@ -766,7 +793,15 @@ func (s *Server) nonstreamOpenAIResponses(
 	isStreaming bool, recorder *ProtocolRecorder,
 ) {
 	responseModel := reqCtx.ResponseModel
-	params := reqCtx.Request.(*responses.ResponseNewParams)
+	params, ok := reqCtx.Request.(*responses.ResponseNewParams)
+	if !ok {
+		err := fmt.Errorf("invalid request type for nonstreamOpenAIResponses: %T", reqCtx.Request)
+		stream.SendInternalError(c, err.Error())
+		if recorder != nil {
+			recorder.RecordError(err)
+		}
+		return
+	}
 
 	// Forward request to provider
 	var response *responses.Response
@@ -835,7 +870,15 @@ func (s *Server) streamOpenAIResponses(
 	isStreaming bool, recorder *ProtocolRecorder,
 ) {
 	responseModel := reqCtx.ResponseModel
-	params := reqCtx.Request.(*responses.ResponseNewParams)
+	params, ok := reqCtx.Request.(*responses.ResponseNewParams)
+	if !ok {
+		err := fmt.Errorf("invalid request type for streamOpenAIResponses: %T", reqCtx.Request)
+		stream.SendInternalError(c, err.Error())
+		if recorder != nil {
+			recorder.RecordError(err)
+		}
+		return
+	}
 
 	// Create streaming request with request context for proper cancellation
 	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
