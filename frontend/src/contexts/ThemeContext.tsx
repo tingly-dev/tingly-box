@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 
-type ThemeMode = 'light' | 'dark';
+type ThemeMode = 'light' | 'dark' | 'sunlit';
 
 interface ThemeContextType {
   mode: ThemeMode;
@@ -28,7 +28,7 @@ export const ThemeModeProvider: React.FC<ThemeModeProviderProps> = ({ children }
   const [mode, setMode] = useState<ThemeMode>(() => {
     // Check localStorage first
     const stored = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
-    if (stored === 'light' || stored === 'dark') {
+    if (stored === 'light' || stored === 'dark' || stored === 'sunlit') {
       return stored;
     }
     // Check system preference
@@ -39,7 +39,11 @@ export const ThemeModeProvider: React.FC<ThemeModeProviderProps> = ({ children }
   });
 
   const toggleTheme = () => {
-    setMode((prev) => (prev === 'light' ? 'dark' : 'light'));
+    setMode((prev) => {
+      if (prev === 'light') return 'dark';
+      if (prev === 'dark') return 'sunlit';
+      return 'light';
+    });
   };
 
   const setTheme = (newMode: ThemeMode) => {
@@ -50,7 +54,7 @@ export const ThemeModeProvider: React.FC<ThemeModeProviderProps> = ({ children }
     // Persist to localStorage
     localStorage.setItem(STORAGE_KEY, mode);
     // Update document class for any CSS that depends on it
-    document.documentElement.classList.remove('light', 'dark');
+    document.documentElement.classList.remove('light', 'dark', 'sunlit');
     document.documentElement.classList.add(mode);
   }, [mode]);
 

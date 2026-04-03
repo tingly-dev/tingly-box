@@ -4,6 +4,7 @@ import {
     ErrorOutline,
     LightMode,
     NewReleases,
+    WbSunny,
 } from '@mui/icons-material';
 import { Box, Divider, ListItemButton, ListItemIcon, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
 import React, { useState } from 'react';
@@ -216,6 +217,8 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                         <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
                             {mode === 'dark' ? (
                                 <DarkMode sx={{ fontSize: 22 }} />
+                            ) : mode === 'sunlit' ? (
+                                <WbSunny sx={{ fontSize: 22 }} />
                             ) : (
                                 <LightMode sx={{ fontSize: 22 }} />
                             )}
@@ -264,7 +267,17 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                         <DarkMode fontSize="small" />
                         <Typography>Dark</Typography>
                     </MenuItem>
-                    {/* More themes can be added here in the future */}
+                    <MenuItem
+                        selected={mode === 'sunlit'}
+                        onClick={() => {
+                            setTheme('sunlit');
+                            handleThemeMenuClose();
+                        }}
+                        sx={{ gap: 1.5 }}
+                    >
+                        <WbSunny fontSize="small" />
+                        <Typography>Sunlit</Typography>
+                    </MenuItem>
                 </Menu>
             </Box>
 
