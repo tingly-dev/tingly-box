@@ -35,8 +35,5 @@ func (s *Server) BuildTransformChain(c *gin.Context, targetType protocol.APIType
 		transforms = append(transforms, NewPostTransformRecorder(recorder, c))
 	}
 
-	// 4. Vendor transform
-	transforms = append(transforms, transform.NewVendorTransform(providerURL))
-
 	return transform.NewTransformChain(transforms), nil
 }
