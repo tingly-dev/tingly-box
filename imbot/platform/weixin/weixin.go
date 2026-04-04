@@ -6,13 +6,17 @@ package weixin
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/weixin/api"
-	"github.com/tingly-dev/weixin/message"
+	wxmessage "github.com/tingly-dev/weixin/message"
+	"github.com/tingly-dev/weixin/message/media"
 	"github.com/tingly-dev/weixin/types"
 	"github.com/tingly-dev/weixin/wechat"
 )
@@ -312,7 +316,7 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 	}
 	// If no context token in metadata, try to get from storage
 	if contextToken == "" {
-		contextToken = message.GetContextToken(b.accountID, target)
+		contextToken = wxmessage.GetContextToken(b.accountID, target)
 	}
 
 	// Send via API - use simple text message
@@ -334,12 +338,122 @@ func (b *Bot) sendMedia(ctx context.Context, target string, opts *core.SendMessa
 		return nil, core.NewBotError(core.ErrUnknown, "no media to send", false)
 	}
 
-	// For now, send the first media item
-	_ = opts.Media[0]
+	// Get context token for reply
+	contextToken := wxmessage.GetContextToken(b.accountID, target)
+	if opts.Metadata != nil {
+		if ct, ok := opts.Metadata["context_token"].(string); ok && ct != "" {
+			contextToken = ct
+		}
+	}
 
-	// TODO: Implement media upload via CDN
-	// For now, return an error
-	return nil, core.NewBotError(core.ErrMediaNotSupported, "media upload not yet implemented", false)
+	// Process each media item
+	// For now, we send the first media item with optional caption text
+	mediaItem := opts.Media[0]
+
+	// Get local file path from URL or use the URL directly
+	filePath := mediaItem.URL
+	if filePath == "" {
+		return nil, core.NewBotError(core.ErrMediaNotSupported, "media URL is required", false)
+	}
+
+	// Check if file exists locally, if not, try to download it
+	var localPath string
+	if _, err := os.Stat(filePath); err == nil {
+		// File exists locally
+		localPath = filePath
+	} else {
+		// File doesn't exist, try to download from URL
+		tempDir := filepath.Join(os.TempDir(), "tingly-box-weixin")
+		downloadedPath, err := media.DownloadRemoteMediaToTemp(ctx, filePath, tempDir)
+		if err != nil {
+			return nil, core.WrapError(err, core.PlatformWeixin, core.ErrMediaNotSupported)
+		}
+		localPath = downloadedPath
+		defer os.Remove(localPath) // Clean up temp file
+	}
+
+	// Determine media type
+	mediaType := b.getMediaType(mediaItem.Type)
+
+	// Get CDN base URL (use account's CDN URL or default)
+	cdnBaseURL := b.account.CDNBaseURL
+	if cdnBaseURL == "" {
+		cdnBaseURL = "https://novac2c.cdn.weixin.qq.com/c2c"
+	}
+
+	// Upload media to WeChat CDN
+	uploaded, err := media.UploadMediaToCDN(
+		ctx,
+		localPath,
+		target, // toUserID
+		b.account.BaseURL,
+		cdnBaseURL,
+		b.account.BotToken,
+		mediaType,
+	)
+	if err != nil {
+		return nil, core.WrapError(err, core.PlatformWeixin, core.ErrMediaNotSupported)
+	}
+
+	// Build message items
+	var items []api.MessageItem
+
+	// Add text caption if provided
+	if opts.Text != "" {
+		items = append(items, wxmessage.BuildTextItem(opts.Text))
+	}
+
+	// Add media item based on type
+	switch mediaItem.Type {
+	case "image":
+		items = append(items, wxmessage.BuildImageItemFromUpload(uploaded, 0))
+	case "video":
+		items = append(items, wxmessage.BuildVideoItemFromUpload(uploaded, uploaded.FileSize))
+	case "audio", "voice":
+		// Build voice item manually since BuildVoiceItemFromUpload doesn't exist
+		items = append(items, wxmessage.BuildVoiceItem(
+			uploaded.DownloadEncryptedQueryParam,
+			formatBase64Key(uploaded.AESKey),
+		))
+	default:
+		// Treat as file
+		fileName := mediaItem.Filename
+		if fileName == "" {
+			fileName = filepath.Base(localPath)
+		}
+		items = append(items, wxmessage.BuildFileItemFromUpload(uploaded, fileName, uploaded.FileSize))
+	}
+
+	// Send the message
+	if err := b.client.SendMessage(ctx, target, contextToken, items); err != nil {
+		return nil, core.WrapError(err, core.PlatformWeixin, core.ErrPlatformError)
+	}
+
+	b.UpdateLastActivity()
+	now := time.Now().Unix()
+	return &core.SendResult{
+		MessageID: fmt.Sprintf("weixin-media-%d", now),
+		Timestamp: now,
+	}, nil
+}
+
+// getMediaType converts core media type to WeChat media type constant
+func (b *Bot) getMediaType(mediaType string) int {
+	switch mediaType {
+	case "image":
+		return types.UploadMediaTypeImage
+	case "video":
+		return types.UploadMediaTypeVideo
+	case "audio", "voice":
+		return types.UploadMediaTypeVoice
+	default:
+		return types.UploadMediaTypeFile
+	}
+}
+
+// formatBase64Key converts a raw AES key to base64 encoded string
+func formatBase64Key(key []byte) string {
+	return base64.StdEncoding.EncodeToString(key)
 }
 
 // receiveMessages receives messages via long-polling
