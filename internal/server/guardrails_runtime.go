@@ -217,7 +217,7 @@ func (s *Server) attachGuardrailsHooks(c *gin.Context, hc *protocol.HandleContex
 			if result.BlockToolID == "" || result.BlockMessage == "" {
 				return
 			}
-			s.recordGuardrailsHistory(c, baseInput, result.Result, "tool_use", result.BlockMessage)
+			s.recordGuardrailsHistory(baseInput, result.Result, "tool_use", result.BlockMessage)
 			stream.RegisterGuardrailsBlock(c, result.BlockToolID, result.BlockIndex, result.BlockMessage)
 		}),
 		WithGuardrailsOnVerdict(func(result GuardrailsHookResult) {
@@ -232,7 +232,7 @@ func (s *Server) attachGuardrailsHooks(c *gin.Context, hc *protocol.HandleContex
 				// second near-identical response entry when the final verdict points at
 				// the same blocked tool_use.
 				if result.BlockToolID == "" {
-					s.recordGuardrailsHistory(c, baseInput, result.Result, "response", result.BlockMessage)
+					s.recordGuardrailsHistory(baseInput, result.Result, "response", result.BlockMessage)
 				}
 			}
 			if result.Err != nil {
@@ -277,7 +277,7 @@ func (s *Server) applyGuardrailsToAnthropicV1Request(c *gin.Context, req *anthro
 	}
 
 	if mutation.ToolResult.Evaluation.Result.Verdict == guardrailscore.VerdictBlock {
-		s.recordGuardrailsHistory(c, mutation.ToolResult.Input, mutation.ToolResult.Evaluation.Result, "tool_result", "")
+		s.recordGuardrailsHistory(mutation.ToolResult.Input, mutation.ToolResult.Evaluation.Result, "tool_result", "")
 	}
 	if mutation.ToolResult.Changed {
 		logrus.Debugf("Guardrails: tool_result replaced (v1) len=%d", len(mutation.ToolResult.Message))
@@ -313,9 +313,6 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaRequest(c *gin.Context, req *an
 		return
 	}
 
-	if mutation.ToolResult.Evaluation.Result.Verdict == guardrailscore.VerdictBlock {
-		s.recordGuardrailsHistory(c, mutation.ToolResult.Input, mutation.ToolResult.Evaluation.Result, "tool_result", "")
-	}
 	if mutation.ToolResult.Changed {
 		logrus.Debugf("Guardrails: tool_result replaced (v1beta) len=%d", len(mutation.ToolResult.Message))
 	}

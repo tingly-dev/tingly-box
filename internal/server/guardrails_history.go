@@ -51,7 +51,7 @@ func sortedMaskHistoryKeys(values map[string]struct{}) []string {
 	return out
 }
 
-func (s *Server) recordGuardrailsHistory(c *gin.Context, input guardrailscore.Input, result guardrailscore.Result, phase, blockMessage string) {
+func (s *Server) recordGuardrailsHistory(input guardrailscore.Input, result guardrailscore.Result, phase, blockMessage string) {
 	if s.guardrailsRuntime == nil || s.guardrailsRuntime.History == nil {
 		return
 	}
@@ -74,7 +74,7 @@ func (s *Server) recordGuardrailsHistory(c *gin.Context, input guardrailscore.In
 	if input.Content.Command != nil {
 		entry.CommandName = input.Content.Command.Name
 	}
-	s.guardrailsRuntime.History.Add(entry, writeFileAtomic)
+	s.guardrailsRuntime.History.Add(entry)
 }
 
 // recordGuardrailsMaskHistory stores a dedicated history row for credential
@@ -103,7 +103,7 @@ func (s *Server) recordGuardrailsMaskHistory(c *gin.Context, input guardrailscor
 	if input.Content.Command != nil {
 		entry.CommandName = input.Content.Command.Name
 	}
-	s.guardrailsRuntime.History.Add(entry, writeFileAtomic)
+	s.guardrailsRuntime.History.Add(entry)
 }
 
 // resolveGuardrailsCredentialNames maps credential ids to stable display names

@@ -57,7 +57,7 @@ func (s *Server) applyGuardrailsToAnthropicV1NonStreamResponse(c *gin.Context, a
 		blockMessage = BlockMessageForCommand(hookResult.Result, input.Content.Command.Name, input.Content.Command.Arguments)
 	}
 	c.Set("guardrails_block_message", blockMessage)
-	s.recordGuardrailsHistory(c, input, hookResult.Result, "response", blockMessage)
+	s.recordGuardrailsHistory(input, hookResult.Result, "response", blockMessage)
 	overwriteAnthropicResponse(resp, blockMessage)
 	return true
 }
@@ -106,7 +106,7 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Contex
 		blockMessage = BlockMessageForCommand(hookResult.Result, input.Content.Command.Name, input.Content.Command.Arguments)
 	}
 	c.Set("guardrails_block_message", blockMessage)
-	s.recordGuardrailsHistory(c, input, hookResult.Result, "response", blockMessage)
+	s.recordGuardrailsHistory(input, hookResult.Result, "response", blockMessage)
 	overwriteAnthropicBetaResponse(resp, blockMessage)
 	return true
 }

@@ -2,12 +2,14 @@ package pipeline
 
 import (
 	"context"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
 	guardrails "github.com/tingly-dev/tingly-box/internal/guardrails"
 	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
+	guardrailsutils "github.com/tingly-dev/tingly-box/internal/guardrails/utils"
 )
 
 // CredentialMaskMutation captures the request-side aliasing outcome.
@@ -71,6 +73,9 @@ func ProcessAnthropicBetaRequest(
 		toolResult.Input.SetContextValue("guardrails_block_message", toolResult.Message)
 		toolResult.Input.SetContextValue("guardrails_block_index", 0)
 	}
+	if toolResult.Evaluation.Result.Verdict == guardrailscore.VerdictBlock {
+		recordGuardrailsHistory(runtime, toolResult.Input, toolResult.Evaluation.Result, "tool_result", "")
+	}
 
 	postToolResult := refreshAnthropicBetaRequestInput(initialInput)
 	out.PostToolResult = postToolResult
@@ -97,6 +102,38 @@ func ProcessAnthropicBetaRequest(
 	out.PostCredentialMask = postMask
 	out.Input = postMask
 	return out, nil
+}
+
+func recordGuardrailsHistory(
+	runtime *guardrails.Guardrails,
+	input guardrailscore.Input,
+	result guardrailscore.Result,
+	phase string,
+	blockMessage string,
+) {
+	if runtime == nil || runtime.History == nil {
+		return
+	}
+
+	credentialRefs := guardrailsutils.CollectCredentialRefs(result)
+	entry := guardrailsutils.Entry{
+		Time:            time.Now(),
+		Scenario:        input.Scenario,
+		Model:           input.Model,
+		Provider:        input.ProviderName(),
+		Direction:       string(input.Direction),
+		Phase:           phase,
+		Verdict:         string(result.Verdict),
+		BlockMessage:    blockMessage,
+		Preview:         input.Content.LatestPreview(160),
+		CredentialRefs:  credentialRefs,
+		CredentialNames: runtime.CredentialNames(credentialRefs),
+		Reasons:         append([]guardrailscore.PolicyResult(nil), result.Reasons...),
+	}
+	if input.Content.Command != nil {
+		entry.CommandName = input.Content.Command.Name
+	}
+	runtime.History.Add(entry)
 }
 
 func refreshAnthropicBetaRequestInput(input guardrailscore.Input) guardrailscore.Input {

@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"sync"
@@ -76,7 +77,7 @@ func (s *Store) load() {
 	s.entries = entries
 }
 
-func (s *Store) Add(entry Entry, persist func(path string, data []byte) error) {
+func (s *Store) Add(entry Entry) {
 	s.mu.Lock()
 	if len(s.entries) > 0 && sameEntry(s.entries[0], entry) {
 		s.mu.Unlock()
@@ -89,7 +90,7 @@ func (s *Store) Add(entry Entry, persist func(path string, data []byte) error) {
 	snapshot := append([]Entry(nil), s.entries...)
 	s.mu.Unlock()
 
-	s.persist(snapshot, persist)
+	s.persist(snapshot)
 }
 
 func (s *Store) List(limit int) []Entry {
@@ -104,15 +105,15 @@ func (s *Store) List(limit int) []Entry {
 	return out
 }
 
-func (s *Store) Clear(persist func(path string, data []byte) error) {
+func (s *Store) Clear() {
 	s.mu.Lock()
 	s.entries = nil
 	s.mu.Unlock()
 
-	s.persist([]Entry{}, persist)
+	s.persist([]Entry{})
 }
 
-func (s *Store) persist(entries []Entry, persist func(path string, data []byte) error) {
+func (s *Store) persist(entries []Entry) {
 	if s.path == "" {
 		return
 	}
@@ -122,9 +123,21 @@ func (s *Store) persist(entries []Entry, persist func(path string, data []byte) 
 		logrus.WithError(err).Warn("Guardrails history: failed to encode entries")
 		return
 	}
-	if err := persist(s.path, data); err != nil {
+	if err := writeFileAtomic(s.path, data); err != nil {
 		logrus.WithError(err).Warnf("Guardrails history: failed to persist %s", s.path)
 	}
+}
+
+func writeFileAtomic(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 func CollectCredentialRefs(result guardrailscore.Result) []string {
