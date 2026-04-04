@@ -1160,7 +1160,7 @@ func (s *Server) GetGuardrailsHistory(c *gin.Context) {
 // ClearGuardrailsHistory deletes all persisted guardrails history rows.
 func (s *Server) ClearGuardrailsHistory(c *gin.Context) {
 	if s.guardrailsRuntime != nil && s.guardrailsRuntime.History != nil {
-		s.guardrailsRuntime.History.Clear(writeFileAtomic)
+		s.guardrailsRuntime.History.Clear()
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
