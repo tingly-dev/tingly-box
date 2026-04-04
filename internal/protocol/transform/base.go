@@ -93,7 +93,7 @@ func (t *BaseTransform) convertToOpenAIChat(ctx *TransformContext, disableStream
 
 	case *openai.ChatCompletionNewParams:
 		// Already in OpenAI Chat format, no protocol conversion needed
-		// But we need to build proper config for vendor transforms
+		// Build fresh config for vendor transforms to detect thinking/cursor settings
 		ctx.Config.OpenAIConfig = buildOpenAIConfigFromRequest(req)
 
 		ctx.Request = req
@@ -288,7 +288,7 @@ func buildOpenAIConfigFromRequest(req *openai.ChatCompletionNewParams) *protocol
 	// Check if request has thinking configuration in extra_fields
 	extraFields := req.ExtraFields()
 	if extraFields == nil {
-		extraFields = map[string]interface{}{}
+		return config
 	}
 
 	// Check for thinking field (used by Anthropic client → OpenAI Chat conversion)
@@ -296,13 +296,17 @@ func buildOpenAIConfigFromRequest(req *openai.ChatCompletionNewParams) *protocol
 		if thinkingMap, ok := thinking.(map[string]interface{}); ok {
 			config.HasThinking = true
 			// Extract reasoning effort if specified
+			// Valid values per OpenAI docs: "none", "minimal", "low", "medium", "high", "xhigh"
+			// See: https://platform.openai.com/docs/guides/reasoning
 			if effortRaw, ok := thinkingMap["effort"]; ok {
 				if effort, ok := effortRaw.(string); ok {
 					config.ReasoningEffort = shared.ReasoningEffort(effort)
 				} else {
+					// Non-string effort: default to low as safe fallback
 					config.ReasoningEffort = shared.ReasoningEffortLow
 				}
 			} else {
+				// No effort specified: default to low
 				config.ReasoningEffort = shared.ReasoningEffortLow
 			}
 		}
