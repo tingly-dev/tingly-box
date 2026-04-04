@@ -275,16 +275,185 @@ jobs:
             -f release_tag="${{ needs.setup.outputs.release_tag }}"
           echo "Triggered docker-npx.yml workflow"
 
+  # Validate NPX packages work correctly on all platforms
+  validate-npx:
+    needs: [setup, publish-cli-bundle]
+    name: Validate NPX on ${{ matrix.platform }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    if: |
+      always() &&
+      needs.publish-cli-bundle.result == 'success' &&
+      needs.setup.outputs.publish_cli == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: amd64
+          - os: macos-latest
+            platform: macos
+            arch: arm64
+          - os: macos-15-intel
+            platform: macos
+            arch: amd64
+          - os: windows-latest
+            platform: windows
+            arch: amd64
+
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Wait for npm registry propagation
+        shell: bash
+        run: |
+          VERSION="${{ needs.setup.outputs.npx_version }}"
+          PKG_NAME="tingly-box"
+          echo "⏳ Waiting for $PKG_NAME@$VERSION to be available on npm..."
+          for i in {1..30}; do
+            if npm view "$PKG_NAME@$VERSION" version >/dev/null 2>&1; then
+              echo "✅ Package is available on npm"
+              echo "Published version: $(npm view "$PKG_NAME@$VERSION" version)"
+              exit 0
+            fi
+            echo "Attempt $i/30: Not yet available, waiting 10s..."
+            sleep 10
+          done
+          echo "❌ Timeout waiting for package to appear on npm"
+          exit 1
+
+      - name: Validate npx execution (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          VERSION="${{ needs.setup.outputs.npx_version }}"
+          echo "🧪 Testing: npx tingly-box@$VERSION --version"
+          echo "Platform: ${{ matrix.platform }} ${{ matrix.arch }}"
+
+          # Retry up to 3 times
+          MAX_ATTEMPTS=3
+          ATTEMPT=1
+
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+            # Clear any cached binary to ensure fresh download
+            CACHE_DIR="$HOME/.cache/tingly-box"
+            if [ "${{ matrix.platform }}" = "macos" ]; then
+              CACHE_DIR="$HOME/Library/Caches/tingly-box"
+            fi
+            rm -rf "$CACHE_DIR" 2>/dev/null || true
+            echo "Cleared cache directory"
+
+            # Run npx with timeout
+            if timeout 120s npx "tingly-box@$VERSION" --version; then
+              echo ""
+              echo "✅ NPX validation successful on attempt $ATTEMPT"
+              exit 0
+            else
+              EXIT_CODE=$?
+              echo "❌ Attempt $ATTEMPT failed with exit code: $EXIT_CODE"
+
+              if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+                echo "⏳ Waiting 5 seconds before retry..."
+                sleep 5
+                ATTEMPT=$((ATTEMPT + 1))
+              else
+                echo ""
+                echo "❌ All $MAX_ATTEMPTS attempts exhausted"
+                exit $EXIT_CODE
+              fi
+            fi
+          done
+
+      - name: Validate npx execution (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $VERSION = "${{ needs.setup.outputs.npx_version }}"
+          Write-Host "🧪 Testing: npx tingly-box@$VERSION --version"
+          Write-Host "Platform: ${{ matrix.platform }} ${{ matrix.arch }}"
+
+          # Retry up to 3 times
+          $MAX_ATTEMPTS = 3
+          $ATTEMPT = 1
+          $SUCCESS = $false
+
+          while ($ATTEMPT -le $MAX_ATTEMPTS -and -not $SUCCESS) {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            Write-Host "Attempt $ATTEMPT/$MAX_ATTEMPTS"
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+            # Clear any cached binary
+            $CacheDir = "$env:LOCALAPPDATA\tingly-box"
+            if (Test-Path $CacheDir) {
+              Remove-Item -Recurse -Force $CacheDir
+            }
+            Write-Host "Cleared cache directory"
+
+            # Run npx with timeout
+            $job = Start-Job -ScriptBlock {
+              param($Version)
+              npx tingly-box@$Version --version
+            } -ArgumentList $VERSION
+
+            $completed = Wait-Job $job -Timeout 120
+
+            if ($completed) {
+              $result = Receive-Job $job
+              Remove-Job $job
+
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host ""
+                Write-Host "✅ NPX validation successful on attempt $ATTEMPT"
+                Write-Host $result
+                $SUCCESS = $true
+              } else {
+                Write-Host "❌ Attempt $ATTEMPT failed with exit code: $LASTEXITCODE"
+
+                if ($ATTEMPT -lt $MAX_ATTEMPTS) {
+                  Write-Host "⏳ Waiting 5 seconds before retry..."
+                  Start-Sleep -Seconds 5
+                  $ATTEMPT++
+                }
+              }
+            } else {
+              Write-Host "❌ Attempt $ATTEMPT timed out"
+              Stop-Job $job
+              Remove-Job $job
+
+              if ($ATTEMPT -lt $MAX_ATTEMPTS) {
+                Write-Host "⏳ Waiting 5 seconds before retry..."
+                Start-Sleep -Seconds 5
+                $ATTEMPT++
+              }
+            }
+          }
+
+          if (-not $SUCCESS) {
+            Write-Host ""
+            Write-Host "❌ All $MAX_ATTEMPTS attempts exhausted"
+            exit 1
+          }
+
   # Create a single NPX tag and release for CLI + Bundle
   create-release:
-    needs: [setup, publish-cli-bundle]
+    needs: [setup, publish-cli-bundle, validate-npx]
     name: Create NPX Release
     runs-on: ubuntu-latest
     permissions:
       contents: write
     if: >-
       needs.setup.result == 'success' &&
-      (needs.publish-cli-bundle.result == 'success' || needs.publish-cli-bundle.result == 'skipped')
+      needs.publish-cli-bundle.result == 'success' &&
+      (needs.validate-npx.result == 'success' || needs.validate-npx.result == 'skipped')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
