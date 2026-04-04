@@ -1,6 +1,10 @@
 package core
 
-import "context"
+import (
+	"context"
+
+	"github.com/gin-gonic/gin"
+)
 
 // Verdict is the overall decision from a policy or engine.
 type Verdict string
@@ -56,17 +60,10 @@ type Payload struct {
 	Response any    `json:"-" yaml:"-"`
 }
 
-// ContextSetter is a narrow request-scoped side-effect surface used by
-// pipelines that need to publish runtime metadata without depending on a
-// concrete transport such as gin.
-type ContextSetter interface {
-	Set(key string, value any)
-}
-
 // InputRuntime stores request-scoped runtime integrations for one processing
 // run. These hooks are optional and should not be used by policy evaluators.
 type InputRuntime struct {
-	ContextSetter ContextSetter `json:"-" yaml:"-"`
+	Context *gin.Context `json:"-" yaml:"-"`
 }
 
 // InputState stores runtime-only state associated with one guardrails
@@ -120,12 +117,25 @@ func (i Input) RequestModel() string {
 }
 
 // SetContextValue publishes a request-scoped runtime value when an optional
-// context setter is attached to the input.
+// gin context is attached to the input.
 func (i Input) SetContextValue(key string, value any) {
-	if i.Runtime.ContextSetter == nil {
+	if i.Runtime.Context == nil {
 		return
 	}
-	i.Runtime.ContextSetter.Set(key, value)
+	i.Runtime.Context.Set(key, value)
+}
+
+// CredentialMaskState returns the request-scoped credential masking state when
+// available via runtime hooks, falling back to the input state snapshot.
+func (i Input) CredentialMaskState() *CredentialMaskState {
+	if i.Runtime.Context != nil {
+		if existing, ok := i.Runtime.Context.Get(CredentialMaskStateContextKey); ok {
+			if state, ok := existing.(*CredentialMaskState); ok && state != nil {
+				return state
+			}
+		}
+	}
+	return i.State.CredentialMask
 }
 
 // PolicyType identifies a policy evaluator implementation.
