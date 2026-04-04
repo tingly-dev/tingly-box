@@ -87,7 +87,32 @@ func (s *Server) refreshGuardrailsCredentialCacheOrWarn(context string) {
 	}
 }
 
+func (s *Server) refreshGuardrailsActivationState() {
+	s.guardrailsHasActivePolicies = false
+	if s.config == nil || s.config.ConfigDir == "" {
+		return
+	}
+
+	cfgPath, err := serverguardrails.FindGuardrailsConfig(s.config.ConfigDir)
+	if err != nil {
+		return
+	}
+
+	cfg, err := guardrails.LoadConfig(cfgPath)
+	if err != nil {
+		logrus.WithError(err).Debug("Guardrails activation state: failed to load config")
+		return
+	}
+
+	s.guardrailsHasActivePolicies = hasActiveGuardrailsPolicies(cfg)
+}
+
 func (s *Server) setGuardrailsEngine(engine guardrails.Guardrails, context string) {
 	s.guardrailsEngine = engine
+	if engine == nil {
+		s.guardrailsHasActivePolicies = false
+	} else {
+		s.refreshGuardrailsActivationState()
+	}
 	s.refreshGuardrailsCredentialCacheOrWarn(context)
 }

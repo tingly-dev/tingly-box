@@ -9,16 +9,10 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // applyGuardrailsToToolResultV1 evaluates tool_result content and replaces it when blocked.
-func (s *Server) applyGuardrailsToToolResultV1(c *gin.Context, req *anthropic.MessageNewParams, actualModel string, provider *typ.Provider) {
-	session := s.guardrailsSessionFromContext(c, actualModel, provider)
-	if !s.guardrailsEnabledForSession(session) {
-		return
-	}
-
+func (s *Server) applyGuardrailsToToolResultV1(c *gin.Context, req *anthropic.MessageNewParams, session guardrailsSession) {
 	toolResultText, toolResultBlocks, toolResultParts := serverguardrails.ExtractToolResultTextV1(req.Messages)
 	logrus.Debugf("Guardrails: tool_result detected (v1) blocks=%d parts=%d len=%d", toolResultBlocks, toolResultParts, len(toolResultText))
 	if toolResultText == "" {
@@ -48,12 +42,7 @@ func (s *Server) applyGuardrailsToToolResultV1(c *gin.Context, req *anthropic.Me
 }
 
 // applyGuardrailsToToolResultV1Beta evaluates tool_result content and replaces it when blocked.
-func (s *Server) applyGuardrailsToToolResultV1Beta(c *gin.Context, req *anthropic.BetaMessageNewParams, actualModel string, provider *typ.Provider) {
-	session := s.guardrailsSessionFromContext(c, actualModel, provider)
-	if !s.guardrailsEnabledForSession(session) {
-		return
-	}
-
+func (s *Server) applyGuardrailsToToolResultV1Beta(c *gin.Context, req *anthropic.BetaMessageNewParams, session guardrailsSession) {
 	toolResultText, toolResultBlocks, toolResultParts := serverguardrails.ExtractToolResultTextV1Beta(req.Messages)
 	logrus.Debugf("Guardrails: tool_result detected (v1beta) blocks=%d parts=%d len=%d", toolResultBlocks, toolResultParts, len(toolResultText))
 	if toolResultText == "" {
