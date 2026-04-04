@@ -2,7 +2,10 @@ package config
 
 import "github.com/tingly-dev/tingly-box/internal/typ"
 
-// applyGuardrailsDefaults enables guardrails by default for testing when not set.
+// applyGuardrailsDefaults ensures the global scenario has an extensions map so
+// guardrails can be toggled explicitly later. Guardrails themselves stay opt-in:
+// a missing flag should behave as disabled rather than forcing runtime startup
+// before a guardrails config exists.
 func (c *Config) applyGuardrailsDefaults() bool {
 	updated := false
 	cfg := c.GetScenarioConfig(typ.ScenarioGlobal)
@@ -17,11 +20,6 @@ func (c *Config) applyGuardrailsDefaults() bool {
 
 	if cfg.Extensions == nil {
 		cfg.Extensions = make(map[string]interface{})
-		updated = true
-	}
-
-	if _, exists := cfg.Extensions["guardrails"]; !exists {
-		cfg.Extensions["guardrails"] = true
 		updated = true
 	}
 
