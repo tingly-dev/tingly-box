@@ -11,20 +11,19 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/imbot/core"
-	"github.com/tingly-dev/weixin"
-	wechatadapters "github.com/tingly-dev/weixin/adapters"
-	weixinapi "github.com/tingly-dev/weixin/api"
-	"github.com/tingly-dev/weixin/channel"
-	"github.com/tingly-dev/weixin/contexttoken"
+	"github.com/tingly-dev/weixin/api"
+	"github.com/tingly-dev/weixin/message"
+	"github.com/tingly-dev/weixin/types"
+	"github.com/tingly-dev/weixin/wechat"
 )
 
 // Bot implements the Weixin platform bot
 type Bot struct {
 	*core.BaseBot
-	plugin    *weixin.Plugin
+	plugin    *wechat.WechatBot
 	accountID string
-	account   *weixin.WeChatAccount
-	client    *weixinapi.Client
+	account   *types.WeChatAccount
+	client    *api.Client
 	adapter   *Adapter
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -61,20 +60,16 @@ func NewBot(config *core.Config) (*Bot, error) {
 	}
 
 	// Create Weixin plugin configuration
-	wcConfig := &weixin.WeChatConfig{
+	wcConfig := &types.WeChatConfig{
 		BaseURL: baseURL,
 		BotType: config.GetOptionString("botType", "3"),
 	}
 
 	// Initialize plugin
-	plugin := weixin.NewPlugin(wcConfig)
-
-	// Initialize adapters for the plugin
-	// This is required to enable all plugin functionality
-	wechatadapters.InitPlugin(plugin)
+	weixinPlugin := wechat.NewWeixinBot(wcConfig)
 
 	// Create account directly from auth config (no file storage needed)
-	account := &weixin.WeChatAccount{
+	account := &types.WeChatAccount{
 		ID:          accountID,
 		Name:        fmt.Sprintf("Weixin Account %s", accountID),
 		BotID:       botID,
@@ -89,13 +84,13 @@ func NewBot(config *core.Config) (*Bot, error) {
 
 	// Save the account to plugin's in-memory account manager
 	// This allows the plugin to find the account later
-	if err := plugin.Accounts().Save(account); err != nil {
+	if err := weixinPlugin.Accounts().Save(account); err != nil {
 		return nil, fmt.Errorf("failed to save account: %w", err)
 	}
 
 	bot := &Bot{
 		BaseBot:   core.NewBaseBot(config),
-		plugin:    plugin,
+		plugin:    weixinPlugin,
 		accountID: accountID,
 		account:   account, // Set account directly
 	}
@@ -128,7 +123,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 	}
 
 	// Create API client
-	b.client = weixinapi.NewClient(account.BaseURL, account.BotToken)
+	b.client = api.NewClient(account.BaseURL, account.BotToken)
 
 	// Initialize adapter for message conversion
 	b.adapter = NewAdapter(b.Config(), account)
@@ -251,7 +246,7 @@ func (b *Bot) StopReceiving(ctx context.Context) error {
 }
 
 // GetAccount returns the current account
-func (b *Bot) GetAccount() *weixin.WeChatAccount {
+func (b *Bot) GetAccount() *types.WeChatAccount {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.account
@@ -275,7 +270,7 @@ func (b *Bot) NeedsPairing() bool {
 }
 
 // getAccount loads or creates an account
-func (b *Bot) getAccount() (*weixin.WeChatAccount, error) {
+func (b *Bot) getAccount() (*types.WeChatAccount, error) {
 	// Try to load existing account
 	account, err := b.plugin.Accounts().Get(b.accountID)
 	if err == nil {
@@ -283,7 +278,7 @@ func (b *Bot) getAccount() (*weixin.WeChatAccount, error) {
 	}
 
 	// Account doesn't exist, create a new one
-	account = &weixin.WeChatAccount{
+	account = &types.WeChatAccount{
 		ID:          b.accountID,
 		Name:        fmt.Sprintf("Weixin Account %s", b.accountID),
 		Enabled:     true,
@@ -317,7 +312,7 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 	}
 	// If no context token in metadata, try to get from storage
 	if contextToken == "" {
-		contextToken = contexttoken.GetContextToken(b.accountID, target)
+		contextToken = message.GetContextToken(b.accountID, target)
 	}
 
 	// Send via API - use simple text message
@@ -383,10 +378,9 @@ func (b *Bot) receiveMessages() {
 			return
 		default:
 			// Fetch updates
-			req := &channel.GetUpdatesRequest{
+			req := &types.GetUpdatesRequest{
 				AccountID: b.accountID,
 				SyncBuf:   syncBuf,
-				TimeoutMs: 30000, // 30 seconds timeout in milliseconds
 			}
 
 			result, err := longPoll.GetUpdates(b.ctx, req)
@@ -430,12 +424,12 @@ func (b *Bot) receiveMessages() {
 }
 
 // handleMessage processes an incoming message
-func (b *Bot) handleMessage(msg *channel.Message) {
+func (b *Bot) handleMessage(msg *types.Message) {
 	if msg == nil {
 		return
 	}
 
-	// Use adapter to convert channel message to core message
+	// Use adapter to convert types message to core message
 	coreMsg, err := b.adapter.AdaptMessage(b.ctx, msg)
 	if err != nil {
 		b.Logger().Error("Failed to adapt message: %v", err)

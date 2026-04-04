@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/imbot/core"
-	"github.com/tingly-dev/weixin"
+	"github.com/tingly-dev/weixin/types"
 )
 
 // TestNewBot tests creating a new Weixin bot
@@ -189,7 +189,7 @@ func TestAdapterPlatform(t *testing.T) {
 	}
 
 	// Account needs to be created first
-	account := &weixin.WeChatAccount{
+	account := &types.WeChatAccount{
 		ID:         "test",
 		Name:       "Test Account",
 		Enabled:    true,
@@ -261,7 +261,7 @@ func TestAdapterMessageLimit(t *testing.T) {
 			Type: "qr",
 		},
 	}
-	account := &weixin.WeChatAccount{
+	account := &types.WeChatAccount{
 		ID:         "test",
 		Name:       "Test Account",
 		Enabled:    true,
@@ -284,7 +284,7 @@ func TestAdapterShouldChunkText(t *testing.T) {
 			Type: "qr",
 		},
 	}
-	account := &weixin.WeChatAccount{
+	account := &types.WeChatAccount{
 		ID:         "test",
 		Name:       "Test Account",
 		Enabled:    true,
@@ -455,7 +455,7 @@ func TestMapContentType(t *testing.T) {
 		Platform: core.PlatformWeixin,
 		Auth:     core.AuthConfig{Type: "qr"},
 	}
-	account := &weixin.WeChatAccount{
+	account := &types.WeChatAccount{
 		ID:         "test",
 		Name:       "Test Account",
 		Enabled:    true,
@@ -493,7 +493,7 @@ func TestBuildReplyTarget(t *testing.T) {
 		Platform: core.PlatformWeixin,
 		Auth:     core.AuthConfig{Type: "qr"},
 	}
-	account := &weixin.WeChatAccount{
+	account := &types.WeChatAccount{
 		ID:         "test",
 		Name:       "Test Account",
 		Enabled:    true,

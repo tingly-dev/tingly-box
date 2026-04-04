@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/tingly-dev/tingly-box/imbot/core"
-	"github.com/tingly-dev/weixin/contexttoken"
+	"github.com/tingly-dev/weixin/message"
 )
 
 // InteractionHandler provides interaction handlers for Weixin
@@ -248,7 +248,7 @@ func (h *InteractionHandler) SendMessage(ctx context.Context, userID string, tex
 	}
 
 	// Get context token from storage
-	contextToken := contexttoken.GetContextToken(h.bot.accountID, userID)
+	contextToken := message.GetContextToken(h.bot.accountID, userID)
 
 	if err := h.bot.client.SendTextMessage(ctx, userID, contextToken, text); err != nil {
 		return "", fmt.Errorf("failed to send message: %w", err)

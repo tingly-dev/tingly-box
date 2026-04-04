@@ -6,18 +6,18 @@ import (
 	"fmt"
 
 	"github.com/tingly-dev/tingly-box/imbot/core"
-	"github.com/tingly-dev/weixin"
-	"github.com/tingly-dev/weixin/channel"
+	"github.com/tingly-dev/weixin/api"
+	"github.com/tingly-dev/weixin/types"
 )
 
 // Adapter adapts Weixin channel messages to core.Message
 type Adapter struct {
 	*core.BaseAdapter
-	account *weixin.WeChatAccount
+	account *types.WeChatAccount
 }
 
 // NewAdapter creates a new Weixin adapter
-func NewAdapter(config *core.Config, account *weixin.WeChatAccount) *Adapter {
+func NewAdapter(config *core.Config, account *types.WeChatAccount) *Adapter {
 	return &Adapter{
 		BaseAdapter: core.NewBaseAdapter(config),
 		account:     account,
@@ -29,8 +29,8 @@ func (a *Adapter) Platform() core.Platform {
 	return core.PlatformWeixin
 }
 
-// AdaptMessage converts a channel.Message to core.Message
-func (a *Adapter) AdaptMessage(ctx context.Context, msg *channel.Message) (*core.Message, error) {
+// AdaptMessage converts a types.Message to core.Message
+func (a *Adapter) AdaptMessage(ctx context.Context, msg *types.Message) (*core.Message, error) {
 	if msg == nil {
 		return nil, fmt.Errorf("nil message")
 	}
@@ -67,26 +67,29 @@ func (a *Adapter) AdaptMessage(ctx context.Context, msg *channel.Message) (*core
 }
 
 // ConvertToOutboundMessage converts SendMessageOptions to Weixin outbound message format
-func (a *Adapter) ConvertToOutboundMessage(opts *core.SendMessageOptions) (*channel.OutboundMessage, string, []weixin.MessageItem) {
-	outbound := &channel.OutboundMessage{
+// Note: This function is kept for compatibility but the actual message sending
+// uses the API client directly with context tokens
+func (a *Adapter) ConvertToOutboundMessage(opts *core.SendMessageOptions) (*types.OutboundMessage, string, []api.MessageItem) {
+	outbound := &types.OutboundMessage{
 		To:           "", // Will be set by caller
 		Text:         opts.Text,
 		ContextToken: "", // Will be set by caller
 	}
 
-	var items []weixin.MessageItem
+	var items []api.MessageItem
 
 	// Add text item
 	if opts.Text != "" {
-		items = append(items, weixin.MessageItem{
-			Type: weixin.MessageItemTypeText,
-			TextItem: &weixin.TextItem{
+		items = append(items, api.MessageItem{
+			Type: api.MessageItemTypeText,
+			TextItem: &api.TextItem{
 				Text: opts.Text,
 			},
 		})
 	}
 
-	// Add media items
+	// Add media items - TODO: implement media upload via CDN
+	// For now, media is not supported in the weixin platform
 	if len(opts.Media) > 0 {
 		for _, media := range opts.Media {
 			item := a.mediaToItem(media)
@@ -99,8 +102,8 @@ func (a *Adapter) ConvertToOutboundMessage(opts *core.SendMessageOptions) (*chan
 	return outbound, "", items
 }
 
-// extractContent extracts content from a channel.Message
-func (a *Adapter) extractContent(msg *channel.Message) core.Content {
+// extractContent extracts content from a types.Message
+func (a *Adapter) extractContent(msg *types.Message) core.Content {
 	// Check if there's text
 	if msg.Text != "" {
 		// Check if there are also attachments
@@ -154,44 +157,44 @@ func (a *Adapter) mapContentType(contentType string) string {
 	}
 }
 
-// mediaToItem converts a core MediaAttachment to Weixin MessageItem
-func (a *Adapter) mediaToItem(media core.MediaAttachment) *weixin.MessageItem {
+// mediaToItem converts a core MediaAttachment to weixinapi MessageItem
+func (a *Adapter) mediaToItem(media core.MediaAttachment) *api.MessageItem {
 	switch media.Type {
 	case "image":
-		return &weixin.MessageItem{
-			Type: weixin.MessageItemTypeImage,
-			ImageItem: &weixin.ImageItem{
+		return &api.MessageItem{
+			Type: api.MessageItemTypeImage,
+			ImageItem: &api.ImageItem{
 				URL: media.URL,
 			},
 		}
 	case "video":
-		return &weixin.MessageItem{
-			Type:      weixin.MessageItemTypeVideo,
-			VideoItem: &weixin.VideoItem{},
+		return &api.MessageItem{
+			Type:      api.MessageItemTypeVideo,
+			VideoItem: &api.VideoItem{},
 		}
 	case "audio", "voice":
-		return &weixin.MessageItem{
-			Type:      weixin.MessageItemTypeVoice,
-			VoiceItem: &weixin.VoiceItem{},
+		return &api.MessageItem{
+			Type:      api.MessageItemTypeVoice,
+			VoiceItem: &api.VoiceItem{},
 		}
 	default:
 		// Treat as file
-		return &weixin.MessageItem{
-			Type: weixin.MessageItemTypeFile,
-			FileItem: &weixin.FileItem{
+		return &api.MessageItem{
+			Type: api.MessageItemTypeFile,
+			FileItem: &api.FileItem{
 				FileName: media.Filename,
 			},
 		}
 	}
 }
 
-// AdaptCoreToChannel converts a core.Message to channel.OutboundMessage
-func (a *Adapter) AdaptCoreToChannel(ctx context.Context, msg *core.Message) (*channel.OutboundMessage, error) {
+// AdaptCoreToChannel converts a core.Message to types.OutboundMessage
+func (a *Adapter) AdaptCoreToChannel(ctx context.Context, msg *core.Message) (*types.OutboundMessage, error) {
 	if msg == nil {
 		return nil, fmt.Errorf("nil message")
 	}
 
-	outbound := &channel.OutboundMessage{
+	outbound := &types.OutboundMessage{
 		To: msg.GetReplyTarget(),
 	}
 
