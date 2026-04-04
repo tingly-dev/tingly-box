@@ -2,9 +2,11 @@ package pipeline
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/sirupsen/logrus"
 
 	guardrails "github.com/tingly-dev/tingly-box/internal/guardrails"
 	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
@@ -43,8 +45,6 @@ func ProcessAnthropicBetaRequest(
 	ctx context.Context,
 	runtime *guardrails.Guardrails,
 	input guardrailscore.Input,
-	credentials []guardrailscore.ProtectedCredential,
-	maskState *guardrailscore.CredentialMaskState,
 ) (AnthropicBetaRequestMutation, error) {
 	req, ok := input.Payload.Request.(*anthropic.BetaMessageNewParams)
 	if !ok || req == nil {
@@ -72,6 +72,7 @@ func ProcessAnthropicBetaRequest(
 	if toolResult.Changed {
 		toolResult.Input.SetContextValue("guardrails_block_message", toolResult.Message)
 		toolResult.Input.SetContextValue("guardrails_block_index", 0)
+		logrus.Debugf("Guardrails: tool_result replaced (v1beta) len=%d", len(toolResult.Message))
 	}
 	if toolResult.Evaluation.Result.Verdict == guardrailscore.VerdictBlock {
 		recordGuardrailsHistory(runtime, toolResult.Input, toolResult.Evaluation.Result, "tool_result", "")
@@ -81,11 +82,13 @@ func ProcessAnthropicBetaRequest(
 	out.PostToolResult = postToolResult
 	out.Input = postToolResult
 
+	credentials := runtime.CredentialMaskCredentials(postToolResult.Scenario)
 	if len(credentials) == 0 {
 		out.PostCredentialMask = postToolResult
 		return out, nil
 	}
 
+	maskState := postToolResult.CredentialMaskState()
 	if maskState == nil {
 		maskState = guardrailscore.NewCredentialMaskState()
 	}
@@ -101,6 +104,10 @@ func ProcessAnthropicBetaRequest(
 	postMask.State.CredentialMask = maskState
 	out.PostCredentialMask = postMask
 	out.Input = postMask
+	if maskChanged && latestTurnChanged {
+		recordGuardrailsMaskHistory(runtime, postMask, maskState, "request_mask")
+		logrus.Debugf("Guardrails credential mask applied (v1beta) refs=%d", len(maskState.UsedRefs))
+	}
 	return out, nil
 }
 
@@ -134,6 +141,65 @@ func recordGuardrailsHistory(
 		entry.CommandName = input.Content.Command.Name
 	}
 	runtime.History.Add(entry)
+}
+
+func recordGuardrailsMaskHistory(
+	runtime *guardrails.Guardrails,
+	input guardrailscore.Input,
+	state *guardrailscore.CredentialMaskState,
+	phase string,
+) {
+	if runtime == nil || runtime.History == nil || state == nil {
+		return
+	}
+
+	refSet := make(map[string]struct{})
+	aliasSet := make(map[string]struct{})
+	for _, ref := range state.UsedRefs {
+		if ref != "" {
+			refSet[ref] = struct{}{}
+		}
+	}
+	for alias := range state.AliasToReal {
+		if alias != "" {
+			aliasSet[alias] = struct{}{}
+		}
+	}
+	credentialRefs := sortedKeys(refSet)
+	aliasHits := sortedKeys(aliasSet)
+	if len(credentialRefs) == 0 && len(aliasHits) == 0 {
+		return
+	}
+
+	entry := guardrailsutils.Entry{
+		Time:            time.Now(),
+		Scenario:        input.Scenario,
+		Model:           input.Model,
+		Provider:        input.ProviderName(),
+		Direction:       string(input.Direction),
+		Phase:           phase,
+		Verdict:         string(guardrailscore.VerdictMask),
+		Preview:         input.Content.LatestPreview(160),
+		CredentialRefs:  credentialRefs,
+		CredentialNames: runtime.CredentialNames(credentialRefs),
+		AliasHits:       aliasHits,
+	}
+	if input.Content.Command != nil {
+		entry.CommandName = input.Content.Command.Name
+	}
+	runtime.History.Add(entry)
+}
+
+func sortedKeys(values map[string]struct{}) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for value := range values {
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func refreshAnthropicBetaRequestInput(input guardrailscore.Input) guardrailscore.Input {

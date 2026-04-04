@@ -2,12 +2,16 @@ package pipeline
 
 import (
 	"context"
+	"sort"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/sirupsen/logrus"
 
 	guardrails "github.com/tingly-dev/tingly-box/internal/guardrails"
 	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
+	guardrailsutils "github.com/tingly-dev/tingly-box/internal/guardrails/utils"
 )
 
 // AnthropicV1RequestMutation captures a merged request-side pipeline run.
@@ -26,8 +30,6 @@ func ProcessAnthropicV1Request(
 	ctx context.Context,
 	runtime *guardrails.Guardrails,
 	input guardrailscore.Input,
-	credentials []guardrailscore.ProtectedCredential,
-	maskState *guardrailscore.CredentialMaskState,
 ) (AnthropicV1RequestMutation, error) {
 	req, ok := input.Payload.Request.(*anthropic.MessageNewParams)
 	if !ok || req == nil {
@@ -51,17 +53,23 @@ func ProcessAnthropicV1Request(
 	if toolResult.Changed {
 		toolResult.Input.SetContextValue("guardrails_block_message", toolResult.Message)
 		toolResult.Input.SetContextValue("guardrails_block_index", 0)
+		logrus.Debugf("Guardrails: tool_result replaced (v1) len=%d", len(toolResult.Message))
+	}
+	if toolResult.Evaluation.Result.Verdict == guardrailscore.VerdictBlock {
+		recordGuardrailsHistoryV1(runtime, toolResult.Input, toolResult.Evaluation.Result, "tool_result", "")
 	}
 
 	postToolResult := refreshAnthropicV1RequestInput(initialInput)
 	out.PostToolResult = postToolResult
 	out.Input = postToolResult
 
+	credentials := runtime.CredentialMaskCredentials(postToolResult.Scenario)
 	if len(credentials) == 0 {
 		out.PostCredentialMask = postToolResult
 		return out, nil
 	}
 
+	maskState := postToolResult.CredentialMaskState()
 	if maskState == nil {
 		maskState = guardrailscore.NewCredentialMaskState()
 	}
@@ -77,7 +85,102 @@ func ProcessAnthropicV1Request(
 	postMask.State.CredentialMask = maskState
 	out.PostCredentialMask = postMask
 	out.Input = postMask
+	if maskChanged && latestTurnChanged {
+		recordGuardrailsMaskHistoryV1(runtime, postMask, maskState, "request_mask")
+		logrus.Debugf("Guardrails credential mask applied (v1) refs=%d", len(maskState.UsedRefs))
+	}
 	return out, nil
+}
+
+func recordGuardrailsHistoryV1(
+	runtime *guardrails.Guardrails,
+	input guardrailscore.Input,
+	result guardrailscore.Result,
+	phase string,
+	blockMessage string,
+) {
+	if runtime == nil || runtime.History == nil {
+		return
+	}
+
+	credentialRefs := guardrailsutils.CollectCredentialRefs(result)
+	entry := guardrailsutils.Entry{
+		Time:            time.Now(),
+		Scenario:        input.Scenario,
+		Model:           input.Model,
+		Provider:        input.ProviderName(),
+		Direction:       string(input.Direction),
+		Phase:           phase,
+		Verdict:         string(result.Verdict),
+		BlockMessage:    blockMessage,
+		Preview:         input.Content.LatestPreview(160),
+		CredentialRefs:  credentialRefs,
+		CredentialNames: runtime.CredentialNames(credentialRefs),
+		Reasons:         append([]guardrailscore.PolicyResult(nil), result.Reasons...),
+	}
+	if input.Content.Command != nil {
+		entry.CommandName = input.Content.Command.Name
+	}
+	runtime.History.Add(entry)
+}
+
+func recordGuardrailsMaskHistoryV1(
+	runtime *guardrails.Guardrails,
+	input guardrailscore.Input,
+	state *guardrailscore.CredentialMaskState,
+	phase string,
+) {
+	if runtime == nil || runtime.History == nil || state == nil {
+		return
+	}
+
+	refSet := make(map[string]struct{})
+	aliasSet := make(map[string]struct{})
+	for _, ref := range state.UsedRefs {
+		if ref != "" {
+			refSet[ref] = struct{}{}
+		}
+	}
+	for alias := range state.AliasToReal {
+		if alias != "" {
+			aliasSet[alias] = struct{}{}
+		}
+	}
+	credentialRefs := sortedKeysV1(refSet)
+	aliasHits := sortedKeysV1(aliasSet)
+	if len(credentialRefs) == 0 && len(aliasHits) == 0 {
+		return
+	}
+
+	entry := guardrailsutils.Entry{
+		Time:            time.Now(),
+		Scenario:        input.Scenario,
+		Model:           input.Model,
+		Provider:        input.ProviderName(),
+		Direction:       string(input.Direction),
+		Phase:           phase,
+		Verdict:         string(guardrailscore.VerdictMask),
+		Preview:         input.Content.LatestPreview(160),
+		CredentialRefs:  credentialRefs,
+		CredentialNames: runtime.CredentialNames(credentialRefs),
+		AliasHits:       aliasHits,
+	}
+	if input.Content.Command != nil {
+		entry.CommandName = input.Content.Command.Name
+	}
+	runtime.History.Add(entry)
+}
+
+func sortedKeysV1(values map[string]struct{}) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for value := range values {
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func refreshAnthropicV1RequestInput(input guardrailscore.Input) guardrailscore.Input {

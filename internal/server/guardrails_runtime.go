@@ -20,17 +20,6 @@ var guardrailsSupportedScenarios = []string{
 	string(typ.ScenarioClaudeCode),
 }
 
-type guardrailsContextSetter struct {
-	ctx *gin.Context
-}
-
-func (s guardrailsContextSetter) Set(key string, value any) {
-	if s.ctx == nil {
-		return
-	}
-	s.ctx.Set(key, value)
-}
-
 // guardrailsEnabledForScenario centralizes feature-flag checks so protocol handlers
 // do not repeat scenario/global guardrails gating logic.
 func (s *Server) guardrailsEnabledForScenario(scenario string) bool {
@@ -192,7 +181,7 @@ func (s *Server) buildGuardrailsBaseInput(c *gin.Context, actualModel string, pr
 			"request_model": requestModel,
 		},
 		Runtime: guardrailscore.InputRuntime{
-			ContextSetter: guardrailsContextSetter{ctx: c},
+			Context: c,
 		},
 	}
 }
@@ -259,32 +248,17 @@ func (s *Server) applyGuardrailsToAnthropicV1Request(c *gin.Context, req *anthro
 		return
 	}
 
-	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
-
 	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionRequest, nil)
 	input.Payload.Protocol = "anthropic_v1"
 	input.Payload.Request = req
 
-	mutation, err := guardrailspipeline.ProcessAnthropicV1Request(
+	_, err := guardrailspipeline.ProcessAnthropicV1Request(
 		c.Request.Context(),
 		s.guardrailsRuntime,
 		input,
-		s.getCachedGuardrailsMaskCredentials(scenario),
-		s.getGuardrailsCredentialMaskState(c),
 	)
 	if err != nil {
 		return
-	}
-
-	if mutation.ToolResult.Evaluation.Result.Verdict == guardrailscore.VerdictBlock {
-		s.recordGuardrailsHistory(mutation.ToolResult.Input, mutation.ToolResult.Evaluation.Result, "tool_result", "")
-	}
-	if mutation.ToolResult.Changed {
-		logrus.Debugf("Guardrails: tool_result replaced (v1) len=%d", len(mutation.ToolResult.Message))
-	}
-	if mutation.CredentialMask.Changed && mutation.CredentialMask.LatestTurnChanged {
-		s.recordGuardrailsMaskHistory(c, mutation.PostCredentialMask, "request_mask")
-		logrus.Debugf("Guardrails credential mask applied (v1) refs=%d", len(mutation.CredentialMask.State.UsedRefs))
 	}
 }
 
@@ -296,29 +270,17 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaRequest(c *gin.Context, req *an
 		return
 	}
 
-	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
-
 	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionRequest, nil)
 	input.Payload.Protocol = "anthropic_beta"
 	input.Payload.Request = req
 
-	mutation, err := guardrailspipeline.ProcessAnthropicBetaRequest(
+	_, err := guardrailspipeline.ProcessAnthropicBetaRequest(
 		c.Request.Context(),
 		s.guardrailsRuntime,
 		input,
-		s.getCachedGuardrailsMaskCredentials(scenario),
-		s.getGuardrailsCredentialMaskState(c),
 	)
 	if err != nil {
 		return
-	}
-
-	if mutation.ToolResult.Changed {
-		logrus.Debugf("Guardrails: tool_result replaced (v1beta) len=%d", len(mutation.ToolResult.Message))
-	}
-	if mutation.CredentialMask.Changed && mutation.CredentialMask.LatestTurnChanged {
-		s.recordGuardrailsMaskHistory(c, mutation.PostCredentialMask, "request_mask")
-		logrus.Debugf("Guardrails credential mask applied (v1beta) refs=%d", len(mutation.CredentialMask.State.UsedRefs))
 	}
 }
 
