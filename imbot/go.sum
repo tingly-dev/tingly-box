@@ -42,8 +42,8 @@ github.com/slack-go/slack v0.19.0 h1:J8lL/nGTsIUX53HU8YxZeI3PDkA+sxZsFrI2Dew7h44
 github.com/slack-go/slack v0.19.0/go.mod h1:K81UmCivcYd/5Jmz8vLBfuyoZ3B4rQC2GHVXHteXiAE=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
-github.com/tingly-dev/weixin v0.0.1 h1:zfkZOFMG6duQy8rU+4QdMQNFhIGH/6K4F6HzicR/XYQ=
-github.com/tingly-dev/weixin v0.0.1/go.mod h1:lBH9TA421BlxpfblBWx/PkoSEpOnCBtkmjcP7HzYbZE=
+github.com/tingly-dev/weixin v0.1.0 h1:vgcphUBGvGTP4ElczEDoCmEYlsSgU1C+VFIUCiLluPg=
+github.com/tingly-dev/weixin v0.1.0/go.mod h1:Utfnu1qfv640H5MI/0qavsnEu9gdumy77VNv76BTNcE=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.7.16 h1:n+CJdUxaFMiDUNnWC3dMWCIQJSkxH4uz3ZwQBkAlVNE=
