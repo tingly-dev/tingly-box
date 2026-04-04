@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/tingly-dev/tingly-box/imbot/core"
-	"github.com/tingly-dev/weixin/api"
 	"github.com/tingly-dev/weixin/types"
 )
 
@@ -66,42 +65,6 @@ func (a *Adapter) AdaptMessage(ctx context.Context, msg *types.Message) (*core.M
 	return messageBuilder.Build(), nil
 }
 
-// ConvertToOutboundMessage converts SendMessageOptions to Weixin outbound message format
-// Note: This function is kept for compatibility but the actual message sending
-// uses the API client directly with context tokens
-func (a *Adapter) ConvertToOutboundMessage(opts *core.SendMessageOptions) (*types.OutboundMessage, string, []api.MessageItem) {
-	outbound := &types.OutboundMessage{
-		To:           "", // Will be set by caller
-		Text:         opts.Text,
-		ContextToken: "", // Will be set by caller
-	}
-
-	var items []api.MessageItem
-
-	// Add text item
-	if opts.Text != "" {
-		items = append(items, api.MessageItem{
-			Type: api.MessageItemTypeText,
-			TextItem: &api.TextItem{
-				Text: opts.Text,
-			},
-		})
-	}
-
-	// Add media items - TODO: implement media upload via CDN
-	// For now, media is not supported in the weixin platform
-	if len(opts.Media) > 0 {
-		for _, media := range opts.Media {
-			item := a.mediaToItem(media)
-			if item != nil {
-				items = append(items, *item)
-			}
-		}
-	}
-
-	return outbound, "", items
-}
-
 // extractContent extracts content from a types.Message
 func (a *Adapter) extractContent(msg *types.Message) core.Content {
 	// Check if there's text
@@ -155,71 +118,6 @@ func (a *Adapter) mapContentType(contentType string) string {
 	default:
 		return "document"
 	}
-}
-
-// mediaToItem converts a core MediaAttachment to weixinapi MessageItem
-func (a *Adapter) mediaToItem(media core.MediaAttachment) *api.MessageItem {
-	switch media.Type {
-	case "image":
-		return &api.MessageItem{
-			Type: api.MessageItemTypeImage,
-			ImageItem: &api.ImageItem{
-				URL: media.URL,
-			},
-		}
-	case "video":
-		return &api.MessageItem{
-			Type:      api.MessageItemTypeVideo,
-			VideoItem: &api.VideoItem{},
-		}
-	case "audio", "voice":
-		return &api.MessageItem{
-			Type:      api.MessageItemTypeVoice,
-			VoiceItem: &api.VoiceItem{},
-		}
-	default:
-		// Treat as file
-		return &api.MessageItem{
-			Type: api.MessageItemTypeFile,
-			FileItem: &api.FileItem{
-				FileName: media.Filename,
-			},
-		}
-	}
-}
-
-// AdaptCoreToChannel converts a core.Message to types.OutboundMessage
-func (a *Adapter) AdaptCoreToChannel(ctx context.Context, msg *core.Message) (*types.OutboundMessage, error) {
-	if msg == nil {
-		return nil, fmt.Errorf("nil message")
-	}
-
-	outbound := &types.OutboundMessage{
-		To: msg.GetReplyTarget(),
-	}
-
-	// Extract text
-	if msg.IsTextContent() {
-		outbound.Text = msg.GetText()
-	} else if mc, ok := msg.Content.(*core.MediaContent); ok {
-		// Media content with caption
-		if len(mc.Media) > 0 {
-			outbound.Text = mc.Caption
-		}
-	}
-
-	// Extract media
-	if msg.IsMediaContent() {
-		media := msg.GetMedia()
-		if len(media) > 0 {
-			firstMedia := media[0]
-			outbound.MediaURL = firstMedia.URL
-			outbound.ContentType = firstMedia.Type
-			outbound.FileName = firstMedia.Filename
-		}
-	}
-
-	return outbound, nil
 }
 
 // BuildReplyTarget builds the reply target from sender/recipient info
