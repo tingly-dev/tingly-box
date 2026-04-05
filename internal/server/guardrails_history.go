@@ -51,32 +51,6 @@ func sortedMaskHistoryKeys(values map[string]struct{}) []string {
 	return out
 }
 
-func (s *Server) recordGuardrailsHistory(input guardrailscore.Input, result guardrailscore.Result, phase, blockMessage string) {
-	if s.guardrailsRuntime == nil || s.guardrailsRuntime.History == nil {
-		return
-	}
-
-	credentialRefs := guardrailsutils.CollectCredentialRefs(result)
-	entry := guardrailsutils.Entry{
-		Time:            time.Now(),
-		Scenario:        input.Scenario,
-		Model:           input.Model,
-		Provider:        input.ProviderName(),
-		Direction:       string(input.Direction),
-		Phase:           phase,
-		Verdict:         string(result.Verdict),
-		BlockMessage:    blockMessage,
-		Preview:         input.Content.LatestPreview(160),
-		CredentialRefs:  credentialRefs,
-		CredentialNames: s.resolveGuardrailsCredentialNames(credentialRefs),
-		Reasons:         append([]guardrailscore.PolicyResult(nil), result.Reasons...),
-	}
-	if input.Content.Command != nil {
-		entry.CommandName = input.Content.Command.Name
-	}
-	s.guardrailsRuntime.History.Add(entry)
-}
-
 // recordGuardrailsMaskHistory stores a dedicated history row for credential
 // aliasing events so masking can be audited separately from block/review events.
 func (s *Server) recordGuardrailsMaskHistory(c *gin.Context, input guardrailscore.Input, phase string) {
@@ -97,17 +71,11 @@ func (s *Server) recordGuardrailsMaskHistory(c *gin.Context, input guardrailscor
 		Verdict:         string(guardrailscore.VerdictMask),
 		Preview:         input.Content.LatestPreview(160),
 		CredentialRefs:  credentialRefs,
-		CredentialNames: s.resolveGuardrailsCredentialNames(credentialRefs),
+		CredentialNames: s.guardrailsRuntime.CredentialNames(credentialRefs),
 		AliasHits:       aliasHits,
 	}
 	if input.Content.Command != nil {
 		entry.CommandName = input.Content.Command.Name
 	}
 	s.guardrailsRuntime.History.Add(entry)
-}
-
-// resolveGuardrailsCredentialNames maps credential ids to stable display names
-// for the history API.
-func (s *Server) resolveGuardrailsCredentialNames(ids []string) []string {
-	return s.getCachedGuardrailsCredentialNames(ids)
 }

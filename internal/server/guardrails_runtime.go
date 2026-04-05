@@ -11,7 +11,6 @@ import (
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	guardrailspipeline "github.com/tingly-dev/tingly-box/internal/guardrails/pipeline"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -100,20 +99,6 @@ func (s *Server) refreshGuardrailsCredentialCache() error {
 	return nil
 }
 
-func (s *Server) getCachedGuardrailsMaskCredentials(scenario string) []guardrailscore.ProtectedCredential {
-	if s.guardrailsRuntime == nil {
-		return nil
-	}
-	return s.guardrailsRuntime.CredentialMaskCredentials(scenario)
-}
-
-func (s *Server) getCachedGuardrailsCredentialNames(ids []string) []string {
-	if s.guardrailsRuntime == nil || len(ids) == 0 {
-		return nil
-	}
-	return s.guardrailsRuntime.CredentialNames(ids)
-}
-
 func (s *Server) refreshGuardrailsCredentialCacheOrWarn(context string) {
 	if err := s.refreshGuardrailsCredentialCache(); err != nil {
 		logrus.WithError(err).Warnf("Guardrails credential cache refresh failed after %s", context)
@@ -190,44 +175,13 @@ func (s *Server) buildGuardrailsBaseInput(c *gin.Context, actualModel string, pr
 // handle context. Provider-specific handlers only need to provide already-normalized
 // message history.
 func (s *Server) attachGuardrailsHooks(c *gin.Context, hc *protocol.HandleContext, actualModel string, provider *typ.Provider, messages []guardrailscore.Message) {
-	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
-	if !s.guardrailsEnabledForScenario(scenario) {
-		return
-	}
-
 	baseInput := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messages)
 	logrus.Debugf("Guardrails: attaching hook (scenario=%s model=%s)", baseInput.Scenario, baseInput.Model)
 
 	onEvent, onComplete, onError := NewGuardrailsHooks(
+		c.Request.Context(),
 		s.guardrailsRuntime,
 		baseInput,
-		WithGuardrailsContext(c.Request.Context()),
-		WithGuardrailsOnBlock(func(result GuardrailsHookResult) {
-			if result.BlockToolID == "" || result.BlockMessage == "" {
-				return
-			}
-			s.recordGuardrailsHistory(baseInput, result.Result, "tool_use", result.BlockMessage)
-			stream.RegisterGuardrailsBlock(c, result.BlockToolID, result.BlockIndex, result.BlockMessage)
-		}),
-		WithGuardrailsOnVerdict(func(result GuardrailsHookResult) {
-			c.Set("guardrails_result", result.Result)
-			if result.BlockMessage != "" {
-				c.Set("guardrails_block_message", result.BlockMessage)
-				c.Set("guardrails_block_index", result.BlockIndex)
-				if result.BlockToolID != "" {
-					c.Set("guardrails_block_tool_id", result.BlockToolID)
-				}
-				// Early tool_use blocks are already recorded in onBlock. Skip adding a
-				// second near-identical response entry when the final verdict points at
-				// the same blocked tool_use.
-				if result.BlockToolID == "" {
-					s.recordGuardrailsHistory(baseInput, result.Result, "response", result.BlockMessage)
-				}
-			}
-			if result.Err != nil {
-				c.Set("guardrails_error", result.Err.Error())
-			}
-		}),
 	)
 	if onEvent != nil {
 		hc.WithOnStreamEvent(onEvent)

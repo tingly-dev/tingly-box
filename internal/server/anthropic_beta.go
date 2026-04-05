@@ -136,9 +136,10 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req *anthro
 		}
 	}
 
-	// Anthropic beta only adapts request history; the shared runtime owns all
-	// enablement checks and hook wiring after this point.
-	s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages))
+	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+	if s.guardrailsEnabledForScenario(scenario) {
+		s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages))
+	}
 
 	usageStat, err := stream.HandleAnthropicV1BetaStream(hc, streamResp)
 	s.trackUsageWithTokenUsage(c, usageStat, err)

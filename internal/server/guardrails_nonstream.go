@@ -1,14 +1,12 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 
-	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -31,18 +29,7 @@ func (s *Server) applyGuardrailsToAnthropicV1NonStreamResponse(c *gin.Context, a
 		Command:  anthropicResponseCommand(resp.Content),
 	}
 
-	var hookResult GuardrailsHookResult
-	done := NewNonStreamGuardrailsHook(
-		s.guardrailsRuntime,
-		input,
-		WithGuardrailsContext(context.Background()),
-		WithGuardrailsOnVerdict(func(result GuardrailsHookResult) {
-			hookResult = result
-		}),
-	)
-	if done != nil {
-		done()
-	}
+	hookResult := EvaluateNonStreamGuardrails(c.Request.Context(), s.guardrailsRuntime, input)
 	if hookResult.Err != nil {
 		c.Set("guardrails_error", hookResult.Err.Error())
 		return false
@@ -57,7 +44,7 @@ func (s *Server) applyGuardrailsToAnthropicV1NonStreamResponse(c *gin.Context, a
 		blockMessage = BlockMessageForCommand(hookResult.Result, input.Content.Command.Name, input.Content.Command.Arguments)
 	}
 	c.Set("guardrails_block_message", blockMessage)
-	s.recordGuardrailsHistory(input, hookResult.Result, "response", blockMessage)
+	s.guardrailsRuntime.AddHistory(input, hookResult.Result, "response", blockMessage)
 	overwriteAnthropicResponse(resp, blockMessage)
 	return true
 }
@@ -80,18 +67,7 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Contex
 		Command:  anthropicBetaResponseCommand(resp.Content),
 	}
 
-	var hookResult GuardrailsHookResult
-	done := NewNonStreamGuardrailsHook(
-		s.guardrailsRuntime,
-		input,
-		WithGuardrailsContext(context.Background()),
-		WithGuardrailsOnVerdict(func(result GuardrailsHookResult) {
-			hookResult = result
-		}),
-	)
-	if done != nil {
-		done()
-	}
+	hookResult := EvaluateNonStreamGuardrails(c.Request.Context(), s.guardrailsRuntime, input)
 	if hookResult.Err != nil {
 		c.Set("guardrails_error", hookResult.Err.Error())
 		return false
@@ -106,7 +82,7 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Contex
 		blockMessage = BlockMessageForCommand(hookResult.Result, input.Content.Command.Name, input.Content.Command.Arguments)
 	}
 	c.Set("guardrails_block_message", blockMessage)
-	s.recordGuardrailsHistory(input, hookResult.Result, "response", blockMessage)
+	s.guardrailsRuntime.AddHistory(input, hookResult.Result, "response", blockMessage)
 	overwriteAnthropicBetaResponse(resp, blockMessage)
 	return true
 }

@@ -95,9 +95,10 @@ func (s *Server) dispatchChainResultToAnthropicV1(
 			}
 		}
 
-		// Anthropic v1 only adapts request history; the shared runtime owns all
-		// enablement checks and hook wiring after this point.
-		s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1(req.System, req.Messages))
+		_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+		if s.guardrailsEnabledForScenario(scenario) {
+			s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1(req.System, req.Messages))
+		}
 
 		usageStat, err := stream.HandleAnthropicV1Stream(hc, *req, streamResp)
 		s.trackUsageWithTokenUsage(c, usageStat, err)

@@ -22,7 +22,7 @@ func TestGuardrailsHookCollectsText(t *testing.T) {
 	runtime := &guardrails.Guardrails{Policy: policy}
 	base := guardrailscore.Input{Scenario: "openai", Model: "gpt-4.1-mini"}
 
-	onEvent, onComplete, _ := NewGuardrailsHooks(runtime, base)
+	onEvent, onComplete, _ := NewGuardrailsHooks(context.Background(), runtime, base)
 	if onEvent == nil || onComplete == nil {
 		t.Fatalf("expected hooks")
 	}
