@@ -15,6 +15,7 @@ import {
     MenuItem,
     Paper,
     Divider,
+    useTheme,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CallMadeIcon from '@mui/icons-material/CallMade';
@@ -66,6 +67,7 @@ const getLocalMidnight = (date: Date): Date => {
 };
 
 export default function DashboardPage() {
+    const theme = useTheme();
     const { timeRange: urlTimeRange } = useParams<{ timeRange: TimeRange }>();
     const navigate = useNavigate();
 
@@ -77,7 +79,7 @@ export default function DashboardPage() {
 
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [autoRefresh, setAutoRefresh] = useState(true);
+    const [autoRefresh, setAutoRefresh] = useState(false);
     const [stats, setStats] = useState<AggregatedStat[]>([]);
     const [timeSeries, setTimeSeries] = useState<TimeSeriesData[]>([]);
     const [providers, setProviders] = useState<Provider[]>([]);
@@ -413,13 +415,15 @@ export default function DashboardPage() {
                                         componentsProps={{
                                             tooltip: {
                                                 sx: {
-                                                    backgroundColor: '#1a1a1a',
-                                                    color: '#ffffff',
+                                                    backgroundColor: theme.palette.mode === 'dark' ? '#1e293b' : '#ffffff',
+                                                    color: theme.palette.mode === 'dark' ? '#f1f5f9' : '#1a1a1a',
                                                     fontSize: '0.75rem',
                                                     p: 1.5,
                                                     borderRadius: 1.5,
+                                                    border: '1px solid',
+                                                    borderColor: theme.palette.mode === 'dark' ? '#334155' : '#e2e8f0',
                                                     '& .MuiTooltip-arrow': {
-                                                        color: '#1a1a1a',
+                                                        color: theme.palette.mode === 'dark' ? '#1e293b' : '#ffffff',
                                                     },
                                                 },
                                             },
@@ -427,8 +431,8 @@ export default function DashboardPage() {
                                         title={
                                             <Box>
                                                 <Typography sx={{ fontWeight: 600, fontSize: '0.8rem', mb: 0.5 }}>{item.model}</Typography>
-                                                <Typography sx={{ color: '#a0a0a0', fontSize: '0.75rem' }}>{item.provider}</Typography>
-                                                <Typography sx={{ color: '#a0a0a0', fontSize: '0.7rem', mt: 0.75 }}>
+                                                <Typography sx={{ color: theme.palette.mode === 'dark' ? '#94a3b8' : '#a0a0a0', fontSize: '0.75rem' }}>{item.provider}</Typography>
+                                                <Typography sx={{ color: theme.palette.mode === 'dark' ? '#94a3b8' : '#a0a0a0', fontSize: '0.7rem', mt: 0.75 }}>
                                                     Total: {formatNumber(totalTokens)} | Input: {formatNumber(item.inputTokens)} | Output: {formatNumber(item.outputTokens)}
                                                 </Typography>
                                             </Box>

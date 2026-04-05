@@ -10,6 +10,7 @@ import {
     TablePagination,
     Box,
     alpha,
+    useTheme,
 } from '@mui/material';
 import { useState } from 'react';
 import type { AggregatedStat as ApiAggregatedStat } from '@/client/api';
@@ -36,8 +37,24 @@ interface ServiceStatsTableProps {
 }
 
 export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
+    const theme = useTheme();
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
+
+    // Get theme-aware empty icon background
+    const getEmptyIconBg = () => {
+        const palette = theme.palette as any;
+        // Sunlit theme uses sky blue color
+        if (palette.isSunlit || palette.mode === 'light' && palette.primary.main === '#0ea5e9') {
+            return 'rgba(14, 165, 233, 0.1)';
+        }
+        // Dark theme
+        if (palette.mode === 'dark') {
+            return 'rgba(148, 163, 184, 0.1)';
+        }
+        // Light theme (default)
+        return 'rgba(100, 116, 139, 0.1)';
+    };
 
     const formatTokens = (num: number): string => {
         if (num >= 1000000) return `${(num / 1000000).toFixed(2)}M`;
@@ -94,7 +111,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                     <TableHead>
                         <TableRow
                             sx={{
-                                backgroundColor: alpha('#f1f5f9', 0.8),
+                                backgroundColor: alpha(theme.palette.background.paper, 0.8),
                                 '& .MuiTableCell-root': {
                                     fontWeight: 600,
                                     fontSize: '0.75rem',
@@ -137,7 +154,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                                 width: 48,
                                                 height: 48,
                                                 borderRadius: 2,
-                                                backgroundColor: alpha('#64748b', 0.1),
+                                                backgroundColor: getEmptyIconBg(),
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',

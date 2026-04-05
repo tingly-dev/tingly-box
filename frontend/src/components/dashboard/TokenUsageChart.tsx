@@ -1,4 +1,4 @@
-import { Paper, Typography, Box, alpha } from '@mui/material';
+import { Paper, Typography, Box, alpha, useTheme } from '@mui/material';
 import { useState } from 'react';
 import {
     BarChart,
@@ -10,7 +10,7 @@ import {
     ResponsiveContainer,
     Cell,
 } from 'recharts';
-import { TOKEN_COLORS, gridStyle, tooltipStyle, barRadius } from './chartStyles';
+import { TOKEN_COLORS, barRadius, getThemeChartStyles } from './chartStyles';
 
 interface UsageData {
     name: string;
@@ -62,6 +62,9 @@ const LegendItem = ({ label, color, visible, onToggle }: LegendItemProps) => (
 );
 
 export default function TokenUsageChart({ data }: TokenUsageChartProps) {
+    const theme = useTheme();
+    const chartStyles = getThemeChartStyles(theme);
+
     // Sort by total tokens (input + output) and take top 5
     const top5Data = [...data]
         .sort((a, b) => (b.inputTokens + b.outputTokens) - (a.inputTokens + a.outputTokens))
@@ -91,7 +94,17 @@ export default function TokenUsageChart({ data }: TokenUsageChartProps) {
 
         const data = payload[0].payload;
         return (
-            <Box sx={tooltipStyle}>
+            <Box
+                sx={{
+                    borderRadius: 2,
+                    border: '1px solid',
+                    borderColor: chartStyles.chart.tooltipBorder,
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                    backgroundColor: chartStyles.chart.tooltipBg,
+                    padding: '12px',
+                    minWidth: 200,
+                }}
+            >
                 <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, fontSize: '0.875rem' }}>
                     {data.name}
                 </Typography>
@@ -119,7 +132,7 @@ export default function TokenUsageChart({ data }: TokenUsageChartProps) {
                         </Typography>
                     </Box>
                 ))}
-                <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid #e2e8f0', fontSize: '0.75rem' }}>
+                <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid', borderColor: 'divider', fontSize: '0.75rem' }}>
                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
                         Total: {formatTooltipValue(data.inputTokens + data.outputTokens + (data.cacheTokens || 0))}
                     </Typography>
@@ -165,7 +178,7 @@ export default function TokenUsageChart({ data }: TokenUsageChartProps) {
                             width: 48,
                             height: 48,
                             borderRadius: 2,
-                            backgroundColor: alpha('#64748b', 0.1),
+                            backgroundColor: chartStyles.statCard.emptyIconBg,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -191,56 +204,54 @@ export default function TokenUsageChart({ data }: TokenUsageChartProps) {
                 </Box>
             ) : (
                 <>
-                <Box sx={{ flex: 1, minHeight: 280 }}>
                     <ResponsiveContainer width="100%" height={280}>
                         <BarChart data={top5Data} layout="vertical" barCategoryGap={12}>
-                            <CartesianGrid strokeDasharray="4 4" stroke={gridStyle.stroke} strokeOpacity={gridStyle.strokeOpacity} />
+                            <CartesianGrid strokeDasharray="4 4" stroke={chartStyles.chart.grid} strokeOpacity={0.5} />
                             <XAxis
                                 type="number"
                                 tickFormatter={formatYAxis}
-                                tick={{ fontSize: 11, fill: '#64748b' }}
+                                tick={{ fontSize: 11, fill: 'text.secondary' }}
                                 tickLine={false}
-                                axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
+                                axisLine={{ stroke: chartStyles.chart.axis, strokeWidth: 1 }}
                             />
                             <YAxis
                                 dataKey="name"
                                 type="category"
-                                tick={{ fontSize: 11, fill: '#64748b' }}
+                                tick={{ fontSize: 11, fill: 'text.secondary' }}
                                 tickLine={false}
-                                axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
+                                axisLine={{ stroke: chartStyles.chart.axis, strokeWidth: 1 }}
                                 width={160}
                             />
                             <Tooltip content={<CustomTooltip />} />
-                            <Bar dataKey="cacheTokens" name="Cache Tokens" fill={TOKEN_COLORS.cache.main} stackId="tokens" radius={barRadius} hide={!visibleSeries.cache}>
+                            <Bar dataKey="cacheTokens" name="Cache Tokens" fill={chartStyles.token.cache.main} stackId="tokens" radius={barRadius} hide={!visibleSeries.cache}>
                                 {top5Data.map((entry, index) => (
                                     <Cell
                                         key={`cache-${index}`}
-                                        fill={entry.cacheTokens > 0 ? TOKEN_COLORS.cache.gradient : 'transparent'}
+                                        fill={entry.cacheTokens > 0 ? chartStyles.token.cache.gradient : 'transparent'}
                                     />
                                 ))}
                             </Bar>
-                            <Bar dataKey="inputTokens" name="Input Tokens" fill={TOKEN_COLORS.input.gradient} stackId="tokens" radius={barRadius} hide={!visibleSeries.input} />
-                            <Bar dataKey="outputTokens" name="Output Tokens" fill={TOKEN_COLORS.output.gradient} stackId="tokens" radius={barRadius} hide={!visibleSeries.output} />
+                            <Bar dataKey="inputTokens" name="Input Tokens" fill={chartStyles.token.input.gradient} stackId="tokens" radius={barRadius} hide={!visibleSeries.input} />
+                            <Bar dataKey="outputTokens" name="Output Tokens" fill={chartStyles.token.output.gradient} stackId="tokens" radius={barRadius} hide={!visibleSeries.output} />
                         </BarChart>
                     </ResponsiveContainer>
-                </Box>
                 {/* Legend replacement - inline indicator */}
                 <Box sx={{ mt: 2, display: 'flex', gap: 3, flexWrap: 'wrap' }}>
                     <LegendItem
                         label="Cache"
-                        color={TOKEN_COLORS.cache.main}
+                        color={chartStyles.token.cache.main}
                         visible={visibleSeries.cache}
                         onToggle={() => toggleSeries('cache')}
                     />
                     <LegendItem
                         label="Input"
-                        color={TOKEN_COLORS.input.main}
+                        color={chartStyles.token.input.main}
                         visible={visibleSeries.input}
                         onToggle={() => toggleSeries('input')}
                     />
                     <LegendItem
                         label="Output"
-                        color={TOKEN_COLORS.output.main}
+                        color={chartStyles.token.output.main}
                         visible={visibleSeries.output}
                         onToggle={() => toggleSeries('output')}
                     />

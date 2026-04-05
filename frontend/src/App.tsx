@@ -3,17 +3,19 @@ import { ContentCopy, Error as ErrorIcon, GitHub, AppRegistration as NPM, Refres
 import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, Paper, Stack, Typography } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
+import { SunlitBackground } from './components/SunlitBackground';
 import { AuthProvider } from './contexts/AuthContext';
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
 import { HealthProvider, useHealth } from './contexts/HealthContext';
+import { ThemeModeProvider, useThemeMode } from './contexts/ThemeContext';
 import { useVersion, VersionProvider } from './contexts/VersionContext';
 import { ProfileProvider } from './contexts/ProfileContext';
 import Layout from './layout/Layout';
-import theme from './theme';
+import createAppTheme from './theme';
 
 import Login from './pages/Login';
 import Guiding from './pages/Guiding';
@@ -343,10 +345,16 @@ function AppContent() {
     )
 }
 
-function App() {
+// Inner component that uses theme context
+function AppWithTheme() {
+    const { mode } = useThemeMode();
+    const theme = useMemo(() => createAppTheme(mode), [mode]);
+
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
+            {/* Sunlit background effect */}
+            {mode === 'sunlit' && <SunlitBackground />}
             <BrowserRouter>
                 <HealthProvider>
                     <VersionProvider>
@@ -362,6 +370,14 @@ function App() {
                 </HealthProvider>
             </BrowserRouter>
         </ThemeProvider>
+    );
+}
+
+function App() {
+    return (
+        <ThemeModeProvider>
+            <AppWithTheme />
+        </ThemeModeProvider>
     );
 }
 
