@@ -142,3 +142,16 @@ func TextResponse(model, message string) map[string]interface{} {
 		},
 	}
 }
+
+// ParseToolArguments decodes a raw JSON argument string into a structured map.
+// When decoding fails, the raw payload is preserved under `_raw`.
+func ParseToolArguments(raw string) map[string]interface{} {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &parsed); err == nil {
+		return parsed
+	}
+	return map[string]interface{}{"_raw": raw}
+}

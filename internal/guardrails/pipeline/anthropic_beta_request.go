@@ -3,7 +3,6 @@ package pipeline
 import (
 	"context"
 	"sort"
-	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/sirupsen/logrus"
@@ -75,7 +74,7 @@ func ProcessAnthropicBetaRequest(
 		logrus.Debugf("Guardrails: tool_result replaced (v1beta) len=%d", len(toolResult.Message))
 	}
 	if toolResult.Evaluation.Result.Verdict == guardrailscore.VerdictBlock {
-		recordGuardrailsHistory(runtime, toolResult.Input, toolResult.Evaluation.Result, "tool_result", "")
+		runtime.AddHistory(toolResult.Input, toolResult.Evaluation.Result, "tool_result", "")
 	}
 
 	postToolResult := refreshAnthropicBetaRequestInput(initialInput)
@@ -109,38 +108,6 @@ func ProcessAnthropicBetaRequest(
 		logrus.Debugf("Guardrails credential mask applied (v1beta) refs=%d", len(maskState.UsedRefs))
 	}
 	return out, nil
-}
-
-func recordGuardrailsHistory(
-	runtime *guardrails.Guardrails,
-	input guardrailscore.Input,
-	result guardrailscore.Result,
-	phase string,
-	blockMessage string,
-) {
-	if runtime == nil || runtime.History == nil {
-		return
-	}
-
-	credentialRefs := guardrailsutils.CollectCredentialRefs(result)
-	entry := guardrailsutils.Entry{
-		Time:            time.Now(),
-		Scenario:        input.Scenario,
-		Model:           input.Model,
-		Provider:        input.ProviderName(),
-		Direction:       string(input.Direction),
-		Phase:           phase,
-		Verdict:         string(result.Verdict),
-		BlockMessage:    blockMessage,
-		Preview:         input.Content.LatestPreview(160),
-		CredentialRefs:  credentialRefs,
-		CredentialNames: runtime.CredentialNames(credentialRefs),
-		Reasons:         append([]guardrailscore.PolicyResult(nil), result.Reasons...),
-	}
-	if input.Content.Command != nil {
-		entry.CommandName = input.Content.Command.Name
-	}
-	runtime.History.Add(entry)
 }
 
 func recordGuardrailsMaskHistory(

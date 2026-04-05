@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sort"
 	"sync"
+	"time"
 
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	guardrailsutils "github.com/tingly-dev/tingly-box/internal/guardrails/utils"
@@ -139,4 +140,30 @@ func (g *Guardrails) CredentialNames(ids []string) []string {
 	byID := g.CredentialCache.ByID
 	g.mu.RUnlock()
 	return ResolveCredentialNames(byID, ids)
+}
+
+func (g *Guardrails) AddHistory(input guardrailscore.Input, result guardrailscore.Result, phase, blockMessage string) {
+	if g == nil || g.History == nil {
+		return
+	}
+
+	credentialRefs := guardrailsutils.CollectCredentialRefs(result)
+	entry := guardrailsutils.Entry{
+		Time:            time.Now(),
+		Scenario:        input.Scenario,
+		Model:           input.Model,
+		Provider:        input.ProviderName(),
+		Direction:       string(input.Direction),
+		Phase:           phase,
+		Verdict:         string(result.Verdict),
+		BlockMessage:    blockMessage,
+		Preview:         input.Content.LatestPreview(160),
+		CredentialRefs:  credentialRefs,
+		CredentialNames: g.CredentialNames(credentialRefs),
+		Reasons:         append([]guardrailscore.PolicyResult(nil), result.Reasons...),
+	}
+	if input.Content.Command != nil {
+		entry.CommandName = input.Content.Command.Name
+	}
+	g.History.Add(entry)
 }

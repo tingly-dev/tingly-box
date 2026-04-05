@@ -12,7 +12,9 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
+	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 )
 
 type GuardrailsHookResult struct {
@@ -23,176 +25,125 @@ type GuardrailsHookResult struct {
 	BlockToolID  string
 }
 
-type GuardrailsHookOption func(*guardrailsHook)
-
-type guardrailsHook struct {
-	runtime   *guardrails.Guardrails
-	baseInput guardrailscore.Input
-	ctx       context.Context
-	onVerdict func(GuardrailsHookResult)
-	onBlock   func(GuardrailsHookResult)
-	acc       *guardrailsAccumulator
-	mu        sync.Mutex
-}
-
-func WithGuardrailsContext(ctx context.Context) GuardrailsHookOption {
-	return func(h *guardrailsHook) {
-		if ctx != nil {
-			h.ctx = ctx
-		}
-	}
-}
-
-func WithGuardrailsOnVerdict(cb func(GuardrailsHookResult)) GuardrailsHookOption {
-	return func(h *guardrailsHook) {
-		h.onVerdict = cb
-	}
-}
-
-func WithGuardrailsOnBlock(cb func(GuardrailsHookResult)) GuardrailsHookOption {
-	return func(h *guardrailsHook) {
-		h.onBlock = cb
-	}
-}
-
-func NewGuardrailsHooks(runtime *guardrails.Guardrails, baseInput guardrailscore.Input, opts ...GuardrailsHookOption) (onStreamEvent func(event interface{}) error, onStreamComplete func(), onStreamError func(err error)) {
+func NewGuardrailsHooks(ctx context.Context, runtime *guardrails.Guardrails, baseInput guardrailscore.Input) (onStreamEvent func(event interface{}) error, onStreamComplete func(), onStreamError func(err error)) {
 	if runtime == nil || runtime.Policy == nil {
 		return nil, nil, nil
 	}
-
-	hook := &guardrailsHook{
-		runtime:   runtime,
-		baseInput: baseInput,
-		ctx:       context.Background(),
-		acc:       &guardrailsAccumulator{},
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	for _, opt := range opts {
-		opt(hook)
-	}
+	acc := &guardrailsAccumulator{}
+	var mu sync.Mutex
 
 	onStreamEvent = func(event interface{}) error {
-		hook.mu.Lock()
-		defer hook.mu.Unlock()
+		mu.Lock()
+		defer mu.Unlock()
 
 		switch evt := event.(type) {
 		case *anthropic.MessageStreamEventUnion:
-			hook.acc.ingestAnthropicEvent(evt)
+			acc.ingestAnthropicEvent(evt)
 		case *anthropic.BetaRawMessageStreamEventUnion:
-			hook.acc.ingestAnthropicBetaEvent(evt)
+			acc.ingestAnthropicBetaEvent(evt)
 		case *openai.ChatCompletionChunk:
-			hook.acc.ingestOpenAIChatChunk(evt)
+			acc.ingestOpenAIChatChunk(evt)
 		case *responses.ResponseStreamEventUnion:
-			hook.acc.ingestOpenAIResponseEvent(evt)
+			acc.ingestOpenAIResponseEvent(evt)
 		case map[string]interface{}:
-			hook.acc.ingestMapEvent(evt)
+			acc.ingestMapEvent(evt)
 		default:
-			hook.acc.ingestAnyEvent(evt)
+			acc.ingestAnyEvent(evt)
 		}
 
-		if hook.onBlock != nil {
-			if toolUse, ok := hook.acc.popCompletedToolUse(); ok {
-				input := hook.baseInput
-				input.Direction = guardrailscore.DirectionResponse
-				input.Content = guardrailscore.Content{
-					Messages: input.Content.Messages,
-					Command: &guardrailscore.Command{
-						Name:      toolUse.name,
-						Arguments: parseToolArgs(toolUse.args),
-					},
-				}
-				result, err := hook.runtime.Evaluate(hook.ctx, input)
-				if err == nil && result.Verdict == guardrailscore.VerdictBlock {
-					hook.onBlock(GuardrailsHookResult{
-						Result:       result,
-						BlockMessage: BlockMessageForCommand(result, toolUse.name, parseToolArgs(toolUse.args)),
-						BlockIndex:   toolUse.index,
-						BlockToolID:  toolUse.id,
-					})
-				}
+		if toolUse, ok := acc.popCompletedToolUse(); ok {
+			input := baseInput
+			input.Direction = guardrailscore.DirectionResponse
+			input.Content = guardrailscore.Content{
+				Messages: input.Content.Messages,
+				Command: &guardrailscore.Command{
+					Name:      toolUse.name,
+					Arguments: guardrailsadapter.ParseToolArguments(toolUse.args),
+				},
+			}
+			result, err := runtime.Evaluate(ctx, input)
+			if err == nil && result.Verdict == guardrailscore.VerdictBlock {
+				handleGuardrailsBlock(runtime, input, GuardrailsHookResult{
+					Result:       result,
+					BlockMessage: BlockMessageForCommand(result, toolUse.name, guardrailsadapter.ParseToolArguments(toolUse.args)),
+					BlockIndex:   toolUse.index,
+					BlockToolID:  toolUse.id,
+				})
 			}
 		}
 		return nil
 	}
 
 	onStreamComplete = func() {
-		hook.mu.Lock()
-		input := hook.buildInputLocked()
-		ctx := hook.ctx
-		onVerdict := hook.onVerdict
+		mu.Lock()
+		input := buildGuardrailsAccumulatedInput(baseInput, acc)
 		scenario := input.Scenario
 		model := input.Model
-		blockIndex := hook.acc.nextBlockIndex()
-		blockToolID := hook.acc.lastToolID
-		hook.mu.Unlock()
+		blockIndex := acc.nextBlockIndex()
+		blockToolID := acc.lastToolID
+		mu.Unlock()
 
 		logrus.Debugf("Guardrails: evaluating stream completion (scenario=%s model=%s)", scenario, model)
-		result, err := hook.runtime.Evaluate(ctx, input)
+		result, err := runtime.Evaluate(ctx, input)
 		if err != nil {
 			logrus.Debugf("Guardrails: evaluation error (scenario=%s model=%s): %v", scenario, model, err)
 		} else {
 			logrus.Debugf("Guardrails: evaluation done (scenario=%s model=%s verdict=%s)", scenario, model, result.Verdict)
 		}
-		if onVerdict != nil {
-			blockMsg := ""
-			if result.Verdict == guardrailscore.VerdictBlock {
-				blockMsg = BlockMessageWithSnippet(result, input.Content.Preview(120))
-			}
-			onVerdict(GuardrailsHookResult{
-				Result:       result,
-				Err:          err,
-				BlockMessage: blockMsg,
-				BlockIndex:   blockIndex,
-				BlockToolID:  blockToolID,
-			})
+		blockMsg := ""
+		if result.Verdict == guardrailscore.VerdictBlock {
+			blockMsg = BlockMessageWithSnippet(result, input.Content.Preview(120))
 		}
+		handleGuardrailsVerdict(runtime, input, GuardrailsHookResult{
+			Result:       result,
+			Err:          err,
+			BlockMessage: blockMsg,
+			BlockIndex:   blockIndex,
+			BlockToolID:  blockToolID,
+		})
 	}
 
 	onStreamError = func(err error) {
 		logrus.Debugf("Guardrails: stream error before evaluation: %v", err)
-		if hook.onVerdict != nil {
-			hook.onVerdict(GuardrailsHookResult{Err: err})
-		}
+		handleGuardrailsVerdict(runtime, baseInput, GuardrailsHookResult{Err: err})
 	}
 
 	return onStreamEvent, onStreamComplete, onStreamError
 }
 
-func NewNonStreamGuardrailsHook(runtime *guardrails.Guardrails, input guardrailscore.Input, opts ...GuardrailsHookOption) func() {
+func EvaluateNonStreamGuardrails(ctx context.Context, runtime *guardrails.Guardrails, input guardrailscore.Input) GuardrailsHookResult {
 	if runtime == nil || runtime.Policy == nil {
-		return nil
+		return GuardrailsHookResult{}
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
-	hook := &guardrailsHook{
-		runtime:   runtime,
-		baseInput: input,
-		ctx:       context.Background(),
-	}
-	for _, opt := range opts {
-		opt(hook)
+	logrus.Debugf("Guardrails: evaluating non-stream input (scenario=%s model=%s)", input.Scenario, input.Model)
+	result, err := runtime.Evaluate(ctx, input)
+	if err != nil {
+		logrus.Debugf("Guardrails: non-stream evaluation error (scenario=%s model=%s): %v", input.Scenario, input.Model, err)
+	} else {
+		logrus.Debugf("Guardrails: non-stream evaluation done (scenario=%s model=%s verdict=%s)", input.Scenario, input.Model, result.Verdict)
 	}
 
-	return func() {
-		logrus.Debugf("Guardrails: evaluating non-stream input (scenario=%s model=%s)", hook.baseInput.Scenario, hook.baseInput.Model)
-		result, err := hook.runtime.Evaluate(hook.ctx, hook.baseInput)
-		if err != nil {
-			logrus.Debugf("Guardrails: non-stream evaluation error (scenario=%s model=%s): %v", hook.baseInput.Scenario, hook.baseInput.Model, err)
-		} else {
-			logrus.Debugf("Guardrails: non-stream evaluation done (scenario=%s model=%s verdict=%s)", hook.baseInput.Scenario, hook.baseInput.Model, result.Verdict)
-		}
-		if hook.onVerdict != nil {
-			hook.onVerdict(GuardrailsHookResult{Result: result, Err: err})
-		}
+	return GuardrailsHookResult{
+		Result: result,
+		Err:    err,
 	}
 }
 
-func (h *guardrailsHook) buildInputLocked() guardrailscore.Input {
-	input := h.baseInput
+func buildGuardrailsAccumulatedInput(baseInput guardrailscore.Input, acc *guardrailsAccumulator) guardrailscore.Input {
+	input := baseInput
 	if input.Direction == "" {
 		input.Direction = guardrailscore.DirectionResponse
 	}
 
 	content := input.Content
-	accContent := h.acc.content()
+	accContent := acc.content()
 
 	if content.Text == "" {
 		content.Text = accContent.Text
@@ -206,6 +157,36 @@ func (h *guardrailsHook) buildInputLocked() guardrailscore.Input {
 
 	input.Content = content
 	return input
+}
+
+func handleGuardrailsBlock(runtime *guardrails.Guardrails, input guardrailscore.Input, result GuardrailsHookResult) {
+	ginCtx := input.Runtime.Context
+	if ginCtx == nil || result.BlockToolID == "" || result.BlockMessage == "" {
+		return
+	}
+	runtime.AddHistory(input, result.Result, "tool_use", result.BlockMessage)
+	stream.RegisterGuardrailsBlock(ginCtx, result.BlockToolID, result.BlockIndex, result.BlockMessage)
+}
+
+func handleGuardrailsVerdict(runtime *guardrails.Guardrails, input guardrailscore.Input, result GuardrailsHookResult) {
+	ginCtx := input.Runtime.Context
+	if ginCtx == nil {
+		return
+	}
+	ginCtx.Set("guardrails_result", result.Result)
+	if result.BlockMessage != "" {
+		ginCtx.Set("guardrails_block_message", result.BlockMessage)
+		ginCtx.Set("guardrails_block_index", result.BlockIndex)
+		if result.BlockToolID != "" {
+			ginCtx.Set("guardrails_block_tool_id", result.BlockToolID)
+		}
+		if result.BlockToolID == "" {
+			runtime.AddHistory(input, result.Result, "response", result.BlockMessage)
+		}
+	}
+	if result.Err != nil {
+		ginCtx.Set("guardrails_error", result.Err.Error())
+	}
 }
 
 type guardrailsAccumulator struct {
@@ -475,12 +456,7 @@ func (a *guardrailsAccumulator) content() guardrailscore.Content {
 	cmd := &guardrailscore.Command{Name: a.commandName}
 	args := strings.TrimSpace(a.commandArgs.String())
 	if args != "" {
-		var parsed map[string]interface{}
-		if err := json.Unmarshal([]byte(args), &parsed); err == nil {
-			cmd.Arguments = parsed
-		} else {
-			cmd.Arguments = map[string]interface{}{"_raw": args}
-		}
+		cmd.Arguments = guardrailsadapter.ParseToolArguments(args)
 	}
 
 	content.Command = cmd
@@ -608,15 +584,4 @@ func formatGuardrailsCommand(name string, args map[string]interface{}) string {
 		payload = payload[:maxLen] + "..."
 	}
 	return name + " " + payload
-}
-
-func parseToolArgs(raw string) map[string]interface{} {
-	if raw == "" {
-		return nil
-	}
-	var parsed map[string]interface{}
-	if err := json.Unmarshal([]byte(raw), &parsed); err == nil {
-		return parsed
-	}
-	return map[string]interface{}{"_raw": raw}
 }
