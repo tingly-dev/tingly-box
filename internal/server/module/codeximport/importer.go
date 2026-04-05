@@ -22,7 +22,23 @@ const (
 	defaultCodexDir       = ".codex"
 	defaultSourceProvider = "openai"
 	defaultTargetProvider = "tingly-box"
+
+	importStateActiveKey         = "codex_import_active"
+	importStateSourceProviderKey = "codex_import_source_provider"
+	importStateTargetProviderKey = "codex_import_target_provider"
+	importStateCodexHomeKey      = "codex_import_codex_home"
+	importStateSqliteHomeKey     = "codex_import_sqlite_home"
+	importStateStateDBPathKey    = "codex_import_state_db_path"
+	importStateAutoUndoOnStopKey = "codex_import_auto_undo_on_stop"
 )
+
+func ImportStateActiveKey() string         { return importStateActiveKey }
+func ImportStateSourceProviderKey() string { return importStateSourceProviderKey }
+func ImportStateTargetProviderKey() string { return importStateTargetProviderKey }
+func ImportStateCodexHomeKey() string      { return importStateCodexHomeKey }
+func ImportStateSqliteHomeKey() string     { return importStateSqliteHomeKey }
+func ImportStateStateDBPathKey() string    { return importStateStateDBPathKey }
+func ImportStateAutoUndoOnStopKey() string { return importStateAutoUndoOnStopKey }
 
 type Importer struct {
 	now func() time.Time
@@ -346,7 +362,7 @@ func (i *Importer) updateSQLiteThreads(dbPath string, sourceProvider string, tar
 }
 
 func (i *Importer) backupSQLiteDatabase(db *sql.DB, dbPath string) (string, error) {
-	backupPath := dbPath + ".backup." + i.now().Format("20060102-150405")
+	backupPath := dbPath + ".backup"
 	stmt := fmt.Sprintf("VACUUM INTO '%s'", escapeSQLiteString(backupPath))
 	if _, err := db.Exec(stmt); err != nil {
 		if isLikelySQLiteLockedError(err) {
@@ -382,7 +398,8 @@ func generateBackupPath(path string, now time.Time) string {
 	base := filepath.Base(path)
 	ext := filepath.Ext(base)
 	name := strings.TrimSuffix(base, ext)
-	return filepath.Join(dir, "backup", fmt.Sprintf("%s.bak-%s%s", name, now.Format("20060102-150405"), ext))
+	_ = now
+	return filepath.Join(dir, "backup", fmt.Sprintf("%s.bak%s", name, ext))
 }
 
 func (i *Importer) resolvePaths(req ImportOpenAISessionsRequest) (*resolvedPaths, error) {

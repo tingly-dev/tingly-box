@@ -26,6 +26,7 @@ import (
 	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/server/hooks"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
+	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
@@ -1364,6 +1365,10 @@ func (s *Server) Stop(ctx context.Context) error {
 		}
 	}
 
+	if err := s.undoCodexImportOnStop(); err != nil {
+		logrus.WithError(err).Warn("Failed to auto-undo Codex import on stop")
+	}
+
 	// Stop debug middleware
 	if s.errorMW != nil {
 		s.errorMW.Stop()
@@ -1402,4 +1407,44 @@ func (s *Server) Stop(ctx context.Context) error {
 
 	fmt.Println("Shutting down server...")
 	return s.httpServer.Shutdown(ctx)
+}
+
+func (s *Server) undoCodexImportOnStop() error {
+	if s == nil || s.config == nil {
+		return nil
+	}
+	if !s.config.GetScenarioExtensionBool(typ.ScenarioCodex, codeximport.ImportStateAutoUndoOnStopKey()) {
+		return nil
+	}
+	if !s.config.GetScenarioExtensionBool(typ.ScenarioCodex, codeximport.ImportStateActiveKey()) {
+		return nil
+	}
+
+	targetProvider := s.config.GetScenarioExtensionString(typ.ScenarioCodex, codeximport.ImportStateSourceProviderKey())
+	sourceProvider := s.config.GetScenarioExtensionString(typ.ScenarioCodex, codeximport.ImportStateTargetProviderKey())
+	if sourceProvider == "" || targetProvider == "" {
+		return nil
+	}
+
+	importer := codeximport.NewImporter()
+	_, err := importer.ImportOpenAISessions(codeximport.ImportOpenAISessionsRequest{
+		SourceProvider: sourceProvider,
+		TargetProvider: targetProvider,
+		CodexHome:      s.config.GetScenarioExtensionString(typ.ScenarioCodex, codeximport.ImportStateCodexHomeKey()),
+		SqliteHome:     s.config.GetScenarioExtensionString(typ.ScenarioCodex, codeximport.ImportStateSqliteHomeKey()),
+		StateDBPath:    s.config.GetScenarioExtensionString(typ.ScenarioCodex, codeximport.ImportStateStateDBPathKey()),
+		DryRun:         false,
+	})
+	if err != nil {
+		return err
+	}
+	return s.config.SetScenarioExtensions(typ.ScenarioCodex, map[string]interface{}{
+		codeximport.ImportStateActiveKey():         false,
+		codeximport.ImportStateSourceProviderKey(): nil,
+		codeximport.ImportStateTargetProviderKey(): nil,
+		codeximport.ImportStateCodexHomeKey():      nil,
+		codeximport.ImportStateSqliteHomeKey():     nil,
+		codeximport.ImportStateStateDBPathKey():    nil,
+		codeximport.ImportStateAutoUndoOnStopKey(): false,
+	})
 }

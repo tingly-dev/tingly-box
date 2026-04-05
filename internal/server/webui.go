@@ -120,7 +120,7 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 	configapplyHandler := configapply.NewHandler(s.config, s.host)
 	configapply.RegisterRoutes(apiV1, configapplyHandler)
 
-	codexImportHandler := codeximport.NewHandler(nil)
+	codexImportHandler := codeximport.NewHandler(nil, s.config)
 	codeximport.RegisterRoutes(apiV1, codexImportHandler)
 
 	// Provider quota API routes

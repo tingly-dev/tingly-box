@@ -29,6 +29,7 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
     const [result, setResult] = React.useState<any | null>(null);
     const [error, setError] = React.useState<string | null>(null);
     const [createBackup, setCreateBackup] = React.useState(false);
+    const [autoUndoOnStop, setAutoUndoOnStop] = React.useState(false);
 
     const codexBaseUrl = `${baseUrl}/tingly/codex`;
 
@@ -84,7 +85,7 @@ EOF`;
         setResult(null);
         try {
             const payload = sessionAction === 'import'
-                ? { createBackup }
+                ? { createBackup, autoUndoOnStop }
                 : { sourceProvider: 'tingly-box', targetProvider: 'openai', createBackup };
             const response = await api.importCodexOpenAISessions(payload);
             if (!response?.success) {
@@ -309,16 +310,30 @@ EOF`;
                             : 'Undo import rewrites local session metadata back to `openai` without creating backups.'}
                     </Typography>
                     {sessionAction === 'import' && (
-                        <FormControlLabel
-                            control={
-                                <Checkbox
-                                    checked={createBackup}
-                                    onChange={(event) => setCreateBackup(event.target.checked)}
-                                    disabled={isSubmitting}
-                                />
-                            }
-                            label="Create backup before modifying local Codex files"
-                        />
+                        <>
+                            <FormControlLabel
+                                control={
+                                    <Checkbox
+                                        checked={createBackup}
+                                        onChange={(event) => setCreateBackup(event.target.checked)}
+                                        disabled={isSubmitting}
+                                    />
+                                }
+                                label="Create backup before modifying local Codex files"
+                                sx={{ my: -0.5 }}
+                            />
+                            <FormControlLabel
+                                control={
+                                    <Checkbox
+                                        checked={autoUndoOnStop}
+                                        onChange={(event) => setAutoUndoOnStop(event.target.checked)}
+                                        disabled={isSubmitting}
+                                    />
+                                }
+                                label="Automatically undo import when Tingly Box exits"
+                                sx={{ my: -0.5 }}
+                            />
+                        </>
                     )}
                     {error && <Alert severity="error">{error}</Alert>}
                 </DialogContent>

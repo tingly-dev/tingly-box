@@ -8,6 +8,7 @@ type ImportOpenAISessionsRequest struct {
 	StateDBPath     string `json:"stateDbPath,omitempty"`
 	IncludeArchived *bool  `json:"includeArchived,omitempty"`
 	CreateBackup    *bool  `json:"createBackup,omitempty"`
+	AutoUndoOnStop  *bool  `json:"autoUndoOnStop,omitempty"`
 	DryRun          bool   `json:"dryRun,omitempty"`
 }
 

@@ -177,6 +177,14 @@ func TestImportOpenAISessionsWithBackupEnabled(t *testing.T) {
 	if len(result.BackupPaths) != 2 {
 		t.Fatalf("expected 2 backup paths with backup enabled, got %d", len(result.BackupPaths))
 	}
+	expectedSessionBackup := filepath.Join(filepath.Dir(sessionFile), "backup", "thread.bak.jsonl")
+	expectedDBBackup := stateDB + ".backup"
+	if result.BackupPaths[0] != expectedSessionBackup && result.BackupPaths[1] != expectedSessionBackup {
+		t.Fatalf("expected session backup path %s, got %v", expectedSessionBackup, result.BackupPaths)
+	}
+	if result.BackupPaths[0] != expectedDBBackup && result.BackupPaths[1] != expectedDBBackup {
+		t.Fatalf("expected db backup path %s, got %v", expectedDBBackup, result.BackupPaths)
+	}
 }
 
 func TestResolvePathsSupportsWindowsEnvStyleVariables(t *testing.T) {
