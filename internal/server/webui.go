@@ -21,6 +21,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/quota"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
@@ -118,6 +119,9 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 	// Config apply API routes
 	configapplyHandler := configapply.NewHandler(s.config, s.host)
 	configapply.RegisterRoutes(apiV1, configapplyHandler)
+
+	codexImportHandler := codeximport.NewHandler(nil)
+	codeximport.RegisterRoutes(apiV1, codexImportHandler)
 
 	// Provider quota API routes
 	if s.quotaManager != nil {
