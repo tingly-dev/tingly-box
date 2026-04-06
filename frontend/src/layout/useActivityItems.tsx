@@ -21,7 +21,7 @@ import {
     IconSparkles,
     IconMessageCircle,
 } from '@tabler/icons-react';
-import { OpenAI, Anthropic, Claude, OpenCode, Xcode, VSCode, Telegram, Feishu, Lark, DingTalk, Weixin } from '../components/BrandIcons';
+import { OpenAI, Anthropic, Claude, OpenCode, Xcode, VSCode, Telegram, Feishu, Lark, DingTalk, Weixin, Codex, OpenClaw } from '../components/BrandIcons';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { isFullEdition } from '@/utils/edition';
@@ -92,7 +92,7 @@ export function useActivityItems(): ActivityItem[] {
                     ...profileNavItems,
                     { path: '#add-profile', label: 'Add Profile', icon: <IconPlus size={20} /> },
                     { type: 'divider' },
-                    { path: '/use-codex', label: t('layout.nav.useCodex', { defaultValue: 'Codex' }), icon: <OpenAI size={20} /> },
+                    { path: '/use-codex', label: t('layout.nav.useCodex', { defaultValue: 'Codex' }), icon: <Codex size={20} /> },
                     { path: '/use-opencode', label: t('layout.nav.useOpenCode', { defaultValue: 'OpenCode' }), icon: <OpenCode size={20} /> },
                     { path: '/use-xcode', label: t('layout.nav.useXcode', { defaultValue: 'Xcode' }), icon: <Xcode size={20} /> },
                     { path: '/use-vscode', label: t('layout.nav.useVSCode', { defaultValue: 'VS Code' }), icon: <VSCode size={20} /> },
@@ -100,7 +100,7 @@ export function useActivityItems(): ActivityItem[] {
                     { path: '/use-openai', label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }), icon: <OpenAI size={20} /> },
                     { path: '/use-anthropic', label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }), icon: <Anthropic size={20} /> },
                     { type: 'divider' },
-                    { path: '/use-agent', label: 'OpenClaw', icon: <IconSparkles size={20} /> },
+                    { path: '/use-agent', label: 'OpenClaw', icon: <OpenClaw size={20} /> },
                 ],
             },
             ...(isFullEdition && promptMenuItems.length > 0 ? [{

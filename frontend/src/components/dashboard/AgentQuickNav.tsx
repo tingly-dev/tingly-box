@@ -2,14 +2,15 @@ import { Box, Card, CardContent, Typography, Tooltip, Divider } from '@mui/mater
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
-    ClaudeCode,
+    Claude,
+    Codex,
     OpenAI as OpenAIIcon,
     Anthropic as AnthropicIcon,
     OpenCode,
     Xcode,
     VSCode,
+    OpenClaw,
 } from '../BrandIcons';
-import { IconSparkles } from '@tabler/icons-react';
 
 interface AgentItem {
     path: string;
@@ -26,49 +27,49 @@ const AgentQuickNav: React.FC = () => {
         {
             path: '/use-claude-code',
             label: 'Claude Code',
-            icon: <ClaudeCode size={28} />,
+            icon: <Claude size={20} />,
             description: 'AI-powered coding assistant',
         },
         {
             path: '/use-codex',
             label: 'Codex',
-            icon: <OpenAIIcon size={28} />,
+            icon: <Codex size={20} />,
             description: 'OpenAI Codex integration',
         },
         {
             path: '/use-opencode',
             label: 'OpenCode',
-            icon: <OpenCode size={28} />,
+            icon: <OpenCode size={20} />,
             description: 'OpenCode agent',
         },
         {
             path: '/use-xcode',
             label: 'Xcode',
-            icon: <Xcode size={28} />,
+            icon: <Xcode size={20} />,
             description: 'Xcode integration',
         },
         {
             path: '/use-vscode',
             label: 'VS Code',
-            icon: <VSCode size={28} />,
+            icon: <VSCode size={20} />,
             description: 'VS Code integration',
         },
         {
             path: '/use-openai',
             label: 'OpenAI',
-            icon: <OpenAIIcon size={28} />,
+            icon: <OpenAIIcon size={20} />,
             description: 'OpenAI SDK',
         },
         {
             path: '/use-anthropic',
             label: 'Anthropic',
-            icon: <AnthropicIcon size={28} />,
+            icon: <AnthropicIcon size={20} />,
             description: 'Anthropic SDK',
         },
         {
             path: '/use-agent',
             label: 'OpenClaw',
-            icon: <IconSparkles size={28} />,
+            icon: <OpenClaw size={20} />,
             description: 'Advanced agent framework',
         },
     ];
@@ -113,12 +114,14 @@ const AgentQuickNav: React.FC = () => {
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: 1,
-                                    py: 1,
+                                    py: 1.25,
                                     px: 1,
                                     borderRadius: 1.25,
                                     cursor: 'pointer',
                                     transition: 'all 0.2s ease',
                                     border: '1px solid transparent',
+                                    position: 'relative',
+                                    color: 'text.secondary',
                                     '&:hover': {
                                         bgcolor: 'primary.main',
                                         color: 'primary.contrastText',
