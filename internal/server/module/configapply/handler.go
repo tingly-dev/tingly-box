@@ -26,6 +26,85 @@ func NewHandler(cfg *config.Config, host string) *Handler {
 	}
 }
 
+// HTTPTransportConfigUpdate represents the update request for HTTP transport settings
+type HTTPTransportConfigUpdate struct {
+	RespectEnvProxy *bool `json:"respect_env_proxy"` // nil = no change
+}
+
+// GetConfig returns the current system configuration
+// Only returns settings that are safe to expose to the UI
+func (h *Handler) GetConfig(c *gin.Context) {
+	cfg := h.config
+	if cfg == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Global config not available",
+		})
+		return
+	}
+
+	response := gin.H{
+		"success": true,
+		"data": gin.H{
+			"http_transport": gin.H{
+				"respect_env_proxy": cfg.HTTPTransport.RespectEnvProxy,
+			},
+		},
+	}
+	c.JSON(http.StatusOK, response)
+}
+
+// UpdateConfig updates the system configuration
+// Only allows updating specific safe fields
+func (h *Handler) UpdateConfig(c *gin.Context) {
+	cfg := h.config
+	if cfg == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Global config not available",
+		})
+		return
+	}
+
+	var req struct {
+		HTTPTransport HTTPTransportConfigUpdate `json:"http_transport"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request body: " + err.Error(),
+		})
+		return
+	}
+
+	// Update respect_env_proxy if provided
+	if req.HTTPTransport.RespectEnvProxy != nil {
+		cfg.HTTPTransport.RespectEnvProxy = req.HTTPTransport.RespectEnvProxy
+	}
+
+	// Save the configuration
+	if err := cfg.Save(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to save configuration: " + err.Error(),
+		})
+		return
+	}
+
+	// Apply the new transport configuration
+	cfg.ApplyHTTPTransportConfig()
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"http_transport": gin.H{
+				"respect_env_proxy": cfg.HTTPTransport.RespectEnvProxy,
+			},
+		},
+	})
+}
+
 // ApplyClaudeConfig generates and applies Claude Code configuration from system state
 func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 	var req struct {

@@ -6,6 +6,17 @@ import (
 
 // RegisterRoutes registers all config apply routes with swagger documentation
 func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
+	// System configuration endpoints
+	router.GET("/config", handler.GetConfig,
+		swagger.WithDescription("Get system configuration"),
+		swagger.WithTags("config"),
+	)
+
+	router.PUT("/config", handler.UpdateConfig,
+		swagger.WithDescription("Update system configuration"),
+		swagger.WithTags("config"),
+	)
+
 	// Config apply endpoints - requires authentication (applied by caller)
 	router.POST("/config/apply/claude", handler.ApplyClaudeConfig,
 		swagger.WithDescription("Generate and apply Claude Code configuration from system state"),
