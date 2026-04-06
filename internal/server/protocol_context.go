@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -32,10 +33,14 @@ func NewForwardContext(baseCtx context.Context, provider *typ.Provider) *Forward
 	if baseCtx == nil {
 		baseCtx = context.Background()
 	}
+	timeout := time.Duration(provider.Timeout) * time.Second
+	if timeout <= 0 {
+		timeout = time.Duration(constant.DefaultRequestTimeout) * time.Second
+	}
 	return &ForwardContext{
 		Provider: provider,
 		BaseCtx:  baseCtx,
-		Timeout:  time.Duration(provider.Timeout) * time.Second,
+		Timeout:  timeout,
 	}
 }
 
@@ -59,6 +64,9 @@ func (fc *ForwardContext) WithBeforeRequest(hook func(context.Context, interface
 // Each hook receives the response and any error that occurred.
 func (fc *ForwardContext) WithAfterRequest(hook func(context.Context, interface{}, error)) *ForwardContext {
 	fc.AfterRequestHooks = append(fc.AfterRequestHooks, hook)
+	if fc.Timeout <= 0 {
+		fc.Timeout = time.Duration(constant.DefaultRequestTimeout) * time.Second
+	}
 	return fc
 }
 
