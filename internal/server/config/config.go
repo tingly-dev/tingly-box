@@ -291,7 +291,7 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 			logrus.Info("Generated new UserToken for control panel:")
 			logrus.Infof("  %s", cfg.UserToken)
 			logrus.Info("Use this token to log in to the web UI at:")
-			logrus.Infof("  http://localhost:%d/login", cfg.ServerPort)
+			logrus.Infof("  http://localhost:%d/login/%s", cfg.ServerPort, cfg.UserToken)
 			logrus.Info("=============================================")
 		}
 		updated = true
