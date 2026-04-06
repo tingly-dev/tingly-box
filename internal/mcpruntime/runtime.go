@@ -8,8 +8,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -339,6 +342,16 @@ func callJSONRPC(ctx context.Context, cfg *typ.MCPRuntimeConfig, source typ.MCPS
 	}
 	httpClient := &http.Client{Timeout: timeout}
 
+	// Use custom proxy if configured
+	if strings.TrimSpace(source.ProxyURL) != "" {
+		proxyURL, err := url.Parse(source.ProxyURL)
+		if err == nil {
+			httpClient.Transport = &http.Transport{
+				Proxy: http.ProxyURL(proxyURL),
+			}
+		}
+	}
+
 	payload := rpcRequest{
 		JSONRPC: "2.0",
 		ID:      fmt.Sprintf("tbe-%d", time.Now().UnixNano()),
@@ -389,14 +402,34 @@ func newStdioRPCClient(ctx context.Context, cfg *typ.MCPRuntimeConfig, source ty
 		return nil, nil, fmt.Errorf("mcp stdio source %s has empty command", source.ID)
 	}
 	cmd := exec.CommandContext(ctx, source.Command, source.Args...)
-	if strings.TrimSpace(source.Cwd) != "" {
-		cmd.Dir = source.Cwd
+	cwd := strings.TrimSpace(source.Cwd)
+	if cwd == "" {
+		// Auto-detect: use the directory of the tingly-box binary
+		// so that relative script paths like ./scripts/mcp_web_tools.py resolve correctly
+		if execPath, err := os.Executable(); err == nil {
+			cwd = filepath.Dir(execPath)
+		}
+	}
+	// Expand ~ to user home directory
+	if strings.HasPrefix(cwd, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			cwd = filepath.Join(home, cwd[2:])
+		}
+	}
+	if cwd != "" {
+		cmd.Dir = cwd
 	}
 
 	env := os.Environ()
+	envVarPattern := regexp.MustCompile(`\$\{([^}]+)\}`)
 	for k, v := range source.Env {
 		if strings.TrimSpace(k) != "" {
-			env = append(env, k+"="+v)
+			// Expand ${VAR} syntax to actual environment variable value
+			expandedValue := envVarPattern.ReplaceAllStringFunc(v, func(match string) string {
+				varName := match[2 : len(match)-1] // Extract VAR from ${VAR}
+				return os.Getenv(varName)
+			})
+			env = append(env, k+"="+expandedValue)
 		}
 	}
 	cmd.Env = env
