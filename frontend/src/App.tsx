@@ -56,6 +56,8 @@ import WeComPage from './pages/remote-control/WeComPage';
 import QQPage from './pages/remote-control/QQPage';
 import DiscordPage from './pages/remote-control/DiscordPage';
 import SlackPage from './pages/remote-control/SlackPage';
+import MCPCustom from './pages/mcp/MCPCustom';
+import MCPBuiltin from './pages/mcp/MCPBuiltin';
 
 // Loading fallback component - kept for potential future use with async data
 
@@ -339,6 +341,10 @@ function AppContent() {
                     <Route path="/guardrails/rules" element={<GuardrailsRulesPage />} />
                     <Route path="/guardrails/credentials" element={<GuardrailsCredentialsPage />} />
                     <Route path="/guardrails/history" element={<GuardrailsHistoryPage />} />
+                    {/* MCP Settings */}
+                    <Route path="/mcp/builtin" element={<MCPBuiltin />} />
+                    <Route path="/mcp/custom" element={<MCPCustom />} />
+                    <Route path="/mcp" element={<Navigate to="/mcp/builtin" replace />} />
                     {/* Catch-all redirect for unknown routes */}
                     <Route path="*" element={<Navigate to="/dashboard/7d" replace />} />
                 </Route>
