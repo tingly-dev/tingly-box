@@ -325,6 +325,17 @@ export default {
       "tokenGenerated": "Token generated successfully",
       "tokenGenerateFailed": "{{error}}"
     },
+    "proxy": {
+      "title": "Proxy Settings",
+      "respectEnvProxy": {
+        "label": "Respect Environment Proxy",
+        "helper": "When enabled, providers without explicit proxy configuration will use system proxy settings (HTTP_PROXY, HTTPS_PROXY, macOS system proxy, Clash, etc.)"
+      },
+      "notifications": {
+        "updateSuccess": "Proxy settings updated successfully",
+        "updateFailed": "Failed to update proxy settings: {{error}}"
+      }
+    },
     "accessControl": {
       "userToken": "User Token (Control Panel)",
       "modelToken": "Model Token (API Proxy)",
