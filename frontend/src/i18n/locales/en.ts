@@ -26,7 +26,7 @@ export default {
     "slogan": "Your Intelligence, Orchestrated.",
     "version": "version {{version}}",
     "nav": {
-      "home": "Scenario",
+      "home": "Agent",
       "settings": "Settings",
       "useOpenAI": "OpenAI SDK",
       "useAnthropic": "Anthropic SDK",
@@ -622,6 +622,12 @@ export default {
       "title": "Token Reset Successfully",
       "message": "Your new user token has been generated and saved to your session. Make sure to save it securely.",
       "saved": "I've Saved My Token"
+    }
+  },
+  "dashboard": {
+    "agentNav": {
+      "title": "Quick Start",
+      "description": "Select agent to start"
     }
   }
 };
