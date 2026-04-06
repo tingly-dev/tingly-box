@@ -32,7 +32,7 @@ func useWindows(a *application.App) {
 			TitleBar: application.MacTitleBarDefault,
 		},
 		BackgroundColour: application.NewRGB(27, 38, 54),
-		URL:              fmt.Sprintf("/?token=%s", tinglyService.GetUserAuthToken()),
+		URL:              fmt.Sprintf("/login/%s", tinglyService.GetUserAuthToken()),
 	})
 
 	// Set window to maximized after creation

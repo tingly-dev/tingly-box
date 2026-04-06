@@ -27,7 +27,7 @@ import (
 const (
 	// URL templates for displaying to users
 	webUITpl             = "%s://localhost:%d/"
-	webUITokenTpl        = "%s://localhost:%d/?token=%s"
+	webUILoginTpl        = "%s://localhost:%d/login/%s"
 	openAIEndpointTpl    = "%s://localhost:%d/tingly/openai/v1/chat/completions"
 	anthropicEndpointTpl = "%s://localhost:%d/tingly/anthropic/v1/messages"
 )
@@ -57,14 +57,22 @@ func printBanner(cfg BannerConfig) {
 	}
 
 	// Show all access URLs when UI is enabled
-	fmt.Println("\nYou can access the service at:")
+	fmt.Println("\n┌────────────────────────────────────────────────────────────────────┐")
+	fmt.Println("                         Access Information                            ")
+	fmt.Println("├────────────────────────────────────────────────────────────────────┤")
 	if cfg.GlobalConfig.HasUserToken() {
-		fmt.Printf("  Web UI:       "+webUITokenTpl+"\n", scheme, cfg.Port, cfg.GlobalConfig.GetUserToken())
+		fmt.Printf("  Web UI:       %s\n", fmt.Sprintf(webUILoginTpl, scheme, cfg.Port, cfg.GlobalConfig.GetUserToken()))
 	} else {
-		fmt.Printf("  Web UI:       "+webUITpl+"\n", scheme, cfg.Port)
+		fmt.Printf("  Web UI:       %s\n", fmt.Sprintf(webUITpl, scheme, cfg.Port))
 	}
-	fmt.Printf("  OpenAI API:   "+openAIEndpointTpl+"\n", scheme, cfg.Port)
-	fmt.Printf("  Anthropic API: "+anthropicEndpointTpl+"\n", scheme, cfg.Port)
+	fmt.Printf("  OpenAI API:   %s\n", fmt.Sprintf(openAIEndpointTpl, scheme, cfg.Port))
+	fmt.Printf("  Anthropic API: %s\n", fmt.Sprintf(anthropicEndpointTpl, scheme, cfg.Port))
+
+	// Show login token for easy copy
+	if cfg.GlobalConfig.HasUserToken() {
+		fmt.Printf("\n  Login Token:  %s\n", cfg.GlobalConfig.GetUserToken())
+	}
+	fmt.Println("└────────────────────────────────────────────────────────────────────┘")
 
 	if cfg.IsDaemon {
 		fmt.Println("\nServer is running in background. Use 'tingly-box stop' to stop.")
@@ -447,9 +455,10 @@ show configuration information including number of providers and server port.`,
 				fmt.Printf("Port: %d\n", port)
 				fmt.Printf("OpenAI Style API Endpoint: "+openAIEndpointTpl+"\n", scheme, port)
 				fmt.Printf("Anthropic Style API Endpoint: "+anthropicEndpointTpl+"\n", scheme, port)
-				fmt.Printf("Web UI: "+webUITpl+"\n", scheme, port)
 				if globalConfig.HasUserToken() {
-					fmt.Printf("UI Management Key: %s\n", globalConfig.GetUserToken())
+					fmt.Printf("Web UI: "+webUILoginTpl+"\n", scheme, port, globalConfig.GetUserToken())
+				} else {
+					fmt.Printf("Web UI: "+webUITpl+"\n", scheme, port)
 				}
 			} else {
 				fmt.Printf("Stopped\n")
@@ -589,7 +598,7 @@ If the server is not running, it will be started first.`,
 				// Build web UI URL
 				webUIURL := fmt.Sprintf("%s://%s:%d/", scheme, resolvedHost, port)
 				if globalConfig.HasUserToken() {
-					webUIURL = fmt.Sprintf("%s://localhost:%d/?user_auth_token=%s", scheme, port, globalConfig.GetUserToken())
+					webUIURL = fmt.Sprintf("%s://%s:%d/login/%s", scheme, resolvedHost, port, globalConfig.GetUserToken())
 				}
 
 				fmt.Printf("Opening web UI: %s\n", webUIURL)

@@ -1186,7 +1186,7 @@ func (s *Server) Start(port int) error {
 	// CASE 2: Web UI Mode ---
 	webUIURL := fmt.Sprintf("%s://%s:%d", scheme, resolvedHost, port)
 	if s.config.HasUserToken() {
-		webUIURL = fmt.Sprintf("%s/?user_auth_token=%s", webUIURL, s.config.GetUserToken())
+		webUIURL = fmt.Sprintf("%s/login/%s", webUIURL, s.config.GetUserToken())
 	}
 
 	fmt.Printf("Web UI: %s\n", webUIURL)

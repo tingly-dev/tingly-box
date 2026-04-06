@@ -589,6 +589,12 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(gin.H{}),
 	)
 
+	// Health check endpoint (no auth required) - for health checks before login
+	apiAuth.GET("/info/health", s.GetHealthInfo,
+		swagger.WithTags("info"),
+		swagger.WithResponseModel(HealthInfoResponse{}),
+	)
+
 	// Create authenticated API group
 	apiV1 := manager.NewGroup("api", "v1", "")
 	apiV1.Router.Use(s.getUserAuthMiddleware())
@@ -611,12 +617,6 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 
 	apiV2 := manager.NewGroup("api", "v2", "")
 	apiV2.Router.Use(s.getUserAuthMiddleware())
-
-	// Health check endpoint
-	apiV1.GET("/info/health", s.GetHealthInfo,
-		swagger.WithTags("info"),
-		swagger.WithResponseModel(HealthInfoResponse{}),
-	)
 
 	apiV1.GET("/info/config", s.GetInfoConfig,
 		swagger.WithTags("info"),
