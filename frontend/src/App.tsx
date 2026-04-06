@@ -270,6 +270,7 @@ function AppContent() {
     return (
             <Routes>
                 <Route path="/login" element={<Login />} />
+                <Route path="/login/:token" element={<Login />} />
                 {/* Protected routes with Layout */}
                 <Route
                     element={

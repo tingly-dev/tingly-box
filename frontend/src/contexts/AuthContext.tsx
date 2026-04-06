@@ -33,6 +33,12 @@ interface AuthProviderProps {
     children: ReactNode;
 }
 
+// Extract token from path like /login/xxxx or /login/xxxx/...
+const extractTokenFromPath = (pathname: string): string | null => {
+    const loginPathMatch = pathname.match(/^\/login\/([^\/]+)\/?/);
+    return loginPathMatch ? loginPathMatch[1] : null;
+};
+
 // Auth prompt dialog component
 const AuthPromptDialog: React.FC<{
     open: boolean;
@@ -115,31 +121,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     useEffect(() => {
         const initializeAuth = async () => {
             try {
-                // Check if there's a token in URL parameters
-                const urlParams = new URLSearchParams(window.location.search);
-                const urlToken = urlParams.get('token') || urlParams.get('user_auth_token');
+                // Check if we're on the login page with a token path
+                // If so, skip AuthContext initialization and let Login component handle it
+                if (extractTokenFromPath(window.location.pathname)) {
+                    // Mark initialization as complete immediately to avoid showing auth prompt
+                    isInitializingRef.current = false;
+                    setIsLoading(false);
+                    return;
+                }
 
+                // Check localStorage for stored token
+                const storedToken = localStorage.getItem('user_auth_token');
                 let finalToken = null;
-                let isFromUrl = false;
 
-                if (urlToken) {
-                    // Use URL token
-                    finalToken = urlToken;
-                    isFromUrl = true;
-                    // Save token immediately to ensure it persists even if validation fails
-                    localStorage.setItem('user_auth_token', urlToken);
-
-                    // Clean up URL by removing the token parameter
-                    const cleanPath = window.location.pathname;
-                    const hash = window.location.hash;
-                    const cleanUrl = cleanPath + hash;
-                    window.history.replaceState({}, '', cleanUrl);
-                } else {
-                    // Check localStorage
-                    const storedToken = localStorage.getItem('user_auth_token');
-                    if (storedToken) {
-                        finalToken = storedToken;
-                    }
+                if (storedToken) {
+                    finalToken = storedToken;
                 }
 
                 // Validate token by making a test API call to the validate endpoint
@@ -158,12 +154,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                             await api.initialize();
                         } else {
                             // Token is invalid
-                            // Only clear if not from URL (to preserve URL tokens for potential retry/debugging)
-                            if (!isFromUrl) {
-                                localStorage.removeItem('user_auth_token');
-                            }
-                            // If from URL, keep it in localStorage but don't set it in state
-                            // This allows the user to see what's happening and retry
+                            localStorage.removeItem('user_auth_token');
                         }
                     } catch (validateError) {
                         // Validation request failed (network error, server error, etc.)
