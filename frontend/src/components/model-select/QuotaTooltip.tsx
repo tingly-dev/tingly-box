@@ -31,6 +31,15 @@ export interface QuotaTooltipProps {
 }
 
 export function QuotaTooltipContent({ title, primary, secondary, cost, breakdowns }: QuotaTooltipProps) {
+  // Helper function to format usage display
+  const formatUsageDisplay = (data: QuotaTooltipData) => {
+    // For percentage-only quotas (used=0, limit=0, unit=percent)
+    if (data.used === 0 && data.limit === 0 && data.unit === 'percent') {
+      return `${data.percent.toFixed(0)}%`;
+    }
+    return `${formatNumber(data.used)} / ${formatNumber(data.limit)} ${data.unit}`;
+  };
+
   return (
     <Box sx={tooltipStyle}>
       <Typography sx={tooltipTextStyles.title}>
@@ -55,7 +64,7 @@ export function QuotaTooltipContent({ title, primary, secondary, cost, breakdown
           }}
         />
         <Typography sx={tooltipTextStyles.body}>
-          Used: {formatNumber(primary.used)} / {formatNumber(primary.limit)} {primary.unit} ({primary.percent.toFixed(0)}%)
+          {formatUsageDisplay(primary)}
         </Typography>
       </Box>
 
@@ -95,7 +104,7 @@ export function QuotaTooltipContent({ title, primary, secondary, cost, breakdown
               }}
             />
             <Typography sx={tooltipTextStyles.body}>
-              {secondary.label}: {formatNumber(secondary.used)} / {formatNumber(secondary.limit)} ({secondary.percent.toFixed(0)}%)
+              {secondary.label}: {formatUsageDisplay(secondary)}
             </Typography>
           </Box>
         </Box>
@@ -132,7 +141,10 @@ export function QuotaTooltipContent({ title, primary, secondary, cost, breakdown
                 }}
               />
               <Typography sx={{ ...tooltipTextStyles.caption, fontSize: '11px' }}>
-                {bd.label}: {formatNumber(bd.window.used)} / {formatNumber(bd.window.limit)} ({bd.window.used_percent.toFixed(0)}%)
+                {bd.label}: {bd.window.used === 0 && bd.window.limit === 0 && bd.window.unit === 'percent'
+                  ? `${bd.window.used_percent.toFixed(0)}%`
+                  : `${formatNumber(bd.window.used)} / ${formatNumber(bd.window.limit)} (${bd.window.used_percent.toFixed(0)}%)`
+                }
               </Typography>
             </Box>
           ))}

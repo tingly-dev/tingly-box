@@ -1,7 +1,7 @@
 // Quota types for provider usage/limit information
 
 export type WindowType = 'session' | 'daily' | 'weekly' | 'monthly' | 'custom' | 'balance';
-export type UsageUnit = 'tokens' | 'requests' | 'credits' | 'currency';
+export type UsageUnit = 'tokens' | 'requests' | 'credits' | 'currency' | 'percent';
 
 export interface UsageWindow {
   type: WindowType;

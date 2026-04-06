@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -90,8 +91,15 @@ func (f *GLMFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.
 		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
 
+	// Read raw response
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+	rawResponse := string(bodyBytes)
+
 	var apiResp glmQuotaLimitResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+	if err := json.Unmarshal(bodyBytes, &apiResp); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
@@ -107,6 +115,7 @@ func (f *GLMFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.
 		ProviderType: quota.ProviderTypeGLM,
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(5 * time.Minute),
+		RawResponse:  rawResponse,
 		Account: &quota.UsageAccount{
 			Tier: apiResp.Data.Level,
 		},
@@ -118,44 +127,65 @@ func (f *GLMFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.
 
 	// Process each limit type
 	for _, lim := range apiResp.Data.Limits {
-		// Calculate total and used from the response
-		// Usage represents total quota, Remaining represents what's left
+		// GLM API fields:
+		// - Usage: total quota allocation (may be absent for percentage-only quotas)
+		// - CurrentValue: amount currently used (may be absent)
+		// - Remaining: amount remaining (may be absent)
+		// - Percentage: utilization percentage (always present)
+		//
+		// Some quotas (like TOKENS_LIMIT) only provide percentage, not absolute values
 		total := lim.Usage
-		used := total - lim.Remaining
-		if total < lim.Remaining {
-			// Sometimes total might be represented differently
-			total = lim.Remaining + lim.CurrentValue
-			used = lim.CurrentValue
-		}
+		used := lim.CurrentValue
+		hasAbsoluteValues := total > 0 || used > 0
 
 		var windowType quota.WindowType
 		var label string
+		var unit quota.UsageUnit
 
 		switch lim.Type {
 		case "TOKENS_LIMIT":
-			windowType = quota.WindowTypeDaily
-			label = "Tokens"
+			// TOKENS_LIMIT is a percentage-only quota (5-hour utilization)
+			windowType = quota.WindowTypeSession
+			label = "5-Hour Tokens"
+			unit = quota.UsageUnitPercent
 		case "TIME_LIMIT":
+			// TIME_LIMIT is actually MCP (Model Context Protocol) quota
 			windowType = quota.WindowTypeCustom
-			label = "Time"
+			label = "MCP Quota"
+			unit = quota.UsageUnitRequests
 		default:
 			windowType = quota.WindowTypeCustom
 			label = lim.Type
+			unit = quota.UsageUnitRequests
 		}
 
-		// Use percentage from API if available, otherwise calculate
+		// Use percentage from API
 		usedPercent := lim.Percentage
-		if usedPercent == 0 && total > 0 {
-			usedPercent = (used / total) * 100
-		}
 
-		window := &quota.UsageWindow{
-			Type:        windowType,
-			Used:        used,
-			Limit:       total,
-			UsedPercent: usedPercent,
-			Unit:        quota.UsageUnitRequests,
-			Label:       label,
+		var window *quota.UsageWindow
+
+		if hasAbsoluteValues {
+			// Has absolute values (e.g., TIME_LIMIT)
+			window = &quota.UsageWindow{
+				Type:        windowType,
+				Used:        used,
+				Limit:       total,
+				UsedPercent: usedPercent,
+				Unit:        unit,
+				Label:       label,
+				Description: fmt.Sprintf("%.0f / %.0f", used, total),
+			}
+		} else {
+			// Percentage-only (e.g., TOKENS_LIMIT)
+			window = &quota.UsageWindow{
+				Type:        windowType,
+				Used:        usedPercent, // No absolute values available
+				Limit:       100,         // No absolute values available
+				UsedPercent: usedPercent,
+				Unit:        unit,
+				Label:       label,
+				Description: fmt.Sprintf("%.0f%% utilization", usedPercent),
+			}
 		}
 
 		if lim.NextResetTime > 0 {
@@ -174,19 +204,20 @@ func (f *GLMFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.
 		// Create breakdowns for usageDetails (per-model breakdown)
 		if len(lim.UsageDetails) > 0 {
 			for _, detail := range lim.UsageDetails {
-				// Estimate this model's share of the total
+				// Calculate this model's share of the total usage
 				modelPercent := float64(0)
-				if lim.Usage > 0 {
-					modelPercent = (detail.Usage / lim.Usage) * 100
+				if lim.CurrentValue > 0 {
+					modelPercent = (detail.Usage / lim.CurrentValue) * 100
 				}
 
 				modelWindow := &quota.UsageWindow{
 					Type:        windowType,
 					Used:        detail.Usage,
-					Limit:       lim.Usage, // Use total as reference
+					Limit:       total, // Use total as reference
 					UsedPercent: modelPercent,
-					Unit:        quota.UsageUnitRequests,
+					Unit:        unit,
 					Label:       label,
+					Description: fmt.Sprintf("%.0f / %.0f", detail.Usage, total),
 				}
 
 				if lim.NextResetTime > 0 {
@@ -221,18 +252,55 @@ func (f *GLMFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.
 		lim := apiResp.Data.Limits[0]
 		total := lim.Usage
 		used := lim.CurrentValue
-		if total < lim.Remaining {
-			total = lim.Remaining + lim.CurrentValue
+		usedPercent := lim.Percentage
+		hasAbsoluteValues := total > 0 || used > 0
+
+		if hasAbsoluteValues && usedPercent == 0 {
+			usedPercent = (used / total) * 100
 		}
 
-		usage.Primary = &quota.UsageWindow{
-			Type:        quota.WindowTypeCustom,
-			Used:        used,
-			Limit:       total,
-			UsedPercent: lim.Percentage,
-			Unit:        quota.UsageUnitRequests,
-			Label:       lim.Type,
+		var label string
+		var unit quota.UsageUnit
+		var windowType quota.WindowType
+
+		switch lim.Type {
+		case "TOKENS_LIMIT":
+			label = "5-Hour Tokens"
+			unit = quota.UsageUnitPercent
+			windowType = quota.WindowTypeSession
+		case "TIME_LIMIT":
+			// TIME_LIMIT is actually MCP (Model Context Protocol) quota
+			label = "MCP Quota"
+			unit = quota.UsageUnitRequests
+			windowType = quota.WindowTypeCustom
+		default:
+			label = lim.Type
+			unit = quota.UsageUnitRequests
+			windowType = quota.WindowTypeCustom
 		}
+
+		if hasAbsoluteValues {
+			usage.Primary = &quota.UsageWindow{
+				Type:        windowType,
+				Used:        used,
+				Limit:       total,
+				UsedPercent: usedPercent,
+				Unit:        unit,
+				Label:       label,
+				Description: fmt.Sprintf("%.0f / %.0f", used, total),
+			}
+		} else {
+			usage.Primary = &quota.UsageWindow{
+				Type:        windowType,
+				Used:        0,
+				Limit:       0,
+				UsedPercent: usedPercent,
+				Unit:        unit,
+				Label:       label,
+				Description: fmt.Sprintf("%.0f%% utilization", usedPercent),
+			}
+		}
+
 		if lim.NextResetTime > 0 {
 			t := time.UnixMilli(lim.NextResetTime)
 			usage.Primary.ResetsAt = &t

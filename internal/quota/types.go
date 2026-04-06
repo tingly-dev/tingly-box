@@ -47,6 +47,7 @@ const (
 	UsageUnitRequests UsageUnit = "requests" // 请求次数
 	UsageUnitCredits  UsageUnit = "credits"  // 积分
 	UsageUnitCurrency UsageUnit = "currency" // 货币
+	UsageUnitPercent  UsageUnit = "percent"  // 百分比 (0-100)
 )
 
 // ProviderUsage 表示供应商配额快照
@@ -75,6 +76,9 @@ type ProviderUsage struct {
 	// 错误信息（如果获取失败）
 	LastError   string     `json:"last_error,omitempty"`
 	LastErrorAt *time.Time `json:"last_error_at,omitempty"`
+
+	// 原始响应数据（用于调试和复查）
+	RawResponse string `json:"raw_response,omitempty"`
 }
 
 // UsageBreakdown 表示配额的分组明细（如按模型、按区域）
@@ -186,8 +190,8 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Enabled:         true,
-		RefreshInterval: 5 * time.Minute,
-		CacheTTL:        10 * time.Minute,
+		RefreshInterval: 15 * time.Minute,
+		CacheTTL:        20 * time.Minute,
 		RetryOnFailure:  true,
 		MaxRetries:      3,
 		Providers:       make(map[string]ProviderUsageConfig),

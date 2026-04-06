@@ -9,8 +9,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
-	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
-
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -469,12 +467,10 @@ func (s *Server) UpdateProviderModelsByUUID(c *gin.Context) {
 
 	// Attach quota information if quota manager is available
 	if s.quotaManager != nil {
-		if qm, ok := s.quotaManager.(providerQuotaModule.Manager); ok {
-			var ctx context.Context = c.Request.Context()
-			quotaData, err := qm.GetQuota(ctx, uid)
-			if err == nil && quotaData != nil {
-				providerModels.Quota = quotaData
-			}
+		var ctx context.Context = c.Request.Context()
+		quotaData, err := s.quotaManager.GetQuota(ctx, uid)
+		if err == nil && quotaData != nil {
+			providerModels.Quota = quotaData
 		}
 	}
 
@@ -505,15 +501,14 @@ func (s *Server) GetProviderModelsByUUID(c *gin.Context) {
 	}
 
 	// Attach quota information if quota manager is available
+	// Use GetQuotaNoCache to always get fresh data from DB (bypasses cache/expiration logic)
 	if s.quotaManager != nil {
-		if qm, ok := s.quotaManager.(providerQuotaModule.Manager); ok {
-			var ctx context.Context = c.Request.Context()
-			quotaData, err := qm.GetQuota(ctx, uid)
-			if err == nil && quotaData != nil {
-				providerModels.Quota = quotaData
-			}
-			// Silently ignore quota errors - models should work without quota
+		var ctx context.Context = c.Request.Context()
+		quotaData, err := s.quotaManager.GetQuotaNoCache(ctx, uid)
+		if err == nil && quotaData != nil {
+			providerModels.Quota = quotaData
 		}
+		// Silently ignore quota errors - models should work without quota
 	}
 
 	response := ProviderModelsResponse{

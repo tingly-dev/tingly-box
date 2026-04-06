@@ -481,9 +481,15 @@ func printUsageWindow(w *quota.UsageWindow, indent int) {
 	prefix := strings.Repeat("  ", indent)
 	fmt.Printf("%sLabel:     %s\n", prefix, w.Label)
 	fmt.Printf("%sType:      %s\n", prefix, w.Type)
-	fmt.Printf("%sUsed:      %s", prefix, formatUsageValue(w.Used, w.Unit))
-	fmt.Printf(" / %s\n", formatUsageValue(w.Limit, w.Unit))
-	fmt.Printf("%sPercent:   %.1f%%\n", prefix, w.UsedPercent)
+
+	// For percentage-only quotas, show only percentage
+	if w.Used == 0 && w.Limit == 0 && w.Unit == quota.UsageUnitPercent {
+		fmt.Printf("%sUtilization: %.1f%%\n", prefix, w.UsedPercent)
+	} else {
+		fmt.Printf("%sUsed:      %s", prefix, formatUsageValue(w.Used, w.Unit))
+		fmt.Printf(" / %s\n", formatUsageValue(w.Limit, w.Unit))
+		fmt.Printf("%sPercent:   %.1f%%\n", prefix, w.UsedPercent)
+	}
 
 	if w.ResetsAt != nil {
 		if time.Until(*w.ResetsAt) > 0 {
@@ -497,7 +503,14 @@ func printUsageWindow(w *quota.UsageWindow, indent int) {
 // printUsageWindowInline prints a usage window on a single line (for breakdowns)
 func printUsageWindowInline(w *quota.UsageWindow, indent int) {
 	prefix := strings.Repeat("  ", indent)
-	fmt.Printf("%s%s: %s / %s (%.1f%%)", prefix, w.Label, formatUsageValue(w.Used, w.Unit), formatUsageValue(w.Limit, w.Unit), w.UsedPercent)
+
+	// For percentage-only quotas (Used=0, Limit=0), show only percentage
+	if w.Used == 0 && w.Limit == 0 && w.Unit == quota.UsageUnitPercent {
+		fmt.Printf("%s%s: %.1f%%", prefix, w.Label, w.UsedPercent)
+	} else {
+		fmt.Printf("%s%s: %s / %s (%.1f%%)", prefix, w.Label, formatUsageValue(w.Used, w.Unit), formatUsageValue(w.Limit, w.Unit), w.UsedPercent)
+	}
+
 	if w.ResetsAt != nil {
 		if time.Until(*w.ResetsAt) > 0 {
 			fmt.Printf(" — resets in %s", formatDuration(time.Until(*w.ResetsAt)))
@@ -520,6 +533,15 @@ func formatUsageValue(value float64, unit quota.UsageUnit) string {
 		return fmt.Sprintf("%.0f", value)
 	case quota.UsageUnitCurrency:
 		return fmt.Sprintf("$%.2f", value)
+	case quota.UsageUnitPercent:
+		return fmt.Sprintf("%.1f%%", value)
+	case quota.UsageUnitCredits:
+		if value >= 1000000 {
+			return fmt.Sprintf("%.1fM", value/1000000)
+		} else if value >= 1000 {
+			return fmt.Sprintf("%.1fK", value/1000)
+		}
+		return fmt.Sprintf("%.0f", value)
 	default:
 		return fmt.Sprintf("%.2f", value)
 	}
