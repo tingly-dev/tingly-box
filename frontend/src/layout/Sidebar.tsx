@@ -1,6 +1,4 @@
-import {
-    Add as AddIcon,
-} from '@mui/icons-material';
+import { IconPlus } from '@tabler/icons-react';
 import {
     Box,
     Button,

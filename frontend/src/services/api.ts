@@ -1580,6 +1580,57 @@ export const api = {
             method: 'POST',
         });
     },
+
+    // ========== System Configuration API ==========
+
+    // Get system configuration
+    getConfig: async (): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            // Use fetch directly since the endpoint may not be in generated client yet
+            const token = getUserAuthToken();
+            const baseURL = await getBaseUrl();
+            const response = await fetch(`${baseURL}/api/v1/config`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+            if (response.ok) {
+                const data = await response.json();
+                return data;
+            } else {
+                return { success: false, error: `HTTP ${response.status}` };
+            }
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Update system configuration
+    updateConfig: async (config: any): Promise<any> => {
+        try {
+            const token = getUserAuthToken();
+            const baseURL = await getBaseUrl();
+            const response = await fetch(`${baseURL}/api/v1/config`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(config),
+            });
+            if (response.ok) {
+                const data = await response.json();
+                return data;
+            } else {
+                const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+                return { success: false, error: errorData.error || `HTTP ${response.status}` };
+            }
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
 };
 
 export default api;
