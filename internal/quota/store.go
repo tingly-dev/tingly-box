@@ -76,6 +76,7 @@ type ProviderUsageRecord struct {
 	ExpiresAt   time.Time  `gorm:"column:expires_at"`
 	LastError   *string    `gorm:"column:last_error"`
 	LastErrorAt *time.Time `gorm:"column:last_error_at"`
+	RawResponse *string    `gorm:"column:raw_response;type:text"` // 原始 API 响应 JSON
 }
 
 func (ProviderUsageRecord) TableName() string {
@@ -90,6 +91,7 @@ func (r *ProviderUsageRecord) toProviderUsage() *ProviderUsage {
 		ProviderType: ProviderType(r.ProviderType),
 		FetchedAt:    r.FetchedAt,
 		ExpiresAt:    r.ExpiresAt,
+		RawResponse:  getString(r.RawResponse),
 	}
 
 	if r.LastError != nil {
@@ -184,6 +186,9 @@ func toRecord(usage *ProviderUsage) *ProviderUsageRecord {
 	}
 	if usage.LastErrorAt != nil {
 		record.LastErrorAt = usage.LastErrorAt
+	}
+	if usage.RawResponse != "" {
+		record.RawResponse = &usage.RawResponse
 	}
 
 	// Primary window

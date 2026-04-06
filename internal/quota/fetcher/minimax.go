@@ -109,14 +109,27 @@ func (f *MiniMaxFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*qu
 	}
 
 	// Aggregate total counts across all models for primary window
-	var totalLimit, totalUsed, weeklyTotal, weeklyUsed int
+	var totalLimit, totalUsed int
+	var weeklyLimit, weeklyUsed int
 	breakdowns := make([]*quota.UsageBreakdown, 0, len(apiResp.ModelRemains))
 
 	for _, m := range apiResp.ModelRemains {
-		totalLimit += m.CurrentIntervalTotalCount
-		totalUsed += m.CurrentIntervalUsageCount
-		weeklyTotal += m.CurrentWeeklyTotalCount
-		weeklyUsed += m.CurrentWeeklyUsageCount
+		// MiniMax API returns REMAINING quota, not used quota
+		// CurrentIntervalTotalCount: total quota allocation
+		// CurrentIntervalUsageCount: REMAINING quota (misleading name!)
+		// So: used = total - remaining
+		dailyTotal := m.CurrentIntervalTotalCount
+		dailyRemaining := m.CurrentIntervalUsageCount
+		dailyUsed := dailyTotal - dailyRemaining
+
+		weeklyTotal := m.CurrentWeeklyTotalCount
+		weeklyRemaining := m.CurrentWeeklyUsageCount
+		weeklyUsed := weeklyTotal - weeklyRemaining
+
+		totalLimit += dailyTotal
+		totalUsed += dailyUsed
+		weeklyLimit += weeklyTotal
+		weeklyUsed += weeklyUsed
 
 		// Create breakdown for this model
 		modelWindows := make([]*quota.UsageWindow, 0, 2)
@@ -124,9 +137,9 @@ func (f *MiniMaxFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*qu
 		// Daily window for this model
 		dailyWindow := &quota.UsageWindow{
 			Type:        quota.WindowTypeDaily,
-			Used:        float64(m.CurrentIntervalUsageCount),
-			Limit:       float64(m.CurrentIntervalTotalCount),
-			UsedPercent: calcPercent(float64(m.CurrentIntervalUsageCount), float64(m.CurrentIntervalTotalCount)),
+			Used:        float64(dailyUsed),
+			Limit:       float64(dailyTotal),
+			UsedPercent: calcPercent(float64(dailyUsed), float64(dailyTotal)),
 			Unit:        quota.UsageUnitRequests,
 			Label:       "Daily",
 		}
@@ -137,12 +150,12 @@ func (f *MiniMaxFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*qu
 		modelWindows = append(modelWindows, dailyWindow)
 
 		// Weekly window for this model (if has weekly quota)
-		if m.CurrentWeeklyTotalCount > 0 {
+		if weeklyTotal > 0 {
 			weeklyWindow := &quota.UsageWindow{
 				Type:        quota.WindowTypeWeekly,
-				Used:        float64(m.CurrentWeeklyUsageCount),
-				Limit:       float64(m.CurrentWeeklyTotalCount),
-				UsedPercent: calcPercent(float64(m.CurrentWeeklyUsageCount), float64(m.CurrentWeeklyTotalCount)),
+				Used:        float64(weeklyUsed),
+				Limit:       float64(weeklyTotal),
+				UsedPercent: calcPercent(float64(weeklyUsed), float64(weeklyTotal)),
 				Unit:        quota.UsageUnitRequests,
 				Label:       "Weekly",
 			}
@@ -181,15 +194,15 @@ func (f *MiniMaxFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*qu
 	}
 
 	// Secondary: aggregated weekly quota
-	if weeklyTotal > 0 {
+	if weeklyLimit > 0 {
 		usage.Secondary = &quota.UsageWindow{
 			Type:        quota.WindowTypeWeekly,
 			Used:        float64(weeklyUsed),
-			Limit:       float64(weeklyTotal),
-			UsedPercent: calcPercent(float64(weeklyUsed), float64(weeklyTotal)),
+			Limit:       float64(weeklyLimit),
+			UsedPercent: calcPercent(float64(weeklyUsed), float64(weeklyLimit)),
 			Unit:        quota.UsageUnitRequests,
 			Label:       "Weekly Quota",
-			Description: fmt.Sprintf("%d / %d requests", weeklyUsed, weeklyTotal),
+			Description: fmt.Sprintf("%d / %d requests", weeklyUsed, weeklyLimit),
 		}
 	}
 

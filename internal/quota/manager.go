@@ -141,6 +141,18 @@ func (m *Manager) GetQuota(ctx context.Context, providerUUID string) (*ProviderU
 	return usage, nil
 }
 
+// GetQuotaNoCache 获取指定供应商的配额（绕过缓存，直接从数据库读取最新数据）
+func (m *Manager) GetQuotaNoCache(ctx context.Context, providerUUID string) (*ProviderUsage, error) {
+	usage, err := m.store.Get(ctx, providerUUID)
+	if err != nil {
+		if err == ErrUsageNotFound {
+			return nil, fmt.Errorf("quota not found for provider: %s", providerUUID)
+		}
+		return nil, err
+	}
+	return usage, nil
+}
+
 // ListQuota 获取所有供应商的配额列表
 func (m *Manager) ListQuota(ctx context.Context) ([]*ProviderUsage, error) {
 	return m.store.List(ctx)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -79,8 +80,15 @@ func (f *ZaiFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.
 		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
 
+	// Read raw response
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+	rawResponse := string(bodyBytes)
+
 	var apiResp zaiQuotaLimitResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+	if err := json.Unmarshal(bodyBytes, &apiResp); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
@@ -91,6 +99,7 @@ func (f *ZaiFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.
 		ProviderType: quota.ProviderTypeZai,
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(5 * time.Minute),
+		RawResponse:  rawResponse,
 		Account: &quota.UsageAccount{
 			Tier: apiResp.Data.PlanName,
 		},
@@ -106,17 +115,21 @@ func (f *ZaiFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.
 	for _, lim := range apiResp.Data.Limits {
 		var windowType quota.WindowType
 		var label string
+		var unit quota.UsageUnit
 
 		switch lim.Type {
 		case "TOKENS_LIMIT":
 			windowType = quota.WindowTypeDaily
 			label = "Tokens"
+			unit = quota.UsageUnitTokens
 		case "TIME_LIMIT":
 			windowType = quota.WindowTypeCustom
 			label = "Time"
+			unit = quota.UsageUnitRequests
 		default:
 			windowType = quota.WindowTypeCustom
 			label = lim.Type
+			unit = quota.UsageUnitRequests
 		}
 
 		window := &quota.UsageWindow{
@@ -124,8 +137,9 @@ func (f *ZaiFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.
 			Used:        lim.Used,
 			Limit:       lim.Total,
 			UsedPercent: calcPercent(lim.Used, lim.Total),
-			Unit:        quota.UsageUnitRequests,
+			Unit:        unit,
 			Label:       label,
+			Description: fmt.Sprintf("%.0f / %.0f", lim.Used, lim.Total),
 		}
 
 		if lim.NextResetMs > 0 {
@@ -151,8 +165,9 @@ func (f *ZaiFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.
 				Used:        lim.Used,
 				Limit:       lim.Total,
 				UsedPercent: calcPercent(lim.Used, lim.Total),
-				Unit:        quota.UsageUnitRequests,
+				Unit:        quota.UsageUnitTokens,
 				Label:       "Token Limit",
+				Description: fmt.Sprintf("%.0f / %.0f", lim.Used, lim.Total),
 			}
 			if lim.NextResetMs > 0 {
 				t := time.UnixMilli(lim.NextResetMs)
@@ -172,6 +187,7 @@ func (f *ZaiFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.
 				UsedPercent: calcPercent(lim.Used, lim.Total),
 				Unit:        quota.UsageUnitRequests,
 				Label:       "Time Limit",
+				Description: fmt.Sprintf("%.0f / %.0f", lim.Used, lim.Total),
 			}
 			if lim.NextResetMs > 0 {
 				t := time.UnixMilli(lim.NextResetMs)
@@ -191,6 +207,7 @@ func (f *ZaiFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.
 			UsedPercent: calcPercent(lim.Used, lim.Total),
 			Unit:        quota.UsageUnitRequests,
 			Label:       lim.Type,
+			Description: fmt.Sprintf("%.0f / %.0f", lim.Used, lim.Total),
 		}
 		if lim.NextResetMs > 0 {
 			t := time.UnixMilli(lim.NextResetMs)

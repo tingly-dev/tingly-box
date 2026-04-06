@@ -27,6 +27,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/hooks"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
+	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
@@ -124,7 +125,7 @@ type Server struct {
 	virtualModelService *virtualmodel.Service
 
 	// quota manager for provider quota tracking
-	quotaManager interface{}
+	quotaManager providerQuotaModule.Manager
 
 	// options
 	enableUI      bool
@@ -1110,10 +1111,8 @@ func (s *Server) Start(port int) error {
 
 	// Start provider quota auto-refresh
 	if s.quotaManager != nil {
-		if qm, ok := s.quotaManager.(interface{ StartAutoRefresh(ctx context.Context) }); ok {
-			qm.StartAutoRefresh(ctx)
-			log.Println("Provider quota auto-refresh started")
-		}
+		s.quotaManager.StartAutoRefresh(ctx)
+		log.Println("Provider quota auto-refresh started")
 	}
 
 	// Start configuration watcher
@@ -1395,10 +1394,8 @@ func (s *Server) Stop(ctx context.Context) error {
 
 	// Stop provider quota auto-refresh
 	if s.quotaManager != nil {
-		if qm, ok := s.quotaManager.(interface{ StopAutoRefresh() }); ok {
-			qm.StopAutoRefresh()
-			log.Println("Provider quota auto-refresh stopped")
-		}
+		s.quotaManager.StopAutoRefresh()
+		log.Println("Provider quota auto-refresh stopped")
 	}
 
 	// Stop debug middleware
