@@ -20,6 +20,8 @@ tasks:
         CXX="zig c++ -target x86_64-windows-gnu" \
         GOOS=windows GOARCH=amd64 CGO_ENABLED=1 \
         go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-amd64.exe ./cli/tingly-box
+        mkdir -p {{.BIN_DIR}}/scripts
+        cp scripts/mcp_web_tools.py {{.BIN_DIR}}/scripts/
 
   build:arm64:
     summary: Cross-compiles for Windows ARM64 (requires zig)
@@ -33,3 +35,5 @@ tasks:
         CXX="zig c++ -target aarch64-windows-gnu" \
         GOOS=windows GOARCH=arm64 CGO_ENABLED=1 \
         go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-arm64.exe ./cli/tingly-box
+        mkdir -p {{.BIN_DIR}}/scripts
+        cp scripts/mcp_web_tools.py {{.BIN_DIR}}/scripts/
