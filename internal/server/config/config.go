@@ -133,6 +133,12 @@ type HTTPTransportConfig struct {
 	// Default (nil): false
 	// WARNING: Setting this to true will significantly impact performance
 	DisableKeepAlives *bool `json:"disable_keep_alives,omitempty" yaml:"disable_keep_alives,omitempty"`
+
+	// RespectEnvProxy controls whether providers without explicit proxy configuration
+	// should use environment/system proxy settings (HTTP_PROXY, HTTPS_PROXY, macOS system proxy, etc.)
+	// Default (nil): true - use environment proxy when provider has no proxy_url configured
+	// Set to false: providers without proxy_url will connect directly
+	RespectEnvProxy *bool `json:"respect_env_proxy,omitempty" yaml:"respect_env_proxy,omitempty"`
 }
 
 // ConfigOption is a function that modifies a Config during initialization
@@ -1901,12 +1907,13 @@ func (c *Config) EnsureDefaultScenarioConfigs() {
 
 // ApplyHTTPTransportConfig applies the HTTP transport configuration to the global transport pool
 // This is called by TBE during initialization to configure connection pooling
-// For TB (tingly-box), this is a no-op since HTTPTransport will be empty (zero values)
+// For TB (tingly-box), this applies the proxy settings (default: respect_env_proxy=true)
 func (c *Config) ApplyHTTPTransportConfig() {
 	if c.HTTPTransport.MaxIdleConns == nil &&
 		c.HTTPTransport.MaxIdleConnsPerHost == nil &&
 		c.HTTPTransport.MaxConnsPerHost == nil &&
-		c.HTTPTransport.DisableKeepAlives == nil {
+		c.HTTPTransport.DisableKeepAlives == nil &&
+		c.HTTPTransport.RespectEnvProxy == nil {
 		// No custom transport config, use Go defaults (backward compatible with TB)
 		return
 	}
@@ -1918,6 +1925,7 @@ func (c *Config) ApplyHTTPTransportConfig() {
 		MaxIdleConnsPerHost: c.HTTPTransport.MaxIdleConnsPerHost,
 		MaxConnsPerHost:     c.HTTPTransport.MaxConnsPerHost,
 		DisableKeepAlives:   c.HTTPTransport.DisableKeepAlives,
+		RespectEnvProxy:     c.HTTPTransport.RespectEnvProxy,
 	}
 	client.SetTransportConfig(config)
 }
