@@ -15,6 +15,11 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
+// Constants for proxy URL values
+const (
+	ProxyURLNone = "none" // Special value to force direct connection (disable proxy)
+)
+
 // TransportConfig holds the configuration for HTTP transport connection pooling
 // All fields are pointers so that zero-value (nil) means "use Go default"
 type TransportConfig struct {
@@ -22,6 +27,12 @@ type TransportConfig struct {
 	MaxIdleConnsPerHost *int  // nil = use Go default (2)
 	MaxConnsPerHost     *int  // nil = use Go default (0, no limit)
 	DisableKeepAlives   *bool // nil = use Go default (false)
+
+	// RespectEnvProxy controls whether providers without explicit proxy configuration
+	// should use environment/system proxy settings (HTTP_PROXY, HTTPS_PROXY, macOS system proxy, etc.)
+	// Default (nil): true - use environment proxy when provider has no proxy_url configured
+	// Set to false: providers without proxy_url will connect directly
+	RespectEnvProxy *bool // nil = use default (true)
 }
 
 // Go defaults for reference (not used directly, only for documentation)
