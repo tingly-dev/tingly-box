@@ -179,8 +179,8 @@ func (f *GLMFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.
 			// Percentage-only (e.g., TOKENS_LIMIT)
 			window = &quota.UsageWindow{
 				Type:        windowType,
-				Used:        0, // No absolute values available
-				Limit:       0, // No absolute values available
+				Used:        usedPercent, // No absolute values available
+				Limit:       100,         // No absolute values available
 				UsedPercent: usedPercent,
 				Unit:        unit,
 				Label:       label,
