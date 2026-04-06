@@ -88,8 +88,8 @@ func ConvertOpenAIResponsesToAnthropicRequest(
 func ConvertOpenAIResponsesToAnthropicBetaRequest(
 	params responses.ResponseNewParams,
 	defaultMaxTokens int64,
-) anthropic.BetaMessageNewParams {
-	anthropicParams := anthropic.BetaMessageNewParams{}
+) *anthropic.BetaMessageNewParams {
+	anthropicParams := &anthropic.BetaMessageNewParams{}
 
 	// Convert model
 	if params.Model != "" {
