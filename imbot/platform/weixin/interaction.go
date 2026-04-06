@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/tingly-dev/tingly-box/imbot/core"
-	"github.com/tingly-dev/weixin/message"
+	"github.com/tingly-dev/weixin/types"
 )
 
 // InteractionHandler provides interaction handlers for Weixin
@@ -25,14 +25,8 @@ func (h *InteractionHandler) GetQRCode(ctx context.Context) (*QRCodeResult, erro
 		return nil, fmt.Errorf("account not loaded")
 	}
 
-	// Use pairing adapter to get QR code
-	pairingAdapter := h.bot.plugin.Pairing()
-	if pairingAdapter == nil {
-		return nil, fmt.Errorf("pairing adapter not available")
-	}
-
-	// Start QR login
-	result, err := pairingAdapter.LoginWithQrStart(ctx, h.bot.accountID)
+	// Use WechatBot.LoginWithQrStart to get QR code
+	result, err := h.bot.LoginWithQrStart(ctx, h.bot.accountID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get QR code: %w", err)
 	}
@@ -68,23 +62,14 @@ func (h *InteractionHandler) StartPairing(ctx context.Context) (*QRCodeResult, e
 		return nil, fmt.Errorf("account not loaded")
 	}
 
-	// Use pairing adapter to start pairing
-	pairingAdapter := h.bot.plugin.Pairing()
-	if pairingAdapter == nil {
-		return nil, fmt.Errorf("pairing adapter not available")
-	}
-
-	// Start QR login
-	result, err := pairingAdapter.LoginWithQrStart(ctx, h.bot.accountID)
+	// Use WechatBot.LoginWithQrStart to start pairing
+	result, err := h.bot.LoginWithQrStart(ctx, h.bot.accountID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start pairing: %w", err)
 	}
 
-	// Set account as pending configuration
-	h.bot.account.Configured = false
-	if err := h.bot.plugin.Accounts().Save(h.bot.account); err != nil {
-		return nil, fmt.Errorf("failed to save account: %w", err)
-	}
+	// Note: We don't save to file system here.
+	// The account state will be updated by our database layer after successful pairing.
 
 	h.bot.Logger().Info("Weixin pairing started for account: %s", h.bot.accountID)
 
@@ -102,14 +87,9 @@ func (h *InteractionHandler) CheckPairingStatus(ctx context.Context, qrID string
 		return nil, fmt.Errorf("account not loaded")
 	}
 
-	// Use pairing adapter to check status
-	pairingAdapter := h.bot.plugin.Pairing()
-	if pairingAdapter == nil {
-		return nil, fmt.Errorf("pairing adapter not available")
-	}
-
-	// Wait for QR scan
-	result, err := pairingAdapter.LoginWithQrWait(ctx, h.bot.accountID, qrID)
+	// Use WechatBot.LoginWithQrWait to check status
+	// Note: This will update the bot's internal account on success
+	result, err := h.bot.LoginWithQrWait(ctx, h.bot.accountID, qrID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check pairing status: %w", err)
 	}
@@ -118,20 +98,22 @@ func (h *InteractionHandler) CheckPairingStatus(ctx context.Context, qrID string
 	status := &PairingStatus{}
 
 	if result.Success {
-		// Pairing successful, load updated account
-		account, err := h.bot.plugin.Accounts().Get(h.bot.accountID)
-		if err != nil {
+		// Pairing successful - SDK has updated the account and saved it to the store
+		// Get the updated account from the bot
+		account := h.bot.Account()
+		if account == nil {
 			status.Status = "error"
-			status.ErrorMsg = "failed to load account after pairing"
+			status.ErrorMsg = "failed to get account after pairing"
 			return status, nil
 		}
 
+		wcAccount := account.WeChatAccount()
 		status.Status = "success"
-		status.BotID = account.BotID
-		status.UserID = account.UserID
-		status.PairedAt = account.LastLoginAt.Unix()
+		status.BotID = wcAccount.BotID
+		status.UserID = wcAccount.UserID
+		status.PairedAt = wcAccount.LastLoginAt.Unix()
 
-		// Update local account reference
+		// Update our bot's account reference
 		h.bot.account = account
 	} else {
 		status.Status = "failed"
@@ -155,7 +137,7 @@ func (h *InteractionHandler) IsConfigured() bool {
 	if h.bot.account == nil {
 		return false
 	}
-	return h.bot.account.Configured && h.bot.account.BotToken != ""
+	return h.bot.account.IsConfigured()
 }
 
 // ReAuthenticate starts the re-authentication process for an expired session
@@ -165,16 +147,18 @@ func (h *InteractionHandler) ReAuthenticate(ctx context.Context) (*QRCodeResult,
 		return nil, fmt.Errorf("account not loaded")
 	}
 
-	h.bot.account.Configured = false
-	h.bot.account.BotToken = ""
-	h.bot.account.BotID = ""
-	h.bot.account.UserID = ""
+	wcAccount := h.bot.account.WeChatAccount()
+	wcAccount.Configured = false
+	wcAccount.BotToken = ""
+	wcAccount.BotID = ""
+	wcAccount.UserID = ""
 
-	if err := h.bot.plugin.Accounts().Save(h.bot.account); err != nil {
+	// Save the updated account to store
+	if err := h.bot.SaveAccount(wcAccount); err != nil {
 		return nil, fmt.Errorf("failed to save account: %w", err)
 	}
 
-	h.bot.Logger().Info("Weixin account reset for re-authentication: %s", h.bot.account.ID)
+	h.bot.Logger().Info("Weixin account reset for re-authentication: %s", h.bot.accountID)
 
 	// Emit session expired event
 	h.bot.EmitError(core.NewAuthFailedError(core.PlatformWeixin, "session expired, please re-authenticate", nil))
@@ -192,16 +176,17 @@ func (h *InteractionHandler) GetAccountInfo() *AccountInfo {
 		}
 	}
 
+	wcAccount := h.bot.account.WeChatAccount()
 	return &AccountInfo{
-		AccountID:   h.bot.account.ID,
-		Name:        h.bot.account.Name,
-		BotID:       h.bot.account.BotID,
-		UserID:      h.bot.account.UserID,
-		BaseURL:     h.bot.account.BaseURL,
-		Configured:  h.bot.account.Configured,
-		Enabled:     h.bot.account.Enabled,
-		CreatedAt:   h.bot.account.CreatedAt.Unix(),
-		LastLoginAt: h.bot.account.LastLoginAt.Unix(),
+		AccountID:   wcAccount.ID,
+		Name:        wcAccount.Name,
+		BotID:       wcAccount.BotID,
+		UserID:      wcAccount.UserID,
+		BaseURL:     wcAccount.BaseURL,
+		Configured:  wcAccount.Configured,
+		Enabled:     wcAccount.Enabled,
+		CreatedAt:   wcAccount.CreatedAt.Unix(),
+		LastLoginAt: wcAccount.LastLoginAt.Unix(),
 	}
 }
 
@@ -243,18 +228,27 @@ func (h *InteractionHandler) CompletePairing(ctx context.Context, qrID string) (
 
 // SendMessage sends a message to a specific user
 func (h *InteractionHandler) SendMessage(ctx context.Context, userID string, text string) (string, error) {
-	if h.bot.client == nil {
+	if h.bot.account == nil {
 		return "", fmt.Errorf("not connected")
 	}
 
-	// Get context token from storage
-	contextToken := message.GetContextToken(h.bot.accountID, userID)
+	// Build outbound message
+	msg := &types.OutboundMessage{
+		To:   userID,
+		Text: text,
+	}
 
-	if err := h.bot.client.SendTextMessage(ctx, userID, contextToken, text); err != nil {
+	// Send via WechatBot
+	result, err := h.bot.Send(ctx, msg)
+	if err != nil {
 		return "", fmt.Errorf("failed to send message: %w", err)
 	}
 
-	return fmt.Sprintf("weixin-%d", h.bot.Status().LastActivity), nil
+	if !result.OK {
+		return "", fmt.Errorf("failed to send message: %s", result.Error)
+	}
+
+	return result.MessageID, nil
 }
 
 // GetContacts returns a list of contacts (not yet implemented)
