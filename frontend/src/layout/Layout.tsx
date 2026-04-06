@@ -1,5 +1,5 @@
 import { Box, Drawer, IconButton, Popover, Typography } from '@mui/material';
-import { Menu as MenuIcon } from '@mui/icons-material';
+import { IconMenu } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
@@ -122,7 +122,7 @@ const Layout = ({ children }: LayoutProps) => {
                     transition: 'all 0.15s',
                 }}
             >
-                <MenuIcon />
+                <IconMenu size={24} />
             </IconButton>
 
             {/* Main content */}

@@ -2,8 +2,10 @@ import CardGrid from '@/components/CardGrid';
 import GlobalExperimentalFeatures from '@/components/GlobalExperimentalFeatures';
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
-import { Cancel, CheckCircle, CloudUpload, NewReleases, Refresh as RefreshIcon } from '@mui/icons-material';
-import { Alert, AlertTitle, Box, CircularProgress, IconButton, Link, Stack, Typography } from '@mui/material';
+import { CloudUpload } from '@mui/icons-material';
+import { Refresh as RefreshIcon } from '@mui/icons-material';
+import { IconCircleCheck, IconCircleX, IconInfoCircle, IconKey, IconLock, IconStar, IconLicense, IconBrandGithub } from '@tabler/icons-react';
+import { Alert, AlertTitle, Box, CircularProgress, IconButton, Link, Stack, Tooltip, Typography, Chip } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useHealth } from '@/contexts/HealthContext';
@@ -22,6 +24,9 @@ const System = () => {
     const [providerModels, setProviderModels] = useState<any>({});
     const [notification, setNotification] = useState<{ open: boolean; message?: string; severity?: 'success' | 'error' | 'info' | 'warning' }>({ open: false });
     const [loading, setLoading] = useState(true);
+
+    // Proxy settings state
+    const [respectEnvProxy, setRespectEnvProxy] = useState<boolean | null>(null);
 
     useEffect(() => {
         loadAllData();
@@ -42,8 +47,32 @@ const System = () => {
             loadServerStatus(),
             loadProvidersStatus(),
             loadProviderSelectionPanel(),
+            loadProxyConfig(),
         ]);
         setLoading(false);
+    };
+
+    const loadProxyConfig = async () => {
+        const result = await api.getConfig();
+        if (result.success && result.data) {
+            const value = result.data.http_transport?.respect_env_proxy;
+            setRespectEnvProxy(value === null ? true : value);
+        }
+    };
+
+    const toggleProxy = () => {
+        const newValue = !respectEnvProxy;
+        setRespectEnvProxy(newValue);
+
+        api.updateConfig({
+            http_transport: {
+                respect_env_proxy: newValue,
+            },
+        }).then((result) => {
+            if (!result.success) {
+                setRespectEnvProxy(!newValue);
+            }
+        });
     };
 
     const loadBaseUrl = async () => {
@@ -139,7 +168,7 @@ const System = () => {
     return (
         <PageLayout loading={loading} notification={notification}>
             <CardGrid>
-                {/* Server Status - Minimal Design */}
+                {/* Server Status - Simplified one-line-per-status design */}
                 <UnifiedCard
                     title="Server Status"
                     size="full"
@@ -154,140 +183,189 @@ const System = () => {
                     }
                 >
                     {serverStatus ? (
-                        <Stack spacing={2}>
-                            {/* Status Row */}
-                            <Stack direction="row" alignItems="center" spacing={2}>
-                                {serverStatus.server_running ? (
-                                    <CheckCircle color="success" />
-                                ) : (
-                                    <Cancel color="error" />
-                                )}
-                                <Typography variant="h6" fontWeight={500}>
-                                    {serverStatus.server_running ? t('system.status.running') : t('system.status.stopped')}
-                                </Typography>
-                                {isHealthy && (
-                                    <Typography variant="body2" color="success.main">
-                                        · Connected
+                        <Stack spacing={1.5}>
+                            {/* Server Status */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
+                                    {serverStatus.server_running ? (
+                                        <IconCircleCheck size={16} style={{ color: 'var(--mui-palette-success-main)' }} />
+                                    ) : (
+                                        <IconCircleX size={16} style={{ color: 'var(--mui-palette-error-main)' }} />
+                                    )}
+                                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                        Server
                                     </Typography>
-                                )}
-                            </Stack>
+                                </Box>
+                                <Box sx={{ flex: 1 }}>
+                                    <Typography variant="body2" sx={{ color: 'text.primary' }}>
+                                        {serverStatus.server_running ? t('system.status.running') : t('system.status.stopped')}
+                                        {isHealthy && (
+                                            <Typography component="span" variant="body2" color="success.main" sx={{ ml: 1 }}>
+                                                · Connected
+                                            </Typography>
+                                        )}
+                                    </Typography>
+                                </Box>
+                            </Box>
 
-                            {/* Details */}
-                            <Stack spacing={1} pl={5}>
-                                <Typography variant="body2" color="text.secondary">
-                                    Server: {baseUrl}
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    Keys: {serverStatus.providers_enabled}/{serverStatus.providers_total}
-                                </Typography>
-                                {serverStatus.uptime && (
-                                    <Typography variant="body2" color="text.secondary">
-                                        Uptime: {serverStatus.uptime}
+                            {/* Keys */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
+                                    <IconKey size={14} style={{ color: 'var(--mui-palette-text-secondary)' }} />
+                                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                        Keys
                                     </Typography>
-                                )}
-                                {serverStatus.last_updated && (
-                                    <Typography variant="body2" color="text.secondary">
-                                        Last updated: {serverStatus.last_updated}
+                                </Box>
+                                <Box sx={{ flex: 1 }}>
+                                    <Typography variant="body2" sx={{ color: 'text.primary' }}>
+                                        {serverStatus.providers_enabled} / {serverStatus.providers_total}
                                     </Typography>
-                                )}
-                            </Stack>
+                                </Box>
+                            </Box>
+
+                            {/* Uptime */}
+                            {serverStatus.uptime && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
+                                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                            Uptime
+                                        </Typography>
+                                    </Box>
+                                    <Box sx={{ flex: 1 }}>
+                                        <Typography variant="body2" sx={{ color: 'text.primary' }}>
+                                            {serverStatus.uptime}
+                                        </Typography>
+                                    </Box>
+                                </Box>
+                            )}
+
+                            {/* Proxy Settings */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
+                                    <IconLock size={14} style={{ color: 'var(--mui-palette-text-secondary)' }} />
+                                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                        Proxy
+                                    </Typography>
+                                </Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
+                                    {respectEnvProxy !== null && (
+                                        <Tooltip
+                                            title={t('system.proxy.respectEnvProxy.helper') + (respectEnvProxy ? ' (enabled)' : ' (disabled)')}
+                                            arrow
+                                        >
+                                            <Chip
+                                                label={`${respectEnvProxy ? 'System Proxy' : 'Direct'} · ${respectEnvProxy ? 'On' : 'Off'}`}
+                                                onClick={toggleProxy}
+                                                size="small"
+                                                sx={(theme) => ({
+                                                    bgcolor: respectEnvProxy ? 'primary.main' : 'action.hover',
+                                                    color: respectEnvProxy ? 'primary.contrastText' : 'text.primary',
+                                                    fontWeight: respectEnvProxy ? 600 : 400,
+                                                    border: respectEnvProxy ? 'none' : '1px solid',
+                                                    borderColor: 'divider',
+                                                    '&:hover': {
+                                                        bgcolor: respectEnvProxy ? 'primary.dark' : 'action.selected',
+                                                    },
+                                                })}
+                                            />
+                                        </Tooltip>
+                                    )}
+                                </Box>
+                            </Box>
                         </Stack>
                     ) : (
                         <Typography color="text.secondary">{t('system.status.loading')}</Typography>
                     )}
                 </UnifiedCard>
 
-                {/* About Card */}
+                {/* About - Simplified one-line-per-status design */}
                 <UnifiedCard
                     title="About"
-                    size="medium"
-                    width="100%"
-                    rightAction={
-                        <IconButton onClick={() => checkForUpdates(true)} size="small" aria-label="Check for updates" title="Check for updates">
-                            {checkingVersion ? <CircularProgress size={16} /> : <RefreshIcon />}
-                        </IconButton>
-                    }
+                    size="full"
                 >
                     <Stack spacing={1.5}>
-                        {/* Version Update Alert - Clickable, always show in dev mode */}
-                        {(hasUpdate || import.meta.env.DEV) && (
-                            <Alert
-                                severity={import.meta.env.DEV && !hasUpdate ? "success" : "info"}
-                                icon={<CloudUpload fontSize="inherit" />}
-                                sx={{ mb: 1, cursor: 'pointer', '&:hover': { bgcolor: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main' } }}
-                                onClick={showUpdateDialog}
-                                role="button"
-                                aria-label="View update details"
-                                tabIndex={0}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
-                                        e.preventDefault();
-                                        showUpdateDialog();
-                                    }
-                                }}
-                            >
-                                <AlertTitle>{import.meta.env.DEV && !hasUpdate ? 'Dev Mode' : 'Update Available'}</AlertTitle>
-                                {hasUpdate
-                                    ? `New version ${latestVersion} is available! You are on ${currentVersion}.`
-                                    : `Dev mode active. Version: ${currentVersion || 'N/A'}`
-                                }
-                                <Typography variant="caption" display="block" sx={{ mt: 0.5, opacity: 0.8 }}>
-                                    Click to view details
+                        {/* Version */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
+                                <IconInfoCircle size={14} style={{ color: 'var(--mui-palette-text-secondary)' }} />
+                                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                    Version
                                 </Typography>
-                            </Alert>
-                        )}
+                            </Box>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
+                                <Typography variant="body2" sx={{ color: 'text.primary' }}>
+                                    {currentVersion || 'N/A'}
+                                </Typography>
+                                {(hasUpdate || import.meta.env.DEV) && (
+                                    <Tooltip title={`Click to view ${hasUpdate ? 'update details' : 'dev info'}`} arrow>
+                                        <Box
+                                            onClick={showUpdateDialog}
+                                            sx={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 0.5,
+                                                color: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main',
+                                                cursor: 'pointer',
+                                                px: 1,
+                                                py: 0.5,
+                                                borderRadius: 1,
+                                                transition: 'all 150ms ease-in-out',
+                                                '&:hover': { bgcolor: 'action.hover' },
+                                            }}
+                                            role="button"
+                                            aria-label="View update details"
+                                            tabIndex={0}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    showUpdateDialog();
+                                                }
+                                            }}
+                                        >
+                                            <IconStar size={16} />
+                                            <Typography variant="caption" color={import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main'}>
+                                                {hasUpdate ? `${latestVersion} available` : 'Dev Mode'}
+                                            </Typography>
+                                        </Box>
+                                    </Tooltip>
+                                )}
+                            </Box>
+                        </Box>
 
-                        <Stack direction="row" alignItems="center" justifyContent="space-between">
-                            <Typography variant="body2" color="text.secondary">
-                                <strong>Version:</strong> {currentVersion || 'N/A'}
-                            </Typography>
-                            {(hasUpdate || import.meta.env.DEV) && (
-                                <Box
-                                    onClick={showUpdateDialog}
-                                    sx={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 0.5,
-                                        color: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main',
-                                        cursor: 'pointer',
-                                        px: 1,
-                                        py: 0.5,
-                                        borderRadius: 1,
-                                        transition: 'all 150ms ease-in-out',
-                                        '&:hover': {
-                                            bgcolor: 'action.hover',
-                                        },
-                                    }}
-                                    role="button"
-                                    aria-label="View update details"
-                                    tabIndex={0}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' || e.key === ' ') {
-                                            e.preventDefault();
-                                            showUpdateDialog();
-                                        }
-                                    }}
+                        {/* License */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
+                                <IconLicense size={16} style={{ color: 'text.secondary' }} />
+                                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                    License
+                                </Typography>
+                            </Box>
+                            <Box sx={{ flex: 1 }}>
+                                <Typography variant="body2" sx={{ color: 'text.primary' }}>
+                                    MPL-2.0 + Commercial
+                                </Typography>
+                            </Box>
+                        </Box>
+
+                        {/* GitHub */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
+                                <IconBrandGithub size={16} style={{ color: 'text.secondary' }} />
+                                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                    GitHub
+                                </Typography>
+                            </Box>
+                            <Box sx={{ flex: 1 }}>
+                                <Link
+                                    href="https://github.com/tingly-dev/tingly-box"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    sx={{ typography: 'body2', color: 'primary.main', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
                                 >
-                                    <NewReleases sx={{ fontSize: 16 }} />
-                                    <Typography variant="caption" color={import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main'}>
-                                        {hasUpdate ? `${latestVersion} available` : 'Dev Mode'}
-                                    </Typography>
-                                </Box>
-                            )}
-                        </Stack>
-                        <Typography variant="body2" color="text.secondary">
-                            <strong>License:</strong> MPL v2.0
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            <strong>GitHub:</strong>{' '}
-                            <Link
-                                href="https://github.com/tingly-dev/tingly-box"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
-                                tingly-dev/tingly-box
-                            </Link>
-                        </Typography>
+                                    tingly-dev/tingly-box
+                                </Link>
+                            </Box>
+                        </Box>
                     </Stack>
                 </UnifiedCard>
 

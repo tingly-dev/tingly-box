@@ -1,5 +1,13 @@
-import { Check as CheckIcon, Science, SettingsSuggest, AutoMode, FlashOn, KeyboardArrowDown, FiberManualRecord } from '@mui/icons-material';
-import Psychology from '@mui/icons-material/Psychology';
+import {
+    IconCheck,
+    IconBrain,
+    IconFlask,
+    IconSettings,
+    IconRefresh,
+    IconBolt,
+    IconChevronDown,
+    IconCircleFilled,
+} from '@tabler/icons-react';
 import {
     Box,
     Button,
@@ -29,7 +37,7 @@ interface PluginFeatureConfig {
 const PLUGIN_FEATURES: PluginFeatureConfig[] = [
     { key: 'smart_compact', label: 'Smart Compact', description: 'Remove thinking blocks from conversation history to reduce context' },
     { key: 'clean_header', label: 'Clean Header', description: 'Remove Claude Code billing header from system messages', scenarios: ['claude_code'] as const },
-    { key: 'anthropic_beta', label: 'Beta', description: 'Enable Anthropic beta features (e.g. extended thinking)', scenarios: ['claude_code'] as const },
+    // { key: 'anthropic_beta', label: 'Beta', description: 'Enable Anthropic beta features (e.g. extended thinking)', scenarios: ['claude_code'] as const },
 ];
 
 const EFFORT_LEVELS = [
@@ -41,9 +49,9 @@ const EFFORT_LEVELS = [
 ] as const;
 
 const THINKING_MODES = [
-    { value: 'default', label: 'By Client', description: 'Use client request config', icon: SettingsSuggest },
-    { value: 'adaptive', label: 'Adaptive', description: 'Adapter to use extended thinking (enable / adaptive)', icon: AutoMode },
-    { value: 'force', label: 'Force', description: 'Force to use extended thinking', icon: FlashOn },
+    { value: 'default', label: 'By Client', description: 'Use client request config', icon: IconSettings },
+    { value: 'adaptive', label: 'Adaptive', description: 'Adapter to use extended thinking (enable / adaptive)', icon: IconRefresh },
+    { value: 'force', label: 'Force', description: 'Force to use extended thinking', icon: IconBolt },
 ] as const;
 
 // Record V2 modes
@@ -232,7 +240,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
                     <Tooltip title="Thinking configuration" arrow>
-                        <Psychology sx={{ fontSize: '1rem', color: 'text.secondary' }} />
+                        <IconBrain size={16} style={{ color: 'var(--mui-palette-text-secondary)' }} />
                     </Tooltip>
                     <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
                         Thinking
@@ -246,7 +254,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                             variant="outlined"
                             onClick={(e) => !updating.effort && handleMenuOpen('effort', e)}
                             disabled={updating.effort}
-                            endIcon={<KeyboardArrowDown />}
+                            endIcon={<IconChevronDown size={18} />}
                             sx={{
                                 minWidth: 110,
                                 textTransform: 'none',
@@ -282,7 +290,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                                 <Tooltip title={level.description} placement="right" arrow>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
                                         <ListItemText>{level.label}</ListItemText>
-                                        {level.value === effort && <CheckIcon />}
+                                        {level.value === effort && <IconCheck size={16} />}
                                     </Box>
                                 </Tooltip>
                             </MenuItem>
@@ -298,7 +306,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                                     variant="outlined"
                                     onClick={(e) => !updating.thinkingMode && handleMenuOpen('thinkingMode', e)}
                                     disabled={updating.thinkingMode}
-                                    endIcon={<KeyboardArrowDown />}
+                                    endIcon={<IconChevronDown size={18} />}
                                     sx={{
                                         minWidth: 110,
                                         textTransform: 'none',
@@ -336,10 +344,10 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                                             <Tooltip title={mode.description} placement="right" arrow>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
                                                     <ListItemIcon sx={{ mr: -1 }}>
-                                                        <Icon sx={{ fontSize: '1rem' }} />
+                                                        <Icon size={16} />
                                                     </ListItemIcon>
                                                     <ListItemText>{mode.label}</ListItemText>
-                                                    {mode.value === thinkingMode && <CheckIcon />}
+                                                    {mode.value === thinkingMode && <IconCheck size={16} />}
                                                 </Box>
                                             </Tooltip>
                                         </MenuItem>
@@ -355,7 +363,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
                     <Tooltip title="Plugin Features Control" arrow>
-                        <Science sx={{ fontSize: '1rem', color: 'text.secondary' }} />
+                        <IconFlask size={16} style={{ color: 'var(--mui-palette-text-secondary)' }} />
                     </Tooltip>
                     <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
                         Plugin
@@ -374,7 +382,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                                         variant="outlined"
                                         onClick={(e) => !isUpdating && handleMenuOpen(feature.key, e)}
                                         disabled={isUpdating}
-                                        endIcon={<KeyboardArrowDown />}
+                                        endIcon={<IconChevronDown size={18} />}
                                         sx={{
                                             minWidth: 100,
                                             textTransform: 'none',
@@ -409,7 +417,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                                             sx={{ width: '100%' }}
                                         >
                                             <ListItemText>On</ListItemText>
-                                            {isEnabled && <CheckIcon />}
+                                            {isEnabled && <IconCheck size={16} />}
                                         </MenuItem>
                                     </Tooltip>
                                     <Tooltip title={feature.description} placement="right" arrow>
@@ -422,7 +430,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                                             sx={{ width: '100%' }}
                                         >
                                             <ListItemText>Off</ListItemText>
-                                            {!isEnabled && <CheckIcon />}
+                                            {!isEnabled && <IconCheck size={16} />}
                                         </MenuItem>
                                     </Tooltip>
                                 </Menu>
@@ -446,7 +454,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                                     variant="outlined"
                                     onClick={(e) => !isUpdatingRecordV2 && handleMenuOpen('recordV2', e)}
                                     disabled={isUpdatingRecordV2}
-                                    endIcon={<KeyboardArrowDown />}
+                                    endIcon={<IconChevronDown size={18} />}
                                     sx={{
                                         minWidth: 110,
                                         textTransform: 'none',
@@ -461,7 +469,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                                         },
                                     }}
                                 >
-                                    <FiberManualRecord sx={{ fontSize: '0.875rem', mr: 0.5 }} />
+                                    <IconCircleFilled size={14} style={{ marginRight: '4px' }} />
                                     Record: {currentRecordMode?.label || 'Off'}
                                 </Button>
                             </Tooltip>
@@ -486,7 +494,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                                 <Tooltip title={mode.description} placement="right" arrow>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
                                         <ListItemText>{mode.label}</ListItemText>
-                                        {mode.value === recordV2Mode && <CheckIcon />}
+                                        {mode.value === recordV2Mode && <IconCheck size={16} />}
                                     </Box>
                                 </Tooltip>
                             </MenuItem>

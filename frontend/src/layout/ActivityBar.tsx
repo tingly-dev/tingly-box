@@ -1,11 +1,12 @@
 import {
-    AccountCircle as AccountIcon,
-    DarkMode,
-    ErrorOutline,
-    LightMode,
-    NewReleases,
-    WbSunny,
-} from '@mui/icons-material';
+    IconAlertCircle,
+    IconBrush,
+    IconMoon,
+    IconStar,
+    IconSun,
+    IconSunHigh,
+    IconUser,
+} from '@tabler/icons-react';
 import { Box, Divider, ListItemButton, ListItemIcon, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
 import React, { useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
@@ -173,7 +174,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                             sx={activityItemSx({ color: 'error.main', '&:hover': { bgcolor: 'action.hover' } })}
                         >
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                                <ErrorOutline sx={{ fontSize: 22 }} />
+                                <IconAlertCircle size={22} />
                             </ListItemIcon>
                             <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
                                 Error
@@ -197,7 +198,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                             })}
                         >
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                                <NewReleases sx={{ fontSize: 22 }} />
+                                <IconStar size={22} />
                             </ListItemIcon>
                             <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
                                 {import.meta.env.DEV && !hasUpdate ? 'Dev' : 'Update'}
@@ -215,13 +216,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                         })}
                     >
                         <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                            {mode === 'dark' ? (
-                                <DarkMode sx={{ fontSize: 22 }} />
-                            ) : mode === 'sunlit' ? (
-                                <WbSunny sx={{ fontSize: 22 }} />
-                            ) : (
-                                <LightMode sx={{ fontSize: 22 }} />
-                            )}
+                            <IconBrush size={22} />
                         </ListItemIcon>
                         <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
                             Theme
@@ -253,7 +248,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                         }}
                         sx={{ gap: 1.5 }}
                     >
-                        <LightMode fontSize="small" />
+                        <IconSun size={18} />
                         <Typography>Light</Typography>
                     </MenuItem>
                     <MenuItem
@@ -264,7 +259,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                         }}
                         sx={{ gap: 1.5 }}
                     >
-                        <DarkMode fontSize="small" />
+                        <IconMoon size={18} />
                         <Typography>Dark</Typography>
                     </MenuItem>
                     <MenuItem
@@ -275,7 +270,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                         }}
                         sx={{ gap: 1.5 }}
                     >
-                        <WbSunny fontSize="small" />
+                        <IconSunHigh size={18} />
                         <Typography>Sunlit</Typography>
                     </MenuItem>
                 </Menu>
@@ -317,7 +312,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                         }}
                     >
                         <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                            <AccountIcon sx={{ fontSize: 20 }} />
+                            <IconUser size={20} />
                         </ListItemIcon>
                     </ListItemButton>
                 </Tooltip>
