@@ -181,7 +181,7 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 	}
 
 	// Use unified dispatch
-	s.dispatchChainFromResponses(c, reqCtx, rule, provider, isStreaming, nil)
+	s.dispatchChainResult(c, reqCtx, rule, provider, isStreaming, nil)
 }
 
 // buildResponsesPayloadFromChat converts a Chat completion response to Responses API format

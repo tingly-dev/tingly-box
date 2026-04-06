@@ -214,7 +214,7 @@ func (t *BaseTransform) convertToAnthropicBeta(ctx *TransformContext) error {
 	case *responses.ResponseNewParams:
 		// OpenAI Responses to Anthropic beta conversion
 		anthropicReq := request.ConvertOpenAIResponsesToAnthropicBetaRequest(*req, ctx.Config.MaxTokens)
-		ctx.Request = &anthropicReq
+		ctx.Request = anthropicReq
 		return nil
 
 	default:
