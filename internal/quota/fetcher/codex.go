@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -96,8 +97,15 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quot
 		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
 
+	// Read raw response
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+	rawResponse := string(bodyBytes)
+
 	var apiResp codexUsageResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+	if err := json.Unmarshal(bodyBytes, &apiResp); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
@@ -108,6 +116,7 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quot
 		ProviderType: quota.ProviderTypeCodex,
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(5 * time.Minute),
+		RawResponse:  rawResponse,
 		Account: &quota.UsageAccount{
 			Tier: apiResp.PlanType,
 		},
@@ -118,28 +127,28 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quot
 			resetsAt := time.Unix(w.ResetAt, 0)
 			usage.Primary = &quota.UsageWindow{
 				Type:          quota.WindowTypeSession,
-				Used:          float64(w.UsedPercent),
-				Limit:         100,
+				Used:          0, // API only provides percentage
+				Limit:         0, // API doesn't provide limit
 				UsedPercent:   float64(w.UsedPercent),
-				Unit:          quota.UsageUnitRequests,
+				Unit:          quota.UsageUnitPercent,
 				ResetsAt:      &resetsAt,
 				WindowMinutes: w.LimitWindowSeconds / 60,
 				Label:         "Current Window",
-				Description:   fmt.Sprintf("%dh window", w.LimitWindowSeconds/3600),
+				Description:   fmt.Sprintf("%dh window, %.0f%% used", w.LimitWindowSeconds/3600, float64(w.UsedPercent)),
 			}
 		}
 		if w := apiResp.RateLimit.SecondaryWindow; w != nil {
 			resetsAt := time.Unix(w.ResetAt, 0)
 			usage.Secondary = &quota.UsageWindow{
 				Type:          quota.WindowTypeWeekly,
-				Used:          float64(w.UsedPercent),
-				Limit:         100,
+				Used:          0, // API only provides percentage
+				Limit:         0, // API doesn't provide limit
 				UsedPercent:   float64(w.UsedPercent),
-				Unit:          quota.UsageUnitRequests,
+				Unit:          quota.UsageUnitPercent,
 				ResetsAt:      &resetsAt,
 				WindowMinutes: w.LimitWindowSeconds / 60,
 				Label:         "Weekly",
-				Description:   fmt.Sprintf("%dd window", w.LimitWindowSeconds/86400),
+				Description:   fmt.Sprintf("%dd window, %.0f%% used", w.LimitWindowSeconds/86400, float64(w.UsedPercent)),
 			}
 		}
 	}

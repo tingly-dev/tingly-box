@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -104,9 +105,16 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
+	// 读取原始响应用于存储
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	rawResponse := string(bodyBytes)
+
 	// 解析响应
 	var apiResp anthropicUsageResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+	if err := json.Unmarshal(bodyBytes, &apiResp); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -118,28 +126,29 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*
 		ProviderType: quota.ProviderTypeAnthropic,
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(5 * time.Minute),
+		RawResponse:  rawResponse, // 存储原始响应
 
-		// Primary: 5-hour session quota
+		// Primary: 5-hour session quota (API returns utilization percentage only)
 		Primary: &quota.UsageWindow{
 			Type:          quota.WindowTypeSession,
-			Used:          apiResp.FiveHour.Utilization,
-			Limit:         100,
+			Used:          0, // API doesn't provide actual count
+			Limit:         0, // API doesn't provide limit
 			UsedPercent:   apiResp.FiveHour.Utilization,
-			Unit:          quota.UsageUnitRequests,
+			Unit:          quota.UsageUnitPercent,
 			WindowMinutes: 300, // 5 hours
-			Label:         "Current Window",
-			Description:   "5-hour rolling window utilization",
+			Label:         "5-Hour Window",
+			Description:   fmt.Sprintf("%.0f%% utilization", apiResp.FiveHour.Utilization),
 		},
 
-		// Secondary: 7-day weekly quota
+		// Secondary: 7-day weekly quota (API returns utilization percentage only)
 		Secondary: &quota.UsageWindow{
 			Type:        quota.WindowTypeWeekly,
-			Used:        apiResp.SevenDay.Utilization,
-			Limit:       100,
+			Used:        0, // API doesn't provide actual count
+			Limit:       0, // API doesn't provide limit
 			UsedPercent: apiResp.SevenDay.Utilization,
-			Unit:        quota.UsageUnitRequests,
-			Label:       "Weekly",
-			Description: "7-day rolling window utilization",
+			Unit:        quota.UsageUnitPercent,
+			Label:       "7-Day Window",
+			Description: fmt.Sprintf("%.0f%% utilization", apiResp.SevenDay.Utilization),
 		},
 	}
 
@@ -156,15 +165,16 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*
 	}
 
 	// Tertiary: Extra usage (Max plan add-on), only if enabled
+	// API returns utilization percentage and credit amounts
 	if apiResp.ExtraUsage.IsEnabled {
 		usage.Tertiary = &quota.UsageWindow{
 			Type:        quota.WindowTypeMonthly,
-			Used:        apiResp.ExtraUsage.Utilization,
-			Limit:       100,
+			Used:        0, // API doesn't provide request count
+			Limit:       0, // API doesn't provide request limit
 			UsedPercent: apiResp.ExtraUsage.Utilization,
-			Unit:        quota.UsageUnitRequests,
-			Label:       "Extra",
-			Description: "Max plan extra usage",
+			Unit:        quota.UsageUnitPercent,
+			Label:       "Extra Usage",
+			Description: fmt.Sprintf("%.0f%% utilization", apiResp.ExtraUsage.Utilization),
 		}
 
 		usage.Cost = &quota.UsageCost{

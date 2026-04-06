@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"time"
@@ -72,7 +73,7 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quo
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 
 	// 1. Get quota — try with empty project first
-	quotaResp, err := f.fetchQuota(ctx, client, token, "")
+	quotaResp, rawResponse, err := f.fetchQuota(ctx, client, token, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch quota: %w", err)
 	}
@@ -85,6 +86,7 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quo
 		ProviderType: quota.ProviderTypeGemini,
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(5 * time.Minute),
+		RawResponse:  rawResponse,
 	}
 
 	if len(quotaResp.Buckets) == 0 {
@@ -104,11 +106,12 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quo
 
 		window := &quota.UsageWindow{
 			Type:        quota.WindowTypeDaily,
-			Used:        usedPercent,
-			Limit:       100,
+			Used:        0, // API only provides remaining fraction, not actual count
+			Limit:       0, // API doesn't provide limit
 			UsedPercent: usedPercent,
-			Unit:        quota.UsageUnitRequests,
+			Unit:        quota.UsageUnitPercent,
 			Label:       "Daily",
+			Description: fmt.Sprintf("%.0f%% used", usedPercent),
 		}
 
 		if bucket.ResetTime != "" {
@@ -133,12 +136,12 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quo
 	avgUsedPercent := totalUsedPercent / float64(len(quotaResp.Buckets))
 	usage.Primary = &quota.UsageWindow{
 		Type:        quota.WindowTypeDaily,
-		Used:        avgUsedPercent,
-		Limit:       100,
+		Used:        0, // API only provides percentage
+		Limit:       0, // API doesn't provide limit
 		UsedPercent: avgUsedPercent,
-		Unit:        quota.UsageUnitRequests,
+		Unit:        quota.UsageUnitPercent,
 		Label:       "Average Usage",
-		Description: fmt.Sprintf("Across %d models", len(quotaResp.Buckets)),
+		Description: fmt.Sprintf("%.0f%% across %d models", avgUsedPercent, len(quotaResp.Buckets)),
 	}
 
 	// Set reset time from first bucket
@@ -153,7 +156,7 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quo
 	return usage, nil
 }
 
-func (f *GeminiFetcher) fetchQuota(ctx context.Context, client *http.Client, token, projectID string) (*geminiQuotaResponse, error) {
+func (f *GeminiFetcher) fetchQuota(ctx context.Context, client *http.Client, token, projectID string) (*geminiQuotaResponse, string, error) {
 	body := map[string]string{}
 	if projectID != "" {
 		body["project"] = projectID
@@ -164,25 +167,32 @@ func (f *GeminiFetcher) fetchQuota(ctx context.Context, client *http.Client, tok
 		"https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota",
 		bytes.NewReader(bodyBytes))
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return nil, "", fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
+		return nil, "", fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("status %d", resp.StatusCode)
+		return nil, "", fmt.Errorf("status %d", resp.StatusCode)
 	}
+
+	// Read raw response
+	respBodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", fmt.Errorf("read response: %w", err)
+	}
+	rawResponse := string(respBodyBytes)
 
 	var result geminiQuotaResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
+	if err = json.Unmarshal(respBodyBytes, &result); err != nil {
+		return nil, "", fmt.Errorf("decode response: %w", err)
 	}
 
-	return &result, nil
+	return &result, rawResponse, nil
 }
