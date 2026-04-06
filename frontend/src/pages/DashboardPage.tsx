@@ -24,7 +24,7 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import StreamIcon from '@mui/icons-material/Stream';
 import SpeedIcon from '@mui/icons-material/Speed';
 import CachedIcon from '@mui/icons-material/Cached';
-import { StatCard, TokenUsageChart, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable } from '@/components/dashboard';
+import { StatCard, TokenUsageChart, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav } from '@/components/dashboard';
 import type { TimeSeriesData, AggregatedStat } from '@/components/dashboard';
 import { switchControlLabelStyle } from '@/styles/toggleStyles';
 import api from '../services/api';
@@ -314,7 +314,7 @@ export default function DashboardPage() {
                 </Box>
             </Paper>
 
-            {/* Main Content: Two Column Layout */}
+            {/* Main Content: Three Column Layout */}
             <Box
                 sx={{
                     display: 'flex',
@@ -323,8 +323,13 @@ export default function DashboardPage() {
                     flexDirection: { xs: 'column', md: 'row' },
                 }}
             >
-                {/* Left Column (70%) */}
-                <Box sx={{ flex: { xs: 1, md: 7 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {/* Left Column (15%) - Agent Quick Nav */}
+                <Box sx={{ flex: { xs: 1, md: 0, lg: 1.5 }, display: { xs: 'none', lg: 'flex' }, minWidth: 180 }}>
+                    <AgentQuickNav />
+                </Box>
+
+                {/* Middle Column (60%) */}
+                <Box sx={{ flex: { xs: 1, md: 7, lg: 6 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {/* Stat Cards Row - 5 cards */}
                     <Grid container spacing={{ xs: 1.5, sm: 2 }}>
                         <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
@@ -384,8 +389,8 @@ export default function DashboardPage() {
                     </Box>
                 </Box>
 
-                {/* Right Column (30%) - Token Usage List */}
-                <Box sx={{ flex: { xs: 1, md: 3 } }}>
+                {/* Right Column (25%) - Token Usage List */}
+                <Box sx={{ flex: { xs: 1, md: 3, lg: 2.5 } }}>
                     <Paper
                         elevation={0}
                         sx={{

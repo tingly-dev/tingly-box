@@ -623,5 +623,11 @@ export default {
       "message": "Your new user token has been generated and saved to your session. Make sure to save it securely.",
       "saved": "I've Saved My Token"
     }
+  },
+  "dashboard": {
+    "agentNav": {
+      "title": "Quick Start",
+      "description": "Select agent to start"
+    }
   }
 };
