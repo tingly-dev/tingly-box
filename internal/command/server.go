@@ -27,7 +27,7 @@ import (
 const (
 	// URL templates for displaying to users
 	webUITpl             = "%s://localhost:%d/"
-	webUITokenTpl        = "%s://localhost:%d/?token=%s"
+	webUILoginTpl        = "%s://localhost:%d/login/%s"
 	openAIEndpointTpl    = "%s://localhost:%d/tingly/openai/v1/chat/completions"
 	anthropicEndpointTpl = "%s://localhost:%d/tingly/anthropic/v1/messages"
 )
@@ -59,12 +59,17 @@ func printBanner(cfg BannerConfig) {
 	// Show all access URLs when UI is enabled
 	fmt.Println("\nYou can access the service at:")
 	if cfg.GlobalConfig.HasUserToken() {
-		fmt.Printf("  Web UI:       "+webUITokenTpl+"\n", scheme, cfg.Port, cfg.GlobalConfig.GetUserToken())
+		fmt.Printf("  Web UI:       "+webUILoginTpl+"\n", scheme, cfg.Port, cfg.GlobalConfig.GetUserToken())
 	} else {
 		fmt.Printf("  Web UI:       "+webUITpl+"\n", scheme, cfg.Port)
 	}
 	fmt.Printf("  OpenAI API:   "+openAIEndpointTpl+"\n", scheme, cfg.Port)
 	fmt.Printf("  Anthropic API: "+anthropicEndpointTpl+"\n", scheme, cfg.Port)
+
+	// Show login token for easy copy
+	if cfg.GlobalConfig.HasUserToken() {
+		fmt.Printf("\n  Login Token:  %s\n", cfg.GlobalConfig.GetUserToken())
+	}
 
 	if cfg.IsDaemon {
 		fmt.Println("\nServer is running in background. Use 'tingly-box stop' to stop.")
