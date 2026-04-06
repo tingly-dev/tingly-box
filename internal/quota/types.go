@@ -190,8 +190,8 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Enabled:         true,
-		RefreshInterval: 5 * time.Minute,
-		CacheTTL:        10 * time.Minute,
+		RefreshInterval: 15 * time.Minute,
+		CacheTTL:        20 * time.Minute,
 		RetryOnFailure:  true,
 		MaxRetries:      3,
 		Providers:       make(map[string]ProviderUsageConfig),

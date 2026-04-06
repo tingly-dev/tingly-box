@@ -13,8 +13,10 @@ import (
 
 // Manager 配额管理器接口
 type Manager interface {
-	// GetQuota 获取指定供应商的配额
+	// GetQuota 获取指定供应商的配额（优先使用缓存）
 	GetQuota(ctx context.Context, providerUUID string) (*quota.ProviderUsage, error)
+	// GetQuotaNoCache 获取指定供应商的配额（绕过缓存，直接从数据库读取最新数据）
+	GetQuotaNoCache(ctx context.Context, providerUUID string) (*quota.ProviderUsage, error)
 	// ListQuota 获取所有供应商的配额列表
 	ListQuota(ctx context.Context) ([]*quota.ProviderUsage, error)
 	// Refresh 刷新所有启用的供应商配额
@@ -23,6 +25,10 @@ type Manager interface {
 	RefreshProvider(ctx context.Context, providerUUID string) (*quota.ProviderUsage, error)
 	// Summary 获取配额汇总
 	Summary(ctx context.Context) (*quota.Summary, error)
+	// StartAutoRefresh 启动自动刷新
+	StartAutoRefresh(ctx context.Context)
+	// StopAutoRefresh 停止自动刷新
+	StopAutoRefresh()
 }
 
 // Handler 配额 API 处理器
