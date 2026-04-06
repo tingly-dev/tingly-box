@@ -158,7 +158,7 @@ require (
 	github.com/tiktoken-go/tokenizer v0.7.0 // indirect
 	github.com/tingly-dev/tingly-agentscope v0.260327.1030 // indirect
 	github.com/tingly-dev/tingly-box/imbot v0.1.0 // indirect
-	github.com/tingly-dev/weixin v0.1.0 // indirect
+	github.com/tingly-dev/weixin v0.1.1 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect

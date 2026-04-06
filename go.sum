@@ -265,7 +265,7 @@ github.com/tiktoken-go/tokenizer v0.7.0 h1:VMu6MPT0bXFDHr7UPh9uii7CNItVt3X9K90om
 github.com/tiktoken-go/tokenizer v0.7.0/go.mod h1:6UCYI/DtOallbmL7sSy30p6YQv60qNyU/4aVigPOx6w=
 github.com/tingly-dev/tingly-agentscope v0.260327.1030 h1:JhOdPzCZ+0YDS9PrDg+LdHLr4aGyyFRC0G7U/ZlNqKo=
 github.com/tingly-dev/tingly-agentscope v0.260327.1030/go.mod h1:BrqudclIzxFSLngtZAEw3C6r7i3AVOaUoDN8YPMN2tw=
-github.com/tingly-dev/weixin v0.1.0 h1:vgcphUBGvGTP4ElczEDoCmEYlsSgU1C+VFIUCiLluPg=
+github.com/tingly-dev/weixin v0.1.1 h1:ekbD/MJjdHL8lkmTaoyfD60Cs1YMGY24mj+pW3J49eM=
 github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS4MhqMhdFk5YI=
 github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
 github.com/ugorji/go/codec v1.3.1 h1:waO7eEiFDwidsBN6agj1vJQ4AG7lh2yqXyOXqhgQuyY=
