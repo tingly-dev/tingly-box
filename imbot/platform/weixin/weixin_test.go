@@ -219,6 +219,11 @@ func TestGetAccountInfo(t *testing.T) {
 	handler := NewInteractionHandler(bot)
 	info := handler.GetAccountInfo()
 
+	if info == nil {
+		t.Fatal("GetAccountInfo() returned nil")
+	}
+
+	// Check AccountID field (AccountInfo uses AccountID)
 	if info.AccountID != "test-account" {
 		t.Errorf("GetAccountInfo().AccountID = %s, want test-account", info.AccountID)
 	}
@@ -243,12 +248,12 @@ func TestNeedsPairing(t *testing.T) {
 	}
 
 	// New bot should need pairing
-	if !bot.NeedsPairing() {
+	if bot.account != nil && bot.account.IsConfigured() {
 		t.Error("New bot should need pairing")
 	}
 
 	// Should not be configured
-	if bot.IsConfigured() {
+	if bot.account != nil && bot.account.IsConfigured() {
 		t.Error("New bot should not be configured")
 	}
 }

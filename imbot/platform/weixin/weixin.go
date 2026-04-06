@@ -66,10 +66,6 @@ func NewBot(config *core.Config) (*Bot, error) {
 		BotType: config.GetOptionString("botType", "3"),
 	}
 
-	// Create in-memory store for account management
-	// This avoids file system storage and allows integration with imbot's database
-	store := NewMemoryStore()
-
 	// Create WeChat account from auth config
 	wcAccount := &types.WeChatAccount{
 		ID:          accountID,
@@ -84,20 +80,11 @@ func NewBot(config *core.Config) (*Bot, error) {
 		LastLoginAt: time.Now(),
 	}
 
-	// Save account to our store
-	if err := store.Save(wcAccount); err != nil {
-		return nil, fmt.Errorf("failed to save account to store: %w", err)
-	}
-
-	// Initialize plugin with our custom store
-	weixinPlugin, err := wechat.NewWechatBotWithStore(wcConfig, store)
+	// Initialize plugin with account directly (no store needed for basic operations)
+	// For production, implement types.AccountStore with database persistence
+	weixinPlugin, err := wechat.NewWechatBotWithAccount(wcConfig, wcAccount)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create weixin bot: %w", err)
-	}
-
-	// Load account from store
-	if err := weixinPlugin.LoadAccount(accountID); err != nil {
-		return nil, fmt.Errorf("failed to load account: %w", err)
 	}
 
 	// Get the account from plugin
@@ -172,7 +159,8 @@ func (b *Bot) Disconnect(ctx context.Context) error {
 }
 
 func (b *Bot) IsConnected() bool {
-	return b.account != nil
+	// Check both account exists and base bot reports connected
+	return b.account != nil && b.BaseBot.IsConnected()
 }
 
 // SendMessage sends a message
@@ -255,31 +243,14 @@ func (b *Bot) StopReceiving(ctx context.Context) error {
 	return nil // Already handled in Disconnect
 }
 
-// GetAccount returns the current account
-func (b *Bot) GetAccount() *types.WeChatAccount {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-	if b.account == nil {
-		return nil
-	}
-	return b.account.WeChatAccount()
-}
-
 // GetInteractionHandler returns the interaction handler for this bot
 func (b *Bot) GetInteractionHandler() *InteractionHandler {
 	return NewInteractionHandler(b)
 }
 
-// IsConfigured checks if the account is configured
-func (b *Bot) IsConfigured() bool {
-	account := b.GetAccount()
-	return account != nil && account.Configured
-}
-
-// NeedsPairing checks if the account needs QR code pairing
-func (b *Bot) NeedsPairing() bool {
-	account := b.GetAccount()
-	return account == nil || !account.Configured || account.BotToken == ""
+// GetAccount returns the current account (for imbot layer use)
+func (b *Bot) GetAccount() *wechat.Account {
+	return b.account
 }
 
 // getContextToken gets the context token for a reply
