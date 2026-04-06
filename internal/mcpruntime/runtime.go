@@ -85,8 +85,10 @@ type mcpCallToolResult struct {
 func (r *Runtime) ListOpenAITools(ctx context.Context) []openai.ChatCompletionToolUnionParam {
 	cfg := r.getConfigOrDefault()
 	if cfg == nil || len(cfg.Sources) == 0 {
+		logrus.Debugf("mcp: ListOpenAITools - no config or no sources (cfg=%v, sources=%d)", cfg != nil, len(cfg.Sources))
 		return nil
 	}
+	logrus.Debugf("mcp: ListOpenAITools - %d sources", len(cfg.Sources))
 
 	out := make([]openai.ChatCompletionToolUnionParam, 0, 8)
 	for _, source := range cfg.Sources {
@@ -403,21 +405,106 @@ func newStdioRPCClient(ctx context.Context, cfg *typ.MCPRuntimeConfig, source ty
 	}
 	cmd := exec.CommandContext(ctx, source.Command, source.Args...)
 	cwd := strings.TrimSpace(source.Cwd)
+	origCwd := cwd
 	if cwd == "" {
-		// Auto-detect: use the directory of the tingly-box binary
-		// so that relative script paths like ./scripts/mcp_web_tools.py resolve correctly
+		// No cwd configured: search for the script in likely locations.
+		// os.Executable() returns the go-run temp binary when running via `go run`,
+		// so we can't rely on it for the real binary directory.
+		candidates := []string{
+			"~/.tingly-box/mcp",
+		}
+		// Also add the executable's directory as a candidate
 		if execPath, err := os.Executable(); err == nil {
-			cwd = filepath.Dir(execPath)
+			execDir := filepath.Dir(execPath)
+			// Skip the go-run temp directory (contains "/go-build" in path)
+			if !strings.Contains(execPath, "/go-build") && execDir != "." {
+				candidates = append(candidates, execDir)
+			}
+		}
+		for _, c := range candidates {
+			resolved := c
+			if strings.HasPrefix(c, "~/") {
+				if home, err := os.UserHomeDir(); err == nil {
+					resolved = filepath.Join(home, c[2:])
+				}
+			}
+			scriptPath := filepath.Join(resolved, "./scripts/mcp_web_tools.py")
+			if _, err := os.Stat(scriptPath); err == nil {
+				cwd = resolved
+				logrus.Debugf("mcp: found script, using cwd=%s (candidate=%s)", cwd, c)
+				break
+			}
+		}
+		if cwd == "" {
+			logrus.Debugf("mcp: no cwd configured, script not found in candidates: %v", candidates)
 		}
 	}
-	// Expand ~ to user home directory
+	// Expand ~ to user home directory for cwd
 	if strings.HasPrefix(cwd, "~/") {
 		if home, err := os.UserHomeDir(); err == nil {
 			cwd = filepath.Join(home, cwd[2:])
 		}
 	}
+	// Validate that the script actually exists in cwd.
+	// Even if the directory exists (e.g. ~/.tingly-box/mcp created earlier),
+	// the script may not be there, so we fallback to a search.
 	if cwd != "" {
+		scriptExists := false
+		for _, arg := range source.Args {
+			// Only check relative-path args (absolute paths are user-specified)
+			if !filepath.IsAbs(arg) {
+				scriptPath := filepath.Join(cwd, arg)
+				if _, err := os.Stat(scriptPath); err == nil {
+					scriptExists = true
+					break
+				}
+			}
+		}
+		if !scriptExists {
+			logrus.Warnf("mcp: script not found in cwd %s (orig=%s), searching...", cwd, origCwd)
+			// Search for the script in likely directories
+			found := false
+			searchDirs := []string{"~/.tingly-box/mcp"}
+			if execPath, err := os.Executable(); err == nil && !strings.Contains(execPath, "/go-build") {
+				searchDirs = append(searchDirs, filepath.Dir(execPath))
+			}
+			for _, dir := range searchDirs {
+				resolved := dir
+				if strings.HasPrefix(dir, "~/") {
+					if home, err := os.UserHomeDir(); err == nil {
+						resolved = filepath.Join(home, dir[2:])
+					}
+				}
+				for _, arg := range source.Args {
+					if filepath.IsAbs(arg) {
+						continue
+					}
+					scriptPath := filepath.Join(resolved, arg)
+					if _, err := os.Stat(scriptPath); err == nil {
+						cwd = resolved
+						logrus.Debugf("mcp: found script in fallback dir=%s", cwd)
+						found = true
+						break
+					}
+				}
+				if found {
+					break
+				}
+			}
+			if !found {
+				cwd = ""
+			}
+		}
 		cmd.Dir = cwd
+	}
+
+	// Also expand ~ in args (e.g. python3 ~/.tingly-box/mcp/scripts/...)
+	for i, arg := range cmd.Args[1:] {
+		if strings.HasPrefix(arg, "~/") {
+			if home, err := os.UserHomeDir(); err == nil {
+				cmd.Args[i+1] = filepath.Join(home, arg[2:])
+			}
+		}
 	}
 
 	env := os.Environ()

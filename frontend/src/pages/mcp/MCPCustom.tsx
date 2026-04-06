@@ -72,7 +72,7 @@ const MCPCustom = () => {
     const [formId, setFormId] = useState('');
     const [formTransport, setFormTransport] = useState<'http' | 'stdio'>('stdio');
     const [formEndpoint, setFormEndpoint] = useState('');
-    const [formArgs, setFormArgs] = useState('~/.tingly-box/mcp/scripts/mcp_web_tools.py');
+    const [formArgs, setFormArgs] = useState('python3 ./scripts/mcp_web_tools.py');
     const [formTools, setFormTools] = useState<string[]>(['*']);
     const [formSerperApiKey, setFormSerperApiKey] = useState('');
     const [formShowApiKey, setFormShowApiKey] = useState(false);
@@ -114,7 +114,7 @@ const MCPCustom = () => {
         setFormId('');
         setFormTransport('stdio');
         setFormEndpoint('');
-        setFormArgs('~/.tingly-box/mcp/scripts/mcp_web_tools.py');
+        setFormArgs('python3 ./scripts/mcp_web_tools.py');
         setFormTools(['*']);
         setFormSerperApiKey('');
         setFormProxyUrl('');
@@ -126,7 +126,7 @@ const MCPCustom = () => {
         setFormId(source.id || '');
         setFormTransport(source.transport || 'stdio');
         setFormEndpoint(source.endpoint || '');
-        setFormArgs(source.args?.join(' ') || '~/.tingly-box/mcp/scripts/mcp_web_tools.py');
+        setFormArgs((source.command || 'python3') + ' ' + (source.args?.join(' ') || './scripts/mcp_web_tools.py'));
         setFormTools(source.tools || []);
         setFormSerperApiKey(source.env?.SERPER_API_KEY || '');
         setFormProxyUrl(source.proxy_url || '');
@@ -144,9 +144,11 @@ const MCPCustom = () => {
             source.endpoint = formEndpoint;
             source.headers = {};
         } else {
-            source.command = 'python3';
-            source.args = formArgs.trim() ? [formArgs.trim()] : [];
-            source.cwd = '~/.tingly-box/mcp';
+            // Split "python3 ./scripts/mcp_web_tools.py" into command + args
+            const parts = formArgs.trim().split(/\s+/);
+            source.command = parts[0] || 'python3';
+            source.args = parts.slice(1);
+            source.cwd = '';
         }
 
         const env: Record<string, string> = {};
@@ -317,8 +319,8 @@ const MCPCustom = () => {
                             <TextField
                                 size="small" fullWidth label="Script Path"
                                 value={formArgs} onChange={(e) => setFormArgs(e.target.value)}
-                                placeholder="~/.tingly-box/mcp/scripts/mcp_web_tools.py"
-                                helperText="Python script path"
+                                placeholder="python3 ./scripts/mcp_web_tools.py"
+                                helperText="Full command line (first word = command, rest = args)"
                             />
                         )}
 

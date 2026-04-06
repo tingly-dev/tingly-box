@@ -6,18 +6,22 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
+	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 )
 
 func (s *Server) injectMCPToolsIntoOpenAIRequest(ctx context.Context, req *openai.ChatCompletionNewParams) *openai.ChatCompletionNewParams {
 	if s.mcpRuntime == nil {
+		logrus.Debugf("mcp: inject - mcpRuntime is nil")
 		return req
 	}
 	mcpTools := s.mcpRuntime.ListOpenAITools(ctx)
 	if len(mcpTools) == 0 {
+		logrus.Debugf("mcp: inject - no tools returned")
 		return req
 	}
+	logrus.Debugf("mcp: inject - injecting %d MCP tools", len(mcpTools))
 	out := *req
 	out.Tools = append(append([]openai.ChatCompletionToolUnionParam{}, req.Tools...), mcpTools...)
 	return &out

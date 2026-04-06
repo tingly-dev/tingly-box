@@ -99,8 +99,8 @@ const MCPBuiltin = () => {
                 id: 'webtools',
                 transport: 'stdio',
                 command: 'python3',
-                args: ['~/.tingly-box/mcp/scripts/mcp_web_tools.py'],
-                cwd: '~/.tingly-box/mcp',
+                args: ['./scripts/mcp_web_tools.py'],
+                cwd: '',
                 tools: ['web_search', 'web_fetch'],
                 env: Object.keys(env).length > 0 ? env : undefined,
                 proxy_url: proxyUrl || undefined,
@@ -159,7 +159,7 @@ const MCPBuiltin = () => {
                                 <TextField
                                     size="small"
                                     fullWidth
-                                    value="python3 ~/.tingly-box/mcp/scripts/mcp_web_tools.py"
+                                    value="python3 ./scripts/mcp_web_tools.py"
                                     InputProps={{ readOnly: true }}
                                     sx={{ '& input': { fontFamily: 'monospace', fontSize: '0.75rem' } }}
                                 />
