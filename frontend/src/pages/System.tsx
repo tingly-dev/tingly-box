@@ -2,31 +2,34 @@ import CardGrid from '@/components/CardGrid';
 import GlobalExperimentalFeatures from '@/components/GlobalExperimentalFeatures';
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
-import { CloudUpload } from '@mui/icons-material';
+import { Logout } from '@mui/icons-material';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
 import { IconCircleCheck, IconCircleX, IconInfoCircle, IconKey, IconLock, IconStar, IconLicense, IconBrandGithub } from '@tabler/icons-react';
-import { Alert, AlertTitle, Box, CircularProgress, IconButton, Link, Stack, Tooltip, Typography, Chip } from '@mui/material';
+import { Box, CircularProgress, IconButton, Link, Stack, Tooltip, Typography, Chip } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useHealth } from '@/contexts/HealthContext';
 import { useVersion } from '@/contexts/VersionContext';
-import { api, getBaseUrl } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { api } from '@/services/api';
 
 const System = () => {
     const { t } = useTranslation();
-    const { currentVersion, hasUpdate, latestVersion, checkingVersion, checkForUpdates, showUpdateDialog } = useVersion();
+    const { currentVersion, hasUpdate, latestVersion, showUpdateDialog } = useVersion();
     const { isHealthy, checking, checkHealth } = useHealth();
+    const { logout: authLogout } = useAuth();
     const [serverStatus, setServerStatus] = useState<any>(null);
-    const [baseUrl, setBaseUrl] = useState<string>("");
-    const [providersStatus, setProvidersStatus] = useState<any>(null);
-    const [rules, setRules] = useState<any>({});
-    const [providers, setProviders] = useState<any[]>([]);
-    const [providerModels, setProviderModels] = useState<any>({});
     const [notification, setNotification] = useState<{ open: boolean; message?: string; severity?: 'success' | 'error' | 'info' | 'warning' }>({ open: false });
     const [loading, setLoading] = useState(true);
-
-    // Proxy settings state
     const [respectEnvProxy, setRespectEnvProxy] = useState<boolean | null>(null);
+
+    const handleForceLogout = () => {
+        authLogout();
+        setNotification({ open: true, message: 'Logged out successfully', severity: 'info' });
+        setTimeout(() => {
+            window.location.href = '/login';
+        }, 500);
+    };
 
     useEffect(() => {
         loadAllData();
@@ -43,10 +46,7 @@ const System = () => {
     const loadAllData = async () => {
         setLoading(true);
         await Promise.all([
-            loadBaseUrl(),
             loadServerStatus(),
-            loadProvidersStatus(),
-            loadProviderSelectionPanel(),
             loadProxyConfig(),
         ]);
         setLoading(false);
@@ -57,6 +57,13 @@ const System = () => {
         if (result.success && result.data) {
             const value = result.data.http_transport?.respect_env_proxy;
             setRespectEnvProxy(value === null ? true : value);
+        }
+    };
+
+    const loadServerStatus = async () => {
+        const result = await api.getStatus();
+        if (result.success) {
+            setServerStatus(result.data);
         }
     };
 
@@ -75,96 +82,6 @@ const System = () => {
         });
     };
 
-    const loadBaseUrl = async () => {
-        const reuslt = await getBaseUrl();
-        setBaseUrl(reuslt)
-    }
-
-    const loadServerStatus = async () => {
-        const result = await api.getStatus();
-        if (result.success) {
-            setServerStatus(result.data);
-        }
-    };
-
-
-    const loadProvidersStatus = async () => {
-        const result = await api.getProviders();
-        if (result.success) {
-            setProvidersStatus(result.data);
-        }
-    };
-
-
-
-    const loadProviderSelectionPanel = async () => {
-        const [providersResult] = await Promise.all([
-            api.getProviders(),
-        ]);
-
-        if (providersResult.success) {
-            setProviders(providersResult.data);
-        }
-    };
-
-    const handleStartServer = async () => {
-        const port = prompt(t('system.prompts.enterPort'), '8080');
-        if (port) {
-            const result = await api.startServer(parseInt(port));
-            if (result.success) {
-                setNotification({ open: true, message: result.message, severity: 'success' });
-                setTimeout(() => {
-                    loadServerStatus();
-                }, 1000);
-            } else {
-                setNotification({ open: true, message: result.error, severity: 'error' });
-            }
-        }
-    };
-
-    const handleStopServer = async () => {
-        if (confirm(t('system.confirmations.stopServer'))) {
-            const result = await api.stopServer();
-            if (result.success) {
-                setNotification({ open: true, message: result.message, severity: 'success' });
-                setTimeout(() => {
-                    loadServerStatus();
-                }, 1000);
-            } else {
-                setNotification({ open: true, message: result.error, severity: 'error' });
-            }
-        }
-    };
-
-    const handleRestartServer = async () => {
-        const port = prompt(t('system.prompts.enterPort'), '8080');
-        if (port) {
-            const result = await api.restartServer(parseInt(port));
-            if (result.success) {
-                setNotification({ open: true, message: result.message, severity: 'success' });
-                setTimeout(() => {
-                    loadServerStatus();
-                }, 1000);
-            } else {
-                setNotification({ open: true, message: result.error, severity: 'error' });
-            }
-        }
-    };
-
-    const handleGenerateToken = async () => {
-        const clientId = prompt(t('system.prompts.enterClientId'), 'web');
-        if (clientId) {
-            const result = await api.generateToken(clientId);
-            if (result.success) {
-                localStorage.setItem('model_auth_token', result.data.token)
-                // navigator.clipboard.writeText(result.data.token);
-                // setNotification({ open: true, message: 'Token copied to clipboard!', severity: 'success' });
-            } else {
-                setNotification({ open: true, message: result.error, severity: 'error' });
-            }
-        }
-    };
-
     return (
         <PageLayout loading={loading} notification={notification}>
             <CardGrid>
@@ -173,13 +90,24 @@ const System = () => {
                     title="Server Status"
                     size="full"
                     rightAction={
-                        <IconButton
-                            onClick={() => { loadServerStatus(); checkHealth(); }}
-                            size="small"
-                            aria-label="Refresh status"
-                        >
-                            {checking ? <CircularProgress size={16} /> : <RefreshIcon />}
-                        </IconButton>
+                        <Stack direction="row" spacing={0.5}>
+                            <Tooltip title="Force Logout" arrow>
+                                <IconButton
+                                    onClick={handleForceLogout}
+                                    size="small"
+                                    aria-label="Force logout"
+                                >
+                                    <Logout fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                            <IconButton
+                                onClick={() => { loadServerStatus(); checkHealth(); }}
+                                size="small"
+                                aria-label="Refresh status"
+                            >
+                                {checking ? <CircularProgress size={16} /> : <RefreshIcon />}
+                            </IconButton>
+                        </Stack>
                     }
                 >
                     {serverStatus ? (
