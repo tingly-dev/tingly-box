@@ -404,97 +404,76 @@ func newStdioRPCClient(ctx context.Context, cfg *typ.MCPRuntimeConfig, source ty
 		return nil, nil, fmt.Errorf("mcp stdio source %s has empty command", source.ID)
 	}
 	cmd := exec.CommandContext(ctx, source.Command, source.Args...)
+	// Helper: search for the MCP script in a list of directories.
+	// For each dir, checks if any relative arg resolves to an existing file.
+	// Returns the directory containing the script, or "" if not found.
+	findScriptInDirs := func(dirs []string) string {
+		for _, d := range dirs {
+			resolved := d
+			if strings.HasPrefix(d, "~/") {
+				if home, err := os.UserHomeDir(); err == nil {
+					resolved = filepath.Join(home, d[2:])
+				}
+			}
+			for _, arg := range source.Args {
+				if filepath.IsAbs(arg) {
+					continue
+				}
+				scriptPath := filepath.Join(resolved, arg)
+				if _, err := os.Stat(scriptPath); err == nil {
+					return resolved
+				}
+			}
+		}
+		return ""
+	}
+
 	cwd := strings.TrimSpace(source.Cwd)
-	origCwd := cwd
 	if cwd == "" {
 		// No cwd configured: search for the script in likely locations.
 		// os.Executable() returns the go-run temp binary when running via `go run`,
-		// so we can't rely on it for the real binary directory.
-		candidates := []string{
-			"~/.tingly-box/mcp",
-		}
-		// Also add the executable's directory as a candidate
+		// so we skip it when it contains "/go-build".
+		searchDirs := []string{"~/.tingly-box/mcp"}
 		if execPath, err := os.Executable(); err == nil {
-			execDir := filepath.Dir(execPath)
-			// Skip the go-run temp directory (contains "/go-build" in path)
-			if !strings.Contains(execPath, "/go-build") && execDir != "." {
-				candidates = append(candidates, execDir)
+			if !strings.Contains(execPath, "/go-build") {
+				execDir := filepath.Dir(execPath)
+				// Also check the "bundle" layout: binary is one level above scripts/
+				// e.g. /usr/local/bin/tingly-box + /usr/local/bin/../scripts/mcp_web_tools.py
+				parent := filepath.Dir(execDir)
+				searchDirs = append(searchDirs, execDir, parent)
 			}
 		}
-		for _, c := range candidates {
-			resolved := c
-			if strings.HasPrefix(c, "~/") {
-				if home, err := os.UserHomeDir(); err == nil {
-					resolved = filepath.Join(home, c[2:])
-				}
-			}
-			scriptPath := filepath.Join(resolved, "./scripts/mcp_web_tools.py")
-			if _, err := os.Stat(scriptPath); err == nil {
-				cwd = resolved
-				logrus.Debugf("mcp: found script, using cwd=%s (candidate=%s)", cwd, c)
-				break
-			}
+		if found := findScriptInDirs(searchDirs); found != "" {
+			cwd = found
+			logrus.Debugf("mcp: found script in cwd=%s", cwd)
+		} else {
+			logrus.Debugf("mcp: no cwd configured, script not found in search dirs: %v", searchDirs)
 		}
-		if cwd == "" {
-			logrus.Debugf("mcp: no cwd configured, script not found in candidates: %v", candidates)
-		}
-	}
-	// Expand ~ to user home directory for cwd
-	if strings.HasPrefix(cwd, "~/") {
-		if home, err := os.UserHomeDir(); err == nil {
-			cwd = filepath.Join(home, cwd[2:])
-		}
-	}
-	// Validate that the script actually exists in cwd.
-	// Even if the directory exists (e.g. ~/.tingly-box/mcp created earlier),
-	// the script may not be there, so we fallback to a search.
-	if cwd != "" {
-		scriptExists := false
-		for _, arg := range source.Args {
-			// Only check relative-path args (absolute paths are user-specified)
-			if !filepath.IsAbs(arg) {
-				scriptPath := filepath.Join(cwd, arg)
-				if _, err := os.Stat(scriptPath); err == nil {
-					scriptExists = true
-					break
-				}
+	} else {
+		// User configured a cwd: expand ~ and validate script exists.
+		// If not found, search as fallback.
+		if strings.HasPrefix(cwd, "~/") {
+			if home, err := os.UserHomeDir(); err == nil {
+				cwd = filepath.Join(home, cwd[2:])
 			}
 		}
-		if !scriptExists {
-			logrus.Warnf("mcp: script not found in cwd %s (orig=%s), searching...", cwd, origCwd)
-			// Search for the script in likely directories
-			found := false
+		if findScriptInDirs([]string{cwd}) == "" {
+			logrus.Warnf("mcp: script not found in configured cwd %s, searching...", source.Cwd)
 			searchDirs := []string{"~/.tingly-box/mcp"}
 			if execPath, err := os.Executable(); err == nil && !strings.Contains(execPath, "/go-build") {
-				searchDirs = append(searchDirs, filepath.Dir(execPath))
+				execDir := filepath.Dir(execPath)
+				parent := filepath.Dir(execDir)
+				searchDirs = append(searchDirs, execDir, parent)
 			}
-			for _, dir := range searchDirs {
-				resolved := dir
-				if strings.HasPrefix(dir, "~/") {
-					if home, err := os.UserHomeDir(); err == nil {
-						resolved = filepath.Join(home, dir[2:])
-					}
-				}
-				for _, arg := range source.Args {
-					if filepath.IsAbs(arg) {
-						continue
-					}
-					scriptPath := filepath.Join(resolved, arg)
-					if _, err := os.Stat(scriptPath); err == nil {
-						cwd = resolved
-						logrus.Debugf("mcp: found script in fallback dir=%s", cwd)
-						found = true
-						break
-					}
-				}
-				if found {
-					break
-				}
-			}
-			if !found {
+			if found := findScriptInDirs(searchDirs); found != "" {
+				cwd = found
+				logrus.Debugf("mcp: found script in fallback cwd=%s", cwd)
+			} else {
 				cwd = ""
 			}
 		}
+	}
+	if cwd != "" {
 		cmd.Dir = cwd
 	}
 
