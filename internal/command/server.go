@@ -452,9 +452,10 @@ show configuration information including number of providers and server port.`,
 				fmt.Printf("Port: %d\n", port)
 				fmt.Printf("OpenAI Style API Endpoint: "+openAIEndpointTpl+"\n", scheme, port)
 				fmt.Printf("Anthropic Style API Endpoint: "+anthropicEndpointTpl+"\n", scheme, port)
-				fmt.Printf("Web UI: "+webUITpl+"\n", scheme, port)
 				if globalConfig.HasUserToken() {
-					fmt.Printf("UI Management Key: %s\n", globalConfig.GetUserToken())
+					fmt.Printf("Web UI: "+webUILoginTpl+"\n", scheme, port, globalConfig.GetUserToken())
+				} else {
+					fmt.Printf("Web UI: "+webUITpl+"\n", scheme, port)
 				}
 			} else {
 				fmt.Printf("Stopped\n")
@@ -594,7 +595,7 @@ If the server is not running, it will be started first.`,
 				// Build web UI URL
 				webUIURL := fmt.Sprintf("%s://%s:%d/", scheme, resolvedHost, port)
 				if globalConfig.HasUserToken() {
-					webUIURL = fmt.Sprintf("%s://localhost:%d/?user_auth_token=%s", scheme, port, globalConfig.GetUserToken())
+					webUIURL = fmt.Sprintf("%s://%s:%d/login/%s", scheme, resolvedHost, port, globalConfig.GetUserToken())
 				}
 
 				fmt.Printf("Opening web UI: %s\n", webUIURL)
