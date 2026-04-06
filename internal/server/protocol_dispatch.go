@@ -95,11 +95,7 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 
 			anthropicResp, req, err = s.handleAnthropicV1MCPToolCalls(c.Request.Context(), provider, req, anthropicResp)
 			if err != nil {
-				s.trackUsageFromContext(c, 0, 0, err)
-				stream.SendStreamingError(c, err)
-				if recorder != nil {
-					recorder.RecordError(err)
-				}
+				recordMCPError(s, c, err, recorder)
 				return
 			}
 
@@ -196,11 +192,7 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 
 		anthropicResp, req, err = s.handleAnthropicV1MCPToolCalls(c.Request.Context(), provider, req, anthropicResp)
 		if err != nil {
-			s.trackUsageFromContext(c, 0, 0, err)
-			stream.SendForwardingError(c, err)
-			if recorder != nil {
-				recorder.RecordError(err)
-			}
+			recordMCPForwardingError(s, c, err, recorder)
 			return
 		}
 
@@ -283,16 +275,7 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 
 			anthropicResp, req, err = s.handleAnthropicBetaMCPToolCalls(c.Request.Context(), provider, req, anthropicResp)
 			if err != nil {
-				s.trackUsageFromContext(c, 0, 0, err)
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Failed to handle MCP tool calls: " + err.Error(),
-						Type:    "api_error",
-					},
-				})
-				if recorder != nil {
-					recorder.RecordError(err)
-				}
+				respondMCPError(s, c, recorder, err, "Failed to handle MCP tool calls")
 				return
 			}
 
@@ -406,16 +389,7 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 
 		anthropicResp, req, err = s.handleAnthropicBetaMCPToolCalls(c.Request.Context(), provider, req, anthropicResp)
 		if err != nil {
-			s.trackUsageFromContext(c, 0, 0, err)
-			c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Failed to handle MCP tool calls: " + err.Error(),
-					Type:    "api_error",
-				},
-			})
-			if recorder != nil {
-				recorder.RecordError(err)
-			}
+			respondMCPError(s, c, recorder, err, "Failed to handle MCP tool calls")
 			return
 		}
 
@@ -487,11 +461,7 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 
 				anthropicResp, req, err = s.handleAnthropicBetaMCPToolCalls(c.Request.Context(), provider, req, anthropicResp)
 				if err != nil {
-					s.trackUsageFromContext(c, 0, 0, err)
-					stream.SendStreamingError(c, err)
-					if recorder != nil {
-						recorder.RecordError(err)
-					}
+					recordMCPError(s, c, err, recorder)
 					return
 				}
 
@@ -555,11 +525,7 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 
 			anthropicResp, req, err = s.handleAnthropicBetaMCPToolCalls(c.Request.Context(), provider, req, anthropicResp)
 			if err != nil {
-				s.trackUsageFromContext(c, 0, 0, err)
-				stream.SendForwardingError(c, err)
-				if recorder != nil {
-					recorder.RecordError(err)
-				}
+				recordMCPForwardingError(s, c, err, recorder)
 				return
 			}
 

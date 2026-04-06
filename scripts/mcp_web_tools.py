@@ -141,6 +141,10 @@ def _urlopen(req: urllib.request.Request, timeout: int):
         if "CERTIFICATE_VERIFY_FAILED" not in msg:
             raise
         # Fallback for hosts where local CA bundle is unavailable.
+        # NOTE: SSL verification is disabled. This is insecure in production.
+        import sys
+        print("WARNING: SSL verification disabled due to CERTIFICATE_VERIFY_FAILED. "
+              "Set the system CA bundle or install certificates to restore secure HTTPS.", file=sys.stderr)
         insecure_ctx = ssl._create_unverified_context()
         return urllib.request.urlopen(req, timeout=timeout, context=insecure_ctx)
 

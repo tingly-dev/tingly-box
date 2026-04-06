@@ -10,6 +10,51 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// buildStreamState creates a streamState from Anthropic usage stats.
+func buildStreamState(inputTokens, outputTokens int64) *streamState {
+	s := newStreamState()
+	s.inputTokens = inputTokens
+	s.outputTokens = outputTokens
+	return s
+}
+
+// setAnthropicSSEHeaders sets standard SSE headers for Anthropic streaming responses.
+func setAnthropicSSEHeaders(c *gin.Context) {
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Allow-Headers", "Cache-Control")
+}
+
+// sendMessageStart emits the message_start SSE event with the given id/model.
+func sendMessageStart(
+	c *gin.Context,
+	flusher http.Flusher,
+	model string,
+	eventType string,
+	sendEvent func(*gin.Context, string, map[string]interface{}, http.Flusher),
+	inputTokens int64,
+) {
+	event := map[string]interface{}{
+		"type": eventType,
+		"message": map[string]interface{}{
+			"id":            fmt.Sprintf("msg_%d", time.Now().Unix()),
+			"type":          "message",
+			"role":          "assistant",
+			"content":       []interface{}{},
+			"model":         model,
+			"stop_reason":   nil,
+			"stop_sequence": nil,
+			"usage": map[string]interface{}{
+				"input_tokens":  inputTokens,
+				"output_tokens": 0,
+			},
+		},
+	}
+	sendEvent(c, eventType, event, flusher)
+}
+
 // StreamAnthropicV1SingleMessage emits a single assembled Anthropic v1 message using SSE events.
 func StreamAnthropicV1SingleMessage(c *gin.Context, resp *anthropic.Message, responseModel string) error {
 	if resp == nil {
@@ -22,37 +67,13 @@ func StreamAnthropicV1SingleMessage(c *gin.Context, resp *anthropic.Message, res
 		return errors.New("streaming not supported by this connection")
 	}
 
-	messageID := string(resp.ID)
-	if messageID == "" {
-		messageID = fmt.Sprintf("msg_%d", time.Now().Unix())
-	}
-
 	model := responseModel
 	if model == "" {
 		model = string(resp.Model)
 	}
 
-	state := newStreamState()
-	state.inputTokens = int64(resp.Usage.InputTokens)
-	state.outputTokens = int64(resp.Usage.OutputTokens)
-
-	messageStart := map[string]interface{}{
-		"type": eventTypeMessageStart,
-		"message": map[string]interface{}{
-			"id":            messageID,
-			"type":          "message",
-			"role":          "assistant",
-			"content":       []interface{}{},
-			"model":         model,
-			"stop_reason":   nil,
-			"stop_sequence": nil,
-			"usage": map[string]interface{}{
-				"input_tokens":  state.inputTokens,
-				"output_tokens": 0,
-			},
-		},
-	}
-	sendAnthropicStreamEvent(c, eventTypeMessageStart, messageStart, flusher)
+	state := buildStreamState(resp.Usage.InputTokens, resp.Usage.OutputTokens)
+	sendMessageStart(c, flusher, model, eventTypeMessageStart, sendAnthropicStreamEvent, state.inputTokens)
 
 	for idx, block := range resp.Content {
 		switch v := block.AsAny().(type) {
@@ -84,12 +105,9 @@ func StreamAnthropicV1SingleMessage(c *gin.Context, resp *anthropic.Message, res
 		}
 	}
 
-	stopReason := string(resp.StopReason)
-	if stopReason == "" {
-		stopReason = anthropicStopReasonEndTurn
-	}
+	stopReason := anthropicStopReasonEndTurn
 	sendMessageDelta(c, state, stopReason, flusher)
-	sendMessageStop(c, messageID, model, state, stopReason, flusher)
+	sendMessageStop(c, fmt.Sprintf("msg_%d", time.Now().Unix()), model, state, stopReason, flusher)
 	return nil
 }
 
@@ -105,37 +123,13 @@ func StreamAnthropicBetaSingleMessage(c *gin.Context, resp *anthropic.BetaMessag
 		return errors.New("streaming not supported by this connection")
 	}
 
-	messageID := string(resp.ID)
-	if messageID == "" {
-		messageID = fmt.Sprintf("msg_%d", time.Now().Unix())
-	}
-
 	model := responseModel
 	if model == "" {
 		model = string(resp.Model)
 	}
 
-	state := newStreamState()
-	state.inputTokens = int64(resp.Usage.InputTokens)
-	state.outputTokens = int64(resp.Usage.OutputTokens)
-
-	messageStart := map[string]interface{}{
-		"type": eventTypeMessageStart,
-		"message": map[string]interface{}{
-			"id":            messageID,
-			"type":          "message",
-			"role":          "assistant",
-			"content":       []interface{}{},
-			"model":         model,
-			"stop_reason":   nil,
-			"stop_sequence": nil,
-			"usage": map[string]interface{}{
-				"input_tokens":  state.inputTokens,
-				"output_tokens": 0,
-			},
-		},
-	}
-	sendAnthropicBetaStreamEvent(c, eventTypeMessageStart, messageStart, flusher)
+	state := buildStreamState(resp.Usage.InputTokens, resp.Usage.OutputTokens)
+	sendMessageStart(c, flusher, model, eventTypeMessageStart, sendAnthropicBetaStreamEvent, state.inputTokens)
 
 	for idx, block := range resp.Content {
 		switch v := block.AsAny().(type) {
@@ -167,19 +161,8 @@ func StreamAnthropicBetaSingleMessage(c *gin.Context, resp *anthropic.BetaMessag
 		}
 	}
 
-	stopReason := string(resp.StopReason)
-	if stopReason == "" {
-		stopReason = anthropicStopReasonEndTurn
-	}
+	stopReason := anthropicStopReasonEndTurn
 	sendBetaMessageDelta(c, state, stopReason, flusher)
-	sendBetaMessageStop(c, messageID, model, state, stopReason, flusher)
+	sendBetaMessageStop(c, fmt.Sprintf("msg_%d", time.Now().Unix()), model, state, stopReason, flusher)
 	return nil
-}
-
-func setAnthropicSSEHeaders(c *gin.Context) {
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("Access-Control-Allow-Origin", "*")
-	c.Header("Access-Control-Allow-Headers", "Cache-Control")
 }

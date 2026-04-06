@@ -89,10 +89,8 @@ const GlobalExperimentalFeatures: React.FC = () => {
 
     const toggleMCP = () => {
         const newValue = !mcpEnabled;
-        console.log('toggleMCP called, newValue:', newValue);
         api.setScenarioFlag('_global', 'mcp', newValue)
             .then((result) => {
-                console.log('setScenarioFlag result:', result);
                 if (result.success) {
                     setMCPEnabled(newValue);
                     refresh();

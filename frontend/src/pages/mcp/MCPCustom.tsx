@@ -30,32 +30,7 @@ import {
 } from '@mui/icons-material';
 import { useEffect, useState } from 'react';
 import { api } from '@/services/api';
-
-interface MCPSourceConfig {
-    id?: string;
-    transport?: 'http' | 'stdio';
-    endpoint?: string;
-    headers?: Record<string, string>;
-    tools?: string[];
-    command?: string;
-    args?: string[];
-    cwd?: string;
-    env?: Record<string, string>;
-    proxy_url?: string;
-}
-
-interface MCPRuntimeConfig {
-    sources?: MCPSourceConfig[];
-    request_timeout?: number;
-}
-
-interface MCPConfigResponse {
-    success: boolean;
-    config?: MCPRuntimeConfig;
-    error?: string;
-}
-
-const BUILTIN_IDS = ['webtools'];
+import { BUILTIN_IDS, type MCPSourceConfig, type MCPConfigResponse } from './types';
 
 const MCPCustom = () => {
     const [loading, setLoading] = useState(true);
@@ -73,7 +48,7 @@ const MCPCustom = () => {
     const [formTransport, setFormTransport] = useState<'http' | 'stdio'>('stdio');
     const [formEndpoint, setFormEndpoint] = useState('');
     const [formArgs, setFormArgs] = useState('python3 ./scripts/mcp_web_tools.py');
-    const [formTools, setFormTools] = useState<string[]>(['*']);
+    const [formTools, setFormTools] = useState<string>('*');
     const [formSerperApiKey, setFormSerperApiKey] = useState('');
     const [formShowApiKey, setFormShowApiKey] = useState(false);
     const [formProxyUrl, setFormProxyUrl] = useState('');
@@ -115,7 +90,7 @@ const MCPCustom = () => {
         setFormTransport('stdio');
         setFormEndpoint('');
         setFormArgs('python3 ./scripts/mcp_web_tools.py');
-        setFormTools(['*']);
+        setFormTools('*');
         setFormSerperApiKey('');
         setFormProxyUrl('');
         setDialogOpen(true);
@@ -127,7 +102,7 @@ const MCPCustom = () => {
         setFormTransport(source.transport || 'stdio');
         setFormEndpoint(source.endpoint || '');
         setFormArgs((source.command || 'python3') + ' ' + (source.args?.join(' ') || './scripts/mcp_web_tools.py'));
-        setFormTools(source.tools || []);
+        setFormTools((source.tools || []).join(' '));
         setFormSerperApiKey(source.env?.SERPER_API_KEY || '');
         setFormProxyUrl(source.proxy_url || '');
         setDialogOpen(true);
@@ -137,7 +112,7 @@ const MCPCustom = () => {
         const source: MCPSourceConfig = {
             id: formId,
             transport: formTransport,
-            tools: formTools,
+            tools: formTools.trim().split(/\s+/).filter(Boolean),
         };
 
         if (formTransport === 'http') {
@@ -180,13 +155,6 @@ const MCPCustom = () => {
         setAllSources([...allSources.filter(s => BUILTIN_IDS.includes(s.id || '')), ...updated]);
     };
 
-    const handleToolToggle = (tool: string) => {
-        if (formTools.includes(tool)) {
-            setFormTools(formTools.filter(t => t !== tool));
-        } else {
-            setFormTools([...formTools, tool]);
-        }
-    };
 
     if (loading) {
         return (
@@ -324,28 +292,12 @@ const MCPCustom = () => {
                             />
                         )}
 
-                        <Box>
-                            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>Tools</Typography>
-                            <Stack direction="row" spacing={1}>
-                                {['web_search', 'web_fetch', '*'].map(tool => (
-                                    <Box
-                                        key={tool}
-                                        onClick={() => handleToolToggle(tool)}
-                                        sx={{
-                                            px: 1.5, py: 0.5,
-                                            border: '1px solid',
-                                            borderColor: formTools.includes(tool) ? 'primary.main' : 'divider',
-                                            borderRadius: 1,
-                                            bgcolor: formTools.includes(tool) ? 'primary.main' : 'transparent',
-                                            color: formTools.includes(tool) ? 'primary.contrastText' : 'text.primary',
-                                            cursor: 'pointer', fontSize: '0.875rem',
-                                        }}
-                                    >
-                                        {tool}
-                                    </Box>
-                                ))}
-                            </Stack>
-                        </Box>
+                        <TextField
+                            size="small" fullWidth label="Tools"
+                            value={formTools} onChange={(e) => setFormTools(e.target.value)}
+                            placeholder="* (all) or space-separated names, e.g. web_search web_fetch"
+                            helperText="Use * to enable all tools, or list specific tool names separated by spaces"
+                        />
 
                         <TextField
                             size="small" fullWidth label="API Key"

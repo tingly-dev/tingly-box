@@ -15,6 +15,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/openai/openai-go/v3"
@@ -416,9 +418,10 @@ func callJSONRPC(ctx context.Context, cfg *typ.MCPRuntimeConfig, source typ.MCPS
 }
 
 type stdioRPCClient struct {
-	in  io.WriteCloser
-	out *bufio.Reader
-	seq int64
+	in      io.WriteCloser
+	out     *bufio.Reader
+	seq     int64
+	mu      sync.Mutex // protects reads from out, since bufio.Reader is not concurrent-safe
 }
 
 func newStdioRPCClient(ctx context.Context, cfg *typ.MCPRuntimeConfig, source typ.MCPSourceConfig) (*stdioRPCClient, func(), error) {
@@ -426,6 +429,21 @@ func newStdioRPCClient(ctx context.Context, cfg *typ.MCPRuntimeConfig, source ty
 		return nil, nil, fmt.Errorf("mcp stdio source %s has empty command", source.ID)
 	}
 	cmd := exec.CommandContext(ctx, source.Command, source.Args...)
+	// buildDefaultSearchDirs returns directories to search when no explicit cwd is given
+	// or when the configured cwd doesn't contain the script.
+	buildDefaultSearchDirs := func() []string {
+		dirs := []string{"~/.tingly-box/mcp"}
+		if execPath, err := os.Executable(); err == nil {
+			if !strings.Contains(execPath, "/go-build") {
+				execDir := filepath.Dir(execPath)
+				// Also check the "bundle" layout: binary is one level above scripts/
+				// e.g. /usr/local/bin/tingly-box + /usr/local/bin/../scripts/mcp_web_tools.py
+				dirs = append(dirs, execDir, filepath.Dir(execDir))
+			}
+		}
+		return dirs
+	}
+
 	// Helper: search for the MCP script in a list of directories.
 	// For each dir, checks if any relative arg resolves to an existing file.
 	// Returns the directory containing the script, or "" if not found.
@@ -455,39 +473,23 @@ func newStdioRPCClient(ctx context.Context, cfg *typ.MCPRuntimeConfig, source ty
 		// No cwd configured: search for the script in likely locations.
 		// os.Executable() returns the go-run temp binary when running via `go run`,
 		// so we skip it when it contains "/go-build".
-		searchDirs := []string{"~/.tingly-box/mcp"}
-		if execPath, err := os.Executable(); err == nil {
-			if !strings.Contains(execPath, "/go-build") {
-				execDir := filepath.Dir(execPath)
-				// Also check the "bundle" layout: binary is one level above scripts/
-				// e.g. /usr/local/bin/tingly-box + /usr/local/bin/../scripts/mcp_web_tools.py
-				parent := filepath.Dir(execDir)
-				searchDirs = append(searchDirs, execDir, parent)
-			}
-		}
-		if found := findScriptInDirs(searchDirs); found != "" {
+		if found := findScriptInDirs(buildDefaultSearchDirs()); found != "" {
 			cwd = found
 			logrus.Debugf("mcp: found script in cwd=%s", cwd)
 		} else {
-			logrus.Debugf("mcp: no cwd configured, script not found in search dirs: %v", searchDirs)
+			logrus.Debugf("mcp: no cwd configured, script not found in search dirs: %v", buildDefaultSearchDirs())
 		}
 	} else {
 		// User configured a cwd: expand ~ and validate script exists.
-		// If not found, search as fallback.
+		// If not found, fall back to default search dirs.
 		if strings.HasPrefix(cwd, "~/") {
 			if home, err := os.UserHomeDir(); err == nil {
 				cwd = filepath.Join(home, cwd[2:])
 			}
 		}
 		if findScriptInDirs([]string{cwd}) == "" {
-			logrus.Warnf("mcp: script not found in configured cwd %s, searching...", source.Cwd)
-			searchDirs := []string{"~/.tingly-box/mcp"}
-			if execPath, err := os.Executable(); err == nil && !strings.Contains(execPath, "/go-build") {
-				execDir := filepath.Dir(execPath)
-				parent := filepath.Dir(execDir)
-				searchDirs = append(searchDirs, execDir, parent)
-			}
-			if found := findScriptInDirs(searchDirs); found != "" {
+			logrus.Warnf("mcp: script not found in configured cwd %s, searching fallback dirs...", source.Cwd)
+			if found := findScriptInDirs(buildDefaultSearchDirs()); found != "" {
 				cwd = found
 				logrus.Debugf("mcp: found script in fallback cwd=%s", cwd)
 			} else {
@@ -543,7 +545,7 @@ func newStdioRPCClient(ctx context.Context, cfg *typ.MCPRuntimeConfig, source ty
 		_ = cmd.Process.Kill()
 		_, _ = cmd.Process.Wait()
 	}
-	_ = cfg
+	_ = cfg // TODO: use cfg for stdio client options (env, timeout) in a follow-up
 	return client, cleanup, nil
 }
 
@@ -560,9 +562,8 @@ func (c *stdioRPCClient) initialize(ctx context.Context) error {
 }
 
 func (c *stdioRPCClient) call(ctx context.Context, method string, params interface{}) (json.RawMessage, error) {
-	_ = ctx
-	c.seq++
-	id := fmt.Sprintf("tbe-stdio-%d", c.seq)
+	seq := atomic.AddInt64(&c.seq, 1)
+	id := fmt.Sprintf("tbe-stdio-%d", seq)
 	req := rpcRequest{
 		JSONRPC: "2.0",
 		ID:      id,
@@ -580,11 +581,25 @@ func (c *stdioRPCClient) call(ctx context.Context, method string, params interfa
 	if _, err := c.in.Write(b); err != nil {
 		return nil, fmt.Errorf("write stdio body failed: %w", err)
 	}
-	return c.readResponseForID(id)
+	return c.readResponseForID(ctx, id)
 }
 
-func (c *stdioRPCClient) readResponseForID(id string) (json.RawMessage, error) {
-	for i := 0; i < 32; i++ {
+// maxSkippedFrames is the maximum number of non-matching frames to skip
+// while waiting for a response with a specific ID. MCP servers may send
+// intermediate notifications (e.g., logging, progress) that we skip over.
+const maxSkippedFrames = 32
+
+func (c *stdioRPCClient) readResponseForID(ctx context.Context, id string) (json.RawMessage, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for i := 0; i < maxSkippedFrames; i++ {
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("rpc response wait cancelled: %w", ctx.Err())
+		default:
+		}
+
 		payload, err := readStdioFrame(c.out)
 		if err != nil {
 			return nil, err
@@ -595,10 +610,12 @@ func (c *stdioRPCClient) readResponseForID(id string) (json.RawMessage, error) {
 		}
 		rawID, hasID := msg["id"]
 		if !hasID {
+			logrus.Debugf("mcp: readResponseForID=%s skipped frame %d: missing id field", id, i+1)
 			continue
 		}
 		var gotID string
 		if err := json.Unmarshal(rawID, &gotID); err != nil || gotID != id {
+			logrus.Debugf("mcp: readResponseForID=%s skipped frame %d: id mismatch (got=%q)", id, i+1, gotID)
 			continue
 		}
 		if rawErr, ok := msg["error"]; ok && len(rawErr) > 0 && string(rawErr) != "null" {
@@ -613,7 +630,7 @@ func (c *stdioRPCClient) readResponseForID(id string) (json.RawMessage, error) {
 		}
 		return nil, fmt.Errorf("rpc response missing result")
 	}
-	return nil, fmt.Errorf("rpc response id %s not received", id)
+	return nil, fmt.Errorf("rpc response id %s not received after %d frames", id, maxSkippedFrames)
 }
 
 func readStdioFrame(r *bufio.Reader) ([]byte, error) {

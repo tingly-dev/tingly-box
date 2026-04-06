@@ -22,32 +22,7 @@ import {
 } from '@mui/icons-material';
 import { useEffect, useState } from 'react';
 import { api } from '@/services/api';
-
-interface MCPSourceConfig {
-    id?: string;
-    transport?: 'http' | 'stdio';
-    endpoint?: string;
-    headers?: Record<string, string>;
-    tools?: string[];
-    command?: string;
-    args?: string[];
-    cwd?: string;
-    env?: Record<string, string>;
-    proxy_url?: string;
-}
-
-interface MCPRuntimeConfig {
-    sources?: MCPSourceConfig[];
-    request_timeout?: number;
-}
-
-interface MCPConfigResponse {
-    success: boolean;
-    config?: MCPRuntimeConfig;
-    error?: string;
-}
-
-const BUILTIN_IDS = ['webtools'];
+import { BUILTIN_IDS, type MCPSourceConfig, type MCPConfigResponse } from './types';
 
 const MCPBuiltin = () => {
     const [loading, setLoading] = useState(true);

@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/gin-gonic/gin"
 
 	"github.com/tingly-dev/tingly-box/internal/mcpruntime"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -45,6 +48,8 @@ func hasOnlyMCPToolUsesBeta(content []anthropic.BetaContentBlockUnion) ([]anthro
 	return toolUses, true
 }
 
+// handleAnthropicV1MCPToolCalls executes MCP tool calls in a loop until no more MCP tools
+// are returned. Returns the final (possibly modified) response and request.
 func (s *Server) handleAnthropicV1MCPToolCalls(
 	ctx context.Context,
 	provider *typ.Provider,
@@ -99,6 +104,41 @@ func (s *Server) handleAnthropicV1MCPToolCalls(
 	return currentResp, currentReq, nil
 }
 
+// respondMCPError writes a JSON error response for non-streaming MCP tool call failures.
+// This consolidates the ~10-line error block repeated across dispatch paths.
+func respondMCPError(s *Server, c *gin.Context, recorder *ProtocolRecorder, err error, msg string) {
+	s.trackUsageFromContext(c, 0, 0, err)
+	c.JSON(http.StatusInternalServerError, ErrorResponse{
+		Error: ErrorDetail{
+			Message: msg + ": " + err.Error(),
+			Type:    "api_error",
+		},
+	})
+	if recorder != nil {
+		recorder.RecordError(err)
+	}
+}
+
+// recordMCPError sends a streaming error response for streaming MCP tool call failures.
+func recordMCPError(s *Server, c *gin.Context, err error, recorder *ProtocolRecorder) {
+	s.trackUsageFromContext(c, 0, 0, err)
+	stream.SendStreamingError(c, err)
+	if recorder != nil {
+		recorder.RecordError(err)
+	}
+}
+
+// recordMCPForwardingError handles MCP errors in non-streaming forward paths.
+func recordMCPForwardingError(s *Server, c *gin.Context, err error, recorder *ProtocolRecorder) {
+	s.trackUsageFromContext(c, 0, 0, err)
+	stream.SendForwardingError(c, err)
+	if recorder != nil {
+		recorder.RecordError(err)
+	}
+}
+
+// handleAnthropicBetaMCPToolCalls executes MCP tool calls in a loop until no more MCP tools
+// are returned. Returns the final (possibly modified) response and request.
 func (s *Server) handleAnthropicBetaMCPToolCalls(
 	ctx context.Context,
 	provider *typ.Provider,
