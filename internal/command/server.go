@@ -57,19 +57,22 @@ func printBanner(cfg BannerConfig) {
 	}
 
 	// Show all access URLs when UI is enabled
-	fmt.Println("\nYou can access the service at:")
+	fmt.Println("\n┌────────────────────────────────────────────────────────────────────┐")
+	fmt.Println("                         Access Information                            ")
+	fmt.Println("├────────────────────────────────────────────────────────────────────┤")
 	if cfg.GlobalConfig.HasUserToken() {
-		fmt.Printf("  Web UI:       "+webUILoginTpl+"\n", scheme, cfg.Port, cfg.GlobalConfig.GetUserToken())
+		fmt.Printf("  Web UI:       %s\n", fmt.Sprintf(webUILoginTpl, scheme, cfg.Port, cfg.GlobalConfig.GetUserToken()))
 	} else {
-		fmt.Printf("  Web UI:       "+webUITpl+"\n", scheme, cfg.Port)
+		fmt.Printf("  Web UI:       %s\n", fmt.Sprintf(webUITpl, scheme, cfg.Port))
 	}
-	fmt.Printf("  OpenAI API:   "+openAIEndpointTpl+"\n", scheme, cfg.Port)
-	fmt.Printf("  Anthropic API: "+anthropicEndpointTpl+"\n", scheme, cfg.Port)
+	fmt.Printf("  OpenAI API:   %s\n", fmt.Sprintf(openAIEndpointTpl, scheme, cfg.Port))
+	fmt.Printf("  Anthropic API: %s\n", fmt.Sprintf(anthropicEndpointTpl, scheme, cfg.Port))
 
 	// Show login token for easy copy
 	if cfg.GlobalConfig.HasUserToken() {
 		fmt.Printf("\n  Login Token:  %s\n", cfg.GlobalConfig.GetUserToken())
 	}
+	fmt.Println("└────────────────────────────────────────────────────────────────────┘")
 
 	if cfg.IsDaemon {
 		fmt.Println("\nServer is running in background. Use 'tingly-box stop' to stop.")
