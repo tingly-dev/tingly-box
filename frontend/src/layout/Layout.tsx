@@ -1,8 +1,9 @@
 import { Box, Drawer, IconButton, Popover, Typography } from '@mui/material';
 import { Menu as MenuIcon } from '@mui/icons-material';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
+import { Z_INDEX } from '../constants/zIndex';
 import { activityBarWidth, sidebarWidth } from './constants';
 import { ActivityBar } from './ActivityBar';
 import { Sidebar } from './Sidebar';
@@ -79,9 +80,9 @@ const Layout = ({ children }: LayoutProps) => {
     );
 
     return (
-        <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', backgroundColor: '#f8f9fa' }}>
+        <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', position: 'relative', zIndex: Z_INDEX.main }}>
             {/* Desktop nav */}
-            <Box component="nav" sx={{ display: { xs: 'none', md: 'flex' }, height: '100%' }}>
+            <Box component="nav" sx={{ display: { xs: 'none', md: 'flex' }, height: '100%', position: 'relative', zIndex: Z_INDEX.drawer + 1 }}>
                 {navigationContent}
             </Box>
 
@@ -96,7 +97,7 @@ const Layout = ({ children }: LayoutProps) => {
                     '& .MuiDrawer-paper': {
                         boxSizing: 'border-box',
                         width: sidebarItems.length > 0 ? activityBarWidth + sidebarWidth : activityBarWidth,
-                        bgcolor: 'background.paper',
+                        zIndex: Z_INDEX.drawer,
                     },
                 }}
             >
@@ -113,8 +114,7 @@ const Layout = ({ children }: LayoutProps) => {
                     position: 'fixed',
                     top: 12,
                     left: 12,
-                    zIndex: 1300,
-                    bgcolor: 'background.paper',
+                    zIndex: Z_INDEX.mobileToggle,
                     boxShadow: 3,
                     width: 44,
                     height: 44,
@@ -128,7 +128,7 @@ const Layout = ({ children }: LayoutProps) => {
             {/* Main content */}
             <Box
                 component="main"
-                sx={{ flexGrow: 1, height: '100vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden' }}
+                sx={{ flexGrow: 1, height: '100vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden', position: 'relative', zIndex: 1 }}
             >
                 <Box
                     sx={{
@@ -156,7 +156,7 @@ const Layout = ({ children }: LayoutProps) => {
                 onClose={() => setEasterEggAnchorEl(null)}
                 anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
                 transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-                sx={{ '& .MuiPopover-paper': { bgcolor: 'primary.main', color: 'white', borderRadius: 2, px: 2, py: 1, fontSize: '0.875rem' } }}
+                sx={{ zIndex: Z_INDEX.popover, '& .MuiPopover-paper': { bgcolor: 'primary.main', color: 'white', borderRadius: 2, px: 2, py: 1, fontSize: '0.875rem' } }}
             >
                 Hi, I'm Tingly-Box, Your Smart AI Orchestrator · {currentVersion}
             </Popover>

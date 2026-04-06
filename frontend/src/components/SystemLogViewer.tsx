@@ -99,7 +99,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                 return '#ef4444';
             case 'warning':
             case 'warn':
-                return '#f59e0b';
+                return '#0ea5e9';
             case 'info':
                 return '#3b82f6';
             case 'debug':
@@ -113,7 +113,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
         if (!statusCode) return '#6b7280'; // gray for missing
         if (statusCode >= 200 && statusCode < 300) return '#10b981'; // green for 2xx
         if (statusCode >= 300 && statusCode < 400) return '#3b82f6'; // blue for 3xx
-        if (statusCode >= 400 && statusCode < 500) return '#f59e0b'; // orange for 4xx
+        if (statusCode >= 400 && statusCode < 500) return '#0ea5e9'; // sky blue for 4xx
         if (statusCode >= 500) return '#ef4444'; // red for 5xx
         return '#6b7280';
     };

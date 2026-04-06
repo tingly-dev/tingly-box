@@ -27,11 +27,25 @@ func (s *Server) applyGuardrailsCredentialMasksV1(c *gin.Context, req *anthropic
 	s.applyGuardrailsCredentialMasksToV1Request(c, session, req)
 }
 
+func (s *Server) applyGuardrailsCredentialMasksV1WithSession(c *gin.Context, req *anthropic.MessageNewParams, session guardrailsSession) {
+	if req == nil {
+		return
+	}
+	s.applyGuardrailsCredentialMasksToV1Request(c, session, req)
+}
+
 func (s *Server) applyGuardrailsCredentialMasksV1Beta(c *gin.Context, req *anthropic.BetaMessageNewParams, actualModel string, provider *typ.Provider) {
 	if req == nil {
 		return
 	}
 	session := s.guardrailsSessionFromContext(c, actualModel, provider)
+	s.applyGuardrailsCredentialMasksToV1BetaRequest(c, session, req)
+}
+
+func (s *Server) applyGuardrailsCredentialMasksV1BetaWithSession(c *gin.Context, req *anthropic.BetaMessageNewParams, session guardrailsSession) {
+	if req == nil {
+		return
+	}
 	s.applyGuardrailsCredentialMasksToV1BetaRequest(c, session, req)
 }
 

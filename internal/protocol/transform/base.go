@@ -6,6 +6,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/openai/openai-go/v3/shared"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 )
@@ -91,12 +92,11 @@ func (t *BaseTransform) convertToOpenAIChat(ctx *TransformContext, disableStream
 		ctx.Config.OpenAIConfig = config
 
 	case *openai.ChatCompletionNewParams:
-		// Already in OpenAI Chat format, no conversion needed
-		// Still create a default config for consistency
-		ctx.Config.OpenAIConfig = &protocol.OpenAIConfig{
-			HasThinking:     false,
-			ReasoningEffort: "none",
-		}
+		// Already in OpenAI Chat format, no protocol conversion needed
+		// Build fresh config for vendor transforms to detect thinking/cursor settings
+		ctx.Config.OpenAIConfig = buildOpenAIConfigFromRequest(req)
+
+		ctx.Request = req
 
 	case *responses.ResponseNewParams:
 		// OpenAI Responses API request - convert to Chat format
@@ -275,4 +275,49 @@ func (t *BaseTransform) convertToGoogle(ctx *TransformContext) error {
 	}
 
 	return nil
+}
+
+// buildOpenAIConfigFromRequest builds OpenAIConfig from an OpenAI Chat request.
+// This detects thinking configuration and other vendor-specific settings.
+func buildOpenAIConfigFromRequest(req *openai.ChatCompletionNewParams) *protocol.OpenAIConfig {
+	config := &protocol.OpenAIConfig{
+		HasThinking:     false,
+		ReasoningEffort: "",
+	}
+
+	// Check if request has thinking configuration in extra_fields
+	extraFields := req.ExtraFields()
+	if extraFields == nil {
+		return config
+	}
+
+	// Check for thinking field (used by Anthropic client → OpenAI Chat conversion)
+	if thinking, ok := extraFields["thinking"]; ok {
+		if thinkingMap, ok := thinking.(map[string]interface{}); ok {
+			config.HasThinking = true
+			// Extract reasoning effort if specified
+			// Valid values per OpenAI docs: "none", "minimal", "low", "medium", "high", "xhigh"
+			// See: https://platform.openai.com/docs/guides/reasoning
+			if effortRaw, ok := thinkingMap["effort"]; ok {
+				if effort, ok := effortRaw.(string); ok {
+					config.ReasoningEffort = shared.ReasoningEffort(effort)
+				} else {
+					// Non-string effort: default to low as safe fallback
+					config.ReasoningEffort = shared.ReasoningEffortLow
+				}
+			} else {
+				// No effort specified: default to low
+				config.ReasoningEffort = shared.ReasoningEffortLow
+			}
+		}
+	}
+
+	// Check for cursor_compat field
+	if cursorCompatRaw, ok := extraFields["cursor_compat"]; ok {
+		if enabled, ok := cursorCompatRaw.(bool); ok && enabled {
+			config.CursorCompat = true
+		}
+	}
+
+	return config
 }
