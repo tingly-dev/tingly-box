@@ -370,7 +370,8 @@ func callJSONRPC(ctx context.Context, cfg *typ.MCPRuntimeConfig, source typ.MCPS
 		return nil, fmt.Errorf("build rpc request failed: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
+	// streamable-http MCP servers require accepting both JSON and SSE
+	req.Header.Set("Accept", "application/json, text/event-stream")
 	for k, v := range source.Headers {
 		if strings.TrimSpace(k) != "" {
 			req.Header.Set(k, v)
@@ -383,9 +384,30 @@ func callJSONRPC(ctx context.Context, cfg *typ.MCPRuntimeConfig, source typ.MCPS
 	}
 	defer resp.Body.Close()
 
+	// Some MCP HTTP servers (streamable-http) return SSE format:
+	//   event: message
+	//   data: {"jsonrpc":"2.0","id":"1","result":{...}}
+	// Try to parse as plain JSON first; if that fails, try SSE format.
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read rpc response failed: %w", err)
+	}
+
 	var out rpcResponse
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, fmt.Errorf("decode rpc response failed: %w", err)
+	if err := json.Unmarshal(body, &out); err != nil {
+		// Try SSE format: find "data: " prefix and extract JSON after it
+		lines := strings.Split(string(body), "\n")
+		for _, line := range lines {
+			if strings.HasPrefix(line, "data: ") {
+				jsonPart := strings.TrimPrefix(line, "data: ")
+				if err := json.Unmarshal([]byte(jsonPart), &out); err == nil {
+					break
+				}
+			}
+		}
+		if out.Result == nil && out.Error == nil {
+			return nil, fmt.Errorf("decode rpc response failed (tried JSON and SSE): %w / body: %s", err, string(body)[:min(200, len(body))])
+		}
 	}
 	if out.Error != nil {
 		return nil, fmt.Errorf("rpc error %d: %s", out.Error.Code, out.Error.Message)
