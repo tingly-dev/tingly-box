@@ -26,7 +26,7 @@ export default {
     "slogan": "Your Intelligence, Orchestrated.",
     "version": "version {{version}}",
     "nav": {
-      "home": "Scenario",
+      "home": "Agent",
       "settings": "Settings",
       "useOpenAI": "OpenAI SDK",
       "useAnthropic": "Anthropic SDK",
