@@ -24,6 +24,7 @@ interface MCPSourceEditorProps {
     onChange: (next: MCPSourceFormValue) => void;
     lockId?: boolean;
     hideTools?: boolean;
+    onUseExample?: () => void;
 }
 
 const sectionSx = {
@@ -33,22 +34,36 @@ const sectionSx = {
     p: 2,
 } as const;
 
-const MCPSourceEditor = ({ title = 'Connect to a custom MCP', value, onChange, lockId = false, hideTools = false }: MCPSourceEditorProps) => {
+const MCPSourceEditor = ({
+    title = 'Connect to a custom MCP',
+    value,
+    onChange,
+    lockId = false,
+    hideTools = false,
+    onUseExample,
+}: MCPSourceEditorProps) => {
     const set = (patch: Partial<MCPSourceFormValue>) => onChange({ ...value, ...patch });
 
     return (
         <Stack spacing={2}>
             <Stack spacing={0.5}>
                 <Typography variant="h4" fontWeight={700}>{title}</Typography>
-                <Button
-                    href="https://docs.getbifrost.ai/mcp/connecting-to-servers"
-                    target="_blank"
-                    rel="noreferrer"
-                    startIcon={<OpenInNewIcon />}
-                    sx={{ alignSelf: 'flex-start', px: 0 }}
-                >
-                    Docs
-                </Button>
+                <Stack direction="row" spacing={2} alignItems="center">
+                    <Button
+                        href="https://tingly-dev.github.io/"
+                        target="_blank"
+                        rel="noreferrer"
+                        startIcon={<OpenInNewIcon />}
+                        sx={{ alignSelf: 'flex-start', px: 0 }}
+                    >
+                        Docs
+                    </Button>
+                    {onUseExample && (
+                        <Button variant="text" sx={{ px: 0 }} onClick={onUseExample}>
+                            Use Weather Example
+                        </Button>
+                    )}
+                </Stack>
             </Stack>
 
             <Box sx={sectionSx}>

@@ -22,7 +22,7 @@ import {
 } from '@mui/icons-material';
 import { useEffect, useState } from 'react';
 import MCPSourceEditor from './MCPSourceEditor';
-import { BUILTIN_IDS, defaultMCPSourceFormValue, formValueToSource, sourceToFormValue, type MCPConfigResponse, type MCPSourceConfig, type MCPSourceFormValue } from './types';
+import { BUILTIN_IDS, MCP_DEFAULT_CWD, defaultMCPSourceFormValue, formValueToSource, sourceToFormValue, type MCPConfigResponse, type MCPSourceConfig, type MCPSourceFormValue } from './types';
 
 const defaultBuiltinForm = (): MCPSourceFormValue => ({
     ...defaultMCPSourceFormValue(),
@@ -81,7 +81,7 @@ const MCPBuiltin = () => {
         const tools = mapped.tools || [];
         setEnableSearch(tools.includes('*') || tools.includes('web_search'));
         setEnableFetch(tools.includes('*') || tools.includes('web_fetch'));
-        setForm({ ...mapped, id: 'webtools' });
+        setForm({ ...mapped, id: 'webtools', cwd: MCP_DEFAULT_CWD });
         setEditorMode('edit');
     };
 
@@ -185,7 +185,7 @@ const MCPBuiltin = () => {
                         </Stack>
 
                         <MCPSourceEditor
-                            title="Connect to a custom MCP"
+                            title="Connect to a builtin MCP"
                             value={form}
                             onChange={setForm}
                             lockId

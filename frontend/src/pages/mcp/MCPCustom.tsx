@@ -195,26 +195,17 @@ const MCPCustom = () => {
                     </Stack>
                 </UnifiedCard>
 
-                <Stack direction="row" justifyContent="flex-start">
-                    <Button
-                        size="small"
-                        variant="text"
-                        onClick={() => {
-                            setEditingId('');
-                            setForm(weatherTemplate());
-                            setEditorMode('add');
-                        }}
-                    >
-                        Use Weather Example
-                    </Button>
-                </Stack>
-
                 {editorMode !== 'none' && (
                     <>
                         <MCPSourceEditor
                             title="Connect to a custom MCP"
                             value={form}
                             onChange={setForm}
+                            onUseExample={() => {
+                                setEditingId('');
+                                setForm(weatherTemplate());
+                                setEditorMode('add');
+                            }}
                         />
 
                         <Stack direction="row" justifyContent="flex-start">
