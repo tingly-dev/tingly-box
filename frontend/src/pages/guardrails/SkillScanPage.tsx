@@ -239,6 +239,14 @@ const SkillScanPage = () => {
         showNotification('Copied to clipboard!', 'success');
     };
 
+    const handleCopyPath = () => {
+        if (!selectedSkill) {
+            return;
+        }
+        navigator.clipboard.writeText(selectedSkill.path);
+        showNotification('Path copied to clipboard!', 'success');
+    };
+
     const updateLocationSkillCount = (locationId: string, count: number) => {
         setLocations(prev =>
             prev.map(loc =>
@@ -986,9 +994,34 @@ const SkillScanPage = () => {
                                             textOverflow: 'ellipsis',
                                             whiteSpace: 'nowrap',
                                         }}
-                                    >
-                                        {selectedSkill ? selectedSkill.name : 'Skill Details'}
-                                    </Typography>
+                                >
+                                    {selectedSkill ? selectedSkill.name : 'Skill Details'}
+                                </Typography>
+                                {selectedSkill && (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                                        <Typography
+                                            variant="caption"
+                                            color="text.secondary"
+                                            sx={{
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                                display: 'block',
+                                                minWidth: 0,
+                                            }}
+                                        >
+                                            {selectedSkill.path}
+                                        </Typography>
+                                        <IconButton
+                                            size="small"
+                                            onClick={handleCopyPath}
+                                            sx={{ ml: -0.5 }}
+                                            title="Copy path"
+                                        >
+                                            <ContentCopy fontSize="small" />
+                                        </IconButton>
+                                    </Box>
+                                )}
                                 </Box>
                                 <Stack direction="row" spacing={0.5} alignItems="center">
                                     {skillContent && (
