@@ -1,5 +1,6 @@
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
+import { api } from '@/services/api';
 import {
     Alert,
     Box,
@@ -7,85 +8,103 @@ import {
     Chip,
     CircularProgress,
     FormControlLabel,
-    Grid,
-    InputAdornment,
-    IconButton,
+    Checkbox,
     Snackbar,
     Stack,
-    Switch,
-    TextField,
+    Typography,
 } from '@mui/material';
-import {
-    Save as SaveIcon,
-    Visibility,
-    VisibilityOff,
-} from '@mui/icons-material';
 import { useEffect, useState } from 'react';
-import { api } from '@/services/api';
-import { BUILTIN_IDS, type MCPSourceConfig, type MCPConfigResponse } from './types';
+import MCPSourceEditor from './MCPSourceEditor';
+import { BUILTIN_IDS, defaultMCPSourceFormValue, formValueToSource, sourceToFormValue, type MCPConfigResponse, type MCPSourceConfig, type MCPSourceFormValue } from './types';
+
+const defaultBuiltinForm = (): MCPSourceFormValue => ({
+    ...defaultMCPSourceFormValue(),
+    id: 'webtools',
+    transport: 'stdio',
+    command: 'python3',
+    args: ['mcp_web_tools.py'],
+    tools: ['web_search', 'web_fetch'],
+    envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'],
+    useGlobalProxy: true,
+});
 
 const MCPBuiltin = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
     const [allSources, setAllSources] = useState<MCPSourceConfig[]>([]);
+    const [form, setForm] = useState<MCPSourceFormValue>(defaultBuiltinForm());
+    const [editorMode, setEditorMode] = useState<'none' | 'add' | 'edit'>('none');
+    const [enableSearch, setEnableSearch] = useState(true);
+    const [enableFetch, setEnableFetch] = useState(true);
 
-    // Inline edit state for webtools
-    const [enabled, setEnabled] = useState(false);
-    const [serperApiKey, setSerperApiKey] = useState('');
-    const [showApiKey, setShowApiKey] = useState(false);
-    const [proxyUrl, setProxyUrl] = useState('');
+    const builtinSource = allSources.find((s) => s.id === 'webtools');
 
     useEffect(() => {
-        loadMCPConfig();
+        void loadMCPConfig();
     }, []);
 
     const loadMCPConfig = async () => {
         setLoading(true);
         const result: MCPConfigResponse = await api.getMCPConfig();
         if (result.success && result.config) {
-            setAllSources(result.config.sources || []);
-            const webtools = (result.config.sources || []).find(s => s.id === 'webtools');
-            if (webtools) {
-                setEnabled(true);
-                setSerperApiKey(webtools.env?.SERPER_API_KEY || '');
-                setProxyUrl(webtools.proxy_url || '');
-            }
+            const sources = result.config.sources || [];
+            setAllSources(sources);
         }
+        setForm(defaultBuiltinForm());
+        setEnableSearch(true);
+        setEnableFetch(true);
+        setEditorMode('none');
         setLoading(false);
     };
 
-    const handleSave = async () => {
-        if (enabled && !serperApiKey.trim()) {
-            setNotification({ open: true, message: 'Serper API Key is required when enabled', severity: 'error' });
+    const openAdd = () => {
+        setForm(defaultBuiltinForm());
+        setEnableSearch(true);
+        setEnableFetch(true);
+        setEditorMode('add');
+    };
+
+    const openEdit = () => {
+        if (!builtinSource) {
+            openAdd();
             return;
         }
-        setSaving(true);
+        const mapped = sourceToFormValue(builtinSource);
+        const tools = mapped.tools || [];
+        setEnableSearch(tools.includes('*') || tools.includes('web_search'));
+        setEnableFetch(tools.includes('*') || tools.includes('web_fetch'));
+        setForm({ ...mapped, id: 'webtools' });
+        setEditorMode('edit');
+    };
 
-        let newSources = allSources.filter(s => !BUILTIN_IDS.includes(s.id || ''));
-        if (enabled) {
-            const env: Record<string, string> = {};
-            if (serperApiKey) env['SERPER_API_KEY'] = serperApiKey;
-            if (proxyUrl) {
-                env['HTTP_PROXY'] = proxyUrl;
-                env['HTTPS_PROXY'] = proxyUrl;
-            }
-            newSources.push({
-                id: 'webtools',
-                transport: 'stdio',
-                command: 'python3',
-                args: ['./scripts/mcp_web_tools.py'],
-                cwd: '',
-                tools: ['web_search', 'web_fetch'],
-                env: Object.keys(env).length > 0 ? env : undefined,
-                proxy_url: proxyUrl || undefined,
-            });
+    const upsertBuiltinDraft = () => {
+        const tools: string[] = [];
+        if (enableSearch) tools.push('web_search');
+        if (enableFetch) tools.push('web_fetch');
+        if (tools.length === 0) {
+            setNotification({ open: true, message: 'At least one tool must be enabled', severity: 'error' });
+            return;
         }
+        const source = formValueToSource({ ...form, id: 'webtools', tools });
+        const next = [...allSources.filter((s) => !BUILTIN_IDS.includes(s.id || '')), source];
+        setAllSources(next);
+        setEditorMode('none');
+        setNotification({ open: true, message: editorMode === 'edit' ? 'Builtin server updated' : 'Builtin server added', severity: 'success' });
+    };
 
-        const result = await api.setMCPConfig({ sources: newSources });
+    const removeBuiltin = () => {
+        const next = allSources.filter((s) => s.id !== 'webtools');
+        setAllSources(next);
+        setEditorMode('none');
+        setNotification({ open: true, message: 'Builtin server removed from draft', severity: 'success' });
+    };
+
+    const saveAll = async () => {
+        setSaving(true);
+        const result = await api.setMCPConfig({ sources: allSources });
         if (result.success) {
             setNotification({ open: true, message: 'Saved. Restart server to apply.', severity: 'success' });
-            setAllSources(newSources);
         } else {
             setNotification({ open: true, message: result.error || 'Failed to save', severity: 'error' });
         }
@@ -102,96 +121,76 @@ const MCPBuiltin = () => {
         );
     }
 
-    const builtinServers = allSources.filter(s => BUILTIN_IDS.includes(s.id || ''));
-
     return (
         <PageLayout>
-            <Stack spacing={3}>
+            <Stack spacing={2.5}>
                 <Alert severity="info">
-                    Built-in MCP tools bundled with tingly-box. web_search uses Serper API, web_fetch uses Jina Reader.
+                    Builtin MCP keeps web_search/web_fetch in one server. Click Add/Edit to open the same connection form used by Custom.
                 </Alert>
 
                 <UnifiedCard title="Builtin MCP Servers" size="full">
                     <Stack spacing={1.5}>
-                        {/* Header */}
-                        <Grid container spacing={2} sx={{ fontWeight: 'bold', borderBottom: '1px solid', borderColor: 'divider', pb: 1 }}>
-                            <Grid size={{ xs: 1 }}>ID</Grid>
-                            <Grid size={{ xs: 1 }}>Transport</Grid>
-                            <Grid size={{ xs: 3 }}>Command</Grid>
-                            <Grid size={{ xs: 2 }}>Tools</Grid>
-                            <Grid size={{ xs: 5 }}>Config</Grid>
-                        </Grid>
-
-                        {/* Webtools row - always shown */}
-                        <Grid container spacing={2} alignItems="center">
-                            <Grid size={{ xs: 1 }}>
-                                <Chip label="webtools" size="small" color="primary" />
-                            </Grid>
-                            <Grid size={{ xs: 1 }}>
-                                <Chip label="STDIO" size="small" sx={{ bgcolor: 'success.main', color: 'white' }} />
-                            </Grid>
-                            <Grid size={{ xs: 3 }}>
-                                <TextField
-                                    size="small"
-                                    fullWidth
-                                    value="python3 ./scripts/mcp_web_tools.py"
-                                    InputProps={{ readOnly: true }}
-                                    sx={{ '& input': { fontFamily: 'monospace', fontSize: '0.75rem' } }}
-                                />
-                            </Grid>
-                            <Grid size={{ xs: 2 }}>
-                                <Stack direction="row" spacing={0.5}>
-                                    <Chip label="web_search" size="small" variant="outlined" sx={{ fontSize: '0.7rem', height: 20 }} />
-                                    <Chip label="web_fetch" size="small" variant="outlined" sx={{ fontSize: '0.7rem', height: 20 }} />
+                        <Stack direction="row" justifyContent="flex-end">
+                            {builtinSource ? (
+                                <Stack direction="row" spacing={1}>
+                                    <Button size="small" onClick={openEdit}>Edit</Button>
+                                    <Button size="small" color="error" onClick={removeBuiltin}>Remove</Button>
                                 </Stack>
-                            </Grid>
-                            <Grid size={{ xs: 5 }}>
-                                <Stack direction="row" spacing={1} alignItems="center">
-                                    <FormControlLabel
-                                        control={<Switch size="small" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />}
-                                        label=""
-                                        sx={{ mr: 0 }}
-                                    />
-                                    <TextField
-                                        size="small"
-                                        label="API Key"
-                                        type={showApiKey ? 'text' : 'password'}
-                                        value={serperApiKey}
-                                        onChange={(e) => setSerperApiKey(e.target.value)}
-                                        sx={{ flex: 1 }}
-                                        InputProps={{
-                                            endAdornment: (
-                                                <InputAdornment position="end">
-                                                    <IconButton onClick={() => setShowApiKey(!showApiKey)} size="small">
-                                                        {showApiKey ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-                                                    </IconButton>
-                                                </InputAdornment>
-                                            ),
-                                        }}
-                                    />
-                                    <TextField
-                                        size="small"
-                                        label="Proxy"
-                                        value={proxyUrl}
-                                        onChange={(e) => setProxyUrl(e.target.value)}
-                                        placeholder="http://127.0.0.1:7890"
-                                        sx={{ flex: 1 }}
-                                    />
-                                </Stack>
-                            </Grid>
-                        </Grid>
+                            ) : (
+                                <Button size="small" variant="outlined" onClick={openAdd}>Add Server</Button>
+                            )}
+                        </Stack>
+                        {builtinSource ? (
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                <Chip label="webtools" color="primary" />
+                                <Chip label={builtinSource.transport || 'stdio'} />
+                                {(builtinSource.tools || []).map((t) => <Chip key={t} label={t} variant="outlined" />)}
+                            </Stack>
+                        ) : (
+                            <Typography variant="body2" color="text.secondary">No builtin MCP server configured.</Typography>
+                        )}
                     </Stack>
                 </UnifiedCard>
 
+                {editorMode !== 'none' && (
+                    <>
+                        <Stack direction="row" spacing={2}>
+                            <FormControlLabel
+                                control={<Checkbox checked={enableSearch} onChange={(e) => setEnableSearch(e.target.checked)} />}
+                                label="web_search"
+                            />
+                            <FormControlLabel
+                                control={<Checkbox checked={enableFetch} onChange={(e) => setEnableFetch(e.target.checked)} />}
+                                label="web_fetch"
+                            />
+                        </Stack>
+
+                        <MCPSourceEditor
+                            title="Connect to a custom MCP"
+                            value={form}
+                            onChange={setForm}
+                            lockId
+                        />
+
+                        <Stack direction="row" justifyContent="space-between">
+                            <Button variant="text" onClick={() => setEditorMode('none')}>Cancel</Button>
+                            <Button variant="outlined" onClick={upsertBuiltinDraft}>
+                                {editorMode === 'edit' ? 'Update Server' : 'Add Server'}
+                            </Button>
+                        </Stack>
+                    </>
+                )}
+
                 <Stack direction="row" justifyContent="flex-end">
-                    <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSave} disabled={saving}>
+                    <Button variant="contained" onClick={saveAll} disabled={saving}>
                         {saving ? 'Saving...' : 'Save'}
                     </Button>
                 </Stack>
             </Stack>
 
             <Snackbar
-                open={notification.open} autoHideDuration={4000}
+                open={notification.open}
+                autoHideDuration={3000}
                 onClose={() => setNotification({ open: false, message: '', severity: 'success' })}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             >

@@ -1,36 +1,38 @@
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
+import { api } from '@/services/api';
 import {
     Alert,
     Box,
     Button,
     Chip,
     CircularProgress,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    Grid,
-    IconButton,
-    InputAdornment,
-    MenuItem,
-    Select,
     Snackbar,
     Stack,
-    TextField,
     Typography,
 } from '@mui/material';
-import {
-    Add as AddIcon,
-    Delete as DeleteIcon,
-    Edit as EditIcon,
-    Save as SaveIcon,
-    Visibility,
-    VisibilityOff,
-} from '@mui/icons-material';
-import { useEffect, useState } from 'react';
-import { api } from '@/services/api';
-import { BUILTIN_IDS, type MCPSourceConfig, type MCPConfigResponse } from './types';
+import { useEffect, useMemo, useState } from 'react';
+import MCPSourceEditor from './MCPSourceEditor';
+import { BUILTIN_IDS, defaultMCPSourceFormValue, formValueToSource, sourceToFormValue, type MCPConfigResponse, type MCPSourceConfig, type MCPSourceFormValue } from './types';
+
+const weatherTemplate = (): MCPSourceFormValue => ({
+    ...defaultMCPSourceFormValue(),
+    id: 'weather',
+    transport: 'stdio',
+    command: 'python3',
+    args: ['mcp_weather_tools.py'],
+    tools: ['get_current_weather'],
+    useGlobalProxy: true,
+    envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'],
+});
+
+const emptyCustomTemplate = (): MCPSourceFormValue => ({
+    ...defaultMCPSourceFormValue(),
+    args: [],
+    tools: ['*'],
+    envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'],
+    useGlobalProxy: true,
+});
 
 const MCPCustom = () => {
     const [loading, setLoading] = useState(true);
@@ -38,42 +40,73 @@ const MCPCustom = () => {
     const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
     const [allSources, setAllSources] = useState<MCPSourceConfig[]>([]);
     const [customSources, setCustomSources] = useState<MCPSourceConfig[]>([]);
-
-    // Dialog state
-    const [dialogOpen, setDialogOpen] = useState(false);
-    const [editingIndex, setEditingIndex] = useState<number | null>(null);
-
-    // Dialog form state
-    const [formId, setFormId] = useState('');
-    const [formTransport, setFormTransport] = useState<'http' | 'stdio'>('stdio');
-    const [formEndpoint, setFormEndpoint] = useState('');
-    const [formArgs, setFormArgs] = useState('python3 ./scripts/mcp_web_tools.py');
-    const [formTools, setFormTools] = useState<string>('*');
-    const [formSerperApiKey, setFormSerperApiKey] = useState('');
-    const [formShowApiKey, setFormShowApiKey] = useState(false);
-    const [formProxyUrl, setFormProxyUrl] = useState('');
+    const [editingId, setEditingId] = useState<string>('');
+    const [form, setForm] = useState<MCPSourceFormValue>(emptyCustomTemplate());
+    const [editorMode, setEditorMode] = useState<'none' | 'add' | 'edit'>('none');
 
     useEffect(() => {
-        loadMCPConfig();
+        void loadMCPConfig();
     }, []);
+
+    const currentCustomIds = useMemo(() => new Set(customSources.map((s) => s.id).filter(Boolean)), [customSources]);
 
     const loadMCPConfig = async () => {
         setLoading(true);
         const result: MCPConfigResponse = await api.getMCPConfig();
         if (result.success && result.config) {
             const sources = result.config.sources || [];
+            const custom = sources.filter((s) => !BUILTIN_IDS.includes(s.id || ''));
             setAllSources(sources);
-            setCustomSources(sources.filter(s => !BUILTIN_IDS.includes(s.id || '')));
+            setCustomSources(custom);
+            setEditingId('');
+            setForm(emptyCustomTemplate());
+            setEditorMode('none');
         }
         setLoading(false);
     };
 
-    const handleSave = async () => {
-        setSaving(true);
-        const fullResult: MCPConfigResponse = await api.getMCPConfig();
-        let newSources = (fullResult.config?.sources || []).filter(s => BUILTIN_IDS.includes(s.id || ''));
-        newSources = [...newSources, ...customSources];
+    const upsertDraftSource = () => {
+        const source = formValueToSource(form);
+        if (!source.id) {
+            setNotification({ open: true, message: 'Server name is required', severity: 'error' });
+            return;
+        }
+        if (source.transport === 'http' && !source.endpoint) {
+            setNotification({ open: true, message: 'HTTP endpoint is required', severity: 'error' });
+            return;
+        }
+        if (source.transport === 'stdio' && !source.command) {
+            setNotification({ open: true, message: 'Command is required', severity: 'error' });
+            return;
+        }
 
+        const updated = [...customSources];
+        const idx = updated.findIndex((s) => s.id === source.id);
+        if (idx >= 0) {
+            updated[idx] = source;
+        } else {
+            updated.push(source);
+        }
+        setCustomSources(updated);
+        setEditingId(source.id);
+        setEditorMode('none');
+        setNotification({ open: true, message: idx >= 0 ? 'Server updated' : 'Server added', severity: 'success' });
+    };
+
+    const deleteSource = (id?: string) => {
+        if (!id) return;
+        const updated = customSources.filter((s) => s.id !== id);
+        setCustomSources(updated);
+        if (editingId === id) {
+            setEditingId(updated[0]?.id || '');
+            setForm(updated[0] ? sourceToFormValue(updated[0]) : emptyCustomTemplate());
+        }
+    };
+
+    const saveAll = async () => {
+        setSaving(true);
+        const builtinSources = allSources.filter((s) => BUILTIN_IDS.includes(s.id || ''));
+        const newSources = [...builtinSources, ...customSources];
         const result = await api.setMCPConfig({ sources: newSources });
         if (result.success) {
             setNotification({ open: true, message: 'Saved. Restart server to apply.', severity: 'success' });
@@ -84,77 +117,17 @@ const MCPCustom = () => {
         setSaving(false);
     };
 
-    const openAddDialog = () => {
-        setEditingIndex(null);
-        setFormId('');
-        setFormTransport('stdio');
-        setFormEndpoint('');
-        setFormArgs('python3 ./scripts/mcp_web_tools.py');
-        setFormTools('*');
-        setFormSerperApiKey('');
-        setFormProxyUrl('');
-        setDialogOpen(true);
+    const openAdd = () => {
+        setEditingId('');
+        setForm(emptyCustomTemplate());
+        setEditorMode('add');
     };
 
-    const openEditDialog = (index: number, source: MCPSourceConfig) => {
-        setEditingIndex(index);
-        setFormId(source.id || '');
-        setFormTransport(source.transport || 'stdio');
-        setFormEndpoint(source.endpoint || '');
-        setFormArgs((source.command || 'python3') + ' ' + (source.args?.join(' ') || './scripts/mcp_web_tools.py'));
-        setFormTools((source.tools || []).join(' '));
-        setFormSerperApiKey(source.env?.SERPER_API_KEY || '');
-        setFormProxyUrl(source.proxy_url || '');
-        setDialogOpen(true);
+    const openEdit = (source: MCPSourceConfig) => {
+        setEditingId(source.id || '');
+        setForm(sourceToFormValue(source));
+        setEditorMode('edit');
     };
-
-    const handleDialogSave = () => {
-        const source: MCPSourceConfig = {
-            id: formId,
-            transport: formTransport,
-            tools: formTools.trim().split(/\s+/).filter(Boolean),
-        };
-
-        if (formTransport === 'http') {
-            source.endpoint = formEndpoint;
-            source.headers = {};
-        } else {
-            // Split "python3 ./scripts/mcp_web_tools.py" into command + args
-            const parts = formArgs.trim().split(/\s+/);
-            source.command = parts[0] || 'python3';
-            source.args = parts.slice(1);
-            source.cwd = '';
-        }
-
-        const env: Record<string, string> = {};
-        if (formSerperApiKey) env['SERPER_API_KEY'] = formSerperApiKey;
-        if (formProxyUrl) {
-            source.proxy_url = formProxyUrl;
-            if (formTransport === 'stdio') {
-                env['HTTP_PROXY'] = formProxyUrl;
-                env['HTTPS_PROXY'] = formProxyUrl;
-            }
-        }
-        if (Object.keys(env).length > 0) source.env = env;
-
-        if (editingIndex !== null) {
-            const updated = [...customSources];
-            updated[editingIndex] = source;
-            setCustomSources(updated);
-            setAllSources([...allSources.filter(s => BUILTIN_IDS.includes(s.id || '')), ...updated]);
-        } else {
-            setCustomSources([...customSources, source]);
-            setAllSources([...allSources.filter(s => BUILTIN_IDS.includes(s.id || '')), ...customSources, source]);
-        }
-        setDialogOpen(false);
-    };
-
-    const handleDeleteSource = (index: number) => {
-        const updated = customSources.filter((_, i) => i !== index);
-        setCustomSources(updated);
-        setAllSources([...allSources.filter(s => BUILTIN_IDS.includes(s.id || '')), ...updated]);
-    };
-
 
     if (loading) {
         return (
@@ -168,170 +141,89 @@ const MCPCustom = () => {
 
     return (
         <PageLayout>
-            <Stack spacing={3}>
+            <Stack spacing={2.5}>
                 <Alert severity="info">
-                    Add custom MCP servers (stdio or HTTP). Builtin web_search/web_fetch is configured on the Builtin tab.
+                    Custom MCP supports local stdio and remote streamable HTTP servers. Builtin web_search/web_fetch stays in Builtin tab.
                 </Alert>
 
                 <UnifiedCard
                     title="Custom MCP Servers"
                     size="full"
-                    rightAction={
-                        <Button startIcon={<AddIcon />} onClick={openAddDialog} size="small" variant="outlined">
-                            Add Server
-                        </Button>
-                    }
                 >
-                    {customSources.length === 0 ? (
-                        <Box sx={{ textAlign: 'center', py: 4 }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                No custom MCP servers.
-                            </Typography>
-                            <Button startIcon={<AddIcon />} onClick={openAddDialog} variant="outlined">
+                    <Stack spacing={1.5}>
+                        <Stack direction="row" justifyContent="flex-end">
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={openAdd}
+                            >
                                 Add Server
                             </Button>
-                        </Box>
-                    ) : (
-                        <Stack spacing={1.5}>
-                            {/* Header */}
-                            <Grid container spacing={2} sx={{ fontWeight: 'bold', borderBottom: '1px solid', borderColor: 'divider', pb: 1 }}>
-                                <Grid size={{ xs: 2 }}>ID</Grid>
-                                <Grid size={{ xs: 1 }}>Transport</Grid>
-                                <Grid size={{ xs: 4 }}>Command / Endpoint</Grid>
-                                <Grid size={{ xs: 2 }}>Tools</Grid>
-                                <Grid size={{ xs: 3 }} />
-                            </Grid>
-
-                            {customSources.map((source, index) => (
-                                <Grid container spacing={2} key={source.id} alignItems="center">
-                                    <Grid size={{ xs: 2 }}>
-                                        <Typography variant="subtitle2" fontWeight="bold">{source.id}</Typography>
-                                    </Grid>
-                                    <Grid size={{ xs: 1 }}>
-                                        <Box
-                                            sx={{
-                                                px: 1, py: 0.25,
-                                                bgcolor: source.transport === 'http' ? 'info.main' : 'success.main',
-                                                color: 'white', borderRadius: 0.5,
-                                                fontSize: '0.7rem', textAlign: 'center', width: 'fit-content',
-                                            }}
-                                        >
-                                            {source.transport?.toUpperCase()}
-                                        </Box>
-                                    </Grid>
-                                    <Grid size={{ xs: 4 }}>
-                                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem', wordBreak: 'break-all' }}>
-                                            {source.transport === 'http' ? source.endpoint : `${source.command} ${source.args?.join(' ')}`}
-                                        </Typography>
-                                    </Grid>
-                                    <Grid size={{ xs: 2 }}>
-                                        <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                                            {source.tools?.map(tool => (
-                                                <Chip key={tool} label={tool} size="small" variant="outlined" sx={{ fontSize: '0.7rem', height: 20 }} />
-                                            ))}
-                                        </Stack>
-                                    </Grid>
-                                    <Grid size={{ xs: 3 }}>
-                                        <Stack direction="row" spacing={0.5}>
-                                            <IconButton size="small" onClick={() => openEditDialog(index, source)}>
-                                                <EditIcon fontSize="small" />
-                                            </IconButton>
-                                            <IconButton size="small" onClick={() => handleDeleteSource(index)}>
-                                                <DeleteIcon fontSize="small" />
-                                            </IconButton>
-                                        </Stack>
-                                    </Grid>
-                                </Grid>
-                            ))}
                         </Stack>
-                    )}
+                        {customSources.length > 0 ? (
+                            <Stack direction="row" spacing={1} flexWrap="wrap">
+                                {customSources.map((source) => {
+                                    const active = source.id === editingId;
+                                    return (
+                                        <Stack key={source.id} direction="row" spacing={0.5} alignItems="center">
+                                            <Chip
+                                                label={`${source.id} (${source.transport || 'stdio'})`}
+                                                color={active ? 'primary' : 'default'}
+                                                onClick={() => setEditingId(source.id || '')}
+                                            />
+                                            <Button size="small" onClick={() => openEdit(source)}>Edit</Button>
+                                            <Button size="small" color="error" onClick={() => deleteSource(source.id)}>Delete</Button>
+                                        </Stack>
+                                    );
+                                })}
+                            </Stack>
+                        ) : (
+                            <Typography variant="body2" color="text.secondary">No custom MCP servers yet.</Typography>
+                        )}
+                    </Stack>
                 </UnifiedCard>
 
+                <Stack direction="row" justifyContent="flex-start">
+                    <Button
+                        size="small"
+                        variant="text"
+                        onClick={() => {
+                            setEditingId('');
+                            setForm(weatherTemplate());
+                            setEditorMode('add');
+                        }}
+                    >
+                        Use Weather Example
+                    </Button>
+                </Stack>
+
+                {editorMode !== 'none' && (
+                    <>
+                        <MCPSourceEditor
+                            title="Connect to a custom MCP"
+                            value={form}
+                            onChange={setForm}
+                        />
+
+                        <Stack direction="row" justifyContent="space-between">
+                            <Button variant="text" onClick={() => setEditorMode('none')}>Cancel</Button>
+                            <Button variant="outlined" onClick={upsertDraftSource}>
+                                {editorMode === 'edit' && editingId && currentCustomIds.has(editingId) ? 'Update Server' : 'Add Server'}
+                            </Button>
+                        </Stack>
+                    </>
+                )}
+
                 <Stack direction="row" justifyContent="flex-end">
-                    <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSave} disabled={saving}>
+                    <Button variant="contained" onClick={saveAll} disabled={saving}>
                         {saving ? 'Saving...' : 'Save'}
                     </Button>
                 </Stack>
             </Stack>
 
-            {/* Add/Edit Dialog */}
-            <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>{editingIndex !== null ? 'Edit MCP Server' : 'Add MCP Server'}</DialogTitle>
-                <DialogContent>
-                    <Stack spacing={2.5} sx={{ pt: 1 }}>
-                        <TextField
-                            size="small" fullWidth label="Server ID"
-                            value={formId} onChange={(e) => setFormId(e.target.value)}
-                            placeholder="e.g., myserver" required
-                        />
-
-                        <Box>
-                            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>Transport</Typography>
-                            <Select
-                                size="small" fullWidth
-                                value={formTransport}
-                                onChange={(e) => setFormTransport(e.target.value as 'http' | 'stdio')}
-                            >
-                                <MenuItem value="stdio">Stdio (Local subprocess)</MenuItem>
-                                <MenuItem value="http">HTTP (Remote server)</MenuItem>
-                            </Select>
-                        </Box>
-
-                        {formTransport === 'http' ? (
-                            <TextField
-                                size="small" fullWidth label="Endpoint"
-                                value={formEndpoint} onChange={(e) => setFormEndpoint(e.target.value)}
-                                placeholder="http://localhost:3000"
-                            />
-                        ) : (
-                            <TextField
-                                size="small" fullWidth label="Script Path"
-                                value={formArgs} onChange={(e) => setFormArgs(e.target.value)}
-                                placeholder="python3 ./scripts/mcp_web_tools.py"
-                                helperText="Full command line (first word = command, rest = args)"
-                            />
-                        )}
-
-                        <TextField
-                            size="small" fullWidth label="Tools"
-                            value={formTools} onChange={(e) => setFormTools(e.target.value)}
-                            placeholder="* (all) or space-separated names, e.g. web_search web_fetch"
-                            helperText="Use * to enable all tools, or list specific tool names separated by spaces"
-                        />
-
-                        <TextField
-                            size="small" fullWidth label="API Key"
-                            type={formShowApiKey ? 'text' : 'password'}
-                            value={formSerperApiKey} onChange={(e) => setFormSerperApiKey(e.target.value)}
-                            placeholder="Optional"
-                            InputProps={{
-                                endAdornment: (
-                                    <InputAdornment position="end">
-                                        <IconButton onClick={() => setFormShowApiKey(!formShowApiKey)} size="small">
-                                            {formShowApiKey ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-                                        </IconButton>
-                                    </InputAdornment>
-                                ),
-                            }}
-                        />
-
-                        <TextField
-                            size="small" fullWidth label="Proxy URL"
-                            value={formProxyUrl} onChange={(e) => setFormProxyUrl(e.target.value)}
-                            placeholder="http://127.0.0.1:7890"
-                        />
-                    </Stack>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleDialogSave} variant="contained" disabled={!formId || (formTransport === 'http' && !formEndpoint)}>
-                        {editingIndex !== null ? 'Save' : 'Add'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
             <Snackbar
-                open={notification.open} autoHideDuration={4000}
+                open={notification.open}
+                autoHideDuration={3000}
                 onClose={() => setNotification({ open: false, message: '', severity: 'success' })}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             >
