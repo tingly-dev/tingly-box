@@ -7,9 +7,11 @@ import {
     Button,
     Chip,
     CircularProgress,
+    FormControlLabel,
     IconButton,
     Snackbar,
     Stack,
+    Switch,
     Tooltip,
     Typography,
 } from '@mui/material';
@@ -134,6 +136,14 @@ const MCPCustom = () => {
         setEditorMode('edit');
     };
 
+    const toggleSourceEnabled = (id: string | undefined, enabled: boolean) => {
+        if (!id) return;
+        setCustomSources((prev) => prev.map((s) => (s.id === id ? { ...s, enabled } : s)));
+        if (editingId === id) {
+            setForm((prev) => ({ ...prev, enabled }));
+        }
+    };
+
     if (loading) {
         return (
             <PageLayout>
@@ -174,7 +184,18 @@ const MCPCustom = () => {
                                                 color={active ? 'primary' : 'default'}
                                                 onClick={() => setEditingId(source.id || '')}
                                             />
-                                            <Stack direction="row" spacing={0.5}>
+                                            <Stack direction="row" spacing={0.5} alignItems="center">
+                                                <FormControlLabel
+                                                    sx={{ mr: 0.5 }}
+                                                    control={(
+                                                        <Switch
+                                                            size="small"
+                                                            checked={source.enabled ?? true}
+                                                            onChange={(e) => toggleSourceEnabled(source.id, e.target.checked)}
+                                                        />
+                                                    )}
+                                                    label="Enable"
+                                                />
                                                 <Tooltip title="Edit">
                                                     <IconButton size="small" color="primary" onClick={() => openEdit(source)}>
                                                         <EditIcon fontSize="small" />

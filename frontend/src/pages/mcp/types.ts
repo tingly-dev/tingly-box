@@ -1,5 +1,6 @@
 export interface MCPSourceConfig {
     id?: string;
+    enabled?: boolean;
     transport?: 'http' | 'stdio';
     endpoint?: string;
     headers?: Record<string, string>;
@@ -32,6 +33,7 @@ export interface MCPKVPair {
 
 export interface MCPSourceFormValue {
     id: string;
+    enabled: boolean;
     transport: 'http' | 'stdio';
     endpoint: string;
     command: string;
@@ -48,6 +50,7 @@ export const MCP_DEFAULT_CWD = '~/.tingly-box/mcp';
 
 export const defaultMCPSourceFormValue = (): MCPSourceFormValue => ({
     id: '',
+    enabled: true,
     transport: 'stdio',
     endpoint: '',
     command: 'python3',
@@ -79,6 +82,7 @@ export const sourceToFormValue = (source?: MCPSourceConfig): MCPSourceFormValue 
     }
     return {
         id: source.id || '',
+        enabled: source.enabled ?? true,
         transport: (source.transport as 'http' | 'stdio') || 'stdio',
         endpoint: source.endpoint || '',
         command: source.command || 'python3',
@@ -107,6 +111,7 @@ export const formValueToSource = (form: MCPSourceFormValue): MCPSourceConfig => 
 
     const source: MCPSourceConfig = {
         id: form.id.trim(),
+        enabled: form.enabled,
         transport: form.transport,
         tools: (form.tools || []).map((t) => t.trim()).filter(Boolean),
     };

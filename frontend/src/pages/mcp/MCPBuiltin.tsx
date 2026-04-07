@@ -11,6 +11,7 @@ import {
     IconButton,
     Snackbar,
     Stack,
+    Switch,
     Tooltip,
     Typography,
     Button,
@@ -92,6 +93,13 @@ const MCPBuiltin = () => {
         setNotification({ open: true, message: 'Builtin server removed from draft', severity: 'success' });
     };
 
+    const toggleBuiltinEnabled = (enabled: boolean) => {
+        setAllSources((prev) => prev.map((s) => (s.id === 'webtools' ? { ...s, enabled } : s)));
+        if (builtinSource) {
+            setForm((prev) => ({ ...prev, enabled }));
+        }
+    };
+
     const saveAll = async () => {
         let next = [...allSources];
         if (editorMode !== 'none') {
@@ -160,10 +168,21 @@ const MCPBuiltin = () => {
                             )}
                         </Stack>
                         {builtinSource ? (
-                            <Stack direction="row" spacing={1} alignItems="center">
+                            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                                 <Chip label="webtools" color="primary" />
                                 <Chip label={builtinSource.transport || 'stdio'} />
                                 {(builtinSource.tools || []).map((t) => <Chip key={t} label={t} variant="outlined" />)}
+                                <FormControlLabel
+                                    sx={{ ml: 0.5 }}
+                                    control={(
+                                        <Switch
+                                            size="small"
+                                            checked={builtinSource.enabled ?? true}
+                                            onChange={(e) => toggleBuiltinEnabled(e.target.checked)}
+                                        />
+                                    )}
+                                    label="Enable"
+                                />
                             </Stack>
                         ) : (
                             <Typography variant="body2" color="text.secondary">No builtin MCP server configured.</Typography>

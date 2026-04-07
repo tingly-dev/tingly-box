@@ -21,7 +21,7 @@ type configProvider func() *typ.MCPRuntimeConfig
 // Runtime handles MCP tool source discovery and tool execution.
 type Runtime struct {
 	getConfig configProvider
-	sc       *sessionCache
+	sc        *sessionCache
 }
 
 // NewRuntime creates a new MCP runtime.
@@ -64,6 +64,10 @@ func (r *Runtime) ListOpenAITools(ctx context.Context) []openai.ChatCompletionTo
 
 	out := make([]openai.ChatCompletionToolUnionParam, 0, 8)
 	for _, source := range cfg.Sources {
+		if !typ.IsMCPSourceEnabled(source) {
+			logrus.Debugf("mcp: source=%s is disabled; skip tool listing", source.ID)
+			continue
+		}
 		transport := strings.TrimSpace(source.Transport)
 		if transport == "" {
 			transport = "stdio"
@@ -162,6 +166,9 @@ func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments
 	}
 	if source == nil {
 		return "", &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " not found"}
+	}
+	if !typ.IsMCPSourceEnabled(*source) {
+		return "", &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " is disabled"}
 	}
 
 	transport := strings.TrimSpace(source.Transport)

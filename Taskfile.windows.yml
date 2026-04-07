@@ -22,6 +22,7 @@ tasks:
         go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-amd64.exe ./cli/tingly-box
         mkdir -p {{.BIN_DIR}}/scripts
         cp scripts/mcp_web_tools.py {{.BIN_DIR}}/scripts/
+        cp scripts/mcp_weather_tools.py {{.BIN_DIR}}/scripts/
 
   build:arm64:
     summary: Cross-compiles for Windows ARM64 (requires zig)
@@ -37,3 +38,4 @@ tasks:
         go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-arm64.exe ./cli/tingly-box
         mkdir -p {{.BIN_DIR}}/scripts
         cp scripts/mcp_web_tools.py {{.BIN_DIR}}/scripts/
+        cp scripts/mcp_weather_tools.py {{.BIN_DIR}}/scripts/

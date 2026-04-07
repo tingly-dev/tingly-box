@@ -58,40 +58,22 @@ WEATHER_CODES = {
 }
 
 
-def _read_exact(n: int) -> bytes:
-    out = bytearray()
-    while len(out) < n:
-        chunk = sys.stdin.buffer.read(n - len(out))
-        if not chunk:
-            raise EOFError("stdin closed")
-        out.extend(chunk)
-    return bytes(out)
-
-
 def read_frame() -> Dict[str, Any]:
-    content_length = None
-    while True:
-        line = sys.stdin.buffer.readline()
-        if not line:
-            raise EOFError("stdin closed")
-        line = line.strip()
-        if not line:
-            break
-        lower = line.lower()
-        if lower.startswith(b"content-length:"):
-            raw = line.split(b":", 1)[1].strip()
-            content_length = int(raw.decode("utf-8"))
-    if content_length is None or content_length <= 0:
-        raise ValueError("missing content-length")
-    payload = _read_exact(content_length)
-    return json.loads(payload.decode("utf-8"))
+    """Read one NDJSON frame (go-sdk CommandTransport compatible)."""
+    line = sys.stdin.buffer.readline()
+    if not line:
+        raise EOFError("stdin closed")
+    line = line.strip()
+    if not line:
+        raise ValueError("empty frame")
+    return json.loads(line.decode("utf-8"))
 
 
 def write_frame(obj: Dict[str, Any]) -> None:
+    """Write one NDJSON frame (go-sdk CommandTransport compatible)."""
     payload = json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    header = f"Content-Length: {len(payload)}\r\n\r\n".encode("utf-8")
-    sys.stdout.buffer.write(header)
     sys.stdout.buffer.write(payload)
+    sys.stdout.buffer.write(b"\n")
     sys.stdout.buffer.flush()
 
 

@@ -1413,6 +1413,12 @@ func (s *Server) Stop(ctx context.Context) error {
 		log.Println("Configuration watcher stopped")
 	}
 
+	// Close all MCP sessions and terminate subprocesses
+	if s.mcpRuntime != nil {
+		s.mcpRuntime.Close()
+		log.Println("MCP runtime stopped: all sessions closed and subprocesses terminated")
+	}
+
 	// Close all scenario recording sinks
 	s.scenarioRecordSinksMu.Lock()
 	for scenario, sink := range s.scenarioRecordSinks {

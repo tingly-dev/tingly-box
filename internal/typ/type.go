@@ -212,6 +212,7 @@ type MCPRuntimeConfig struct {
 // MCPSourceConfig defines one MCP source connection.
 type MCPSourceConfig struct {
 	ID        string            `json:"id,omitempty"`        // unique source id for normalized tool names
+	Enabled   *bool             `json:"enabled,omitempty"`   // nil means enabled (backward-compatible default)
 	Transport string            `json:"transport,omitempty"` // "http" or "stdio" (stdio reserved for future path)
 	Endpoint  string            `json:"endpoint,omitempty"`  // endpoint URL for HTTP transport
 	Headers   map[string]string `json:"headers,omitempty"`   // static headers for MCP calls
@@ -231,6 +232,22 @@ func ApplyMCPRuntimeDefaults(config *MCPRuntimeConfig) {
 	if config.RequestTimeout == 0 {
 		config.RequestTimeout = 30
 	}
+	for i := range config.Sources {
+		if config.Sources[i].Enabled == nil {
+			config.Sources[i].Enabled = BoolPtr(true)
+		}
+	}
+}
+
+// BoolPtr returns a pointer to the given bool.
+func BoolPtr(v bool) *bool {
+	return &v
+}
+
+// IsMCPSourceEnabled returns whether a source is enabled.
+// Nil means enabled for backward compatibility with existing configs.
+func IsMCPSourceEnabled(source MCPSourceConfig) bool {
+	return source.Enabled == nil || *source.Enabled
 }
 
 // IsExpired checks if the OAuth token is expired

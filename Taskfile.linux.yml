@@ -27,3 +27,4 @@ tasks:
         go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-linux-arm64 ./cli/tingly-box
         mkdir -p {{.BIN_DIR}}/scripts
         cp scripts/mcp_web_tools.py {{.BIN_DIR}}/scripts/
+        cp scripts/mcp_weather_tools.py {{.BIN_DIR}}/scripts/

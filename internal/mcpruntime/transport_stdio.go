@@ -15,12 +15,18 @@ import (
 
 // buildCommand builds an exec.Cmd for an MCP stdio source, reusing the cwd
 // search and environment variable expansion logic from the original runtime.go.
-func buildCommand(ctx context.Context, source typ.MCPSourceConfig) (*exec.Cmd, error) {
+// NOTE: The command must not be tied to the request context (ctx) because
+// the MCP session persists across requests. Using CommandContext with the
+// request context would kill the subprocess when the request completes.
+// The ctx parameter is kept for API consistency but intentionally unused.
+func buildCommand(_ context.Context, source typ.MCPSourceConfig) (*exec.Cmd, error) {
 	if strings.TrimSpace(source.Command) == "" {
 		return nil, &sourceError{sourceID: source.ID, msg: "empty command"}
 	}
 
-	cmd := exec.CommandContext(ctx, source.Command, source.Args...)
+	// Use context.Background() for the subprocess lifecycle.
+	// The session manages process lifetime explicitly via close(), not via context cancellation.
+	cmd := exec.Command(source.Command, source.Args...)
 
 	// buildDefaultSearchDirs returns directories to search when no explicit cwd is given
 	// or when the configured cwd doesn't contain the script.
