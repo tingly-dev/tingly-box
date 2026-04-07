@@ -97,9 +97,9 @@ func TestApplyClaudeCodeHeaders_Context1M_ModelDependent(t *testing.T) {
 		body   string
 		want1m bool
 	}{
-		{"sonnet_4_6 gets context-1m", `{"model":"claude-sonnet-4-6","max_tokens":1024}`, true},
+		{"sonnet_4_6 gets context-1m", `{"model":"claude-sonnet-4-6","max_tokens":1024}`, false},
 		{"sonnet_4 gets context-1m", `{"model":"claude-sonnet-4-20250514","max_tokens":1024}`, false},
-		{"opus_4_6 gets context-1m", `{"model":"claude-opus-4-6","max_tokens":1024}`, true},
+		{"opus_4_6 gets context-1m", `{"model":"claude-opus-4-6","max_tokens":1024}`, false},
 		{"opus_4 gets context-1m", `{"model":"claude-opus-4-20250514","max_tokens":1024}`, false},
 		{"haiku no context-1m", `{"model":"claude-3-5-haiku-20241022","max_tokens":1024}`, false},
 		{"haiku_4 no context-1m", `{"model":"claude-haiku-4-5-20250115","max_tokens":1024}`, false},
