@@ -2,6 +2,8 @@ module github.com/tingly-dev/tingly-box/imbot
 
 go 1.25.6
 
+//replace github.com/tingly-dev/weixin => ../weixin
+
 require (
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/go-telegram/bot v1.20.0
@@ -10,7 +12,7 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 	github.com/slack-go/slack v0.19.0
 	github.com/stretchr/testify v1.11.1
-	github.com/tingly-dev/weixin v0.0.1
+	github.com/tingly-dev/weixin v0.1.1
 	github.com/yuin/goldmark v1.7.16
 	golang.org/x/net v0.52.0
 )
