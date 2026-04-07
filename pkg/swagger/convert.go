@@ -42,7 +42,10 @@ func (rm *RouteManager) parseValidationRules(schema *Schema, bindingTag string, 
 		case strings.HasPrefix(rule, "min="):
 			if minVal := rm.parseNumericValue(strings.TrimPrefix(rule, "min="), goType); minVal != nil {
 				if goType.Kind() == reflect.String {
-					schema.MinLength = minVal.(*int)
+					if iv, ok := minVal.(*int64); ok {
+						intVal := int(*iv)
+						schema.MinLength = &intVal
+					}
 				} else if fv, ok := minVal.(*float64); ok {
 					schema.Minimum = fv
 				} else if iv, ok := minVal.(*int64); ok {
@@ -53,7 +56,10 @@ func (rm *RouteManager) parseValidationRules(schema *Schema, bindingTag string, 
 		case strings.HasPrefix(rule, "max="):
 			if maxVal := rm.parseNumericValue(strings.TrimPrefix(rule, "max="), goType); maxVal != nil {
 				if goType.Kind() == reflect.String {
-					schema.MaxLength = maxVal.(*int)
+					if iv, ok := maxVal.(*int64); ok {
+						intVal := int(*iv)
+						schema.MaxLength = &intVal
+					}
 				} else if fv, ok := maxVal.(*float64); ok {
 					schema.Maximum = fv
 				} else if iv, ok := maxVal.(*int64); ok {
@@ -64,8 +70,11 @@ func (rm *RouteManager) parseValidationRules(schema *Schema, bindingTag string, 
 		case strings.HasPrefix(rule, "len="):
 			if lenVal := rm.parseNumericValue(strings.TrimPrefix(rule, "len="), goType); lenVal != nil {
 				if goType.Kind() == reflect.String || goType.Kind() == reflect.Slice || goType.Kind() == reflect.Array {
-					schema.MinLength = lenVal.(*int)
-					schema.MaxLength = lenVal.(*int)
+					if iv, ok := lenVal.(*int64); ok {
+						intVal := int(*iv)
+						schema.MinLength = &intVal
+						schema.MaxLength = &intVal
+					}
 				}
 			}
 		case strings.HasPrefix(rule, "gt="):
@@ -280,6 +289,62 @@ func (rm *RouteManager) getSwaggerType(goType reflect.Type) Schema {
 		return Schema{Type: "object"}
 	case reflect.Ptr:
 		return rm.getSwaggerType(goType.Elem())
+	case reflect.Interface:
+		return Schema{Type: "object"}
+	default:
+		return Schema{Type: "object"}
+	}
+}
+
+// getSwaggerTypeVersion converts Go type to Swagger schema with version-specific refs
+func (rm *RouteManager) getSwaggerTypeVersion(goType reflect.Type, version Version) Schema {
+	switch goType.Kind() {
+	case reflect.String:
+		return Schema{Type: "string"}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return Schema{Type: "integer", Format: "int64"}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return Schema{Type: "integer", Format: "int64"}
+	case reflect.Float32, reflect.Float64:
+		return Schema{Type: "number", Format: "double"}
+	case reflect.Bool:
+		return Schema{Type: "boolean"}
+	case reflect.Slice, reflect.Array:
+		elemType := goType.Elem()
+		if elemType.Kind() == reflect.Ptr {
+			elemType = elemType.Elem()
+		}
+		elemSchema := rm.getSwaggerTypeVersion(elemType, version)
+		return Schema{
+			Type:  "array",
+			Items: &elemSchema,
+		}
+	case reflect.Map:
+		valueType := goType.Elem()
+		if valueType.Kind() == reflect.Ptr {
+			valueType = valueType.Elem()
+		}
+
+		schema := Schema{Type: "object"}
+		refPrefix := getRefPrefix(version)
+
+		if valueType.Kind() == reflect.Struct && valueType.String() != "time.Time" {
+			schema.AdditionalProperties = &Schema{
+				Ref: refPrefix + valueType.Name(),
+			}
+		} else {
+			valueSchema := rm.getSwaggerTypeVersion(valueType, version)
+			schema.AdditionalProperties = &valueSchema
+		}
+
+		return schema
+	case reflect.Struct:
+		if goType.String() == "time.Time" {
+			return Schema{Type: "string", Format: "date-time"}
+		}
+		return Schema{Type: "object"}
+	case reflect.Ptr:
+		return rm.getSwaggerTypeVersion(goType.Elem(), version)
 	case reflect.Interface:
 		return Schema{Type: "object"}
 	default:
