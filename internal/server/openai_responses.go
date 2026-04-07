@@ -294,7 +294,8 @@ func (s *Server) convertToResponsesParams(bodyBytes []byte, actualModel string) 
 	// The OpenAI Responses SDK may drop message content when it is provided as
 	// output_text blocks in a message content array. Flatten those blocks before
 	// unmarshalling into SDK params so multi-turn Codex history remains intact.
-	flattenMessageOutputTextContent(raw)
+	// DEPRECATED: protocol type unmarshal will handle this
+	// flattenMessageOutputTextContent(raw)
 
 	// Marshal back to JSON and unmarshal into ResponseNewParams
 	modifiedJSON, err := json.Marshal(raw)
@@ -310,6 +311,7 @@ func (s *Server) convertToResponsesParams(bodyBytes []byte, actualModel string) 
 	return params, nil
 }
 
+// DEPRECATED: protocol type unmarshal will handle this
 func flattenMessageOutputTextContent(raw map[string]any) {
 	input, ok := raw["input"]
 	if !ok {
@@ -339,6 +341,7 @@ func flattenMessageOutputTextContent(raw map[string]any) {
 	}
 }
 
+// DEPRECATED: protocol type unmarshal will handle this
 func flattenOutputTextContent(content any) (string, bool) {
 	items, ok := content.([]any)
 	if !ok {
