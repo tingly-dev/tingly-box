@@ -927,10 +927,6 @@ func (s *Server) setupMiddleware() {
 
 // setupRoutes configures server routes
 func (s *Server) setupRoutes(ctx context.Context) {
-	// Integrate Web UI routes if enabled
-	if s.enableUI {
-		s.UseUIEndpoints(ctx)
-	}
 
 	s.UseAIEndpoints()
 
@@ -938,6 +934,11 @@ func (s *Server) setupRoutes(ctx context.Context) {
 
 	// Virtual model endpoints for testing
 	s.UseVirtualModelEndpoints()
+
+	// Integrate Web UI routes if enabled
+	if s.enableUI {
+		s.UseUIEndpoints(ctx)
+	}
 }
 
 func (s *Server) UseAIEndpoints() {
