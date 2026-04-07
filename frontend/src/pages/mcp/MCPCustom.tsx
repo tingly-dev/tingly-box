@@ -7,11 +7,18 @@ import {
     Button,
     Chip,
     CircularProgress,
+    IconButton,
     Snackbar,
     Stack,
+    Tooltip,
     Typography,
 } from '@mui/material';
-import { useEffect, useMemo, useState } from 'react';
+import {
+    Add as AddIcon,
+    DeleteOutline as DeleteOutlineIcon,
+    Edit as EditIcon,
+} from '@mui/icons-material';
+import { useEffect, useState } from 'react';
 import MCPSourceEditor from './MCPSourceEditor';
 import { BUILTIN_IDS, defaultMCPSourceFormValue, formValueToSource, sourceToFormValue, type MCPConfigResponse, type MCPSourceConfig, type MCPSourceFormValue } from './types';
 
@@ -48,8 +55,6 @@ const MCPCustom = () => {
         void loadMCPConfig();
     }, []);
 
-    const currentCustomIds = useMemo(() => new Set(customSources.map((s) => s.id).filter(Boolean)), [customSources]);
-
     const loadMCPConfig = async () => {
         setLoading(true);
         const result: MCPConfigResponse = await api.getMCPConfig();
@@ -65,34 +70,6 @@ const MCPCustom = () => {
         setLoading(false);
     };
 
-    const upsertDraftSource = () => {
-        const source = formValueToSource(form);
-        if (!source.id) {
-            setNotification({ open: true, message: 'Server name is required', severity: 'error' });
-            return;
-        }
-        if (source.transport === 'http' && !source.endpoint) {
-            setNotification({ open: true, message: 'HTTP endpoint is required', severity: 'error' });
-            return;
-        }
-        if (source.transport === 'stdio' && !source.command) {
-            setNotification({ open: true, message: 'Command is required', severity: 'error' });
-            return;
-        }
-
-        const updated = [...customSources];
-        const idx = updated.findIndex((s) => s.id === source.id);
-        if (idx >= 0) {
-            updated[idx] = source;
-        } else {
-            updated.push(source);
-        }
-        setCustomSources(updated);
-        setEditingId(source.id);
-        setEditorMode('none');
-        setNotification({ open: true, message: idx >= 0 ? 'Server updated' : 'Server added', severity: 'success' });
-    };
-
     const deleteSource = (id?: string) => {
         if (!id) return;
         const updated = customSources.filter((s) => s.id !== id);
@@ -104,13 +81,40 @@ const MCPCustom = () => {
     };
 
     const saveAll = async () => {
+        const source = formValueToSource(form);
+        const hasEditorOpen = editorMode !== 'none';
+        let mergedCustom = [...customSources];
+
+        if (hasEditorOpen) {
+            if (!source.id) {
+                setNotification({ open: true, message: 'Server name is required', severity: 'error' });
+                return;
+            }
+            if (source.transport === 'http' && !source.endpoint) {
+                setNotification({ open: true, message: 'HTTP endpoint is required', severity: 'error' });
+                return;
+            }
+            if (source.transport === 'stdio' && !source.command) {
+                setNotification({ open: true, message: 'Command is required', severity: 'error' });
+                return;
+            }
+            const idx = mergedCustom.findIndex((s) => s.id === source.id);
+            if (idx >= 0) {
+                mergedCustom[idx] = source;
+            } else {
+                mergedCustom.push(source);
+            }
+        }
+
         setSaving(true);
         const builtinSources = allSources.filter((s) => BUILTIN_IDS.includes(s.id || ''));
-        const newSources = [...builtinSources, ...customSources];
+        const newSources = [...builtinSources, ...mergedCustom];
         const result = await api.setMCPConfig({ sources: newSources });
         if (result.success) {
             setNotification({ open: true, message: 'Saved. Restart server to apply.', severity: 'success' });
             setAllSources(newSources);
+            setCustomSources(mergedCustom);
+            setEditorMode('none');
         } else {
             setNotification({ open: true, message: result.error || 'Failed to save', severity: 'error' });
         }
@@ -152,27 +156,35 @@ const MCPCustom = () => {
                 >
                     <Stack spacing={1.5}>
                         <Stack direction="row" justifyContent="flex-end">
-                            <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={openAdd}
-                            >
-                                Add Server
-                            </Button>
+                            <Tooltip title="Add Server">
+                                <IconButton onClick={openAdd} color="primary">
+                                    <AddIcon />
+                                </IconButton>
+                            </Tooltip>
                         </Stack>
                         {customSources.length > 0 ? (
-                            <Stack direction="row" spacing={1} flexWrap="wrap">
+                            <Stack spacing={1}>
                                 {customSources.map((source) => {
                                     const active = source.id === editingId;
                                     return (
-                                        <Stack key={source.id} direction="row" spacing={0.5} alignItems="center">
+                                        <Stack key={source.id} direction="row" justifyContent="space-between" alignItems="center">
                                             <Chip
                                                 label={`${source.id} (${source.transport || 'stdio'})`}
                                                 color={active ? 'primary' : 'default'}
                                                 onClick={() => setEditingId(source.id || '')}
                                             />
-                                            <Button size="small" onClick={() => openEdit(source)}>Edit</Button>
-                                            <Button size="small" color="error" onClick={() => deleteSource(source.id)}>Delete</Button>
+                                            <Stack direction="row" spacing={0.5}>
+                                                <Tooltip title="Edit">
+                                                    <IconButton size="small" color="primary" onClick={() => openEdit(source)}>
+                                                        <EditIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                <Tooltip title="Delete">
+                                                    <IconButton size="small" color="error" onClick={() => deleteSource(source.id)}>
+                                                        <DeleteOutlineIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            </Stack>
                                         </Stack>
                                     );
                                 })}
@@ -205,11 +217,8 @@ const MCPCustom = () => {
                             onChange={setForm}
                         />
 
-                        <Stack direction="row" justifyContent="space-between">
+                        <Stack direction="row" justifyContent="flex-start">
                             <Button variant="text" onClick={() => setEditorMode('none')}>Cancel</Button>
-                            <Button variant="outlined" onClick={upsertDraftSource}>
-                                {editorMode === 'edit' && editingId && currentCustomIds.has(editingId) ? 'Update Server' : 'Add Server'}
-                            </Button>
                         </Stack>
                     </>
                 )}

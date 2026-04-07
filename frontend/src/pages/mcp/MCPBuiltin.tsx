@@ -4,15 +4,22 @@ import { api } from '@/services/api';
 import {
     Alert,
     Box,
-    Button,
     Chip,
     CircularProgress,
-    FormControlLabel,
     Checkbox,
+    FormControlLabel,
+    IconButton,
     Snackbar,
     Stack,
+    Tooltip,
     Typography,
+    Button,
 } from '@mui/material';
+import {
+    Add as AddIcon,
+    DeleteOutline as DeleteOutlineIcon,
+    Edit as EditIcon,
+} from '@mui/icons-material';
 import { useEffect, useState } from 'react';
 import MCPSourceEditor from './MCPSourceEditor';
 import { BUILTIN_IDS, defaultMCPSourceFormValue, formValueToSource, sourceToFormValue, type MCPConfigResponse, type MCPSourceConfig, type MCPSourceFormValue } from './types';
@@ -78,21 +85,6 @@ const MCPBuiltin = () => {
         setEditorMode('edit');
     };
 
-    const upsertBuiltinDraft = () => {
-        const tools: string[] = [];
-        if (enableSearch) tools.push('web_search');
-        if (enableFetch) tools.push('web_fetch');
-        if (tools.length === 0) {
-            setNotification({ open: true, message: 'At least one tool must be enabled', severity: 'error' });
-            return;
-        }
-        const source = formValueToSource({ ...form, id: 'webtools', tools });
-        const next = [...allSources.filter((s) => !BUILTIN_IDS.includes(s.id || '')), source];
-        setAllSources(next);
-        setEditorMode('none');
-        setNotification({ open: true, message: editorMode === 'edit' ? 'Builtin server updated' : 'Builtin server added', severity: 'success' });
-    };
-
     const removeBuiltin = () => {
         const next = allSources.filter((s) => s.id !== 'webtools');
         setAllSources(next);
@@ -101,9 +93,24 @@ const MCPBuiltin = () => {
     };
 
     const saveAll = async () => {
+        let next = [...allSources];
+        if (editorMode !== 'none') {
+            const tools: string[] = [];
+            if (enableSearch) tools.push('web_search');
+            if (enableFetch) tools.push('web_fetch');
+            if (tools.length === 0) {
+                setNotification({ open: true, message: 'At least one tool must be enabled', severity: 'error' });
+                return;
+            }
+            const source = formValueToSource({ ...form, id: 'webtools', tools });
+            next = [...allSources.filter((s) => !BUILTIN_IDS.includes(s.id || '')), source];
+        }
+
         setSaving(true);
-        const result = await api.setMCPConfig({ sources: allSources });
+        const result = await api.setMCPConfig({ sources: next });
         if (result.success) {
+            setAllSources(next);
+            setEditorMode('none');
             setNotification({ open: true, message: 'Saved. Restart server to apply.', severity: 'success' });
         } else {
             setNotification({ open: true, message: result.error || 'Failed to save', severity: 'error' });
@@ -133,11 +140,23 @@ const MCPBuiltin = () => {
                         <Stack direction="row" justifyContent="flex-end">
                             {builtinSource ? (
                                 <Stack direction="row" spacing={1}>
-                                    <Button size="small" onClick={openEdit}>Edit</Button>
-                                    <Button size="small" color="error" onClick={removeBuiltin}>Remove</Button>
+                                    <Tooltip title="Edit">
+                                        <IconButton size="small" color="primary" onClick={openEdit}>
+                                            <EditIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title="Delete">
+                                        <IconButton size="small" color="error" onClick={removeBuiltin}>
+                                            <DeleteOutlineIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
                                 </Stack>
                             ) : (
-                                <Button size="small" variant="outlined" onClick={openAdd}>Add Server</Button>
+                                <Tooltip title="Add Server">
+                                    <IconButton size="small" color="primary" onClick={openAdd}>
+                                        <AddIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
                             )}
                         </Stack>
                         {builtinSource ? (
@@ -174,9 +193,6 @@ const MCPBuiltin = () => {
 
                         <Stack direction="row" justifyContent="space-between">
                             <Button variant="text" onClick={() => setEditorMode('none')}>Cancel</Button>
-                            <Button variant="outlined" onClick={upsertBuiltinDraft}>
-                                {editorMode === 'edit' ? 'Update Server' : 'Add Server'}
-                            </Button>
                         </Stack>
                     </>
                 )}
