@@ -30,9 +30,9 @@ type TransportConfig struct {
 
 	// RespectEnvProxy controls whether providers without explicit proxy configuration
 	// should use environment/system proxy settings (HTTP_PROXY, HTTPS_PROXY, macOS system proxy, etc.)
-	// Default (nil): true - use environment proxy when provider has no proxy_url configured
-	// Set to false: providers without proxy_url will connect directly
-	RespectEnvProxy *bool // nil = use default (true)
+	// Default (nil): false - providers without proxy_url connect directly
+	// Set to true: providers without proxy_url will use system/environment proxy
+	RespectEnvProxy *bool // nil = use default (false)
 }
 
 // Go defaults for reference (not used directly, only for documentation)
@@ -159,11 +159,31 @@ func (tp *TransportPool) generateTransportKey(providerUUID, proxyURL string) str
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
+// newDirectTransport returns a transport with env proxy disabled (direct connection).
+func (tp *TransportPool) newDirectTransport() *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	return transport
+}
+
+// respectEnvProxy returns true if providers without explicit proxy should use env/system proxy.
+// Default is false — only use proxy when explicitly configured.
+func (tp *TransportPool) respectEnvProxy() bool {
+	if tp.config != nil && tp.config.RespectEnvProxy != nil {
+		return *tp.config.RespectEnvProxy
+	}
+	return false
+}
+
 // createTransport creates a new HTTP transport with proxy support
 func (tp *TransportPool) createTransport(proxyURL string) *http.Transport {
 	if proxyURL == "" {
-		// Return a copy of default transport to avoid mutation issues
+		// Clone default transport for connection pool settings, then clear proxy
+		// unless the user has explicitly opted into env proxy via RespectEnvProxy.
 		transport := http.DefaultTransport.(*http.Transport).Clone()
+		if !tp.respectEnvProxy() {
+			transport.Proxy = nil
+		}
 		tp.applyConfig(transport)
 		return transport
 	}
@@ -172,14 +192,15 @@ func (tp *TransportPool) createTransport(proxyURL string) *http.Transport {
 	parsedURL, err := url.Parse(proxyURL)
 	if err != nil {
 		logrus.Errorf("Failed to parse proxy URL %s: %v, using default transport", proxyURL, err)
-		return http.DefaultTransport.(*http.Transport).Clone()
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		if !tp.respectEnvProxy() {
+			transport.Proxy = nil
+		}
+		return transport
 	}
 
-	// Create transport with proxy
-	transport := &http.Transport{
-		// Use same defaults as http.DefaultTransport
-		Proxy: http.ProxyFromEnvironment,
-	}
+	// Create transport with explicit proxy — no env proxy fallback
+	transport := &http.Transport{}
 
 	switch parsedURL.Scheme {
 	case "http", "https":
@@ -187,18 +208,18 @@ func (tp *TransportPool) createTransport(proxyURL string) *http.Transport {
 	case "socks5":
 		dialer, err := proxy.SOCKS5("tcp", parsedURL.Host, nil, proxy.Direct)
 		if err != nil {
-			logrus.Errorf("Failed to create SOCKS5 proxy dialer: %v, using default transport", err)
-			return http.DefaultTransport.(*http.Transport).Clone()
+			logrus.Errorf("Failed to create SOCKS5 proxy dialer: %v, using direct transport", err)
+			return tp.newDirectTransport()
 		}
 		dialContext, ok := dialer.(proxy.ContextDialer)
 		if ok {
 			transport.DialContext = dialContext.DialContext
 		} else {
-			return http.DefaultTransport.(*http.Transport).Clone()
+			return tp.newDirectTransport()
 		}
 	default:
 		logrus.Errorf("Unsupported proxy scheme %s, supported schemes are http, https, socks5", parsedURL.Scheme)
-		return http.DefaultTransport.(*http.Transport).Clone()
+		return tp.newDirectTransport()
 	}
 
 	tp.applyConfig(transport)

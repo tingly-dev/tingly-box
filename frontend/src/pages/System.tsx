@@ -56,7 +56,7 @@ const System = () => {
         const result = await api.getConfig();
         if (result.success && result.data) {
             const value = result.data.http_transport?.respect_env_proxy;
-            setRespectEnvProxy(value === null ? true : value);
+            setRespectEnvProxy(value === null ? false : value);
         }
     };
 
