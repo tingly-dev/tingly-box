@@ -227,6 +227,7 @@ jobs:
           # Copy MCP scripts alongside the binary for distribution
           mkdir -p ./dist/scripts
           cp scripts/mcp_web_tools.py ./dist/scripts/
+          cp scripts/mcp_weather_tools.py ./dist/scripts/
 
       - name: Install UPX 5.1.1
         if: matrix.goos != 'darwin'

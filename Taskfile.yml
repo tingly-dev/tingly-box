@@ -115,6 +115,7 @@ tasks:
       - |
         mkdir -p build/scripts
         cp scripts/mcp_web_tools.py build/scripts/
+        cp scripts/mcp_weather_tools.py build/scripts/
 
   web:
     aliases:
