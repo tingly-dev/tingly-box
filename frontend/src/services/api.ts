@@ -1,7 +1,5 @@
 // API service layer for communicating with the backend
 
-import { authEvents } from './authState';
-
 import TinglyService from "@/bindings";
 import {
     Configuration,
@@ -73,15 +71,6 @@ const getRemoteCCAuthToken = async (): Promise<string | null> => {
     return token;
 };
 
-// Handle 401 Unauthorized response - centralize auth failure handling
-const handleAuthFailure = () => {
-    localStorage.removeItem('user_auth_token');
-    // Notify AuthContext that auth failed (401 occurred)
-    authEvents.notifyAuthFailure();
-    // Also dispatch custom event for cross-tab sync
-    window.dispatchEvent(new CustomEvent('auth-state-change', { detail: { type: 'logout' } }));
-};
-
 // Get model token for OpenAI/Anthropic API from localStorage
 const getModelToken = (): string | null => {
     return localStorage.getItem('model_token');
@@ -91,6 +80,39 @@ const getModelToken = (): string | null => {
 // @deprecated Use getApiBaseUrl from utils/protocol.ts directly
 export const getBaseUrl = async (): Promise<string> => {
     return getApiBaseUrl();
+}
+
+// Lightweight fetch helper for endpoints not covered by codegen
+async function uiAPI(path: string, options: RequestInit = {}): Promise<any> {
+    const fullUrl = path.startsWith('/api/v1') ? path : `/api/v1${path}`;
+    const token = getUserAuthToken();
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...options.headers as Record<string, string>,
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    try {
+        const response = await fetch(fullUrl, { headers, ...options });
+        return await response.json();
+    } catch (error) {
+        return { success: false, error: (error as Error).message };
+    }
+}
+
+// Fetch helper for model API endpoints (OpenAI/Anthropic compatible)
+async function modelAPI(url: string, options: RequestInit = {}): Promise<any> {
+    const token = getModelToken();
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...options.headers as Record<string, string>,
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    try {
+        const response = await fetch(url, { headers, ...options });
+        return await response.json();
+    } catch (error) {
+        return { success: false, error: (error as Error).message };
+    }
 }
 
 // Create API configuration
@@ -147,65 +169,6 @@ const createApiInstances = async () => {
     };
 };
 
-async function fetchUIAPI(url: string, options: RequestInit = {}): Promise<any> {
-    try {
-        const fullUrl = url.startsWith('/api/v1') ? url : `/api/v1${url}`;
-        const token = getUserAuthToken();
-
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-            ...options.headers as Record<string, string>,
-        };
-
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
-
-        const response = await fetch(fullUrl, {
-            headers,
-            ...options,
-        });
-
-        // Handle 401 Unauthorized - token is invalid or expired
-        if (response.status === 401) {
-            handleAuthFailure();
-            return { success: false, error: 'Authentication required' };
-        }
-
-        return await response.json();
-    } catch (error) {
-        console.error('UI API Error:', error);
-        return { success: false, error: (error as Error).message };
-    }
-}
-
-// Fetch function for model API calls (OpenAI/Anthropic)
-async function fetchModelAPI(url: string, options: RequestInit = {}): Promise<any> {
-    try {
-        const token = getModelToken();
-
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-            ...options.headers as Record<string, string>,
-        };
-
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
-
-        const response = await fetch(url, {
-            headers,
-            ...options,
-        });
-
-        return await response.json();
-    } catch (error) {
-        console.error('Model API Error:', error);
-        return { success: false, error: (error as Error).message };
-    }
-}
-
-
 // Initialize API instances immediately
 let apiInstances: ApiInstances | null = null;
 let initializationPromise: Promise<ApiInstances> | null = null;
@@ -241,10 +204,6 @@ export const api = {
             const response = await apiInstances.serverApi.apiV1StatusGet();
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -260,10 +219,6 @@ export const api = {
             }
             return body;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -312,10 +267,6 @@ export const api = {
             const response = await apiInstances.historyApi.apiV1HistoryGet();
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -327,10 +278,6 @@ export const api = {
             const response = await apiInstances.providersApi.apiV2ProvidersPost(data, force);
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -349,10 +296,6 @@ export const api = {
             const response = await apiInstances.providersApi.apiV2ProvidersUuidPut(uuid, data);
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -364,10 +307,6 @@ export const api = {
             const response = await apiInstances.providersApi.apiV2ProvidersUuidDelete(uuid);
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -379,10 +318,6 @@ export const api = {
             const response = await apiInstances.providersApi.apiV2ProvidersUuidTogglePost(uuid);
             return response.data
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -394,10 +329,6 @@ export const api = {
             const response = await apiInstances.serverApi.apiV1ServerStartPost();
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -408,10 +339,6 @@ export const api = {
             const response = await apiInstances.serverApi.apiV1ServerStopPost();
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -422,10 +349,6 @@ export const api = {
             const response = await apiInstances.serverApi.apiV1ServerRestartPost();
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -436,10 +359,6 @@ export const api = {
             const response = await apiInstances.tokenApi.apiV1TokenPost({ client_id: clientId });
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -450,10 +369,6 @@ export const api = {
             const response = await apiInstances.tokenApi.apiV1TokenGet();
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -466,10 +381,6 @@ export const api = {
             const response = await apiInstances.rulesApi.apiV1RulesGet(scenario);
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -492,10 +403,6 @@ export const api = {
             const response = await apiInstances.rulesApi.apiV1RulePost(data);
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -507,10 +414,6 @@ export const api = {
             const response = await apiInstances.rulesApi.apiV1RuleUuidPost(uuid, data);
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -522,16 +425,12 @@ export const api = {
             const response = await apiInstances.rulesApi.apiV1RuleUuidDelete(uuid);
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
 
     importRule: async (data: string, onProviderConflict: string = 'use', onRuleConflict: string = 'new'): Promise<any> => {
-        return fetchUIAPI('/rule/import', {
+        return uiAPI('/rule/import', {
             method: 'POST',
             body: JSON.stringify({
                 data,
@@ -542,7 +441,7 @@ export const api = {
     },
 
     importProvider: async (data: string, onProviderConflict: string = 'use'): Promise<any> => {
-        return fetchUIAPI('/rule/import', {
+        return uiAPI('/rule/import', {
             method: 'POST',
             body: JSON.stringify({
                 data,
@@ -554,37 +453,37 @@ export const api = {
 
     // Scenario API
     getScenarios: async (): Promise<any> => {
-        return fetchUIAPI('/scenarios');
+        return uiAPI('/scenarios');
     },
 
     getScenarioConfig: async (scenario: string): Promise<any> => {
-        return fetchUIAPI(`/scenario/${scenario}`);
+        return uiAPI(`/scenario/${scenario}`);
     },
 
     setScenarioConfig: async (scenario: string, config: any): Promise<any> => {
-        return fetchUIAPI(`/scenario/${scenario}`, {
+        return uiAPI(`/scenario/${scenario}`, {
             method: 'POST',
             body: JSON.stringify(config),
         });
     },
 
     getScenarioFlag: async (scenario: string, flag: string): Promise<any> => {
-        return fetchUIAPI(`/scenario/${scenario}/flag/${flag}`);
+        return uiAPI(`/scenario/${scenario}/flag/${flag}`);
     },
 
     setScenarioFlag: async (scenario: string, flag: string, value: boolean): Promise<any> => {
-        return fetchUIAPI(`/scenario/${scenario}/flag/${flag}`, {
+        return uiAPI(`/scenario/${scenario}/flag/${flag}`, {
             method: 'PUT',
             body: JSON.stringify({ value }),
         });
     },
 
     getScenarioStringFlag: async (scenario: string, flag: string): Promise<any> => {
-        return fetchUIAPI(`/scenario/${scenario}/string-flag/${flag}`);
+        return uiAPI(`/scenario/${scenario}/string-flag/${flag}`);
     },
 
     setScenarioStringFlag: async (scenario: string, flag: string, value: string): Promise<any> => {
-        return fetchUIAPI(`/scenario/${scenario}/string-flag/${flag}`, {
+        return uiAPI(`/scenario/${scenario}/string-flag/${flag}`, {
             method: 'PUT',
             body: JSON.stringify({ value }),
         });
@@ -592,111 +491,111 @@ export const api = {
 
     // Profile API
     getProfiles: async (scenario: string): Promise<any> => {
-        return fetchUIAPI(`/scenario/${scenario}/profiles`);
+        return uiAPI(`/scenario/${scenario}/profiles`);
     },
 
     createProfile: async (scenario: string, name: string): Promise<any> => {
-        return fetchUIAPI(`/scenario/${scenario}/profiles`, {
+        return uiAPI(`/scenario/${scenario}/profiles`, {
             method: 'POST',
             body: JSON.stringify({ name }),
         });
     },
 
     updateProfile: async (scenario: string, id: string, name: string): Promise<any> => {
-        return fetchUIAPI(`/scenario/${scenario}/profiles/${id}`, {
+        return uiAPI(`/scenario/${scenario}/profiles/${id}`, {
             method: 'PUT',
             body: JSON.stringify({ name }),
         });
     },
 
     deleteProfile: async (scenario: string, id: string): Promise<any> => {
-        return fetchUIAPI(`/scenario/${scenario}/profiles/${id}`, {
+        return uiAPI(`/scenario/${scenario}/profiles/${id}`, {
             method: 'DELETE',
         });
     },
 
     // Guardrails API
     getGuardrailsConfig: async (): Promise<any> => {
-        return fetchUIAPI('/guardrails/config');
+        return uiAPI('/guardrails/config');
     },
     getGuardrailsBuiltins: async (): Promise<any> => {
-        return fetchUIAPI('/guardrails/builtins');
+        return uiAPI('/guardrails/builtins');
     },
     getGuardrailsCredentials: async (): Promise<any> => {
-        return fetchUIAPI('/guardrails/credentials');
+        return uiAPI('/guardrails/credentials');
     },
     getGuardrailsCredential: async (credentialId: string): Promise<any> => {
-        return fetchUIAPI(`/guardrails/credential/${encodeURIComponent(credentialId)}`);
+        return uiAPI(`/guardrails/credential/${encodeURIComponent(credentialId)}`);
     },
     createGuardrailsCredential: async (payload: any): Promise<any> => {
-        return fetchUIAPI('/guardrails/credential', {
+        return uiAPI('/guardrails/credential', {
             method: 'POST',
             body: JSON.stringify(payload),
         });
     },
     updateGuardrailsCredential: async (credentialId: string, payload: any): Promise<any> => {
-        return fetchUIAPI(`/guardrails/credential/${encodeURIComponent(credentialId)}`, {
+        return uiAPI(`/guardrails/credential/${encodeURIComponent(credentialId)}`, {
             method: 'PUT',
             body: JSON.stringify(payload),
         });
     },
     deleteGuardrailsCredential: async (credentialId: string): Promise<any> => {
-        return fetchUIAPI(`/guardrails/credential/${encodeURIComponent(credentialId)}`, {
+        return uiAPI(`/guardrails/credential/${encodeURIComponent(credentialId)}`, {
             method: 'DELETE',
         });
     },
     getGuardrailsHistory: async (): Promise<any> => {
-        return fetchUIAPI('/guardrails/history');
+        return uiAPI('/guardrails/history');
     },
     clearGuardrailsHistory: async (): Promise<any> => {
-        return fetchUIAPI('/guardrails/history', {
+        return uiAPI('/guardrails/history', {
             method: 'DELETE',
         });
     },
     createGuardrailsPolicy: async (payload: any): Promise<any> => {
-        return fetchUIAPI('/guardrails/policy', {
+        return uiAPI('/guardrails/policy', {
             method: 'POST',
             body: JSON.stringify(payload),
         });
     },
     updateGuardrailsPolicy: async (policyId: string, payload: any): Promise<any> => {
-        return fetchUIAPI(`/guardrails/policy/${encodeURIComponent(policyId)}`, {
+        return uiAPI(`/guardrails/policy/${encodeURIComponent(policyId)}`, {
             method: 'PUT',
             body: JSON.stringify(payload),
         });
     },
     deleteGuardrailsPolicy: async (policyId: string): Promise<any> => {
-        return fetchUIAPI(`/guardrails/policy/${encodeURIComponent(policyId)}`, {
+        return uiAPI(`/guardrails/policy/${encodeURIComponent(policyId)}`, {
             method: 'DELETE',
         });
     },
     createGuardrailsGroup: async (payload: any): Promise<any> => {
-        return fetchUIAPI('/guardrails/group', {
+        return uiAPI('/guardrails/group', {
             method: 'POST',
             body: JSON.stringify(payload),
         });
     },
     updateGuardrailsGroup: async (groupId: string, payload: any): Promise<any> => {
-        return fetchUIAPI(`/guardrails/group/${encodeURIComponent(groupId)}`, {
+        return uiAPI(`/guardrails/group/${encodeURIComponent(groupId)}`, {
             method: 'PUT',
             body: JSON.stringify(payload),
         });
     },
     deleteGuardrailsGroup: async (groupId: string): Promise<any> => {
-        return fetchUIAPI(`/guardrails/group/${encodeURIComponent(groupId)}`, {
+        return uiAPI(`/guardrails/group/${encodeURIComponent(groupId)}`, {
             method: 'DELETE',
         });
     },
 
     updateGuardrailsConfig: async (content: string): Promise<any> => {
-        return fetchUIAPI('/guardrails/config', {
+        return uiAPI('/guardrails/config', {
             method: 'PUT',
             body: JSON.stringify({ content }),
         });
     },
 
     reloadGuardrailsConfig: async (): Promise<any> => {
-        return fetchUIAPI('/guardrails/reload', {
+        return uiAPI('/guardrails/reload', {
             method: 'POST',
         });
     },
@@ -711,10 +610,6 @@ export const api = {
                 });
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -730,10 +625,6 @@ export const api = {
             });
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -755,10 +646,6 @@ export const api = {
             const response = await apiInstances.infoApi.apiV1InfoVersionCheckGet();
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -774,28 +661,28 @@ export const api = {
     },
 
     // Model API calls (OpenAI/Anthropic compatible)
-    openAIChatCompletions: (data: any): Promise<any> => fetchModelAPI('/openai/v1/chat/completions', {
+    openAIChatCompletions: (data: any): Promise<any> => modelAPI('/openai/v1/chat/completions', {
         method: 'POST',
         body: JSON.stringify(data),
     }),
-    anthropicMessages: (data: any): Promise<any> => fetchModelAPI('/anthropic/v1/messages', {
+    anthropicMessages: (data: any): Promise<any> => modelAPI('/anthropic/v1/messages', {
         method: 'POST',
         body: JSON.stringify(data),
     }),
-    listOpenAIModels: (): Promise<any> => fetchModelAPI('/openai/v1/models'),
-    listAnthropicModels: (): Promise<any> => fetchModelAPI('/anthropic/v1/models'),
+    listOpenAIModels: (): Promise<any> => modelAPI('/openai/v1/models'),
+    listAnthropicModels: (): Promise<any> => modelAPI('/anthropic/v1/models'),
 
 
     // Service management within rules
-    addServiceToRule: (ruleName: string, serviceData: any): Promise<any> => fetchUIAPI(`/rule/${ruleName}/services`, {
+    addServiceToRule: (ruleName: string, serviceData: any): Promise<any> => uiAPI(`/rule/${ruleName}/services`, {
         method: 'POST',
         body: JSON.stringify(serviceData),
     }),
-    updateServiceInRule: (ruleName: string, serviceIndex: number, serviceData: any): Promise<any> => fetchUIAPI(`/rule/${ruleName}/services/${serviceIndex}`, {
+    updateServiceInRule: (ruleName: string, serviceIndex: number, serviceData: any): Promise<any> => uiAPI(`/rule/${ruleName}/services/${serviceIndex}`, {
         method: 'PUT',
         body: JSON.stringify(serviceData),
     }),
-    deleteServiceFromRule: (ruleName: string, serviceIndex: number): Promise<any> => fetchUIAPI(`/rule/${ruleName}/services/${serviceIndex}`, {
+    deleteServiceFromRule: (ruleName: string, serviceIndex: number): Promise<any> => uiAPI(`/rule/${ruleName}/services/${serviceIndex}`, {
         method: 'DELETE',
     }),
     // Token management
@@ -851,10 +738,6 @@ export const api = {
             );
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -879,31 +762,27 @@ export const api = {
             );
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
 
     // Config Apply API - Safe endpoints that generate config from system state
     applyClaudeConfig: async (mode: string, installStatusLine?: boolean): Promise<any> => {
-        return fetchUIAPI('/config/apply/claude', {
+        return uiAPI('/config/apply/claude', {
             method: 'POST',
             body: JSON.stringify({ mode, installStatusLine }),
         });
     },
 
     applyOpenCodeConfig: async (): Promise<any> => {
-        return fetchUIAPI('/config/apply/opencode', {
+        return uiAPI('/config/apply/opencode', {
             method: 'POST',
             body: JSON.stringify({}),
         });
     },
 
     getOpenCodeConfigPreview: async (): Promise<any> => {
-        return fetchUIAPI('/config/preview/opencode', {
+        return uiAPI('/config/preview/opencode', {
             method: 'GET',
         });
     },
@@ -919,10 +798,6 @@ export const api = {
             const response = await apiInstances.skillsApi.apiV2SkillLocationsGet();
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -938,10 +813,6 @@ export const api = {
             const response = await apiInstances.skillsApi.apiV2SkillLocationsPost(data);
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -953,10 +824,6 @@ export const api = {
             const response = await apiInstances.skillsApi.apiV2SkillLocationsIdGet(id);
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -968,10 +835,6 @@ export const api = {
             const response = await apiInstances.skillsApi.apiV2SkillLocationsIdDelete(id);
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -983,10 +846,6 @@ export const api = {
             const response = await apiInstances.skillsApi.apiV2SkillLocationsIdRefreshPost(id);
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -998,10 +857,6 @@ export const api = {
             const response = await apiInstances.skillsApi.apiV2SkillLocationsDiscoverGet();
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -1013,10 +868,6 @@ export const api = {
             const response = await apiInstances.skillsApi.apiV2SkillLocationsImportPost({ locations });
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -1034,10 +885,6 @@ export const api = {
                 },
             });
 
-            if (response.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
 
             return await response.json();
         } catch (error: any) {
@@ -1062,10 +909,6 @@ export const api = {
                 },
             });
 
-            if (response.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
 
             return await response.json();
         } catch (error: any) {
@@ -1079,12 +922,12 @@ export const api = {
 
     // Get all ImBot settings
     getImBotSettingsList: async (): Promise<any> => {
-        return fetchUIAPI('/imbot-settings');
+        return uiAPI('/imbot-settings');
     },
 
     // Get a specific ImBot setting by UUID
     getImBotSetting: async (uuid: string): Promise<any> => {
-        return fetchUIAPI(`/imbot-settings/${uuid}`);
+        return uiAPI(`/imbot-settings/${uuid}`);
     },
 
     // Create a new ImBot setting
@@ -1099,7 +942,7 @@ export const api = {
         enabled?: boolean;
         token?: string;
     }): Promise<any> => {
-        return fetchUIAPI('/imbot-settings', {
+        return uiAPI('/imbot-settings', {
             method: 'POST',
             body: JSON.stringify(data),
         });
@@ -1116,7 +959,7 @@ export const api = {
         bash_allowlist?: string[];
         enabled?: boolean;
     }): Promise<any> => {
-        return fetchUIAPI(`/imbot-settings/${uuid}`, {
+        return uiAPI(`/imbot-settings/${uuid}`, {
             method: 'PUT',
             body: JSON.stringify(data),
         });
@@ -1124,26 +967,26 @@ export const api = {
 
     // Delete an ImBot setting
     deleteImBotSetting: async (uuid: string): Promise<any> => {
-        return fetchUIAPI(`/imbot-settings/${uuid}`, {
+        return uiAPI(`/imbot-settings/${uuid}`, {
             method: 'DELETE',
         });
     },
 
     // Toggle an ImBot setting's enabled status
     toggleImBotSetting: async (uuid: string): Promise<any> => {
-        return fetchUIAPI(`/imbot-settings/${uuid}/toggle`, {
+        return uiAPI(`/imbot-settings/${uuid}/toggle`, {
             method: 'POST',
         });
     },
 
     // Get all supported ImBot platforms
     getImBotPlatforms: async (): Promise<any> => {
-        return fetchUIAPI('/imbot-platforms');
+        return uiAPI('/imbot-platforms');
     },
 
     // Get platform auth configuration
     getImBotPlatformConfig: async (platform: string): Promise<any> => {
-        return fetchUIAPI(`/imbot-platform-config?platform=${platform}`);
+        return uiAPI(`/imbot-platform-config?platform=${platform}`);
     },
 
     // ============================================
@@ -1374,10 +1217,6 @@ export const api = {
             const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsGet();
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -1389,10 +1228,6 @@ export const api = {
             const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidGet(uuid);
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             if (error.response?.status === 404) {
                 return { success: false, error: 'ImBot setting not found' };
             }
@@ -1418,10 +1253,6 @@ export const api = {
             const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsPost(data);
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             return { success: false, error: error.message };
         }
     },
@@ -1443,10 +1274,6 @@ export const api = {
             const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidPut(uuid, data);
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             if (error.response?.status === 404) {
                 return { success: false, error: 'ImBot setting not found' };
             }
@@ -1461,10 +1288,6 @@ export const api = {
             const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidDelete(uuid);
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             if (error.response?.status === 404) {
                 return { success: false, error: 'ImBot setting not found' };
             }
@@ -1479,10 +1302,6 @@ export const api = {
             const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidTogglePost(uuid);
             return response.data;
         } catch (error: any) {
-            if (error.response?.status === 401) {
-                handleAuthFailure();
-                return { success: false, error: 'Authentication required' };
-            }
             if (error.response?.status === 404) {
                 return { success: false, error: 'ImBot setting not found' };
             }
@@ -1561,7 +1380,7 @@ export const api = {
 
     // Start Weixin QR login flow
     weixinQRStart: async (botUUID: string, platform?: string, botName?: string): Promise<any> => {
-        return fetchUIAPI(`/imbot-settings/${botUUID}/weixin/qr-start`, {
+        return uiAPI(`/imbot-settings/${botUUID}/weixin/qr-start`, {
             method: 'POST',
             body: JSON.stringify({ bot_uuid: botUUID, bot_platform: platform, bot_name: botName }),
         });
@@ -1569,14 +1388,14 @@ export const api = {
 
     // Poll Weixin QR login status
     weixinQRStatus: async (botUUID: string, qrCodeId: string): Promise<any> => {
-        return fetchUIAPI(`/imbot-settings/${botUUID}/weixin/qr-status?qrcode_id=${qrCodeId}`, {
+        return uiAPI(`/imbot-settings/${botUUID}/weixin/qr-status?qrcode_id=${qrCodeId}`, {
             method: 'GET',
         });
     },
 
     // Cancel Weixin QR login flow
     weixinQRCancel: async (botUUID: string): Promise<any> => {
-        return fetchUIAPI(`/imbot-settings/${botUUID}/weixin/qr-cancel`, {
+        return uiAPI(`/imbot-settings/${botUUID}/weixin/qr-cancel`, {
             method: 'POST',
         });
     },

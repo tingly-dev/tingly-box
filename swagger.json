@@ -164,6 +164,52 @@
         }
       }
     },
+    "/api/v1/config": {
+      "get": {
+        "tags": [
+          "config"
+        ],
+        "summary": "Get system configuration",
+        "description": "Get system configuration",
+        "operationId": "apiV1ConfigGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "config"
+        ],
+        "summary": "Update system configuration",
+        "description": "Update system configuration",
+        "operationId": "apiV1ConfigPut",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/config/apply/claude": {
       "post": {
         "tags": [
@@ -231,6 +277,465 @@
             "description": "Successful response",
             "schema": {
               "$ref": "#/definitions/OpenCodeConfigPreviewResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/guardrails/builtins": {
+      "get": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Get curated builtin guardrails policy templates",
+        "description": "Get curated builtin guardrails policy templates",
+        "operationId": "apiV1GuardrailsBuiltinsGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/guardrails/config": {
+      "get": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Get guardrails config content and parsed config",
+        "description": "Get guardrails config content and parsed config",
+        "operationId": "apiV1GuardrailsConfigGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Update guardrails config and reload engine",
+        "description": "Update guardrails config and reload engine",
+        "operationId": "apiV1GuardrailsConfigPut",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/guardrails/credential": {
+      "post": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Create a protected credential for guardrails pseudonymization",
+        "description": "Create a protected credential for guardrails pseudonymization",
+        "operationId": "apiV1GuardrailsCredentialPost",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/guardrails/credential/{id}": {
+      "get": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Get a protected credential for the local editor dialog",
+        "description": "Get a protected credential for the local editor dialog",
+        "operationId": "apiV1GuardrailsCredentialIdGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Update a protected credential for guardrails pseudonymization",
+        "description": "Update a protected credential for guardrails pseudonymization",
+        "operationId": "apiV1GuardrailsCredentialIdPut",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Delete a protected credential for guardrails pseudonymization",
+        "description": "Delete a protected credential for guardrails pseudonymization",
+        "operationId": "apiV1GuardrailsCredentialIdDelete",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/guardrails/credentials": {
+      "get": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "List protected credentials used by guardrails pseudonymization",
+        "description": "List protected credentials used by guardrails pseudonymization",
+        "operationId": "apiV1GuardrailsCredentialsGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/guardrails/group": {
+      "post": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Create a new guardrails group and reload engine",
+        "description": "Create a new guardrails group and reload engine",
+        "operationId": "apiV1GuardrailsGroupPost",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/guardrails/group/{id}": {
+      "put": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Update a guardrails group and reload engine",
+        "description": "Update a guardrails group and reload engine",
+        "operationId": "apiV1GuardrailsGroupIdPut",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Delete a guardrails group and reload engine",
+        "description": "Delete a guardrails group and reload engine",
+        "operationId": "apiV1GuardrailsGroupIdDelete",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/guardrails/history": {
+      "get": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Get recent guardrails interception history",
+        "description": "Get recent guardrails interception history",
+        "operationId": "apiV1GuardrailsHistoryGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Clear guardrails interception history",
+        "description": "Clear guardrails interception history",
+        "operationId": "apiV1GuardrailsHistoryDelete",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/guardrails/policy": {
+      "post": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Create a new guardrails policy and reload engine",
+        "description": "Create a new guardrails policy and reload engine",
+        "operationId": "apiV1GuardrailsPolicyPost",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/guardrails/policy/{id}": {
+      "put": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Update a guardrails policy and reload engine",
+        "description": "Update a guardrails policy and reload engine",
+        "operationId": "apiV1GuardrailsPolicyIdPut",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Delete a guardrails policy and reload engine",
+        "description": "Delete a guardrails policy and reload engine",
+        "operationId": "apiV1GuardrailsPolicyIdDelete",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/guardrails/reload": {
+      "post": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Reload guardrails config from disk",
+        "description": "Reload guardrails config from disk",
+        "operationId": "apiV1GuardrailsReloadPost",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
             }
           }
         }
@@ -1744,6 +2249,119 @@
             "description": "Successful response",
             "schema": {
               "$ref": "#/definitions/ScenarioFlagResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenario/{scenario}/profiles": {
+      "get": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "List profiles for a scenario",
+        "description": "List profiles for a scenario",
+        "operationId": "apiV1ScenarioScenarioProfilesGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Create a new profile for a scenario",
+        "description": "Create a new profile for a scenario",
+        "operationId": "apiV1ScenarioScenarioProfilesPost",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ProfileCreateRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenario/{scenario}/profiles/{id}": {
+      "delete": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Delete a profile",
+        "description": "Delete a profile",
+        "operationId": "apiV1ScenarioScenarioProfilesIdDelete",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
             }
           }
         }
@@ -3629,6 +4247,10 @@
             "$ref": "#/definitions/Service"
           }
         },
+        "smart_affinity": {
+          "type": "boolean",
+          "description": "Field smart_affinity"
+        },
         "smart_enabled": {
           "type": "boolean",
           "description": "Field smart_enabled"
@@ -5348,6 +5970,18 @@
         "total_tokens"
       ]
     },
+    "ProfileCreateRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Field name"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
     "ProviderModelInfo": {
       "type": "object",
       "properties": {
@@ -5381,6 +6015,10 @@
             "gpt-3.5-turbo",
             "gpt-4"
           ]
+        },
+        "quota": {
+          "description": "Field quota",
+          "$ref": "#/definitions/ProviderUsage"
         },
         "star_models": {
           "type": "array",
@@ -5510,6 +6148,11 @@
           "type": "string",
           "description": "Field base_url_openai"
         },
+        "default_model_capacity": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field default_model_capacity"
+        },
         "description": {
           "type": "string",
           "description": "Field description"
@@ -5523,6 +6166,14 @@
           "description": "Field metadata",
           "additionalProperties": {
             "type": "string"
+          }
+        },
+        "model_capacities": {
+          "type": "object",
+          "description": "Field model_capacities",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int64"
           }
         },
         "model_doc": {
@@ -5571,6 +6222,11 @@
             "type": "string"
           }
         },
+        "total_capacity": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field total_capacity"
+        },
         "type": {
           "type": "string",
           "description": "Field type"
@@ -5603,6 +6259,80 @@
         "supports_models_endpoint"
       ]
     },
+    "ProviderUsage": {
+      "type": "object",
+      "properties": {
+        "account": {
+          "description": "Field account",
+          "$ref": "#/definitions/UsageAccount"
+        },
+        "breakdowns": {
+          "type": "array",
+          "description": "Field breakdowns",
+          "items": {
+            "$ref": "#/definitions/UsageBreakdown"
+          }
+        },
+        "cost": {
+          "description": "Field cost",
+          "$ref": "#/definitions/UsageCost"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Field expires_at"
+        },
+        "fetched_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Field fetched_at"
+        },
+        "last_error": {
+          "type": "string",
+          "description": "Field last_error"
+        },
+        "last_error_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Field last_error_at"
+        },
+        "primary": {
+          "description": "Field primary",
+          "$ref": "#/definitions/UsageWindow"
+        },
+        "provider_name": {
+          "type": "string",
+          "description": "Field provider_name"
+        },
+        "provider_type": {
+          "type": "string",
+          "description": "Field provider_type"
+        },
+        "provider_uuid": {
+          "type": "string",
+          "description": "Field provider_uuid"
+        },
+        "raw_response": {
+          "type": "string",
+          "description": "Field raw_response"
+        },
+        "secondary": {
+          "description": "Field secondary",
+          "$ref": "#/definitions/UsageWindow"
+        },
+        "tertiary": {
+          "description": "Field tertiary",
+          "$ref": "#/definitions/UsageWindow"
+        }
+      },
+      "required": [
+        "provider_uuid",
+        "provider_name",
+        "provider_type",
+        "fetched_at",
+        "expires_at"
+      ]
+    },
     "ProvidersResponse": {
       "type": "object",
       "properties": {
@@ -5624,19 +6354,7 @@
         "data"
       ]
     },
-    "QRStartRequest": {
-      "type": "object",
-      "properties": {
-        "bot_uuid": {
-          "type": "string",
-          "description": "Field bot_uuid"
-        }
-      },
-      "required": [
-        "bot_uuid"
-      ]
-    },
-    "QRStartResponse": {
+    "QRStartData": {
       "type": "object",
       "properties": {
         "expires_in": {
@@ -5659,12 +6377,57 @@
         "expires_in"
       ]
     },
-    "QRStatusResponse": {
+    "QRStartRequest": {
       "type": "object",
       "properties": {
+        "bot_name": {
+          "type": "string",
+          "description": "Field bot_name"
+        },
+        "bot_platform": {
+          "type": "string",
+          "description": "Field bot_platform"
+        },
+        "bot_type": {
+          "type": "string",
+          "description": "Field bot_type"
+        },
+        "bot_uuid": {
+          "type": "string",
+          "description": "Field bot_uuid"
+        }
+      },
+      "required": [
+        "bot_uuid"
+      ]
+    },
+    "QRStartResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/QRStartData"
+        },
         "error": {
           "type": "string",
           "description": "Field error"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
+    "QRStatusData": {
+      "type": "object",
+      "properties": {
+        "bot_uuid": {
+          "type": "string",
+          "description": "Field bot_uuid"
         },
         "status": {
           "type": "string",
@@ -5673,6 +6436,26 @@
       },
       "required": [
         "status"
+      ]
+    },
+    "QRStatusResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/QRStatusData"
+        },
+        "error": {
+          "type": "string",
+          "description": "Field error"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        }
+      },
+      "required": [
+        "success"
       ]
     },
     "RefreshSkillLocationResponse": {
@@ -5758,6 +6541,10 @@
           "items": {
             "$ref": "#/definitions/Service"
           }
+        },
+        "smart_affinity": {
+          "type": "boolean",
+          "description": "Field smart_affinity"
         },
         "smart_enabled": {
           "type": "boolean",
@@ -6132,6 +6919,11 @@
           "type": "string",
           "description": "Field model"
         },
+        "model_capacity": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field model_capacity"
+        },
         "provider": {
           "type": "string",
           "description": "Field provider"
@@ -6159,10 +6951,99 @@
     "ServiceStats": {
       "type": "object",
       "properties": {
+        "LatencySamples": {
+          "type": "array",
+          "description": "Field LatencySamples",
+          "items": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "SpeedSamples": {
+          "type": "array",
+          "description": "Field SpeedSamples",
+          "items": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "TTFTSamples": {
+          "type": "array",
+          "description": "Field TTFTSamples",
+          "items": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "avg_latency_ms": {
+          "type": "number",
+          "format": "double",
+          "description": "Field avg_latency_ms"
+        },
+        "avg_token_speed": {
+          "type": "number",
+          "format": "double",
+          "description": "Field avg_token_speed"
+        },
+        "avg_ttft_ms": {
+          "type": "number",
+          "format": "double",
+          "description": "Field avg_ttft_ms"
+        },
+        "cache_hit_rate": {
+          "type": "number",
+          "format": "double",
+          "description": "Field cache_hit_rate"
+        },
+        "last_latency_update": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Field last_latency_update"
+        },
+        "last_speed_update": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Field last_speed_update"
+        },
+        "last_ttft_update": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Field last_ttft_update"
+        },
         "last_used": {
           "type": "string",
           "format": "date-time",
           "description": "Field last_used"
+        },
+        "p50_latency_ms": {
+          "type": "number",
+          "format": "double",
+          "description": "Field p50_latency_ms"
+        },
+        "p50_ttft_ms": {
+          "type": "number",
+          "format": "double",
+          "description": "Field p50_ttft_ms"
+        },
+        "p95_latency_ms": {
+          "type": "number",
+          "format": "double",
+          "description": "Field p95_latency_ms"
+        },
+        "p95_ttft_ms": {
+          "type": "number",
+          "format": "double",
+          "description": "Field p95_ttft_ms"
+        },
+        "p99_latency_ms": {
+          "type": "number",
+          "format": "double",
+          "description": "Field p99_latency_ms"
+        },
+        "p99_ttft_ms": {
+          "type": "number",
+          "format": "double",
+          "description": "Field p99_ttft_ms"
         },
         "request_count": {
           "type": "integer",
@@ -6177,6 +7058,21 @@
           "type": "integer",
           "format": "int64",
           "description": "Field time_window"
+        },
+        "window_cache_hits": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field window_cache_hits"
+        },
+        "window_cache_misses": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field window_cache_misses"
+        },
+        "window_cost_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field window_cost_tokens"
         },
         "window_input_tokens": {
           "type": "integer",
@@ -6213,7 +7109,26 @@
         "window_tokens_consumed",
         "window_input_tokens",
         "window_output_tokens",
-        "time_window"
+        "time_window",
+        "LatencySamples",
+        "avg_latency_ms",
+        "p50_latency_ms",
+        "p95_latency_ms",
+        "p99_latency_ms",
+        "last_latency_update",
+        "SpeedSamples",
+        "avg_token_speed",
+        "last_speed_update",
+        "TTFTSamples",
+        "avg_ttft_ms",
+        "p50_ttft_ms",
+        "p95_ttft_ms",
+        "p99_ttft_ms",
+        "last_ttft_update",
+        "window_cache_hits",
+        "window_cache_misses",
+        "cache_hit_rate",
+        "window_cost_tokens"
       ]
     },
     "Settings": {
@@ -7064,6 +7979,10 @@
             "$ref": "#/definitions/Service"
           }
         },
+        "smart_affinity": {
+          "type": "boolean",
+          "description": "Field smart_affinity"
+        },
         "smart_enabled": {
           "type": "boolean",
           "description": "Field smart_enabled"
@@ -7124,6 +8043,10 @@
               "type": "string",
               "description": "Field response_model"
             },
+            "scenario": {
+              "type": "string",
+              "description": "Field scenario"
+            },
             "smart_enabled": {
               "type": "boolean",
               "description": "Field smart_enabled"
@@ -7142,6 +8065,7 @@
           },
           "required": [
             "uuid",
+            "scenario",
             "request_model",
             "response_model",
             "description",
@@ -7166,6 +8090,103 @@
         "success",
         "message",
         "data"
+      ]
+    },
+    "UsageAccount": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "description": "Field email"
+        },
+        "id": {
+          "type": "string",
+          "description": "Field id"
+        },
+        "name": {
+          "type": "string",
+          "description": "Field name"
+        },
+        "organization_id": {
+          "type": "string",
+          "description": "Field organization_id"
+        },
+        "tier": {
+          "type": "string",
+          "description": "Field tier"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ]
+    },
+    "UsageBreakdown": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Field description"
+        },
+        "group": {
+          "type": "string",
+          "description": "Field group"
+        },
+        "key": {
+          "type": "string",
+          "description": "Field key"
+        },
+        "label": {
+          "type": "string",
+          "description": "Field label"
+        },
+        "windows": {
+          "type": "array",
+          "description": "Field windows",
+          "items": {
+            "$ref": "#/definitions/UsageWindow"
+          }
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "group",
+        "windows"
+      ]
+    },
+    "UsageCost": {
+      "type": "object",
+      "properties": {
+        "currency_code": {
+          "type": "string",
+          "description": "Field currency_code"
+        },
+        "label": {
+          "type": "string",
+          "description": "Field label"
+        },
+        "limit": {
+          "type": "number",
+          "format": "double",
+          "description": "Field limit"
+        },
+        "resets_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Field resets_at"
+        },
+        "used": {
+          "type": "number",
+          "format": "double",
+          "description": "Field used"
+        }
+      },
+      "required": [
+        "used",
+        "limit",
+        "currency_code",
+        "label"
       ]
     },
     "UsageRecordResponse": {
@@ -7378,6 +8399,61 @@
         "data"
       ]
     },
+    "UsageWindow": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Field description"
+        },
+        "label": {
+          "type": "string",
+          "description": "Field label"
+        },
+        "limit": {
+          "type": "number",
+          "format": "double",
+          "description": "Field limit"
+        },
+        "resets_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Field resets_at"
+        },
+        "type": {
+          "type": "string",
+          "description": "Field type"
+        },
+        "unit": {
+          "type": "string",
+          "description": "Field unit"
+        },
+        "used": {
+          "type": "number",
+          "format": "double",
+          "description": "Field used"
+        },
+        "used_percent": {
+          "type": "number",
+          "format": "double",
+          "description": "Field used_percent"
+        },
+        "window_minutes": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field window_minutes"
+        }
+      },
+      "required": [
+        "type",
+        "used",
+        "limit",
+        "used_percent",
+        "unit",
+        "label",
+        "description"
+      ]
+    },
     "VersionInfo": {
       "type": "object",
       "properties": {
@@ -7426,20 +8502,28 @@
   },
   "tags": [
     {
-      "name": "imbot-settings",
-      "description": "Operations related to imbot-settings"
-    },
-    {
-      "name": "weixin",
-      "description": "Operations related to weixin"
+      "name": "guardrails",
+      "description": "Operations related to guardrails"
     },
     {
       "name": "token",
       "description": "Operations related to token"
     },
     {
-      "name": "skills",
-      "description": "Operations related to skills"
+      "name": "usage",
+      "description": "Operations related to usage"
+    },
+    {
+      "name": "weixin",
+      "description": "Operations related to weixin"
+    },
+    {
+      "name": "actions",
+      "description": "Operations related to actions"
+    },
+    {
+      "name": "history",
+      "description": "Operations related to history"
     },
     {
       "name": "logs",
@@ -7450,56 +8534,52 @@
       "description": "Operations related to system-logs"
     },
     {
-      "name": "actions",
-      "description": "Operations related to actions"
+      "name": "server",
+      "description": "Operations related to server"
     },
     {
-      "name": "testing",
-      "description": "Operations related to testing"
+      "name": "skills",
+      "description": "Operations related to skills"
     },
     {
-      "name": "oauth",
-      "description": "Operations related to oauth"
-    },
-    {
-      "name": "auth",
-      "description": "Operations related to auth"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
+      "name": "imbot-settings",
+      "description": "Operations related to imbot-settings"
     },
     {
       "name": "info",
       "description": "Operations related to info"
     },
     {
-      "name": "server",
-      "description": "Operations related to server"
-    },
-    {
-      "name": "scenarios",
-      "description": "Operations related to scenarios"
-    },
-    {
       "name": "models",
       "description": "Operations related to models"
     },
     {
-      "name": "usage",
-      "description": "Operations related to usage"
+      "name": "testing",
+      "description": "Operations related to testing"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
     },
     {
       "name": "config",
       "description": "Operations related to config"
     },
     {
+      "name": "auth",
+      "description": "Operations related to auth"
+    },
+    {
       "name": "rules",
       "description": "Operations related to rules"
     },
     {
-      "name": "history",
-      "description": "Operations related to history"
+      "name": "scenarios",
+      "description": "Operations related to scenarios"
     }
   ]
 }
