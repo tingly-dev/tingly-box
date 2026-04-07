@@ -308,25 +308,37 @@ def tool_web_fetch(args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def handle_request(req: Dict[str, Any]) -> Dict[str, Any]:
+def handle_request(req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     rid = req.get("id")
     method = req.get("method")
     params = req.get("params") or {}
 
+    # Notifications (no id) are one-way; don't send a response.
+    is_notification = rid is None
+
+    if method == "ping":
+        if is_notification:
+            return None
+        return ok(rid, {})
+
     if method == "initialize":
-        return ok(
-            rid,
-            {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {"tools": {}},
-                "serverInfo": {"name": "tingly-web-tools", "version": "0.1.0"},
-            },
-        )
+        result = {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {"tools": {}},
+            "serverInfo": {"name": "tingly-web-tools", "version": "0.1.0"},
+        }
+        if is_notification:
+            return None
+        return ok(rid, result)
 
     if method == "tools/list":
+        if is_notification:
+            return None
         return ok(rid, {"tools": [TOOL_WEB_SEARCH, TOOL_WEB_FETCH]})
 
     if method == "tools/call":
+        if is_notification:
+            return None
         name = str(params.get("name", "")).strip()
         arguments = params.get("arguments") or {}
         if not isinstance(arguments, dict):
@@ -348,7 +360,26 @@ def handle_request(req: Dict[str, Any]) -> Dict[str, Any]:
         except Exception as e:
             return err(rid, -32000, f"tool execution failed: {e}")
 
-    return err(rid, -32601, f"method not found: {method}")
+    if method == "resources/list":
+        if is_notification:
+            return None
+        return ok(rid, {"resources": []})
+
+    if method == "prompts/list":
+        if is_notification:
+            return None
+        return ok(rid, {"prompts": []})
+
+    if method == "logging/setLevel":
+        if is_notification:
+            return None
+        return ok(rid, {})
+
+    if is_notification:
+        return None  # Unknown notification; silently ignore.
+
+    # Be permissive for unknown calls to keep compatibility with evolving MCP clients.
+    return ok(rid, {})
 
 
 def main() -> int:
@@ -360,7 +391,9 @@ def main() -> int:
         except Exception as e:
             write_frame(err(None, -32700, f"parse error: {e}"))
             continue
-        write_frame(handle_request(req))
+        resp = handle_request(req)
+        if resp is not None:
+            write_frame(resp)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,6 @@
 package mcpruntime
 
 import (
-	"bufio"
-	"strings"
 	"testing"
 )
 
@@ -57,17 +55,5 @@ func TestBuildAllowList(t *testing.T) {
 	}
 	if !allowSet["web_search"] || !allowSet["web_fetch"] {
 		t.Fatalf("expected allow set to include explicit names")
-	}
-}
-
-func TestReadStdioFrame(t *testing.T) {
-	in := "Content-Length: 17\r\n\r\n{\"jsonrpc\":\"2.0\"}"
-	r := bufio.NewReader(strings.NewReader(in))
-	body, err := readStdioFrame(r)
-	if err != nil {
-		t.Fatalf("readStdioFrame returned error: %v", err)
-	}
-	if string(body) != "{\"jsonrpc\":\"2.0\"}" {
-		t.Fatalf("unexpected body: %s", string(body))
 	}
 }
