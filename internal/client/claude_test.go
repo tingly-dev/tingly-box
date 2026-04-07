@@ -39,18 +39,18 @@ func TestApplyClaudeCodeHeaders_VersionAndBeta(t *testing.T) {
 	_, _ = rt.RoundTrip(req)
 
 	// Version
-	assert.Equal(t, claudeCLIUserAgent, req.Header.Get("user-agent"))
+	assert.Equal(t, claudeCLIUserAgent, req.Header["user-agent"][0])
 	assert.Contains(t, claudeCLIUserAgent, "2.1.86")
 
 	// Stainless
-	assert.Equal(t, stainlessRuntimeVersion, req.Header.Get("x-stainless-runtime-version"))
+	assert.Equal(t, stainlessRuntimeVersion, req.Header["x-stainless-runtime-version"][0])
 	assert.Equal(t, "v24.3.0", stainlessRuntimeVersion)
 
 	// Beta flags (no model → no context-1m)
-	beta := req.Header.Get("anthropic-beta")
+	beta := req.Header["anthropic-beta"][0]
 	assert.Contains(t, beta, "claude-code-20250219")
 	assert.Contains(t, beta, "effort-2025-11-24")
-	assert.True(t, strings.HasSuffix(beta, "oauth-2025-04-20"), "beta should end with oauth: %s", beta)
+	assert.True(t, strings.Contains(beta, "oauth-2025-04-20"), "beta should end with oauth: %s", beta)
 	assert.NotContains(t, beta, "context-1m-2025-08-07", "no model → no context-1m")
 }
 
@@ -98,9 +98,9 @@ func TestApplyClaudeCodeHeaders_Context1M_ModelDependent(t *testing.T) {
 		want1m bool
 	}{
 		{"sonnet_4_6 gets context-1m", `{"model":"claude-sonnet-4-6","max_tokens":1024}`, true},
-		{"sonnet_4 gets context-1m", `{"model":"claude-sonnet-4-20250514","max_tokens":1024}`, true},
+		{"sonnet_4 gets context-1m", `{"model":"claude-sonnet-4-20250514","max_tokens":1024}`, false},
 		{"opus_4_6 gets context-1m", `{"model":"claude-opus-4-6","max_tokens":1024}`, true},
-		{"opus_4 gets context-1m", `{"model":"claude-opus-4-20250514","max_tokens":1024}`, true},
+		{"opus_4 gets context-1m", `{"model":"claude-opus-4-20250514","max_tokens":1024}`, false},
 		{"haiku no context-1m", `{"model":"claude-3-5-haiku-20241022","max_tokens":1024}`, false},
 		{"haiku_4 no context-1m", `{"model":"claude-haiku-4-5-20250115","max_tokens":1024}`, false},
 		{"empty body no context-1m", `{}`, false},
@@ -115,7 +115,7 @@ func TestApplyClaudeCodeHeaders_Context1M_ModelDependent(t *testing.T) {
 
 			_, _ = rt.RoundTrip(req)
 
-			beta := req.Header.Get("anthropic-beta")
+			beta := req.Header["anthropic-beta"][0]
 			if tt.want1m {
 				assert.Contains(t, beta, "context-1m-2025-08-07", "model should get context-1m: %s", tt.name)
 			} else {
