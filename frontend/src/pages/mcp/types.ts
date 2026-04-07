@@ -85,7 +85,7 @@ export const sourceToFormValue = (source?: MCPSourceConfig): MCPSourceFormValue 
         args: source.args || [],
         env,
         envPassthrough,
-        cwd: source.cwd || '',
+        cwd: source.cwd || MCP_DEFAULT_CWD,
         tools: source.tools && source.tools.length > 0 ? source.tools : ['*'],
         useGlobalProxy: !source.proxy_url,
         proxyUrl: source.proxy_url || '',

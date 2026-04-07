@@ -20,7 +20,7 @@ import {
 } from '@mui/icons-material';
 import { useEffect, useState } from 'react';
 import MCPSourceEditor from './MCPSourceEditor';
-import { BUILTIN_IDS, defaultMCPSourceFormValue, formValueToSource, sourceToFormValue, type MCPConfigResponse, type MCPSourceConfig, type MCPSourceFormValue } from './types';
+import { BUILTIN_IDS, MCP_DEFAULT_CWD, defaultMCPSourceFormValue, formValueToSource, sourceToFormValue, type MCPConfigResponse, type MCPSourceConfig, type MCPSourceFormValue } from './types';
 
 const weatherTemplate = (): MCPSourceFormValue => ({
     ...defaultMCPSourceFormValue(),
@@ -28,6 +28,7 @@ const weatherTemplate = (): MCPSourceFormValue => ({
     transport: 'stdio',
     command: 'python3',
     args: ['mcp_weather_tools.py'],
+    cwd: MCP_DEFAULT_CWD,
     tools: ['get_current_weather'],
     useGlobalProxy: true,
     envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'],
