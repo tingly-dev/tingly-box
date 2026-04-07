@@ -10,14 +10,19 @@ import (
 
 // ShouldRecording determines if recording should be used
 func (s *Server) ShouldRecording(recorder *ProtocolRecorder) bool {
-	return s.enableRecording && recorder != nil
+	return recorder != nil
+}
+
+// ShouldRecordingV3 determines if V3 recording should be used
+func (s *Server) ShouldRecordingV3(recorder *UnifiedRecorder) bool {
+	return recorder != nil
 }
 
 // BuildTransformChain builds the appropriate transform chain based on recording configuration
-func (s *Server) BuildTransformChain(c *gin.Context, targetType protocol.APIType, providerURL string, scenarioFlags *typ.ScenarioFlags, recorder *ProtocolRecorder) (*transform.TransformChain, error) {
+func (s *Server) BuildTransformChain(c *gin.Context, targetType protocol.APIType, providerURL string, scenarioFlags *typ.ScenarioFlags, recorder *UnifiedRecorder) (*transform.TransformChain, error) {
 
 	recordMode := s.recordMode
-	shouldRecord := s.ShouldRecording(recorder)
+	shouldRecord := s.ShouldRecordingV3(recorder)
 
 	var transforms []transform.Transform
 

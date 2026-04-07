@@ -19,11 +19,8 @@ import (
 
 // AnthropicMessagesV1Beta implements beta messages API
 func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, proxyModel string, provider *typ.Provider, actualModel string, rule *typ.Rule) {
-
-	// Get or create recorder for dual-stage recording (when V2 flag is enabled)
-	var recorder *ProtocolRecorder
 	scenarioType := rule.GetScenario()
-	recorder = s.GetOrCreateScenarioRecorderV2(c, string(scenarioType), provider, actualModel, s.recordMode)
+	scenario := string(scenarioType)
 
 	// Check if streaming is requested
 	isStreaming := req.Stream
@@ -94,6 +91,9 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		}
 	}
 
+	// Get or create V3 recorder if recording is enabled
+	recorder := s.SetupV3Recorder(c, scenarioType, scenario, protocol.TypeAnthropicBeta, provider, actualModel)
+
 	reqCtx, err := s.transformAnthropicBeta(c, req, target, provider, isStreaming, recorder, scenarioType)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -106,7 +106,8 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	reqCtx.RequestModel = actualModel
 	reqCtx.ResponseModel = proxyModel
 
-	s.dispatchChainResult(c, reqCtx, rule, provider, isStreaming, recorder)
+	// Pass nil for V2 recorder since V3 recorder is stored in gin context
+	s.dispatchChainResult(c, reqCtx, rule, provider, isStreaming, nil)
 }
 
 // handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming response and sends it to the client

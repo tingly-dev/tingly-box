@@ -159,6 +159,9 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	}
 
 	// Return modified response
+	// V3 recording for non-streaming response
+	FinalizeV3NonStreamingRecording(c, provider, responseModel, responseMap)
+
 	c.JSON(http.StatusOK, responseMap)
 }
 
@@ -260,6 +263,33 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 		}
 		return nil
 	})
+
+	// Add V3 recording hooks if available
+	if recorder, exists := c.Get("unified_recorder_v3"); exists {
+		if r, ok := recorder.(*UnifiedRecorder); ok {
+			// Update recorder with provider/model info
+			r.SetProvider(provider)
+			r.SetModel(string(req.Model))
+			if scenarioVal, scenarioOk := c.Get("scenario"); scenarioOk {
+				if scenario, ok := scenarioVal.(string); ok {
+					r.SetScenario(scenario)
+				}
+			}
+
+			// Enable streaming and create hooks
+			r.EnableStreaming()
+			onEvent, onComplete, onError := CreateRecordingHooks(r, protocol.TypeOpenAIChat)
+			if onEvent != nil {
+				hc.WithOnStreamEvent(onEvent)
+			}
+			if onComplete != nil {
+				hc.WithOnStreamComplete(onComplete)
+			}
+			if onError != nil {
+				hc.WithOnStreamError(onError)
+			}
+		}
+	}
 
 	usage, err := stream.HandleOpenAIChatStream(hc, streamResp, req)
 

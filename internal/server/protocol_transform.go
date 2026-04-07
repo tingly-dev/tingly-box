@@ -7,9 +7,16 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
+const (
+	// Extra key for V3 recorder in TransformContext
+	ExtraKeyV3Recorder = "v3_recorder"
+	// Extra key for scenario in TransformContext
+	ExtraKeyScenario = "scenario"
+)
+
+func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, recorder *UnifiedRecorder, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
 	// Build transform chain with recording support
-	chain, err := s.BuildTransformChain(c, target, provider.APIBase, nil, protocolRecorder)
+	chain, err := s.BuildTransformChain(c, target, provider.APIBase, nil, recorder)
 	if err != nil {
 		return nil, err
 	}
@@ -40,23 +47,23 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 	// Execute transform chain
 	finalCtx, err := chain.Execute(transformCtx)
 	if err != nil {
-		if protocolRecorder != nil {
-			protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
-			protocolRecorder.RecordError(err)
+		if recorder != nil {
+			recorder.AddTransformStep(finalCtx.TransformSteps...)
+			recorder.RecordError(err)
 		}
 		return nil, err
 	}
 
 	// Store transform steps in V2 recorder
-	if protocolRecorder != nil {
-		protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
+	if recorder != nil {
+		recorder.AddTransformStep(finalCtx.TransformSteps...)
 	}
 	return finalCtx, nil
 }
 
-func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
+func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, recorder *UnifiedRecorder, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
 	// Build transform chain with recording support
-	chain, err := s.BuildTransformChain(c, target, provider.APIBase, nil, protocolRecorder)
+	chain, err := s.BuildTransformChain(c, target, provider.APIBase, nil, recorder)
 	if err != nil {
 		return nil, err
 	}
@@ -87,23 +94,23 @@ func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMess
 	// Execute transform chain
 	finalCtx, err := chain.Execute(transformCtx)
 	if err != nil {
-		if protocolRecorder != nil {
-			protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
-			protocolRecorder.RecordError(err)
+		if recorder != nil {
+			recorder.AddTransformStep(finalCtx.TransformSteps...)
+			recorder.RecordError(err)
 		}
 		return nil, err
 	}
 
 	// Store transform steps in V2 recorder
-	if protocolRecorder != nil {
-		protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
+	if recorder != nil {
+		recorder.AddTransformStep(finalCtx.TransformSteps...)
 	}
 	return finalCtx, nil
 }
 
-func (s *Server) transformOpenAIChat(c *gin.Context, req protocol.OpenAIChatCompletionRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
+func (s *Server) transformOpenAIChat(c *gin.Context, req protocol.OpenAIChatCompletionRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, recorder *UnifiedRecorder, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
 	// Build transform chain with recording support
-	chain, err := s.BuildTransformChain(c, target, provider.APIBase, nil, protocolRecorder)
+	chain, err := s.BuildTransformChain(c, target, provider.APIBase, nil, recorder)
 	if err != nil {
 		return nil, err
 	}
@@ -134,23 +141,23 @@ func (s *Server) transformOpenAIChat(c *gin.Context, req protocol.OpenAIChatComp
 	// Execute transform chain
 	finalCtx, err := chain.Execute(transformCtx)
 	if err != nil {
-		if protocolRecorder != nil {
-			protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
-			protocolRecorder.RecordError(err)
+		if recorder != nil {
+			recorder.AddTransformStep(finalCtx.TransformSteps...)
+			recorder.RecordError(err)
 		}
 		return nil, err
 	}
 
 	// Store transform steps in V2 recorder
-	if protocolRecorder != nil {
-		protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
+	if recorder != nil {
+		recorder.AddTransformStep(finalCtx.TransformSteps...)
 	}
 	return finalCtx, nil
 }
 
-func (s *Server) transformOpenAIResponses(c *gin.Context, req protocol.ResponseCreateRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, maxAllowed int) (*transform.TransformContext, error) {
+func (s *Server) transformOpenAIResponses(c *gin.Context, req protocol.ResponseCreateRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, recorder *UnifiedRecorder, scenarioType typ.RuleScenario, maxAllowed int) (*transform.TransformContext, error) {
 	// Build transform chain with recording support
-	chain, err := s.BuildTransformChain(c, target, provider.APIBase, nil, protocolRecorder)
+	chain, err := s.BuildTransformChain(c, target, provider.APIBase, nil, recorder)
 	if err != nil {
 		return nil, err
 	}
@@ -182,16 +189,16 @@ func (s *Server) transformOpenAIResponses(c *gin.Context, req protocol.ResponseC
 	// Execute transform chain
 	finalCtx, err := chain.Execute(transformCtx)
 	if err != nil {
-		if protocolRecorder != nil {
-			protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
-			protocolRecorder.RecordError(err)
+		if recorder != nil {
+			recorder.AddTransformStep(finalCtx.TransformSteps...)
+			recorder.RecordError(err)
 		}
 		return nil, err
 	}
 
 	// Store transform steps in V2 recorder
-	if protocolRecorder != nil {
-		protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
+	if recorder != nil {
+		recorder.AddTransformStep(finalCtx.TransformSteps...)
 	}
 	return finalCtx, nil
 }

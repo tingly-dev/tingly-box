@@ -44,29 +44,6 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 		return
 	}
 
-	// Validate required fields
-	if param.IsOmitted(req.Model) || string(req.Model) == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Model is required",
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
-
-	// Check if input is provided (either string or array)
-	inputValue := protocol.GetInputValue(req.Input)
-	if inputValue == nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Input is required",
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
-
 	// Determine provider & model
 	var (
 		provider        *typ.Provider
@@ -85,9 +62,67 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 		return
 	}
 
+	// Start scenario-level recording (client -> tingly-box traffic) only if enabled
+	var recorder *ProtocolRecorder
+	if s.ApplyRecording(scenarioType) {
+		recorder = s.RecordScenarioRequest(c, scenario)
+		if recorder != nil {
+			// Store recorder in context for use in handlers
+			c.Set("scenario_recorder", recorder)
+		}
+	}
+
+	// Track whether we've successfully recorded a response or error
+	requestFailed := false
+	defer func() {
+		if recorder != nil {
+			if requestFailed {
+				// Error was already recorded at the error location
+				return
+			}
+			// Record successful response
+			recorder.RecordResponse(provider, req.Model)
+		}
+	}()
+
+	// Validate required fields
+	if param.IsOmitted(req.Model) || string(req.Model) == "" {
+		requestFailed = true
+		if recorder != nil {
+			recorder.RecordError(fmt.Errorf("model is required"))
+		}
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Model is required",
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Check if input is provided (either string or array)
+	inputValue := protocol.GetInputValue(req.Input)
+	if inputValue == nil {
+		requestFailed = true
+		if recorder != nil {
+			recorder.RecordError(fmt.Errorf("input is required"))
+		}
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Input is required",
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
 	// Check if this is the request model name first
 	rule, err = s.determineRuleWithScenario(c, scenarioType, req.Model)
 	if err != nil {
+		requestFailed = true
+		if recorder != nil {
+			recorder.RecordError(err)
+		}
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
@@ -100,6 +135,10 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	// Select service using routing pipeline
 	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, req)
 	if err != nil {
+		requestFailed = true
+		if recorder != nil {
+			recorder.RecordError(err)
+		}
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
@@ -134,8 +173,12 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 }
 
 func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, provider *typ.Provider, rule *typ.Rule, req protocol.ResponseCreateRequest, responseModel string, maxAllowed int) {
+	scenario := string(scenarioType)
 	actualModel := req.Model
 	isStreaming := req.Stream
+
+	// Create V3 recorder
+	s.SetupV3Recorder(c, scenarioType, scenario, protocol.TypeOpenAIResponses, provider, actualModel)
 
 	// Determine target API type based on provider API style
 	target := protocol.TypeOpenAIResponses

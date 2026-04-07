@@ -165,9 +165,36 @@ func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
 		return
 	}
 
+	// Start scenario-level recording (client -> tingly-box traffic) only if enabled
+	var recorder *ProtocolRecorder
+	if s.ApplyRecording(scenarioType) {
+		recorder = s.RecordScenarioRequest(c, scenario, protocol.APIStyleOpenAI)
+		if recorder != nil {
+			// Store recorder in context for use in handlers
+			c.Set("scenario_recorder", recorder)
+		}
+	}
+
+	// Track whether we've successfully recorded a response or error
+	requestFailed := false
+	defer func() {
+		if recorder != nil {
+			if requestFailed {
+				// Error was already recorded at the error location
+				return
+			}
+			// Record successful response
+			recorder.RecordResponse(provider, req.Model)
+		}
+	}()
+
 	// Check if this is the request model name first
 	rule, err = s.determineRuleWithScenario(c, scenarioType, req.Model)
 	if err != nil {
+		requestFailed = true
+		if recorder != nil {
+			recorder.RecordError(err)
+		}
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
@@ -180,6 +207,10 @@ func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
 	// Select service using routing pipeline
 	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, &req.ChatCompletionNewParams)
 	if err != nil {
+		requestFailed = true
+		if recorder != nil {
+			recorder.RecordError(err)
+		}
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
@@ -196,6 +227,11 @@ func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
 }
 
 func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCompletionRequest, responseModel string, provider *typ.Provider, scenarioType typ.RuleScenario, rule *typ.Rule) {
+	scenario := string(scenarioType)
+
+	// Create V3 recorder if recording is enabled
+	s.SetupV3Recorder(c, scenarioType, scenario, protocol.TypeOpenAIChat, provider, string(req.Model))
+
 	isStreaming := req.Stream
 	actualModel := req.Model
 	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)

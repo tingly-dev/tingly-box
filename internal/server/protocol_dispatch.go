@@ -22,6 +22,47 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// getV3RecorderFromContext extracts the V3 recorder from gin.Context or TransformContext.Extra
+func getV3RecorderFromContext(c *gin.Context, reqCtx *transform.TransformContext) *UnifiedRecorder {
+	// First try to get from gin context (set by handler)
+	if c != nil {
+		if recorder, exists := c.Get("unified_recorder_v3"); exists {
+			if r, ok := recorder.(*UnifiedRecorder); ok {
+				return r
+			}
+		}
+	}
+	// Fallback to TransformContext.Extra
+	if reqCtx != nil && reqCtx.Extra != nil {
+		if recorder, ok := reqCtx.Extra[ExtraKeyV3Recorder].(*UnifiedRecorder); ok {
+			return recorder
+		}
+	}
+	return nil
+}
+
+// getScenarioFromContext extracts the scenario from TransformContext.Extra
+func getScenarioFromContext(reqCtx *transform.TransformContext) string {
+	if reqCtx == nil || reqCtx.Extra == nil {
+		return ""
+	}
+	if scenario, ok := reqCtx.Extra[ExtraKeyScenario].(string); ok {
+		return scenario
+	}
+	return ""
+}
+
+// localHeaderToMap converts http.Header to map[string]string (local copy)
+func localHeaderToMap(h http.Header) map[string]string {
+	result := make(map[string]string)
+	for k, v := range h {
+		if len(v) > 0 {
+			result[k] = v[0]
+		}
+	}
+	return result
+}
+
 func (s *Server) dispatchChainResult(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
@@ -103,9 +144,31 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 			return nil
 		})
 
-		// Add recorder hooks if recorder is available
+		// Add V2 recorder hooks if recorder is available
 		if recorder != nil {
 			onEvent, onComplete, onError := NewRecorderHooksWithModel(recorder, actualModel, provider)
+			if onEvent != nil {
+				hc.WithOnStreamEvent(onEvent)
+			}
+			if onComplete != nil {
+				hc.WithOnStreamComplete(onComplete)
+			}
+			if onError != nil {
+				hc.WithOnStreamError(onError)
+			}
+		}
+
+		// Add V3 recorder hooks if available
+		v3Recorder := getV3RecorderFromContext(c, reqCtx)
+		if v3Recorder != nil {
+			// Update recorder info
+			v3Recorder.SetProvider(provider)
+			v3Recorder.SetModel(actualModel)
+			v3Recorder.SetScenario(getScenarioFromContext(reqCtx))
+
+			// Enable streaming and create hooks
+			v3Recorder.EnableStreaming()
+			onEvent, onComplete, onError := CreateRecordingHooks(v3Recorder, reqCtx.TargetAPI)
 			if onEvent != nil {
 				hc.WithOnStreamEvent(onEvent)
 			}
@@ -170,6 +233,28 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 			recorder.SetAssembledResponse(anthropicResp)
 			recorder.RecordResponse(provider, reqCtx.RequestModel)
 		}
+
+		// V3 recording for non-streaming response
+		v3Recorder := getV3RecorderFromContext(c, reqCtx)
+		if v3Recorder != nil {
+			// Convert response to map for recording
+			respMap := map[string]any{
+				"id":            string(anthropicResp.ID),
+				"type":          string(anthropicResp.Type),
+				"role":          string(anthropicResp.Role),
+				"content":       anthropicResp.Content,
+				"model":         string(anthropicResp.Model),
+				"stop_reason":   string(anthropicResp.StopReason),
+				"stop_sequence": anthropicResp.StopSequence,
+				"usage": map[string]any{
+					"input_tokens":  anthropicResp.Usage.InputTokens,
+					"output_tokens": anthropicResp.Usage.OutputTokens,
+				},
+			}
+			v3Recorder.SetNonStreamingResponse(200, localHeaderToMap(c.Writer.Header()), respMap)
+			v3Recorder.Finalize()
+		}
+
 		c.JSON(http.StatusOK, anthropicResp)
 	}
 }
@@ -792,6 +877,13 @@ func (s *Server) nonstreamOpenAIResponses(
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
+		// V3 error recording
+		if recorder, exists := c.Get("unified_recorder_v3"); exists {
+			if r, ok := recorder.(*UnifiedRecorder); ok {
+				r.SetError(err)
+				r.Finalize()
+			}
+		}
 		return
 	}
 
@@ -814,6 +906,8 @@ func (s *Server) nonstreamOpenAIResponses(
 				recorder.SetAssembledResponse(response)
 				recorder.RecordResponse(provider, reqCtx.RequestModel)
 			}
+			// V3 non-streaming recording
+			FinalizeV3NonStreamingRecording(c, provider, string(params.Model), responseMap)
 			c.JSON(http.StatusOK, responseMap)
 			return
 		}
@@ -823,6 +917,14 @@ func (s *Server) nonstreamOpenAIResponses(
 		recorder.SetAssembledResponse(response)
 		recorder.RecordResponse(provider, reqCtx.RequestModel)
 	}
+
+	// V3 non-streaming recording
+	responseJSON, _ := json.Marshal(response)
+	var responseMap map[string]any
+	if err := json.Unmarshal(responseJSON, &responseMap); err == nil {
+		FinalizeV3NonStreamingRecording(c, provider, string(params.Model), responseMap)
+	}
+
 	// Return response as-is
 	c.JSON(http.StatusOK, response)
 }
@@ -836,6 +938,30 @@ func (s *Server) streamOpenAIResponses(
 ) {
 	responseModel := reqCtx.ResponseModel
 	params := reqCtx.Request.(*responses.ResponseNewParams)
+
+	// Add V3 recording hooks
+	if recorder, exists := c.Get("unified_recorder_v3"); exists {
+		if r, ok := recorder.(*UnifiedRecorder); ok {
+			r.SetProvider(provider)
+			r.SetModel(string(params.Model))
+			if scenarioVal, scenarioOk := c.Get("scenario"); scenarioOk {
+				if scenario, ok := scenarioVal.(string); ok {
+					r.SetScenario(scenario)
+				}
+			}
+			r.EnableStreaming()
+			_, onComplete, onError := CreateRecordingHooks(r, protocol.TypeOpenAIResponses)
+			defer onComplete()
+			// Set error handler for tracking
+			if onError != nil {
+				defer func() {
+					if err := recover(); err != nil {
+						onError(fmt.Errorf("panic: %v", err))
+					}
+				}()
+			}
+		}
+	}
 
 	// Create streaming request with request context for proper cancellation
 	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
@@ -856,16 +982,53 @@ func (s *Server) streamOpenAIResponses(
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
+		// V3 error recording
+		if recorder, exists := c.Get("unified_recorder_v3"); exists {
+			if r, ok := recorder.(*UnifiedRecorder); ok {
+				r.SetError(err)
+				r.Finalize()
+			}
+		}
 		return
 	}
 
 	// Handle the streaming response
 	hc := protocol.NewHandleContext(c, responseModel)
 	firstTokenRecorded := false
-	hc.WithOnStreamEvent(func(_ interface{}) error {
+
+	// Add V3 onStreamEvent hook
+	var v3OnEvent func(event any) error
+	if recorder, exists := c.Get("unified_recorder_v3"); exists {
+		if r, ok := recorder.(*UnifiedRecorder); ok {
+			if r.assembler != nil {
+				v3OnEvent = func(event any) error {
+					// Record ResponseStreamEventUnion
+					if evt, ok := event.(*responses.ResponseStreamEventUnion); ok {
+						chunkJSON := []byte(evt.RawJSON())
+						var chunkData map[string]any
+						if err := json.Unmarshal(chunkJSON, &chunkData); err == nil {
+							eventType := ""
+							if t, ok := chunkData["type"].(string); ok {
+								eventType = t
+							}
+							r.RecordStreamChunk(eventType, chunkJSON, chunkData)
+							r.assembler.AddChunk(eventType, chunkJSON, chunkData)
+						}
+					}
+					return nil
+				}
+			}
+		}
+	}
+
+	hc.WithOnStreamEvent(func(evt interface{}) error {
 		if !firstTokenRecorded {
 			SetFirstTokenTime(c)
 			firstTokenRecorded = true
+		}
+		// Call V3 recording hook
+		if v3OnEvent != nil {
+			v3OnEvent(evt)
 		}
 		return nil
 	})
@@ -873,6 +1036,24 @@ func (s *Server) streamOpenAIResponses(
 
 	// Track usage from stream handler
 	s.trackUsageWithTokenUsage(c, usage, err)
+
+	// Finalize V3 recording after stream completes
+	if recorder, exists := c.Get("unified_recorder_v3"); exists {
+		if r, ok := recorder.(*UnifiedRecorder); ok {
+			if r.assembler != nil {
+				assembled := r.assembler.GetAssembled()
+				if assembled != nil {
+					r.SetAssembledResponse(assembled)
+				}
+			}
+			r.SetStatusCode(r.GetStatusCode())
+			r.SetHeaders(r.GetResponseHeaders())
+			if err != nil {
+				r.SetError(err)
+			}
+			r.Finalize()
+		}
+	}
 }
 
 // nonstreamOpenAIChatToResponses handles Chat → Responses conversion (non-streaming)
@@ -896,13 +1077,24 @@ func (s *Server) nonstreamOpenAIChatToResponses(
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
+		// V3 error recording
+		if recorder, exists := c.Get("unified_recorder_v3"); exists {
+			if r, ok := recorder.(*UnifiedRecorder); ok {
+				r.SetError(err)
+				r.Finalize()
+			}
+		}
 		return
 	}
 	inputTokens := chatResp.Usage.PromptTokens
 	outputTokens := chatResp.Usage.CompletionTokens
 	cacheTokens := chatResp.Usage.PromptTokensDetails.CachedTokens
 	s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil)
-	c.JSON(http.StatusOK, buildResponsesPayloadFromChat(chatResp, responseModel, reqCtx.RequestModel))
+
+	responsesPayload := buildResponsesPayloadFromChat(chatResp, responseModel, reqCtx.RequestModel)
+	// V3 non-streaming recording
+	FinalizeV3NonStreamingRecording(c, provider, string(chatReq.Model), responsesPayload)
+	c.JSON(http.StatusOK, responsesPayload)
 }
 
 // streamOpenAIChatToResponses handles Chat → Responses conversion (streaming)

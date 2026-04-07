@@ -625,3 +625,58 @@ func (s *Server) RecordScenarioRequestV3(
 ) *UnifiedRecorder {
 	return s.StartUnifiedRecordingV3(c, scenario, targetAPIType, provider, model)
 }
+
+// ===================================================================
+// V3 Recording Helper Functions
+// ===================================================================
+
+// SetupV3Recorder initializes and stores a V3 recorder in the gin context
+// This is a convenience function to reduce code duplication across handlers
+func (s *Server) SetupV3Recorder(
+	c *gin.Context,
+	scenarioType typ.RuleScenario,
+	scenario string,
+	targetAPIType protocol.APIType,
+	provider *typ.Provider,
+	model string,
+) *UnifiedRecorder {
+	if !s.ApplyRecording(scenarioType) {
+		return nil
+	}
+
+	recorder := s.StartUnifiedRecordingV3(c, scenario, targetAPIType, provider, model)
+	if recorder != nil {
+		c.Set("unified_recorder_v3", recorder)
+		c.Set("scenario", scenario)
+	}
+	return recorder
+}
+
+// FinalizeV3NonStreamingRecording finalizes a V3 recorder with a non-streaming response
+// This is a convenience function to reduce code duplication across handlers
+func FinalizeV3NonStreamingRecording(
+	c *gin.Context,
+	provider *typ.Provider,
+	model string,
+	responseMap map[string]any,
+) {
+	recorder, exists := c.Get("unified_recorder_v3")
+	if !exists {
+		return
+	}
+
+	r, ok := recorder.(*UnifiedRecorder)
+	if !ok {
+		return
+	}
+
+	r.SetProvider(provider)
+	r.SetModel(model)
+	if scenarioVal, ok := c.Get("scenario"); ok {
+		if scenario, ok := scenarioVal.(string); ok {
+			r.SetScenario(scenario)
+		}
+	}
+	r.SetNonStreamingResponse(200, localHeaderToMap(c.Writer.Header()), responseMap)
+	r.Finalize()
+}

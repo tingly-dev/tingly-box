@@ -17,10 +17,8 @@ import (
 
 // AnthropicMessagesV1 implements standard v1 messages API
 func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, provider *typ.Provider, actualModel string, rule *typ.Rule) {
-	// Get or create recorder for dual-stage recording (when V2 flag is enabled)
-	var recorder *ProtocolRecorder
 	scenarioType := rule.GetScenario()
-	recorder = s.GetOrCreateScenarioRecorderV2(c, string(scenarioType), provider, actualModel, s.recordMode)
+	scenario := string(scenarioType)
 
 	// Check if streaming is requested
 	isStreaming := req.Stream
@@ -90,6 +88,9 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		}
 	}
 
+	// Get or create V3 recorder if recording is enabled
+	recorder := s.SetupV3Recorder(c, scenarioType, scenario, protocol.TypeAnthropicV1, provider, actualModel)
+
 	reqCtx, err := s.transformAnthropicV1(c, req, target, provider, isStreaming, recorder, scenarioType)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -102,7 +103,8 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	reqCtx.RequestModel = actualModel
 	reqCtx.ResponseModel = proxyModel
 
-	s.dispatchChainResult(c, reqCtx, rule, provider, isStreaming, recorder)
+	// Pass nil for V2 recorder since V3 recorder is stored in gin context
+	s.dispatchChainResult(c, reqCtx, rule, provider, isStreaming, nil)
 }
 
 // handleAnthropicV1ViaResponsesAPINonStreaming handles non-streaming Responses API request for v1
