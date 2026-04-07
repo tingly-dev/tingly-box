@@ -11,6 +11,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 
@@ -19,7 +20,9 @@ import (
 
 // RecordScenarioRequest records the scenario-level request (client -> tingly-box)
 // This captures the original request from the client before any transformation
-func (s *Server) RecordScenarioRequest(c *gin.Context, scenario string) *ProtocolRecorder {
+// DEPRECATED: Use StartUnifiedRecordingV3 for new V3 recordings
+// The apiStyle parameter is currently ignored (for V2 compatibility)
+func (s *Server) RecordScenarioRequest(c *gin.Context, scenario string, apiStyle ...protocol.APIStyle) *ProtocolRecorder {
 	scenarioType := typ.RuleScenario(scenario)
 
 	// Get or create sink for this scenario (on-demand)
@@ -577,4 +580,48 @@ func NewNonStreamRecorderHook(recorder *ScenarioRecorder, provider *typ.Provider
 	return func() {
 		recorder.RecordResponse(provider, model)
 	}
+}
+
+// ===================================================================
+// V3 Recording Methods (New Unified Recording System)
+// ===================================================================
+
+// StartUnifiedRecordingV3 starts a new V3 unified recorder
+// This replaces RecordScenarioRequest for new V3 recordings
+func (s *Server) StartUnifiedRecordingV3(
+	c *gin.Context,
+	scenario string,
+	targetAPIType protocol.APIType,
+	provider *typ.Provider,
+	model string,
+) *UnifiedRecorder {
+	// Get sink for this scenario
+	scenarioType := typ.RuleScenario(scenario)
+	sink := s.GetOrCreateScenarioSink(scenarioType)
+	if sink == nil {
+		return nil
+	}
+
+	recorder := NewUnifiedRecorder(c, scenario, targetAPIType, provider, model)
+	recorder.SetSink(sink)
+
+	// Record the original request from context
+	if err := recorder.RecordRequestFromContext(); err != nil {
+		logrus.Debugf("Failed to record original request: %v", err)
+	}
+
+	return recorder
+}
+
+// RecordScenarioRequestV3 is a convenience wrapper that creates a V3 recorder
+// from a scenario string and API style (for backward compatibility during migration)
+func (s *Server) RecordScenarioRequestV3(
+	c *gin.Context,
+	scenario string,
+	apiStyle protocol.APIStyle,
+	targetAPIType protocol.APIType,
+	provider *typ.Provider,
+	model string,
+) *UnifiedRecorder {
+	return s.StartUnifiedRecordingV3(c, scenario, targetAPIType, provider, model)
 }

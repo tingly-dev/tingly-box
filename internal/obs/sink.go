@@ -63,6 +63,7 @@ type RecordResponse struct {
 // - Transformed request (after protocol conversion)
 // - Provider response (raw response from provider)
 // - Final response (after reverse transformation, if applicable)
+// DEPRECATED: Use RecordEntryV3 instead
 type RecordEntryV2 struct {
 	Timestamp string `json:"timestamp"`
 	RequestID string `json:"request_id"`
@@ -82,6 +83,58 @@ type RecordEntryV2 struct {
 	Error          string                 `json:"error,omitempty"`
 	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 	TransformSteps []string               `json:"transform_steps,omitempty"` // Applied transforms
+}
+
+// StreamChunk represents a single streaming chunk
+type StreamChunk struct {
+	Type      string         `json:"type"`             // Event type: "chunk", "message_delta", etc.
+	Data      string         `json:"data"`             // Raw SSE data
+	Parsed    map[string]any `json:"parsed,omitempty"` // Parsed JSON
+	Timestamp string         `json:"timestamp"`
+}
+
+// RecordResponseV3 represents the HTTP response details for V3 recording
+type RecordResponseV3 struct {
+	StatusCode int               `json:"status_code"`
+	Headers    map[string]string `json:"headers"`
+
+	// For streaming responses
+	IsStreaming   bool           `json:"is_streaming,omitempty"`
+	StreamChunks  []StreamChunk  `json:"stream_chunks,omitempty"`  // Raw chunks
+	AssembledBody map[string]any `json:"assembled_body,omitempty"` // After assembly
+
+	// For non-streaming responses
+	Body map[string]any `json:"body,omitempty"`
+}
+
+// RecordEntryV3 represents a V3 recorded entry with enhanced recording
+// Dimensions: scenario + target_api_type + provider
+// Captures: original request, transformed request, provider response, final response
+type RecordEntryV3 struct {
+	// Metadata
+	Timestamp  string `json:"timestamp"`
+	RequestID  string `json:"request_id"`
+	DurationMs int64  `json:"duration_ms"`
+
+	// Routing dimensions
+	Scenario      string `json:"scenario"`        // openai, anthropic, claude_code
+	TargetAPIType string `json:"target_api_type"` // openai_chat, anthropic_v1, etc.
+	Provider      string `json:"provider"`        // Provider name
+	Model         string `json:"model"`           // Requested model
+
+	// Request stages
+	OriginalRequest    *RecordRequest `json:"original_request,omitempty"`
+	TransformedRequest *RecordRequest `json:"transformed_request,omitempty"`
+
+	// Response stages
+	ProviderResponse *RecordResponseV3 `json:"provider_response,omitempty"`
+	FinalResponse    *RecordResponseV3 `json:"final_response,omitempty"`
+
+	// Error handling
+	Error string `json:"error,omitempty"`
+
+	// Transform metadata
+	TransformSteps []string `json:"transform_steps,omitempty"`
 }
 
 // Sink manages recording of HTTP requests/responses to JSONL files
@@ -350,6 +403,7 @@ func (r *Sink) GetBaseDir() string {
 
 // RecordEntryV2 records a V2 entry with dual-stage request/response recording
 // This is used for protocol conversion scenarios where we need to capture requests at multiple stages
+// DEPRECATED: Use RecordEntryV3 instead
 func (r *Sink) RecordEntryV2(entry *RecordEntryV2) {
 	if r == nil || r.mode == "" {
 		return
@@ -398,5 +452,64 @@ func (r *Sink) RecordEntryV2(entry *RecordEntryV2) {
 	// Write entry as JSONL (one JSON object per line)
 	if err := rf.writer.Encode(entry); err != nil {
 		logrus.Errorf("Failed to write V2 record entry: %v", err)
+	}
+}
+
+// RecordEntryV3 records a V3 entry with enhanced recording
+// File path: {baseDir}/{scenario}/{target_api_type}/{date}/{hour}.jsonl
+func (r *Sink) RecordEntryV3(entry *RecordEntryV3) {
+	if r == nil || r.mode == "" {
+		return
+	}
+
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	// Get current date and hour for hierarchical structure
+	currentDate := time.Now().UTC().Format("2006-01-02")
+	currentHour := time.Now().UTC().Format("15")
+
+	// Build hierarchical path: {scenario}/{target_api_type}/{date}/{hour}.jsonl
+	// Example: openai/openai_chat/2025-04-07/14.jsonl
+	relativePath := filepath.Join(entry.Scenario, entry.TargetAPIType, currentDate, currentHour+".jsonl")
+
+	// Use full relative path as file key
+	fileKey := relativePath
+
+	// Get or create file for this path
+	rf, exists := r.fileMap[fileKey]
+	if !exists || rf.currentHour != currentHour {
+		// Close old file if hour changed
+		if exists && rf.currentHour != currentHour {
+			r.closeFile(rf)
+		}
+
+		// Create full path
+		fullPath := filepath.Join(r.baseDir, relativePath)
+
+		// Ensure parent directories exist
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+			logrus.Errorf("Failed to create recording directories: %v", err)
+			return
+		}
+
+		// Create new file
+		file, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0640)
+		if err != nil {
+			logrus.Errorf("Failed to open V3 record file %s: %v", fullPath, err)
+			return
+		}
+
+		rf = &recordFile{
+			file:        file,
+			writer:      json.NewEncoder(file),
+			currentHour: currentHour,
+		}
+		r.fileMap[fileKey] = rf
+	}
+
+	// Write entry as JSONL (one JSON object per line)
+	if err := rf.writer.Encode(entry); err != nil {
+		logrus.Errorf("Failed to write V3 record entry: %v", err)
 	}
 }
