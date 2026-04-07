@@ -631,6 +631,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.mcpRuntime = mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig {
 		return cfg.GetMCPRuntimeConfig()
 	})
+	if err := mcpruntime.EnsureBuiltinScripts(cfg.ConfigDir); err != nil {
+		logrus.WithError(err).Warn("mcp: failed to ensure builtin scripts in config dir")
+	}
 
 	// Initialize probe cache with 24-hour TTL
 	server.probeCache = NewProbeCache(24 * time.Hour)

@@ -797,7 +797,7 @@ export const api = {
         createBackup?: boolean;
         dryRun?: boolean;
     } = {}): Promise<any> => {
-        return fetchUIAPI('/codex/import/openai', {
+        return uiAPI('/codex/import/openai', {
             method: 'POST',
             body: JSON.stringify(payload),
         });
@@ -1471,7 +1471,7 @@ export const api = {
 
     // Get MCP runtime config
     getMCPConfig: async (): Promise<any> => {
-        return fetchUIAPI('/mcp/config', {
+        return uiAPI('/mcp/config', {
             method: 'GET',
         });
     },
@@ -1491,11 +1491,10 @@ export const api = {
         }>;
         request_timeout?: number;
     }): Promise<any> => {
-        return fetchUIAPI('/mcp/config', {
+        return uiAPI('/mcp/config', {
             method: 'PUT',
             body: JSON.stringify(config),
         });
-    },
     },
 };
 

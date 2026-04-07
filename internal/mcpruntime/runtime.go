@@ -3,6 +3,7 @@ package mcpruntime
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -75,7 +76,12 @@ func (r *Runtime) ListOpenAITools(ctx context.Context) []openai.ChatCompletionTo
 
 		ss, _, err := r.sc.getOrCreate(ctx, source, time.Duration(cfg.RequestTimeout)*time.Second)
 		if err != nil {
-			logrus.WithError(err).Warnf("mcp: connect failed for source=%s", source.ID)
+			logrus.WithFields(logrus.Fields{
+				"source":    source.ID,
+				"transport": transport,
+				"error":     err.Error(),
+				"err_type":  fmt.Sprintf("%T", err),
+			}).Warn("mcp: connect failed")
 			continue
 		}
 
@@ -86,7 +92,12 @@ func (r *Runtime) ListOpenAITools(ctx context.Context) []openai.ChatCompletionTo
 			return ss.listTools(ctx)
 		}()
 		if err != nil {
-			logrus.WithError(err).Warnf("mcp: list tools failed for source=%s", source.ID)
+			logrus.WithFields(logrus.Fields{
+				"source":    source.ID,
+				"transport": transport,
+				"error":     err.Error(),
+				"err_type":  fmt.Sprintf("%T", err),
+			}).Warn("mcp: list tools failed")
 			continue
 		}
 

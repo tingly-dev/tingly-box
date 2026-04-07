@@ -278,7 +278,7 @@ const MCPSourceEditor = ({
                     <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>Tools</Typography>
                     <TextField
                         fullWidth
-                        placeholder="* or web_search web_fetch"
+                        placeholder="* or mcp_web_search mcp_web_fetch"
                         value={value.tools.join(' ')}
                         onChange={(e) => set({ tools: e.target.value.split(/\s+/).filter(Boolean) })}
                     />

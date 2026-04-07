@@ -104,7 +104,7 @@ tasks:
         python -m tests.test_automation
 
   mcp:web-tools:
-    summary: Run local MCP stdio server exposing web_search/web_fetch tools
+    summary: Run local MCP stdio server exposing mcp_web_search/mcp_web_fetch tools
     cmds:
       - |
         python3 ./scripts/mcp_web_tools.py

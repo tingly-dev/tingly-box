@@ -158,7 +158,7 @@ const MCPCustom = () => {
         <PageLayout>
             <Stack spacing={2.5}>
                 <Alert severity="info">
-                    Custom MCP supports local stdio and remote streamable HTTP servers. Builtin web_search/web_fetch stays in Builtin tab.
+                    Custom MCP supports local stdio and remote streamable HTTP servers. Builtin mcp_web_search/mcp_web_fetch stays in Builtin tab.
                 </Alert>
 
                 <UnifiedCard

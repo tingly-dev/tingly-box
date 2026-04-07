@@ -178,6 +178,7 @@ func (s *Server) handleMCPToolCalls(ctx context.Context, provider *typ.Provider,
 		for _, tc := range resp.Choices[0].Message.ToolCalls {
 			result, err := s.mcpRuntime.CallTool(ctx, tc.Function.Name, tc.Function.Arguments)
 			if err != nil {
+				logrus.WithError(err).Warnf("mcp: openai tool call failed name=%s arguments=%s", tc.Function.Name, tc.Function.Arguments)
 				result = fmt.Sprintf(`{"error":"%s"}`, err.Error())
 			}
 			newMessages = append(newMessages, openai.ToolMessage(result, tc.ID))
@@ -185,6 +186,7 @@ func (s *Server) handleMCPToolCalls(ctx context.Context, provider *typ.Provider,
 
 		followUpReq := *originalReq
 		followUpReq.Messages = newMessages
+		followUpReq.StreamOptions = openai.ChatCompletionStreamOptionsParam{}
 		followUpReq = *s.injectMCPToolsIntoOpenAIRequest(ctx, &followUpReq)
 
 		wrapper := s.clientPool.GetOpenAIClient(provider, string(followUpReq.Model))
@@ -202,9 +204,12 @@ func (s *Server) handleMCPToolCalls(ctx context.Context, provider *typ.Provider,
 func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
 	req := s.injectMCPToolsIntoOpenAIRequest(c.Request.Context(), originalReq)
 	if hasDeclaredMCPTools(req) {
+		reqForMCP := *req
+		reqForMCP.StreamOptions = openai.ChatCompletionStreamOptionsParam{}
+
 		wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
 		fc := NewForwardContext(nil, provider)
-		resp, _, err := ForwardOpenAIChat(fc, wrapper, req)
+		resp, _, err := ForwardOpenAIChat(fc, wrapper, &reqForMCP)
 		if err != nil {
 			usage := protocol.NewTokenUsageWithCache(0, 0, 0)
 			s.trackUsageWithTokenUsage(c, usage, err)
@@ -218,7 +223,7 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 		}
 
 		if len(resp.Choices) > 0 && len(resp.Choices[0].Message.ToolCalls) > 0 && hasOnlyMCPToolCalls(resp.Choices[0].Message.ToolCalls) {
-			resp, err = s.handleMCPToolCalls(c.Request.Context(), provider, req, resp)
+			resp, err = s.handleMCPToolCalls(c.Request.Context(), provider, &reqForMCP, resp)
 			if err != nil {
 				usage := protocol.NewTokenUsageWithCache(0, 0, 0)
 				s.trackUsageWithTokenUsage(c, usage, err)

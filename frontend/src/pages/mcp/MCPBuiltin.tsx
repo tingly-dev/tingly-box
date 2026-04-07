@@ -31,7 +31,7 @@ const defaultBuiltinForm = (): MCPSourceFormValue => ({
     transport: 'stdio',
     command: 'python3',
     args: ['mcp_web_tools.py'],
-    tools: ['web_search', 'web_fetch'],
+    tools: ['mcp_web_search', 'mcp_web_fetch'],
     envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'],
     useGlobalProxy: true,
 });
@@ -80,8 +80,8 @@ const MCPBuiltin = () => {
         }
         const mapped = sourceToFormValue(builtinSource);
         const tools = mapped.tools || [];
-        setEnableSearch(tools.includes('*') || tools.includes('web_search'));
-        setEnableFetch(tools.includes('*') || tools.includes('web_fetch'));
+        setEnableSearch(tools.includes('*') || tools.includes('mcp_web_search'));
+        setEnableFetch(tools.includes('*') || tools.includes('mcp_web_fetch'));
         setForm({ ...mapped, id: 'webtools', cwd: MCP_DEFAULT_CWD });
         setEditorMode('edit');
     };
@@ -104,8 +104,8 @@ const MCPBuiltin = () => {
         let next = [...allSources];
         if (editorMode !== 'none') {
             const tools: string[] = [];
-            if (enableSearch) tools.push('web_search');
-            if (enableFetch) tools.push('web_fetch');
+            if (enableSearch) tools.push('mcp_web_search');
+            if (enableFetch) tools.push('mcp_web_fetch');
             if (tools.length === 0) {
                 setNotification({ open: true, message: 'At least one tool must be enabled', severity: 'error' });
                 return;
@@ -140,7 +140,7 @@ const MCPBuiltin = () => {
         <PageLayout>
             <Stack spacing={2.5}>
                 <Alert severity="info">
-                    Builtin MCP keeps web_search/web_fetch in one server. Click Add/Edit to open the same connection form used by Custom.
+                    Builtin MCP keeps mcp_web_search/mcp_web_fetch in one server. Click Add/Edit to open the same connection form used by Custom.
                 </Alert>
 
                 <UnifiedCard title="Builtin MCP Servers" size="full">
@@ -195,11 +195,11 @@ const MCPBuiltin = () => {
                         <Stack direction="row" spacing={2}>
                             <FormControlLabel
                                 control={<Checkbox checked={enableSearch} onChange={(e) => setEnableSearch(e.target.checked)} />}
-                                label="web_search"
+                                label="mcp_web_search"
                             />
                             <FormControlLabel
                                 control={<Checkbox checked={enableFetch} onChange={(e) => setEnableFetch(e.target.checked)} />}
-                                label="web_fetch"
+                                label="mcp_web_fetch"
                             />
                         </Stack>
 

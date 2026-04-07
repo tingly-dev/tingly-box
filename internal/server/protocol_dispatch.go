@@ -753,6 +753,68 @@ func (s *Server) dispatchChainFromOpenAIChat(
 	if isStreaming {
 		switch reqCtx.SourceAPI {
 		case protocol.TypeAnthropicV1:
+			if hasDeclaredMCPTools(req) {
+				reqForMCP := *req
+				// This branch intentionally uses non-stream forwarding to execute
+				// server-side MCP tool loop, so stream-only options must be omitted.
+				reqForMCP.StreamOptions = openai.ChatCompletionStreamOptionsParam{}
+
+				wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
+				fc := NewForwardContext(nil, provider)
+				resp, _, err := ForwardOpenAIChat(fc, wrapper, &reqForMCP)
+				if err != nil {
+					stream.SendStreamingError(c, err)
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
+				resp, err = s.handleMCPToolCalls(c.Request.Context(), provider, &reqForMCP, resp)
+				if err != nil {
+					stream.SendStreamingError(c, err)
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
+
+				usage := protocol.NewTokenUsageWithCache(
+					int(resp.Usage.PromptTokens),
+					int(resp.Usage.CompletionTokens),
+					int(resp.Usage.PromptTokensDetails.CachedTokens),
+				)
+				s.trackUsageWithTokenUsage(c, usage, nil)
+
+				betaResp := nonstream.ConvertOpenAIToAnthropicResponse(resp, responseModel)
+				s.updateAffinityMessageID(c, rule, string(betaResp.ID))
+				var v1Resp anthropic.Message
+				if b, err := json.Marshal(betaResp); err != nil {
+					stream.SendInternalError(c, err.Error())
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				} else if err := json.Unmarshal(b, &v1Resp); err != nil {
+					stream.SendInternalError(c, err.Error())
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
+				if err := stream.StreamAnthropicV1SingleMessage(c, &v1Resp, responseModel); err != nil {
+					stream.SendInternalError(c, err.Error())
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
+				if recorder != nil {
+					recorder.SetAssembledResponse(betaResp)
+					recorder.RecordResponse(provider, actualModel)
+				}
+				return
+			}
+
 			wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
 			fc := NewForwardContext(c.Request.Context(), provider)
 			streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, req)
@@ -778,6 +840,54 @@ func (s *Server) dispatchChainFromOpenAIChat(
 			}
 			s.trackUsageWithTokenUsage(c, usage, nil)
 		case protocol.TypeAnthropicBeta:
+			if hasDeclaredMCPTools(req) {
+				reqForMCP := *req
+				// This branch intentionally uses non-stream forwarding to execute
+				// server-side MCP tool loop, so stream-only options must be omitted.
+				reqForMCP.StreamOptions = openai.ChatCompletionStreamOptionsParam{}
+
+				wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
+				fc := NewForwardContext(nil, provider)
+				resp, _, err := ForwardOpenAIChat(fc, wrapper, &reqForMCP)
+				if err != nil {
+					stream.SendStreamingError(c, err)
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
+				resp, err = s.handleMCPToolCalls(c.Request.Context(), provider, &reqForMCP, resp)
+				if err != nil {
+					stream.SendStreamingError(c, err)
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
+
+				usage := protocol.NewTokenUsageWithCache(
+					int(resp.Usage.PromptTokens),
+					int(resp.Usage.CompletionTokens),
+					int(resp.Usage.PromptTokensDetails.CachedTokens),
+				)
+				s.trackUsageWithTokenUsage(c, usage, nil)
+
+				anthropicResp := nonstream.ConvertOpenAIToAnthropicBetaResponse(resp, responseModel)
+				s.updateAffinityMessageID(c, rule, anthropicResp.ID)
+				if err := stream.StreamAnthropicBetaSingleMessage(c, &anthropicResp, responseModel); err != nil {
+					stream.SendInternalError(c, err.Error())
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
+				if recorder != nil {
+					recorder.SetAssembledResponse(&anthropicResp)
+					recorder.RecordResponse(provider, actualModel)
+				}
+				return
+			}
+
 			streamRec := newStreamRecorder(recorder)
 			if streamRec != nil {
 				streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
@@ -853,6 +963,16 @@ func (s *Server) dispatchChainFromOpenAIChat(
 				recorder.RecordError(err)
 			}
 			return
+		}
+		if hasDeclaredMCPTools(req) {
+			resp, err = s.handleMCPToolCalls(c.Request.Context(), provider, req, resp)
+			if err != nil {
+				stream.SendForwardingError(c, err)
+				if recorder != nil {
+					recorder.RecordError(err)
+				}
+				return
+			}
 		}
 
 		inputTokens := int(resp.Usage.PromptTokens)

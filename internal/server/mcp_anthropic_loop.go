@@ -8,6 +8,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/mcpruntime"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
@@ -78,6 +79,7 @@ func (s *Server) handleAnthropicV1MCPToolCalls(
 			}
 			result, err := s.mcpRuntime.CallTool(ctx, tu.Name, arguments)
 			if err != nil {
+				logrus.WithError(err).Warnf("mcp: tool call failed name=%s arguments=%s", tu.Name, arguments)
 				result = fmt.Sprintf(`{"error":"%s"}`, err.Error())
 			}
 			toolResults = append(toolResults, anthropic.NewToolResultBlock(tu.ID, result, err != nil))
@@ -167,6 +169,7 @@ func (s *Server) handleAnthropicBetaMCPToolCalls(
 			}
 			result, err := s.mcpRuntime.CallTool(ctx, tu.Name, arguments)
 			if err != nil {
+				logrus.WithError(err).Warnf("mcp: beta tool call failed name=%s arguments=%s", tu.Name, arguments)
 				result = fmt.Sprintf(`{"error":"%s"}`, err.Error())
 			}
 			toolResults = append(toolResults, anthropic.NewBetaToolResultBlock(tu.ID, result, err != nil))

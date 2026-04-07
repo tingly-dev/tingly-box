@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
 MCP stdio server that exposes two tools:
-  - web_search: search via Serper API
-  - web_fetch: fetch page content via Jina Reader
+  - mcp_web_search: search via Serper API
+  - mcp_web_fetch: fetch page content via Jina Reader
 
 Environment variables:
-  - SERPER_API_KEY   required for web_search
-  - JINA_API_KEY     optional for web_fetch
+  - SERPER_API_KEY   required for mcp_web_search
+  - JINA_API_KEY     optional for mcp_web_fetch
 """
 
 from __future__ import annotations
@@ -25,46 +25,40 @@ from typing import Any, Dict, List, Optional, Tuple
 JSONRPC_VERSION = "2.0"
 
 TOOL_WEB_SEARCH = {
-    "name": "web_search",
+    "name": "mcp_web_search",
     "description": "Search web pages with Serper and return top organic results.",
     "inputSchema": {
         "type": "object",
         "properties": {
             "query": {"type": "string", "description": "Search query."},
-            "num_results": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 10,
-                "default": 5,
-                "description": "Max result count.",
+            "allowed_domains": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Optional domain allow list.",
             },
-            "gl": {"type": "string", "description": "Country code, e.g. us."},
-            "hl": {"type": "string", "description": "Language code, e.g. en."},
+            "blocked_domains": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Optional domain block list.",
+            },
         },
         "required": ["query"],
     },
 }
 
 TOOL_WEB_FETCH = {
-    "name": "web_fetch",
+    "name": "mcp_web_fetch",
     "description": "Fetch and convert a URL to markdown-like text via Jina Reader.",
     "inputSchema": {
         "type": "object",
         "properties": {
             "url": {"type": "string", "description": "Target URL."},
-            "query": {
+            "prompt": {
                 "type": "string",
-                "description": "Optional focus question for local snippet extraction.",
-            },
-            "max_chars": {
-                "type": "integer",
-                "minimum": 256,
-                "maximum": 100000,
-                "default": 12000,
-                "description": "Max output characters.",
+                "description": "Extraction instruction for content focus.",
             },
         },
-        "required": ["url"],
+        "required": ["url", "prompt"],
     },
 }
 
@@ -138,7 +132,30 @@ def _safe_int(v: Any, default: int) -> int:
         return default
 
 
+def _require_allowed_keys(args: Dict[str, Any], allowed: set[str]) -> None:
+    unknown = [k for k in args.keys() if k not in allowed]
+    if unknown:
+        raise ValueError(f"unsupported argument(s): {', '.join(sorted(unknown))}")
+
+
+def _as_string_list(v: Any, key: str) -> List[str]:
+    if v is None:
+        return []
+    if not isinstance(v, list):
+        raise ValueError(f"{key} must be an array of strings")
+    out: List[str] = []
+    for item in v:
+        if not isinstance(item, str):
+            raise ValueError(f"{key} must be an array of strings")
+        s = item.strip()
+        if s:
+            out.append(s)
+    return out
+
+
 def tool_web_search(args: Dict[str, Any]) -> Dict[str, Any]:
+    _require_allowed_keys(args, {"query", "allowed_domains", "blocked_domains"})
+
     query = str(args.get("query", "")).strip()
     if not query:
         raise ValueError("query is required")
@@ -147,19 +164,17 @@ def tool_web_search(args: Dict[str, Any]) -> Dict[str, Any]:
     if not api_key:
         raise ValueError("SERPER_API_KEY is not set")
 
-    num_results = _safe_int(args.get("num_results"), 5)
-    if num_results < 1:
-        num_results = 1
-    if num_results > 10:
-        num_results = 10
+    allowed_domains = _as_string_list(args.get("allowed_domains"), "allowed_domains")
+    blocked_domains = _as_string_list(args.get("blocked_domains"), "blocked_domains")
 
-    payload: Dict[str, Any] = {"q": query, "num": num_results}
-    gl = str(args.get("gl", "")).strip()
-    hl = str(args.get("hl", "")).strip()
-    if gl:
-        payload["gl"] = gl
-    if hl:
-        payload["hl"] = hl
+    final_query = query
+    if allowed_domains:
+        allow_expr = " OR ".join(f"site:{d}" for d in allowed_domains)
+        final_query = f"{final_query} ({allow_expr})"
+    for d in blocked_domains:
+        final_query = f"{final_query} -site:{d}"
+
+    payload: Dict[str, Any] = {"q": final_query, "num": 5}
 
     resp = _http_json_post(
         "https://google.serper.dev/search",
@@ -178,8 +193,11 @@ def tool_web_search(args: Dict[str, Any]) -> Dict[str, Any]:
         )
 
     structured = {
-        "tool": "web_search",
+        "tool": "mcp_web_search",
         "query": query,
+        "effective_query": final_query,
+        "allowed_domains": allowed_domains,
+        "blocked_domains": blocked_domains,
         "result_count": len(results),
         "results": results,
     }
@@ -235,6 +253,8 @@ def _fetch_direct(url: str) -> str:
 
 
 def tool_web_fetch(args: Dict[str, Any]) -> Dict[str, Any]:
+    _require_allowed_keys(args, {"url", "prompt"})
+
     url = str(args.get("url", "")).strip()
     if not url:
         raise ValueError("url is required")
@@ -242,11 +262,11 @@ def tool_web_fetch(args: Dict[str, Any]) -> Dict[str, Any]:
     if parsed.scheme not in ("http", "https"):
         raise ValueError("url must be http/https")
 
-    max_chars = _safe_int(args.get("max_chars"), 12000)
-    if max_chars < 256:
-        max_chars = 256
-    if max_chars > 100000:
-        max_chars = 100000
+    prompt = str(args.get("prompt", "")).strip()
+    if not prompt:
+        raise ValueError("prompt is required")
+
+    max_chars = 12000
 
     headers = {
         "Content-Type": "application/json",
@@ -270,14 +290,13 @@ def tool_web_fetch(args: Dict[str, Any]) -> Dict[str, Any]:
         content = content[:max_chars]
         truncated = True
 
-    query = str(args.get("query", "")).strip()
-    snippets = _extract_snippets(content, query) if query else []
+    snippets = _extract_snippets(content, prompt)
 
     structured = {
-        "tool": "web_fetch",
+        "tool": "mcp_web_fetch",
         "url": url,
         "source": source,
-        "query": query,
+        "prompt": prompt,
         "truncated": truncated,
         "content": content,
     }
@@ -326,9 +345,9 @@ def handle_request(req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if not isinstance(arguments, dict):
             return err(rid, -32602, "arguments must be an object")
         try:
-            if name == "web_search":
+            if name == "mcp_web_search":
                 result = tool_web_search(arguments)
-            elif name == "web_fetch":
+            elif name == "mcp_web_fetch":
                 result = tool_web_fetch(arguments)
             else:
                 return err(rid, -32601, f"tool not found: {name}")
