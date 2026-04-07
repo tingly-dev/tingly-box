@@ -275,7 +275,7 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 	}
 	if cfg.UserToken == "" {
 		// Generate secure random token instead of using default
-		userToken, err := GenerateSecureToken()
+		userToken, err := GenerateUserToken()
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to generate secure user token, using default")
 			cfg.UserToken = constant.DefaultUserToken

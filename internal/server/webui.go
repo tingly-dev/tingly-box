@@ -397,7 +397,7 @@ func (s *Server) GetUserToken(c *gin.Context) {
 // ResetUserToken generates a new secure random token and updates the configuration
 // Requires authentication
 func (s *Server) ResetUserToken(c *gin.Context) {
-	newToken, err := config.GenerateSecureToken()
+	newToken, err := config.GenerateUserToken()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -427,7 +427,7 @@ func (s *Server) ResetUserToken(c *gin.Context) {
 // ResetModelToken generates a new secure random model token and updates the configuration
 // Requires authentication
 func (s *Server) ResetModelToken(c *gin.Context) {
-	newToken, err := config.GenerateSecureToken()
+	newToken, err := config.GenerateModelToken()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
