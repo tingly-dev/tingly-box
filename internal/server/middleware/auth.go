@@ -299,6 +299,10 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		if authHeader == "" {
+			authHeader = xApiKey
+		}
+
 		token := authHeader
 		// Remove "Bearer " prefix if present in the token
 		if strings.HasPrefix(token, "Bearer ") {
