@@ -98,20 +98,22 @@ func DefaultConfig() *Config {
 	return cfg
 }
 
-// GetHTTPClient returns an HTTP client configured with proxy if set
+// GetHTTPClient returns an HTTP client configured with proxy if set.
+// When no proxy is configured, uses a direct transport (no env/system proxy).
 func (c *Config) GetHTTPClient() *http.Client {
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 	}
 
 	if c.ProxyURL != nil {
-		transport := &http.Transport{
+		client.Transport = &http.Transport{
 			Proxy: http.ProxyURL(c.ProxyURL),
 		}
-		client.Transport = transport
 		logrus.Infof("[OAuth] Using proxy: %s for token request", c.ProxyURL.String())
 	} else {
-		logrus.Debug("[OAuth] No proxy configured for token request")
+		// Explicit no-proxy transport — avoids inheriting http.DefaultTransport's ProxyFromEnvironment.
+		client.Transport = &http.Transport{}
+		logrus.Debug("[OAuth] No proxy configured for token request, using direct connection")
 	}
 
 	return client

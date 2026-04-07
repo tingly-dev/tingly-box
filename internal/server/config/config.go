@@ -136,8 +136,8 @@ type HTTPTransportConfig struct {
 
 	// RespectEnvProxy controls whether providers without explicit proxy configuration
 	// should use environment/system proxy settings (HTTP_PROXY, HTTPS_PROXY, macOS system proxy, etc.)
-	// Default (nil): true - use environment proxy when provider has no proxy_url configured
-	// Set to false: providers without proxy_url will connect directly
+	// Default (nil): false - providers without proxy_url connect directly
+	// Set to true: providers without proxy_url will use system/environment proxy
 	RespectEnvProxy *bool `json:"respect_env_proxy,omitempty" yaml:"respect_env_proxy,omitempty"`
 }
 
