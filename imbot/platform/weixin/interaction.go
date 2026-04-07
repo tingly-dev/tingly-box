@@ -9,17 +9,17 @@ import (
 	"github.com/tingly-dev/weixin/types"
 )
 
-// InteractionHandler provides interaction handlers for Weixin
+// InteractionHandler handles user interactions like QR code pairing and account management.
 type InteractionHandler struct {
 	bot *Bot
 }
 
-// NewInteractionHandler creates a new interaction handler
+// NewInteractionHandler creates a new interaction handler for the given bot.
 func NewInteractionHandler(bot *Bot) *InteractionHandler {
 	return &InteractionHandler{bot: bot}
 }
 
-// QRCodeResult represents a QR code for pairing (imbot layer type)
+// QRCodeResult contains QR code data for account pairing.
 type QRCodeResult struct {
 	QrCodeID   string
 	QrCodeURL  string
@@ -27,7 +27,7 @@ type QRCodeResult struct {
 	ExpiresIn  int    // Seconds until expiration
 }
 
-// PairingStatus represents the status of QR code pairing (imbot layer type)
+// PairingStatus represents the current status of QR code pairing.
 type PairingStatus struct {
 	Status   string // "pending", "success", "failed", "expired"
 	BotID    string
@@ -36,7 +36,7 @@ type PairingStatus struct {
 	ErrorMsg string
 }
 
-// AccountInfo represents information about a Weixin account (imbot layer type)
+// AccountInfo contains information about a Weixin account.
 type AccountInfo struct {
 	AccountID   string
 	Name        string
@@ -49,7 +49,7 @@ type AccountInfo struct {
 	LastLoginAt int64
 }
 
-// GetQRCode returns a QR code image for account pairing
+// GetQRCode returns a QR code for account pairing.
 func (h *InteractionHandler) GetQRCode(ctx context.Context) (*QRCodeResult, error) {
 	if h.bot.account == nil {
 		return nil, fmt.Errorf("account not loaded")
@@ -66,7 +66,7 @@ func (h *InteractionHandler) GetQRCode(ctx context.Context) (*QRCodeResult, erro
 	}, nil
 }
 
-// GetQRCodeDisplayURL returns a URL to display the QR code
+// GetQRCodeDisplayURL returns a URL to display the QR code.
 func (h *InteractionHandler) GetQRCodeDisplayURL(ctx context.Context) (string, error) {
 	qrResult, err := h.GetQRCode(ctx)
 	if err != nil {
@@ -75,7 +75,7 @@ func (h *InteractionHandler) GetQRCodeDisplayURL(ctx context.Context) (string, e
 	return qrResult.QrCodeURL, nil
 }
 
-// StartPairing starts the QR code pairing process
+// StartPairing initiates the QR code pairing process.
 func (h *InteractionHandler) StartPairing(ctx context.Context) (*QRCodeResult, error) {
 	if h.bot.account == nil {
 		return nil, fmt.Errorf("account not loaded")
@@ -93,7 +93,7 @@ func (h *InteractionHandler) StartPairing(ctx context.Context) (*QRCodeResult, e
 	}, nil
 }
 
-// CheckPairingStatus checks the status of the QR code pairing process
+// CheckPairingStatus checks the current status of the QR code pairing process.
 func (h *InteractionHandler) CheckPairingStatus(ctx context.Context, qrID string) (*PairingStatus, error) {
 	if h.bot.account == nil {
 		return nil, fmt.Errorf("account not loaded")
@@ -124,12 +124,12 @@ func (h *InteractionHandler) CheckPairingStatus(ctx context.Context, qrID string
 	return status, nil
 }
 
-// IsConfigured checks if the account is fully configured
+// IsConfigured reports whether the account is fully configured.
 func (h *InteractionHandler) IsConfigured() bool {
 	return h.bot.account != nil && h.bot.account.IsConfigured()
 }
 
-// ReAuthenticate starts the re-authentication process for an expired session
+// ReAuthenticate initiates re-authentication for an expired session.
 func (h *InteractionHandler) ReAuthenticate(ctx context.Context) (*QRCodeResult, error) {
 	if h.bot.account == nil {
 		return nil, fmt.Errorf("account not loaded")
@@ -151,7 +151,7 @@ func (h *InteractionHandler) ReAuthenticate(ctx context.Context) (*QRCodeResult,
 	return h.StartPairing(ctx)
 }
 
-// GetAccountInfo returns information about the current account
+// GetAccountInfo returns information about the current account.
 func (h *InteractionHandler) GetAccountInfo() *AccountInfo {
 	if h.bot.account == nil {
 		return &AccountInfo{
@@ -173,7 +173,7 @@ func (h *InteractionHandler) GetAccountInfo() *AccountInfo {
 	}
 }
 
-// PairAccount is a convenience method that starts pairing
+// PairAccount is a convenience method that starts pairing and returns a pending status.
 func (h *InteractionHandler) PairAccount(ctx context.Context) (*PairingStatus, error) {
 	_, err := h.StartPairing(ctx)
 	if err != nil {
@@ -184,7 +184,7 @@ func (h *InteractionHandler) PairAccount(ctx context.Context) (*PairingStatus, e
 	}, nil
 }
 
-// CompletePairing waits for the user to scan the QR code and confirms pairing
+// CompletePairing waits for the user to scan the QR code and confirms pairing.
 func (h *InteractionHandler) CompletePairing(ctx context.Context, qrID string) (*PairingStatus, error) {
 	if qrID == "" {
 		return nil, fmt.Errorf("qrID is required")
@@ -192,7 +192,7 @@ func (h *InteractionHandler) CompletePairing(ctx context.Context, qrID string) (
 	return h.CheckPairingStatus(ctx, qrID)
 }
 
-// SendMessage sends a message to a specific user
+// SendMessage sends a text message to a specific user.
 func (h *InteractionHandler) SendMessage(ctx context.Context, userID string, text string) (string, error) {
 	if h.bot.account == nil {
 		return "", fmt.Errorf("not connected")
@@ -215,12 +215,12 @@ func (h *InteractionHandler) SendMessage(ctx context.Context, userID string, tex
 	return result.MessageID, nil
 }
 
-// GetContacts returns a list of contacts (not yet implemented)
+// GetContacts returns a list of contacts (not yet implemented).
 func (h *InteractionHandler) GetContacts(ctx context.Context) ([]Contact, error) {
 	return nil, core.NewBotError(core.ErrPlatformError, "contacts list not available", false)
 }
 
-// Contact represents a Weixin contact
+// Contact represents a Weixin contact.
 type Contact struct {
 	ID       string
 	Name     string

@@ -9,13 +9,13 @@ import (
 	"github.com/tingly-dev/weixin/types"
 )
 
-// Adapter adapts Weixin channel messages to core.Message
+// Adapter converts Weixin channel messages to core.Message format.
 type Adapter struct {
 	*core.BaseAdapter
 	account *types.WeChatAccount
 }
 
-// NewAdapter creates a new Weixin adapter
+// NewAdapter creates a new Weixin adapter with the given config and account.
 func NewAdapter(config *core.Config, account *types.WeChatAccount) *Adapter {
 	return &Adapter{
 		BaseAdapter: core.NewBaseAdapter(config),
@@ -23,12 +23,12 @@ func NewAdapter(config *core.Config, account *types.WeChatAccount) *Adapter {
 	}
 }
 
-// Platform returns core.PlatformWeixin
+// Platform returns core.PlatformWeixin.
 func (a *Adapter) Platform() core.Platform {
 	return core.PlatformWeixin
 }
 
-// AdaptMessage converts a types.Message to core.Message
+// AdaptMessage converts a types.Message to core.Message.
 func (a *Adapter) AdaptMessage(ctx context.Context, msg *types.Message) (*core.Message, error) {
 	if msg == nil {
 		return nil, fmt.Errorf("nil message")
@@ -65,7 +65,7 @@ func (a *Adapter) AdaptMessage(ctx context.Context, msg *types.Message) (*core.M
 	return messageBuilder.Build(), nil
 }
 
-// extractContent extracts content from a types.Message
+// extractContent extracts the content from a types.Message.
 func (a *Adapter) extractContent(msg *types.Message) core.Content {
 	// Check if there's text
 	if msg.Text != "" {
@@ -102,7 +102,7 @@ func (a *Adapter) extractContent(msg *types.Message) core.Content {
 	return core.NewSystemContent("unknown", nil)
 }
 
-// mapContentType maps Weixin content type to core media type
+// mapContentType maps Weixin content type to core media type.
 func (a *Adapter) mapContentType(contentType string) string {
 	switch contentType {
 	case "image":
@@ -120,12 +120,12 @@ func (a *Adapter) mapContentType(contentType string) string {
 	}
 }
 
-// BuildReplyTarget builds the reply target from sender/recipient info
+// BuildReplyTarget builds the reply target from sender/recipient info.
+//
+// For Weixin, we use the other party's ID as the reply target:
+// - If we're the sender (bot), reply to the recipient
+// - If we're the recipient, reply to the sender
 func (a *Adapter) BuildReplyTarget(senderID, recipientID, sessionID string) string {
-	// For Weixin, use the other party's ID as reply target
-	// If we're the sender (bot), reply to the recipient
-	// If we're the recipient, reply to the sender
-
 	// Check if the sender is the bot (matches our account ID)
 	if a.account != nil && senderID == a.account.UserID {
 		return recipientID
@@ -134,13 +134,12 @@ func (a *Adapter) BuildReplyTarget(senderID, recipientID, sessionID string) stri
 	return senderID
 }
 
-// GetMessageLimit returns the message length limit for Weixin
+// GetMessageLimit returns the message length limit for Weixin (2048 bytes).
 func (a *Adapter) GetMessageLimit() int {
-	// Weixin message limit is typically 2048 bytes
 	return 2048
 }
 
-// ShouldChunkText determines if text should be chunked
+// ShouldChunkText reports whether text should be chunked.
 func (a *Adapter) ShouldChunkText(text string) bool {
 	return len([]rune(text)) > a.GetMessageLimit()
 }
