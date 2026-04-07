@@ -7,24 +7,24 @@ package weixin
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/imbot/core"
-	"github.com/tingly-dev/weixin"
-	wechatadapters "github.com/tingly-dev/weixin/adapters"
-	weixinapi "github.com/tingly-dev/weixin/api"
-	"github.com/tingly-dev/weixin/channel"
-	"github.com/tingly-dev/weixin/contexttoken"
+	"github.com/tingly-dev/weixin/message/media"
+	"github.com/tingly-dev/weixin/types"
+	"github.com/tingly-dev/weixin/wechat"
 )
 
-// Bot implements the Weixin platform bot
+// Bot implements the Weixin platform bot.
 type Bot struct {
 	*core.BaseBot
-	plugin    *weixin.Plugin
+	*wechat.WechatBot
 	accountID string
-	account   *weixin.WeChatAccount
-	client    *weixinapi.Client
+	account   *wechat.Account
 	adapter   *Adapter
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -32,7 +32,7 @@ type Bot struct {
 	mu        sync.RWMutex
 }
 
-// NewBot creates a new Weixin bot
+// NewBot creates a new Weixin bot.
 func NewBot(config *core.Config) (*Bot, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
@@ -61,20 +61,13 @@ func NewBot(config *core.Config) (*Bot, error) {
 	}
 
 	// Create Weixin plugin configuration
-	wcConfig := &weixin.WeChatConfig{
+	wcConfig := &types.WeChatConfig{
 		BaseURL: baseURL,
 		BotType: config.GetOptionString("botType", "3"),
 	}
 
-	// Initialize plugin
-	plugin := weixin.NewPlugin(wcConfig)
-
-	// Initialize adapters for the plugin
-	// This is required to enable all plugin functionality
-	wechatadapters.InitPlugin(plugin)
-
-	// Create account directly from auth config (no file storage needed)
-	account := &weixin.WeChatAccount{
+	// Create WeChat account from auth config
+	wcAccount := &types.WeChatAccount{
 		ID:          accountID,
 		Name:        fmt.Sprintf("Weixin Account %s", accountID),
 		BotID:       botID,
@@ -87,17 +80,21 @@ func NewBot(config *core.Config) (*Bot, error) {
 		LastLoginAt: time.Now(),
 	}
 
-	// Save the account to plugin's in-memory account manager
-	// This allows the plugin to find the account later
-	if err := plugin.Accounts().Save(account); err != nil {
-		return nil, fmt.Errorf("failed to save account: %w", err)
+	// Initialize plugin with account directly (no store needed for basic operations)
+	// For production, implement types.AccountStore with database persistence
+	weixinBot, err := wechat.NewWechatBotWithAccount(wcConfig, wcAccount)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create weixin bot: %w", err)
 	}
+
+	// Get the account from plugin
+	account := weixinBot.Account()
 
 	bot := &Bot{
 		BaseBot:   core.NewBaseBot(config),
-		plugin:    plugin,
+		WechatBot: weixinBot,
 		accountID: accountID,
-		account:   account, // Set account directly
+		account:   account,
 	}
 
 	// Set platform info
@@ -106,47 +103,42 @@ func NewBot(config *core.Config) (*Bot, error) {
 	return bot, nil
 }
 
-// Connect connects to Weixin
+// Connect establishes a connection to Weixin.
 func (b *Bot) Connect(ctx context.Context) error {
 	b.ctx, b.cancel = context.WithCancel(ctx)
 
-	// Get or load account
-	account, err := b.getAccount()
-	if err != nil {
-		return core.NewAuthFailedError(core.PlatformWeixin, "failed to get account", err)
+	// Account is already set in NewBot, just validate it
+	if b.account == nil {
+		return core.NewAuthFailedError(core.PlatformWeixin, "account not initialized", nil)
 	}
-	b.account = account
 
 	// Check if account is configured
-	if !account.Configured {
+	if !b.account.IsConfigured() {
 		return core.NewAuthFailedError(core.PlatformWeixin, "account not configured, please pair first", nil)
 	}
 
 	// Check if account is enabled
-	if !account.Enabled {
+	if !b.account.IsEnabled() {
 		return fmt.Errorf("account is disabled")
 	}
 
-	// Create API client
-	b.client = weixinapi.NewClient(account.BaseURL, account.BotToken)
-
 	// Initialize adapter for message conversion
-	b.adapter = NewAdapter(b.Config(), account)
+	wcAccount := b.account.WeChatAccount()
+	b.adapter = NewAdapter(b.BaseBot.Config(), wcAccount)
 
-	// Mark as connected
+	// Mark as connected and start receiving messages
 	b.UpdateConnected(true)
 	b.UpdateAuthenticated(true)
 	b.EmitConnected()
-	b.Logger().Info("Weixin bot connected: account=%s", account.ID)
+	b.Logger().Info("Weixin bot connected: account=%s", b.account.ID())
 
-	// Start receiving messages
 	b.wg.Add(1)
 	go b.receiveMessages()
 
 	return nil
 }
 
-// Disconnect disconnects from Weixin
+// Disconnect closes the connection to Weixin.
 func (b *Bot) Disconnect(ctx context.Context) error {
 	if b.cancel != nil {
 		b.cancel()
@@ -154,13 +146,8 @@ func (b *Bot) Disconnect(ctx context.Context) error {
 
 	b.wg.Wait()
 
-	// Stop the channel gateway
-	if b.plugin != nil && b.accountID != "" {
-		gateway := b.plugin.Gateway()
-		if gateway != nil {
-			_ = gateway.StopAccount(ctx, b.accountID)
-		}
-	}
+	// Disconnect from plugin
+	_ = b.WechatBot.Disconnect()
 
 	b.UpdateConnected(false)
 	b.UpdateReady(false)
@@ -170,7 +157,12 @@ func (b *Bot) Disconnect(ctx context.Context) error {
 	return nil
 }
 
-// SendMessage sends a message
+// IsConnected reports whether the bot is connected.
+func (b *Bot) IsConnected() bool {
+	return b.account != nil && b.BaseBot.IsConnected()
+}
+
+// SendMessage sends a message to the specified target.
 func (b *Bot) SendMessage(ctx context.Context, target string, opts *core.SendMessageOptions) (*core.SendResult, error) {
 	if err := b.EnsureReady(); err != nil {
 		return nil, err
@@ -182,11 +174,11 @@ func (b *Bot) SendMessage(ctx context.Context, target string, opts *core.SendMes
 	}
 
 	// Handle text message
-	if opts.Text != "" {
+	if opts.Text != "" && len(opts.Media) == 0 {
 		return b.sendText(ctx, target, opts)
 	}
 
-	// Handle media
+	// Handle media (with optional caption)
 	if len(opts.Media) > 0 {
 		return b.sendMedia(ctx, target, opts)
 	}
@@ -194,186 +186,228 @@ func (b *Bot) SendMessage(ctx context.Context, target string, opts *core.SendMes
 	return nil, core.NewBotError(core.ErrUnknown, "no content to send", false)
 }
 
-// SendText sends a text message
+// SendText sends a text message.
 func (b *Bot) SendText(ctx context.Context, target string, text string) (*core.SendResult, error) {
 	return b.SendMessage(ctx, target, &core.SendMessageOptions{
 		Text: text,
 	})
 }
 
-// SendMedia sends media
+// SendMedia sends media attachments.
 func (b *Bot) SendMedia(ctx context.Context, target string, media []core.MediaAttachment) (*core.SendResult, error) {
 	return b.SendMessage(ctx, target, &core.SendMessageOptions{
 		Media: media,
 	})
 }
 
-// React reacts to a message
+// React adds a reaction to a message (not supported on Weixin).
 func (b *Bot) React(ctx context.Context, messageID string, emoji string) error {
 	if err := b.EnsureReady(); err != nil {
 		return err
 	}
-	// Weixin doesn't have a native reaction feature
 	return core.NewBotError(core.ErrPlatformError, "reactions not supported on Weixin", false)
 }
 
-// EditMessage edits a message
+// EditMessage edits a message (not supported on Weixin).
 func (b *Bot) EditMessage(ctx context.Context, messageID string, text string) error {
 	if err := b.EnsureReady(); err != nil {
 		return err
 	}
-	// Weixin doesn't support editing messages after sending
 	return core.NewBotError(core.ErrPlatformError, "editing messages not supported on Weixin", false)
 }
 
-// DeleteMessage deletes a message
+// DeleteMessage deletes a message (not supported on Weixin).
 func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 	if err := b.EnsureReady(); err != nil {
 		return err
 	}
-	// Weixin doesn't support deleting messages via API
 	return core.NewBotError(core.ErrPlatformError, "deleting messages not supported on Weixin", false)
 }
 
-// PlatformInfo returns platform information
+// PlatformInfo returns platform information.
 func (b *Bot) PlatformInfo() *core.PlatformInfo {
 	return core.NewPlatformInfo(core.PlatformWeixin, "Weixin")
 }
 
-// StartReceiving starts receiving messages (already started in Connect)
+// StartReceiving starts receiving messages (already started in Connect).
 func (b *Bot) StartReceiving(ctx context.Context) error {
 	return nil // Already started in Connect
 }
 
-// StopReceiving stops receiving messages (already handled in Disconnect)
+// StopReceiving stops receiving messages (already handled in Disconnect).
 func (b *Bot) StopReceiving(ctx context.Context) error {
 	return nil // Already handled in Disconnect
 }
 
-// GetAccount returns the current account
-func (b *Bot) GetAccount() *weixin.WeChatAccount {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-	return b.account
-}
-
-// GetInteractionHandler returns the interaction handler for this bot
+// GetInteractionHandler returns the interaction handler for this bot.
 func (b *Bot) GetInteractionHandler() *InteractionHandler {
 	return NewInteractionHandler(b)
 }
 
-// IsConfigured checks if the account is configured
-func (b *Bot) IsConfigured() bool {
-	account := b.GetAccount()
-	return account != nil && account.Configured
+// GetAccount returns the current account.
+func (b *Bot) GetAccount() *wechat.Account {
+	return b.account
 }
 
-// NeedsPairing checks if the account needs QR code pairing
-func (b *Bot) NeedsPairing() bool {
-	account := b.GetAccount()
-	return account == nil || !account.Configured || account.BotToken == ""
+// getContextToken gets the context token for a reply.
+func (b *Bot) getContextToken(target string, metadata map[string]interface{}) string {
+	if metadata != nil {
+		if ct, ok := metadata["context_token"].(string); ok && ct != "" {
+			return ct
+		}
+	}
+	// For new SDK, context token is managed internally.
+	// Return empty string to let SDK handle it.
+	return ""
 }
 
-// getAccount loads or creates an account
-func (b *Bot) getAccount() (*weixin.WeChatAccount, error) {
-	// Try to load existing account
-	account, err := b.plugin.Accounts().Get(b.accountID)
-	if err == nil {
-		return account, nil
-	}
-
-	// Account doesn't exist, create a new one
-	account = &weixin.WeChatAccount{
-		ID:          b.accountID,
-		Name:        fmt.Sprintf("Weixin Account %s", b.accountID),
-		Enabled:     true,
-		Configured:  false,
-		BaseURL:     b.Config().GetOptionString("baseUrl", ""),
-		CreatedAt:   time.Now(),
-		LastLoginAt: time.Now(),
-	}
-
-	// Save the new account
-	if err := b.plugin.Accounts().Save(account); err != nil {
-		return nil, fmt.Errorf("failed to save account: %w", err)
-	}
-
-	return account, nil
-}
-
-// sendText sends a text message
+// sendText sends a text message using WechatBot.Send().
 func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessageOptions) (*core.SendResult, error) {
 	// Validate text length
 	if err := b.ValidateTextLength(opts.Text); err != nil {
 		return nil, err
 	}
 
-	// Check if there's a context token from a reply
-	var contextToken string
-	if opts.Metadata != nil {
-		if ct, ok := opts.Metadata["context_token"].(string); ok {
-			contextToken = ct
-		}
-	}
-	// If no context token in metadata, try to get from storage
-	if contextToken == "" {
-		contextToken = contexttoken.GetContextToken(b.accountID, target)
+	// Build outbound message
+	msg := &types.OutboundMessage{
+		To:           target,
+		Text:         opts.Text,
+		ContextToken: b.getContextToken(target, opts.Metadata),
 	}
 
-	// Send via API - use simple text message
-	if err := b.client.SendTextMessage(ctx, target, contextToken, opts.Text); err != nil {
+	// Send via WechatBot
+	result, err := b.Send(ctx, msg)
+	if err != nil {
 		return nil, core.WrapError(err, core.PlatformWeixin, core.ErrPlatformError)
+	}
+
+	if !result.OK {
+		return nil, core.NewBotError(core.ErrPlatformError, result.Error, false)
 	}
 
 	b.UpdateLastActivity()
 	now := time.Now().Unix()
 	return &core.SendResult{
-		MessageID: fmt.Sprintf("weixin-%d", now),
+		MessageID: result.MessageID,
 		Timestamp: now,
 	}, nil
 }
 
-// sendMedia sends media messages
+// sendMedia sends media messages using WechatBot.SendMedia().
 func (b *Bot) sendMedia(ctx context.Context, target string, opts *core.SendMessageOptions) (*core.SendResult, error) {
 	if len(opts.Media) == 0 {
 		return nil, core.NewBotError(core.ErrUnknown, "no media to send", false)
 	}
 
-	// For now, send the first media item
-	_ = opts.Media[0]
+	// Process the first media item
+	mediaItem := opts.Media[0]
 
-	// TODO: Implement media upload via CDN
-	// For now, return an error
-	return nil, core.NewBotError(core.ErrMediaNotSupported, "media upload not yet implemented", false)
+	// Get local file path from URL
+	filePath := mediaItem.URL
+	if filePath == "" {
+		return nil, core.NewBotError(core.ErrMediaNotSupported, "media URL is required", false)
+	}
+
+	// Check if file exists locally, if not, try to download it
+	localPath := filePath
+	cleanupNeeded := false
+	if _, err := os.Stat(filePath); err != nil {
+		// File doesn't exist, try to download from URL
+		tempDir := filepath.Join(os.TempDir(), "tingly-box-weixin")
+		downloadedPath, err := media.DownloadRemoteMediaToTemp(ctx, filePath, tempDir)
+		if err != nil {
+			return nil, core.WrapError(err, core.PlatformWeixin, core.ErrMediaNotSupported)
+		}
+		localPath = downloadedPath
+		cleanupNeeded = true
+	}
+
+	// Determine content type
+	contentType := mediaItem.Type
+	if contentType == "" {
+		// Try to detect from file extension
+		switch {
+		case isImageFile(localPath):
+			contentType = "image"
+		case isVideoFile(localPath):
+			contentType = "video"
+		case isAudioFile(localPath):
+			contentType = "audio"
+		default:
+			contentType = "file"
+		}
+	}
+
+	// Get filename
+	fileName := mediaItem.Filename
+	if fileName == "" {
+		fileName = filepath.Base(localPath)
+	}
+
+	// Build outbound message with media
+	msg := &types.OutboundMessage{
+		To:           target,
+		Text:         opts.Text,
+		FilePath:     localPath,
+		FileName:     fileName,
+		ContentType:  contentType,
+		ContextToken: b.getContextToken(target, opts.Metadata),
+	}
+
+	// Send via WechatBot.SendMedia
+	result, err := b.WechatBot.SendMedia(ctx, msg)
+	if err != nil {
+		if cleanupNeeded {
+			_ = os.Remove(localPath)
+		}
+		return nil, core.WrapError(err, core.PlatformWeixin, core.ErrMediaNotSupported)
+	}
+
+	// Clean up temp file
+	if cleanupNeeded {
+		_ = os.Remove(localPath)
+	}
+
+	if !result.OK {
+		return nil, core.NewBotError(core.ErrPlatformError, result.Error, false)
+	}
+
+	b.UpdateLastActivity()
+	now := time.Now().Unix()
+	return &core.SendResult{
+		MessageID: result.MessageID,
+		Timestamp: now,
+	}, nil
 }
 
-// receiveMessages receives messages via long-polling
+// Helper functions to detect media type from file extension.
+
+// isImageFile reports whether the file is an image based on extension.
+func isImageFile(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	return ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif" || ext == ".webp"
+}
+
+// isVideoFile reports whether the file is a video based on extension.
+func isVideoFile(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	return ext == ".mp4" || ext == ".mov" || ext == ".avi" || ext == ".mkv" || ext == ".webm"
+}
+
+// isAudioFile reports whether the file is an audio file based on extension.
+func isAudioFile(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	return ext == ".mp3" || ext == ".wav" || ext == ".m4a" || ext == ".aac" || ext == ".ogg"
+}
+
+// receiveMessages receives messages via long-polling.
 func (b *Bot) receiveMessages() {
 	defer b.wg.Done()
-
-	// Start the gateway for this account
-	gateway := b.plugin.Gateway()
-	if gateway == nil {
-		b.Logger().Error("Gateway not available")
-		return
-	}
-
-	if err := gateway.StartAccount(b.ctx, b.accountID); err != nil {
-		b.Logger().Error("Failed to start account: %v", err)
-		return
-	}
 
 	// Mark as ready
 	b.UpdateReady(true)
 	b.EmitReady()
 	b.Logger().Info("Weixin bot ready: account=%s", b.accountID)
-
-	// Use long-poll adapter to receive messages
-	longPoll := b.plugin.LongPoll()
-	if longPoll == nil {
-		b.Logger().Error("LongPoll adapter not available")
-		return
-	}
 
 	var syncBuf string
 
@@ -382,14 +416,8 @@ func (b *Bot) receiveMessages() {
 		case <-b.ctx.Done():
 			return
 		default:
-			// Fetch updates
-			req := &channel.GetUpdatesRequest{
-				AccountID: b.accountID,
-				SyncBuf:   syncBuf,
-				TimeoutMs: 30000, // 30 seconds timeout in milliseconds
-			}
-
-			result, err := longPoll.GetUpdates(b.ctx, req)
+			// Fetch updates using new SDK API
+			result, err := b.GetUpdates(b.ctx, syncBuf)
 			if err != nil {
 				b.Logger().Error("Failed to get updates: %v", err)
 				// Wait before retrying
@@ -401,15 +429,10 @@ func (b *Bot) receiveMessages() {
 				continue
 			}
 
-			b.Logger().Debug("GetUpdates result: ErrCode=%d, Messages=%d, SyncBuf=%s", result.ErrCode, len(result.Messages), func() string {
-				if len(result.SyncBuf) > 50 {
-					return result.SyncBuf[:50] + "..."
-				}
-				return result.SyncBuf
-			}())
+			b.Logger().Debug("GetUpdates result: ErrCode=%d, Messages=%d", result.ErrCode, len(result.Messages))
 
 			// Check for session expiration
-			if result.ErrCode == -14 { // SessionExpiredErrCode from adapters package
+			if result.ErrCode == -14 { // SessionExpiredErrCode
 				b.Logger().Error("Weixin session expired, need to re-authenticate")
 				// Emit session expired event
 				b.EmitError(core.NewAuthFailedError(core.PlatformWeixin, "session expired", nil))
@@ -420,22 +443,33 @@ func (b *Bot) receiveMessages() {
 			syncBuf = result.SyncBuf
 
 			// Process messages
-			b.Logger().Info("Processing %d messages from Weixin", len(result.Messages))
+			if len(result.Messages) > 0 {
+				b.Logger().Info("Processing %d messages from Weixin", len(result.Messages))
+			}
 			for _, msg := range result.Messages {
 				b.Logger().Info("Handling message: ID=%s, From=%s, To=%s, Text=%s", msg.MessageID, msg.From, msg.To, msg.Text)
 				b.handleMessage(msg)
+			}
+
+			// Use long-polling timeout if provided
+			if result.LongPollingTimeout > 0 {
+				select {
+				case <-time.After(time.Duration(result.LongPollingTimeout) * time.Millisecond):
+				case <-b.ctx.Done():
+					return
+				}
 			}
 		}
 	}
 }
 
-// handleMessage processes an incoming message
-func (b *Bot) handleMessage(msg *channel.Message) {
+// handleMessage processes an incoming message.
+func (b *Bot) handleMessage(msg *types.Message) {
 	if msg == nil {
 		return
 	}
 
-	// Use adapter to convert channel message to core message
+	// Use adapter to convert types message to core message
 	coreMsg, err := b.adapter.AdaptMessage(b.ctx, msg)
 	if err != nil {
 		b.Logger().Error("Failed to adapt message: %v", err)
@@ -445,7 +479,7 @@ func (b *Bot) handleMessage(msg *channel.Message) {
 	b.EmitMessage(*coreMsg)
 }
 
-// Close cleans up resources
+// Close cleans up resources.
 func (b *Bot) Close() error {
 	if b.cancel != nil {
 		b.cancel()
