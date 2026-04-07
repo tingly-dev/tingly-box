@@ -219,15 +219,16 @@ func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthTo
 	baseBetas := anthropicBeta
 
 	// Add context-1m for models that support it (Sonnet/Opus, not Haiku)
-	if model != "" && supportsContext1M(model) {
-		baseBetas = strings.TrimRight(baseBetas, ",") + "," + anthropicContext1m
-	}
-	baseBetas = strings.TrimRight(baseBetas, ",")
+	//if model != "" && supportsContext1M(model) {
+	//	baseBetas = strings.TrimRight(baseBetas, ",") + "," + anthropicContext1m
+	//}
 
 	// If user provides custom betas, use them
 	if val := strings.TrimSpace(req.Header.Get("Anthropic-Beta")); val != "" {
 		baseBetas = val
 	}
+
+	baseBetas = strings.TrimRight(baseBetas, ",")
 
 	// Ensure oauth is always present at the end
 	if !strings.Contains(baseBetas, "oauth") {
