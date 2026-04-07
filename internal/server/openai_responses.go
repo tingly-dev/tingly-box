@@ -277,7 +277,8 @@ func buildResponsesPayloadFromAnthropic(resp *anthropic.Message, responseModel, 
 // This handles the model override and forwards the rest as-is
 func (s *Server) convertToResponsesParams(bodyBytes []byte, actualModel string) (responses.ResponseNewParams, error) {
 	// Preprocess to add type fields to input items (needed for union deserialization)
-	processedData, err := protocol.AddTypeFieldToInputItems(bodyBytes)
+	// and flatten output_text content blocks
+	processedData, err := protocol.PreprocessInputData(bodyBytes)
 	if err != nil {
 		return responses.ResponseNewParams{}, err
 	}
