@@ -13,7 +13,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 )
@@ -229,7 +228,7 @@ func (am *AuthMiddleware) UserAuthMiddleware() gin.HandlerFunc {
 		if authHeader == "" {
 			c.JSON(http.StatusUnauthorized, ErrorResponse{
 				Error: ErrorDetail{
-					Message: "Authorization header required",
+					Message: "User authorization header required",
 					Type:    "invalid_request_error",
 				},
 			})
@@ -242,7 +241,7 @@ func (am *AuthMiddleware) UserAuthMiddleware() gin.HandlerFunc {
 		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
 			c.JSON(http.StatusUnauthorized, ErrorResponse{
 				Error: ErrorDetail{
-					Message: "Invalid authorization header format. Expected: 'Bearer <token>'",
+					Message: "Invalid user authorization header format. Expected: 'Bearer <token>'",
 					Type:    "invalid_request_error",
 				},
 			})
@@ -273,7 +272,7 @@ func (am *AuthMiddleware) UserAuthMiddleware() gin.HandlerFunc {
 
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Error: ErrorDetail{
-				Message: "Invalid authorization header format. Expected: 'Bearer <token>'",
+				Message: "Invalid user authorization token.",
 				Type:    "invalid_request_error",
 			},
 		})
@@ -291,7 +290,7 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 		if authHeader == "" && xApiKey == "" {
 			c.JSON(http.StatusUnauthorized, ErrorResponse{
 				Error: ErrorDetail{
-					Message: "Authorization header required",
+					Message: "Model authorization header required",
 					Type:    "invalid_request_error",
 				},
 			})
@@ -372,7 +371,7 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Error: ErrorDetail{
-				Message: "Invalid authorization header format. Expected: 'Bearer <token>'",
+				Message: "Invalid model authorization token.",
 				Type:    "invalid_request_error",
 			},
 		})
@@ -435,57 +434,5 @@ func (am *AuthMiddleware) VirtualModelAuthMiddleware() gin.HandlerFunc {
 		})
 		c.Abort()
 		return
-	}
-}
-
-// AuthMiddleware validates the authentication token
-func (am *AuthMiddleware) AuthMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Get the auth token from global config
-		cfg := am.config
-		if cfg == nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   "Global config not available",
-			})
-			c.Abort()
-			return
-		}
-
-		expectedToken := cfg.GetUserToken()
-		if expectedToken == "" {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   "User auth token not configured",
-			})
-			c.Abort()
-			return
-		}
-
-		// Get token from Authorization header
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"success": false,
-				"error":   "Authorization header required",
-			})
-			c.Abort()
-			return
-		}
-
-		// Support both "Bearer token" and just "token" formats
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		token = strings.TrimSpace(token)
-
-		if token != expectedToken {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"success": false,
-				"error":   "Invalid authentication token",
-			})
-			c.Abort()
-			return
-		}
-
-		c.Next()
 	}
 }
