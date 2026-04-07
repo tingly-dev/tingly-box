@@ -204,6 +204,65 @@ func TestOpenAPIV3WithValidation(t *testing.T) {
 	assert.Equal(t, "uri", urlSchema.Format)
 }
 
+func TestOpenAPIV3WithMapModels(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	rm := NewRouteManager(engine)
+	rm.SetSwaggerInfo(SwaggerInfo{
+		Title:    "Map Models API",
+		Version:  "1.0.0",
+		Host:     "localhost:8080",
+		BasePath: "/api/v1",
+	})
+
+	group := rm.NewGroup("test", "v1", "")
+
+	// Model with map containing struct values
+	type Metadata struct {
+		Key   string `json:"key"`
+		Value string `json:"value"`
+	}
+
+	type TemplateResponse struct {
+		ID    string              `json:"id"`
+		Name  string              `json:"name"`
+		Data  map[string]Metadata `json:"data"`
+		Items map[string]string   `json:"items"`
+	}
+
+	group.GET("/template", func(c *gin.Context) {
+		c.JSON(200, gin.H{})
+	},
+		WithDescription("Get template with map data"),
+		WithResponseModel(TemplateResponse{}),
+	)
+
+	v3JSON, err := rm.GenerateOpenAPI(VersionV3)
+	assert.NoError(t, err)
+
+	var openapi OpenAPI
+	err = json.Unmarshal([]byte(v3JSON), &openapi)
+	assert.NoError(t, err)
+
+	// Both TemplateResponse and Metadata should be in components
+	assert.Contains(t, openapi.Components.Schemas, "TemplateResponse")
+	assert.Contains(t, openapi.Components.Schemas, "Metadata")
+
+	// TemplateResponse should have proper schema for data field (map with struct values)
+	templateSchema := openapi.Components.Schemas["TemplateResponse"]
+	dataField := templateSchema.Properties["data"]
+	assert.Equal(t, "object", dataField.Type)
+	assert.NotNil(t, dataField.AdditionalProperties)
+	// Should have $ref to Metadata with correct v3 prefix
+	assert.Equal(t, "#/components/schemas/Metadata", dataField.AdditionalProperties.Ref)
+
+	// Items field (map with string values) should not have ref
+	itemsField := templateSchema.Properties["items"]
+	assert.Equal(t, "object", itemsField.Type)
+	assert.NotNil(t, itemsField.AdditionalProperties)
+	assert.Equal(t, "string", itemsField.AdditionalProperties.Type)
+}
+
 func TestOpenAPIV3WithNestedModels(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()

@@ -497,10 +497,13 @@ func (rm *RouteManager) generateSchemaWithReferencesVersion(model interface{}, v
 					propSchema = Schema{Type: "array", Items: &Schema{Ref: refPrefix + nestedModelName}}
 				}
 			} else {
-				propSchema = rm.getSwaggerTypeWithDetails(field.Type, bindingTag, formatTag, enumTag)
+				propSchema = rm.getSwaggerTypeWithDetailsVersion(field.Type, bindingTag, formatTag, enumTag, version)
 			}
+		} else if field.Type.Kind() == reflect.Map {
+			// Handle maps with version-aware type conversion
+			propSchema = rm.getSwaggerTypeWithDetailsVersion(field.Type, bindingTag, formatTag, enumTag, version)
 		} else {
-			propSchema = rm.getSwaggerTypeWithDetails(field.Type, bindingTag, formatTag, enumTag)
+			propSchema = rm.getSwaggerTypeWithDetailsVersion(field.Type, bindingTag, formatTag, enumTag, version)
 		}
 
 		// Set description
@@ -580,6 +583,12 @@ func (rm *RouteManager) generateAnonymousStructSchemaVersion(structType reflect.
 				}
 				fieldSchema = Schema{Ref: refPrefix + nestedModelName}
 			}
+		} else if field.Type.Kind() == reflect.Map {
+			// Handle maps with version-aware type conversion
+			fieldSchema = rm.getSwaggerTypeVersion(field.Type, version)
+		} else if field.Type.Kind() == reflect.Slice || field.Type.Kind() == reflect.Array {
+			// Handle arrays with version-aware type conversion
+			fieldSchema = rm.getSwaggerTypeVersion(field.Type, version)
 		} else {
 			fieldSchema = rm.getSwaggerType(field.Type)
 		}
@@ -689,10 +698,13 @@ func (rm *RouteManager) generateSchemaFromModelWithDefinitionsVersion(model inte
 					propSchema = Schema{Type: "array", Items: &Schema{Ref: refPrefix + nestedModelName}}
 				}
 			} else {
-				propSchema = rm.getSwaggerTypeWithDetails(field.Type, bindingTag, formatTag, enumTag)
+				propSchema = rm.getSwaggerTypeWithDetailsVersion(field.Type, bindingTag, formatTag, enumTag, version)
 			}
+		} else if field.Type.Kind() == reflect.Map {
+			// Handle maps with version-aware type conversion
+			propSchema = rm.getSwaggerTypeWithDetailsVersion(field.Type, bindingTag, formatTag, enumTag, version)
 		} else {
-			propSchema = rm.getSwaggerTypeWithDetails(field.Type, bindingTag, formatTag, enumTag)
+			propSchema = rm.getSwaggerTypeWithDetailsVersion(field.Type, bindingTag, formatTag, enumTag, version)
 		}
 
 		if descriptionTag != "" {
@@ -737,4 +749,14 @@ func (rm *RouteManager) generateSchemaFromModelWithCacheVersion(model interface{
 	}
 
 	return rm.generateSchemaWithReferencesVersion(model, version)
+}
+
+// getSwaggerTypeWithDetailsVersion converts Go type to Swagger schema with additional details and version
+func (rm *RouteManager) getSwaggerTypeWithDetailsVersion(goType reflect.Type, bindingTag, formatTag, enumTag string, version Version) Schema {
+	// For maps and other complex types, use the version-aware function
+	if goType.Kind() == reflect.Map {
+		return rm.getSwaggerTypeVersion(goType, version)
+	}
+	// For other types, use the original function (version doesn't affect primitives)
+	return rm.getSwaggerTypeWithDetails(goType, bindingTag, formatTag, enumTag)
 }
