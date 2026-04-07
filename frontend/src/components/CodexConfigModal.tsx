@@ -15,6 +15,8 @@ interface CodexConfigModalProps {
 type ScriptTab = 'json' | 'windows' | 'unix';
 type SessionAction = 'import' | 'undo';
 
+const SHOW_CODEX_SESSION_IMPORT = false;
+
 const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
     open,
     onClose,
@@ -241,40 +243,42 @@ EOF`;
                         </Box>
                     </Box>
 
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                            Step 3 · Optional: import previous OpenAI sessions
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            If you previously used Codex with the built-in OpenAI provider, import those local sessions so they remain visible after switching to `tingly-box`. If needed, you can undo the import later.
-                        </Typography>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                            <Button
-                                variant="contained"
-                                onClick={() => setSessionAction('import')}
-                                disabled={isSubmitting}
-                            >
-                                Import Sessions
-                            </Button>
-                            <Button
-                                variant="contained"
-                                onClick={() => setSessionAction('undo')}
-                                disabled={isSubmitting}
-                                sx={{ color: 'common.white' }}
-                            >
-                                Undo Import
-                            </Button>
+                    {SHOW_CODEX_SESSION_IMPORT && (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                            <Typography variant="subtitle2" color="text.secondary">
+                                Step 3 · Optional: import previous OpenAI sessions
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                If you previously used Codex with the built-in OpenAI provider, import those local sessions so they remain visible after switching to `tingly-box`. If needed, you can undo the import later.
+                            </Typography>
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                                <Button
+                                    variant="contained"
+                                    onClick={() => setSessionAction('import')}
+                                    disabled={isSubmitting}
+                                >
+                                    Import Sessions
+                                </Button>
+                                <Button
+                                    variant="contained"
+                                    onClick={() => setSessionAction('undo')}
+                                    disabled={isSubmitting}
+                                    sx={{ color: 'common.white' }}
+                                >
+                                    Undo Import
+                                </Button>
+                            </Box>
+                            {error && <Alert severity="error">{error}</Alert>}
+                            {result && (
+                                <Alert severity="success">
+                                    Updated {result.updatedSessionFiles || 0} active sessions, {result.updatedArchivedFiles || 0} archived sessions, and {result.updatedThreadRows || 0} SQLite thread records.
+                                    {Array.isArray(result.skippedLockedFiles) && result.skippedLockedFiles.length > 0
+                                        ? ` Skipped ${result.skippedLockedFiles.length} locked files; close Codex and retry if needed.`
+                                        : ''}
+                                </Alert>
+                            )}
                         </Box>
-                        {error && <Alert severity="error">{error}</Alert>}
-                        {result && (
-                            <Alert severity="success">
-                                Updated {result.updatedSessionFiles || 0} active sessions, {result.updatedArchivedFiles || 0} archived sessions, and {result.updatedThreadRows || 0} SQLite thread records.
-                                {Array.isArray(result.skippedLockedFiles) && result.skippedLockedFiles.length > 0
-                                    ? ` Skipped ${result.skippedLockedFiles.length} locked files; close Codex and retry if needed.`
-                                    : ''}
-                            </Alert>
-                        )}
-                    </Box>
+                    )}
                 </Box>
             </DialogContent>
 
@@ -285,7 +289,7 @@ EOF`;
             </DialogActions>
 
             <Dialog
-                open={sessionAction !== null}
+                open={SHOW_CODEX_SESSION_IMPORT && sessionAction !== null}
                 onClose={(event, reason) => {
                     if (isSubmitting || shouldIgnoreDialogClose(reason)) {
                         return;
