@@ -27,7 +27,7 @@ const (
 	stainlessTimeout        = "3000"
 
 	// Anthropic API headers
-	anthropicBeta                         = "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,effort-2025-11-24,"
+	anthropicBeta                         = "claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,effort-2025-11-24"
 	anthropicOAuthBeta                    = "oauth-2025-04-20"
 	anthropicDangerousDirectBrowserAccess = "true"
 	anthropicVersion                      = "2023-06-01"
@@ -125,7 +125,7 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	var modifiedBody []byte
 	var isOAuthToken bool
 
-	if req.Body != nil && req.Method == "POST" {
+	if req.Body != nil {
 		var err error
 		originalBody, err = io.ReadAll(req.Body)
 		_ = req.Body.Close()
@@ -199,50 +199,59 @@ func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthTo
 	// Check if target is Anthropic's API
 	isAnthropicBase := req.URL != nil && strings.Contains(strings.ToLower(req.URL.Host), "api.anthropic.com")
 
-	if isAnthropicBase && !isOAuthToken {
-		req.Header.Del("X-Api-Key")
-		req.Header.Set("X-Api-Key", key)
-	} else {
+	if !isAnthropicBase {
+		panic("Impossible to use claude client for server not anthropic")
+	}
+
+	if isOAuthToken {
 		req.Header.Del("X-Api-Key")
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
+
+	} else {
+		req.Header.Del("X-Api-Key")
+		req.Header.Set("X-Api-Key", key)
 	}
 
 	// Set Claude Code specific headers
-	req.Header.Set("accept", acceptHeader)
+	req.Header["accept"] = []string{acceptHeader}
 
 	// Build beta header with all required flags
 	baseBetas := anthropicBeta
 
 	// Add context-1m for models that support it (Sonnet/Opus, not Haiku)
-	if model != "" && supportsContext1M(model) {
-		baseBetas = strings.TrimRight(baseBetas, ",") + "," + anthropicContext1m
-	}
-	baseBetas = strings.TrimRight(baseBetas, ",")
+	//if model != "" && supportsContext1M(model) {
+	//	baseBetas = strings.TrimRight(baseBetas, ",") + "," + anthropicContext1m
+	//}
 
-	// If user provides custom betas, merge them while ensuring oauth is included
+	// If user provides custom betas, use them
 	if val := strings.TrimSpace(req.Header.Get("Anthropic-Beta")); val != "" {
 		baseBetas = val
-		if !strings.Contains(val, "oauth") {
-			baseBetas = fmt.Sprintf("%s,%s", baseBetas, anthropicOAuthBeta)
-		}
 	}
 
-	req.Header.Set("anthropic-beta", baseBetas)
-	req.Header.Set("anthropic-dangerous-direct-browser-access", anthropicDangerousDirectBrowserAccess)
-	req.Header.Set("anthropic-version", anthropicVersion)
-	req.Header.Set("user-agent", claudeCLIUserAgent)
-	req.Header.Set("x-app", claudeXApp)
-	req.Header.Set("x-stainless-helper-method", stainlessHelperMethod)
-	req.Header.Set("x-stainless-retry-count", stainlessRetryCount)
-	req.Header.Set("x-stainless-runtime-version", stainlessRuntimeVersion)
-	req.Header.Set("x-stainless-package-version", stainlessPackageVersion)
-	req.Header.Set("x-stainless-runtime", stainlessRuntime)
-	req.Header.Set("x-stainless-lang", stainlessLang)
-	req.Header.Set("x-stainless-arch", stainlessArch())
-	req.Header.Set("x-stainless-os", stainlessOS())
-	req.Header.Set("x-stainless-timeout", stainlessTimeout)
+	baseBetas = strings.TrimRight(baseBetas, ",")
+
+	// Ensure oauth is always present at the end
+	if !strings.Contains(baseBetas, "oauth") {
+		baseBetas = strings.TrimRight(baseBetas, ",")
+		baseBetas = fmt.Sprintf("%s,%s", baseBetas, anthropicOAuthBeta)
+	}
+
+	req.Header["anthropic-beta"] = []string{baseBetas}
+	req.Header["anthropic-dangerous-direct-browser-access"] = []string{anthropicDangerousDirectBrowserAccess}
+	req.Header["anthropic-version"] = []string{anthropicVersion}
+	req.Header["user-agent"] = []string{claudeCLIUserAgent}
+	req.Header["x-app"] = []string{claudeXApp}
+	req.Header["x-stainless-helper-method"] = []string{stainlessHelperMethod}
+	req.Header["x-stainless-retry-count"] = []string{stainlessRetryCount}
+	req.Header["x-stainless-runtime-version"] = []string{stainlessRuntimeVersion}
+	req.Header["x-stainless-package-version"] = []string{stainlessPackageVersion}
+	req.Header["x-stainless-runtime"] = []string{stainlessRuntime}
+	req.Header["x-stainless-lang"] = []string{stainlessLang}
+	req.Header["x-stainless-arch"] = []string{stainlessArch()}
+	req.Header["x-stainless-os"] = []string{stainlessOS()}
+	req.Header["x-stainless-timeout"] = []string{stainlessTimeout}
 	if sessionID != "" {
-		req.Header.Set("X-Claude-Code-Session-Id", sessionID)
+		req.Header["X-Claude-Code-Session-Id"] = []string{sessionID}
 	}
 }
 
