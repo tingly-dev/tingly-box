@@ -903,8 +903,10 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(TokenResponse{}),
 	)
 
-	// Setup Swagger documentation endpoint
-	manager.SetupSwaggerEndpoints()
+	// Setup Swagger and OpenAPI documentation endpoints
+	// - /swagger.json (Swagger 2.0)
+	// - /openapi.json (OpenAPI 3.0)
+	manager.SetupOpenAPIEndpoints()
 }
 
 func useV2Provider(s *Server, api *swagger.RouteGroup) {

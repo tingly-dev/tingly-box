@@ -405,3 +405,358 @@ func (rm *RouteManager) generateSchemaFromModelWithCache(model interface{}, allM
 	// Otherwise, generate the schema normally
 	return rm.generateSchemaWithReferences(model)
 }
+
+// Version-aware schema generation functions for OpenAPI v3
+
+// getRefPrefix returns the reference prefix based on version
+func getRefPrefix(version Version) string {
+	switch version {
+	case VersionV3:
+		return "#/components/schemas/"
+	default:
+		return "#/definitions/"
+	}
+}
+
+// generateSchemaWithReferencesVersion generates schema using $ref with version-specific prefix
+func (rm *RouteManager) generateSchemaWithReferencesVersion(model interface{}, version Version) Schema {
+	modelType := reflect.TypeOf(model)
+	if modelType.Kind() == reflect.Ptr {
+		modelType = modelType.Elem()
+	}
+
+	refPrefix := getRefPrefix(version)
+
+	schema := Schema{
+		Type:       "object",
+		Properties: make(map[string]Schema),
+		Required:   []string{},
+	}
+
+	for i := 0; i < modelType.NumField(); i++ {
+		field := modelType.Field(i)
+		fieldName := field.Name
+
+		// Get all relevant tags
+		jsonTag := field.Tag.Get("json")
+		bindingTag := field.Tag.Get("binding")
+		exampleTag := field.Tag.Get("example")
+		defaultTag := field.Tag.Get("default")
+		docTag := field.Tag.Get("doc")
+		descriptionTag := field.Tag.Get("description")
+		formatTag := field.Tag.Get("format")
+		enumTag := field.Tag.Get("enum")
+
+		// Skip non-exported fields
+		if field.PkgPath != "" {
+			continue
+		}
+
+		// Determine the property name and json options
+		propName := fieldName
+		isOptional := false
+		if jsonTag != "" && jsonTag != "-" {
+			parts := strings.Split(jsonTag, ",")
+			if parts[0] != "" {
+				propName = parts[0]
+			}
+			for _, part := range parts[1:] {
+				if part == "omitempty" || part == "omitempty,stringize" {
+					isOptional = true
+				}
+			}
+		}
+
+		// Generate property schema
+		var propSchema Schema
+		fieldType := field.Type
+		if fieldType.Kind() == reflect.Ptr {
+			fieldType = fieldType.Elem()
+		}
+
+		if fieldType.Kind() == reflect.Struct && fieldType.String() != "time.Time" {
+			nestedModelName := fieldType.Name()
+			if nestedModelName == "" {
+				collectedModels := make(map[string]interface{})
+				propSchema = rm.generateAnonymousStructSchemaVersion(fieldType, collectedModels, version)
+			} else {
+				propSchema = Schema{Ref: refPrefix + nestedModelName}
+			}
+		} else if field.Type.Kind() == reflect.Slice || field.Type.Kind() == reflect.Array {
+			elemType := field.Type.Elem()
+			if elemType.Kind() == reflect.Ptr {
+				elemType = elemType.Elem()
+			}
+			if elemType.Kind() == reflect.Struct && elemType.String() != "time.Time" {
+				nestedModelName := elemType.Name()
+				if nestedModelName == "" {
+					collectedModels := make(map[string]interface{})
+					itemSchema := rm.generateAnonymousStructSchemaVersion(elemType, collectedModels, version)
+					propSchema = Schema{Type: "array", Items: &itemSchema}
+				} else {
+					propSchema = Schema{Type: "array", Items: &Schema{Ref: refPrefix + nestedModelName}}
+				}
+			} else {
+				propSchema = rm.getSwaggerTypeWithDetailsVersion(field.Type, bindingTag, formatTag, enumTag, version)
+			}
+		} else if field.Type.Kind() == reflect.Map {
+			// Handle maps with version-aware type conversion
+			propSchema = rm.getSwaggerTypeWithDetailsVersion(field.Type, bindingTag, formatTag, enumTag, version)
+		} else {
+			propSchema = rm.getSwaggerTypeWithDetailsVersion(field.Type, bindingTag, formatTag, enumTag, version)
+		}
+
+		// Set description
+		if descriptionTag != "" {
+			propSchema.Description = descriptionTag
+		} else if docTag != "" {
+			propSchema.Description = docTag
+		} else {
+			propSchema.Description = fmt.Sprintf("Field %s", propName)
+		}
+
+		// Set example
+		if exampleTag != "" {
+			propSchema.Example = rm.parseExampleValue(exampleTag, field.Type)
+		}
+
+		// Set default
+		if defaultTag != "" {
+			propSchema.Default = rm.parseDefaultValue(defaultTag, field.Type)
+		}
+
+		// Parse validation
+		rm.parseValidationRules(&propSchema, bindingTag, field.Type)
+
+		// Check required
+		if strings.Contains(bindingTag, "required") {
+			schema.Required = append(schema.Required, propName)
+		} else if !isOptional {
+			schema.Required = append(schema.Required, propName)
+		}
+
+		schema.Properties[propName] = propSchema
+	}
+
+	return schema
+}
+
+// generateAnonymousStructSchemaVersion generates schema for anonymous struct with version
+func (rm *RouteManager) generateAnonymousStructSchemaVersion(structType reflect.Type, collectedModels map[string]interface{}, version Version) Schema {
+	refPrefix := getRefPrefix(version)
+
+	schema := Schema{
+		Type:       "object",
+		Properties: make(map[string]Schema),
+		Required:   []string{},
+	}
+
+	for i := 0; i < structType.NumField(); i++ {
+		field := structType.Field(i)
+		if field.PkgPath != "" {
+			continue
+		}
+
+		propName := field.Name
+		jsonTag := field.Tag.Get("json")
+		if jsonTag != "" && jsonTag != "-" {
+			parts := strings.Split(jsonTag, ",")
+			if parts[0] != "" {
+				propName = parts[0]
+			}
+		}
+
+		var fieldSchema Schema
+		fieldType := field.Type
+		if fieldType.Kind() == reflect.Ptr {
+			fieldType = fieldType.Elem()
+		}
+
+		if fieldType.Kind() == reflect.Struct && fieldType.String() != "time.Time" {
+			nestedModelName := fieldType.Name()
+			if nestedModelName == "" {
+				fieldSchema = rm.generateAnonymousStructSchemaVersion(fieldType, collectedModels, version)
+			} else {
+				if _, exists := collectedModels[nestedModelName]; !exists {
+					nestedModel := reflect.Zero(fieldType).Interface()
+					collectedModels[nestedModelName] = nestedModel
+				}
+				fieldSchema = Schema{Ref: refPrefix + nestedModelName}
+			}
+		} else if field.Type.Kind() == reflect.Map {
+			// Handle maps with version-aware type conversion
+			fieldSchema = rm.getSwaggerTypeVersion(field.Type, version)
+		} else if field.Type.Kind() == reflect.Slice || field.Type.Kind() == reflect.Array {
+			// Handle arrays with version-aware type conversion
+			fieldSchema = rm.getSwaggerTypeVersion(field.Type, version)
+		} else {
+			fieldSchema = rm.getSwaggerType(field.Type)
+		}
+
+		descriptionTag := field.Tag.Get("description")
+		docTag := field.Tag.Get("doc")
+		if descriptionTag != "" {
+			fieldSchema.Description = descriptionTag
+		} else if docTag != "" {
+			fieldSchema.Description = docTag
+		} else {
+			fieldSchema.Description = fmt.Sprintf("Field %s", propName)
+		}
+
+		schema.Properties[propName] = fieldSchema
+
+		if !strings.Contains(jsonTag, "omitempty") {
+			schema.Required = append(schema.Required, propName)
+		}
+	}
+
+	return schema
+}
+
+// generateSchemaFromModelWithDefinitionsVersion generates schema with definitions and version
+func (rm *RouteManager) generateSchemaFromModelWithDefinitionsVersion(model interface{}, collectedModels map[string]interface{}, version Version) Schema {
+	modelType := reflect.TypeOf(model)
+	if modelType.Kind() == reflect.Ptr {
+		modelType = modelType.Elem()
+	}
+
+	refPrefix := getRefPrefix(version)
+
+	schema := Schema{
+		Type:       "object",
+		Properties: make(map[string]Schema),
+		Required:   []string{},
+	}
+
+	if modelType.Kind() != reflect.Struct {
+		return rm.getSwaggerType(modelType)
+	}
+
+	for i := 0; i < modelType.NumField(); i++ {
+		field := modelType.Field(i)
+		fieldName := field.Name
+
+		jsonTag := field.Tag.Get("json")
+		bindingTag := field.Tag.Get("binding")
+		exampleTag := field.Tag.Get("example")
+		defaultTag := field.Tag.Get("default")
+		docTag := field.Tag.Get("doc")
+		descriptionTag := field.Tag.Get("description")
+		formatTag := field.Tag.Get("format")
+		enumTag := field.Tag.Get("enum")
+
+		if field.PkgPath != "" {
+			continue
+		}
+
+		propName := fieldName
+		isOptional := false
+		if jsonTag != "" && jsonTag != "-" {
+			parts := strings.Split(jsonTag, ",")
+			if parts[0] != "" {
+				propName = parts[0]
+			}
+			for _, part := range parts[1:] {
+				if part == "omitempty" || part == "omitempty,stringize" {
+					isOptional = true
+				}
+			}
+		}
+
+		var propSchema Schema
+		fieldType := field.Type
+		if fieldType.Kind() == reflect.Ptr {
+			fieldType = fieldType.Elem()
+		}
+
+		if fieldType.Kind() == reflect.Struct && fieldType.String() != "time.Time" {
+			nestedModelName := fieldType.Name()
+			if nestedModelName == "" {
+				propSchema = rm.generateAnonymousStructSchemaVersion(fieldType, collectedModels, version)
+			} else {
+				if _, exists := collectedModels[nestedModelName]; !exists {
+					nestedModel := reflect.Zero(fieldType).Interface()
+					collectedModels[nestedModelName] = nestedModel
+				}
+				propSchema = Schema{Ref: refPrefix + nestedModelName}
+			}
+		} else if field.Type.Kind() == reflect.Slice || field.Type.Kind() == reflect.Array {
+			elemType := field.Type.Elem()
+			if elemType.Kind() == reflect.Ptr {
+				elemType = elemType.Elem()
+			}
+			if elemType.Kind() == reflect.Struct && elemType.String() != "time.Time" {
+				nestedModelName := elemType.Name()
+				if nestedModelName == "" {
+					itemSchema := rm.generateAnonymousStructSchemaVersion(elemType, collectedModels, version)
+					propSchema = Schema{Type: "array", Items: &itemSchema}
+				} else {
+					if _, exists := collectedModels[nestedModelName]; !exists {
+						nestedModel := reflect.Zero(elemType).Interface()
+						collectedModels[nestedModelName] = nestedModel
+					}
+					propSchema = Schema{Type: "array", Items: &Schema{Ref: refPrefix + nestedModelName}}
+				}
+			} else {
+				propSchema = rm.getSwaggerTypeWithDetailsVersion(field.Type, bindingTag, formatTag, enumTag, version)
+			}
+		} else if field.Type.Kind() == reflect.Map {
+			// Handle maps with version-aware type conversion
+			propSchema = rm.getSwaggerTypeWithDetailsVersion(field.Type, bindingTag, formatTag, enumTag, version)
+		} else {
+			propSchema = rm.getSwaggerTypeWithDetailsVersion(field.Type, bindingTag, formatTag, enumTag, version)
+		}
+
+		if descriptionTag != "" {
+			propSchema.Description = descriptionTag
+		} else if docTag != "" {
+			propSchema.Description = docTag
+		} else {
+			propSchema.Description = fmt.Sprintf("Field %s", propName)
+		}
+
+		if exampleTag != "" {
+			propSchema.Example = rm.parseExampleValue(exampleTag, field.Type)
+		}
+
+		if defaultTag != "" {
+			propSchema.Default = rm.parseDefaultValue(defaultTag, field.Type)
+		}
+
+		rm.parseValidationRules(&propSchema, bindingTag, field.Type)
+
+		if strings.Contains(bindingTag, "required") {
+			schema.Required = append(schema.Required, propName)
+		} else if !isOptional {
+			schema.Required = append(schema.Required, propName)
+		}
+
+		schema.Properties[propName] = propSchema
+	}
+
+	return schema
+}
+
+// generateSchemaFromModelWithCacheVersion generates schema with cache and version
+func (rm *RouteManager) generateSchemaFromModelWithCacheVersion(model interface{}, allModels map[string]interface{}, version Version) Schema {
+	modelType := reflect.TypeOf(model)
+	if modelType.Kind() == reflect.Ptr {
+		modelType = modelType.Elem()
+	}
+
+	if modelType.Kind() != reflect.Struct {
+		return rm.getSwaggerType(modelType)
+	}
+
+	return rm.generateSchemaWithReferencesVersion(model, version)
+}
+
+// getSwaggerTypeWithDetailsVersion converts Go type to Swagger schema with additional details and version
+func (rm *RouteManager) getSwaggerTypeWithDetailsVersion(goType reflect.Type, bindingTag, formatTag, enumTag string, version Version) Schema {
+	// For maps and other complex types, use the version-aware function
+	if goType.Kind() == reflect.Map {
+		return rm.getSwaggerTypeVersion(goType, version)
+	}
+	// For other types, use the original function (version doesn't affect primitives)
+	return rm.getSwaggerTypeWithDetails(goType, bindingTag, formatTag, enumTag)
+}

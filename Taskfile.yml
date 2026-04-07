@@ -54,9 +54,12 @@ tasks:
       - go run ./cli/tingly-box --verbose start --port 12580 --record-mode=scenario --debug --browser=false
 
   swagger:
+    aliases:
+      - openapi
     cmds:
       - |
         curl -s http://localhost:{{.PORT}}/swagger.json > swagger.json
+        curl -s http://localhost:{{.PORT}}/openapi.json > openapi.json
 
   codegen:
     cmds:
