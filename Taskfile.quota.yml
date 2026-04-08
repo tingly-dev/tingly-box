@@ -18,20 +18,28 @@ tasks:
       - |
         cat << EOF
         {
-          "five_hour": {
-            "utilization": 12.5,
-            "resets_at": "2026-04-02T15:00:00Z"
-          },
-          "seven_day": {
-            "utilization": 34.2,
-            "resets_at": "2026-04-09T00:00:00Z"
-          },
-          "extra_usage": {
-            "is_enabled": false,
-            "utilization": 0,
-            "used_credits": 0,
-            "monthly_limit": 0
-          }
+            "five_hour": {
+                "utilization": 7.0,
+                "resets_at": "2026-04-08T05:00:00.096458+00:00"
+            },
+            "seven_day": {
+                "utilization": 1.0,
+                "resets_at": "2026-04-14T15:00:01.096478+00:00"
+            },
+            "seven_day_oauth_apps": null,
+            "seven_day_opus": null,
+            "seven_day_sonnet": {
+                "utilization": 1.0,
+                "resets_at": "2026-04-14T15:00:01.096485+00:00"
+            },
+            "seven_day_cowork": null,
+            "iguana_necktie": null,
+            "extra_usage": {
+                "is_enabled": true,
+                "monthly_limit": 7500,
+                "used_credits": 0.0,
+                "utilization": null
+            }
         }
         EOF
 
