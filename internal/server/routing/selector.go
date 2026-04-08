@@ -27,6 +27,7 @@ type LoadBalancer interface {
 type AffinityStore interface {
 	Get(ruleUUID, sessionID string) (*AffinityEntry, bool)
 	Set(ruleUUID, sessionID string, entry *AffinityEntry)
+	CountByService(serviceID string) int // count active sessions locked to this service
 }
 
 // AffinityEntry represents a locked service for a session
@@ -94,18 +95,18 @@ func NewServiceSelector(
 
 	// Pre-build all pipeline variants
 	s.pipelines[pipelineModeNoAffinity] = []SelectionStage{
-		NewSmartRoutingStage(lb),
+		NewSmartRoutingStage(lb, affinity),
 		NewLoadBalancerStage(lb),
 	}
 	s.pipelines[pipelineModeGlobalAffinity] = []SelectionStage{
 		NewAffinityStage(affinity, "global"),
-		NewSmartRoutingStage(lb),
+		NewSmartRoutingStage(lb, affinity),
 		NewLoadBalancerStage(lb),
 	}
 	s.pipelines[pipelineModeSmartAffinity] = []SelectionStage{
 		NewHealthStage(healthFilter),
 		NewAffinityStage(affinity, "smart_rule"),
-		NewSmartRoutingStage(lb),
+		NewSmartRoutingStage(lb, affinity),
 		NewLoadBalancerStage(lb),
 	}
 

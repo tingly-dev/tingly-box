@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	defaultAffinityTTL = 2 * time.Hour
+	defaultAffinityTTL = 1 * time.Hour
 	gcInterval         = 30 * time.Minute
 )
 
@@ -108,6 +108,26 @@ func (s *AffinityStore) GC() {
 			delete(s.entries, key)
 		}
 	}
+}
+
+const capacityActiveWindow = 30 * time.Minute
+
+// CountByService returns the number of sessions locked to the given serviceID
+// that were created within the capacity active window (last 30 minutes).
+// This provides a "recently active users" count for seat utilization calculation.
+func (s *AffinityStore) CountByService(serviceID string) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	cutoff := time.Now().Add(-capacityActiveWindow)
+	count := 0
+	for _, entry := range s.entries {
+		if entry.LockedAt.After(cutoff) && entry.Service != nil &&
+			entry.Service.ServiceID() == serviceID {
+			count++
+		}
+	}
+	return count
 }
 
 // StartGC starts a background goroutine that periodically cleans up expired entries
