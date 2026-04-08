@@ -549,6 +549,7 @@ func hasDeclaredMCPAnthropicV1Tools(req *anthropic.MessageNewParams) bool {
 }
 
 func hasDeclaredMCPAnthropicBetaTools(req *anthropic.BetaMessageNewParams) bool {
+	// FIXME: we can not use such a simple logic to check
 	if req == nil || len(req.Tools) == 0 {
 		return false
 	}

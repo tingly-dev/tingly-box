@@ -15,7 +15,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-const normalizedPrefix = "mcp__"
+const normalizedPrefix = "tingly_box_mcp__"
 
 type configProvider func() *typ.MCPRuntimeConfig
 
@@ -27,6 +27,11 @@ type Runtime struct {
 
 // NewRuntime creates a new MCP runtime.
 func NewRuntime(getConfig configProvider) *Runtime {
+	// FIXME: it is useful but ugly, guard it in future
+	cfg := getConfig()
+	if cfg == nil {
+		return nil
+	}
 	return &Runtime{getConfig: getConfig, sc: newSessionCache()}
 }
 
