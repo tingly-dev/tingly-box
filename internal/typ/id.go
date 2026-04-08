@@ -1,6 +1,8 @@
 package typ
 
-import "fmt"
+import (
+	"encoding/json"
+)
 
 // SessionSource identifies where a session ID was resolved from.
 type SessionSource string
@@ -24,12 +26,10 @@ func (s SessionID) IsIPFallback() bool { return s.Source == SessionSourceIP }
 // IsEmpty returns true for zero value (no session resolved).
 func (s SessionID) IsEmpty() bool { return s.Value == "" }
 
-// String returns "<source>:<value>" for logging and map keys.
+// String returns the JSON-encoded representation, e.g. {"source":"user","value":"abc"}.
 func (s SessionID) String() string {
-	if s.IsEmpty() {
-		return ""
-	}
-	return string(s.Source) + ":" + s.Value
+	bs, _ := json.Marshal(s)
+	return string(bs)
 }
 
 // ClientKey uniquely identifies a cached client in the ClientPool.
@@ -37,21 +37,19 @@ func (s SessionID) String() string {
 // isolate per-user OAuth credentials. For API-key providers or IP-fallback
 // sessions, SessionID is omitted so clients are shared at provider level.
 type ClientKey struct {
-	ProviderUUID string `json:"provider_uuid"`
-	Model        string `json:"model"`
-	SessionID    string `json:"session_id,omitempty"`
+	ProviderUUID string    `json:"provider_uuid"`
+	Model        string    `json:"model"`
+	SessionID    SessionID `json:"session_id,omitempty"`
 }
 
 // String returns a stable string for use as map key.
 func (k ClientKey) String() string {
-	if k.SessionID != "" {
-		return fmt.Sprintf("%s/%s/%s", k.ProviderUUID, k.SessionID, k.Model)
-	}
-	return fmt.Sprintf("%s/%s", k.ProviderUUID, k.Model)
+	bs, _ := json.Marshal(k)
+	return string(bs)
 }
 
 // IsSessionScoped returns true when this key is bound to a specific user session.
-func (k ClientKey) IsSessionScoped() bool { return k.SessionID != "" }
+func (k ClientKey) IsSessionScoped() bool { return k.SessionID.Value != "" }
 
 // NewClientKey builds a ClientKey applying OAuth session-scoping rules.
 // sessionID is only included in the key when:
@@ -63,7 +61,7 @@ func NewClientKey(provider *Provider, model string, session SessionID) ClientKey
 		return ClientKey{
 			ProviderUUID: provider.UUID,
 			Model:        model,
-			SessionID:    session.String(),
+			SessionID:    session,
 		}
 	}
 	return ClientKey{
@@ -82,7 +80,8 @@ type TransportKey struct {
 
 // String returns a stable string for use as map key.
 func (k TransportKey) String() string {
-	return fmt.Sprintf("%s/%s", k.ProviderUUID, k.ProxyURL)
+	bs, _ := json.Marshal(k)
+	return string(bs)
 }
 
 // NewTransportKey creates a TransportKey.
