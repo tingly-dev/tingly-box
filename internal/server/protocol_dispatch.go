@@ -13,6 +13,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/mcpruntime"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
@@ -78,6 +79,57 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 	fc := NewForwardContext(c.Request.Context(), provider)
 
 	if isStreaming {
+		if hasDeclaredMCPAnthropicV1Tools(req) {
+			anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, req)
+			if cancel != nil {
+				defer cancel()
+			}
+			if err != nil {
+				s.trackUsageFromContext(c, 0, 0, err)
+				stream.SendStreamingError(c, err)
+				if recorder != nil {
+					recorder.RecordError(err)
+				}
+				return
+			}
+
+			anthropicResp, req, err = s.handleAnthropicV1MCPToolCalls(c.Request.Context(), provider, req, anthropicResp)
+			if err != nil {
+				recordMCPError(s, c, err, recorder)
+				return
+			}
+
+			usage := protocol.NewTokenUsageWithCache(
+				int(anthropicResp.Usage.InputTokens),
+				int(anthropicResp.Usage.OutputTokens),
+				int(anthropicResp.Usage.CacheReadInputTokens),
+			)
+			s.trackUsageWithTokenUsage(c, usage, nil)
+
+			s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
+			anthropicResp.Model = anthropic.Model(responseModel)
+
+			session := s.guardrailsSessionFromContext(c, actualModel, provider)
+			messageHistory := serverguardrails.MessagesFromAnthropicV1(req.System, req.Messages)
+			blocked := s.applyGuardrailsToAnthropicV1NonStreamResponse(c, session, messageHistory, anthropicResp)
+			if !blocked {
+				s.restoreGuardrailsCredentialAliasesV1Response(c, anthropicResp)
+			}
+
+			if err := stream.StreamAnthropicV1SingleMessage(c, anthropicResp, responseModel); err != nil {
+				stream.SendInternalError(c, err.Error())
+				if recorder != nil {
+					recorder.RecordError(err)
+				}
+				return
+			}
+			if recorder != nil {
+				recorder.SetAssembledResponse(anthropicResp)
+				recorder.RecordResponse(provider, actualModel)
+			}
+			return
+		}
+
 		streamResp, cancel, err := ForwardAnthropicV1Stream(fc, wrapper, req)
 		if cancel != nil {
 			defer cancel()
@@ -138,6 +190,12 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 			return
 		}
 
+		anthropicResp, req, err = s.handleAnthropicV1MCPToolCalls(c.Request.Context(), provider, req, anthropicResp)
+		if err != nil {
+			recordMCPForwardingError(s, c, err, recorder)
+			return
+		}
+
 		inputTokens := int(anthropicResp.Usage.InputTokens)
 		outputTokens := int(anthropicResp.Usage.OutputTokens)
 		cacheTokens := int(anthropicResp.Usage.CacheReadInputTokens)
@@ -188,6 +246,88 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 	fc := NewForwardContext(c.Request.Context(), provider)
 
 	if isStreaming {
+		disableStreamUsage := false
+		if v, ok := reqCtx.Extra["cursor_compat"]; ok {
+			disableStreamUsage = v.(bool)
+		}
+		if reqCtx.ScenarioFlags != nil {
+			disableStreamUsage = disableStreamUsage || reqCtx.ScenarioFlags.DisableStreamUsage
+		}
+
+		if hasDeclaredMCPAnthropicBetaTools(req) {
+			anthropicResp, cancel, err := ForwardAnthropicV1Beta(fc, wrapper, req)
+			if cancel != nil {
+				defer cancel()
+			}
+			if err != nil {
+				s.trackUsageFromContext(c, 0, 0, err)
+				c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Error: ErrorDetail{
+						Message: "Failed to forward Anthropic request: " + err.Error(),
+						Type:    "api_error",
+					},
+				})
+				if recorder != nil {
+					recorder.RecordError(err)
+				}
+				return
+			}
+
+			anthropicResp, req, err = s.handleAnthropicBetaMCPToolCalls(c.Request.Context(), provider, req, anthropicResp)
+			if err != nil {
+				respondMCPError(s, c, recorder, err, "Failed to handle MCP tool calls")
+				return
+			}
+
+			inputTokens := int(anthropicResp.Usage.InputTokens)
+			outputTokens := int(anthropicResp.Usage.OutputTokens)
+			cacheTokens := int(anthropicResp.Usage.CacheReadInputTokens + anthropicResp.Usage.CacheCreationInputTokens)
+			tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
+			s.trackUsageWithTokenUsage(c, tokenUsage, nil)
+
+			openaiResp := ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
+			if ShouldRoundtripResponse(c, "anthropic") {
+				roundtripped, err := RoundtripOpenAIMapViaAnthropic(openaiResp, responseModel, provider, actualModel)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, ErrorResponse{
+						Error: ErrorDetail{
+							Message: "Failed to roundtrip response: " + err.Error(),
+							Type:    "api_error",
+						},
+					})
+					return
+				}
+				openaiResp = roundtripped
+			}
+
+			cursorCompat := false
+			if v, ok := reqCtx.Extra["cursor_compat"]; ok {
+				cursorCompat = v.(bool)
+			}
+			if cursorCompat {
+				delete(openaiResp, "usage")
+			}
+
+			var parsed openai.ChatCompletion
+			raw, _ := json.Marshal(openaiResp)
+			if err := json.Unmarshal(raw, &parsed); err != nil {
+				c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Error: ErrorDetail{
+						Message: "Failed to encode streaming response: " + err.Error(),
+						Type:    "api_error",
+					},
+				})
+				return
+			}
+
+			streamSingleOpenAICompletion(c, &parsed, responseModel, disableStreamUsage)
+			if recorder != nil {
+				recorder.SetAssembledResponse(anthropicResp)
+				recorder.RecordResponse(provider, actualModel)
+			}
+			return
+		}
+
 		streamResp, cancel, err := ForwardAnthropicV1BetaStream(fc, wrapper, req)
 		if cancel != nil {
 			defer cancel()
@@ -204,14 +344,6 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 				recorder.RecordError(err)
 			}
 			return
-		}
-
-		disableStreamUsage := false
-		if v, ok := reqCtx.Extra["cursor_compat"]; ok {
-			disableStreamUsage = v.(bool)
-		}
-		if reqCtx.ScenarioFlags != nil {
-			disableStreamUsage = disableStreamUsage || reqCtx.ScenarioFlags.DisableStreamUsage
 		}
 
 		inputTokens, outputTokens, err := stream.AnthropicToOpenAIStream(c, req, streamResp, responseModel, disableStreamUsage)
@@ -252,6 +384,12 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
+			return
+		}
+
+		anthropicResp, req, err = s.handleAnthropicBetaMCPToolCalls(c.Request.Context(), provider, req, anthropicResp)
+		if err != nil {
+			respondMCPError(s, c, recorder, err, "Failed to handle MCP tool calls")
 			return
 		}
 
@@ -307,6 +445,57 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 		fc := NewForwardContext(c.Request.Context(), provider)
 
 		if isStreaming {
+			if hasDeclaredMCPAnthropicBetaTools(req) {
+				anthropicResp, cancel, err := ForwardAnthropicV1Beta(fc, wrapper, req)
+				if cancel != nil {
+					defer cancel()
+				}
+				if err != nil {
+					s.trackUsageFromContext(c, 0, 0, err)
+					stream.SendStreamingError(c, err)
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
+
+				anthropicResp, req, err = s.handleAnthropicBetaMCPToolCalls(c.Request.Context(), provider, req, anthropicResp)
+				if err != nil {
+					recordMCPError(s, c, err, recorder)
+					return
+				}
+
+				usage := protocol.NewTokenUsageWithCache(
+					int(anthropicResp.Usage.InputTokens),
+					int(anthropicResp.Usage.OutputTokens),
+					int(anthropicResp.Usage.CacheReadInputTokens),
+				)
+				s.trackUsageWithTokenUsage(c, usage, nil)
+
+				s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
+				anthropicResp.Model = anthropic.Model(responseModel)
+
+				session := s.guardrailsSessionFromContext(c, actualModel, provider)
+				messageHistory := serverguardrails.MessagesFromAnthropicV1Beta(req.System, req.Messages)
+				blocked := s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, session, messageHistory, anthropicResp)
+				if !blocked {
+					s.restoreGuardrailsCredentialAliasesV1BetaResponse(c, anthropicResp)
+				}
+
+				if err := stream.StreamAnthropicBetaSingleMessage(c, anthropicResp, responseModel); err != nil {
+					stream.SendInternalError(c, err.Error())
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
+				if recorder != nil {
+					recorder.SetAssembledResponse(anthropicResp)
+					recorder.RecordResponse(provider, actualModel)
+				}
+				return
+			}
+
 			streamResp, cancel, err := ForwardAnthropicV1BetaStream(fc, wrapper, req)
 			if cancel != nil {
 				defer cancel()
@@ -331,6 +520,12 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
+				return
+			}
+
+			anthropicResp, req, err = s.handleAnthropicBetaMCPToolCalls(c.Request.Context(), provider, req, anthropicResp)
+			if err != nil {
+				recordMCPForwardingError(s, c, err, recorder)
 				return
 			}
 
@@ -359,6 +554,30 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 			c.JSON(http.StatusOK, anthropicResp)
 		}
 	}
+}
+
+func hasDeclaredMCPAnthropicV1Tools(req *anthropic.MessageNewParams) bool {
+	if req == nil || len(req.Tools) == 0 {
+		return false
+	}
+	for _, t := range req.Tools {
+		if t.OfTool != nil && mcpruntime.IsMCPToolName(t.OfTool.Name) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasDeclaredMCPAnthropicBetaTools(req *anthropic.BetaMessageNewParams) bool {
+	if req == nil || len(req.Tools) == 0 {
+		return false
+	}
+	for _, t := range req.Tools {
+		if t.OfTool != nil && mcpruntime.IsMCPToolName(t.OfTool.Name) {
+			return true
+		}
+	}
+	return false
 }
 
 // ── Google ──────────────────────────────────────────────────────────────
@@ -534,6 +753,68 @@ func (s *Server) dispatchChainFromOpenAIChat(
 	if isStreaming {
 		switch reqCtx.SourceAPI {
 		case protocol.TypeAnthropicV1:
+			if hasDeclaredMCPTools(req) {
+				reqForMCP := *req
+				// This branch intentionally uses non-stream forwarding to execute
+				// server-side MCP tool loop, so stream-only options must be omitted.
+				reqForMCP.StreamOptions = openai.ChatCompletionStreamOptionsParam{}
+
+				wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
+				fc := NewForwardContext(nil, provider)
+				resp, _, err := ForwardOpenAIChat(fc, wrapper, &reqForMCP)
+				if err != nil {
+					stream.SendStreamingError(c, err)
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
+				resp, err = s.handleMCPToolCalls(c.Request.Context(), provider, &reqForMCP, resp)
+				if err != nil {
+					stream.SendStreamingError(c, err)
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
+
+				usage := protocol.NewTokenUsageWithCache(
+					int(resp.Usage.PromptTokens),
+					int(resp.Usage.CompletionTokens),
+					int(resp.Usage.PromptTokensDetails.CachedTokens),
+				)
+				s.trackUsageWithTokenUsage(c, usage, nil)
+
+				betaResp := nonstream.ConvertOpenAIToAnthropicResponse(resp, responseModel)
+				s.updateAffinityMessageID(c, rule, string(betaResp.ID))
+				var v1Resp anthropic.Message
+				if b, err := json.Marshal(betaResp); err != nil {
+					stream.SendInternalError(c, err.Error())
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				} else if err := json.Unmarshal(b, &v1Resp); err != nil {
+					stream.SendInternalError(c, err.Error())
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
+				if err := stream.StreamAnthropicV1SingleMessage(c, &v1Resp, responseModel); err != nil {
+					stream.SendInternalError(c, err.Error())
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
+				if recorder != nil {
+					recorder.SetAssembledResponse(betaResp)
+					recorder.RecordResponse(provider, actualModel)
+				}
+				return
+			}
+
 			wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
 			fc := NewForwardContext(c.Request.Context(), provider)
 			streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, req)
@@ -559,6 +840,54 @@ func (s *Server) dispatchChainFromOpenAIChat(
 			}
 			s.trackUsageWithTokenUsage(c, usage, nil)
 		case protocol.TypeAnthropicBeta:
+			if hasDeclaredMCPTools(req) {
+				reqForMCP := *req
+				// This branch intentionally uses non-stream forwarding to execute
+				// server-side MCP tool loop, so stream-only options must be omitted.
+				reqForMCP.StreamOptions = openai.ChatCompletionStreamOptionsParam{}
+
+				wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
+				fc := NewForwardContext(nil, provider)
+				resp, _, err := ForwardOpenAIChat(fc, wrapper, &reqForMCP)
+				if err != nil {
+					stream.SendStreamingError(c, err)
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
+				resp, err = s.handleMCPToolCalls(c.Request.Context(), provider, &reqForMCP, resp)
+				if err != nil {
+					stream.SendStreamingError(c, err)
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
+
+				usage := protocol.NewTokenUsageWithCache(
+					int(resp.Usage.PromptTokens),
+					int(resp.Usage.CompletionTokens),
+					int(resp.Usage.PromptTokensDetails.CachedTokens),
+				)
+				s.trackUsageWithTokenUsage(c, usage, nil)
+
+				anthropicResp := nonstream.ConvertOpenAIToAnthropicBetaResponse(resp, responseModel)
+				s.updateAffinityMessageID(c, rule, anthropicResp.ID)
+				if err := stream.StreamAnthropicBetaSingleMessage(c, &anthropicResp, responseModel); err != nil {
+					stream.SendInternalError(c, err.Error())
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
+				if recorder != nil {
+					recorder.SetAssembledResponse(&anthropicResp)
+					recorder.RecordResponse(provider, actualModel)
+				}
+				return
+			}
+
 			streamRec := newStreamRecorder(recorder)
 			if streamRec != nil {
 				streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
@@ -595,9 +924,6 @@ func (s *Server) dispatchChainFromOpenAIChat(
 			}
 		case protocol.TypeOpenAIChat:
 			// OpenAI passthrough: source and target are both OpenAI Chat format
-			shouldIntercept, _ := reqCtx.Extra["should_intercept"].(bool)
-			shouldStripTools, _ := reqCtx.Extra["should_strip_tools"].(bool)
-
 			disableStreamUsage := false
 			if v, ok := reqCtx.Extra["cursor_compat"]; ok {
 				disableStreamUsage = v.(bool)
@@ -606,7 +932,7 @@ func (s *Server) dispatchChainFromOpenAIChat(
 				disableStreamUsage = disableStreamUsage || reqCtx.ScenarioFlags.DisableStreamUsage
 			}
 
-			s.handleOpenAIChatStreamingRequest(c, provider, req, responseModel, shouldIntercept, shouldStripTools, disableStreamUsage)
+			s.handleOpenAIChatStreamingRequest(c, provider, req, responseModel, disableStreamUsage)
 		case protocol.TypeOpenAIResponses:
 			s.streamOpenAIChatToResponses(c, reqCtx, rule, provider, isStreaming, recorder)
 		}
@@ -614,14 +940,12 @@ func (s *Server) dispatchChainFromOpenAIChat(
 		switch reqCtx.SourceAPI {
 		case protocol.TypeOpenAIChat:
 			// OpenAI passthrough: delegate to handleNonStreamingRequest for tool interceptor support
-			shouldIntercept, _ := reqCtx.Extra["should_intercept"].(bool)
-			shouldStripTools, _ := reqCtx.Extra["should_strip_tools"].(bool)
 			stripUsage := false
 			if v, ok := reqCtx.Extra["cursor_compat"]; ok {
 				stripUsage = v.(bool)
 			}
 
-			s.handleNonStreamingRequest(c, provider, req, responseModel, shouldIntercept, shouldStripTools, stripUsage)
+			s.handleNonStreamingRequest(c, provider, req, responseModel, stripUsage)
 			return
 		case protocol.TypeOpenAIResponses:
 			s.nonstreamOpenAIChatToResponses(c, reqCtx, rule, provider, isStreaming, recorder)
@@ -639,6 +963,16 @@ func (s *Server) dispatchChainFromOpenAIChat(
 				recorder.RecordError(err)
 			}
 			return
+		}
+		if hasDeclaredMCPTools(req) {
+			resp, err = s.handleMCPToolCalls(c.Request.Context(), provider, req, resp)
+			if err != nil {
+				stream.SendForwardingError(c, err)
+				if recorder != nil {
+					recorder.RecordError(err)
+				}
+				return
+			}
 		}
 
 		inputTokens := int(resp.Usage.PromptTokens)

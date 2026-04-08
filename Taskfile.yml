@@ -89,6 +89,8 @@ tasks:
         mkdir -p build
         LDFLAGS="-X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME} -X main.goVersion=${GO_VERSION} -X main.platform=${PLATFORM}"
         GOOS={{.OS}} GOARCH={{.ARCH}} go build -ldflags="${LDFLAGS}" -o ./build/{{.BIN_NAME}} ./cli/tingly-box
+        # Copy MCP scripts alongside the binary
+        task mcp:copy-scripts
 
   go:test:
     cmds:
@@ -100,6 +102,20 @@ tasks:
     cmds:
       - |
         python -m tests.test_automation
+
+  mcp:web-tools:
+    summary: Run local MCP stdio server exposing mcp_web_search/mcp_web_fetch tools
+    cmds:
+      - |
+        python3 ./scripts/mcp_web_tools.py
+
+  mcp:copy-scripts:
+    summary: Copy MCP scripts to build directory (for distribution)
+    cmds:
+      - |
+        mkdir -p build/scripts
+        cp scripts/mcp_web_tools.py build/scripts/
+        cp scripts/mcp_weather_tools.py build/scripts/
 
   web:
     aliases:

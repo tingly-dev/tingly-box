@@ -203,49 +203,51 @@ type OAuthDetail struct {
 	ExtraFields  map[string]interface{} `json:"extra_fields"`  // Any extra field for some special clients
 }
 
-// ToolInterceptorConfig contains configuration for tool interceptor (search & fetch)
-type ToolInterceptorConfig struct {
-	PreferLocalSearch FlexibleBool `json:"prefer_local_search,omitempty"` // Prefer local tool interception even if provider has built-in search
-	SearchAPI         string       `json:"search_api,omitempty"`          // "brave" or "google"
-	SearchKey         string       `json:"search_key,omitempty"`          // API key for search service
-	MaxResults        int          `json:"max_results,omitempty"`         // Max search results to return (default: 10)
-
-	// Proxy configuration
-	ProxyURL string `json:"proxy_url,omitempty"` // HTTP proxy URL (e.g., "http://127.0.0.1:7897")
-
-	// Fetch configuration
-	MaxFetchSize int64 `json:"max_fetch_size,omitempty"` // Max content size for fetch in bytes (default: 1MB)
-	FetchTimeout int64 `json:"fetch_timeout,omitempty"`  // Fetch timeout in seconds (default: 30)
-	MaxURLLength int   `json:"max_url_length,omitempty"` // Max URL length (default: 2000)
+// MCPRuntimeConfig contains global MCP runtime configuration.
+type MCPRuntimeConfig struct {
+	Sources        []MCPSourceConfig `json:"sources,omitempty"`
+	RequestTimeout int               `json:"request_timeout,omitempty"` // seconds, default: 30
 }
 
-// ToolInterceptorOverride contains provider-level overrides for tool interceptor
-type ToolInterceptorOverride struct {
-	// Disabled allows provider to explicitly disable when globally enabled
-	Disabled bool `json:"disabled,omitempty"`
-
-	// MaxResults override for this specific provider
-	MaxResults *int `json:"max_results,omitempty"`
+// MCPSourceConfig defines one MCP source connection.
+type MCPSourceConfig struct {
+	ID        string            `json:"id,omitempty"`        // unique source id for normalized tool names
+	Enabled   *bool             `json:"enabled,omitempty"`   // nil means enabled (backward-compatible default)
+	Transport string            `json:"transport,omitempty"` // "http" or "stdio" (stdio reserved for future path)
+	Endpoint  string            `json:"endpoint,omitempty"`  // endpoint URL for HTTP transport
+	Headers   map[string]string `json:"headers,omitempty"`   // static headers for MCP calls
+	Tools     []string          `json:"tools,omitempty"`     // allow list, empty means all
+	Command   string            `json:"command,omitempty"`   // command for stdio transport
+	Args      []string          `json:"args,omitempty"`      // args for stdio command
+	Cwd       string            `json:"cwd,omitempty"`       // working directory for stdio command
+	Env       map[string]string `json:"env,omitempty"`       // extra env vars for stdio command
+	ProxyURL  string            `json:"proxy_url,omitempty"` // HTTP proxy URL for outgoing requests
 }
 
-// ApplyToolInterceptorDefaults applies default values to tool interceptor config
-func ApplyToolInterceptorDefaults(config *ToolInterceptorConfig) {
-	if config.MaxResults == 0 {
-		config.MaxResults = 10
+// ApplyMCPRuntimeDefaults applies default values to MCP runtime config.
+func ApplyMCPRuntimeDefaults(config *MCPRuntimeConfig) {
+	if config == nil {
+		return
 	}
-	if config.MaxFetchSize == 0 {
-		config.MaxFetchSize = 1 * 1024 * 1024 // 1MB
+	if config.RequestTimeout == 0 {
+		config.RequestTimeout = 30
 	}
-	if config.FetchTimeout == 0 {
-		config.FetchTimeout = 30 // 30 seconds
+	for i := range config.Sources {
+		if config.Sources[i].Enabled == nil {
+			config.Sources[i].Enabled = BoolPtr(true)
+		}
 	}
-	if config.MaxURLLength == 0 {
-		config.MaxURLLength = 2000
-	}
-	// Default to duckduckgo if no search API specified
-	if config.SearchAPI == "" {
-		config.SearchAPI = "duckduckgo"
-	}
+}
+
+// BoolPtr returns a pointer to the given bool.
+func BoolPtr(v bool) *bool {
+	return &v
+}
+
+// IsMCPSourceEnabled returns whether a source is enabled.
+// Nil means enabled for backward compatibility with existing configs.
+func IsMCPSourceEnabled(source MCPSourceConfig) bool {
+	return source.Enabled == nil || *source.Enabled
 }
 
 // IsExpired checks if the OAuth token is expired

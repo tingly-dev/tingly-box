@@ -1,6 +1,6 @@
 import {useFeatureFlags} from '@/contexts/FeatureFlagsContext';
-import { Cloud } from '@mui/icons-material';
 import { IconBrain, IconShield } from '@tabler/icons-react';
+import { SettingsApplications } from '@mui/icons-material';
 import {Alert, Box, Chip, Tooltip, Typography,} from '@mui/material';
 import React, {useEffect, useState} from 'react';
 import {api} from '../services/api';
@@ -17,6 +17,7 @@ const SKILL_FEATURES = [
 const GlobalExperimentalFeatures: React.FC = () => {
     const [features, setFeatures] = useState<Record<string, boolean>>({});
     const [guardrailsEnabled, setGuardrailsEnabled] = useState(false);
+    const [mcpEnabled, setMCPEnabled] = useState(false);
     const [loading, setLoading] = useState(true);
     const {refresh} = useFeatureFlags();
 
@@ -36,6 +37,10 @@ const GlobalExperimentalFeatures: React.FC = () => {
             // Load Guardrails flag
             const guardrailsResult = await api.getScenarioFlag('_global', 'guardrails');
             setGuardrailsEnabled(guardrailsResult?.data?.value || false);
+
+            // Load MCP flag
+            const mcpResult = await api.getScenarioFlag('_global', 'mcp');
+            setMCPEnabled(mcpResult?.data?.value || false);
 
         } catch (error) {
             console.error('Failed to load global experimental features:', error);
@@ -78,6 +83,24 @@ const GlobalExperimentalFeatures: React.FC = () => {
             })
             .catch((err) => {
                 console.error('Failed to set Guardrails:', err);
+                loadFeatures();
+            });
+    };
+
+    const toggleMCP = () => {
+        const newValue = !mcpEnabled;
+        api.setScenarioFlag('_global', 'mcp', newValue)
+            .then((result) => {
+                if (result.success) {
+                    setMCPEnabled(newValue);
+                    refresh();
+                } else {
+                    console.error('Failed to set MCP:', result);
+                    loadFeatures();
+                }
+            })
+            .catch((err) => {
+                console.error('Failed to set MCP:', err);
                 loadFeatures();
             });
     };
@@ -163,6 +186,35 @@ const GlobalExperimentalFeatures: React.FC = () => {
                 <Alert severity="info" sx={{ mt: 1 }}>
                     <Typography variant="body2">
                         Guardrails is enabled. A "Guardrails" page is available in the sidebar for rule management.
+                    </Typography>
+                </Alert>
+            )}
+
+            {/* MCP Section */}
+            <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
+                    <SettingsApplications sx={{ fontSize: '1rem', color: 'text.secondary' }} />
+                    <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
+                        MCP
+                    </Typography>
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
+                    <Tooltip title={"Enable MCP Tools - Configure MCP (Model Context Protocol) tools like web search and web fetch" + (mcpEnabled ? ' (enabled)' : ' (disabled) - Click to enable')} arrow>
+                        <Chip
+                            label={`MCP Tools · ${mcpEnabled ? 'On' : 'Off'}`}
+                            onClick={toggleMCP}
+                            size="small"
+                            sx={{ ...chipStyle(mcpEnabled), cursor: 'pointer', pointerEvents: 'auto' }}
+                        />
+                    </Tooltip>
+                </Box>
+            </Box>
+
+            {mcpEnabled && (
+                <Alert severity="info" sx={{ mt: 1 }}>
+                    <Typography variant="body2">
+                        MCP Tools is enabled. An "MCP Tools" page is available under System in the sidebar for configuration.
                     </Typography>
                 </Alert>
             )}

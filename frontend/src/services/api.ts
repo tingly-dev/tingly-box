@@ -797,7 +797,7 @@ export const api = {
         createBackup?: boolean;
         dryRun?: boolean;
     } = {}): Promise<any> => {
-        return fetchUIAPI('/codex/import/openai', {
+        return uiAPI('/codex/import/openai', {
             method: 'POST',
             body: JSON.stringify(payload),
         });
@@ -1465,6 +1465,36 @@ export const api = {
         } catch (error: any) {
             return { success: false, error: error.message };
         }
+    },
+
+    // ========== MCP Runtime API ==========
+
+    // Get MCP runtime config
+    getMCPConfig: async (): Promise<any> => {
+        return uiAPI('/mcp/config', {
+            method: 'GET',
+        });
+    },
+
+    // Set MCP runtime config
+    setMCPConfig: async (config: {
+        sources?: Array<{
+            id?: string;
+            transport?: string;
+            endpoint?: string;
+            headers?: Record<string, string>;
+            tools?: string[];
+            command?: string;
+            args?: string[];
+            cwd?: string;
+            env?: Record<string, string>;
+        }>;
+        request_timeout?: number;
+    }): Promise<any> => {
+        return uiAPI('/mcp/config', {
+            method: 'PUT',
+            body: JSON.stringify(config),
+        });
     },
 };
 

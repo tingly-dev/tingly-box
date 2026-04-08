@@ -22,6 +22,7 @@ import {
     IconMessageCircle,
 } from '@tabler/icons-react';
 import { OpenAI, Anthropic, Claude, OpenCode, Xcode, VSCode, Telegram, Feishu, Lark, DingTalk, Weixin, Codex, OpenClaw } from '../components/BrandIcons';
+import { SettingsApplications } from '@mui/icons-material';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { isFullEdition } from '@/utils/edition';
@@ -30,7 +31,7 @@ import { IconAiAgents } from '@tabler/icons-react';
 
 export function useActivityItems(): ActivityItem[] {
     const { t } = useTranslation();
-    const { skillUser, skillIde, enableGuardrails } = useFeatureFlags();
+    const { skillUser, skillIde, enableGuardrails, enableMCP } = useFeatureFlags();
     const { profiles } = useProfileContext();
 
     const promptMenuItems = useMemo(() => {
@@ -135,6 +136,15 @@ export function useActivityItems(): ActivityItem[] {
                     { path: '/guardrails/history', label: 'History', icon: <IconHistory size={20} /> },
                 ] as NavItem[],
             }] as ActivityItem[] : []),
+            ...(enableMCP ? [{
+                key: 'mcp' as const,
+                icon: <SettingsApplications sx={{ fontSize: 22 }} />,
+                label: 'MCP',
+                children: [
+                    { path: '/mcp/builtin', label: 'Builtin', icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
+                    { path: '/mcp/custom', label: 'Custom', icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
+                ] as NavItem[],
+            }] as ActivityItem[] : []),
             {
                 key: 'credential',
                 icon: <IconLock size={22} />,
@@ -156,5 +166,5 @@ export function useActivityItems(): ActivityItem[] {
         ];
 
         return items;
-    }, [t, promptMenuItems, enableGuardrails, profiles]);
+    }, [t, promptMenuItems, enableGuardrails, enableMCP, profiles]);
 }

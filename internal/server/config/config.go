@@ -984,15 +984,16 @@ func (c *Config) GetDefaultMaxTokens() int {
 	return c.DefaultMaxTokens
 }
 
-// GetToolInterceptorConfig returns the global tool interceptor config
-func (c *Config) GetToolInterceptorConfig() *typ.ToolInterceptorConfig {
+// GetMCPRuntimeConfig returns the global MCP runtime config.
+func (c *Config) GetMCPRuntimeConfig() *typ.MCPRuntimeConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	var config typ.ToolInterceptorConfig
+	var config typ.MCPRuntimeConfig
 	if c.ToolConfigs != nil {
-		if data, ok := c.ToolConfigs[db.ToolTypeInterceptor]; ok {
+		if data, ok := c.ToolConfigs[db.ToolTypeMCPRuntime]; ok {
 			if err := json.Unmarshal(data, &config); err == nil {
+				typ.ApplyMCPRuntimeDefaults(&config)
 				return &config
 			}
 		}
@@ -1043,112 +1044,12 @@ func (c *Config) SetToolConfig(toolType string, config interface{}) error {
 	return c.Save()
 }
 
-// GetToolInterceptorConfigForProvider returns the effective tool interceptor config for a specific provider
-// This merges the global config with provider-specific config from the tool config store
-func (c *Config) GetToolInterceptorConfigForProvider(providerUUID string) (*typ.ToolInterceptorConfig, bool) {
-	global := c.GetToolInterceptorConfig()
-	if global == nil && c.toolConfigStore == nil {
-		return nil, false
-	}
-
-	// Try to get provider-specific config from the store
-	providerConfig, enabled, err := c.toolConfigStore.GetToolInterceptorConfig(providerUUID)
-	if err != nil {
-		logrus.Warnf("Failed to get tool interceptor config for provider %s: %v", providerUUID, err)
-	}
-
-	// If provider explicitly disabled, return disabled
-	if providerConfig != nil && !enabled {
-		return nil, false
-	}
-
-	// If provider has config, merge with global (provider takes precedence)
-	if providerConfig != nil {
-		// Start with an empty config or copy from global if available
-		effective := &typ.ToolInterceptorConfig{}
-
-		// Copy global config values if global is not nil
-		if global != nil {
-			effective.PreferLocalSearch = global.PreferLocalSearch
-			effective.SearchAPI = global.SearchAPI
-			effective.SearchKey = global.SearchKey
-			effective.MaxResults = global.MaxResults
-			effective.ProxyURL = global.ProxyURL
-			effective.MaxFetchSize = global.MaxFetchSize
-			effective.FetchTimeout = global.FetchTimeout
-			effective.MaxURLLength = global.MaxURLLength
-		}
-
-		// Apply provider overrides
-		if providerConfig.PreferLocalSearch {
-			effective.PreferLocalSearch = true
-		}
-		if providerConfig.SearchAPI != "" {
-			effective.SearchAPI = providerConfig.SearchAPI
-		}
-		if providerConfig.SearchKey != "" {
-			effective.SearchKey = providerConfig.SearchKey
-		}
-		if providerConfig.MaxResults != 0 {
-			effective.MaxResults = providerConfig.MaxResults
-		}
-		if providerConfig.ProxyURL != "" {
-			effective.ProxyURL = providerConfig.ProxyURL
-		}
-		if providerConfig.MaxFetchSize != 0 {
-			effective.MaxFetchSize = providerConfig.MaxFetchSize
-		}
-		if providerConfig.FetchTimeout != 0 {
-			effective.FetchTimeout = providerConfig.FetchTimeout
-		}
-		if providerConfig.MaxURLLength != 0 {
-			effective.MaxURLLength = providerConfig.MaxURLLength
-		}
-
-		// Apply defaults
-		typ.ApplyToolInterceptorDefaults(effective)
-		return effective, true
-	}
-
-	// No provider-specific config, use global if enabled
-	if global == nil {
-		return nil, false
-	}
-
-	effective := &typ.ToolInterceptorConfig{
-		PreferLocalSearch: global.PreferLocalSearch,
-		SearchAPI:         global.SearchAPI,
-		SearchKey:         global.SearchKey,
-		MaxResults:        global.MaxResults,
-		ProxyURL:          global.ProxyURL,
-		MaxFetchSize:      global.MaxFetchSize,
-		FetchTimeout:      global.FetchTimeout,
-		MaxURLLength:      global.MaxURLLength,
-	}
-
-	typ.ApplyToolInterceptorDefaults(effective)
-	return effective, true
-}
-
 // GetEffectiveToolConfig returns the effective tool config for a specific provider and tool type
 // This is a generic method that works for any tool type
 // The mergeFunc parameter defines how to merge global and provider-specific configs
 //
-// Usage:
-//
-//	var globalCfg typ.ToolInterceptorConfig
-//	if !c.GetToolConfig(db.ToolTypeInterceptor, &globalCfg) {
-//	    // No global config
-//	    return nil, false
-//	}
-//
-//	effective, enabled := c.GetEffectiveToolConfig(providerUUID, db.ToolTypeInterceptor,
-//	    func(globalJSON, providerJSON []byte) ([]byte, error) {
-//	        // Custom merge logic
-//	        return mergedJSON, nil
-//	    },
-//	    &globalCfg,
-//	)
+// Usage: load global config with GetToolConfig(), then call this helper to merge
+// provider-specific overrides by tool type.
 func (c *Config) GetEffectiveToolConfig(providerUUID, toolType string, mergeFunc func(global, provider interface{}) interface{}, globalConfig interface{}) (interface{}, bool) {
 	if c.toolConfigStore == nil {
 		return nil, false
@@ -1518,6 +1419,11 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 			return val
 		}
 		return false
+	case "mcp":
+		if val, ok := config.Extensions["mcp"].(bool); ok {
+			return val
+		}
+		return false
 	default:
 		return false
 	}
@@ -1581,6 +1487,11 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 			config.Extensions = make(map[string]interface{})
 		}
 		config.Extensions["guardrails"] = value
+	case "mcp":
+		if config.Extensions == nil {
+			config.Extensions = make(map[string]interface{})
+		}
+		config.Extensions["mcp"] = value
 	default:
 		return fmt.Errorf("unknown flag name: %s", flagName)
 	}

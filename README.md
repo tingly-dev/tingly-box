@@ -190,6 +190,8 @@ npx tingly-box@latest
 
 **[Guardrails](./docs/guardrails.md)** – Policy-based safety checks, built-in protections, and protected credential masking
 
+**[MCP Web Tools](./docs/mcp-web-tools.md)** – Local stdio MCP server for `web_search` / `web_fetch`
+
 
 ## **Philosophy**
 

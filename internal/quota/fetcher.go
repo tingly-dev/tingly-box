@@ -143,6 +143,6 @@ func NewHTTPClient(proxyURL string, timeout time.Duration) *http.Client {
 	}
 
 	client.Transport = transport
-	logrus.Infof("Using proxy: %s", proxyURL)
+	logrus.Debugf("Using proxy: %s", proxyURL)
 	return client
 }

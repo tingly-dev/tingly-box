@@ -20,6 +20,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/mcpruntime"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
@@ -31,7 +32,6 @@ import (
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
-	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
@@ -92,8 +92,8 @@ type Server struct {
 	// capability store for persistent model capabilities
 	capabilityStore *db.ModelCapabilityStore
 
-	// tool interceptor for local tool execution
-	toolInterceptor *toolinterceptor.Interceptor
+	// mcp runtime for external MCP tools
+	mcpRuntime *mcpruntime.Runtime
 
 	// guardrails engine (optional)
 	guardrailsEngine            guardrails.Guardrails
@@ -628,11 +628,12 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Set template manager in config for model fetching fallback
 	server.config.SetTemplateManager(templateManager)
 
-	// Initialize tool interceptor (local web_search/web_fetch)
-	// Pass a config provider function that gets effective config for each provider
-	server.toolInterceptor = toolinterceptor.NewInterceptor(func(providerUUID string) (*typ.ToolInterceptorConfig, bool) {
-		return cfg.GetToolInterceptorConfigForProvider(providerUUID)
+	server.mcpRuntime = mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig {
+		return cfg.GetMCPRuntimeConfig()
 	})
+	if err := mcpruntime.EnsureBuiltinScripts(cfg.ConfigDir); err != nil {
+		logrus.WithError(err).Warn("mcp: failed to ensure builtin scripts in config dir")
+	}
 
 	// Initialize probe cache with 24-hour TTL
 	server.probeCache = NewProbeCache(24 * time.Hour)
@@ -1413,6 +1414,12 @@ func (s *Server) Stop(ctx context.Context) error {
 	if s.watcher != nil {
 		s.watcher.Stop()
 		log.Println("Configuration watcher stopped")
+	}
+
+	// Close all MCP sessions and terminate subprocesses
+	if s.mcpRuntime != nil {
+		s.mcpRuntime.Close()
+		log.Println("MCP runtime stopped: all sessions closed and subprocesses terminated")
 	}
 
 	// Close all scenario recording sinks
