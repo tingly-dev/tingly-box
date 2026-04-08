@@ -969,6 +969,10 @@ func (s *Server) UseAIEndpoints() {
 	passthroughOpenaiV1 := s.engine.Group("/passthrough/openai/v1")
 	s.SetupPassthroughOpenAIEndpoints(passthroughOpenaiV1)
 
+	// Generic passthrough — registered before /tingly/:scenario to avoid param capture
+	generic := s.engine.Group("/tingly/generic")
+	generic.Any("/*path", s.getModelAuthMiddleware(), s.GenericPassthrough)
+
 	// scenario routes with middleware to inject scenario into context
 	scenario := s.engine.Group("/tingly/:scenario")
 	scenario.Use(s.contextMiddleware)
