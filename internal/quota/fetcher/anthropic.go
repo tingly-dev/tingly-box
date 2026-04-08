@@ -61,19 +61,19 @@ func (f *AnthropicFetcher) Validate(provider *typ.Provider) error {
 type anthropicUsageResponse struct {
 	FiveHour struct {
 		Utilization float64 `json:"utilization"` // 0-100 percentage
-		ResetsAt    *string `json:"resets_at"`   // ISO 8601
+		ResetsAt    *string `json:"resets_at"`   // ISO 8601 with microseconds
 	} `json:"five_hour"`
 
 	SevenDay struct {
 		Utilization float64 `json:"utilization"` // 0-100 percentage
-		ResetsAt    *string `json:"resets_at"`   // ISO 8601
+		ResetsAt    *string `json:"resets_at"`   // ISO 8601 with microseconds
 	} `json:"seven_day"`
 
 	ExtraUsage struct {
-		IsEnabled    bool    `json:"is_enabled"`
-		Utilization  float64 `json:"utilization"`   // 0-100 percentage
-		UsedCredits  float64 `json:"used_credits"`  // in cents
-		MonthlyLimit float64 `json:"monthly_limit"` // in cents
+		IsEnabled    bool     `json:"is_enabled"`
+		Utilization  *float64 `json:"utilization"`   // 0-100 percentage, nullable
+		UsedCredits  float64  `json:"used_credits"`  // in cents
+		MonthlyLimit float64  `json:"monthly_limit"` // in cents
 	} `json:"extra_usage"`
 }
 
@@ -129,10 +129,11 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*
 		RawResponse:  rawResponse, // 存储原始响应
 
 		// Primary: 5-hour session quota (API returns utilization percentage only)
+		// Used/Limit normalized to 0-100 scale for unified frontend rendering
 		Primary: &quota.UsageWindow{
 			Type:          quota.WindowTypeSession,
-			Used:          0, // API doesn't provide actual count
-			Limit:         0, // API doesn't provide limit
+			Used:          apiResp.FiveHour.Utilization,
+			Limit:         100,
 			UsedPercent:   apiResp.FiveHour.Utilization,
 			Unit:          quota.UsageUnitPercent,
 			WindowMinutes: 300, // 5 hours
@@ -141,10 +142,11 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*
 		},
 
 		// Secondary: 7-day weekly quota (API returns utilization percentage only)
+		// Used/Limit normalized to 0-100 scale for unified frontend rendering
 		Secondary: &quota.UsageWindow{
 			Type:        quota.WindowTypeWeekly,
-			Used:        0, // API doesn't provide actual count
-			Limit:       0, // API doesn't provide limit
+			Used:        apiResp.SevenDay.Utilization,
+			Limit:       100,
 			UsedPercent: apiResp.SevenDay.Utilization,
 			Unit:        quota.UsageUnitPercent,
 			Label:       "7-Day Window",
@@ -152,29 +154,42 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*
 		},
 	}
 
-	// 解析 resets_at 时间
+	// 解析 resets_at 时间（API 返回带微秒的 ISO 8601，需用 RFC3339Nano）
 	if apiResp.FiveHour.ResetsAt != nil {
-		if t, err := time.Parse(time.RFC3339, *apiResp.FiveHour.ResetsAt); err == nil {
+		if t, err := time.Parse(time.RFC3339Nano, *apiResp.FiveHour.ResetsAt); err == nil {
 			usage.Primary.ResetsAt = &t
 		}
 	}
 	if apiResp.SevenDay.ResetsAt != nil {
-		if t, err := time.Parse(time.RFC3339, *apiResp.SevenDay.ResetsAt); err == nil {
+		if t, err := time.Parse(time.RFC3339Nano, *apiResp.SevenDay.ResetsAt); err == nil {
 			usage.Secondary.ResetsAt = &t
 		}
 	}
 
 	// Tertiary: Extra usage (Max plan add-on), only if enabled
-	// API returns utilization percentage and credit amounts
+	// API returns utilization percentage (nullable) and credit amounts
 	if apiResp.ExtraUsage.IsEnabled {
+		var utilPct float64
+		var used, limit float64
+		var desc string
+		if apiResp.ExtraUsage.Utilization != nil {
+			utilPct = *apiResp.ExtraUsage.Utilization
+			used = utilPct
+			limit = 100
+			desc = fmt.Sprintf("%.0f%% utilization", utilPct)
+		} else {
+			used = 0
+			limit = 100
+			desc = "utilization unavailable"
+		}
 		usage.Tertiary = &quota.UsageWindow{
 			Type:        quota.WindowTypeMonthly,
-			Used:        0, // API doesn't provide request count
-			Limit:       0, // API doesn't provide request limit
-			UsedPercent: apiResp.ExtraUsage.Utilization,
+			Used:        used,
+			Limit:       limit,
+			UsedPercent: utilPct,
 			Unit:        quota.UsageUnitPercent,
 			Label:       "Extra Usage",
-			Description: fmt.Sprintf("%.0f%% utilization", apiResp.ExtraUsage.Utilization),
+			Description: desc,
 		}
 
 		usage.Cost = &quota.UsageCost{
