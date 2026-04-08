@@ -1,9 +1,11 @@
 package server
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/quota"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -20,6 +22,17 @@ type ErrorDetail struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
 	Code    string `json:"code,omitempty"`
+}
+
+// sendErrorResponse registers the error into gin context for logging middleware and sends JSON response.
+func sendErrorResponse(c *gin.Context, statusCode int, err error, errType string) {
+	c.Error(fmt.Errorf("%s: %w", errType, err)).SetType(gin.ErrorTypePublic) //nolint:errcheck
+	c.JSON(statusCode, ErrorResponse{
+		Error: ErrorDetail{
+			Message: err.Error(),
+			Type:    errType,
+		},
+	})
 }
 
 // =============================================

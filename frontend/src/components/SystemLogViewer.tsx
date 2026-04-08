@@ -294,10 +294,44 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                 <Box sx={{ p: 2, backgroundColor: 'rgba(0,0,0,0.03)' }}>
                                                     {log.fields && Object.keys(log.fields).length > 0 && (
                                                         <Stack spacing={1}>
-                                                            <Typography variant="subtitle2" color="text.secondary">
-                                                                Fields:
-                                                            </Typography>
-                                                            {Object.entries(log.fields).map(([key, value]) => (
+                                                            {/* Show error field prominently if it exists */}
+                                                            {log.fields.error && (
+                                                                <Box sx={{
+                                                                    p: 1,
+                                                                    backgroundColor: 'error.dark',
+                                                                    borderRadius: 1,
+                                                                }}>
+                                                                    <Typography
+                                                                        variant="body2"
+                                                                        sx={{
+                                                                            fontFamily: 'monospace',
+                                                                            fontSize: '0.75rem',
+                                                                            color: 'error.contrastText',
+                                                                            fontWeight: 'bold',
+                                                                            wordBreak: 'break-all',
+                                                                        }}
+                                                                    >
+                                                                        ERROR: {String(log.fields.error)}
+                                                                    </Typography>
+                                                                    {log.fields.error_type && (
+                                                                        <Typography
+                                                                            variant="caption"
+                                                                            sx={{
+                                                                                fontFamily: 'monospace',
+                                                                                fontSize: '0.7rem',
+                                                                                color: 'error.contrastText',
+                                                                                opacity: 0.8,
+                                                                            }}
+                                                                        >
+                                                                            Type: {String(log.fields.error_type)}
+                                                                        </Typography>
+                                                                    )}
+                                                                </Box>
+                                                            )}
+                                                            {/* Show other fields */}
+                                                            {Object.entries(log.fields)
+                                                                .filter(([key]) => key !== 'error' && key !== 'error_type')
+                                                                .map(([key, value]) => (
                                                                 <Typography
                                                                     key={key}
                                                                     variant="body2"

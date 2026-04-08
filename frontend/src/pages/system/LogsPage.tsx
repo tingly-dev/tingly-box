@@ -1,4 +1,4 @@
-import { Box, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
+import { Box, FormControlLabel, Stack, Switch, Typography, Alert } from '@mui/material';
 import { useEffect, useState } from 'react';
 import SystemLogViewer from '@/components/SystemLogViewer';
 import UnifiedCard from '@/components/UnifiedCard';
@@ -6,6 +6,7 @@ import UnifiedCard from '@/components/UnifiedCard';
 const LogsPage = () => {
     const [debugMode, setDebugMode] = useState(false);
     const [loadingDebug, setLoadingDebug] = useState(false);
+    const [logError, setLogError] = useState<string | null>(null);
 
     // Fetch current debug mode on mount
     useEffect(() => {
@@ -23,6 +24,14 @@ const LogsPage = () => {
             if (response.ok) {
                 const data = await response.json();
                 setDebugMode(data.level === 'debug');
+            } else {
+                // Try to extract error message from response
+                let errorMsg = `Failed to fetch debug mode (${response.status})`;
+                try {
+                    const errData = await response.json();
+                    if (errData.error) errorMsg = errData.error;
+                } catch {}
+                console.error(errorMsg);
             }
         } catch (error) {
             console.error('Failed to fetch debug mode:', error);
@@ -45,7 +54,13 @@ const LogsPage = () => {
             if (response.ok) {
                 setDebugMode(newDebugMode);
             } else {
-                console.error('Failed to set debug mode');
+                // Try to extract error message from response
+                let errorMsg = `Failed to set debug mode (${response.status})`;
+                try {
+                    const errData = await response.json();
+                    if (errData.error) errorMsg = errData.error;
+                } catch {}
+                console.error(errorMsg);
             }
         } catch (error) {
             console.error('Failed to set debug mode:', error);
@@ -73,8 +88,14 @@ const LogsPage = () => {
             }
         >
             <Box sx={{ height: '100%' }}>
+                {logError && (
+                    <Alert severity="error" onClose={() => setLogError(null)} sx={{ mb: 2 }}>
+                        {logError}
+                    </Alert>
+                )}
                 <SystemLogViewer
                     getLogs={async (params) => {
+                        setLogError(null);
                         try {
                             const queryParams = new URLSearchParams();
                             if (params?.limit) queryParams.append('limit', params.limit.toString());
@@ -88,7 +109,18 @@ const LogsPage = () => {
                             });
 
                             if (!response.ok) {
-                                throw new Error(`HTTP error! status: ${response.status}`);
+                                // Try to extract error message from response body
+                                let errorDetail = `HTTP error! status: ${response.status}`;
+                                try {
+                                    const errorData = await response.json();
+                                    if (errorData.error) {
+                                        errorDetail = errorData.error;
+                                    }
+                                } catch {
+                                    // If response is not JSON, use status text
+                                    errorDetail = response.statusText || errorDetail;
+                                }
+                                throw new Error(errorDetail);
                             }
 
                             const data = await response.json();
@@ -97,7 +129,9 @@ const LogsPage = () => {
                                 logs: data.logs || [],
                             };
                         } catch (error: any) {
-                            console.error('Failed to get system logs:', error);
+                            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                            console.error('Failed to get system logs:', errorMessage);
+                            setLogError(`Failed to load system logs: ${errorMessage}`);
                             return { total: 0, logs: [] };
                         }
                     }}
