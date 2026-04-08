@@ -5,7 +5,18 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
+
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 )
+
+// ServiceCapacityInfo holds seat-capacity info for a single service.
+// Capacity is ModelCapacity (configured seat limit); 0 means unlimited.
+// ActiveCount is the number of active affinity sessions currently locked to this service.
+type ServiceCapacityInfo struct {
+	ServiceID   string
+	Capacity    int // seat limit (ModelCapacity); 0 = unlimited
+	ActiveCount int // active affinity sessions
+}
 
 // RequestContext holds extracted request data for evaluation
 type RequestContext struct {
@@ -17,6 +28,11 @@ type RequestContext struct {
 	LatestRole        string // Latest message role (user, assistant, tool, function, etc.)
 	LatestContentType string
 	EstimatedTokens   int
+
+	// Service runtime characteristics — populated by SmartRoutingStage before router evaluation.
+	// These fields are set per-rule inside evaluateRule to avoid cross-rule contamination.
+	ServiceStats    []loadbalance.ServiceStats // TTFT / latency snapshots
+	ServiceCapacity []ServiceCapacityInfo      // seat utilization info
 }
 
 // GetLatestUserMessage returns the latest user message
