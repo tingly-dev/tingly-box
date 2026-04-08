@@ -123,6 +123,9 @@ func (r *Registry) RegisterDefaults() {
 
 	// Register tool-type models
 	r.registerToolModels()
+
+	// Register vision analyzer model for server tool testing
+	r.registerVisionModels()
 }
 
 // registerToolModels registers tool-type virtual models
@@ -229,4 +232,32 @@ func (r *Registry) registerCompactModels() {
 func newSmartCompactTransformer() protocol.Transformer {
 	// Create smart_compact transformer with keepLastNRounds=2
 	return smart_compact.NewCompactTransformer(2)
+}
+
+// registerVisionModels registers virtual models for vision/image analysis testing
+func (r *Registry) registerVisionModels() {
+	visionModels := []*VirtualModelConfig{
+		{
+			ID:   "vision-analyzer",
+			Name: "Vision Analyzer",
+			Description: "A virtual model that simulates vision analysis. Returns a canned image " +
+				"description for testing the server tool framework's analyze_image tool.",
+			Content: "The image shows a Go source code file displayed in a code editor. " +
+				"The file contains an HTTP handler function named `handleRequest` with approximately 30 lines of code. " +
+				"Key observations:\n" +
+				"- Line 15: There is an unhandled error from `db.Query()` — the `err` variable is assigned but never checked.\n" +
+				"- Line 22: A SQL query string is constructed using string concatenation, which is vulnerable to SQL injection.\n" +
+				"- Line 28: The function returns `http.StatusOK` even when the query fails.\n" +
+				"- The function accepts `w http.ResponseWriter` and `r *http.Request` as parameters.\n" +
+				"- Import block includes `database/sql`, `net/http`, and `encoding/json`.",
+			Delay: 200 * 1000000, // 200ms to simulate vision model latency
+		},
+	}
+
+	for _, cfg := range visionModels {
+		vm := NewVirtualModel(cfg)
+		if err := r.Register(vm); err != nil {
+			continue
+		}
+	}
 }
