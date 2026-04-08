@@ -27,6 +27,11 @@ type Runtime struct {
 
 // NewRuntime creates a new MCP runtime.
 func NewRuntime(getConfig configProvider) *Runtime {
+	// FIXME: it is useful but ugly, guard it in future
+	cfg := getConfig()
+	if cfg == nil {
+		return nil
+	}
 	return &Runtime{getConfig: getConfig, sc: newSessionCache()}
 }
 
