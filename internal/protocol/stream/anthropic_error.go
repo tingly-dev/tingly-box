@@ -2,6 +2,7 @@ package stream
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -68,6 +69,7 @@ func SendInvalidRequestBodyError(c *gin.Context, err error) {
 
 // SendStreamingError sends an error response for streaming request failures
 func SendStreamingError(c *gin.Context, err error) {
+	c.Error(err).SetType(gin.ErrorTypePublic) //nolint:errcheck
 	c.JSON(http.StatusInternalServerError, protocol.ErrorResponse{
 		Error: protocol.ErrorDetail{
 			Message: "Failed to create streaming request: " + err.Error(),
@@ -78,6 +80,7 @@ func SendStreamingError(c *gin.Context, err error) {
 
 // SendForwardingError sends an error response for request forwarding failures
 func SendForwardingError(c *gin.Context, err error) {
+	c.Error(err).SetType(gin.ErrorTypePublic) //nolint:errcheck
 	c.JSON(http.StatusInternalServerError, protocol.ErrorResponse{
 		Error: protocol.ErrorDetail{
 			Message: "Failed to forward request: " + err.Error(),
@@ -88,6 +91,7 @@ func SendForwardingError(c *gin.Context, err error) {
 
 // SendInternalError sends an error response for internal errors
 func SendInternalError(c *gin.Context, errMsg string) {
+	c.Error(fmt.Errorf("%s", errMsg)).SetType(gin.ErrorTypePublic) //nolint:errcheck
 	c.JSON(http.StatusInternalServerError, protocol.ErrorResponse{
 		Error: protocol.ErrorDetail{
 			Message: errMsg,

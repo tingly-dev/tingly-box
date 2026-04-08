@@ -54,12 +54,7 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 				if err != nil {
 					usage := protocol.NewTokenUsageWithCache(0, 0, 0)
 					s.trackUsageWithTokenUsage(c, usage, err)
-					c.JSON(http.StatusInternalServerError, ErrorResponse{
-						Error: ErrorDetail{
-							Message: "Failed to handle MCP tool calls: " + err.Error(),
-							Type:    "api_error",
-						},
-					})
+					sendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to handle tool calls: %w", err), "api_error")
 					return
 				}
 

@@ -28,6 +28,21 @@ type ErrorResponse struct {
 	Error ErrorDetail `json:"error"`
 }
 
+// abortWithError sends an error response and adds the error to gin context for logging
+func abortWithError(c *gin.Context, statusCode int, message string, errorType string) {
+	// Add error to context so logging middleware can capture it
+	c.Error(fmt.Errorf("%s: %s", errorType, message)).SetType(gin.ErrorTypePublic)
+
+	// Send JSON response
+	c.JSON(statusCode, ErrorResponse{
+		Error: ErrorDetail{
+			Message: message,
+			Type:    errorType,
+		},
+	})
+	c.Abort()
+}
+
 // ErrorDetail represents error details
 type ErrorDetail struct {
 	Message string `json:"message"`
@@ -226,26 +241,14 @@ func (am *AuthMiddleware) UserAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "User authorization header required",
-					Type:    "invalid_request_error",
-				},
-			})
-			c.Abort()
+			abortWithError(c, http.StatusUnauthorized, "User authorization header required", "invalid_request_error")
 			return
 		}
 
 		// Extract token from "Bearer <token>" format
 		tokenParts := strings.Split(authHeader, " ")
 		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
-			c.JSON(http.StatusUnauthorized, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Invalid user authorization header format. Expected: 'Bearer <token>'",
-					Type:    "invalid_request_error",
-				},
-			})
-			c.Abort()
+			abortWithError(c, http.StatusUnauthorized, "Invalid user authorization header format. Expected: 'Bearer <token>'", "invalid_request_error")
 			return
 		}
 
@@ -270,14 +273,7 @@ func (am *AuthMiddleware) UserAuthMiddleware() gin.HandlerFunc {
 			}
 		}
 
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Invalid user authorization token.",
-				Type:    "invalid_request_error",
-			},
-		})
-		c.Abort()
-		return
+		abortWithError(c, http.StatusUnauthorized, "Invalid user authorization token.", "invalid_request_error")
 	}
 }
 
@@ -288,13 +284,7 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 		authHeader := c.GetHeader("Authorization")
 		xApiKey := c.GetHeader("X-Api-Key")
 		if authHeader == "" && xApiKey == "" {
-			c.JSON(http.StatusUnauthorized, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Model authorization header required",
-					Type:    "invalid_request_error",
-				},
-			})
-			c.Abort()
+			abortWithError(c, http.StatusUnauthorized, "Model authorization header required", "invalid_request_error")
 			return
 		}
 
@@ -313,12 +303,7 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 		// Check against global config model token first
 		cfg := am.config
 		if cfg == nil || !cfg.HasModelToken() {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "config or config model token missing",
-					Type:    "invalid_request_error",
-				},
-			})
+			abortWithError(c, http.StatusInternalServerError, "config or config model token missing", "invalid_request_error")
 			return
 		}
 
@@ -331,13 +316,7 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 			if contextJWT != "" {
 				claims, verifyErr := verifyEnterpriseContextJWT(cfg, contextJWT)
 				if verifyErr != nil {
-					c.JSON(http.StatusUnauthorized, ErrorResponse{
-						Error: ErrorDetail{
-							Message: "Invalid enterprise context jwt",
-							Type:    "invalid_request_error",
-						},
-					})
-					c.Abort()
+					abortWithError(c, http.StatusUnauthorized, "Invalid enterprise context jwt", "invalid_request_error")
 					return
 				}
 				if claims != nil {
@@ -359,24 +338,11 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 			requestToken = xApiKey
 		}
 		if strings.HasPrefix(strings.TrimSpace(requestToken), "sk-tbe-") {
-			c.JSON(http.StatusUnauthorized, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Virtual key must be used through TBE /tbe/* endpoints",
-					Type:    "invalid_request_error",
-				},
-			})
-			c.Abort()
+			abortWithError(c, http.StatusUnauthorized, "Virtual key must be used through TBE /tbe/* endpoints", "invalid_request_error")
 			return
 		}
 
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Invalid model authorization token.",
-				Type:    "invalid_request_error",
-			},
-		})
-		c.Abort()
-		return
+		abortWithError(c, http.StatusUnauthorized, "Invalid model authorization token.", "invalid_request_error")
 	}
 }
 
@@ -387,13 +353,7 @@ func (am *AuthMiddleware) VirtualModelAuthMiddleware() gin.HandlerFunc {
 		authHeader := c.GetHeader("Authorization")
 		xApiKey := c.GetHeader("X-Api-Key")
 		if authHeader == "" && xApiKey == "" {
-			c.JSON(http.StatusUnauthorized, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Authorization header required for virtual model access",
-					Type:    "invalid_request_error",
-				},
-			})
-			c.Abort()
+			abortWithError(c, http.StatusUnauthorized, "Authorization header required for virtual model access", "invalid_request_error")
 			return
 		}
 
@@ -406,12 +366,7 @@ func (am *AuthMiddleware) VirtualModelAuthMiddleware() gin.HandlerFunc {
 		// Check against virtual model token
 		cfg := am.config
 		if cfg == nil || !cfg.HasVirtualModelToken() {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "virtual model token not configured",
-					Type:    "invalid_request_error",
-				},
-			})
+			abortWithError(c, http.StatusInternalServerError, "virtual model token not configured", "invalid_request_error")
 			c.Abort()
 			return
 		}
@@ -426,13 +381,6 @@ func (am *AuthMiddleware) VirtualModelAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Invalid virtual model authorization",
-				Type:    "invalid_request_error",
-			},
-		})
-		c.Abort()
-		return
+		abortWithError(c, http.StatusUnauthorized, "Invalid virtual model authorization", "invalid_request_error")
 	}
 }
