@@ -58,7 +58,11 @@ func ConvertOpenAIToAnthropicResponse(openaiResp *openai.ChatCompletion, model s
 		// Convert tool_calls to tool_use blocks
 		if len(choice.Message.ToolCalls) > 0 {
 			for _, toolCall := range choice.Message.ToolCalls {
-				contentBlocks = append(contentBlocks, anthropic.NewToolUseBlock(toolCall.ID, toolCall.Function.Arguments, toolCall.Function.Name))
+				var input map[string]interface{}
+				if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &input); err != nil {
+					input = make(map[string]interface{})
+				}
+				contentBlocks = append(contentBlocks, anthropic.NewToolUseBlock(toolCall.ID, input, toolCall.Function.Name))
 			}
 
 			// If there were tool calls, set stop_reason to tool_use
@@ -127,7 +131,11 @@ func ConvertOpenAIToAnthropicBetaResponse(openaiResp *openai.ChatCompletion, mod
 		// Convert tool_calls to tool_use blocks
 		if len(choice.Message.ToolCalls) > 0 {
 			for _, toolCall := range choice.Message.ToolCalls {
-				contentBlocks = append(contentBlocks, anthropic.NewBetaToolUseBlock(toolCall.ID, toolCall.Function.Arguments, toolCall.Function.Name))
+				var input map[string]interface{}
+				if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &input); err != nil {
+					input = make(map[string]interface{})
+				}
+				contentBlocks = append(contentBlocks, anthropic.NewBetaToolUseBlock(toolCall.ID, input, toolCall.Function.Name))
 			}
 
 			// If there were tool calls, set stop_reason to tool_use
