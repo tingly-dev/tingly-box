@@ -30,6 +30,8 @@ const POSITION_OPTIONS = [
     // { value: 'tool_use', label: 'Tool Name', description: 'Tool name' },
     { value: 'thinking', label: 'Thinking', description: 'Thinking mode enabled / disable' },
     { value: 'token', label: 'Token Count', description: 'Token count' },
+    { value: 'service_ttft', label: 'Service TTFT', description: 'Time to first token across services (ms)' },
+    { value: 'service_capacity', label: 'Service Capacity', description: 'Seat utilization across services (%)' },
 ] as const;
 
 // Operation options grouped by position
@@ -63,6 +65,18 @@ const OPERATION_OPTIONS: Record<string, Array<{ value: string; label: string; de
         // { value: 'gt', label: 'Greater Than', description: 'Token count > value', valueType: 'int' },
         { value: 'le', label: 'Less or Equal', description: 'Token count <= value', valueType: 'int' },
         // { value: 'lt', label: 'Less Than', description: 'Token count < value', valueType: 'int' },
+    ],
+    service_ttft: [
+        { value: 'avg_le', label: 'Avg ≤', description: 'Best service avg TTFT <= value (ms)', valueType: 'int' },
+        { value: 'avg_ge', label: 'Avg ≥', description: 'Mean avg TTFT across services >= value (ms)', valueType: 'int' },
+        { value: 'max_le', label: 'P99 ≤', description: 'Best service P99 TTFT <= value (ms)', valueType: 'int' },
+        { value: 'max_ge', label: 'P99 ≥', description: 'Mean P99 TTFT across services >= value (ms)', valueType: 'int' },
+    ],
+    service_capacity: [
+        { value: 'util_le', label: 'Utilization ≤', description: 'Avg seat utilization across services <= value (%)', valueType: 'int' },
+        { value: 'util_ge', label: 'Utilization ≥', description: 'Avg seat utilization across services >= value (%)', valueType: 'int' },
+        { value: 'util_lt', label: 'Utilization <', description: 'Avg seat utilization across services < value (%)', valueType: 'int' },
+        { value: 'util_gt', label: 'Utilization >', description: 'Avg seat utilization across services > value (%)', valueType: 'int' },
     ],
 };
 
@@ -333,6 +347,8 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
                                                 value={getDisplayValue(op)}
                                                 onChange={(e) => handleValueChange(op.uuid, e.target.value)}
                                                 placeholder={
+                                                    op.position === 'service_capacity' ? '0–100' :
+                                                    op.position === 'service_ttft' ? 'ms' :
                                                     op.meta?.type === 'int' ? '1,234' :
                                                     'enter value'
                                                 }

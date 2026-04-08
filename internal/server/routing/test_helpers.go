@@ -123,6 +123,18 @@ func (m *mockAffinityStore) Set(ruleUUID, sessionID string, entry *AffinityEntry
 	m.sets = append(m.sets, setCall{ruleUUID: ruleUUID, sessionID: sessionID})
 }
 
+func (m *mockAffinityStore) CountByService(serviceID string) int {
+	cutoff := time.Now().Add(-30 * time.Minute)
+	count := 0
+	for _, entry := range m.entries {
+		if entry.LockedAt.After(cutoff) && entry.Service != nil &&
+			entry.Service.ServiceID() == serviceID {
+			count++
+		}
+	}
+	return count
+}
+
 // mockConfig implements ProviderResolver for ServiceSelector tests.
 type mockConfig struct {
 	providers map[string]*typ.Provider
