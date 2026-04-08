@@ -378,11 +378,8 @@ func showPreview(appManager *AppManager, req *agent.ApplyAgentRequest) error {
 func executeAgentApply(appManager *AppManager, req *agent.ApplyAgentRequest) error {
 	globalConfig := appManager.GetGlobalConfig()
 
-	// Get host for configuration
+	// Get host for configuration (pure hostname, port is handled by AgentApply)
 	host := "127.0.0.1"
-	if port := appManager.GetServerPort(); port != 0 {
-		host = fmt.Sprintf("127.0.0.1:%d", port)
-	}
 
 	// Create agent apply instance
 	agentApply := agent.NewAgentApply(globalConfig, host)
