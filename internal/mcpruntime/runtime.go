@@ -15,7 +15,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-const normalizedPrefix = "mcp__"
+const normalizedPrefix = "tingly_box_mcp__"
 
 type configProvider func() *typ.MCPRuntimeConfig
 
