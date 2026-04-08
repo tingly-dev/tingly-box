@@ -17,7 +17,7 @@ func TestSmartRouting_RuleMatch(t *testing.T) {
 	ctx := testContext(rule, "")
 	ctx.Request = testOpenAIRequest("gpt-4o")
 
-	stage := NewSmartRoutingStage(lb)
+	stage := NewSmartRoutingStage(lb, newMockAffinityStore())
 	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.True(t, handled)
 	require.NotNil(t, result)
@@ -34,7 +34,7 @@ func TestSmartRouting_NoMatch(t *testing.T) {
 	ctx := testContext(rule, "")
 	ctx.Request = testOpenAIRequest("gpt-4o")
 
-	stage := NewSmartRoutingStage(lb)
+	stage := NewSmartRoutingStage(lb, newMockAffinityStore())
 	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.False(t, handled, "should pass when rule doesn't match")
 }
@@ -44,7 +44,7 @@ func TestSmartRouting_Disabled(t *testing.T) {
 	rule := testRule("rule-1", "gpt-4", nil)
 	// SmartEnabled is false by default
 
-	stage := NewSmartRoutingStage(lb)
+	stage := NewSmartRoutingStage(lb, newMockAffinityStore())
 	ctx := testContext(rule, "")
 	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.False(t, handled)
@@ -56,7 +56,7 @@ func TestSmartRouting_EmptyRules(t *testing.T) {
 	rule.SmartEnabled = true
 	rule.SmartRouting = []smartrouting.SmartRouting{} // empty
 
-	stage := NewSmartRoutingStage(lb)
+	stage := NewSmartRoutingStage(lb, newMockAffinityStore())
 	ctx := testContext(rule, "")
 	ctx.Request = testOpenAIRequest("gpt-4")
 
@@ -69,7 +69,7 @@ func TestSmartRouting_NilRequest(t *testing.T) {
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = true
 
-	stage := NewSmartRoutingStage(lb)
+	stage := NewSmartRoutingStage(lb, newMockAffinityStore())
 	ctx := testContext(rule, "")
 	ctx.Request = nil
 
@@ -85,7 +85,7 @@ func TestSmartRouting_InactiveServiceFiltered(t *testing.T) {
 	ctx := testContext(rule, "")
 	ctx.Request = testOpenAIRequest("gpt-4o")
 
-	stage := NewSmartRoutingStage(lb)
+	stage := NewSmartRoutingStage(lb, newMockAffinityStore())
 	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.False(t, handled, "should pass when matched service is inactive")
 }
@@ -98,7 +98,7 @@ func TestSmartRouting_SingleService(t *testing.T) {
 	ctx := testContext(rule, "")
 	ctx.Request = testOpenAIRequest("gpt-4o")
 
-	stage := NewSmartRoutingStage(lb)
+	stage := NewSmartRoutingStage(lb, newMockAffinityStore())
 	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.True(t, handled)
 	require.Equal(t, "provider-a", result.Service.Provider)
@@ -115,7 +115,7 @@ func TestSmartRouting_MultipleServices_LB(t *testing.T) {
 	ctx := testContext(rule, "")
 	ctx.Request = testOpenAIRequest("gpt-4o")
 
-	stage := NewSmartRoutingStage(lb)
+	stage := NewSmartRoutingStage(lb, newMockAffinityStore())
 	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.True(t, handled)
 	require.Equal(t, "provider-b", result.Service.Provider, "should use LB-selected service")
@@ -138,7 +138,7 @@ func TestSmartRouting_MatchedRuleIndex(t *testing.T) {
 	ctx := testContext(rule, "")
 	ctx.Request = testOpenAIRequest("gpt-4o")
 
-	stage := NewSmartRoutingStage(lb)
+	stage := NewSmartRoutingStage(lb, newMockAffinityStore())
 	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.True(t, handled)
 	require.Equal(t, "provider-b", result.Service.Provider)
@@ -146,6 +146,6 @@ func TestSmartRouting_MatchedRuleIndex(t *testing.T) {
 }
 
 func TestSmartRouting_Name(t *testing.T) {
-	stage := NewSmartRoutingStage(&mockLoadBalancer{})
+	stage := NewSmartRoutingStage(&mockLoadBalancer{}, newMockAffinityStore())
 	require.Equal(t, "smart_routing", stage.Name())
 }

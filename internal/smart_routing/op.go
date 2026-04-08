@@ -154,16 +154,86 @@ var Operations = []SmartOp{
 			Type:        ValueTypeInt,
 		},
 	},
+
+	// Service TTFT operations
+	{
+		Position:  PositionServiceTTFT,
+		Operation: OpServiceTTFTAvgLe,
+		Meta: SmartOpMeta{
+			Description: "Min avg TTFT across services <= value (ms)",
+			Type:        ValueTypeInt,
+		},
+	},
+	{
+		Position:  PositionServiceTTFT,
+		Operation: OpServiceTTFTAvgGe,
+		Meta: SmartOpMeta{
+			Description: "Avg TTFT mean across services >= value (ms)",
+			Type:        ValueTypeInt,
+		},
+	},
+	{
+		Position:  PositionServiceTTFT,
+		Operation: OpServiceTTFTMaxLe,
+		Meta: SmartOpMeta{
+			Description: "Min P99 TTFT across services <= value (ms)",
+			Type:        ValueTypeInt,
+		},
+	},
+	{
+		Position:  PositionServiceTTFT,
+		Operation: OpServiceTTFTMaxGe,
+		Meta: SmartOpMeta{
+			Description: "Avg P99 TTFT across services >= value (ms)",
+			Type:        ValueTypeInt,
+		},
+	},
+
+	// Service capacity operations (seat utilization %)
+	{
+		Position:  PositionServiceCapacity,
+		Operation: OpServiceCapacityUtilLe,
+		Meta: SmartOpMeta{
+			Description: "Avg seat utilization across services <= value (%)",
+			Type:        ValueTypeInt,
+		},
+	},
+	{
+		Position:  PositionServiceCapacity,
+		Operation: OpServiceCapacityUtilGe,
+		Meta: SmartOpMeta{
+			Description: "Avg seat utilization across services >= value (%)",
+			Type:        ValueTypeInt,
+		},
+	},
+	{
+		Position:  PositionServiceCapacity,
+		Operation: OpServiceCapacityUtilLt,
+		Meta: SmartOpMeta{
+			Description: "Avg seat utilization across services < value (%)",
+			Type:        ValueTypeInt,
+		},
+	},
+	{
+		Position:  PositionServiceCapacity,
+		Operation: OpServiceCapacityUtilGt,
+		Meta: SmartOpMeta{
+			Description: "Avg seat utilization across services > value (%)",
+			Type:        ValueTypeInt,
+		},
+	},
 }
 
 const (
-	PositionModel         SmartOpPosition = "model"          // Request model name
-	PositionThinking      SmartOpPosition = "thinking"       // Thinking mode enabled
-	PositionContextSystem SmartOpPosition = "context_system" // System message content in context
-	PositionContextUser   SmartOpPosition = "context_user"   // User message content in context
-	PositionLatestUser    SmartOpPosition = "latest_user"    // Latest user message
-	PositionToolUse       SmartOpPosition = "tool_use"       // Tool use/name
-	PositionToken         SmartOpPosition = "token"          // Token count
+	PositionModel           SmartOpPosition = "model"            // Request model name
+	PositionThinking        SmartOpPosition = "thinking"         // Thinking mode enabled
+	PositionContextSystem   SmartOpPosition = "context_system"   // System message content in context
+	PositionContextUser     SmartOpPosition = "context_user"     // User message content in context
+	PositionLatestUser      SmartOpPosition = "latest_user"      // Latest user message
+	PositionToolUse         SmartOpPosition = "tool_use"         // Tool use/name
+	PositionToken           SmartOpPosition = "token"            // Token count
+	PositionServiceTTFT     SmartOpPosition = "service_ttft"     // Service TTFT characteristics
+	PositionServiceCapacity SmartOpPosition = "service_capacity" // Service seat capacity (affinity utilization)
 )
 
 const (
@@ -197,4 +267,16 @@ const (
 	OpTokenGt SmartOpOperation = "gt" // Token count greater than value
 	OpTokenLe SmartOpOperation = "le" // Token count less than or equal to value
 	OpTokenLt SmartOpOperation = "lt" // Token count less than value
+
+	// Service TTFT operations
+	OpServiceTTFTAvgLe SmartOpOperation = "avg_le" // Min avg TTFT across services <= value (ms)
+	OpServiceTTFTAvgGe SmartOpOperation = "avg_ge" // Avg TTFT mean across services >= value (ms)
+	OpServiceTTFTMaxLe SmartOpOperation = "max_le" // Min P99 TTFT across services <= value (ms)
+	OpServiceTTFTMaxGe SmartOpOperation = "max_ge" // Avg P99 TTFT across services >= value (ms)
+
+	// Service capacity operations (seat utilization %)
+	OpServiceCapacityUtilLe SmartOpOperation = "util_le" // Avg seat utilization <= value (%)
+	OpServiceCapacityUtilGe SmartOpOperation = "util_ge" // Avg seat utilization >= value (%)
+	OpServiceCapacityUtilLt SmartOpOperation = "util_lt" // Avg seat utilization < value (%)
+	OpServiceCapacityUtilGt SmartOpOperation = "util_gt" // Avg seat utilization > value (%)
 )
