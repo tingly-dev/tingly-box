@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
@@ -68,7 +69,7 @@ func (r *ResponseCreateRequest) UnmarshalJSON(data []byte) error {
 
 	// Preprocess the JSON to add "type": "message" to input items that don't have it
 	// This is needed because the OpenAI SDK's union deserializer requires the type field
-	processedData, err := AddTypeFieldToInputItems(data)
+	processedData, err := PreprocessInputData(data)
 	if err != nil {
 		return err
 	}
@@ -84,10 +85,11 @@ func (r *ResponseCreateRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// AddTypeFieldToInputItems preprocesses the JSON to add "type": "message" to input items
-// that don't have a type field. This is necessary because the OpenAI SDK's union
-// deserializer requires the type field to correctly match variants.
-func AddTypeFieldToInputItems(data []byte) ([]byte, error) {
+// PreprocessInputData preprocesses the JSON data before unmarshaling.
+// It performs two preprocessing steps:
+// 1. Adds "type": "message" to input items that don't have a type field
+// 2. Flattens output_text content blocks into single strings
+func PreprocessInputData(data []byte) ([]byte, error) {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
@@ -112,17 +114,27 @@ func AddTypeFieldToInputItems(data []byte) ([]byte, error) {
 			continue
 		}
 
-		// If type field is missing and role field exists, add "type": "message"
+		// Step 1: Add "type": "message" if missing and role exists
 		if _, hasType := itemObj["type"]; !hasType {
 			if _, hasRole := itemObj["role"]; hasRole {
 				itemObj["type"] = "message"
-				modified, err := json.Marshal(itemObj)
-				if err != nil {
-					continue
-				}
-				inputArray[i] = modified
 			}
 		}
+
+		// Step 2: Flatten output_text content blocks
+		if itemType, _ := itemObj["type"].(string); itemType == "message" {
+			if content, hasContent := itemObj["content"]; hasContent {
+				if flattened, ok := flattenOutputTextContent(content); ok {
+					itemObj["content"] = flattened
+				}
+			}
+		}
+
+		modified, err := json.Marshal(itemObj)
+		if err != nil {
+			continue
+		}
+		inputArray[i] = modified
 	}
 
 	modifiedInput, err := json.Marshal(inputArray)
@@ -132,6 +144,48 @@ func AddTypeFieldToInputItems(data []byte) ([]byte, error) {
 
 	raw["input"] = modifiedInput
 	return json.Marshal(raw)
+}
+
+// flattenOutputTextContent flattens output_text blocks into a single string.
+//
+// The Responses API returns output_text in responses, but when using those
+// responses as history in subsequent requests, we need to flatten them to
+// strings for SDK compatibility.
+func flattenOutputTextContent(content any) (string, bool) {
+	items, ok := asSlice(content)
+	if !ok {
+		return "", false
+	}
+
+	var parts []string
+	for _, item := range items {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if m["type"] != "output_text" {
+			continue
+		}
+		if text, ok := m["text"].(string); ok && text != "" {
+			parts = append(parts, text)
+		}
+	}
+
+	if len(parts) == 0 {
+		return "", false
+	}
+	return strings.Join(parts, "\n"), true
+}
+
+// asSlice converts content to []any, handling both []any and []interface{}
+func asSlice(v any) ([]any, bool) {
+	if items, ok := v.([]any); ok {
+		return items, true
+	}
+	if items, ok := v.([]interface{}); ok {
+		return items, true
+	}
+	return nil, false
 }
 
 // =============================================

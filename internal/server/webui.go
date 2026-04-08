@@ -20,6 +20,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
@@ -115,6 +116,9 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 	// Config apply API routes
 	configapplyHandler := configapply.NewHandler(s.config, s.host)
 	configapply.RegisterRoutes(apiV1, configapplyHandler)
+
+	codexImportHandler := codeximport.NewHandler(nil, s.config)
+	codeximport.RegisterRoutes(apiV1, codexImportHandler)
 
 	// Provider quota API routes
 	if s.quotaManager != nil {
@@ -388,7 +392,7 @@ func (s *Server) GetUserToken(c *gin.Context) {
 // ResetUserToken generates a new secure random token and updates the configuration
 // Requires authentication
 func (s *Server) ResetUserToken(c *gin.Context) {
-	newToken, err := config.GenerateSecureToken()
+	newToken, err := config.GenerateUserToken()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -418,7 +422,7 @@ func (s *Server) ResetUserToken(c *gin.Context) {
 // ResetModelToken generates a new secure random model token and updates the configuration
 // Requires authentication
 func (s *Server) ResetModelToken(c *gin.Context) {
-	newToken, err := config.GenerateSecureToken()
+	newToken, err := config.GenerateModelToken()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,

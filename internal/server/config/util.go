@@ -15,14 +15,22 @@ func generateSecret() string {
 	return fmt.Sprintf("%d", time.Now().UnixNano())
 }
 
+func GenerateUserToken() (string, error) {
+	return GenerateSecureToken("tb-user-")
+}
+
+func GenerateModelToken() (string, error) {
+	return GenerateSecureToken("tb-model-")
+}
+
 // GenerateSecureToken generates a cryptographically random token for user authentication
 // The token is a 256-bit (32 byte) random value, hex-encoded, with a "tingly-box-" prefix
-func GenerateSecureToken() (string, error) {
+func GenerateSecureToken(prefix string) (string, error) {
 	bytes := make([]byte, 32) // 256 bits
 	if _, err := rand.Read(bytes); err != nil {
 		return "", fmt.Errorf("failed to generate random token: %w", err)
 	}
-	return "tb-user-" + hex.EncodeToString(bytes), nil
+	return prefix + hex.EncodeToString(bytes), nil
 }
 
 // IsDefaultToken checks if the given token is the default token
