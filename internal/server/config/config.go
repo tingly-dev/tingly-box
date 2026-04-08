@@ -281,7 +281,7 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 	}
 	if cfg.UserToken == "" {
 		// Generate secure random token instead of using default
-		userToken, err := GenerateSecureToken()
+		userToken, err := GenerateUserToken()
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to generate secure user token, using default")
 			cfg.UserToken = constant.DefaultUserToken
@@ -1649,6 +1649,72 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 		return fmt.Errorf("unknown string flag name: %s", flagName)
 	}
 
+	return c.Save()
+}
+
+// GetScenarioExtensionBool returns a boolean value from scenario extensions.
+func (c *Config) GetScenarioExtensionBool(scenario typ.RuleScenario, key string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	config := c.GetScenarioConfig(scenario)
+	if config == nil || config.Extensions == nil {
+		return false
+	}
+	val, ok := config.Extensions[key].(bool)
+	if !ok {
+		return false
+	}
+	return val
+}
+
+// GetScenarioExtensionString returns a string value from scenario extensions.
+func (c *Config) GetScenarioExtensionString(scenario typ.RuleScenario, key string) string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	config := c.GetScenarioConfig(scenario)
+	if config == nil || config.Extensions == nil {
+		return ""
+	}
+	val, ok := config.Extensions[key].(string)
+	if !ok {
+		return ""
+	}
+	return val
+}
+
+// SetScenarioExtensions merges extension values into a scenario config.
+func (c *Config) SetScenarioExtensions(scenario typ.RuleScenario, values map[string]interface{}) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	var config *typ.ScenarioConfig
+	for i := range c.Scenarios {
+		if c.Scenarios[i].Scenario == scenario {
+			config = &c.Scenarios[i]
+			break
+		}
+	}
+
+	if config == nil {
+		newConfig := typ.ScenarioConfig{
+			Scenario:   scenario,
+			Flags:      typ.ScenarioFlags{},
+			Extensions: make(map[string]interface{}),
+		}
+		c.Scenarios = append(c.Scenarios, newConfig)
+		config = &c.Scenarios[len(c.Scenarios)-1]
+	}
+
+	if config.Extensions == nil {
+		config.Extensions = make(map[string]interface{})
+	}
+	for key, value := range values {
+		if value == nil {
+			delete(config.Extensions, key)
+			continue
+		}
+		config.Extensions[key] = value
+	}
 	return c.Save()
 }
 

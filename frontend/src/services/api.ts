@@ -787,6 +787,22 @@ export const api = {
         });
     },
 
+    importCodexOpenAISessions: async (payload: {
+        sourceProvider?: string;
+        targetProvider?: string;
+        codexHome?: string;
+        sqliteHome?: string;
+        stateDbPath?: string;
+        includeArchived?: boolean;
+        createBackup?: boolean;
+        dryRun?: boolean;
+    } = {}): Promise<any> => {
+        return fetchUIAPI('/codex/import/openai', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    },
+
     // ============================================
     // Skill Management API
     // ============================================
