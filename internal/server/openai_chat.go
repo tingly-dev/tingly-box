@@ -16,7 +16,7 @@ import (
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
+	"github.com/tingly-dev/tingly-box/internal/mcpruntime"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
@@ -24,16 +24,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// handleNonStreamingRequest handles non-streaming chat completion requests with tool interceptor support
-func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, shouldIntercept, shouldStripTools bool, stripUsage bool) {
-	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
-	req := originalReq
-	if shouldIntercept {
-		preparedReq, _ := s.toolInterceptor.PrepareOpenAIRequest(provider, originalReq)
-		req = preparedReq
-	} else if shouldStripTools {
-		req = toolinterceptor.StripSearchFetchToolsOpenAI(originalReq)
-	}
+// handleNonStreamingRequest handles non-streaming chat completion requests with MCP runtime support.
+func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, stripUsage bool) {
+	req := s.injectMCPToolsIntoOpenAIRequest(c.Request.Context(), originalReq)
 
 	// Forward request to provider
 	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
@@ -52,29 +45,18 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 		return
 	}
 
-	// === POST-RESPONSE INTERCEPTION: Handle tool calls from provider ===
-	if shouldIntercept && len(response.Choices) > 0 {
+	// === POST-RESPONSE MCP tool execution loop ===
+	if len(response.Choices) > 0 {
 		choice := response.Choices[0]
 		if len(choice.Message.ToolCalls) > 0 {
-			// Check if any tool calls should be intercepted
-			hasInterceptedCalls := false
-			for _, tc := range choice.Message.ToolCalls {
-				fn := tc.Function
-				if fn.Name != "" && toolinterceptor.ShouldInterceptTool(fn.Name) {
-					hasInterceptedCalls = true
-					break
-				}
-			}
-
-			if hasInterceptedCalls {
-				// Execute intercepted tool calls locally and get final response
-				finalResponse, err := s.handleInterceptedToolCalls(provider, originalReq, response)
+			if hasOnlyMCPToolCalls(choice.Message.ToolCalls) {
+				finalResponse, err := s.handleMCPToolCalls(c.Request.Context(), provider, req, response)
 				if err != nil {
 					usage := protocol.NewTokenUsageWithCache(0, 0, 0)
 					s.trackUsageWithTokenUsage(c, usage, err)
 					c.JSON(http.StatusInternalServerError, ErrorResponse{
 						Error: ErrorDetail{
-							Message: "Failed to handle tool calls: " + err.Error(),
+							Message: "Failed to handle MCP tool calls: " + err.Error(),
 							Type:    "api_error",
 						},
 					})
@@ -88,7 +70,6 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 				usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
 				s.trackUsageWithTokenUsage(c, usage, nil)
 
-				// Convert to JSON and return
 				responseJSON, _ := json.Marshal(finalResponse)
 				var responseMap map[string]interface{}
 				json.Unmarshal(responseJSON, &responseMap)
@@ -162,70 +143,108 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	c.JSON(http.StatusOK, responseMap)
 }
 
-// handleInterceptedToolCalls executes intercepted tool calls locally and returns final response
-func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, toolCallResponse *openai.ChatCompletion) (*openai.ChatCompletion, error) {
-	logrus.Debugf("Handling %d intercepted tool calls for provider %s", len(toolCallResponse.Choices[0].Message.ToolCalls), provider.Name)
-
-	// Build new messages list with original messages
-	newMessages := make([]openai.ChatCompletionMessageParamUnion, len(originalReq.Messages))
-	copy(newMessages, originalReq.Messages)
-
-	// Add assistant message with tool calls
-	newMessages = append(newMessages, toolCallResponse.Choices[0].Message.ToParam())
-
-	// Execute each intercepted tool call
-	for _, tc := range toolCallResponse.Choices[0].Message.ToolCalls {
-		fn := tc.Function
-		// Check if this tool should be intercepted
-		if !toolinterceptor.ShouldInterceptTool(fn.Name) {
-			continue
-		}
-
-		// Execute the tool using the interceptor
-		result := s.toolInterceptor.ExecuteTool(provider, fn.Name, fn.Arguments)
-
-		// Add tool result message
-		var toolResultMsg openai.ChatCompletionMessageParamUnion
-		if result.IsError {
-			toolResultMsg = openai.ToolMessage(
-				fmt.Sprintf("Error: %s", result.Error),
-				tc.ID,
-			)
-		} else {
-			toolResultMsg = openai.ToolMessage(
-				result.Content,
-				tc.ID,
-			)
-		}
-		newMessages = append(newMessages, toolResultMsg)
-		logrus.Debugf("Executed tool %s locally: %s", fn.Name, fn.Arguments)
+func hasOnlyMCPToolCalls(toolCalls []openai.ChatCompletionMessageToolCallUnion) bool {
+	if len(toolCalls) == 0 {
+		return false
 	}
-
-	// Create new request with updated messages
-	followUpReq := *originalReq
-	followUpReq.Messages = newMessages
-	followUpReq = *toolinterceptor.StripSearchFetchToolsOpenAI(&followUpReq)
-
-	// Forward to provider for final response (may contain more tool calls or final answer)
-	wrapper := s.clientPool.GetOpenAIClient(provider, string(followUpReq.Model))
-	fc := NewForwardContext(nil, provider)
-	finalResponse, _, err := ForwardOpenAIChat(fc, wrapper, &followUpReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get final response after tool execution: %w", err)
+	for _, tc := range toolCalls {
+		if !mcpruntime.IsMCPToolName(tc.Function.Name) {
+			return false
+		}
 	}
-
-	return finalResponse, nil
+	return true
 }
 
-// handleOpenAIChatStreamingRequest handles streaming chat completion requests with tool interceptor support
-func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, shouldIntercept, shouldStripTools bool, disableStreamUsage bool) {
-	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
-	req := originalReq
-	if shouldIntercept {
-		preparedReq, _ := s.toolInterceptor.PrepareOpenAIRequest(provider, originalReq)
-		req = preparedReq
-	} else if shouldStripTools {
-		req = toolinterceptor.StripSearchFetchToolsOpenAI(originalReq)
+// handleMCPToolCalls executes MCP-prefixed tool calls and loops until model returns a non-MCP tool step.
+func (s *Server) handleMCPToolCalls(ctx context.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, toolCallResponse *openai.ChatCompletion) (*openai.ChatCompletion, error) {
+	if s.mcpRuntime == nil {
+		return nil, fmt.Errorf("mcp runtime is not initialized")
+	}
+
+	newMessages := make([]openai.ChatCompletionMessageParamUnion, len(originalReq.Messages))
+	copy(newMessages, originalReq.Messages)
+	resp := toolCallResponse
+
+	const maxRounds = 6
+	for round := 0; round < maxRounds; round++ {
+		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.ToolCalls) == 0 {
+			return resp, nil
+		}
+		if !hasOnlyMCPToolCalls(resp.Choices[0].Message.ToolCalls) {
+			return resp, nil
+		}
+
+		newMessages = append(newMessages, resp.Choices[0].Message.ToParam())
+		for _, tc := range resp.Choices[0].Message.ToolCalls {
+			result, err := s.mcpRuntime.CallTool(ctx, tc.Function.Name, tc.Function.Arguments)
+			if err != nil {
+				logrus.WithError(err).Warnf("mcp: openai tool call failed name=%s arguments=%s", tc.Function.Name, tc.Function.Arguments)
+				result = fmt.Sprintf(`{"error":"%s"}`, err.Error())
+			}
+			newMessages = append(newMessages, openai.ToolMessage(result, tc.ID))
+		}
+
+		followUpReq := *originalReq
+		followUpReq.Messages = newMessages
+		followUpReq.StreamOptions = openai.ChatCompletionStreamOptionsParam{}
+		followUpReq = *s.injectMCPToolsIntoOpenAIRequest(ctx, &followUpReq)
+
+		wrapper := s.clientPool.GetOpenAIClient(provider, string(followUpReq.Model))
+		fc := NewForwardContext(nil, provider)
+		nextResp, _, err := ForwardOpenAIChat(fc, wrapper, &followUpReq)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get follow-up response after mcp tool execution: %w", err)
+		}
+		resp = nextResp
+	}
+	return resp, nil
+}
+
+// handleOpenAIChatStreamingRequest handles streaming chat completion requests.
+func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
+	req := s.injectMCPToolsIntoOpenAIRequest(c.Request.Context(), originalReq)
+	if hasDeclaredMCPTools(req) {
+		reqForMCP := *req
+		reqForMCP.StreamOptions = openai.ChatCompletionStreamOptionsParam{}
+
+		wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
+		fc := NewForwardContext(nil, provider)
+		resp, _, err := ForwardOpenAIChat(fc, wrapper, &reqForMCP)
+		if err != nil {
+			usage := protocol.NewTokenUsageWithCache(0, 0, 0)
+			s.trackUsageWithTokenUsage(c, usage, err)
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Failed to forward request: " + err.Error(),
+					Type:    "api_error",
+				},
+			})
+			return
+		}
+
+		if len(resp.Choices) > 0 && len(resp.Choices[0].Message.ToolCalls) > 0 && hasOnlyMCPToolCalls(resp.Choices[0].Message.ToolCalls) {
+			resp, err = s.handleMCPToolCalls(c.Request.Context(), provider, &reqForMCP, resp)
+			if err != nil {
+				usage := protocol.NewTokenUsageWithCache(0, 0, 0)
+				s.trackUsageWithTokenUsage(c, usage, err)
+				c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Error: ErrorDetail{
+						Message: "Failed to handle MCP tool calls: " + err.Error(),
+						Type:    "api_error",
+					},
+				})
+				return
+			}
+		}
+
+		usage := protocol.NewTokenUsageWithCache(
+			int(resp.Usage.PromptTokens),
+			int(resp.Usage.CompletionTokens),
+			int(resp.Usage.PromptTokensDetails.CachedTokens),
+		)
+		s.trackUsageWithTokenUsage(c, usage, nil)
+		streamSingleOpenAICompletion(c, resp, responseModel, disableStreamUsage)
+		return
 	}
 
 	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
@@ -265,6 +284,81 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 
 	// Track usage from stream handler
 	s.trackUsageWithTokenUsage(c, usage, err)
+}
+
+func hasDeclaredMCPTools(req *openai.ChatCompletionNewParams) bool {
+	if req == nil || len(req.Tools) == 0 {
+		return false
+	}
+	for _, t := range req.Tools {
+		fn := t.GetFunction()
+		if fn == nil {
+			continue
+		}
+		if mcpruntime.IsMCPToolName(fn.Name) {
+			return true
+		}
+	}
+	return false
+}
+
+func streamSingleOpenAICompletion(c *gin.Context, resp *openai.ChatCompletion, responseModel string, disableStreamUsage bool) {
+	c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization, Cache-Control")
+	c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Content-Type", "text/event-stream; charset=utf-8")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Streaming not supported by this connection",
+				Type:    "api_error",
+				Code:    "streaming_unsupported",
+			},
+		})
+		return
+	}
+
+	chunk := map[string]interface{}{
+		"id":      resp.ID,
+		"object":  "chat.completion.chunk",
+		"created": resp.Created,
+		"model":   responseModel,
+		"choices": []map[string]interface{}{},
+	}
+
+	for _, choice := range resp.Choices {
+		delta := map[string]interface{}{
+			"role":    "assistant",
+			"content": choice.Message.Content,
+		}
+		if len(choice.Message.ToolCalls) > 0 {
+			delta["tool_calls"] = choice.Message.ToolCalls
+		}
+		chunk["choices"] = append(chunk["choices"].([]map[string]interface{}), map[string]interface{}{
+			"index":         choice.Index,
+			"delta":         delta,
+			"finish_reason": choice.FinishReason,
+			"logprobs":      nil,
+		})
+	}
+
+	if !disableStreamUsage {
+		chunk["usage"] = map[string]interface{}{
+			"prompt_tokens":     resp.Usage.PromptTokens,
+			"completion_tokens": resp.Usage.CompletionTokens,
+			"total_tokens":      resp.Usage.TotalTokens,
+		}
+	}
+
+	chunkJSON, _ := json.Marshal(chunk)
+	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", chunkJSON))
+	flusher.Flush()
+	c.Writer.WriteString("data: [DONE]\n\n")
+	flusher.Flush()
 }
 
 func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {

@@ -23,6 +23,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
+	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
@@ -119,6 +120,10 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 
 	codexImportHandler := codeximport.NewHandler(nil, s.config)
 	codeximport.RegisterRoutes(apiV1, codexImportHandler)
+
+	// MCP runtime API routes
+	mcpHandler := mcpmodule.NewHandler(s.config)
+	mcpmodule.RegisterRoutes(apiV1, mcpHandler)
 
 	// Provider quota API routes
 	if s.quotaManager != nil {

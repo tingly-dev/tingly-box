@@ -25,3 +25,6 @@ tasks:
         CXX="zig c++ -target aarch64-linux-gnu" \
         GOOS=linux GOARCH=arm64 CGO_ENABLED=1 \
         go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-linux-arm64 ./cli/tingly-box
+        mkdir -p {{.BIN_DIR}}/scripts
+        cp scripts/mcp_web_tools.py {{.BIN_DIR}}/scripts/
+        cp scripts/mcp_weather_tools.py {{.BIN_DIR}}/scripts/

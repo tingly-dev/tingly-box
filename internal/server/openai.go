@@ -206,12 +206,6 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, isStreaming)
 
 	apiStyle := provider.APIStyle
-	// === Check if provider has built-in web_search ===
-	hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
-
-	// === Tool Interceptor: Check if enabled and should be used ===
-	shouldIntercept, shouldStripTools, _ := s.resolveToolInterceptor(provider, hasBuiltInWebSearch)
-
 	// === Cursor compat content normalization (before transform) ===
 	if cursorCompat {
 		ops.ApplyCursorCompatContentNormalization(&req.ChatCompletionNewParams)
@@ -257,8 +251,6 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 		return
 	}
 	reqCtx.Extra["cursor_compat"] = cursorCompat
-	reqCtx.Extra["should_intercept"] = shouldIntercept
-	reqCtx.Extra["should_strip_tools"] = shouldStripTools
 
 	// === Dispatch via transform chain ===
 	reqCtx.RequestModel = actualModel

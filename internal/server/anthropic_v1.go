@@ -11,7 +11,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
-	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -30,12 +29,6 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
 	SetTrackingContext(c, rule, provider, actualModel, proxyModel, isStreaming)
 
-	// === Check if provider has built-in web_search ===
-	hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
-
-	// === Tool Interceptor: Check if enabled and should be used ===
-	shouldIntercept, shouldStripTools, _ := s.resolveToolInterceptor(provider, hasBuiltInWebSearch)
-
 	// Get scenario config for flags
 	scenarioConfig := s.config.GetScenarioConfig(scenarioType)
 
@@ -53,13 +46,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	c.Set("provider", provider.UUID)
 	c.Set("model", actualModel)
 
-	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
-	if shouldIntercept {
-		preparedReq, _ := s.toolInterceptor.PrepareAnthropicRequest(provider, &req.MessageNewParams)
-		req.MessageNewParams = *preparedReq
-	} else if shouldStripTools {
-		req.MessageNewParams.Tools = toolinterceptor.StripSearchFetchToolsAnthropic(req.MessageNewParams.Tools)
-	}
+	req.MessageNewParams = *s.injectMCPToolsIntoAnthropicV1Request(c.Request.Context(), &req.MessageNewParams)
 
 	session := s.guardrailsSessionFromContext(c, actualModel, provider)
 	if s.guardrailsEnabledForSession(session) {
