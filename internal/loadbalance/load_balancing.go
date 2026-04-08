@@ -9,18 +9,24 @@ import (
 
 // Service represents a provider-model combination for load balancing
 type Service struct {
-	Provider   string       `yaml:"provider" json:"provider"`       // Provider name / uuid
-	Model      string       `yaml:"model" json:"model"`             // Model name
-	Weight     int          `yaml:"weight" json:"weight"`           // Weight for load balancing
-	Active     bool         `yaml:"active" json:"active"`           // Whether this service is active
-	TimeWindow int          `yaml:"time_window" json:"time_window"` // Statistics time window in seconds
-	ModelCapacity *int      `yaml:"model_capacity,omitempty" json:"model_capacity,omitempty"` // ModelCapacity overrides the provider's default_model_capacity for this specific model
-	Stats      ServiceStats `yaml:"-" json:"-"`                     // Service usage statistics (stored in SQLite, not in config)
+	Provider      string       `yaml:"provider" json:"provider"`                                 // Provider name / uuid
+	Model         string       `yaml:"model" json:"model"`                                       // Model name
+	Weight        int          `yaml:"weight" json:"weight"`                                     // Weight for load balancing
+	Active        bool         `yaml:"active" json:"active"`                                     // Whether this service is active
+	TimeWindow    int          `yaml:"time_window" json:"time_window"`                           // Statistics time window in seconds
+	ModelCapacity *int         `yaml:"model_capacity,omitempty" json:"model_capacity,omitempty"` // ModelCapacity overrides the provider's default_model_capacity for this specific model
+	Stats         ServiceStats `yaml:"-" json:"-"`                                               // Service usage statistics (stored in SQLite, not in config)
 }
 
-// ServiceID returns a unique identifier for the service
+// ServiceID returns a unique string identifier for the service (provider:model).
+// Deprecated: use GetServiceID() for the typed form.
 func (s *Service) ServiceID() string {
 	return fmt.Sprintf("%s:%s", s.Provider, s.Model)
+}
+
+// GetServiceID returns the typed service identifier.
+func (s *Service) GetServiceID() ServiceID {
+	return NewServiceID(s.Provider, s.Model)
 }
 
 // InitializeStats initializes the service statistics if they are empty
@@ -450,14 +456,14 @@ func (ss *ServiceStats) GetCostMetrics() int64 {
 type TacticType int
 
 const (
-	_                  TacticType = iota // 0: deprecated round_robin → token_based
-	TacticTokenBased                     // Rotate by token consumption
-	_                                    // 2: deprecated hybrid → token_based
-	TacticRandom                         // Random selection with weighted probability
-	TacticLatencyBased                   // Route based on response latency
-	TacticSpeedBased                     // Route based on token generation speed
-	TacticAdaptive                       // Composite multi-dimensional routing
-	TacticCapacityBased                  // 6: NEW - capacity-based load balancing
+	_                   TacticType = iota // 0: deprecated round_robin → token_based
+	TacticTokenBased                      // Rotate by token consumption
+	_                                     // 2: deprecated hybrid → token_based
+	TacticRandom                          // Random selection with weighted probability
+	TacticLatencyBased                    // Route based on response latency
+	TacticSpeedBased                      // Route based on token generation speed
+	TacticAdaptive                        // Composite multi-dimensional routing
+	TacticCapacityBased                   // 6: NEW - capacity-based load balancing
 )
 
 // MarshalJSON implements json.Marshaler for TacticType
