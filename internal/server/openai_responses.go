@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
@@ -291,12 +290,6 @@ func (s *Server) convertToResponsesParams(bodyBytes []byte, actualModel string) 
 	// Override the model
 	raw["model"] = actualModel
 
-	// The OpenAI Responses SDK may drop message content when it is provided as
-	// output_text blocks in a message content array. Flatten those blocks before
-	// unmarshalling into SDK params so multi-turn Codex history remains intact.
-	// DEPRECATED: protocol type unmarshal will handle this
-	// flattenMessageOutputTextContent(raw)
-
 	// Marshal back to JSON and unmarshal into ResponseNewParams
 	modifiedJSON, err := json.Marshal(raw)
 	if err != nil {
@@ -309,73 +302,6 @@ func (s *Server) convertToResponsesParams(bodyBytes []byte, actualModel string) 
 	}
 
 	return params, nil
-}
-
-// DEPRECATED: protocol type unmarshal will handle this
-func flattenMessageOutputTextContent(raw map[string]any) {
-	input, ok := raw["input"]
-	if !ok {
-		return
-	}
-
-	items, ok := input.([]any)
-	if !ok {
-		return
-	}
-
-	for _, item := range items {
-		itemMap, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-
-		if itemType, _ := itemMap["type"].(string); itemType != "message" {
-			continue
-		}
-
-		// Only flatten message content arrays that contain output_text blocks.
-		// Other content block types should be forwarded unchanged.
-		if flattened, ok := flattenOutputTextContent(itemMap["content"]); ok {
-			itemMap["content"] = flattened
-		}
-	}
-}
-
-// DEPRECATED: protocol type unmarshal will handle this
-func flattenOutputTextContent(content any) (string, bool) {
-	items, ok := content.([]any)
-	if !ok {
-		if itemsInterface, ok := content.([]interface{}); ok {
-			items = itemsInterface
-		} else {
-			return "", false
-		}
-	}
-
-	var textParts []string
-	for _, rawItem := range items {
-		itemMap, ok := rawItem.(map[string]any)
-		if !ok {
-			continue
-		}
-
-		itemType, _ := itemMap["type"].(string)
-		if itemType != "output_text" {
-			continue
-		}
-
-		text, _ := itemMap["text"].(string)
-		if text == "" {
-			continue
-		}
-		textParts = append(textParts, text)
-	}
-
-	if len(textParts) == 0 {
-		return "", false
-	}
-
-	return strings.Join(textParts, "\n"), true
 }
 
 // ResponsesGet handles GET /v1/responses/{id}
