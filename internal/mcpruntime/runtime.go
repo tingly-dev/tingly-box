@@ -58,7 +58,11 @@ func (t mcpTool) schema() json.RawMessage {
 func (r *Runtime) ListOpenAITools(ctx context.Context) []openai.ChatCompletionToolUnionParam {
 	cfg := r.getConfigOrDefault()
 	if cfg == nil || len(cfg.Sources) == 0 {
-		logrus.Debugf("mcp: ListOpenAITools - no config or no sources (cfg=%v, sources=%d)", cfg != nil, len(cfg.Sources))
+		sourceCount := 0
+		if cfg != nil {
+			sourceCount = len(cfg.Sources)
+		}
+		logrus.Debugf("mcp: ListOpenAITools - no config or no sources (cfg=%v, sources=%d)", cfg != nil, sourceCount)
 		return nil
 	}
 	logrus.Debugf("mcp: ListOpenAITools - %d sources", len(cfg.Sources))
