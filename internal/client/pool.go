@@ -1,7 +1,6 @@
 package client
 
 import (
-	"fmt"
 	"runtime"
 	"strings"
 	"sync"
@@ -136,13 +135,14 @@ func NewSharedClientPool() *ClientPool {
 		Build()
 }
 
-// GetOpenAIClient returns an OpenAI client wrapper for the specified provider
-func (p *ClientPool) GetOpenAIClient(provider *typ.Provider, model string) *OpenAIClient {
+// GetOpenAIClient returns an OpenAI client wrapper for the specified provider.
+// sessionID is used to scope the client for OAuth providers; pass "" when no session is available.
+func (p *ClientPool) GetOpenAIClient(provider *typ.Provider, model string, sessionID typ.SessionID) *OpenAIClient {
 	switch p.mode {
 	case PoolModeOnce:
 		return p.createOnceOpenAIClient(provider, model)
 	case PoolModeShared:
-		return p.getOrCreateOpenAIClient(provider, model)
+		return p.getOrCreateOpenAIClient(provider, model, sessionID)
 	default:
 		logrus.Warnf("Unknown pool mode: %s, falling back to once mode", p.mode)
 		return p.createOnceOpenAIClient(provider, "")
@@ -176,9 +176,9 @@ func (p *ClientPool) createOnceOpenAIClient(provider *typ.Provider, model string
 }
 
 // getOrCreateOpenAIClient gets cached client or creates new one (shared mode)
-func (p *ClientPool) getOrCreateOpenAIClient(provider *typ.Provider, model string) *OpenAIClient {
+func (p *ClientPool) getOrCreateOpenAIClient(provider *typ.Provider, model string, sessionID typ.SessionID) *OpenAIClient {
 	// Generate unique key for provider
-	key := p.generateProviderKey(provider, model)
+	key := generateClientKey(provider, model, sessionID)
 
 	// Try to get existing client with read lock first
 	p.mutex.RLock()
@@ -226,13 +226,14 @@ func (p *ClientPool) getOrCreateOpenAIClient(provider *typ.Provider, model strin
 	return client
 }
 
-// GetAnthropicClient returns an Anthropic client wrapper for the specified provider
-func (p *ClientPool) GetAnthropicClient(provider *typ.Provider, model string) *AnthropicClient {
+// GetAnthropicClient returns an Anthropic client wrapper for the specified provider.
+// sessionID is used to scope the client for OAuth providers; pass "" when no session is available.
+func (p *ClientPool) GetAnthropicClient(provider *typ.Provider, model string, sessionID typ.SessionID) *AnthropicClient {
 	switch p.mode {
 	case PoolModeOnce:
 		return p.createOnceAnthropicClient(provider, model)
 	case PoolModeShared:
-		return p.getOrCreateAnthropicClient(provider, model)
+		return p.getOrCreateAnthropicClient(provider, model, sessionID)
 	default:
 		logrus.Warnf("Unknown pool mode: %s, falling back to once mode", p.mode)
 		return p.createOnceAnthropicClient(provider, "")
@@ -265,9 +266,9 @@ func (p *ClientPool) createOnceAnthropicClient(provider *typ.Provider, model str
 }
 
 // getOrCreateAnthropicClient gets cached client or creates new one (shared mode)
-func (p *ClientPool) getOrCreateAnthropicClient(provider *typ.Provider, model string) *AnthropicClient {
+func (p *ClientPool) getOrCreateAnthropicClient(provider *typ.Provider, model string, sessionID typ.SessionID) *AnthropicClient {
 	// Generate unique key for provider
-	key := p.generateProviderKey(provider, model)
+	key := generateClientKey(provider, model, sessionID)
 
 	// Try to get existing client with read lock first
 	p.mutex.RLock()
@@ -315,13 +316,14 @@ func (p *ClientPool) getOrCreateAnthropicClient(provider *typ.Provider, model st
 	return client
 }
 
-// GetGoogleClient returns a Google client wrapper for the specified provider
-func (p *ClientPool) GetGoogleClient(provider *typ.Provider, model string) *GoogleClient {
+// GetGoogleClient returns a Google client wrapper for the specified provider.
+// sessionID is reserved for future use; Google providers use API keys so it is currently ignored.
+func (p *ClientPool) GetGoogleClient(provider *typ.Provider, model string, sessionID typ.SessionID) *GoogleClient {
 	switch p.mode {
 	case PoolModeOnce:
 		return p.createOnceGoogleClient(provider, model)
 	case PoolModeShared:
-		return p.getOrCreateGoogleClient(provider, model)
+		return p.getOrCreateGoogleClient(provider, model, sessionID)
 	default:
 		logrus.Warnf("Unknown pool mode: %s, falling back to once mode", p.mode)
 		return p.createOnceGoogleClient(provider, "")
@@ -354,9 +356,9 @@ func (p *ClientPool) createOnceGoogleClient(provider *typ.Provider, model string
 }
 
 // getOrCreateGoogleClient gets cached client or creates new one (shared mode)
-func (p *ClientPool) getOrCreateGoogleClient(provider *typ.Provider, model string) *GoogleClient {
+func (p *ClientPool) getOrCreateGoogleClient(provider *typ.Provider, model string, sessionID typ.SessionID) *GoogleClient {
 	// Generate unique key for provider
-	key := p.generateProviderKey(provider, model)
+	key := generateClientKey(provider, model, sessionID)
 
 	// Try to get existing client with read lock first
 	p.mutex.RLock()
@@ -404,10 +406,11 @@ func (p *ClientPool) getOrCreateGoogleClient(provider *typ.Provider, model strin
 	return client
 }
 
-// generateProviderKey creates a unique key for a provider
-// Uses only UUID and model - token changes will be handled by explicit invalidation
-func (p *ClientPool) generateProviderKey(provider *typ.Provider, model string) string {
-	return fmt.Sprintf("%s:%s", provider.UUID, model)
+// generateClientKey creates a unique cache key for a client using typ.NewClientKey.
+// sessionID is the raw session string (e.g. "user:abc", "ip:1.2.3.4").
+func generateClientKey(provider *typ.Provider, model string, sessionID typ.SessionID) string {
+	// Parse the raw sessionID string back into a typed SessionID for scoping logic.
+	return typ.NewClientKey(provider, model, sessionID).String()
 }
 
 // Clear removes all clients from the pool
@@ -433,7 +436,7 @@ func (p *ClientPool) RemoveProvider(provider *typ.Provider, model string) {
 		return
 	}
 
-	key := p.generateProviderKey(provider, model)
+	key := generateClientKey(provider, model, typ.SessionID{})
 
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
@@ -469,10 +472,12 @@ func (p *ClientPool) InvalidateProvider(providerUUID string) {
 	defer p.mutex.Unlock()
 
 	count := 0
+	// Keys are JSON from ClientKey.String(); match provider_uuid field value.
+	uuidToken := `"` + providerUUID + `"`
 
 	// Remove all OpenAI clients matching this provider UUID
 	for key := range p.openaiClients {
-		if strings.HasPrefix(key, providerUUID+":") {
+		if strings.Contains(key, uuidToken) {
 			delete(p.openaiClients, key)
 			count++
 		}
@@ -480,7 +485,7 @@ func (p *ClientPool) InvalidateProvider(providerUUID string) {
 
 	// Remove all Anthropic clients matching this provider UUID
 	for key := range p.anthropicClients {
-		if strings.HasPrefix(key, providerUUID+":") {
+		if strings.Contains(key, uuidToken) {
 			delete(p.anthropicClients, key)
 			count++
 		}
@@ -488,7 +493,7 @@ func (p *ClientPool) InvalidateProvider(providerUUID string) {
 
 	// Remove all Google clients matching this provider UUID
 	for key := range p.googleClients {
-		if strings.HasPrefix(key, providerUUID+":") {
+		if strings.Contains(key, uuidToken) {
 			delete(p.googleClients, key)
 			count++
 		}
@@ -498,6 +503,48 @@ func (p *ClientPool) InvalidateProvider(providerUUID string) {
 		logrus.Infof("Invalidated %d client(s) for provider UUID: %s", count, providerUUID)
 	} else {
 		logrus.Debugf("No clients found to invalidate for provider UUID: %s", providerUUID)
+	}
+}
+
+// InvalidateSession removes all cached clients associated with a specific session for a provider.
+// This is useful when a session ends or its OAuth token is revoked.
+func (p *ClientPool) InvalidateSession(providerUUID, sessionID string) {
+	if p.mode == PoolModeOnce {
+		return
+	}
+	if sessionID == "" {
+		return
+	}
+
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	// Keys are JSON from ClientKey.String(); match both provider_uuid and session value fields.
+	uuidToken := `"` + providerUUID + `"`
+	sessionToken := `"` + sessionID + `"`
+	count := 0
+
+	for key := range p.openaiClients {
+		if strings.Contains(key, uuidToken) && strings.Contains(key, sessionToken) {
+			delete(p.openaiClients, key)
+			count++
+		}
+	}
+	for key := range p.anthropicClients {
+		if strings.Contains(key, uuidToken) && strings.Contains(key, sessionToken) {
+			delete(p.anthropicClients, key)
+			count++
+		}
+	}
+	for key := range p.googleClients {
+		if strings.Contains(key, uuidToken) && strings.Contains(key, sessionToken) {
+			delete(p.googleClients, key)
+			count++
+		}
+	}
+
+	if count > 0 {
+		logrus.Infof("Invalidated %d client(s) for provider UUID: %s session: %s", count, providerUUID, sessionID)
 	}
 }
 
