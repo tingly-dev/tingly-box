@@ -89,7 +89,7 @@ func (s *Server) handleAnthropicV1MCPToolCalls(
 		nextReq.Messages = append(append([]anthropic.MessageParam{}, currentReq.Messages...), currentResp.ToParam(), anthropic.NewUserMessage(toolResults...))
 		nextReq = *s.injectMCPToolsIntoAnthropicV1Request(ctx, &nextReq)
 
-		wrapper := s.clientPool.GetAnthropicClient(provider, string(nextReq.Model))
+		wrapper := s.clientPool.GetAnthropicClient(provider, nextReq.Model, typ.SessionID{})
 		fc := NewForwardContext(nil, provider)
 		nextResp, cancel, err := ForwardAnthropicV1(fc, wrapper, &nextReq)
 		if cancel != nil {
@@ -179,7 +179,7 @@ func (s *Server) handleAnthropicBetaMCPToolCalls(
 		nextReq.Messages = append(append([]anthropic.BetaMessageParam{}, currentReq.Messages...), currentResp.ToParam(), anthropic.NewBetaUserMessage(toolResults...))
 		nextReq = *s.injectMCPToolsIntoAnthropicBetaRequest(ctx, &nextReq)
 
-		wrapper := s.clientPool.GetAnthropicClient(provider, string(nextReq.Model))
+		wrapper := s.clientPool.GetAnthropicClient(provider, nextReq.Model, typ.SessionID{})
 		fc := NewForwardContext(nil, provider)
 		nextResp, cancel, err := ForwardAnthropicV1Beta(fc, wrapper, &nextReq)
 		if cancel != nil {

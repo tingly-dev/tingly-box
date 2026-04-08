@@ -106,7 +106,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, pr
 	var cancel context.CancelFunc
 
 	// Use standard OpenAI Responses API
-	wrapper := s.clientPool.GetOpenAIClient(provider, responsesReq.Model)
+	wrapper := s.clientPool.GetOpenAIClient(provider, responsesReq.Model, resolveSessionID(c, &responsesReq))
 	fc := NewForwardContext(nil, provider)
 
 	response, cancel, err = ForwardOpenAIResponses(fc, wrapper, responsesReq)
@@ -167,7 +167,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, proxy
 	}
 
 	// For standard OpenAI providers, use the OpenAI SDK
-	wrapper := s.clientPool.GetOpenAIClient(provider, responsesReq.Model)
+	wrapper := s.clientPool.GetOpenAIClient(provider, responsesReq.Model, resolveSessionID(c, &responsesReq))
 	fc := NewForwardContext(c.Request.Context(), provider)
 	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
 	if cancel != nil {
@@ -220,7 +220,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIAssembly(c *gin.Context, proxyM
 	}
 
 	// For standard OpenAI providers, use the OpenAI SDK
-	wrapper := s.clientPool.GetOpenAIClient(provider, responsesReq.Model)
+	wrapper := s.clientPool.GetOpenAIClient(provider, responsesReq.Model, resolveSessionID(c, &responsesReq))
 	fc := NewForwardContext(c.Request.Context(), provider)
 	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
 	if cancel != nil {

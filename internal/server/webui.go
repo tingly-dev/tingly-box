@@ -209,11 +209,11 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 	var prober client.Prober
 	switch provider.APIStyle {
 	case protocol.APIStyleOpenAI:
-		prober = s.clientPool.GetOpenAIClient(provider, model)
+		prober = s.clientPool.GetOpenAIClient(provider, model, typ.SessionID{})
 	case protocol.APIStyleAnthropic:
-		prober = s.clientPool.GetAnthropicClient(provider, model)
+		prober = s.clientPool.GetAnthropicClient(provider, model, typ.SessionID{})
 	case protocol.APIStyleGoogle:
-		prober = s.clientPool.GetGoogleClient(provider, model)
+		prober = s.clientPool.GetGoogleClient(provider, model, typ.SessionID{})
 	default:
 		errorMessage := "unknown api style"
 		c.JSON(http.StatusNotFound, ProbeResponse{
