@@ -237,7 +237,9 @@ func (aa *AgentApply) applyClaudeSettings(env map[string]string, installStatusLi
 		if err != nil {
 			return nil, fmt.Errorf("failed to install status line script: %w", err)
 		}
-		statusLine := map[string]any{"type": "command", "command": "~/.claude/tingly-statusline.sh"}
+		baseURL, _ := aa.getBaseURLAndToken()
+		statusLineCmd := fmt.Sprintf("TINGLY_API_URL=%s ~/.claude/tingly-statusline.sh", baseURL)
+		statusLine := map[string]any{"type": "command", "command": statusLineCmd}
 		extras = append(extras, serverconfig.KV{Key: "statusLine", Value: statusLine})
 	}
 
