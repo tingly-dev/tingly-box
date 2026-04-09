@@ -804,6 +804,11 @@ func (h *BotHandler) completeBind(hCtx HandlerContext, projectPath string) {
 		return
 	}
 
+	// Also update bash cwd to match the new project path
+	if err := h.chatStore.SetBashCwd(hCtx.ChatID, expandedPath); err != nil {
+		logrus.WithError(err).Warn("Failed to update bash cwd after project bind")
+	}
+
 	// With new design, sessions are created on-demand when agent processes a message
 	// No need to create session here
 
