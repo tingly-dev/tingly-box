@@ -26,6 +26,10 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 
 	req.Model = anthropic.Model(actualModel)
 
+	// Inject session ID into request context so all downstream code can access it
+	sessionID := resolveSessionID(c, &req.MessageNewParams)
+	c.Request = c.Request.WithContext(typ.WithSessionID(c.Request.Context(), sessionID))
+
 	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
 	SetTrackingContext(c, rule, provider, actualModel, proxyModel, isStreaming)
 
@@ -105,9 +109,8 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, pr
 	var err error
 	var cancel context.CancelFunc
 
-	// Inject sessionID into ctx and use standard OpenAI Responses API
-	ctx := typ.WithSessionID(c.Request.Context(), resolveSessionID(c, &responsesReq))
-	wrapper := s.clientPool.GetOpenAIClient(ctx, provider, responsesReq.Model)
+	// Use standard OpenAI Responses API (session ID already in c.Request.Context)
+	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
 	fc := NewForwardContext(nil, provider)
 
 	response, cancel, err = ForwardOpenAIResponses(fc, wrapper, responsesReq)
@@ -167,9 +170,8 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, proxy
 		streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
 	}
 
-	// For standard OpenAI providers, use the OpenAI SDK
-	ctx := typ.WithSessionID(c.Request.Context(), resolveSessionID(c, &responsesReq))
-	wrapper := s.clientPool.GetOpenAIClient(ctx, provider, responsesReq.Model)
+	// For standard OpenAI providers, use the OpenAI SDK (session ID already in c.Request.Context)
+	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
 	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
 	if cancel != nil {
@@ -221,9 +223,8 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIAssembly(c *gin.Context, proxyM
 		streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
 	}
 
-	// For standard OpenAI providers, use the OpenAI SDK
-	ctx := typ.WithSessionID(c.Request.Context(), resolveSessionID(c, &responsesReq))
-	wrapper := s.clientPool.GetOpenAIClient(ctx, provider, responsesReq.Model)
+	// For standard OpenAI providers, use the OpenAI SDK (session ID already in c.Request.Context)
+	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
 	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
 	if cancel != nil {

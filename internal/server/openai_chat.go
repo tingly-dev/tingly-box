@@ -29,8 +29,7 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	req := s.injectMCPToolsIntoOpenAIRequest(c.Request.Context(), originalReq)
 
 	// Forward request to provider
-	ctx := typ.WithSessionID(c.Request.Context(), resolveSessionID(c, req))
-	wrapper := s.clientPool.GetOpenAIClient(ctx, provider, req.Model)
+	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
 	fc := NewForwardContext(nil, provider)
 	response, _, err := ForwardOpenAIChat(fc, wrapper, req)
 	if err != nil {
@@ -185,7 +184,7 @@ func (s *Server) handleMCPToolCalls(ctx context.Context, provider *typ.Provider,
 		followUpReq.StreamOptions = openai.ChatCompletionStreamOptionsParam{}
 		followUpReq = *s.injectMCPToolsIntoOpenAIRequest(ctx, &followUpReq)
 
-		wrapper := s.clientPool.GetOpenAIClient(context.Background(), provider, string(followUpReq.Model))
+		wrapper := s.clientPool.GetOpenAIClient(ctx, provider, string(followUpReq.Model))
 		fc := NewForwardContext(nil, provider)
 		nextResp, _, err := ForwardOpenAIChat(fc, wrapper, &followUpReq)
 		if err != nil {
@@ -203,8 +202,7 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 		reqForMCP := *req
 		reqForMCP.StreamOptions = openai.ChatCompletionStreamOptionsParam{}
 
-		ctx := typ.WithSessionID(c.Request.Context(), resolveSessionID(c, req))
-		wrapper := s.clientPool.GetOpenAIClient(ctx, provider, req.Model)
+		wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
 		fc := NewForwardContext(nil, provider)
 		resp, _, err := ForwardOpenAIChat(fc, wrapper, &reqForMCP)
 		if err != nil {
@@ -244,8 +242,7 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 		return
 	}
 
-	ctx := typ.WithSessionID(c.Request.Context(), resolveSessionID(c, req))
-	wrapper := s.clientPool.GetOpenAIClient(ctx, provider, req.Model)
+	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
 	streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, req)
 	if cancel != nil {
