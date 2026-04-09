@@ -2,6 +2,7 @@ import { ApiStyleBadge } from '@/components/ApiStyleBadge.tsx';
 import ModelListDialog from '@/components/ModelListDialog';
 import ProviderExportMenu from '@/components/ProviderExportMenu';
 import { exportProvider, exportProviderAsBase64ToClipboard, exportProviderAsJsonlToClipboard } from '@/components/rule-card/utils';
+import { ProviderQuotaDetailRow } from '@/components/credential/ProviderQuotaDetailRow';
 import { Delete, Edit, ListAlt, Refresh as RefreshIcon, Route, Schedule, VpnKey } from '@mui/icons-material';
 import {
     Box,
@@ -24,7 +25,8 @@ import {
     Typography,
 } from '@mui/material';
 import type { ExportFormat } from '@/components/rule-card/utils';
-import {useCallback, useState} from 'react';
+import type { ProviderQuota } from '@/types/quota';
+import React, {useCallback, useState} from 'react';
 import type { Provider } from '../types/provider';
 
 interface OAuthTableProps {
@@ -35,6 +37,9 @@ interface OAuthTableProps {
     onReauthorize?: (providerUuid: string) => void;
     onRefreshToken?: (providerUuid: string) => Promise<void>;
     onNotification?: (message: string, severity: 'success' | 'error') => void;
+    providerQuotas?: { [uuid: string]: ProviderQuota };
+    refreshingQuotas?: Set<string>;
+    onQuotaRefresh?: (providerUuid: string) => void;
 }
 
 interface DeleteModalState {
@@ -54,7 +59,7 @@ interface ModelListDialogState {
     provider: Provider | null;
 }
 
-const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRefreshToken, onNotification }: OAuthTableProps) => {
+const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRefreshToken, onNotification, providerQuotas, refreshingQuotas, onQuotaRefresh }: OAuthTableProps) => {
     const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
         open: false,
         providerUuid: '',
@@ -207,7 +212,9 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                         const isExpired = expiresAt ? new Date(expiresAt) < new Date() : false;
 
                         return (
-                            <TableRow key={provider.uuid}>
+                            <React.Fragment key={provider.uuid}>
+                                {/* Main provider row */}
+                                <TableRow>
                                 {/* Status */}
                                 <TableCell>
                                     <Stack direction="row" alignItems="center" spacing={1}>
@@ -350,7 +357,18 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                                     </Box>
                                 </TableCell>
                             </TableRow>
-                        );
+
+                    {/* Quota detail row */}
+                    {providerQuotas && onQuotaRefresh && (
+                        <ProviderQuotaDetailRow
+                            provider={provider}
+                            quota={providerQuotas[provider.uuid]}
+                            isRefreshing={refreshingQuotas?.has(provider.uuid) || false}
+                            onRefresh={onQuotaRefresh}
+                        />
+                    )}
+                </React.Fragment>
+                );
                     })}
                 </TableBody>
             </Table>
