@@ -177,10 +177,12 @@ export const UnifiedCard = forwardRef<HTMLDivElement, UnifiedCardProps>(({
             </Alert>
           </Box>
         )}
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
           <Box
             sx={{
               flex: 1,
+              minHeight: 0,
+              overflow: 'hidden',
               position: 'relative',
             }}
           >
