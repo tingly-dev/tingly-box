@@ -138,6 +138,7 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req *anthro
 
 	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
 	if s.guardrailsEnabledForScenario(scenario) {
+		hc.EnableGuardrailsRewrite = true
 		s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages))
 	}
 
