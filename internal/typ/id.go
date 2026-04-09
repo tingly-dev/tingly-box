@@ -84,12 +84,15 @@ func NewClientKey(provider *Provider, model string, session SessionID) ClientKey
 }
 
 // TransportKey uniquely identifies a cached HTTP transport.
-// The key is based on provider + proxy + session (for OAuth providers) so that:
+// The key is based on provider + session (for OAuth providers) so that:
 // - API-key providers share transports across sessions (TCP connection pool reuse)
 // - OAuth providers get per-session transports for proper isolation
+//
+// Note: ProxyURL is NOT part of the key because it's a provider configuration,
+// not a separate dimension for connection pooling. When a provider's proxy changes,
+// the old transport should be invalidated and a new one created.
 type TransportKey struct {
 	ProviderUUID string    `json:"provider_uuid"`
-	ProxyURL     string    `json:"proxy_url,omitempty"`
 	SessionID    SessionID `json:"session_id,omitempty"` // Included for per-session OAuth providers
 }
 
