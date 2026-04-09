@@ -132,7 +132,7 @@ func (ap *AdaptiveProbe) probeChatEndpoint(ctx context.Context, provider *typ.Pr
 // probeOpenAIChatEndpointWithSDK probes OpenAI-style chat completions endpoint using SDK
 func (ap *AdaptiveProbe) probeOpenAIChatEndpointWithSDK(ctx context.Context, provider *typ.Provider, modelID string, startTime time.Time) EndpointStatus {
 	// Get OpenAI client from pool
-	wrapper := ap.server.clientPool.GetOpenAIClient(provider, "")
+	wrapper := ap.server.clientPool.GetOpenAIClient(provider, "", typ.SessionID{})
 	if wrapper == nil {
 		return EndpointStatus{
 			Available:    false,
@@ -187,7 +187,7 @@ func (ap *AdaptiveProbe) probeOpenAIChatEndpointWithSDK(ctx context.Context, pro
 // probeAnthropicChatEndpointWithSDK probes Anthropic-style messages endpoint using SDK
 func (ap *AdaptiveProbe) probeAnthropicChatEndpointWithSDK(ctx context.Context, provider *typ.Provider, modelID string, startTime time.Time) EndpointStatus {
 	// Get Anthropic client from pool
-	wrapper := ap.server.clientPool.GetAnthropicClient(provider, "")
+	wrapper := ap.server.clientPool.GetAnthropicClient(provider, "", typ.SessionID{})
 	if wrapper == nil {
 		return EndpointStatus{
 			Available:    false,
@@ -257,7 +257,7 @@ func (ap *AdaptiveProbe) probeResponsesEndpoint(ctx context.Context, provider *t
 	startTime := time.Now()
 
 	// Get OpenAI client from pool
-	wrapper := ap.server.clientPool.GetOpenAIClient(provider, "")
+	wrapper := ap.server.clientPool.GetOpenAIClient(provider, "", typ.SessionID{})
 	if wrapper == nil {
 		return EndpointStatus{
 			Available:    false,

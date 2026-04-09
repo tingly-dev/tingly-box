@@ -74,19 +74,19 @@ func (b *SDKProbeBuilder) buildOpenAIChatRequest(model, message string, testMode
 func (s *Server) getClientForProvider(provider *typ.Provider, model string) (interface{}, error) {
 	switch provider.APIStyle {
 	case protocol.APIStyleAnthropic:
-		client := s.clientPool.GetAnthropicClient(provider, model)
+		client := s.clientPool.GetAnthropicClient(provider, model, typ.SessionID{})
 		if client == nil {
 			return nil, fmt.Errorf("failed to get Anthropic client for provider: %s", provider.Name)
 		}
 		return client, nil
 	case protocol.APIStyleOpenAI:
-		client := s.clientPool.GetOpenAIClient(provider, model)
+		client := s.clientPool.GetOpenAIClient(provider, model, typ.SessionID{})
 		if client == nil {
 			return nil, fmt.Errorf("failed to get OpenAI client for provider: %s", provider.Name)
 		}
 		return client, nil
 	case protocol.APIStyleGoogle:
-		client := s.clientPool.GetGoogleClient(provider, model)
+		client := s.clientPool.GetGoogleClient(provider, model, typ.SessionID{})
 		if client == nil {
 			return nil, fmt.Errorf("failed to get Google client for provider: %s", provider.Name)
 		}

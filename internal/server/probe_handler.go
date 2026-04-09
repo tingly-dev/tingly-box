@@ -116,9 +116,9 @@ func (s *Server) testProviderConnectivity(req *ProbeProviderRequest) (bool, stri
 	var prober client.Prober
 	switch provider.APIStyle {
 	case protocol.APIStyleOpenAI:
-		prober = s.clientPool.GetOpenAIClient(provider, "")
+		prober = s.clientPool.GetOpenAIClient(provider, "", typ.SessionID{})
 	case protocol.APIStyleAnthropic:
-		prober = s.clientPool.GetAnthropicClient(provider, "")
+		prober = s.clientPool.GetAnthropicClient(provider, "", typ.SessionID{})
 	default:
 		return false, "unsupported API style", 0, nil
 	}

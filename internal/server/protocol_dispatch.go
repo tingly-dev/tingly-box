@@ -75,7 +75,7 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 	req := reqCtx.Request.(*anthropic.MessageNewParams)
 
-	wrapper := s.clientPool.GetAnthropicClient(provider, actualModel)
+	wrapper := s.clientPool.GetAnthropicClient(provider, actualModel, resolveSessionID(c, reqCtx.Request))
 	fc := NewForwardContext(c.Request.Context(), provider)
 
 	if isStreaming {
@@ -242,7 +242,7 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 
-	wrapper := s.clientPool.GetAnthropicClient(provider, actualModel)
+	wrapper := s.clientPool.GetAnthropicClient(provider, actualModel, resolveSessionID(c, reqCtx.Request))
 	fc := NewForwardContext(c.Request.Context(), provider)
 
 	if isStreaming {
@@ -421,7 +421,7 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 		actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 		req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 
-		wrapper := s.clientPool.GetAnthropicClient(provider, actualModel)
+		wrapper := s.clientPool.GetAnthropicClient(provider, actualModel, resolveSessionID(c, reqCtx.Request))
 		fc := NewForwardContext(c.Request.Context(), provider)
 
 		if isStreaming {
@@ -573,7 +573,7 @@ func (s *Server) dispatchChainFromGoogle(
 	model, req, cfg := actualModel, googleReq.Contents, googleReq.Config
 
 	if isStreaming {
-		wrapper := s.clientPool.GetGoogleClient(provider, model)
+		wrapper := s.clientPool.GetGoogleClient(provider, model, resolveSessionID(c, reqCtx.Request))
 		fc := NewForwardContext(c.Request.Context(), provider)
 		streamResp, cancel, err := ForwardGoogleStream(fc, wrapper, model, req, cfg)
 		if cancel != nil {
@@ -604,7 +604,7 @@ func (s *Server) dispatchChainFromGoogle(
 		}
 		s.trackUsageWithTokenUsage(c, usage, nil)
 	} else {
-		wrapper := s.clientPool.GetGoogleClient(provider, model)
+		wrapper := s.clientPool.GetGoogleClient(provider, model, resolveSessionID(c, reqCtx.Request))
 		fc := NewForwardContext(nil, provider)
 		resp, _, err := ForwardGoogle(fc, wrapper, model, req, cfg)
 		if err != nil {
@@ -740,7 +740,7 @@ func (s *Server) dispatchChainFromOpenAIChat(
 				// server-side MCP tool loop, so stream-only options must be omitted.
 				reqForMCP.StreamOptions = openai.ChatCompletionStreamOptionsParam{}
 
-				wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
+				wrapper := s.clientPool.GetOpenAIClient(provider, req.Model, resolveSessionID(c, req))
 				fc := NewForwardContext(nil, provider)
 				resp, _, err := ForwardOpenAIChat(fc, wrapper, &reqForMCP)
 				if err != nil {
@@ -796,7 +796,7 @@ func (s *Server) dispatchChainFromOpenAIChat(
 				return
 			}
 
-			wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
+			wrapper := s.clientPool.GetOpenAIClient(provider, req.Model, resolveSessionID(c, req))
 			fc := NewForwardContext(c.Request.Context(), provider)
 			streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, req)
 			if cancel != nil {
@@ -827,7 +827,7 @@ func (s *Server) dispatchChainFromOpenAIChat(
 				// server-side MCP tool loop, so stream-only options must be omitted.
 				reqForMCP.StreamOptions = openai.ChatCompletionStreamOptionsParam{}
 
-				wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
+				wrapper := s.clientPool.GetOpenAIClient(provider, req.Model, resolveSessionID(c, req))
 				fc := NewForwardContext(nil, provider)
 				resp, _, err := ForwardOpenAIChat(fc, wrapper, &reqForMCP)
 				if err != nil {
@@ -874,7 +874,7 @@ func (s *Server) dispatchChainFromOpenAIChat(
 				streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
 			}
 
-			wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
+			wrapper := s.clientPool.GetOpenAIClient(provider, req.Model, resolveSessionID(c, req))
 			fc := NewForwardContext(c.Request.Context(), provider)
 			streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, req)
 			if cancel != nil {
@@ -935,7 +935,7 @@ func (s *Server) dispatchChainFromOpenAIChat(
 			// Forward request to provider for format conversion
 		}
 
-		wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
+		wrapper := s.clientPool.GetOpenAIClient(provider, req.Model, resolveSessionID(c, req))
 		fc := NewForwardContext(nil, provider)
 		resp, _, err := ForwardOpenAIChat(fc, wrapper, req)
 		if err != nil {
@@ -1001,7 +1001,7 @@ func (s *Server) dispatchOpenAIChatFromResponses(
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 	req := reqCtx.Request.(*responses.ResponseNewParams)
 
-	wrapper := s.clientPool.GetOpenAIClient(provider, actualModel)
+	wrapper := s.clientPool.GetOpenAIClient(provider, actualModel, resolveSessionID(c, reqCtx.Request))
 	fc := NewForwardContext(c.Request.Context(), provider)
 
 	if isStreaming {
@@ -1078,7 +1078,7 @@ func (s *Server) nonstreamOpenAIResponses(
 	var err error
 	var cancel context.CancelFunc
 
-	wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model))
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model), resolveSessionID(c, params))
 	fc := NewForwardContext(nil, provider)
 	response, cancel, err = ForwardOpenAIResponses(fc, wrapper, *params)
 	if cancel != nil {
@@ -1138,7 +1138,7 @@ func (s *Server) streamOpenAIResponses(
 	params := reqCtx.Request.(*responses.ResponseNewParams)
 
 	// Create streaming request with request context for proper cancellation
-	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
+	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model, resolveSessionID(c, params))
 	fc := NewForwardContext(c.Request.Context(), provider)
 	respStream, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, *params)
 	if cancel != nil {
@@ -1180,7 +1180,7 @@ func (s *Server) nonstreamOpenAIChatToResponses(
 	responseModel := reqCtx.ResponseModel
 	chatReq := reqCtx.Request.(*openai.ChatCompletionNewParams)
 
-	wrapper := s.clientPool.GetOpenAIClient(provider, string(chatReq.Model))
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(chatReq.Model), resolveSessionID(c, chatReq))
 	fc := NewForwardContext(nil, provider)
 	chatResp, _, err := ForwardOpenAIChat(fc, wrapper, chatReq)
 	if err != nil {
@@ -1208,7 +1208,7 @@ func (s *Server) streamOpenAIChatToResponses(
 	responseModel := reqCtx.ResponseModel
 	chatReq := reqCtx.Request.(*openai.ChatCompletionNewParams)
 
-	wrapper := s.clientPool.GetOpenAIClient(provider, string(chatReq.Model))
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(chatReq.Model), resolveSessionID(c, chatReq))
 	fc := NewForwardContext(c.Request.Context(), provider)
 	chatStream, cancel, err := ForwardOpenAIChatStream(fc, wrapper, chatReq)
 	if cancel != nil {
@@ -1236,7 +1236,7 @@ func (s *Server) nonstreamAnthropicV1ToResponses(
 	responseModel := reqCtx.ResponseModel
 	anthropicReq := reqCtx.Request.(*anthropic.MessageNewParams)
 
-	wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
+	wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model), resolveSessionID(c, anthropicReq))
 	fc := NewForwardContext(nil, provider)
 	anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, anthropicReq)
 	if cancel != nil {
@@ -1266,7 +1266,7 @@ func (s *Server) streamAnthropicV1ToResponses(
 	responseModel := reqCtx.ResponseModel
 	anthropicReq := reqCtx.Request.(*anthropic.MessageNewParams)
 
-	wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
+	wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model), resolveSessionID(c, anthropicReq))
 	fc := NewForwardContext(c.Request.Context(), provider)
 	anthropicStream, cancel, err := ForwardAnthropicV1Stream(fc, wrapper, anthropicReq)
 	if cancel != nil {

@@ -29,7 +29,7 @@ func (s *AffinityStage) Evaluate(ctx *SelectionContext, state *selectionState) (
 	rule := ctx.Rule
 
 	// Skip if affinity not enabled
-	if !rule.SmartEnabled || !rule.SmartAffinity || ctx.SessionID == "" {
+	if !rule.SmartEnabled || !rule.SmartAffinity || ctx.SessionID.IsEmpty() {
 		return nil, false
 	}
 
@@ -43,13 +43,13 @@ func (s *AffinityStage) Evaluate(ctx *SelectionContext, state *selectionState) (
 	// Check affinity store
 	// Currently AffinityStore only supports global scope (ruleUUID:sessionID)
 	// TODO: Extend AffinityStore to support smart_rule scope keys
-	entry, ok := s.store.Get(rule.UUID, ctx.SessionID)
+	entry, ok := s.store.Get(rule.UUID, ctx.SessionID.String())
 	if !ok {
 		return nil, false
 	}
 
 	logrus.Infof("[affinity] using locked service for session %s: %s",
-		ctx.SessionID, entry.Service.Model)
+		ctx.SessionID.String(), entry.Service.Model)
 
 	if state != nil && len(state.candidateServices) > 0 && !ContainsService(state.candidateServices, entry.Service) {
 		logrus.Debugf("[affinity] locked service %s not in candidate set, skipping",

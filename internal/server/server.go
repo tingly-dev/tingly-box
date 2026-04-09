@@ -694,7 +694,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Set up health monitor probe function using existing probe infrastructure
 	if server.healthMonitor != nil {
 		server.healthMonitor.SetProbeFunc(func(serviceID string) bool {
-			// Extract provider UUID from serviceID (format: providerUUID:model)
+			// serviceID format: "<providerUUID>:<model>" (from Service.ServiceID())
 			parts := strings.Split(serviceID, ":")
 			if len(parts) < 2 {
 				return false

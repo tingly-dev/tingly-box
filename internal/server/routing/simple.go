@@ -54,7 +54,7 @@ func (s *SimpleSelector) SelectService(
 	}
 
 	// Automatically store sessionID in gin context for downstream handlers
-	c.Set("tracking_session_id", ctx.SessionID)
+	c.Set("tracking_session_id", ctx.SessionID.String())
 
 	// Store result metadata for observability
 	c.Set("routing_source", result.Source)
