@@ -21,7 +21,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // OpenAIClient wraps the OpenAI SDK client
@@ -34,7 +33,7 @@ type OpenAIClient struct {
 }
 
 // defaultNewOpenAIClient creates a new OpenAI client wrapper
-func defaultNewOpenAIClient(provider *typ.Provider, model string) (*OpenAIClient, error) {
+func defaultNewOpenAIClient(provider *typ.Provider, model string, sessionID typ.SessionID) (*OpenAIClient, error) {
 	options := []option.RequestOption{
 		option.WithAPIKey(provider.GetAccessToken()),
 		option.WithBaseURL(provider.APIBase),
@@ -49,25 +48,27 @@ func defaultNewOpenAIClient(provider *typ.Provider, model string) (*OpenAIClient
 		}
 	}
 
-	// Create HTTP client with proper hook configuration
-	var httpClient *http.Client
-	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
-		// Use CreateHTTPClientForProvider which applies OAuth hooks and uses shared transport
-		httpClient = CreateHTTPClientForProvider(provider, model)
-		providerType := oauth.ProviderType(provider.OAuthDetail.ProviderType)
-		if providerType == oauth.ProviderCodex {
-			logrus.Infof("[Codex] Using hook-based transport for ChatGPT backend API path rewriting")
-		} else {
-			logrus.Infof("Using shared transport for OAuth provider type: %s", providerType)
+	// Create HTTP client with session-bound transport
+	var transport http.RoundTripper
+	if provider.AuthType == typ.AuthTypeOAuth || provider.ProxyURL != "" {
+		// Use createSessionBoundTransport which applies OAuth hooks and uses shared transport
+		transport = createSessionBoundTransport(provider, sessionID)
+		providerType := ""
+		if provider.OAuthDetail != nil {
+			providerType = provider.OAuthDetail.ProviderType
+		}
+		if providerType == "codex" {
+			logrus.Infof("[Codex] Using session-bound transport for ChatGPT backend API path rewriting, session: %s", sessionID.Value)
+		} else if providerType != "" {
+			logrus.Infof("Using session-bound transport for OAuth provider type: %s, session: %s", providerType, sessionID.Value)
 		}
 	} else {
-		// For non-OAuth providers, use simple proxy client
-		if provider.ProxyURL != "" {
-			httpClient = CreateHTTPClientWithProxy(provider.ProxyURL)
-			logrus.Infof("Using proxy for OpenAI client: %s", provider.ProxyURL)
-		} else {
-			httpClient = http.DefaultClient
-		}
+		// For non-OAuth providers without proxy, use default transport
+		transport = http.DefaultTransport
+	}
+
+	httpClient := &http.Client{
+		Transport: transport,
 	}
 
 	options = append(options, option.WithHTTPClient(httpClient))

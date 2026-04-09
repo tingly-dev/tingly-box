@@ -29,7 +29,8 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	req := s.injectMCPToolsIntoOpenAIRequest(c.Request.Context(), originalReq)
 
 	// Forward request to provider
-	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model, resolveSessionID(c, req))
+	ctx := typ.WithSessionID(c.Request.Context(), resolveSessionID(c, req))
+	wrapper := s.clientPool.GetOpenAIClient(ctx, provider, req.Model)
 	fc := NewForwardContext(nil, provider)
 	response, _, err := ForwardOpenAIChat(fc, wrapper, req)
 	if err != nil {
@@ -184,7 +185,7 @@ func (s *Server) handleMCPToolCalls(ctx context.Context, provider *typ.Provider,
 		followUpReq.StreamOptions = openai.ChatCompletionStreamOptionsParam{}
 		followUpReq = *s.injectMCPToolsIntoOpenAIRequest(ctx, &followUpReq)
 
-		wrapper := s.clientPool.GetOpenAIClient(provider, string(followUpReq.Model), typ.SessionID{})
+		wrapper := s.clientPool.GetOpenAIClient(context.Background(), provider, string(followUpReq.Model))
 		fc := NewForwardContext(nil, provider)
 		nextResp, _, err := ForwardOpenAIChat(fc, wrapper, &followUpReq)
 		if err != nil {
@@ -202,7 +203,8 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 		reqForMCP := *req
 		reqForMCP.StreamOptions = openai.ChatCompletionStreamOptionsParam{}
 
-		wrapper := s.clientPool.GetOpenAIClient(provider, req.Model, resolveSessionID(c, req))
+		ctx := typ.WithSessionID(c.Request.Context(), resolveSessionID(c, req))
+		wrapper := s.clientPool.GetOpenAIClient(ctx, provider, req.Model)
 		fc := NewForwardContext(nil, provider)
 		resp, _, err := ForwardOpenAIChat(fc, wrapper, &reqForMCP)
 		if err != nil {
@@ -242,7 +244,8 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 		return
 	}
 
-	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model, resolveSessionID(c, req))
+	ctx := typ.WithSessionID(c.Request.Context(), resolveSessionID(c, req))
+	wrapper := s.clientPool.GetOpenAIClient(ctx, provider, req.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
 	streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, req)
 	if cancel != nil {

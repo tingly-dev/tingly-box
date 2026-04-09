@@ -1640,17 +1640,18 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	var apiErr error
 
 	// Create appropriate client based on provider API style
+	// Note: For model listing, we use empty SessionID as no user session is involved
 	var lister client.ModelLister
 	switch provider.APIStyle {
 	case protocol.APIStyleAnthropic:
-		aClient, err := client.NewAnthropicClient(provider, "")
+		aClient, err := client.NewAnthropicClient(provider, "", typ.SessionID{})
 		if err == nil {
 			defer aClient.Close()
 			lister = aClient
 		}
 		apiErr = err
 	case protocol.APIStyleGoogle:
-		gClient, err := client.NewGoogleClient(provider, "")
+		gClient, err := client.NewGoogleClient(provider, "", typ.SessionID{})
 		if err == nil {
 			defer gClient.Close()
 			lister = gClient
@@ -1659,7 +1660,7 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	case protocol.APIStyleOpenAI:
 		fallthrough
 	default:
-		oClient, err := client.NewOpenAIClient(provider, "")
+		oClient, err := client.NewOpenAIClient(provider, "", typ.SessionID{})
 		if err == nil {
 			defer oClient.Close()
 			lister = oClient

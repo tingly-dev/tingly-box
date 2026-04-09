@@ -384,19 +384,131 @@ func CreateHTTPClientWithProxy(proxyURL string) *http.Client {
 	}
 }
 
+// TransportPoolInterface defines the interface for transport pools.
+// This allows both the real TransportPool and test doubles to be used.
+type TransportPoolInterface interface {
+	GetTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType, sessionID typ.SessionID) *http.Transport
+}
+
+// SessionBoundTransport is a RoundTripper that binds to a specific session.
+// It stores the sessionID and routes all requests through that session's transport.
+// This enables session-scoped transport isolation while keeping the http.Client
+// as a lightweight, stateless shell.
+type SessionBoundTransport struct {
+	transportPool TransportPoolInterface
+	providerUUID  string
+	proxyURL      string
+	oauthType     oauth.ProviderType
+	sessionID     typ.SessionID // Bound at creation time
+
+	// Optional: provider-specific response wrapper (e.g., for tool prefix stripping)
+	responseWrapper func(*http.Response) *http.Response
+}
+
+// RoundTrip implements http.RoundTripper for SessionBoundTransport.
+// It gets the transport for the stored session from the pool and executes the request.
+func (t *SessionBoundTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Get the transport for this session (cached in pool)
+	transport := t.transportPool.GetTransport(
+		t.providerUUID,
+		"", // model - not used for transport keying
+		t.proxyURL,
+		t.oauthType,
+		t.sessionID, // Use stored sessionID
+	)
+
+	// Execute request
+	resp, err := transport.RoundTrip(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply response wrapper if needed (e.g., tool prefix stripping)
+	if t.responseWrapper != nil {
+		resp = t.responseWrapper(resp)
+	}
+
+	return resp, nil
+}
+
+// createSessionBoundTransport creates a session-bound transport with
+// optional provider-specific wrapping (claudeRoundTripper, codexRoundTripper, etc.).
+// This helper builds the layered transport chain based on provider configuration.
+func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID) http.RoundTripper {
+	var oauthType oauth.ProviderType
+	if provider.OAuthDetail != nil {
+		oauthType = oauth.ProviderType(provider.OAuthDetail.ProviderType)
+	}
+
+	// Base: SessionBoundTransport
+	baseTransport := &SessionBoundTransport{
+		transportPool: GetGlobalTransportPool(),
+		providerUUID:  provider.UUID,
+		proxyURL:      provider.ProxyURL,
+		oauthType:     oauthType,
+		sessionID:     sessionID,
+	}
+
+	// Layer provider-specific transformations
+	if provider.AuthType == typ.AuthTypeOAuth {
+		switch oauthType {
+		case oauth.ProviderClaudeCode:
+			// Claude Code OAuth needs request/response transformations
+			return &claudeRoundTripper{
+				RoundTripper: baseTransport,
+			}
+		case oauth.ProviderCodex:
+			// Codex (ChatGPT backend API) needs path rewriting and response transformation
+			return &codexRoundTripper{
+				RoundTripper: baseTransport,
+			}
+		case oauth.ProviderAntigravity:
+			// Antigravity needs extra config (project_id) and special wrapping
+			project := ""
+			model := ""
+			if provider.OAuthDetail != nil && provider.OAuthDetail.ExtraFields != nil {
+				if p, ok := provider.OAuthDetail.ExtraFields["project_id"].(string); ok {
+					project = p
+				}
+			}
+			return &antigravityRoundTripper{
+				RoundTripper: baseTransport,
+				project:      project,
+				model:        model,
+				proxyURL:     provider.ProxyURL,
+			}
+		default:
+			// Generic OAuth with hooks (if any are defined)
+			if hook := oauthHookFunctions[oauthType]; hook != nil {
+				return &requestModifier{
+					RoundTripper: baseTransport,
+					hooks:        []HookFunc{hook},
+				}
+			}
+		}
+	}
+
+	return baseTransport
+}
+
 // CreateHTTPClientForProvider creates an HTTP client configured for the given provider
 // It handles proxy and OAuth hooks if applicable
 // The model parameter is used for transport pool keying (provider+model+proxy)
+// The sessionID parameter is used for session-scoped transport creation for OAuth providers
+//
+// Deprecated: Use createSessionBoundTransport instead. This function is kept for
+// backward compatibility during the migration to SessionBoundTransport.
 //
 // Returns a configured http.Client
-func CreateHTTPClientForProvider(provider *typ.Provider, model string) *http.Client {
+func CreateHTTPClientForProvider(provider *typ.Provider, model string, sessionID typ.SessionID) *http.Client {
 	var providerType oauth.ProviderType
 	if provider.OAuthDetail != nil {
 		providerType = oauth.ProviderType(provider.OAuthDetail.ProviderType)
 	}
 
-	// Get shared transport from transport pool (keyed by providerUUID + proxyURL)
-	transport := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, providerType)
+	// Get shared transport from transport pool (keyed by providerUUID + sessionID for OAuth)
+	// proxyURL is used to configure the transport but is NOT part of the key
+	transport := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, providerType, sessionID)
 
 	client := &http.Client{
 		Transport: transport,

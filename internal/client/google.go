@@ -14,7 +14,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // GoogleClient wraps the Google genai SDK client
@@ -27,22 +26,30 @@ type GoogleClient struct {
 }
 
 // NewGoogleClient creates a new Google client wrapper
-func NewGoogleClient(provider *typ.Provider, model string) (*GoogleClient, error) {
-	// Create HTTP client with proper OAuth/proxy configuration
-	var httpClient *http.Client
-	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
-		// Use CreateHTTPClientForProvider which applies OAuth hooks and uses shared transport
-		httpClient = CreateHTTPClientForProvider(provider, model)
-		providerType := oauth.ProviderType(provider.OAuthDetail.ProviderType)
-		logrus.Infof("Using shared transport for OAuth provider type: %s", providerType)
-	} else {
-		// For non-OAuth providers, use simple proxy client or default
-		if provider.ProxyURL != "" {
-			httpClient = CreateHTTPClientWithProxy(provider.ProxyURL)
-			logrus.Infof("Using proxy for Google client: %s", provider.ProxyURL)
-		} else {
-			httpClient = http.DefaultClient
+// sessionID is used for session-scoped transport creation for OAuth providers
+func NewGoogleClient(provider *typ.Provider, model string, sessionID typ.SessionID) (*GoogleClient, error) {
+	// Create HTTP client with session-bound transport
+	var transport http.RoundTripper
+	if provider.AuthType == typ.AuthTypeOAuth || provider.ProxyURL != "" {
+		// Use createSessionBoundTransport which applies OAuth hooks and uses shared transport
+		transport = createSessionBoundTransport(provider, sessionID)
+
+		providerType := ""
+		if provider.OAuthDetail != nil {
+			providerType = provider.OAuthDetail.ProviderType
 		}
+		if providerType != "" {
+			logrus.Infof("Using session-bound transport for OAuth provider type: %s, session: %s", providerType, sessionID.Value)
+		}
+		if provider.ProxyURL != "" {
+			logrus.Infof("Using proxy for Google client: %s", provider.ProxyURL)
+		}
+	} else {
+		transport = http.DefaultTransport
+	}
+
+	httpClient := &http.Client{
+		Transport: transport,
 	}
 
 	// Create Google client config

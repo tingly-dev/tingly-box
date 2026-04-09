@@ -65,7 +65,7 @@ func TestE2E_ClaudeRoundTripper(t *testing.T) {
 
 	t.Run("model_list", func(t *testing.T) {
 		// Create Anthropic client
-		client, err := NewAnthropicClient(provider, model)
+		client, err := NewAnthropicClient(provider, model, typ.SessionID{})
 		require.NoError(t, err)
 		defer client.Close()
 
@@ -97,7 +97,7 @@ func TestE2E_ClaudeRoundTripper(t *testing.T) {
 
 	t.Run("streaming_with_tools", func(t *testing.T) {
 		// Create Anthropic client
-		client, err := NewAnthropicClient(provider, model)
+		client, err := NewAnthropicClient(provider, model, typ.SessionID{})
 		require.NoError(t, err)
 		defer client.Close()
 
@@ -223,7 +223,7 @@ func TestE2E_ClaudeRoundTripper(t *testing.T) {
 
 	t.Run("streaming_simple", func(t *testing.T) {
 		// Create Anthropic client
-		client, err := NewAnthropicClient(provider, model)
+		client, err := NewAnthropicClient(provider, model, typ.SessionID{})
 		require.NoError(t, err)
 		defer client.Close()
 
@@ -297,7 +297,7 @@ func TestE2E_ClaudeRoundTripper(t *testing.T) {
 
 	t.Run("simple", func(t *testing.T) {
 		// Simple test using Anthropic client
-		client, err := NewAnthropicClient(provider, model)
+		client, err := NewAnthropicClient(provider, model, typ.SessionID{})
 		require.NoError(t, err)
 		defer client.Close()
 
@@ -381,7 +381,7 @@ func TestE2E_ClaudeOAuthRoundTripper(t *testing.T) {
 
 	t.Run("oauth_streaming_with_tool_prefix", func(t *testing.T) {
 		// Test that tool prefix is correctly applied and stripped for OAuth
-		client, err := NewAnthropicClient(provider, model)
+		client, err := NewAnthropicClient(provider, model, typ.SessionID{})
 		require.NoError(t, err)
 		defer client.Close()
 
@@ -500,7 +500,7 @@ func TestE2E_BetaStreaming(t *testing.T) {
 	}
 
 	t.Run("beta_streaming_simple", func(t *testing.T) {
-		client, err := NewAnthropicClient(provider, model)
+		client, err := NewAnthropicClient(provider, model, typ.SessionID{})
 		require.NoError(t, err)
 		defer client.Close()
 

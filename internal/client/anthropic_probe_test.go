@@ -31,7 +31,7 @@ func TestAnthropicClient_ProbeChatEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client, err := NewAnthropicClient(tt.provider, tt.model)
+			client, err := NewAnthropicClient(tt.provider, tt.model, typ.SessionID{})
 			if err != nil {
 				t.Fatalf("NewAnthropicClient() error = %v", err)
 			}
@@ -71,7 +71,7 @@ func TestAnthropicClient_ProbeModelsEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client, err := NewAnthropicClient(tt.provider, tt.model)
+			client, err := NewAnthropicClient(tt.provider, tt.model, typ.SessionID{})
 			if err != nil {
 				t.Fatalf("NewAnthropicClient() error = %v", err)
 			}
@@ -111,7 +111,7 @@ func TestAnthropicClient_ProbeOptionsEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client, err := NewAnthropicClient(tt.provider, tt.model)
+			client, err := NewAnthropicClient(tt.provider, tt.model, typ.SessionID{})
 			if err != nil {
 				t.Fatalf("NewAnthropicClient() error = %v", err)
 			}

@@ -6,10 +6,12 @@ import (
 )
 
 // NewOpenAIClient creates a new OpenAI client wrapper
-var NewOpenAIClient func(provider *typ.Provider, model string) (*OpenAIClient, error) = defaultNewOpenAIClient
+// sessionID is used for session-scoped transport creation for OAuth providers
+var NewOpenAIClient func(provider *typ.Provider, model string, sessionID typ.SessionID) (*OpenAIClient, error) = defaultNewOpenAIClient
 
 // NewAnthropicClient creates a new Anthropic client wrapper
-var NewAnthropicClient func(provider *typ.Provider, model string) (*AnthropicClient, error) = defaultNewAnthropicClient
+// sessionID is used for session-scoped transport creation for OAuth providers
+var NewAnthropicClient func(provider *typ.Provider, model string, sessionID typ.SessionID) (*AnthropicClient, error) = defaultNewAnthropicClient
 
 // CloseClient closes a client if it implements Close()
 func CloseClient(client protocol.Client) error {
