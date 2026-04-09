@@ -101,28 +101,6 @@ func NewGuardrailsHooks(ctx context.Context, runtime *guardrails.Guardrails, bas
 	return onStreamEvent, onStreamComplete, onStreamError
 }
 
-func EvaluateNonStreamGuardrails(ctx context.Context, runtime *guardrails.Guardrails, input guardrailscore.Input) GuardrailsHookResult {
-	if runtime == nil || runtime.Policy == nil {
-		return GuardrailsHookResult{}
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	logrus.Debugf("Guardrails: evaluating non-stream input (scenario=%s model=%s)", input.Scenario, input.Model)
-	result, err := runtime.Evaluate(ctx, input)
-	if err != nil {
-		logrus.Debugf("Guardrails: non-stream evaluation error (scenario=%s model=%s): %v", input.Scenario, input.Model, err)
-	} else {
-		logrus.Debugf("Guardrails: non-stream evaluation done (scenario=%s model=%s verdict=%s)", input.Scenario, input.Model, result.Verdict)
-	}
-
-	return GuardrailsHookResult{
-		Result: result,
-		Err:    err,
-	}
-}
-
 func ingestGuardrailsStreamEvent(acc *guardrailsadapter.StreamAccumulator, event interface{}) {
 	switch evt := event.(type) {
 	case *anthropic.MessageStreamEventUnion:

@@ -19,6 +19,10 @@ var guardrailsSupportedScenarios = []string{
 	string(typ.ScenarioClaudeCode),
 }
 
+// ----------------------------------------------------------------------
+// Runtime Gate And Shared State
+// ----------------------------------------------------------------------
+
 // guardrailsEnabledForScenario centralizes feature-flag checks so protocol handlers
 // do not repeat scenario/global guardrails gating logic.
 func (s *Server) guardrailsEnabledForScenario(scenario string) bool {
@@ -146,6 +150,10 @@ func (s *Server) setGuardrailsRuntime(runtime *guardrails.Guardrails, context st
 	}
 }
 
+// ----------------------------------------------------------------------
+// Shared Input Construction
+// ----------------------------------------------------------------------
+
 // buildGuardrailsBaseInput creates the shared evaluation envelope; adapters can then
 // add request/response-specific content without rebuilding metadata each time.
 func (s *Server) buildGuardrailsBaseInput(c *gin.Context, actualModel string, provider *typ.Provider, direction guardrailscore.Direction, messages []guardrailscore.Message) guardrailscore.Input {
@@ -171,6 +179,10 @@ func (s *Server) buildGuardrailsBaseInput(c *gin.Context, actualModel string, pr
 	}
 }
 
+// ----------------------------------------------------------------------
+// Stream Response Guardrails
+// ----------------------------------------------------------------------
+
 // attachGuardrailsHooks wires the shared stream guardrails runtime into a protocol
 // handle context. Provider-specific handlers only need to provide already-normalized
 // message history.
@@ -193,6 +205,10 @@ func (s *Server) attachGuardrailsHooks(c *gin.Context, hc *protocol.HandleContex
 		hc.WithOnStreamError(onError)
 	}
 }
+
+// ----------------------------------------------------------------------
+// Request Guardrails
+// ----------------------------------------------------------------------
 
 // applyGuardrailsToAnthropicV1Request is the merged request-side entry for
 // Anthropic v1 requests. It runs request tool_result filtering first and then
@@ -237,6 +253,58 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaRequest(c *gin.Context, req *an
 		return
 	}
 }
+
+// ----------------------------------------------------------------------
+// Non-Stream Response Guardrails
+// ----------------------------------------------------------------------
+
+// applyGuardrailsToAnthropicV1NonStreamResponse evaluates a fully assembled
+// Anthropic v1 response and rewrites it when guardrails block it.
+func (s *Server) applyGuardrailsToAnthropicV1NonStreamResponse(c *gin.Context, actualModel string, provider *typ.Provider, messageHistory []guardrailscore.Message, resp *anthropic.Message) bool {
+	if resp == nil {
+		return false
+	}
+	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+	if !s.guardrailsEnabledForScenario(scenario) {
+		return false
+	}
+
+	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messageHistory)
+	input.Payload.Protocol = "anthropic_v1"
+	input.Payload.Response = resp
+
+	mutation, err := guardrailspipeline.ProcessAnthropicV1NonStreamResponse(c.Request.Context(), s.guardrailsRuntime, input, resp)
+	if err != nil {
+		return false
+	}
+	return mutation.Changed
+}
+
+// applyGuardrailsToAnthropicV1BetaNonStreamResponse is the beta equivalent of
+// applyGuardrailsToAnthropicV1NonStreamResponse.
+func (s *Server) applyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Context, actualModel string, provider *typ.Provider, messageHistory []guardrailscore.Message, resp *anthropic.BetaMessage) bool {
+	if resp == nil {
+		return false
+	}
+	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+	if !s.guardrailsEnabledForScenario(scenario) {
+		return false
+	}
+
+	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messageHistory)
+	input.Payload.Protocol = "anthropic_beta"
+	input.Payload.Response = resp
+
+	mutation, err := guardrailspipeline.ProcessAnthropicV1BetaNonStreamResponse(c.Request.Context(), s.guardrailsRuntime, input, resp)
+	if err != nil {
+		return false
+	}
+	return mutation.Changed
+}
+
+// ----------------------------------------------------------------------
+// Response Alias Restoration
+// ----------------------------------------------------------------------
 
 func (s *Server) getGuardrailsCredentialMaskState(c *gin.Context) *guardrailscore.CredentialMaskState {
 	if existing, ok := c.Get(guardrailscore.CredentialMaskStateContextKey); ok {
