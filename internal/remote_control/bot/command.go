@@ -200,7 +200,8 @@ func newInterruptCommand(adapter BotHandlerAdapter) imbot.Command {
 			}
 			return adapter.SendText(ctx.ChatID, "No running task to stop.")
 		}).
-		Hidden().
+		WithCategory("session").
+		WithPriority(70).
 		MustBuild()
 }
 
