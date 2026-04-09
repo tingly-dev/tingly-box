@@ -53,9 +53,14 @@ func NewTransportKey(providerUUID string, proxyURL string, providerType oauth.Pr
 	policy := GetTransportReusePolicy(providerType)
 
 	if policy == TransportPerSession && !session.IsEmpty() && !session.IsIPFallback() {
+		// Strip IPBackup: it's for logging only and must not affect transport keying.
+		// Including it would create different transports for the same session from different IPs.
 		return typ.TransportKey{
 			ProviderUUID: providerUUID,
-			SessionID:    session,
+			SessionID: typ.SessionID{
+				Source: session.Source,
+				Value:  session.Value,
+			},
 		}
 	}
 	return typ.TransportKey{

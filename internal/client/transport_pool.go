@@ -274,6 +274,32 @@ func (tp *TransportPool) Clear() {
 	logrus.Info("Transport pool cleared")
 }
 
+// InvalidateProvider removes all transports associated with a specific provider UUID.
+// This should be called when provider credentials are updated (e.g., OAuth token refresh).
+func (tp *TransportPool) InvalidateProvider(providerUUID string) {
+	if providerUUID == "" {
+		return
+	}
+
+	tp.mutex.Lock()
+	defer tp.mutex.Unlock()
+
+	uuidToken := `"` + providerUUID + `"`
+	count := 0
+
+	for key, pooled := range tp.transports {
+		if strings.Contains(key, uuidToken) {
+			pooled.transport.CloseIdleConnections()
+			delete(tp.transports, key)
+			count++
+		}
+	}
+
+	if count > 0 {
+		logrus.Infof("Invalidated %d transport(s) for provider UUID: %s", count, providerUUID)
+	}
+}
+
 // InvalidateSession removes all transports associated with a specific session for a provider.
 // This should be called when a session ends or its OAuth token is revoked.
 func (tp *TransportPool) InvalidateSession(providerUUID, sessionID string) {

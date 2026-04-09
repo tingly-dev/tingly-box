@@ -173,12 +173,8 @@ func (p *ClientPool) InvalidateSession(providerUUID, sessionID string) {
 // Note: Since ClientPool no longer caches clients, this only invalidates
 // the TransportPool entries. Client instances will be garbage collected naturally.
 func (p *ClientPool) InvalidateProvider(providerUUID string) {
-	// Since we don't cache clients, we don't need to do anything at the client pool level.
-	// The TransportPool manages its own lifecycle, and transports are created on-demand.
-	//
-	// If a provider's credentials change, existing client instances with stale credentials
-	// will be naturally garbage collected. New requests will get fresh clients with updated credentials.
-	logrus.Debugf("InvalidateProvider called for provider UUID: %s (no-op in once mode)", providerUUID)
+	GetGlobalTransportPool().InvalidateProvider(providerUUID)
+	logrus.Infof("Invalidated transport pool entries for provider UUID: %s", providerUUID)
 }
 
 // Stats provides statistics about the client pool and transport pool.
