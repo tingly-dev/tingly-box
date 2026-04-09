@@ -73,6 +73,7 @@ const LogsPage = () => {
         <UnifiedCard
             title="System Logs"
             size="full"
+            height="calc(100vh - 48px)"
             rightAction={
                 <Stack direction="row" spacing={1} alignItems="center">
                     <Typography variant="body2" color="text.secondary">
@@ -87,12 +88,13 @@ const LogsPage = () => {
                 </Stack>
             }
         >
-            <Box sx={{ height: '100%' }}>
+            <Stack sx={{ height: '100%', minHeight: 0 }} spacing={0}>
                 {logError && (
-                    <Alert severity="error" onClose={() => setLogError(null)} sx={{ mb: 2 }}>
+                    <Alert severity="error" onClose={() => setLogError(null)} sx={{ mb: 1 }}>
                         {logError}
                     </Alert>
                 )}
+                <Box sx={{ flex: 1, minHeight: 0 }}>
                 <SystemLogViewer
                     getLogs={async (params) => {
                         setLogError(null);
@@ -136,7 +138,8 @@ const LogsPage = () => {
                         }
                     }}
                 />
-            </Box>
+                </Box>
+            </Stack>
         </UnifiedCard>
     );
 };

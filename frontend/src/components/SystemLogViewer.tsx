@@ -13,15 +13,10 @@ import {
     Typography,
     IconButton,
     Collapse,
-    Menu,
-    MenuItem,
 } from '@mui/material';
 import { useState, useEffect, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
-import FilterListIcon from '@mui/icons-material/FilterList';
-import ClearIcon from '@mui/icons-material/Clear';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
 export interface SystemLogEntry {
@@ -43,34 +38,24 @@ interface SystemLogViewerProps {
 const LOG_LEVELS = ['debug', 'info', 'warn', 'error', 'fatal', 'panic'];
 
 const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
-    const { t } = useTranslation();
     const [logs, setLogs] = useState<SystemLogEntry[]>([]);
     const [allLogs, setAllLogs] = useState<SystemLogEntry[]>([]);
     const [loading, setLoading] = useState(false);
-    const [filterLevel, setFilterLevel] = useState<string | null>(null);
+    // Multi-select level filter: empty set = show all
+    const [selectedLevels, setSelectedLevels] = useState<Set<string>>(new Set());
     const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
     const [autoRefresh, setAutoRefresh] = useState(false);
     const tableContainerRef = useRef<HTMLDivElement>(null);
-
-    // Menu anchor elements
-    const [levelMenuAnchor, setLevelMenuAnchor] = useState<null | HTMLElement>(null);
 
     const loadLogs = async () => {
         setLoading(true);
         try {
             const response = await getLogs({ limit: 200 });
             if (response && response.logs) {
-                // Sort logs by time ascending (oldest first)
                 const sortedLogs = [...response.logs].sort((a, b) =>
                     new Date(a.time).getTime() - new Date(b.time).getTime()
                 );
                 setAllLogs(sortedLogs);
-                // Apply current filter to newly loaded logs
-                if (filterLevel === null) {
-                    setLogs(sortedLogs);
-                } else {
-                    setLogs(sortedLogs.filter(log => log.level?.toLowerCase() === filterLevel?.toLowerCase()));
-                }
             }
         } catch (error) {
             console.error('Failed to load system logs:', error);
@@ -89,56 +74,64 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
         setExpandedRows(newExpanded);
     };
 
+    const toggleLevel = (level: string) => {
+        const next = new Set(selectedLevels);
+        if (next.has(level)) {
+            next.delete(level);
+        } else {
+            next.add(level);
+        }
+        setSelectedLevels(next);
+    };
+
     const getLevelColor = (level: string): string => {
         switch (level.toLowerCase()) {
-            case 'panic':
-                return '#991b1b';
-            case 'fatal':
-                return '#dc2626';
-            case 'error':
-                return '#ef4444';
+            case 'panic':   return '#991b1b';
+            case 'fatal':   return '#dc2626';
+            case 'error':   return '#ef4444';
             case 'warning':
-            case 'warn':
-                return '#0ea5e9';
-            case 'info':
-                return '#3b82f6';
-            case 'debug':
-                return '#6b7280';
-            default:
-                return '#10b981';
+            case 'warn':    return '#f59e0b';
+            case 'info':    return '#3b82f6';
+            case 'debug':   return '#6b7280';
+            default:        return '#10b981';
         }
     };
 
     const getStatusCodeColor = (statusCode?: number): string => {
-        if (!statusCode) return '#6b7280'; // gray for missing
-        if (statusCode >= 200 && statusCode < 300) return '#10b981'; // green for 2xx
-        if (statusCode >= 300 && statusCode < 400) return '#3b82f6'; // blue for 3xx
-        if (statusCode >= 400 && statusCode < 500) return '#0ea5e9'; // sky blue for 4xx
-        if (statusCode >= 500) return '#ef4444'; // red for 5xx
+        if (!statusCode) return '#6b7280';
+        if (statusCode >= 200 && statusCode < 300) return '#10b981';
+        if (statusCode >= 300 && statusCode < 400) return '#3b82f6';
+        if (statusCode >= 400 && statusCode < 500) return '#f59e0b';
+        if (statusCode >= 500) return '#ef4444';
         return '#6b7280';
     };
 
     const formatTimestamp = (timestamp: string): string => {
         try {
-            const date = new Date(timestamp);
-            return date.toLocaleString();
+            return new Date(timestamp).toLocaleString();
         } catch {
             return timestamp;
         }
     };
 
-    // Client-side filter when filterLevel changes
+    // Client-side filter
     useEffect(() => {
-        let filtered = allLogs;
-        if (filterLevel !== null) {
-            filtered = filtered.filter(log => log.level?.toLowerCase() === filterLevel?.toLowerCase());
+        if (selectedLevels.size === 0) {
+            setLogs(allLogs);
+        } else {
+            setLogs(allLogs.filter(log => {
+                const l = log.level?.toLowerCase() ?? '';
+                // match "warn" tag against "warn" or "warning"
+                return [...selectedLevels].some(sel =>
+                    l === sel || (sel === 'warn' && l === 'warning')
+                );
+            }));
         }
-        setLogs(filtered);
-    }, [filterLevel, allLogs]);
+    }, [selectedLevels, allLogs]);
 
     useEffect(() => {
         loadLogs();
-    }, []); // Only load on mount
+    }, []);
 
     useEffect(() => {
         if (autoRefresh) {
@@ -147,7 +140,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
         }
     }, [autoRefresh]);
 
-    // Scroll to bottom when logs change (show newest)
+    // Scroll to bottom when logs update
     useEffect(() => {
         if (tableContainerRef.current && logs.length > 0) {
             tableContainerRef.current.scrollTop = tableContainerRef.current.scrollHeight;
@@ -155,16 +148,18 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
     }, [logs]);
 
     return (
-        <Stack spacing={2}>
-            {/* Header */}
-            <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
-                <Stack direction="row" spacing={2} alignItems="center">
+        <Stack spacing={1.5} sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            {/* Toolbar */}
+            <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+                {/* Actions */}
+                <Stack direction="row" spacing={1} alignItems="center">
                     <Button
                         variant={autoRefresh ? 'contained' : 'outlined'}
                         size="small"
                         onClick={() => setAutoRefresh(!autoRefresh)}
+                        sx={{ fontSize: '0.75rem' }}
                     >
-                        Auto Refresh
+                        Auto
                     </Button>
                     <Button
                         variant="outlined"
@@ -172,47 +167,71 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                         onClick={loadLogs}
                         disabled={loading}
                         startIcon={<RefreshIcon />}
+                        sx={{ fontSize: '0.75rem' }}
                     >
                         Refresh
                     </Button>
-                    {filterLevel !== null && (
-                        <Button
-                            variant="outlined"
+                    <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                        {logs.length}{allLogs.length !== logs.length ? ` / ${allLogs.length}` : ''}
+                    </Typography>
+                </Stack>
+
+                <Box sx={{ flex: 1 }} />
+
+                {/* Level filter tags */}
+                <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap>
+                    {LOG_LEVELS.map((level) => {
+                        const active = selectedLevels.has(level);
+                        return (
+                            <Chip
+                                key={level}
+                                label={level.toUpperCase()}
+                                size="small"
+                                clickable
+                                onClick={() => toggleLevel(level)}
+                                sx={{
+                                    backgroundColor: active ? getLevelColor(level) : 'transparent',
+                                    color: active ? 'white' : 'text.secondary',
+                                    border: active ? `1px solid ${getLevelColor(level)}` : '1px solid',
+                                    borderColor: active ? getLevelColor(level) : 'divider',
+                                    fontWeight: 'bold',
+                                    fontSize: '0.7rem',
+                                    height: 24,
+                                    '&:hover': {
+                                        backgroundColor: active
+                                            ? getLevelColor(level)
+                                            : `${getLevelColor(level)}22`,
+                                        borderColor: getLevelColor(level),
+                                        color: active ? 'white' : getLevelColor(level),
+                                    },
+                                }}
+                            />
+                        );
+                    })}
+                    {selectedLevels.size > 0 && (
+                        <Chip
+                            label="Clear"
                             size="small"
-                            startIcon={<ClearIcon />}
-                            onClick={() => {
-                                setFilterLevel(null);
-                            }}
-                        >
-                            Clear Filter
-                        </Button>
+                            clickable
+                            onClick={() => setSelectedLevels(new Set())}
+                            sx={{ fontSize: '0.7rem', height: 24 }}
+                        />
                     )}
                 </Stack>
-                <Typography variant="body2" color="text.secondary">
-                    Total: {logs.length}{allLogs.length !== logs.length && ` / ${allLogs.length}`}
-                </Typography>
             </Stack>
 
-            {/* Logs Table */}
-            <TableContainer component={Paper} sx={{ height: 600 }} ref={tableContainerRef}>
+            {/* Logs Table — fills remaining space */}
+            <TableContainer
+                component={Paper}
+                ref={tableContainerRef}
+                sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}
+            >
                 <Table stickyHeader size="small">
                     <TableHead>
                         <TableRow>
                             <TableCell padding="checkbox" />
                             <TableCell sx={{ width: 180 }}>Time</TableCell>
-                            <TableCell sx={{ width: 100 }}>
-                                <Stack direction="row" alignItems="center" spacing={0.5}>
-                                    <span>Level</span>
-                                    <IconButton
-                                        size="small"
-                                        onClick={(e) => setLevelMenuAnchor(e.currentTarget)}
-                                        sx={{ padding: 0.5 }}
-                                        color={filterLevel !== null ? 'primary' : 'default'}
-                                    >
-                                        <FilterListIcon fontSize="small" />
-                                    </IconButton>
-                                </Stack>
-                            </TableCell>
+                            <TableCell sx={{ width: 90 }}>Level</TableCell>
                             <TableCell sx={{ width: 80 }}>Status</TableCell>
                             <TableCell>Message</TableCell>
                         </TableRow>
@@ -282,67 +301,38 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                         </TableCell>
                                     </TableRow>
                                     <TableRow key={`${index}-expanded`}>
-                                        <TableCell
-                                            colSpan={5}
-                                            sx={{ pb: 0, pt: 0, border: 'none' }}
-                                        >
-                                            <Collapse
-                                                in={expandedRows.has(index)}
-                                                timeout="auto"
-                                                unmountOnExit
-                                            >
+                                        <TableCell colSpan={5} sx={{ pb: 0, pt: 0, border: 'none' }}>
+                                            <Collapse in={expandedRows.has(index)} timeout="auto" unmountOnExit>
                                                 <Box sx={{ p: 2, backgroundColor: 'rgba(0,0,0,0.03)' }}>
-                                                    {log.fields && Object.keys(log.fields).length > 0 && (
+                                                    {log.fields && Object.keys(log.fields).length > 0 ? (
                                                         <Stack spacing={1}>
-                                                            {/* Show error field prominently if it exists */}
                                                             {log.fields.error && (
-                                                                <Box sx={{
-                                                                    p: 1,
-                                                                    backgroundColor: 'error.dark',
-                                                                    borderRadius: 1,
-                                                                }}>
+                                                                <Box sx={{ p: 1, backgroundColor: 'error.dark', borderRadius: 1 }}>
                                                                     <Typography
                                                                         variant="body2"
-                                                                        sx={{
-                                                                            fontFamily: 'monospace',
-                                                                            fontSize: '0.75rem',
-                                                                            color: 'error.contrastText',
-                                                                            fontWeight: 'bold',
-                                                                            wordBreak: 'break-all',
-                                                                        }}
+                                                                        sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'error.contrastText', fontWeight: 'bold', wordBreak: 'break-all' }}
                                                                     >
-                                                                        ERROR: {String(log.fields.error)}
+                                                                        ERROR: {typeof log.fields.error === 'object' && log.fields.error !== null ? JSON.stringify(log.fields.error) : String(log.fields.error)}
                                                                     </Typography>
                                                                     {log.fields.error_type && (
                                                                         <Typography
                                                                             variant="caption"
-                                                                            sx={{
-                                                                                fontFamily: 'monospace',
-                                                                                fontSize: '0.7rem',
-                                                                                color: 'error.contrastText',
-                                                                                opacity: 0.8,
-                                                                            }}
+                                                                            sx={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'error.contrastText', opacity: 0.8 }}
                                                                         >
-                                                                            Type: {String(log.fields.error_type)}
+                                                                            Type: {typeof log.fields.error_type === 'object' && log.fields.error_type !== null ? JSON.stringify(log.fields.error_type) : String(log.fields.error_type)}
                                                                         </Typography>
                                                                     )}
                                                                 </Box>
                                                             )}
-                                                            {/* Show other fields */}
                                                             {Object.entries(log.fields)
                                                                 .filter(([key]) => key !== 'error' && key !== 'error_type')
                                                                 .map(([key, value]) => (
-                                                                <Typography
-                                                                    key={key}
-                                                                    variant="body2"
-                                                                    sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
-                                                                >
-                                                                    <strong>{key}:</strong> {String(value)}
-                                                                </Typography>
-                                                            ))}
+                                                                    <Typography key={key} variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                                                                        <strong>{key}:</strong> {typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)}
+                                                                    </Typography>
+                                                                ))}
                                                         </Stack>
-                                                    )}
-                                                    {!log.fields || Object.keys(log.fields).length === 0 && (
+                                                    ) : (
                                                         <Typography variant="body2" color="text.secondary">
                                                             No additional fields
                                                         </Typography>
@@ -357,36 +347,6 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                     </TableBody>
                 </Table>
             </TableContainer>
-
-            {/* Level Filter Menu */}
-            <Menu
-                anchorEl={levelMenuAnchor}
-                open={Boolean(levelMenuAnchor)}
-                onClose={() => setLevelMenuAnchor(null)}
-            >
-                <MenuItem
-                    selected={filterLevel === null}
-                    onClick={() => {
-                        setFilterLevel(null);
-                        setLevelMenuAnchor(null);
-                    }}
-                >
-                    All Levels
-                </MenuItem>
-                {LOG_LEVELS.map((level) => (
-                    <MenuItem
-                        key={level}
-                        selected={filterLevel === level}
-                        onClick={() => {
-                            setFilterLevel(level);
-                            setLevelMenuAnchor(null);
-                        }}
-                    >
-                        <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: getLevelColor(level), mr: 1 }} />
-                        {level.charAt(0).toUpperCase() + level.slice(1)}
-                    </MenuItem>
-                ))}
-            </Menu>
         </Stack>
     );
 };
