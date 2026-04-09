@@ -295,7 +295,7 @@ func newStatusCommand(adapter BotHandlerAdapter) imbot.Command {
 			}
 
 			var parts []string
-			parts = append(parts, fmt.Sprintf("Agent: %s", agentType))
+			parts = append(parts, fmt.Sprintf("Agent: %s", GetAgentDisplayName(agentType)))
 			parts = append(parts, fmt.Sprintf("Session: %s", sess.ID))
 			parts = append(parts, fmt.Sprintf("Status: %s", sess.Status))
 
