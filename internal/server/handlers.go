@@ -117,8 +117,14 @@ func (s *Server) GetToken(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// DetermineProviderAndModelWithScenario determines the provider and service for a request
-// based on the rule's configuration, smart routing rules, and optional affinity locking.
+// resolveSessionID returns the session identifier for the current request as a string.
+// It delegates to routing.ResolveSessionID which checks (in priority order):
+// Anthropic metadata.user_id > X-Tingly-Session-ID header > ClientIP fallback.
+func resolveSessionID(c *gin.Context, req interface{}) typ.SessionID {
+	return routing.ResolveSessionID(c, req)
+}
+
+// DetermineProviderAndModelWithScenario determines the provider and service for a request// based on the rule's configuration, smart routing rules, and optional affinity locking.
 // sessionID is used for affinity locking when SmartAffinity is enabled.
 //
 // Deprecated: Use routing.SimpleSelector.SelectService() instead for cleaner code.

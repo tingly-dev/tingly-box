@@ -195,17 +195,17 @@ func (s *ServiceSelector) selectPipeline(rule *typ.Rule) []SelectionStage {
 // Locks affinity whenever affinity is enabled and the source is not "affinity"
 // (i.e., don't re-lock an already-locked entry).
 func (s *ServiceSelector) postProcess(ctx *SelectionContext, result *SelectionResult) {
-	if result.Source == "affinity" || !ctx.Rule.SmartAffinity || ctx.SessionID == "" {
+	if result.Source == "affinity" || !ctx.Rule.SmartAffinity || ctx.SessionID.IsEmpty() {
 		return
 	}
 
-	s.affinityStore.Set(ctx.Rule.UUID, ctx.SessionID, &AffinityEntry{
+	s.affinityStore.Set(ctx.Rule.UUID, ctx.SessionID.String(), &AffinityEntry{
 		Service:   result.Service,
 		LockedAt:  time.Now(),
 		ExpiresAt: time.Now().Add(2 * time.Hour), // TODO: make configurable
 	})
 	logrus.Infof("[affinity] locked service %s -> %s for session %s",
-		result.Provider.Name, result.Service.Model, ctx.SessionID)
+		result.Provider.Name, result.Service.Model, ctx.SessionID.String())
 }
 
 // UpdateServiceIndex updates the current service index for round-robin.

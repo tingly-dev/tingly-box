@@ -1,8 +1,6 @@
 package client
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -12,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/proxy"
 
+	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
@@ -103,11 +102,10 @@ func SetTransportConfig(config *TransportConfig) {
 	}
 }
 
-// GetTransport returns or creates a shared HTTP transport for the given configuration
-// The transport key is based on: providerUUID + proxyURL
-// oauthType is used for logging only, not part of the key
+// GetTransport returns or creates a shared HTTP transport for the given configuration.
+// The transport key is based on: providerUUID + proxyURL.
 func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType) *http.Transport {
-	key := tp.generateTransportKey(providerUUID, proxyURL)
+	key := typ.NewTransportKey(providerUUID, proxyURL).String()
 
 	// Try to get existing transport with read lock first
 	tp.mutex.RLock()
@@ -144,19 +142,14 @@ func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oaut
 	return transport
 }
 
-// generateTransportKey creates a unique key for transport caching
+// generateTransportKey creates a unique key for transport caching.
+// Kept for reference; production code uses typ.NewTransportKey directly.
 // The key is based on providerUUID + proxyURL to ensure:
 // - Same provider + same proxy = shared transport (connection reuse)
 // - Different providers = separate transports
 // - Same provider + different proxies = separate transports
 func (tp *TransportPool) generateTransportKey(providerUUID, proxyURL string) string {
-	// Build key string
-	keyStr := providerUUID + "|" + proxyURL
-
-	// Hash the key to create a fixed-length identifier
-	h := sha256.New()
-	h.Write([]byte(keyStr))
-	return hex.EncodeToString(h.Sum(nil))[:16]
+	return typ.NewTransportKey(providerUUID, proxyURL).String()
 }
 
 // newDirectTransport returns a transport with env proxy disabled (direct connection).

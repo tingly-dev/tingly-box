@@ -21,13 +21,13 @@ func TestClientPool_OnceMode(t *testing.T) {
 	}
 
 	// First call should create new client
-	client1 := pool.GetOpenAIClient(provider, "gpt-4")
+	client1 := pool.GetOpenAIClient(provider, "gpt-4", typ.SessionID{})
 	if client1 == nil {
 		t.Fatal("Expected non-nil client")
 	}
 
 	// Second call should create different client (no caching)
-	client2 := pool.GetOpenAIClient(provider, "gpt-4")
+	client2 := pool.GetOpenAIClient(provider, "gpt-4", typ.SessionID{})
 	if client2 == nil {
 		t.Fatal("Expected non-nil client")
 	}
@@ -64,13 +64,13 @@ func TestClientPool_SharedMode(t *testing.T) {
 	}
 
 	// First call should create new client
-	client1 := pool.GetOpenAIClient(provider, "gpt-4")
+	client1 := pool.GetOpenAIClient(provider, "gpt-4", typ.SessionID{})
 	if client1 == nil {
 		t.Fatal("Expected non-nil client")
 	}
 
 	// Second call should return same client (cached)
-	client2 := pool.GetOpenAIClient(provider, "gpt-4")
+	client2 := pool.GetOpenAIClient(provider, "gpt-4", typ.SessionID{})
 	if client1 != client2 {
 		t.Error("Expected same client instance in shared mode")
 	}
@@ -123,13 +123,13 @@ func TestClientPool_GetClient(t *testing.T) {
 	}
 
 	// First call should create new client
-	client1 := pool.GetOpenAIClient(provider, "")
+	client1 := pool.GetOpenAIClient(provider, "", typ.SessionID{})
 	if client1 == nil {
 		t.Fatal("Expected non-nil client")
 	}
 
 	// Second call should return same client
-	client2 := pool.GetOpenAIClient(provider, "")
+	client2 := pool.GetOpenAIClient(provider, "", typ.SessionID{})
 	if client1 != client2 {
 		t.Error("Expected same client instance for same provider")
 	}
@@ -159,8 +159,8 @@ func TestClientPool_DifferentProviders(t *testing.T) {
 	}
 
 	// Get clients for different providers
-	client1 := pool.GetOpenAIClient(provider1, "")
-	client2 := pool.GetOpenAIClient(provider2, "")
+	client1 := pool.GetOpenAIClient(provider1, "", typ.SessionID{})
+	client2 := pool.GetOpenAIClient(provider2, "", typ.SessionID{})
 
 	if client1 == client2 {
 		t.Error("Expected different clients for different providers")
@@ -190,7 +190,7 @@ func TestClientPool_ConcurrentAccess(t *testing.T) {
 
 	for i := 0; i < numGoroutines; i++ {
 		go func(index int) {
-			client := pool.GetOpenAIClient(provider, "")
+			client := pool.GetOpenAIClient(provider, "", typ.SessionID{})
 			clients[index] = client
 			done <- true
 		}(i)
@@ -234,8 +234,8 @@ func TestClientPool_Clear(t *testing.T) {
 		APIBase: "https://api.openai.com/v1",
 	}
 
-	pool.GetOpenAIClient(provider1, "")
-	pool.GetOpenAIClient(provider2, "")
+	pool.GetOpenAIClient(provider1, "", typ.SessionID{})
+	pool.GetOpenAIClient(provider2, "", typ.SessionID{})
 
 	// Verify pool has clients
 	if pool.Size() != 2 {
@@ -269,8 +269,8 @@ func TestClientPool_RemoveProvider(t *testing.T) {
 	}
 
 	// Add clients
-	pool.GetOpenAIClient(provider1, "")
-	pool.GetOpenAIClient(provider2, "")
+	pool.GetOpenAIClient(provider1, "", typ.SessionID{})
+	pool.GetOpenAIClient(provider2, "", typ.SessionID{})
 
 	// Verify pool size
 	if pool.Size() != 2 {
@@ -286,7 +286,7 @@ func TestClientPool_RemoveProvider(t *testing.T) {
 	}
 
 	// Verify remaining client is for provider2
-	client := pool.GetOpenAIClient(provider2, "")
+	client := pool.GetOpenAIClient(provider2, "", typ.SessionID{})
 	if client == nil {
 		t.Error("Expected provider2 client to still exist")
 	}
@@ -303,7 +303,7 @@ func TestClientPool_Stats(t *testing.T) {
 	}
 
 	// Add a client
-	pool.GetOpenAIClient(provider, "")
+	pool.GetOpenAIClient(provider, "", typ.SessionID{})
 
 	// Get stats
 	stats := pool.Stats()
@@ -342,7 +342,7 @@ func TestClientPool_InvalidateProvider_OnceMode(t *testing.T) {
 	}
 
 	// Create a client (but it won't be cached)
-	client := pool.GetOpenAIClient(provider, "gpt-4")
+	client := pool.GetOpenAIClient(provider, "gpt-4", typ.SessionID{})
 	if client == nil {
 		t.Fatal("Expected non-nil client")
 	}
@@ -367,8 +367,8 @@ func TestClientPool_InvalidateProvider_SharedMode(t *testing.T) {
 	}
 
 	// Create clients
-	pool.GetOpenAIClient(provider, "gpt-4")
-	pool.GetAnthropicClient(provider, "claude-3")
+	pool.GetOpenAIClient(provider, "gpt-4", typ.SessionID{})
+	pool.GetAnthropicClient(provider, "claude-3", typ.SessionID{})
 
 	// Size should be 2
 	if pool.Size() != 2 {
@@ -406,5 +406,118 @@ func TestClientPoolBuilder_WithMode(t *testing.T) {
 	stats := pool.Stats()
 	if stats["mode"] != string(PoolModeShared) {
 		t.Errorf("Expected mode 'shared', got %v", stats["mode"])
+	}
+}
+
+// TestClientPool_OAuthSessionKey verifies that OAuth providers with a session get a separate
+// cache entry from the same provider without a session (or with a different session).
+func TestClientPool_OAuthSessionKey(t *testing.T) {
+	pool := NewSharedClientPool()
+
+	oauthProvider := &typ.Provider{
+		UUID:     "oauth-uuid-1",
+		Name:     "oauth-provider",
+		Token:    "test-token-12345678",
+		APIBase:  "https://api.openai.com/v1",
+		AuthType: typ.AuthTypeOAuth,
+	}
+
+	sessionAlice := typ.SessionID{Source: typ.SessionSourceUser, Value: "session-alice"}
+	sessionBob := typ.SessionID{Source: typ.SessionSourceUser, Value: "session-bob"}
+
+	// Same provider, different sessions → different clients
+	c1 := pool.GetOpenAIClient(oauthProvider, "gpt-4", sessionAlice)
+	c2 := pool.GetOpenAIClient(oauthProvider, "gpt-4", sessionBob)
+	if c1 == c2 {
+		t.Error("Expected different clients for different OAuth sessions")
+	}
+
+	// Same provider, same session → same client (cached)
+	c3 := pool.GetOpenAIClient(oauthProvider, "gpt-4", sessionAlice)
+	if c1 != c3 {
+		t.Error("Expected same client for same OAuth session")
+	}
+
+	// Pool should have 2 entries (one per session)
+	if pool.Size() != 2 {
+		t.Errorf("Expected pool size 2 for 2 sessions, got %d", pool.Size())
+	}
+}
+
+// TestClientPool_IPSessionNotUsedForOAuth verifies that ip:-prefixed sessions
+// (fallback values) are not used as OAuth session keys.
+func TestClientPool_IPSessionNotUsedForOAuth(t *testing.T) {
+	pool := NewSharedClientPool()
+
+	oauthProvider := &typ.Provider{
+		UUID:     "oauth-uuid-2",
+		Name:     "oauth-provider",
+		Token:    "test-token-12345678",
+		APIBase:  "https://api.openai.com/v1",
+		AuthType: typ.AuthTypeOAuth,
+	}
+
+	// ip: prefix should be treated as no session → provider-level key
+	c1 := pool.GetOpenAIClient(oauthProvider, "gpt-4", typ.SessionID{Source: typ.SessionSourceIP, Value: "1.2.3.4"})
+	c2 := pool.GetOpenAIClient(oauthProvider, "gpt-4", typ.SessionID{Source: typ.SessionSourceIP, Value: "5.6.7.8"})
+	if c1 != c2 {
+		t.Error("Expected same client for ip:-prefixed sessions (no session isolation)")
+	}
+
+	if pool.Size() != 1 {
+		t.Errorf("Expected pool size 1 for ip: sessions (shared), got %d", pool.Size())
+	}
+}
+
+// TestClientPool_NonOAuthIgnoresSession verifies that non-OAuth providers
+// always use provider-level keys regardless of sessionID.
+func TestClientPool_NonOAuthIgnoresSession(t *testing.T) {
+	pool := NewSharedClientPool()
+
+	apiKeyProvider := &typ.Provider{
+		UUID:     "apikey-uuid-1",
+		Name:     "apikey-provider",
+		Token:    "test-token-12345678",
+		APIBase:  "https://api.openai.com/v1",
+		AuthType: typ.AuthTypeAPIKey,
+	}
+
+	c1 := pool.GetOpenAIClient(apiKeyProvider, "gpt-4", typ.SessionID{Source: typ.SessionSourceUser, Value: "session-alice"})
+	c2 := pool.GetOpenAIClient(apiKeyProvider, "gpt-4", typ.SessionID{Source: typ.SessionSourceUser, Value: "session-bob"})
+	if c1 != c2 {
+		t.Error("Expected same client for non-OAuth provider regardless of session")
+	}
+
+	if pool.Size() != 1 {
+		t.Errorf("Expected pool size 1 for non-OAuth provider, got %d", pool.Size())
+	}
+}
+
+// TestClientPool_InvalidateSession verifies session-scoped clients are removed.
+func TestClientPool_InvalidateSession(t *testing.T) {
+	pool := NewSharedClientPool()
+
+	oauthProvider := &typ.Provider{
+		UUID:     "oauth-uuid-3",
+		Name:     "oauth-provider",
+		Token:    "test-token-12345678",
+		APIBase:  "https://api.openai.com/v1",
+		AuthType: typ.AuthTypeOAuth,
+	}
+
+	sessionAlice := typ.SessionID{Source: typ.SessionSourceUser, Value: "session-alice"}
+	sessionBob := typ.SessionID{Source: typ.SessionSourceUser, Value: "session-bob"}
+
+	pool.GetOpenAIClient(oauthProvider, "gpt-4", sessionAlice)
+	pool.GetOpenAIClient(oauthProvider, "gpt-4", sessionBob)
+
+	if pool.Size() != 2 {
+		t.Fatalf("Expected pool size 2 before invalidate, got %d", pool.Size())
+	}
+
+	pool.InvalidateSession(oauthProvider.UUID, sessionAlice.Value)
+
+	if pool.Size() != 1 {
+		t.Errorf("Expected pool size 1 after InvalidateSession, got %d", pool.Size())
 	}
 }

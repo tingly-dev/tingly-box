@@ -18,7 +18,7 @@ type SelectionContext struct {
 
 	// SessionID is the resolved session identifier for affinity
 	// Priority: Anthropic metadata.user_id > X-Tingly-Session-ID header > ClientIP
-	SessionID string
+	SessionID typ.SessionID
 
 	// GinContext provides access to HTTP headers and client info
 	GinContext *gin.Context
@@ -50,24 +50,24 @@ func NewSelectionContext(
 
 // ResolveSessionID returns the best available session identifier from the request.
 // Priority: Anthropic metadata.user_id > X-Tingly-Session-ID header > ClientIP
-func ResolveSessionID(c *gin.Context, req interface{}) string {
+func ResolveSessionID(c *gin.Context, req interface{}) typ.SessionID {
 	// 1. Extract from Anthropic request metadata.user_id
 	switch r := req.(type) {
 	case *anthropic.MessageNewParams:
 		if r.Metadata.UserID.Valid() && r.Metadata.UserID.Value != "" {
-			return "user:" + r.Metadata.UserID.Value
+			return typ.SessionID{Source: typ.SessionSourceUser, Value: r.Metadata.UserID.Value}
 		}
 	case *anthropic.BetaMessageNewParams:
 		if r.Metadata.UserID.Valid() && r.Metadata.UserID.Value != "" {
-			return "user:" + r.Metadata.UserID.Value
+			return typ.SessionID{Source: typ.SessionSourceUser, Value: r.Metadata.UserID.Value}
 		}
 	}
 
 	// 2. X-Tingly-Session-ID header
 	if id := c.GetHeader("X-Tingly-Session-ID"); id != "" {
-		return "hdr:" + id
+		return typ.SessionID{Source: typ.SessionSourceHeader, Value: id}
 	}
 
 	// 3. Fallback: client IP
-	return "ip:" + c.ClientIP()
+	return typ.SessionID{Source: typ.SessionSourceIP, Value: c.ClientIP()}
 }
