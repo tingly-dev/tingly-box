@@ -200,7 +200,8 @@ func newInterruptCommand(adapter BotHandlerAdapter) imbot.Command {
 			}
 			return adapter.SendText(ctx.ChatID, "No running task to stop.")
 		}).
-		Hidden().
+		WithCategory("session").
+		WithPriority(70).
 		MustBuild()
 }
 
@@ -295,7 +296,7 @@ func newStatusCommand(adapter BotHandlerAdapter) imbot.Command {
 			}
 
 			var parts []string
-			parts = append(parts, fmt.Sprintf("Agent: %s", agentType))
+			parts = append(parts, fmt.Sprintf("Agent: %s", GetAgentDisplayName(agentType)))
 			parts = append(parts, fmt.Sprintf("Session: %s", sess.ID))
 			parts = append(parts, fmt.Sprintf("Status: %s", sess.Status))
 

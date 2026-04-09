@@ -42,11 +42,13 @@ type IMPrompter struct {
 
 // pendingIMRequest stores a pending request with its context
 type pendingIMRequest struct {
-	request   ask.Request
-	chatID    string
-	platform  imbot.Platform
-	messageID string
-	createdAt time.Time
+	request        ask.Request
+	chatID         string
+	platform       imbot.Platform
+	messageID      string
+	createdAt      time.Time
+	partialAnswers map[string]string // question text -> selected label (for multi-question AskUserQuestion)
+	totalQuestions int               // total number of questions (set when request is created)
 }
 
 // NewIMPrompter creates a new IM-based prompter
@@ -122,12 +124,22 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 	// Create response channel
 	responseChan := make(chan ask.Result, 1)
 
+	// Count questions for AskUserQuestion requests
+	totalQuestions := 0
+	if req.ToolName == "AskUserQuestion" {
+		if questions, ok := req.Input["questions"].([]interface{}); ok {
+			totalQuestions = len(questions)
+		}
+	}
+
 	p.mu.Lock()
 	p.pendingRequests[req.ID] = &pendingIMRequest{
-		request:   req,
-		chatID:    chatID,
-		platform:  platform,
-		createdAt: time.Now(),
+		request:        req,
+		chatID:         chatID,
+		platform:       platform,
+		createdAt:      time.Now(),
+		partialAnswers: make(map[string]string),
+		totalQuestions: totalQuestions,
 	}
 	p.responseChannels[req.ID] = responseChan
 	timeout := p.defaultTimeout
@@ -195,6 +207,13 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 	case <-time.After(timeout):
 		p.cleanup(req.ID)
 		p.editPromptToTimeout(bot, chatID, msg.MessageID, req)
+
+		// For AskUserQuestion: auto-select first option (recommended strategy)
+		// For permission/approval requests: deny on timeout
+		if req.ToolName == "AskUserQuestion" {
+			result := p.buildTimeoutQuestionResult(req)
+			return result, nil
+		}
 		return ask.Result{
 			ID:       req.ID,
 			Approved: false,
@@ -204,6 +223,54 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 	case <-ctx.Done():
 		p.cleanup(req.ID)
 		return ask.Result{ID: req.ID, Approved: false}, ctx.Err()
+	}
+}
+
+// buildTimeoutQuestionResult builds a result that auto-selects the first (recommended) option
+// for AskUserQuestion when it times out.
+func (p *IMPrompter) buildTimeoutQuestionResult(req ask.Request) ask.Result {
+	questions, ok := req.Input["questions"].([]interface{})
+	if !ok || len(questions) == 0 {
+		return ask.Result{
+			ID:       req.ID,
+			Approved: false,
+			Reason:   "request timed out",
+		}
+	}
+
+	// For each question, select its first option as the recommended default
+	answers := make(map[string]interface{})
+	for _, q := range questions {
+		question, ok := q.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		questionText, ok := question["question"].(string)
+		if !ok {
+			continue
+		}
+		options, ok := question["options"].([]interface{})
+		if !ok || len(options) == 0 {
+			continue
+		}
+		if opt, ok := options[0].(map[string]interface{}); ok {
+			if label, ok := opt["label"].(string); ok {
+				answers[questionText] = label
+			}
+		}
+	}
+
+	updatedInput := make(map[string]interface{})
+	for k, v := range req.Input {
+		updatedInput[k] = v
+	}
+	updatedInput["answers"] = answers
+
+	return ask.Result{
+		ID:           req.ID,
+		Approved:     true,
+		UpdatedInput: updatedInput,
+		Reason:       "timed out - auto-selected recommended option",
 	}
 }
 
@@ -268,6 +335,48 @@ func (p *IMPrompter) SubmitUserResponse(requestID string, response ask.Response)
 	}
 
 	return p.SubmitResult(requestID, result)
+}
+
+// SubmitPartialAnswer records the answer for one question of an AskUserQuestion request.
+// Returns (true, nil) when all questions are answered and the result has been submitted.
+// Returns (false, nil) when more questions remain.
+func (p *IMPrompter) SubmitPartialAnswer(requestID, questionText, label string) (bool, error) {
+	p.mu.Lock()
+	pending, exists := p.pendingRequests[requestID]
+	if !exists {
+		p.mu.Unlock()
+		return false, fmt.Errorf("request not found or expired: %s", requestID)
+	}
+
+	pending.partialAnswers[questionText] = label
+	answered := len(pending.partialAnswers)
+	total := pending.totalQuestions
+
+	if answered < total {
+		p.mu.Unlock()
+		return false, nil
+	}
+
+	// All questions answered — build final result
+	answers := make(map[string]interface{}, len(pending.partialAnswers))
+	for k, v := range pending.partialAnswers {
+		answers[k] = v
+	}
+	updatedInput := make(map[string]interface{})
+	for k, v := range pending.request.Input {
+		updatedInput[k] = v
+	}
+	updatedInput["answers"] = answers
+
+	result := ask.Result{
+		ID:           requestID,
+		Approved:     true,
+		UpdatedInput: updatedInput,
+		Reason:       "User selected options",
+	}
+	p.mu.Unlock()
+
+	return true, p.SubmitResult(requestID, result)
 }
 
 // GetPendingRequest returns a pending request by ID
@@ -338,6 +447,7 @@ func (p *IMPrompter) buildDefaultKeyboard(requestID string) imbot.InlineKeyboard
 }
 
 // buildAskUserQuestionKeyboard builds a keyboard with options for AskUserQuestion
+// Supports multiple questions: callback data includes question index and option index.
 func (p *IMPrompter) buildAskUserQuestionKeyboard(req ask.Request) imbot.InlineKeyboardMarkup {
 	kb := imbot.NewKeyboardBuilder()
 
@@ -346,19 +456,28 @@ func (p *IMPrompter) buildAskUserQuestionKeyboard(req ask.Request) imbot.InlineK
 		return p.buildDefaultKeyboard(req.ID)
 	}
 
-	// Build buttons for each option in the first question
-	if question, ok := questions[0].(map[string]interface{}); ok {
-		if options, ok := question["options"].([]interface{}); ok {
-			for i, opt := range options {
-				if option, ok := opt.(map[string]interface{}); ok {
-					label, _ := option["label"].(string)
-					if label != "" {
-						// Use simple button text with just the number
-						buttonText := fmt.Sprintf("Option %d", i+1)
-						// Use only the index in callback data to keep it short
-						callbackData := imbot.FormatCallbackData("perm", "option", req.ID, fmt.Sprintf("%d", i))
-						kb.AddRow(imbot.CallbackButton(buttonText, callbackData))
-					}
+	// Build buttons for each question and its options
+	for qIdx, q := range questions {
+		question, ok := q.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		options, ok := question["options"].([]interface{})
+		if !ok || len(options) == 0 {
+			continue
+		}
+		// Add a label row for the question if there are multiple questions
+		if len(questions) > 1 {
+			questionText, _ := question["question"].(string)
+			kb.AddRow(imbot.CallbackButton(fmt.Sprintf("Q%d: %s", qIdx+1, questionText), imbot.FormatCallbackData("perm", "noop", req.ID)))
+		}
+		for optIdx, opt := range options {
+			if option, ok := opt.(map[string]interface{}); ok {
+				label, _ := option["label"].(string)
+				if label != "" {
+					buttonText := fmt.Sprintf("%d. %s", optIdx+1, label)
+					callbackData := imbot.FormatCallbackData("perm", "option", req.ID, fmt.Sprintf("%d", qIdx), fmt.Sprintf("%d", optIdx))
+					kb.AddRow(imbot.CallbackButton(buttonText, callbackData))
 				}
 			}
 		}
@@ -374,32 +493,47 @@ func (p *IMPrompter) buildAskUserQuestionKeyboard(req ask.Request) imbot.InlineK
 func (p *IMPrompter) buildTextSelectionInstructions(req ask.Request) string {
 	var text strings.Builder
 
-	text.WriteString("*To select an option, reply with the number:*\n\n")
-
 	questions, ok := req.Input["questions"].([]interface{})
 	if !ok || len(questions) == 0 {
 		// Fallback: use permission instructions from shared config
 		return ask.FormatPermissionInstructions()
 	}
 
-	// For AskUserQuestion - list the options
-	if question, ok := questions[0].(map[string]interface{}); ok {
-		if options, ok := question["options"].([]interface{}); ok {
-			for i, opt := range options {
-				if option, ok := opt.(map[string]interface{}); ok {
-					label, _ := option["label"].(string)
-					desc, hasDesc := option["description"].(string)
-					if hasDesc && desc != "" {
-						text.WriteString(fmt.Sprintf("• `%d` - %s - %s\n", i+1, label, desc))
-					} else {
-						text.WriteString(fmt.Sprintf("• `%d` - %s\n", i+1, label))
-					}
+	// For AskUserQuestion - list all questions and options
+	for qIdx, q := range questions {
+		question, ok := q.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		questionText, _ := question["question"].(string)
+		options, ok := question["options"].([]interface{})
+		if !ok {
+			continue
+		}
+		if len(questions) > 1 {
+			text.WriteString(fmt.Sprintf("*Q%d: %s*\n", qIdx+1, questionText))
+		} else {
+			text.WriteString("*To select an option, reply with the number:*\n\n")
+		}
+		for i, opt := range options {
+			if option, ok := opt.(map[string]interface{}); ok {
+				label, _ := option["label"].(string)
+				desc, hasDesc := option["description"].(string)
+				if hasDesc && desc != "" {
+					text.WriteString(fmt.Sprintf("• `%d` - %s - %s\n", i+1, label, desc))
+				} else {
+					text.WriteString(fmt.Sprintf("• `%d` - %s\n", i+1, label))
 				}
 			}
 		}
+		text.WriteString("\n")
 	}
 
-	text.WriteString("\n_Just type the number to reply_")
+	if len(questions) > 1 {
+		text.WriteString("_Reply with answers in order, e.g. `1 2 1` for Q1=opt1, Q2=opt2, Q3=opt1_")
+	} else {
+		text.WriteString("_Just type the number to reply_")
+	}
 
 	return text.String()
 }

@@ -247,8 +247,8 @@ func (h *BotHandler) SetVerbose(chatID string, verbose bool) {
 
 	// Also update in-memory default (fallback)
 	h.verboseMu.Lock()
-	h.verboseMu.Unlock()
 	h.verbose = verbose
+	h.verboseMu.Unlock()
 }
 
 // HandleMessage is the main entry point for handling bot messages
@@ -802,6 +802,11 @@ func (h *BotHandler) completeBind(hCtx HandlerContext, projectPath string) {
 	if err := h.chatStore.BindProject(hCtx.ChatID, platform, expandedPath, hCtx.SenderID); err != nil {
 		h.SendText(hCtx, fmt.Sprintf("Failed to bind project: %v", err))
 		return
+	}
+
+	// Also update bash cwd to match the new project path
+	if err := h.chatStore.SetBashCwd(hCtx.ChatID, expandedPath); err != nil {
+		logrus.WithError(err).Warn("Failed to update bash cwd after project bind")
 	}
 
 	// With new design, sessions are created on-demand when agent processes a message
