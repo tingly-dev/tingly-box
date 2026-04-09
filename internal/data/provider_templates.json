@@ -590,7 +590,9 @@
                 "gpt-5.1-codex-max",
                 "gpt-5.1-codex-mini",
                 "gpt-5.2-codex",
-                "gpt-5.3-codex"
+                "gpt-5.3-codex",
+                "gpt-5.4",
+                "gpt-5.4-mini"
             ],
             "model_limits": {
                 "gpt-5-codex": 8192,
@@ -598,7 +600,9 @@
                 "gpt-5.1-codex-max": 8192,
                 "gpt-5.1-codex-mini": 8192,
                 "gpt-5.2-codex": 8192,
-                "gpt-5.3-codex": 8192
+                "gpt-5.3-codex": 8192,
+                "gpt-5.4": 8192,
+                "gpt-5.4-mini": 8192
             },
             "supports_models_endpoint": false,
             "oauth_provider": "codex"
