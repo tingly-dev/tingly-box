@@ -333,14 +333,13 @@ const CredentialPage = () => {
 
     const handleRefreshToken = async (providerUuid: string) => {
         try {
-            const { oauthApi } = await api.instances();
-            const response = await oauthApi.apiV1OauthRefreshPost({ provider_uuid: providerUuid });
+            const response = await api.oauthRefresh({ provider_uuid: providerUuid });
 
-            if (response.data.success) {
+            if (response.success) {
                 showNotification('Token refreshed successfully!', 'success');
                 await loadProviders();
             } else {
-                showNotification(`Failed to refresh token: ${response.data.message || 'Unknown error'}`, 'error');
+                showNotification(`Failed to refresh token: ${response.message || 'Unknown error'}`, 'error');
             }
         } catch (error: any) {
             const errorMessage = error?.response?.data?.error || error?.message || 'Unknown error';
