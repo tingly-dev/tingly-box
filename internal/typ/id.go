@@ -14,19 +14,32 @@ const (
 )
 
 // SessionID carries a resolved session identifier with its source.
+// IPBackup is always populated (when available) as a fallback for rate limiting or logging.
 type SessionID struct {
-	Source SessionSource `json:"source"`
-	Value  string        `json:"value"`
+	Source   SessionSource `json:"source"`
+	Value    string        `json:"value"`
+	IPBackup string        `json:"ip_backup,omitempty"` // Always store client IP when available
 }
 
-// IsIPFallback returns true for client-IP fallback sessions.
+// IsIPFallback returns true for client-IP fallback sessions (no better session available).
 // IP-fallback sessions should not be used for per-user client scoping.
 func (s SessionID) IsIPFallback() bool { return s.Source == SessionSourceIP }
 
 // IsEmpty returns true for zero value (no session resolved).
 func (s SessionID) IsEmpty() bool { return s.Value == "" }
 
-// String returns the JSON-encoded representation, e.g. {"source":"user","value":"abc"}.
+// GetIP returns the IP address if available, first trying IPBackup then Value (for IP-fallback).
+func (s SessionID) GetIP() string {
+	if s.IPBackup != "" {
+		return s.IPBackup
+	}
+	if s.Source == SessionSourceIP {
+		return s.Value
+	}
+	return ""
+}
+
+// String returns the JSON-encoded representation, e.g. {"source":"user","value":"abc","ip_backup":"1.2.3.4"}.
 func (s SessionID) String() string {
 	bs, _ := json.Marshal(s)
 	return string(bs)
@@ -71,11 +84,13 @@ func NewClientKey(provider *Provider, model string, session SessionID) ClientKey
 }
 
 // TransportKey uniquely identifies a cached HTTP transport.
-// The key is based on provider + proxy so the same provider without a proxy
-// always reuses the same transport (TCP connection pool).
+// The key is based on provider + proxy + session (for OAuth providers) so that:
+// - API-key providers share transports across sessions (TCP connection pool reuse)
+// - OAuth providers get per-session transports for proper isolation
 type TransportKey struct {
-	ProviderUUID string `json:"provider_uuid"`
-	ProxyURL     string `json:"proxy_url,omitempty"`
+	ProviderUUID string    `json:"provider_uuid"`
+	ProxyURL     string    `json:"proxy_url,omitempty"`
+	SessionID    SessionID `json:"session_id,omitempty"` // Included for per-session OAuth providers
 }
 
 // String returns a stable string for use as map key.
@@ -84,7 +99,5 @@ func (k TransportKey) String() string {
 	return string(bs)
 }
 
-// NewTransportKey creates a TransportKey.
-func NewTransportKey(providerUUID, proxyURL string) TransportKey {
-	return TransportKey{ProviderUUID: providerUUID, ProxyURL: proxyURL}
-}
+// IsSessionScoped returns true when this key is bound to a specific user session.
+func (k TransportKey) IsSessionScoped() bool { return k.SessionID.Value != "" }
