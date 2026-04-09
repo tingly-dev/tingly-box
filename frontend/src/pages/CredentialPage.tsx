@@ -22,6 +22,7 @@ import OAuthTable from '@/components/OAuthTable.tsx';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import OAuthDialog from '@/components/OAuthDialog.tsx';
 import OAuthDetailDialog from '@/components/OAuthDetailDialog.tsx';
+import { useProviderQuota } from '@/hooks/useProviderQuota';
 
 type ProviderFormData = EnhancedProviderFormData;
 
@@ -99,6 +100,19 @@ const CredentialPage = () => {
     useEffect(() => {
         loadProviders();
     }, []);
+
+    // Quota data fetching
+    const {
+        quotaData,
+        refreshing,
+        refreshQuota,
+    } = useProviderQuota(providers, { fetchOnMount: true });
+
+    // Debug logging
+    useEffect(() => {
+        console.log('[CredentialPage] quotaData updated:', quotaData);
+        console.log('[CredentialPage] providers:', providers);
+    }, [quotaData, providers]);
 
     const showNotification = (message: string, severity: 'success' | 'error') => {
         setSnackbar({ open: true, message, severity });
@@ -446,6 +460,9 @@ const CredentialPage = () => {
                             onNotification={(message, severity) => {
                                 setSnackbar({ open: true, message, severity });
                             }}
+                            providerQuotas={quotaData}
+                            refreshingQuotas={refreshing}
+                            onQuotaRefresh={refreshQuota}
                         />
                     ) : (
                         <EmptyStateGuide
@@ -484,6 +501,9 @@ const CredentialPage = () => {
                             onNotification={(message, severity) => {
                                 setSnackbar({ open: true, message, severity });
                             }}
+                            providerQuotas={quotaData}
+                            refreshingQuotas={refreshing}
+                            onQuotaRefresh={refreshQuota}
                         />
                     ) : (
                         <EmptyStateGuide

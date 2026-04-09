@@ -2,6 +2,7 @@ import { ApiStyleBadge } from '@/components/ApiStyleBadge.tsx';
 import ModelListDialog from '@/components/ModelListDialog';
 import ProviderExportMenu from '@/components/ProviderExportMenu';
 import { exportProvider, exportProviderAsBase64ToClipboard, exportProviderAsJsonlToClipboard } from '@/components/rule-card/utils';
+import { ProviderQuotaDetailRow } from '@/components/credential/ProviderQuotaDetailRow';
 import { Cancel, ContentCopy, Delete, Edit, ListAlt, Route, Visibility } from '@mui/icons-material';
 import {
     Box,
@@ -23,7 +24,8 @@ import {
     Typography,
 } from '@mui/material';
 import type { ExportFormat } from '@/components/rule-card/utils';
-import {useCallback, useState} from 'react';
+import type { ProviderQuota } from '@/types/quota';
+import React, {useCallback, useState} from 'react';
 import api from '../services/api';
 import type { Provider } from '../types/provider';
 
@@ -33,6 +35,9 @@ interface ApiKeyTableProps {
     onToggle?: (providerUuid: string) => void;
     onDelete?: (providerUuid: string) => void;
     onNotification?: (message: string, severity: 'success' | 'error') => void;
+    providerQuotas?: { [uuid: string]: ProviderQuota };
+    refreshingQuotas?: Set<string>;
+    onQuotaRefresh?: (providerUuid: string) => void;
 }
 
 interface TokenModalState {
@@ -53,7 +58,7 @@ interface ModelListDialogState {
     provider: Provider | null;
 }
 
-const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification }: ApiKeyTableProps) => {
+const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification, providerQuotas, refreshingQuotas, onQuotaRefresh }: ApiKeyTableProps) => {
     const [tokenModal, setTokenModal] = useState<TokenModalState>({
         open: false,
         providerName: '',
@@ -190,7 +195,9 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification }: 
                 </TableHead>
                 <TableBody>
                     {providers.map((provider) => (
-                        <TableRow key={provider.uuid}>
+                        <React.Fragment key={provider.uuid}>
+                            {/* Main provider row */}
+                            <TableRow>
                             {/* Status */}
                             <TableCell>
                                 <Stack direction="row" alignItems="center" spacing={1}>
@@ -329,7 +336,18 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification }: 
                                 </Box>
                             </TableCell>
                         </TableRow>
-                    ))}
+
+                    {/* Quota detail row */}
+                    {providerQuotas && onQuotaRefresh && (
+                        <ProviderQuotaDetailRow
+                            provider={provider}
+                            quota={providerQuotas[provider.uuid]}
+                            isRefreshing={refreshingQuotas?.has(provider.uuid) || false}
+                            onRefresh={onQuotaRefresh}
+                        />
+                    )}
+                </React.Fragment>
+                ))}
                 </TableBody>
             </Table>
 
