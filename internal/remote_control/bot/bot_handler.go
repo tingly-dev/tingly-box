@@ -247,8 +247,8 @@ func (h *BotHandler) SetVerbose(chatID string, verbose bool) {
 
 	// Also update in-memory default (fallback)
 	h.verboseMu.Lock()
-	h.verboseMu.Unlock()
 	h.verbose = verbose
+	h.verboseMu.Unlock()
 }
 
 // HandleMessage is the main entry point for handling bot messages
