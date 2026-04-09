@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
@@ -130,7 +131,7 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 		originalBody, err = io.ReadAll(req.Body)
 		_ = req.Body.Close()
 		if err != nil {
-			return nil, fmt.Errorf("failed to read request body: %w", err)
+			return nil, fmt.Errorf("failed to read request body: %s", err.Error())
 		}
 
 		modifiedBody = originalBody
@@ -173,6 +174,7 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	// Execute the request
 	resp, err := t.RoundTripper.RoundTrip(req)
 	if err != nil {
+		logrus.Errorf("failed to round trip request: %v", err)
 		return nil, err
 	}
 
