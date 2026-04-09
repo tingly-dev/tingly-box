@@ -254,3 +254,87 @@ func GetPlatformCapabilities(platform Platform) *PlatformCapabilities {
 		Features:  []string{},
 	}
 }
+
+// ReactionToken represents a platform-agnostic semantic reaction token.
+// Use these constants instead of raw emoji or platform-specific keys.
+type ReactionToken string
+
+const (
+	ReactionReceived  ReactionToken = "received" // 👀 / Get / eyes — message received, processing
+	ReactionDone      ReactionToken = "done"     // ✅ / DONE / CheckMark — task completed successfully
+	ReactionError     ReactionToken = "error"    // ❌ / CrossMark — task failed
+	ReactionLike      ReactionToken = "like"     // 👍 / THUMBSUP — general approval
+	ReactionLove      ReactionToken = "love"     // ❤️ / HEART — love / great
+	ReactionLaugh     ReactionToken = "laugh"    // 😂 / LOL — funny
+)
+
+// reactionMap maps semantic ReactionToken to platform-specific emoji/key strings.
+var reactionMap = map[Platform]map[ReactionToken]string{
+	PlatformTelegram: {
+		ReactionReceived: "👀",
+		ReactionDone:     "✅",
+		ReactionError:    "❌",
+		ReactionLike:     "👍",
+		ReactionLove:     "❤️",
+		ReactionLaugh:    "😂",
+	},
+	PlatformDiscord: {
+		ReactionReceived: "👀",
+		ReactionDone:     "✅",
+		ReactionError:    "❌",
+		ReactionLike:     "👍",
+		ReactionLove:     "❤️",
+		ReactionLaugh:    "😂",
+	},
+	PlatformSlack: {
+		ReactionReceived: "eyes",
+		ReactionDone:     "white_check_mark",
+		ReactionError:    "x",
+		ReactionLike:     "thumbsup",
+		ReactionLove:     "heart",
+		ReactionLaugh:    "joy",
+	},
+	PlatformWhatsApp: {
+		ReactionReceived: "👀",
+		ReactionDone:     "✅",
+		ReactionError:    "❌",
+		ReactionLike:     "👍",
+		ReactionLove:     "❤️",
+		ReactionLaugh:    "😂",
+	},
+	PlatformFeishu: {
+		ReactionReceived: "Get",
+		ReactionDone:     "DONE",
+		ReactionError:    "CrossMark",
+		ReactionLike:     "THUMBSUP",
+		ReactionLove:     "HEART",
+		ReactionLaugh:    "LOL",
+	},
+	PlatformLark: {
+		ReactionReceived: "Get",
+		ReactionDone:     "DONE",
+		ReactionError:    "CrossMark",
+		ReactionLike:     "THUMBSUP",
+		ReactionLove:     "HEART",
+		ReactionLaugh:    "LOL",
+	},
+	PlatformDingTalk: {
+		ReactionReceived: "👀",
+		ReactionDone:     "✅",
+		ReactionError:    "❌",
+		ReactionLike:     "👍",
+		ReactionLove:     "❤️",
+		ReactionLaugh:    "😂",
+	},
+}
+
+// ResolveReaction returns the platform-specific emoji/key for a semantic reaction token.
+// Falls back to the reaction token itself if no mapping is found.
+func ResolveReaction(platform Platform, r ReactionToken) string {
+	if m, ok := reactionMap[platform]; ok {
+		if v, ok := m[r]; ok {
+			return v
+		}
+	}
+	return string(r)
+}

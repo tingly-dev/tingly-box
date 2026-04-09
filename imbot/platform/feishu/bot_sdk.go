@@ -654,9 +654,29 @@ func (b *Bot) SendMedia(ctx context.Context, target string, media []core.MediaAt
 	return b.SendMessage(ctx, target, &core.SendMessageOptions{Media: media})
 }
 
-// React reacts to a message
+// React reacts to a message using Feishu SDK MessageReaction API.
+// emoji should be a platform-specific key (e.g. "THUMBSUP") or a core.Reaction
+// resolved via core.ResolveReaction before calling.
 func (b *Bot) React(ctx context.Context, messageID string, emoji string) error {
-	return fmt.Errorf("reaction not implemented")
+	if b.client == nil {
+		return fmt.Errorf("feishu client not initialized")
+	}
+
+	req := larkim.NewCreateMessageReactionReqBuilder().
+		MessageId(messageID).
+		Body(larkim.NewCreateMessageReactionReqBodyBuilder().
+			ReactionType(larkim.NewEmojiBuilder().EmojiType(emoji).Build()).
+			Build()).
+		Build()
+
+	resp, err := b.client.Im.MessageReaction.Create(ctx, req)
+	if err != nil {
+		return fmt.Errorf("feishu react: %w", err)
+	}
+	if !resp.Success() {
+		return fmt.Errorf("feishu react failed: code=%d msg=%s", resp.Code, resp.Msg)
+	}
+	return nil
 }
 
 // EditMessage edits a message
