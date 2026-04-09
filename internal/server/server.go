@@ -1087,9 +1087,15 @@ func (s *Server) SetupPassthroughAnthropicEndpoints(group *gin.RouterGroup) {
 
 // UseVirtualModelEndpoints sets up virtual model endpoints for testing
 func (s *Server) UseVirtualModelEndpoints() {
-	virtual := s.engine.Group("/virtual/v1")
+	virtual := s.engine.Group("/virtual")
 	virtual.GET("/models", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().ListModels)
 	virtual.POST("/chat/completions", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().ChatCompletions)
+	virtual.POST("/messages", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().Messages)
+
+	virtualV1 := s.engine.Group("/virtual/v1")
+	virtualV1.GET("/models", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().ListModels)
+	virtualV1.POST("/chat/completions", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().ChatCompletions)
+	virtualV1.POST("/messages", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().Messages)
 }
 
 func (s *Server) UseLoadBalanceEndpoints() {
