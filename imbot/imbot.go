@@ -90,6 +90,7 @@ type (
 	Poll              = core.Poll
 	PollOption        = core.PollOption
 	Reaction          = core.Reaction
+	ReactionToken     = core.ReactionToken
 	ThreadContext     = core.ThreadContext
 	Entity            = core.Entity
 	ConnectionDetails = core.ConnectionDetails
@@ -144,8 +145,15 @@ const (
 	ErrPlatformError     = core.ErrPlatformError
 	ErrTimeout           = core.ErrTimeout
 	ErrUnknown           = core.ErrUnknown
-)
 
+	// Semantic reaction tokens
+	ReactionReceived = core.ReactionReceived
+	ReactionDone     = core.ReactionDone
+	ReactionError    = core.ReactionError
+	ReactionLike     = core.ReactionLike
+	ReactionLove     = core.ReactionLove
+	ReactionLaugh    = core.ReactionLaugh
+)
 // Version is the imbot package version
 const Version = "0.1.0"
 
@@ -169,6 +177,11 @@ func NewPollContent(poll core.Poll) *core.PollContent {
 // NewReactionContent creates a new reaction content
 func NewReactionContent(reaction core.Reaction) *core.ReactionContent {
 	return core.NewReactionContent(reaction)
+}
+
+// ResolveReaction returns the platform-specific emoji/key for a semantic reaction token.
+func ResolveReaction(platform Platform, r ReactionToken) string {
+	return core.ResolveReaction(platform, r)
 }
 
 // NewSystemContent creates a new system content
