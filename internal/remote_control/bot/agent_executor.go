@@ -111,7 +111,7 @@ func (d *ExecutorDependencies) ResolveDefaultProjectPath() string {
 func (d *ExecutorDependencies) resolveSession(chatID string, agentType string, projectPath string) (string, bool, string) {
 	sess := d.SessionMgr.FindBy(chatID, agentType, projectPath)
 
-	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed || sess.Status == session.StatusPending {
+	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed {
 		sess = d.SessionMgr.CreateWith(chatID, agentType, projectPath)
 		d.SessionMgr.Update(sess.ID, func(s *session.Session) {
 			s.ExpiresAt = time.Time{}

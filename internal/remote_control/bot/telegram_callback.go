@@ -257,48 +257,64 @@ func (h *BotHandler) handlePermissionCallback(hCtx HandlerContext, parts []strin
 	var resultText string
 
 	switch subAction {
+	case "noop":
+		// Label-only button (e.g., question header), do nothing
+		return
+
 	case "option":
 		// Handle multi-option selection (e.g., AskUserQuestion)
-		if len(parts) < 4 {
+		// Callback data format: perm:option:reqID:qIdx:optIdx
+		if len(parts) < 5 {
 			logrus.WithField("parts", parts).Warn("Invalid option callback data")
 			return
 		}
-		optionIndex := parts[3]
+		qIdxStr := parts[3]
+		optIdxStr := parts[4]
 
-		// Convert index to label from the pending request
-		optionLabel := optionIndex
-		if questions, ok := pendingReq.Input["questions"].([]interface{}); ok && len(questions) > 0 {
-			if question, ok := questions[0].(map[string]interface{}); ok {
-				if options, ok := question["options"].([]interface{}); ok {
-					// Parse index
-					var idx int
-					if _, err := fmt.Sscanf(optionIndex, "%d", &idx); err == nil && idx >= 0 && idx < len(options) {
-						if option, ok := options[idx].(map[string]interface{}); ok {
-							if label, ok := option["label"].(string); ok {
-								optionLabel = label
+		// Resolve question text and option label from the pending request
+		var questionText, optionLabel string
+		if questions, ok := pendingReq.Input["questions"].([]interface{}); ok {
+			var qIdx int
+			if _, err := fmt.Sscanf(qIdxStr, "%d", &qIdx); err == nil && qIdx >= 0 && qIdx < len(questions) {
+				if question, ok := questions[qIdx].(map[string]interface{}); ok {
+					questionText, _ = question["question"].(string)
+					if options, ok := question["options"].([]interface{}); ok {
+						var optIdx int
+						if _, err := fmt.Sscanf(optIdxStr, "%d", &optIdx); err == nil && optIdx >= 0 && optIdx < len(options) {
+							if option, ok := options[optIdx].(map[string]interface{}); ok {
+								optionLabel, _ = option["label"].(string)
 							}
 						}
 					}
 				}
 			}
 		}
+		if questionText == "" || optionLabel == "" {
+			logrus.WithField("parts", parts).Warn("Could not resolve question or option from callback data")
+			h.SendText(hCtx, "⚠️ Failed to process selection.")
+			return
+		}
 
-		// Submit as a structured response with the label
-		if err := h.imPrompter.SubmitUserResponse(requestID, ask.Response{
-			Type: "selection",
-			Data: optionLabel,
-		}); err != nil {
-			logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit option selection")
+		done, err := h.imPrompter.SubmitPartialAnswer(requestID, questionText, optionLabel)
+		if err != nil {
+			logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit partial answer")
 			h.SendText(hCtx, fmt.Sprintf("Failed to process option selection: %v", err))
 			return
 		}
-		resultText = fmt.Sprintf("✅ Selected: %s", optionLabel)
+
+		if done {
+			resultText = fmt.Sprintf("✅ All answered")
+		} else {
+			h.SendText(hCtx, fmt.Sprintf("✅ Q: %s → %s", questionText, optionLabel))
+			return
+		}
+
 		logrus.WithFields(logrus.Fields{
-			"request_id":   requestID,
-			"tool_name":    pendingReq.ToolName,
-			"option_index": optionIndex,
-			"option_label": optionLabel,
-			"user_id":      hCtx.SenderID,
+			"request_id":    requestID,
+			"tool_name":     pendingReq.ToolName,
+			"question":      questionText,
+			"option_label":  optionLabel,
+			"user_id":       hCtx.SenderID,
 		}).Info("User selected option")
 
 	default:
