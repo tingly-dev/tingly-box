@@ -51,6 +51,7 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 	if protocolRecorder != nil {
 		protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
 	}
+
 	return finalCtx, nil
 }
 

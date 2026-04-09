@@ -1,6 +1,7 @@
 package typ
 
 import (
+	"context"
 	"encoding/json"
 )
 
@@ -104,3 +105,28 @@ func (k TransportKey) String() string {
 
 // IsSessionScoped returns true when this key is bound to a specific user session.
 func (k TransportKey) IsSessionScoped() bool { return k.SessionID.Value != "" }
+
+// Context key type for session ID in context.
+// Using unexported type prevents context key collisions.
+type contextKey string
+
+const SessionIDKey contextKey = "session_id"
+
+// WithSessionID adds a sessionID to the context.
+// This allows sessionID to be propagated through the call chain
+// without explicit parameter passing.
+func WithSessionID(ctx context.Context, sessionID SessionID) context.Context {
+	return context.WithValue(ctx, SessionIDKey, sessionID)
+}
+
+// GetSessionID retrieves the sessionID from the context.
+// Returns empty SessionID if not found in context.
+func GetSessionID(ctx context.Context) SessionID {
+	if ctx == nil {
+		return SessionID{}
+	}
+	if sid, ok := ctx.Value(SessionIDKey).(SessionID); ok {
+		return sid
+	}
+	return SessionID{}
+}
