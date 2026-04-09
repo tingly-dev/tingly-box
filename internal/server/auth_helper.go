@@ -22,9 +22,3 @@ func (s *Server) getModelAuthMiddleware() gin.HandlerFunc {
 	}
 	return s.authMW.ModelAuthMiddleware()
 }
-
-// getVirtualModelAuthMiddleware returns the virtual model auth middleware to use
-// Reuses the model auth middleware (shared token)
-func (s *Server) getVirtualModelAuthMiddleware() gin.HandlerFunc {
-	return s.getModelAuthMiddleware()
-}
