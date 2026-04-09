@@ -97,6 +97,7 @@ func (s *Server) dispatchChainResultToAnthropicV1(
 
 		_, _, _, _, scenario, _, _ := GetTrackingContext(c)
 		if s.guardrailsEnabledForScenario(scenario) {
+			hc.EnableGuardrailsRewrite = true
 			s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1(req.System, req.Messages))
 		}
 
