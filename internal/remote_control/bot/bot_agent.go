@@ -37,7 +37,7 @@ func (c *CompletionCallback) OnComplete(result *agentboot.CompletionResult) {
 	kb := BuildActionKeyboard()
 	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
-	doneText := IconDone + " " + MsgTaskDone + ". \n" + MsgContinueOrHelp + BuildFooter(c.meta.AgentType, c.meta.ProjectPath)
+	doneText := IconDone + " " + MsgTaskDone + ". " + MsgContinueOrHelp + BuildFooter(c.meta.AgentType, c.meta.ProjectPath)
 	_, err := c.hCtx.Bot.SendMessage(context.Background(), c.hCtx.ChatID, &imbot.SendMessageOptions{
 		Text: doneText,
 		Metadata: map[string]interface{}{
@@ -217,7 +217,7 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 		}
 	}
 
-	sgDoneText := IconDone + " " + MsgTaskDone + ". \n" + MsgContinueOrHelp + BuildFooter(c.meta.AgentType, c.meta.ProjectPath)
+	sgDoneText := IconDone + " " + MsgTaskDone + ". " + MsgContinueOrHelp + BuildFooter(c.meta.AgentType, c.meta.ProjectPath)
 	_, err := c.hCtx.Bot.SendMessage(context.Background(), c.hCtx.ChatID, &imbot.SendMessageOptions{
 		Text:     sgDoneText,
 		Metadata: metadata,
@@ -255,7 +255,9 @@ func (h *BotHandler) handleAgentMessage(hCtx HandlerContext, agent agentboot.Age
 	if err != nil {
 		logrus.WithError(err).Error("Agent execution failed via router")
 		h.SendText(hCtx, fmt.Sprintf("Agent execution failed: %v", err))
+		return
 	}
+	h.reactDone(hCtx)
 }
 
 // getCurrentAgent retrieves the current agent for a chat
