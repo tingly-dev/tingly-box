@@ -195,6 +195,13 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 	case <-time.After(timeout):
 		p.cleanup(req.ID)
 		p.editPromptToTimeout(bot, chatID, msg.MessageID, req)
+
+		// For AskUserQuestion: auto-select first option (recommended strategy)
+		// For permission/approval requests: deny on timeout
+		if req.ToolName == "AskUserQuestion" {
+			result := p.buildTimeoutQuestionResult(req)
+			return result, nil
+		}
 		return ask.Result{
 			ID:       req.ID,
 			Approved: false,
@@ -204,6 +211,54 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 	case <-ctx.Done():
 		p.cleanup(req.ID)
 		return ask.Result{ID: req.ID, Approved: false}, ctx.Err()
+	}
+}
+
+// buildTimeoutQuestionResult builds a result that auto-selects the first (recommended) option
+// for AskUserQuestion when it times out.
+func (p *IMPrompter) buildTimeoutQuestionResult(req ask.Request) ask.Result {
+	questions, ok := req.Input["questions"].([]interface{})
+	if !ok || len(questions) == 0 {
+		return ask.Result{
+			ID:       req.ID,
+			Approved: false,
+			Reason:   "request timed out",
+		}
+	}
+
+	// For each question, select its first option as the recommended default
+	answers := make(map[string]interface{})
+	for _, q := range questions {
+		question, ok := q.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		questionText, ok := question["question"].(string)
+		if !ok {
+			continue
+		}
+		options, ok := question["options"].([]interface{})
+		if !ok || len(options) == 0 {
+			continue
+		}
+		if opt, ok := options[0].(map[string]interface{}); ok {
+			if label, ok := opt["label"].(string); ok {
+				answers[questionText] = label
+			}
+		}
+	}
+
+	updatedInput := make(map[string]interface{})
+	for k, v := range req.Input {
+		updatedInput[k] = v
+	}
+	updatedInput["answers"] = answers
+
+	return ask.Result{
+		ID:           req.ID,
+		Approved:     true,
+		UpdatedInput: updatedInput,
+		Reason:       "timed out - auto-selected recommended option",
 	}
 }
 

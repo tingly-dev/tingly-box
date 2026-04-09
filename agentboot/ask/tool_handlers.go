@@ -109,10 +109,11 @@ func (h *AskUserQuestionHandler) ParseResponse(req Request, response Response) (
 		}, nil
 	}
 
-	// Try to match against first question (most common case)
+	// Try to match against first question (most common case for stdin single-line input)
 	if len(questions) > 0 {
 		question, ok := questions[0].(map[string]interface{})
 		if ok {
+			questionText, _ := question["question"].(string)
 			options, ok := question["options"].([]interface{})
 			if ok {
 				selectedIndex, selectedLabel := h.parseSelection(selection, options)
@@ -121,12 +122,12 @@ func (h *AskUserQuestionHandler) ParseResponse(req Request, response Response) (
 					// Store the selected option label as the answer
 					if opt, ok := options[selectedIndex].(map[string]interface{}); ok {
 						if label, ok := opt["label"].(string); ok {
-							answers["0"] = label
+							answers[questionText] = label
 						}
 					}
 				} else if selectedLabel != "" {
 					// User typed the label directly
-					answers["0"] = selectedLabel
+					answers[questionText] = selectedLabel
 				}
 			}
 		}
