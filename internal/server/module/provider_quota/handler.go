@@ -3,6 +3,7 @@ package provider_quota
 import (
 	"context"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -50,6 +51,7 @@ func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 	quota := r.Group("/provider-quota")
 	{
 		quota.GET("", h.ListQuota)
+		quota.POST("/batch", h.BatchGetQuota) // 批量获取指定 providers 的 quota
 		quota.GET("/:uuid", h.GetQuota)
 		quota.POST("/refresh", h.RefreshAll)
 		quota.POST("/:uuid/refresh", h.RefreshProvider)
@@ -186,4 +188,84 @@ func (h *Handler) Summary(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, summary)
+}
+
+// BatchGetQuotaRequest 批量获取配额请求
+type BatchGetQuotaRequest struct {
+	// ProviderUUIDs 需要获取配额的供应商 UUID 列表
+	ProviderUUIDs []string `json:"provider_uuids" binding:"required"`
+}
+
+// BatchGetQuotaResponse 批量获取配额响应
+type BatchGetQuotaResponse struct {
+	Data map[string]*quota.ProviderUsage `json:"data"` // key: provider_uuid, value: quota data
+}
+
+// BatchGetQuota 批量获取指定供应商的配额
+// POST /api/v1/provider-quota/batch
+// Body: { "provider_uuids": ["uuid1", "uuid2", "uuid3"] }
+func (h *Handler) BatchGetQuota(c *gin.Context) {
+	var req BatchGetQuotaRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid request body",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	if len(req.ProviderUUIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "provider_uuids cannot be empty",
+		})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// 并发获取多个 provider 的 quota
+	result := make(map[string]*quota.ProviderUsage)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(req.ProviderUUIDs))
+
+	for _, uuid := range req.ProviderUUIDs {
+		wg.Add(1)
+		go func(providerUUID string) {
+			defer wg.Done()
+			usage, err := h.manager.GetQuota(ctx, providerUUID)
+			if err != nil {
+				// 如果某个 provider 没有 quota 数据，不返回错误，只是跳过
+				if err != quota.ErrUsageNotFound {
+					h.logger.WithError(err).WithField("provider_uuid", providerUUID).Warn("failed to get quota for provider")
+					errChan <- err
+				}
+				return
+			}
+			mu.Lock()
+			result[providerUUID] = usage
+			mu.Unlock()
+		}(uuid)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// 收集错误（如果有）
+	var errors []error
+	for err := range errChan {
+		errors = append(errors, err)
+	}
+
+	// 如果全部失败，返回错误
+	if len(result) == 0 && len(errors) > 0 {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to get quota for any provider",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, BatchGetQuotaResponse{
+		Data: result,
+	})
 }
