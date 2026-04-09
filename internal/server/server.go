@@ -1087,9 +1087,15 @@ func (s *Server) SetupPassthroughAnthropicEndpoints(group *gin.RouterGroup) {
 
 // UseVirtualModelEndpoints sets up virtual model endpoints for testing
 func (s *Server) UseVirtualModelEndpoints() {
-	virtual := s.engine.Group("/virtual/v1")
-	virtual.GET("/models", s.authMW.VirtualModelAuthMiddleware(), s.virtualModelService.GetHandler().ListModels)
-	virtual.POST("/chat/completions", s.authMW.VirtualModelAuthMiddleware(), s.virtualModelService.GetHandler().ChatCompletions)
+	virtual := s.engine.Group("/virtual")
+	virtual.GET("/models", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().ListModels)
+	virtual.POST("/chat/completions", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().ChatCompletions)
+	virtual.POST("/messages", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().Messages)
+
+	virtualV1 := s.engine.Group("/virtual/v1")
+	virtualV1.GET("/models", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().ListModels)
+	virtualV1.POST("/chat/completions", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().ChatCompletions)
+	virtualV1.POST("/messages", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().Messages)
 }
 
 func (s *Server) UseLoadBalanceEndpoints() {
@@ -1173,7 +1179,6 @@ func (s *Server) Start(port int) error {
 		fmt.Printf("Virtual Model API endpoint: %s://%s:%d/virtual/v1/chat/completions\n", scheme, resolvedHost, port)
 		fmt.Printf("Mode name: %s\n", constant.DefaultModeName)
 		fmt.Printf("Model API key: %s\n", s.config.GetModelToken())
-		fmt.Printf("Virtual Model API key: %s\n", s.config.GetVirtualModelToken())
 
 		if s.httpsEnabled {
 			certDir := s.httpsCertDir

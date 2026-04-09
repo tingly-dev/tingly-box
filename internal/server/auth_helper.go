@@ -22,9 +22,3 @@ func (s *Server) getModelAuthMiddleware() gin.HandlerFunc {
 	}
 	return s.authMW.ModelAuthMiddleware()
 }
-
-// getVirtualModelAuthMiddleware returns the virtual model auth middleware to use
-// Note: TBE typically doesn't override this, so always use default
-func (s *Server) getVirtualModelAuthMiddleware() gin.HandlerFunc {
-	return s.authMW.VirtualModelAuthMiddleware()
-}
