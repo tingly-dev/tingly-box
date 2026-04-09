@@ -25,11 +25,29 @@ export interface ServiceProviderOption {
     baseUrl: string;
 }
 
-const serviceProviders = await async function () {
-    const {providersApi} = await api.instances()
-    let res = await providersApi.apiV2ProviderTemplatesGet()
-    return res.data.data
-}()
+// Cache for provider templates
+let cachedProviders: Record<string, ServiceProvider> | null = null;
+
+// Load provider templates from API
+async function loadProviderTemplates(): Promise<Record<string, ServiceProvider>> {
+    if (cachedProviders) {
+        return cachedProviders;
+    }
+
+    try {
+        const res = await api.getProviderTemplates();
+        if (res.success && res.data) {
+            cachedProviders = res.data;
+            return cachedProviders;
+        }
+    } catch (error) {
+        console.error('Failed to load provider templates:', error);
+    }
+
+    return {};
+}
+
+const serviceProviders = await loadProviderTemplates();
 
 // Get dropdown options for service provider selection
 export function getServiceProviderOptions(): ServiceProviderOption[] {

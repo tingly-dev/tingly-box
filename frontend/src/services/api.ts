@@ -1,49 +1,27 @@
 // API service layer for communicating with the backend
 
 import TinglyService from "@/bindings";
-import {
-    Configuration,
-    HistoryApi,
-    ImbotSettingsApi,
-    InfoApi,
-    LogsApi,
-    ModelsApi,
-    OauthApi,
-    ProbeProviderRequestApiStyleEnum,
-    type ProbeResponse,
-    type ProviderResponse,
-    type ProviderModelsResponse,
-    ProvidersApi,
-    type RuleResponse,
-    RulesApi,
-    ServerApi,
-    SkillsApi,
-    TestingApi,
-    TokenApi,
-    UsageApi,
-} from '../client';
-import {
-    getApiBaseUrl,
-    getDisplayOrigin
-} from '../utils/protocol';
+import type { paths } from '../client/schema';
+import { getApiBaseUrl, getDisplayOrigin } from '../utils/protocol';
 
 const DEFAULT_BASE_PATH = getDisplayOrigin().replace(/\/+$/, "");
 
-// Type definition for API instances
+// Type definitions for backward compatibility
+// @deprecated Direct client access is preferred now
 interface ApiInstances {
-    historyApi: HistoryApi;
-    modelsApi: ModelsApi;
-    providersApi: ProvidersApi;
-    rulesApi: RulesApi;
-    serverApi: ServerApi;
-    skillsApi: SkillsApi;
-    testingApi: TestingApi;
-    tokenApi: TokenApi;
-    infoApi: InfoApi;
-    oauthApi: OauthApi;
-    logsApi: LogsApi;
-    usageApi: UsageApi;
-    imbotSettingsApi: ImbotSettingsApi;
+    historyApi: any;
+    modelsApi: any;
+    providersApi: any;
+    rulesApi: any;
+    serverApi: any;
+    skillsApi: any;
+    testingApi: any;
+    tokenApi: any;
+    infoApi: any;
+    oauthApi: any;
+    logsApi: any;
+    usageApi: any;
+    imbotSettingsApi: any;
 }
 
 
@@ -82,6 +60,61 @@ export const getBaseUrl = async (): Promise<string> => {
     return getApiBaseUrl();
 }
 
+// Import openapi-fetch
+import createClient from 'openapi-fetch';
+
+// Create the typed client with base URL
+const createApiClient = async () => {
+    const basePath = await getApiBaseUrl();
+    return createClient<paths>({ baseUrl: basePath });
+};
+
+// Global client instance (lazily initialized)
+let client: ReturnType<typeof createClient<paths>> | null = null;
+let clientInitPromise: Promise<ReturnType<typeof createClient<paths>>> | null = null;
+
+// Get the client singleton
+const getClient = async () => {
+    if (!clientInitPromise) {
+        clientInitPromise = createApiClient().then((c) => {
+            client = c;
+            return c;
+        });
+    }
+    return clientInitPromise;
+};
+
+// Reset client (e.g., when token changes)
+const resetClient = () => {
+    client = null;
+    clientInitPromise = null;
+};
+
+// Helper to get auth headers
+const getAuthHeaders = async (): Promise<Record<string, string>> => {
+    const token = getUserAuthToken();
+
+    // Try to get token from GUI if available
+    if (!token && import.meta.env.VITE_PKG_MODE === "gui") {
+        const svc = TinglyService;
+        if (svc) {
+            try {
+                const guiToken = await svc.GetUserAuthToken();
+                if (guiToken) {
+                    return { 'Authorization': `Bearer ${guiToken}` };
+                }
+            } catch (err) {
+                console.error('Failed to get GUI token:', err);
+            }
+        }
+    }
+
+    if (token) {
+        return { 'Authorization': `Bearer ${token}` };
+    }
+    return {};
+};
+
 // Lightweight fetch helper for endpoints not covered by codegen
 async function uiAPI(path: string, options: RequestInit = {}): Promise<any> {
     const fullUrl = path.startsWith('/api/v1') ? path : `/api/v1${path}`;
@@ -115,93 +148,59 @@ async function modelAPI(url: string, options: RequestInit = {}): Promise<any> {
     }
 }
 
-// Create API configuration
-const createApiConfig = async () => {
-    let token = getUserAuthToken();
+// ============================================
+// Legacy API Instances Wrapper
+// Maintained for backward compatibility with api.instances()
+// ============================================
 
-    // Get token from GUI if available
-    if (import.meta.env.VITE_PKG_MODE === "gui") {
-        const svc = TinglyService;
-        if (svc) {
-            try {
-                const guiToken = await svc.GetUserAuthToken();
-                if (guiToken) {
-                    token = guiToken;
-                }
-            } catch (err) {
-                console.error('Failed to get GUI token:', err);
-            }
-        }
-    }
+// Lazy client initialization
+let apiInstancesInitialized = false;
 
-    const basePath = await getApiBaseUrl();
-    console.log("api config", basePath);
-
-    return new Configuration({
-        basePath: basePath,
-        baseOptions: token ? {
-            headers: { Authorization: `Bearer ${token}` },
-            validateStatus: (status: number) => status < 500, // Don't reject on 4xx errors
-        } : {
-            validateStatus: (status: number) => status < 500,
-        },
-    });
-};
-
-// Create API instances
-const createApiInstances = async () => {
-    const config = await createApiConfig();
-
-    return {
-        historyApi: new HistoryApi(config),
-        modelsApi: new ModelsApi(config),
-        providersApi: new ProvidersApi(config),
-        rulesApi: new RulesApi(config),
-        serverApi: new ServerApi(config),
-        skillsApi: new SkillsApi(config),
-        testingApi: new TestingApi(config),
-        tokenApi: new TokenApi(config),
-        infoApi: new InfoApi(config),
-        oauthApi: new OauthApi(config),
-        logsApi: new LogsApi(config),
-        usageApi: new UsageApi(config),
-        imbotSettingsApi: new ImbotSettingsApi(config),
-    };
-};
-
-// Initialize API instances immediately
-let apiInstances: ApiInstances | null = null;
-let initializationPromise: Promise<ApiInstances> | null = null;
-
-// Async initialization function
+// Async initialization function (backward compat)
 async function initializeApiInstances(): Promise<ApiInstances> {
-    if (!apiInstances) {
-        apiInstances = await createApiInstances();
-    }
-    return apiInstances;
+    await getClient(); // Ensure client is ready
+    apiInstancesInitialized = true;
+    // Return mock instances that delegate to the real client
+    return createMockApiInstances();
 }
 
-// Get API instances (async)
+// Create mock instances that delegate to openapi-fetch client
+function createMockApiInstances(): ApiInstances {
+    return {
+        historyApi: {},
+        modelsApi: {},
+        providersApi: {},
+        rulesApi: {},
+        serverApi: {},
+        skillsApi: {},
+        testingApi: {},
+        tokenApi: {},
+        infoApi: {},
+        oauthApi: {},
+        logsApi: {},
+        usageApi: {},
+        imbotSettingsApi: {},
+    };
+}
+
+// Get API instances (async) - backward compatibility
 export async function getApiInstances(): Promise<ApiInstances> {
-    if (!initializationPromise) {
-        initializationPromise = initializeApiInstances();
-    }
-    return initializationPromise;
+    await getClient();
+    return createMockApiInstances();
 }
 
 export const api = {
-    // Initialize API instances
+    // Initialize API client
     initialize: async (): Promise<void> => {
-        if (!initializationPromise) {
-            await getApiInstances();
-        }
+        await getClient();
     },
 
     // Status endpoints
     getStatus: async (): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.serverApi.apiV1StatusGet();
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/status', { headers });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -210,12 +209,13 @@ export const api = {
 
     getProviders: async (): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.providersApi.apiV2ProvidersGet();
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v2/providers', { headers });
             const body = response.data;
             if (body.success && body.data) {
                 // Sort providers alphabetically by name to reduce UI changes
-                body.data.sort((a: ProviderResponse, b: ProviderResponse) => a.name.localeCompare(b.name));
+                body.data.sort((a: any, b: any) => a.name.localeCompare(b.name));
             }
             return body;
         } catch (error: any) {
@@ -223,13 +223,26 @@ export const api = {
         }
     },
 
-    updateProviderModelsByUUID: async (uuid: string): Promise<ProviderModelsResponse> => {
+    // Get provider templates (service providers for dropdown)
+    getProviderTemplates: async (): Promise<any> => {
         try {
-            // Note: The generated client has an issue with path parameters
-            // We need to manually handle this for now
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.modelsApi.apiV1ProviderModelsUuidPost(uuid);
-            const body = response.data
+            const client = await getClient();
+            const response = await client.GET('/api/v2/provider-templates');
+            return response.data;
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    updateProviderModelsByUUID: async (uuid: string): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/provider-models/{uuid}', {
+                headers,
+                params: { path: { uuid } }
+            });
+            const body = response.data;
             if (body.success && body.data) {
                 // Sort models alphabetically by model name to reduce UI changes
                 body.data.models.sort((a: any, b: any) =>
@@ -242,13 +255,15 @@ export const api = {
         }
     },
 
-    getProviderModelsByUUID: async (uuid: string): Promise<ProviderModelsResponse> => {
+    getProviderModelsByUUID: async (uuid: string): Promise<any> => {
         try {
-            // Note: The generated client has an issue with path parameters
-            // We need to manually handle this for now
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.modelsApi.apiV1ProviderModelsUuidGet(uuid);
-            const body = response.data
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/provider-models/{uuid}', {
+                headers,
+                params: { path: { uuid } }
+            });
+            const body = response.data;
             if (body.success && body.data) {
                 // Sort models alphabetically by model name to reduce UI changes
                 body.data.models.sort((a: any, b: any) =>
@@ -263,8 +278,9 @@ export const api = {
 
     getHistory: async (limit?: number): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.historyApi.apiV1HistoryGet();
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/history', { headers });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -274,26 +290,42 @@ export const api = {
     // Provider management
     addProvider: async (data: any, force: boolean = false): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.providersApi.apiV2ProvidersPost(data, force);
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v2/providers', {
+                headers,
+                params: { query: { force } },
+                body: data
+            });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
         }
     },
 
-    getProvider: async (uuid: string): Promise<ProviderResponse> => {
-        // Note: The generated client has an issue with path parameters
-        const apiInstances = await getApiInstances();
-        const response = await apiInstances.providersApi.apiV2ProvidersUuidGet(uuid);
-        return response.data;
+    getProvider: async (uuid: string): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v2/providers/{uuid}', {
+                headers,
+                params: { path: { uuid } }
+            });
+            return response.data;
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
     },
 
     updateProvider: async (uuid: string, data: any): Promise<any> => {
         try {
-            // Note: The generated client has an issue with path parameters
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.providersApi.apiV2ProvidersUuidPut(uuid, data);
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.PUT('/api/v2/providers/{uuid}', {
+                headers,
+                params: { path: { uuid } },
+                body: data
+            });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -302,9 +334,12 @@ export const api = {
 
     deleteProvider: async (uuid: string): Promise<any> => {
         try {
-            // Note: The generated client has an issue with path parameters
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.providersApi.apiV2ProvidersUuidDelete(uuid);
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.DELETE('/api/v2/providers/{uuid}', {
+                headers,
+                params: { path: { uuid } }
+            });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -313,10 +348,13 @@ export const api = {
 
     toggleProvider: async (uuid: string): Promise<any> => {
         try {
-            // Note: The generated client has an issue with path parameters
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.providersApi.apiV2ProvidersUuidTogglePost(uuid);
-            return response.data
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v2/providers/{uuid}/toggle', {
+                headers,
+                params: { path: { uuid } }
+            });
+            return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
         }
@@ -325,8 +363,9 @@ export const api = {
     // Server control
     startServer: async (): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.serverApi.apiV1ServerStartPost();
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/server/start', { headers });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -335,8 +374,9 @@ export const api = {
 
     stopServer: async (): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.serverApi.apiV1ServerStopPost();
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/server/stop', { headers });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -345,8 +385,9 @@ export const api = {
 
     restartServer: async (): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.serverApi.apiV1ServerRestartPost();
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/server/restart', { headers });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -355,8 +396,12 @@ export const api = {
 
     generateToken: async (clientId: string): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.tokenApi.apiV1TokenPost({ client_id: clientId });
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/token', {
+                headers,
+                body: { client_id: clientId }
+            });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -365,31 +410,38 @@ export const api = {
 
     getToken: async (): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.tokenApi.apiV1TokenGet();
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/token', { headers });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
         }
     },
 
-
-    // Rules API - Updated for new rule structure with services
+    // Rules API
     getRules: async (scenario: string): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.rulesApi.apiV1RulesGet(scenario);
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/rules', {
+                headers,
+                params: { query: { scenario } }
+            });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
         }
     },
 
-    getRule: async (uuid: string): Promise<RuleResponse> => {
+    getRule: async (uuid: string): Promise<any> => {
         try {
-            // Note: The generated client has an issue with path parameters
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.rulesApi.apiV1RuleUuidGet(uuid);
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/rule/{uuid}', {
+                headers,
+                params: { path: { uuid } }
+            });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -398,9 +450,12 @@ export const api = {
 
     createRule: async (uuid: string, data: any): Promise<any> => {
         try {
-            // Note: The API uses POST to /rules but generated client expects different structure
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.rulesApi.apiV1RulePost(data);
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/rule', {
+                headers,
+                body: data
+            });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -409,9 +464,13 @@ export const api = {
 
     updateRule: async (uuid: string, data: any): Promise<any> => {
         try {
-            // Note: The generated client has an issue with path parameters
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.rulesApi.apiV1RuleUuidPost(uuid, data);
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/rule/{uuid}', {
+                headers,
+                params: { path: { uuid } },
+                body: data
+            });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -420,9 +479,12 @@ export const api = {
 
     deleteRule: async (uuid: string): Promise<any> => {
         try {
-            // Note: The generated client has an issue with path parameters
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.rulesApi.apiV1RuleUuidDelete(uuid);
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.DELETE('/api/v1/rule/{uuid}', {
+                headers,
+                params: { path: { uuid } }
+            });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -600,14 +662,17 @@ export const api = {
         });
     },
 
-    probeModel: async (uuid: string, model: string): Promise<ProbeResponse> => {
+    probeModel: async (uuid: string, model: string): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances
-                .testingApi.apiV1ProbePost({
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/probe/model', {
+                headers,
+                body: {
                     provider: uuid,
                     model: model
-                });
+                }
+            });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -616,12 +681,16 @@ export const api = {
 
     probeProvider: async (api_style: string, api_base: string, token: string): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.testingApi.apiV1ProbeProviderPost({
-                name: "placeholder",
-                api_style: (api_style) as ProbeProviderRequestApiStyleEnum,
-                api_base: api_base,
-                token: token
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/probe/provider', {
+                headers,
+                body: {
+                    name: "placeholder",
+                    api_style: api_style as any,
+                    api_base: api_base,
+                    token: token
+                }
             });
             return response.data;
         } catch (error: any) {
@@ -631,8 +700,8 @@ export const api = {
 
     getVersion: async (): Promise<string> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.infoApi.apiV1InfoVersionGet();
+            const client = await getClient();
+            const response = await client.GET('/api/v1/info/version');
             return response.data.data.version;
         } catch (error: any) {
             console.error('Failed to get version:', error);
@@ -642,8 +711,8 @@ export const api = {
 
     getLatestVersion: async (): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.infoApi.apiV1InfoVersionCheckGet();
+            const client = await getClient();
+            const response = await client.GET('/api/v1/info/version/check');
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -652,8 +721,8 @@ export const api = {
 
     healthCheck: async (): Promise<boolean> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.infoApi.apiV1InfoHealthGet();
+            const client = await getClient();
+            const response = await client.GET('/api/v1/info/health');
             return response.data.health === true;
         } catch {
             return false;
@@ -688,16 +757,12 @@ export const api = {
     // Token management
     setUserToken: (token: string): void => {
         localStorage.setItem('user_auth_token', token);
-        // Reset API instances to refresh token
-        apiInstances = null;
-        initializationPromise = null;
+        resetClient();
     },
     getUserToken: (): string | null => getUserAuthToken(),
     removeUserToken: (): void => {
         localStorage.removeItem('user_auth_token');
-        // Reset API instances to clear token
-        apiInstances = null;
-        initializationPromise = null;
+        resetClient();
     },
     setModelToken: (token: string): void => {
         localStorage.setItem('model_token', token);
@@ -706,8 +771,7 @@ export const api = {
         localStorage.removeItem('model_token');
     },
 
-    // Direct access to raw API instances for advanced usage
-    // Usage: const { providersApi, modelsApi } = await api.instances();
+    // Direct access to raw API instances for advanced usage (backward compat)
     instances: getApiInstances,
 
     // Usage Dashboard API calls
@@ -721,21 +785,22 @@ export const api = {
         limit?: number;
     } = {}): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.usageApi.apiV1UsageStatsGet(
-                params.group_by as any,
-                params.start_time,
-                params.end_time,
-                params.provider,
-                params.model,
-                params.scenario,
-                undefined, // rule_uuid
-                undefined, // user_id
-                undefined, // status
-                params.limit,
-                undefined, // sort_by
-                undefined, // sort_order
-            );
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/usage/stats', {
+                headers,
+                params: {
+                    query: {
+                        group_by: params.group_by as any,
+                        start_time: params.start_time,
+                        end_time: params.end_time,
+                        provider: params.provider,
+                        model: params.model,
+                        scenario: params.scenario,
+                        limit: params.limit,
+                    }
+                }
+            });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -751,15 +816,117 @@ export const api = {
         scenario?: string;
     } = {}): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.usageApi.apiV1UsageTimeseriesGet(
-                params.interval as any,
-                params.start_time,
-                params.end_time,
-                params.provider,
-                params.model,
-                params.scenario,
-            );
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/usage/timeseries', {
+                headers,
+                params: {
+                    query: {
+                        interval: params.interval as any,
+                        start_time: params.start_time,
+                        end_time: params.end_time,
+                        provider: params.provider,
+                        model: params.model,
+                        scenario: params.scenario,
+                    }
+                }
+            });
+            return response.data;
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // ============================================
+    // OAuth API
+    // ============================================
+
+    // Initiate OAuth authorization flow
+    oauthAuthorize: async (data: {
+        provider_type: string;
+        provider_uuid?: string;
+        redirect_uri?: string;
+        state?: string;
+    }): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/oauth/authorize', {
+                headers,
+                body: data
+            });
+            return response.data;
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get OAuth session status
+    oauthStatus: async (session_id: string): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/oauth/status', {
+                headers,
+                params: { query: { session_id } }
+            });
+            return response.data;
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Cancel an in-progress OAuth session
+    oauthCancel: async (data: { session_id: string }): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/oauth/cancel', {
+                headers,
+                body: data
+            });
+            return response.data;
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Refresh OAuth token
+    oauthRefresh: async (data: { provider_uuid: string }): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/oauth/refresh', {
+                headers,
+                body: data
+            });
+            return response.data;
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get available OAuth providers
+    oauthProviders: async (): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/oauth/providers', { headers });
+            return response.data;
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get OAuth provider configuration
+    oauthProviderConfig: async (type: string): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/oauth/providers/{type}', {
+                headers,
+                params: { path: { type } }
+            });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -810,8 +977,9 @@ export const api = {
     // Get all skill locations
     getSkillLocations: async (): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.skillsApi.apiV2SkillLocationsGet();
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v2/skill-locations', { headers });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -825,8 +993,12 @@ export const api = {
         ide_source: string;
     }): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.skillsApi.apiV2SkillLocationsPost(data);
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v2/skill-locations', {
+                headers,
+                body: data
+            });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -836,8 +1008,12 @@ export const api = {
     // Get a specific skill location
     getSkillLocation: async (id: string): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.skillsApi.apiV2SkillLocationsIdGet(id);
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v2/skill-locations/{id}', {
+                headers,
+                params: { path: { id } }
+            });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -847,8 +1023,12 @@ export const api = {
     // Remove a skill location
     removeSkillLocation: async (id: string): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.skillsApi.apiV2SkillLocationsIdDelete(id);
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.DELETE('/api/v2/skill-locations/{id}', {
+                headers,
+                params: { path: { id } }
+            });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -858,8 +1038,12 @@ export const api = {
     // Refresh/scan a skill location
     refreshSkillLocation: async (id: string): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.skillsApi.apiV2SkillLocationsIdRefreshPost(id);
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v2/skill-locations/{id}/refresh', {
+                headers,
+                params: { path: { id } }
+            });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -869,8 +1053,9 @@ export const api = {
     // Discover IDEs with skills
     discoverIdes: async (): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.skillsApi.apiV2SkillLocationsDiscoverGet();
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v2/skill-locations/discover', { headers });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -880,8 +1065,12 @@ export const api = {
     // Import discovered skill locations
     importSkillLocations: async (locations: any[]): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.skillsApi.apiV2SkillLocationsImportPost({ locations });
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v2/skill-locations/import', {
+                headers,
+                body: { locations }
+            });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -1229,8 +1418,9 @@ export const api = {
     // List all ImBot settings
     listImbotSettings: async (): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsGet();
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/imbot-settings', { headers });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -1240,8 +1430,12 @@ export const api = {
     // Get a specific ImBot setting
     getImbotSetting: async (uuid: string): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidGet(uuid);
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/imbot-settings/{uuid}', {
+                headers,
+                params: { path: { uuid } }
+            });
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 404) {
@@ -1265,8 +1459,12 @@ export const api = {
         default_cwd?: string;
     }): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsPost(data);
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/imbot-settings', {
+                headers,
+                body: data
+            });
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -1286,8 +1484,13 @@ export const api = {
         default_cwd?: string;
     }): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidPut(uuid, data);
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.PUT('/api/v1/imbot-settings/{uuid}', {
+                headers,
+                params: { path: { uuid } },
+                body: data
+            });
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 404) {
@@ -1300,8 +1503,12 @@ export const api = {
     // Delete an ImBot setting
     deleteImbotSetting: async (uuid: string): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidDelete(uuid);
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.DELETE('/api/v1/imbot-settings/{uuid}', {
+                headers,
+                params: { path: { uuid } }
+            });
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 404) {
@@ -1314,8 +1521,12 @@ export const api = {
     // Toggle ImBot enabled status
     toggleImbotSetting: async (uuid: string): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidTogglePost(uuid);
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/imbot-settings/{uuid}/toggle', {
+                headers,
+                params: { path: { uuid } }
+            });
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 404) {
@@ -1329,18 +1540,10 @@ export const api = {
     // Get current user token (masked)
     getUserAuthTokenInfo: async (): Promise<{ success: boolean; data?: { token: string; is_default: boolean }; error?: string }> => {
         try {
-            const response = await fetch('/api/v1/auth/token', {
-                headers: {
-                    'Authorization': `Bearer ${getUserAuthToken()}`,
-                    'Content-Type': 'application/json',
-                },
-            });
-            if (response.ok) {
-                const data = await response.json();
-                return { success: true, data: data.data };
-            } else {
-                return { success: false, error: 'Failed to get user token' };
-            }
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/auth/token', { headers });
+            return { success: true, data: response.data.data };
         } catch (error: any) {
             return { success: false, error: error.message };
         }
@@ -1349,23 +1552,15 @@ export const api = {
     // Reset user token to a new secure random value
     resetUserToken: async (): Promise<{ success: boolean; data?: { token: string }; error?: string }> => {
         try {
-            const response = await fetch('/api/v1/auth/token/reset', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${getUserAuthToken()}`,
-                    'Content-Type': 'application/json',
-                },
-            });
-            if (response.ok) {
-                const data = await response.json();
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/auth/token/reset', { headers });
+            if (response.data?.data?.token) {
                 // Update localStorage with new token
-                if (data.data?.token) {
-                    localStorage.setItem('user_auth_token', data.data.token);
-                }
-                return { success: true, data: data.data };
-            } else {
-                return { success: false, error: 'Failed to reset user token' };
+                localStorage.setItem('user_auth_token', response.data.data.token);
+                resetClient();
             }
+            return { success: true, data: response.data.data };
         } catch (error: any) {
             return { success: false, error: error.message };
         }
@@ -1374,19 +1569,10 @@ export const api = {
     // Reset model token to a new secure random value
     resetModelToken: async (): Promise<{ success: boolean; data?: { token: string }; error?: string }> => {
         try {
-            const response = await fetch('/api/v1/auth/model-token/reset', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${getUserAuthToken()}`,
-                    'Content-Type': 'application/json',
-                },
-            });
-            if (response.ok) {
-                const data = await response.json();
-                return { success: true, data: data.data };
-            } else {
-                return { success: false, error: 'Failed to reset model token' };
-            }
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/auth/model-token/reset', { headers });
+            return { success: true, data: response.data.data };
         } catch (error: any) {
             return { success: false, error: error.message };
         }
@@ -1421,22 +1607,10 @@ export const api = {
     // Get system configuration
     getConfig: async (): Promise<any> => {
         try {
-            const apiInstances = await getApiInstances();
-            // Use fetch directly since the endpoint may not be in generated client yet
-            const token = getUserAuthToken();
-            const baseURL = await getBaseUrl();
-            const response = await fetch(`${baseURL}/api/v1/config`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-            });
-            if (response.ok) {
-                const data = await response.json();
-                return data;
-            } else {
-                return { success: false, error: `HTTP ${response.status}` };
-            }
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/config', { headers });
+            return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
         }
@@ -1445,23 +1619,13 @@ export const api = {
     // Update system configuration
     updateConfig: async (config: any): Promise<any> => {
         try {
-            const token = getUserAuthToken();
-            const baseURL = await getBaseUrl();
-            const response = await fetch(`${baseURL}/api/v1/config`, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(config),
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.PUT('/api/v1/config', {
+                headers,
+                body: config
             });
-            if (response.ok) {
-                const data = await response.json();
-                return data;
-            } else {
-                const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-                return { success: false, error: errorData.error || `HTTP ${response.status}` };
-            }
+            return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
         }
