@@ -151,6 +151,39 @@
         }
       }
     },
+    "/api/v1/codex/import/openai": {
+      "post": {
+        "tags": [
+          "codex"
+        ],
+        "summary": "Import existing Codex OpenAI sessions into the current custom provider by rewriting session metadata and the local state SQLite index",
+        "description": "Import existing Codex OpenAI sessions into the current custom provider by rewriting session metadata and the local state SQLite index",
+        "operationId": "apiV1CodexImportOpenaiPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportOpenAISessionsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportOpenAISessionsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/config": {
       "get": {
         "tags": [
@@ -1306,6 +1339,48 @@
               "application/json": {
                 "schema": {
                   "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/config": {
+      "get": {
+        "tags": [
+          "mcp"
+        ],
+        "summary": "Get global MCP runtime configuration",
+        "description": "Get global MCP runtime configuration",
+        "operationId": "apiV1McpConfigGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPRuntimeConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "mcp"
+        ],
+        "summary": "Set global MCP runtime configuration",
+        "description": "Set global MCP runtime configuration",
+        "operationId": "apiV1McpConfigPut",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPRuntimeConfigResponse"
                 }
               }
             }
@@ -4591,6 +4666,151 @@
           "data"
         ]
       },
+      "ImportOpenAISessionsRequest": {
+        "type": "object",
+        "properties": {
+          "autoUndoOnStop": {
+            "type": "boolean",
+            "description": "Field autoUndoOnStop"
+          },
+          "codexHome": {
+            "type": "string",
+            "description": "Field codexHome"
+          },
+          "createBackup": {
+            "type": "boolean",
+            "description": "Field createBackup"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "Field dryRun"
+          },
+          "includeArchived": {
+            "type": "boolean",
+            "description": "Field includeArchived"
+          },
+          "sourceProvider": {
+            "type": "string",
+            "description": "Field sourceProvider"
+          },
+          "sqliteHome": {
+            "type": "string",
+            "description": "Field sqliteHome"
+          },
+          "stateDbPath": {
+            "type": "string",
+            "description": "Field stateDbPath"
+          },
+          "targetProvider": {
+            "type": "string",
+            "description": "Field targetProvider"
+          }
+        }
+      },
+      "ImportOpenAISessionsResponse": {
+        "type": "object",
+        "properties": {
+          "backupPaths": {
+            "type": "array",
+            "description": "Field backupPaths",
+            "items": {
+              "type": "string"
+            }
+          },
+          "codexHome": {
+            "type": "string",
+            "description": "Field codexHome"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "Field dryRun"
+          },
+          "message": {
+            "type": "string",
+            "description": "Field message"
+          },
+          "scannedFiles": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field scannedFiles"
+          },
+          "skippedInvalidJsonl": {
+            "type": "array",
+            "description": "Field skippedInvalidJsonl",
+            "items": {
+              "type": "string"
+            }
+          },
+          "skippedLockedFiles": {
+            "type": "array",
+            "description": "Field skippedLockedFiles",
+            "items": {
+              "type": "string"
+            }
+          },
+          "skippedUnchangedFiles": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field skippedUnchangedFiles"
+          },
+          "sourceProvider": {
+            "type": "string",
+            "description": "Field sourceProvider"
+          },
+          "sqliteHome": {
+            "type": "string",
+            "description": "Field sqliteHome"
+          },
+          "stateDbPath": {
+            "type": "string",
+            "description": "Field stateDbPath"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          },
+          "targetProvider": {
+            "type": "string",
+            "description": "Field targetProvider"
+          },
+          "updatedArchivedFiles": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field updatedArchivedFiles"
+          },
+          "updatedFiles": {
+            "type": "array",
+            "description": "Field updatedFiles",
+            "items": {
+              "type": "string"
+            }
+          },
+          "updatedSessionFiles": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field updatedSessionFiles"
+          },
+          "updatedThreadRows": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field updatedThreadRows"
+          }
+        },
+        "required": [
+          "success",
+          "codexHome",
+          "sqliteHome",
+          "stateDbPath",
+          "sourceProvider",
+          "targetProvider",
+          "dryRun",
+          "scannedFiles",
+          "updatedSessionFiles",
+          "updatedArchivedFiles",
+          "updatedThreadRows",
+          "skippedUnchangedFiles"
+        ]
+      },
       "ImportRuleRequest": {
         "type": "object",
         "properties": {
@@ -4848,6 +5068,104 @@
           "total",
           "logs"
         ]
+      },
+      "MCPRuntimeConfig": {
+        "type": "object",
+        "properties": {
+          "request_timeout": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field request_timeout"
+          },
+          "sources": {
+            "type": "array",
+            "description": "Field sources",
+            "items": {
+              "$ref": "#/components/schemas/MCPSourceConfig"
+            }
+          }
+        }
+      },
+      "MCPRuntimeConfigResponse": {
+        "type": "object",
+        "properties": {
+          "config": {
+            "description": "Field config",
+            "$ref": "#/components/schemas/MCPRuntimeConfig"
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "MCPSourceConfig": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "array",
+            "description": "Field args",
+            "items": {
+              "type": "string"
+            }
+          },
+          "command": {
+            "type": "string",
+            "description": "Field command"
+          },
+          "cwd": {
+            "type": "string",
+            "description": "Field cwd"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "endpoint": {
+            "type": "string",
+            "description": "Field endpoint"
+          },
+          "env": {
+            "type": "object",
+            "description": "Field env",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "headers": {
+            "type": "object",
+            "description": "Field headers",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "proxy_url": {
+            "type": "string",
+            "description": "Field proxy_url"
+          },
+          "tools": {
+            "type": "array",
+            "description": "Field tools",
+            "items": {
+              "type": "string"
+            }
+          },
+          "transport": {
+            "type": "string",
+            "description": "Field transport"
+          }
+        }
       },
       "ModelProbeData": {
         "type": "object",
@@ -8496,6 +8814,34 @@
   },
   "tags": [
     {
+      "name": "history",
+      "description": "Operations related to history"
+    },
+    {
+      "name": "config",
+      "description": "Operations related to config"
+    },
+    {
+      "name": "auth",
+      "description": "Operations related to auth"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "imbot-settings",
+      "description": "Operations related to imbot-settings"
+    },
+    {
+      "name": "codex",
+      "description": "Operations related to codex"
+    },
+    {
+      "name": "mcp",
+      "description": "Operations related to mcp"
+    },
+    {
       "name": "system-logs",
       "description": "Operations related to system-logs"
     },
@@ -8504,64 +8850,8 @@
       "description": "Operations related to server"
     },
     {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
       "name": "models",
       "description": "Operations related to models"
-    },
-    {
-      "name": "scenarios",
-      "description": "Operations related to scenarios"
-    },
-    {
-      "name": "weixin",
-      "description": "Operations related to weixin"
-    },
-    {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "info",
-      "description": "Operations related to info"
-    },
-    {
-      "name": "actions",
-      "description": "Operations related to actions"
-    },
-    {
-      "name": "guardrails",
-      "description": "Operations related to guardrails"
-    },
-    {
-      "name": "oauth",
-      "description": "Operations related to oauth"
-    },
-    {
-      "name": "logs",
-      "description": "Operations related to logs"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "skills",
-      "description": "Operations related to skills"
-    },
-    {
-      "name": "usage",
-      "description": "Operations related to usage"
-    },
-    {
-      "name": "imbot-settings",
-      "description": "Operations related to imbot-settings"
-    },
-    {
-      "name": "config",
-      "description": "Operations related to config"
     },
     {
       "name": "testing",
@@ -8572,8 +8862,44 @@
       "description": "Operations related to providers"
     },
     {
-      "name": "auth",
-      "description": "Operations related to auth"
+      "name": "weixin",
+      "description": "Operations related to weixin"
+    },
+    {
+      "name": "info",
+      "description": "Operations related to info"
+    },
+    {
+      "name": "actions",
+      "description": "Operations related to actions"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "scenarios",
+      "description": "Operations related to scenarios"
+    },
+    {
+      "name": "guardrails",
+      "description": "Operations related to guardrails"
+    },
+    {
+      "name": "skills",
+      "description": "Operations related to skills"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
+      "name": "usage",
+      "description": "Operations related to usage"
+    },
+    {
+      "name": "logs",
+      "description": "Operations related to logs"
     }
   ]
 }

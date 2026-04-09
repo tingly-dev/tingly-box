@@ -145,8 +145,7 @@ const OAuthAuthorizationDialog = ({
     const cleanupOnClose = async () => {
         if (authData?.session_id && !opened) {
             try {
-                const {oauthApi} = await api.instances();
-                await oauthApi.apiV1OauthCancelPost({session_id: authData.session_id});
+                await api.oauthCancel({ session_id: authData.session_id });
             } catch (error) {
                 console.error('[OAuth] Failed to cleanup session:', error);
             }
@@ -240,10 +239,9 @@ const OAuthAuthorizationDialog = ({
             setPollCount(currentPollCount);
 
             try {
-                const {oauthApi} = await api.instances();
-                const response = await oauthApi.apiV1OauthStatusGet(sessionId);
+                const response = await api.oauthStatus(sessionId);
 
-                if (response.data.data.status === 'success') {
+                if (response.data.status === 'success') {
                     // Success - stop polling and notify
                     if (intervalId) {
                         clearInterval(intervalId);
@@ -251,17 +249,17 @@ const OAuthAuthorizationDialog = ({
                     }
                     onSuccess?.();
                     return;
-                } else if (response.data.data.status === 'failed') {
+                } else if (response.data.status === 'failed') {
                     // Failed - stop polling and show error
                     if (intervalId) {
                         clearInterval(intervalId);
                         setPollingIntervalId(null);
                     }
-                    const error = response.data.data.error || 'Authorization failed';
+                    const error = response.data.error || 'Authorization failed';
                     setErrorMessage(error);
                     onError?.(error);
                     return;
-                } else if (response.data.data.status === 'pending') {
+                } else if (response.data.status === 'pending') {
                     // Still pending - check thresholds
                     if (currentPollCount >= MAX_POLL_COUNT) {
                         // Max timeout reached
@@ -578,8 +576,7 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
     // Cleanup OAuth session and callback server
     const cleanupOAuthSession = async (sessionId: string) => {
         try {
-            const {oauthApi} = await api.instances();
-            await oauthApi.apiV1OauthCancelPost({session_id: sessionId});
+            await api.oauthCancel({ session_id: sessionId });
         } catch (error) {
             console.error('[OAuth] Failed to cleanup session:', error);
         }
@@ -599,10 +596,9 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
     // Auto-detect proxy URL from existing providers
     const detectProxyFromProviders = async () => {
         try {
-            const {providersApi} = await api.instances();
-            const response = await providersApi.apiV2ProvidersGet();
-            if (response.data.success && response.data.data) {
-                const providers = response.data.data;
+            const response = await api.getProviders();
+            if (response.success && response.data) {
+                const providers = response.data;
                 // Find OpenAI-style providers with proxy
                 const openaiProvider = providers.find((p: any) =>
                     p.api_style === 'openai' && p.proxy_url
@@ -640,21 +636,17 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
         setInitError(null); // Clear any previous errors
 
         try {
-            const {oauthApi} = await api.instances()
             const redirectUri = await getOAuthRedirectPath();
-            const response = await oauthApi.apiV1OauthAuthorizePost(
+            const response = await api.oauthAuthorize(
                 {
-                    name: "",
-                    redirect: redirectUri,
-                    user_id: "",
-                    provider: provider.id,
-                    response_type: 'json',
-                    proxy_url: proxyUrl || undefined
+                    provider_type: provider.id,
+                    provider_uuid: providerUuid || undefined,
+                    redirect_uri: redirectUri,
                 } as any,
             );
 
-            if (response.data.success) {
-                const data = response.data.data as any;
+            if (response.success) {
+                const data = response.data as any;
 
                 // Determine flow type and set auth data
                 let flowType: 'standard' | 'device_code' = 'standard';
