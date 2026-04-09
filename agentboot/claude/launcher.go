@@ -69,14 +69,11 @@ func (l *Launcher) GetDiscovery() *CLIDiscovery {
 func (l *Launcher) Execute(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (*agentboot.Result, error) {
 	timeout := opts.Timeout
 	if timeout == 0 {
-		// Use configured default timeout
+		// Use configured default timeout (0 means no timeout)
 		l.mu.RLock()
 		timeout = l.config.DefaultExecutionTimeout
 		l.mu.RUnlock()
-		// Fallback to 5 minutes if not configured
-		if timeout == 0 {
-			timeout = 5 * time.Minute
-		}
+		// timeout == 0 means no timeout (context cancellation is used instead)
 	}
 	logrus.Infof("launching claude code...: %s", prompt)
 	// If handler is provided in options, use ExecuteWithHandler directly

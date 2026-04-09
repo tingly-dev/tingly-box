@@ -11,7 +11,7 @@ func DefaultConfig() Config {
 		DefaultFormat:           OutputFormatStreamJSON,
 		EnableStreamJSON:        true,
 		StreamBufferSize:        100,
-		DefaultExecutionTimeout: 5 * time.Minute,
+		DefaultExecutionTimeout: 0, // no timeout
 	}
 }
 
