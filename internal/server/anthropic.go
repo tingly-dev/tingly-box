@@ -95,7 +95,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 			}
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
-					Message: "Message error",
+					Message: fmt.Sprintf("Message error: %s", string(bodyBytes)),
 					Type:    "invalid_request_error",
 				},
 			})
@@ -112,7 +112,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 			}
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
-					Message: "Message error",
+					Message: fmt.Sprintf("Message error: %s", string(bodyBytes)),
 					Type:    "invalid_request_error",
 				},
 			})
