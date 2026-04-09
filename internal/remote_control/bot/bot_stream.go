@@ -115,9 +115,9 @@ func (f *streamingMessageHandler) OnComplete(result *agentboot.CompletionResult)
 	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
 	// Prepare completion message based on verbose mode
-	completionText := IconDone + " " + MsgTaskDone + ". \n" + MsgContinueOrHelp + BuildFooter(f.meta.AgentType, f.meta.ProjectPath)
+	completionText := IconDone + " " + MsgTaskDone + ". " + MsgContinueOrHelp + BuildFooter(f.meta.AgentType, f.meta.ProjectPath)
 	if !f.verbose {
-		completionText = IconDone + " " + MsgTaskDone + ". (Quiet mode: /verbose to show details)\n" + MsgContinueOrHelp + BuildFooter(f.meta.AgentType, f.meta.ProjectPath)
+		completionText = IconDone + " " + MsgTaskDone + ". (Quiet mode: /verbose to show details) " + MsgContinueOrHelp + BuildFooter(f.meta.AgentType, f.meta.ProjectPath)
 	}
 
 	_, err := f.bot.SendMessage(context.Background(), f.chatID, &imbot.SendMessageOptions{
