@@ -29,8 +29,8 @@ type AnthropicClient struct {
 	recordSink *obs.Sink
 }
 
-// defaultNewAnthropicClient creates a new Anthropic client wrapper
-func defaultNewAnthropicClient(provider *typ.Provider, model string, sessionID typ.SessionID) (*AnthropicClient, error) {
+// NewAnthropicClient creates a new Anthropic client wrapper
+func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.SessionID) (*AnthropicClient, error) {
 	// Handle API base URL - Anthropic SDK expects base without /v1
 	apiBase := strings.TrimRight(provider.APIBase, "/")
 	if strings.HasSuffix(apiBase, "/v1") {

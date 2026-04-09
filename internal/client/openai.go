@@ -32,8 +32,8 @@ type OpenAIClient struct {
 	recordSink *obs.Sink
 }
 
-// defaultNewOpenAIClient creates a new OpenAI client wrapper
-func defaultNewOpenAIClient(provider *typ.Provider, model string, sessionID typ.SessionID) (*OpenAIClient, error) {
+// NewOpenAIClient creates a new OpenAI client wrapper
+func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.SessionID) (*OpenAIClient, error) {
 	options := []option.RequestOption{
 		option.WithAPIKey(provider.GetAccessToken()),
 		option.WithBaseURL(provider.APIBase),
