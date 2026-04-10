@@ -331,8 +331,11 @@ func (t *BashTool) executeCommand(ctx context.Context, command string, skipAllow
 	// The semicolon ensures pwd runs even if command fails
 	compositeCommand := fmt.Sprintf("{ %s; pwd; }", command)
 
-	// Use empty allowlist since allowlist check was already done in Call method
-	// This also avoids issues with the braces in the composite command
+	// Use empty allowlist for extension tool since allowlist check was already done in Call method
+	// This design allows:
+	// 1. Single allowlist enforcement point (Call method)
+	// 2. Clean composite command format without allowlist conflicts
+	// 3. Simplified extension tool invocation
 	extBash := extTools.NewBashTool(
 		extTools.BashOptions([]string{}, nil, 120*time.Second, cwd),
 		extTools.BashAllowChaining(true), // Allow command chaining

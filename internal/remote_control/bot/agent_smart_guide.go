@@ -129,7 +129,7 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		"chatID":     req.HCtx.ChatID,
 		"workingDir": workingDir,
 		"source":     map[bool]string{true: "BashCwd", false: "ProjectPath"}[hasWD && workingDir != ""],
-	}).Debug("SmartGuide: Initial working directory set")
+	}).Info("SmartGuide: Initial working directory set")
 
 	// 5. Send processing message
 	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponseWithFooter(*meta, IconProcess+" "+MsgProcessing), req.ReplyTo)

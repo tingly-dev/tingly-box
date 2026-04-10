@@ -132,7 +132,13 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 	}
 
 	// Sync working directory state to ChatStore
-	// This handles both change_workdir tool (which already persisted) and bash cd (which needs sync)
+	// This handles both change_workdir tool (which already persisted via updateProjectFunc)
+	// and bash cd (which only updates ToolExecutor state, requiring sync here)
+	//
+	// Note: change_workdir tool immediately persists via updateProjectFunc (updates both ProjectPath and BashCwd)
+	// The completion callback sync here is a safety net that ensures:
+	// 1. bash cd changes are persisted (ToolExecutor -> ChatStore.BashCwd)
+	// 2. change_workdir changes are correctly reflected (ChatStore already updated, condition prevents duplicate write)
 	currentWorkingDir := c.agent.GetExecutor().GetWorkingDirectory()
 	if currentWorkingDir != "" {
 		// Get current stored values
