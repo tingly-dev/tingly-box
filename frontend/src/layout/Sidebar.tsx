@@ -36,7 +36,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
 
     const [addProfileAnchorEl, setAddProfileAnchorEl] = useState<HTMLElement | null>(null);
     const [newProfileName, setNewProfileName] = useState('');
-    const [newProfileUnified, setNewProfileUnified] = useState(false);
+    const [newProfileUnified, setNewProfileUnified] = useState(true);  // Default to unified
     const [isCreating, setIsCreating] = useState(false);
     const addProfileInputRef = useRef<HTMLInputElement>(null);
 
@@ -45,14 +45,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
     const handleAddProfileClick = useCallback((e: React.MouseEvent<HTMLElement>) => {
         setAddProfileAnchorEl(e.currentTarget);
         setNewProfileName('');
-        setNewProfileUnified(false);
+        setNewProfileUnified(true);  // Reset to unified when opening
         setTimeout(() => addProfileInputRef.current?.focus(), 100);
     }, []);
 
     const handleAddProfileClose = useCallback(() => {
         setAddProfileAnchorEl(null);
         setNewProfileName('');
-        setNewProfileUnified(false);
+        setNewProfileUnified(true);  // Reset to unified when closing
     }, []);
 
     const handleCreateProfile = useCallback(async () => {
