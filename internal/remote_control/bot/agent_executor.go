@@ -74,6 +74,7 @@ type ExecutorDependencies struct {
 	SendText                   func(hCtx HandlerContext, text string)
 	SendTextWithReply          func(hCtx HandlerContext, text string, replyTo string)
 	SendTextWithActionKeyboard func(hCtx HandlerContext, text string, replyTo string)
+	SendFile                   func(hCtx HandlerContext, filePath, caption string) error
 	NewStreamingMessageHandler func(hCtx HandlerContext, meta *ResponseMeta) *streamingMessageHandler
 }
 

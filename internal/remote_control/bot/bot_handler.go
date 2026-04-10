@@ -203,6 +203,9 @@ func NewBotHandler(
 		SendText:                   handler.SendText,
 		SendTextWithReply:          handler.sendTextWithReply,
 		SendTextWithActionKeyboard: handler.sendTextWithActionKeyboard,
+		SendFile: func(hCtx HandlerContext, filePath, caption string) error {
+			return handler.SendFile(context.Background(), hCtx, filePath, caption)
+		},
 		NewStreamingMessageHandler: handler.newStreamingMessageHandler,
 	}
 	handler.agentRouter = NewAgentRouter(deps)

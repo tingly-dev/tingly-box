@@ -24,6 +24,16 @@ type ToolContext struct {
 	ChatID      string
 	ProjectPath string
 	SessionID   string
+
+	// SendFile sends a local file to the user via the IM bot.
+	// Injected by the bot layer; nil if file sending is not available.
+	SendFile func(ctx context.Context, filePath, caption string) error
+
+	// RequestApproval requests explicit user approval for sensitive operations
+	// (e.g. sending files outside the project path). This callback must NOT be
+	// bypassed by yolo mode — it is distinct from the bash approval callback.
+	// Returns (false, nil) if denied. Returns (false, err) on failure.
+	RequestApproval func(ctx context.Context, prompt string) (approved bool, err error)
 }
 
 // ApprovalRequest represents a request for user approval
@@ -635,6 +645,7 @@ func RegisterTools(
 	toolkit *tool.Toolkit, executor *ToolExecutor, chatID string,
 	getStatusFunc func(chatID string) (*StatusInfo, error),
 	updateProjectFunc func(chatID string, projectPath string) error,
+	toolCtx *ToolContext,
 ) error {
 
 	// Create tool groups
@@ -683,6 +694,14 @@ func RegisterTools(
 	if err := extTools.RegisterEditTool(toolkit,
 		extTools.EditOptions(nil)); err != nil {
 		return fmt.Errorf("failed to register edit tool: %w", err)
+	}
+
+	// Register send_file tool (if SendFile callback is available)
+	if toolCtx != nil && toolCtx.SendFile != nil {
+		sendFileTool := NewSendFileTool(executor, toolCtx)
+		if err := toolkit.RegisterAll(sendFileTool); err != nil {
+			return fmt.Errorf("failed to register send_file tool: %w", err)
+		}
 	}
 
 	// Note: handoff_to_cc is not registered for now
