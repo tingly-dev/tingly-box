@@ -66,6 +66,12 @@ func NewBot(config *core.Config) (*Bot, error) {
 		BotType: config.GetOptionString("botType", "3"),
 	}
 
+	// Get cdn_base_url from options or default to baseURL
+	cdnBaseURL := config.GetOptionString("cdn_base_url", "")
+	if cdnBaseURL == "" {
+		cdnBaseURL = baseURL // Default to same as baseURL for Weixin
+	}
+
 	// Create WeChat account from auth config
 	wcAccount := &types.WeChatAccount{
 		ID:          accountID,
@@ -74,6 +80,7 @@ func NewBot(config *core.Config) (*Bot, error) {
 		UserID:      userID,
 		BotToken:    token,
 		BaseURL:     baseURL,
+		CDNBaseURL:  cdnBaseURL,
 		Enabled:     true,
 		Configured:  token != "" && botID != "", // Consider configured if we have credentials
 		CreatedAt:   time.Now(),
@@ -302,8 +309,12 @@ func (b *Bot) sendMedia(ctx context.Context, target string, opts *core.SendMessa
 	// Process the first media item
 	mediaItem := opts.Media[0]
 
-	// Get local file path from URL
-	filePath := mediaItem.URL
+	// Normalize the URL to handle file:// URLs
+	filePath, err := core.NormalizeMediaURL(mediaItem.URL)
+	if err != nil {
+		return nil, core.NewBotError(core.ErrMediaNotSupported, fmt.Sprintf("invalid media URL: %v", err), false)
+	}
+
 	if filePath == "" {
 		return nil, core.NewBotError(core.ErrMediaNotSupported, "media URL is required", false)
 	}
