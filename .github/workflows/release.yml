@@ -85,12 +85,9 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: ./frontend
 
-      - name: Install openapi-generator-cli
-        run: npm install -g @openapitools/openapi-generator-cli
-
       - name: Run codegen and build frontend
         run: |
-          openapi-generator-cli generate -g typescript-axios -i ../swagger.json -o ./src/client --global-property apiDocs=false,modelDocs=false
+          pnpm gen:api
           pnpm build && mkdir -p ../internal/web/dist && cp -R dist/* ../internal/web/dist/
         working-directory: ./frontend
 
@@ -352,9 +349,6 @@ jobs:
           echo "@swc/core" | pnpm approve-builds
           pnpm install --frozen-lockfile
         working-directory: ./frontend
-
-      - name: Install openapi-generator-cli
-        run: npm install -g @openapitools/openapi-generator-cli
 
       - name: Run codegen
         run: task codegen
