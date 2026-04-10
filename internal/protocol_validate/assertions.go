@@ -95,7 +95,6 @@ func AssertToolCallArgs(index int, key, value string) Assertion {
 				return fmt.Errorf("tool_call[%d]: index out of range (have %d)", index, len(r.ToolCalls))
 			}
 			args := r.ToolCalls[index].Arguments
-			// Simple substring check: "key":"value" — avoids a full JSON parse
 			needle := fmt.Sprintf(`%q:%q`, key, value)
 			altNeedle := fmt.Sprintf(`%q: %q`, key, value)
 			if !strings.Contains(args, needle) && !strings.Contains(args, altNeedle) {

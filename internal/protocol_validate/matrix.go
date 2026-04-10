@@ -67,17 +67,16 @@ var skipPairs = map[string]string{
 	// OpenAI Responses → Google: not yet implemented
 	"openai_responses|google": "Responses API to Google not yet implemented",
 	// Google target: vendor_adjust transform does not support OpenAI/Anthropic→Google yet
-	"anthropic_v1|google":  "Anthropic→Google target not yet implemented",
+	"anthropic_v1|google":   "Anthropic→Google target not yet implemented",
 	"anthropic_beta|google": "Anthropic→Google target not yet implemented",
-	"openai_chat|google":   "OpenAI Chat→Google target not yet implemented",
-	// Google source is not yet a supported inbound protocol
+	"openai_chat|google":    "OpenAI Chat→Google target not yet implemented",
 }
 
 // skipSourceScenarios lists source+scenario combinations that are known to be broken.
 var skipSourceScenarios = map[string]string{
 	// openai_responses source: tool_call conversion from provider back to Responses format loses tool calls
-	"openai_responses|tool_use":             "Responses API source: tool_use conversion incomplete",
-	"openai_responses|streaming_tool_use":   "Responses API source: streaming tool_use conversion incomplete",
+	"openai_responses|tool_use":           "Responses API source: tool_use conversion incomplete",
+	"openai_responses|streaming_tool_use": "Responses API source: streaming tool_use conversion incomplete",
 }
 
 // Run executes all matrix combinations as subtests under t.
@@ -103,7 +102,6 @@ func (m *Matrix) Run(t *testing.T) {
 								t.Run(modeSuffix, func(t *testing.T) {
 									t.Parallel()
 
-									// Check skip list
 									pairKey := fmt.Sprintf("%s|%s", source, target)
 									if reason, skip := skipPairs[pairKey]; skip {
 										t.Skipf("skipped: %s", reason)
@@ -115,7 +113,6 @@ func (m *Matrix) Run(t *testing.T) {
 										return
 									}
 
-									// Skip streaming scenarios on non-streaming scenarios and vice versa
 									if streaming && !scenarioSupportsStreaming(scenario) {
 										t.Skip("scenario does not support streaming")
 										return
@@ -132,7 +129,6 @@ func (m *Matrix) Run(t *testing.T) {
 
 									result := env.SendAs(t, source, scenario, streaming)
 
-									// Run scenario-level assertions
 									for _, a := range scenario.Assertions {
 										if err := a.Check(result); err != nil {
 											t.Errorf("assertion %q failed: %v\n  body: %s",
@@ -159,8 +155,7 @@ func scenarioSupportsStreaming(s Scenario) bool {
 	return false
 }
 
-// scenarioRequiresStreaming returns true if the scenario has streaming-specific
-// assertions (e.g. AssertStreamEventCount) that only make sense in streaming mode.
+// scenarioRequiresStreaming returns true if the scenario has streaming-specific assertions.
 func scenarioRequiresStreaming(s Scenario) bool {
 	for _, a := range s.Assertions {
 		if strings.Contains(a.Name, "stream_event_count") {

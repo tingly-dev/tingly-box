@@ -14,7 +14,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
 	"github.com/tingly-dev/tingly-box/internal/server"
+	"github.com/tingly-dev/tingly-box/internal/server_validate"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -22,10 +24,12 @@ import (
 // VirtualServer. It manages config, routing rules, and provides SendAs() for
 // full round-trip testing.
 type TestEnv struct {
-	appConfig     *config.AppConfig
-	ginEngine     interface{ ServeHTTP(http.ResponseWriter, *http.Request) }
+	appConfig *config.AppConfig
+	ginEngine interface {
+		ServeHTTP(http.ResponseWriter, *http.Request)
+	}
 	gatewayServer *httptest.Server // real HTTP server for streaming support
-	virtual       *VirtualServer
+	virtual       *server_validate.VirtualServer
 	modelToken    string
 
 	mu          sync.Mutex
@@ -57,7 +61,7 @@ func NewTestEnv(t *testing.T) *TestEnv {
 		appConfig:     appConfig,
 		ginEngine:     router,
 		gatewayServer: ts,
-		virtual:       NewVirtualServer(t),
+		virtual:       server_validate.NewVirtualServer(t),
 		modelToken:    appConfig.GetGlobalConfig().GetModelToken(),
 		routeModels:   make(map[string]string),
 	}
@@ -77,7 +81,7 @@ func (env *TestEnv) VirtualCallCount() int { return env.virtual.CallCount() }
 //
 // The virtual server is pre-registered with the scenario's mock responses.
 func (env *TestEnv) SetupRoute(source, target protocol.APIType, s Scenario) {
-	env.virtual.RegisterScenario(s)
+	env.virtual.RegisterScenario(s.toVirtualServerScenario())
 
 	virtualURL := env.virtual.URL()
 	providerName := fmt.Sprintf("virtual-%s-%s", target, s.Name)
@@ -86,10 +90,6 @@ func (env *TestEnv) SetupRoute(source, target protocol.APIType, s Scenario) {
 
 	apiStyle := targetToAPIStyle(target)
 
-	// The openai-go SDK resolves paths relative to APIBase:
-	// BaseURL "http://host/v1" + "chat/completions" → "http://host/v1/chat/completions"
-	// BaseURL "http://host"    + "chat/completions" → "http://host/chat/completions"
-	// So we append "/v1" for OpenAI-style providers so the SDK hits /v1/chat/completions.
 	providerAPIBase := virtualURL
 	if apiStyle == protocol.APIStyleOpenAI {
 		providerAPIBase = virtualURL + "/v1"
@@ -104,7 +104,7 @@ func (env *TestEnv) SetupRoute(source, target protocol.APIType, s Scenario) {
 		Enabled:  true,
 		Timeout:  int64(constant.DefaultRequestTimeout),
 	}
-	_ = env.appConfig.AddProvider(provider) // ignore duplicate error
+	_ = env.appConfig.AddProvider(provider)
 
 	ruleScenario := sourceToRuleScenario(source)
 
@@ -159,7 +159,6 @@ func (env *TestEnv) SendAs(t *testing.T, source protocol.APIType, s Scenario, st
 	}
 
 	if streaming {
-		// Use real HTTP server for streaming — ResponseRecorder panics with Gin SSE.
 		url := env.gatewayServer.URL + path
 		req, err := http.NewRequest("POST", url, bytes.NewReader(body))
 		if err != nil {
@@ -175,8 +174,10 @@ func (env *TestEnv) SendAs(t *testing.T, source protocol.APIType, s Scenario, st
 		defer resp.Body.Close()
 
 		result.HTTPStatus = resp.StatusCode
-		result.StreamEvents, result.RawBody = readSSEEvents(resp.Body)
-		parseStreamedResult(result, sourceToStyle(source))
+		result.StreamEvents, result.RawBody = sse.ReadSSELines(resp.Body)
+		fillFromParsedResult(result, sse.ParsedResult{}, sourceToStyle(source), true)
+		parsed := assembleFromEvents(result.StreamEvents, sourceToStyle(source))
+		fillFromParsedResult(result, parsed, sourceToStyle(source), true)
 	} else {
 		req, err := http.NewRequest("POST", path, bytes.NewReader(body))
 		if err != nil {
@@ -190,7 +191,8 @@ func (env *TestEnv) SendAs(t *testing.T, source protocol.APIType, s Scenario, st
 
 		result.HTTPStatus = w.Code
 		result.RawBody = w.Body.Bytes()
-		parseJSONResult(result, sourceToStyle(source))
+		parsed := parseFromJSON(result.RawBody, sourceToStyle(source))
+		fillFromParsedResult(result, parsed, sourceToStyle(source), false)
 	}
 
 	return result
@@ -205,23 +207,15 @@ func routeKey(source, target protocol.APIType, scenario string) string {
 func (env *TestEnv) findRouteModel(source protocol.APIType, scenarioName string) string {
 	env.mu.Lock()
 	defer env.mu.Unlock()
-	// Search for any key matching source+scenario (any target)
 	prefix := fmt.Sprintf("%s|", source)
 	suffix := fmt.Sprintf("|%s", scenarioName)
 	for k, v := range env.routeModels {
-		if hasPrefix(k, prefix) && hasSuffix(k, suffix) {
+		if len(k) >= len(prefix) && k[:len(prefix)] == prefix &&
+			len(k) >= len(suffix) && k[len(k)-len(suffix):] == suffix {
 			return v
 		}
 	}
 	return ""
-}
-
-func hasPrefix(s, prefix string) bool {
-	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
-}
-
-func hasSuffix(s, suffix string) bool {
-	return len(s) >= len(suffix) && s[len(s)-len(suffix):] == suffix
 }
 
 func buildRequest(source protocol.APIType, model string, streaming bool) (path string, body []byte) {
@@ -302,5 +296,63 @@ func sourceToStyle(source protocol.APIType) protocol.APIStyle {
 	}
 }
 
-// Ensure json is used (referenced in virtual_server.go and scenarios.go).
-var _ = json.Marshal
+func parseFromJSON(raw []byte, style protocol.APIStyle) sse.ParsedResult {
+	var m map[string]interface{}
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return sse.ParsedResult{}
+	}
+	var r *sse.ParsedResult
+	switch style {
+	case protocol.APIStyleOpenAI:
+		if _, hasOutput := m["output"]; hasOutput {
+			r = sse.ParseOpenAIResponsesResult(m)
+		} else {
+			r = sse.ParseOpenAIChatResult(m)
+		}
+	case protocol.APIStyleAnthropic:
+		r = sse.ParseAnthropicResult(m)
+	case protocol.APIStyleGoogle:
+		r = sse.ParseGoogleResult(m)
+	}
+	if r == nil {
+		return sse.ParsedResult{}
+	}
+	return *r
+}
+
+func assembleFromEvents(events []string, style protocol.APIStyle) sse.ParsedResult {
+	var r *sse.ParsedResult
+	switch style {
+	case protocol.APIStyleOpenAI:
+		r = sse.AssembleOpenAIStream(events)
+	case protocol.APIStyleAnthropic:
+		r = sse.AssembleAnthropicStream(events)
+	case protocol.APIStyleGoogle:
+		r = sse.AssembleGoogleStream(events)
+	}
+	if r == nil {
+		return sse.ParsedResult{}
+	}
+	return *r
+}
+
+func fillFromParsedResult(result *RoundTripResult, parsed sse.ParsedResult, _ protocol.APIStyle, _ bool) {
+	result.Role = parsed.Role
+	result.Content = parsed.Content
+	result.Model = parsed.Model
+	result.FinishReason = parsed.FinishReason
+	result.ThinkingContent = parsed.ThinkingContent
+	for _, tc := range parsed.ToolCalls {
+		result.ToolCalls = append(result.ToolCalls, ToolCallResult{
+			ID:        tc.ID,
+			Name:      tc.Name,
+			Arguments: tc.Arguments,
+		})
+	}
+	if parsed.Usage != nil {
+		result.Usage = &TokenUsage{
+			InputTokens:  parsed.Usage.InputTokens,
+			OutputTokens: parsed.Usage.OutputTokens,
+		}
+	}
+}
