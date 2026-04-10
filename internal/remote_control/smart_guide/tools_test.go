@@ -270,7 +270,7 @@ func TestRegisterTools(t *testing.T) {
 	getStatusFunc := func(chatID string) (*StatusInfo, error) { return nil, nil }
 	updateProjectFunc := func(chatID string, projectPath string) error { return nil }
 
-	err := RegisterTools(toolkit, executor, "test-chat", getStatusFunc, updateProjectFunc)
+	err := RegisterTools(toolkit, executor, "test-chat", getStatusFunc, updateProjectFunc, nil)
 	assert.NoError(t, err)
 
 	// Verify schemas are registered (tools should be available)
