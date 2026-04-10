@@ -41,7 +41,7 @@ export const VersionProvider: React.FC<VersionProviderProps> = ({ children }) =>
         setChecking(true);
         try {
             const result = await api.getLatestVersion();
-            if (result.success) {
+            if (result && result.success && result.data) {
                 setCurrentVersion(result.data.current_version);
                 setLatestVersion(result.data.latest_version);
                 setHasUpdate(result.data.has_update);
