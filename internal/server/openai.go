@@ -202,6 +202,10 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	cursorCompat := resolveCursorCompat(c, rule)
 	applyCursorCompatFlag(&req.ChatCompletionNewParams, cursorCompat)
 
+	// Inject session ID into request context so all downstream code can access it
+	sessionID := resolveSessionID(c, &req.ChatCompletionNewParams)
+	c.Request = c.Request.WithContext(typ.WithSessionID(c.Request.Context(), sessionID))
+
 	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, isStreaming)
 
