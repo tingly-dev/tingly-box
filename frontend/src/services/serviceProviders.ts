@@ -27,6 +27,7 @@ export interface ServiceProviderOption {
 
 // Cache for provider templates
 let cachedProviders: Record<string, ServiceProvider> | null = null;
+let loadPromise: Promise<Record<string, ServiceProvider>> | null = null;
 
 // Load provider templates from API
 async function loadProviderTemplates(): Promise<Record<string, ServiceProvider>> {
@@ -34,24 +35,44 @@ async function loadProviderTemplates(): Promise<Record<string, ServiceProvider>>
         return cachedProviders;
     }
 
-    try {
-        const res = await api.getProviderTemplates();
-        if (res.success && res.data) {
-            cachedProviders = res.data;
-            return cachedProviders;
-        }
-    } catch (error) {
-        console.error('Failed to load provider templates:', error);
+    // Return existing promise if loading is in progress
+    if (loadPromise) {
+        return loadPromise;
     }
 
-    return {};
+    loadPromise = (async () => {
+        try {
+            const res = await api.getProviderTemplates();
+            if (res && res.success && res.data) {
+                cachedProviders = res.data;
+                return cachedProviders;
+            }
+        } catch (error) {
+            console.error('Failed to load provider templates:', error);
+        } finally {
+            loadPromise = null; // Clear promise after completion
+        }
+
+        return {};
+    })();
+
+    return loadPromise;
 }
 
-const serviceProviders = await loadProviderTemplates();
+// Export a function to get service providers (lazy loading)
+export async function getServiceProviders(): Promise<Record<string, ServiceProvider>> {
+    return loadProviderTemplates();
+}
+
+// Synchronous getter for cached providers (returns empty object if not loaded)
+export function getServiceProvidersSync(): Record<string, ServiceProvider> {
+    return cachedProviders || {};
+}
 
 // Get dropdown options for service provider selection
 export function getServiceProviderOptions(): ServiceProviderOption[] {
     const options: ServiceProviderOption[] = [];
+    const serviceProviders = getServiceProvidersSync();
 
     Object.entries(serviceProviders).forEach(([key, provider]: [string, any]) => {
         const hasOpenAi = !!(provider as ServiceProvider).base_url_openai;
@@ -87,6 +108,7 @@ export function getServiceProviderOptions(): ServiceProviderOption[] {
 
 // Get provider by ID
 export function getServiceProvider(id: string): ServiceProvider | null {
+    const serviceProviders = getServiceProvidersSync();
     const provider = (serviceProviders as any)[id];
     return provider || null;
 }
@@ -110,6 +132,7 @@ export interface UniqueProvider {
 // Get all unique providers (not split by API style)
 export function getAllUniqueProviders(): UniqueProvider[] {
     const providers: UniqueProvider[] = [];
+    const serviceProviders = getServiceProvidersSync();
 
     Object.entries(serviceProviders).forEach(([_key, provider]: [string, any]) => {
         const sp = provider as ServiceProvider;
@@ -135,6 +158,3 @@ export function getAllUniqueProviders(): UniqueProvider[] {
 
     return providers;
 }
-
-// Export the raw data for direct access
-export {serviceProviders};
