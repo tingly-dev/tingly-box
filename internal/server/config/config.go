@@ -1200,7 +1200,8 @@ func (c *Config) GetProfile(baseScenario typ.RuleScenario, profileID string) (ty
 }
 
 // CreateProfile adds a new profile to a base scenario. Returns the created ProfileMeta.
-func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string) (typ.ProfileMeta, error) {
+// The unified parameter determines whether to use unified mode (single model) or separate mode (individual models).
+func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unified bool) (typ.ProfileMeta, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -1229,20 +1230,40 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string) (typ.
 	}
 
 	meta := typ.ProfileMeta{
-		ID:   fmt.Sprintf("p%d", nextID),
-		Name: name,
+		ID:      fmt.Sprintf("p%d", nextID),
+		Name:    name,
+		Unified: unified,
 	}
 
 	c.Profiles[base] = append(c.Profiles[base], meta)
 
 	// Clone rules from base scenario to the new profiled scenario.
-	// For claude_code, profiles only support "separate" mode, so skip the unified rule.
+	// For claude_code, mode determines which rules to include:
+	// - unified mode: include built-in-cc rule, skip individual model rules
+	// - separate mode: skip built-in-cc rule, include individual model rules
 	profiledScenario := typ.ProfiledScenarioName(baseScenario, meta.ID)
 	for _, rule := range c.Rules {
 		if rule.Scenario == baseScenario {
-			if baseScenario == typ.ScenarioClaudeCode && rule.UUID == RuleUUIDBuiltinCC {
-				continue // skip unified rule for claude_code profiles
+			// Handle claude_code scenario specially based on mode
+			if baseScenario == typ.ScenarioClaudeCode {
+				if unified {
+					// Unified mode: only include built-in-cc, skip individual model rules
+					if rule.UUID == RuleUUIDBuiltinCC {
+						cloned := rule
+						cloned.UUID = uuid.New().String()
+						cloned.Scenario = profiledScenario
+						c.Rules = append(c.Rules, cloned)
+					}
+					// Skip individual model rules (haiku, sonnet, opus, default, subagent)
+					continue
+				} else {
+					// Separate mode: skip built-in-cc, include individual model rules
+					if rule.UUID == RuleUUIDBuiltinCC {
+						continue
+					}
+				}
 			}
+
 			cloned := rule
 			cloned.UUID = uuid.New().String()
 			cloned.Scenario = profiledScenario
@@ -1250,7 +1271,10 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string) (typ.
 			if strings.HasPrefix(cloned.RequestModel, "tingly/cc-") {
 				cloned.RequestModel = strings.TrimPrefix(cloned.RequestModel, "tingly/cc-")
 			} else if cloned.RequestModel == "tingly/cc" {
-				continue // skip unified model name
+				// Skip unified model name for separate mode
+				if !unified {
+					continue
+				}
 			}
 			c.Rules = append(c.Rules, cloned)
 		}
@@ -1259,8 +1283,9 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string) (typ.
 	return meta, c.Save()
 }
 
-// UpdateProfile updates the name of an existing profile.
-func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, name string) error {
+// UpdateProfile updates the name and/or mode of an existing profile.
+// Pass nil for unified to keep existing mode, or bool pointer to change it.
+func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, name string, unified *bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -1288,7 +1313,58 @@ func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, 
 		}
 	}
 
+	oldUnified := profiles[idx].Unified
+
+	// Update fields
 	profiles[idx].Name = name
+	if unified != nil {
+		profiles[idx].Unified = *unified
+	}
+
+	// If mode changed, we need to update the rules
+	if unified != nil && *unified != oldUnified && baseScenario == typ.ScenarioClaudeCode {
+		profiledScenario := typ.ProfiledScenarioName(baseScenario, profileID)
+
+		// Remove existing profile rules
+		c.Rules = slices.DeleteFunc(c.Rules, func(r typ.Rule) bool {
+			return r.Scenario == profiledScenario
+		})
+
+		// Re-clone rules with new mode setting
+		for _, rule := range c.Rules {
+			if rule.Scenario == baseScenario {
+				if *unified {
+					// Unified mode: only include built-in-cc, skip individual model rules
+					if rule.UUID == RuleUUIDBuiltinCC {
+						cloned := rule
+						cloned.UUID = uuid.New().String()
+						cloned.Scenario = profiledScenario
+						c.Rules = append(c.Rules, cloned)
+					}
+					continue
+				} else {
+					// Separate mode: skip built-in-cc, include individual model rules
+					if rule.UUID == RuleUUIDBuiltinCC {
+						continue
+					}
+				}
+
+				cloned := rule
+				cloned.UUID = uuid.New().String()
+				cloned.Scenario = profiledScenario
+				// Strip "tingly/cc-" prefix for profile rules
+				if strings.HasPrefix(cloned.RequestModel, "tingly/cc-") {
+					cloned.RequestModel = strings.TrimPrefix(cloned.RequestModel, "tingly/cc-")
+				} else if cloned.RequestModel == "tingly/cc" {
+					if !*unified {
+						continue
+					}
+				}
+				c.Rules = append(c.Rules, cloned)
+			}
+		}
+	}
+
 	return c.Save()
 }
 

@@ -165,8 +165,9 @@ type RuleFlags struct {
 // Profiles allow multiple Rule + ScenarioFlags configurations per base scenario.
 // A profile is identified by a short service-generated ID (e.g. "p1", "p2").
 type ProfileMeta struct {
-	ID   string `json:"id" yaml:"id"`     // Profile ID (e.g. "p1")
-	Name string `json:"name" yaml:"name"` // Human-readable name (unique within base scenario)
+	ID      string `json:"id" yaml:"id"`           // Profile ID (e.g. "p1")
+	Name    string `json:"name" yaml:"name"`       // Human-readable name (unique within base scenario)
+	Unified bool   `json:"unified" yaml:"unified"` // true=unified mode (single model), false=separate mode (individual models, default)
 }
 
 // ScenarioConfig represents configuration for a specific scenario
