@@ -282,72 +282,19 @@ jobs:
       needs.publish-cli-bundle.result == 'success' &&
       needs.setup.outputs.publish_cli == 'true' &&
       needs.setup.outputs.build_docker == 'true'
-    env:
-      REGISTRY: ghcr.io
-      IMAGE_NAME: tingly-box
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.setup.outputs.release_tag }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/tingly-dev/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=${{ needs.setup.outputs.release_tag }}
-            type=raw,value=${{ needs.setup.outputs.npx_version }}
-            type=raw,value=latest
-
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: ./.github/actions/docker-build-push
         with:
-          context: .
-          file: ./npx.Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64
-          build-args: |
+          image_name: tingly-box
+          version: ${{ needs.setup.outputs.release_tag }}
+          build_args: |
             TINGLY_VERSION=${{ needs.setup.outputs.npx_version }}
-
-      - name: Generate image digest summary
-        run: |
-          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          ## Docker NPX Image Published :rocket:
-
-          **Tag:** `${{ needs.setup.outputs.release_tag }}`
-          **Image:** `${{ env.REGISTRY }}/tingly-dev/${{ env.IMAGE_NAME }}:${{ needs.setup.outputs.release_tag }}`
-
-          ### Pull Command
-          ```bash
-          docker pull ${{ env.REGISTRY }}/tingly-dev/${{ env.IMAGE_NAME }}:${{ needs.setup.outputs.release_tag }}
-          ```
-
-          ### Run Command
-          ```bash
-          mkdir tingly-data
-          docker run -d \
-            --name tingly-box \
-            -p 12580:12580 \
-            -v `pwd`/tingly-data:/app/.tingly-box \
-            ${{ env.REGISTRY }}/tingly-dev/${{ env.IMAGE_NAME }}:${{ needs.setup.outputs.release_tag }}
-          ```
-          EOF
 
   # Create a single NPX tag and release for CLI + Bundle
   create-release:

@@ -1,9 +1,6 @@
 name: Docker NPX Image Build and Push
 
 on:
-  # push:
-  #   tags:
-  #     - 'v*.*.*'
   workflow_dispatch:
     inputs:
       release_tag:
@@ -12,8 +9,6 @@ on:
         type: string
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: tingly-box
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
@@ -27,92 +22,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Determine version tag
-        id: version
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # Manual trigger: use the provided tag
-            INPUT_TAG="${{ github.event.inputs.release_tag }}"
-
-            # Add 'v' prefix if not present
-            if [[ ! "$INPUT_TAG" =~ ^v ]]; then
-              TAG="v${INPUT_TAG}"
-            else
-              TAG="$INPUT_TAG"
-            fi
-          else
-            # Push tag: use the git ref
-            TAG="${GITHUB_REF#refs/tags/}"
-          fi
-
-          # Validate tag format
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
-            echo "Error: Invalid tag format. Expected format: v1.0.0 or v1.0.0-beta"
-            exit 1
-          fi
-
-          # Strip 'v' prefix for npm version
-          NPM_VERSION="${TAG#v}"
-
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "npm_version=$NPM_VERSION" >> $GITHUB_OUTPUT
-          echo "is_prerelease=$([[ "$TAG" == *-* ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-          echo "Building image for tag: $TAG (npm version: $NPM_VERSION)"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+      - name: Validate release tag
+        id: validate
+        uses: ./.github/actions/validate-tag
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/tingly-dev/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=${{ steps.version.outputs.tag }}
-            type=raw,value=${{ steps.version.outputs.npm_version }}
-            type=raw,value=latest
+          release_tag: ${{ github.event.inputs.release_tag }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: ./.github/actions/docker-build-push
         with:
-          context: .
-          file: ./npx.Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64
-          build-args: |
-            TINGLY_VERSION=${{ steps.version.outputs.npm_version }}
-
-      - name: Generate image digest summary
-        run: |
-          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          ## Docker Image Published :rocket:
-
-          **Tag:** `${{ steps.version.outputs.tag }}`
-          **Image:** `${{ env.REGISTRY }}/tingly-dev/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}`
-
-          ### Pull Command
-          ```bash
-          docker pull ${{ env.REGISTRY }}/tingly-dev/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
-          ```
-
-          ### Run Command
-          ```bash
-          mkdir tingly-data
-          docker run -d \
-            --name tingly-box \
-            -p 12580:12580 \
-            -v `pwd`/tingly-data:/app/.tingly-box \
-            ${{ env.REGISTRY }}/tingly-dev/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
-          ```
-          EOF
+          image_name: tingly-box
+          version: ${{ steps.validate.outputs.tag }}
+          build_args: |
+            TINGLY_VERSION=${{ steps.validate.outputs.npm_version }}
