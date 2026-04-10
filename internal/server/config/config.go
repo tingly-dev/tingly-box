@@ -1239,7 +1239,7 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 
 	// Clone rules from base scenario to the new profiled scenario.
 	// For claude_code, mode determines which rules to include:
-	// - unified mode: include built-in-cc rule, skip individual model rules
+	// - unified mode: include built-in-cc rule as "*" (wildcard), skip individual model rules
 	// - separate mode: skip built-in-cc rule, include individual model rules
 	profiledScenario := typ.ProfiledScenarioName(baseScenario, meta.ID)
 	for _, rule := range c.Rules {
@@ -1247,11 +1247,12 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 			// Handle claude_code scenario specially based on mode
 			if baseScenario == typ.ScenarioClaudeCode {
 				if unified {
-					// Unified mode: only include built-in-cc, skip individual model rules
+					// Unified mode: only include built-in-cc, rename request model to "*"
 					if rule.UUID == RuleUUIDBuiltinCC {
 						cloned := rule
 						cloned.UUID = uuid.New().String()
 						cloned.Scenario = profiledScenario
+						cloned.RequestModel = "*" // Use "*" as wildcard for all models
 						c.Rules = append(c.Rules, cloned)
 					}
 					// Skip individual model rules (haiku, sonnet, opus, default, subagent)
@@ -1275,6 +1276,8 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 				if !unified {
 					continue
 				}
+				// For unified mode, rename to "*"
+				cloned.RequestModel = "*"
 			}
 			c.Rules = append(c.Rules, cloned)
 		}
@@ -1334,11 +1337,12 @@ func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, 
 		for _, rule := range c.Rules {
 			if rule.Scenario == baseScenario {
 				if *unified {
-					// Unified mode: only include built-in-cc, skip individual model rules
+					// Unified mode: only include built-in-cc, rename to "*"
 					if rule.UUID == RuleUUIDBuiltinCC {
 						cloned := rule
 						cloned.UUID = uuid.New().String()
 						cloned.Scenario = profiledScenario
+						cloned.RequestModel = "*" // Use "*" as wildcard for all models
 						c.Rules = append(c.Rules, cloned)
 					}
 					continue
@@ -1359,6 +1363,8 @@ func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, 
 					if !*unified {
 						continue
 					}
+					// For unified mode, rename to "*"
+					cloned.RequestModel = "*"
 				}
 				c.Rules = append(c.Rules, cloned)
 			}
