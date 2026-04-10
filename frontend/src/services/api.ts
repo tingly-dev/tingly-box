@@ -556,17 +556,24 @@ export const api = {
         return uiAPI(`/scenario/${scenario}/profiles`);
     },
 
-    createProfile: async (scenario: string, name: string): Promise<any> => {
+    createProfile: async (scenario: string, name: string, unified?: boolean): Promise<any> => {
         return uiAPI(`/scenario/${scenario}/profiles`, {
             method: 'POST',
-            body: JSON.stringify({ name }),
+            body: JSON.stringify({ name, unified }),
         });
     },
 
-    updateProfile: async (scenario: string, id: string, name: string): Promise<any> => {
+    updateProfile: async (scenario: string, id: string, name: string, unified?: boolean): Promise<any> => {
+        const body: { name?: string; unified?: boolean } = {};
+        if (name) {
+            body.name = name;
+        }
+        if (unified !== undefined) {
+            body.unified = unified;
+        }
         return uiAPI(`/scenario/${scenario}/profiles/${id}`, {
             method: 'PUT',
-            body: JSON.stringify({ name }),
+            body: JSON.stringify(body),
         });
     },
 
