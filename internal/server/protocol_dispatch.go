@@ -95,6 +95,7 @@ func (s *Server) dispatchChainResultToAnthropicV1(
 			}
 		}
 
+		// response guardrails
 		_, _, _, _, scenario, _, _ := GetTrackingContext(c)
 		if s.guardrailsEnabledForScenario(scenario) {
 			hc.EnableGuardrailsRewrite = true
@@ -137,8 +138,12 @@ func (s *Server) dispatchChainResultToAnthropicV1(
 			anthropicResp = roundtripped
 		}
 
-		messageHistory := guardrailsadapter.AdaptMessagesFromAnthropicV1(req.System, req.Messages)
-		blocked := s.applyGuardrailsToAnthropicV1NonStreamResponse(c, actualModel, provider, messageHistory, anthropicResp)
+		// response guardrails
+		_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+		blocked := false
+		if s.guardrailsEnabledForScenario(scenario) {
+			blocked = s.applyGuardrailsToAnthropicV1NonStreamResponse(c, req, actualModel, provider, anthropicResp)
+		}
 		if !blocked {
 			s.restoreGuardrailsCredentialAliasesV1Response(c, anthropicResp)
 		}
@@ -201,8 +206,12 @@ func (s *Server) dispatchChainResultToAnthropicBeta(
 		// FIXME: now we use req model as resp model
 		anthropicResp.Model = anthropic.Model(responseModel)
 
-		messageHistory := guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages)
-		blocked := s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, actualModel, provider, messageHistory, anthropicResp)
+		// response guardrails
+		_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+		blocked := false
+		if s.guardrailsEnabledForScenario(scenario) {
+			blocked = s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, req, actualModel, provider, anthropicResp)
+		}
 		if !blocked {
 			s.restoreGuardrailsCredentialAliasesV1BetaResponse(c, anthropicResp)
 		}
