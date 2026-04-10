@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
+	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	guardrailspipeline "github.com/tingly-dev/tingly-box/internal/guardrails/pipeline"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -260,15 +261,12 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaRequest(c *gin.Context, req *an
 
 // applyGuardrailsToAnthropicV1NonStreamResponse evaluates a fully assembled
 // Anthropic v1 response and rewrites it when guardrails block it.
-func (s *Server) applyGuardrailsToAnthropicV1NonStreamResponse(c *gin.Context, actualModel string, provider *typ.Provider, messageHistory []guardrailscore.Message, resp *anthropic.Message) bool {
-	if resp == nil {
-		return false
-	}
-	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
-	if !s.guardrailsEnabledForScenario(scenario) {
+func (s *Server) applyGuardrailsToAnthropicV1NonStreamResponse(c *gin.Context, req *anthropic.MessageNewParams, actualModel string, provider *typ.Provider, resp *anthropic.Message) bool {
+	if req == nil || resp == nil {
 		return false
 	}
 
+	messageHistory := guardrailsadapter.AdaptMessagesFromAnthropicV1(req.System, req.Messages)
 	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messageHistory)
 	input.Payload.Protocol = "anthropic_v1"
 	input.Payload.Response = resp
@@ -282,15 +280,12 @@ func (s *Server) applyGuardrailsToAnthropicV1NonStreamResponse(c *gin.Context, a
 
 // applyGuardrailsToAnthropicV1BetaNonStreamResponse is the beta equivalent of
 // applyGuardrailsToAnthropicV1NonStreamResponse.
-func (s *Server) applyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Context, actualModel string, provider *typ.Provider, messageHistory []guardrailscore.Message, resp *anthropic.BetaMessage) bool {
-	if resp == nil {
-		return false
-	}
-	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
-	if !s.guardrailsEnabledForScenario(scenario) {
+func (s *Server) applyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Context, req *anthropic.BetaMessageNewParams, actualModel string, provider *typ.Provider, resp *anthropic.BetaMessage) bool {
+	if req == nil || resp == nil {
 		return false
 	}
 
+	messageHistory := guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages)
 	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messageHistory)
 	input.Payload.Protocol = "anthropic_beta"
 	input.Payload.Response = resp
