@@ -91,19 +91,14 @@ func (a *ResponsesAssembler) Accumulate(event responses.ResponseStreamEventUnion
 
 	// Function call events (tool calls)
 	case "response.function_call_arguments.delta":
-		if event.OutputIndex >= 0 && int(event.OutputIndex) < len(a.pendingToolCalls) {
-			if pending, exists := a.pendingToolCalls[int(event.OutputIndex)]; exists {
-				pending.arguments.WriteString(event.Arguments)
-			}
+		if pending, exists := a.pendingToolCalls[int(event.OutputIndex)]; exists {
+			pending.arguments.WriteString(event.Arguments)
 		}
 		return true
 
 	case "response.function_call_arguments.done":
-		if event.OutputIndex >= 0 && int(event.OutputIndex) < len(a.pendingToolCalls) {
-			if pending, exists := a.pendingToolCalls[int(event.OutputIndex)]; exists {
-				pending.arguments.WriteString(event.Input)
-			}
-		}
+		// event.Input contains the full arguments string; delta events already
+		// accumulated the content, so nothing extra to append here.
 		return true
 
 	// Output item events
@@ -111,19 +106,13 @@ func (a *ResponsesAssembler) Accumulate(event responses.ResponseStreamEventUnion
 		a.itemID = event.ItemID
 		a.outputIndex = int(event.OutputIndex)
 
-		// Track function call items
-		// Try to get the function call details from the item
-		if fcItem, ok := event.AsAny().(responses.ResponseOutputItemAddedEvent); ok {
-			// Use AsAny() to check the actual type
-			if actualItem := fcItem.Item.AsAny(); actualItem != nil {
-				if fc, ok := actualItem.(responses.ResponseFunctionToolCallItem); ok {
-					// fc is ResponseFunctionToolCallItem which embeds ResponseFunctionToolCall
-					a.pendingToolCalls[a.outputIndex] = &pendingResponseToolCall{
-						itemID:    fc.ID,
-						name:      fc.Name,
-						arguments: strings.Builder{},
-					}
-				}
+		// Track function call items by checking the item type directly
+		if event.Item.Type == "function_call" {
+			fc := event.Item.AsFunctionCall()
+			a.pendingToolCalls[a.outputIndex] = &pendingResponseToolCall{
+				itemID:    fc.ID,
+				name:      fc.Name,
+				arguments: strings.Builder{},
 			}
 		}
 		return true
@@ -139,6 +128,7 @@ func (a *ResponsesAssembler) Accumulate(event responses.ResponseStreamEventUnion
 
 	case "response.content_part.done":
 		a.contentIndex = 0
+		a.currentText = ""
 		return true
 
 	// Refusal events
@@ -147,7 +137,7 @@ func (a *ResponsesAssembler) Accumulate(event responses.ResponseStreamEventUnion
 		return true
 
 	case "response.refusal.done":
-		a.currentRefusal += event.Refusal
+		// delta events already accumulated the refusal; nothing extra to append.
 		return true
 
 	// Completion events
