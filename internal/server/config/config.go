@@ -680,7 +680,9 @@ func (c *Config) IsRequestModelInScenario(modelName string, scenario typ.RuleSce
 	return false
 }
 
-// IsWildcardRuleName checks if the given rule name is a wildcard that matches any model
+// IsWildcardRuleName checks if the given rule name is a wildcard that matches any model.
+// This function is thread-safe as it only performs constant string comparisons
+// and does not access any shared state. It can be called without holding Config.mu.
 func IsWildcardRuleName(name string) bool {
 	return name == WildcardRuleName || name == WildcardRuleNameAlt
 }

@@ -194,7 +194,10 @@ func runCC(appManager *AppManager, profile string, unified bool, claudeArgs []st
 	execCmd.Stderr = os.Stderr
 	execCmd.Env = os.Environ()
 
-	return execCmd.Run()
+	if err := execCmd.Run(); err != nil {
+		return fmt.Errorf("failed to run claude CLI: %w", err)
+	}
+	return nil
 }
 
 // buildProfileSettings copies the user's ~/.claude/settings.json to
