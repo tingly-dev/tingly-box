@@ -978,6 +978,12 @@ func (s *Server) useWebStaticEndpoints(engine *gin.Engine) {
 	engine.NoRoute(func(c *gin.Context) {
 		// Don't serve index.html for API routes - let them return 404s
 		path := c.Request.URL.Path
+		// Don't serve index.html for static assets - missing assets should 404 (prevents MIME-type issues).
+		if path == "" || strings.HasPrefix(path, "/assets/") || path == "/assets" {
+			c.Status(http.StatusNotFound)
+			c.Abort()
+			return
+		}
 		// Check if this looks like an API route
 		if path == "" || strings.HasPrefix(path, "/api/v") || strings.HasPrefix(path, "/v") || strings.HasPrefix(path, "/openai") || strings.HasPrefix(path, "/anthropic") || strings.HasPrefix(path, "/tingly") {
 			// This looks like an API route, return 404
