@@ -228,6 +228,11 @@ export const api = {
         try {
             const client = await getClient();
             const response = await client.GET('/api/v2/provider-templates');
+            // openapi-fetch returns { data, error, response }
+            // Check for error in response first
+            if (response.error) {
+                return { success: false, error: 'Request failed' };
+            }
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -428,9 +433,13 @@ export const api = {
                 headers,
                 params: { query: { scenario } }
             });
+            // openapi-fetch returns { data, error, response }
+            if (response.error) {
+                return { success: false, error: 'Request failed', data: [] };
+            }
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return { success: false, error: error.message, data: [] };
         }
     },
 
@@ -701,8 +710,14 @@ export const api = {
     getVersion: async (): Promise<string> => {
         try {
             const client = await getClient();
-            const response = await client.GET('/api/v1/info/version');
-            return response.data.data.version;
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/info/version', { headers });
+            // openapi-fetch returns { data, error, response }
+            if (response.error || !response.data) {
+                console.error('Failed to get version:', response.error || 'No data in response');
+                return 'Unknown';
+            }
+            return response.data.data?.version || 'Unknown';
         } catch (error: any) {
             console.error('Failed to get version:', error);
             return 'Unknown';
@@ -712,7 +727,12 @@ export const api = {
     getLatestVersion: async (): Promise<any> => {
         try {
             const client = await getClient();
-            const response = await client.GET('/api/v1/info/version/check');
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/info/version/check', { headers });
+            // openapi-fetch returns { data, error, response }
+            if (response.error) {
+                return { success: false, error: 'Request failed' };
+            }
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
