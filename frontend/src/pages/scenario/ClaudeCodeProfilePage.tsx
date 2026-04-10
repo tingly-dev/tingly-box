@@ -12,6 +12,7 @@ import InfoIcon from '@mui/icons-material/Info';
 import CodeIcon from '@mui/icons-material/Code';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import Chip from '@mui/material/Chip';
+import Switch from '@mui/material/Switch';
 import {
     Box,
     Button,
@@ -26,7 +27,7 @@ import {
     Tooltip,
     Typography
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import TemplatePage from './components/TemplatePage.tsx';
@@ -63,21 +64,27 @@ const ClaudeCodeProfilePage: React.FC = () => {
     const [isProfileMutating, setIsProfileMutating] = useState(false);
     const [npmMode, setNpmMode] = useState(true);
     const [appVersion, setAppVersion] = useState('');
+    const [unifiedMode, setUnifiedMode] = useState(currentProfile?.unified || false);
+    const [isUpdatingMode, setIsUpdatingMode] = useState(false);
+
+    // Update unified mode when profile changes
+    useEffect(() => {
+        setUnifiedMode(currentProfile?.unified || false);
+    }, [currentProfile]);
 
     // Load rules for this profile
-    useEffect(() => {
-        let isMounted = true;
-        const loadData = async () => {
-            setLoadingRule(true);
-            const result = await api.getRules(scenario);
-            if (isMounted) {
-                setRules(result.success ? result.data : []);
-                setLoadingRule(false);
-            }
-        };
-        loadData();
-        return () => { isMounted = false; };
+    const loadRules = useCallback(async () => {
+        setLoadingRule(true);
+        // Profile rules have their own scenario (e.g., claude_code:p1)
+        // Just load all rules for this profile scenario
+        const result = await api.getRules(scenario);
+        setRules(result.success ? result.data : []);
+        setLoadingRule(false);
     }, [scenario]);
+
+    useEffect(() => {
+        loadRules();
+    }, [loadRules]);
 
     // Load app version for npm command
     useEffect(() => {
@@ -125,6 +132,30 @@ const ClaudeCodeProfilePage: React.FC = () => {
         }
     };
 
+    // Handle mode toggle
+    const handleModeToggle = async () => {
+        if (!profileId) return;
+        const newMode = !unifiedMode;
+        try {
+            setIsUpdatingMode(true);
+            // Only pass unified mode, let backend use existing name
+            const result = await api.updateProfile(BASE_SCENARIO, profileId, '', newMode);
+            if (result.success) {
+                setUnifiedMode(newMode);
+                showNotification(t('claudeCode.profile.modeUpdated', { mode: newMode ? t('claudeCode.profile.unified') : t('claudeCode.profile.separate') }), 'success');
+                refreshProfiles();
+                // Reload rules after mode change
+                await loadRules();
+            } else {
+                showNotification(`${t('claudeCode.profile.modeUpdateFailed')}: ${result.error || 'Unknown error'}`, 'error');
+            }
+        } catch {
+            showNotification(t('claudeCode.profile.modeUpdateFailed'), 'error');
+        } finally {
+            setIsUpdatingMode(false);
+        }
+    };
+
     const ccCommand = npmMode && appVersion
         ? `npx -y tingly-box@${appVersion} cc --profile ${profileId}`
         : `tingly-box cc --profile ${profileId}`;
@@ -155,7 +186,15 @@ const ClaudeCodeProfilePage: React.FC = () => {
                         </Box>
                     }
                     rightAction={
-                        <Chip label={currentProfile ? `${profileId} - ${currentProfile.name}` : profileId} size="small" variant="outlined" />
+                        <Stack direction="row" spacing={1} alignItems="center">
+                            <Chip
+                                label={unifiedMode ? t('claudeCode.profile.unified') : t('claudeCode.profile.separate')}
+                                size="small"
+                                variant="outlined"
+                                color={unifiedMode ? "primary" : "default"}
+                            />
+                            <Chip label={currentProfile ? `${profileId} - ${currentProfile.name}` : profileId} size="small" variant="outlined" />
+                        </Stack>
                     }
                 >
                     <Box sx={{ px: 2, pb: 1.5 }}>
@@ -225,6 +264,51 @@ const ClaudeCodeProfilePage: React.FC = () => {
                                 </Tooltip>
                             </Stack>
                         </Box>
+                    </Box>
+                    <Divider sx={{ mx: 2 }} />
+                    {/* Mode Toggle Section */}
+                    <Box sx={{ px: 2, py: 1.5 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, maxWidth: 700 }}>
+                            <Typography variant="subtitle2" color="text.secondary" sx={{ minWidth: 190, flexShrink: 0, fontWeight: 500 }}>
+                                {t('claudeCode.profile.mode')}
+                            </Typography>
+                            <Typography variant="subtitle2" color="text.secondary"
+                            sx={{
+                                    fontFamily: 'monospace',
+                                    fontSize: '0.75rem',
+                                    color: 'primary.main',
+                                    flex: 1,
+                                    minWidth: 0,
+                                    cursor: 'pointer',
+                                    '&:hover': {
+                                        textDecoration: 'underline',
+                                        backgroundColor: 'action.hover'
+                                    },
+                                    padding: 1,
+                                    borderRadius: 1,
+                                    transition: 'all 0.2s ease-in-out'
+                                }}
+                            >
+                            {unifiedMode
+                                ? t('claudeCode.profile.unifiedDescription')
+                                : t('claudeCode.profile.separateDescription')}
+                            </Typography>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                <Typography variant="body2" color="text.secondary">
+                                    {t('claudeCode.profile.separate')}
+                                </Typography>
+                                <Switch
+                                    checked={unifiedMode}
+                                    onChange={handleModeToggle}
+                                    disabled={isUpdatingMode}
+                                    size="small"
+                                />
+                                <Typography variant="body2" color="text.secondary">
+                                    {t('claudeCode.profile.unified')}
+                                </Typography>
+                            </Stack>
+                        </Box>
+
                     </Box>
                     <Divider sx={{ mx: 2 }} />
                     <ProviderConfigCard

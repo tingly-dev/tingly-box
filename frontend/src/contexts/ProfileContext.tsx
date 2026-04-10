@@ -4,6 +4,7 @@ import { api } from '@/services/api';
 export interface ProfileInfo {
     id: string;
     name: string;
+    unified?: boolean;  // true=unified mode, false/undefined=separate mode
 }
 
 interface ScenarioProfiles {

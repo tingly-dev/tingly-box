@@ -454,7 +454,14 @@ export default {
       "profileRenamed": "Profile renamed",
       "profileDeleted": "Profile deleted",
       "renameFailed": "Failed to rename profile",
-      "deleteFailed": "Failed to delete profile"
+      "deleteFailed": "Failed to delete profile",
+      "mode": "Mode",
+      "unified": "Unified",
+      "separate": "Separate",
+      "unifiedDescription": "All models use the same routing rule (tingly/cc)",
+      "separateDescription": "Each model uses its own routing rule",
+      "modeUpdated": "Profile mode updated to {{mode}}",
+      "modeUpdateFailed": "Failed to update profile mode"
     }
   },
   "prompt": {
