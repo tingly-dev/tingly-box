@@ -1,4 +1,4 @@
-package stream
+package assembler
 
 import (
 	"testing"
@@ -64,11 +64,11 @@ func TestAnthropicStreamAssembler_Finish_WithDefaults(t *testing.T) {
 
 	require.NotNil(t, result)
 	assert.Equal(t, "msg_defaults", result.ID)
-	assert.Equal(t, "message", string(result.Type)) // Convert constant to string for comparison
-	assert.Equal(t, "assistant", string(result.Role)) // Convert constant to string for comparison
+	assert.Equal(t, "message", string(result.Type))        // Convert constant to string for comparison
+	assert.Equal(t, "assistant", string(result.Role))      // Convert constant to string for comparison
 	assert.Equal(t, "end_turn", string(result.StopReason)) // Convert constant to string for comparison
-	assert.Equal(t, int64(0), result.Usage.InputTokens)   // From params
-	assert.Equal(t, int64(0), result.Usage.OutputTokens)  // From params
+	assert.Equal(t, int64(0), result.Usage.InputTokens)    // From params
+	assert.Equal(t, int64(0), result.Usage.OutputTokens)   // From params
 }
 
 func TestAnthropicStreamAssembler_Finish_NilAssembler(t *testing.T) {

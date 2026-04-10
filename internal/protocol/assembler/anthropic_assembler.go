@@ -1,4 +1,4 @@
-package stream
+package assembler
 
 import (
 	"github.com/anthropics/anthropic-sdk-go"
