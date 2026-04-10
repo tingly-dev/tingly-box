@@ -158,8 +158,8 @@ If a release introduces issues:
 
 ## References
 
-- CI/CD Configuration: [`.github/workflows/gh-release.yml`](../.github/workflows/gh-release.yml)
-- NPX Publish Workflow: [`.github/workflows/gh-npx-publish.yml`](../.github/workflows/gh-npx-publish.yml)
+- CI/CD Configuration: [`.github/workflows/gh-release.yml`](../.github/workflows/release.yml)
+- NPX Publish Workflow: [`.github/workflows/gh-npx-publish.yml`](../.github/workflows/npm.yml)
 - User Manual: [`docs/user-manual.md`](user-manual.md)
 - Docker Setup: [`docs/docker.md`](docker.md)
 

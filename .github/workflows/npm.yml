@@ -27,6 +27,11 @@ on:
         required: false
         type: boolean
         default: true
+      build_docker:
+        description: 'Build Docker NPX image after CLI publish'
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -44,6 +49,7 @@ jobs:
       publish_cli: ${{ steps.set_vars.outputs.publish_cli }}
       publish_gui: ${{ steps.set_vars.outputs.publish_gui }}
       publish_bundle: ${{ steps.set_vars.outputs.publish_bundle }}
+      build_docker: ${{ steps.set_vars.outputs.build_docker }}
       npx_version: ${{ steps.version.outputs.npx_version }}
       release_tag: ${{ steps.version.outputs.release_tag }}
     steps:
@@ -58,6 +64,7 @@ jobs:
           echo "publish_cli=${{ github.event.inputs.publish_cli }}" >> $GITHUB_OUTPUT
           echo "publish_gui=${{ github.event.inputs.publish_gui }}" >> $GITHUB_OUTPUT
           echo "publish_bundle=${{ github.event.inputs.publish_bundle }}" >> $GITHUB_OUTPUT
+          echo "build_docker=${{ github.event.inputs.build_docker }}" >> $GITHUB_OUTPUT
 
       - name: Validate and extract version
         id: version
@@ -262,29 +269,45 @@ jobs:
             npm publish --provenance --access public
           fi
 
-      # CLI-only: trigger Docker NPX build
-      - name: Trigger Docker NPX build
-        if: success() && matrix.type == 'cli' && needs.setup.outputs.publish_cli == 'true'
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          gh workflow run docker-npx.yml \
-            --repo tingly-dev/tingly-box \
-            --ref "${{ needs.setup.outputs.release_tag }}" \
-            -f release_tag="${{ needs.setup.outputs.release_tag }}"
-          echo "Triggered docker-npx.yml workflow"
+  # Build Docker NPX image after CLI is published
+  build-docker-npx:
+    needs: [setup, publish-cli-bundle]
+    name: Build Docker NPX Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    if: >-
+      needs.setup.result == 'success' &&
+      needs.publish-cli-bundle.result == 'success' &&
+      needs.setup.outputs.publish_cli == 'true' &&
+      needs.setup.outputs.build_docker == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.setup.outputs.release_tag }}
+
+      - name: Build and push Docker image
+        uses: ./.github/actions/docker-build-push
+        with:
+          image_name: tingly-box
+          version: ${{ needs.setup.outputs.release_tag }}
+          build_args: |
+            TINGLY_VERSION=${{ needs.setup.outputs.npx_version }}
 
   # Create a single NPX tag and release for CLI + Bundle
   create-release:
-    needs: [setup, publish-cli-bundle]
+    needs: [setup, publish-cli-bundle, build-docker-npx]
     name: Create NPX Release
     runs-on: ubuntu-latest
     permissions:
       contents: write
     if: >-
+      always() &&
       needs.setup.result == 'success' &&
-      (needs.publish-cli-bundle.result == 'success' || needs.publish-cli-bundle.result == 'skipped')
+      (needs.publish-cli-bundle.result == 'success' || needs.publish-cli-bundle.result == 'skipped') &&
+      (needs.build-docker-npx.result == 'success' || needs.build-docker-npx.result == 'skipped' || needs.build-docker-npx.result == 'cancelled')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

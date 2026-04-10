@@ -1,6 +1,6 @@
 name: "TEP: Tingly-Box Enhancement Proposal"
 description: Propose a significant enhancement, design change, or new capability for Tingly-Box
-title: "[TEP] $title"
+title: "[TEP] "
 labels: ["tep", "enhancement"]
 body:
   - type: markdown
@@ -10,14 +10,7 @@ body:
 
         For simple feature requests, use the [Feature Request](?template=feature_request.yml) template instead.
 
-  - type: input
-    id: title
-    attributes:
-      label: TEP Title
-      description: A short, descriptive title for this proposal
-      placeholder: "e.g. TEP-001: Multi-Provider Load Balancing Strategy"
-    validations:
-      required: true
+        **Please include the TEP number in the issue title above** (e.g., "[TEP] 001: Multi-Provider Load Balancing Strategy").
 
   - type: input
     id: version
@@ -35,7 +28,7 @@ body:
       description: Which area does this proposal primarily affect?
       options:
         - Protocol
-        - UI
+        - UI / UX / I18N
         - Remote Control
         - Load Balancing
         - Smart Routing
