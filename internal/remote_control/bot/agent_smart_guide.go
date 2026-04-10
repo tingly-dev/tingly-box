@@ -117,8 +117,19 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		}, err
 	}
 
-	// Set working directory from resolved project path
-	agent.GetExecutor().SetWorkingDirectory(projectPath)
+	// Set working directory from BashCwd (preferred) or projectPath (fallback)
+	// This ensures bash cd changes are persisted across agent executions
+	workingDir, hasWD, _ := e.deps.ChatStore.GetBashCwd(req.HCtx.ChatID)
+	if !hasWD || workingDir == "" {
+		workingDir = projectPath
+	}
+	agent.GetExecutor().SetWorkingDirectory(workingDir)
+
+	logrus.WithFields(logrus.Fields{
+		"chatID":     req.HCtx.ChatID,
+		"workingDir": workingDir,
+		"source":     map[bool]string{true: "BashCwd", false: "ProjectPath"}[hasWD && workingDir != ""],
+	}).Info("SmartGuide: Initial working directory set")
 
 	// 5. Send processing message
 	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponseWithFooter(*meta, IconProcess+" "+MsgProcessing), req.ReplyTo)

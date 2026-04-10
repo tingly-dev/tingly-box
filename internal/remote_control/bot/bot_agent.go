@@ -131,46 +131,54 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 		}
 	}
 
-	// Check if working directory was changed by change_workdir tool
-	newProjectPath := c.agent.GetExecutor().GetWorkingDirectory()
-	if newProjectPath != c.projectPath {
-		logrus.WithFields(logrus.Fields{
-			"chatID":         c.hCtx.ChatID,
-			"oldProjectPath": c.projectPath,
-			"newProjectPath": newProjectPath,
-		}).Info("Project path changed, updating chat store")
+	// Sync working directory state to ChatStore
+	// This handles both change_workdir tool (which already persisted via updateProjectFunc)
+	// and bash cd (which only updates ToolExecutor state, requiring sync here)
+	//
+	// Note: change_workdir tool immediately persists via updateProjectFunc (updates both ProjectPath and BashCwd)
+	// The completion callback sync here is a safety net that ensures:
+	// 1. bash cd changes are persisted (ToolExecutor -> ChatStore.BashCwd)
+	// 2. change_workdir changes are correctly reflected (ChatStore already updated, condition prevents duplicate write)
+	currentWorkingDir := c.agent.GetExecutor().GetWorkingDirectory()
+	if currentWorkingDir != "" {
+		// Get current stored values
+		storedBashCwd, hasBashCwd, _ := c.chatStore.GetBashCwd(c.hCtx.ChatID)
+		storedProjectPath, _, _ := c.chatStore.GetProjectPath(c.hCtx.ChatID)
 
-		// Update chat store with new project path
-		chat, err := c.chatStore.GetChat(c.hCtx.ChatID)
-		if err != nil {
-			logrus.WithError(err).WithField("chatID", c.hCtx.ChatID).Warn("Failed to get chat for update")
-		}
+		// Determine what needs to be updated
+		updateProjectPath := (currentWorkingDir != storedProjectPath)
+		updateBashCwd := (currentWorkingDir != storedBashCwd || !hasBashCwd)
 
-		if chat == nil {
-			now := time.Now().UTC()
-			chat = &Chat{
-				ChatID:      c.hCtx.ChatID,
-				Platform:    string(c.hCtx.Platform),
-				ProjectPath: newProjectPath,
-				BashCwd:     newProjectPath,
-				CreatedAt:   now,
-				UpdatedAt:   now,
-			}
-			if err := c.chatStore.UpsertChat(chat); err != nil {
-				logrus.WithError(err).WithField("chatID", c.hCtx.ChatID).Warn("Failed to create chat")
-			}
-		} else {
+		if updateProjectPath || updateBashCwd {
+			logrus.WithFields(logrus.Fields{
+				"chatID":            c.hCtx.ChatID,
+				"currentWorkingDir": currentWorkingDir,
+				"storedProjectPath": storedProjectPath,
+				"storedBashCwd":     storedBashCwd,
+				"updateProjectPath":  updateProjectPath,
+				"updateBashCwd":      updateBashCwd,
+			}).Info("SmartGuide: Syncing working directory to chat store")
+
 			if err := c.chatStore.UpdateChat(c.hCtx.ChatID, func(ch *Chat) {
-				ch.ProjectPath = newProjectPath
-				ch.BashCwd = newProjectPath
+				// Only update ProjectPath if it actually changed (change_workdir case)
+				if updateProjectPath {
+					ch.ProjectPath = currentWorkingDir
+				}
+				// Always update BashCwd to track actual working directory (bash cd case)
+				ch.BashCwd = currentWorkingDir
 			}); err != nil {
-				logrus.WithError(err).WithField("chatID", c.hCtx.ChatID).Warn("Failed to update chat")
+				logrus.WithError(err).WithField("chatID", c.hCtx.ChatID).Warn("Failed to sync working directory to chat store")
+			} else {
+				// Update meta to reflect new project path
+				c.meta.ProjectPath = currentWorkingDir
 			}
 		}
 	}
 
 	// Update shared meta so footers reflect the new project path
-	c.meta.ProjectPath = newProjectPath
+	if currentWorkingDir != "" {
+		c.meta.ProjectPath = currentWorkingDir
+	}
 
 	// NOTE: Response should be sent via OnMessage callbacks from hooks
 	// However, if hooks failed to fire or agent completed without generating output,
