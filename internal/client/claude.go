@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
@@ -130,6 +131,7 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 		originalBody, err = io.ReadAll(req.Body)
 		_ = req.Body.Close()
 		if err != nil {
+			logrus.WithError(err).Errorf("error reading body")
 			return nil, fmt.Errorf("failed to read request body: %w", err)
 		}
 
@@ -173,6 +175,7 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	// Execute the request
 	resp, err := t.RoundTripper.RoundTrip(req)
 	if err != nil {
+		logrus.WithError(err).Errorf("failed to round trip request: %v", err)
 		return nil, err
 	}
 
@@ -212,8 +215,15 @@ func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthTo
 		req.Header.Set("X-Api-Key", key)
 	}
 
-	// Set Claude Code specific headers
-	req.Header["accept"] = []string{acceptHeader}
+	// Clear and set Claude Code specific headers
+	// First, clear headers that may have been set by the SDK
+	for k := range req.Header {
+		if strings.HasPrefix(strings.ToLower(k), "x-stainless-") ||
+			strings.HasPrefix(strings.ToLower(k), "anthropic-") ||
+			k == "User-Agent" || k == "X-App" {
+			delete(req.Header, k)
+		}
+	}
 
 	// Build beta header with all required flags
 	baseBetas := anthropicBeta
@@ -236,22 +246,31 @@ func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthTo
 		baseBetas = fmt.Sprintf("%s,%s", baseBetas, anthropicOAuthBeta)
 	}
 
-	req.Header["anthropic-beta"] = []string{baseBetas}
-	req.Header["anthropic-dangerous-direct-browser-access"] = []string{anthropicDangerousDirectBrowserAccess}
-	req.Header["anthropic-version"] = []string{anthropicVersion}
-	req.Header["user-agent"] = []string{claudeCLIUserAgent}
-	req.Header["x-app"] = []string{claudeXApp}
-	req.Header["x-stainless-helper-method"] = []string{stainlessHelperMethod}
-	req.Header["x-stainless-retry-count"] = []string{stainlessRetryCount}
-	req.Header["x-stainless-runtime-version"] = []string{stainlessRuntimeVersion}
-	req.Header["x-stainless-package-version"] = []string{stainlessPackageVersion}
-	req.Header["x-stainless-runtime"] = []string{stainlessRuntime}
-	req.Header["x-stainless-lang"] = []string{stainlessLang}
-	req.Header["x-stainless-arch"] = []string{stainlessArch()}
-	req.Header["x-stainless-os"] = []string{stainlessOS()}
-	req.Header["x-stainless-timeout"] = []string{stainlessTimeout}
+	// Set all headers via map
+	headers := map[string]string{
+		"accept":         acceptHeader,
+		"anthropic-beta": baseBetas,
+		"anthropic-dangerous-direct-browser-access": anthropicDangerousDirectBrowserAccess,
+		"anthropic-version":                         anthropicVersion,
+		"user-agent":                                claudeCLIUserAgent,
+		"x-app":                                     claudeXApp,
+		"x-stainless-helper-method":                 stainlessHelperMethod,
+		"x-stainless-retry-count":                   stainlessRetryCount,
+		"x-stainless-runtime-version":               stainlessRuntimeVersion,
+		"x-stainless-package-version":               stainlessPackageVersion,
+		"x-stainless-runtime":                       stainlessRuntime,
+		"x-stainless-lang":                          stainlessLang,
+		"x-stainless-arch":                          stainlessArch(),
+		"x-stainless-os":                            stainlessOS(),
+		"x-stainless-timeout":                       stainlessTimeout,
+	}
+
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
 	if sessionID != "" {
-		req.Header["X-Claude-Code-Session-Id"] = []string{sessionID}
+		req.Header.Set("X-Claude-Code-Session-Id", sessionID)
 	}
 }
 

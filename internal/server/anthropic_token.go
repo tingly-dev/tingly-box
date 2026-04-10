@@ -112,7 +112,7 @@ func (s *Server) anthropicCountTokens(c *gin.Context, provider *typ.Provider, mo
 	c.Set("model", model)
 
 	apiStyle := provider.APIStyle
-	wrapper := s.clientPool.GetAnthropicClient(provider, model, typ.SessionID{})
+	wrapper := s.clientPool.GetAnthropicClient(context.Background(), provider, model)
 	timeout := time.Duration(provider.Timeout) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()

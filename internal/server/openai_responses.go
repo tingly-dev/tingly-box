@@ -112,6 +112,10 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	actualModel := selectedService.Model
 	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
 
+	// Inject session ID into request context so all downstream code can access it
+	sessionID := resolveSessionID(c, &req.ResponseNewParams)
+	c.Request = c.Request.WithContext(typ.WithSessionID(c.Request.Context(), sessionID))
+
 	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
 	SetTrackingContext(c, rule, provider, actualModel, req.Model, req.Stream)
 

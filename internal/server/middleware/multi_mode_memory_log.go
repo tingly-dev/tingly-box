@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -49,6 +51,13 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		start := time.Now()
 		path := c.Request.URL.Path
 		raw := c.Request.URL.RawQuery
+
+		// Wrap response writer to capture body for error responses
+		w := &responseBodyWriter{
+			ResponseWriter: c.Writer,
+			body:           &bytes.Buffer{},
+		}
+		c.Writer = w
 
 		// Process request
 		c.Next()
@@ -100,6 +109,16 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 			fields["error"] = errorMsg
 			if errorType != "" {
 				fields["error_type"] = errorType
+			}
+		}
+
+		// Add response body for error responses (4xx/5xx)
+		if statusCode >= 400 && w.body.Len() > 0 {
+			respBytes := w.body.Bytes()
+			if json.Valid(respBytes) {
+				fields["response_body"] = json.RawMessage(respBytes)
+			} else {
+				fields["response_body"] = string(respBytes)
 			}
 		}
 

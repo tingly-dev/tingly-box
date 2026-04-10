@@ -39,15 +39,15 @@ func TestApplyClaudeCodeHeaders_VersionAndBeta(t *testing.T) {
 	_, _ = rt.RoundTrip(req)
 
 	// Version
-	assert.Equal(t, claudeCLIUserAgent, req.Header["user-agent"][0])
+	assert.Equal(t, claudeCLIUserAgent, req.Header.Get("user-agent"))
 	assert.Contains(t, claudeCLIUserAgent, "2.1.86")
 
 	// Stainless
-	assert.Equal(t, stainlessRuntimeVersion, req.Header["x-stainless-runtime-version"][0])
+	assert.Equal(t, stainlessRuntimeVersion, req.Header.Get("x-stainless-runtime-version"))
 	assert.Equal(t, "v24.3.0", stainlessRuntimeVersion)
 
 	// Beta flags (no model → no context-1m)
-	beta := req.Header["anthropic-beta"][0]
+	beta := req.Header.Get("anthropic-beta")
 	assert.Contains(t, beta, "claude-code-20250219")
 	assert.Contains(t, beta, "effort-2025-11-24")
 	assert.True(t, strings.Contains(beta, "oauth-2025-04-20"), "beta should end with oauth: %s", beta)

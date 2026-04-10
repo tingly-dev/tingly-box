@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -53,9 +54,13 @@ type pooledTransport struct {
 }
 
 // TransportPool manages shared HTTP transports for clients
-// Transports are keyed by: providerUUID + proxyURL
+// Transports are keyed by: providerUUID + sessionID (for OAuth providers)
 // This allows multiple clients to share the same connection pool
-// when they use the same provider+proxy combination.
+// when they use the same provider+session combination.
+// For OAuth providers, transports are session-scoped to prevent cross-session contamination.
+//
+// Note: ProxyURL is NOT part of the transport key. It's used to configure
+// how the transport is created, but doesn't create a separate pool.
 type TransportPool struct {
 	transports map[string]*pooledTransport
 	config     *TransportConfig // nil = use Go defaults
@@ -103,9 +108,11 @@ func SetTransportConfig(config *TransportConfig) {
 }
 
 // GetTransport returns or creates a shared HTTP transport for the given configuration.
-// The transport key is based on: providerUUID + proxyURL.
-func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType) *http.Transport {
-	key := typ.NewTransportKey(providerUUID, proxyURL).String()
+// The transport key is based on: providerUUID + sessionID (for OAuth providers).
+// proxyURL is used to configure the transport but is NOT part of the key.
+// sessionID is used to scope transports for OAuth providers that require per-session isolation.
+func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType, sessionID typ.SessionID) *http.Transport {
+	key := NewTransportKey(providerUUID, "", oauthType, sessionID).String()
 
 	// Try to get existing transport with read lock first
 	tp.mutex.RLock()
@@ -132,7 +139,8 @@ func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oaut
 	}
 
 	// Create new transport
-	logrus.Infof("Creating new transport for provider: %s, model: %s, proxy: %s, oauth: %s", providerUUID, model, proxyURL, oauthType)
+	logrus.Infof("Creating new transport for provider: %s, model: %s, proxy: %s, oauth: %s, session: %s",
+		providerUUID, model, proxyURL, oauthType, sessionID.Value)
 	transport := tp.createTransport(proxyURL)
 	tp.transports[key] = &pooledTransport{
 		transport:  transport,
@@ -144,12 +152,14 @@ func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oaut
 
 // generateTransportKey creates a unique key for transport caching.
 // Kept for reference; production code uses typ.NewTransportKey directly.
-// The key is based on providerUUID + proxyURL to ensure:
-// - Same provider + same proxy = shared transport (connection reuse)
+// The key is based on providerUUID + sessionID (for OAuth) to ensure:
+// - Same provider + same session = shared transport (connection reuse)
 // - Different providers = separate transports
-// - Same provider + different proxies = separate transports
-func (tp *TransportPool) generateTransportKey(providerUUID, proxyURL string) string {
-	return typ.NewTransportKey(providerUUID, proxyURL).String()
+// - OAuth providers + different sessions = separate transports
+//
+// Note: ProxyURL is NOT part of the key - it's a provider configuration.
+func (tp *TransportPool) generateTransportKey(providerUUID, proxyURL string, oauthType oauth.ProviderType, sessionID typ.SessionID) string {
+	return NewTransportKey(providerUUID, "", oauthType, sessionID).String()
 }
 
 // newDirectTransport returns a transport with env proxy disabled (direct connection).
@@ -262,6 +272,61 @@ func (tp *TransportPool) Clear() {
 	}
 	tp.transports = make(map[string]*pooledTransport)
 	logrus.Info("Transport pool cleared")
+}
+
+// InvalidateProvider removes all transports associated with a specific provider UUID.
+// This should be called when provider credentials are updated (e.g., OAuth token refresh).
+func (tp *TransportPool) InvalidateProvider(providerUUID string) {
+	if providerUUID == "" {
+		return
+	}
+
+	tp.mutex.Lock()
+	defer tp.mutex.Unlock()
+
+	uuidToken := `"` + providerUUID + `"`
+	count := 0
+
+	for key, pooled := range tp.transports {
+		if strings.Contains(key, uuidToken) {
+			pooled.transport.CloseIdleConnections()
+			delete(tp.transports, key)
+			count++
+		}
+	}
+
+	if count > 0 {
+		logrus.Infof("Invalidated %d transport(s) for provider UUID: %s", count, providerUUID)
+	}
+}
+
+// InvalidateSession removes all transports associated with a specific session for a provider.
+// This should be called when a session ends or its OAuth token is revoked.
+func (tp *TransportPool) InvalidateSession(providerUUID, sessionID string) {
+	if sessionID == "" {
+		return
+	}
+
+	tp.mutex.Lock()
+	defer tp.mutex.Unlock()
+
+	// Keys are JSON from TransportKey.String(); match both provider_uuid and session_id value fields.
+	uuidToken := `"` + providerUUID + `"`
+	sessionToken := `"` + sessionID + `"`
+	count := 0
+
+	for key, pooled := range tp.transports {
+		// Note: ProxyURL is no longer part of the key, so we don't need to match it
+		if strings.Contains(key, uuidToken) && strings.Contains(key, sessionToken) {
+			pooled.transport.CloseIdleConnections()
+			delete(tp.transports, key)
+			count++
+		}
+	}
+
+	if count > 0 {
+		logrus.Infof("Invalidated %d transport(s) for provider UUID: %s session: %s", count, providerUUID, sessionID)
+	}
 }
 
 // cleanupExpiredTransports removes transports that haven't been accessed within the TTL period

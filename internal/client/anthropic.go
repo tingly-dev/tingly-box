@@ -29,8 +29,8 @@ type AnthropicClient struct {
 	recordSink *obs.Sink
 }
 
-// defaultNewAnthropicClient creates a new Anthropic client wrapper
-func defaultNewAnthropicClient(provider *typ.Provider, model string) (*AnthropicClient, error) {
+// NewAnthropicClient creates a new Anthropic client wrapper
+func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.SessionID) (*AnthropicClient, error) {
 	// Handle API base URL - Anthropic SDK expects base without /v1
 	apiBase := strings.TrimRight(provider.APIBase, "/")
 	if strings.HasSuffix(apiBase, "/v1") {
@@ -42,20 +42,25 @@ func defaultNewAnthropicClient(provider *typ.Provider, model string) (*Anthropic
 		anthropicOption.WithBaseURL(apiBase),
 	}
 
-	// Create base HTTP client
-	var httpClient *http.Client
-	// Add proxy and/or custom headers if configured
-	if provider.ProxyURL != "" || provider.AuthType == typ.AuthTypeOAuth {
-		httpClient = CreateHTTPClientForProvider(provider, model)
+	// Create HTTP client with session-bound transport
+	var transport http.RoundTripper
+	if provider.AuthType == typ.AuthTypeOAuth || provider.ProxyURL != "" {
+		// Use createSessionBoundTransport which applies OAuth hooks and uses shared transport
+		transport = createSessionBoundTransport(provider, sessionID)
 
 		if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
-			logrus.Infof("Using shared transport with custom headers/params for OAuth provider type: %s", provider.OAuthDetail.ProviderType)
+			logrus.Infof("Using session-bound transport for OAuth provider type: %s, session: %s",
+				provider.OAuthDetail.ProviderType, sessionID.Value)
 		}
 		if provider.ProxyURL != "" {
 			logrus.Infof("Using proxy for Anthropic client: %s", provider.ProxyURL)
 		}
 	} else {
-		httpClient = http.DefaultClient
+		transport = http.DefaultTransport
+	}
+
+	httpClient := &http.Client{
+		Transport: transport,
 	}
 
 	if provider.ProxyURL != "" || provider.AuthType == typ.AuthTypeOAuth {
