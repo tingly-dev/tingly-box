@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-agentscope/pkg/message"
 	"github.com/tingly-dev/tingly-agentscope/pkg/types"
@@ -61,6 +62,42 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 	}
 
 	// 3. Create agent config
+	hCtx := req.HCtx
+	toolCtx := &smart_guide.ToolContext{
+		ChatID:      hCtx.ChatID,
+		ProjectPath: projectPath,
+		SessionID:   req.SessionID,
+		SendFile: func(ctx context.Context, filePath, caption string) error {
+			if e.deps.SendFile == nil {
+				return fmt.Errorf("file sending is not configured")
+			}
+			return e.deps.SendFile(hCtx, filePath, caption)
+		},
+		RequestApproval: func(ctx context.Context, prompt string) (bool, error) {
+			if e.deps.IMPrompter == nil {
+				return false, nil
+			}
+			permReq := agentboot.PermissionRequest{
+				RequestID: uuid.New().String(),
+				AgentType: smart_guide.AgentTypeTinglyBox,
+				ToolName:  "send_file",
+				Input: map[string]interface{}{
+					"prompt": prompt,
+				},
+				Reason:    prompt,
+				SessionID: hCtx.ChatID,
+				BotUUID:   e.deps.BotSetting.UUID,
+				ChatID:    hCtx.ChatID,
+				Platform:  string(hCtx.Platform),
+			}
+			result, err := e.deps.IMPrompter.OnApproval(ctx, permReq)
+			if err != nil {
+				return false, err
+			}
+			return result.Approved, nil
+		},
+	}
+
 	agentConfig := &smart_guide.AgentConfig{
 		SmartGuideConfig: smart_guide.LoadSmartGuideConfig(),
 		BaseURL:          baseURL,
@@ -68,9 +105,10 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		Provider:         e.deps.BotSetting.SmartGuideProvider,
 		Model:            e.deps.BotSetting.SmartGuideModel,
 		Handler:          agentboot.NewCompositeHandler().SetApprovalHandler(e.deps.IMPrompter),
-		ChatID:           req.HCtx.ChatID,
-		Platform:         string(req.HCtx.Platform),
+		ChatID:           hCtx.ChatID,
+		Platform:         string(hCtx.Platform),
 		BotUUID:          e.deps.BotSetting.UUID,
+		ToolCtx:          toolCtx,
 		GetStatusFunc: func(chatID string) (*smart_guide.StatusInfo, error) {
 			projectPath, _, _ := e.deps.ChatStore.GetProjectPath(chatID)
 			workingDir, hasWD, _ := e.deps.ChatStore.GetBashCwd(chatID)
@@ -173,11 +211,6 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 
 	// 11. Execute
 	startTime := time.Now()
-	toolCtx := &smart_guide.ToolContext{
-		ChatID:      req.HCtx.ChatID,
-		ProjectPath: projectPath,
-		SessionID:   req.SessionID,
-	}
 
 	result, err := agent.ExecuteWithHandler(ctx, req.Text, toolCtx, compositeHandler)
 	duration := time.Since(startTime)

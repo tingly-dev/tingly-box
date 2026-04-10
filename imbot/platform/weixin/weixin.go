@@ -49,10 +49,6 @@ func NewBot(config *core.Config) (*Bot, error) {
 	if baseURL == "" {
 		baseURL = config.GetOptionString("base_url", "")
 	}
-	// Default to Weixin's official iLink endpoint
-	if baseURL == "" {
-		baseURL = "https://ilinkai.weixin.qq.com"
-	}
 
 	// Use account ID from bot_id if available, otherwise use default
 	accountID := botID
@@ -60,29 +56,31 @@ func NewBot(config *core.Config) (*Bot, error) {
 		accountID = "default"
 	}
 
-	// Create Weixin plugin configuration
-	wcConfig := &types.WeChatConfig{
-		BaseURL: baseURL,
-		BotType: config.GetOptionString("botType", "3"),
-	}
-
 	// Create WeChat account from auth config
+	// Note: BaseURL and CDNBaseURL will be set to defaults if empty by wechat.NewAccount
 	wcAccount := &types.WeChatAccount{
 		ID:          accountID,
 		Name:        fmt.Sprintf("Weixin Account %s", accountID),
 		BotID:       botID,
 		UserID:      userID,
 		BotToken:    token,
-		BaseURL:     baseURL,
+		BaseURL:     baseURL, // Will be set to DefaultBaseURL if empty by NewAccount
 		Enabled:     true,
 		Configured:  token != "" && botID != "", // Consider configured if we have credentials
 		CreatedAt:   time.Now(),
 		LastLoginAt: time.Now(),
 	}
 
+	// Build wechat bot options
+	opts := []wechat.Option{
+		wechat.WithAccount(wcAccount),
+	}
+	if baseURL != "" {
+		opts = append(opts, wechat.WithBaseURL(baseURL))
+	}
+
 	// Initialize plugin with account directly (no store needed for basic operations)
-	// For production, implement types.AccountStore with database persistence
-	weixinBot, err := wechat.NewWechatBotWithAccount(wcConfig, wcAccount)
+	weixinBot, err := wechat.NewWechatBot(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create weixin bot: %w", err)
 	}
@@ -302,8 +300,12 @@ func (b *Bot) sendMedia(ctx context.Context, target string, opts *core.SendMessa
 	// Process the first media item
 	mediaItem := opts.Media[0]
 
-	// Get local file path from URL
-	filePath := mediaItem.URL
+	// Normalize the URL to handle file:// URLs
+	filePath, err := core.NormalizeMediaURL(mediaItem.URL)
+	if err != nil {
+		return nil, core.NewBotError(core.ErrMediaNotSupported, fmt.Sprintf("invalid media URL: %v", err), false)
+	}
+
 	if filePath == "" {
 		return nil, core.NewBotError(core.ErrMediaNotSupported, "media URL is required", false)
 	}

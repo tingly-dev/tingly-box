@@ -260,18 +260,20 @@ func GetPlatformCapabilities(platform Platform) *PlatformCapabilities {
 type ReactionToken string
 
 const (
-	ReactionReceived  ReactionToken = "received" // 👀 / Get / eyes — message received, processing
-	ReactionDone      ReactionToken = "done"     // ✅ / DONE / CheckMark — task completed successfully
-	ReactionError     ReactionToken = "error"    // ❌ / CrossMark — task failed
-	ReactionLike      ReactionToken = "like"     // 👍 / THUMBSUP — general approval
-	ReactionLove      ReactionToken = "love"     // ❤️ / HEART — love / great
-	ReactionLaugh     ReactionToken = "laugh"    // 😂 / LOL — funny
+	ReactionReceived ReactionToken = "received" // 👨‍💻 — message received, processing
+	ReactionDone     ReactionToken = "done"     // ✅ / DONE / CheckMark — task completed successfully
+	ReactionError    ReactionToken = "error"    // ❌ / CrossMark — task failed
+	ReactionLike     ReactionToken = "like"     // 👍 / THUMBSUP — general approval
+	ReactionLove     ReactionToken = "love"     // ❤️ / HEART — love / great
+	ReactionLaugh    ReactionToken = "laugh"    // 😂 / LOL — funny
 )
 
 // reactionMap maps semantic ReactionToken to platform-specific emoji/key strings.
+// telegram free reaction
+// 👍 👎 ❤ 🔥 🥰 👏 😁 🤔 🤯 😱 🤬 😢 🎉 🤩 🤮 💩 🙏 👌 🕊 🤡 🥱 🥴 😍 🐳 ❤️‍🔥 🌚 🌭 💯 🤣 ⚡ 🍌 🏆 💔 🤨 😐 🍓 🍾 💋 🖕 😈 😴 😭 🤓 👻 👨‍💻 👀 🎃 🙈 😇 😨 🤝 ✍ 🤗 🫡 🎅 🎄 ☃ 💅 🤪 🗿 🆒 💘 🙉 🦄 😘 💊 🙊 😎 👾 🤷‍♂️ 🤷 🤷‍♀️ 😡
 var reactionMap = map[Platform]map[ReactionToken]string{
 	PlatformTelegram: {
-		ReactionReceived: "👀",
+		ReactionReceived: "👨‍💻",
 		ReactionDone:     "✅",
 		ReactionError:    "❌",
 		ReactionLike:     "👍",
@@ -279,7 +281,7 @@ var reactionMap = map[Platform]map[ReactionToken]string{
 		ReactionLaugh:    "😂",
 	},
 	PlatformDiscord: {
-		ReactionReceived: "👀",
+		ReactionReceived: "👨‍💻",
 		ReactionDone:     "✅",
 		ReactionError:    "❌",
 		ReactionLike:     "👍",
@@ -295,7 +297,7 @@ var reactionMap = map[Platform]map[ReactionToken]string{
 		ReactionLaugh:    "joy",
 	},
 	PlatformWhatsApp: {
-		ReactionReceived: "👀",
+		ReactionReceived: "👨‍💻",
 		ReactionDone:     "✅",
 		ReactionError:    "❌",
 		ReactionLike:     "👍",
@@ -319,7 +321,7 @@ var reactionMap = map[Platform]map[ReactionToken]string{
 		ReactionLaugh:    "LOL",
 	},
 	PlatformDingTalk: {
-		ReactionReceived: "👀",
+		ReactionReceived: "👨‍💻",
 		ReactionDone:     "✅",
 		ReactionError:    "❌",
 		ReactionLike:     "👍",
