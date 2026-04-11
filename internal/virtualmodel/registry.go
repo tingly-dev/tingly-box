@@ -45,10 +45,16 @@ func (r *Registry) Register(vm VirtualModel) error {
 		if err := validateProtocol(vm, apiType); err != nil {
 			return fmt.Errorf("model %s: %w", id, err)
 		}
-		if r.byProtocol[apiType] == nil {
-			r.byProtocol[apiType] = make(map[string]VirtualModel)
+		// TypeAnthropicV1 is compatible with Beta; route it into the Beta bucket
+		// so GetAnthropicVM can find it without a separate v1 getter.
+		indexType := apiType
+		if apiType == protocol.TypeAnthropicV1 {
+			indexType = protocol.TypeAnthropicBeta
 		}
-		r.byProtocol[apiType][id] = vm
+		if r.byProtocol[indexType] == nil {
+			r.byProtocol[indexType] = make(map[string]VirtualModel)
+		}
+		r.byProtocol[indexType][id] = vm
 	}
 
 	r.models[id] = vm
@@ -80,7 +86,11 @@ func (r *Registry) Unregister(id string) {
 		return
 	}
 	for _, apiType := range vm.Protocols() {
-		delete(r.byProtocol[apiType], id)
+		indexType := apiType
+		if apiType == protocol.TypeAnthropicV1 {
+			indexType = protocol.TypeAnthropicBeta
+		}
+		delete(r.byProtocol[indexType], id)
 	}
 	delete(r.models, id)
 }
