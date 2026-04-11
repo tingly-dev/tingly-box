@@ -6,7 +6,6 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
-	guardrailsevaluate "github.com/tingly-dev/tingly-box/internal/guardrails/evaluate"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 )
 
@@ -32,39 +31,18 @@ func AdaptMessagesFromAnthropicV1Beta(system []anthropic.BetaTextBlockParam, mes
 	return out
 }
 
-// ResponseViewFromAnthropicV1BetaResponse adapts a non-stream Anthropic beta
-// response into the shared response view.
-func ResponseViewFromAnthropicV1BetaResponse(messageHistory []guardrailscore.Message, resp *anthropic.BetaMessage) guardrailsevaluate.ResponseView {
-	if resp == nil {
-		return guardrailsevaluate.ResponseView{MessageHistory: messageHistory}
+// RefreshInputFromAnthropicBetaResponse rebuilds the normalized response-side
+// guardrails input from a fully assembled Anthropic beta response.
+func RefreshInputFromAnthropicBetaResponse(input guardrailscore.Input, resp *anthropic.BetaMessage) guardrailscore.Input {
+	input.Direction = guardrailscore.DirectionResponse
+	input.Content = guardrailscore.Content{
+		Messages: input.Content.Messages,
 	}
-	return guardrailsevaluate.ResponseView{
-		Text:           responseTextFromAnthropicV1BetaBlocks(resp.Content),
-		Command:        commandFromAnthropicV1BetaBlocks(resp.Content),
-		MessageHistory: messageHistory,
+	if resp != nil {
+		input.Content.Text = responseTextFromAnthropicV1BetaBlocks(resp.Content)
+		input.Content.Command = commandFromAnthropicV1BetaBlocks(resp.Content)
 	}
-}
-
-// AdaptToolResultRequestFromAnthropicBeta extracts the latest tool_result
-// payload from an Anthropic beta request and normalizes it into the shared
-// request view used by Guardrails request-side evaluation.
-func AdaptToolResultRequestFromAnthropicBeta(req *anthropic.BetaMessageNewParams) guardrailsevaluate.ToolResultRequestView {
-	if req == nil {
-		return guardrailsevaluate.ToolResultRequestView{}
-	}
-
-	text, blockCount, partCount := ExtractToolResultTextV1Beta(req.Messages)
-	history := AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages)
-
-	return guardrailsevaluate.ToolResultRequestView{
-		View: guardrailsevaluate.RequestView{
-			Text:           text,
-			MessageHistory: history,
-		},
-		HasToolResult: blockCount > 0,
-		BlockCount:    blockCount,
-		PartCount:     partCount,
-	}
+	return input
 }
 
 func responseTextFromAnthropicV1BetaBlocks(blocks []anthropic.BetaContentBlockUnion) string {

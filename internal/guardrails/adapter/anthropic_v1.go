@@ -7,7 +7,6 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
-	guardrailsevaluate "github.com/tingly-dev/tingly-box/internal/guardrails/evaluate"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 )
 
@@ -33,39 +32,18 @@ func AdaptMessagesFromAnthropicV1(system []anthropic.TextBlockParam, messages []
 	return out
 }
 
-// ResponseViewFromAnthropicV1Response adapts a non-stream Anthropic v1 response
-// into the shared response view.
-func ResponseViewFromAnthropicV1Response(messageHistory []guardrailscore.Message, resp *anthropic.Message) guardrailsevaluate.ResponseView {
-	if resp == nil {
-		return guardrailsevaluate.ResponseView{MessageHistory: messageHistory}
+// RefreshInputFromAnthropicV1Response rebuilds the normalized response-side
+// guardrails input from a fully assembled Anthropic v1 response.
+func RefreshInputFromAnthropicV1Response(input guardrailscore.Input, resp *anthropic.Message) guardrailscore.Input {
+	input.Direction = guardrailscore.DirectionResponse
+	input.Content = guardrailscore.Content{
+		Messages: input.Content.Messages,
 	}
-	return guardrailsevaluate.ResponseView{
-		Text:           responseTextFromAnthropicV1Blocks(resp.Content),
-		Command:        commandFromAnthropicV1Blocks(resp.Content),
-		MessageHistory: messageHistory,
+	if resp != nil {
+		input.Content.Text = responseTextFromAnthropicV1Blocks(resp.Content)
+		input.Content.Command = commandFromAnthropicV1Blocks(resp.Content)
 	}
-}
-
-// AdaptToolResultRequestFromAnthropicV1 extracts the latest tool_result payload
-// from an Anthropic v1 request and normalizes it into the shared request view
-// used by Guardrails request-side evaluation.
-func AdaptToolResultRequestFromAnthropicV1(req *anthropic.MessageNewParams) guardrailsevaluate.ToolResultRequestView {
-	if req == nil {
-		return guardrailsevaluate.ToolResultRequestView{}
-	}
-
-	text, blockCount, partCount := ExtractToolResultTextV1(req.Messages)
-	history := AdaptMessagesFromAnthropicV1(req.System, req.Messages)
-
-	return guardrailsevaluate.ToolResultRequestView{
-		View: guardrailsevaluate.RequestView{
-			Text:           text,
-			MessageHistory: history,
-		},
-		HasToolResult: blockCount > 0,
-		BlockCount:    blockCount,
-		PartCount:     partCount,
-	}
+	return input
 }
 
 func responseTextFromAnthropicV1Blocks(blocks []anthropic.ContentBlockUnion) string {

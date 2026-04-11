@@ -76,6 +76,18 @@ type InputState struct {
 }
 
 // Input is the unified guardrails processing context.
+//
+// The top section contains the stable semantic fields consumed by policy
+// evaluation. Request adapters may also place request-focused extracted text
+// into Content.Text, while keeping the full conversation history in
+// Content.Messages.
+//
+// The middle section stores lightweight extraction hints derived from the raw
+// protocol payload. These fields avoid reparsing the same request structure in
+// later pipeline stages.
+//
+// The bottom section carries runtime-only attachments and should not be relied
+// on by policy implementations.
 type Input struct {
 	Scenario  string                 `json:"scenario,omitempty" yaml:"scenario,omitempty"`
 	Model     string                 `json:"model,omitempty" yaml:"model,omitempty"`
@@ -83,9 +95,14 @@ type Input struct {
 	Tags      []string               `json:"tags,omitempty" yaml:"tags,omitempty"`
 	Content   Content                `json:"content" yaml:"content"`
 	Metadata  map[string]interface{} `json:"metadata,omitempty" yaml:"metadata,omitempty"`
-	Payload   Payload                `json:"-" yaml:"-"`
-	State     InputState             `json:"-" yaml:"-"`
-	Runtime   InputRuntime           `json:"-" yaml:"-"`
+
+	HasToolResult        bool `json:"has_tool_result,omitempty" yaml:"has_tool_result,omitempty"`
+	ToolResultBlockCount int  `json:"tool_result_block_count,omitempty" yaml:"tool_result_block_count,omitempty"`
+	ToolResultPartCount  int  `json:"tool_result_part_count,omitempty" yaml:"tool_result_part_count,omitempty"`
+
+	Payload Payload      `json:"-" yaml:"-"`
+	State   InputState   `json:"-" yaml:"-"`
+	Runtime InputRuntime `json:"-" yaml:"-"`
 }
 
 // Text returns the combined text for guardrails matching.

@@ -13,11 +13,16 @@ func RefreshInputFromAnthropicV1Request(input guardrailscore.Input) guardrailsco
 	if req == nil {
 		return input
 	}
+	text, blockCount, partCount := ExtractToolResultTextV1(req.Messages)
 
 	input.Direction = guardrailscore.DirectionRequest
 	input.Content = guardrailscore.Content{
+		Text:     text,
 		Messages: AdaptMessagesFromAnthropicV1(req.System, req.Messages),
 	}
+	input.HasToolResult = blockCount > 0
+	input.ToolResultBlockCount = blockCount
+	input.ToolResultPartCount = partCount
 	if input.Payload.Protocol == "" {
 		input.Payload.Protocol = "anthropic_v1"
 	}
@@ -32,11 +37,16 @@ func RefreshInputFromAnthropicBetaRequest(input guardrailscore.Input) guardrails
 	if req == nil {
 		return input
 	}
+	text, blockCount, partCount := ExtractToolResultTextV1Beta(req.Messages)
 
 	input.Direction = guardrailscore.DirectionRequest
 	input.Content = guardrailscore.Content{
+		Text:     text,
 		Messages: AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages),
 	}
+	input.HasToolResult = blockCount > 0
+	input.ToolResultBlockCount = blockCount
+	input.ToolResultPartCount = partCount
 	if input.Payload.Protocol == "" {
 		input.Payload.Protocol = "anthropic_beta"
 	}

@@ -9,6 +9,13 @@ import (
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 )
 
+// CredentialMaskMutation captures the request-side aliasing outcome.
+type CredentialMaskMutation struct {
+	Changed           bool
+	LatestTurnChanged bool
+	State             *guardrailscore.CredentialMaskState
+}
+
 type RequestMutation struct {
 	Input              guardrailscore.Input
 	ToolResult         ToolResultMutation

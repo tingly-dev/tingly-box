@@ -11,13 +11,6 @@ import (
 	guardrailsmutate "github.com/tingly-dev/tingly-box/internal/guardrails/mutate"
 )
 
-// CredentialMaskMutation captures the request-side aliasing outcome.
-type CredentialMaskMutation struct {
-	Changed           bool
-	LatestTurnChanged bool
-	State             *guardrailscore.CredentialMaskState
-}
-
 type AnthropicBetaRequestMutation = RequestMutation
 
 // ProcessAnthropicBetaRequest runs the draft merged request pipeline for
