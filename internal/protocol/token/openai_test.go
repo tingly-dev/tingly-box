@@ -55,9 +55,9 @@ func TestCountTokensWithTiktoken(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			params := &anthropic.MessageCountTokensParams{
-				Model:       anthropic.Model(tt.model),
-				Messages:    tt.messages,
-				System:      anthropic.MessageCountTokensParamsSystemUnion{OfTextBlockArray: tt.system},
+				Model:    anthropic.Model(tt.model),
+				Messages: tt.messages,
+				System:   anthropic.MessageCountTokensParamsSystemUnion{OfTextBlockArray: tt.system},
 			}
 			count, err := CountTokensViaTiktoken(params)
 			fmt.Printf("t: %s, count: %d\n", tt.name, count)
