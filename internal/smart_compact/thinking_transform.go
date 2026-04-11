@@ -125,7 +125,13 @@ func (t *ThinkingCompactTransform) compactV1Rounds(rounds []protocol.V1Round) ([
 		for _, msg := range rnd.Messages {
 			// Only remove thinking from assistant messages in non-preserved rounds that passed guard
 			if !shouldPreserve && guardPassed && string(msg.Role) == "assistant" {
-				msg.Content, removedCount = t.removeV1ThinkingBlocks(msg.Content, removedCount)
+				newContent, count := t.removeV1ThinkingBlocks(msg.Content, removedCount)
+				removedCount = count
+				// Create a new message with updated content
+				msg = anthropic.MessageParam{
+					Role:    msg.Role,
+					Content: newContent,
+				}
 			}
 			result = append(result, msg)
 		}
@@ -163,7 +169,13 @@ func (t *ThinkingCompactTransform) compactBetaRounds(rounds []protocol.BetaRound
 		for _, msg := range rnd.Messages {
 			// Only remove thinking from assistant messages in non-preserved rounds that passed guard
 			if !shouldPreserve && guardPassed && string(msg.Role) == "assistant" {
-				msg.Content, removedCount = t.removeBetaThinkingBlocks(msg.Content, removedCount)
+				newContent, count := t.removeBetaThinkingBlocks(msg.Content, removedCount)
+				removedCount = count
+				// Create a new message with updated content
+				msg = anthropic.BetaMessageParam{
+					Role:    msg.Role,
+					Content: newContent,
+				}
 			}
 			result = append(result, msg)
 		}

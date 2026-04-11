@@ -33,8 +33,17 @@ type CompressionStrategy interface {
 // CompactTransformer implements the Transformer interface.
 type CompactTransformer struct {
 	protocol.Transformer
-	rounder         *protocol.Grouper
-	KeepLastNRounds int // Number of recent rounds to preserve thinking blocks (min: 1)
+	rounder           *protocol.Grouper
+	KeepLastNRounds   int // Number of recent rounds to preserve thinking blocks (min: 1)
+	MinAssistantCount int // Minimum assistant messages required for compaction (default: 1)
+}
+
+type Option = func(*CompactTransformer)
+
+func WithMinAssistant(count int) Option {
+	return func(t *CompactTransformer) {
+		t.MinAssistantCount = count
+	}
 }
 
 // NewCompactTransformer creates a new smart_compact transformer instance.
@@ -47,14 +56,19 @@ type CompactTransformer struct {
 //   - keepLastNRounds=1: Default, preserves only the current request's thinking
 //   - keepLastNRounds=2-3: Suitable for multi-step reasoning, debugging, or document analysis
 //   - Minimum allowed value is 1 (current round's thinking is always preserved)
-func NewCompactTransformer(keepLastNRounds int) *CompactTransformer {
+func NewCompactTransformer(keepLastNRounds int, opts ...Option) *CompactTransformer {
 	if keepLastNRounds < 1 {
 		keepLastNRounds = 1
 	}
-	return &CompactTransformer{
-		rounder:         protocol.NewGrouper(),
-		KeepLastNRounds: keepLastNRounds,
+	res := &CompactTransformer{
+		rounder:           protocol.NewGrouper(),
+		KeepLastNRounds:   keepLastNRounds,
+		MinAssistantCount: 10, // Default: require at least 10 assistant message
 	}
+	for _, opt := range opts {
+		opt(res)
+	}
+	return res
 }
 
 // HandleV1 compacts an Anthropic v1 request by removing thinking fields
@@ -132,7 +146,13 @@ func (t *CompactTransformer) compactV1Rounds(rounds []protocol.V1Round) ([]anthr
 		for _, msg := range rnd.Messages {
 			// Only remove thinking from assistant messages in non-preserved rounds that passed guard
 			if !shouldPreserve && guardPassed && string(msg.Role) == "assistant" {
-				msg.Content, removedCount = t.removeV1ThinkingBlocks(msg.Content, removedCount)
+				newContent, count := t.removeV1ThinkingBlocks(msg.Content, removedCount)
+				removedCount = count
+				// Create a new message with updated content
+				msg = anthropic.MessageParam{
+					Role:    msg.Role,
+					Content: newContent,
+				}
 			}
 			result = append(result, msg)
 		}
@@ -170,7 +190,13 @@ func (t *CompactTransformer) compactBetaRounds(rounds []protocol.BetaRound) ([]a
 		for _, msg := range rnd.Messages {
 			// Only remove thinking from assistant messages in non-preserved rounds that passed guard
 			if !shouldPreserve && guardPassed && string(msg.Role) == "assistant" {
-				msg.Content, removedCount = t.removeBetaThinkingBlocks(msg.Content, removedCount)
+				newContent, count := t.removeBetaThinkingBlocks(msg.Content, removedCount)
+				removedCount = count
+				// Create a new message with updated content
+				msg = anthropic.BetaMessageParam{
+					Role:    msg.Role,
+					Content: newContent,
+				}
 			}
 			result = append(result, msg)
 		}
@@ -234,7 +260,7 @@ func (t *CompactTransformer) shouldCompactRound(stats *protocol.RoundStats) bool
 	}
 
 	// Guard: should have at least one assistant response
-	if stats.AssistantCount < 20 {
+	if stats.AssistantCount < t.MinAssistantCount {
 		return false
 	}
 

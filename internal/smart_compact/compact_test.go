@@ -95,7 +95,7 @@ func TestHandleV1_RemovesThinkingFromPastRounds(t *testing.T) {
 		},
 	}
 
-	transformer := NewCompactTransformer(1)
+	transformer := NewCompactTransformer(1, WithMinAssistant(1))
 	err := transformer.HandleV1(req)
 
 	require.NoError(t, err)
@@ -103,7 +103,7 @@ func TestHandleV1_RemovesThinkingFromPastRounds(t *testing.T) {
 
 	// First round assistant message - thinking removed (index 1)
 	assert.Len(t, req.Messages[1].Content, 1)
-	assert.Equal(t, "Old response", req.Messages[1].Content[1].OfText.Text)
+	assert.Equal(t, "Old response", req.Messages[1].Content[0].OfText.Text)
 
 	// Second round assistant message - thinking preserved (index 3, last message)
 	assert.Len(t, req.Messages[3].Content, 2)
