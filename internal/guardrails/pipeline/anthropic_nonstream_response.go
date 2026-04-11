@@ -14,7 +14,6 @@ import (
 
 type NonStreamResponseMutation struct {
 	Input        guardrailscore.Input
-	Adapted      guardrailsevaluate.ResponseView
 	Evaluation   guardrailsevaluate.Evaluation
 	Changed      bool
 	BlockMessage string
@@ -26,15 +25,13 @@ func ProcessAnthropicV1NonStreamResponse(
 	input guardrailscore.Input,
 	resp *anthropic.Message,
 ) (NonStreamResponseMutation, error) {
-	view := guardrailsadapter.ResponseViewFromAnthropicV1Response(input.Content.Messages, resp)
-	adaptedInput := guardrailsevaluate.WithResponseView(input, view)
+	adaptedInput := guardrailsadapter.RefreshInputFromAnthropicV1Response(input, resp)
 
 	evaluation, err := guardrailsevaluate.EvaluateInput(ctx, runtime, adaptedInput)
 	if err != nil {
 		adaptedInput.SetContextValue("guardrails_error", err.Error())
 		return NonStreamResponseMutation{
-			Input:   adaptedInput,
-			Adapted: view,
+			Input: adaptedInput,
 		}, err
 	}
 
@@ -47,7 +44,6 @@ func ProcessAnthropicV1NonStreamResponse(
 
 	return NonStreamResponseMutation{
 		Input:        evaluation.Input,
-		Adapted:      view,
 		Evaluation:   evaluation,
 		Changed:      changed,
 		BlockMessage: blockMessage,
@@ -60,15 +56,13 @@ func ProcessAnthropicV1BetaNonStreamResponse(
 	input guardrailscore.Input,
 	resp *anthropic.BetaMessage,
 ) (NonStreamResponseMutation, error) {
-	view := guardrailsadapter.ResponseViewFromAnthropicV1BetaResponse(input.Content.Messages, resp)
-	adaptedInput := guardrailsevaluate.WithResponseView(input, view)
+	adaptedInput := guardrailsadapter.RefreshInputFromAnthropicBetaResponse(input, resp)
 
 	evaluation, err := guardrailsevaluate.EvaluateInput(ctx, runtime, adaptedInput)
 	if err != nil {
 		adaptedInput.SetContextValue("guardrails_error", err.Error())
 		return NonStreamResponseMutation{
-			Input:   adaptedInput,
-			Adapted: view,
+			Input: adaptedInput,
 		}, err
 	}
 
@@ -81,7 +75,6 @@ func ProcessAnthropicV1BetaNonStreamResponse(
 
 	return NonStreamResponseMutation{
 		Input:        evaluation.Input,
-		Adapted:      view,
 		Evaluation:   evaluation,
 		Changed:      changed,
 		BlockMessage: blockMessage,

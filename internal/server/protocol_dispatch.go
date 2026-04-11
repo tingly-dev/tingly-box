@@ -143,9 +143,9 @@ func (s *Server) dispatchChainResultToAnthropicV1(
 		blocked := false
 		if s.guardrailsEnabledForScenario(scenario) {
 			blocked = s.applyGuardrailsToAnthropicV1NonStreamResponse(c, req, actualModel, provider, anthropicResp)
-		}
-		if !blocked {
-			s.restoreGuardrailsCredentialAliasesV1Response(c, anthropicResp)
+			if !blocked {
+				s.restoreGuardrailsCredentialAliasesV1Response(c, anthropicResp)
+			}
 		}
 
 		if recorder != nil {
@@ -211,9 +211,9 @@ func (s *Server) dispatchChainResultToAnthropicBeta(
 		blocked := false
 		if s.guardrailsEnabledForScenario(scenario) {
 			blocked = s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, req, actualModel, provider, anthropicResp)
-		}
-		if !blocked {
-			s.restoreGuardrailsCredentialAliasesV1BetaResponse(c, anthropicResp)
+			if !blocked {
+				s.restoreGuardrailsCredentialAliasesV1BetaResponse(c, anthropicResp)
+			}
 		}
 
 		if recorder != nil {

@@ -17,7 +17,6 @@ import (
 // Anthropic tool_result request.
 type ToolResultMutation struct {
 	Input      guardrailscore.Input
-	Adapted    guardrailsevaluate.ToolResultRequestView
 	Evaluation guardrailsevaluate.Evaluation
 	Changed    bool
 	Message    string
@@ -34,31 +33,21 @@ func EvaluateAnthropicBetaToolResultRequest(
 	if req == nil {
 		return ToolResultMutation{Input: input}, nil
 	}
-
-	adapted := guardrailsadapter.AdaptToolResultRequestFromAnthropicBeta(req)
-	adaptedInput := guardrailsevaluate.WithRequestView(input, adapted.View)
-	if !adapted.HasToolResult {
-		return ToolResultMutation{
-			Input:   adaptedInput,
-			Adapted: adapted,
-		}, nil
+	if !input.HasToolResult {
+		return ToolResultMutation{Input: input}, nil
 	}
-	if strings.HasPrefix(adapted.View.Text, guardrailsadapter.BlockPrefix) {
-		return ToolResultMutation{
-			Input:   adaptedInput,
-			Adapted: adapted,
-		}, nil
+	if strings.HasPrefix(input.Content.Text, guardrailsadapter.BlockPrefix) {
+		return ToolResultMutation{Input: input}, nil
 	}
 
-	evaluation, err := guardrailsevaluate.EvaluateInput(ctx, runtime, adaptedInput)
+	evaluation, err := guardrailsevaluate.EvaluateInput(ctx, runtime, input)
 	if err != nil {
 		return ToolResultMutation{}, err
 	}
 
 	changed, message := guardrailsmutate.MutateAnthropicBetaToolResultRequest(req, evaluation)
 	return ToolResultMutation{
-		Input:      adaptedInput,
-		Adapted:    adapted,
+		Input:      input,
 		Evaluation: evaluation,
 		Changed:    changed,
 		Message:    message,
@@ -76,31 +65,21 @@ func EvaluateAnthropicV1ToolResultRequest(
 	if req == nil {
 		return ToolResultMutation{Input: input}, nil
 	}
-
-	adapted := guardrailsadapter.AdaptToolResultRequestFromAnthropicV1(req)
-	adaptedInput := guardrailsevaluate.WithRequestView(input, adapted.View)
-	if !adapted.HasToolResult {
-		return ToolResultMutation{
-			Input:   adaptedInput,
-			Adapted: adapted,
-		}, nil
+	if !input.HasToolResult {
+		return ToolResultMutation{Input: input}, nil
 	}
-	if strings.HasPrefix(adapted.View.Text, guardrailsadapter.BlockPrefix) {
-		return ToolResultMutation{
-			Input:   adaptedInput,
-			Adapted: adapted,
-		}, nil
+	if strings.HasPrefix(input.Content.Text, guardrailsadapter.BlockPrefix) {
+		return ToolResultMutation{Input: input}, nil
 	}
 
-	evaluation, err := guardrailsevaluate.EvaluateInput(ctx, runtime, adaptedInput)
+	evaluation, err := guardrailsevaluate.EvaluateInput(ctx, runtime, input)
 	if err != nil {
 		return ToolResultMutation{}, err
 	}
 
 	changed, message := guardrailsmutate.MutateAnthropicV1ToolResultRequest(req, evaluation)
 	return ToolResultMutation{
-		Input:      adaptedInput,
-		Adapted:    adapted,
+		Input:      input,
 		Evaluation: evaluation,
 		Changed:    changed,
 		Message:    message,
