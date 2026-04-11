@@ -172,6 +172,30 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 		Category:    "enterprise",
 		Fields:      []FieldSpec{}, // No fields - credentials set via QR flow
 	},
+	"wecom": {
+		Platform:    "wecom",
+		AuthType:    "oauth",
+		DisplayName: "WeCom",
+		Category:    "enterprise",
+		Fields: []FieldSpec{
+			{
+				Key:         "clientId",
+				Label:       "Bot ID",
+				Placeholder: "Your WeCom AI Bot ID",
+				Required:    true,
+				Secret:      false,
+				HelperText:  "The AI Bot ID from WeCom developer console",
+			},
+			{
+				Key:         "clientSecret",
+				Label:       "Bot Secret",
+				Placeholder: "Your WeCom AI Bot secret",
+				Required:    true,
+				Secret:      true,
+				HelperText:  "The AI Bot secret from WeCom developer console",
+			},
+		},
+	},
 }
 
 // GetPlatformConfig returns the auth config for a given platform

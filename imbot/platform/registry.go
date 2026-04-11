@@ -11,6 +11,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot/platform/lark"
 	"github.com/tingly-dev/tingly-box/imbot/platform/slack"
 	"github.com/tingly-dev/tingly-box/imbot/platform/telegram"
+	"github.com/tingly-dev/tingly-box/imbot/platform/wecom"
 	"github.com/tingly-dev/tingly-box/imbot/platform/weixin"
 	"github.com/tingly-dev/tingly-box/imbot/platform/whatsapp"
 )
@@ -110,6 +111,11 @@ func (r *Registry) RegisterBuiltinPlatforms() {
 	// Weixin
 	r.Register(core.PlatformWeixin, func(config *core.Config) (core.Bot, error) {
 		return weixin.NewBot(config)
+	})
+
+	// WeCom (Enterprise WeChat AI Bot)
+	r.Register(core.PlatformWecom, func(config *core.Config) (core.Bot, error) {
+		return wecom.NewBot(config)
 	})
 
 	// Add more platforms as they are implemented

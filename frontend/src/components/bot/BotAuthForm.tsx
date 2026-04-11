@@ -40,6 +40,10 @@ const oauthHelpLinks: Record<string, { url: string; label: string }> = {
         url: 'https://open.larksuite.com/document/home/introduction-to-lark-platform/',
         label: 'Lark Developer Docs',
     },
+    wecom: {
+        url: 'https://work.weixin.qq.com/wework_admin/frame#/aiHelper/list',
+        label: 'WeCom Admin Console',
+    },
 };
 
 export const BotAuthForm: React.FC<BotAuthFormProps> = ({
