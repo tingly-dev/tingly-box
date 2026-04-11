@@ -1,43 +1,20 @@
-// Package smart_compact provides conversation compression strategies and transformers
-// for Anthropic requests.
-//
-// The package includes:
-//   - CompressionStrategy interface for defining compression algorithms
-//   - Strategy implementations (thinking removal, round-only, round-files)
-//   - Transformer adapters that bridge strategies to the protocol.Transformer interface
-//
-// Strategies compress conversation rounds by removing thinking blocks,
-// tool calls, and tool results while preserving the essential flow
-// of user requests and assistant responses.
 package smart_compact
 
 import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/sirupsen/logrus"
-
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
-// CompressionStrategy defines the interface for compression algorithms.
-type CompressionStrategy interface {
-	// Name returns the strategy identifier
-	Name() string
-
-	// CompressV1 compresses v1 messages
-	CompressV1(messages []anthropic.MessageParam) []anthropic.MessageParam
-
-	// CompressBeta compresses beta messages
-	CompressBeta(messages []anthropic.BetaMessageParam) []anthropic.BetaMessageParam
-}
-
-// CompactTransformer implements the Transformer interface.
-type CompactTransformer struct {
-	protocol.Transformer
+// CompactTransform removes thinking fields from non-current rounds.
+// This is the transform-style implementation that implements transform.Transform.
+type CompactTransform struct {
 	rounder         *protocol.Grouper
-	KeepLastNRounds int // Number of recent rounds to preserve thinking blocks (min: 1)
+	keepLastNRounds int // Number of recent rounds to preserve thinking blocks (min: 1)
 }
 
-// NewCompactTransformer creates a new smart_compact transformer instance.
+// NewCompactTransform creates a new CompactTransform.
 //
 // The keepLastNRounds parameter controls how many recent conversation rounds
 // should have their thinking blocks preserved. Higher values retain more reasoning
@@ -47,19 +24,36 @@ type CompactTransformer struct {
 //   - keepLastNRounds=1: Default, preserves only the current request's thinking
 //   - keepLastNRounds=2-3: Suitable for multi-step reasoning, debugging, or document analysis
 //   - Minimum allowed value is 1 (current round's thinking is always preserved)
-func NewCompactTransformer(keepLastNRounds int) *CompactTransformer {
+func NewCompactTransform(keepLastNRounds int) transform.Transform {
 	if keepLastNRounds < 1 {
 		keepLastNRounds = 1
 	}
-	return &CompactTransformer{
+	return &CompactTransform{
 		rounder:         protocol.NewGrouper(),
-		KeepLastNRounds: keepLastNRounds,
+		keepLastNRounds: keepLastNRounds,
 	}
 }
 
-// HandleV1 compacts an Anthropic v1 request by removing thinking fields
-// from non-current rounds.
-func (t *CompactTransformer) HandleV1(req *anthropic.MessageNewParams) error {
+// Name returns the transform identifier.
+func (t *CompactTransform) Name() string {
+	return "compact_thinking"
+}
+
+// Apply applies the compaction to the request.
+func (t *CompactTransform) Apply(ctx *transform.TransformContext) error {
+	switch req := ctx.Request.(type) {
+	case *anthropic.MessageNewParams:
+		return t.applyV1(req)
+	case *anthropic.BetaMessageNewParams:
+		return t.applyBeta(req)
+	default:
+		// Unsupported request type, pass through
+		return nil
+	}
+}
+
+// applyV1 applies compaction to v1 requests.
+func (t *CompactTransform) applyV1(req *anthropic.MessageNewParams) error {
 	if req.Messages == nil || len(req.Messages) == 0 {
 		return nil
 	}
@@ -73,9 +67,8 @@ func (t *CompactTransformer) HandleV1(req *anthropic.MessageNewParams) error {
 	return nil
 }
 
-// HandleV1Beta compacts an Anthropic v1beta request by removing thinking fields
-// from non-current rounds.
-func (t *CompactTransformer) HandleV1Beta(req *anthropic.BetaMessageNewParams) error {
+// applyBeta applies compaction to beta requests.
+func (t *CompactTransform) applyBeta(req *anthropic.BetaMessageNewParams) error {
 	if req.Messages == nil || len(req.Messages) == 0 {
 		return nil
 	}
@@ -106,11 +99,11 @@ func (t *CompactTransformer) HandleV1Beta(req *anthropic.BetaMessageNewParams) e
 //	Rounds failing these checks are skipped (not compacted) to avoid corrupting
 //
 // potentially malformed conversation structures.
-func (t *CompactTransformer) compactV1Rounds(rounds []protocol.V1Round) ([]anthropic.MessageParam, int) {
+func (t *CompactTransform) compactV1Rounds(rounds []protocol.V1Round) ([]anthropic.MessageParam, int) {
 	var result []anthropic.MessageParam
 	removedCount := 0
 	totalRounds := len(rounds)
-	preserveStart := totalRounds - t.KeepLastNRounds
+	preserveStart := totalRounds - t.keepLastNRounds
 	if preserveStart < 0 {
 		preserveStart = 0
 	}
@@ -144,11 +137,11 @@ func (t *CompactTransformer) compactV1Rounds(rounds []protocol.V1Round) ([]anthr
 // compactBetaRounds removes thinking blocks from rounds outside the preservation window.
 //
 // See compactV1Rounds for detailed strategy rationale and guard checks.
-func (t *CompactTransformer) compactBetaRounds(rounds []protocol.BetaRound) ([]anthropic.BetaMessageParam, int) {
+func (t *CompactTransform) compactBetaRounds(rounds []protocol.BetaRound) ([]anthropic.BetaMessageParam, int) {
 	var result []anthropic.BetaMessageParam
 	removedCount := 0
 	totalRounds := len(rounds)
-	preserveStart := totalRounds - t.KeepLastNRounds
+	preserveStart := totalRounds - t.keepLastNRounds
 	if preserveStart < 0 {
 		preserveStart = 0
 	}
@@ -180,7 +173,7 @@ func (t *CompactTransformer) compactBetaRounds(rounds []protocol.BetaRound) ([]a
 }
 
 // removeV1ThinkingBlocks removes thinking content blocks from v1 message content.
-func (t *CompactTransformer) removeV1ThinkingBlocks(content []anthropic.ContentBlockParamUnion, count int) ([]anthropic.ContentBlockParamUnion, int) {
+func (t *CompactTransform) removeV1ThinkingBlocks(content []anthropic.ContentBlockParamUnion, count int) ([]anthropic.ContentBlockParamUnion, int) {
 	var filtered []anthropic.ContentBlockParamUnion
 
 	for _, block := range content {
@@ -196,7 +189,7 @@ func (t *CompactTransformer) removeV1ThinkingBlocks(content []anthropic.ContentB
 }
 
 // removeBetaThinkingBlocks removes thinking content blocks from beta message content.
-func (t *CompactTransformer) removeBetaThinkingBlocks(content []anthropic.BetaContentBlockParamUnion, count int) ([]anthropic.BetaContentBlockParamUnion, int) {
+func (t *CompactTransform) removeBetaThinkingBlocks(content []anthropic.BetaContentBlockParamUnion, count int) ([]anthropic.BetaContentBlockParamUnion, int) {
 	var filtered []anthropic.BetaContentBlockParamUnion
 
 	for _, block := range content {
@@ -222,7 +215,7 @@ func (t *CompactTransformer) removeBetaThinkingBlocks(content []anthropic.BetaCo
 //
 // Returns false if the round structure appears malformed, preventing compaction
 // on potentially incorrectly grouped rounds.
-func (t *CompactTransformer) shouldCompactRound(stats *protocol.RoundStats) bool {
+func (t *CompactTransform) shouldCompactRound(stats *protocol.RoundStats) bool {
 	// Guard: nil stats check
 	if stats == nil {
 		return false
@@ -234,7 +227,7 @@ func (t *CompactTransformer) shouldCompactRound(stats *protocol.RoundStats) bool
 	}
 
 	// Guard: should have at least one assistant response
-	if stats.AssistantCount < 20 {
+	if stats.AssistantCount < 1 {
 		return false
 	}
 
