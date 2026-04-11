@@ -21,7 +21,7 @@ import {
     IconSparkles,
     IconMessageCircle,
 } from '@tabler/icons-react';
-import { OpenAI, Anthropic, Claude, OpenCode, Xcode, VSCode, Telegram, Feishu, Lark, DingTalk, Weixin, Codex, OpenClaw } from '../components/BrandIcons';
+import { OpenAI, Anthropic, Claude, OpenCode, Xcode, VSCode, Telegram, Feishu, Lark, DingTalk, Weixin, WeCom, Codex, OpenClaw } from '../components/BrandIcons';
 import { SettingsApplications } from '@mui/icons-material';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
@@ -118,6 +118,7 @@ export function useActivityItems(): ActivityItem[] {
                     { path: '/remote-control', label: 'Overview', icon: <IconMessageCircle size={20} /> },
                     { type: 'divider' } as NavDivider,
                     { path: '/remote-control/weixin', label: 'Weixin', icon: <Weixin size={20} /> },
+                    { path: '/remote-control/wecom', label: 'WeCom', icon: <WeCom size={20} /> },
                     { path: '/remote-control/telegram', label: 'Telegram', icon: <Telegram size={20} /> },
                     { path: '/remote-control/feishu', label: 'Feishu', icon: <Feishu size={20} /> },
                     { path: '/remote-control/lark', label: 'Lark', icon: <Lark size={20} /> },

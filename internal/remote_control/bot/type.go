@@ -22,11 +22,13 @@ var defaultBashAllowlist = map[string]struct{}{
 // Platforms that do NOT support verbose mode (can only receive final messages)
 var nonVerbosePlatforms = map[string]struct{}{
 	"weixin": {},
+	"wecom":  {},
 }
 
 // Platforms with low-frequency sending limitations (need rate limiting)
 var lowFrequencyPlatforms = map[string]struct{}{
 	"weixin": {},
+	"wecom":  {},
 }
 
 // ResponseMeta contains metadata for response formatting

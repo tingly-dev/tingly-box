@@ -56,7 +56,6 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 			options["base_url"] = baseURL
 		}
 	}
-
 	err = manager.AddBot(&imbot.Config{
 		UUID:     setting.UUID,
 		Platform: platform,
@@ -103,7 +102,7 @@ func buildAuthConfig(setting BotSetting) imbot.AuthConfig {
 			Type:  "token",
 			Token: auth["token"],
 		}
-	case "dingtalk", "feishu":
+	case "dingtalk", "feishu", "wecom":
 		return imbot.AuthConfig{
 			Type:         "oauth",
 			ClientID:     auth["clientId"],
@@ -243,7 +242,7 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	// Validate auth credentials based on platform
 	hasValidAuth := false
 	switch platform {
-	case "dingtalk", "feishu":
+	case "dingtalk", "feishu", "wecom":
 		// OAuth platforms require clientId and clientSecret
 		hasValidAuth = auth["clientId"] != "" && auth["clientSecret"] != ""
 	case "weixin":

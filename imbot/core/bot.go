@@ -137,7 +137,7 @@ func IsValidPlatform(platform string) bool {
 	case PlatformWhatsApp, PlatformTelegram, PlatformDiscord,
 		PlatformSlack, PlatformGoogleChat, PlatformSignal,
 		PlatformBlueBubbles, PlatformFeishu, PlatformLark,
-		PlatformWebChat, PlatformDingTalk, PlatformWeixin:
+		PlatformWebChat, PlatformDingTalk, PlatformWeixin, PlatformWecom:
 		return true
 	default:
 		return false
