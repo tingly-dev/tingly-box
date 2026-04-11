@@ -210,12 +210,57 @@ const platformConfigs: PlatformConfig[] = [
     {
         id: 'wecom',
         name: 'WeCom (企业微信）',
-        status: 'coming-soon',
-        requiredFields: ['App ID', 'App Secret'],
+        status: 'available',
+        requiredFields: ['Bot ID', 'Bot Secret'],
         steps: (
-            <Typography variant="body2" color="text.secondary">
-                WeCom bot integration is currently under development. Stay tuned for updates!
-            </Typography>
+            <Stack spacing={2}>
+                <Box>
+                    <Typography variant="subtitle2" sx={{fontWeight: 600, mb: 1}}>
+                        1. Open WeCom Admin Console
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        Go to{' '}
+                        <Link href="https://work.weixin.qq.com/wework_admin/frame#/aiHelper/list" target="_blank">
+                            WeCom Admin → AI Assistant <OpenInNew sx={{fontSize: 10}}/>
+                        </Link>
+                        {' '}and click <strong>Create Bot</strong> → <strong>Create Manually</strong>.
+                    </Typography>
+                </Box>
+                <Box>
+                    <Typography variant="subtitle2" sx={{fontWeight: 600, mb: 1}}>
+                        2. Create via API mode
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        Scroll to the bottom of the page and click <strong>Create via API Mode</strong>.
+                    </Typography>
+                </Box>
+                <Box>
+                    <Typography variant="subtitle2" sx={{fontWeight: 600, mb: 1}}>
+                        3. Configure the bot
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" component="div">
+                        <Box component="ul" sx={{pl: 2, m: 0}}>
+                            <li><strong>Visible Scope:</strong> Set who can use the bot</li>
+                            <li><strong>API Config:</strong> Under Connection Method, select <strong>Long Connection</strong></li>
+                            <li>In the Secret section, click <strong>Click to Retrieve</strong> — save the <strong>Bot ID</strong> and <strong>Secret</strong></li>
+                            <li><strong>Permissions:</strong> Configure as needed, then click <strong>Save</strong></li>
+                        </Box>
+                    </Typography>
+                </Box>
+                <Box>
+                    <Typography variant="subtitle2" sx={{fontWeight: 600, mb: 1}}>
+                        4. Add bot
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        Click "Add Bot" above and enter the Bot ID and Secret to connect.
+                    </Typography>
+                </Box>
+                <Box sx={{bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light'}}>
+                    <Typography variant="body2" color="info.dark">
+                        Tip: WeCom AI Bot uses WebSocket long connection — no public IP required.
+                    </Typography>
+                </Box>
+            </Stack>
         ),
     },
     {
