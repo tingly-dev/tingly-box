@@ -6,6 +6,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
 // TestClaudeCodeReplayStrategy_CompressBeta_ProducesAssistantMessageWithBlocks verifies
@@ -184,7 +186,7 @@ func TestClaudeCodeReplayStrategy_CompressV1_ProducesAssistantTextMessage(t *tes
 // TestConversationReplayTransformer_Beta_CompressesWhenConditionsMet verifies
 // end-to-end transformer behavior for beta API.
 func TestConversationReplayTransformer_Beta_CompressesWhenConditionsMet(t *testing.T) {
-	transformer := NewConversationReplayTransformer().(*ConversationReplayTransformer)
+	transformer := NewConversationReplayTransformer()
 
 	req := &anthropic.BetaMessageNewParams{
 		Messages: []anthropic.BetaMessageParam{
@@ -197,7 +199,8 @@ func TestConversationReplayTransformer_Beta_CompressesWhenConditionsMet(t *testi
 		},
 	}
 
-	err := transformer.HandleV1Beta(req)
+	ctx := transform.NewTransformContext(req)
+	err := transformer.Apply(ctx)
 	assert.NoError(t, err)
 	require.Len(t, req.Messages, 1)
 	assert.Equal(t, "assistant", string(req.Messages[0].Role))

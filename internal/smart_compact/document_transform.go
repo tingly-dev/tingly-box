@@ -4,7 +4,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
 const (
@@ -86,7 +86,7 @@ func (s *ConversationDocumentStrategy) CompressBeta(messages []anthropic.BetaMes
 	}
 }
 
-// ConversationDocumentTransformer applies document-based compression.
+// ConversationDocumentTransformer applies document-based compression using transform.Transform interface.
 //
 // Conditions for activation (same as ConditionalCompactTransformer):
 // 1. Last user message contains "compact" (case-insensitive)
@@ -95,15 +95,35 @@ type ConversationDocumentTransformer struct {
 	strategy *ConversationDocumentStrategy
 }
 
+// Compile-time interface check.
+var _ transform.Transform = (*ConversationDocumentTransformer)(nil)
+
 // NewConversationDocumentTransformer creates a new document-based compact transformer.
-func NewConversationDocumentTransformer() protocol.Transformer {
+func NewConversationDocumentTransformer() transform.Transform {
 	return &ConversationDocumentTransformer{
 		strategy: NewConversationDocumentStrategy(),
 	}
 }
 
-// HandleV1 handles compacting for Anthropic v1 requests.
-func (t *ConversationDocumentTransformer) HandleV1(req *anthropic.MessageNewParams) error {
+// Name returns the transform identifier.
+func (t *ConversationDocumentTransformer) Name() string {
+	return "conversation-document"
+}
+
+// Apply applies the document-based compression to the request.
+func (t *ConversationDocumentTransformer) Apply(ctx *transform.TransformContext) error {
+	switch req := ctx.Request.(type) {
+	case *anthropic.MessageNewParams:
+		return t.applyV1(req)
+	case *anthropic.BetaMessageNewParams:
+		return t.applyBeta(req)
+	default:
+		return nil
+	}
+}
+
+// applyV1 handles compacting for Anthropic v1 requests.
+func (t *ConversationDocumentTransformer) applyV1(req *anthropic.MessageNewParams) error {
 	if len(req.Messages) == 0 {
 		return nil
 	}
@@ -116,8 +136,8 @@ func (t *ConversationDocumentTransformer) HandleV1(req *anthropic.MessageNewPara
 	return nil
 }
 
-// HandleV1Beta handles compacting for Anthropic v1beta requests.
-func (t *ConversationDocumentTransformer) HandleV1Beta(req *anthropic.BetaMessageNewParams) error {
+// applyBeta handles compacting for Anthropic v1beta requests.
+func (t *ConversationDocumentTransformer) applyBeta(req *anthropic.BetaMessageNewParams) error {
 	if len(req.Messages) == 0 {
 		return nil
 	}

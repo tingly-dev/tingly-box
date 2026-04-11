@@ -6,6 +6,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
 // TestClaudeCodeCompactionStrategy_CompressBeta_ProducesAssistantWithCompactionBlock
@@ -113,7 +115,7 @@ func TestClaudeCodeCompactionStrategy_CompressV1_FallsBackToAssistantTextMessage
 // TestXMLCompactionTransformer_Beta_CompressesWhenConditionsMet verifies
 // end-to-end transformer behavior for beta API.
 func TestXMLCompactionTransformer_Beta_CompressesWhenConditionsMet(t *testing.T) {
-	transformer := NewXMLCompactionTransformer().(*XMLCompactionTransformer)
+	transformer := NewXMLCompactionTransformer()
 
 	req := &anthropic.BetaMessageNewParams{
 		Messages: []anthropic.BetaMessageParam{
@@ -126,7 +128,8 @@ func TestXMLCompactionTransformer_Beta_CompressesWhenConditionsMet(t *testing.T)
 		},
 	}
 
-	err := transformer.HandleV1Beta(req)
+	ctx := transform.NewTransformContext(req)
+	err := transformer.Apply(ctx)
 	assert.NoError(t, err)
 	require.Len(t, req.Messages, 1)
 	assert.Equal(t, "assistant", string(req.Messages[0].Role))
@@ -136,7 +139,7 @@ func TestXMLCompactionTransformer_Beta_CompressesWhenConditionsMet(t *testing.T)
 // TestXMLCompactionTransformer_Beta_PassthroughWhenNoTools verifies
 // the transformer does not compress when tools are absent.
 func TestXMLCompactionTransformer_Beta_PassthroughWhenNoTools(t *testing.T) {
-	transformer := NewXMLCompactionTransformer().(*XMLCompactionTransformer)
+	transformer := NewXMLCompactionTransformer()
 
 	req := &anthropic.BetaMessageNewParams{
 		Messages: []anthropic.BetaMessageParam{
@@ -145,7 +148,8 @@ func TestXMLCompactionTransformer_Beta_PassthroughWhenNoTools(t *testing.T) {
 	}
 
 	originalLen := len(req.Messages)
-	err := transformer.HandleV1Beta(req)
+	ctx := transform.NewTransformContext(req)
+	err := transformer.Apply(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, originalLen, len(req.Messages))
 }

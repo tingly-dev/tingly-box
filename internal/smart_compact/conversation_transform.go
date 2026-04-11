@@ -6,7 +6,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
 // ConversationReplayStrategy compresses conversation history by reconstructing historical
@@ -113,7 +113,7 @@ func (s *ConversationReplayStrategy) replayBetaMessage(role string, content []an
 	return blocks
 }
 
-// ConversationReplayTransformer applies replay-based compression.
+// ConversationReplayTransformer applies replay-based compression using transform.Transform interface.
 //
 // Same trigger conditions as other compact transformers:
 // 1. Last user message contains "compact" (case-insensitive)
@@ -122,15 +122,35 @@ type ConversationReplayTransformer struct {
 	strategy *ConversationReplayStrategy
 }
 
+// Compile-time interface check.
+var _ transform.Transform = (*ConversationReplayTransformer)(nil)
+
 // NewConversationReplayTransformer creates a new replay transformer.
-func NewConversationReplayTransformer() protocol.Transformer {
+func NewConversationReplayTransformer() transform.Transform {
 	return &ConversationReplayTransformer{
 		strategy: NewConversationReplayStrategy(),
 	}
 }
 
-// HandleV1 handles compacting for Anthropic v1 requests (XML fallback).
-func (t *ConversationReplayTransformer) HandleV1(req *anthropic.MessageNewParams) error {
+// Name returns the transform identifier.
+func (t *ConversationReplayTransformer) Name() string {
+	return "conversation-replay"
+}
+
+// Apply applies the replay-based compression to the request.
+func (t *ConversationReplayTransformer) Apply(ctx *transform.TransformContext) error {
+	switch req := ctx.Request.(type) {
+	case *anthropic.MessageNewParams:
+		return t.applyV1(req)
+	case *anthropic.BetaMessageNewParams:
+		return t.applyBeta(req)
+	default:
+		return nil
+	}
+}
+
+// applyV1 handles compacting for Anthropic v1 requests (XML fallback).
+func (t *ConversationReplayTransformer) applyV1(req *anthropic.MessageNewParams) error {
 	if len(req.Messages) == 0 {
 		return nil
 	}
@@ -143,8 +163,8 @@ func (t *ConversationReplayTransformer) HandleV1(req *anthropic.MessageNewParams
 	return nil
 }
 
-// HandleV1Beta handles compacting for Anthropic v1beta requests (native block replay).
-func (t *ConversationReplayTransformer) HandleV1Beta(req *anthropic.BetaMessageNewParams) error {
+// applyBeta handles compacting for Anthropic v1beta requests (native block replay).
+func (t *ConversationReplayTransformer) applyBeta(req *anthropic.BetaMessageNewParams) error {
 	if len(req.Messages) == 0 {
 		return nil
 	}

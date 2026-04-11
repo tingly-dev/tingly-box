@@ -6,6 +6,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
 // TestClaudeCodeDocumentStrategy_CompressV1_ProducesUserMessageWithDocumentBlock verifies
@@ -198,7 +200,7 @@ func TestClaudeCodeDocumentStrategy_CompressBeta_DocumentContainsConversationXML
 // TestConversationDocumentTransformer_V1_PassthroughWhenNoTools verifies that
 // the transformer does not compress when the request has no tools.
 func TestConversationDocumentTransformer_V1_PassthroughWhenNoTools(t *testing.T) {
-	transformer := NewConversationDocumentTransformer().(*ConversationDocumentTransformer)
+	transformer := NewConversationDocumentTransformer()
 
 	req := &anthropic.MessageNewParams{
 		Messages: []anthropic.MessageParam{
@@ -210,7 +212,8 @@ func TestConversationDocumentTransformer_V1_PassthroughWhenNoTools(t *testing.T)
 	}
 
 	originalLen := len(req.Messages)
-	err := transformer.HandleV1(req)
+	ctx := transform.NewTransformContext(req)
+	err := transformer.Apply(ctx)
 	assert.NoError(t, err)
 	// Messages unchanged — no compression
 	assert.Equal(t, originalLen, len(req.Messages))
@@ -219,7 +222,7 @@ func TestConversationDocumentTransformer_V1_PassthroughWhenNoTools(t *testing.T)
 // TestConversationDocumentTransformer_V1_PassthroughWhenNoCompactKeyword verifies that
 // the transformer does not compress when the last user message lacks "compact".
 func TestConversationDocumentTransformer_V1_PassthroughWhenNoCompactKeyword(t *testing.T) {
-	transformer := NewConversationDocumentTransformer().(*ConversationDocumentTransformer)
+	transformer := NewConversationDocumentTransformer()
 
 	req := &anthropic.MessageNewParams{
 		Messages: []anthropic.MessageParam{
@@ -238,7 +241,8 @@ func TestConversationDocumentTransformer_V1_PassthroughWhenNoCompactKeyword(t *t
 	}
 
 	originalLen := len(req.Messages)
-	err := transformer.HandleV1(req)
+	ctx := transform.NewTransformContext(req)
+	err := transformer.Apply(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, originalLen, len(req.Messages))
 }
@@ -246,7 +250,7 @@ func TestConversationDocumentTransformer_V1_PassthroughWhenNoCompactKeyword(t *t
 // TestConversationDocumentTransformer_V1_CompressesWhenConditionsMet verifies that
 // the transformer applies compression when both conditions are satisfied.
 func TestConversationDocumentTransformer_V1_CompressesWhenConditionsMet(t *testing.T) {
-	transformer := NewConversationDocumentTransformer().(*ConversationDocumentTransformer)
+	transformer := NewConversationDocumentTransformer()
 
 	req := &anthropic.MessageNewParams{
 		Messages: []anthropic.MessageParam{
@@ -264,7 +268,8 @@ func TestConversationDocumentTransformer_V1_CompressesWhenConditionsMet(t *testi
 		},
 	}
 
-	err := transformer.HandleV1(req)
+	ctx := transform.NewTransformContext(req)
+	err := transformer.Apply(ctx)
 	assert.NoError(t, err)
 
 	// Must be compressed to a single user message with document block

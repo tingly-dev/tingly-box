@@ -7,6 +7,7 @@ import (
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
 // helpers
@@ -321,16 +322,16 @@ func TestMockScenario_DefaultStopReasons(t *testing.T) {
 
 type recordingTransformer struct{ called *bool }
 
-func (r *recordingTransformer) HandleV1(_ *anthropic.MessageNewParams) error { return nil }
-func (r *recordingTransformer) HandleV1Beta(_ *anthropic.BetaMessageNewParams) error {
+func (r *recordingTransformer) Name() string { return "recording" }
+func (r *recordingTransformer) Apply(_ *transform.TransformContext) error {
 	*r.called = true
 	return nil
 }
 
 type failingTransformer struct{}
 
-func (f *failingTransformer) HandleV1(_ *anthropic.MessageNewParams) error { return nil }
-func (f *failingTransformer) HandleV1Beta(_ *anthropic.BetaMessageNewParams) error {
+func (f *failingTransformer) Name() string { return "failing" }
+func (f *failingTransformer) Apply(_ *transform.TransformContext) error {
 	return errTransformFailed
 }
 

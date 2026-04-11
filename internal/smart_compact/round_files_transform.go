@@ -6,20 +6,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
-// NewRoundFilesTransformer creates a protocol.Transformer for round-files compression.
-func NewRoundFilesTransformer() protocol.Transformer {
-	t := NewRoundWithFilesStrategy()
-	return &roundFilesTransformerAdapter{t}
-}
-
-type roundFilesTransformerAdapter struct{ t *RoundFilesTransform }
-
-func (a *roundFilesTransformerAdapter) HandleV1(req *anthropic.MessageNewParams) error {
-	return a.t.applyV1(req)
-}
-
-func (a *roundFilesTransformerAdapter) HandleV1Beta(req *anthropic.BetaMessageNewParams) error {
-	return a.t.applyBeta(req)
+// NewRoundFilesTransformer creates a transform.Transform for round-files compression.
+func NewRoundFilesTransformer() transform.Transform {
+	return NewRoundWithFilesStrategy()
 }
 
 // RoundFilesTransform keeps user/assistant + file paths as virtual tool calls.
@@ -30,20 +19,21 @@ type RoundFilesTransform struct {
 	pathUtil *PathUtil
 }
 
+// Compile-time interface check.
+var _ transform.Transform = (*RoundFilesTransform)(nil)
+
 // NewRoundFilesTransform creates a new RoundFilesTransform.
-func NewRoundFilesTransform() transform.Transform {
+func NewRoundFilesTransform() *RoundFilesTransform {
 	return &RoundFilesTransform{
 		rounder:  protocol.NewGrouper(),
 		pathUtil: NewPathUtil(),
 	}
 }
 
-// NewRoundWithFilesStrategy creates a RoundFilesTransform (previously a separate Strategy type).
+// NewRoundWithFilesStrategy creates a RoundFilesTransform for direct use (mainly for tests).
+// This returns the concrete type so tests can call CompressV1/CompressBeta directly.
 func NewRoundWithFilesStrategy() *RoundFilesTransform {
-	return &RoundFilesTransform{
-		rounder:  protocol.NewGrouper(),
-		pathUtil: NewPathUtil(),
-	}
+	return NewRoundFilesTransform()
 }
 
 // Name returns the transform identifier.

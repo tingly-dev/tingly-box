@@ -3,12 +3,22 @@
 //
 // The package includes:
 //   - CompressionStrategy interface for defining compression algorithms
-//   - Strategy implementations (thinking removal, round-only, round-files)
-//   - Transformer adapters that bridge strategies to the protocol.Transformer interface
+//   - Strategy implementations (conversation replay, document, round-only, round-files)
+//   - Transform implementations that implement transform.Transform interface
+//   - Legacy CompactTransformer for test compatibility only (production code uses ThinkingCompactTransform)
 //
 // Strategies compress conversation rounds by removing thinking blocks,
 // tool calls, and tool results while preserving the essential flow
 // of user requests and assistant responses.
+//
+// For new code, prefer using the transform.Transform implementations:
+//   - NewCompactTransform() / ThinkingCompactTransform - removes thinking blocks
+//   - NewRoundOnlyTransform() / RoundOnlyTransform - keeps only user/assistant text
+//   - NewRoundFilesTransform() / RoundFilesTransform - keeps text + virtual file tools
+//   - NewConversationReplayTransformer() - replay-based compression
+//   - NewConversationDocumentTransformer() - document-based compression
+//   - NewDeduplicationTransform() - removes duplicate tool calls
+//   - NewPurgeErrorsTransform() - removes errored tool inputs
 package smart_compact
 
 import (
@@ -32,18 +42,8 @@ type CompressionStrategy interface {
 
 // CompactTransformer implements the Transformer interface.
 type CompactTransformer struct {
-	protocol.Transformer
-	rounder           *protocol.Grouper
-	KeepLastNRounds   int // Number of recent rounds to preserve thinking blocks (min: 1)
-	MinAssistantCount int // Minimum assistant messages required for compaction (default: 1)
-}
-
-type Option = func(*CompactTransformer)
-
-func WithMinAssistant(count int) Option {
-	return func(t *CompactTransformer) {
-		t.MinAssistantCount = count
-	}
+	rounder *protocol.Grouper
+	config  CompactConfig
 }
 
 // NewCompactTransformer creates a new smart_compact transformer instance.
@@ -61,14 +61,26 @@ func NewCompactTransformer(keepLastNRounds int, opts ...Option) *CompactTransfor
 		keepLastNRounds = 1
 	}
 	res := &CompactTransformer{
-		rounder:           protocol.NewGrouper(),
-		KeepLastNRounds:   keepLastNRounds,
-		MinAssistantCount: 10, // Default: require at least 10 assistant message
+		rounder: protocol.NewGrouper(),
+		config: CompactConfig{
+			KeepLastNRounds:   keepLastNRounds,
+			MinAssistantCount: 1, // Default: require at least 1 assistant message
+		},
 	}
 	for _, opt := range opts {
 		opt(res)
 	}
 	return res
+}
+
+// Option configures a CompactTransformer.
+type Option = func(*CompactTransformer)
+
+// WithMinAssistant sets the minimum assistant count required for compaction.
+func WithMinAssistant(count int) Option {
+	return func(t *CompactTransformer) {
+		t.config.MinAssistantCount = count
+	}
 }
 
 // HandleV1 compacts an Anthropic v1 request by removing thinking fields
@@ -124,7 +136,7 @@ func (t *CompactTransformer) compactV1Rounds(rounds []protocol.V1Round) ([]anthr
 	var result []anthropic.MessageParam
 	removedCount := 0
 	totalRounds := len(rounds)
-	preserveStart := totalRounds - t.KeepLastNRounds
+	preserveStart := totalRounds - t.config.KeepLastNRounds
 	if preserveStart < 0 {
 		preserveStart = 0
 	}
@@ -134,19 +146,16 @@ func (t *CompactTransformer) compactV1Rounds(rounds []protocol.V1Round) ([]anthr
 		var guardPassed bool
 
 		// Guard: check round structure before compacting
+		guardPassed = ShouldCompactRound(rnd.Stats, t.config)
 		if rnd.Stats != nil {
-			guardPassed = t.shouldCompactRound(rnd.Stats)
 			logrus.Debugf("[smart_compact] v1: round %d: user=%d, assistant=%d, tool_result=%d, has_thinking=%v, preserve=%v, guard_ok=%v",
 				i, rnd.Stats.UserMessageCount, rnd.Stats.AssistantCount, rnd.Stats.ToolResultCount, rnd.Stats.HasThinking, shouldPreserve, guardPassed)
-		} else {
-			// No stats available, assume guard passed for backward compatibility
-			guardPassed = true
 		}
 
 		for _, msg := range rnd.Messages {
 			// Only remove thinking from assistant messages in non-preserved rounds that passed guard
 			if !shouldPreserve && guardPassed && string(msg.Role) == "assistant" {
-				newContent, count := t.removeV1ThinkingBlocks(msg.Content, removedCount)
+				newContent, count := RemoveV1ThinkingBlocks(msg.Content, removedCount)
 				removedCount = count
 				// Create a new message with updated content
 				msg = anthropic.MessageParam{
@@ -161,6 +170,21 @@ func (t *CompactTransformer) compactV1Rounds(rounds []protocol.V1Round) ([]anthr
 	return result, removedCount
 }
 
+// removeV1ThinkingBlocks is a convenience wrapper for the shared function.
+func (t *CompactTransformer) removeV1ThinkingBlocks(content []anthropic.ContentBlockParamUnion, count int) ([]anthropic.ContentBlockParamUnion, int) {
+	return RemoveV1ThinkingBlocks(content, count)
+}
+
+// removeBetaThinkingBlocks is a convenience wrapper for the shared function.
+func (t *CompactTransformer) removeBetaThinkingBlocks(content []anthropic.BetaContentBlockParamUnion, count int) ([]anthropic.BetaContentBlockParamUnion, int) {
+	return RemoveBetaThinkingBlocks(content, count)
+}
+
+// shouldCompactRound is a convenience wrapper for the shared function.
+func (t *CompactTransformer) shouldCompactRound(stats *protocol.RoundStats) bool {
+	return ShouldCompactRound(stats, t.config)
+}
+
 // compactBetaRounds removes thinking blocks from rounds outside the preservation window.
 //
 // See compactV1Rounds for detailed strategy rationale and guard checks.
@@ -168,7 +192,7 @@ func (t *CompactTransformer) compactBetaRounds(rounds []protocol.BetaRound) ([]a
 	var result []anthropic.BetaMessageParam
 	removedCount := 0
 	totalRounds := len(rounds)
-	preserveStart := totalRounds - t.KeepLastNRounds
+	preserveStart := totalRounds - t.config.KeepLastNRounds
 	if preserveStart < 0 {
 		preserveStart = 0
 	}
@@ -178,19 +202,16 @@ func (t *CompactTransformer) compactBetaRounds(rounds []protocol.BetaRound) ([]a
 		var guardPassed bool
 
 		// Guard: check round structure before compacting
+		guardPassed = ShouldCompactRound(rnd.Stats, t.config)
 		if rnd.Stats != nil {
-			guardPassed = t.shouldCompactRound(rnd.Stats)
 			logrus.Debugf("[smart_compact] v1beta: round %d: user=%d, assistant=%d, tool_result=%d, has_thinking=%v, preserve=%v, guard_ok=%v",
 				i, rnd.Stats.UserMessageCount, rnd.Stats.AssistantCount, rnd.Stats.ToolResultCount, rnd.Stats.HasThinking, shouldPreserve, guardPassed)
-		} else {
-			// No stats available, assume guard passed for backward compatibility
-			guardPassed = true
 		}
 
 		for _, msg := range rnd.Messages {
 			// Only remove thinking from assistant messages in non-preserved rounds that passed guard
 			if !shouldPreserve && guardPassed && string(msg.Role) == "assistant" {
-				newContent, count := t.removeBetaThinkingBlocks(msg.Content, removedCount)
+				newContent, count := RemoveBetaThinkingBlocks(msg.Content, removedCount)
 				removedCount = count
 				// Create a new message with updated content
 				msg = anthropic.BetaMessageParam{
@@ -203,66 +224,4 @@ func (t *CompactTransformer) compactBetaRounds(rounds []protocol.BetaRound) ([]a
 	}
 
 	return result, removedCount
-}
-
-// removeV1ThinkingBlocks removes thinking content blocks from v1 message content.
-func (t *CompactTransformer) removeV1ThinkingBlocks(content []anthropic.ContentBlockParamUnion, count int) ([]anthropic.ContentBlockParamUnion, int) {
-	var filtered []anthropic.ContentBlockParamUnion
-
-	for _, block := range content {
-		// Skip thinking blocks (both regular and redacted)
-		if block.OfThinking == nil && block.OfRedactedThinking == nil {
-			filtered = append(filtered, block)
-		} else {
-			count++
-		}
-	}
-
-	return filtered, count
-}
-
-// removeBetaThinkingBlocks removes thinking content blocks from beta message content.
-func (t *CompactTransformer) removeBetaThinkingBlocks(content []anthropic.BetaContentBlockParamUnion, count int) ([]anthropic.BetaContentBlockParamUnion, int) {
-	var filtered []anthropic.BetaContentBlockParamUnion
-
-	for _, block := range content {
-		// Skip thinking blocks (both regular and redacted)
-		if block.OfThinking == nil && block.OfRedactedThinking == nil {
-			filtered = append(filtered, block)
-		} else {
-			count++
-		}
-	}
-
-	return filtered, count
-}
-
-// shouldCompactRound performs guard checks to determine if a round is safe to compact.
-//
-// Guard checks:
-//   - UserMessageCount == 1: Round should have exactly one pure user message as start
-//   - AssistantCount >= 1: Round should have at least one assistant response
-//
-// Note: ToolResultCount is not enforced as a guard because not all conversations
-// use tools. A round is valid with just user/assistant text exchanges.
-//
-// Returns false if the round structure appears malformed, preventing compaction
-// on potentially incorrectly grouped rounds.
-func (t *CompactTransformer) shouldCompactRound(stats *protocol.RoundStats) bool {
-	// Guard: nil stats check
-	if stats == nil {
-		return false
-	}
-
-	// Guard: should have exactly one pure user message as the round start
-	if stats.UserMessageCount != 1 {
-		return false
-	}
-
-	// Guard: should have at least one assistant response
-	if stats.AssistantCount < t.MinAssistantCount {
-		return false
-	}
-
-	return true
 }

@@ -6,20 +6,15 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
-// NewRoundOnlyTransformer creates a protocol.Transformer for round-only compression.
-func NewRoundOnlyTransformer() protocol.Transformer {
-	t := NewRoundOnlyStrategy()
-	return &roundOnlyTransformerAdapter{t}
+// NewRoundOnlyTransformer creates a transform.Transform for round-only compression.
+func NewRoundOnlyTransformer() transform.Transform {
+	return NewRoundOnlyStrategy()
 }
 
-type roundOnlyTransformerAdapter struct{ t *RoundOnlyTransform }
-
-func (a *roundOnlyTransformerAdapter) HandleV1(req *anthropic.MessageNewParams) error {
-	return a.t.applyV1(req)
-}
-
-func (a *roundOnlyTransformerAdapter) HandleV1Beta(req *anthropic.BetaMessageNewParams) error {
-	return a.t.applyBeta(req)
+// NewRoundOnlyStrategy creates a RoundOnlyTransform for direct use (mainly for tests).
+// This returns the concrete type so tests can call CompressV1/CompressBeta directly.
+func NewRoundOnlyStrategy() *RoundOnlyTransform {
+	return NewRoundOnlyTransform()
 }
 
 // RoundOnlyTransform keeps only user request + assistant conclusion.
@@ -28,15 +23,11 @@ type RoundOnlyTransform struct {
 	rounder *protocol.Grouper
 }
 
-// NewRoundOnlyTransform creates a new RoundOnlyTransform.
-func NewRoundOnlyTransform() transform.Transform {
-	return &RoundOnlyTransform{
-		rounder: protocol.NewGrouper(),
-	}
-}
+// Compile-time interface check.
+var _ transform.Transform = (*RoundOnlyTransform)(nil)
 
-// NewRoundOnlyStrategy creates a RoundOnlyTransform (previously a separate Strategy type).
-func NewRoundOnlyStrategy() *RoundOnlyTransform {
+// NewRoundOnlyTransform creates a new RoundOnlyTransform.
+func NewRoundOnlyTransform() *RoundOnlyTransform {
 	return &RoundOnlyTransform{
 		rounder: protocol.NewGrouper(),
 	}

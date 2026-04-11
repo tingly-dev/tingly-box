@@ -6,7 +6,6 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
@@ -117,7 +116,7 @@ func (s *XMLCompactionStrategy) CompressBeta(messages []anthropic.BetaMessagePar
 	}
 }
 
-// XMLCompactionTransformer applies compaction block compression.
+// XMLCompactionTransformer applies compaction block compression using transform.Transform interface.
 //
 // Same trigger conditions as other compact transformers:
 // 1. Last user message contains "compact" (case-insensitive)
@@ -126,15 +125,35 @@ type XMLCompactionTransformer struct {
 	strategy *XMLCompactionStrategy
 }
 
+// Compile-time interface check.
+var _ transform.Transform = (*XMLCompactionTransformer)(nil)
+
 // NewXMLCompactionTransformer creates a new compaction transformer.
-func NewXMLCompactionTransformer() protocol.Transformer {
+func NewXMLCompactionTransformer() transform.Transform {
 	return &XMLCompactionTransformer{
 		strategy: NewXMLCompactionStrategy(),
 	}
 }
 
-// HandleV1 handles compacting for Anthropic v1 requests (fallback to XML text).
-func (t *XMLCompactionTransformer) HandleV1(req *anthropic.MessageNewParams) error {
+// Name returns the transform identifier.
+func (t *XMLCompactionTransformer) Name() string {
+	return "xml-compaction"
+}
+
+// Apply applies the compaction block compression to the request.
+func (t *XMLCompactionTransformer) Apply(ctx *transform.TransformContext) error {
+	switch req := ctx.Request.(type) {
+	case *anthropic.MessageNewParams:
+		return t.applyV1(req)
+	case *anthropic.BetaMessageNewParams:
+		return t.applyBeta(req)
+	default:
+		return nil
+	}
+}
+
+// applyV1 handles compacting for Anthropic v1 requests (fallback to XML text).
+func (t *XMLCompactionTransformer) applyV1(req *anthropic.MessageNewParams) error {
 	if len(req.Messages) == 0 {
 		return nil
 	}
@@ -147,8 +166,8 @@ func (t *XMLCompactionTransformer) HandleV1(req *anthropic.MessageNewParams) err
 	return nil
 }
 
-// HandleV1Beta handles compacting for Anthropic v1beta requests (native compaction block).
-func (t *XMLCompactionTransformer) HandleV1Beta(req *anthropic.BetaMessageNewParams) error {
+// applyBeta handles compacting for Anthropic v1beta requests (native compaction block).
+func (t *XMLCompactionTransformer) applyBeta(req *anthropic.BetaMessageNewParams) error {
 	if len(req.Messages) == 0 {
 		return nil
 	}

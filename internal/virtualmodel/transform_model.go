@@ -14,7 +14,7 @@ type TransformModelConfig struct {
 	ID          string
 	Name        string
 	Description string
-	Transformer protocol.Transformer      // applied after Chain
+	Transformer transform.Transform       // applied after Chain
 	Chain       *transform.TransformChain // applied first
 }
 
@@ -59,14 +59,18 @@ func (m *TransformModel) HandleAnthropicStream(req *protocol.AnthropicBetaMessag
 
 // HandleAnthropic applies Chain then Transformer to req in-place and returns the response.
 func (m *TransformModel) HandleAnthropic(req *protocol.AnthropicBetaMessagesRequest) (VModelResponse, error) {
+	ctx := transform.NewTransformContext(&req.BetaMessageNewParams)
+
+	// Apply Chain first
 	if m.cfg.Chain != nil {
-		ctx := transform.NewTransformContext(&req.BetaMessageNewParams)
 		if _, err := m.cfg.Chain.Execute(ctx); err != nil {
 			return VModelResponse{}, fmt.Errorf("transform chain failed: %w", err)
 		}
 	}
+
+	// Apply Transformer
 	if m.cfg.Transformer != nil {
-		if err := m.cfg.Transformer.HandleV1Beta(&req.BetaMessageNewParams); err != nil {
+		if err := m.cfg.Transformer.Apply(ctx); err != nil {
 			return VModelResponse{}, fmt.Errorf("transformer failed: %w", err)
 		}
 	}
