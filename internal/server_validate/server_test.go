@@ -107,7 +107,7 @@ func TestServerValidate_OpenAI_ChatCompletions(t *testing.T) {
 	defer vs.Close()
 
 	s := newTextScenario()
-	result := vs.SendOpenAIChat(t, s, false)
+	result := vs.Client().SendOpenAIChat(t, s, false)
 	require.Equal(t, 200, result.HTTPStatus)
 	assert.Equal(t, "assistant", result.Role)
 	assert.NotEmpty(t, result.Content)
@@ -120,7 +120,7 @@ func TestServerValidate_OpenAI_ChatCompletions_Streaming(t *testing.T) {
 	defer vs.Close()
 
 	s := newTextScenario()
-	result := vs.SendOpenAIChat(t, s, true)
+	result := vs.Client().SendOpenAIChat(t, s, true)
 	require.Equal(t, 200, result.HTTPStatus)
 	assert.NotEmpty(t, result.StreamEvents)
 	assert.NotEmpty(t, result.Content)
@@ -131,7 +131,7 @@ func TestServerValidate_Anthropic_Messages(t *testing.T) {
 	defer vs.Close()
 
 	s := newTextScenario()
-	result := vs.SendAnthropicV1(t, s, false)
+	result := vs.Client().SendAnthropicV1(t, s, false)
 	require.Equal(t, 200, result.HTTPStatus)
 	assert.Equal(t, "assistant", result.Role)
 	assert.NotEmpty(t, result.Content)
@@ -143,7 +143,7 @@ func TestServerValidate_Anthropic_Messages_Streaming(t *testing.T) {
 	defer vs.Close()
 
 	s := newTextScenario()
-	result := vs.SendAnthropicV1(t, s, true)
+	result := vs.Client().SendAnthropicV1(t, s, true)
 	require.Equal(t, 200, result.HTTPStatus)
 	assert.NotEmpty(t, result.StreamEvents)
 	assert.NotEmpty(t, result.Content)
@@ -154,7 +154,7 @@ func TestServerValidate_Google_GenerateContent(t *testing.T) {
 	defer vs.Close()
 
 	s := newTextScenario()
-	result := vs.SendGoogle(t, s, false)
+	result := vs.Client().SendGoogle(t, s, false)
 	require.Equal(t, 200, result.HTTPStatus)
 	assert.NotEmpty(t, result.Content)
 }
@@ -164,7 +164,7 @@ func TestServerValidate_ToolUse_OpenAI(t *testing.T) {
 	defer vs.Close()
 
 	s := newToolUseScenario()
-	result := vs.SendOpenAIChat(t, s, false)
+	result := vs.Client().SendOpenAIChat(t, s, false)
 	require.Equal(t, 200, result.HTTPStatus)
 	require.Len(t, result.ToolCalls, 1)
 	assert.Equal(t, "get_weather", result.ToolCalls[0].Name)
@@ -176,7 +176,7 @@ func TestServerValidate_ToolUse_Anthropic(t *testing.T) {
 	defer vs.Close()
 
 	s := newToolUseScenario()
-	result := vs.SendAnthropicV1(t, s, false)
+	result := vs.Client().SendAnthropicV1(t, s, false)
 	require.Equal(t, 200, result.HTTPStatus)
 	require.Len(t, result.ToolCalls, 1)
 	assert.Equal(t, "get_weather", result.ToolCalls[0].Name)
@@ -188,7 +188,7 @@ func TestServerValidate_ErrorResponse(t *testing.T) {
 	defer vs.Close()
 
 	s := newErrorScenario()
-	result := vs.SendOpenAIChat(t, s, false)
+	result := vs.Client().SendOpenAIChat(t, s, false)
 	assert.Equal(t, 429, result.HTTPStatus)
 }
 
@@ -197,7 +197,8 @@ func TestServerValidate_CallCount(t *testing.T) {
 	defer vs.Close()
 
 	s := newTextScenario()
-	vs.SendOpenAIChat(t, s, false)
-	vs.SendOpenAIChat(t, s, false)
+	vc := vs.Client()
+	vc.SendOpenAIChat(t, s, false)
+	vc.SendOpenAIChat(t, s, false)
 	assert.Equal(t, 2, vs.CallCount())
 }
