@@ -18,6 +18,7 @@ const (
 	PlatformWebChat     Platform = "webchat"
 	PlatformDingTalk    Platform = "dingtalk"
 	PlatformWeixin      Platform = "weixin"
+	PlatformWecom       Platform = "wecom"
 )
 
 // ChatType represents the type of chat
@@ -240,6 +241,13 @@ func GetPlatformCapabilities(platform Platform) *PlatformCapabilities {
 			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup},
 			MediaTypes: []string{"image", "video", "audio", "document"},
 			Features:   []string{"reactions", "delete", "threads"},
+			TextLimit:  4000,
+			RateLimit:  50,
+		},
+		PlatformWecom: {
+			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup},
+			MediaTypes: []string{"image", "video", "audio", "file"},
+			Features:   []string{"streaming"},
 			TextLimit:  4000,
 			RateLimit:  50,
 		},
