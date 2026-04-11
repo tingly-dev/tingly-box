@@ -14,7 +14,10 @@
     "build:wails": "vite build --mode production-wails --config vite.config.wails.ts",
     "build:wails:lite": "vite build --mode production-wails-lite --config vite.config.wails.ts",
     "preview": "vite preview",
-    "gen:api": "openapi-typescript ../openapi.json -o ./src/client/schema.d.ts"
+    "gen:api": "openapi-typescript ../openapi.json -o ./src/client/schema.d.ts",
+    "lint": "oxlint src",
+    "lint:fix": "oxlint src --fix",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@ant-design/x-markdown": "^2.4.0",
