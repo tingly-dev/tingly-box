@@ -6,8 +6,8 @@ import {
     FormControl,
     Select,
     MenuItem,
-    SelectChangeEvent,
 } from '@mui/material';
+import type { SelectChangeEvent } from '@mui/material';
 import { Science, FiberManualRecord } from '@mui/icons-material';
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';

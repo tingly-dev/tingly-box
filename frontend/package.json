@@ -44,12 +44,18 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react-swc": "^4.3.0",
+    "eslint": "^10.2.0",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.4.0",
     "msw": "^2.12.14",
     "openapi-typescript": "^7.13.0",
     "rollup-plugin-visualizer": "^7.0.1",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.58.1",
     "vite": "^7.3.1"
   },
   "overrides": {

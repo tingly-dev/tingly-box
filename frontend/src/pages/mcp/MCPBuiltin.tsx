@@ -82,7 +82,7 @@ const MCPBuiltin = () => {
         const tools = mapped.tools || [];
         setEnableSearch(tools.includes('*') || tools.includes('mcp_web_search'));
         setEnableFetch(tools.includes('*') || tools.includes('mcp_web_fetch'));
-        setForm({ ...mapped, id: 'webtools', cwd: MCP_DEFAULT_CWD });
+        setForm({ ...mapped, id: 'webtools' as const, cwd: MCP_DEFAULT_CWD });
         setEditorMode('edit');
     };
 
@@ -110,8 +110,8 @@ const MCPBuiltin = () => {
                 setNotification({ open: true, message: 'At least one tool must be enabled', severity: 'error' });
                 return;
             }
-            const source = formValueToSource({ ...form, id: 'webtools', tools });
-            next = [...allSources.filter((s) => !BUILTIN_IDS.includes(s.id || '')), source];
+            const source = formValueToSource({ ...form, id: 'webtools' as const, tools });
+            next = [...allSources.filter((s) => s.id !== 'webtools'), source];
         }
 
         setSaving(true);
@@ -128,7 +128,7 @@ const MCPBuiltin = () => {
 
     if (loading) {
         return (
-            <PageLayout>
+            <PageLayout loading={true}>
                 <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
                     <CircularProgress />
                 </Box>
@@ -137,7 +137,7 @@ const MCPBuiltin = () => {
     }
 
     return (
-        <PageLayout>
+        <PageLayout loading={false}>
             <Stack spacing={2.5}>
                 <Alert severity="info">
                     Builtin MCP keeps mcp_web_search/mcp_web_fetch in one server. Click Add/Edit to open the same connection form used by Custom.

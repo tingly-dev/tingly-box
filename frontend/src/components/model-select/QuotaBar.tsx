@@ -1,5 +1,6 @@
 import { Box, Tooltip } from '@mui/material';
-import { QuotaTooltipContent, QuotaTooltipData, QuotaWindowDisplay } from './QuotaTooltip';
+import { QuotaTooltipContent } from './QuotaTooltip';
+import type { QuotaTooltipData, QuotaWindowDisplay } from './QuotaTooltip';
 import { QUOTA_COLORS, formatNumber } from '../dashboard/chartStyles';
 import type { ProviderQuota } from '../../types/quota';
 

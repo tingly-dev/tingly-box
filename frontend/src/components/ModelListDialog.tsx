@@ -150,7 +150,7 @@ const ModelListDialog = ({ open, onClose, provider }: ModelListDialogProps) => {
             if (isDialogOpenRef.current) {
                 const errorResult: ProbeResponse = {
                     success: false,
-                    error: { message: err?.message || 'Test failed' },
+                    error: { message: err?.message || 'Test failed', type: 'client_error' },
                 };
                 setTestResults(prev => new Map(prev).set(model, errorResult));
                 setViewResultModel(model);

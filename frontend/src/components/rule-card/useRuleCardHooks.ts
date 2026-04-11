@@ -8,6 +8,7 @@ import {
     cloneSmartRouting,
     createEmptySmartRouting,
     exportRuleWithProviders,
+    exportRuleAsJsonlToClipboard,
     exportRuleAsBase64ToClipboard,
     type ExportFormat,
 } from './utils';

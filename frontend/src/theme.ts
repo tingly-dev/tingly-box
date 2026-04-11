@@ -153,8 +153,6 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
       mode: isSunlit ? 'light' : mode,
       primary: primaryColor,
       secondary: secondaryColor,
-      // Add identifier for sunlit theme
-      isSunlit: isSunlit,
       success: {
         main: isSunlit ? '#22c55e' : '#059669',
         light: isSunlit ? '#4ade80' : '#10b981',
@@ -185,12 +183,13 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
         selected: isSunlit ? 'rgba(14, 165, 233, 0.15)' : (isDark ? '#1e3a8a' : '#e0e7ff'),
         disabled: isSunlit ? 'rgba(14, 165, 233, 0.04)' : (isDark ? '#1e293b' : '#f1f5f9'),
       },
-      // Dashboard colors palette
+      // Dashboard colors palette - custom extension
+      // @ts-ignore - custom dashboard colors
       dashboard: {
         token: dashboardColors.token,
         chart: dashboardColors.chart,
         statCard: dashboardColors.statCard,
-      },
+      } as any,
     },
     typography: {
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica", "Arial", sans-serif',

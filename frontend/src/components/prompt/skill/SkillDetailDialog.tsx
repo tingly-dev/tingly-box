@@ -172,7 +172,7 @@ const SkillDetailDialog = ({ open, skill, location, onClose }: SkillDetailDialog
                                 Size: {formatFileSize(skill.size)}
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
-                                Modified: {formatDate(skill.modified_at as string)}
+                                Modified: {formatDate(String(skill.modified_at))}
                             </Typography>
                         </Stack>
                     </Box>
