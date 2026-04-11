@@ -52,7 +52,7 @@ npx tingly-box@latest
 
 **From source code**
 
-*Requires: Go 1.25+, Node.js 20+, pnpm, task, openapi-generator-cli*
+*Requires: Go 1.25+, Node.js 20+, pnpm, task, openapi*
 
 ```bash
 # Install dependencies
@@ -60,7 +60,7 @@ npx tingly-box@latest
 # - Node.js: https://nodejs.org/
 # - pnpm: `npm install -g pnpm`
 # - task: https://taskfile.dev/installation/, or `go install github.com/go-task/task/v3/cmd/task@latest`
-# - openapi-generator-cli: `npm install @openapitools/openapi-generator-cli -g`
+# - shell: copy and run shell command in taskfile directly
 
 git submodule update --init --recursive
 
