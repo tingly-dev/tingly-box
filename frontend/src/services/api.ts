@@ -213,7 +213,7 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v2/providers', { headers });
             const body = response.data;
-            if (body.success && body.data) {
+            if (body?.success && body?.data) {
                 // Sort providers alphabetically by name to reduce UI changes
                 body.data.sort((a: any, b: any) => a.name.localeCompare(b.name));
             }
@@ -248,7 +248,7 @@ export const api = {
                 params: { path: { uuid } }
             });
             const body = response.data;
-            if (body.success && body.data) {
+            if (body?.success && body?.data) {
                 // Sort models alphabetically by model name to reduce UI changes
                 body.data.models.sort((a: any, b: any) =>
                     a.localeCompare(b)
@@ -269,7 +269,7 @@ export const api = {
                 params: { path: { uuid } }
             });
             const body = response.data;
-            if (body.success && body.data) {
+            if (body?.success && body?.data) {
                 // Sort models alphabetically by model name to reduce UI changes
                 body.data.models.sort((a: any, b: any) =>
                     a.localeCompare(b)
@@ -299,7 +299,7 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.POST('/api/v2/providers', {
                 headers,
-                params: { query: { force } },
+                params: { query: { force } as any },
                 body: data
             });
             return response.data;
@@ -713,11 +713,11 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v1/info/version', { headers });
             // openapi-fetch returns { data, error, response }
-            if (response.error || !response.data) {
-                console.error('Failed to get version:', response.error || 'No data in response');
+            if ((response as any).error || !response.data) {
+                console.error('Failed to get version:', (response as any).error || 'No data in response');
                 return 'Unknown';
             }
-            return response.data.data?.version || 'Unknown';
+            return response.data?.data?.version || 'Unknown';
         } catch (error: any) {
             console.error('Failed to get version:', error);
             return 'Unknown';
@@ -743,7 +743,7 @@ export const api = {
         try {
             const client = await getClient();
             const response = await client.GET('/api/v1/info/health');
-            return response.data.health === true;
+            return (response.data as any)?.health === true;
         } catch {
             return false;
         }
@@ -873,7 +873,7 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.POST('/api/v1/oauth/authorize', {
                 headers,
-                body: data
+                body: data as any
             });
             return response.data;
         } catch (error: any) {
@@ -1477,13 +1477,14 @@ export const api = {
         default_agent?: string;
         agent_type?: string;
         default_cwd?: string;
+        enabled?: boolean;
     }): Promise<any> => {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.POST('/api/v1/imbot-settings', {
                 headers,
-                body: data
+                body: data as any
             });
             return response.data;
         } catch (error: any) {
@@ -1563,7 +1564,7 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v1/auth/token', { headers });
-            return { success: true, data: response.data.data };
+            return { success: true, data: response.data?.data as { token: string; is_default: boolean } | undefined };
         } catch (error: any) {
             return { success: false, error: error.message };
         }
@@ -1575,12 +1576,13 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.POST('/api/v1/auth/token/reset', { headers });
-            if (response.data?.data?.token) {
+            const data = response.data?.data as { token: string } | undefined;
+            if (data?.token) {
                 // Update localStorage with new token
-                localStorage.setItem('user_auth_token', response.data.data.token);
+                localStorage.setItem('user_auth_token', data.token);
                 resetClient();
             }
-            return { success: true, data: response.data.data };
+            return { success: true, data };
         } catch (error: any) {
             return { success: false, error: error.message };
         }
@@ -1592,7 +1594,7 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.POST('/api/v1/auth/model-token/reset', { headers });
-            return { success: true, data: response.data.data };
+            return { success: true, data: (response.data as any)?.data };
         } catch (error: any) {
             return { success: false, error: error.message };
         }

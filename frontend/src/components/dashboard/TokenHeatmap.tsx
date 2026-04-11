@@ -422,7 +422,7 @@ export const TokenHeatmap = ({
                                             >
                                                 {formatTokenTotal(value)} total tokens
                                             </Typography>
-                                            {dayData && (dayData.inputTokens > 0 || dayData.outputTokens > 0 || dayData.cacheTokens > 0) && (
+                                            {dayData && (dayData.inputTokens > 0 || dayData.outputTokens > 0 || (dayData.cacheTokens ?? 0) > 0) && (
                                                 <Typography
                                                     sx={{
                                                         fontSize: '12px',

@@ -1,0 +1,40 @@
+{
+  "categories": {
+    "correctness": "warn",
+    "suspicious": "warn",
+    "perf": "warn",
+    "style": "off",
+    "restriction": "off",
+    "pedantic": "off"
+  },
+  "plugins": ["react"],
+  "ignorePatterns": [
+    "dist/**",
+    "node_modules/**",
+    "build/**",
+    "bindings/**",
+    "bindings-wails/**",
+    "*.config.js",
+    "*.config.ts"
+  ],
+  "rules": {
+    "react-in-jsx-scope": "off",
+    "jsx-key": "off",
+    "no-shadow": "off",
+    "no-unused-vars": "off",
+    "exhaustive-deps": "off",
+    "jsx-no-constructed-context-values": "off",
+    "no-array-index-key": "off",
+    "no-await-in-loop": "off",
+    "no-unmodified-loop-condition": "off",
+    "no-useless-escape": "off"
+  },
+  "overrides": [
+    {
+      "files": ["src/services/api.ts", "src/client/**/*"],
+      "rules": {
+        "typescript/no-explicit-any": "off"
+      }
+    }
+  ]
+}

@@ -19,6 +19,9 @@ import {useEffect, useState} from 'react';
 import api from "@/services/api.ts";
 import {getOAuthRedirectPath} from "@/utils/protocol";
 
+// Type for timer (browser vs Node.js)
+type TimerId = ReturnType<typeof setTimeout>;
+
 interface OAuthProvider {
     id: string;
     name: string;
@@ -139,7 +142,7 @@ const OAuthAuthorizationDialog = ({
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
     const [showTimeoutDialog, setShowTimeoutDialog] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [pollingIntervalId, setPollingIntervalId] = useState<NodeJS.Timeout | null>(null);
+    const [pollingIntervalId, setPollingIntervalId] = useState<TimerId | null>(null);
 
     // Cleanup OAuth session when dialog closes without success
     const cleanupOnClose = async () => {
@@ -231,7 +234,7 @@ const OAuthAuthorizationDialog = ({
             }
         }
 
-        let intervalId: NodeJS.Timeout | null = null;
+        let intervalId: TimerId | null = null;
         let currentPollCount = 0;
 
         const doPoll = async () => {
@@ -640,7 +643,7 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
             const response = await api.oauthAuthorize(
                 {
                     provider_type: provider.id,
-                    provider_uuid: providerUuid || undefined,
+                    provider_uuid: proxyUrl || undefined,
                     redirect_uri: redirectUri,
                 } as any,
             );

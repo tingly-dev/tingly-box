@@ -227,7 +227,7 @@ export default function TokenUsageChart({ data }: TokenUsageChartProps) {
                                 {top5Data.map((entry, index) => (
                                     <Cell
                                         key={`cache-${index}`}
-                                        fill={entry.cacheTokens > 0 ? chartStyles.token.cache.gradient : 'transparent'}
+                                        fill={(entry.cacheTokens ?? 0) > 0 ? chartStyles.token.cache.gradient : 'transparent'}
                                     />
                                 ))}
                             </Bar>

@@ -403,8 +403,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                     </Box>
 
                     {/* Status Line section */}
-                    {(generateStatusLineConfig || generateStatusLineScriptWindows || generateStatusLineScriptUnix) && (
-                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                             <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <Typography variant="subtitle2" color="text.secondary">
                                     {t('claudeCode.step3')}
@@ -415,15 +414,9 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                     variant="standard"
                                     sx={{ minHeight: 32, '& .MuiTabs-indicator': { height: 3 } }}
                                 >
-                                    {generateStatusLineConfig && (
-                                        <Tab label="JSON" value="json" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                    )}
-                                    {generateStatusLineScriptWindows && (
-                                        <Tab label="Windows" value="windows" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                    )}
-                                    {generateStatusLineScriptUnix && (
-                                        <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                    )}
+                                    <Tab label="JSON" value="json" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                    <Tab label="Windows" value="windows" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                    <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
                                 </Tabs>
                             </Box>
                             <Box>
@@ -498,8 +491,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                     />
                                 )}
                             </Box>
-                        </Box>
-                    )}
+                    </Box>
                 </Box>
             </DialogContent>
 
