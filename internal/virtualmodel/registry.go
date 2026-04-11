@@ -3,26 +3,36 @@ package virtualmodel
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/smart_compact"
 )
 
-// Registry manages virtual models
+// Registry manages virtual models indexed by ID and by protocol type.
+// At Register time it reads vm.Protocols() to build a protocol index and
+// validates that each declared APIType maps to the corresponding sub-interface.
 type Registry struct {
-	models map[string]*VirtualModel
-	mu     sync.RWMutex
+	models     map[string]VirtualModel
+	byProtocol map[protocol.APIType]map[string]VirtualModel
+	mu         sync.RWMutex
 }
 
-// NewRegistry creates a new virtual model registry
+// NewRegistry creates a new virtual model registry.
 func NewRegistry() *Registry {
 	return &Registry{
-		models: make(map[string]*VirtualModel),
+		models:     make(map[string]VirtualModel),
+		byProtocol: make(map[protocol.APIType]map[string]VirtualModel),
 	}
 }
 
-// Register registers a virtual model
-func (r *Registry) Register(vm *VirtualModel) error {
+// Register registers a virtual model.
+// It reads vm.Protocols() to populate the protocol index and validates that
+// each declared APIType corresponds to an implemented sub-interface:
+//   - TypeAnthropicV1 / TypeAnthropicBeta → AnthropicVirtualModel
+//   - TypeOpenAIChat / TypeOpenAIResponses → OpenAIChatVirtualModel
+func (r *Registry) Register(vm VirtualModel) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -31,27 +41,84 @@ func (r *Registry) Register(vm *VirtualModel) error {
 		return fmt.Errorf("model already registered: %s", id)
 	}
 
+	for _, apiType := range vm.Protocols() {
+		if err := validateProtocol(vm, apiType); err != nil {
+			return fmt.Errorf("model %s: %w", id, err)
+		}
+		if r.byProtocol[apiType] == nil {
+			r.byProtocol[apiType] = make(map[string]VirtualModel)
+		}
+		r.byProtocol[apiType][id] = vm
+	}
+
 	r.models[id] = vm
 	return nil
 }
 
-// Unregister unregisters a virtual model
+// validateProtocol checks that vm implements the sub-interface required by apiType.
+func validateProtocol(vm VirtualModel, apiType protocol.APIType) error {
+	switch apiType {
+	case protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta:
+		if _, ok := vm.(AnthropicVirtualModel); !ok {
+			return fmt.Errorf("declares %s but does not implement AnthropicVirtualModel", apiType)
+		}
+	case protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses:
+		if _, ok := vm.(OpenAIChatVirtualModel); !ok {
+			return fmt.Errorf("declares %s but does not implement OpenAIChatVirtualModel", apiType)
+		}
+	}
+	return nil
+}
+
+// Unregister removes a virtual model from all indexes.
 func (r *Registry) Unregister(id string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	vm, exists := r.models[id]
+	if !exists {
+		return
+	}
+	for _, apiType := range vm.Protocols() {
+		delete(r.byProtocol[apiType], id)
+	}
 	delete(r.models, id)
 }
 
-// Get retrieves a virtual model by ID
-func (r *Registry) Get(id string) *VirtualModel {
+// Get retrieves a virtual model by ID (protocol-agnostic).
+func (r *Registry) Get(id string) VirtualModel {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-
 	return r.models[id]
 }
 
-// ListModels returns all registered models as Model slices
+// GetAnthropicVM returns the AnthropicVirtualModel for id, or nil if not found
+// or if the model does not support the Anthropic protocol.
+func (r *Registry) GetAnthropicVM(id string) AnthropicVirtualModel {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	vm := r.byProtocol[protocol.TypeAnthropicBeta][id]
+	if vm == nil {
+		return nil
+	}
+	avm, _ := vm.(AnthropicVirtualModel)
+	return avm
+}
+
+// GetOpenAIChatVM returns the OpenAIChatVirtualModel for id, or nil if not found
+// or if the model does not support the OpenAI Chat protocol.
+func (r *Registry) GetOpenAIChatVM(id string) OpenAIChatVirtualModel {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	vm := r.byProtocol[protocol.TypeOpenAIChat][id]
+	if vm == nil {
+		return nil
+	}
+	ovm, _ := vm.(OpenAIChatVirtualModel)
+	return ovm
+}
+
+// ListModels returns all registered models as Model slices.
 func (r *Registry) ListModels() []Model {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -63,76 +130,62 @@ func (r *Registry) ListModels() []Model {
 	return models
 }
 
-// List returns all registered virtual models
-func (r *Registry) List() []*VirtualModel {
+// List returns all registered virtual models.
+func (r *Registry) List() []VirtualModel {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	vms := make([]*VirtualModel, 0, len(r.models))
+	vms := make([]VirtualModel, 0, len(r.models))
 	for _, vm := range r.models {
 		vms = append(vms, vm)
 	}
 	return vms
 }
 
-// Clear clears all registered models
+// Clear clears all registered models from all indexes.
 func (r *Registry) Clear() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.models = make(map[string]*VirtualModel)
+	r.models = make(map[string]VirtualModel)
+	r.byProtocol = make(map[protocol.APIType]map[string]VirtualModel)
 }
 
-// RegisterDefaults registers default virtual models
+// RegisterDefaults registers default virtual models.
 func (r *Registry) RegisterDefaults() {
-	defaultModels := []*VirtualModelConfig{
-		// Mock models for testing
+	staticModels := []MockModelConfig{
 		{
-			ID:          "virtual-gpt-4",
-			Name:        "Virtual GPT-4",
-			Description: "A virtual model that returns fixed responses for testing",
-			Content:     "Hello! This is a response from the virtual GPT-4 model. I'm here to help you test your application without making actual API calls.",
-			Delay:       100 * 1000000, // 100ms
+			ID:      "virtual-gpt-4",
+			Name:    "Virtual GPT-4",
+			Content: "Hello! This is a response from the virtual GPT-4 model. I'm here to help you test your application without making actual API calls.",
+			Delay:   100 * time.Millisecond,
 		},
 		{
-			ID:          "virtual-claude-3",
-			Name:        "Virtual Claude 3",
-			Description: "A virtual model simulating Claude 3 responses",
-			Content:     "Greetings! I'm a virtual Claude 3 model, providing fixed responses for testing and development purposes.",
-			Delay:       150 * 1000000, // 150ms
+			ID:      "virtual-claude-3",
+			Name:    "Virtual Claude 3",
+			Content: "Greetings! I'm a virtual Claude 3 model, providing fixed responses for testing and development purposes.",
+			Delay:   150 * time.Millisecond,
 		},
 		{
-			ID:          "echo-model",
-			Name:        "Echo Model",
-			Description: "A model that echoes back a simple message",
-			Content:     "Echo: Your message has been received by the virtual model.",
-			Delay:       50 * 1000000, // 50ms
+			ID:      "echo-model",
+			Name:    "Echo Model",
+			Content: "Echo: Your message has been received by the virtual model.",
+			Delay:   50 * time.Millisecond,
 		},
 	}
-
-	for _, cfg := range defaultModels {
-		vm := NewVirtualModel(cfg)
-		if err := r.Register(vm); err != nil {
-			// Log but continue
-			continue
-		}
+	for i := range staticModels {
+		_ = r.Register(NewMockModel(&staticModels[i]))
 	}
 
-	// Register compact proxy models
-	r.registerCompactModels()
-
-	// Register tool-type models
 	r.registerToolModels()
+	r.registerCompactModels()
 }
 
-// registerToolModels registers tool-type virtual models
 func (r *Registry) registerToolModels() {
-	toolModels := []*VirtualModelConfig{
+	toolModels := []MockModelConfig{
 		{
-			ID:          "ask-user-question",
-			Name:        "Ask User Question",
-			Description: "A virtual model that asks the user a question with predefined options",
-			Type:        VirtualModelTypeTool,
+			ID:   "ask-user-question",
+			Name: "Ask User Question",
 			ToolCall: &ToolCallConfig{
 				Name: "ask_user_question",
 				Arguments: map[string]interface{}{
@@ -143,13 +196,11 @@ func (r *Registry) registerToolModels() {
 					},
 				},
 			},
-			Delay: 100 * 1000000, // 100ms
+			Delay: 100 * time.Millisecond,
 		},
 		{
-			ID:          "ask-confirmation",
-			Name:        "Ask Confirmation",
-			Description: "A virtual model that asks for user confirmation",
-			Type:        VirtualModelTypeTool,
+			ID:   "ask-confirmation",
+			Name: "Ask Confirmation",
 			ToolCall: &ToolCallConfig{
 				Name: "ask_user_question",
 				Arguments: map[string]interface{}{
@@ -160,73 +211,60 @@ func (r *Registry) registerToolModels() {
 					},
 				},
 			},
-			Delay: 50 * 1000000, // 50ms
+			Delay: 50 * time.Millisecond,
 		},
-		// Example of a different tool type
 		{
-			ID:          "web-search-example",
-			Name:        "Web Search Example",
-			Description: "A virtual model that demonstrates web_search tool call",
-			Type:        VirtualModelTypeTool,
+			ID:   "web-search-example",
+			Name: "Web Search Example",
 			ToolCall: &ToolCallConfig{
-				Name: "web_search",
-				Arguments: map[string]interface{}{
-					"query": "latest AI developments",
-				},
+				Name:      "web_search",
+				Arguments: map[string]interface{}{"query": "latest AI developments"},
 			},
-			Delay: 50 * 1000000,
+			Delay: 50 * time.Millisecond,
 		},
 	}
-
-	for _, cfg := range toolModels {
-		vm := NewVirtualModel(cfg)
-		if err := r.Register(vm); err != nil {
-			// Log but continue
-			continue
-		}
+	for i := range toolModels {
+		_ = r.Register(NewMockModel(&toolModels[i]))
 	}
 }
 
-// registerCompactModels registers compact compression virtual models
 func (r *Registry) registerCompactModels() {
-	compactModels := []*VirtualModelConfig{
+	compactModels := []TransformModelConfig{
 		{
-			ID:            "compact-thinking",
-			Name:          "Compact Thinking",
-			Description:   "Removes thinking blocks from historical conversation rounds (10-20% compression)",
-			Type:          VirtualModelTypeProxy,
-			DelegateModel: "", // User should specify the real model
-			Transformer:   newSmartCompactTransformer(),
+			ID:          "compact-thinking",
+			Name:        "Compact Thinking",
+			Description: "Removes thinking blocks from historical conversation rounds (10-20% compression)",
+			Chain:       transform.NewTransformChain([]transform.Transform{smart_compact.NewCompactTransform(2)}),
 		},
 		{
-			ID:            "compact-round-only",
-			Name:          "Compact Round Only",
-			Description:   "Keeps only user request + assistant conclusion, removes intermediate process (70-85% compression)",
-			Type:          VirtualModelTypeProxy,
-			DelegateModel: "",
-			Transformer:   smart_compact.NewRoundOnlyTransformer(),
+			ID:          "compact-round-only",
+			Name:        "Compact Round Only",
+			Description: "Keeps only user request + assistant conclusion, removes intermediate process (70-85% compression)",
+			Chain:       transform.NewTransformChain([]transform.Transform{smart_compact.NewRoundOnlyTransform()}),
 		},
 		{
-			ID:            "compact-round-files",
-			Name:          "Compact Round Files",
-			Description:   "Keeps user/assistant + virtual file tools (75-88% compression)",
-			Type:          VirtualModelTypeProxy,
-			DelegateModel: "",
-			Transformer:   smart_compact.NewRoundFilesTransformer(),
+			ID:          "compact-round-files",
+			Name:        "Compact Round Files",
+			Description: "Keeps user/assistant + virtual file tools (75-88% compression)",
+			Chain:       transform.NewTransformChain([]transform.Transform{smart_compact.NewRoundFilesTransform()}),
+		},
+		{
+			ID:          "claude-code-compact",
+			Name:        "Claude Code Compact",
+			Description: "Conditional compression: only activates when last user message contains '<command>compact</command>' with tools defined.",
+			Chain:       transform.NewTransformChain([]transform.Transform{NewClaudeCodeCompactTransform()}),
+		},
+		{
+			ID:          "claude-code-strategy",
+			Name:        "Claude Code Strategy",
+			Description: "Applies DCP-inspired pruning strategies on every request: deduplicates repeated tool calls (keeps latest), and purges inputs of errored tool calls older than 4 turns.",
+			Chain: transform.NewTransformChain([]transform.Transform{
+				smart_compact.NewDeduplicationTransform(),
+				smart_compact.NewPurgeErrorsTransform(4),
+			}),
 		},
 	}
-
-	for _, cfg := range compactModels {
-		vm := NewVirtualModel(cfg)
-		if err := r.Register(vm); err != nil {
-			// Log but continue
-			continue
-		}
+	for i := range compactModels {
+		_ = r.Register(NewTransformModel(&compactModels[i]))
 	}
-}
-
-// newSmartCompactTransformer creates a smart_compact transformer with default settings
-func newSmartCompactTransformer() protocol.Transformer {
-	// Create smart_compact transformer with keepLastNRounds=2
-	return smart_compact.NewCompactTransformer(2)
 }
