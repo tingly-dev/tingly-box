@@ -1,6 +1,7 @@
 import { Block as InactiveIcon, CheckCircle as ActiveIcon, Delete as DeleteIcon, Edit as EditIcon, MoreHoriz as MoreHorizIcon } from '@mui/icons-material';
 import { IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Tooltip } from '@mui/material';
-import { MouseEvent, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import type { MouseEvent } from 'react';
 
 interface BotSettingsMenuProps {
     onEdit: () => void;
@@ -27,8 +28,7 @@ const BotSettingsMenu: React.FC<BotSettingsMenuProps> = ({
         setAnchorEl(event.currentTarget);
     }, []);
 
-    const handleClose = useCallback((event?: MouseEvent<HTMLElement>) => {
-        event?.stopPropagation();
+    const handleClose = useCallback(() => {
         setAnchorEl(null);
     }, []);
 

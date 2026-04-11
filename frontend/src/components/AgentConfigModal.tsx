@@ -17,6 +17,7 @@ import {
     Alert,
     CircularProgress,
 } from '@mui/material';
+import type { SelectChangeEvent } from '@mui/material';
 import { useState, useEffect, useCallback } from 'react';
 import type { AgentConfig } from '@/types/remoteGraph';
 
@@ -55,6 +56,12 @@ const AgentConfigModal: React.FC<AgentConfigModalProps> = ({
 
     const handleChange = useCallback((field: keyof AgentConfig) => (
         event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    ) => {
+        setLocalConfig((prev: AgentConfig) => ({ ...prev, [field]: event.target.value }));
+    }, []);
+
+    const handleSelectChange = useCallback((field: keyof AgentConfig) => (
+        event: SelectChangeEvent
     ) => {
         setLocalConfig((prev: AgentConfig) => ({ ...prev, [field]: event.target.value }));
     }, []);
@@ -116,7 +123,7 @@ const AgentConfigModal: React.FC<AgentConfigModalProps> = ({
 
                     <FormControl fullWidth>
                         <InputLabel>Agent Type</InputLabel>
-                        <Select value={localConfig.agent_type} onChange={handleChange('agent_type')} label="Agent Type">
+                        <Select value={localConfig.agent_type} onChange={handleSelectChange('agent_type')} label="Agent Type">
                             <MenuItem value="claude-code">Claude Code</MenuItem>
                             <MenuItem value="custom">Custom</MenuItem>
                             <MenuItem value="mock">Mock</MenuItem>
