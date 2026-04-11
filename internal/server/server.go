@@ -33,7 +33,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
+	"github.com/tingly-dev/tingly-box/internal/virtualserver"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 	pkgoauth "github.com/tingly-dev/tingly-box/pkg/oauth"
@@ -123,7 +123,7 @@ type Server struct {
 	tokenTracker *tracker.TokenTracker
 
 	// virtual model service for testing
-	virtualModelService *virtualmodel.Service
+	virtualModelService *virtualserver.Service
 
 	// quota manager for provider quota tracking
 	quotaManager providerQuotaModule.Manager
@@ -671,7 +671,8 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	}
 
 	// Initialize virtual model service
-	server.virtualModelService = virtualmodel.NewService()
+	server.virtualModelService = virtualserver.NewService()
+	server.virtualModelService.SetHandler(virtualserver.NewHandler(server.virtualModelService.GetRegistry()))
 	logrus.Debugf("Virtual model service initialized with default models")
 
 	// Initialize provider quota manager

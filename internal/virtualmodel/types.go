@@ -50,13 +50,13 @@ type VirtualModelConfig struct {
 	ToolCall *ToolCallConfig
 
 	// For proxy-type models
-	DelegateModel string              // Real model to delegate to (e.g., "claude-3-5-sonnet-20241022")
+	DelegateModel string               // Real model to delegate to (e.g., "claude-3-5-sonnet-20241022")
 	Transformer   protocol.Transformer // Optional transformer for proxy mode
 }
 
 // VirtualModel represents a registered virtual model
 type VirtualModel struct {
-	config *VirtualModelConfig
+	Config *VirtualModelConfig
 }
 
 // NewVirtualModel creates a new virtual model
@@ -70,88 +70,88 @@ func NewVirtualModel(cfg *VirtualModelConfig) *VirtualModel {
 	if cfg.Type == "" {
 		cfg.Type = VirtualModelTypeStatic
 	}
-	return &VirtualModel{config: cfg}
+	return &VirtualModel{Config: cfg}
 }
 
 // GetID returns the model ID
 func (vm *VirtualModel) GetID() string {
-	return vm.config.ID
+	return vm.Config.ID
 }
 
 // GetName returns the model name
 func (vm *VirtualModel) GetName() string {
-	if vm.config.Name != "" {
-		return vm.config.Name
+	if vm.Config.Name != "" {
+		return vm.Config.Name
 	}
-	return vm.config.ID
+	return vm.Config.ID
 }
 
 // GetContent returns the response content
 func (vm *VirtualModel) GetContent() string {
-	return vm.config.Content
+	return vm.Config.Content
 }
 
 // GetDelay returns the response delay
 func (vm *VirtualModel) GetDelay() time.Duration {
-	return vm.config.Delay
+	return vm.Config.Delay
 }
 
 // GetStreamChunks returns the streaming chunks
 func (vm *VirtualModel) GetStreamChunks() []string {
-	if len(vm.config.StreamChunks) == 0 {
+	if len(vm.Config.StreamChunks) == 0 {
 		// Default: split content into words for streaming
-		return splitIntoChunks(vm.config.Content)
+		return SplitIntoChunks(vm.Config.Content)
 	}
-	return vm.config.StreamChunks
+	return vm.Config.StreamChunks
 }
 
 // GetType returns the model type
 func (vm *VirtualModel) GetType() VirtualModelType {
-	return vm.config.Type
+	return vm.Config.Type
 }
 
 // IsStatic returns true if this is a static model
 func (vm *VirtualModel) IsStatic() bool {
-	return vm.config.Type == VirtualModelTypeStatic
+	return vm.Config.Type == VirtualModelTypeStatic
 }
 
 // IsTool returns true if this is a tool-type model
 func (vm *VirtualModel) IsTool() bool {
-	return vm.config.Type == VirtualModelTypeTool
+	return vm.Config.Type == VirtualModelTypeTool
 }
 
 // IsProxy returns true if this is a proxy model
 func (vm *VirtualModel) IsProxy() bool {
-	return vm.config.Type == VirtualModelTypeProxy
+	return vm.Config.Type == VirtualModelTypeProxy
 }
 
 // GetDelegateModel returns the delegate model for proxy mode
 func (vm *VirtualModel) GetDelegateModel() string {
-	return vm.config.DelegateModel
+	return vm.Config.DelegateModel
 }
 
 // GetTransformer returns the transformer for proxy mode
 func (vm *VirtualModel) GetTransformer() protocol.Transformer {
-	return vm.config.Transformer
+	return vm.Config.Transformer
 }
 
 // GetToolCall returns the tool call configuration
 func (vm *VirtualModel) GetToolCall() *ToolCallConfig {
-	return vm.config.ToolCall
+	return vm.Config.ToolCall
 }
 
 // ToModel converts to Model type for API response
 func (vm *VirtualModel) ToModel() Model {
 	return Model{
-		ID:      vm.config.ID,
+		ID:      vm.Config.ID,
 		Object:  "model",
 		Created: time.Now().Unix(),
 		OwnedBy: "tingly-box-virtual",
 	}
 }
 
-// splitIntoChunks splits content into word-based chunks for streaming
-func splitIntoChunks(content string) []string {
+// SplitIntoChunks splits content into word-based chunks for streaming
+func SplitIntoChunks(content string) []string {
 	words := []string{}
 	currentWord := ""
 	for _, ch := range content {

@@ -1,4 +1,4 @@
-package virtualmodel
+package virtualserver
 
 import (
 	"encoding/json"
@@ -8,9 +8,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
 )
 
-// AnthropicMessageRequest represents an Anthropic-compatible messages request
+// AnthropicMessageRequest is an Anthropic-compatible messages request.
 type AnthropicMessageRequest struct {
 	Model     string             `json:"model"`
 	Messages  []AnthropicMessage `json:"messages"`
@@ -19,20 +21,20 @@ type AnthropicMessageRequest struct {
 	Tools     []AnthropicTool    `json:"tools,omitempty"`
 }
 
-// AnthropicMessage represents a message in Anthropic format
+// AnthropicMessage is a message in Anthropic format.
 type AnthropicMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-// AnthropicTool represents a tool definition in Anthropic format
+// AnthropicTool is a tool definition in Anthropic format.
 type AnthropicTool struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	InputSchema json.RawMessage `json:"input_schema"`
 }
 
-// AnthropicMessageResponse represents an Anthropic-compatible message response
+// AnthropicMessageResponse is an Anthropic-compatible message response.
 type AnthropicMessageResponse struct {
 	ID         string             `json:"id"`
 	Type       string             `json:"type"`
@@ -43,7 +45,7 @@ type AnthropicMessageResponse struct {
 	Usage      AnthropicUsage     `json:"usage"`
 }
 
-// AnthropicContent represents content block in Anthropic response
+// AnthropicContent is a content block in an Anthropic response.
 type AnthropicContent struct {
 	Type  string          `json:"type"`
 	Text  string          `json:"text,omitempty"`
@@ -52,13 +54,13 @@ type AnthropicContent struct {
 	Input json.RawMessage `json:"input,omitempty"`
 }
 
-// AnthropicUsage represents token usage in Anthropic format
+// AnthropicUsage holds token usage in Anthropic format.
 type AnthropicUsage struct {
 	InputTokens  int `json:"input_tokens"`
 	OutputTokens int `json:"output_tokens"`
 }
 
-// AnthropicStreamEvent represents a streaming event in Anthropic format
+// AnthropicStreamEvent is a streaming event in Anthropic format.
 type AnthropicStreamEvent struct {
 	Type    string                    `json:"type"`
 	Message *AnthropicMessageResponse `json:"message,omitempty"`
@@ -67,92 +69,79 @@ type AnthropicStreamEvent struct {
 	Usage   *AnthropicUsage           `json:"usage,omitempty"`
 }
 
-// AnthropicDelta represents a delta in streaming response
+// AnthropicDelta is a delta in an Anthropic streaming response.
 type AnthropicDelta struct {
 	Type       string `json:"type,omitempty"`
 	Text       string `json:"text,omitempty"`
 	StopReason string `json:"stop_reason,omitempty"`
 }
 
-// Messages handles the POST /virtual/v1/messages endpoint (Anthropic format)
+// Messages handles POST /virtual/v1/messages (Anthropic format).
 func (h *Handler) Messages(c *gin.Context) {
 	var req AnthropicMessageRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"type": "error",
-			"error": gin.H{
-				"type":    "invalid_request_error",
-				"message": "Invalid request body: " + err.Error(),
-			},
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"type": "error", "error": gin.H{
+			"type":    "invalid_request_error",
+			"message": "Invalid request body: " + err.Error(),
+		}})
 		return
 	}
 
 	if req.Model == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"type": "error",
-			"error": gin.H{
-				"type":    "invalid_request_error",
-				"message": "Model is required",
-			},
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"type": "error", "error": gin.H{
+			"type":    "invalid_request_error",
+			"message": "Model is required",
+		}})
 		return
 	}
 
-	virtualModel := h.registry.Get(req.Model)
-	if virtualModel == nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"type": "error",
-			"error": gin.H{
-				"type":    "not_found_error",
-				"message": fmt.Sprintf("Model not found: %s", req.Model),
-			},
-		})
+	vm := h.registry.Get(req.Model)
+	if vm == nil {
+		c.JSON(http.StatusNotFound, gin.H{"type": "error", "error": gin.H{
+			"type":    "not_found_error",
+			"message": fmt.Sprintf("Model not found: %s", req.Model),
+		}})
 		return
 	}
 
-	switch virtualModel.GetType() {
-	case VirtualModelTypeTool:
+	switch vm.GetType() {
+	case virtualmodel.VirtualModelTypeTool:
 		if req.Stream {
-			h.handleAnthropicToolModelStreaming(c, &req, virtualModel)
+			h.handleAnthropicToolModelStreaming(c, &req, vm)
 		} else {
-			h.handleAnthropicToolModelNonStreaming(c, &req, virtualModel)
+			h.handleAnthropicToolModelNonStreaming(c, &req, vm)
 		}
 		return
 	}
 
 	if req.Stream {
-		h.handleAnthropicStreaming(c, &req, virtualModel)
+		h.handleAnthropicStreaming(c, &req, vm)
 	} else {
-		h.handleAnthropicNonStreaming(c, &req, virtualModel)
+		h.handleAnthropicNonStreaming(c, &req, vm)
 	}
 }
 
-func (h *Handler) handleAnthropicNonStreaming(c *gin.Context, req *AnthropicMessageRequest, vm *VirtualModel) {
+func (h *Handler) handleAnthropicNonStreaming(c *gin.Context, req *AnthropicMessageRequest, vm *virtualmodel.VirtualModel) {
 	if delay := vm.GetDelay(); delay > 0 {
 		time.Sleep(delay)
 	}
 
 	content := vm.GetContent()
-	resp := AnthropicMessageResponse{
+	c.JSON(http.StatusOK, AnthropicMessageResponse{
 		ID:         fmt.Sprintf("msg_virtual_%d", time.Now().Unix()),
 		Type:       "message",
 		Role:       "assistant",
 		Model:      req.Model,
 		StopReason: "end_turn",
-		Content: []AnthropicContent{
-			{Type: "text", Text: content},
-		},
+		Content:    []AnthropicContent{{Type: "text", Text: content}},
 		Usage: AnthropicUsage{
 			InputTokens:  estimateAnthropicTokens(req.Messages),
 			OutputTokens: estimateTokensString(content),
 		},
-	}
-
-	c.JSON(http.StatusOK, resp)
+	})
 }
 
-func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessageRequest, vm *VirtualModel) {
+func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessageRequest, vm *virtualmodel.VirtualModel) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
@@ -165,46 +154,34 @@ func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessage
 		content := vm.GetContent()
 		msgID := fmt.Sprintf("msg_virtual_%d", time.Now().Unix())
 
-		startEvent := AnthropicStreamEvent{
+		data, _ := json.Marshal(AnthropicStreamEvent{
 			Type: "message_start",
 			Message: &AnthropicMessageResponse{
-				ID:    msgID,
-				Type:  "message",
-				Role:  "assistant",
-				Model: req.Model,
+				ID: msgID, Type: "message", Role: "assistant", Model: req.Model,
 			},
-		}
-		data, _ := json.Marshal(startEvent)
+		})
 		fmt.Fprintf(w, "event: message_start\ndata: %s\n\n", data)
 		c.Writer.Flush()
 
-		chunks := splitIntoChunks(content)
-		for i, chunk := range chunks {
+		for i, chunk := range splitIntoChunks(content) {
 			time.Sleep(50 * time.Millisecond)
-
-			deltaEvent := AnthropicStreamEvent{
+			data, _ := json.Marshal(AnthropicStreamEvent{
 				Type:  "content_block_delta",
 				Index: i,
-				Delta: &AnthropicDelta{
-					Type: "text_delta",
-					Text: chunk,
-				},
-			}
-			data, _ := json.Marshal(deltaEvent)
+				Delta: &AnthropicDelta{Type: "text_delta", Text: chunk},
+			})
 			fmt.Fprintf(w, "event: content_block_delta\ndata: %s\n\n", data)
 			c.Writer.Flush()
 		}
 
-		stopEvent := AnthropicStreamEvent{Type: "message_stop"}
-		data, _ = json.Marshal(stopEvent)
+		data, _ = json.Marshal(AnthropicStreamEvent{Type: "message_stop"})
 		fmt.Fprintf(w, "event: message_stop\ndata: %s\n\n", data)
 		c.Writer.Flush()
-
 		return false
 	})
 }
 
-func (h *Handler) handleAnthropicToolModelNonStreaming(c *gin.Context, req *AnthropicMessageRequest, vm *VirtualModel) {
+func (h *Handler) handleAnthropicToolModelNonStreaming(c *gin.Context, req *AnthropicMessageRequest, vm *virtualmodel.VirtualModel) {
 	if delay := vm.GetDelay(); delay > 0 {
 		time.Sleep(delay)
 	}
@@ -215,10 +192,7 @@ func (h *Handler) handleAnthropicToolModelNonStreaming(c *gin.Context, req *Anth
 		return
 	}
 
-	// Use arguments directly as tool input
 	inputJSON, _ := json.Marshal(toolCall.Arguments)
-
-	// Extract message content from arguments if available
 	content := ""
 	if msg, ok := toolCall.Arguments["message"].(string); ok {
 		content = msg
@@ -226,7 +200,7 @@ func (h *Handler) handleAnthropicToolModelNonStreaming(c *gin.Context, req *Anth
 		content = question
 	}
 
-	resp := AnthropicMessageResponse{
+	c.JSON(http.StatusOK, AnthropicMessageResponse{
 		ID:         fmt.Sprintf("msg_virtual_%d", time.Now().Unix()),
 		Type:       "message",
 		Role:       "assistant",
@@ -245,12 +219,10 @@ func (h *Handler) handleAnthropicToolModelNonStreaming(c *gin.Context, req *Anth
 			InputTokens:  estimateAnthropicTokens(req.Messages),
 			OutputTokens: estimateTokensString(content) + 20,
 		},
-	}
-
-	c.JSON(http.StatusOK, resp)
+	})
 }
 
-func (h *Handler) handleAnthropicToolModelStreaming(c *gin.Context, req *AnthropicMessageRequest, vm *VirtualModel) {
+func (h *Handler) handleAnthropicToolModelStreaming(c *gin.Context, req *AnthropicMessageRequest, vm *virtualmodel.VirtualModel) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
@@ -261,10 +233,7 @@ func (h *Handler) handleAnthropicToolModelStreaming(c *gin.Context, req *Anthrop
 		return
 	}
 
-	// Use arguments directly as tool input
 	inputJSON, _ := json.Marshal(toolCall.Arguments)
-
-	// Extract message content from arguments if available
 	content := ""
 	if msg, ok := toolCall.Arguments["message"].(string); ok {
 		content = msg
@@ -280,45 +249,29 @@ func (h *Handler) handleAnthropicToolModelStreaming(c *gin.Context, req *Anthrop
 		msgID := fmt.Sprintf("msg_virtual_%d", time.Now().Unix())
 		toolID := fmt.Sprintf("toolu_%d", time.Now().Unix())
 
-		startEvent := AnthropicStreamEvent{
-			Type: "message_start",
-			Message: &AnthropicMessageResponse{
-				ID:    msgID,
-				Type:  "message",
-				Role:  "assistant",
-				Model: req.Model,
-			},
-		}
-		data, _ := json.Marshal(startEvent)
+		data, _ := json.Marshal(AnthropicStreamEvent{
+			Type:    "message_start",
+			Message: &AnthropicMessageResponse{ID: msgID, Type: "message", Role: "assistant", Model: req.Model},
+		})
 		fmt.Fprintf(w, "event: message_start\ndata: %s\n\n", data)
 		c.Writer.Flush()
-
 		time.Sleep(50 * time.Millisecond)
 
-		textEvent := AnthropicStreamEvent{
+		data, _ = json.Marshal(AnthropicStreamEvent{
 			Type:  "content_block_delta",
 			Index: 0,
-			Delta: &AnthropicDelta{
-				Type: "text_delta",
-				Text: content,
-			},
-		}
-		data, _ = json.Marshal(textEvent)
+			Delta: &AnthropicDelta{Type: "text_delta", Text: content},
+		})
 		fmt.Fprintf(w, "event: content_block_delta\ndata: %s\n\n", data)
 		c.Writer.Flush()
-
 		time.Sleep(50 * time.Millisecond)
 
-		toolEvent := AnthropicStreamEvent{
-			Type:  "content_block_stop",
-			Index: 1,
-		}
-		data, _ = json.Marshal(toolEvent)
+		data, _ = json.Marshal(AnthropicStreamEvent{Type: "content_block_stop", Index: 1})
 		fmt.Fprintf(w, "event: content_block_stop\ndata: %s\n\n", data)
 		c.Writer.Flush()
 
-		toolStartEvent := map[string]interface{}{
-			"type": "content_block_start",
+		data, _ = json.Marshal(map[string]interface{}{
+			"type":  "content_block_start",
 			"index": 1,
 			"content_block": map[string]interface{}{
 				"type":  "tool_use",
@@ -326,21 +279,16 @@ func (h *Handler) handleAnthropicToolModelStreaming(c *gin.Context, req *Anthrop
 				"name":  toolCall.Name,
 				"input": inputJSON,
 			},
-		}
-		data, _ = json.Marshal(toolStartEvent)
+		})
 		fmt.Fprintf(w, "event: content_block_start\ndata: %s\n\n", data)
 		c.Writer.Flush()
 
-		stopEvent := AnthropicStreamEvent{
-			Type: "message_stop",
-			Message: &AnthropicMessageResponse{
-				StopReason: "tool_use",
-			},
-		}
-		data, _ = json.Marshal(stopEvent)
+		data, _ = json.Marshal(AnthropicStreamEvent{
+			Type:    "message_stop",
+			Message: &AnthropicMessageResponse{StopReason: "tool_use"},
+		})
 		fmt.Fprintf(w, "event: message_stop\ndata: %s\n\n", data)
 		c.Writer.Flush()
-
 		return false
 	})
 }
@@ -348,8 +296,7 @@ func (h *Handler) handleAnthropicToolModelStreaming(c *gin.Context, req *Anthrop
 func estimateAnthropicTokens(messages []AnthropicMessage) int {
 	total := 0
 	for _, msg := range messages {
-		total += estimateTokensString(msg.Content)
-		total += 5
+		total += estimateTokensString(msg.Content) + 5
 	}
 	return total
 }

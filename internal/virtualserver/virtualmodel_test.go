@@ -1,13 +1,15 @@
-package virtualmodel
+package virtualserver
 
 import (
 	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
 )
 
 func TestNewVirtualModel(t *testing.T) {
-	cfg := &VirtualModelConfig{
+	cfg := &virtualmodel.VirtualModelConfig{
 		ID:          "test-model",
 		Name:        "Test Model",
 		Description: "A test model",
@@ -15,7 +17,7 @@ func TestNewVirtualModel(t *testing.T) {
 		Delay:       100 * time.Millisecond,
 	}
 
-	vm := NewVirtualModel(cfg)
+	vm := virtualmodel.NewVirtualModel(cfg)
 
 	if vm.GetID() != "test-model" {
 		t.Errorf("Expected ID 'test-model', got '%s'", vm.GetID())
@@ -35,33 +37,33 @@ func TestNewVirtualModel(t *testing.T) {
 }
 
 func TestNewVirtualModelDefaults(t *testing.T) {
-	cfg := &VirtualModelConfig{
+	cfg := &virtualmodel.VirtualModelConfig{
 		ID:      "test-model-defaults",
 		Content: "Test",
 	}
 
-	vm := NewVirtualModel(cfg)
+	vm := virtualmodel.NewVirtualModel(cfg)
 
-	if vm.config.Role != "assistant" {
-		t.Errorf("Expected default role 'assistant', got '%s'", vm.config.Role)
+	if vm.Config.Role != "assistant" {
+		t.Errorf("Expected default role 'assistant', got '%s'", vm.Config.Role)
 	}
 
-	if vm.config.FinishReason != "stop" {
-		t.Errorf("Expected default finish_reason 'stop', got '%s'", vm.config.FinishReason)
+	if vm.Config.FinishReason != "stop" {
+		t.Errorf("Expected default finish_reason 'stop', got '%s'", vm.Config.FinishReason)
 	}
 }
 
 func TestRegistry(t *testing.T) {
-	registry := NewRegistry()
+	registry := virtualmodel.NewRegistry()
 
-	cfg := &VirtualModelConfig{
+	cfg := &virtualmodel.VirtualModelConfig{
 		ID:          "registry-test",
 		Name:        "Registry Test",
 		Description: "Test registry",
 		Content:     "Registry test content",
 	}
 
-	vm := NewVirtualModel(cfg)
+	vm := virtualmodel.NewVirtualModel(cfg)
 
 	// Test Register
 	err := registry.Register(vm)
@@ -104,7 +106,7 @@ func TestRegistry(t *testing.T) {
 }
 
 func TestRegisterDefaults(t *testing.T) {
-	registry := NewRegistry()
+	registry := virtualmodel.NewRegistry()
 	registry.RegisterDefaults()
 
 	models := registry.ListModels()
@@ -128,7 +130,7 @@ func TestRegisterDefaults(t *testing.T) {
 
 func TestSplitIntoChunks(t *testing.T) {
 	content := "Hello world this is a test"
-	chunks := splitIntoChunks(content)
+	chunks := virtualmodel.SplitIntoChunks(content)
 
 	if len(chunks) == 0 {
 		t.Error("Expected at least one chunk, got none")
@@ -161,11 +163,11 @@ func TestService(t *testing.T) {
 	}
 
 	// Test RegisterModel
-	cfg := &VirtualModelConfig{
+	cfg := &virtualmodel.VirtualModelConfig{
 		ID:      "service-test",
 		Content: "Service test",
 	}
-	err := service.RegisterModel(NewVirtualModel(cfg))
+	err := service.RegisterModel(virtualmodel.NewVirtualModel(cfg))
 	if err != nil {
 		t.Fatalf("Failed to register model: %v", err)
 	}
@@ -228,19 +230,19 @@ func TestEstimateTokens(t *testing.T) {
 }
 
 func TestRegistryList(t *testing.T) {
-	registry := NewRegistry()
+	registry := virtualmodel.NewRegistry()
 
-	cfg1 := &VirtualModelConfig{
+	cfg1 := &virtualmodel.VirtualModelConfig{
 		ID:      "list-test-1",
 		Content: "Test 1",
 	}
-	cfg2 := &VirtualModelConfig{
+	cfg2 := &virtualmodel.VirtualModelConfig{
 		ID:      "list-test-2",
 		Content: "Test 2",
 	}
 
-	registry.Register(NewVirtualModel(cfg1))
-	registry.Register(NewVirtualModel(cfg2))
+	registry.Register(virtualmodel.NewVirtualModel(cfg1))
+	registry.Register(virtualmodel.NewVirtualModel(cfg2))
 
 	// Test List() returns []*VirtualModel
 	vms := registry.List()
@@ -258,13 +260,13 @@ func TestRegistryList(t *testing.T) {
 }
 
 func TestRegistryClear(t *testing.T) {
-	registry := NewRegistry()
+	registry := virtualmodel.NewRegistry()
 
-	cfg := &VirtualModelConfig{
+	cfg := &virtualmodel.VirtualModelConfig{
 		ID:      "clear-test",
 		Content: "Test",
 	}
-	registry.Register(NewVirtualModel(cfg))
+	registry.Register(virtualmodel.NewVirtualModel(cfg))
 
 	// Verify model is registered
 	if registry.Get("clear-test") == nil {
@@ -294,23 +296,23 @@ func TestRegistryClear(t *testing.T) {
 func TestVirtualModelTypes(t *testing.T) {
 	tests := []struct {
 		name     string
-		vmType   VirtualModelType
+		vmType   virtualmodel.VirtualModelType
 		isStatic bool
 		isTool   bool
 		isProxy  bool
 	}{
-		{"static", VirtualModelTypeStatic, true, false, false},
-		{"tool", VirtualModelTypeTool, false, true, false},
-		{"proxy", VirtualModelTypeProxy, false, false, true},
+		{"static", virtualmodel.VirtualModelTypeStatic, true, false, false},
+		{"tool", virtualmodel.VirtualModelTypeTool, false, true, false},
+		{"proxy", virtualmodel.VirtualModelTypeProxy, false, false, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := &VirtualModelConfig{
+			cfg := &virtualmodel.VirtualModelConfig{
 				ID:   "test-" + tt.name,
 				Type: tt.vmType,
 			}
-			vm := NewVirtualModel(cfg)
+			vm := virtualmodel.NewVirtualModel(cfg)
 
 			if vm.GetType() != tt.vmType {
 				t.Errorf("Expected type %s, got %s", tt.vmType, vm.GetType())
@@ -330,24 +332,24 @@ func TestVirtualModelTypes(t *testing.T) {
 
 // Test default type is static
 func TestVirtualModelDefaultType(t *testing.T) {
-	cfg := &VirtualModelConfig{
+	cfg := &virtualmodel.VirtualModelConfig{
 		ID:      "test-default",
 		Content: "Test",
 	}
-	vm := NewVirtualModel(cfg)
+	vm := virtualmodel.NewVirtualModel(cfg)
 
-	if vm.GetType() != VirtualModelTypeStatic {
-		t.Errorf("Expected default type %s, got %s", VirtualModelTypeStatic, vm.GetType())
+	if vm.GetType() != virtualmodel.VirtualModelTypeStatic {
+		t.Errorf("Expected default type %s, got %s", virtualmodel.VirtualModelTypeStatic, vm.GetType())
 	}
 }
 
 // Test tool model with generic arguments
 func TestToolModel(t *testing.T) {
 	// Test ask_user_question tool
-	cfg := &VirtualModelConfig{
+	cfg := &virtualmodel.VirtualModelConfig{
 		ID:   "test-ask",
-		Type: VirtualModelTypeTool,
-		ToolCall: &ToolCallConfig{
+		Type: virtualmodel.VirtualModelTypeTool,
+		ToolCall: &virtualmodel.ToolCallConfig{
 			Name: "ask_user_question",
 			Arguments: map[string]interface{}{
 				"question": "Which option?",
@@ -358,7 +360,7 @@ func TestToolModel(t *testing.T) {
 		},
 	}
 
-	vm := NewVirtualModel(cfg)
+	vm := virtualmodel.NewVirtualModel(cfg)
 
 	if !vm.IsTool() {
 		t.Error("Expected IsTool() to return true")
@@ -378,10 +380,10 @@ func TestToolModel(t *testing.T) {
 	}
 
 	// Test web_search tool (different tool type)
-	cfg2 := &VirtualModelConfig{
+	cfg2 := &virtualmodel.VirtualModelConfig{
 		ID:   "test-search",
-		Type: VirtualModelTypeTool,
-		ToolCall: &ToolCallConfig{
+		Type: virtualmodel.VirtualModelTypeTool,
+		ToolCall: &virtualmodel.ToolCallConfig{
 			Name: "web_search",
 			Arguments: map[string]interface{}{
 				"query": "latest AI news",
@@ -389,7 +391,7 @@ func TestToolModel(t *testing.T) {
 		},
 	}
 
-	vm2 := NewVirtualModel(cfg2)
+	vm2 := virtualmodel.NewVirtualModel(cfg2)
 	if vm2.GetToolCall().Name != "web_search" {
 		t.Errorf("Expected tool name 'web_search', got '%s'", vm2.GetToolCall().Name)
 	}
@@ -397,13 +399,13 @@ func TestToolModel(t *testing.T) {
 
 // Test proxy model
 func TestProxyModel(t *testing.T) {
-	cfg := &VirtualModelConfig{
+	cfg := &virtualmodel.VirtualModelConfig{
 		ID:            "test-proxy",
-		Type:          VirtualModelTypeProxy,
+		Type:          virtualmodel.VirtualModelTypeProxy,
 		DelegateModel: "claude-3-5-sonnet",
 	}
 
-	vm := NewVirtualModel(cfg)
+	vm := virtualmodel.NewVirtualModel(cfg)
 
 	if !vm.IsProxy() {
 		t.Error("Expected IsProxy() to return true")
@@ -416,22 +418,22 @@ func TestProxyModel(t *testing.T) {
 
 // Test all default model types are registered
 func TestDefaultModelTypes(t *testing.T) {
-	registry := NewRegistry()
+	registry := virtualmodel.NewRegistry()
 	registry.RegisterDefaults()
 
 	testCases := []struct {
 		id       string
-		expected VirtualModelType
+		expected virtualmodel.VirtualModelType
 	}{
-		{"virtual-gpt-4", VirtualModelTypeStatic},
-		{"virtual-claude-3", VirtualModelTypeStatic},
-		{"echo-model", VirtualModelTypeStatic},
-		{"compact-thinking", VirtualModelTypeProxy},
-		{"compact-round-only", VirtualModelTypeProxy},
-		{"compact-round-files", VirtualModelTypeProxy},
-		{"ask-user-question", VirtualModelTypeTool},
-		{"ask-confirmation", VirtualModelTypeTool},
-		{"web-search-example", VirtualModelTypeTool},
+		{"virtual-gpt-4", virtualmodel.VirtualModelTypeStatic},
+		{"virtual-claude-3", virtualmodel.VirtualModelTypeStatic},
+		{"echo-model", virtualmodel.VirtualModelTypeStatic},
+		{"compact-thinking", virtualmodel.VirtualModelTypeProxy},
+		{"compact-round-only", virtualmodel.VirtualModelTypeProxy},
+		{"compact-round-files", virtualmodel.VirtualModelTypeProxy},
+		{"ask-user-question", virtualmodel.VirtualModelTypeTool},
+		{"ask-confirmation", virtualmodel.VirtualModelTypeTool},
+		{"web-search-example", virtualmodel.VirtualModelTypeTool},
 	}
 
 	for _, tc := range testCases {
@@ -448,11 +450,11 @@ func TestDefaultModelTypes(t *testing.T) {
 
 // Test GetStreamChunks with default behavior (splits content)
 func TestGetStreamChunksDefault(t *testing.T) {
-	cfg := &VirtualModelConfig{
+	cfg := &virtualmodel.VirtualModelConfig{
 		ID:      "test-stream-default",
 		Content: "Hello world test",
 	}
-	vm := NewVirtualModel(cfg)
+	vm := virtualmodel.NewVirtualModel(cfg)
 
 	chunks := vm.GetStreamChunks()
 	if len(chunks) == 0 {
@@ -472,12 +474,12 @@ func TestGetStreamChunksDefault(t *testing.T) {
 // Test GetStreamChunks with custom chunks
 func TestGetStreamChunksCustom(t *testing.T) {
 	customChunks := []string{"Custom", " ", "Chunks"}
-	cfg := &VirtualModelConfig{
+	cfg := &virtualmodel.VirtualModelConfig{
 		ID:           "test-stream-custom",
 		Content:      "Original",
 		StreamChunks: customChunks,
 	}
-	vm := NewVirtualModel(cfg)
+	vm := virtualmodel.NewVirtualModel(cfg)
 
 	chunks := vm.GetStreamChunks()
 	if len(chunks) != len(customChunks) {
@@ -493,11 +495,11 @@ func TestGetStreamChunksCustom(t *testing.T) {
 
 // Test GetStreamChunks with empty content
 func TestGetStreamChunksEmpty(t *testing.T) {
-	cfg := &VirtualModelConfig{
+	cfg := &virtualmodel.VirtualModelConfig{
 		ID:      "test-stream-empty",
 		Content: "",
 	}
-	vm := NewVirtualModel(cfg)
+	vm := virtualmodel.NewVirtualModel(cfg)
 
 	chunks := vm.GetStreamChunks()
 	if len(chunks) == 0 {
@@ -507,13 +509,13 @@ func TestGetStreamChunksEmpty(t *testing.T) {
 
 // Test ToModel conversion
 func TestToModel(t *testing.T) {
-	cfg := &VirtualModelConfig{
+	cfg := &virtualmodel.VirtualModelConfig{
 		ID:          "test-to-model",
 		Name:        "Test Model Name",
 		Description: "Test Description",
 		Content:     "Test content",
 	}
-	vm := NewVirtualModel(cfg)
+	vm := virtualmodel.NewVirtualModel(cfg)
 
 	model := vm.ToModel()
 
@@ -534,11 +536,11 @@ func TestToModel(t *testing.T) {
 	}
 
 	// Test with ID only (Name defaults to ID)
-	cfg2 := &VirtualModelConfig{
+	cfg2 := &virtualmodel.VirtualModelConfig{
 		ID:      "id-only",
 		Content: "Content",
 	}
-	vm2 := NewVirtualModel(cfg2)
+	vm2 := virtualmodel.NewVirtualModel(cfg2)
 	model2 := vm2.ToModel()
 
 	if model2.ID != "id-only" {
@@ -549,21 +551,21 @@ func TestToModel(t *testing.T) {
 // Test GetName with and without explicit name
 func TestGetName(t *testing.T) {
 	// With explicit name
-	cfg1 := &VirtualModelConfig{
+	cfg1 := &virtualmodel.VirtualModelConfig{
 		ID:   "test-id",
 		Name: "Explicit Name",
 	}
-	vm1 := NewVirtualModel(cfg1)
+	vm1 := virtualmodel.NewVirtualModel(cfg1)
 	if vm1.GetName() != "Explicit Name" {
 		t.Errorf("Expected 'Explicit Name', got '%s'", vm1.GetName())
 	}
 
 	// Without explicit name (should default to ID)
-	cfg2 := &VirtualModelConfig{
+	cfg2 := &virtualmodel.VirtualModelConfig{
 		ID:   "test-id-only",
 		Name: "",
 	}
-	vm2 := NewVirtualModel(cfg2)
+	vm2 := virtualmodel.NewVirtualModel(cfg2)
 	if vm2.GetName() != "test-id-only" {
 		t.Errorf("Expected name to default to ID 'test-id-only', got '%s'", vm2.GetName())
 	}
@@ -782,7 +784,7 @@ func TestAnthropicMessageResponseJSON(t *testing.T) {
 
 // Test ToolCallConfig JSON serialization
 func TestToolCallConfigJSON(t *testing.T) {
-	cfg := ToolCallConfig{
+	cfg := virtualmodel.ToolCallConfig{
 		Name: "ask_user_question",
 		Arguments: map[string]interface{}{
 			"question": "Choose an option",
@@ -798,7 +800,7 @@ func TestToolCallConfigJSON(t *testing.T) {
 		t.Fatalf("Failed to marshal ToolCallConfig: %v", err)
 	}
 
-	var unmarshaled ToolCallConfig
+	var unmarshaled virtualmodel.ToolCallConfig
 	err = json.Unmarshal(data, &unmarshaled)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal ToolCallConfig: %v", err)
