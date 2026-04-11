@@ -1,6 +1,7 @@
 package virtualmodel
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -11,10 +12,7 @@ import (
 
 // TestClaudeCodeCompact_Compression tests that claude-code-compact actually compresses messages
 func TestClaudeCodeCompact_Compression(t *testing.T) {
-	vm := NewTransformModel(&TransformModelConfig{
-		ID:    "claude-code-compact",
-		Chain: transform.NewTransformChain([]transform.Transform{NewClaudeCodeCompactTransform()}),
-	})
+	vm := newCompactVM()
 
 	// Create a request with multiple rounds and tools + compact command
 	originalMessages := []anthropic.BetaMessageParam{
@@ -86,7 +84,7 @@ func TestClaudeCodeCompact_Compression(t *testing.T) {
 			if block.OfText != nil && len(block.OfText.Text) > 0 {
 				content := block.OfText.Text
 				// Compressed content should be XML format
-				if len(content) > 100 && (contains(content, "<conversation>") || contains(content, "<user>")) {
+				if len(content) > 100 && (strings.Contains(content, "<conversation>") || strings.Contains(content, "<user>")) {
 					hasCompressedContent = true
 					t.Logf("Found compressed content (length: %d): %s", len(content), truncate(content, 200))
 				}
@@ -105,7 +103,7 @@ func TestClaudeCodeCompact_Compression(t *testing.T) {
 	}
 
 	// Content should contain analysis or summary markers
-	if !contains(contentText, "<analysis>") && !contains(contentText, "<summary>") {
+	if !strings.Contains(contentText, "<analysis>") && !strings.Contains(contentText, "<summary>") {
 		t.Errorf("Expected content to contain compressed summary markers, got: %s", truncate(contentText, 200))
 	}
 
@@ -119,10 +117,7 @@ func TestClaudeCodeCompact_Compression(t *testing.T) {
 
 // TestClaudeCodeCompact_NoCompressionWithoutCommand tests that compression doesn't happen without <command>compact</command>
 func TestClaudeCodeCompact_NoCompressionWithoutCommand(t *testing.T) {
-	vm := NewTransformModel(&TransformModelConfig{
-		ID:    "claude-code-compact",
-		Chain: transform.NewTransformChain([]transform.Transform{NewClaudeCodeCompactTransform()}),
-	})
+	vm := newCompactVM()
 
 	// Request WITHOUT compact command
 	originalMessages := []anthropic.BetaMessageParam{
@@ -172,7 +167,7 @@ func TestClaudeCodeCompact_NoCompressionWithoutCommand(t *testing.T) {
 		for _, block := range msg.Content {
 			if block.OfText != nil {
 				content := block.OfText.Text
-				if contains(content, "<conversation>") || contains(content, "<compressed>") {
+				if strings.Contains(content, "<conversation>") || strings.Contains(content, "<compressed>") {
 					t.Errorf("Unexpected compressed content without compact command: %s", truncate(content, 100))
 				}
 			}
@@ -233,17 +228,11 @@ func TestClaudeCodeCompact_NoCompressionWithoutTools(t *testing.T) {
 }
 
 // Helper functions
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || indexOf(s, substr) >= 0)
-}
-
-func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
+func newCompactVM() *TransformModel {
+	return NewTransformModel(&TransformModelConfig{
+		ID:    "claude-code-compact",
+		Chain: transform.NewTransformChain([]transform.Transform{NewClaudeCodeCompactTransform()}),
+	})
 }
 
 func truncate(s string, maxLen int) string {
