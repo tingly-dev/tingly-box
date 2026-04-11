@@ -4,10 +4,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	"github.com/tingly-dev/tingly-box/internal/smart_compact"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
+
 	// Build transform chain with recording support
 	chain, err := s.BuildTransformChain(c, target, provider.APIBase, nil, protocolRecorder)
 	if err != nil {
@@ -18,6 +20,17 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 	var scenarioFlags *typ.ScenarioFlags
 	if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
 		scenarioFlags = &scenarioConfig.Flags
+	}
+
+	if s.ApplySmartCompact(scenarioType) {
+		baseTransforms := chain.GetTransforms()
+		newTransforms := append(
+			[]transform.Transform{
+				smart_compact.NewCompactTransform(2),
+			},
+			baseTransforms...,
+		)
+		chain.SetTransforms(newTransforms)
 	}
 
 	opts := []transform.TransformOption{
@@ -66,6 +79,17 @@ func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMess
 	var scenarioFlags *typ.ScenarioFlags
 	if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
 		scenarioFlags = &scenarioConfig.Flags
+	}
+
+	if s.ApplySmartCompact(scenarioType) {
+		baseTransforms := chain.GetTransforms()
+		newTransforms := append(
+			[]transform.Transform{
+				smart_compact.NewCompactTransform(2),
+			},
+			baseTransforms...,
+		)
+		chain.SetTransforms(newTransforms)
 	}
 
 	opts := []transform.TransformOption{

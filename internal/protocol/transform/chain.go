@@ -247,3 +247,8 @@ func (c *TransformChain) GetTransforms() []Transform {
 	copy(transforms, c.transforms)
 	return transforms
 }
+
+// SetTransforms help reset transforms
+func (c *TransformChain) SetTransforms(ts []Transform) {
+	c.transforms = ts
+}
