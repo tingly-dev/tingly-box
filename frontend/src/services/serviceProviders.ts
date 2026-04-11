@@ -37,15 +37,15 @@ async function loadProviderTemplates(): Promise<Record<string, ServiceProvider>>
 
     // Return existing promise if loading is in progress
     if (loadPromise) {
-        return loadPromise;
+        return loadPromise!;
     }
 
-    loadPromise = (async () => {
+    loadPromise = (async (): Promise<Record<string, ServiceProvider>> => {
         try {
             const res = await api.getProviderTemplates();
             if (res && res.success && res.data) {
                 cachedProviders = res.data;
-                return cachedProviders;
+                return cachedProviders!;
             }
         } catch (error) {
             console.error('Failed to load provider templates:', error);
@@ -53,10 +53,10 @@ async function loadProviderTemplates(): Promise<Record<string, ServiceProvider>>
             loadPromise = null; // Clear promise after completion
         }
 
-        return {};
+        return {} as Record<string, ServiceProvider>;
     })();
 
-    return loadPromise;
+    return loadPromise!;
 }
 
 // Export a function to get service providers (lazy loading)

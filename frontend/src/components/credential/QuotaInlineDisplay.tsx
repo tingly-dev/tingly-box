@@ -92,7 +92,7 @@ export function QuotaInlineDisplay({
           )}
         </Box>
       ))}
-      {quota.cost && (
+      {quota?.cost && (
         <Box sx={{ mt: 1.5, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
           <Typography variant="caption" sx={{ fontWeight: 500, display: 'block' }}>
             Cost

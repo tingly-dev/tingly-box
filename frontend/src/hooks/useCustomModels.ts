@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 const CUSTOM_MODELS_STORAGE_KEY = 'tingly_custom_models';
 
 // Helper functions to manage custom models in local storage
-export const loadCustomModelsFromStorage = (): { [providerUuid: string]: string } => {
+export const loadCustomModelsFromStorage = (): { [providerUuid: string]: string | string[] } => {
     try {
         const stored = localStorage.getItem(CUSTOM_MODELS_STORAGE_KEY);
         return stored ? JSON.parse(stored) : {};

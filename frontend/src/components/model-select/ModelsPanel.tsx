@@ -18,6 +18,7 @@ import {
 } from '@mui/material';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Provider } from '@/types/provider';
+import type { ProviderQuota, UsageWindow } from '@/types/quota';
 import { getModelTypeInfo } from '@/utils/modelUtils';
 import { useCustomModels } from '@/hooks/useCustomModels';
 import { useProviderModels } from '@/hooks/useProviderModels';
@@ -51,6 +52,31 @@ async function fetchUIAPI(url: string, options: RequestInit = {}): Promise<any> 
     }
 
     return response.json();
+}
+
+// Convert ProviderModelData.quota to ProviderQuota type
+function convertToProviderQuota(
+    quota: { primary?: any; cost?: any } | undefined,
+    provider: Provider,
+    lastUpdated?: string
+): ProviderQuota | undefined {
+    if (!quota) return undefined;
+
+    return {
+        provider_uuid: provider.uuid,
+        provider_name: provider.name,
+        provider_type: provider.api_style,
+        fetched_at: lastUpdated || new Date().toISOString(),
+        expires_at: '',
+        primary: quota.primary as UsageWindow | undefined,
+        secondary: undefined,
+        tertiary: undefined,
+        cost: quota.cost,
+        account: undefined,
+        breakdowns: undefined,
+        last_error: undefined,
+        last_error_at: undefined,
+    };
 }
 
 export interface ModelsPanelProps {
@@ -89,8 +115,12 @@ export function ModelsPanel({
 
     // Get quota data for this provider
     const providerQuota = useMemo(() => {
-        return providerModels?.[provider.uuid]?.quota;
-    }, [providerModels, provider.uuid]);
+        return convertToProviderQuota(
+            providerModels?.[provider.uuid]?.quota,
+            provider,
+            providerModels?.[provider.uuid]?.last_updated
+        );
+    }, [providerModels, provider.uuid, provider.name, provider.api_style]);
 
     // Prepare quota prop for ModelCard
     const quotaProp = useMemo(() => {

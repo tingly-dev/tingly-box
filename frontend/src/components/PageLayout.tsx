@@ -1,6 +1,8 @@
 import { CircularProgress, Box, Alert, IconButton } from '@mui/material';
 import { useEffect, useRef } from 'react';
 
+type TimerId = ReturnType<typeof setTimeout>;
+
 interface PageLoadingProps {
   minHeight?: number;
 }
@@ -35,7 +37,7 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
   loadingMinHeight = 400,
   notification,
 }) => {
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<TimerId | null>(null);
 
   // Auto-hide notification after specified duration
   useEffect(() => {

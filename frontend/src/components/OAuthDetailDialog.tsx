@@ -269,7 +269,7 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit }: OAuthDetailDia
                                                     <IconButton
                                                         edge="end"
                                                         size="small"
-                                                        onClick={() => copyToken(provider.oauth_detail.refresh_token, 'refresh_token')}
+                                                        onClick={() => copyToken(provider.oauth_detail?.refresh_token ?? '', 'refresh_token')}
                                                         title={copiedToken === 'refresh_token' ? 'Copied!' : 'Copy'}
                                                     >
                                                         <ContentCopy fontSize="small" />

@@ -43,7 +43,7 @@ export function normalizeSmartRoutingServices(smartRouting: SmartRouting[]): Sma
         uuid: routing.uuid || uuidv4(),
         services: (routing.services || []).map((service: ConfigProvider) => ({
             ...service,
-            uuid: service.id || service.uuid || uuidv4(),
+            uuid: service.uuid || uuidv4(),
         })),
     }));
 }

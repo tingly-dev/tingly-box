@@ -165,7 +165,7 @@ export const CardGridItem = ({
   }
 
   return (
-    <Grid item xs={xs} sm={sm} md={md} lg={lg} xl={xl}>
+    <Grid size={{ xs, sm, md, lg, xl }}>
       {children}
     </Grid>
   );

@@ -202,7 +202,6 @@ export default function RequestErrorChart({ data, interval = 'hour' }: RequestEr
                 <Tabs
                     value={tabValue}
                     onChange={(_, value) => setTabValue(value)}
-                    size="small"
                     sx={{ minHeight: 36, '& .MuiTabs-indicator': { height: 3 } }}
                 >
                     <Tab label="Requests" value="requests" sx={{ minHeight: 36, py: 0.5, fontSize: '0.875rem' }} />

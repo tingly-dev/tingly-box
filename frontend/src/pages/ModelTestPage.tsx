@@ -274,7 +274,7 @@ const ModelTestPage = () => {
         } catch (err: any) {
             const errorResult: ProbeResponse = {
                 success: false,
-                error: { message: err?.message || 'Test failed' },
+                error: { message: err?.message || 'Test failed', type: 'client_error' },
             };
             setTestResults(prev => new Map(prev).set(model, errorResult));
             setSelectedModel(model);
@@ -375,7 +375,7 @@ const ModelTestPage = () => {
             ) : (
                 <Grid container spacing={2}>
                     {modelsData.map((model) => (
-                        <Grid item xs={12} sm={6} md={4} lg={3} key={model}>
+                        <Grid key={model} xs={12} sm={6} md={4} lg={3} {...({ item: true } as any)}>
                             <ModelCard
                                 model={model}
                                 provider={provider}

@@ -13,7 +13,6 @@ import {
     useTheme,
 } from '@mui/material';
 import { useState } from 'react';
-import type { AggregatedStat as ApiAggregatedStat } from '@/client/api';
 
 export interface AggregatedStat {
     key: string;
@@ -225,10 +224,10 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                             <Typography
                                                 variant="body2"
                                                 sx={{
-                                                    color: stat.error_rate > 0.05 ? 'error.main' : 'text.secondary',
+                                                    color: (stat.error_rate ?? 0) > 0.05 ? 'error.main' : 'text.secondary',
                                                 }}
                                             >
-                                                {(stat.error_rate * 100).toFixed(2)}%
+                                                {((stat.error_rate ?? 0) * 100).toFixed(2)}%
                                             </Typography>
                                         </TableCell>
                                     </TableRow>
