@@ -5,65 +5,48 @@ import (
 	"testing"
 	"time"
 
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
 )
 
-func TestNewVirtualModel(t *testing.T) {
-	cfg := &virtualmodel.VirtualModelConfig{
-		ID:          "test-model",
-		Name:        "Test Model",
-		Description: "A test model",
-		Content:     "Test response",
-		Delay:       100 * time.Millisecond,
-	}
-
-	vm := virtualmodel.NewVirtualModel(cfg)
+func TestNewMockModel(t *testing.T) {
+	vm := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
+		ID:      "test-model",
+		Name:    "Test Model",
+		Content: "Test response",
+		Delay:   100 * time.Millisecond,
+	})
 
 	if vm.GetID() != "test-model" {
 		t.Errorf("Expected ID 'test-model', got '%s'", vm.GetID())
 	}
 
-	if vm.GetName() != "Test Model" {
-		t.Errorf("Expected Name 'Test Model', got '%s'", vm.GetName())
-	}
-
-	if vm.GetContent() != "Test response" {
-		t.Errorf("Expected Content 'Test response', got '%s'", vm.GetContent())
-	}
-
-	if vm.GetDelay() != 100*time.Millisecond {
-		t.Errorf("Expected Delay 100ms, got %v", vm.GetDelay())
+	if vm.SimulatedDelay() != 100*time.Millisecond {
+		t.Errorf("Expected Delay 100ms, got %v", vm.SimulatedDelay())
 	}
 }
 
-func TestNewVirtualModelDefaults(t *testing.T) {
-	cfg := &virtualmodel.VirtualModelConfig{
+func TestNewMockModelDefaults(t *testing.T) {
+	vm := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
 		ID:      "test-model-defaults",
 		Content: "Test",
-	}
+	})
 
-	vm := virtualmodel.NewVirtualModel(cfg)
-
-	if vm.Config.Role != "assistant" {
-		t.Errorf("Expected default role 'assistant', got '%s'", vm.Config.Role)
-	}
-
-	if vm.Config.FinishReason != "stop" {
-		t.Errorf("Expected default finish_reason 'stop', got '%s'", vm.Config.FinishReason)
+	resp, _ := vm.HandleAnthropic(nil)
+	if resp.StopReason == "" {
+		t.Error("Expected non-empty default StopReason")
 	}
 }
 
 func TestRegistry(t *testing.T) {
 	registry := virtualmodel.NewRegistry()
 
-	cfg := &virtualmodel.VirtualModelConfig{
-		ID:          "registry-test",
-		Name:        "Registry Test",
-		Description: "Test registry",
-		Content:     "Registry test content",
-	}
-
-	vm := virtualmodel.NewVirtualModel(cfg)
+	vm := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
+		ID:      "registry-test",
+		Content: "Registry test content",
+	})
 
 	// Test Register
 	err := registry.Register(vm)
@@ -130,7 +113,7 @@ func TestRegisterDefaults(t *testing.T) {
 
 func TestSplitIntoChunks(t *testing.T) {
 	content := "Hello world this is a test"
-	chunks := virtualmodel.SplitIntoChunks(content)
+	chunks := token.SplitIntoChunks(content)
 
 	if len(chunks) == 0 {
 		t.Error("Expected at least one chunk, got none")
@@ -163,11 +146,10 @@ func TestService(t *testing.T) {
 	}
 
 	// Test RegisterModel
-	cfg := &virtualmodel.VirtualModelConfig{
+	err := service.RegisterModel(virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
 		ID:      "service-test",
 		Content: "Service test",
-	}
-	err := service.RegisterModel(virtualmodel.NewVirtualModel(cfg))
+	}))
 	if err != nil {
 		t.Fatalf("Failed to register model: %v", err)
 	}
@@ -187,43 +169,43 @@ func TestService(t *testing.T) {
 }
 
 func TestEstimateTokens(t *testing.T) {
-	messages := []Message{
-		{Role: "user", Content: "Hello world"},
-		{Role: "assistant", Content: "Hi there"},
+	messages := []openai.ChatCompletionMessageParamUnion{
+		openai.UserMessage("Hello world"),
+		openai.AssistantMessage("Hi there"),
 	}
 
-	count := estimateTokens(messages)
+	count := token.EstimateMessagesTokens(messages)
 	if count <= 0 {
 		t.Errorf("Expected positive token count, got %d", count)
 	}
 
 	// Test empty string
-	emptyCount := estimateTokensString("")
+	emptyCount := token.EstimateTokensString("")
 	if emptyCount != 0 {
 		t.Errorf("Expected 0 tokens for empty string, got %d", emptyCount)
 	}
 
 	// Test rough estimate (should be approximately length/4)
 	shortContent := "Hello world"
-	shortCount := estimateTokensString(shortContent)
-	expectedShort := (len(shortContent) + 3) / 4
+	shortCount := token.EstimateTokensString(shortContent)
+	expectedShort := int64((len(shortContent) + 3) / 4)
 	if shortCount != expectedShort {
 		t.Errorf("Expected %d tokens for '%s', got %d", expectedShort, shortContent, shortCount)
 	}
 
 	// Test empty messages slice
-	emptyMessages := []Message{}
-	emptyMsgCount := estimateTokens(emptyMessages)
+	emptyMessages := []openai.ChatCompletionMessageParamUnion{}
+	emptyMsgCount := token.EstimateMessagesTokens(emptyMessages)
 	if emptyMsgCount != 0 {
 		t.Errorf("Expected 0 tokens for empty messages, got %d", emptyMsgCount)
 	}
 
 	// Test messages with empty content
-	messagesWithEmpty := []Message{
-		{Role: "user", Content: ""},
-		{Role: "assistant", Content: "Hello"},
+	messagesWithEmpty := []openai.ChatCompletionMessageParamUnion{
+		openai.UserMessage(""),
+		openai.AssistantMessage("Hello"),
 	}
-	countWithEmpty := estimateTokens(messagesWithEmpty)
+	countWithEmpty := token.EstimateMessagesTokens(messagesWithEmpty)
 	if countWithEmpty <= 0 {
 		t.Errorf("Expected positive token count with empty content message, got %d", countWithEmpty)
 	}
@@ -232,17 +214,8 @@ func TestEstimateTokens(t *testing.T) {
 func TestRegistryList(t *testing.T) {
 	registry := virtualmodel.NewRegistry()
 
-	cfg1 := &virtualmodel.VirtualModelConfig{
-		ID:      "list-test-1",
-		Content: "Test 1",
-	}
-	cfg2 := &virtualmodel.VirtualModelConfig{
-		ID:      "list-test-2",
-		Content: "Test 2",
-	}
-
-	registry.Register(virtualmodel.NewVirtualModel(cfg1))
-	registry.Register(virtualmodel.NewVirtualModel(cfg2))
+	registry.Register(virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{ID: "list-test-1", Content: "Test 1"}))
+	registry.Register(virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{ID: "list-test-2", Content: "Test 2"}))
 
 	// Test List() returns []*VirtualModel
 	vms := registry.List()
@@ -262,11 +235,7 @@ func TestRegistryList(t *testing.T) {
 func TestRegistryClear(t *testing.T) {
 	registry := virtualmodel.NewRegistry()
 
-	cfg := &virtualmodel.VirtualModelConfig{
-		ID:      "clear-test",
-		Content: "Test",
-	}
-	registry.Register(virtualmodel.NewVirtualModel(cfg))
+	registry.Register(virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{ID: "clear-test", Content: "Test"}))
 
 	// Verify model is registered
 	if registry.Get("clear-test") == nil {
@@ -292,63 +261,88 @@ func TestRegistryClear(t *testing.T) {
 	}
 }
 
-// Test unified type system
+// Test that MockModel and TransformModel both satisfy VirtualModel interface
 func TestVirtualModelTypes(t *testing.T) {
-	tests := []struct {
-		name     string
-		vmType   virtualmodel.VirtualModelType
-		isStatic bool
-		isTool   bool
-		isProxy  bool
-	}{
-		{"static", virtualmodel.VirtualModelTypeStatic, true, false, false},
-		{"tool", virtualmodel.VirtualModelTypeTool, false, true, false},
-		{"proxy", virtualmodel.VirtualModelTypeProxy, false, false, true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := &virtualmodel.VirtualModelConfig{
-				ID:   "test-" + tt.name,
-				Type: tt.vmType,
-			}
-			vm := virtualmodel.NewVirtualModel(cfg)
-
-			if vm.GetType() != tt.vmType {
-				t.Errorf("Expected type %s, got %s", tt.vmType, vm.GetType())
-			}
-			if vm.IsStatic() != tt.isStatic {
-				t.Errorf("IsStatic() = %v, want %v", vm.IsStatic(), tt.isStatic)
-			}
-			if vm.IsTool() != tt.isTool {
-				t.Errorf("IsTool() = %v, want %v", vm.IsTool(), tt.isTool)
-			}
-			if vm.IsProxy() != tt.isProxy {
-				t.Errorf("IsProxy() = %v, want %v", vm.IsProxy(), tt.isProxy)
-			}
+	t.Run("MockModel satisfies VirtualModel", func(t *testing.T) {
+		var vm virtualmodel.VirtualModel = virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
+			ID:      "test-mock",
+			Content: "hello",
 		})
-	}
+		if vm.GetID() != "test-mock" {
+			t.Errorf("Expected ID 'test-mock', got '%s'", vm.GetID())
+		}
+	})
+
+	t.Run("MockModel satisfies AnthropicVirtualModel", func(t *testing.T) {
+		vm := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
+			ID:      "test-mock-anthropic",
+			Content: "hello",
+		})
+		var _ virtualmodel.AnthropicVirtualModel = vm
+	})
+
+	t.Run("MockModel satisfies OpenAIChatVirtualModel", func(t *testing.T) {
+		vm := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
+			ID:      "test-mock-openai",
+			Content: "hello",
+		})
+		var _ virtualmodel.OpenAIChatVirtualModel = vm
+	})
+
+	t.Run("MockModel tool satisfies VirtualModel", func(t *testing.T) {
+		var vm virtualmodel.VirtualModel = virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
+			ID: "test-tool",
+			ToolCall: &virtualmodel.ToolCallConfig{
+				Name:      "web_search",
+				Arguments: map[string]interface{}{"query": "test"},
+			},
+		})
+		if vm.GetID() != "test-tool" {
+			t.Errorf("Expected ID 'test-tool', got '%s'", vm.GetID())
+		}
+	})
+
+	t.Run("TransformModel satisfies VirtualModel", func(t *testing.T) {
+		var vm virtualmodel.VirtualModel = virtualmodel.NewTransformModel(&virtualmodel.TransformModelConfig{
+			ID: "test-transform",
+		})
+		if vm.GetID() != "test-transform" {
+			t.Errorf("Expected ID 'test-transform', got '%s'", vm.GetID())
+		}
+	})
+
+	t.Run("TransformModel satisfies AnthropicVirtualModel", func(t *testing.T) {
+		vm := virtualmodel.NewTransformModel(&virtualmodel.TransformModelConfig{ID: "test-transform-a"})
+		var _ virtualmodel.AnthropicVirtualModel = vm
+	})
+
+	t.Run("TransformModel does NOT satisfy OpenAIChatVirtualModel", func(t *testing.T) {
+		var vm virtualmodel.VirtualModel = virtualmodel.NewTransformModel(&virtualmodel.TransformModelConfig{ID: "t"})
+		if _, ok := vm.(virtualmodel.OpenAIChatVirtualModel); ok {
+			t.Error("TransformModel must not implement OpenAIChatVirtualModel")
+		}
+	})
 }
 
-// Test default type is static
+// Test MockModel default stop reason
 func TestVirtualModelDefaultType(t *testing.T) {
-	cfg := &virtualmodel.VirtualModelConfig{
+	vm := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
 		ID:      "test-default",
 		Content: "Test",
+	})
+	resp, _ := vm.HandleAnthropic(nil)
+	if resp.StopReason == "" {
+		t.Error("Expected non-empty default StopReason")
 	}
-	vm := virtualmodel.NewVirtualModel(cfg)
-
-	if vm.GetType() != virtualmodel.VirtualModelTypeStatic {
-		t.Errorf("Expected default type %s, got %s", virtualmodel.VirtualModelTypeStatic, vm.GetType())
+	if string(resp.StopReason) != "stop" {
+		t.Errorf("Expected default StopReason 'stop', got '%s'", resp.StopReason)
 	}
 }
 
-// Test tool model with generic arguments
+// Test MockModel tool response contains correct tool call
 func TestToolModel(t *testing.T) {
-	// Test ask_user_question tool
-	cfg := &virtualmodel.VirtualModelConfig{
-		ID:   "test-ask",
-		Type: virtualmodel.VirtualModelTypeTool,
+	vm := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
+		ID: "test-ask",
 		ToolCall: &virtualmodel.ToolCallConfig{
 			Name: "ask_user_question",
 			Arguments: map[string]interface{}{
@@ -358,164 +352,86 @@ func TestToolModel(t *testing.T) {
 				},
 			},
 		},
+	})
+
+	resp, _ := vm.HandleAnthropic(nil)
+	if string(resp.StopReason) != "tool_use" {
+		t.Errorf("Expected StopReason 'tool_use', got '%s'", resp.StopReason)
 	}
 
-	vm := virtualmodel.NewVirtualModel(cfg)
-
-	if !vm.IsTool() {
-		t.Error("Expected IsTool() to return true")
+	// Find the tool_use block
+	var foundToolUse bool
+	for _, blk := range resp.Content {
+		if blk.OfToolUse != nil && blk.OfToolUse.Name == "ask_user_question" {
+			foundToolUse = true
+		}
+	}
+	if !foundToolUse {
+		t.Error("Expected tool_use block with name 'ask_user_question'")
 	}
 
-	toolCall := vm.GetToolCall()
-	if toolCall == nil {
-		t.Fatal("Expected tool call config")
-	}
-
-	if toolCall.Name != "ask_user_question" {
-		t.Errorf("Expected tool name 'ask_user_question', got '%s'", toolCall.Name)
-	}
-
-	if toolCall.Arguments["question"] != "Which option?" {
-		t.Errorf("Expected question 'Which option?', got '%v'", toolCall.Arguments["question"])
-	}
-
-	// Test web_search tool (different tool type)
-	cfg2 := &virtualmodel.VirtualModelConfig{
-		ID:   "test-search",
-		Type: virtualmodel.VirtualModelTypeTool,
+	// Test another tool type
+	vm2 := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
+		ID: "test-search",
 		ToolCall: &virtualmodel.ToolCallConfig{
-			Name: "web_search",
-			Arguments: map[string]interface{}{
-				"query": "latest AI news",
-			},
+			Name:      "web_search",
+			Arguments: map[string]interface{}{"query": "latest AI news"},
 		},
+	})
+	resp2, _ := vm2.HandleAnthropic(nil)
+	var foundSearch bool
+	for _, blk := range resp2.Content {
+		if blk.OfToolUse != nil && blk.OfToolUse.Name == "web_search" {
+			foundSearch = true
+		}
 	}
-
-	vm2 := virtualmodel.NewVirtualModel(cfg2)
-	if vm2.GetToolCall().Name != "web_search" {
-		t.Errorf("Expected tool name 'web_search', got '%s'", vm2.GetToolCall().Name)
+	if !foundSearch {
+		t.Error("Expected tool_use block with name 'web_search'")
 	}
 }
 
-// Test proxy model
+// Test TransformModel SimulatedDelay is 0
 func TestProxyModel(t *testing.T) {
-	cfg := &virtualmodel.VirtualModelConfig{
-		ID:            "test-proxy",
-		Type:          virtualmodel.VirtualModelTypeProxy,
-		DelegateModel: "claude-3-5-sonnet",
-	}
+	vm := virtualmodel.NewTransformModel(&virtualmodel.TransformModelConfig{
+		ID: "test-proxy",
+	})
 
-	vm := virtualmodel.NewVirtualModel(cfg)
-
-	if !vm.IsProxy() {
-		t.Error("Expected IsProxy() to return true")
-	}
-
-	if vm.GetDelegateModel() != "claude-3-5-sonnet" {
-		t.Errorf("Expected delegate model 'claude-3-5-sonnet', got '%s'", vm.GetDelegateModel())
+	if vm.SimulatedDelay() != 0 {
+		t.Errorf("Expected SimulatedDelay 0 for TransformModel, got %v", vm.SimulatedDelay())
 	}
 }
 
-// Test all default model types are registered
+// Test all default models are registered
 func TestDefaultModelTypes(t *testing.T) {
 	registry := virtualmodel.NewRegistry()
 	registry.RegisterDefaults()
 
-	testCases := []struct {
-		id       string
-		expected virtualmodel.VirtualModelType
-	}{
-		{"virtual-gpt-4", virtualmodel.VirtualModelTypeStatic},
-		{"virtual-claude-3", virtualmodel.VirtualModelTypeStatic},
-		{"echo-model", virtualmodel.VirtualModelTypeStatic},
-		{"compact-thinking", virtualmodel.VirtualModelTypeProxy},
-		{"compact-round-only", virtualmodel.VirtualModelTypeProxy},
-		{"compact-round-files", virtualmodel.VirtualModelTypeProxy},
-		{"ask-user-question", virtualmodel.VirtualModelTypeTool},
-		{"ask-confirmation", virtualmodel.VirtualModelTypeTool},
-		{"web-search-example", virtualmodel.VirtualModelTypeTool},
+	expectedIDs := []string{
+		"virtual-gpt-4",
+		"virtual-claude-3",
+		"echo-model",
+		"compact-thinking",
+		"compact-round-only",
+		"compact-round-files",
+		"ask-user-question",
+		"ask-confirmation",
+		"web-search-example",
 	}
 
-	for _, tc := range testCases {
-		vm := registry.Get(tc.id)
+	for _, id := range expectedIDs {
+		vm := registry.Get(id)
 		if vm == nil {
-			t.Errorf("Model '%s' not found", tc.id)
-			continue
+			t.Errorf("Model '%s' not found", id)
 		}
-		if vm.GetType() != tc.expected {
-			t.Errorf("Model '%s': expected type %s, got %s", tc.id, tc.expected, vm.GetType())
-		}
-	}
-}
-
-// Test GetStreamChunks with default behavior (splits content)
-func TestGetStreamChunksDefault(t *testing.T) {
-	cfg := &virtualmodel.VirtualModelConfig{
-		ID:      "test-stream-default",
-		Content: "Hello world test",
-	}
-	vm := virtualmodel.NewVirtualModel(cfg)
-
-	chunks := vm.GetStreamChunks()
-	if len(chunks) == 0 {
-		t.Error("Expected at least one chunk from default streaming")
-	}
-
-	// Reconstruct content
-	reconstructed := ""
-	for _, chunk := range chunks {
-		reconstructed += chunk
-	}
-	if reconstructed != "Hello world test" {
-		t.Errorf("Reconstructed chunks don't match original. Expected 'Hello world test', got '%s'", reconstructed)
-	}
-}
-
-// Test GetStreamChunks with custom chunks
-func TestGetStreamChunksCustom(t *testing.T) {
-	customChunks := []string{"Custom", " ", "Chunks"}
-	cfg := &virtualmodel.VirtualModelConfig{
-		ID:           "test-stream-custom",
-		Content:      "Original",
-		StreamChunks: customChunks,
-	}
-	vm := virtualmodel.NewVirtualModel(cfg)
-
-	chunks := vm.GetStreamChunks()
-	if len(chunks) != len(customChunks) {
-		t.Errorf("Expected %d chunks, got %d", len(customChunks), len(chunks))
-	}
-
-	for i, chunk := range chunks {
-		if chunk != customChunks[i] {
-			t.Errorf("Chunk %d: expected '%s', got '%s'", i, customChunks[i], chunk)
-		}
-	}
-}
-
-// Test GetStreamChunks with empty content
-func TestGetStreamChunksEmpty(t *testing.T) {
-	cfg := &virtualmodel.VirtualModelConfig{
-		ID:      "test-stream-empty",
-		Content: "",
-	}
-	vm := virtualmodel.NewVirtualModel(cfg)
-
-	chunks := vm.GetStreamChunks()
-	if len(chunks) == 0 {
-		t.Error("Expected at least one chunk even for empty content")
 	}
 }
 
 // Test ToModel conversion
 func TestToModel(t *testing.T) {
-	cfg := &virtualmodel.VirtualModelConfig{
-		ID:          "test-to-model",
-		Name:        "Test Model Name",
-		Description: "Test Description",
-		Content:     "Test content",
-	}
-	vm := virtualmodel.NewVirtualModel(cfg)
+	vm := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
+		ID:      "test-to-model",
+		Content: "Test content",
+	})
 
 	model := vm.ToModel()
 
@@ -531,16 +447,11 @@ func TestToModel(t *testing.T) {
 		t.Errorf("Expected owned_by 'tingly-box-virtual', got '%s'", model.OwnedBy)
 	}
 
-	if model.Created == 0 {
-		t.Error("Expected non-zero created timestamp")
-	}
-
-	// Test with ID only (Name defaults to ID)
-	cfg2 := &virtualmodel.VirtualModelConfig{
+	// Test with another ID
+	vm2 := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
 		ID:      "id-only",
 		Content: "Content",
-	}
-	vm2 := virtualmodel.NewVirtualModel(cfg2)
+	})
 	model2 := vm2.ToModel()
 
 	if model2.ID != "id-only" {
@@ -548,26 +459,14 @@ func TestToModel(t *testing.T) {
 	}
 }
 
-// Test GetName with and without explicit name
+// Test GetID for MockModel
 func TestGetName(t *testing.T) {
-	// With explicit name
-	cfg1 := &virtualmodel.VirtualModelConfig{
-		ID:   "test-id",
-		Name: "Explicit Name",
-	}
-	vm1 := virtualmodel.NewVirtualModel(cfg1)
-	if vm1.GetName() != "Explicit Name" {
-		t.Errorf("Expected 'Explicit Name', got '%s'", vm1.GetName())
-	}
-
-	// Without explicit name (should default to ID)
-	cfg2 := &virtualmodel.VirtualModelConfig{
-		ID:   "test-id-only",
-		Name: "",
-	}
-	vm2 := virtualmodel.NewVirtualModel(cfg2)
-	if vm2.GetName() != "test-id-only" {
-		t.Errorf("Expected name to default to ID 'test-id-only', got '%s'", vm2.GetName())
+	vm := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
+		ID:      "test-id",
+		Content: "Test",
+	})
+	if vm.GetID() != "test-id" {
+		t.Errorf("Expected ID 'test-id', got '%s'", vm.GetID())
 	}
 }
 
@@ -598,11 +497,11 @@ func TestChatCompletionRequestJSON(t *testing.T) {
 		t.Errorf("Expected model 'virtual-gpt-4', got '%s'", req.Model)
 	}
 
-	if req.Temperature == nil || *req.Temperature != 0.7 {
+	if param.IsOmitted(req.Temperature) || req.Temperature.Value != 0.7 {
 		t.Error("Expected temperature 0.7")
 	}
 
-	if req.MaxTokens == nil || *req.MaxTokens != 100 {
+	if param.IsOmitted(req.MaxTokens) || req.MaxTokens.Value != 100 {
 		t.Error("Expected max_tokens 100")
 	}
 
@@ -708,77 +607,6 @@ func TestChatCompletionResponseJSON(t *testing.T) {
 
 	if unmarshaled.Usage.TotalTokens != 30 {
 		t.Errorf("TotalTokens mismatch: expected 30, got %d", unmarshaled.Usage.TotalTokens)
-	}
-}
-
-// Test Anthropic API types JSON serialization
-func TestAnthropicMessageRequestJSON(t *testing.T) {
-	jsonData := `{
-		"model": "virtual-claude-3",
-		"messages": [
-			{"role": "user", "content": "Hello"}
-		],
-		"max_tokens": 1024,
-		"stream": true
-	}`
-
-	var req AnthropicMessageRequest
-	err := json.Unmarshal([]byte(jsonData), &req)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal AnthropicMessageRequest: %v", err)
-	}
-
-	if req.Model != "virtual-claude-3" {
-		t.Errorf("Expected model 'virtual-claude-3', got '%s'", req.Model)
-	}
-
-	if len(req.Messages) != 1 {
-		t.Errorf("Expected 1 message, got %d", len(req.Messages))
-	}
-
-	if !req.Stream {
-		t.Error("Expected stream to be true")
-	}
-}
-
-// Test AnthropicMessageResponse JSON serialization
-func TestAnthropicMessageResponseJSON(t *testing.T) {
-	resp := AnthropicMessageResponse{
-		ID:         "msg_test_123",
-		Type:       "message",
-		Role:       "assistant",
-		Model:      "virtual-claude-3",
-		StopReason: "end_turn",
-		Content: []AnthropicContent{
-			{Type: "text", Text: "Test response"},
-		},
-		Usage: AnthropicUsage{
-			InputTokens:  15,
-			OutputTokens: 25,
-		},
-	}
-
-	data, err := json.Marshal(resp)
-	if err != nil {
-		t.Fatalf("Failed to marshal AnthropicMessageResponse: %v", err)
-	}
-
-	var unmarshaled AnthropicMessageResponse
-	err = json.Unmarshal(data, &unmarshaled)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal AnthropicMessageResponse: %v", err)
-	}
-
-	if unmarshaled.ID != resp.ID {
-		t.Errorf("ID mismatch: expected '%s', got '%s'", resp.ID, unmarshaled.ID)
-	}
-
-	if len(unmarshaled.Content) != 1 {
-		t.Fatalf("Expected 1 content block, got %d", len(unmarshaled.Content))
-	}
-
-	if unmarshaled.Content[0].Type != "text" {
-		t.Errorf("Expected content type 'text', got '%s'", unmarshaled.Content[0].Type)
 	}
 }
 
