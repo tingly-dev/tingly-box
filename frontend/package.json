@@ -53,10 +53,11 @@
     "globals": "^17.4.0",
     "msw": "^2.12.14",
     "openapi-typescript": "^7.13.0",
+    "oxlint": "^1.59.0",
     "rollup-plugin-visualizer": "^7.0.1",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.58.1",
-    "vite": "^7.3.1"
+    "vite": "8.0.5"
   },
   "overrides": {
     "d3-array": "^3.2.4",
