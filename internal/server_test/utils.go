@@ -1,4 +1,4 @@
-package tests
+package server
 
 import (
 	"bytes"
@@ -15,19 +15,19 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
+	server2 "github.com/tingly-dev/tingly-box/internal/server"
 
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/server"
 	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // TestServer represents a test server wrapper
 type TestServer struct {
 	appConfig *config.AppConfig
-	server    *server.Server
+	server    *server2.Server
 	ginEngine *gin.Engine
 }
 
@@ -77,7 +77,7 @@ func NewTestServer(t *testing.T) *TestServer {
 func createTestServer(t *testing.T, appConfig *config.AppConfig) *TestServer {
 	// Create server instance but don't start it
 	// Note: adapter is disabled by default in tests to test the fallback behavior
-	httpServer := server.NewServer(appConfig.GetGlobalConfig(), server.WithAdaptor(false))
+	httpServer := server2.NewServer(appConfig.GetGlobalConfig(), server2.WithAdaptor(false))
 
 	return &TestServer{
 		appConfig: appConfig,
@@ -105,7 +105,7 @@ func NewTestServerWithAdaptor(t *testing.T) *TestServer {
 	}
 
 	// Create server instance with adaptor flag
-	httpServer := server.NewServer(appConfig.GetGlobalConfig())
+	httpServer := server2.NewServer(appConfig.GetGlobalConfig())
 
 	return &TestServer{
 		appConfig: appConfig,
@@ -294,7 +294,7 @@ func (ts *TestServer) AddTestRule(t *testing.T, requestModel, providerName, mode
 // NewTestServerWithAdaptorFromConfig creates a new test server with adaptor flag using existing app config
 func NewTestServerWithAdaptorFromConfig(appConfig *config.AppConfig) *TestServer {
 	// Create server instance with adaptor flag
-	httpServer := server.NewServer(appConfig.GetGlobalConfig())
+	httpServer := server2.NewServer(appConfig.GetGlobalConfig())
 
 	return &TestServer{
 		appConfig: appConfig,
@@ -378,4 +378,14 @@ func NewTestConfigDirCopy(t *testing.T) *TestConfigDir {
 // Path returns the path to the temporary config directory
 func (td *TestConfigDir) Path() string {
 	return td.path
+}
+
+// containsStatus checks if status code is in expected list
+func containsStatus(actual int, expected []int) bool {
+	for _, code := range expected {
+		if actual == code {
+			return true
+		}
+	}
+	return false
 }

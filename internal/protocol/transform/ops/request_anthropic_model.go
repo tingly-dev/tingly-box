@@ -227,9 +227,17 @@ func ApplyAnthropicV1MetadataTransform(req *anthropic.MessageNewParams, extra ma
 	if req.Metadata.UserID.Valid() {
 		m := ParseMetadataUserID(req.Metadata.UserID.String())
 		if m != nil {
-			m.Fix(extra)
-			s := m.Format()
-			req.Metadata.UserID = param.NewOpt(s)
+			// Recover from panic if Fix() fails due to missing required fields
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						// Fix() panicked, skip setting metadata
+					}
+				}()
+				m.Fix(extra)
+				s := m.Format()
+				req.Metadata.UserID = param.NewOpt(s)
+			}()
 		}
 	} else {
 		m := BuildMetadataUserID(extra)

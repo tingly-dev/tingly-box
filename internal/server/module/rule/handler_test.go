@@ -16,25 +16,12 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/pkg/obs"
 )
-
-// setupTestActionLogger creates a test action logger for use in tests
-func setupTestActionLogger() *obs.ScopedLogger {
-	multiLogger, _ := obs.NewMultiLogger(&obs.MultiLoggerConfig{
-		TextLogPath: "/tmp/test.log",
-		JSONLogPath: "/tmp/test.jsonl",
-		MemorySinkConfig: map[obs.LogSource]obs.MemorySinkConfig{
-			obs.LogSourceAction: {MaxEntries: 10},
-		},
-	})
-	return multiLogger.WithSource(obs.LogSourceAction)
-}
 
 func setupTestRouter(cfg *config.Config) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	_ = NewHandler(cfg, setupTestActionLogger())
+	_ = NewHandler(cfg)
 	return router
 }
 
@@ -52,8 +39,7 @@ func registerTestRuleScenario(t *testing.T, scenario typ.RuleScenario) {
 }
 
 func TestNewHandler(t *testing.T) {
-	actionLogger := setupTestActionLogger()
-	handler := NewHandler(nil, actionLogger)
+	handler := NewHandler(nil)
 
 	cfg, _ := config.NewConfig()
 	router := setupTestRouter(cfg)
@@ -82,8 +68,7 @@ func TestGetRules_WithScenario(t *testing.T) {
 	cfg, _ := config.NewConfig()
 	router := setupTestRouter(cfg)
 
-	actionLogger := setupTestActionLogger()
-	handler := NewHandler(cfg, actionLogger)
+	handler := NewHandler(cfg)
 
 	router.GET("/rules", handler.GetRules)
 
@@ -122,8 +107,7 @@ func TestGetRules_WithScenario(t *testing.T) {
 func TestGetRules_NilConfig(t *testing.T) {
 	router := setupTestRouter(nil)
 
-	actionLogger := setupTestActionLogger()
-	handler := NewHandler(nil, actionLogger)
+	handler := NewHandler(nil)
 
 	router.GET("/rules", handler.GetRules)
 
@@ -140,8 +124,7 @@ func TestGetRule_Success(t *testing.T) {
 	cfg, _ := config.NewConfig()
 	router := setupTestRouter(cfg)
 
-	actionLogger := setupTestActionLogger()
-	handler := NewHandler(cfg, actionLogger)
+	handler := NewHandler(cfg)
 
 	router.GET("/rules/:uuid", handler.GetRule)
 
@@ -167,8 +150,7 @@ func TestGetRule_NotFound(t *testing.T) {
 	cfg, _ := config.NewConfig()
 	router := setupTestRouter(cfg)
 
-	actionLogger := setupTestActionLogger()
-	handler := NewHandler(cfg, actionLogger)
+	handler := NewHandler(cfg)
 
 	router.GET("/rules/:uuid", handler.GetRule)
 
@@ -185,8 +167,7 @@ func TestGetRule_EmptyUUID(t *testing.T) {
 	cfg, _ := config.NewConfig()
 	router := setupTestRouter(cfg)
 
-	actionLogger := setupTestActionLogger()
-	handler := NewHandler(cfg, actionLogger)
+	handler := NewHandler(cfg)
 
 	router.GET("/rules/:uuid", handler.GetRule)
 
@@ -202,8 +183,7 @@ func TestGetRule_EmptyUUID(t *testing.T) {
 func TestGetRule_NilConfig(t *testing.T) {
 	router := setupTestRouter(nil)
 
-	actionLogger := setupTestActionLogger()
-	handler := NewHandler(nil, actionLogger)
+	handler := NewHandler(nil)
 
 	router.GET("/rules/:uuid", handler.GetRule)
 
@@ -220,10 +200,10 @@ func TestGetRule_NilConfig(t *testing.T) {
 func TestCreateRule_Success(t *testing.T) {
 	registerTestRuleScenario(t, typ.RuleScenario("test-scenario"))
 
-	cfg := NewConfig(t)
+	cfg, _ := config.NewConfig()
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	handler := NewHandler(cfg, logger)
+	handler := NewHandler(cfg)
 
 	router.POST("/rules", handler.CreateRule)
 
@@ -250,11 +230,10 @@ func TestCreateRule_Success(t *testing.T) {
 }
 
 func TestCreateRule_NoScenario(t *testing.T) {
-	cfg := NewConfig(t)
+	cfg, _ := config.NewConfig()
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	logger, _ := obs.NewMemoryLogger()
-	handler := NewHandler(cfg, logger)
+	handler := NewHandler(cfg)
 
 	router.POST("/rules", handler.CreateRule)
 
@@ -282,11 +261,10 @@ func TestCreateRule_NoScenario(t *testing.T) {
 func TestUpdateRule_Success(t *testing.T) {
 	registerTestRuleScenario(t, typ.RuleScenario("test-scenario"))
 
-	cfg := NewConfig(t)
+	cfg, _ := config.NewConfig()
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	logger, _ := obs.NewMemoryLogger()
-	handler := NewHandler(cfg, logger)
+	handler := NewHandler(cfg)
 
 	router.PUT("/rules/:uuid", handler.UpdateRule)
 
@@ -336,11 +314,10 @@ func TestUpdateRule_Success(t *testing.T) {
 }
 
 func TestDeleteRule_Success(t *testing.T) {
-	cfg := setupTestConfig(t)
+	cfg, _ := config.NewConfig()
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	logger, _ := obs.NewMemoryLogger()
-	handler := NewHandler(cfg, logger)
+	handler := NewHandler(cfg)
 
 	router.DELETE("/rules/:uuid", handler.DeleteRule)
 
@@ -379,11 +356,10 @@ func TestDeleteRule_Success(t *testing.T) {
 
 // TestImportRule_JSONL tests importing a rule from JSONL format
 func TestImportRule_JSONL(t *testing.T) {
-	cfg := setupTestConfig(t)
+	cfg, _ := config.NewConfig()
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	logger, _ := obs.NewMemoryLogger()
-	handler := NewHandler(cfg, logger)
+	handler := NewHandler(cfg)
 
 	router.POST("/rules/import", handler.ImportRule)
 
@@ -420,11 +396,10 @@ func TestImportRule_JSONL(t *testing.T) {
 
 // TestImportRule_Base64 tests importing a rule from Base64 format
 func TestImportRule_Base64(t *testing.T) {
-	cfg := setupTestConfig(t)
+	cfg, _ := config.NewConfig()
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	logger, _ := obs.NewMemoryLogger()
-	handler := NewHandler(cfg, logger)
+	handler := NewHandler(cfg)
 
 	router.POST("/rules/import", handler.ImportRule)
 
@@ -459,11 +434,10 @@ func TestImportRule_Base64(t *testing.T) {
 
 // TestImportRule_ProviderConflictUse tests using existing provider on conflict
 func TestImportRule_ProviderConflictUse(t *testing.T) {
-	cfg := NewConfig(t)
+	cfg, _ := config.NewConfig()
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	logger, _ := obs.NewMemoryLogger()
-	handler := NewHandler(cfg, logger)
+	handler := NewHandler(cfg)
 
 	router.POST("/rules/import", handler.ImportRule)
 
@@ -519,11 +493,10 @@ func TestImportRule_ProviderConflictUse(t *testing.T) {
 
 // TestImportRule_RuleConflictSkip tests skipping rule on conflict
 func TestImportRule_RuleConflictSkip(t *testing.T) {
-	cfg := setupTestConfig(t)
+	cfg, _ := config.NewConfig()
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	logger, _ := obs.NewMemoryLogger()
-	handler := NewHandler(cfg, logger)
+	handler := NewHandler(cfg)
 
 	router.POST("/rules/import", handler.ImportRule)
 
@@ -584,11 +557,10 @@ func TestImportRule_RuleConflictSkip(t *testing.T) {
 
 // TestImportRule_InvalidData tests importing with invalid data
 func TestImportRule_InvalidData(t *testing.T) {
-	cfg := setupTestConfig(t)
+	cfg, _ := config.NewConfig()
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	logger, _ := obs.NewMemoryLogger()
-	handler := NewHandler(cfg, logger)
+	handler := NewHandler(cfg)
 
 	router.POST("/rules/import", handler.ImportRule)
 
@@ -613,11 +585,10 @@ func TestImportRule_InvalidData(t *testing.T) {
 
 // TestImportRule_ProviderUUIDConflict tests real UUID conflict scenario
 func TestImportRule_ProviderUUIDConflict(t *testing.T) {
-	cfg := setupTestConfig(t)
+	cfg, _ := config.NewConfig()
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	logger, _ := obs.NewMemoryLogger()
-	handler := NewHandler(cfg, logger)
+	handler := NewHandler(cfg)
 
 	router.POST("/rules/import", handler.ImportRule)
 
@@ -685,11 +656,10 @@ func TestImportRule_ProviderUUIDConflict(t *testing.T) {
 
 // TestImportRule_MissingData tests importing with missing data field
 func TestImportRule_MissingData(t *testing.T) {
-	cfg := setupTestConfig(t)
+	cfg, _ := config.NewConfig()
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	logger, _ := obs.NewMemoryLogger()
-	handler := NewHandler(cfg, logger)
+	handler := NewHandler(cfg)
 
 	router.POST("/rules/import", handler.ImportRule)
 

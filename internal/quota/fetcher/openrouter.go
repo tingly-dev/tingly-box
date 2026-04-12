@@ -61,7 +61,14 @@ func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *typ.Provider) (
 	token := provider.GetAccessToken()
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://openrouter.ai/api/v1/key", nil)
+	// Use provider.APIBase for testing, fallback to production URL
+	apiBase := provider.APIBase
+	if apiBase == "" {
+		apiBase = "https://openrouter.ai"
+	}
+	url := apiBase + "/api/v1/key"
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}

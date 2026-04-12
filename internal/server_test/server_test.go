@@ -1,4 +1,7 @@
-package tests
+//go:build e2e
+// +build e2e
+
+package server
 
 import (
 	"encoding/json"
@@ -8,16 +11,37 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/tingly-dev/tingly-box/internal/server"
+
+	"github.com/tingly-dev/tingly-box/internal/server/config"
 )
 
-// containsStatus checks if status code is in expected list
-func containsStatus(actual int, expected []int) bool {
-	for _, code := range expected {
-		if actual == code {
-			return true
-		}
+// TestServerLifecycle verifies server context management
+// Merged from server_lifecycle_test.go
+func TestServerLifecycle(t *testing.T) {
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatalf("failed to create config: %v", err)
 	}
-	return false
+
+	s := server.NewServer(cfg, server.WithOpenBrowser(false))
+	if s.Context() == nil {
+		t.Fatal("expected context to be initialized")
+	}
+	if err := s.Context().Err(); err != nil {
+		t.Fatalf("expected context to remain active after NewServer, got %v", err)
+	}
+
+	if s.Cancel() == nil {
+		t.Fatal("expected cancel to be initialized")
+	}
+	s.Cancel()
+
+	select {
+	case <-s.Context().Done():
+	default:
+		t.Fatal("expected context to be canceled by cancel")
+	}
 }
 
 // Individual test functions

@@ -233,11 +233,14 @@ func TestMetadataUserID_Fix(t *testing.T) {
 		{
 			name: "fixes empty device_id with generated hash",
 			input: &MetadataUserID{
-				SessionID: "sess-789",
+				SessionID:   "sess-789",
+				AccountUUID: "test-account",
 			},
-			extras: nil,
+			extras: map[string]any{
+				"device": "test-device",
+			},
 			verify: func(m *MetadataUserID) bool {
-				return m.DeviceID != "" && m.SessionID == "sess-789"
+				return m.DeviceID == "test-device" && m.SessionID == "sess-789"
 			},
 		},
 		{
@@ -246,16 +249,18 @@ func TestMetadataUserID_Fix(t *testing.T) {
 				SessionID: "sess-789",
 			},
 			extras: map[string]any{
+				"device":  "test-device",
 				"user_id": "acc-custom-123",
 			},
 			verify: func(m *MetadataUserID) bool {
-				return m.AccountUUID == "acc-custom-123"
+				return m.DeviceID == "test-device" && m.AccountUUID == "acc-custom-123"
 			},
 		},
 		{
 			name: "generates session_id if empty",
 			input: &MetadataUserID{
-				DeviceID: "existing-device",
+				DeviceID:    "existing-device",
+				AccountUUID: "test-account",
 			},
 			extras: nil,
 			verify: func(m *MetadataUserID) bool {
@@ -265,8 +270,9 @@ func TestMetadataUserID_Fix(t *testing.T) {
 		{
 			name: "nil extras is handled",
 			input: &MetadataUserID{
-				DeviceID:  "existing-device",
-				SessionID: "existing-session",
+				DeviceID:    "existing-device",
+				SessionID:   "existing-session",
+				AccountUUID: "existing-account",
 			},
 			extras: nil,
 			verify: func(m *MetadataUserID) bool {
@@ -468,23 +474,24 @@ func TestBuildMetadataUserIDFromProvider(t *testing.T) {
 		verify func(*MetadataUserID) bool
 	}{
 		{
-			name:  "nil extra - generates random values",
+			name:  "nil extra - returns nil",
 			extra: nil,
 			verify: func(m *MetadataUserID) bool {
-				return m != nil && m.DeviceID != "" && m.SessionID != ""
+				return m == nil
 			},
 		},
 		{
-			name:  "empty extra - generates random values",
+			name:  "empty extra - returns nil",
 			extra: map[string]any{},
 			verify: func(m *MetadataUserID) bool {
-				return m != nil && m.DeviceID != "" && m.SessionID != ""
+				return m == nil
 			},
 		},
 		{
 			name: "extra with user_id only - user_id goes to account_uuid",
 			extra: map[string]any{
 				"user_id": userID,
+				"device":  "test-device",
 			},
 			verify: func(m *MetadataUserID) bool {
 				return m != nil && m.AccountUUID == userID && m.SessionID != ""
@@ -495,7 +502,7 @@ func TestBuildMetadataUserIDFromProvider(t *testing.T) {
 			extra: map[string]any{
 				"user_id":       userID,
 				"account_uuid":  accountUUID,
-				"device_id":     deviceID,
+				"device":        deviceID,
 				"provider_uuid": providerUUID,
 			},
 			verify: func(m *MetadataUserID) bool {
@@ -508,10 +515,6 @@ func TestBuildMetadataUserIDFromProvider(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := BuildMetadataUserID(tt.extra)
-			if got == nil {
-				t.Errorf("BuildMetadataUserID() = nil, want non-nil")
-				return
-			}
 			if !tt.verify(got) {
 				t.Errorf("BuildMetadataUserID() verification failed: %+v", got)
 			}
@@ -530,15 +533,15 @@ func TestFixMetadataUserID(t *testing.T) {
 		check func(*MetadataUserID) bool
 	}{
 		{
-			name:  "valid JSON gets fixed with generated fields",
-			input: `{"device_id":"","session_id":""}`,
+			name:  "valid JSON with device_id and account_uuid gets fixed",
+			input: `{"device_id":"existing-device","account_uuid":"existing-account","session_id":""}`,
 			check: func(m *MetadataUserID) bool {
-				return m.DeviceID != "" && m.SessionID != ""
+				return m.DeviceID == "existing-device" && m.SessionID != ""
 			},
 		},
 		{
 			name:  "partial JSON gets completed",
-			input: `{"device_id":"existing","session_id":""}`,
+			input: `{"device_id":"existing","account_uuid":"test-account","session_id":""}`,
 			check: func(m *MetadataUserID) bool {
 				return m.DeviceID == "existing" && m.SessionID != ""
 			},
@@ -619,19 +622,17 @@ func TestApplyAnthropicV1MetadataTransform(t *testing.T) {
 			wantNoMetadata: true,
 		},
 		{
-			name:           "nil extra - still generates metadata",
+			name:           "nil extra - no metadata generated",
 			req:            &anthropic.MessageNewParams{},
 			extra:          nil,
-			wantNoMetadata: false, // BuildMetadataUserID(nil) generates random values
-			checkMetadata: func(s string) bool {
-				return strings.HasPrefix(s, "{") && strings.Contains(s, "device_id")
-			},
+			wantNoMetadata: true, // BuildMetadataUserID(nil) returns nil due to missing required fields
 		},
 		{
-			name: "with user_id in extra",
+			name: "with user_id in extra - also needs device",
 			req:  &anthropic.MessageNewParams{},
 			extra: map[string]any{
 				"user_id": userID,
+				"device":  "test-device",
 			},
 			wantNoMetadata: false,
 			checkMetadata: func(s string) bool {
@@ -639,16 +640,16 @@ func TestApplyAnthropicV1MetadataTransform(t *testing.T) {
 			},
 		},
 		{
-			name: "existing metadata gets fixed",
+			name: "existing metadata with required fields gets fixed",
 			req: &anthropic.MessageNewParams{
 				Metadata: anthropic.MetadataParam{
-					UserID: param.NewOpt(`{"device_id":"","session_id":""}`),
+					UserID: param.NewOpt(`{"device_id":"existing-device","account_uuid":"test-account","session_id":""}`),
 				},
 			},
 			extra:          nil,
 			wantNoMetadata: false,
 			checkMetadata: func(s string) bool {
-				// After Fix, should have generated device_id and session_id
+				// After Fix, should have generated session_id
 				return strings.Contains(s, "device_id") && strings.Contains(s, "session_id")
 			},
 		},
@@ -689,20 +690,21 @@ func TestApplyAnthropicBetaMetadataTransform(t *testing.T) {
 		checkMetadata func(string) bool
 	}{
 		{
-			name: "with user_id in extra",
+			name: "with user_id in extra - also needs device",
 			req:  &anthropic.BetaMessageNewParams{},
 			extra: map[string]any{
 				"user_id": userID,
+				"device":  "test-device",
 			},
 			checkMetadata: func(s string) bool {
 				return strings.Contains(s, userID)
 			},
 		},
 		{
-			name: "existing metadata gets fixed",
+			name: "existing metadata with required fields gets fixed",
 			req: &anthropic.BetaMessageNewParams{
 				Metadata: anthropic.BetaMetadataParam{
-					UserID: param.NewOpt(`{"device_id":"","session_id":""}`),
+					UserID: param.NewOpt(`{"device_id":"existing-device","account_uuid":"test-account","session_id":""}`),
 				},
 			},
 			extra: nil,

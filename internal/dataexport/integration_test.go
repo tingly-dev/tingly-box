@@ -26,7 +26,7 @@ func TestExportRoundTrip(t *testing.T) {
 			},
 		},
 		LBTactic: typ.Tactic{
-			Type: loadbalance.TacticRoundRobin,
+			Type: loadbalance.TacticRandom,
 		},
 		Active:       true,
 		SmartEnabled: false,

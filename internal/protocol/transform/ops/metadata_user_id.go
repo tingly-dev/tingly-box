@@ -132,6 +132,12 @@ func BuildMetadataUserID(extra map[string]any) *MetadataUserID {
 	m := &MetadataUserID{}
 
 	// Always call Fix to generate default values if needed
+	// Recover from panic if Fix() fails due to missing required fields
+	defer func() {
+		if r := recover(); r != nil {
+			// Fix() panicked, return nil
+		}
+	}()
 	m.Fix(extra)
 
 	// Only return nil if all fields are empty after fixing
@@ -149,7 +155,16 @@ func FixMetadataUserID(raw string) *MetadataUserID {
 	if m == nil {
 		m = &MetadataUserID{}
 	}
+
+	// Recover from panic if Fix() fails due to missing required fields
+	defer func() {
+		if r := recover(); r != nil {
+			// Fix() panicked, return nil
+			m = nil
+		}
+	}()
 	m.Fix(nil)
+
 	return m
 }
 

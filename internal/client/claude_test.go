@@ -113,9 +113,12 @@ func TestApplyClaudeCodeHeaders_Context1M_ModelDependent(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "https://api.anthropic.com/v1/messages", strings.NewReader(tt.body))
 			req.Header.Set("X-Api-Key", "sk-ant-test-key")
 
-			_, _ = rt.RoundTrip(req)
+			resp, err := rt.RoundTrip(req)
+			require.NoError(t, err)
+			require.NotNil(t, resp)
 
-			beta := req.Header["anthropic-beta"][0]
+			beta := req.Header.Get("anthropic-beta")
+			require.NotEmpty(t, beta, "anthropic-beta header should be set")
 			if tt.want1m {
 				assert.Contains(t, beta, "context-1m-2025-08-07", "model should get context-1m: %s", tt.name)
 			} else {

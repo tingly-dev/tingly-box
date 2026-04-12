@@ -16,25 +16,25 @@ import (
 func TestConvertAnthropicToOpenAIResponse(t *testing.T) {
 	tests := []struct {
 		name          string
-		anthropicResp *anthropic.Message
+		anthropicResp *anthropic.BetaMessage
 		responseModel string
 		expectContent string
 		expectTools   bool
 	}{
 		{
 			name: "text only response",
-			anthropicResp: &anthropic.Message{
+			anthropicResp: &anthropic.BetaMessage{
 				ID:    "msg_123",
 				Model: "claude-3-sonnet",
 				Role:  "assistant",
 				Type:  "message",
-				Content: []anthropic.ContentBlockUnion{
+				Content: []anthropic.BetaContentBlockUnion{
 					{
 						Type: "text",
 						Text: "Hello, world!",
 					},
 				},
-				Usage: anthropic.Usage{
+				Usage: anthropic.BetaUsage{
 					InputTokens:  10,
 					OutputTokens: 20,
 				},
@@ -47,12 +47,12 @@ func TestConvertAnthropicToOpenAIResponse(t *testing.T) {
 		},
 		{
 			name: "tool use response",
-			anthropicResp: &anthropic.Message{
+			anthropicResp: &anthropic.BetaMessage{
 				ID:    "msg_456",
 				Model: "claude-3-opus",
 				Role:  "assistant",
 				Type:  "message",
-				Content: []anthropic.ContentBlockUnion{
+				Content: []anthropic.BetaContentBlockUnion{
 					{
 						Type:  "tool_use",
 						ID:    "tool_123",
@@ -60,7 +60,7 @@ func TestConvertAnthropicToOpenAIResponse(t *testing.T) {
 						Input: json.RawMessage(`{"location":"New York","unit":"celsius"}`),
 					},
 				},
-				Usage: anthropic.Usage{
+				Usage: anthropic.BetaUsage{
 					InputTokens:  15,
 					OutputTokens: 25,
 				},
