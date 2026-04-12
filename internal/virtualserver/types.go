@@ -1,81 +1,81 @@
 package virtualserver
 
+import (
+	"encoding/json"
+
+	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/openai/openai-go/v3"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
+)
+
 // ChatCompletionRequest is an OpenAI-compatible chat completion request.
-type ChatCompletionRequest struct {
-	Messages    []Message `json:"messages"`
-	Model       string    `json:"model"`
-	Temperature *float64  `json:"temperature,omitempty"`
-	MaxTokens   *int      `json:"max_tokens,omitempty"`
-	Stream      bool      `json:"stream,omitempty"`
+type ChatCompletionRequest = protocol.OpenAIChatCompletionRequest
+
+// Response types aliased from OpenAI SDK
+type (
+	ChatCompletionResponse       = openai.ChatCompletion
+	Choice                       = openai.ChatCompletionChoice
+	Message                      = openai.ChatCompletionMessage
+	ToolCall                     = openai.ChatCompletionMessageFunctionToolCall
+	FunctionCall                 = openai.ChatCompletionMessageFunctionToolCallFunction
+	Usage                        = openai.CompletionUsage
+	ChatCompletionStreamResponse = openai.ChatCompletionChunk
+	StreamChoice                 = openai.ChatCompletionChunkChoice
+	Delta                        = openai.ChatCompletionChunkChoiceDelta
+)
+
+// OpenAIModelsResponse is the OpenAI models list response format.
+type OpenAIModelsResponse struct {
+	Object string               `json:"object"`
+	Data   []virtualmodel.Model `json:"data"`
 }
 
-// Message is a chat message.
-type Message struct {
-	Role       string     `json:"role"`
-	Content    string     `json:"content"`
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
-	ToolCallID string     `json:"tool_call_id,omitempty"`
+// Request types aliased from protocol / Anthropic SDK
+type (
+	AnthropicMessageRequest = protocol.AnthropicBetaMessagesRequest
+	AnthropicMessage        = anthropic.BetaMessageParam
+	AnthropicTool           = anthropic.BetaToolParam
+)
+
+// AnthropicMessageResponse is an Anthropic-compatible message response.
+type AnthropicMessageResponse struct {
+	ID         string             `json:"id"`
+	Type       string             `json:"type"`
+	Role       string             `json:"role"`
+	Model      string             `json:"model"`
+	Content    []AnthropicContent `json:"content"`
+	StopReason string             `json:"stop_reason"`
+	Usage      AnthropicUsage     `json:"usage"`
 }
 
-// ToolCall is a tool call in the response.
-type ToolCall struct {
-	ID       string       `json:"id"`
-	Type     string       `json:"type"`
-	Function FunctionCall `json:"function"`
+// AnthropicContent is a content block in an Anthropic response.
+type AnthropicContent struct {
+	Type  string          `json:"type"`
+	Text  string          `json:"text,omitempty"`
+	ID    string          `json:"id,omitempty"`
+	Name  string          `json:"name,omitempty"`
+	Input json.RawMessage `json:"input,omitempty"`
 }
 
-// FunctionCall is a function call.
-type FunctionCall struct {
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"`
+// AnthropicUsage holds token usage in Anthropic format.
+type AnthropicUsage struct {
+	InputTokens  int64 `json:"input_tokens"`
+	OutputTokens int64 `json:"output_tokens"`
 }
 
-// ChatCompletionResponse is an OpenAI-compatible chat completion response.
-type ChatCompletionResponse struct {
-	ID      string   `json:"id"`
-	Object  string   `json:"object"`
-	Created int64    `json:"created"`
-	Model   string   `json:"model"`
-	Choices []Choice `json:"choices"`
-	Usage   Usage    `json:"usage"`
+// AnthropicStreamEvent is a streaming event in Anthropic format.
+type AnthropicStreamEvent struct {
+	Type    string                    `json:"type"`
+	Message *AnthropicMessageResponse `json:"message,omitempty"`
+	Index   int                       `json:"index,omitempty"`
+	Delta   *AnthropicDelta           `json:"delta,omitempty"`
+	Usage   *AnthropicUsage           `json:"usage,omitempty"`
 }
 
-// Choice is a choice in the response.
-type Choice struct {
-	Index        int        `json:"index"`
-	Message      Message    `json:"message"`
-	FinishReason string     `json:"finish_reason"`
-	Delta        Delta      `json:"delta,omitempty"`
-	ToolCalls    []ToolCall `json:"tool_calls,omitempty"`
-}
-
-// Usage holds token usage information.
-type Usage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
-}
-
-// ChatCompletionStreamResponse is a streaming chunk in OpenAI format.
-type ChatCompletionStreamResponse struct {
-	ID      string         `json:"id"`
-	Object  string         `json:"object"`
-	Created int64          `json:"created"`
-	Model   string         `json:"model"`
-	Choices []StreamChoice `json:"choices"`
-}
-
-// StreamChoice is a choice in a streaming response.
-type StreamChoice struct {
-	Index        int        `json:"index"`
-	Delta        Delta      `json:"delta"`
-	FinishReason *string    `json:"finish_reason"`
-	ToolCalls    []ToolCall `json:"tool_calls,omitempty"`
-}
-
-// Delta is the delta in a streaming response.
-type Delta struct {
-	Role      string     `json:"role,omitempty"`
-	Content   string     `json:"content,omitempty"`
-	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+// AnthropicDelta is a delta in an Anthropic streaming response.
+type AnthropicDelta struct {
+	Type       string `json:"type,omitempty"`
+	Text       string `json:"text,omitempty"`
+	StopReason string `json:"stop_reason,omitempty"`
 }

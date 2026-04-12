@@ -1,10 +1,13 @@
-// Package virtualserver provides a mock HTTP provider server that speaks
+// Package server_validate provides a mock HTTP provider server that speaks
 // OpenAI, Anthropic, and Google response formats for testing purposes.
 //
 // A VirtualServer acts as a deterministic "virtual model" — scenario responses
 // are pre-configured and returned without any real model calls. It is used by
 // the virtualmodel test framework to exercise the gateway's protocol transform
 // pipeline end-to-end.
+//
+// Use VirtualClient (client.go) to send requests to the server and inspect
+// parsed responses. A bound client is obtained via vs.Client().
 package server_validate
 
 import (
@@ -99,49 +102,6 @@ func (vs *VirtualServer) CallCount() int {
 	vs.mu.RLock()
 	defer vs.mu.RUnlock()
 	return vs.callCount
-}
-
-// ─── Direct send helpers ───────────────────────────────────────────────────────
-
-// SendOpenAIChat sends a request directly to the virtual server's OpenAI endpoint.
-func (vs *VirtualServer) SendOpenAIChat(t *testing.T, s Scenario, streaming bool) *ParsedResponse {
-	t.Helper()
-	vs.RegisterScenario(s)
-	body := map[string]interface{}{
-		"model":    "gpt-4o",
-		"messages": []map[string]string{{"role": "user", "content": "What is the capital of France?"}},
-		"stream":   streaming,
-	}
-	return vs.doRequest(t, "POST", vs.server.URL+"/v1/chat/completions", body, streaming, StyleOpenAI)
-}
-
-// SendAnthropicV1 sends a request directly to the virtual server's Anthropic endpoint.
-func (vs *VirtualServer) SendAnthropicV1(t *testing.T, s Scenario, streaming bool) *ParsedResponse {
-	t.Helper()
-	vs.RegisterScenario(s)
-	body := map[string]interface{}{
-		"model":      "claude-3-5-sonnet-20241022",
-		"max_tokens": 1024,
-		"messages":   []map[string]string{{"role": "user", "content": "What is the capital of France?"}},
-		"stream":     streaming,
-	}
-	return vs.doRequest(t, "POST", vs.server.URL+"/v1/messages", body, streaming, StyleAnthropic)
-}
-
-// SendGoogle sends a request directly to the virtual server's Google endpoint.
-func (vs *VirtualServer) SendGoogle(t *testing.T, s Scenario, streaming bool) *ParsedResponse {
-	t.Helper()
-	vs.RegisterScenario(s)
-	body := map[string]interface{}{
-		"contents": []map[string]interface{}{
-			{"role": "user", "parts": []map[string]string{{"text": "What is the capital of France?"}}},
-		},
-	}
-	suffix := "generateContent"
-	if streaming {
-		suffix = "streamGenerateContent"
-	}
-	return vs.doRequest(t, "POST", vs.server.URL+"/v1beta/models/gemini-2.0-flash/"+suffix, body, streaming, StyleGoogle)
 }
 
 // ─── HTTP handlers ─────────────────────────────────────────────────────────────
@@ -272,97 +232,4 @@ func (vs *VirtualServer) firstScenario() Scenario {
 	return Scenario{}
 }
 
-// ─── Result parsing ────────────────────────────────────────────────────────────
 
-// ParsedResponse is the result of a request sent to the virtual server.
-// It wraps stream.ParsedResult with HTTP-layer fields.
-type ParsedResponse struct {
-	HTTPStatus   int
-	IsStreaming  bool
-	StreamEvents []string
-	RawBody      []byte
-
-	// Parsed semantics (populated from RawBody or StreamEvents)
-	sse.ParsedResult
-}
-
-// doRequest sends an HTTP request to the virtual server and returns a ParsedResponse.
-func (vs *VirtualServer) doRequest(t *testing.T, method, url string, body interface{}, streaming bool, style APIStyle) *ParsedResponse {
-	t.Helper()
-
-	reqBody, err := json.Marshal(body)
-	if err != nil {
-		t.Fatalf("marshal request: %v", err)
-	}
-
-	req, err := http.NewRequest(method, url, strings.NewReader(string(reqBody)))
-	if err != nil {
-		t.Fatalf("new request: %v", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("do request: %v", err)
-	}
-	defer resp.Body.Close()
-
-	result := &ParsedResponse{
-		HTTPStatus:  resp.StatusCode,
-		IsStreaming: streaming,
-	}
-
-	if streaming {
-		result.StreamEvents, result.RawBody = sse.ReadSSELines(resp.Body)
-		result.ParsedResult = parsedResultFromStream(result.StreamEvents, style)
-	} else {
-		result.RawBody, _ = io.ReadAll(resp.Body)
-		result.ParsedResult = parsedResultFromJSON(result.RawBody, style)
-	}
-
-	return result
-}
-
-func parsedResultFromJSON(raw []byte, style APIStyle) sse.ParsedResult {
-	var m map[string]interface{}
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return sse.ParsedResult{}
-	}
-	var r *sse.ParsedResult
-	switch style {
-	case StyleOpenAI:
-		if _, hasOutput := m["output"]; hasOutput {
-			r = sse.ParseOpenAIResponsesResult(m)
-		} else {
-			r = sse.ParseOpenAIChatResult(m)
-		}
-	case StyleAnthropic:
-		r = sse.ParseAnthropicResult(m)
-	case StyleGoogle:
-		r = sse.ParseGoogleResult(m)
-	default:
-		return sse.ParsedResult{}
-	}
-	if r == nil {
-		return sse.ParsedResult{}
-	}
-	return *r
-}
-
-func parsedResultFromStream(events []string, style APIStyle) sse.ParsedResult {
-	var r *sse.ParsedResult
-	switch style {
-	case StyleOpenAI:
-		r = sse.AssembleOpenAIStream(events)
-	case StyleAnthropic:
-		r = sse.AssembleAnthropicStream(events)
-	case StyleGoogle:
-		r = sse.AssembleGoogleStream(events)
-	default:
-		return sse.ParsedResult{}
-	}
-	if r == nil {
-		return sse.ParsedResult{}
-	}
-	return *r
-}

@@ -672,7 +672,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Initialize virtual model service
 	server.virtualModelService = virtualserver.NewService()
-	server.virtualModelService.SetHandler(virtualserver.NewHandler(server.virtualModelService.GetRegistry()))
 	logrus.Debugf("Virtual model service initialized with default models")
 
 	// Initialize provider quota manager

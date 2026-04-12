@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 
 	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
 )
@@ -24,12 +26,6 @@ type Handler struct {
 // NewHandler creates a new Handler backed by the given registry.
 func NewHandler(registry *virtualmodel.Registry) *Handler {
 	return &Handler{registry: registry}
-}
-
-// OpenAIModelsResponse is the OpenAI models list response format.
-type OpenAIModelsResponse struct {
-	Object string               `json:"object"`
-	Data   []virtualmodel.Model `json:"data"`
 }
 
 // ListModels handles GET /virtual/v1/models.
@@ -51,7 +47,6 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 		}})
 		return
 	}
-
 	if req.Model == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{
 			"message": "Model is required",
@@ -69,90 +64,199 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 		return
 	}
 
-	switch vm.GetType() {
-	case virtualmodel.VirtualModelTypeProxy:
-		if req.Stream {
-			h.handleProxyStreaming(c, &req, vm)
-		} else {
-			h.handleProxyRequest(c, &req, vm)
-		}
-		return
-	case virtualmodel.VirtualModelTypeTool:
-		if req.Stream {
-			h.handleToolModelStreaming(c, &req, vm)
-		} else {
-			h.handleToolModelNonStreaming(c, &req, vm)
-		}
+	openaiVM := h.registry.GetOpenAIChatVM(req.Model)
+	if openaiVM == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": gin.H{
+			"message": fmt.Sprintf("Model %q does not support OpenAI Chat. Use the Anthropic Messages endpoint (/virtual/v1/messages) instead.", req.Model),
+			"type":    "not_implemented_error",
+		}})
 		return
 	}
 
 	if req.Stream {
-		h.handleStreaming(c, &req, vm)
+		h.handleOpenAIStreaming(c, &req, openaiVM)
 	} else {
-		h.handleNonStreaming(c, &req, vm)
+		h.handleOpenAINonStreaming(c, &req, openaiVM)
 	}
 }
 
-func (h *Handler) handleProxyRequest(c *gin.Context, req *ChatCompletionRequest, vm *virtualmodel.VirtualModel) {
-	if vm.GetTransformer() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{
-			"message": "Proxy model has no transformer configured",
-			"type":    "internal_error",
+// Messages handles POST /virtual/v1/messages (Anthropic format).
+func (h *Handler) Messages(c *gin.Context) {
+	var req AnthropicMessageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"type": "error", "error": gin.H{
+			"type":    "invalid_request_error",
+			"message": "Invalid request body: " + err.Error(),
+		}})
+		return
+	}
+	if req.Model == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"type": "error", "error": gin.H{
+			"type":    "invalid_request_error",
+			"message": "Model is required",
 		}})
 		return
 	}
 
-	logrus.Infof("Proxy model %s with transformer, messages: %d", req.Model, len(req.Messages))
-
-	c.JSON(http.StatusOK, ChatCompletionResponse{
-		ID:      fmt.Sprintf("chatcmpl-proxy-%d", time.Now().Unix()),
-		Object:  "chat.completion",
-		Created: time.Now().Unix(),
-		Model:   req.Model,
-		Choices: []Choice{{
-			Index: 0,
-			Message: Message{
-				Role:    "assistant",
-				Content: fmt.Sprintf("[Proxy Mode: Request was received by %s. The transformer is configured and ready. Implement actual LLM proxying to complete the flow.]", req.Model),
-			},
-			FinishReason: "stop",
-		}},
-		Usage: Usage{
-			PromptTokens:     estimateTokens(req.Messages),
-			CompletionTokens: 50,
-			TotalTokens:      estimateTokens(req.Messages) + 50,
-		},
-	})
-}
-
-func (h *Handler) handleNonStreaming(c *gin.Context, req *ChatCompletionRequest, vm *virtualmodel.VirtualModel) {
-	if delay := vm.GetDelay(); delay > 0 {
-		time.Sleep(delay)
+	vm := h.registry.Get(req.Model)
+	if vm == nil {
+		c.JSON(http.StatusNotFound, gin.H{"type": "error", "error": gin.H{
+			"type":    "not_found_error",
+			"message": fmt.Sprintf("Model not found: %s", req.Model),
+		}})
+		return
 	}
 
-	content := vm.GetContent()
-	c.JSON(http.StatusOK, ChatCompletionResponse{
-		ID:      fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()),
-		Object:  "chat.completion",
-		Created: time.Now().Unix(),
-		Model:   req.Model,
-		Choices: []Choice{{
-			Index: 0,
-			Message: Message{
-				Role:    "assistant",
-				Content: content,
-			},
-			FinishReason: "stop",
-		}},
-		Usage: Usage{
-			PromptTokens:     estimateTokens(req.Messages),
-			CompletionTokens: estimateTokensString(content),
-			TotalTokens:      estimateTokens(req.Messages) + estimateTokensString(content),
+	anthropicVM := h.registry.GetAnthropicVM(req.Model)
+	if anthropicVM == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"type": "error", "error": gin.H{
+			"type":    "not_implemented_error",
+			"message": fmt.Sprintf("Model %q does not support the Anthropic Messages protocol.", req.Model),
+		}})
+		return
+	}
+
+	if req.Stream {
+		h.handleAnthropicStreaming(c, &req, anthropicVM)
+	} else {
+		h.handleAnthropicNonStreaming(c, &req, anthropicVM)
+	}
+}
+
+// ── Anthropic handlers ────────────────────────────────────────────────────────
+
+func (h *Handler) handleAnthropicNonStreaming(c *gin.Context, req *AnthropicMessageRequest, vm virtualmodel.AnthropicVirtualModel) {
+	if d := vm.SimulatedDelay(); d > 0 {
+		time.Sleep(d)
+	}
+
+	resp, err := vm.HandleAnthropic(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"type": "error", "error": gin.H{
+			"type":    "api_error",
+			"message": err.Error(),
+		}})
+		return
+	}
+
+	content := vmodelContentToAnthropic(resp)
+
+	c.JSON(http.StatusOK, AnthropicMessageResponse{
+		ID:         fmt.Sprintf("msg_virtual_%d", time.Now().Unix()),
+		Type:       "message",
+		Role:       "assistant",
+		Model:      req.Model,
+		StopReason: string(resp.StopReason),
+		Content:    content,
+		Usage: AnthropicUsage{
+			InputTokens:  token.EstimateBetaAnthropicTokens(req.Messages),
+			OutputTokens: token.EstimateTokensString(vmodelTextContent(resp)),
 		},
 	})
 }
 
-func (h *Handler) handleStreaming(c *gin.Context, req *ChatCompletionRequest, vm *virtualmodel.VirtualModel) {
+func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessageRequest, vm virtualmodel.AnthropicVirtualModel) {
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+
+	msgID := fmt.Sprintf("msg_virtual_%d", time.Now().Unix())
+
+	c.Stream(func(w io.Writer) bool {
+		if d := vm.SimulatedDelay(); d > 0 {
+			time.Sleep(d)
+		}
+
+		err := vm.HandleAnthropicStream(req, func(ev any) {
+			switch e := ev.(type) {
+			case virtualmodel.AnthropicStreamStartEvent:
+				id := e.MsgID
+				if id == "" {
+					id = msgID
+				}
+				data, _ := json.Marshal(AnthropicStreamEvent{
+					Type:    "message_start",
+					Message: &AnthropicMessageResponse{ID: id, Type: "message", Role: "assistant", Model: req.Model},
+				})
+				fmt.Fprintf(w, "event: message_start\ndata: %s\n\n", data)
+			case virtualmodel.AnthropicTextDeltaEvent:
+				data, _ := json.Marshal(AnthropicStreamEvent{
+					Type:  "content_block_delta",
+					Index: e.Index,
+					Delta: &AnthropicDelta{Type: "text_delta", Text: e.Text},
+				})
+				fmt.Fprintf(w, "event: content_block_delta\ndata: %s\n\n", data)
+			case virtualmodel.AnthropicToolUseEvent:
+				data, _ := json.Marshal(map[string]interface{}{
+					"type":  "content_block_start",
+					"index": e.Index,
+					"content_block": map[string]interface{}{
+						"type":  "tool_use",
+						"id":    e.ID,
+						"name":  e.Name,
+						"input": json.RawMessage(e.Input),
+					},
+				})
+				fmt.Fprintf(w, "event: content_block_start\ndata: %s\n\n", data)
+			case virtualmodel.AnthropicDoneEvent:
+				data, _ := json.Marshal(AnthropicStreamEvent{Type: "message_stop"})
+				fmt.Fprintf(w, "event: message_stop\ndata: %s\n\n", data)
+			}
+			c.Writer.Flush()
+		})
+		if err != nil {
+			errData, _ := json.Marshal(map[string]interface{}{
+				"type": "error",
+				"error": map[string]interface{}{
+					"type":    "api_error",
+					"message": err.Error(),
+				},
+			})
+			fmt.Fprintf(w, "event: error\ndata: %s\n\n", errData)
+			c.Writer.Flush()
+		}
+		return false
+	})
+}
+
+// ── OpenAI handlers ───────────────────────────────────────────────────────────
+
+func (h *Handler) handleOpenAINonStreaming(c *gin.Context, req *ChatCompletionRequest, vm virtualmodel.OpenAIChatVirtualModel) {
+	if d := vm.SimulatedDelay(); d > 0 {
+		time.Sleep(d)
+	}
+
+	resp, err := vm.HandleOpenAIChat(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{
+			"message": err.Error(),
+			"type":    "api_error",
+		}})
+		return
+	}
+
+	finishReason := resp.FinishReason
+	outputTokens := token.EstimateTokensString(resp.Content)
+	toolCalls := vmodelToolCallsToOpenAI(resp.ToolCalls)
+
+	c.JSON(http.StatusOK, ChatCompletionResponse{
+		ID:      fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()),
+		Created: time.Now().Unix(),
+		Model:   req.Model,
+		Choices: []Choice{{
+			Index:        0,
+			Message:      Message{Content: resp.Content, ToolCalls: toolCalls},
+			FinishReason: finishReason,
+		}},
+		Usage: Usage{
+			PromptTokens:     token.EstimateMessagesTokens(req.Messages),
+			CompletionTokens: outputTokens,
+			TotalTokens:      token.EstimateMessagesTokens(req.Messages) + outputTokens,
+		},
+	})
+}
+
+func (h *Handler) handleOpenAIStreaming(c *gin.Context, req *ChatCompletionRequest, vm virtualmodel.OpenAIChatVirtualModel) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
@@ -169,247 +273,125 @@ func (h *Handler) handleStreaming(c *gin.Context, req *ChatCompletionRequest, vm
 	}
 
 	c.Stream(func(w io.Writer) bool {
-		chunks := vm.GetStreamChunks()
-		chunkIndex := 0
+		if d := vm.SimulatedDelay(); d > 0 {
+			time.Sleep(d)
+		}
 
-		for i, chunk := range chunks {
+		chunkIndex := 0
+		var finishReason string
+
+		err := vm.HandleOpenAIChatStream(req, func(ev any) {
 			select {
 			case <-c.Request.Context().Done():
 				logrus.Debug("Client disconnected during streaming")
-				return false
+				return
 			default:
 			}
-
-			if delay := vm.GetDelay(); delay > 0 {
-				time.Sleep(delay / time.Duration(len(chunks)))
-			} else {
-				time.Sleep(50 * time.Millisecond)
+			switch e := ev.(type) {
+			case virtualmodel.OpenAIChatDeltaEvent:
+				chunkIndex = e.Index + 1
+				data, _ := json.Marshal(ChatCompletionStreamResponse{
+					ID:      fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()),
+					Created: time.Now().Unix(),
+					Model:   req.Model,
+					Choices: []StreamChoice{{
+						Index:        int64(e.Index),
+						Delta:        Delta{Content: e.Content},
+						FinishReason: "",
+					}},
+				})
+				c.SSEvent("", string(data))
+			case virtualmodel.OpenAIChatToolEvent:
+				tc := vmodelToolCallsToOpenAI([]virtualmodel.VToolCall{e.ToolCall})
+				if len(tc) > 0 {
+					data, _ := json.Marshal(ChatCompletionStreamResponse{
+						ID:      fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()),
+						Created: time.Now().Unix(),
+						Model:   req.Model,
+						Choices: []StreamChoice{{
+							Index: 0,
+							Delta: Delta{ToolCalls: []openai.ChatCompletionChunkChoiceDeltaToolCall{{
+								Index:    int64(e.Index),
+								ID:       tc[0].ID,
+								Type:     "function",
+								Function: openai.ChatCompletionChunkChoiceDeltaToolCallFunction{Name: tc[0].Function.Name, Arguments: tc[0].Function.Arguments},
+							}}},
+						}},
+					})
+					c.SSEvent("", string(data))
+				}
+			case virtualmodel.OpenAIChatDoneEvent:
+				finishReason = e.FinishReason
+				data, _ := json.Marshal(ChatCompletionStreamResponse{
+					ID:      fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()),
+					Created: time.Now().Unix(),
+					Model:   req.Model,
+					Choices: []StreamChoice{{Index: int64(chunkIndex), Delta: Delta{}, FinishReason: finishReason}},
+				})
+				c.SSEvent("", string(data))
 			}
-
-			chunkIndex = i + 1
-			data, _ := json.Marshal(ChatCompletionStreamResponse{
-				ID:      fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()),
-				Object:  "chat.completion.chunk",
-				Created: time.Now().Unix(),
-				Model:   req.Model,
-				Choices: []StreamChoice{{
-					Index:        i,
-					Delta:        Delta{Content: chunk},
-					FinishReason: nil,
-				}},
-			})
-			c.SSEvent("", string(data))
 			c.Writer.Flush()
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{
+				"message": err.Error(),
+				"type":    "api_error",
+			}})
+			return false
 		}
 
-		data, _ := json.Marshal(ChatCompletionStreamResponse{
-			ID:      fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()),
-			Object:  "chat.completion.chunk",
-			Created: time.Now().Unix(),
-			Model:   req.Model,
-			Choices: []StreamChoice{{
-				Index:        chunkIndex,
-				Delta:        Delta{},
-				FinishReason: stringPtr("stop"),
-			}},
-		})
-		c.SSEvent("", string(data))
-		c.Writer.Flush()
-
 		c.SSEvent("", "[DONE]")
 		c.Writer.Flush()
 		return false
 	})
 }
 
-func (h *Handler) handleProxyStreaming(c *gin.Context, req *ChatCompletionRequest, vm *virtualmodel.VirtualModel) {
-	if vm.GetTransformer() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{
-			"message": "Proxy model has no transformer configured",
-			"type":    "internal_error",
-		}})
-		return
+// ── response conversion helpers ───────────────────────────────────────────────
+
+// vmodelTextContent extracts concatenated text from Anthropic response content blocks.
+func vmodelTextContent(resp virtualmodel.VModelResponse) string {
+	s := ""
+	for _, blk := range resp.Content {
+		if blk.OfText != nil {
+			s += blk.OfText.Text
+		}
 	}
-
-	logrus.Infof("Proxy model %s with transformer (streaming), messages: %d", req.Model, len(req.Messages))
-
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("Access-Control-Allow-Origin", "*")
-	c.Header("Access-Control-Allow-Headers", "Cache-Control")
-
-	if _, ok := c.Writer.(http.Flusher); !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{
-			"message": "Streaming not supported by this connection",
-			"type":    "api_error",
-			"code":    "streaming_unsupported",
-		}})
-		return
-	}
-
-	c.Stream(func(w io.Writer) bool {
-		content := fmt.Sprintf("[Proxy Mode: Request was received by %s. The transformer is configured and ready. Implement actual LLM proxying to complete the flow.]", req.Model)
-
-		data, _ := json.Marshal(ChatCompletionStreamResponse{
-			ID:      fmt.Sprintf("chatcmpl-proxy-%d", time.Now().Unix()),
-			Object:  "chat.completion.chunk",
-			Created: time.Now().Unix(),
-			Model:   req.Model,
-			Choices: []StreamChoice{{
-				Index:        0,
-				Delta:        Delta{Content: content},
-				FinishReason: nil,
-			}},
-		})
-		c.SSEvent("", string(data))
-		c.Writer.Flush()
-
-		time.Sleep(10 * time.Millisecond)
-
-		data, _ = json.Marshal(ChatCompletionStreamResponse{
-			ID:      fmt.Sprintf("chatcmpl-proxy-%d", time.Now().Unix()),
-			Object:  "chat.completion.chunk",
-			Created: time.Now().Unix(),
-			Model:   req.Model,
-			Choices: []StreamChoice{{
-				Index:        0,
-				Delta:        Delta{},
-				FinishReason: stringPtr("stop"),
-			}},
-		})
-		c.SSEvent("", string(data))
-		c.Writer.Flush()
-
-		c.SSEvent("", "[DONE]")
-		c.Writer.Flush()
-		return false
-	})
+	return s
 }
 
-func (h *Handler) handleToolModelNonStreaming(c *gin.Context, req *ChatCompletionRequest, vm *virtualmodel.VirtualModel) {
-	if delay := vm.GetDelay(); delay > 0 {
-		time.Sleep(delay)
+func vmodelContentToAnthropic(resp virtualmodel.VModelResponse) []AnthropicContent {
+	out := make([]AnthropicContent, 0, len(resp.Content))
+	for _, blk := range resp.Content {
+		if blk.OfText != nil {
+			out = append(out, AnthropicContent{Type: "text", Text: blk.OfText.Text})
+		} else if blk.OfToolUse != nil {
+			inputJSON, _ := json.Marshal(blk.OfToolUse.Input)
+			out = append(out, AnthropicContent{
+				Type:  "tool_use",
+				ID:    blk.OfToolUse.ID,
+				Name:  blk.OfToolUse.Name,
+				Input: inputJSON,
+			})
+		}
 	}
+	return out
+}
 
-	toolCall := vm.GetToolCall()
-	if toolCall == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "tool call config not found"})
-		return
+// vmodelToolCallsToOpenAI converts VToolCall slice to OpenAI SDK tool call format.
+func vmodelToolCallsToOpenAI(calls []virtualmodel.VToolCall) []openai.ChatCompletionMessageToolCallUnion {
+	if len(calls) == 0 {
+		return nil
 	}
-
-	argsJSON, _ := json.Marshal(toolCall.Arguments)
-
-	content := ""
-	if msg, ok := toolCall.Arguments["message"].(string); ok {
-		content = msg
-	} else if question, ok := toolCall.Arguments["question"].(string); ok {
-		content = question
-	}
-
-	c.JSON(http.StatusOK, ChatCompletionResponse{
-		ID:      fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()),
-		Object:  "chat.completion",
-		Created: time.Now().Unix(),
-		Model:   req.Model,
-		Choices: []Choice{{
-			Index: 0,
-			Message: Message{
-				Role:    "assistant",
-				Content: content,
-				ToolCalls: []ToolCall{{
-					ID:   fmt.Sprintf("call_%d", time.Now().Unix()),
-					Type: "function",
-					Function: FunctionCall{
-						Name:      toolCall.Name,
-						Arguments: string(argsJSON),
-					},
-				}},
+	out := make([]openai.ChatCompletionMessageToolCallUnion, 0, len(calls))
+	for _, tc := range calls {
+		out = append(out, openai.ChatCompletionMessageToolCallUnion{
+			ID:   tc.ID,
+			Type: "function",
+			Function: openai.ChatCompletionMessageFunctionToolCallFunction{
+				Name:      tc.Name,
+				Arguments: tc.Arguments,
 			},
-			FinishReason: "tool_calls",
-		}},
-		Usage: Usage{
-			PromptTokens:     estimateTokens(req.Messages),
-			CompletionTokens: estimateTokensString(content) + 20,
-			TotalTokens:      estimateTokens(req.Messages) + estimateTokensString(content) + 20,
-		},
-	})
-}
-
-func (h *Handler) handleToolModelStreaming(c *gin.Context, req *ChatCompletionRequest, vm *virtualmodel.VirtualModel) {
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("Access-Control-Allow-Origin", "*")
-	c.Header("Access-Control-Allow-Headers", "Cache-Control")
-
-	if _, ok := c.Writer.(http.Flusher); !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{
-			"message": "Streaming not supported",
-			"type":    "api_error",
-		}})
-		return
-	}
-
-	toolCall := vm.GetToolCall()
-	if toolCall == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "tool call config not found"})
-		return
-	}
-
-	argsJSON, _ := json.Marshal(toolCall.Arguments)
-
-	content := ""
-	if msg, ok := toolCall.Arguments["message"].(string); ok {
-		content = msg
-	} else if question, ok := toolCall.Arguments["question"].(string); ok {
-		content = question
-	}
-
-	c.Stream(func(w io.Writer) bool {
-		if delay := vm.GetDelay(); delay > 0 {
-			time.Sleep(delay)
-		}
-
-		data, _ := json.Marshal(ChatCompletionStreamResponse{
-			ID: fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()), Object: "chat.completion.chunk",
-			Created: time.Now().Unix(), Model: req.Model,
-			Choices: []StreamChoice{{Index: 0, Delta: Delta{Role: "assistant"}}},
 		})
-		c.SSEvent("", string(data))
-		c.Writer.Flush()
-		time.Sleep(50 * time.Millisecond)
-
-		data, _ = json.Marshal(ChatCompletionStreamResponse{
-			ID: fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()), Object: "chat.completion.chunk",
-			Created: time.Now().Unix(), Model: req.Model,
-			Choices: []StreamChoice{{Index: 0, Delta: Delta{Content: content}}},
-		})
-		c.SSEvent("", string(data))
-		c.Writer.Flush()
-		time.Sleep(50 * time.Millisecond)
-
-		data, _ = json.Marshal(ChatCompletionStreamResponse{
-			ID: fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()), Object: "chat.completion.chunk",
-			Created: time.Now().Unix(), Model: req.Model,
-			Choices: []StreamChoice{{
-				Index: 0,
-				Delta: Delta{ToolCalls: []ToolCall{{
-					ID:   fmt.Sprintf("call_%d", time.Now().Unix()),
-					Type: "function",
-					Function: FunctionCall{
-						Name:      toolCall.Name,
-						Arguments: string(argsJSON),
-					},
-				}}},
-				FinishReason: stringPtr("tool_calls"),
-			}},
-		})
-		c.SSEvent("", string(data))
-		c.Writer.Flush()
-
-		c.SSEvent("", "[DONE]")
-		c.Writer.Flush()
-		return false
-	})
+	}
+	return out
 }
