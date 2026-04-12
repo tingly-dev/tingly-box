@@ -284,36 +284,9 @@ jobs:
             npm publish --provenance --access public
           fi
 
-  # Build Docker NPX image after CLI is published
-  build-docker-npx:
-    needs: [setup, publish-cli-bundle]
-    name: Build Docker NPX Image
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    if: >-
-      needs.setup.result == 'success' &&
-      needs.publish-cli-bundle.result == 'success' &&
-      needs.setup.outputs.publish_cli == 'true' &&
-      needs.setup.outputs.build_docker == 'true'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.setup.outputs.release_tag }}
-
-      - name: Build and push Docker image
-        uses: ./.github/actions/docker-build-push
-        with:
-          image_name: tingly-box
-          version: ${{ needs.setup.outputs.release_tag }}
-          build_args: |
-            TINGLY_VERSION=${{ needs.setup.outputs.npx_version }}
-
   # Create a single NPX tag and release for CLI + Bundle
   create-release:
-    needs: [setup, publish-cli-bundle, build-docker-npx]
+    needs: [setup, publish-cli-bundle]
     name: Create NPX Release
     runs-on: ubuntu-latest
     permissions:
@@ -321,8 +294,7 @@ jobs:
     if: >-
       always() &&
       needs.setup.result == 'success' &&
-      (needs.publish-cli-bundle.result == 'success' || needs.publish-cli-bundle.result == 'skipped') &&
-      (needs.build-docker-npx.result == 'success' || needs.build-docker-npx.result == 'skipped' || needs.build-docker-npx.result == 'cancelled')
+      (needs.publish-cli-bundle.result == 'success' || needs.publish-cli-bundle.result == 'skipped')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -432,6 +404,32 @@ jobs:
               --notes-file npx_release_notes.md \
               ${PRERELEASE_FLAG}
           fi
+
+  # Build Docker NPX image after npm release is created
+  build-docker-npx:
+    needs: [setup, publish-cli-bundle, create-release]
+    name: Build Docker NPX Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    if: >-
+      needs.setup.result == 'success' &&
+      needs.publish-cli-bundle.result == 'success' &&
+      needs.create-release.result == 'success' &&
+      needs.setup.outputs.publish_cli == 'true' &&
+      needs.setup.outputs.build_docker == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build and push Docker image
+        uses: ./.github/actions/docker-build-push
+        with:
+          image_name: tingly-box
+          version: ${{ needs.setup.outputs.release_tag }}
+          build_args: |
+            TINGLY_VERSION=${{ needs.setup.outputs.npx_version }}
 
   # Publish GUI NPX package
   publish-gui:
