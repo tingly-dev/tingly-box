@@ -28,7 +28,12 @@ func CCCommand(appManager *AppManager) *cobra.Command {
 A temporary settings file is created and passed to Claude Code via --settings,
 so the existing Claude Code configuration is not modified.
 
-Profiles can be used to switch between different rule sets for the same scenario.`,
+Profiles can be used to switch between different rule sets for the same scenario.
+
+Flags:
+  -p, --profile <id>     Profile ID or name (e.g., p1, Premium)
+  -u, --unified          Unified mode (all models use same rule)
+  -s, --no-unified       Separate mode (individual model rules)`,
 		DisableFlagParsing: true,
 		Args:               cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -85,11 +90,11 @@ func parseCCFlags(args []string) (profile string, unified *bool, remaining []str
 			profile = args[i+1]
 			i++ // skip next
 
-		case args[i] == "--unified":
+		case args[i] == "--unified" || args[i] == "-u":
 			v := true
 			unified = &v
 
-		case args[i] == "--no-unified":
+		case args[i] == "--no-unified" || args[i] == "-s":
 			v := false
 			unified = &v
 
@@ -108,12 +113,22 @@ func runCC(appManager *AppManager, profile string, unified bool, claudeArgs []st
 
 	// Resolve profile if specified
 	var profileID string
+	var profileMeta *typ.ProfileMeta
 	if profile != "" {
 		resolved, err := globalConfig.ResolveProfileNameOrID(scenario, profile)
 		if err != nil {
 			return fmt.Errorf("profile error: %w", err)
 		}
 		profileID = resolved
+
+		// Get profile metadata to check Unified setting
+		profiles := globalConfig.GetProfiles(scenario)
+		for i := range profiles {
+			if profiles[i].ID == profileID {
+				profileMeta = &profiles[i]
+				break
+			}
+		}
 	}
 
 	// Build the scenario path (with or without profile)
@@ -130,10 +145,18 @@ func runCC(appManager *AppManager, profile string, unified bool, claudeArgs []st
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 	apiKey := globalConfig.GetModelToken()
 
-	// Generate env map (profile always uses separate mode)
+	// Determine unified mode: CLI flag > profile setting > default (false for profiles)
 	envUnified := unified
 	if profileID != "" {
-		envUnified = false
+		if !unified {
+			// No explicit CLI flag, use profile's setting
+			if profileMeta != nil {
+				envUnified = profileMeta.Unified
+			} else {
+				envUnified = false // default to separate for backward compatibility
+			}
+		}
+		// If unified flag was explicitly set, it overrides profile setting
 	}
 	env := generateCCEnv(baseURL, apiKey, scenarioPath, envUnified, profileID != "")
 
@@ -171,7 +194,10 @@ func runCC(appManager *AppManager, profile string, unified bool, claudeArgs []st
 	execCmd.Stderr = os.Stderr
 	execCmd.Env = os.Environ()
 
-	return execCmd.Run()
+	if err := execCmd.Run(); err != nil {
+		return fmt.Errorf("failed to run claude CLI: %w", err)
+	}
+	return nil
 }
 
 // buildProfileSettings copies the user's ~/.claude/settings.json to

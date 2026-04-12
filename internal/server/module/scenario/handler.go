@@ -362,7 +362,7 @@ func (h *Handler) CreateProfile(c *gin.Context) {
 		return
 	}
 
-	meta, err := h.config.CreateProfile(scenario, req.Name)
+	meta, err := h.config.CreateProfile(scenario, req.Name, req.Unified)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
@@ -371,7 +371,7 @@ func (h *Handler) CreateProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": meta})
 }
 
-// UpdateProfile updates a profile's name
+// UpdateProfile updates a profile's name and/or mode
 func (h *Handler) UpdateProfile(c *gin.Context) {
 	scenario := typ.RuleScenario(c.Param("scenario"))
 	if scenario == "" {
@@ -388,22 +388,43 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	var req ProfileCreateRequest
+	var req ProfileUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
 	}
+
+	// If name is not provided, fetch existing profile name
 	if req.Name == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "name is required"})
-		return
+		profiles := h.config.GetProfiles(scenario)
+		for _, p := range profiles {
+			if p.ID == profileID {
+				req.Name = p.Name
+				break
+			}
+		}
+		if req.Name == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "profile not found"})
+			return
+		}
 	}
 
-	if err := h.config.UpdateProfile(scenario, profileID, req.Name); err != nil {
+	if err := h.config.UpdateProfile(scenario, profileID, req.Name, req.Unified); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "profile updated"})
+	// Fetch updated profile to return in response
+	profiles := h.config.GetProfiles(scenario)
+	var updatedProfile *typ.ProfileMeta
+	for i := range profiles {
+		if profiles[i].ID == profileID {
+			updatedProfile = &profiles[i]
+			break
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "profile updated", "data": updatedProfile})
 }
 
 // DeleteProfile deletes a profile by ID

@@ -2362,6 +2362,57 @@
       }
     },
     "/api/v1/scenario/{scenario}/profiles/{id}": {
+      "put": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Update a profile name or mode",
+        "description": "Update a profile name or mode",
+        "operationId": "apiV1ScenarioScenarioProfilesIdPut",
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "tags": [
           "scenarios"
@@ -6286,10 +6337,32 @@
           "name": {
             "type": "string",
             "description": "Field name"
+          },
+          "unified": {
+            "type": "boolean",
+            "description": "Field unified"
           }
         },
         "required": [
-          "name"
+          "name",
+          "unified"
+        ]
+      },
+      "ProfileUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "unified": {
+            "type": "boolean",
+            "description": "Field unified"
+          }
+        },
+        "required": [
+          "name",
+          "unified"
         ]
       },
       "ProviderModelInfo": {
@@ -8814,40 +8887,16 @@
   },
   "tags": [
     {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
-      "name": "config",
-      "description": "Operations related to config"
-    },
-    {
-      "name": "auth",
-      "description": "Operations related to auth"
-    },
-    {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "imbot-settings",
-      "description": "Operations related to imbot-settings"
-    },
-    {
-      "name": "codex",
-      "description": "Operations related to codex"
-    },
-    {
-      "name": "mcp",
-      "description": "Operations related to mcp"
-    },
-    {
-      "name": "system-logs",
-      "description": "Operations related to system-logs"
+      "name": "actions",
+      "description": "Operations related to actions"
     },
     {
       "name": "server",
       "description": "Operations related to server"
+    },
+    {
+      "name": "scenarios",
+      "description": "Operations related to scenarios"
     },
     {
       "name": "models",
@@ -8862,44 +8911,68 @@
       "description": "Operations related to providers"
     },
     {
-      "name": "weixin",
-      "description": "Operations related to weixin"
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
+      "name": "imbot-settings",
+      "description": "Operations related to imbot-settings"
     },
     {
       "name": "info",
       "description": "Operations related to info"
     },
     {
-      "name": "actions",
-      "description": "Operations related to actions"
+      "name": "history",
+      "description": "Operations related to history"
     },
     {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "scenarios",
-      "description": "Operations related to scenarios"
-    },
-    {
-      "name": "guardrails",
-      "description": "Operations related to guardrails"
+      "name": "token",
+      "description": "Operations related to token"
     },
     {
       "name": "skills",
       "description": "Operations related to skills"
     },
     {
-      "name": "oauth",
-      "description": "Operations related to oauth"
+      "name": "config",
+      "description": "Operations related to config"
+    },
+    {
+      "name": "codex",
+      "description": "Operations related to codex"
+    },
+    {
+      "name": "auth",
+      "description": "Operations related to auth"
+    },
+    {
+      "name": "logs",
+      "description": "Operations related to logs"
+    },
+    {
+      "name": "system-logs",
+      "description": "Operations related to system-logs"
+    },
+    {
+      "name": "guardrails",
+      "description": "Operations related to guardrails"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
     },
     {
       "name": "usage",
       "description": "Operations related to usage"
     },
     {
-      "name": "logs",
-      "description": "Operations related to logs"
+      "name": "weixin",
+      "description": "Operations related to weixin"
+    },
+    {
+      "name": "mcp",
+      "description": "Operations related to mcp"
     }
   ]
 }
