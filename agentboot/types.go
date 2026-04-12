@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/agentboot/common"
 )
 
 // AgentType defines the supported agent types
@@ -380,13 +382,9 @@ type PermissionConfig struct {
 	DecisionDuration  time.Duration  `json:"decision_duration"`
 }
 
-// Event represents a generic agent event
-type Event struct {
-	Type      string                 `json:"type"`
-	Data      map[string]interface{} `json:"data"`
-	Timestamp time.Time              `json:"timestamp"`
-	Raw       string                 `json:"raw,omitempty"`
-}
+// Event represents a generic agent event.
+// Alias of common.Event — the two types are identical and interchangeable.
+type Event = common.Event
 
 // Agent is the interface for all agent types
 type Agent interface {
