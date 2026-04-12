@@ -67,11 +67,39 @@ type selectionState struct {
 }
 
 func newSelectionState(rule *typ.Rule) *selectionState {
-	var services []*loadbalance.Service
-	if rule != nil && rule.Services != nil {
-		services = make([]*loadbalance.Service, len(rule.Services))
-		copy(services, rule.Services)
+	if rule == nil {
+		return &selectionState{candidateServices: nil}
 	}
+
+	// Use a map to deduplicate services by service ID
+	serviceMap := make(map[string]*loadbalance.Service)
+
+	// Add default services
+	if rule.Services != nil {
+		for _, svc := range rule.Services {
+			if svc != nil {
+				serviceMap[svc.GetServiceID().String()] = svc
+			}
+		}
+	}
+
+	// Add smart_routing services (override defaults if same ID)
+	for _, sr := range rule.SmartRouting {
+		if sr.Services != nil {
+			for _, svc := range sr.Services {
+				if svc != nil {
+					serviceMap[svc.GetServiceID().String()] = svc
+				}
+			}
+		}
+	}
+
+	// Convert map back to slice
+	services := make([]*loadbalance.Service, 0, len(serviceMap))
+	for _, svc := range serviceMap {
+		services = append(services, svc)
+	}
+
 	return &selectionState{candidateServices: services}
 }
 

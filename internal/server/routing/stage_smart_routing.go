@@ -34,6 +34,8 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 
 	// Skip if smart routing not enabled
 	if !rule.SmartEnabled || len(rule.SmartRouting) == 0 || ctx.Request == nil {
+		logrus.Debugf("[smart_routing] skipped - SmartEnabled=%v, SmartRoutingCount=%d, Request=%v",
+			rule.SmartEnabled, len(rule.SmartRouting), ctx.Request != nil)
 		return nil, false
 	}
 
@@ -59,12 +61,14 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 
 	matchedServices, matchedRuleIndex, matched := router.EvaluateRequestWithIndex(reqCtx)
 	if !matched || len(matchedServices) == 0 {
-		logrus.Debugf("[smart_routing] no rule matched")
+		logrus.Debugf("[smart_routing] no rule matched - matched=%v, services=%d", matched, len(matchedServices))
 		return nil, false
 	}
 
 	if state != nil && len(state.candidateServices) > 0 {
+		beforeCount := len(matchedServices)
 		matchedServices = IntersectServices(matchedServices, state.candidateServices)
+		logrus.Debugf("[smart_routing] intersection: %d -> %d services", beforeCount, len(matchedServices))
 	}
 	if len(matchedServices) == 0 {
 		logrus.Debugf("[smart_routing] matched rule has no services in current candidate set")
