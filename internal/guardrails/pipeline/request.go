@@ -9,22 +9,6 @@ import (
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 )
 
-// CredentialMaskMutation captures the request-side aliasing outcome.
-type CredentialMaskMutation struct {
-	Changed           bool
-	LatestTurnChanged bool
-	State             *guardrailscore.CredentialMaskState
-}
-
-type RequestMutation struct {
-	Input              guardrailscore.Input
-	ToolResult         ToolResultMutation
-	CredentialMask     CredentialMaskMutation
-	InitialInput       guardrailscore.Input
-	PostToolResult     guardrailscore.Input
-	PostCredentialMask guardrailscore.Input
-}
-
 type requestRefreshFunc func(input guardrailscore.Input) guardrailscore.Input
 
 type requestToolResultFunc func(
@@ -38,6 +22,15 @@ type requestMaskFunc func(
 	state *guardrailscore.CredentialMaskState,
 ) (bool, bool)
 
+// processAnthropicRequest runs the shared request-side pipeline:
+// 1. rebuild the normalized input from the latest raw request
+// 2. apply credential masking to the raw request when possible
+// 3. rebuild the input after masking so later stages see the safe payload
+// 4. evaluate tool_result content as a fallback check on the masked request
+//
+// This ordering lets credential masking de-risk secrets that are safe to alias
+// in-place, while still leaving tool_result evaluation as a final policy guard
+// for anything the mask step did not neutralize.
 func processAnthropicRequest(
 	ctx context.Context,
 	runtime *guardrails.Guardrails,
@@ -46,21 +39,44 @@ func processAnthropicRequest(
 	refresh requestRefreshFunc,
 	evaluateToolResult requestToolResultFunc,
 	applyMask requestMaskFunc,
-) (RequestMutation, error) {
+) error {
+	// ------------------------------------------------------------------
+	// Stage 1: build request input from the current raw payload
+	// ------------------------------------------------------------------
 	initialInput := refresh(input)
-	out := RequestMutation{
-		Input:              initialInput,
-		InitialInput:       initialInput,
-		PostToolResult:     initialInput,
-		PostCredentialMask: initialInput,
+
+	// ------------------------------------------------------------------
+	// Stage 2: apply credential masking on the latest raw request
+	// ------------------------------------------------------------------
+	postMask := initialInput
+	credentials := runtime.CredentialMaskCredentials(initialInput.Scenario)
+	if len(credentials) > 0 {
+		maskState := initialInput.CredentialMaskState()
+		if maskState == nil {
+			maskState = guardrailscore.NewCredentialMaskState()
+		}
+		maskChanged, latestTurnChanged := applyMask(credentials, maskState)
+		initialInput.State.CredentialMask = maskState
+
+		// --------------------------------------------------------------
+		// Stage 3: rebuild after masking so later stages see final text
+		// --------------------------------------------------------------
+		postMask = refresh(initialInput)
+		postMask.State.CredentialMask = maskState
+		if maskChanged && latestTurnChanged {
+			recordGuardrailsMaskHistory(runtime, postMask, maskState, "request_mask")
+			logrus.Debugf("Guardrails credential mask applied (%s) refs=%d", protocolLabel, len(maskState.UsedRefs))
+		}
 	}
 
-	toolResult, err := evaluateToolResult(ctx, runtime, initialInput)
+	// ------------------------------------------------------------------
+	// Stage 4: evaluate and mutate tool_result content as a fallback check
+	// ------------------------------------------------------------------
+	toolResult, err := evaluateToolResult(ctx, runtime, postMask)
 	if err != nil {
-		initialInput.SetContextValue("guardrails_error", err.Error())
-		return RequestMutation{}, err
+		postMask.SetContextValue("guardrails_error", err.Error())
+		return err
 	}
-	out.ToolResult = toolResult
 	if toolResult.Changed {
 		toolResult.Input.SetContextValue("guardrails_block_message", toolResult.Message)
 		toolResult.Input.SetContextValue("guardrails_block_index", 0)
@@ -69,36 +85,5 @@ func processAnthropicRequest(
 	if toolResult.Evaluation.Result.Verdict == guardrailscore.VerdictBlock {
 		runtime.AddHistory(toolResult.Input, toolResult.Evaluation.Result, "tool_result", "")
 	}
-
-	postToolResult := refresh(initialInput)
-	out.PostToolResult = postToolResult
-	out.Input = postToolResult
-
-	credentials := runtime.CredentialMaskCredentials(postToolResult.Scenario)
-	if len(credentials) == 0 {
-		out.PostCredentialMask = postToolResult
-		return out, nil
-	}
-
-	maskState := postToolResult.CredentialMaskState()
-	if maskState == nil {
-		maskState = guardrailscore.NewCredentialMaskState()
-	}
-	maskChanged, latestTurnChanged := applyMask(credentials, maskState)
-	postToolResult.State.CredentialMask = maskState
-	out.CredentialMask = CredentialMaskMutation{
-		Changed:           maskChanged,
-		LatestTurnChanged: latestTurnChanged,
-		State:             maskState,
-	}
-
-	postMask := refresh(postToolResult)
-	postMask.State.CredentialMask = maskState
-	out.PostCredentialMask = postMask
-	out.Input = postMask
-	if maskChanged && latestTurnChanged {
-		recordGuardrailsMaskHistory(runtime, postMask, maskState, "request_mask")
-		logrus.Debugf("Guardrails credential mask applied (%s) refs=%d", protocolLabel, len(maskState.UsedRefs))
-	}
-	return out, nil
+	return nil
 }

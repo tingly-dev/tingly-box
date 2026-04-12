@@ -11,23 +11,16 @@ import (
 	guardrailsmutate "github.com/tingly-dev/tingly-box/internal/guardrails/mutate"
 )
 
-type AnthropicBetaRequestMutation = RequestMutation
-
-// ProcessAnthropicBetaRequest runs the draft merged request pipeline for
-// Anthropic beta requests:
-// 1. refresh the normalized request input from Input.Payload.Request
-// 2. evaluate and mutate tool_result content when present
-// 3. rebuild normalized input from the latest raw request state
-// 4. apply credential alias masking in place
-// 5. rebuild normalized input again so later stages see the latest request
+// ProcessAnthropicBetaRequest runs the merged request pipeline for Anthropic
+// beta requests. Shared stage ordering lives in processAnthropicRequest.
 func ProcessAnthropicBetaRequest(
 	ctx context.Context,
 	runtime *guardrails.Guardrails,
 	input guardrailscore.Input,
-) (AnthropicBetaRequestMutation, error) {
+) error {
 	req, ok := input.Payload.Request.(*anthropic.BetaMessageNewParams)
 	if !ok || req == nil {
-		return AnthropicBetaRequestMutation{}, nil
+		return nil
 	}
 
 	return processAnthropicRequest(

@@ -223,7 +223,7 @@ func (s *Server) applyGuardrailsToAnthropicV1Request(c *gin.Context, req *anthro
 	input.Payload.Protocol = "anthropic_v1"
 	input.Payload.Request = req
 
-	_, err := guardrailspipeline.ProcessAnthropicV1Request(
+	err := guardrailspipeline.ProcessAnthropicV1Request(
 		c.Request.Context(),
 		s.guardrailsRuntime,
 		input,
@@ -245,7 +245,7 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaRequest(c *gin.Context, req *an
 	input.Payload.Protocol = "anthropic_beta"
 	input.Payload.Request = req
 
-	_, err := guardrailspipeline.ProcessAnthropicBetaRequest(
+	err := guardrailspipeline.ProcessAnthropicBetaRequest(
 		c.Request.Context(),
 		s.guardrailsRuntime,
 		input,

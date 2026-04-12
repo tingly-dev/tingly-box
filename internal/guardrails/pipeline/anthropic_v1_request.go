@@ -11,18 +11,16 @@ import (
 	guardrailsmutate "github.com/tingly-dev/tingly-box/internal/guardrails/mutate"
 )
 
-type AnthropicV1RequestMutation = RequestMutation
-
 // ProcessAnthropicV1Request runs the merged request pipeline for Anthropic v1
 // requests: tool_result filtering first, then credential masking.
 func ProcessAnthropicV1Request(
 	ctx context.Context,
 	runtime *guardrails.Guardrails,
 	input guardrailscore.Input,
-) (AnthropicV1RequestMutation, error) {
+) error {
 	req, ok := input.Payload.Request.(*anthropic.MessageNewParams)
 	if !ok || req == nil {
-		return AnthropicV1RequestMutation{}, nil
+		return nil
 	}
 
 	return processAnthropicRequest(
