@@ -138,7 +138,23 @@ type PreparedEditorState = {
 
 const MAX_SUMMARY_VALUES = 2;
 const MAX_SUMMARY_CHARS = 140;
+// Heuristic editability thresholds for large generated guardrail lists.
+// These optimize for Rules page responsiveness, not persistence size: once a
+// list grows into the hundreds of entries, joining it into one large string,
+// repeatedly splitting it on render, and mounting one editable row per value
+// starts to make the dialog sluggish. We keep normal hand-authored policies
+// fully editable, but switch machine-generated blocklists into preview mode
+// before they become expensive to render.
+//
+// The specific cutoffs are intentionally conservative and were chosen around
+// the datasets introduced in this PR:
+// - medium generated lists such as the NuGet and RubyGems malicious package
+//   blocklists are already well above 400 entries and should use preview mode
+// - very large PyPI and npm blocklists always use preview mode
+// - smaller policies remain inline-editable
 const MAX_INLINE_LIST_ITEMS = 400;
+// Secondary guardrail for cases where the item count is moderate but the total
+// joined text is still large enough to hurt UI responsiveness.
 const MAX_INLINE_LIST_CHARS = 16000;
 const OVERSIZED_LIST_PREVIEW_ITEMS = 25;
 
