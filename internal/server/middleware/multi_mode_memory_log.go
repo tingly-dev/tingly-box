@@ -80,7 +80,6 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 			// Get the last error (most recent)
 			lastErr := c.Errors.Last()
 			errorMsg = lastErr.Error()
-			errorType = string(lastErr.Type)
 
 			// For panic errors, include additional context
 			if lastErr.Type == gin.ErrorTypeBind {
@@ -89,6 +88,9 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 				errorType = "public_error"
 			} else if lastErr.Type == gin.ErrorTypePrivate {
 				errorType = "private_error"
+			} else {
+				// Convert ErrorType to string safely
+				errorType = fmt.Sprintf("error_type_%d", lastErr.Type)
 			}
 		}
 

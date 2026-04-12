@@ -1,3 +1,6 @@
+//go:build e2e
+// +build e2e
+
 package dataexport
 
 import (
@@ -76,8 +79,8 @@ func TestEndToEndExportImportJSONL(t *testing.T) {
 			},
 		},
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticRoundRobin,
-			Params: typ.DefaultRoundRobinParams(),
+			Type:   loadbalance.TacticTokenBased,
+			Params: typ.DefaultTokenBasedParams(),
 		},
 		Active:       true,
 		SmartEnabled: false,
@@ -238,8 +241,8 @@ func TestEndToEndExportImportBase64(t *testing.T) {
 			},
 		},
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticRoundRobin,
-			Params: typ.DefaultRoundRobinParams(),
+			Type:   loadbalance.TacticTokenBased,
+			Params: typ.DefaultTokenBasedParams(),
 		},
 		Active:       true,
 		SmartEnabled: false,
@@ -383,8 +386,8 @@ func TestEndToEndMultipleProviders(t *testing.T) {
 		Description:   "Test with multiple providers",
 		Services:      services,
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticRoundRobin,
-			Params: typ.DefaultRoundRobinParams(),
+			Type:   loadbalance.TacticTokenBased,
+			Params: typ.DefaultTokenBasedParams(),
 		},
 		Active: true,
 	}

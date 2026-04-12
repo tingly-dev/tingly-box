@@ -6,7 +6,7 @@ import (
 
 func TestNormalizeAndParseToolName(t *testing.T) {
 	name := NormalizeToolName("search", "web_search")
-	if name != "mcp__search__web_search" {
+	if name != "tingly_box_mcp__search__web_search" {
 		t.Fatalf("unexpected normalized name: %s", name)
 	}
 
@@ -24,8 +24,9 @@ func TestIsMCPToolName(t *testing.T) {
 		name string
 		want bool
 	}{
-		{name: "mcp__search__web_search", want: true},
-		{name: "mcp__onlyonesep", want: false},
+		{name: "tingly_box_mcp__search__web_search", want: true},
+		{name: "tingly_box_mcp__onlyonesep", want: false},
+		{name: "mcp__search__web_search", want: false},
 		{name: "web_search", want: false},
 		{name: "", want: false},
 	}

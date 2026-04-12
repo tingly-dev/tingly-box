@@ -50,9 +50,15 @@ func ParseMediaURL(mediaURL string) (*MediaURLInfo, error) {
 		} else {
 			info.LocalPath = u.Path
 			// On Windows, file:// URLs might have a host (e.g., file:///C:/path)
-			if u.Host != "" && len(u.Host) == 1 && u.Host[0] >= 'A' && u.Host[0] <= 'Z' {
-				// Windows drive letter
-				info.LocalPath = u.Host + ":" + u.Path
+			if u.Host != "" {
+				if len(u.Host) == 1 && u.Host[0] >= 'A' && u.Host[0] <= 'Z' {
+					// Windows drive letter
+					info.LocalPath = u.Host + ":" + u.Path
+				} else {
+					// Unix-style path with host (e.g., file://host/path)
+					// Treat the host as part of the path
+					info.LocalPath = "/" + u.Host + u.Path
+				}
 			}
 		}
 		return info, nil
@@ -66,7 +72,12 @@ func ParseMediaURL(mediaURL string) (*MediaURLInfo, error) {
 	}
 
 	// Check for http/https URLs
-	if strings.HasPrefix(mediaURL, "http://") || strings.HasPrefix(mediaURL, "https://") {
+	if strings.HasPrefix(mediaURL, "http://") {
+		info.Scheme = FileURLSchemeHTTP
+		info.RemoteURL = mediaURL
+		return info, nil
+	}
+	if strings.HasPrefix(mediaURL, "https://") {
 		info.Scheme = FileURLSchemeHTTPS
 		info.RemoteURL = mediaURL
 		return info, nil

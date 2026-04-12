@@ -1,3 +1,6 @@
+//go:build e2e
+// +build e2e
+
 package imbot
 
 import (
@@ -45,49 +48,46 @@ func TestQRStartRequestStructure(t *testing.T) {
 // TestQRStartResponseStructure tests response structure
 func TestQRStartResponseStructure(t *testing.T) {
 	resp := QRStartResponse{
-		QrCodeID:   "qr-123",
-		QrCodeData: "https://example.com/qr.png",
-		ExpiresIn:  300,
+		Success: true,
+		Data: QRStartData{
+			QrCodeID:   "qr-123",
+			QrCodeData: "https://example.com/qr.png",
+			ExpiresIn:  300,
+		},
 	}
 
-	if resp.QrCodeID != "qr-123" {
-		t.Errorf("Expected QrCodeID 'qr-123', got %s", resp.QrCodeID)
+	if resp.Data.QrCodeID != "qr-123" {
+		t.Errorf("Expected QrCodeID 'qr-123', got %s", resp.Data.QrCodeID)
 	}
 
-	if resp.QrCodeData != "https://example.com/qr.png" {
-		t.Errorf("Expected QrCodeData 'https://example.com/qr.png', got %s", resp.QrCodeData)
+	if resp.Data.QrCodeData != "https://example.com/qr.png" {
+		t.Errorf("Expected QrCodeData 'https://example.com/qr.png', got %s", resp.Data.QrCodeData)
 	}
 
-	if resp.ExpiresIn != 300 {
-		t.Errorf("Expected ExpiresIn 300, got %d", resp.ExpiresIn)
+	if resp.Data.ExpiresIn != 300 {
+		t.Errorf("Expected ExpiresIn 300, got %d", resp.Data.ExpiresIn)
 	}
 }
 
 // TestQRStatusResponseStructure tests status response structure
 func TestQRStatusResponseStructure(t *testing.T) {
 	resp := QRStatusResponse{
-		Status: "confirmed",
-		Error:  "",
+		Success: true,
+		Data: QRStatusData{
+			Status: "confirmed",
+		},
 	}
 
-	if resp.Status != "confirmed" {
-		t.Errorf("Expected Status 'confirmed', got %s", resp.Status)
-	}
-
-	if resp.Error != "" {
-		t.Errorf("Expected empty Error, got %s", resp.Error)
+	if resp.Data.Status != "confirmed" {
+		t.Errorf("Expected Status 'confirmed', got %s", resp.Data.Status)
 	}
 }
 
 // TestQRStatusResponse_WithError tests error response structure
 func TestQRStatusResponse_WithError(t *testing.T) {
 	resp := QRStatusResponse{
-		Status: "error",
-		Error:  "Failed to poll QR status",
-	}
-
-	if resp.Status != "error" {
-		t.Errorf("Expected Status 'error', got %s", resp.Status)
+		Success: false,
+		Error:   "Failed to poll QR status",
 	}
 
 	if resp.Error != "Failed to poll QR status" {
@@ -120,7 +120,7 @@ func TestQRStatusResponse_ValidStatuses(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_ = QRStatusResponse{Status: tt.status}
+			_ = QRStatusResponse{Data: QRStatusData{Status: tt.status}}
 			if validStatuses[tt.status] != tt.valid {
 				t.Errorf("Status %s validity mismatch", tt.status)
 			}
@@ -135,7 +135,7 @@ func TestWeChatQRClient_GetBotQRCode(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	resp, err := client.GetBotQRCode(ctx)
+	resp, err := client.GetBotQRCode(ctx, "3")
 
 	require.NoError(t, err)
 	require.NotNil(t, resp)
@@ -174,7 +174,6 @@ func TestQRSessionCreation(t *testing.T) {
 		qrID:      "qr-123",
 		qrData:    "mock-qr-data",
 		startedAt: testTimeNow(),
-		client:    &wechatQRClient{},
 	}
 
 	if session.botUUID != "test-bot" {
@@ -249,9 +248,12 @@ func TestCredentialMapping(t *testing.T) {
 // TestJSONSerialization tests JSON serialization for API responses
 func TestJSONSerialization(t *testing.T) {
 	startResp := QRStartResponse{
-		QrCodeID:   "qr-123",
-		QrCodeData: "https://example.com/qr.png",
-		ExpiresIn:  300,
+		Success: true,
+		Data: QRStartData{
+			QrCodeID:   "qr-123",
+			QrCodeData: "https://example.com/qr.png",
+			ExpiresIn:  300,
+		},
 	}
 
 	data, err := json.Marshal(startResp)
@@ -261,13 +263,13 @@ func TestJSONSerialization(t *testing.T) {
 	err = json.Unmarshal(data, &decoded)
 	require.NoError(t, err)
 
-	if decoded.QrCodeID != startResp.QrCodeID {
+	if decoded.Data.QrCodeID != startResp.Data.QrCodeID {
 		t.Errorf("JSON roundtrip failed for QrCodeID")
 	}
-	if decoded.QrCodeData != startResp.QrCodeData {
+	if decoded.Data.QrCodeData != startResp.Data.QrCodeData {
 		t.Errorf("JSON roundtrip failed for QrCodeData")
 	}
-	if decoded.ExpiresIn != startResp.ExpiresIn {
+	if decoded.Data.ExpiresIn != startResp.Data.ExpiresIn {
 		t.Errorf("JSON roundtrip failed for ExpiresIn")
 	}
 }

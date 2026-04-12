@@ -60,23 +60,27 @@ func TestControlManager(t *testing.T) {
 
 	// Test 1: Send and receive control response
 	t.Run("SendAndReceiveResponse", func(t *testing.T) {
-		// Create a mock stdin/stdout pair
-		reader, writer := io.Pipe()
+		stdinReader, stdinWriter := io.Pipe()
 
-		// Start goroutine to handle response
+		// Start goroutine to read request and send response via manager
 		go func() {
-			// Simulate Claude sending back a response
-			time.Sleep(10 * time.Millisecond)
-			resp := ControlResponse{
-				RequestID: "req-123",
-				Type:      "control_response",
-				Response: map[string]interface{}{
-					"subtype": "success",
-				},
+			// Read the request from stdin
+			decoder := json.NewDecoder(stdinReader)
+			var req map[string]interface{}
+			if err := decoder.Decode(&req); err == nil {
+				// Simulate Claude sending back a response
+				time.Sleep(10 * time.Millisecond)
+				respData := map[string]interface{}{
+					"type":       "control_response",
+					"request_id": req["request_id"],
+					"response": map[string]interface{}{
+						"subtype": "success",
+					},
+				}
+				// Feed the response into the manager
+				manager.HandleControlMessage(respData)
 			}
-
-			data, _ := json.Marshal(resp)
-			writer.Write(append(data, '\n'))
+			stdinReader.Close()
 		}()
 
 		req := ControlRequest{
@@ -87,13 +91,13 @@ func TestControlManager(t *testing.T) {
 			},
 		}
 
-		resp, err := manager.SendRequest(ctx, req, writer)
+		// Send request and wait for response
+		resp, err := manager.SendRequest(ctx, req, stdinWriter)
 		require.NoError(t, err)
 		assert.Equal(t, "req-123", resp.RequestID)
 		assert.Equal(t, "control_response", resp.Type)
 
-		reader.Close()
-		writer.Close()
+		stdinWriter.Close()
 	})
 
 	// Test 2: Handle control message
@@ -548,29 +552,36 @@ func TestControlManagerConcurrent(t *testing.T) {
 	defer reader.Close()
 	defer writer.Close()
 
+	// Track request IDs
+	requestIDs := make(chan string, 10)
+
 	// Start response simulator
 	go func() {
-		for i := 0; i < 10; i++ {
-			resp := ControlResponse{
-				RequestID: generateRequestID(),
-				Type:      "control_response",
+		for requestID := range requestIDs {
+			respData := map[string]interface{}{
+				"type":       "control_response",
+				"request_id": requestID,
+				"response": map[string]interface{}{
+					"subtype": "success",
+				},
 			}
-			data, _ := json.Marshal(resp)
-			writer.Write(append(data, '\n'))
+			// Feed the response into the manager
+			manager.HandleControlMessage(respData)
 		}
 	}()
 
 	// Send multiple concurrent requests
 	errChan := make(chan error, 10)
 	for i := 0; i < 10; i++ {
-		go func() {
+		go func(idx int) {
 			req := ControlRequest{
 				RequestID: generateRequestID(),
 				Type:      "permission",
 			}
+			requestIDs <- req.RequestID
 			_, err := manager.SendRequest(ctx, req, writer)
 			errChan <- err
-		}()
+		}(i)
 	}
 
 	// Collect errors
@@ -578,4 +589,6 @@ func TestControlManagerConcurrent(t *testing.T) {
 		// Some may timeout, some may succeed - we just want to ensure no deadlocks
 		<-errChan
 	}
+
+	close(requestIDs)
 }

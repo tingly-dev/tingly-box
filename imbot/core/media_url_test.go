@@ -24,7 +24,7 @@ func TestParseMediaURL(t *testing.T) {
 			name:       "file URL without leading slash",
 			url:        "file://Users/yz/test.txt",
 			wantScheme: FileURLSchemeLocal,
-			wantLocal:  "Users/yz/test.txt",
+			wantLocal:  "/Users/yz/test.txt",
 		},
 		{
 			name:       "file URL with URL encoding",
@@ -110,7 +110,7 @@ func TestNormalizeMediaURL(t *testing.T) {
 		{
 			name: "file URL without leading slash",
 			url:  "file://Users/yz/test.txt",
-			want: "Users/yz/test.txt",
+			want: "/Users/yz/test.txt",
 		},
 		{
 			name: "https URL unchanged",

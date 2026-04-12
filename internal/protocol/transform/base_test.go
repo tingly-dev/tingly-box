@@ -99,7 +99,7 @@ func TestBaseTransform_AlreadyOpenAIChat(t *testing.T) {
 	config := ctx.Config.OpenAIConfig
 	require.NotNil(t, config)
 	assert.False(t, config.HasThinking)
-	assert.Equal(t, "none", string(config.ReasoningEffort))
+	assert.Equal(t, "", string(config.ReasoningEffort))
 }
 
 func TestBaseTransform_DisableStreamUsage(t *testing.T) {

@@ -76,7 +76,14 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quot
 		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://chatgpt.com/backend-api/wham/usage", nil)
+	// Use provider.APIBase for testing, fallback to production URL
+	apiBase := provider.APIBase
+	if apiBase == "" {
+		apiBase = "https://chatgpt.com"
+	}
+	url := apiBase + "/backend-api/wham/usage"
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
