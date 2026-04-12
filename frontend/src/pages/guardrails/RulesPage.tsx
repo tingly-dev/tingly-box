@@ -123,6 +123,25 @@ type EditorState = {
     reason: string;
 };
 
+type EditorListField = 'toolNames' | 'commandTerms' | 'resources' | 'patterns';
+
+type OversizedListField = {
+    values: string[];
+    preview: string[];
+    total: number;
+};
+
+type PreparedEditorState = {
+    state: EditorState;
+    oversized: Partial<Record<EditorListField, OversizedListField>>;
+};
+
+const MAX_SUMMARY_VALUES = 2;
+const MAX_SUMMARY_CHARS = 140;
+const MAX_INLINE_LIST_ITEMS = 400;
+const MAX_INLINE_LIST_CHARS = 16000;
+const OVERSIZED_LIST_PREVIEW_ITEMS = 25;
+
 const resourceAccessActionOptions = [
     {
         value: 'read',
@@ -174,6 +193,7 @@ const GuardrailsRulesPage = () => {
     const [selectedResourceRow, setSelectedResourceRow] = useState(-1);
     const [selectedCommandTermRow, setSelectedCommandTermRow] = useState(-1);
     const [selectedPatternRow, setSelectedPatternRow] = useState(-1);
+    const [oversizedListFields, setOversizedListFields] = useState<Partial<Record<EditorListField, OversizedListField>>>({});
     const [editorState, setEditorState] = useState<EditorState>({
         id: '',
         name: '',
@@ -211,6 +231,56 @@ const GuardrailsRulesPage = () => {
     };
 
     const joinLines = (values?: string[]) => (Array.isArray(values) ? values.join('\n') : '');
+    const isOversizedList = (values?: string[]) => {
+        if (!Array.isArray(values) || values.length === 0) {
+            return false;
+        }
+        if (values.length > MAX_INLINE_LIST_ITEMS) {
+            return true;
+        }
+        let chars = 0;
+        for (const value of values) {
+            chars += value.length + 1;
+            if (chars > MAX_INLINE_LIST_CHARS) {
+                return true;
+            }
+        }
+        return false;
+    };
+    const prepareListField = (values?: string[]) => {
+        const list = Array.isArray(values) ? values.filter(Boolean) : [];
+        if (!isOversizedList(list)) {
+            return { text: joinLines(list), oversized: undefined };
+        }
+        return {
+            text: joinLines(list.slice(0, OVERSIZED_LIST_PREVIEW_ITEMS)),
+            oversized: {
+                values: list,
+                preview: list.slice(0, OVERSIZED_LIST_PREVIEW_ITEMS),
+                total: list.length,
+            } satisfies OversizedListField,
+        };
+    };
+    const summarizeValues = (values?: string[], emptyLabel = 'none') => {
+        const list = Array.isArray(values) ? values.filter(Boolean) : [];
+        if (list.length === 0) {
+            return emptyLabel;
+        }
+        const preview = list.slice(0, MAX_SUMMARY_VALUES).join(', ');
+        const suffix = list.length > MAX_SUMMARY_VALUES ? ` (+${list.length - MAX_SUMMARY_VALUES} more)` : '';
+        const text = `${preview}${suffix}`;
+        if (text.length <= MAX_SUMMARY_CHARS) {
+            return text;
+        }
+        return `${text.slice(0, MAX_SUMMARY_CHARS - 1)}…`;
+    };
+    const effectiveListValues = (field: EditorListField, rawValue: string) => {
+        const oversized = oversizedListFields[field];
+        if (oversized) {
+            return oversized.values;
+        }
+        return splitLines(rawValue);
+    };
     const normalizeGroup = (value?: string) => value?.trim() || DEFAULT_GROUP_ID;
     const normalizePolicyGroups = (values?: string[]) => {
         const seen = new Set<string>();
@@ -423,15 +493,15 @@ const GuardrailsRulesPage = () => {
 
     const buildPolicySummary = (policy: DisplayPolicy) => {
         if (policy.kind === 'command_execution') {
-            const terms = policy.match?.terms?.join(', ') || 'any command';
-            const resources = policy.match?.resources?.values?.join(', ');
-            const toolNames = policy.match?.tool_names?.join(', ') || 'any tool';
-            return resources ? `${toolNames} · execute · ${terms} · ${resources}` : `${toolNames} · execute · ${terms}`;
+            const terms = summarizeValues(policy.match?.terms, 'any command');
+            const resources = summarizeValues(policy.match?.resources?.values, '');
+            const toolNames = summarizeValues(policy.match?.tool_names, 'any tool');
+            return resources && resources !== 'none' ? `${toolNames} · execute · ${terms} · ${resources}` : `${toolNames} · execute · ${terms}`;
         }
         if (policy.kind === 'resource_access' || policy.kind === 'operation') {
-            const actions = policy.match?.actions?.include?.join(', ') || 'any action';
-            const resources = policy.match?.resources?.values?.join(', ') || 'any resource';
-            const toolNames = policy.match?.tool_names?.join(', ') || 'any tool';
+            const actions = summarizeValues(policy.match?.actions?.include, 'any action');
+            const resources = summarizeValues(policy.match?.resources?.values, 'any resource');
+            const toolNames = summarizeValues(policy.match?.tool_names, 'any tool');
             return `${toolNames} · ${actions} · ${resources}`;
         }
         const patterns = policy.match?.patterns || [];
@@ -441,7 +511,7 @@ const GuardrailsRulesPage = () => {
             }
             return 'No patterns configured';
         }
-        return patterns.slice(0, 2).join(', ');
+        return summarizeValues(patterns, 'No patterns configured');
     };
 
     const buildPolicyScope = (policy: DisplayPolicy) => {
@@ -465,11 +535,20 @@ const GuardrailsRulesPage = () => {
         }
     };
 
-    const makeEditorState = (policy?: GuardrailsPolicy): EditorState => {
+    const makeEditorState = (policy?: GuardrailsPolicy): PreparedEditorState => {
         const scenarios =
             policy?.scope?.scenarios && policy.scope.scenarios.length > 0
                 ? policy.scope.scenarios
                 : scenarioOptions;
+        const toolNamesField = prepareListField(policy?.match?.tool_names);
+        const commandTermsField = prepareListField(policy?.match?.terms);
+        const resourcesField = prepareListField(policy?.match?.resources?.values);
+        const patternsField = prepareListField(policy?.match?.patterns);
+        const oversized: Partial<Record<EditorListField, OversizedListField>> = {};
+        if (toolNamesField.oversized) oversized.toolNames = toolNamesField.oversized;
+        if (commandTermsField.oversized) oversized.commandTerms = commandTermsField.oversized;
+        if (resourcesField.oversized) oversized.resources = resourcesField.oversized;
+        if (patternsField.oversized) oversized.patterns = patternsField.oversized;
         const nextState: EditorState = {
             id: policy?.id || '',
             name: policy?.name || '',
@@ -481,21 +560,21 @@ const GuardrailsRulesPage = () => {
                 policy?.verdict || 'block'
             ),
             scenarios,
-            toolNames: joinLines(policy?.match?.tool_names),
+            toolNames: toolNamesField.text,
             actions: policy?.match?.actions?.include || [],
-            commandTerms: joinLines(policy?.match?.terms),
-            resources: joinLines(policy?.match?.resources?.values),
+            commandTerms: commandTermsField.text,
+            resources: resourcesField.text,
             resourceMode: policy?.match?.resources?.mode || 'prefix',
-            patterns: joinLines(policy?.match?.patterns),
+            patterns: patternsField.text,
             patternMode: policy?.match?.pattern_mode || 'substring',
             caseSensitive: !!policy?.match?.case_sensitive,
             reason: policy?.reason || '',
         };
-        return nextState;
+        return { state: nextState, oversized };
     };
 
     const makeEditorStateFromDraft = (draft: Partial<EditorState>): EditorState => {
-        const baseState = makeEditorState();
+        const baseState = makeEditorState().state;
         const nextKind = draft.kind || baseState.kind;
         const nextName = draft.name || baseState.name;
         const nextID =
@@ -604,11 +683,13 @@ const GuardrailsRulesPage = () => {
         if (!policy) {
             return;
         }
-        const nextState = makeEditorState(policy);
+        const prepared = makeEditorState(policy);
+        const nextState = prepared.state;
         setSelectedPolicyId(policy.id);
         setIsNewPolicy(false);
         setEditorOpen(true);
         setAdvancedOpen(false);
+        setOversizedListFields(prepared.oversized);
         setEditorState(nextState);
         setEditorSnapshot(JSON.stringify(nextState));
         navigate('/guardrails/rules', { replace: true });
@@ -627,6 +708,7 @@ const GuardrailsRulesPage = () => {
         setIsNewPolicy(true);
         setEditorOpen(true);
         setAdvancedOpen(false);
+        setOversizedListFields({});
         setSelectedResourceRow(splitLines(nextState.resources).length > 0 ? 0 : -1);
         setSelectedCommandTermRow(splitLines(nextState.commandTerms).length > 0 ? 0 : -1);
         setSelectedPatternRow(splitLines(nextState.patterns).length > 0 ? 0 : -1);
@@ -638,11 +720,13 @@ const GuardrailsRulesPage = () => {
     const openPolicyEditor = (policy: DisplayPolicy) => {
         const builtin = policy.isBuiltin ? builtinMap.get(policy.id) : undefined;
         const isVirtualBuiltin = !!builtin && !policies.some((existing) => existing.id === policy.id);
-        const nextState = isVirtualBuiltin ? makeEditorState(buildBuiltinPayload(builtin, false)) : makeEditorState(policy);
+        const prepared = isVirtualBuiltin ? makeEditorState(buildBuiltinPayload(builtin, false)) : makeEditorState(policy);
+        const nextState = prepared.state;
         setSelectedPolicyId(isVirtualBuiltin ? null : policy.id);
         setIsNewPolicy(isVirtualBuiltin);
         setEditorOpen(true);
         setAdvancedOpen(false);
+        setOversizedListFields(prepared.oversized);
         setSelectedResourceRow(splitLines(nextState.resources).length > 0 ? 0 : -1);
         setSelectedCommandTermRow(splitLines(nextState.commandTerms).length > 0 ? 0 : -1);
         setSelectedPatternRow(splitLines(nextState.patterns).length > 0 ? 0 : -1);
@@ -651,12 +735,13 @@ const GuardrailsRulesPage = () => {
     };
 
     const handleNewPolicy = (kind?: 'resource_access' | 'command_execution' | 'content') => {
-        const baseState = makeEditorState();
+        const baseState = makeEditorState().state;
         const nextState = kind ? applyKindDefaults(kind, baseState) : baseState;
         setSelectedPolicyId(null);
         setIsNewPolicy(true);
         setEditorOpen(true);
         setAdvancedOpen(false);
+        setOversizedListFields({});
         setSelectedResourceRow(splitLines(nextState.resources).length > 0 ? 0 : -1);
         setSelectedCommandTermRow(splitLines(nextState.commandTerms).length > 0 ? 0 : -1);
         setSelectedPatternRow(splitLines(nextState.patterns).length > 0 ? 0 : -1);
@@ -673,18 +758,18 @@ const GuardrailsRulesPage = () => {
 
     const buildPolicyPayload = (state: EditorState) => {
         const operationMatch = {
-            tool_names: splitLines(state.toolNames),
+            tool_names: effectiveListValues('toolNames', state.toolNames),
             actions: {
                 include:
                     state.kind === 'command_execution'
                         ? ['execute']
                         : state.actions.filter((action) => action !== 'execute'),
             },
-            terms: state.kind === 'command_execution' ? splitLines(state.commandTerms) : [],
+            terms: state.kind === 'command_execution' ? effectiveListValues('commandTerms', state.commandTerms) : [],
             resources: {
                 type: 'path',
                 mode: state.resourceMode,
-                values: splitLines(state.resources),
+                values: effectiveListValues('resources', state.resources),
             },
         };
         const payload = {
@@ -701,7 +786,7 @@ const GuardrailsRulesPage = () => {
             match:
                 state.kind === 'content'
                     ? {
-                          patterns: splitLines(state.patterns),
+                          patterns: effectiveListValues('patterns', state.patterns),
                           pattern_mode: state.patternMode,
                           case_sensitive: state.caseSensitive,
                       }
@@ -726,24 +811,24 @@ const GuardrailsRulesPage = () => {
                       ...editorState,
                       id: generatePolicyId(editorState.name, editorState.kind, isNewPolicy ? undefined : selectedPolicyId || editorState.id),
                   };
-        if (editorState.kind === 'content' && splitLines(editorState.patterns).length === 0) {
+        if (editorState.kind === 'content' && effectiveListValues('patterns', editorState.patterns).length === 0) {
             setActionMessage({ type: 'error', text: 'Privacy policies require at least one pattern.' });
             return false;
         }
         if (
             editorState.kind === 'resource_access' &&
-            splitLines(editorState.resources).length === 0 &&
+            effectiveListValues('resources', editorState.resources).length === 0 &&
             editorState.actions.length === 0 &&
-            splitLines(editorState.toolNames).length === 0
+            effectiveListValues('toolNames', editorState.toolNames).length === 0
         ) {
             setActionMessage({ type: 'error', text: 'Resource access policies require at least one action, resource, or tool filter.' });
             return false;
         }
         if (
             editorState.kind === 'command_execution' &&
-            splitLines(editorState.commandTerms).length === 0 &&
-            splitLines(editorState.toolNames).length === 0 &&
-            splitLines(editorState.resources).length === 0
+            effectiveListValues('commandTerms', editorState.commandTerms).length === 0 &&
+            effectiveListValues('toolNames', editorState.toolNames).length === 0 &&
+            effectiveListValues('resources', editorState.resources).length === 0
         ) {
             setActionMessage({ type: 'error', text: 'Command execution policies require a command match, tool filter, or resource filter.' });
             return false;
@@ -953,9 +1038,12 @@ const GuardrailsRulesPage = () => {
                                     }}
                                     onClick={() => openPolicyEditor(policy)}
                                 >
-                                    <Box sx={{ minWidth: { lg: 220 }, flexShrink: 0 }}>
+                                    <Box sx={{ minWidth: { lg: 220 }, flexShrink: 0, minHeight: 0 }}>
                                         <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-                                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                            <Typography
+                                                variant="body2"
+                                                sx={{ fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}
+                                            >
                                                 {policy.id}
                                             </Typography>
                                             {policy.isBuiltin && <Chip size="small" label="Built-in" variant="outlined" />}
@@ -963,7 +1051,11 @@ const GuardrailsRulesPage = () => {
                                                 <Chip size="small" label="No active group" variant="outlined" />
                                             )}
                                         </Stack>
-                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                        <Typography
+                                            variant="caption"
+                                            color="text.secondary"
+                                            sx={{ display: 'block', mt: 0.5, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                        >
                                             {policy.name || 'Unnamed policy'}
                                         </Typography>
                                     </Box>
@@ -1057,6 +1149,7 @@ const GuardrailsRulesPage = () => {
         onChange,
         placeholder,
         helperText,
+        oversizedField,
     }: {
         title: string;
         description: string;
@@ -1067,12 +1160,14 @@ const GuardrailsRulesPage = () => {
         onChange: (value: string) => void;
         placeholder: string;
         helperText: string;
+        oversizedField?: OversizedListField;
     }) => {
         const rows = textListRows(value);
         const isEmpty = rows.length === 1 && rows[0] === '';
         const showEmptyState = isEmpty && selectedIndex < 0;
-        const canRemove = !showEmptyState;
+        const canRemove = !showEmptyState && !oversizedField;
         const visibleRows = showEmptyState ? [] : rows;
+        const isReadOnly = Boolean(oversizedField);
 
         return (
             <Stack spacing={1.5}>
@@ -1097,6 +1192,7 @@ const GuardrailsRulesPage = () => {
                         <IconButton
                             size="small"
                             color="primary"
+                            disabled={isReadOnly}
                             onClick={() => {
                                 if (showEmptyState) {
                                     onSelectedIndexChange(0);
@@ -1155,6 +1251,7 @@ const GuardrailsRulesPage = () => {
                                             <InputBase
                                                 fullWidth
                                                 value={item}
+                                                readOnly={isReadOnly}
                                                 placeholder={index === 0 ? placeholder : 'Add another entry'}
                                                 onFocus={() => onSelectedIndexChange(index)}
                                                 onChange={(e) => onChange(updateTextListValue(value, index, e.target.value))}
@@ -1167,7 +1264,11 @@ const GuardrailsRulesPage = () => {
                         </TableBody>
                     </Table>
                 </TableContainer>
-                <FormHelperText>{helperText}</FormHelperText>
+                <FormHelperText>
+                    {oversizedField
+                        ? `This field contains ${oversizedField.total.toLocaleString()} entries. Showing the first ${oversizedField.preview.length}. Inline editing is disabled to keep the page responsive. Saving preserves the full list.`
+                        : helperText}
+                </FormHelperText>
             </Stack>
         );
     };
@@ -1650,6 +1751,7 @@ const GuardrailsRulesPage = () => {
                                                     description: 'Define the files, directories, URLs, or other resources this policy protects.',
                                                     columnLabel: 'Path / URL / Resource',
                                                     value: editorState.resources,
+                                                    oversizedField: oversizedListFields.resources,
                                                     selectedIndex: selectedResourceRow,
                                                     onSelectedIndexChange: setSelectedResourceRow,
                                                     onChange: (resources) => setEditorState((state) => ({ ...state, resources })),
@@ -1684,16 +1786,17 @@ const GuardrailsRulesPage = () => {
                                         }}
                                     >
                                         <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
-                                            {renderCompactListEditor({
-                                                title: 'Command Match',
-                                                description: 'Describe the command patterns you want to block or review. This is the main selector for execution policies.',
-                                                columnLabel: 'Command Pattern',
-                                                value: editorState.commandTerms,
-                                                selectedIndex: selectedCommandTermRow,
-                                                onSelectedIndexChange: setSelectedCommandTermRow,
-                                                onChange: (commandTerms) => setEditorState((state) => ({ ...state, commandTerms })),
-                                                placeholder: 'rm -rf',
-                                                helperText: 'One pattern per row, such as `rm -rf`, `curl | sh`, or `python -c`.',
+                                                {renderCompactListEditor({
+                                                    title: 'Command Match',
+                                                    description: 'Describe the command patterns you want to block or review. This is the main selector for execution policies.',
+                                                    columnLabel: 'Command Pattern',
+                                                    value: editorState.commandTerms,
+                                                    oversizedField: oversizedListFields.commandTerms,
+                                                    selectedIndex: selectedCommandTermRow,
+                                                    onSelectedIndexChange: setSelectedCommandTermRow,
+                                                    onChange: (commandTerms) => setEditorState((state) => ({ ...state, commandTerms })),
+                                                    placeholder: 'rm -rf',
+                                                    helperText: 'One pattern per row, such as `rm -rf`, `curl | sh`, or `python -c`.',
                                             })}
                                         </Box>
 
@@ -1704,6 +1807,7 @@ const GuardrailsRulesPage = () => {
                                                     description: 'Optional. Add paths only when the command rule should apply to a specific file, directory, URL, or other resource.',
                                                     columnLabel: 'Path / Resource',
                                                     value: editorState.resources,
+                                                    oversizedField: oversizedListFields.resources,
                                                     selectedIndex: selectedResourceRow,
                                                     onSelectedIndexChange: setSelectedResourceRow,
                                                     onChange: (resources) => setEditorState((state) => ({ ...state, resources })),
@@ -1744,6 +1848,7 @@ const GuardrailsRulesPage = () => {
                                                     description: 'Define the text you want to block or review. Each row becomes one pattern.',
                                                     columnLabel: 'Pattern',
                                                     value: editorState.patterns,
+                                                    oversizedField: oversizedListFields.patterns,
                                                     selectedIndex: selectedPatternRow,
                                                     onSelectedIndexChange: setSelectedPatternRow,
                                                     onChange: (patterns) => setEditorState((state) => ({ ...state, patterns })),

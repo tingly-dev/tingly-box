@@ -1,0 +1,20 @@
+templates:
+  - id: block-malicious-maven-packages
+    name: Block known malicious Maven packages
+    summary: Block Maven package names reported in the OpenSSF Malicious Packages dataset.
+    description: Blocks commands that reference Maven package names already reported in the OpenSSF Malicious Packages dataset, reducing the chance that an agent installs a package known to be malicious.
+    kind: command_execution
+    topic: command_execution
+    tags: [supply-chain, packages, maven, gradle]
+    policy:
+      enabled: true
+      kind: command_execution
+      verdict: block
+      reason: This policy blocks package names already reported as malicious in the OpenSSF Malicious Packages dataset for Maven.
+      match:
+        tool_names: [bash]
+        actions:
+          include: [install]
+        terms:
+          - "io.github.leetcrunch:scribejava-core"
+          - "org.mvnpm:posthog-node"

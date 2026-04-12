@@ -8,4 +8,5 @@ const (
 	ActionDelete  = "delete"
 	ActionExecute = "execute"
 	ActionNetwork = "network"
+	ActionInstall = "install"
 )

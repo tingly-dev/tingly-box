@@ -1,0 +1,21 @@
+templates:
+  - id: block-malicious-cargo-packages
+    name: Block known malicious Cargo packages
+    summary: Block Cargo package names reported in the OpenSSF Malicious Packages dataset.
+    description: Blocks commands that reference Cargo package names already reported in the OpenSSF Malicious Packages dataset, reducing the chance that an agent installs a package known to be malicious.
+    kind: command_execution
+    topic: command_execution
+    tags: [supply-chain, packages, cargo, crates]
+    policy:
+      enabled: true
+      kind: command_execution
+      verdict: block
+      reason: This policy blocks package names already reported as malicious in the OpenSSF Malicious Packages dataset for Cargo.
+      match:
+        tool_names: [bash]
+        actions:
+          include: [install]
+        terms:
+          - "littest"
+          - "replit_ruspty"
+          - "rustdecimal"

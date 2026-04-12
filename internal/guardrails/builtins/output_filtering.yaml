@@ -56,3 +56,84 @@ templates:
           - "DATABASE_URL="
         pattern_mode: substring
         case_sensitive: true
+
+  - id: block-request-secret-egress
+    name: Block request secret egress
+    summary: Stop request-side content that appears to contain common API keys, access tokens, or private key material.
+    description: Blocks request payloads that match common secret formats before they can be forwarded to an untrusted router or model endpoint.
+    kind: content
+    topic: output_filtering
+    tags: [request, secrets, exfiltration, api-key]
+    policy:
+      enabled: true
+      kind: content
+      verdict: block
+      reason: This policy blocks request content that appears to contain high-risk secrets.
+      scope:
+        directions: [request]
+      match:
+        patterns:
+          - "sk-[A-Za-z0-9]{20,}"
+          - "AKIA[0-9A-Z]{16}"
+          - "ghp_[A-Za-z0-9]{20,}"
+          - "github_pat_[A-Za-z0-9_]{20,}"
+          - "xoxb-[0-9]+-[A-Za-z0-9-]+"
+          - "0x[a-fA-F0-9]{64}"
+          - "-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"
+        pattern_mode: regex
+        case_sensitive: true
+
+  - id: block-request-dotenv-egress
+    name: Block request dotenv egress
+    summary: Stop request-side content that looks like dotenv or environment secret dumps.
+    description: Blocks request payloads containing common `.env` style assignments so local secret files are not forwarded upstream as plain text.
+    kind: content
+    topic: output_filtering
+    tags: [request, dotenv, env, secrets]
+    policy:
+      enabled: true
+      kind: content
+      verdict: block
+      reason: This policy blocks request content that looks like a dotenv or environment secret dump.
+      scope:
+        directions: [request]
+      match:
+        patterns:
+          - "OPENAI_API_KEY="
+          - "ANTHROPIC_API_KEY="
+          - "AWS_SECRET_ACCESS_KEY="
+          - "AWS_ACCESS_KEY_ID="
+          - "DATABASE_URL="
+          - "SLACK_BOT_TOKEN="
+          - "GITHUB_TOKEN="
+        pattern_mode: substring
+        case_sensitive: true
+        min_matches: 2
+
+  - id: block-request-cloud-credential-bundle
+    name: Block request cloud credential bundles
+    summary: Stop request-side content that includes multiple cloud credential markers or private key blocks.
+    description: Blocks request payloads that look like copied credential bundles, AWS shared credentials, or PEM-style key material before they leave the workstation.
+    kind: content
+    topic: output_filtering
+    tags: [request, cloud, aws, private-key, exfiltration]
+    policy:
+      enabled: true
+      kind: content
+      verdict: block
+      reason: This policy blocks request content that looks like bundled cloud credentials or private key material.
+      scope:
+        directions: [request]
+      match:
+        patterns:
+          - "aws_access_key_id"
+          - "aws_secret_access_key"
+          - "aws_session_token"
+          - "-----BEGIN CERTIFICATE-----"
+          - "-----BEGIN OPENSSH PRIVATE KEY-----"
+          - "-----BEGIN RSA PRIVATE KEY-----"
+          - "-----BEGIN EC PRIVATE KEY-----"
+          - "-----BEGIN PRIVATE KEY-----"
+        pattern_mode: substring
+        case_sensitive: false
+        min_matches: 2

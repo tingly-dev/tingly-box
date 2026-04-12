@@ -1,0 +1,27 @@
+templates:
+  - id: block-package-index-overrides
+    name: Block package index overrides
+    summary: Stop install commands that redirect package resolution to custom indexes or registries.
+    description: Blocks shell commands that combine dependency installs with flags such as `--index-url`, `--extra-index-url`, or custom npm registry overrides.
+    kind: command_execution
+    topic: command_execution
+    tags: [supply-chain, registry, index, dependency]
+    policy:
+      enabled: true
+      kind: command_execution
+      verdict: block
+      reason: This policy blocks custom package index overrides on dependency installation commands.
+      match:
+        tool_names: [bash]
+        actions:
+          include: [install]
+        terms:
+          - "--index-url"
+          - "--extra-index-url"
+          - "--find-links"
+          - "--registry"
+          - "--source"
+        resources:
+          type: path
+          mode: contains
+          values: ["http://", "https://"]

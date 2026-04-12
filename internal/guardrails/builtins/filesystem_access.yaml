@@ -82,3 +82,66 @@ templates:
           type: path
           mode: contains
           values: [".zsh_history", ".bash_history"]
+
+  - id: block-aws-credential-read
+    name: Block AWS credential reads
+    summary: Prevent shell commands from reading local AWS credential files.
+    description: Blocks reads of common AWS credential stores such as `~/.aws/credentials` and `~/.aws/config` before those secrets can be forwarded upstream.
+    kind: resource_access
+    topic: filesystem_access
+    tags: [aws, cloud, credentials, secrets]
+    policy:
+      enabled: true
+      kind: resource_access
+      verdict: block
+      reason: This policy blocks attempts to read local AWS credential files.
+      match:
+        tool_names: [bash]
+        actions:
+          include: [read]
+        resources:
+          type: path
+          mode: contains
+          values: ["~/.aws/credentials", "~/.aws/config", ".aws/credentials", ".aws/config"]
+
+  - id: block-cloud-config-read
+    name: Block cloud config reads
+    summary: Prevent shell commands from reading common cloud and registry credential files.
+    description: Blocks reads of files such as `~/.kube/config`, `~/.docker/config.json`, `.npmrc`, `.pypirc`, and `.netrc` that frequently carry tokens or auth material.
+    kind: resource_access
+    topic: filesystem_access
+    tags: [cloud, docker, kube, registry, tokens]
+    policy:
+      enabled: true
+      kind: resource_access
+      verdict: block
+      reason: This policy blocks attempts to read cloud and registry credential files.
+      match:
+        tool_names: [bash]
+        actions:
+          include: [read]
+        resources:
+          type: path
+          mode: contains
+          values: ["~/.kube/config", "~/.docker/config.json", ".npmrc", ".pypirc", ".netrc"]
+
+  - id: block-private-key-file-read
+    name: Block private key file reads
+    summary: Prevent shell commands from reading private key files and common SSH private key names.
+    description: Blocks reads of PEM, key, and common SSH private key filenames such as `id_rsa` and `id_ed25519`.
+    kind: resource_access
+    topic: filesystem_access
+    tags: [private-key, ssh, pem, certificates]
+    policy:
+      enabled: true
+      kind: resource_access
+      verdict: block
+      reason: This policy blocks attempts to read private key files.
+      match:
+        tool_names: [bash]
+        actions:
+          include: [read]
+        resources:
+          type: path
+          mode: contains
+          values: [".pem", ".key", "id_rsa", "id_ed25519", ".p12", ".pfx"]

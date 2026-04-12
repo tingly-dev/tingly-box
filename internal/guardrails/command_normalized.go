@@ -67,6 +67,9 @@ func normalizeShellCommand(shell *ShellCommand) *NormalizedCommand {
 		// policies can still match commands such as `rm`.
 		actions = appendUniqueString(actions, ActionExecute)
 		actions = appendUniqueString(actions, normalizeShellAction(cmd.Program))
+		if isInstallCommand(cmd) {
+			actions = appendUniqueString(actions, ActionInstall)
+		}
 
 		for _, arg := range cmd.Args {
 			terms = appendUniqueString(terms, arg)
