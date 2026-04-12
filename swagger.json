@@ -2409,6 +2409,53 @@
       }
     },
     "/api/v1/scenario/{scenario}/profiles/{id}": {
+      "put": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Update a profile name or mode",
+        "description": "Update a profile name or mode",
+        "operationId": "apiV1ScenarioScenarioProfilesIdPut",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ProfileUpdateRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      },
       "delete": {
         "tags": [
           "scenarios"
@@ -6300,10 +6347,32 @@
         "name": {
           "type": "string",
           "description": "Field name"
+        },
+        "unified": {
+          "type": "boolean",
+          "description": "Field unified"
         }
       },
       "required": [
-        "name"
+        "name",
+        "unified"
+      ]
+    },
+    "ProfileUpdateRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Field name"
+        },
+        "unified": {
+          "type": "boolean",
+          "description": "Field unified"
+        }
+      },
+      "required": [
+        "name",
+        "unified"
       ]
     },
     "ProviderModelInfo": {
@@ -8826,48 +8895,12 @@
   },
   "tags": [
     {
-      "name": "system-logs",
-      "description": "Operations related to system-logs"
-    },
-    {
-      "name": "actions",
-      "description": "Operations related to actions"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
-      "name": "usage",
-      "description": "Operations related to usage"
-    },
-    {
-      "name": "weixin",
-      "description": "Operations related to weixin"
-    },
-    {
-      "name": "mcp",
-      "description": "Operations related to mcp"
-    },
-    {
       "name": "auth",
       "description": "Operations related to auth"
     },
     {
-      "name": "info",
-      "description": "Operations related to info"
-    },
-    {
-      "name": "server",
-      "description": "Operations related to server"
-    },
-    {
-      "name": "imbot-settings",
-      "description": "Operations related to imbot-settings"
-    },
-    {
-      "name": "logs",
-      "description": "Operations related to logs"
+      "name": "system-logs",
+      "description": "Operations related to system-logs"
     },
     {
       "name": "scenarios",
@@ -8878,12 +8911,52 @@
       "description": "Operations related to guardrails"
     },
     {
-      "name": "testing",
-      "description": "Operations related to testing"
-    },
-    {
       "name": "token",
       "description": "Operations related to token"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
+    },
+    {
+      "name": "imbot-settings",
+      "description": "Operations related to imbot-settings"
+    },
+    {
+      "name": "weixin",
+      "description": "Operations related to weixin"
+    },
+    {
+      "name": "logs",
+      "description": "Operations related to logs"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
+      "name": "mcp",
+      "description": "Operations related to mcp"
+    },
+    {
+      "name": "info",
+      "description": "Operations related to info"
+    },
+    {
+      "name": "actions",
+      "description": "Operations related to actions"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "history",
+      "description": "Operations related to history"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
     },
     {
       "name": "skills",
@@ -8898,20 +8971,16 @@
       "description": "Operations related to codex"
     },
     {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
+      "name": "server",
+      "description": "Operations related to server"
     },
     {
       "name": "models",
       "description": "Operations related to models"
     },
     {
-      "name": "oauth",
-      "description": "Operations related to oauth"
+      "name": "usage",
+      "description": "Operations related to usage"
     }
   ]
 }
