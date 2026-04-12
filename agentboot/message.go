@@ -110,15 +110,7 @@ type InitMessage struct {
 
 // ToEvent converts InitMessage to Event
 func (m *InitMessage) ToEvent() Event {
-	return Event{
-		Type: m.Type,
-		Data: map[string]interface{}{
-			"agent_type":     string(m.AgentType),
-			"session_id":     m.SessionID,
-			"max_iterations": m.MaxIterations,
-		},
-		Timestamp: m.Timestamp,
-	}
+	return Event{Type: m.Type, Data: marshalToMap(m), Timestamp: m.Timestamp}
 }
 
 // GetRawData returns raw data
@@ -199,20 +191,7 @@ type PermissionRequestMessage struct {
 
 // ToEvent converts PermissionRequestMessage to Event
 func (m *PermissionRequestMessage) ToEvent() Event {
-	return Event{
-		Type: m.Type,
-		Data: map[string]interface{}{
-			"agent_type": string(m.AgentType),
-			"session_id": m.SessionID,
-			"request_id": m.RequestID,
-			"tool_name":  m.ToolName,
-			"input":      m.Input,
-			"reason":     m.Reason,
-			"step":       m.Step,
-			"total":      m.Total,
-		},
-		Timestamp: m.Timestamp,
-	}
+	return Event{Type: m.Type, Data: marshalToMap(m), Timestamp: m.Timestamp}
 }
 
 // GetRawData returns raw data
@@ -231,18 +210,7 @@ type PermissionResultMessage struct {
 
 // ToEvent converts PermissionResultMessage to Event
 func (m *PermissionResultMessage) ToEvent() Event {
-	return Event{
-		Type: m.Type,
-		Data: map[string]interface{}{
-			"agent_type": string(m.AgentType),
-			"session_id": m.SessionID,
-			"request_id": m.RequestID,
-			"approved":   m.Approved,
-			"reason":     m.Reason,
-			"remember":   m.Remember,
-		},
-		Timestamp: m.Timestamp,
-	}
+	return Event{Type: m.Type, Data: marshalToMap(m), Timestamp: m.Timestamp}
 }
 
 // GetRawData returns raw data
@@ -264,21 +232,7 @@ type ResultMessage struct {
 
 // ToEvent converts ResultMessage to Event
 func (m *ResultMessage) ToEvent() Event {
-	return Event{
-		Type: m.Type,
-		Data: map[string]interface{}{
-			"agent_type":     string(m.AgentType),
-			"session_id":     m.SessionID,
-			"status":         m.Status,
-			"message":        m.Message,
-			"cost_usd":       m.CostUSD,
-			"duration_ms":    m.Duration,
-			"steps_completed": m.Steps,
-			"is_error":       m.IsError,
-			"error":          m.ErrorMsg,
-		},
-		Timestamp: m.Timestamp,
-	}
+	return Event{Type: m.Type, Data: marshalToMap(m), Timestamp: m.Timestamp}
 }
 
 // GetRawData returns raw data
@@ -299,15 +253,7 @@ type StreamDeltaMessage struct {
 
 // ToEvent converts StreamDeltaMessage to Event
 func (m *StreamDeltaMessage) ToEvent() Event {
-	return Event{
-		Type: m.Type,
-		Data: map[string]interface{}{
-			"agent_type": string(m.AgentType),
-			"session_id": m.SessionID,
-			"delta":      m.Delta,
-		},
-		Timestamp: m.Timestamp,
-	}
+	return Event{Type: m.Type, Data: marshalToMap(m), Timestamp: m.Timestamp}
 }
 
 // GetRawData returns raw data
