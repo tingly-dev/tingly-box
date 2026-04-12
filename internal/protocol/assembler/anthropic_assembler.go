@@ -1,6 +1,8 @@
 package assembler
 
 import (
+	"encoding/json"
+
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/shared/constant"
 )
@@ -18,12 +20,16 @@ type AnthropicStreamAssembler struct {
 
 	// Block-level tracking - store ContentBlockUnion by index
 	blocks map[int]anthropic.ContentBlockUnion
+
+	// tool_use block input accumulation: blockIndex -> partial JSON string
+	toolInputBuf map[int][]byte
 }
 
 // NewAnthropicStreamAssembler creates a new assembler for Anthropic streams
 func NewAnthropicStreamAssembler() *AnthropicStreamAssembler {
 	return &AnthropicStreamAssembler{
-		blocks: make(map[int]anthropic.ContentBlockUnion),
+		blocks:       make(map[int]anthropic.ContentBlockUnion),
+		toolInputBuf: make(map[int][]byte),
 	}
 }
 
@@ -97,6 +103,10 @@ func (a *AnthropicStreamAssembler) handleContentBlockStart(blockIndex int, block
 		if union.Signature == "" {
 			union.Signature = "sig_" + a.msgID
 		}
+	case "tool_use":
+		union.ID = block.ID
+		union.Name = block.Name
+		a.toolInputBuf[blockIndex] = nil
 	}
 
 	a.blocks[blockIndex] = union
@@ -117,6 +127,10 @@ func (a *AnthropicStreamAssembler) handleContentBlockStartBeta(blockIndex int, b
 		if union.Signature == "" {
 			union.Signature = "sig_" + a.msgID
 		}
+	case "tool_use":
+		union.ID = block.ID
+		union.Name = block.Name
+		a.toolInputBuf[blockIndex] = nil
 	}
 
 	a.blocks[blockIndex] = union
@@ -136,6 +150,9 @@ func (a *AnthropicStreamAssembler) handleContentBlockDelta(blockIndex int, delta
 		block.Thinking += delta.Thinking
 	case "signature_delta":
 		block.Signature = delta.Signature
+	case "input_json_delta":
+		a.toolInputBuf[blockIndex] = append(a.toolInputBuf[blockIndex], delta.PartialJSON...)
+		block.Input = json.RawMessage(a.toolInputBuf[blockIndex])
 	}
 
 	a.blocks[blockIndex] = block
@@ -155,6 +172,9 @@ func (a *AnthropicStreamAssembler) handleContentBlockDeltaBeta(blockIndex int, d
 		block.Thinking += delta.Thinking
 	case "signature_delta":
 		block.Signature = delta.Signature
+	case "input_json_delta":
+		a.toolInputBuf[blockIndex] = append(a.toolInputBuf[blockIndex], delta.PartialJSON...)
+		block.Input = json.RawMessage(a.toolInputBuf[blockIndex])
 	}
 
 	a.blocks[blockIndex] = block
