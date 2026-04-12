@@ -1,0 +1,3 @@
+internal/guardrails/builtins/malicious_npm_packages.yaml filter=lfs diff=lfs merge=lfs -text
+internal/guardrails/builtins/malicious_pypi_packages.yaml filter=lfs diff=lfs merge=lfs -text
+internal/guardrails/builtins/urlhaus_blocklist.yaml filter=lfs diff=lfs merge=lfs -text
