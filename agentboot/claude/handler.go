@@ -13,18 +13,16 @@ import (
 // ResultCollector collects messages and builds an agentboot.Result
 // It implements MessageHandler for use with ExecuteWithHandler
 type ResultCollector struct {
-	mu          sync.Mutex
-	messages    []Message
-	accumulator *MessageAccumulator
-	result      *agentboot.Result
-	complete    bool
+	mu       sync.Mutex
+	messages []Message
+	result   *agentboot.Result
+	complete bool
 }
 
 // NewResultCollector creates a new result collector
 func NewResultCollector() *ResultCollector {
 	return &ResultCollector{
-		messages:    make([]Message, 0),
-		accumulator: NewMessageAccumulator(),
+		messages: make([]Message, 0),
 		result: &agentboot.Result{
 			Metadata: make(map[string]interface{}),
 		},

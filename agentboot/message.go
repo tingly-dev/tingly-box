@@ -123,10 +123,7 @@ func (m *InitMessage) ToEvent() Event {
 
 // GetRawData returns raw data
 func (m *InitMessage) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // AssistantMessage represents an assistant response
@@ -171,10 +168,7 @@ func (m *AssistantMessage) ToEvent() Event {
 
 // GetRawData returns raw data
 func (m *AssistantMessage) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // GetText returns the text content
@@ -223,10 +217,7 @@ func (m *PermissionRequestMessage) ToEvent() Event {
 
 // GetRawData returns raw data
 func (m *PermissionRequestMessage) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // PermissionResultMessage represents the result of a permission request
@@ -256,10 +247,7 @@ func (m *PermissionResultMessage) ToEvent() Event {
 
 // GetRawData returns raw data
 func (m *PermissionResultMessage) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // ResultMessage represents the final result
@@ -295,10 +283,7 @@ func (m *ResultMessage) ToEvent() Event {
 
 // GetRawData returns raw data
 func (m *ResultMessage) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // IsSuccess returns true if result is successful
@@ -327,10 +312,7 @@ func (m *StreamDeltaMessage) ToEvent() Event {
 
 // GetRawData returns raw data
 func (m *StreamDeltaMessage) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // NewInitMessage creates a new init message
@@ -415,6 +397,14 @@ func NewStreamDeltaMessage(agentType AgentType, sessionID, delta string) *Stream
 		},
 		Delta: delta,
 	}
+}
+
+// marshalToMap serializes v to a map via JSON round-trip
+func marshalToMap(v any) map[string]interface{} {
+	data, _ := json.Marshal(v)
+	var result map[string]interface{}
+	_ = json.Unmarshal(data, &result)
+	return result
 }
 
 // MessageFromEvent converts an Event to an AgentMessage if possible

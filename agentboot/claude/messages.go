@@ -47,10 +47,7 @@ func (m *SystemMessage) GetTimestamp() time.Time {
 
 // GetRawData implements Message
 func (m *SystemMessage) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // AssistantMessage represents assistant messages with content blocks
@@ -84,10 +81,7 @@ func (m *AssistantMessage) GetTimestamp() time.Time {
 
 // GetRawData implements Message
 func (m *AssistantMessage) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // UsageInfo contains token usage statistics
@@ -232,10 +226,7 @@ func (m *UserMessage) GetTimestamp() time.Time {
 
 // GetRawData implements Message
 func (m *UserMessage) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // ToolCallInfo represents a tool call
@@ -272,10 +263,7 @@ func (m *ToolUseMessage) GetTimestamp() time.Time {
 
 // GetRawData implements Message
 func (m *ToolUseMessage) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // ToolResultMessage represents a tool result message
@@ -304,10 +292,7 @@ func (m *ToolResultMessage) GetTimestamp() time.Time {
 
 // GetRawData implements Message
 func (m *ToolResultMessage) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // ResultMessage represents the final result message
@@ -347,10 +332,7 @@ func (m *ResultMessage) GetTimestamp() time.Time {
 
 // GetRawData implements Message
 func (m *ResultMessage) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // IsSuccess returns true if the result indicates success
@@ -381,10 +363,7 @@ func (m *StreamEventMessage) GetTimestamp() time.Time {
 
 // GetRawData implements Message
 func (m *StreamEventMessage) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // StreamEvent represents a streaming event
@@ -432,10 +411,7 @@ func (m *ControlRequest) GetTimestamp() time.Time {
 
 // GetRawData implements Message
 func (m *ControlRequest) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // ControlResponse represents a control response received from Claude

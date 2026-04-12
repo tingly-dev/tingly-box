@@ -1,6 +1,16 @@
 package claude
 
+import "encoding/json"
+
 // Helper functions for type-safe map access (shared across package)
+
+// marshalToMap serializes v to a map via JSON round-trip
+func marshalToMap(v any) map[string]interface{} {
+	data, _ := json.Marshal(v)
+	var result map[string]interface{}
+	_ = json.Unmarshal(data, &result)
+	return result
+}
 
 // getString extracts a string value from a map
 func getString(m map[string]interface{}, key string) string {

@@ -517,17 +517,15 @@ func (r *StreamReader) ReadAll() ([]map[string]interface{}, error) {
 
 // StreamWriter writes line-delimited JSON to a writer
 type StreamWriter struct {
-	writer  io.Writer
-	encoder *json.Encoder
-	closed  bool
-	mu      sync.Mutex
+	writer io.Writer
+	closed bool
+	mu     sync.Mutex
 }
 
 // NewStreamWriter creates a new stream writer
 func NewStreamWriter(w io.Writer) *StreamWriter {
 	return &StreamWriter{
-		writer:  w,
-		encoder: json.NewEncoder(w),
+		writer: w,
 	}
 }
 

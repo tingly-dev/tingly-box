@@ -47,11 +47,6 @@ func NewEventFromRaw(raw string) Event {
 		eventType = t
 	}
 
-	if data != nil && raw == "" {
-		bs, _ := json.Marshal(data)
-		raw = string(bs)
-	}
-
 	return Event{
 		Type:      eventType,
 		Data:      data,

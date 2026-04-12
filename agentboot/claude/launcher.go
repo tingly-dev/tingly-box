@@ -286,7 +286,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 								}
 
 								// Send control response via stdin (use WriteWait to avoid silent drop)
-								input := l.sendAskResponseNew(requestID, result)
+								input := l.sendAskResponse(requestID, result)
 								if err := inputSource.WriteWait(ctx, input); err != nil {
 									logrus.WithError(err).Error("Failed to write ask control response to stdin")
 								}
@@ -313,7 +313,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 								}
 
 								// Send control response via stdin (use WriteWait to avoid silent drop)
-								input := l.sendPermissionResponseNew(requestID, result, req.Input)
+								input := l.sendPermissionResponse(requestID, result, req.Input)
 								if err := inputSource.WriteWait(ctx, input); err != nil {
 									logrus.WithError(err).Error("Failed to write permission response to stdin")
 								}
@@ -353,7 +353,7 @@ func (l *Launcher) ExecuteWithHandler(ctx context.Context,
 								}
 
 								// Send control response via stdin (use WriteWait to avoid silent drop)
-								input := l.sendAskResponseNew(requestID, result)
+								input := l.sendAskResponse(requestID, result)
 								if err := inputSource.WriteWait(ctx, input); err != nil {
 									logrus.WithError(err).Error("Failed to write ask assistant response to stdin")
 								}
@@ -702,45 +702,7 @@ func (l *Launcher) parseAskRequestFromControl(controlData map[string]interface{}
 }
 
 // sendAskResponse sends an ask response to Claude Code
-func (l *Launcher) sendAskResponse(stdin io.WriteCloser, requestID string, result agentboot.AskResult) error {
-	response := map[string]interface{}{
-		"request_id": requestID,
-		"type":       ControlMsgTypeResponse,
-	}
-
-	innerResponse := map[string]interface{}{
-		"request_id": requestID,
-	}
-
-	if result.Approved {
-		innerResponse["subtype"] = ResultSubtypeSuccess
-		if result.UpdatedInput != nil {
-			innerResponse["response"] = map[string]interface{}{
-				"behavior":     "allow",
-				"updatedInput": result.UpdatedInput,
-			}
-		} else {
-			innerResponse["response"] = map[string]interface{}{
-				"behavior": "allow",
-			}
-		}
-	} else {
-		innerResponse["subtype"] = ResultSubtypeError
-		innerResponse["error"] = result.Reason
-		if result.Reason == "" {
-			innerResponse["error"] = "User denied this request"
-		}
-	}
-
-	response["response"] = innerResponse
-
-	data, _ := json.Marshal(response)
-	_, err := stdin.Write(append(data, '\n'))
-	return err
-}
-
-// sendAskResponse sends an ask response to Claude Code
-func (l *Launcher) sendAskResponseNew(requestID string, result agentboot.AskResult) map[string]any {
+func (l *Launcher) sendAskResponse(requestID string, result agentboot.AskResult) map[string]any {
 	response := map[string]interface{}{
 		"request_id": requestID,
 		"type":       ControlMsgTypeResponse,
@@ -816,7 +778,7 @@ func (l *Launcher) parsePermissionRequest(data map[string]interface{}) agentboot
 }
 
 // sendPermissionResponse sends a permission response to Claude Code
-func (l *Launcher) sendPermissionResponseNew(requestID string, result agentboot.PermissionResult, originalInput map[string]interface{}) map[string]any {
+func (l *Launcher) sendPermissionResponse(requestID string, result agentboot.PermissionResult, originalInput map[string]interface{}) map[string]any {
 	response := map[string]interface{}{
 		"request_id": requestID,
 		"type":       ControlMsgTypeResponse,
@@ -853,31 +815,6 @@ func (l *Launcher) sendPermissionResponseNew(requestID string, result agentboot.
 	response["response"] = innerResponse
 
 	return response
-}
-
-// sendPermissionResponse sends a permission response to Claude Code
-func (l *Launcher) sendPermissionResponse(stdin io.WriteCloser, requestID string, result agentboot.PermissionResult) error {
-	response := map[string]interface{}{
-		"request_id": requestID,
-		"type":       ControlMsgTypeResponse,
-	}
-
-	if result.Approved {
-		response["response"] = map[string]interface{}{
-			"subtype":    ResultSubtypeSuccess,
-			"request_id": requestID,
-		}
-	} else {
-		response["response"] = map[string]interface{}{
-			"subtype":    ResultSubtypeError,
-			"request_id": requestID,
-			"error":      result.Reason,
-		}
-	}
-
-	data, _ := json.Marshal(response)
-	_, err := stdin.Write(append(data, '\n'))
-	return err
 }
 
 func isRoot() bool {
