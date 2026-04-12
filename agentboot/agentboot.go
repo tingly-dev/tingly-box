@@ -26,13 +26,12 @@ type AgentBoot struct {
 	mu     sync.RWMutex
 	config Config
 	agents map[AgentType]Agent
-
-	// Session management
-	sessionManager *SessionManager
+	store  common.SessionStore // nil if ClaudeProjectsDir not configured
 }
 
-// New creates a new AgentBoot instance
-func New(config Config) *AgentBoot {
+// New creates a new AgentBoot instance.
+// Returns an error only if ClaudeProjectsDir is set but cannot be initialized.
+func New(config Config) (*AgentBoot, error) {
 	if config.DefaultAgent == "" {
 		config.DefaultAgent = AgentTypeClaude
 	}
@@ -48,7 +47,15 @@ func New(config Config) *AgentBoot {
 		agents: make(map[AgentType]Agent),
 	}
 
-	return ab
+	if config.ClaudeProjectsDir != "" {
+		store, err := NewClaudeStore(config.ClaudeProjectsDir)
+		if err != nil {
+			return nil, fmt.Errorf("initialize session store: %w", err)
+		}
+		ab.store = store
+	}
+
+	return ab, nil
 }
 
 // RegisterAgent registers a new agent type
@@ -116,51 +123,20 @@ func (ab *AgentBoot) ListAgents() []AgentType {
 	return types
 }
 
-// GetSessionManager returns the session manager (lazy initialization)
-func (ab *AgentBoot) GetSessionManager() *SessionManager {
-	ab.mu.RLock()
-	if ab.sessionManager != nil {
-		manager := ab.sessionManager
-		ab.mu.RUnlock()
-		return manager
-	}
-	ab.mu.RUnlock()
-
-	// Lazy initialization
-	ab.mu.Lock()
-	defer ab.mu.Unlock()
-
-	if ab.sessionManager != nil {
-		return ab.sessionManager
-	}
-
-	// Initialize session manager
-	manager, err := NewSessionManager(ab.config.ClaudeProjectsDir)
-	if err != nil {
-		// Log error but don't fail - session management will be unavailable
-		return nil
-	}
-
-	ab.sessionManager = manager
-	return manager
-}
-
 // ListRecentSessions returns recent sessions for a project
 func (ab *AgentBoot) ListRecentSessions(ctx context.Context, projectPath string, limit int) ([]common.SessionMetadata, error) {
-	manager := ab.GetSessionManager()
-	if manager == nil {
-		return nil, fmt.Errorf("session manager not available")
+	if ab.store == nil {
+		return nil, fmt.Errorf("session store not configured: set ClaudeProjectsDir in Config")
 	}
-	return manager.ListRecentSessions(ctx, projectPath, limit)
+	return ab.store.GetRecentSessions(ctx, projectPath, limit)
 }
 
 // GetSessionSummary returns a summary of a session
 func (ab *AgentBoot) GetSessionSummary(ctx context.Context, sessionID string, firstN, lastM int) (*common.SessionSummary, error) {
-	manager := ab.GetSessionManager()
-	if manager == nil {
-		return nil, fmt.Errorf("session manager not available")
+	if ab.store == nil {
+		return nil, fmt.Errorf("session store not configured: set ClaudeProjectsDir in Config")
 	}
-	return manager.GetSessionSummary(ctx, sessionID, firstN, lastM)
+	return ab.store.GetSessionSummary(ctx, sessionID, firstN, lastM)
 }
 
 // ResumeSession creates ExecutionOptions to resume a session

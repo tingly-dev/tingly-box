@@ -574,7 +574,10 @@ func runStandaloneBot(ctx context.Context, appManager *AppManager, setting db.Se
 	// Create AgentBoot instance
 	agentBootConfig := agentboot.DefaultConfig()
 	agentBootConfig.DefaultExecutionTimeout = 30 * time.Minute
-	agentBoot := agentboot.New(agentBootConfig)
+	agentBoot, err := agentboot.New(agentBootConfig)
+	if err != nil {
+		return fmt.Errorf("create agentboot: %w", err)
+	}
 
 	// Register Claude agent
 	claudeAgent := claude.NewAgent(agentBootConfig)
