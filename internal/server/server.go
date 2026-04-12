@@ -729,6 +729,14 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	return server
 }
 
+func (s *Server) Context() context.Context {
+	return s.ctx
+}
+
+func (s *Server) Cancel() context.CancelFunc {
+	return s.cancel
+}
+
 // setupConfigWatcher initializes the configuration hot-reload watcher
 func (s *Server) setupConfigWatcher() {
 	watcher, err := config.NewConfigWatcher(s.config)

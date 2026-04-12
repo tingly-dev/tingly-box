@@ -1,4 +1,4 @@
-package tests
+package server
 
 import (
 	"testing"
@@ -7,10 +7,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/server"
 
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
-	"github.com/tingly-dev/tingly-box/internal/server"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 

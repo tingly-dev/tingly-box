@@ -1,4 +1,4 @@
-package tests
+package server
 
 import (
 	"encoding/json"
@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/tingly-dev/tingly-box/internal/server"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/server"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 

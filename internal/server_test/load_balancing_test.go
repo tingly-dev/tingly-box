@@ -1,4 +1,7 @@
-package tests
+//go:build e2e
+// +build e2e
+
+package server
 
 import (
 	"bytes"
@@ -13,11 +16,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/server"
 
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
-	"github.com/tingly-dev/tingly-box/internal/server"
 	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
 
