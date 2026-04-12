@@ -213,16 +213,15 @@ func (f *TextFormatter) formatTaskNotification(m *SystemMessage) string {
 func (f *TextFormatter) formatAssistant(m *AssistantMessage) string {
 	var b strings.Builder
 
-	hasContent := false
 	if m.Message.ID != "" {
-		hasContent = true
 		b.WriteString("[ASSISTANT] ")
 		b.WriteString(m.Message.ID)
 		b.WriteString("\n")
 	} else if !m.IsError() {
-		hasContent = true
 		b.WriteString("[ASSISTANT]")
 	}
+
+	hasContent := false
 	for _, content := range m.Message.Content {
 		switch content.Type {
 		case ContentBlockTypeText:

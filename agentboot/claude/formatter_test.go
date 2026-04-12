@@ -315,9 +315,9 @@ func TestTextFormatter_EmptyFieldsNoOutput(t *testing.T) {
 	}
 
 	output := formatter.Format(msg)
-	// Should only contain [ASSISTANT], no content from empty text
-	if !contains(output, "[ASSISTANT]") {
-		t.Errorf("Expected [ASSISTANT] in output: %s", output)
+	// Empty content means no output at all (filtered intentionally)
+	if output != "" {
+		t.Errorf("Expected empty output for empty content, got: %q", output)
 	}
 }
 
