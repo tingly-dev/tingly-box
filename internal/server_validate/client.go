@@ -106,6 +106,33 @@ func (vc *VirtualClient) SendGoogle(t *testing.T, s Scenario, streaming bool) *P
 	return vc.doRequest(t, "POST", vc.baseURL+"/v1beta/models/gemini-2.0-flash/"+suffix, body, streaming, StyleGoogle)
 }
 
+// ─── Model-parameterized send helpers ─────────────────────────────────────────
+
+// SendOpenAIChatModel sends a request to the OpenAI Chat Completions endpoint
+// using the specified model ID instead of the scenario-derived default.
+func (vc *VirtualClient) SendOpenAIChatModel(t *testing.T, modelID string, streaming bool) *ParsedResponse {
+	t.Helper()
+	body := map[string]interface{}{
+		"model":    modelID,
+		"messages": []map[string]string{{"role": "user", "content": "What is the capital of France?"}},
+		"stream":   streaming,
+	}
+	return vc.doRequest(t, "POST", vc.baseURL+"/v1/chat/completions", body, streaming, StyleOpenAI)
+}
+
+// SendAnthropicV1Model sends a request to the Anthropic Messages endpoint
+// using the specified model ID instead of the scenario-derived default.
+func (vc *VirtualClient) SendAnthropicV1Model(t *testing.T, modelID string, streaming bool) *ParsedResponse {
+	t.Helper()
+	body := map[string]interface{}{
+		"model":      modelID,
+		"max_tokens": 1024,
+		"messages":   []map[string]string{{"role": "user", "content": "What is the capital of France?"}},
+		"stream":     streaming,
+	}
+	return vc.doRequest(t, "POST", vc.baseURL+"/v1/messages", body, streaming, StyleAnthropic)
+}
+
 // ─── Internals ─────────────────────────────────────────────────────────────────
 
 // maybeRegister registers the scenario on the bound server, if any.
