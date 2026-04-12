@@ -146,10 +146,6 @@ func TestControlManager(t *testing.T) {
 
 	// Test 4: Request timeout
 	t.Run("RequestTimeout", func(t *testing.T) {
-		reader, writer := io.Pipe()
-		defer reader.Close()
-		defer writer.Close()
-
 		manager.SetRequestTimeout(10 * time.Millisecond)
 
 		req := ControlRequest{
@@ -157,7 +153,8 @@ func TestControlManager(t *testing.T) {
 			Type:      "permission",
 		}
 
-		_, err := manager.SendRequest(ctx, req, writer)
+		// Use io.Discard so writeRequest doesn't block waiting for a reader
+		_, err := manager.SendRequest(ctx, req, io.Discard)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "timeout")
 	})
@@ -252,21 +249,14 @@ func TestParseVersion(t *testing.T) {
 		{"Standard version", "Claude CLI v1.0.0", "1.0.0"},
 		{"No prefix", "1.2.3", "1.2.3"},
 		{"With extra text", "Claude Code CLI version 2.0.0-beta", "2.0.0-beta"},
-		{"Multi-word", "Claude CLI 1.5.0\nSome other text", "Claude"},
+		{"Multi-word", "Claude CLI 1.5.0\nSome other text", "1.5.0"},
 		{"Just version number", "3.0.0", "3.0.0"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := parseVersion(tt.input)
-			// For the multi-word case, we expect the first word
-			if tt.name == "Multi-word" {
-				assert.Equal(t, "Claude", result)
-			} else if tt.name == "With extra text" {
-				assert.Equal(t, "2.0.0-beta", result)
-			} else {
-				assert.Equal(t, tt.expected, result)
-			}
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
@@ -419,7 +409,8 @@ func TestGenerateRequestID(t *testing.T) {
 	assert.NotEmpty(t, id1)
 	assert.NotEmpty(t, id2)
 	assert.NotEqual(t, id1, id2)
-	assert.True(t, strings.HasPrefix(id1, "req_"))
+	// generateRequestID returns a UUID
+	assert.Len(t, id1, 36)
 }
 
 // TestLauncherWithNewConfig tests launcher with new config options
@@ -476,7 +467,7 @@ func TestLauncherWithConfig(t *testing.T) {
 			opts: agentboot.ExecutionOptions{
 				OutputFormat: agentboot.OutputFormatStreamJSON,
 			},
-			expectedSubstr: []string{"--custom-system-prompt", "Custom prompt"},
+			expectedSubstr: []string{"--system-prompt", "Custom prompt"},
 		},
 		{
 			name:   "Allowed tools",
@@ -484,7 +475,7 @@ func TestLauncherWithConfig(t *testing.T) {
 			opts: agentboot.ExecutionOptions{
 				OutputFormat: agentboot.OutputFormatStreamJSON,
 			},
-			expectedSubstr: []string{"--allowed-tools", "bash,editor"},
+			expectedSubstr: []string{"--allowedTools", "bash,editor"},
 		},
 		{
 			name:   "Resume session",
@@ -551,47 +542,37 @@ func TestControlManagerConcurrent(t *testing.T) {
 	defer manager.Close()
 
 	ctx := context.Background()
-	reader, writer := io.Pipe()
-	defer reader.Close()
-	defer writer.Close()
 
-	// Track request IDs
-	requestIDs := make(chan string, 10)
+	// Use io.Discard so writes never block
+	writer := io.Discard
 
-	// Start response simulator
-	go func() {
-		for requestID := range requestIDs {
-			respData := map[string]interface{}{
-				"type":       "control_response",
-				"request_id": requestID,
-				"response": map[string]interface{}{
-					"subtype": "success",
-				},
-			}
-			// Feed the response into the manager
-			manager.HandleControlMessage(respData)
-		}
-	}()
-
-	// Send multiple concurrent requests
+	// Send multiple concurrent requests; each goroutine feeds its own response
+	// after registering with the manager (via a small delay to let SendRequest register).
 	errChan := make(chan error, 10)
 	for i := 0; i < 10; i++ {
-		go func(idx int) {
+		go func() {
 			req := ControlRequest{
 				RequestID: generateRequestID(),
 				Type:      "permission",
 			}
-			requestIDs <- req.RequestID
+			// Feed response asynchronously after a brief yield so SendRequest
+			// has time to register the pending channel before the response arrives.
+			go func(id string) {
+				time.Sleep(5 * time.Millisecond)
+				manager.HandleControlMessage(map[string]interface{}{
+					"type":       "control_response",
+					"request_id": id,
+					"response":   map[string]interface{}{"subtype": "success"},
+				})
+			}(req.RequestID)
 			_, err := manager.SendRequest(ctx, req, writer)
 			errChan <- err
-		}(i)
+		}()
 	}
 
-	// Collect errors
+	// All should succeed
 	for i := 0; i < 10; i++ {
-		// Some may timeout, some may succeed - we just want to ensure no deadlocks
-		<-errChan
+		err := <-errChan
+		assert.NoError(t, err)
 	}
-
-	close(requestIDs)
 }
