@@ -59,13 +59,10 @@ export function useProviderQuota(providers: Array<{ uuid: string }>, options: Us
 
     setLoading(true);
     try {
-      console.log('[useProviderQuota] Batch fetching quota for providers:', providerUuids);
       const response = await fetchUIAPI('/provider-quota/batch', {
         method: 'POST',
         body: JSON.stringify({ provider_uuids: providerUuids }),
       });
-
-      console.log('[useProviderQuota] Batch response:', response);
 
       if (response.data) {
         setQuotaData(prev => ({ ...prev, ...response.data }));
@@ -97,10 +94,7 @@ export function useProviderQuota(providers: Array<{ uuid: string }>, options: Us
   // Fetch quota for a single provider
   const fetchQuota = useCallback(async (providerUuid: string): Promise<ProviderQuota | null> => {
     try {
-      console.log(`[useProviderQuota] Fetching quota for ${providerUuid}`);
       const response = await fetchUIAPI(`/provider-quota/${providerUuid}`);
-
-      console.log(`[useProviderQuota] Response for ${providerUuid}:`, response);
 
       if (response && response.provider_uuid) {
         setQuotaData(prev => ({ ...prev, [providerUuid]: response }));

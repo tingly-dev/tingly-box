@@ -21,19 +21,10 @@ export function ProviderQuotaDetailRow({
   isRefreshing,
   onRefresh,
 }: ProviderQuotaDetailRowProps) {
-  // Debug logging
-  console.log('[ProviderQuotaDetailRow] Rendering for provider:', provider.name, 'uuid:', provider.uuid);
-  console.log('[ProviderQuotaDetailRow] quota:', quota);
-  console.log('[ProviderQuotaDetailRow] quota exists?', !!quota);
-  console.log('[ProviderQuotaDetailRow] quota.primary?', quota?.primary);
-
   // Don't render the row if no quota data
   if (!quota) {
-    console.log('[ProviderQuotaDetailRow] Skipping render - no quota data');
     return null;
   }
-
-  console.log('[ProviderQuotaDetailRow] Rendering row with quota');
 
   return (
     <TableRow>
