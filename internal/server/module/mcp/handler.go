@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
@@ -39,7 +38,7 @@ func NewHandler(cfg *config.Config) *Handler {
 	adapter := local.NewMCPRuntimeAdapter(runtime)
 
 	// Create transport handler for local mode
-	transportHandler := local.NewTransportHandler(adapter, 5*time.Minute)
+	transportHandler := local.NewTransportHandler(adapter)
 	h.transportHandler = transportHandler
 
 	return h

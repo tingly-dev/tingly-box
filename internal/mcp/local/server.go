@@ -13,17 +13,12 @@ import (
 )
 
 // MCPServer provides an MCP server that exposes tools from configured MCP sources.
-// It starts on-demand when the first client connects and shuts down after idle timeout.
+// It starts on-demand when the first client connects and shuts down after the session ends.
 type MCPServer struct {
-	name        string
-	idleTimeout time.Duration
-	idleTimer   *time.Timer
-	idleMu      sync.Mutex
-	httpServer  *server.StreamableHTTPServer
-	serverMu    sync.RWMutex
-	clientCount int
-	clientCountMu sync.Mutex
-	handler     MCPConnectionHandler
+	name       string
+	httpServer *server.StreamableHTTPServer
+	serverMu   sync.RWMutex
+	handler    MCPConnectionHandler
 }
 
 // MCPTool represents a tool exposed by the MCP server.
@@ -40,14 +35,10 @@ type MCPConnectionHandler interface {
 }
 
 // NewMCPServer creates a new MCP server instance.
-func NewMCPServer(name string, handler MCPConnectionHandler, idleTimeout time.Duration) *MCPServer {
-	if idleTimeout <= 0 {
-		idleTimeout = 5 * time.Minute
-	}
+func NewMCPServer(name string, handler MCPConnectionHandler) *MCPServer {
 	return &MCPServer{
-		name:        name,
-		idleTimeout: idleTimeout,
-		handler:     handler,
+		name:    name,
+		handler: handler,
 	}
 }
 
@@ -148,7 +139,7 @@ func (s *MCPServer) Stop() error {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	_ = cancel // cancel to release resources, timeout will trigger shutdown
 
 	err := s.httpServer.Shutdown(ctx)
 	s.httpServer = nil
@@ -157,44 +148,8 @@ func (s *MCPServer) Stop() error {
 	return err
 }
 
-// ClientConnected is called when a client connects.
-func (s *MCPServer) ClientConnected() {
-	s.clientCountMu.Lock()
-	s.clientCount++
-	s.clientCountMu.Unlock()
-	s.resetIdleTimer()
-}
-
-// ClientDisconnected is called when a client disconnects.
-func (s *MCPServer) ClientDisconnected() {
-	s.clientCountMu.Lock()
-	s.clientCount--
-	if s.clientCount < 0 {
-		s.clientCount = 0
-	}
-	clientCount := s.clientCount
-	s.clientCountMu.Unlock()
-
-	if clientCount == 0 {
-		s.resetIdleTimer()
-	}
-}
-
-// resetIdleTimer resets the idle timer.
-func (s *MCPServer) resetIdleTimer() {
-	s.idleMu.Lock()
-	defer s.idleMu.Unlock()
-
-	if s.idleTimer != nil {
-		s.idleTimer.Stop()
-	}
-
-	s.idleTimer = time.AfterFunc(s.idleTimeout, func() {
-		s.Stop()
-	})
-}
-
 // ServeHTTP implements http.Handler for Gin integration.
+// It starts the server on first request and shuts down after the session ends.
 func (s *MCPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.serverMu.RLock()
 	httpServer := s.httpServer
@@ -210,5 +165,19 @@ func (s *MCPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.serverMu.RUnlock()
 	}
 
-	httpServer.ServeHTTP(w, r)
+	// Wrap the response writer to detect when the request is complete
+	ww := &responseWriterWrapper{ResponseWriter: w}
+	httpServer.ServeHTTP(ww, r)
+
+	// Shutdown after the session ends (request completes)
+	go s.Stop()
+}
+
+// responseWriterWrapper wraps http.ResponseWriter to detect when response is done.
+type responseWriterWrapper struct {
+	http.ResponseWriter
+}
+
+func (w *responseWriterWrapper) CloseNotify() <-chan bool {
+	return nil
 }

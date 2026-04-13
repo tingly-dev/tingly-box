@@ -3,32 +3,23 @@ package local
 import (
 	"net/http"
 	"sync"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )
 
-// DefaultIdleTimeout is the default idle timeout before the server shuts down.
-const DefaultIdleTimeout = 5 * time.Minute
-
 // TransportHandler handles MCP transport (HTTP/SSE) requests for local mode.
 type TransportHandler struct {
-	servers     map[string]*MCPServer // client name -> server
-	serversMu   sync.RWMutex
-	idleTimeout time.Duration
-	handler     MCPConnectionHandler
+	servers   map[string]*MCPServer // client name -> server
+	serversMu sync.RWMutex
+	handler   MCPConnectionHandler
 }
 
 // NewTransportHandler creates a new transport handler.
-func NewTransportHandler(handler MCPConnectionHandler, idleTimeout time.Duration) *TransportHandler {
-	if idleTimeout <= 0 {
-		idleTimeout = DefaultIdleTimeout
-	}
+func NewTransportHandler(handler MCPConnectionHandler) *TransportHandler {
 	return &TransportHandler{
-		servers:     make(map[string]*MCPServer),
-		idleTimeout: idleTimeout,
-		handler:    handler,
+		servers: make(map[string]*MCPServer),
+		handler: handler,
 	}
 }
 
@@ -51,7 +42,7 @@ func (t *TransportHandler) GetServer(clientName string) (*MCPServer, error) {
 		return server, nil
 	}
 
-	server = NewMCPServer(clientName, t.handler, t.idleTimeout)
+	server = NewMCPServer(clientName, t.handler)
 	t.servers[clientName] = server
 
 	return server, nil
@@ -72,9 +63,6 @@ func (t *TransportHandler) HandleMCP(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create MCP server"})
 		return
 	}
-
-	// Notify of connection
-	server.ClientConnected()
 
 	// Handle the request
 	server.ServeHTTP(c.Writer, c.Request)
