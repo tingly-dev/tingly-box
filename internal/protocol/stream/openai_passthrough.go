@@ -483,7 +483,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 // and transforms it to Anthropic message format.
 // This is used for ChatGPT backend API providers when the original request was in Anthropic format.
 // Returns (TokenUsage, error)
-func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string, useV1Format bool) (*protocol.TokenUsage, error) {
+func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {
 	defer stream.Close()
 
 	logrus.Debug("[ChatGPT] Starting OpenAI Responses to Anthropic streaming handler")
@@ -519,18 +519,10 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream
 	messageID := fmt.Sprintf("msg_%d", time.Now().Unix())
 
 	// Send message_start event
-	if useV1Format {
-		sendAnthropicV1MessageStart(c, messageID, responseModel, flusher)
-	} else {
-		sendAnthropicBetaMessageStart(c, messageID, responseModel, flusher)
-	}
+	sendAnthropicV1MessageStart(c, messageID, responseModel, flusher)
 
 	// Send content_block_start event
-	if useV1Format {
-		sendAnthropicV1ContentBlockStart(c, flusher)
-	} else {
-		sendAnthropicBetaContentBlockStart(c, flusher)
-	}
+	sendAnthropicV1ContentBlockStart(c, flusher)
 
 	// Process the stream using the SDK
 	chunkCount := 0
@@ -560,11 +552,7 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream
 					if content.Type == "output_text" || content.Type == "text" {
 						if content.Text != "" {
 							// Send content_block_delta event
-							if useV1Format {
-								sendAnthropicV1ContentBlockDelta(c, content.Text, flusher)
-							} else {
-								sendAnthropicBetaContentBlockDelta(c, content.Text, flusher)
-							}
+							sendAnthropicV1ContentBlockDelta(c, content.Text, flusher)
 						}
 					}
 				}
@@ -592,18 +580,10 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream
 	logrus.Infof("[ChatGPT] Finished reading SSE stream: %d chunks, tokens: %d in, %d out", chunkCount, inputTokens, outputTokens)
 
 	// Send content_block_stop event
-	if useV1Format {
-		sendAnthropicV1ContentBlockStop(c, flusher)
-	} else {
-		sendAnthropicBetaContentBlockStop(c, flusher)
-	}
+	sendAnthropicV1ContentBlockStop(c, flusher)
 
 	// Send message_stop event with usage
-	if useV1Format {
-		sendAnthropicV1MessageStop(c, inputTokens, outputTokens, flusher)
-	} else {
-		sendAnthropicBetaMessageStop(c, inputTokens, outputTokens, flusher)
-	}
+	sendAnthropicV1MessageStop(c, inputTokens, outputTokens, flusher)
 
 	return protocol.NewTokenUsage(inputTokens, outputTokens), nil
 }
