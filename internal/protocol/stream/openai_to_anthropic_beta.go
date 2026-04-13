@@ -96,7 +96,7 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 			},
 		},
 	}
-	sendAnthropicBetaStreamEvent(c, eventTypeMessageStart, messageStartEvent, flusher)
+	sendAnthropicStreamEvent(c, eventTypeMessageStart, messageStartEvent, flusher)
 
 	// Process the stream with context cancellation checking
 	chunkCount := 0
@@ -162,7 +162,7 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 						state.thinkingBlockIndex = state.nextBlockIndex
 						state.nextBlockIndex++
 						logrus.Debugf("[Thinking] Initializing thinking block at index %d", state.thinkingBlockIndex)
-						sendBetaContentBlockStart(c, state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{
+						sendContentBlockStart(c, state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{
 							"thinking": "",
 						}, flusher)
 					}
@@ -173,7 +173,7 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 						preview := thinkingText
 						logrus.Debugf("[Thinking] Sending thinking_delta: len=%d, preview=%q", len(thinkingText), preview)
 						// Send content_block_delta with thinking_delta
-						sendBetaContentBlockDelta(c, state.thinkingBlockIndex, map[string]interface{}{
+						sendContentBlockDelta(c, state.thinkingBlockIndex, map[string]interface{}{
 							"type":     deltaTypeThinkingDelta,
 							"thinking": thinkingText,
 						}, flusher)
@@ -194,13 +194,13 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 			if state.textBlockIndex == -1 {
 				state.textBlockIndex = state.nextBlockIndex
 				state.nextBlockIndex++
-				sendBetaContentBlockStart(c, state.textBlockIndex, blockTypeText, map[string]interface{}{
+				sendContentBlockStart(c, state.textBlockIndex, blockTypeText, map[string]interface{}{
 					"text": "",
 				}, flusher)
 			}
 			state.hasTextContent = true
 
-			sendBetaContentBlockDelta(c, state.textBlockIndex, map[string]interface{}{
+			sendContentBlockDelta(c, state.textBlockIndex, map[string]interface{}{
 				"type": deltaTypeTextDelta,
 				"text": delta.Refusal,
 			}, flusher)
@@ -214,7 +214,7 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 			if state.textBlockIndex == -1 {
 				state.textBlockIndex = state.nextBlockIndex
 				state.nextBlockIndex++
-				sendBetaContentBlockStart(c, state.textBlockIndex, blockTypeText, map[string]interface{}{
+				sendContentBlockStart(c, state.textBlockIndex, blockTypeText, map[string]interface{}{
 					"text": "",
 				}, flusher)
 			}
@@ -229,7 +229,7 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 				"text": delta.Content,
 			}
 			deltaMap = mergeMaps(deltaMap, currentExtras)
-			sendBetaContentBlockDelta(c, state.textBlockIndex, deltaMap, flusher)
+			sendContentBlockDelta(c, state.textBlockIndex, deltaMap, flusher)
 		} else if choice.FinishReason == "" && state.textBlockIndex != -1 {
 			// Send empty delta for empty chunks to keep client informed
 			// Only if text block has been initialized
@@ -241,7 +241,7 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 				"text": "",
 			}
 			deltaMap = mergeMaps(deltaMap, currentExtras)
-			sendBetaContentBlockDelta(c, state.textBlockIndex, deltaMap, flusher)
+			sendContentBlockDelta(c, state.textBlockIndex, deltaMap, flusher)
 		}
 
 		// Handle tool_calls delta
@@ -266,7 +266,7 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 					}
 
 					// Send content_block_start for tool_use
-					sendBetaContentBlockStart(c, anthropicIndex, blockTypeToolUse, map[string]interface{}{
+					sendContentBlockStart(c, anthropicIndex, blockTypeToolUse, map[string]interface{}{
 						"id":   truncatedID,
 						"name": toolCall.Function.Name,
 					}, flusher)
@@ -277,7 +277,7 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 					state.pendingToolCalls[anthropicIndex].input += toolCall.Function.Arguments
 
 					// Send content_block_delta with input_json_delta
-					sendBetaContentBlockDelta(c, anthropicIndex, map[string]interface{}{
+					sendContentBlockDelta(c, anthropicIndex, map[string]interface{}{
 						"type":         deltaTypeInputJSONDelta,
 						"partial_json": toolCall.Function.Arguments,
 					}, flusher)
@@ -306,9 +306,9 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 				state.outputTokens = int64(outputTokens)
 			}
 
-			sendBetaStopEvents(c, state, flusher)
-			sendBetaMessageDelta(c, state, mapOpenAIFinishReasonToAnthropicBeta(choice.FinishReason), flusher)
-			sendBetaMessageStop(c, messageID, responseModel, state, mapOpenAIFinishReasonToAnthropicBeta(choice.FinishReason), flusher)
+			sendStopEvents(c, state, flusher)
+			sendMessageDelta(c, state, mapOpenAIFinishReasonToAnthropicBeta(choice.FinishReason), flusher)
+			sendMessageStop(c, messageID, responseModel, state, mapOpenAIFinishReasonToAnthropicBeta(choice.FinishReason), flusher)
 			return false
 		}
 
@@ -331,7 +331,7 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 				"code":    "stream_failed",
 			},
 		}
-		sendAnthropicBetaStreamEvent(c, "error", errorEvent, flusher)
+		sendAnthropicStreamEvent(c, "error", errorEvent, flusher)
 		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), err
 	}
 	return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
@@ -343,28 +343,28 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 func HandleResponsesToAnthropicBetaStream(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {
 	return handlerResponsesToAnthropicStream(c, stream, responseModel, responsesAPIEventSenders{
 		SendMessageStart: func(event map[string]interface{}, flusher http.Flusher) {
-			sendAnthropicBetaStreamEvent(c, eventTypeMessageStart, event, flusher)
+			sendAnthropicStreamEvent(c, eventTypeMessageStart, event, flusher)
 		},
 		SendContentBlockStart: func(index int, blockType string, content map[string]interface{}, flusher http.Flusher) {
-			sendBetaContentBlockStart(c, index, blockType, content, flusher)
+			sendContentBlockStart(c, index, blockType, content, flusher)
 		},
 		SendContentBlockDelta: func(index int, content map[string]interface{}, flusher http.Flusher) {
-			sendBetaContentBlockDelta(c, index, content, flusher)
+			sendContentBlockDelta(c, index, content, flusher)
 		},
 		SendContentBlockStop: func(state *streamState, index int, flusher http.Flusher) {
-			sendBetaContentBlockStop(c, state, index, flusher)
+			sendContentBlockStop(c, state, index, flusher)
 		},
 		SendStopEvents: func(state *streamState, flusher http.Flusher) {
-			sendBetaStopEvents(c, state, flusher)
+			sendStopEvents(c, state, flusher)
 		},
 		SendMessageDelta: func(state *streamState, stopReason string, flusher http.Flusher) {
-			sendBetaMessageDelta(c, state, stopReason, flusher)
+			sendMessageDelta(c, state, stopReason, flusher)
 		},
 		SendMessageStop: func(messageID, model string, state *streamState, stopReason string, flusher http.Flusher) {
-			sendBetaMessageStop(c, messageID, model, state, stopReason, flusher)
+			sendMessageStop(c, messageID, model, state, stopReason, flusher)
 		},
 		SendErrorEvent: func(event map[string]interface{}, flusher http.Flusher) {
-			sendAnthropicBetaStreamEvent(c, "error", event, flusher)
+			sendAnthropicStreamEvent(c, "error", event, flusher)
 		},
 	})
 }

@@ -129,40 +129,40 @@ func StreamAnthropicBetaSingleMessage(c *gin.Context, resp *anthropic.BetaMessag
 	}
 
 	state := buildStreamState(resp.Usage.InputTokens, resp.Usage.OutputTokens)
-	sendMessageStart(c, flusher, model, eventTypeMessageStart, sendAnthropicBetaStreamEvent, state.inputTokens)
+	sendMessageStart(c, flusher, model, eventTypeMessageStart, sendAnthropicStreamEvent, state.inputTokens)
 
 	for idx, block := range resp.Content {
 		switch v := block.AsAny().(type) {
 		case anthropic.BetaTextBlock:
-			sendBetaContentBlockStart(c, idx, blockTypeText, map[string]interface{}{"text": ""}, flusher)
+			sendContentBlockStart(c, idx, blockTypeText, map[string]interface{}{"text": ""}, flusher)
 			if v.Text != "" {
-				sendBetaContentBlockDelta(c, idx, map[string]interface{}{
+				sendContentBlockDelta(c, idx, map[string]interface{}{
 					"type": deltaTypeTextDelta,
 					"text": v.Text,
 				}, flusher)
 			}
-			sendBetaContentBlockStop(c, state, idx, flusher)
+			sendContentBlockStop(c, state, idx, flusher)
 		case anthropic.BetaThinkingBlock:
-			sendBetaContentBlockStart(c, idx, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
+			sendContentBlockStart(c, idx, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
 			if v.Thinking != "" {
-				sendBetaContentBlockDelta(c, idx, map[string]interface{}{
+				sendContentBlockDelta(c, idx, map[string]interface{}{
 					"type":     deltaTypeThinkingDelta,
 					"thinking": v.Thinking,
 				}, flusher)
 			}
-			sendBetaContentBlockStop(c, state, idx, flusher)
+			sendContentBlockStop(c, state, idx, flusher)
 		case anthropic.BetaToolUseBlock:
-			sendBetaContentBlockStart(c, idx, blockTypeToolUse, map[string]interface{}{
+			sendContentBlockStart(c, idx, blockTypeToolUse, map[string]interface{}{
 				"id":    v.ID,
 				"name":  v.Name,
 				"input": v.Input,
 			}, flusher)
-			sendBetaContentBlockStop(c, state, idx, flusher)
+			sendContentBlockStop(c, state, idx, flusher)
 		}
 	}
 
 	stopReason := anthropicStopReasonEndTurn
-	sendBetaMessageDelta(c, state, stopReason, flusher)
-	sendBetaMessageStop(c, fmt.Sprintf("msg_%d", time.Now().Unix()), model, state, stopReason, flusher)
+	sendMessageDelta(c, state, stopReason, flusher)
+	sendMessageStop(c, fmt.Sprintf("msg_%d", time.Now().Unix()), model, state, stopReason, flusher)
 	return nil
 }

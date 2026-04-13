@@ -292,16 +292,16 @@ func TestHandleGoogleToAnthropicStreamResponse(t *testing.T) {
 
 		assert.NoError(t, err)
 		_ = usage // Ignore usage check for this test
-		assert.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
+		assert.Equal(t, "text/event-stream;charset=utf-8", w.Header().Get("Content-Type"))
 
 		body := w.Body.String()
-		// Should have Anthropic SSE format
-		assert.Contains(t, body, "event: message_start")
-		assert.Contains(t, body, "event: content_block_start")
-		assert.Contains(t, body, "event: content_block_delta")
-		assert.Contains(t, body, "event: content_block_stop")
-		assert.Contains(t, body, "event: message_delta")
-		assert.Contains(t, body, "event: message_stop")
+		// Should have Anthropic SSE format (Gin's c.SSEvent uses "event:name" without space after colon)
+		assert.Contains(t, body, "event:message_start")
+		assert.Contains(t, body, "event:content_block_start")
+		assert.Contains(t, body, "event:content_block_delta")
+		assert.Contains(t, body, "event:content_block_stop")
+		assert.Contains(t, body, "event:message_delta")
+		assert.Contains(t, body, "event:message_stop")
 		assert.Contains(t, body, "Hello")
 		assert.Contains(t, body, "world")
 	})
@@ -368,7 +368,7 @@ func TestHandleGoogleToAnthropicStreamResponse(t *testing.T) {
 		assert.Equal(t, 0, usage.InputTokens)
 		assert.Equal(t, 0, usage.OutputTokens)
 		body := w.Body.String()
-		assert.Contains(t, body, "event: error")
+		assert.Contains(t, body, "event:error")
 		assert.Contains(t, body, "stream_error")
 	})
 
@@ -671,9 +671,9 @@ func TestStreamChunkFormatValidation(t *testing.T) {
 		HandleGoogleToAnthropicStreamResponse(c, stream, "gemini-pro")
 
 		body := w.Body.String()
-		// Check Anthropic SSE format
-		assert.Contains(t, body, "event: ")
-		assert.Contains(t, body, "data: ")
+		// Check Anthropic SSE format (Gin's c.SSEvent uses "event:" and "data:" without space after colon)
+		assert.Contains(t, body, "event:")
+		assert.Contains(t, body, "data:")
 		assert.Contains(t, body, "\n\n")
 		// Check message structure
 		assert.Contains(t, body, `"type":"message"`)

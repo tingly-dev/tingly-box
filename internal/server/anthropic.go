@@ -98,6 +98,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 					Type:    "invalid_request_error",
 				},
 			})
+			logrus.WithError(err).WithField("body", string(bodyBytes)).Errorf("Anthropic decode error")
 			return
 		}
 		requestModel = string(betaMessages.Model)
@@ -115,6 +116,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 					Type:    "invalid_request_error",
 				},
 			})
+			logrus.WithError(err).WithField("body", string(bodyBytes)).Errorf("Anthropic decode error")
 			return
 		}
 
@@ -147,6 +149,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 				Type:    "invalid_request_error",
 			},
 		})
+		logrus.WithError(err).Errorf("Select service error")
 		return
 	}
 
