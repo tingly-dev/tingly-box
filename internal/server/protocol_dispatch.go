@@ -116,7 +116,7 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 				s.restoreGuardrailsCredentialAliasesV1Response(c, anthropicResp)
 			}
 
-			if err := stream.StreamAnthropicV1SingleMessage(c, anthropicResp, responseModel); err != nil {
+			if err := stream.AnthropicSingleMessage(c, anthropicResp, responseModel); err != nil {
 				stream.SendInternalError(c, err.Error())
 				if recorder != nil {
 					recorder.RecordError(err)
@@ -174,7 +174,7 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 		session := s.guardrailsSessionFromContext(c, actualModel, provider)
 		s.attachGuardrailsHooks(c, hc, session, serverguardrails.MessagesFromAnthropicV1(req.System, req.Messages))
 
-		usageStat, err := stream.HandleAnthropicV1Stream(hc, *req, streamResp)
+		usageStat, err := stream.HandleAnthropic(hc, streamResp)
 		s.trackUsageWithTokenUsage(c, usageStat, err)
 	} else {
 		anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, req)
@@ -462,7 +462,7 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 					s.restoreGuardrailsCredentialAliasesV1BetaResponse(c, anthropicResp)
 				}
 
-				if err := stream.StreamAnthropicBetaSingleMessage(c, anthropicResp, responseModel); err != nil {
+				if err := stream.AnthropicSingleBetaMessage(c, anthropicResp, responseModel); err != nil {
 					stream.SendInternalError(c, err.Error())
 					if recorder != nil {
 						recorder.RecordError(err)
@@ -782,7 +782,7 @@ func (s *Server) dispatchChainFromOpenAIChat(
 					}
 					return
 				}
-				if err := stream.StreamAnthropicV1SingleMessage(c, &v1Resp, responseModel); err != nil {
+				if err := stream.AnthropicSingleMessage(c, &v1Resp, responseModel); err != nil {
 					stream.SendInternalError(c, err.Error())
 					if recorder != nil {
 						recorder.RecordError(err)
@@ -855,7 +855,7 @@ func (s *Server) dispatchChainFromOpenAIChat(
 
 				anthropicResp := nonstream.ConvertOpenAIToAnthropicBetaResponse(resp, responseModel)
 				s.updateAffinityMessageID(c, rule, anthropicResp.ID)
-				if err := stream.StreamAnthropicBetaSingleMessage(c, &anthropicResp, responseModel); err != nil {
+				if err := stream.AnthropicSingleBetaMessage(c, &anthropicResp, responseModel); err != nil {
 					stream.SendInternalError(c, err.Error())
 					if recorder != nil {
 						recorder.RecordError(err)

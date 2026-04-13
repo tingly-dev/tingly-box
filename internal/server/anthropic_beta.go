@@ -134,7 +134,7 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req *anthro
 	session := s.guardrailsSessionFromContext(c, actualModel, provider)
 	s.attachGuardrailsHooks(c, hc, session, serverguardrails.MessagesFromAnthropicV1Beta(req.System, req.Messages))
 
-	usageStat, err := stream.HandleAnthropicV1BetaStream(hc, streamResp)
+	usageStat, err := stream.HandleAnthropicBeta(hc, streamResp)
 	s.trackUsageWithTokenUsage(c, usageStat, err)
 }
 

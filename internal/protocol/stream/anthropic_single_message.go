@@ -10,8 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// StreamAnthropicV1SingleMessage emits a single assembled Anthropic v1 message using SSE events.
-func StreamAnthropicV1SingleMessage(c *gin.Context, resp *anthropic.Message, responseModel string) error {
+// AnthropicSingleMessage emits a single assembled Anthropic v1 message using SSE events.
+func AnthropicSingleMessage(c *gin.Context, resp *anthropic.Message, responseModel string) error {
 	if resp == nil {
 		return errors.New("nil anthropic v1 response")
 	}
@@ -24,7 +24,7 @@ func StreamAnthropicV1SingleMessage(c *gin.Context, resp *anthropic.Message, res
 
 	model := responseModel
 	if model == "" {
-		model = string(resp.Model)
+		model = resp.Model
 	}
 
 	state := buildStreamState(resp.Usage.InputTokens, resp.Usage.OutputTokens)
@@ -66,8 +66,8 @@ func StreamAnthropicV1SingleMessage(c *gin.Context, resp *anthropic.Message, res
 	return nil
 }
 
-// StreamAnthropicBetaSingleMessage emits a single assembled Anthropic beta message using SSE events.
-func StreamAnthropicBetaSingleMessage(c *gin.Context, resp *anthropic.BetaMessage, responseModel string) error {
+// AnthropicSingleBetaMessage emits a single assembled Anthropic beta message using SSE events.
+func AnthropicSingleBetaMessage(c *gin.Context, resp *anthropic.BetaMessage, responseModel string) error {
 	if resp == nil {
 		return errors.New("nil anthropic beta response")
 	}
