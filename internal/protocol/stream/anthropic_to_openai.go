@@ -306,11 +306,7 @@ func sendOpenAIStreamChunk(c *gin.Context, chunk openai.ChatCompletionChunk, dis
 		logrus.Errorf("Failed to marshal chunk: %v", err)
 		return
 	}
-	// MENTION: Must keep extra space (matching openai_chat.go:365)
-	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", chunkJSON))
-	if flusher, ok := c.Writer.(http.Flusher); ok {
-		flusher.Flush()
-	}
+	OpenAISSE(c, chunkJSON)
 }
 
 func chunkToMap(chunk openai.ChatCompletionChunk) (map[string]interface{}, error) {
@@ -332,11 +328,7 @@ func sendOpenAIStreamChunkForce(c *gin.Context, chunk map[string]interface{}) {
 		logrus.Errorf("Failed to marshal chunk: %v", err)
 		return
 	}
-	// MENTION: Must keep extra space (matching openai_chat.go:365)
-	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", chunkJSON))
-	if flusher, ok := c.Writer.(http.Flusher); ok {
-		flusher.Flush()
-	}
+	OpenAISSE(c, chunkJSON)
 }
 
 // sendOpenAIStreamError sends an error chunk in OpenAI format
@@ -348,10 +340,7 @@ func sendOpenAIStreamError(c *gin.Context, message, errorType string) {
 		},
 	}
 	errorJSON, _ := json.Marshal(errorMap)
-	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", errorJSON))
-	if flusher, ok := c.Writer.(http.Flusher); ok {
-		flusher.Flush()
-	}
+	OpenAISSE(c, errorJSON)
 }
 
 // createReasoningContentChunk creates a chunk with reasoning_content field

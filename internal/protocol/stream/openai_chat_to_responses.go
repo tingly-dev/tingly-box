@@ -215,9 +215,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 			completedSent = true
 
 			// Send final [DONE] message
-			c.Writer.WriteString("data: [DONE]\n\n")
-			flusher.Flush()
-
+			OpenAISSEDone(c)
 			return false
 		}
 
@@ -240,8 +238,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 			"error":           map[string]interface{}{"message": err.Error(), "type": "stream_error"},
 		}
 		errorJSON, _ := json.Marshal(errorEvent)
-		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", string(errorJSON)))
-		flusher.Flush()
+		OpenAISSE(c, errorJSON)
 
 		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), err
 	}
@@ -259,8 +256,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		}
 
 		sendResponsesCompletedEvent(c, state, responseModel, finishReason, flusher)
-		c.Writer.WriteString("data: [DONE]\n\n")
-		flusher.Flush()
+		OpenAISSEDone(c)
 	}
 
 	return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
@@ -514,8 +510,7 @@ func sendChatToResponsesEvent(c *gin.Context, event map[string]interface{}, flus
 		return
 	}
 	// Responses API SSE format: data: <json>\n\n
-	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", string(eventJSON)))
-	flusher.Flush()
+	OpenAISSE(c, eventJSON)
 }
 
 func nextSequenceNumber(state *chatToResponsesState) int64 {

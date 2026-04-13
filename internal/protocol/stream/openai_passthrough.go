@@ -234,9 +234,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 			}
 
 			// Send the chunk
-			// MENTION: Must keep extra space
-			c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", chunkJSON))
-			flusher.Flush()
+			OpenAISSE(c, chunkJSON)
 			return nil
 		},
 	)
@@ -343,7 +341,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		}
 	}()
 
-	flusher, ok := c.Writer.(http.Flusher)
+	_, ok := c.Writer.(http.Flusher)
 	if !ok {
 		c.JSON(http.StatusInternalServerError, protocol.ErrorResponse{
 			Error: protocol.ErrorDetail{
@@ -417,8 +415,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		}
 
 		// Send SSE event with event type (e.g., "response.created", "response.output_text.delta")
-		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", jsonBytes))
-		flusher.Flush()
+		OpenAISSE(c, jsonBytes)
 		return true
 	})
 
@@ -448,14 +445,12 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		}
 
 		errorJSON, _ := json.Marshal(errorChunk)
-		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", string(errorJSON)))
-		flusher.Flush()
+		OpenAISSE(c, errorJSON)
 		return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), err
 	}
 
 	// Send final [DONE] message
-	c.Writer.WriteString("data: [DONE]\n\n")
-	flusher.Flush()
+	OpenAISSEDone(c)
 
 	// Track successful streaming completion
 	if hasUsage {
