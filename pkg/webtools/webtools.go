@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Tool 定义了一个可被 AI 调用的工具
+// Tool represents a callable tool that can be invoked by an AI.
 type Tool interface {
 	Name() string
 	Description() string
@@ -14,7 +14,7 @@ type Tool interface {
 	Execute(ctx context.Context, params map[string]interface{}) (interface{}, error)
 }
 
-// Parameter 定义工具参数
+// Parameter defines a tool parameter.
 type Parameter struct {
 	Type        string `json:"type"`
 	Description string `json:"description"`
@@ -22,21 +22,21 @@ type Parameter struct {
 	Default     any    `json:"default,omitempty"`
 }
 
-// SearchResult 搜索结果
+// SearchResult represents a search result.
 type SearchResult struct {
 	Title   string `json:"title"`
 	URL     string `json:"url"`
 	Snippet string `json:"snippet"`
 }
 
-// FetchResult 抓取结果
+// FetchResult represents a web page fetch result.
 type FetchResult struct {
 	Content string `json:"content"`
 	Title   string `json:"title"`
 	URL     string `json:"url"`
 }
 
-// Config 配置
+// Config holds the webtools configuration.
 type Config struct {
 	Timeout       time.Duration
 	MaxResults    int
@@ -52,31 +52,31 @@ var defaultConfig = Config{
 	UserAgent:  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 }
 
-// Option 配置选项
+// Option defines a configuration option.
 type Option func(*Config)
 
-// WithTimeout 设置超时
+// WithTimeout sets the request timeout.
 func WithTimeout(timeout time.Duration) Option {
 	return func(c *Config) {
 		c.Timeout = timeout
 	}
 }
 
-// WithMaxResults 设置最大结果数
+// WithMaxResults sets the maximum number of search results.
 func WithMaxResults(max int) Option {
 	return func(c *Config) {
 		c.MaxResults = max
 	}
 }
 
-// WithHeadless 设置无头模式
+// WithHeadless sets headless browser mode.
 func WithHeadless(headless bool) Option {
 	return func(c *Config) {
 		c.Headless = headless
 	}
 }
 
-// NewConfig 创建配置
+// NewConfig creates a new configuration with the given options.
 func NewConfig(opts ...Option) Config {
 	cfg := defaultConfig
 	for _, opt := range opts {
@@ -85,27 +85,27 @@ func NewConfig(opts ...Option) Config {
 	return cfg
 }
 
-// WebTools 工具集
+// WebTools is a collection of web automation tools.
 type WebTools struct {
 	config  Config
 	browser Browser
 }
 
-// New 创建 WebTools 实例
+// New creates a new WebTools instance.
 func New(opts ...Option) (*WebTools, error) {
 	cfg := NewConfig(opts...)
-	
-	// 注意: 实际需要初始化浏览器
-	// 这里先创建基础结构
-	
+
+	// Note: browser initialization is required for actual functionality.
+	// For now, create the basic structure.
+
 	wt := &WebTools{
 		config: cfg,
 	}
-	
+
 	return wt, nil
 }
 
-// Close 关闭浏览器
+// Close closes the browser.
 func (wt *WebTools) Close() error {
 	if wt.browser != nil {
 		return wt.browser.Close()
@@ -113,17 +113,17 @@ func (wt *WebTools) Close() error {
 	return nil
 }
 
-// Search 执行搜索
+// Search performs a web search.
 func (wt *WebTools) Search(ctx context.Context, query string, numResults int) ([]SearchResult, error) {
 	return nil, fmt.Errorf("not implemented: Search requires browser initialization")
 }
 
-// Fetch 抓取网页
+// Fetch fetches a web page.
 func (wt *WebTools) Fetch(ctx context.Context, url string) (*FetchResult, error) {
 	return nil, fmt.Errorf("not implemented: Fetch requires browser initialization")
 }
 
-// GetTools 返回工具列表 (MCP 格式)
+// GetTools returns available tools in MCP format.
 func (wt *WebTools) GetTools() []Tool {
 	return []Tool{
 		&SearchTool{webtools: wt},
