@@ -7,15 +7,15 @@ import (
 	"net/http"
 )
 
-// MCPServer MCP 工具服务器
-// 参考: libs/go-genai/examples/mcptoolbox/mcp_toolbox.go
+// MCPServer is an MCP tool server.
+// Reference: libs/go-genai/examples/mcptoolbox/mcp_toolbox.go
 type MCPServer struct {
 	tools    []Tool
 	httpAddr string
 	server   *http.Server
 }
 
-// NewMCPServer 创建 MCP 服务器
+// NewMCPServer creates a new MCP server instance.
 func NewMCPServer(tools []Tool, port int) *MCPServer {
 	return &MCPServer{
 		tools:    tools,
@@ -23,10 +23,10 @@ func NewMCPServer(tools []Tool, port int) *MCPServer {
 	}
 }
 
-// Toolset MCP 工具集名称
+// ToolsetName is the name of the toolset.
 const ToolsetName = "webtools"
 
-// ServeHTTP 处理 MCP 请求
+// ServeHTTP handles MCP requests.
 func (m *MCPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/tools":
@@ -41,7 +41,7 @@ func (m *MCPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// listTools 列出所有工具
+// listTools lists all available tools.
 func (m *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
 	tools := make([]map[string]interface{}, len(m.tools))
 	for i, tool := range m.tools {
@@ -75,7 +75,7 @@ func (m *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// executeTool 执行工具
+// executeTool executes a tool.
 func (m *MCPServer) executeTool(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -92,7 +92,7 @@ func (m *MCPServer) executeTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 查找工具
+	// Find tool
 	var tool Tool
 	for _, t := range m.tools {
 		if t.Name() == req.Tool {
@@ -106,7 +106,7 @@ func (m *MCPServer) executeTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 执行工具
+	// Execute tool
 	result, err := tool.Execute(context.Background(), req.Params)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -120,16 +120,16 @@ func (m *MCPServer) executeTool(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Start 启动 MCP 服务器
+// Start starts the MCP server.
 func (m *MCPServer) Start() error {
 	m.server = &http.Server{
-		Addr: m.httpAddr,
+		Addr:    m.httpAddr,
 		Handler: m,
 	}
 	return m.server.ListenAndServe()
 }
 
-// Stop 停止 MCP 服务器
+// Stop stops the MCP server.
 func (m *MCPServer) Stop(ctx context.Context) error {
 	return m.server.Shutdown(ctx)
 }

@@ -5,13 +5,13 @@ import (
 	"fmt"
 )
 
-// Browser 浏览器接口
+// Browser represents a browser interface.
 type Browser interface {
 	Close() error
 	NewPage() (Page, error)
 }
 
-// Page 页面接口
+// Page represents a browser page interface.
 type Page interface {
 	Close() error
 	Goto(ctx context.Context, url string) error
@@ -20,54 +20,54 @@ type Page interface {
 	Screenshot(ctx context.Context) ([]byte, error)
 }
 
-// ChromeDPBrowser 基于 chromedp 的浏览器实现
-// 使用 chrome-devtools-protocol 进行浏览器自动化
+// ChromeDPBrowser is a browser implementation using chromedp.
+// It uses chrome-devtools-protocol for browser automation.
 type ChromeDPBrowser struct {
-	// TODO: 实现 chromedp 浏览器
+	// TODO: implement chromedp browser
 }
 
-// NewChromeDPBrowser 创建 ChromeDP 浏览器
+// NewChromeDPBrowser creates a new ChromeDP browser instance.
 func NewChromeDPBrowser(ctx context.Context, headless bool) (*ChromeDPBrowser, error) {
-	// TODO: 使用 chromedp 库初始化浏览器
+	// TODO: use chromedp library to initialize browser
 	return nil, fmt.Errorf("chromedp implementation not yet available - add 'github.com/chromedp/chromedp' to go.mod")
 }
 
-// Close 关闭浏览器
+// Close closes the browser.
 func (b *ChromeDPBrowser) Close() error {
 	return nil
 }
 
-// NewPage 创建新页面
+// NewPage creates a new page.
 func (b *ChromeDPBrowser) NewPage() (Page, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-// ChromeDPPage ChromeDP 页面实现
+// ChromeDPPage is a ChromeDP page implementation.
 type ChromeDPPage struct {
-	// TODO: 实现页面
+	// TODO: implement page
 }
 
-// Close 关闭页面
+// Close closes the page.
 func (p *ChromeDPPage) Close() error {
 	return nil
 }
 
-// Goto 导航到 URL
+// Goto navigates to a URL.
 func (p *ChromeDPPage) Goto(ctx context.Context, url string) error {
 	return fmt.Errorf("not implemented")
 }
 
-// Content 获取页面内容
+// Content returns the page content.
 func (p *ChromeDPPage) Content(ctx context.Context) (string, error) {
 	return "", fmt.Errorf("not implemented")
 }
 
-// Evaluate 执行 JavaScript
+// Evaluate executes JavaScript.
 func (p *ChromeDPPage) Evaluate(ctx context.Context, script string) (interface{}, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-// Screenshot 截图
+// Screenshot takes a screenshot.
 func (p *ChromeDPPage) Screenshot(ctx context.Context) ([]byte, error) {
 	return nil, fmt.Errorf("not implemented")
 }
