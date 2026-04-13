@@ -89,8 +89,11 @@ func NewVirtualServerForCLI() *VirtualServer {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/chat/completions", vs.handleOpenAIChat)
+	mux.HandleFunc("/chat/completions", vs.handleOpenAIChat)
 	mux.HandleFunc("/v1/responses", vs.handleOpenAIResponses)
+	mux.HandleFunc("/responses", vs.handleOpenAIResponses)
 	mux.HandleFunc("/v1/messages", vs.handleAnthropicMessages)
+	mux.HandleFunc("/messages", vs.handleAnthropicMessages)
 	mux.HandleFunc("/", vs.handleGoogle) // catches /v1beta/models/*/generateContent
 
 	vs.server = httptest.NewServer(mux)
@@ -156,7 +159,55 @@ func (vs *VirtualServer) handleOpenAIChat(w http.ResponseWriter, r *http.Request
 }
 
 func (vs *VirtualServer) handleOpenAIResponses(w http.ResponseWriter, r *http.Request) {
-	vs.handleOpenAIChat(w, r)
+	vs.mu.Lock()
+	vs.callCount++
+	vs.mu.Unlock()
+
+	bodyBytes, _ := io.ReadAll(r.Body)
+	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+	streaming := vs.parseStreamFlagFromBytes(bodyBytes)
+
+	if streaming {
+		// Return Responses API SSE streaming format
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		w.WriteHeader(http.StatusOK)
+		flusher, _ := w.(http.Flusher)
+
+		lines := []string{
+			`data: {"type":"response.created","response":{"id":"resp_vs_001","object":"realtime.response","model":"virtual","status":"in_progress","output":[],"usage":null}}`,
+			``,
+			`data: {"type":"response.output_item.added","response_id":"resp_vs_001","item":{"id":"item_vs_001","type":"message","status":"in_progress","role":"assistant","content":[]}}`,
+			``,
+			`data: {"type":"response.content_part.added","response_id":"resp_vs_001","item_id":"item_vs_001","output_index":0,"content_index":0,"part":{"type":"output_text","text":""}}`,
+			``,
+			`data: {"type":"response.output_text.delta","response_id":"resp_vs_001","item_id":"item_vs_001","output_index":0,"content_index":0,"delta":"Hello, world!"}`,
+			``,
+			`data: {"type":"response.output_text.done","response_id":"resp_vs_001","item_id":"item_vs_001","output_index":0,"content_index":0,"text":"Hello, world!"}`,
+			``,
+			`data: {"type":"response.content_part.done","response_id":"resp_vs_001","item_id":"item_vs_001","output_index":0,"content_index":0,"part":{"type":"output_text","text":"Hello, world!"}}`,
+			``,
+			`data: {"type":"response.output_item.done","response_id":"resp_vs_001","item":{"id":"item_vs_001","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"Hello, world!"}]}}`,
+			``,
+			`data: {"type":"response.completed","response":{"id":"resp_vs_001","object":"realtime.response","model":"virtual","status":"completed","output":[{"id":"item_vs_001","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"Hello, world!"}]}],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}}`,
+			``,
+			`data: [DONE]`,
+			``,
+		}
+		for _, line := range lines {
+			w.Write([]byte(line + "\n"))
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
+	} else {
+		// Return Responses API non-streaming format
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"id":"resp_vs_001","object":"realtime.response","model":"virtual","status":"completed","output":[{"id":"item_vs_001","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"Hello, world!"}]}],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}`))
+	}
 }
 
 func (vs *VirtualServer) handleAnthropicMessages(w http.ResponseWriter, r *http.Request) {
@@ -248,5 +299,3 @@ func (vs *VirtualServer) firstScenario() Scenario {
 	}
 	return Scenario{}
 }
-
-
