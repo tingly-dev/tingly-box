@@ -63,6 +63,11 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 
 	// 3. Create agent config
 	hCtx := req.HCtx
+
+	// Load persisted tool allowlist from ChatStore and merge with defaults
+	persistedAllowlist, _ := e.deps.ChatStore.GetToolAllowlist(hCtx.ChatID)
+	mergedAllowlist := smart_guide.MergeAllowlists(smart_guide.DefaultBashAllowlist, persistedAllowlist)
+
 	toolCtx := &smart_guide.ToolContext{
 		ChatID:      hCtx.ChatID,
 		ProjectPath: projectPath,
@@ -109,6 +114,21 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		Platform:         string(hCtx.Platform),
 		BotUUID:          e.deps.BotSetting.UUID,
 		ToolCtx:          toolCtx,
+		BashAllowlist:    mergedAllowlist,
+		OnCommandAlwaysAllowed: func(rule smart_guide.AllowRule) {
+			ruleStr := rule.String() // e.g. "Bash(npm *)" or "Bash(make)"
+			if err := e.deps.ChatStore.AddToToolAllowlist(hCtx.ChatID, ruleStr); err != nil {
+				logrus.WithError(err).WithFields(logrus.Fields{
+					"chatID": hCtx.ChatID,
+					"rule":   ruleStr,
+				}).Warn("Failed to persist tool allowlist entry")
+			} else {
+				logrus.WithFields(logrus.Fields{
+					"chatID": hCtx.ChatID,
+					"rule":   ruleStr,
+				}).Info("Rule added to persistent tool allowlist")
+			}
+		},
 		GetStatusFunc: func(chatID string) (*smart_guide.StatusInfo, error) {
 			projectPath, _, _ := e.deps.ChatStore.GetProjectPath(chatID)
 			workingDir, hasWD, _ := e.deps.ChatStore.GetBashCwd(chatID)

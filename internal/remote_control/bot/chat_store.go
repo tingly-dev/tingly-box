@@ -3,6 +3,7 @@ package bot
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -54,7 +55,8 @@ type Chat struct {
 	WhitelistedBy string `json:"whitelisted_by,omitempty"`
 
 	// Bash state
-	BashCwd string `json:"bash_cwd,omitempty"`
+	BashCwd       string   `json:"bash_cwd,omitempty"`
+	ToolAllowlist []string `json:"tool_allowlist,omitempty"` // user-granted tool rules, e.g. "Bash(npm *)" (persisted "Always Allow")
 
 	// Agent state (for smart guide handoff)
 	CurrentAgent string `json:"current_agent,omitempty"` // "tingly-box" or "claude"
@@ -108,6 +110,12 @@ type ChatStoreInterface interface {
 
 	// GetBashCwd retrieves the bash working directory for a chat
 	GetBashCwd(chatID string) (string, bool, error)
+
+	// GetToolAllowlist retrieves the persisted tool allowlist for a chat
+	GetToolAllowlist(chatID string) ([]string, error)
+
+	// AddToToolAllowlist adds a rule to the persisted tool allowlist for a chat (deduplicates)
+	AddToToolAllowlist(chatID string, rule string) error
 
 	// SetCurrentAgent sets the current agent for a chat
 	SetCurrentAgent(chatID, agentType string) error
@@ -374,6 +382,32 @@ func (s *ChatStoreJSON) GetBashCwd(chatID string) (string, bool, error) {
 		return "", false, nil
 	}
 	return chat.BashCwd, true, nil
+}
+
+// GetToolAllowlist retrieves the persisted tool allowlist for a chat
+func (s *ChatStoreJSON) GetToolAllowlist(chatID string) ([]string, error) {
+	if s == nil || s.store == nil {
+		return nil, nil
+	}
+	chat := s.store.Get(chatID)
+	if chat == nil {
+		return nil, nil
+	}
+	return chat.ToolAllowlist, nil
+}
+
+// AddToToolAllowlist adds a rule to the persisted tool allowlist for a chat.
+// Deduplicates: if the rule is already present (case-insensitive), it is not added again.
+func (s *ChatStoreJSON) AddToToolAllowlist(chatID string, rule string) error {
+	return s.UpdateChat(chatID, func(chat *Chat) {
+		ruleLower := strings.ToLower(rule)
+		for _, existing := range chat.ToolAllowlist {
+			if strings.ToLower(existing) == ruleLower {
+				return // already present
+			}
+		}
+		chat.ToolAllowlist = append(chat.ToolAllowlist, rule)
+	})
 }
 
 // ============== Current Agent ==============

@@ -286,8 +286,11 @@ func (p *IMPrompter) SubmitResult(requestID string, result ask.Result) error {
 	// Get pending request for tool name (needed for whitelist)
 	pending, hasPending := p.pendingRequests[requestID]
 
-	// If remember is true and approved, add tool to whitelist
-	if result.Remember && result.Approved && hasPending && pending.request.ToolName != "" {
+	// If remember is true and approved, add tool to whitelist.
+	// Exception: bash uses per-command allowlist rules (ChatStore.ToolAllowlist),
+	// not the in-memory IMPrompter whitelist, to avoid auto-approving all bash commands.
+	if result.Remember && result.Approved && hasPending &&
+		pending.request.ToolName != "" && pending.request.ToolName != "bash" {
 		p.whitelist[pending.request.ToolName] = true
 		logrus.WithFields(logrus.Fields{
 			"tool_name":  pending.request.ToolName,
@@ -424,13 +427,57 @@ func (p *IMPrompter) buildPromptText(req ask.Request, supportsKeyboard bool) str
 
 // buildKeyboard builds the inline keyboard for prompts
 func (p *IMPrompter) buildKeyboard(req ask.Request) imbot.InlineKeyboardMarkup {
-	// Check if this is AskUserQuestion - build option keyboard
 	if req.ToolName == "AskUserQuestion" {
 		return p.buildAskUserQuestionKeyboard(req)
 	}
-
+	if req.ToolName == "bash" {
+		return p.buildBashKeyboard(req)
+	}
 	// Default keyboard: Approve/Deny/Always
 	return p.buildDefaultKeyboard(req.ID)
+}
+
+// buildBashKeyboard builds a bash-specific permission keyboard.
+//
+// For chained commands (pipes, &&, etc.):
+//
+//	✅ Allow   ❌ Deny
+//	(no "Always" options — chained commands are not allowlist-eligible)
+//
+// For plain commands:
+//
+//	✅ Allow              ❌ Deny
+//	🔒 Always Bash(cmd)   🔓 Always Bash(cmd *)
+//
+// "Always Bash(cmd)" persists an exact rule — only this command with no args.
+// "Always Bash(cmd *)" persists a prefix rule — this command with any args.
+func (p *IMPrompter) buildBashKeyboard(req ask.Request) imbot.InlineKeyboardMarkup {
+	kb := imbot.NewKeyboardBuilder()
+
+	// Allow / Deny are always present
+	kb.AddRow(
+		imbot.CallbackButton("✅ Allow", imbot.FormatCallbackData("perm", "allow", req.ID)),
+		imbot.CallbackButton("❌ Deny", imbot.FormatCallbackData("perm", "deny", req.ID)),
+	)
+
+	// Extract command info from input
+	command, _ := req.Input["command"].(string)
+	isChained, _ := req.Input["isChained"].(bool)
+
+	// Chained commands (pipes, &&, etc.) are never allowlist-eligible
+	if isChained || command == "" {
+		return kb.Build()
+	}
+
+	// Two "Always" options — exact vs glob
+	exactLabel := fmt.Sprintf("🔒 Always Bash(%s)", command)
+	globLabel := fmt.Sprintf("🔓 Always Bash(%s *)", command)
+	kb.AddRow(
+		imbot.CallbackButton(exactLabel, imbot.FormatCallbackData("perm", "always_exact", req.ID)),
+		imbot.CallbackButton(globLabel, imbot.FormatCallbackData("perm", "always_glob", req.ID)),
+	)
+
+	return kb.Build()
 }
 
 // buildDefaultKeyboard builds the permission keyboard from shared PermissionOptions config

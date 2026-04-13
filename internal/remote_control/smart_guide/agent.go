@@ -72,6 +72,16 @@ type AgentConfig struct {
 	Platform string                   // Platform identifier
 	BotUUID  string                   // Bot UUID for routing
 
+	// BashAllowlist is the merged allowlist (DefaultBashAllowlist + user-persisted commands).
+	// If nil, DefaultBashAllowlist is used.
+	BashAllowlist []string
+
+	// OnCommandAlwaysAllowed is called when the user selects "Always Allow" for a bash command.
+	// The caller should persist the rule to the chat's bash allowlist.
+	// rule.Command is the base command; rule.HasArgs indicates the original invocation
+	// had arguments (in which case the rule should be stored as "cmd *").
+	OnCommandAlwaysAllowed func(rule AllowRule)
+
 	// ToolContext for injecting file send capability and cross-path approval.
 	// If nil, send_file tool will not be registered.
 	ToolCtx *ToolContext
@@ -131,7 +141,11 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 	toolkit := tool.NewToolkit()
 
 	// Register tools
-	if err := RegisterTools(toolkit, executor, config.ChatID, config.GetStatusFunc, config.UpdateProjectFunc, config.ToolCtx); err != nil {
+	bashAllowlist := config.BashAllowlist
+	if len(bashAllowlist) == 0 {
+		bashAllowlist = DefaultBashAllowlist
+	}
+	if err := RegisterTools(toolkit, executor, config.ChatID, config.GetStatusFunc, config.UpdateProjectFunc, config.ToolCtx, bashAllowlist); err != nil {
 		return nil, fmt.Errorf("failed to register tools: %w", err)
 	}
 
@@ -238,8 +252,9 @@ func (a *TinglyBoxAgent) createApprovalCallback(config *AgentConfig) func(contex
 			AgentType: AgentTypeTinglyBox,
 			ToolName:  "bash",
 			Input: map[string]interface{}{
-				"command": req.Command,
-				"args":    req.Args,
+				"command":   req.Command,
+				"args":      req.Args,
+				"isChained": req.IsChained,
 			},
 			Reason:    req.Reason,
 			SessionID: config.ChatID, // Use chatID as session identifier
@@ -269,6 +284,16 @@ func (a *TinglyBoxAgent) createApprovalCallback(config *AgentConfig) func(contex
 			"approved":  result.Approved,
 			"requestID": permReq.RequestID,
 		}).Info("Approval result received from handler")
+
+		// If user selected "Always Allow", persist the allow rule — unless the
+		// command was chained/piped (IsChained), in which case it is not eligible
+		// for allowlist storage.
+		if result.Approved && result.Remember && !req.IsChained && config.OnCommandAlwaysAllowed != nil {
+			config.OnCommandAlwaysAllowed(AllowRule{
+				Command: req.Command,
+				HasArgs: len(req.Args) > 0,
+			})
+		}
 
 		return result.Approved, nil
 	}

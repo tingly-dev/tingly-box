@@ -372,7 +372,6 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 		return
 	}
 
-
 	// NEW: Route all messages through agent router
 	// The router now defaults to @tb (Smart Guide) for new users
 	// Smart Guide can help with navigation, project setup, and handoff to @cc
@@ -489,8 +488,16 @@ func (h *BotHandler) handlePermissionTextResponse(hCtx HandlerContext) bool {
 	// Try to parse the text as a standard permission response
 	approved, remember, isValid := ask.ParseTextResponse(input)
 	if !isValid {
-		// Not a valid permission response, let other handlers process it
-		return false
+		// There IS a pending approval — don't route to agent (that would start a parallel run).
+		// Re-send the instructions so the user knows what to type.
+		h.SendText(hCtx, "⚠️ Waiting for your approval. "+ask.FormatPermissionInstructions())
+		return true
+	}
+
+	// For bash tools, "always" via text should not whitelist the entire tool.
+	// Bash always-allow is persisted per-command (Bash(cmd) / Bash(cmd *)) via TG buttons only.
+	if latestReq.ToolName == "bash" && remember {
+		remember = false
 	}
 
 	// Submit the decision
@@ -502,9 +509,7 @@ func (h *BotHandler) handlePermissionTextResponse(hCtx HandlerContext) bool {
 
 	// Send feedback to user
 	var resultText string
-	if remember {
-		resultText = "🔄 Always allowed"
-	} else if approved {
+	if approved {
 		resultText = "✅ Permission granted"
 	} else {
 		resultText = "❌ Permission denied"
