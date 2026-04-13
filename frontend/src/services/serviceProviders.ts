@@ -164,8 +164,8 @@ export function getAllUniqueProviders(): UniqueProvider[] {
     Object.entries(serviceProviders).forEach(([_key, provider]: [string, any]) => {
         const sp = provider as ServiceProvider;
 
-        // Skip OAuth-only providers (providers that only support OAuth, not API keys)
-        if (sp.oauth_provider && !sp.base_url_openai && !sp.base_url_anthropic) {
+        // Skip OAuth providers - they should be added via the OAuth dialog, not API key dialog
+        if (sp.oauth_provider) {
             return;
         }
 
