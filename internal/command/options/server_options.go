@@ -18,9 +18,6 @@ type StartFlags struct {
 	Daemon               bool
 	LogFile              string
 	PromptRestart        bool
-	HTTPS                bool
-	HTTPSCertDir         string
-	HTTPSRegen           bool
 	RecordMode           string
 	RecordDir            string
 	Expr                 string
@@ -28,19 +25,14 @@ type StartFlags struct {
 
 // StartServerOptions contains resolved options for starting the server
 type StartServerOptions struct {
-	Host              string
-	Port              int
-	EnableUI          bool
-	EnableDebug       bool
-	EnableOpenBrowser bool
-	Daemon            bool
-	LogFile           string
-	PromptRestart     bool
-	HTTPS             struct {
-		Enabled    bool
-		CertDir    string
-		Regenerate bool
-	}
+	Host                 string
+	Port                 int
+	EnableUI             bool
+	EnableDebug          bool
+	EnableOpenBrowser    bool
+	Daemon               bool
+	LogFile              string
+	PromptRestart        bool
 	RecordMode           string
 	RecordDir            string
 	ExperimentalFeatures map[string]bool
@@ -58,9 +50,6 @@ func AddStartFlags(cmd *cobra.Command, flags *StartFlags) {
 	cmd.Flags().BoolVar(&flags.Daemon, "daemon", false, "Run as daemon in background (default: false)")
 	cmd.Flags().StringVar(&flags.LogFile, "log-file", "", "Log file path for daemon mode (default: ~/.tingly-box/tingly-box.log)")
 	cmd.Flags().BoolVar(&flags.PromptRestart, "prompt-restart", false, "Prompt to restart if server is already running (default: false)")
-	cmd.Flags().BoolVar(&flags.HTTPS, "https", false, "Enable HTTPS mode with self-signed certificate (default: false)")
-	cmd.Flags().StringVar(&flags.HTTPSCertDir, "https-cert-dir", "", "Certificate directory for HTTPS (default: ~/.tingly-box/certs/)")
-	cmd.Flags().BoolVar(&flags.HTTPSRegen, "https-regen", false, "Regenerate HTTPS certificate (default: false)")
 	cmd.Flags().StringVar(&flags.RecordMode, "record-mode", "", "Record mode: empty=disabled, 'all'=record request+response, 'scenario'=all but for scenario only, 'response'=response only (default: disabled)")
 	cmd.Flags().StringVar(&flags.RecordDir, "record-dir", "", "Record directory (default: ~/.tingly-box/record/)")
 	cmd.Flags().StringVar(&flags.Expr, "expr", "", "Enable experimental features (comma-separated, e.g., compact,other)")
@@ -92,23 +81,14 @@ func ResolveStartOptions(cmd *cobra.Command, flags StartFlags, appConfig *config
 	experimentalFeatures := feature.ParseFeatures(flags.Expr)
 
 	return StartServerOptions{
-		Host:              flags.Host,
-		Port:              resolvedPort,
-		EnableUI:          flags.EnableUI,
-		EnableDebug:       resolvedDebug,
-		EnableOpenBrowser: flags.EnableOpenBrowser,
-		Daemon:            flags.Daemon,
-		LogFile:           flags.LogFile,
-		PromptRestart:     flags.PromptRestart,
-		HTTPS: struct {
-			Enabled    bool
-			CertDir    string
-			Regenerate bool
-		}{
-			Enabled:    flags.HTTPS,
-			CertDir:    flags.HTTPSCertDir,
-			Regenerate: flags.HTTPSRegen,
-		},
+		Host:                 flags.Host,
+		Port:                 resolvedPort,
+		EnableUI:             flags.EnableUI,
+		EnableDebug:          resolvedDebug,
+		EnableOpenBrowser:    flags.EnableOpenBrowser,
+		Daemon:               flags.Daemon,
+		LogFile:              flags.LogFile,
+		PromptRestart:        flags.PromptRestart,
 		RecordMode:           flags.RecordMode,
 		RecordDir:            resolvedRecordDir,
 		ExperimentalFeatures: experimentalFeatures,

@@ -31,7 +31,6 @@ import (
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
-	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/virtualserver"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
@@ -134,11 +133,6 @@ type Server struct {
 	openBrowser   bool
 	host          string
 	debug         bool
-
-	// https options
-	httpsEnabled    bool
-	httpsCertDir    string
-	httpsRegenerate bool
 
 	// record options
 	recordMode obs.RecordMode
@@ -312,27 +306,6 @@ func WithAdaptor(enabled bool) ServerOption {
 func WithOpenBrowser(enabled bool) ServerOption {
 	return func(s *Server) {
 		s.openBrowser = enabled
-	}
-}
-
-// WithHTTPSEnabled enables or disables HTTPS
-func WithHTTPSEnabled(enabled bool) ServerOption {
-	return func(s *Server) {
-		s.httpsEnabled = enabled
-	}
-}
-
-// WithHTTPSCertDir sets the HTTPS certificate directory
-func WithHTTPSCertDir(certDir string) ServerOption {
-	return func(s *Server) {
-		s.httpsCertDir = certDir
-	}
-}
-
-// WithHTTPSRegenerate sets the HTTPS certificate regenerate flag
-func WithHTTPSRegenerate(regenerate bool) ServerOption {
-	return func(s *Server) {
-		s.httpsRegenerate = regenerate
 	}
 }
 
@@ -577,17 +550,11 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize load balancer API
 	loadBalancerAPI := NewLoadBalancerAPI(loadBalancer, cfg)
 
-	// Determine protocol for OAuth BaseURL
-	protocol := "http"
-	if server.httpsEnabled {
-		protocol = "https"
-	}
-
 	// Initialize OAuth manager and handler
 	// Note: BaseURL will be dynamically updated for providers with port constraints
 	registry := pkgoauth.DefaultRegistry()
 	oauthConfig := &pkgoauth.Config{
-		BaseURL:           fmt.Sprintf("%s://localhost:%d", protocol, cfg.GetServerPort()),
+		BaseURL:           fmt.Sprintf("http://localhost:%d", cfg.GetServerPort()),
 		ProviderConfigs:   make(map[pkgoauth.ProviderType]*pkgoauth.ProviderConfig),
 		TokenStorage:      pkgoauth.NewMemoryTokenStorage(),
 		StateExpiry:       10 * time.Minute,
@@ -1148,26 +1115,6 @@ func (s *Server) Start(port int) error {
 		logrus.Info("Remote-coder auto-start initiated")
 	}
 
-	// Determine scheme and handle HTTPS setup
-	scheme := "http"
-	if s.httpsEnabled {
-		scheme = "https"
-
-		// Determine certificate directory
-		certDir := s.httpsCertDir
-		if certDir == "" {
-			certDir = servertls.GetDefaultCertDir(s.config.ConfigDir)
-		}
-
-		// Ensure certificates exist
-		certGen := servertls.NewCertificateGenerator(certDir)
-		if err := certGen.EnsureCertificates(s.httpsRegenerate); err != nil {
-			return fmt.Errorf("failed to setup HTTPS certificates: %w", err)
-		}
-
-		logrus.Debugf("HTTPS enabled, using certificates from: %s", certDir)
-	}
-
 	addr := fmt.Sprintf("%s:%d", s.host, port)
 	s.httpServer = &http.Server{
 		Addr:              addr,
@@ -1179,6 +1126,7 @@ func (s *Server) Start(port int) error {
 	}
 
 	resolvedHost := network.ResolveHost(s.host)
+	scheme := "http"
 
 	// CASE 1: Non-UI Mode ---
 	if !s.enableUI {
@@ -1187,15 +1135,6 @@ func (s *Server) Start(port int) error {
 		fmt.Printf("Virtual Model API endpoint: %s://%s:%d/virtual/v1/chat/completions\n", scheme, resolvedHost, port)
 		fmt.Printf("Mode name: %s\n", constant.DefaultModeName)
 		fmt.Printf("Model API key: %s\n", s.config.GetModelToken())
-
-		if s.httpsEnabled {
-			certDir := s.httpsCertDir
-			if certDir == "" {
-				certDir = servertls.GetDefaultCertDir(s.config.ConfigDir)
-			}
-			certGen := servertls.NewCertificateGenerator(certDir)
-			return s.engine.RunTLS(addr, certGen.GetCertFile(), certGen.GetKeyFile())
-		}
 		return s.httpServer.ListenAndServe()
 	}
 
@@ -1215,16 +1154,7 @@ func (s *Server) Start(port int) error {
 	// Use a channel to capture the immediate error if ListenAndServe fails
 	serverError := make(chan error, 1)
 	go func() {
-		if s.httpsEnabled {
-			certDir := s.httpsCertDir
-			if certDir == "" {
-				certDir = servertls.GetDefaultCertDir(s.config.ConfigDir)
-			}
-			certGen := servertls.NewCertificateGenerator(certDir)
-			serverError <- s.engine.RunTLS(addr, certGen.GetCertFile(), certGen.GetKeyFile())
-		} else {
-			serverError <- s.httpServer.ListenAndServe()
-		}
+		serverError <- s.httpServer.ListenAndServe()
 	}()
 
 	// Instead of a fixed 100ms sleep, we poll the port
