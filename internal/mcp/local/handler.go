@@ -528,7 +528,12 @@ func (h *Handler) GetInstallCommand(c *gin.Context) {
 	var installCmd string
 	baseURL := h.baseURL
 	if baseURL == "" {
-		baseURL = "http://localhost:18090"
+		// Get actual server port from config
+		port := 12580 // default fallback
+		if h.cfg != nil {
+			port = h.cfg.GetServerPort()
+		}
+		baseURL = fmt.Sprintf("http://localhost:%d", port)
 	}
 
 	switch client.Config.ConnectionType {
