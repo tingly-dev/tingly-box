@@ -65,6 +65,12 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler, localHandler *
 		swagger.WithTags("mcp"),
 	)
 
+	// Tool execution endpoint for testing
+	router.POST("/mcp/execute", localHandler.ExecuteTool,
+		swagger.WithDescription("Execute an MCP tool for testing"),
+		swagger.WithTags("mcp"),
+	)
+
 	// MCP Transport endpoints for local mode
 	// These handle HTTP/SSE connections from external MCP clients
 	if transportHandler != nil {

@@ -253,6 +253,15 @@ func (s *Server) guardrailsEnabled() bool {
 		s.config.GetScenarioFlag(typ.ScenarioClaudeCode, "guardrails")
 }
 
+// mcpEnabled checks if MCP feature is enabled via scenario flag
+func (s *Server) mcpEnabled() bool {
+	if s.config == nil {
+		return false
+	}
+	return s.config.GetScenarioFlag(typ.ScenarioGlobal, "mcp") ||
+		s.config.GetScenarioFlag(typ.ScenarioClaudeCode, "mcp")
+}
+
 func (s *Server) syncGuardrailsFromConfig() {
 	if s.config == nil {
 		return

@@ -1,19 +1,25 @@
 package local
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/mcpruntime"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // Handler handles MCP Local mode HTTP requests
 type Handler struct {
-	cfg       *config.Config
-	registry  *Registry
-	baseURL   string
+	cfg      *config.Config
+	registry *Registry
+	baseURL  string
+	runtime  *mcpruntime.Runtime
 }
 
 // NewHandler creates a new Local mode handler
@@ -25,6 +31,15 @@ func NewHandler(cfg *config.Config, registry *Registry, baseURL string) *Handler
 	}
 }
 
+// isMCPEnabled checks if MCP feature is enabled via scenario flag
+func (h *Handler) isMCPEnabled() bool {
+	if h.cfg == nil {
+		return false
+	}
+	return h.cfg.GetScenarioFlag(typ.ScenarioGlobal, "mcp") ||
+		h.cfg.GetScenarioFlag(typ.ScenarioClaudeCode, "mcp")
+}
+
 // MCPModeResponse is the API response for MCP mode
 type MCPModeResponse struct {
 	Success bool        `json:"success"`
@@ -34,6 +49,15 @@ type MCPModeResponse struct {
 
 // GetMCPMode returns the current MCP runtime mode
 func (h *Handler) GetMCPMode(c *gin.Context) {
+	// Check if MCP is enabled
+	if !h.isMCPEnabled() {
+		c.JSON(http.StatusForbidden, MCPModeResponse{
+			Success: false,
+			Error:   "MCP feature is disabled",
+		})
+		return
+	}
+
 	if h.cfg == nil {
 		c.JSON(http.StatusInternalServerError, MCPModeResponse{
 			Success: false,
@@ -47,7 +71,7 @@ func (h *Handler) GetMCPMode(c *gin.Context) {
 
 	mode := mcpCfg.Mode
 	if mode == "" {
-		mode = typ.MCPModeIntercept // default mode
+		mode = typ.MCPModeClienttool // default mode
 	}
 
 	c.JSON(http.StatusOK, MCPModeResponse{
@@ -63,6 +87,15 @@ type SetMCPModeRequest struct {
 
 // SetMCPMode sets the MCP runtime mode
 func (h *Handler) SetMCPMode(c *gin.Context) {
+	// Check if MCP is enabled
+	if !h.isMCPEnabled() {
+		c.JSON(http.StatusForbidden, MCPModeResponse{
+			Success: false,
+			Error:   "MCP feature is disabled",
+		})
+		return
+	}
+
 	if h.cfg == nil {
 		c.JSON(http.StatusInternalServerError, MCPModeResponse{
 			Success: false,
@@ -81,7 +114,7 @@ func (h *Handler) SetMCPMode(c *gin.Context) {
 	}
 
 	// Validate mode
-	if req.Mode != typ.MCPModeIntercept && req.Mode != typ.MCPModeLocal {
+	if req.Mode != typ.MCPModeServertool && req.Mode != typ.MCPModeClienttool {
 		c.JSON(http.StatusBadRequest, MCPModeResponse{
 			Success: false,
 			Error:   "Invalid mode. Must be 'intercept' or 'local'",
@@ -109,13 +142,22 @@ func (h *Handler) SetMCPMode(c *gin.Context) {
 
 // ClientListResponse is the API response for listing clients
 type ClientListResponse struct {
-	Success bool           `json:"success"`
+	Success bool             `json:"success"`
 	Clients []*typ.MCPClient `json:"clients,omitempty"`
-	Error   string         `json:"error,omitempty"`
+	Error   string           `json:"error,omitempty"`
 }
 
 // ListClients returns all registered MCP clients
 func (h *Handler) ListClients(c *gin.Context) {
+	// Check if MCP is enabled
+	if !h.isMCPEnabled() {
+		c.JSON(http.StatusForbidden, ClientListResponse{
+			Success: false,
+			Error:   "MCP feature is disabled",
+		})
+		return
+	}
+
 	clients := h.registry.List()
 	c.JSON(http.StatusOK, ClientListResponse{
 		Success: true,
@@ -125,13 +167,22 @@ func (h *Handler) ListClients(c *gin.Context) {
 
 // ClientResponse is the API response for a single client
 type ClientResponse struct {
-	Success bool          `json:"success"`
+	Success bool           `json:"success"`
 	Client  *typ.MCPClient `json:"client,omitempty"`
-	Error   string        `json:"error,omitempty"`
+	Error   string         `json:"error,omitempty"`
 }
 
 // GetClient returns a specific client by ID
 func (h *Handler) GetClient(c *gin.Context) {
+	// Check if MCP is enabled
+	if !h.isMCPEnabled() {
+		c.JSON(http.StatusForbidden, ClientResponse{
+			Success: false,
+			Error:   "MCP feature is disabled",
+		})
+		return
+	}
+
 	id := c.Param("id")
 
 	client, err := h.registry.Get(id)
@@ -151,26 +202,35 @@ func (h *Handler) GetClient(c *gin.Context) {
 
 // CreateClientRequest is the API request for creating a client
 type CreateClientRequest struct {
-	Name               string              `json:"name" binding:"required"`
-	ConnectionType     string              `json:"connection_type" binding:"required"`
-	Enabled            *bool               `json:"enabled,omitempty"`
-	StdioConfig        *typ.MCPStdioConfig `json:"stdio_config,omitempty"`
-	ConnectionString   string              `json:"connection_string,omitempty"`
-	AuthType           string              `json:"auth_type,omitempty"`
-	Headers            map[string]string   `json:"headers,omitempty"`
-	AllowedExtraHeaders []string           `json:"allowed_extra_headers,omitempty"`
-	OAuthConfig        *typ.MCPOAuthConfig `json:"oauth_config,omitempty"`
-	ToolsToExecute     []string            `json:"tools_to_execute,omitempty"`
-	ToolsAutoExec      []string            `json:"tools_to_auto_execute,omitempty"`
-	IsPingAvailable    *bool               `json:"is_ping_available,omitempty"`
-	ProxyURL           string              `json:"proxy_url,omitempty"`
-	Env                map[string]string   `json:"env,omitempty"`
-	Args               []string            `json:"args,omitempty"`
-	Cwd                string              `json:"cwd,omitempty"`
+	Name                string              `json:"name" binding:"required"`
+	ConnectionType      string              `json:"connection_type" binding:"required"`
+	Enabled             *bool               `json:"enabled,omitempty"`
+	StdioConfig         *typ.MCPStdioConfig `json:"stdio_config,omitempty"`
+	ConnectionString    string              `json:"connection_string,omitempty"`
+	AuthType            string              `json:"auth_type,omitempty"`
+	Headers             map[string]string   `json:"headers,omitempty"`
+	AllowedExtraHeaders []string            `json:"allowed_extra_headers,omitempty"`
+	OAuthConfig         *typ.MCPOAuthConfig `json:"oauth_config,omitempty"`
+	ToolsToExecute      []string            `json:"tools_to_execute,omitempty"`
+	ToolsAutoExec       []string            `json:"tools_to_auto_execute,omitempty"`
+	IsPingAvailable     *bool               `json:"is_ping_available,omitempty"`
+	ProxyURL            string              `json:"proxy_url,omitempty"`
+	Env                 map[string]string   `json:"env,omitempty"`
+	Args                []string            `json:"args,omitempty"`
+	Cwd                 string              `json:"cwd,omitempty"`
 }
 
 // CreateClient registers a new MCP client
 func (h *Handler) CreateClient(c *gin.Context) {
+	// Check if MCP is enabled
+	if !h.isMCPEnabled() {
+		c.JSON(http.StatusForbidden, ClientResponse{
+			Success: false,
+			Error:   "MCP feature is disabled",
+		})
+		return
+	}
+
 	var req CreateClientRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ClientResponse{
@@ -191,8 +251,8 @@ func (h *Handler) CreateClient(c *gin.Context) {
 
 	// Build config
 	config := typ.MCPSourceConfig{
-		Name:                 req.Name,
-		Enabled:              req.Enabled,
+		Name:                req.Name,
+		Enabled:             req.Enabled,
 		AuthType:            typ.MCPAuthType(req.AuthType),
 		AllowedExtraHeaders: req.AllowedExtraHeaders,
 		StdioConfig:         req.StdioConfig,
@@ -249,24 +309,33 @@ func (h *Handler) CreateClient(c *gin.Context) {
 
 // UpdateClientRequest is the API request for updating a client
 type UpdateClientRequest struct {
-	Name               string              `json:"name,omitempty"`
-	Enabled            *bool               `json:"enabled,omitempty"`
-	ConnectionType     string              `json:"connection_type,omitempty"`
-	StdioConfig        *typ.MCPStdioConfig `json:"stdio_config,omitempty"`
-	ConnectionString   string              `json:"connection_string,omitempty"`
-	AuthType           string              `json:"auth_type,omitempty"`
-	Headers            map[string]string   `json:"headers,omitempty"`
-	AllowedExtraHeaders []string           `json:"allowed_extra_headers,omitempty"`
-	OAuthConfig        *typ.MCPOAuthConfig `json:"oauth_config,omitempty"`
-	ToolsToExecute     []string            `json:"tools_to_execute,omitempty"`
-	ToolsAutoExec      []string            `json:"tools_to_auto_execute,omitempty"`
-	IsPingAvailable    *bool               `json:"is_ping_available,omitempty"`
-	ProxyURL           string              `json:"proxy_url,omitempty"`
-	Env                map[string]string   `json:"env,omitempty"`
+	Name                string              `json:"name,omitempty"`
+	Enabled             *bool               `json:"enabled,omitempty"`
+	ConnectionType      string              `json:"connection_type,omitempty"`
+	StdioConfig         *typ.MCPStdioConfig `json:"stdio_config,omitempty"`
+	ConnectionString    string              `json:"connection_string,omitempty"`
+	AuthType            string              `json:"auth_type,omitempty"`
+	Headers             map[string]string   `json:"headers,omitempty"`
+	AllowedExtraHeaders []string            `json:"allowed_extra_headers,omitempty"`
+	OAuthConfig         *typ.MCPOAuthConfig `json:"oauth_config,omitempty"`
+	ToolsToExecute      []string            `json:"tools_to_execute,omitempty"`
+	ToolsAutoExec       []string            `json:"tools_to_auto_execute,omitempty"`
+	IsPingAvailable     *bool               `json:"is_ping_available,omitempty"`
+	ProxyURL            string              `json:"proxy_url,omitempty"`
+	Env                 map[string]string   `json:"env,omitempty"`
 }
 
 // UpdateClient updates an existing MCP client
 func (h *Handler) UpdateClient(c *gin.Context) {
+	// Check if MCP is enabled
+	if !h.isMCPEnabled() {
+		c.JSON(http.StatusForbidden, ClientResponse{
+			Success: false,
+			Error:   "MCP feature is disabled",
+		})
+		return
+	}
+
 	id := c.Param("id")
 
 	var req UpdateClientRequest
@@ -369,6 +438,15 @@ func (h *Handler) UpdateClient(c *gin.Context) {
 
 // DeleteClient removes an MCP client
 func (h *Handler) DeleteClient(c *gin.Context) {
+	// Check if MCP is enabled
+	if !h.isMCPEnabled() {
+		c.JSON(http.StatusForbidden, ClientResponse{
+			Success: false,
+			Error:   "MCP feature is disabled",
+		})
+		return
+	}
+
 	id := c.Param("id")
 
 	if err := h.registry.Unregister(id); err != nil {
@@ -386,6 +464,15 @@ func (h *Handler) DeleteClient(c *gin.Context) {
 
 // ReconnectClient triggers a reconnection for a client
 func (h *Handler) ReconnectClient(c *gin.Context) {
+	// Check if MCP is enabled
+	if !h.isMCPEnabled() {
+		c.JSON(http.StatusForbidden, ClientResponse{
+			Success: false,
+			Error:   "MCP feature is disabled",
+		})
+		return
+	}
+
 	id := c.Param("id")
 
 	client, err := h.registry.Get(id)
@@ -417,6 +504,15 @@ type InstallCommandResponse struct {
 
 // GetInstallCommand returns the MCP install command for a client
 func (h *Handler) GetInstallCommand(c *gin.Context) {
+	// Check if MCP is enabled
+	if !h.isMCPEnabled() {
+		c.JSON(http.StatusNotFound, InstallCommandResponse{
+			Success: false,
+			Error:   "MCP feature is disabled",
+		})
+		return
+	}
+
 	name := c.Param("name")
 
 	client, err := h.registry.GetByName(name)
@@ -448,6 +544,140 @@ func (h *Handler) GetInstallCommand(c *gin.Context) {
 		Success:        true,
 		InstallCommand: installCmd,
 	})
+}
+
+// ExecuteToolRequest is the API request for executing a tool
+type ExecuteToolRequest struct {
+	ClientID  string                 `json:"client_id" binding:"required"`
+	ToolName  string                 `json:"tool_name" binding:"required"`
+	Arguments map[string]interface{} `json:"arguments,omitempty"`
+}
+
+// ExecuteToolResponse is the API response for tool execution
+type ExecuteToolResponse struct {
+	Success       bool   `json:"success"`
+	Result        string `json:"result,omitempty"`
+	Error         string `json:"error,omitempty"`
+	ExecutionTime int64  `json:"execution_time,omitempty"` // milliseconds
+}
+
+// ExecuteTool executes an MCP tool for testing purposes
+func (h *Handler) ExecuteTool(c *gin.Context) {
+	// Check if MCP is enabled
+	if !h.isMCPEnabled() {
+		c.JSON(http.StatusForbidden, ExecuteToolResponse{
+			Success: false,
+			Error:   "MCP feature is disabled",
+		})
+		return
+	}
+
+	if h.runtime == nil {
+		c.JSON(http.StatusServiceUnavailable, ExecuteToolResponse{
+			Success: false,
+			Error:   "MCP runtime not available",
+		})
+		return
+	}
+
+	var req ExecuteToolRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ExecuteToolResponse{
+			Success: false,
+			Error:   "Invalid request body: " + err.Error(),
+		})
+		return
+	}
+
+	// Get client to verify it exists and find the source
+	client, err := h.registry.Get(req.ClientID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, ExecuteToolResponse{
+			Success: false,
+			Error:   "Client not found: " + req.ClientID,
+		})
+		return
+	}
+
+	// Check if client is enabled
+	if client.Config.Enabled != nil && !*client.Config.Enabled {
+		c.JSON(http.StatusBadRequest, ExecuteToolResponse{
+			Success: false,
+			Error:   "Client is disabled",
+		})
+		return
+	}
+
+	// Check if tool is allowed for this client
+	toolAllowed := false
+	allowedTools := client.Config.ToolsToExecute
+	if len(allowedTools) == 0 {
+		// If no specific tools configured, allow all
+		toolAllowed = true
+	} else {
+		for _, tool := range allowedTools {
+			if tool == "*" || tool == req.ToolName {
+				toolAllowed = true
+				break
+			}
+		}
+	}
+
+	if !toolAllowed {
+		c.JSON(http.StatusForbidden, ExecuteToolResponse{
+			Success: false,
+			Error:   "Tool not allowed for this client",
+		})
+		return
+	}
+
+	// Execute the tool using the runtime
+	startTime := time.Now()
+
+	// Build the normalized tool name: tingly_box_mcp__<source_id>__<tool_name>
+	normalizedToolName := mcpruntime.NormalizeToolName(client.Config.ID, req.ToolName)
+
+	// Serialize arguments
+	argsJSON, err := json.Marshal(req.Arguments)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ExecuteToolResponse{
+			Success: false,
+			Error:   "Invalid arguments: " + err.Error(),
+		})
+		return
+	}
+
+	// Call the tool via runtime
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+	defer cancel()
+
+	result, err := h.runtime.CallTool(ctx, normalizedToolName, string(argsJSON))
+	executionTime := time.Since(startTime).Milliseconds()
+
+	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"client_id": client.Config.ID,
+			"tool_name": req.ToolName,
+		}).Warn("Tool execution failed")
+
+		c.JSON(http.StatusOK, ExecuteToolResponse{
+			Success:       false,
+			Error:         err.Error(),
+			ExecutionTime: executionTime,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, ExecuteToolResponse{
+		Success:       true,
+		Result:        result,
+		ExecutionTime: executionTime,
+	})
+}
+
+// SetRuntime sets the MCP runtime for tool execution
+func (h *Handler) SetRuntime(runtime *mcpruntime.Runtime) {
+	h.runtime = runtime
 }
 
 // isValidClientName checks if a client name is valid
