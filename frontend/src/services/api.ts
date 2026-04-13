@@ -227,7 +227,8 @@ export const api = {
     getProviderTemplates: async (): Promise<any> => {
         try {
             const client = await getClient();
-            const response = await client.GET('/api/v2/provider-templates');
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v2/provider-templates', { headers });
             // openapi-fetch returns { data, error, response }
             // Check for error in response first
             if (response.error) {
