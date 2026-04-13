@@ -80,6 +80,23 @@ func NewVirtualServer(t *testing.T) *VirtualServer {
 	return vs
 }
 
+// NewVirtualServerForCLI creates a new VirtualServer for CLI use (without testing.T).
+// The caller must call Close() to clean up resources.
+func NewVirtualServerForCLI() *VirtualServer {
+	vs := &VirtualServer{
+		scenarios: make(map[string]Scenario),
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/chat/completions", vs.handleOpenAIChat)
+	mux.HandleFunc("/v1/responses", vs.handleOpenAIResponses)
+	mux.HandleFunc("/v1/messages", vs.handleAnthropicMessages)
+	mux.HandleFunc("/", vs.handleGoogle) // catches /v1beta/models/*/generateContent
+
+	vs.server = httptest.NewServer(mux)
+	return vs
+}
+
 // RegisterScenario registers a scenario so the virtual server can serve its mock responses.
 func (vs *VirtualServer) RegisterScenario(s Scenario) {
 	vs.mu.Lock()
