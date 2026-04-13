@@ -13,10 +13,12 @@ import (
 	extTools "github.com/tingly-dev/tingly-agentscope/extension/tools"
 	"github.com/tingly-dev/tingly-agentscope/pkg/message"
 	"github.com/tingly-dev/tingly-agentscope/pkg/tool"
+	"github.com/tingly-dev/tingly-box/agentsec"
+	"github.com/tingly-dev/tingly-box/agentsec/bash"
 )
 
 // ============================================================================
-// Tool Context & Executor
+// Tool Context
 // ============================================================================
 
 // ToolContext provides context for tool execution
@@ -34,164 +36,6 @@ type ToolContext struct {
 	// bypassed by yolo mode — it is distinct from the bash approval callback.
 	// Returns (false, nil) if denied. Returns (false, err) on failure.
 	RequestApproval func(ctx context.Context, prompt string) (approved bool, err error)
-}
-
-// ApprovalRequest represents a request for user approval
-type ApprovalRequest struct {
-	Command string   // Command to execute
-	Args    []string // Command arguments
-	Reason  string   // Reason for approval request
-}
-
-// ApprovalCallback is called when a command requires user approval
-// Returns (approved, error) - if error is non-nil, the approval process failed
-type ApprovalCallback func(ctx context.Context, req ApprovalRequest) (approved bool, err error)
-
-// ToolExecutor handles tool execution with proper context
-type ToolExecutor struct {
-	BashAllowlist   map[string]struct{}
-	BashCwd         string           // Per-execution working directory
-	onApproval      ApprovalCallback // Approval callback for non-allowlisted commands
-	approvalTimeout time.Duration    // Timeout for approval requests
-}
-
-// NewToolExecutor creates a new tool executor
-func NewToolExecutor(allowlist []string) *ToolExecutor {
-	allowlistMap := make(map[string]struct{})
-	for _, cmd := range allowlist {
-		allowlistMap[strings.ToLower(cmd)] = struct{}{}
-	}
-
-	return &ToolExecutor{
-		BashAllowlist:   allowlistMap,
-		BashCwd:         "",              // Start in current directory
-		approvalTimeout: 5 * time.Minute, // Default 5 minute timeout
-	}
-}
-
-// SetApprovalCallback sets the approval callback for non-allowlisted commands
-func (e *ToolExecutor) SetApprovalCallback(callback ApprovalCallback) {
-	e.onApproval = callback
-}
-
-// HasApprovalCallback returns true if an approval callback is set
-func (e *ToolExecutor) HasApprovalCallback() bool {
-	return e.onApproval != nil
-}
-
-// SetApprovalTimeout sets the timeout for approval requests
-func (e *ToolExecutor) SetApprovalTimeout(timeout time.Duration) {
-	e.approvalTimeout = timeout
-}
-
-// SetWorkingDirectory sets the current working directory
-func (e *ToolExecutor) SetWorkingDirectory(cwd string) {
-	e.BashCwd = cwd
-}
-
-// GetWorkingDirectory returns the current working directory
-func (e *ToolExecutor) GetWorkingDirectory() string {
-	if e.BashCwd == "" {
-		return "" // Return empty string if not explicitly set
-	}
-	return e.BashCwd
-}
-
-// ResolvePath resolves a path to an absolute path
-// If the path is relative, it's joined with the current working directory
-func (e *ToolExecutor) ResolvePath(path string) string {
-	if !filepath.IsAbs(path) {
-		currentDir := e.GetWorkingDirectory()
-		if currentDir == "" {
-			// If no working directory is set, use os.Getwd() as a fallback for resolution
-			if wd, err := os.Getwd(); err == nil {
-				currentDir = wd
-			} else {
-				currentDir = "/" // Fallback to root if os.Getwd fails
-			}
-		}
-		return filepath.Join(currentDir, path)
-	}
-	return path
-}
-
-// ExecuteBash executes a bash command with allowlist checking
-func (e *ToolExecutor) ExecuteBash(ctx context.Context, cmd string, args ...string) (string, error) {
-	// Check if command is in allowlist
-	cmdLower := strings.ToLower(cmd)
-	if _, allowed := e.BashAllowlist[cmdLower]; !allowed {
-		// Command not in allowlist - request approval if callback is available
-		if e.onApproval != nil {
-			logrus.WithFields(logrus.Fields{
-				"command": cmd,
-				"args":    args,
-			}).Info("Command not in allowlist, requesting approval")
-
-			approved, err := e.onApproval(ctx, ApprovalRequest{
-				Command: cmd,
-				Args:    args,
-				Reason:  fmt.Sprintf("Command '%s' is not in the allowlist", cmd),
-			})
-			if err != nil {
-				return "", fmt.Errorf("approval request failed: %w", err)
-			}
-			if !approved {
-				return "", fmt.Errorf("command '%s' was not approved by user", cmd)
-			}
-			logrus.WithField("command", cmd).Info("Command approved by user")
-		} else {
-			// No approval callback available - deny with error
-			return "", fmt.Errorf("command '%s' is not allowed. Allowed commands: %v",
-				cmd, e.GetAllowedCommands())
-		}
-	}
-
-	// Build full command
-	fullCmd := append([]string{cmd}, args...)
-
-	// Create command execution
-	execCmd := exec.CommandContext(ctx, fullCmd[0], fullCmd[1:]...)
-
-	// Set working directory
-	if e.BashCwd != "" {
-		execCmd.Dir = e.BashCwd
-	}
-
-	// Execute and capture output
-	output, err := execCmd.CombinedOutput()
-	if err != nil {
-		return string(output), fmt.Errorf("command failed: %w", err)
-	}
-
-	return string(output), nil
-}
-
-// GetAllowedCommands returns the list of allowed commands
-func (e *ToolExecutor) GetAllowedCommands() []string {
-	cmds := make([]string, 0, len(e.BashAllowlist))
-	for cmd := range e.BashAllowlist {
-		cmds = append(cmds, cmd)
-	}
-	return cmds
-}
-
-// ============================================================================
-// Default Configuration
-// ============================================================================
-
-// DefaultBashAllowlist defines the default allowed bash commands
-// These are commands useful for preparation/guide work
-var DefaultBashAllowlist = []string{
-	// File navigation
-	"ls", "pwd", "cd", "cat", "tree",
-	// File operations
-	"mkdir", "rm", "cp", "mv", "touch", "chmod",
-	// Git operations
-	"git",
-	// Network (for setup)
-	"curl", "wget",
-	// Utility
-	"echo", "which", "env", "head", "tail", "wc", "find", "grep",
 }
 
 // ============================================================================
@@ -217,18 +61,26 @@ type BashParams struct {
 	Command string `json:"command" required:"true" jsonschema:"description=The bash command to execute (e.g., 'ls -la', 'git status')"`
 }
 
-// BashTool wraps extension's BashTool with Smart Guide specific behavior
+// BashTool wraps the bash policy layer with SmartGuide-specific execution:
+// the { cmd; pwd; } composite pattern that tracks the working directory.
 type BashTool struct {
-	Executor        *ToolExecutor
-	AllowedCommands []string
+	Executor *ToolExecutor
+	policy   *bash.Policy
 }
 
-// NewBashTool creates a new bash tool wrapper
-func NewBashTool(executor *ToolExecutor, allowlist []string) *BashTool {
+// NewBashTool creates a new bash tool wrapper with the given rules.
+// The rules are used to create a bash.Policy for command evaluation.
+func NewBashTool(executor *ToolExecutor, rules []agentsec.Rule) *BashTool {
 	return &BashTool{
-		Executor:        executor,
-		AllowedCommands: allowlist,
+		Executor: executor,
+		policy:   bash.NewPolicy(rules),
 	}
+}
+
+// AllowedCommands returns the allowlist rules for display purposes.
+// It delegates to the executor's allowlist map.
+func (t *BashTool) AllowedCommands() []string {
+	return t.Executor.GetAllowedCommands()
 }
 
 // Description returns the bash tool description
@@ -236,8 +88,8 @@ func (t *BashTool) Description() string {
 	return `Execute bash commands for file system operations and git.
 
 Allowed commands: ls, pwd, cat, mkdir, rm, cp, mv, git, curl, wget, and more.
-
-Supports command chaining with &&, ||, |, ;, etc.
+Commands containing pipes (|), && chains, ; sequences, or $(...) substitutions
+always require explicit user approval.
 
 Examples:
 - List files: ls -la
@@ -252,112 +104,54 @@ func (t *BashTool) Name() string {
 	return "bash"
 }
 
-// Call executes a bash command with Smart Guide specific enhancements
+// Call executes a bash command with SmartGuide-specific enhancements.
+// Policy evaluation (allowlist check, pipe detection) is delegated to bash.Policy.
 func (t *BashTool) Call(ctx context.Context, params BashParams) (*tool.ToolResponse, error) {
 	command := params.Command
 	if command == "" {
 		return tool.TextResponse("Error: 'command' parameter is required"), nil
 	}
 
-	// Extract base command for allowlist checking
-	baseCmd := t.extractBaseCommand(command)
+	decision := t.policy.Evaluate(command)
 
-	// Check if command is in allowlist
-	// Note: isCommandAllowed returns true when command should be BLOCKED (not in allowlist)
-	if !t.isCommandAllowed(baseCmd) {
-		// Command is in allowlist - execute directly
-		return t.executeCommand(ctx, command, false)
+	switch {
+	case decision.Allow:
+		return t.executeCommand(ctx, command)
+
+	case !decision.Allow && decision.Remember:
+		// Not allowed but can be remembered (normal approval flow)
+		return t.requestApproval(ctx, command, false)
+
+	case !decision.Allow && !decision.Remember:
+		// Chained command - never allow, never remember
+		return t.requestApproval(ctx, command, true)
+
+	default:
+		return tool.TextResponse(fmt.Sprintf("Error: unexpected policy decision for command %q", command)), nil
 	}
-
-	// Command is NOT in allowlist - request approval
-	if t.Executor.onApproval != nil {
-		logrus.WithFields(logrus.Fields{
-			"command":         baseCmd,
-			"full":            command,
-			"callbackSet":     true,
-			"allowedCommands": t.AllowedCommands,
-		}).Info("BashTool: Command not in allowlist, requesting approval via callback")
-
-		// Parse command into base command and args
-		parts := strings.Fields(command)
-		var cmd string
-		var args []string
-		if len(parts) > 0 {
-			cmd = parts[0]
-			args = parts[1:]
-		}
-
-		logrus.WithFields(logrus.Fields{
-			"cmd":  cmd,
-			"args": args,
-		}).Debug("BashTool: Calling Executor.onApproval callback")
-
-		approved, err := t.Executor.onApproval(ctx, ApprovalRequest{
-			Command: cmd,
-			Args:    args,
-			Reason:  fmt.Sprintf("Command '%s' is not in the allowlist", baseCmd),
-		})
-
-		logrus.WithFields(logrus.Fields{
-			"command":  cmd,
-			"approved": approved,
-			"error":    err,
-		}).Info("BashTool: onApproval callback returned")
-
-		if err != nil {
-			logrus.WithError(err).WithField("command", cmd).Error("BashTool: Approval callback failed with error")
-			return tool.TextResponse(fmt.Sprintf("Error: approval request failed: %v", err)), nil
-		}
-		if !approved {
-			logrus.WithField("command", cmd).Warn("BashTool: Command was NOT approved by user")
-			return tool.TextResponse(fmt.Sprintf("Error: command '%s' was not approved by user", baseCmd)), nil
-		}
-		logrus.WithField("command", baseCmd).Info("BashTool: Command approved by user, executing")
-		// Execute approved command without allowlist restriction
-		return t.executeCommand(ctx, command, true)
-	}
-
-	// No approval callback - deny with error
-	logrus.WithFields(logrus.Fields{
-		"command":         baseCmd,
-		"callbackSet":     false,
-		"allowedCommands": t.AllowedCommands,
-	}).Warn("BashTool: Command not in allowlist AND no approval callback set - denying")
-	allowedList := strings.Join(t.AllowedCommands, ", ")
-	return tool.TextResponse(fmt.Sprintf("Error: command '%s' is not allowed. Allowed commands: %s", baseCmd, allowedList)), nil
 }
 
-// executeCommand executes a bash command using the extension tool
-// If skipAllowlist is true, the command is executed without allowlist restriction
-func (t *BashTool) executeCommand(ctx context.Context, command string, skipAllowlist bool) (*tool.ToolResponse, error) {
-	// Store original working directory
+// executeCommand runs the command via the extension BashTool using the
+// SmartGuide-specific { cmd; pwd; } composite to track working directory.
+func (t *BashTool) executeCommand(ctx context.Context, command string) (*tool.ToolResponse, error) {
 	oldDir := t.Executor.GetWorkingDirectory()
-
-	// Create extension bash tool with current working directory
 	cwd := oldDir
 
 	// Build a composite command: { command; pwd; }
-	// Using { } instead of ( ) ensures cd affects the current shell context
-	// The semicolon ensures pwd runs even if command fails
+	// Using { } ensures cd affects the current shell context; pwd captures new dir.
 	compositeCommand := fmt.Sprintf("{ %s; pwd; }", command)
 
-	// Use empty allowlist for extension tool since allowlist check was already done in Call method
-	// This design allows:
-	// 1. Single allowlist enforcement point (Call method)
-	// 2. Clean composite command format without allowlist conflicts
-	// 3. Simplified extension tool invocation
 	extBash := extTools.NewBashTool(
 		extTools.BashOptions([]string{}, nil, 120*time.Second, cwd),
-		extTools.BashAllowChaining(true), // Allow command chaining
+		extTools.BashAllowChaining(true),
 	)
 
-	// Execute using extension tool
 	result, err := extBash.Call(ctx, extTools.BashParams{Command: compositeCommand})
 	if err != nil {
 		return result, err
 	}
 
-	// Extract the directory from the last line (pwd output)
+	// Extract new working directory from the trailing pwd output
 	newDir := t.extractDirectoryFromResult(result)
 	if newDir != "" && newDir != oldDir {
 		t.Executor.SetWorkingDirectory(newDir)
@@ -368,7 +162,7 @@ func (t *BashTool) executeCommand(ctx context.Context, command string, skipAllow
 		cwd = newDir
 	}
 
-	// Add working directory context to response (remove trailing pwd for cleaner output)
+	// Annotate output with cwd, removing the trailing pwd line
 	if result != nil && len(result.Content) > 0 {
 		if textBlock, ok := result.Content[0].(*message.TextBlock); ok {
 			displayText := t.removeTrailingPwd(textBlock.Text)
@@ -379,22 +173,69 @@ func (t *BashTool) executeCommand(ctx context.Context, command string, skipAllow
 	return result, nil
 }
 
-// extractDirectoryFromResult extracts the directory from the command result
-// The last line should be the pwd output from our composite command
+// requestApproval sends the command for user approval via the executor callback.
+// isChained is true for commands containing shell operators; in that case the
+// approval result's Remember flag must be ignored (not stored in allowlist).
+func (t *BashTool) requestApproval(ctx context.Context, command string, isChained bool) (*tool.ToolResponse, error) {
+	baseCmd := bash.ExtractBaseCommand(command)
+
+	if t.Executor.HasApprovalCallback() {
+		logrus.WithFields(logrus.Fields{
+			"command":   baseCmd,
+			"full":      command,
+			"isChained": isChained,
+		}).Info("BashTool: Requesting approval for command")
+
+		parts := strings.Fields(command)
+		var cmd string
+		var args []string
+		if len(parts) > 0 {
+			cmd = parts[0]
+			args = parts[1:]
+		}
+
+		approved, err := t.Executor.CallApproval(ctx, agentsec.ApprovalRequest{
+			Command:   cmd,
+			Args:      args,
+			Reason:    fmt.Sprintf("Command %q is not in the allowlist", baseCmd),
+			IsChained: isChained,
+		})
+
+		logrus.WithFields(logrus.Fields{
+			"command":   cmd,
+			"approved":  approved,
+			"isChained": isChained,
+			"error":     err,
+		}).Info("BashTool: Approval callback returned")
+
+		if err != nil {
+			logrus.WithError(err).WithField("command", cmd).Error("BashTool: Approval callback failed")
+			return tool.TextResponse(fmt.Sprintf("Error: approval request failed: %v", err)), nil
+		}
+		if !approved {
+			logrus.WithField("command", cmd).Warn("BashTool: Command was NOT approved by user")
+			return tool.TextResponse(fmt.Sprintf("Error: command %q was not approved by user", baseCmd)), nil
+		}
+		logrus.WithField("command", baseCmd).Info("BashTool: Command approved, executing")
+		return t.executeCommand(ctx, command)
+	}
+
+	// No approval callback — deny
+	logrus.WithField("command", baseCmd).Warn("BashTool: Command not in allowlist and no approval callback set - denying")
+	return tool.TextResponse(fmt.Sprintf("Error: command %q is not allowed. Allowed commands: %s",
+		baseCmd, strings.Join(t.AllowedCommands(), ", "))), nil
+}
+
+// extractDirectoryFromResult reads the trailing pwd line from the composite command output.
 func (t *BashTool) extractDirectoryFromResult(result *tool.ToolResponse) string {
 	if result == nil || len(result.Content) == 0 {
 		return ""
 	}
-
 	if textBlock, ok := result.Content[0].(*message.TextBlock); ok {
-		// Trim trailing whitespace/newlines before splitting
 		text := strings.TrimRight(textBlock.Text, "\n\r\t ")
 		lines := strings.Split(text, "\n")
-
 		if len(lines) > 0 {
-			// The last line is the pwd output
 			potentialDir := strings.TrimSpace(lines[len(lines)-1])
-			// Verify it's a valid absolute path
 			if filepath.IsAbs(potentialDir) {
 				return potentialDir
 			}
@@ -403,59 +244,15 @@ func (t *BashTool) extractDirectoryFromResult(result *tool.ToolResponse) string 
 	return ""
 }
 
-// removeTrailingPwd removes the trailing pwd line from the command output
+// removeTrailingPwd strips the last line if it is an absolute path (the pwd output).
 func (t *BashTool) removeTrailingPwd(text string) string {
 	lines := strings.Split(text, "\n")
 	if len(lines) > 1 {
-		lastLine := strings.TrimSpace(lines[len(lines)-1])
-		if filepath.IsAbs(lastLine) {
+		if filepath.IsAbs(strings.TrimSpace(lines[len(lines)-1])) {
 			return strings.Join(lines[:len(lines)-1], "\n")
 		}
 	}
 	return text
-}
-
-// isCommandAllowed checks if a command is in the allowlist
-func (t *BashTool) isCommandAllowed(baseCmd string) bool {
-	if len(t.AllowedCommands) == 0 {
-		return false // Empty allowlist means allow all
-	}
-	for _, cmd := range t.AllowedCommands {
-		if strings.ToLower(cmd) == strings.ToLower(baseCmd) {
-			return false // Command is allowed
-		}
-	}
-	return true // Command not found in allowlist
-}
-
-// extractBaseCommand extracts the base command name from a command string
-// Handles subshells by extracting the first actual command inside parentheses
-func (t *BashTool) extractBaseCommand(command string) string {
-	trimmed := strings.TrimSpace(command)
-	// Handle subshell format: (cmd...)
-	if len(trimmed) > 0 && trimmed[0] == '(' {
-		// Find the closing parenthesis or first command inside
-		for i := 1; i < len(trimmed); i++ {
-			if trimmed[i] == ')' || trimmed[i] == ' ' || trimmed[i] == '\t' {
-				// Extract the command inside parentheses
-				innerCmd := strings.TrimSpace(trimmed[1:i])
-				return t.extractBaseCommand(innerCmd)
-			}
-		}
-		// If no closing paren found, extract what's inside
-		if len(trimmed) > 1 {
-			innerCmd := strings.TrimSpace(trimmed[1:])
-			return t.extractBaseCommand(innerCmd)
-		}
-	}
-
-	// Normal case: extract first word
-	for i, r := range trimmed {
-		if r == ' ' || r == '\t' {
-			return strings.ToLower(trimmed[:i])
-		}
-	}
-	return strings.ToLower(trimmed)
 }
 
 // ============================================================================
@@ -494,8 +291,6 @@ func (t *GetStatusTool) Name() string {
 // Call returns the current bot status
 func (t *GetStatusTool) Call(ctx context.Context, params GetStatusParams) (*tool.ToolResponse, error) {
 	chatID := params.ChatID
-
-	// Add current working directory from executor
 	cwd := t.executor.GetWorkingDirectory()
 
 	if t.getStatusFunc == nil {
@@ -507,12 +302,10 @@ func (t *GetStatusTool) Call(ctx context.Context, params GetStatusParams) (*tool
 		return tool.TextResponse(fmt.Sprintf("Error getting status: %v", err)), nil
 	}
 
-	// Override working directory with executor's current directory
 	if status != nil {
 		status.WorkingDir = cwd
 	}
 
-	// Format status response
 	response := fmt.Sprintf("**Current Status:**\n"+
 		"• Agent: %s\n"+
 		"• Session: %s\n"+
@@ -542,7 +335,7 @@ type ChangeDirParams struct {
 // ChangeDirTool changes the bound project directory
 type ChangeDirTool struct {
 	executor          *ToolExecutor
-	chatID            string // ChatID injected from agent config (not from LLM params)
+	chatID            string
 	updateProjectFunc func(chatID string, projectPath string) error
 }
 
@@ -568,15 +361,12 @@ func (t *ChangeDirTool) Name() string {
 // Call changes the working directory and persists the change
 func (t *ChangeDirTool) Call(ctx context.Context, params ChangeDirParams) (*tool.ToolResponse, error) {
 	path := params.Path
-
 	if path == "" {
 		return tool.TextResponse("Error: 'path' parameter is required"), nil
 	}
 
-	// Resolve path (handle relative paths)
 	resolvedPath := t.executor.ResolvePath(path)
 
-	// Check if directory exists
 	info, err := os.Stat(resolvedPath)
 	if err != nil {
 		return tool.TextResponse(fmt.Sprintf("Error: %v", err)), nil
@@ -585,10 +375,8 @@ func (t *ChangeDirTool) Call(ctx context.Context, params ChangeDirParams) (*tool
 		return tool.TextResponse(fmt.Sprintf("Error: '%s' is not a directory", resolvedPath)), nil
 	}
 
-	// Update working directory in executor
 	t.executor.SetWorkingDirectory(resolvedPath)
 
-	// Persist to chat store using injected chatID (not from LLM params)
 	if t.updateProjectFunc != nil && t.chatID != "" {
 		if err := t.updateProjectFunc(t.chatID, resolvedPath); err != nil {
 			logrus.WithError(err).WithField("chatID", t.chatID).Warn("Failed to update project path in chat store")
@@ -596,35 +384,28 @@ func (t *ChangeDirTool) Call(ctx context.Context, params ChangeDirParams) (*tool
 		}
 	}
 
-	// List directory contents to show user where they are
 	lsCmd := exec.CommandContext(ctx, "ls", "-la")
 	lsCmd.Dir = resolvedPath
 	output, _ := lsCmd.CombinedOutput()
 
-	response := fmt.Sprintf("✅ Changed directory to: %s\n\nDirectory contents:\n%s", resolvedPath, string(output))
-	return tool.TextResponse(response), nil
+	return tool.TextResponse(fmt.Sprintf("✅ Changed directory to: %s\n\nDirectory contents:\n%s", resolvedPath, string(output))), nil
 }
 
 // ============================================================================
-// Handoff Tool (Hidden for now)
+// Handoff Tool (hidden, reserved for future use)
 // ============================================================================
 
 // HandoffParams defines the parameters for handoff_to_cc tool
 type HandoffParams struct{}
 
 // HandoffToCCTool provides handoff to Claude Code
-// Note: Currently not registered, kept for future use
 type HandoffToCCTool struct{}
 
 // NewHandoffToCCTool creates a new handoff tool
-func NewHandoffToCCTool() *HandoffToCCTool {
-	return &HandoffToCCTool{}
-}
+func NewHandoffToCCTool() *HandoffToCCTool { return &HandoffToCCTool{} }
 
 // Name returns the tool name
-func (t *HandoffToCCTool) Name() string {
-	return "handoff_to_cc"
-}
+func (t *HandoffToCCTool) Name() string { return "handoff_to_cc" }
 
 // Description returns the tool description
 func (t *HandoffToCCTool) Description() string {
@@ -646,9 +427,9 @@ func RegisterTools(
 	getStatusFunc func(chatID string) (*StatusInfo, error),
 	updateProjectFunc func(chatID string, projectPath string) error,
 	toolCtx *ToolContext,
+	rules []agentsec.Rule, // Changed from bashAllowlist []string
 ) error {
 
-	// Create tool groups
 	if err := toolkit.CreateToolGroup("bash", "Bash commands for file system and git operations", true, ""); err != nil {
 		return fmt.Errorf("failed to create bash tool group: %w", err)
 	}
@@ -659,44 +440,31 @@ func RegisterTools(
 		return fmt.Errorf("failed to create file_ops tool group: %w", err)
 	}
 
-	// Register bash tool
-	bashTool := NewBashTool(executor, DefaultBashAllowlist)
+	bashTool := NewBashTool(executor, rules)
 	if err := toolkit.RegisterAll(bashTool); err != nil {
 		return fmt.Errorf("failed to register bash tool: %w", err)
 	}
 
-	// Register get_status tool
 	getStatusTool := NewGetStatusTool(executor, getStatusFunc)
 	if err := toolkit.RegisterAll(getStatusTool); err != nil {
 		return fmt.Errorf("failed to register get_status tool: %w", err)
 	}
 
-	// Register change_workdir tool
 	changeDirTool := NewChangeDirTool(executor, chatID, updateProjectFunc)
 	if err := toolkit.RegisterAll(changeDirTool); err != nil {
 		return fmt.Errorf("failed to register change_workdir tool: %w", err)
 	}
 
-	// Register read tool (from extension)
-	if err := extTools.RegisterReadTool(toolkit,
-		extTools.ReadOptions(nil, 10*1024*1024)); err != nil {
+	if err := extTools.RegisterReadTool(toolkit, extTools.ReadOptions(nil, 10*1024*1024)); err != nil {
 		return fmt.Errorf("failed to register read tool: %w", err)
 	}
-
-	// Register write tool (from extension)
-	if err := extTools.RegisterWriteTool(toolkit,
-		extTools.WriteOptions(nil, true),
-		extTools.WriteMaxSize(10*1024*1024)); err != nil {
+	if err := extTools.RegisterWriteTool(toolkit, extTools.WriteOptions(nil, true), extTools.WriteMaxSize(10*1024*1024)); err != nil {
 		return fmt.Errorf("failed to register write tool: %w", err)
 	}
-
-	// Register edit tool (from extension)
-	if err := extTools.RegisterEditTool(toolkit,
-		extTools.EditOptions(nil)); err != nil {
+	if err := extTools.RegisterEditTool(toolkit, extTools.EditOptions(nil)); err != nil {
 		return fmt.Errorf("failed to register edit tool: %w", err)
 	}
 
-	// Register send_file tool (if SendFile callback is available)
 	if toolCtx != nil && toolCtx.SendFile != nil {
 		sendFileTool := NewSendFileTool(executor, toolCtx)
 		if err := toolkit.RegisterAll(sendFileTool); err != nil {
@@ -704,8 +472,6 @@ func RegisterTools(
 		}
 	}
 
-	// Note: handoff_to_cc is not registered for now
-
-	logrus.Info("Smart guide tools registered successfully (all tools now use standard pattern)")
+	logrus.Info("Smart guide tools registered successfully")
 	return nil
 }

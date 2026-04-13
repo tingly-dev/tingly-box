@@ -10,6 +10,8 @@ import (
 	"github.com/tingly-dev/tingly-agentscope/pkg/message"
 	"github.com/tingly-dev/tingly-agentscope/pkg/types"
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentsec"
+	"github.com/tingly-dev/tingly-box/agentsec/bash"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/smart_guide"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -63,6 +65,15 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 
 	// 3. Create agent config
 	hCtx := req.HCtx
+
+	// Load persisted rules from ChatStore and merge with defaults
+	persistedRules, _ := e.deps.ChatStore.GetRules(hCtx.ChatID)
+	defaultRules := bash.DefaultRules()
+
+	// Merge rules: defaults first, then persisted rules (persisted take precedence if duplicates)
+	// Using bash.MergeAllowlists for proper deduplication
+	allRules := bash.MergeAllowlists(defaultRules, persistedRules)
+
 	toolCtx := &smart_guide.ToolContext{
 		ChatID:      hCtx.ChatID,
 		ProjectPath: projectPath,
@@ -109,6 +120,28 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		Platform:         string(hCtx.Platform),
 		BotUUID:          e.deps.BotSetting.UUID,
 		ToolCtx:          toolCtx,
+		Rules:            allRules,
+		OnCommandAlwaysAllowed: func(rule smart_guide.AllowRule) {
+			// Convert AllowRule to agentsec.Rule and persist
+			var newRule agentsec.Rule
+			if rule.HasArgs {
+				newRule = agentsec.PrefixRule{Tool: "Bash", Prefix: rule.Command}
+			} else {
+				newRule = agentsec.ExactRule{Tool: "Bash", Input: rule.Command}
+			}
+
+			if err := e.deps.ChatStore.AddRule(hCtx.ChatID, newRule); err != nil {
+				logrus.WithError(err).WithFields(logrus.Fields{
+					"chatID": hCtx.ChatID,
+					"rule":   newRule.String(),
+				}).Warn("Failed to persist rule to ChatStore")
+			} else {
+				logrus.WithFields(logrus.Fields{
+					"chatID": hCtx.ChatID,
+					"rule":   newRule.String(),
+				}).Info("Rule added to persistent rules")
+			}
+		},
 		GetStatusFunc: func(chatID string) (*smart_guide.StatusInfo, error) {
 			projectPath, _, _ := e.deps.ChatStore.GetProjectPath(chatID)
 			workingDir, hasWD, _ := e.deps.ChatStore.GetBashCwd(chatID)

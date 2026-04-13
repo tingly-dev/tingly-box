@@ -1,0 +1,73 @@
+// Package agentsec provides command-level security primitives for agent tool execution.
+//
+// It defines the PermissionRule format, approval contracts, and policy-checking
+// logic used to gate tool execution. This package has no dependency on any specific
+// agent (SmartGuide, ClaudeCode, etc.) and is intended to be a shared foundation
+// analogous to agentboot.
+//
+// Rule format: "ToolName(pattern)" or bare "ToolName"
+//
+//	"Bash(git)"       — allow git with any arguments
+//	"Bash(npm *)"     — allow npm with any arguments (canonical persisted form)
+//	"Bash(rm -rf *)"  — allow rm -rf with any path
+//	"Read(./src/**)"  — allow reading files under ./src/
+//	"Read"            — allow reading any file
+package agentsec
+
+import "context"
+
+// ApprovalCallback is called when a tool call is not auto-approved by the allowlist.
+// Returns (true, nil) if the user approves, (false, nil) if denied,
+// or (false, err) if the approval process itself failed.
+type ApprovalCallback func(ctx context.Context, req ApprovalRequest) (approved bool, err error)
+
+// ApprovalRequest carries the details of a tool call that requires user approval.
+type ApprovalRequest struct {
+	// Command is the base command name for Bash tools (e.g. "npm").
+	Command string
+
+	// Args are the command arguments (e.g. ["run", "dev"]).
+	Args []string
+
+	// Reason is a human-readable explanation of why approval is needed.
+	Reason string
+
+	// IsChained is true when the command string contains shell operators
+	// (|, &&, ||, ;, $(...), backtick). Chained commands are never
+	// allowlist-eligible; callers should suppress "Always Allow" storage
+	// when this flag is set.
+	IsChained bool
+}
+
+// AllowRule represents a bash command that the user approved, to be persisted
+// as a Rule in the tool allowlist.
+//
+//   - HasArgs=false → ExactRule{Tool: "Bash", Input: "cmd"}
+//   - HasArgs=true  → PrefixRule{Tool: "Bash", Prefix: "cmd"}
+//
+// Use ToRule() to get the Rule interface.
+type AllowRule struct {
+	// Command is the base command name (e.g. "npm").
+	Command string
+
+	// HasArgs indicates the original invocation had arguments.
+	// true  → PrefixRule{Prefix: "cmd"} so future invocations with args are also allowed.
+	// false → ExactRule{Input: "cmd"} so only the bare command (no args) is allowed.
+	HasArgs bool
+}
+
+// ToRule converts this AllowRule to a Rule.
+//
+//	AllowRule{"npm", true}.ToRule()   → PrefixRule{Tool: "Bash", Prefix: "npm"}  → "Bash(npm *)"
+//	AllowRule{"make", false}.ToRule() → ExactRule{Tool: "Bash", Input: "make"}   → "Bash(make)"
+func (a AllowRule) ToRule() Rule {
+	if a.HasArgs {
+		return PrefixRule{Tool: "Bash", Prefix: a.Command}
+	}
+	return ExactRule{Tool: "Bash", Input: a.Command}
+}
+
+// String returns the canonical serialized form, ready to store.
+func (a AllowRule) String() string {
+	return a.ToRule().String()
+}

@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/agentboot/ask"
+	"github.com/tingly-dev/tingly-box/agentsec"
 	"github.com/tingly-dev/tingly-box/imbot"
 )
 
@@ -310,22 +312,78 @@ func (h *BotHandler) handlePermissionCallback(hCtx HandlerContext, parts []strin
 		}
 
 		logrus.WithFields(logrus.Fields{
-			"request_id":    requestID,
-			"tool_name":     pendingReq.ToolName,
-			"question":      questionText,
-			"option_label":  optionLabel,
-			"user_id":       hCtx.SenderID,
+			"request_id":   requestID,
+			"tool_name":    pendingReq.ToolName,
+			"question":     questionText,
+			"option_label": optionLabel,
+			"user_id":      hCtx.SenderID,
 		}).Info("User selected option")
 
+	case "always_exact", "always_glob":
+		// Bash-specific "Always Allow" actions — persist a PermissionRule and approve.
+		// always_exact → "Bash(cmd)"   — exact match: only this command without args
+		// always_glob  → "Bash(cmd *)" — prefix match: this command with any args
+		if pendingReq.ToolName != "bash" {
+			logrus.WithField("action", subAction).Warn("always_exact/always_glob used on non-bash tool, ignoring")
+			return
+		}
+		command, _ := pendingReq.Input["command"].(string)
+		if command == "" {
+			logrus.WithField("request_id", requestID).Warn("always_exact/always_glob: missing command in input")
+			return
+		}
+		hasArgs := subAction == "always_glob"
+
+		// Convert to Rule
+		var newRule agentsec.Rule
+		if hasArgs {
+			newRule = agentsec.PrefixRule{Tool: "Bash", Prefix: command}
+		} else {
+			newRule = agentsec.ExactRule{Tool: "Bash", Input: command}
+		}
+
+		// Persist to chat's rules
+		if err := h.chatStore.AddRule(hCtx.ChatID, newRule); err != nil {
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"chatID": hCtx.ChatID,
+				"rule":   newRule.String(),
+			}).Warn("Failed to persist rule from callback")
+		} else {
+			logrus.WithFields(logrus.Fields{
+				"chatID": hCtx.ChatID,
+				"rule":   newRule.String(),
+			}).Info("Rule added to persistent rules")
+		}
+
+		// Approve the current request (no IMPrompter whitelist — rule lives in ChatStore)
+		if err := h.imPrompter.SubmitDecision(requestID, true, false, newRule.String()); err != nil {
+			logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit always decision")
+			h.SendText(hCtx, fmt.Sprintf("Failed to process response: %v", err))
+			return
+		}
+		resultText = fmt.Sprintf("✅ Always allowed: `%s`", newRule.String())
+		logrus.WithFields(logrus.Fields{
+			"request_id": requestID,
+			"rule":       newRule.String(),
+			"action":     subAction,
+		}).Info("Bash always-allow rule applied")
+
 	default:
-		// Look up permission action from shared config
+		// Look up permission action from shared config (allow, deny, always for non-bash tools)
 		permOpt := ask.FindPermissionByAction(subAction)
 		if permOpt == nil {
 			logrus.WithField("action", subAction).Warn("Unknown permission action")
 			return
 		}
 
-		if err := h.imPrompter.SubmitDecision(requestID, permOpt.Approved, permOpt.Remember, permOpt.Label); err != nil {
+		remember := permOpt.Remember
+		// For bash, "Always Allow" is handled by always_exact/always_glob above.
+		// The generic "always" action should not reach here for bash, but guard anyway.
+		if pendingReq.ToolName == "bash" && permOpt.Remember {
+			remember = false
+		}
+
+		if err := h.imPrompter.SubmitDecision(requestID, permOpt.Approved, remember, permOpt.Label); err != nil {
 			logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit permission decision")
 			h.SendText(hCtx, fmt.Sprintf("Failed to process permission response: %v", err))
 			return
@@ -339,8 +397,24 @@ func (h *BotHandler) handlePermissionCallback(hCtx HandlerContext, parts []strin
 		}).Info("User responded to permission request")
 	}
 
-	// Send feedback to user
-	h.SendText(hCtx, fmt.Sprintf("%s for tool: `%s`", resultText, pendingReq.ToolName))
+	// Send feedback to user — for bash, include the command context
+	if pendingReq.ToolName == "bash" {
+		cmd, _ := pendingReq.Input["command"].(string)
+		args, _ := pendingReq.Input["args"].([]interface{})
+		var argStrs []string
+		for _, a := range args {
+			if s, ok := a.(string); ok {
+				argStrs = append(argStrs, s)
+			}
+		}
+		fullCmd := cmd
+		if len(argStrs) > 0 {
+			fullCmd = cmd + " " + strings.Join(argStrs, " ")
+		}
+		h.SendText(hCtx, fmt.Sprintf("%s\n`%s`", resultText, fullCmd))
+	} else {
+		h.SendText(hCtx, fmt.Sprintf("%s for tool: `%s`", resultText, pendingReq.ToolName))
+	}
 }
 
 // handleCreateConfirm sends a confirmation prompt for creating a directory

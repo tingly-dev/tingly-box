@@ -15,6 +15,8 @@ import (
 	"github.com/tingly-dev/tingly-agentscope/pkg/tool"
 	"github.com/tingly-dev/tingly-agentscope/pkg/types"
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentsec"
+	"github.com/tingly-dev/tingly-box/agentsec/bash"
 )
 
 // AgentType constants
@@ -25,6 +27,24 @@ const (
 	AgentTypeClaudeCode = "claude"     // @cc
 	AgentTypeMock       = "mock"
 )
+
+// AllowRule represents a bash command that the user approved.
+// Used in the OnCommandAlwaysAllowed callback to notify the caller
+// that a command should be added to the persistent allowlist.
+type AllowRule struct {
+	Command string // Base command name (e.g. "npm")
+	HasArgs bool   // True if the original invocation had arguments
+}
+
+// Type aliases for agentsec types used in smart_guide
+type ToolExecutor = agentsec.ToolExecutor
+type ApprovalRequest = agentsec.ApprovalRequest
+type ApprovalCallback = agentsec.ApprovalCallback
+
+// NewToolExecutor creates a new ToolExecutor with the given allowlist.
+func NewToolExecutor(allowlist []string) *ToolExecutor {
+	return agentsec.NewToolExecutor(allowlist)
+}
 
 // Summary prompt template
 // Provides a concise, user-friendly summary of what was accomplished
@@ -71,6 +91,16 @@ type AgentConfig struct {
 	ChatID   string                   // Chat ID for approval routing
 	Platform string                   // Platform identifier
 	BotUUID  string                   // Bot UUID for routing
+
+	// Rules is the merged rule list (DefaultRules + user-persisted rules).
+	// If nil, DefaultRules is used.
+	Rules []agentsec.Rule
+
+	// OnCommandAlwaysAllowed is called when the user selects "Always Allow" for a bash command.
+	// The caller should persist the rule to the chat's bash allowlist.
+	// rule.Command is the base command; rule.HasArgs indicates the original invocation
+	// had arguments (in which case the rule should be stored as "cmd *").
+	OnCommandAlwaysAllowed func(rule AllowRule)
 
 	// ToolContext for injecting file send capability and cross-path approval.
 	// If nil, send_file tool will not be registered.
@@ -131,7 +161,11 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 	toolkit := tool.NewToolkit()
 
 	// Register tools
-	if err := RegisterTools(toolkit, executor, config.ChatID, config.GetStatusFunc, config.UpdateProjectFunc, config.ToolCtx); err != nil {
+	rules := config.Rules
+	if len(rules) == 0 {
+		rules = bash.DefaultRules()
+	}
+	if err := RegisterTools(toolkit, executor, config.ChatID, config.GetStatusFunc, config.UpdateProjectFunc, config.ToolCtx, rules); err != nil {
 		return nil, fmt.Errorf("failed to register tools: %w", err)
 	}
 
@@ -238,8 +272,9 @@ func (a *TinglyBoxAgent) createApprovalCallback(config *AgentConfig) func(contex
 			AgentType: AgentTypeTinglyBox,
 			ToolName:  "bash",
 			Input: map[string]interface{}{
-				"command": req.Command,
-				"args":    req.Args,
+				"command":   req.Command,
+				"args":      req.Args,
+				"isChained": req.IsChained,
 			},
 			Reason:    req.Reason,
 			SessionID: config.ChatID, // Use chatID as session identifier
@@ -269,6 +304,16 @@ func (a *TinglyBoxAgent) createApprovalCallback(config *AgentConfig) func(contex
 			"approved":  result.Approved,
 			"requestID": permReq.RequestID,
 		}).Info("Approval result received from handler")
+
+		// If user selected "Always Allow", persist the allow rule — unless the
+		// command was chained/piped (IsChained), in which case it is not eligible
+		// for allowlist storage.
+		if result.Approved && result.Remember && !req.IsChained && config.OnCommandAlwaysAllowed != nil {
+			config.OnCommandAlwaysAllowed(AllowRule{
+				Command: req.Command,
+				HasArgs: len(req.Args) > 0,
+			})
+		}
 
 		return result.Approved, nil
 	}

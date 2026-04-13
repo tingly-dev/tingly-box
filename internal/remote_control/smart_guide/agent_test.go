@@ -11,7 +11,21 @@ import (
 	"github.com/tingly-dev/tingly-agentscope/pkg/model"
 	"github.com/tingly-dev/tingly-agentscope/pkg/model/mockmodel"
 	"github.com/tingly-dev/tingly-agentscope/pkg/tool"
+	"github.com/tingly-dev/tingly-box/agentsec"
 )
+
+// parseRules converts rule strings to Rule slice for tests
+func parseRules(ruleStrs []string) []agentsec.Rule {
+	rules := make([]agentsec.Rule, len(ruleStrs))
+	for i, s := range ruleStrs {
+		rule, err := agentsec.ParseRuleToRule(s)
+		if err != nil {
+			panic(err)
+		}
+		rules[i] = rule
+	}
+	return rules
+}
 
 // Helper function to extract text from tool response content
 func extractTextFromContent(content []message.ContentBlock) string {
@@ -298,13 +312,13 @@ func TestToolExecutor_ExecuteBash_NotAllowedCommand(t *testing.T) {
 
 func TestBashTool_Name(t *testing.T) {
 	executor := NewToolExecutor([]string{"ls"})
-	tool := NewBashTool(executor, []string{"ls"})
+	tool := NewBashTool(executor, parseRules([]string{"Bash(ls)"}))
 	assert.Equal(t, "bash", tool.Name())
 }
 
 func TestBashTool_Description(t *testing.T) {
 	executor := NewToolExecutor([]string{})
-	tool := NewBashTool(executor, []string{})
+	tool := NewBashTool(executor, parseRules([]string{}))
 	desc := tool.Description()
 	assert.Contains(t, desc, "bash")
 	assert.Contains(t, desc, "Allowed commands")
@@ -315,7 +329,7 @@ func TestBashTool_Description(t *testing.T) {
 
 func TestBashTool_Call_AllowedCommand(t *testing.T) {
 	executor := NewToolExecutor([]string{"echo"})
-	tool := NewBashTool(executor, []string{"echo"})
+	tool := NewBashTool(executor, parseRules([]string{"Bash(echo)"}))
 
 	ctx := context.Background()
 	resp, err := tool.Call(ctx, BashParams{Command: "echo hello"})
@@ -328,7 +342,7 @@ func TestBashTool_Call_AllowedCommand(t *testing.T) {
 
 func TestBashTool_Call_NotAllowedCommand(t *testing.T) {
 	executor := NewToolExecutor([]string{"echo"})
-	tool := NewBashTool(executor, []string{"echo"})
+	tool := NewBashTool(executor, parseRules([]string{"Bash(echo)"}))
 
 	ctx := context.Background()
 	resp, err := tool.Call(ctx, BashParams{Command: "rm -rf /"})
@@ -341,10 +355,13 @@ func TestBashTool_Call_NotAllowedCommand(t *testing.T) {
 
 func TestBashTool_Call_CDAllowed(t *testing.T) {
 	executor := NewToolExecutor([]string{"cd", "ls", "pwd"})
-	tool := NewBashTool(executor, []string{"cd", "ls", "pwd"})
+	tool := NewBashTool(executor, parseRules([]string{"Bash(cd)", "Bash(ls)", "Bash(pwd)"}))
+	// cd /tmp && pwd is a chained command — approve it for this test
+	executor.SetApprovalCallback(func(ctx context.Context, req ApprovalRequest) (bool, error) {
+		return true, nil
+	})
 
 	ctx := context.Background()
-	// cd is now allowed in bash (uses shell chaining)
 	resp, err := tool.Call(ctx, BashParams{Command: "cd /tmp && pwd"})
 
 	assert.NoError(t, err)
@@ -504,7 +521,11 @@ func TestHandoffToCCTool_Call(t *testing.T) {
 
 func TestBashTool_ComplexCommands(t *testing.T) {
 	executor := NewToolExecutor([]string{"echo", "sh", "cat"})
-	tool := NewBashTool(executor, []string{"echo", "sh", "cat"})
+	tool := NewBashTool(executor, parseRules([]string{"Bash(echo)", "Bash(sh)", "Bash(cat)"}))
+	// Chained/piped commands require approval — approve all for this test
+	executor.SetApprovalCallback(func(ctx context.Context, req ApprovalRequest) (bool, error) {
+		return true, nil
+	})
 
 	ctx := context.Background()
 
@@ -514,13 +535,13 @@ func TestBashTool_ComplexCommands(t *testing.T) {
 	text := extractTextFromContent(resp.Content)
 	assert.Contains(t, text, "hello world")
 
-	// Test command with pipe (if shell supports it)
+	// Test command with pipe (chained — requires approval)
 	resp, err = tool.Call(ctx, BashParams{Command: "echo 'test' | cat"})
 	assert.NoError(t, err)
 	text = extractTextFromContent(resp.Content)
 	assert.Contains(t, text, "test")
 
-	// Test command with redirect
+	// Test command with redirect and &&  (chained — requires approval)
 	resp, err = tool.Call(ctx, BashParams{Command: "echo 'redirect test' > /dev/null && echo 'success'"})
 	assert.NoError(t, err)
 	text = extractTextFromContent(resp.Content)

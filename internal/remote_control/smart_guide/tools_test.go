@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/tingly-dev/tingly-agentscope/pkg/message"
 	"github.com/tingly-dev/tingly-agentscope/pkg/tool"
+	"github.com/tingly-dev/tingly-box/agentsec/bash"
 )
 
 func extractTextFromResponse(resp *tool.ToolResponse) string {
@@ -27,8 +28,8 @@ func extractTextFromResponse(resp *tool.ToolResponse) string {
 
 func TestNewBashTool(t *testing.T) {
 	executor := NewToolExecutor([]string{"ls"})
-	allowlist := []string{"ls", "cat"}
-	bashTool := NewBashTool(executor, allowlist)
+	allowlist := []string{"Bash(ls)", "Bash(cat)"}
+	bashTool := NewBashTool(executor, parseRules(allowlist))
 
 	assert.NotNil(t, bashTool)
 	assert.Equal(t, "bash", bashTool.Name())
@@ -37,7 +38,7 @@ func TestNewBashTool(t *testing.T) {
 
 func TestBashTool_NameDescription(t *testing.T) {
 	executor := NewToolExecutor([]string{})
-	bashTool := NewBashTool(executor, []string{})
+	bashTool := NewBashTool(executor, parseRules([]string{}))
 
 	assert.Equal(t, "bash", bashTool.Name())
 	assert.Contains(t, bashTool.Description(), "Execute bash commands")
@@ -48,8 +49,8 @@ func TestBashTool_NameDescription(t *testing.T) {
 
 func TestBashTool_Call(t *testing.T) {
 	ctx := context.Background()
-	executor := NewToolExecutor([]string{"ls", "echo", "pwd", "cd"})       // Allow cd in executor
-	bashTool := NewBashTool(executor, []string{"ls", "echo", "pwd", "cd"}) // Also allow cd in tool to test cd-specific logic
+	executor := NewToolExecutor([]string{"ls", "echo", "pwd", "cd"})
+	bashTool := NewBashTool(executor, parseRules([]string{"Bash(ls)", "Bash(echo)", "Bash(pwd)", "Bash(cd)"}))
 
 	// Test valid command
 	resp, err := bashTool.Call(ctx, BashParams{Command: "echo hello"})
@@ -58,11 +59,11 @@ func TestBashTool_Call(t *testing.T) {
 	assert.Contains(t, text, "(cwd:")
 	assert.Contains(t, text, "hello\n")
 
-	// Test command not in tool's allowlist (but might be in executor's - tool's takes precedence)
+	// Test command not in tool's allowlist
 	resp, err = bashTool.Call(ctx, BashParams{Command: "cat /etc/hosts"})
 	assert.NoError(t, err) // No error from Call, but should be an error message in text
 	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "Error: command 'cat' is not allowed")
+	assert.Contains(t, text, "Error: command \"cat\" is not allowed")
 
 	// Test empty command
 	resp, err = bashTool.Call(ctx, BashParams{Command: ""})
@@ -70,11 +71,12 @@ func TestBashTool_Call(t *testing.T) {
 	text = extractTextFromResponse(resp)
 	assert.Contains(t, text, "Error: 'command' parameter is required")
 
-	// Test 'cd' command is now allowed when using shell chaining
+	// Test 'cd /tmp && pwd' — contains && so it requires approval (chained command)
+	// Without an approval callback set, it should be denied
 	resp, err = bashTool.Call(ctx, BashParams{Command: "cd /tmp && pwd"})
 	assert.NoError(t, err)
 	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "/tmp")
+	assert.Contains(t, text, "Error:")
 
 	// Test command with arguments
 	resp, err = bashTool.Call(ctx, BashParams{Command: "echo arg1 arg2"})
@@ -266,11 +268,13 @@ func TestChangeDirTool_Call(t *testing.T) {
 
 func TestRegisterTools(t *testing.T) {
 	toolkit := tool.NewToolkit()
-	executor := NewToolExecutor(DefaultBashAllowlist)
+	// For NewToolExecutor, we use []string for backward compatibility
+	// The actual rules are enforced by the BashTool itself via the rules parameter
+	executor := NewToolExecutor([]string{"ls", "pwd", "cd", "cat", "tree", "mkdir", "rm", "cp", "mv", "touch", "chmod", "git", "curl", "wget", "echo", "which", "head", "tail", "wc", "find", "grep"})
 	getStatusFunc := func(chatID string) (*StatusInfo, error) { return nil, nil }
 	updateProjectFunc := func(chatID string, projectPath string) error { return nil }
 
-	err := RegisterTools(toolkit, executor, "test-chat", getStatusFunc, updateProjectFunc, nil)
+	err := RegisterTools(toolkit, executor, "test-chat", getStatusFunc, updateProjectFunc, nil, bash.DefaultRules())
 	assert.NoError(t, err)
 
 	// Verify schemas are registered (tools should be available)
@@ -292,7 +296,7 @@ func TestRegisterTools(t *testing.T) {
 func TestToolExecutor_ApprovalCallback(t *testing.T) {
 	ctx := context.Background()
 	executor := NewToolExecutor([]string{"ls", "echo"}) // Limited allowlist
-	bashTool := NewBashTool(executor, []string{"ls", "echo"})
+	bashTool := NewBashTool(executor, parseRules([]string{"Bash(ls)", "Bash(echo)"}))
 
 	// Test 1: Command in allowlist - no approval needed
 	resp, err := bashTool.Call(ctx, BashParams{Command: "ls ."})
@@ -304,7 +308,7 @@ func TestToolExecutor_ApprovalCallback(t *testing.T) {
 	resp, err = bashTool.Call(ctx, BashParams{Command: "cat /etc/hosts"})
 	assert.NoError(t, err) // Call doesn't return error, error is in response text
 	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "Error: command 'cat' is not allowed")
+	assert.Contains(t, text, "Error: command \"cat\" is not allowed")
 
 	// Test 3: Command not in allowlist, with approval callback - approved
 	approvalCalled := false
@@ -322,7 +326,7 @@ func TestToolExecutor_ApprovalCallback(t *testing.T) {
 	assert.Equal(t, "pwd", approvedCommand)
 	// The command should execute successfully after approval
 	text = extractTextFromResponse(resp)
-	assert.NotContains(t, text, "Error: command 'pwd' was not approved")
+	assert.NotContains(t, text, "Error: command \"pwd\" was not approved")
 
 	// Test 4: Command not in allowlist, with approval callback - denied
 	executor.SetApprovalCallback(func(ctx context.Context, req ApprovalRequest) (bool, error) {
@@ -332,7 +336,7 @@ func TestToolExecutor_ApprovalCallback(t *testing.T) {
 	resp, err = bashTool.Call(ctx, BashParams{Command: "date"})
 	assert.NoError(t, err) // Call doesn't return error, error is in response text
 	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "Error: command 'date' was not approved")
+	assert.Contains(t, text, "Error: command \"date\" was not approved")
 
 	// Test 5: Approval callback returns error
 	executor.SetApprovalCallback(func(ctx context.Context, req ApprovalRequest) (bool, error) {
@@ -356,12 +360,15 @@ func TestBashTool_DirectoryTracking(t *testing.T) {
 	assert.NoError(t, os.Mkdir(subDir2, 0755))
 
 	// Create executor and set initial directory
-	// Empty allowlist means allow all (for testing convenience)
-	executor := NewToolExecutor([]string{})
+	executor := NewToolExecutor([]string{"cd", "pwd", "ls"})
 	executor.SetWorkingDirectory(rootTempDir)
+	// Approve all chained commands (needed for "cd x && pwd" pattern)
+	executor.SetApprovalCallback(func(ctx context.Context, req ApprovalRequest) (bool, error) {
+		return true, nil
+	})
 
-	// Create bash tool with empty allowlist (allows all commands)
-	bashTool := NewBashTool(executor, []string{})
+	// Create bash tool with matching allowlist
+	bashTool := NewBashTool(executor, parseRules([]string{"Bash(cd)", "Bash(pwd)", "Bash(ls)"}))
 
 	// Test 1: Initial directory
 	assert.Equal(t, rootTempDir, executor.GetWorkingDirectory(), "Initial directory should be rootTempDir")

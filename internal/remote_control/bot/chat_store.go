@@ -3,9 +3,11 @@ package bot
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/agentsec"
 	"github.com/tingly-dev/tingly-box/pkg/jsonstore"
 )
 
@@ -54,7 +56,8 @@ type Chat struct {
 	WhitelistedBy string `json:"whitelisted_by,omitempty"`
 
 	// Bash state
-	BashCwd string `json:"bash_cwd,omitempty"`
+	BashCwd string              `json:"bash_cwd,omitempty"`
+	Rules   agentsec.RulesSlice `json:"rules,omitempty"` // user-granted tool rules
 
 	// Agent state (for smart guide handoff)
 	CurrentAgent string `json:"current_agent,omitempty"` // "tingly-box" or "claude"
@@ -108,6 +111,15 @@ type ChatStoreInterface interface {
 
 	// GetBashCwd retrieves the bash working directory for a chat
 	GetBashCwd(chatID string) (string, bool, error)
+
+	// GetRules retrieves the persisted rules for a chat
+	GetRules(chatID string) ([]agentsec.Rule, error)
+
+	// AddRule adds a rule to the persisted rules for a chat
+	AddRule(chatID string, rule agentsec.Rule) error
+
+	// RemoveRule removes a rule from the persisted rules for a chat
+	RemoveRule(chatID string, rule string) error
 
 	// SetCurrentAgent sets the current agent for a chat
 	SetCurrentAgent(chatID, agentType string) error
@@ -374,6 +386,55 @@ func (s *ChatStoreJSON) GetBashCwd(chatID string) (string, bool, error) {
 		return "", false, nil
 	}
 	return chat.BashCwd, true, nil
+}
+
+// ============== Rules (New API) ==============
+
+// GetRules retrieves the persisted rules for a chat.
+func (s *ChatStoreJSON) GetRules(chatID string) ([]agentsec.Rule, error) {
+	if s == nil || s.store == nil {
+		return nil, nil
+	}
+	chat := s.store.Get(chatID)
+	if chat == nil {
+		return nil, nil
+	}
+	return chat.Rules, nil
+}
+
+// AddRule adds a rule to the persisted rules for a chat.
+// Deduplicates based on the rule's String() representation (case-insensitive).
+func (s *ChatStoreJSON) AddRule(chatID string, rule agentsec.Rule) error {
+	return s.UpdateChat(chatID, func(chat *Chat) {
+		ruleStr := rule.String()
+		ruleLower := strings.ToLower(ruleStr)
+
+		// Check if already in Rules
+		for _, existing := range chat.Rules {
+			if strings.ToLower(existing.String()) == ruleLower {
+				return // already present
+			}
+		}
+
+		chat.Rules = append(chat.Rules, rule)
+	})
+}
+
+// RemoveRule removes a rule from the persisted rules for a chat.
+// It matches by the rule's String() representation (case-insensitive).
+func (s *ChatStoreJSON) RemoveRule(chatID string, rule string) error {
+	return s.UpdateChat(chatID, func(chat *Chat) {
+		ruleLower := strings.ToLower(rule)
+
+		// Remove from Rules
+		var filtered []agentsec.Rule
+		for _, existing := range chat.Rules {
+			if strings.ToLower(existing.String()) != ruleLower {
+				filtered = append(filtered, existing)
+			}
+		}
+		chat.Rules = filtered
+	})
 }
 
 // ============== Current Agent ==============
