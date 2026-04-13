@@ -1,9 +1,11 @@
-package dataexport
+package dataio
 
 import (
 	"encoding/base64"
 	"fmt"
 	"strings"
+
+	"github.com/tingly-dev/tingly-box/internal/server/config"
 )
 
 // Base64Exporter exports data in Base64-encoded JSONL format
@@ -45,6 +47,35 @@ func (e *Base64Exporter) Export(req *ExportRequest) (*ExportResult, error) {
 // Format returns the format type
 func (e *Base64Exporter) Format() Format {
 	return FormatBase64
+}
+
+// Base64Importer imports data from Base64-encoded JSONL format
+type Base64Importer struct {
+	jsonlImporter *JSONLImporter
+}
+
+// NewBase64Importer creates a new Base64 importer
+func NewBase64Importer() *Base64Importer {
+	return &Base64Importer{
+		jsonlImporter: NewJSONLImporter(),
+	}
+}
+
+// Format returns the format type
+func (i *Base64Importer) Format() Format {
+	return FormatBase64
+}
+
+// Import imports data from Base64 format
+func (i *Base64Importer) Import(data string, globalConfig *config.Config, opts ImportOptions) (*ImportResult, error) {
+	// Decode Base64 to JSONL
+	jsonlData, err := DecodeBase64Export(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode Base64 export: %w", err)
+	}
+
+	// Use JSONL importer to process the decoded data
+	return i.jsonlImporter.Import(jsonlData, globalConfig, opts)
 }
 
 // DecodeBase64Export decodes a Base64 export back to JSONL content

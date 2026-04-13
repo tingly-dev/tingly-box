@@ -8,8 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/tingly-dev/tingly-box/internal/config"
-	exportpkg "github.com/tingly-dev/tingly-box/internal/dataexport"
-	importpkg "github.com/tingly-dev/tingly-box/internal/dataimport"
+	exportpkg "github.com/tingly-dev/tingly-box/internal/dataio"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server"
@@ -544,18 +543,18 @@ func (am *AppManager) getProviderUUIDsFromRule(rule *typ.Rule) []string {
 // ============
 
 // ImportRule imports a rule from data in the specified format
-func (am *AppManager) ImportRule(data string, format importpkg.Format, opts ImportOptions) (*ImportResult, error) {
+func (am *AppManager) ImportRule(data string, format exportpkg.Format, opts ImportOptions) (*ImportResult, error) {
 	globalConfig := am.appConfig.GetGlobalConfig()
 
 	// Convert command.ImportOptions to import.ImportOptions
-	importOpts := importpkg.ImportOptions{
+	importOpts := exportpkg.ImportOptions{
 		OnProviderConflict: opts.OnProviderConflict,
 		OnRuleConflict:     opts.OnRuleConflict,
 		Quiet:              opts.Quiet,
 	}
 
 	// Perform import
-	result, err := importpkg.Import(data, globalConfig, format, importOpts)
+	result, err := exportpkg.Import(data, globalConfig, format, importOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to import rule: %w", err)
 	}

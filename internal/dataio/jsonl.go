@@ -1,56 +1,11 @@
-package dataexport
+package dataio
 
 import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-// ExportLine is the base type for all export lines
-type ExportLine struct {
-	Type string `json:"type"`
-}
-
-// ExportMetadata represents the metadata line
-type ExportMetadata struct {
-	Type       string `json:"type"`
-	Version    string `json:"version"`
-	ExportedAt string `json:"exported_at"`
-}
-
-// ExportRuleData represents the rule export data
-type ExportRuleData struct {
-	Type          string                 `json:"type"`
-	UUID          string                 `json:"uuid"`
-	Scenario      string                 `json:"scenario"`
-	RequestModel  string                 `json:"request_model"`
-	ResponseModel string                 `json:"response_model"`
-	Description   string                 `json:"description"`
-	Services      []*loadbalance.Service `json:"services"`
-	LBTactic      typ.Tactic             `json:"lb_tactic"`
-	Active        bool                   `json:"active"`
-	SmartEnabled  bool                   `json:"smart_enabled"`
-	SmartRouting  []interface{}          `json:"smart_routing"`
-}
-
-// ExportProviderData represents the provider export data
-type ExportProviderData struct {
-	Type        string           `json:"type"`
-	UUID        string           `json:"uuid"`
-	Name        string           `json:"name"`
-	APIBase     string           `json:"api_base"`
-	APIStyle    string           `json:"api_style"`
-	AuthType    string           `json:"auth_type"`
-	Token       string           `json:"token"`
-	OAuthDetail *typ.OAuthDetail `json:"oauth_detail"`
-	Enabled     bool             `json:"enabled"`
-	ProxyURL    string           `json:"proxy_url"`
-	Timeout     int64            `json:"timeout"`
-	Tags        []string         `json:"tags"`
-	Models      []string         `json:"models"`
-}
 
 // ExportRequest contains the data needed for export
 type ExportRequest struct {
@@ -93,7 +48,7 @@ func (e *JSONLExporter) buildJSONLLines(req *ExportRequest) (string, error) {
 	lines := make([]string, 0, 2+len(req.Providers))
 
 	// Line 1: Metadata
-	metadata := ExportMetadata{
+	metadata := Metadata{
 		Type:       "metadata",
 		Version:    CurrentVersion,
 		ExportedAt: timestamp(),
@@ -140,15 +95,15 @@ func (e *JSONLExporter) buildJSONLLines(req *ExportRequest) (string, error) {
 	return joinLines(lines), nil
 }
 
-// buildRuleData converts a Rule to ExportRuleData
-func (e *JSONLExporter) buildRuleData(rule *typ.Rule) ExportRuleData {
+// buildRuleData converts a Rule to RuleData
+func (e *JSONLExporter) buildRuleData(rule *typ.Rule) RuleData {
 	// Convert SmartRouting to []interface{} for JSON marshaling
 	smartRouting := make([]interface{}, len(rule.SmartRouting))
 	for i, sr := range rule.SmartRouting {
 		smartRouting[i] = sr
 	}
 
-	return ExportRuleData{
+	return RuleData{
 		Type:          "rule",
 		UUID:          rule.UUID,
 		Scenario:      string(rule.Scenario),
@@ -163,9 +118,9 @@ func (e *JSONLExporter) buildRuleData(rule *typ.Rule) ExportRuleData {
 	}
 }
 
-// buildProviderData converts a Provider to ExportProviderData
-func (e *JSONLExporter) buildProviderData(provider *typ.Provider) ExportProviderData {
-	return ExportProviderData{
+// buildProviderData converts a Provider to ProviderData
+func (e *JSONLExporter) buildProviderData(provider *typ.Provider) ProviderData {
+	return ProviderData{
 		Type:        "provider",
 		UUID:        provider.UUID,
 		Name:        provider.Name,

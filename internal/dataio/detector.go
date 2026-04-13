@@ -1,4 +1,4 @@
-package dataimport
+package dataio
 
 import (
 	"strings"
