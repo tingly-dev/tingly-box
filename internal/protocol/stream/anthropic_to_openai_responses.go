@@ -2,7 +2,6 @@ package stream
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -557,12 +556,7 @@ func sendResponsesEvent(c *gin.Context, event map[string]interface{}, flusher ht
 	default:
 	}
 
-	eventJSON, err := json.Marshal(event)
-	if err != nil {
-		logrus.Errorf("Failed to marshal Responses event: %v", err)
-		return
-	}
-	OpenAISSE(c, eventJSON)
+	OpenAISSE(c, event)
 }
 
 // sendResponsesErrorEvent sends an error event in Responses API format

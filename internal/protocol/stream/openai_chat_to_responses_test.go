@@ -154,7 +154,7 @@ func TestSendChatToResponsesEvent(t *testing.T) {
 		},
 	}
 
-	sendChatToResponsesEvent(c, eventData, w)
+	OpenAISSE(c, eventData)
 
 	body := w.Body.String()
 	assert.Contains(t, body, "data:")

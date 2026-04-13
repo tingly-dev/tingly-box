@@ -227,14 +227,8 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 				chunkMap["obfuscation"] = obfuscationValue
 			}
 
-			// Convert to JSON and send as SSE
-			chunkJSON, err := json.Marshal(chunkMap)
-			if err != nil {
-				return err
-			}
-
 			// Send the chunk
-			OpenAISSE(c, chunkJSON)
+			OpenAISSE(c, chunkMap)
 			return nil
 		},
 	)
@@ -415,7 +409,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		}
 
 		// Send SSE event with event type (e.g., "response.created", "response.output_text.delta")
-		OpenAISSE(c, jsonBytes)
+		OpenAISSE(c, json.RawMessage(jsonBytes))
 		return true
 	})
 
@@ -444,8 +438,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 			},
 		}
 
-		errorJSON, _ := json.Marshal(errorChunk)
-		OpenAISSE(c, errorJSON)
+		OpenAISSE(c, errorChunk)
 		return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), err
 	}
 

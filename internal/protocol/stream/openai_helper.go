@@ -12,9 +12,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// OpenAISSE writes a JSON payload as an OpenAI-style SSE data line and flushes.
+// OpenAISSE marshals v to JSON and writes it as an OpenAI-style SSE data line, then flushes.
 // MENTION: Must keep extra space after "data:" to match OpenAI wire format.
-func OpenAISSE(c *gin.Context, data []byte) {
+func OpenAISSE(c *gin.Context, v any) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		logrus.Errorf("OpenAISSE: failed to marshal: %v", err)
+		return
+	}
 	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", data))
 	if flusher, ok := c.Writer.(http.Flusher); ok {
 		flusher.Flush()
@@ -27,17 +32,6 @@ func OpenAISSEDone(c *gin.Context) {
 	if flusher, ok := c.Writer.(http.Flusher); ok {
 		flusher.Flush()
 	}
-}
-
-// sendChatToResponsesEvent sends an event in Responses API SSE format (specific to Chat → Responses conversion)
-func sendChatToResponsesEvent(c *gin.Context, event map[string]interface{}, flusher http.Flusher) {
-	eventJSON, err := json.Marshal(event)
-	if err != nil {
-		logrus.Errorf("Failed to marshal Responses event: %v", err)
-		return
-	}
-	// Responses API SSE format: data: <json>\n\n
-	OpenAISSE(c, eventJSON)
 }
 
 func nextSequenceNumber(state *chatToResponsesState) int64 {

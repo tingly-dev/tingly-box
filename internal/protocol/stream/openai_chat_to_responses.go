@@ -2,7 +2,6 @@ package stream
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -237,8 +236,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 			"sequence_number": nextSequenceNumber(state),
 			"error":           map[string]interface{}{"message": err.Error(), "type": "stream_error"},
 		}
-		errorJSON, _ := json.Marshal(errorEvent)
-		OpenAISSE(c, errorJSON)
+		OpenAISSE(c, errorEvent)
 
 		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), err
 	}
@@ -286,7 +284,7 @@ func sendResponsesCreatedEvent(c *gin.Context, state *chatToResponsesState, flus
 			},
 		},
 	}
-	sendChatToResponsesEvent(c, event, flusher)
+	OpenAISSE(c, event)
 }
 
 func sendResponsesOutputTextItemAdded(c *gin.Context, state *chatToResponsesState, flusher http.Flusher) {
@@ -311,7 +309,7 @@ func sendResponsesOutputTextItemAdded(c *gin.Context, state *chatToResponsesStat
 			},
 		},
 	}
-	sendChatToResponsesEvent(c, event, flusher)
+	OpenAISSE(c, event)
 }
 
 // sendResponsesOutputTextDelta sends response.output_text.delta event
@@ -325,7 +323,7 @@ func sendResponsesOutputTextDelta(c *gin.Context, state *chatToResponsesState, d
 		"delta":           delta,
 		"logprobs":        []interface{}{},
 	}
-	sendChatToResponsesEvent(c, event, flusher)
+	OpenAISSE(c, event)
 }
 
 // sendResponsesOutputItemAdded sends response.output_item.added event for tool calls
@@ -346,7 +344,7 @@ func sendResponsesOutputItemAdded(c *gin.Context, state *chatToResponsesState, i
 		},
 		"output_index": outputIndex,
 	}
-	sendChatToResponsesEvent(c, event, flusher)
+	OpenAISSE(c, event)
 }
 
 // sendResponsesFunctionCallArgumentsDelta sends response.function_call_arguments.delta event
@@ -358,7 +356,7 @@ func sendResponsesFunctionCallArgumentsDelta(c *gin.Context, state *chatToRespon
 		"output_index":    outputIndex,
 		"delta":           delta,
 	}
-	sendChatToResponsesEvent(c, event, flusher)
+	OpenAISSE(c, event)
 }
 
 // sendResponsesCompletedEvent sends the response.completed event
@@ -373,7 +371,7 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 			"text":            state.accumulatedText.String(),
 			"logprobs":        []interface{}{},
 		}
-		sendChatToResponsesEvent(c, textDone, flusher)
+		OpenAISSE(c, textDone)
 
 		textItemDone := map[string]interface{}{
 			"type":            "response.output_item.done",
@@ -393,7 +391,7 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 				},
 			},
 		}
-		sendChatToResponsesEvent(c, textItemDone, flusher)
+		OpenAISSE(c, textItemDone)
 	}
 
 	sortedIndexes := make([]int, 0, len(state.pendingToolCalls))
@@ -416,7 +414,7 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 			"name":            ptc.name,
 			"arguments":       ptc.arguments.String(),
 		}
-		sendChatToResponsesEvent(c, argumentsDone, flusher)
+		OpenAISSE(c, argumentsDone)
 
 		itemDone := map[string]interface{}{
 			"type":            "response.output_item.done",
@@ -431,7 +429,7 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 				"status":    "completed",
 			},
 		}
-		sendChatToResponsesEvent(c, itemDone, flusher)
+		OpenAISSE(c, itemDone)
 	}
 
 	// Build output array
@@ -499,5 +497,5 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 		event["response"].(map[string]interface{})["model"] = model
 	}
 
-	sendChatToResponsesEvent(c, event, flusher)
+	OpenAISSE(c, event)
 }

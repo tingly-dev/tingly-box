@@ -301,12 +301,7 @@ func sendOpenAIStreamChunk(c *gin.Context, chunk openai.ChatCompletionChunk, dis
 		delete(chunkMap, "usage")
 	}
 
-	chunkJSON, err := json.Marshal(chunkMap)
-	if err != nil {
-		logrus.Errorf("Failed to marshal chunk: %v", err)
-		return
-	}
-	OpenAISSE(c, chunkJSON)
+	OpenAISSE(c, chunkMap)
 }
 
 func chunkToMap(chunk openai.ChatCompletionChunk) (map[string]interface{}, error) {
@@ -323,12 +318,7 @@ func chunkToMap(chunk openai.ChatCompletionChunk) (map[string]interface{}, error
 
 // sendOpenAIStreamChunk helper function to send a chunk in OpenAI format
 func sendOpenAIStreamChunkForce(c *gin.Context, chunk map[string]interface{}) {
-	chunkJSON, err := json.Marshal(chunk)
-	if err != nil {
-		logrus.Errorf("Failed to marshal chunk: %v", err)
-		return
-	}
-	OpenAISSE(c, chunkJSON)
+	OpenAISSE(c, chunk)
 }
 
 // sendOpenAIStreamError sends an error chunk in OpenAI format
@@ -339,8 +329,7 @@ func sendOpenAIStreamError(c *gin.Context, message, errorType string) {
 			"type":    errorType,
 		},
 	}
-	errorJSON, _ := json.Marshal(errorMap)
-	OpenAISSE(c, errorJSON)
+	OpenAISSE(c, errorMap)
 }
 
 // createReasoningContentChunk creates a chunk with reasoning_content field
