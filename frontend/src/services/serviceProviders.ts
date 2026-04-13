@@ -17,6 +17,7 @@ export interface ServiceProvider {
     base_url_anthropic?: string;
     auth_type?: string;
     oauth_provider?: string;
+    icon?: string; // Icon identifier for Lobe Icons (e.g., "openai", "anthropic")
 }
 
 export interface ServiceProviderOption {
@@ -154,6 +155,7 @@ export interface UniqueProvider {
     supportsAnthropic: boolean;
     baseUrlOpenAI?: string;
     baseUrlAnthropic?: string;
+    icon?: string; // Icon identifier for Lobe Icons
 }
 
 // Get all unique providers (not split by API style)
@@ -164,8 +166,8 @@ export function getAllUniqueProviders(): UniqueProvider[] {
     Object.entries(serviceProviders).forEach(([_key, provider]: [string, any]) => {
         const sp = provider as ServiceProvider;
 
-        // Skip OAuth-only providers (providers that only support OAuth, not API keys)
-        if (sp.oauth_provider && !sp.base_url_openai && !sp.base_url_anthropic) {
+        // Skip OAuth providers - they should be added via the OAuth dialog, not API key dialog
+        if (sp.oauth_provider) {
             return;
         }
 
@@ -177,6 +179,7 @@ export function getAllUniqueProviders(): UniqueProvider[] {
             supportsAnthropic: !!sp.base_url_anthropic,
             baseUrlOpenAI: sp.base_url_openai,
             baseUrlAnthropic: sp.base_url_anthropic,
+            icon: sp.icon,
         });
     });
 

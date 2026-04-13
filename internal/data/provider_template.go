@@ -50,7 +50,7 @@ type ProviderTemplate struct {
 	ID                     string            `json:"id"`
 	Name                   string            `json:"name"`
 	Alias                  string            `json:"alias,omitempty"` // Display name with locale information
-	Status                 string            `json:"status"` // "active", "deprecated", etc.
+	Status                 string            `json:"status"`          // "active", "deprecated", etc.
 	Valid                  bool              `json:"valid"`
 	Website                string            `json:"website"`
 	Description            string            `json:"description"`
@@ -68,6 +68,7 @@ type ProviderTemplate struct {
 	OAuthProvider          string            `json:"oauth_provider,omitempty"`    // OAuth provider type for oauth type providers
 	AuthType               string            `json:"auth_type,omitempty"`         // "oauth", "key"
 	WebSearchSchema        string            `json:"web_search_schema,omitempty"` // Reference to capability schema for web_search
+	Icon                   string            `json:"icon,omitempty"`              // Icon identifier (e.g., "openai", "anthropic") for Lobe Icons
 
 	// Capacity configuration for TacticCapacityBased load balancing
 	// TotalCapacity is the total seat count for this provider (shared across all models)
