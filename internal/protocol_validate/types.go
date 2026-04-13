@@ -24,7 +24,11 @@
 //	assert.Equal(t, "assistant", result.Role)
 package protocol_validate
 
-import "github.com/tingly-dev/tingly-box/internal/protocol"
+import (
+	"time"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+)
 
 // TokenUsage holds token counts extracted from a provider response.
 type TokenUsage struct {
@@ -66,4 +70,35 @@ type RoundTripResult struct {
 type Assertion struct {
 	Name  string
 	Check func(r *RoundTripResult) error
+}
+
+// TestResult represents the outcome of a single matrix test combination.
+// This is returned by Matrix.ExecuteAll() for CLI and other non-testing contexts.
+type TestResult struct {
+	// Test identification
+	Name      string        // Full test name: "scenario/source/target/mode"
+	Scenario  string        // Scenario name: "text", "tool_use", etc.
+	Source    protocol.APIType
+	Target    protocol.APIType
+	Streaming bool
+
+	// Test outcome
+	Passed     bool   // true if all assertions passed
+	Skipped    bool   // true if test was skipped
+	SkipReason string // reason for skipping
+
+	// Error details
+	Errors   []AssertionError // list of assertion failures
+	Duration time.Duration    // test execution time
+
+	// Response details (for debugging/verbose output)
+	HTTPStatus int              // HTTP status code
+	Response   *RoundTripResult // full round-trip result
+}
+
+// AssertionError represents a single assertion failure.
+type AssertionError struct {
+	Assertion string // assertion name
+	Error     string // error message
+	Context   string // additional context (truncated body, etc.)
 }
