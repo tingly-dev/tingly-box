@@ -38,12 +38,17 @@ Examples:
   harness profile claude "What is 2+2?"
 
   # Test opencode profile
-  harness profile opencode "Hello, world!"`,
+  harness profile opencode "Hello, world!"
+
+  # Test with real providers from a config file
+  harness profile real claude --models models.yaml`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runProfileTest(args)
 		},
 	}
+
+	cmd.AddCommand(newProfileRealCommand())
 
 	return cmd
 }
@@ -124,29 +129,30 @@ func executeAgentCommand(profileType protocol_validate.ProfileType, prompt strin
 }
 
 // executeClaudeTest executes claude CLI backed by an ephemeral gateway + virtual server.
-// Flow: NewProfileTestEnv → SetupProfile → write settings.json → claude --settings <file> -p <prompt>
 func executeClaudeTest(prompt string) (*ProfileTestResult, error) {
-	start := time.Now()
-	result := &ProfileTestResult{
-		Profile: "claude",
-		Prompt:  prompt,
-	}
-
 	const model = "tingly/cc"
 
-	// 1. Start isolated gateway + virtual server
 	env, err := protocol_validate.NewProfileTestEnv(protocol_validate.ProfileTypeClaudeCode)
 	if err != nil {
 		return nil, fmt.Errorf("create test env: %w", err)
 	}
 	defer env.Close(false)
 
-	// 2. Register virtual provider + routing rule (requestModel = model = ANTHROPIC_MODEL)
 	if err := env.SetupProfile(protocol_validate.ProfileTypeClaudeCode, "virtual-claude", model); err != nil {
 		return nil, fmt.Errorf("setup profile: %w", err)
 	}
 
-	// 3. Write settings.json pointing at the ephemeral gateway
+	return executeClaudeWithEnv(env, model, prompt)
+}
+
+// executeClaudeWithEnv writes settings.json and runs claude CLI against a pre-configured env.
+func executeClaudeWithEnv(env *protocol_validate.ProfileTestEnv, model string, prompt string) (*ProfileTestResult, error) {
+	start := time.Now()
+	result := &ProfileTestResult{
+		Profile: "claude",
+		Prompt:  prompt,
+	}
+
 	settingsDir, err := os.MkdirTemp("", "harness-claude-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp settings dir: %w", err)
@@ -171,7 +177,6 @@ func executeClaudeTest(prompt string) (*ProfileTestResult, error) {
 		return nil, fmt.Errorf("write settings: %w", err)
 	}
 
-	// 4. Discover claude binary
 	variant, err := claude.FindClaudeCLI(context.Background())
 	if err != nil {
 		result.Duration = time.Since(start)
@@ -184,7 +189,6 @@ func executeClaudeTest(prompt string) (*ProfileTestResult, error) {
 	fmt.Printf("🔧 Settings: %s\n", settingsPath)
 	fmt.Printf("🚀 Command: claude --settings %s -p %s\n\n", settingsPath, prompt)
 
-	// 5. Execute claude non-interactively
 	cmd := exec.Command(variant.Path, "--settings", settingsPath, "-p", prompt)
 	output, err := cmd.CombinedOutput()
 
@@ -202,41 +206,41 @@ func executeClaudeTest(prompt string) (*ProfileTestResult, error) {
 	return result, nil
 }
 
-// executeCodexTest executes codex CLI non-interactively backed by an ephemeral gateway + virtual server.
-// Uses CODEX_HOME to inject a fully isolated config.toml pointing at the ephemeral gateway.
+// executeCodexTest executes codex CLI backed by an ephemeral gateway + virtual server.
 func executeCodexTest(prompt string) (*ProfileTestResult, error) {
-	start := time.Now()
-	result := &ProfileTestResult{
-		Profile: "codex",
-		Prompt:  prompt,
-	}
+	const model = "tingly-codex"
 
-	const model = "tingly-codex" // must match built-in-codex RequestModel
-	const providerKey = "harness"
-
-	// 1. Start isolated gateway + virtual server
 	env, err := protocol_validate.NewProfileTestEnv(protocol_validate.ProfileTypeCodex)
 	if err != nil {
 		return nil, fmt.Errorf("create test env: %w", err)
 	}
 	defer env.Close(false)
 
-	// 2. Register virtual provider + routing rule
 	if err := env.SetupProfile(protocol_validate.ProfileTypeCodex, "virtual-codex", model); err != nil {
 		return nil, fmt.Errorf("setup profile: %w", err)
 	}
 
+	return executeCodexWithEnv(env, model, prompt)
+}
+
+// executeCodexWithEnv writes CODEX_HOME config and runs codex CLI against a pre-configured env.
+func executeCodexWithEnv(env *protocol_validate.ProfileTestEnv, model string, prompt string) (*ProfileTestResult, error) {
+	start := time.Now()
+	result := &ProfileTestResult{
+		Profile: "codex",
+		Prompt:  prompt,
+	}
+
+	const providerKey = "harness"
 	gatewayURL := env.BaseURL() + "/tingly/codex"
 	apiKey := env.ModelToken()
 
-	// 3. Write config.toml into a temp CODEX_HOME dir
 	codexHome, err := os.MkdirTemp("", "harness-codex-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp codex home: %w", err)
 	}
 	defer os.RemoveAll(codexHome)
 
-	// config.toml: define harness provider with the ephemeral gateway URL and token
 	configTOML := fmt.Sprintf(`model = %q
 model_provider = %q
 disable_response_storage = true
@@ -253,7 +257,6 @@ wire_api = "responses"
 		return nil, fmt.Errorf("write codex config: %w", err)
 	}
 
-	// auth.json: provide the API key that codex sends as Authorization: Bearer
 	authJSON := fmt.Sprintf(`{"auth_mode":"apikey","OPENAI_API_KEY":%q}`, apiKey)
 	if err := os.WriteFile(filepath.Join(codexHome, "auth.json"), []byte(authJSON), 0644); err != nil {
 		return nil, fmt.Errorf("write codex auth: %w", err)
@@ -289,34 +292,35 @@ wire_api = "responses"
 	return result, nil
 }
 
-// executeOpenCodeTest executes opencode CLI non-interactively backed by an ephemeral gateway + virtual server.
-// Flow: NewProfileTestEnv → SetupProfile → XDG_CONFIG_HOME=<tmpdir> opencode run --dangerously-skip-permissions -m harness/<model> <prompt>
+// executeOpenCodeTest executes opencode CLI backed by an ephemeral gateway + virtual server.
 func executeOpenCodeTest(prompt string) (*ProfileTestResult, error) {
-	start := time.Now()
-	result := &ProfileTestResult{
-		Profile: "opencode",
-		Prompt:  prompt,
-	}
+	const model = "tingly-opencode"
 
-	const model = "tingly-opencode" // must match built-in-opencode RequestModel
-	const providerKey = "harness"
-
-	// 1. Start isolated gateway + virtual server
 	env, err := protocol_validate.NewProfileTestEnv(protocol_validate.ProfileTypeOpenCode)
 	if err != nil {
 		return nil, fmt.Errorf("create test env: %w", err)
 	}
 	defer env.Close(false)
 
-	// 2. Register virtual provider + routing rule
 	if err := env.SetupProfile(protocol_validate.ProfileTypeOpenCode, "virtual-opencode", model); err != nil {
 		return nil, fmt.Errorf("setup profile: %w", err)
 	}
 
+	return executeOpenCodeWithEnv(env, model, prompt)
+}
+
+// executeOpenCodeWithEnv writes XDG config and runs opencode CLI against a pre-configured env.
+func executeOpenCodeWithEnv(env *protocol_validate.ProfileTestEnv, model string, prompt string) (*ProfileTestResult, error) {
+	start := time.Now()
+	result := &ProfileTestResult{
+		Profile: "opencode",
+		Prompt:  prompt,
+	}
+
+	const providerKey = "harness"
 	gatewayURL := env.BaseURL() + "/tingly/opencode"
 	apiKey := env.ModelToken()
 
-	// 3. Write opencode config.json into a temp XDG dir
 	xdgDir, err := os.MkdirTemp("", "harness-opencode-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp xdg dir: %w", err)

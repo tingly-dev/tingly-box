@@ -8,6 +8,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server_validate"
@@ -261,6 +262,69 @@ func (env *ProfileTestEnv) SetupProfile(profileType ProfileType, providerName st
 	scenario := profileType.Scenario()
 
 	// Resolve the built-in rule UUID and its request model
+	var builtinUUID string
+	var requestModel string
+	switch profileType {
+	case ProfileTypeClaudeCode:
+		builtinUUID = "built-in-cc"
+		requestModel = "tingly/cc"
+	case ProfileTypeCodex:
+		builtinUUID = "built-in-codex"
+		requestModel = "tingly-codex"
+	case ProfileTypeOpenCode:
+		builtinUUID = "built-in-opencode"
+		requestModel = "tingly-opencode"
+	default:
+		return fmt.Errorf("unknown profile type: %s", profileType)
+	}
+
+	rule := typ.Rule{
+		UUID:          builtinUUID,
+		Scenario:      scenario,
+		RequestModel:  requestModel,
+		ResponseModel: modelName,
+		Services: []*loadbalance.Service{
+			{
+				Provider: providerName,
+				Model:    modelName,
+				Weight:   1,
+				Active:   true,
+			},
+		},
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticRandom,
+			Params: typ.DefaultRandomParams(),
+		},
+		Active: true,
+	}
+
+	if err := env.appConfig.GetGlobalConfig().UpdateRequestConfigByUUID(builtinUUID, rule); err != nil {
+		return fmt.Errorf("update rule: %w", err)
+	}
+
+	return nil
+}
+
+// SetupRealProfile configures the environment to route through a real upstream provider.
+// Unlike SetupProfile, it does not use the virtual server — the provider points at the
+// real apiBase with the real apiKey. apiStyle must be "openai" or "anthropic".
+func (env *ProfileTestEnv) SetupRealProfile(profileType ProfileType, providerName string, modelName string, apiBase string, apiKey string, apiStyle string) error {
+	provider := &typ.Provider{
+		UUID:     providerName,
+		Name:     providerName,
+		APIBase:  apiBase,
+		APIStyle: protocol.APIStyle(apiStyle),
+		Token:    apiKey,
+		Enabled:  true,
+		Timeout:  60000,
+	}
+
+	if err := env.appConfig.AddProvider(provider); err != nil {
+		return fmt.Errorf("add provider: %w", err)
+	}
+
+	scenario := profileType.Scenario()
+
 	var builtinUUID string
 	var requestModel string
 	switch profileType {
