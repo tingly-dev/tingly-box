@@ -3,17 +3,22 @@ package stream
 import (
 	"encoding/json"
 	"errors"
+	"github.com/gin-gonic/gin"
 	"net/http"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/gin-gonic/gin"
 	guardrailsmutate "github.com/tingly-dev/tingly-box/internal/guardrails/mutate"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 // rewriteAnthropicGuardrailsEvent keeps the main Anthropic passthrough loop
 // focused on stream orchestration. It only intercepts tool_use-related events;
 // all other events fall through to the normal passthrough sender.
-func rewriteAnthropicGuardrailsEvent(c *gin.Context, beta bool, event interface{}) (bool, error) {
+func rewriteAnthropicGuardrailsEvent(hc *protocol.HandleContext, beta bool, event interface{}) (bool, error) {
+	if hc == nil || hc.GinContext == nil {
+		return false, nil
+	}
+	c := hc.GinContext
 	var (
 		eventType string
 		index     int
@@ -33,12 +38,15 @@ func rewriteAnthropicGuardrailsEvent(c *gin.Context, beta bool, event interface{
 		if evt == nil {
 			return false, nil
 		}
-
+		eventType = evt.Type
+		index = int(evt.Index)
+		block = evt.ContentBlock
+		rawJSON = evt.RawJSON()
 	default:
 		return false, nil
 	}
 
-	if !guardrailsmutate.ShouldRewriteAnthropicEvent(c, eventType, block) {
+	if hc.Guardrails == nil || !guardrailsmutate.ShouldRewriteAnthropicEvent(hc.Guardrails.Stream, eventType, block) {
 		return false, nil
 	}
 
@@ -54,7 +62,7 @@ func rewriteAnthropicGuardrailsEvent(c *gin.Context, beta bool, event interface{
 		return false, errors.New("streaming not supported")
 	}
 
-	decision := guardrailsmutate.HandleAnthropicToolUseBuffer(c, eventType, index, block, eventMap)
+	decision := guardrailsmutate.HandleAnthropicToolUseBuffer(hc.Guardrails.CredentialMask, hc.Guardrails.Stream, eventType, index, block, eventMap)
 	switch decision.Kind {
 	case guardrailsmutate.AnthropicToolUseDecisionBuffer:
 		return true, nil

@@ -151,6 +151,20 @@ func (s *Server) setGuardrailsRuntime(runtime *guardrails.Guardrails, context st
 	}
 }
 
+func ensureGuardrailsCredentialMaskState(c *gin.Context) *guardrailscore.CredentialMaskState {
+	if c == nil {
+		return nil
+	}
+	if existing, ok := c.Get(guardrailscore.CredentialMaskStateContextKey); ok {
+		if state, ok := existing.(*guardrailscore.CredentialMaskState); ok && state != nil {
+			return state
+		}
+	}
+	state := guardrailscore.NewCredentialMaskState()
+	c.Set(guardrailscore.CredentialMaskStateContextKey, state)
+	return state
+}
+
 // ----------------------------------------------------------------------
 // Shared Input Construction
 // ----------------------------------------------------------------------
@@ -188,13 +202,20 @@ func (s *Server) buildGuardrailsBaseInput(c *gin.Context, actualModel string, pr
 // handle context. Provider-specific handlers only need to provide already-normalized
 // message history.
 func (s *Server) attachGuardrailsHooks(c *gin.Context, hc *protocol.HandleContext, actualModel string, provider *typ.Provider, messages []guardrailscore.Message) {
+	guardrailsState := hc.EnsureGuardrails()
 	baseInput := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messages)
+	maskState := ensureGuardrailsCredentialMaskState(c)
+	baseInput.State.CredentialMask = maskState
+	guardrailsState.Enabled = true
+	guardrailsState.CredentialMask = baseInput.State.CredentialMask
+	streamState := hc.EnsureGuardrailsStream()
 	logrus.Debugf("Guardrails: attaching hook (scenario=%s model=%s)", baseInput.Scenario, baseInput.Model)
 
 	onEvent, onError := NewGuardrailsHooks(
 		c.Request.Context(),
 		s.guardrailsRuntime,
 		baseInput,
+		streamState,
 	)
 	if onEvent != nil {
 		hc.WithOnStreamEvent(onEvent)
@@ -202,6 +223,13 @@ func (s *Server) attachGuardrailsHooks(c *gin.Context, hc *protocol.HandleContex
 	if onError != nil {
 		hc.WithOnStreamError(onError)
 	}
+}
+
+func (s *Server) applyGuardrailsCredentialMaskState(input *guardrailscore.Input, state *guardrailscore.CredentialMaskState) {
+	if input == nil {
+		return
+	}
+	input.State.CredentialMask = state
 }
 
 // ----------------------------------------------------------------------
@@ -217,6 +245,7 @@ func (s *Server) applyGuardrailsToAnthropicV1Request(c *gin.Context, req *anthro
 	}
 
 	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionRequest, nil)
+	s.applyGuardrailsCredentialMaskState(&input, ensureGuardrailsCredentialMaskState(c))
 	input.Payload.Protocol = "anthropic_v1"
 	input.Payload.Request = req
 
@@ -239,6 +268,7 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaRequest(c *gin.Context, req *an
 	}
 
 	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionRequest, nil)
+	s.applyGuardrailsCredentialMaskState(&input, ensureGuardrailsCredentialMaskState(c))
 	input.Payload.Protocol = "anthropic_beta"
 	input.Payload.Request = req
 
@@ -265,6 +295,7 @@ func (s *Server) applyGuardrailsToAnthropicV1NonStreamResponse(c *gin.Context, r
 
 	messageHistory := guardrailsadapter.AdaptMessagesFromAnthropicV1(req.System, req.Messages)
 	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messageHistory)
+	s.applyGuardrailsCredentialMaskState(&input, ensureGuardrailsCredentialMaskState(c))
 	input.Payload.Protocol = "anthropic_v1"
 	input.Payload.Response = resp
 
@@ -284,6 +315,7 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Contex
 
 	messageHistory := guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages)
 	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messageHistory)
+	s.applyGuardrailsCredentialMaskState(&input, ensureGuardrailsCredentialMaskState(c))
 	input.Payload.Protocol = "anthropic_beta"
 	input.Payload.Response = resp
 
@@ -298,29 +330,18 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Contex
 // Response Alias Restoration
 // ----------------------------------------------------------------------
 
-func (s *Server) getGuardrailsCredentialMaskState(c *gin.Context) *guardrailscore.CredentialMaskState {
-	if existing, ok := c.Get(guardrailscore.CredentialMaskStateContextKey); ok {
-		if state, ok := existing.(*guardrailscore.CredentialMaskState); ok {
-			return state
-		}
-	}
-	state := guardrailscore.NewCredentialMaskState()
-	c.Set(guardrailscore.CredentialMaskStateContextKey, state)
-	return state
-}
-
-func (s *Server) restoreGuardrailsCredentialAliasesV1Response(c *gin.Context, resp *anthropic.Message) bool {
+func (s *Server) restoreGuardrailsCredentialAliasesV1Response(state *guardrailscore.CredentialMaskState, resp *anthropic.Message) bool {
 	if resp == nil {
 		return false
 	}
-	return restoreAnthropicResponseBlocks(resp.Content, s.getGuardrailsCredentialMaskState(c))
+	return restoreAnthropicResponseBlocks(resp.Content, state)
 }
 
-func (s *Server) restoreGuardrailsCredentialAliasesV1BetaResponse(c *gin.Context, resp *anthropic.BetaMessage) bool {
+func (s *Server) restoreGuardrailsCredentialAliasesV1BetaResponse(state *guardrailscore.CredentialMaskState, resp *anthropic.BetaMessage) bool {
 	if resp == nil {
 		return false
 	}
-	return restoreAnthropicBetaResponseBlocks(resp.Content, s.getGuardrailsCredentialMaskState(c))
+	return restoreAnthropicBetaResponseBlocks(resp.Content, state)
 }
 
 func restoreAnthropicResponseBlocks(blocks []anthropic.ContentBlockUnion, state *guardrailscore.CredentialMaskState) bool {

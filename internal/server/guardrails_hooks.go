@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
@@ -13,9 +14,10 @@ import (
 	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	guardrailsmutate "github.com/tingly-dev/tingly-box/internal/guardrails/mutate"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
-func NewGuardrailsHooks(ctx context.Context, runtime *guardrails.Guardrails, baseInput guardrailscore.Input) (onStreamEvent func(event interface{}) error, onStreamError func(err error)) {
+func NewGuardrailsHooks(ctx context.Context, runtime *guardrails.Guardrails, baseInput guardrailscore.Input, streamState *protocol.GuardrailsStreamState) (onStreamEvent func(event interface{}) error, onStreamError func(err error)) {
 	if runtime == nil || runtime.Policy == nil {
 		return nil, nil
 	}
@@ -49,6 +51,7 @@ func NewGuardrailsHooks(ctx context.Context, runtime *guardrails.Guardrails, bas
 				handleGuardrailsBlock(
 					runtime,
 					input,
+					streamState,
 					toolUse.ID,
 					toolUse.Index,
 					guardrailsmutate.BlockMessageForCommand(result, toolUse.Name, guardrailsadapter.ParseToolArguments(toolUse.Args)),
@@ -85,13 +88,14 @@ func ingestGuardrailsStreamEvent(acc *guardrailsadapter.StreamAccumulator, event
 	}
 }
 
-func handleGuardrailsBlock(runtime *guardrails.Guardrails, input guardrailscore.Input, toolID string, blockIndex int, blockMessage string) {
-	ginCtx := input.Runtime.Context
-	if ginCtx == nil || toolID == "" || blockMessage == "" {
+func handleGuardrailsBlock(runtime *guardrails.Guardrails, input guardrailscore.Input, streamState *protocol.GuardrailsStreamState, toolID string, blockIndex int, blockMessage string) {
+	if toolID == "" || blockMessage == "" {
 		return
 	}
 	if runtime != nil {
 		runtime.AddHistory(input, guardrailscore.Result{Verdict: guardrailscore.VerdictBlock}, "tool_use", blockMessage)
 	}
-	guardrailsmutate.RegisterAnthropicGuardrailsBlock(ginCtx, toolID, blockIndex, blockMessage)
+	if streamState != nil {
+		guardrailsmutate.RegisterAnthropicGuardrailsBlock(streamState, toolID, blockIndex, blockMessage)
+	}
 }

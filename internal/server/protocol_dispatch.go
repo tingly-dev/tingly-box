@@ -98,7 +98,7 @@ func (s *Server) dispatchChainResultToAnthropicV1(
 		// response guardrails
 		_, _, _, _, scenario, _, _ := GetTrackingContext(c)
 		if s.guardrailsEnabledForScenario(scenario) {
-			hc.EnableGuardrailsRewrite = true
+			hc.EnsureGuardrails().Enabled = true
 			s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1(req.System, req.Messages))
 		}
 
@@ -142,9 +142,10 @@ func (s *Server) dispatchChainResultToAnthropicV1(
 		_, _, _, _, scenario, _, _ := GetTrackingContext(c)
 		blocked := false
 		if s.guardrailsEnabledForScenario(scenario) {
+			maskState := ensureGuardrailsCredentialMaskState(c)
 			blocked = s.applyGuardrailsToAnthropicV1NonStreamResponse(c, req, actualModel, provider, anthropicResp)
 			if !blocked {
-				s.restoreGuardrailsCredentialAliasesV1Response(c, anthropicResp)
+				s.restoreGuardrailsCredentialAliasesV1Response(maskState, anthropicResp)
 			}
 		}
 
@@ -210,9 +211,10 @@ func (s *Server) dispatchChainResultToAnthropicBeta(
 		_, _, _, _, scenario, _, _ := GetTrackingContext(c)
 		blocked := false
 		if s.guardrailsEnabledForScenario(scenario) {
+			maskState := ensureGuardrailsCredentialMaskState(c)
 			blocked = s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, req, actualModel, provider, anthropicResp)
 			if !blocked {
-				s.restoreGuardrailsCredentialAliasesV1BetaResponse(c, anthropicResp)
+				s.restoreGuardrailsCredentialAliasesV1BetaResponse(maskState, anthropicResp)
 			}
 		}
 

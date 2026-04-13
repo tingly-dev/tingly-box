@@ -3,9 +3,8 @@ package mutate
 import (
 	"encoding/json"
 
-	"github.com/gin-gonic/gin"
-
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 const (
@@ -15,10 +14,7 @@ const (
 	anthropicDeltaTypeInputJSONDelta    = "input_json_delta"
 )
 
-type AnthropicBufferedEvent struct {
-	EventType string
-	Payload   map[string]interface{}
-}
+type AnthropicBufferedEvent = protocol.GuardrailsBufferedEvent
 
 type AnthropicToolUseDecisionKind string
 
@@ -35,26 +31,18 @@ type AnthropicToolUseDecision struct {
 	Passthrough  []AnthropicBufferedEvent
 }
 
-type anthropicToolUseBufferState struct {
-	ByIndex       map[int][]AnthropicBufferedEvent
-	ToolIDByIndex map[int]string
-}
-
-type anthropicGuardrailsBlockState struct {
-	ToolMessages map[string]string
-	BlockedIndex map[int]string
-}
-
-func RegisterAnthropicGuardrailsBlock(c *gin.Context, toolID string, index int, message string) {
-	if toolID == "" || message == "" {
+func RegisterAnthropicGuardrailsBlock(state *protocol.GuardrailsStreamState, toolID string, index int, message string) {
+	if state == nil || toolID == "" || message == "" {
 		return
 	}
-	state := getAnthropicGuardrailsBlockState(c)
-	state.ToolMessages[toolID] = message
-	state.BlockedIndex[index] = toolID
+	state.PendingBlockMessages[toolID] = message
+	state.PendingBlockedIndex[index] = toolID
 }
 
-func ShouldRewriteAnthropicEvent(c *gin.Context, eventType string, block interface{}) bool {
+// ShouldRewriteAnthropicEvent is the fast-path gate for stream rewriting. It
+// only turns on rewrite handling when a tool_use block starts, or when a
+// previously buffered tool_use block is still in flight.
+func ShouldRewriteAnthropicEvent(state *protocol.GuardrailsStreamState, eventType string, block interface{}) bool {
 	switch eventType {
 	case anthropicEventTypeContentBlockStart:
 		blockType, _ := extractAnthropicBlockTypeAndID(block)
@@ -62,62 +50,80 @@ func ShouldRewriteAnthropicEvent(c *gin.Context, eventType string, block interfa
 			return true
 		}
 	case anthropicEventTypeContentBlockDelta:
-		state := getAnthropicToolUseBufferState(c)
-		if len(state.ByIndex) > 0 {
+		if state != nil && len(state.AnthropicToolEvents) > 0 {
 			return true
 		}
 	case anthropicEventTypeContentBlockStop:
-		state := getAnthropicToolUseBufferState(c)
-		if len(state.ByIndex) > 0 {
+		if state != nil && len(state.AnthropicToolEvents) > 0 {
 			return true
 		}
 	}
 	return false
 }
 
-func HandleAnthropicToolUseBuffer(c *gin.Context, eventType string, index int, block interface{}, eventMap map[string]interface{}) AnthropicToolUseDecision {
+// HandleAnthropicToolUseBuffer owns the protocol-level buffering for one
+// Anthropic tool_use content block. By the time a block_stop arrives, it can
+// choose between:
+// 1. keep buffering
+// 2. emit a synthetic block message
+// 3. flush the original or rebuilt tool_use events
+func HandleAnthropicToolUseBuffer(credentialMask *guardrailscore.CredentialMaskState, streamState *protocol.GuardrailsStreamState, eventType string, index int, block interface{}, eventMap map[string]interface{}) AnthropicToolUseDecision {
+	if streamState == nil {
+		return AnthropicToolUseDecision{}
+	}
 	switch eventType {
 	case anthropicEventTypeContentBlockStart:
 		blockType, toolID := extractAnthropicBlockTypeAndID(block)
 		if blockType != "tool_use" {
 			return AnthropicToolUseDecision{}
 		}
-		state := getAnthropicToolUseBufferState(c)
-		state.ToolIDByIndex[index] = toolID
-		state.ByIndex[index] = append(state.ByIndex[index], AnthropicBufferedEvent{EventType: eventType, Payload: eventMap})
+		streamState.AnthropicToolIDs[index] = toolID
+		streamState.AnthropicToolEvents[index] = append(streamState.AnthropicToolEvents[index], AnthropicBufferedEvent{EventType: eventType, Payload: eventMap})
 		return AnthropicToolUseDecision{Kind: AnthropicToolUseDecisionBuffer}
 	case anthropicEventTypeContentBlockDelta, anthropicEventTypeContentBlockStop:
-		state := getAnthropicToolUseBufferState(c)
-		if _, ok := state.ByIndex[index]; !ok {
+		if _, ok := streamState.AnthropicToolEvents[index]; !ok {
 			return AnthropicToolUseDecision{}
 		}
-		state.ByIndex[index] = append(state.ByIndex[index], AnthropicBufferedEvent{EventType: eventType, Payload: eventMap})
+		streamState.AnthropicToolEvents[index] = append(streamState.AnthropicToolEvents[index], AnthropicBufferedEvent{EventType: eventType, Payload: eventMap})
 		if eventType != anthropicEventTypeContentBlockStop {
 			return AnthropicToolUseDecision{Kind: AnthropicToolUseDecisionBuffer}
 		}
 
-		toolID := state.ToolIDByIndex[index]
-		blockState := getAnthropicGuardrailsBlockState(c)
-		if message, ok := blockState.ToolMessages[toolID]; ok {
-			delete(state.ByIndex, index)
-			delete(state.ToolIDByIndex, index)
+		toolID := streamState.AnthropicToolIDs[index]
+		if message, ok := streamState.PendingBlockMessages[toolID]; ok {
+			delete(streamState.PendingBlockMessages, toolID)
+			delete(streamState.PendingBlockedIndex, index)
+			delete(streamState.AnthropicToolEvents, index)
+			delete(streamState.AnthropicToolIDs, index)
 			return AnthropicToolUseDecision{
 				Kind:         AnthropicToolUseDecisionBlock,
 				BlockMessage: message,
 			}
 		}
+		if blockedToolID, ok := streamState.PendingBlockedIndex[index]; ok && blockedToolID != "" {
+			if message, ok := streamState.PendingBlockMessages[blockedToolID]; ok {
+				delete(streamState.PendingBlockMessages, blockedToolID)
+				delete(streamState.PendingBlockedIndex, index)
+				delete(streamState.AnthropicToolEvents, index)
+				delete(streamState.AnthropicToolIDs, index)
+				return AnthropicToolUseDecision{
+					Kind:         AnthropicToolUseDecisionBlock,
+					BlockMessage: message,
+				}
+			}
+		}
 
-		buffered := state.ByIndex[index]
-		if rebuilt, ok := RebuildBufferedAnthropicToolUseEvents(c, buffered); ok {
-			delete(state.ByIndex, index)
-			delete(state.ToolIDByIndex, index)
+		buffered := streamState.AnthropicToolEvents[index]
+		if rebuilt, ok := RebuildBufferedAnthropicToolUseEvents(credentialMask, buffered); ok {
+			delete(streamState.AnthropicToolEvents, index)
+			delete(streamState.AnthropicToolIDs, index)
 			return AnthropicToolUseDecision{
 				Kind:        AnthropicToolUseDecisionPassthrough,
 				Passthrough: rebuilt,
 			}
 		}
-		delete(state.ByIndex, index)
-		delete(state.ToolIDByIndex, index)
+		delete(streamState.AnthropicToolEvents, index)
+		delete(streamState.AnthropicToolIDs, index)
 		return AnthropicToolUseDecision{
 			Kind:        AnthropicToolUseDecisionPassthrough,
 			Passthrough: buffered,
@@ -126,8 +132,7 @@ func HandleAnthropicToolUseBuffer(c *gin.Context, eventType string, index int, b
 	return AnthropicToolUseDecision{}
 }
 
-func RebuildBufferedAnthropicToolUseEvents(c *gin.Context, events []AnthropicBufferedEvent) ([]AnthropicBufferedEvent, bool) {
-	state := getAnthropicCredentialMaskState(c)
+func RebuildBufferedAnthropicToolUseEvents(state *guardrailscore.CredentialMaskState, events []AnthropicBufferedEvent) ([]AnthropicBufferedEvent, bool) {
 	if state == nil || len(state.AliasToReal) == 0 || len(events) == 0 {
 		return nil, false
 	}
@@ -220,43 +225,6 @@ func RebuildBufferedAnthropicToolUseEvents(c *gin.Context, events []AnthropicBuf
 		},
 		{EventType: anthropicEventTypeContentBlockStop, Payload: stopPayload},
 	}, true
-}
-
-func getAnthropicCredentialMaskState(c *gin.Context) *guardrailscore.CredentialMaskState {
-	if existing, ok := c.Get(guardrailscore.CredentialMaskStateContextKey); ok {
-		if state, ok := existing.(*guardrailscore.CredentialMaskState); ok {
-			return state
-		}
-	}
-	return nil
-}
-
-func getAnthropicToolUseBufferState(c *gin.Context) *anthropicToolUseBufferState {
-	if existing, ok := c.Get("guardrails_tool_buffer"); ok {
-		if state, ok := existing.(*anthropicToolUseBufferState); ok {
-			return state
-		}
-	}
-	state := &anthropicToolUseBufferState{
-		ByIndex:       make(map[int][]AnthropicBufferedEvent),
-		ToolIDByIndex: make(map[int]string),
-	}
-	c.Set("guardrails_tool_buffer", state)
-	return state
-}
-
-func getAnthropicGuardrailsBlockState(c *gin.Context) *anthropicGuardrailsBlockState {
-	if existing, ok := c.Get("guardrails_block_state"); ok {
-		if state, ok := existing.(*anthropicGuardrailsBlockState); ok {
-			return state
-		}
-	}
-	state := &anthropicGuardrailsBlockState{
-		ToolMessages: make(map[string]string),
-		BlockedIndex: make(map[int]string),
-	}
-	c.Set("guardrails_block_state", state)
-	return state
 }
 
 func extractAnthropicBlockTypeAndID(block interface{}) (string, string) {

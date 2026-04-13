@@ -142,12 +142,16 @@ func (i Input) SetContextValue(key string, value any) {
 	i.Runtime.Context.Set(key, value)
 }
 
-// CredentialMaskState returns the request-scoped credential masking state when
-// available via runtime hooks, falling back to the input state snapshot.
+// CredentialMaskState returns the request-scoped credential masking state
+// attached to this input. State on the input takes precedence; the runtime gin
+// context remains as a compatibility fallback for request wiring.
 func (i Input) CredentialMaskState() *CredentialMaskState {
+	if i.State.CredentialMask != nil {
+		return i.State.CredentialMask
+	}
 	if i.Runtime.Context != nil {
-		if existing, ok := i.Runtime.Context.Get(CredentialMaskStateContextKey); ok {
-			if state, ok := existing.(*CredentialMaskState); ok && state != nil {
+		if value, ok := i.Runtime.Context.Get(CredentialMaskStateContextKey); ok {
+			if state, ok := value.(*CredentialMaskState); ok {
 				return state
 			}
 		}
