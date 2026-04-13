@@ -6,22 +6,18 @@ import (
 	"fmt"
 )
 
-// SearchTool 搜索工具 (MCP 工具格式)
 type SearchTool struct {
 	webtools *WebTools
 }
 
-// Name 工具名称
 func (t *SearchTool) Name() string {
 	return "web_search"
 }
 
-// Description 工具描述
 func (t *SearchTool) Description() string {
 	return "Search the web for information using Google or other search engines. Returns search results with titles, URLs, and snippets."
 }
 
-// Parameters 参数定义
 func (t *SearchTool) Parameters() map[string]Parameter {
 	return map[string]Parameter{
 		"query": {
@@ -44,7 +40,6 @@ func (t *SearchTool) Parameters() map[string]Parameter {
 	}
 }
 
-// Execute 执行搜索
 func (t *SearchTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
 	query, ok := params["query"].(string)
 	if !ok || query == "" {
@@ -65,12 +60,10 @@ func (t *SearchTool) Execute(ctx context.Context, params map[string]interface{})
 	if err != nil {
 		return nil, err
 	}
-
-	// 转换为 MCP 格式
 	type SearchResponse struct {
 		Results []SearchResult `json:"results"`
-		Query   string        `json:"query"`
-		Engine  string        `json:"engine"`
+		Query   string         `json:"query"`
+		Engine  string         `json:"engine"`
 	}
 
 	return SearchResponse{
@@ -80,7 +73,6 @@ func (t *SearchTool) Execute(ctx context.Context, params map[string]interface{})
 	}, nil
 }
 
-// ToJSON 转换为 JSON (用于 MCP)
 func (t *SearchTool) ToJSON() string {
 	params := make(map[string]map[string]interface{})
 	for k, v := range t.Parameters() {

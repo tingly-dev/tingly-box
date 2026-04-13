@@ -6,22 +6,18 @@ import (
 	"fmt"
 )
 
-// FetchTool 网页抓取工具 (MCP 工具格式)
 type FetchTool struct {
 	webtools *WebTools
 }
 
-// Name 工具名称
 func (t *FetchTool) Name() string {
 	return "web_fetch"
 }
 
-// Description 工具描述
 func (t *FetchTool) Description() string {
 	return "Fetch and extract content from a web page. Supports plain text, HTML, and markdown extraction. Can also extract specific information using a prompt."
 }
 
-// Parameters 参数定义
 func (t *FetchTool) Parameters() map[string]Parameter {
 	return map[string]Parameter{
 		"url": {
@@ -43,7 +39,6 @@ func (t *FetchTool) Parameters() map[string]Parameter {
 	}
 }
 
-// Execute 执行抓取
 func (t *FetchTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
 	url, ok := params["url"].(string)
 	if !ok || url == "" {
@@ -60,7 +55,6 @@ func (t *FetchTool) Execute(ctx context.Context, params map[string]interface{}) 
 		return nil, err
 	}
 
-	// 转换为 MCP 格式
 	type FetchResponse struct {
 		Content string `json:"content"`
 		Title   string `json:"title"`
@@ -76,7 +70,6 @@ func (t *FetchTool) Execute(ctx context.Context, params map[string]interface{}) 
 	}, nil
 }
 
-// ToJSON 转换为 JSON (用于 MCP)
 func (t *FetchTool) ToJSON() string {
 	params := make(map[string]map[string]interface{})
 	for k, v := range t.Parameters() {
