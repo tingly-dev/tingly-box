@@ -87,6 +87,9 @@ const ProviderFormDialog = ({
     const [protocolOpenAI, setProtocolOpenAI] = useState(false);
     const [protocolAnthropic, setProtocolAnthropic] = useState(false);
 
+    // Track if user has manually edited the name
+    const [nameIsAutoFilled, setNameIsAutoFilled] = useState(true);
+
     // All unique providers - use hook to get reactive updates
     const allProviders = useProviderTemplates();
 
@@ -125,6 +128,15 @@ const ProviderFormDialog = ({
     useEffect(() => {
         setNoApiKey(data.noKeyRequired || false);
     }, [data.noKeyRequired]);
+
+    // Track if name was manually edited by user
+    useEffect(() => {
+        // Check if current name differs from the auto-fill pattern
+        if (data.name && !nameIsAutoFilled) {
+            // User has edited the name, don't auto-fill anymore
+            return;
+        }
+    }, [data.name, nameIsAutoFilled]);
 
     // Initialize state when dialog opens or mode changes
     useEffect(() => {
@@ -214,9 +226,12 @@ const ProviderFormDialog = ({
                 anthropic: newValue.baseUrlAnthropic,
             });
 
-            // Auto-fill name when provider changes
-            const autoName = t('providerDialog.keyName.autoFill', { title: displayName });
-            onChange('name', autoName);
+            // Auto-fill name only if user hasn't manually edited it
+            if (nameIsAutoFilled || !data.name) {
+                const autoName = t('providerDialog.keyName.autoFill', { title: displayName });
+                onChange('name', autoName);
+                setNameIsAutoFilled(true);
+            }
         } else {
             // Cleared
             setSelectedProvider(null);
@@ -424,15 +439,16 @@ const ProviderFormDialog = ({
                         {/* ② Protocol Selection (Checkboxes) */}
                         <FormControl
                             required
+                            disabled={mode === 'edit'}
                             sx={{
                                 position: 'relative',
                                 border: 1,
                                 borderColor: 'text.primary',
                                 borderWidth: 0.5,
-                                // opacity: 0.23,
                                 borderRadius: 1,
                                 p: 0.5,
                                 m: 0,
+                                opacity: mode === 'edit' ? 0.6 : 1,
                             }}
                         >
                             <FormLabel
@@ -450,6 +466,11 @@ const ProviderFormDialog = ({
                                 }}
                             >
                                 {t('providerDialog.protocol.label')}
+                                {mode === 'edit' && (
+                                    <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
+                                        (Cannot be modified in edit mode)
+                                    </Typography>
+                                )}
                             </FormLabel>
                             <Stack spacing={0.5} sx={{ mt: 0.5 }}>
                                 {/* OpenAI Protocol */}
@@ -458,14 +479,15 @@ const ProviderFormDialog = ({
                                         px: 1.5,
                                         py: 1,
                                         borderRadius: 1,
-                                        cursor: 'pointer',
+                                        cursor: mode === 'edit' ? 'not-allowed' : 'pointer',
                                         transition: 'all 0.15s',
                                         bgcolor: protocolOpenAI ? 'action.selected' : 'transparent',
                                         '&:hover': {
-                                            bgcolor: protocolOpenAI ? 'action.selected' : 'action.hover',
+                                            bgcolor: mode === 'edit' ? (protocolOpenAI ? 'action.selected' : 'transparent') : (protocolOpenAI ? 'action.selected' : 'action.hover'),
                                         },
                                     }}
                                     onClick={() => {
+                                        if (mode === 'edit') return;
                                         if (selectedProvider && !selectedProvider.supportsOpenAI) return;
                                         setProtocolOpenAI(!protocolOpenAI);
                                         setVerificationResult(null);
@@ -487,7 +509,7 @@ const ProviderFormDialog = ({
                                         <Checkbox
                                             size="small"
                                             checked={protocolOpenAI}
-                                            disabled={selectedProvider ? !selectedProvider.supportsOpenAI : false}
+                                            disabled={mode === 'edit' || (selectedProvider ? !selectedProvider.supportsOpenAI : false)}
                                             sx={{ p: 0, mt: -0.5 }}
                                         />
                                     </Stack>
@@ -498,14 +520,15 @@ const ProviderFormDialog = ({
                                         borderRadius: 1,
                                         px: 1.5,
                                         py: 1,
-                                        cursor: 'pointer',
+                                        cursor: mode === 'edit' ? 'not-allowed' : 'pointer',
                                         transition: 'all 0.15s',
                                         bgcolor: protocolAnthropic ? 'action.selected' : 'transparent',
                                         '&:hover': {
-                                            bgcolor: protocolAnthropic ? 'action.selected' : 'action.hover',
+                                            bgcolor: mode === 'edit' ? (protocolAnthropic ? 'action.selected' : 'transparent') : (protocolAnthropic ? 'action.selected' : 'action.hover'),
                                         },
                                     }}
                                     onClick={() => {
+                                        if (mode === 'edit') return;
                                         if (selectedProvider && !selectedProvider.supportsAnthropic) return;
                                         setProtocolAnthropic(!protocolAnthropic);
                                         setVerificationResult(null);
@@ -527,7 +550,7 @@ const ProviderFormDialog = ({
                                         <Checkbox
                                             size="small"
                                             checked={protocolAnthropic}
-                                            disabled={selectedProvider ? !selectedProvider.supportsAnthropic : false}
+                                            disabled={mode === 'edit' || (selectedProvider ? !selectedProvider.supportsAnthropic : false)}
                                             sx={{ p: 0, mt: -0.5 }}
                                         />
                                     </Stack>
@@ -604,6 +627,8 @@ const ProviderFormDialog = ({
                             onChange={(e) => {
                                 onChange('name', e.target.value);
                                 setVerificationResult(null);
+                                // Mark that user has manually edited the name
+                                setNameIsAutoFilled(false);
                             }}
                             required
                             placeholder={t('providerDialog.keyName.placeholder')}
