@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"github.com/tingly-dev/tingly-box/internal/dataimport"
+	"github.com/tingly-dev/tingly-box/internal/dataio"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
@@ -411,7 +411,7 @@ func TestImportRule_Base64(t *testing.T) {
 
 	// Encode the JSONL data to Base64
 	base64Payload := base64.StdEncoding.EncodeToString([]byte(jsonlData))
-	base64Data := dataimport.Base64Prefix + ":1.0:" + base64Payload
+	base64Data := dataio.Base64Prefix + ":1.0:" + base64Payload
 
 	importReq := ImportRuleRequest{
 		Data:               base64Data,

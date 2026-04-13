@@ -1,4 +1,4 @@
-package dataimport
+package dataio
 
 import (
 	"strings"
@@ -69,8 +69,6 @@ func TestDetectorDetect(t *testing.T) {
 }
 
 func TestBase64ImporterDecode(t *testing.T) {
-	importer := NewBase64Importer()
-
 	tests := []struct {
 		name       string
 		data       string
@@ -109,24 +107,24 @@ func TestBase64ImporterDecode(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := importer.decodeBase64Export(tt.data)
+			got, err := DecodeBase64Export(tt.data)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("Base64Importer.decodeBase64Export() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("Base64Importer.DecodeBase64Export() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if tt.wantErr {
 				if tt.errMessage != "" {
 					// Check if error message contains expected text
 					if err == nil {
-						t.Errorf("Base64Importer.decodeBase64Export() expected error, got nil")
+						t.Errorf("Base64Importer.DecodeBase64Export() expected error, got nil")
 					} else if !strings.Contains(err.Error(), tt.errMessage) {
-						t.Errorf("Base64Importer.decodeBase64Export() error = %v, want包含 %v", err.Error(), tt.errMessage)
+						t.Errorf("Base64Importer.DecodeBase64Export() error = %v, want包含 %v", err.Error(), tt.errMessage)
 					}
 				}
 				return
 			}
 			if got == "" {
-				t.Error("Base64Importer.decodeBase64Export() returned empty string")
+				t.Error("Base64Importer.DecodeBase64Export() returned empty string")
 			}
 			// Check that the decoded content is valid JSONL (has newlines between JSON objects)
 			if !strings.Contains(got, "\n") {

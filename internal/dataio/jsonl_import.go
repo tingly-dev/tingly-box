@@ -1,4 +1,4 @@
-package dataimport
+package dataio
 
 import (
 	"bufio"
@@ -7,55 +7,10 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-// ImportLine is the base type for all import lines
-type ImportLine struct {
-	Type string `json:"type"`
-}
-
-// ImportMetadata represents the metadata line
-type ImportMetadata struct {
-	Type       string `json:"type"`
-	Version    string `json:"version"`
-	ExportedAt string `json:"exported_at"`
-}
-
-// ImportRuleData represents the rule import data
-type ImportRuleData struct {
-	Type          string                 `json:"type"`
-	UUID          string                 `json:"uuid"`
-	Scenario      string                 `json:"scenario"`
-	RequestModel  string                 `json:"request_model"`
-	ResponseModel string                 `json:"response_model"`
-	Description   string                 `json:"description"`
-	Services      []*loadbalance.Service `json:"services"`
-	LBTactic      typ.Tactic             `json:"lb_tactic"`
-	Active        bool                   `json:"active"`
-	SmartEnabled  bool                   `json:"smart_enabled"`
-	SmartRouting  []interface{}          `json:"smart_routing"`
-}
-
-// ImportProviderData represents the provider import data
-type ImportProviderData struct {
-	Type        string           `json:"type"`
-	UUID        string           `json:"uuid"`
-	Name        string           `json:"name"`
-	APIBase     string           `json:"api_base"`
-	APIStyle    string           `json:"api_style"`
-	AuthType    string           `json:"auth_type"`
-	Token       string           `json:"token"`
-	OAuthDetail *typ.OAuthDetail `json:"oauth_detail"`
-	Enabled     bool             `json:"enabled"`
-	ProxyURL    string           `json:"proxy_url"`
-	Timeout     int64            `json:"timeout"`
-	Tags        []string         `json:"tags"`
-	Models      []string         `json:"models"`
-}
 
 // ImportOptions controls how imports are handled when conflicts occur
 type ImportOptions struct {
@@ -121,9 +76,9 @@ func (i *JSONLImporter) Import(data string, globalConfig *config.Config, opts Im
 
 	// Parse lines
 	scanner := bufio.NewScanner(strings.NewReader(data))
-	var metadata *ImportMetadata
-	var ruleData *ImportRuleData
-	providersData := []*ImportProviderData{}
+	var metadata *Metadata
+	var ruleData *RuleData
+	providersData := []*ProviderData{}
 
 	lineNum := 0
 	for scanner.Scan() {
@@ -134,7 +89,7 @@ func (i *JSONLImporter) Import(data string, globalConfig *config.Config, opts Im
 		}
 
 		// Parse line type
-		var base ImportLine
+		var base DataLine
 		if err := json.Unmarshal([]byte(line), &base); err != nil {
 			return nil, fmt.Errorf("line %d: invalid JSON: %w", lineNum, err)
 		}
@@ -154,7 +109,7 @@ func (i *JSONLImporter) Import(data string, globalConfig *config.Config, opts Im
 			}
 
 		case "provider":
-			var provider ImportProviderData
+			var provider ProviderData
 			if err := json.Unmarshal([]byte(line), &provider); err != nil {
 				return nil, fmt.Errorf("line %d: invalid provider data: %w", lineNum, err)
 			}
@@ -282,7 +237,7 @@ type providerImportResult struct {
 	info    *ProviderImportInfo
 }
 
-func (i *JSONLImporter) importProvider(globalConfig *config.Config, p *ImportProviderData, onConflict string, providerMap map[string]string) (*providerImportResult, error) {
+func (i *JSONLImporter) importProvider(globalConfig *config.Config, p *ProviderData, onConflict string, providerMap map[string]string) (*providerImportResult, error) {
 	result := &providerImportResult{}
 
 	// Check if provider with same UUID already exists (real conflict)
