@@ -22,7 +22,7 @@ import {
 } from '@mui/material';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getAllUniqueProviders, type UniqueProvider } from '../services/serviceProviders';
+import { useProviderTemplates, type UniqueProvider } from '../services/serviceProviders';
 import { api } from '../services/api';
 import { OpenAI, Anthropic } from './BrandIcons';
 
@@ -87,8 +87,8 @@ const ProviderFormDialog = ({
     const [protocolOpenAI, setProtocolOpenAI] = useState(false);
     const [protocolAnthropic, setProtocolAnthropic] = useState(false);
 
-    // All unique providers
-    const allProviders = useMemo(() => getAllUniqueProviders(), []);
+    // All unique providers - use hook to get reactive updates
+    const allProviders = useProviderTemplates();
 
     // Helper component for displaying base URL
     const ProtocolBaseUrlDisplay: React.FC<{ url: string }> = ({ url }) => {

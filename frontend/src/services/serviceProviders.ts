@@ -1,4 +1,5 @@
 import api from "@/services/api.ts";
+import React from "react";
 
 export interface ServiceProvider {
     id: string;
@@ -29,6 +30,24 @@ export interface ServiceProviderOption {
 let cachedProviders: Record<string, ServiceProvider> | null = null;
 let loadPromise: Promise<Record<string, ServiceProvider>> | null = null;
 
+// Listener mechanism for provider template loading
+type ProviderListener = () => void;
+const listeners: Set<ProviderListener> = new Set();
+
+export function subscribeToProviders(listener: ProviderListener): () => void {
+    listeners.add(listener);
+    // If already loaded, notify immediately
+    if (cachedProviders) {
+        listener();
+    }
+    // Return unsubscribe function
+    return () => listeners.delete(listener);
+}
+
+function notifyListeners() {
+    listeners.forEach(listener => listener());
+}
+
 // Load provider templates from API
 async function loadProviderTemplates(): Promise<Record<string, ServiceProvider>> {
     if (cachedProviders) {
@@ -45,6 +64,7 @@ async function loadProviderTemplates(): Promise<Record<string, ServiceProvider>>
             const res = await api.getProviderTemplates();
             if (res && res.success && res.data) {
                 cachedProviders = res.data;
+                notifyListeners(); // Notify all subscribers
                 return cachedProviders!;
             }
         } catch (error) {
@@ -68,6 +88,13 @@ export async function getServiceProviders(): Promise<Record<string, ServiceProvi
 export function getServiceProvidersSync(): Record<string, ServiceProvider> {
     return cachedProviders || {};
 }
+
+// Initialize provider templates on module load
+// This ensures the provider list is available when components mount
+getServiceProviders().then(data => {
+    const providerCount = Object.keys(data || {}).length;
+    console.log(`[serviceProviders] Loaded ${providerCount} provider templates`);
+}).catch(err => console.error('Failed to initialize provider templates:', err));
 
 // Get dropdown options for service provider selection
 export function getServiceProviderOptions(): ServiceProviderOption[] {
@@ -137,8 +164,8 @@ export function getAllUniqueProviders(): UniqueProvider[] {
     Object.entries(serviceProviders).forEach(([_key, provider]: [string, any]) => {
         const sp = provider as ServiceProvider;
 
-        // Skip OAuth-only providers
-        if (sp.auth_type === 'api_key' || sp.oauth_provider) {
+        // Skip OAuth-only providers (providers that only support OAuth, not API keys)
+        if (sp.oauth_provider && !sp.base_url_openai && !sp.base_url_anthropic) {
             return;
         }
 
@@ -157,4 +184,20 @@ export function getAllUniqueProviders(): UniqueProvider[] {
     providers.sort((a, b) => (a.alias || a.name).localeCompare(b.alias || b.name));
 
     return providers;
+}
+
+// React hook for provider templates
+// This ensures components re-render when providers are loaded
+export function useProviderTemplates(): UniqueProvider[] {
+    const [, forceUpdate] = React.useReducer(x => x + 1, 0);
+
+    React.useEffect(() => {
+        // Subscribe to provider updates
+        const unsubscribe = subscribeToProviders(() => {
+            forceUpdate();
+        });
+        return unsubscribe;
+    }, []);
+
+    return getAllUniqueProviders();
 }
