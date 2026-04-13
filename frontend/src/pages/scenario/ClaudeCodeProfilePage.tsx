@@ -91,6 +91,11 @@ const ClaudeCodeProfilePage: React.FC = () => {
         api.getVersion().then(setAppVersion);
     }, []);
 
+    // Refresh profiles on mount to ensure we have the latest data
+    useEffect(() => {
+        refreshProfiles();
+    }, [refreshProfiles]);
+
     // Rename profile handler
     const handleRenameProfile = async () => {
         if (!renameName.trim() || !profileId) return;
