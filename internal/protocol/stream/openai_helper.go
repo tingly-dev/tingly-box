@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 // OpenAISSE writes a JSON payload as an OpenAI-style SSE data line and flushes.
@@ -26,6 +27,22 @@ func OpenAISSEDone(c *gin.Context) {
 	if flusher, ok := c.Writer.(http.Flusher); ok {
 		flusher.Flush()
 	}
+}
+
+// sendChatToResponsesEvent sends an event in Responses API SSE format (specific to Chat → Responses conversion)
+func sendChatToResponsesEvent(c *gin.Context, event map[string]interface{}, flusher http.Flusher) {
+	eventJSON, err := json.Marshal(event)
+	if err != nil {
+		logrus.Errorf("Failed to marshal Responses event: %v", err)
+		return
+	}
+	// Responses API SSE format: data: <json>\n\n
+	OpenAISSE(c, eventJSON)
+}
+
+func nextSequenceNumber(state *chatToResponsesState) int64 {
+	state.sequenceNumber++
+	return state.sequenceNumber
 }
 
 // FilterSpecialFields removes special fields that have dedicated content blocks

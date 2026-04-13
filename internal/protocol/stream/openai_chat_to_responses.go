@@ -501,19 +501,3 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 
 	sendChatToResponsesEvent(c, event, flusher)
 }
-
-// sendChatToResponsesEvent sends an event in Responses API SSE format (specific to Chat → Responses conversion)
-func sendChatToResponsesEvent(c *gin.Context, event map[string]interface{}, flusher http.Flusher) {
-	eventJSON, err := json.Marshal(event)
-	if err != nil {
-		logrus.Errorf("Failed to marshal Responses event: %v", err)
-		return
-	}
-	// Responses API SSE format: data: <json>\n\n
-	OpenAISSE(c, eventJSON)
-}
-
-func nextSequenceNumber(state *chatToResponsesState) int64 {
-	state.sequenceNumber++
-	return state.sequenceNumber
-}
