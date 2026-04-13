@@ -5,14 +5,39 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	guardrailsmutate "github.com/tingly-dev/tingly-box/internal/guardrails/mutate"
 )
 
 // rewriteAnthropicGuardrailsEvent keeps the main Anthropic passthrough loop
-// focused on stream orchestration. Guardrails-specific event rewriting, tool_use
-// buffering, and credential alias restoration all live here.
-func rewriteAnthropicGuardrailsEvent(c *gin.Context, beta bool, eventType string, index int, block interface{}, rawJSON string) (bool, error) {
+// focused on stream orchestration. It only intercepts tool_use-related events;
+// all other events fall through to the normal passthrough sender.
+func rewriteAnthropicGuardrailsEvent(c *gin.Context, beta bool, event interface{}) (bool, error) {
+	var (
+		eventType string
+		index     int
+		block     interface{}
+		rawJSON   string
+	)
+	switch evt := event.(type) {
+	case *anthropic.MessageStreamEventUnion:
+		if evt == nil {
+			return false, nil
+		}
+		eventType = evt.Type
+		index = int(evt.Index)
+		block = evt.ContentBlock
+		rawJSON = evt.RawJSON()
+	case *anthropic.BetaRawMessageStreamEventUnion:
+		if evt == nil {
+			return false, nil
+		}
+
+	default:
+		return false, nil
+	}
+
 	if !guardrailsmutate.ShouldRewriteAnthropicEvent(c, eventType, block) {
 		return false, nil
 	}
@@ -24,14 +49,17 @@ func rewriteAnthropicGuardrailsEvent(c *gin.Context, beta bool, eventType string
 	if eventType != "" {
 		eventMap["type"] = eventType
 	}
-	guardrailsmutate.RestoreCredentialAliasesInAnthropicEventMap(c, eventMap)
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
 		return false, errors.New("streaming not supported")
 	}
 
-	if handled, blockMessage, passthrough := guardrailsmutate.HandleAnthropicToolUseBuffer(c, eventType, index, block, eventMap); handled {
-		if blockMessage != "" {
+	decision := guardrailsmutate.HandleAnthropicToolUseBuffer(c, eventType, index, block, eventMap)
+	switch decision.Kind {
+	case guardrailsmutate.AnthropicToolUseDecisionBuffer:
+		return true, nil
+	case guardrailsmutate.AnthropicToolUseDecisionBlock:
+		if decision.BlockMessage != "" {
 			start := map[string]interface{}{
 				"type":  eventTypeContentBlockStart,
 				"index": index,
@@ -45,7 +73,7 @@ func rewriteAnthropicGuardrailsEvent(c *gin.Context, beta bool, eventType string
 				"index": index,
 				"delta": map[string]interface{}{
 					"type": "text_delta",
-					"text": blockMessage,
+					"text": decision.BlockMessage,
 				},
 			}
 			stop := map[string]interface{}{
@@ -63,17 +91,14 @@ func rewriteAnthropicGuardrailsEvent(c *gin.Context, beta bool, eventType string
 			}
 			return true, nil
 		}
-		if len(passthrough) > 0 {
-			for _, buffered := range passthrough {
-				sendAnthropicGuardrailsMapEvent(c, beta, buffered.EventType, buffered.Payload, flusher)
-			}
-			return true, nil
+		return true, nil
+	case guardrailsmutate.AnthropicToolUseDecisionPassthrough:
+		for _, buffered := range decision.Passthrough {
+			sendAnthropicGuardrailsMapEvent(c, beta, buffered.EventType, buffered.Payload, flusher)
 		}
 		return true, nil
 	}
-
-	sendAnthropicGuardrailsMapEvent(c, beta, eventType, eventMap, flusher)
-	return true, nil
+	return false, nil
 }
 
 func sendAnthropicGuardrailsMapEvent(c *gin.Context, beta bool, eventType string, eventData map[string]interface{}, flusher http.Flusher) {

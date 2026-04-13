@@ -41,32 +41,14 @@ func (a *StreamAccumulator) IngestAnthropicEvent(evt *anthropic.MessageStreamEve
 	if evt == nil {
 		return
 	}
-	payload, err := json.Marshal(evt)
-	if err != nil {
-		return
-	}
-	var data map[string]interface{}
-	if err := json.Unmarshal(payload, &data); err != nil {
-		return
-	}
-	data["type"] = evt.Type
-	a.ingestEventMap(data)
+	a.ingestRawJSON(evt.RawJSON())
 }
 
 func (a *StreamAccumulator) IngestAnthropicBetaEvent(evt *anthropic.BetaRawMessageStreamEventUnion) {
 	if evt == nil {
 		return
 	}
-	payload, err := json.Marshal(evt)
-	if err != nil {
-		return
-	}
-	var data map[string]interface{}
-	if err := json.Unmarshal(payload, &data); err != nil {
-		return
-	}
-	data["type"] = evt.Type
-	a.ingestEventMap(data)
+	a.ingestRawJSON(evt.RawJSON())
 }
 
 func (a *StreamAccumulator) IngestOpenAIChatChunk(chunk *openai.ChatCompletionChunk) {
@@ -117,15 +99,12 @@ func (a *StreamAccumulator) IngestAnyEvent(event interface{}) {
 	if event == nil {
 		return
 	}
-	data, err := json.Marshal(event)
-	if err != nil {
-		return
+	switch evt := event.(type) {
+	case interface{ RawJSON() string }:
+		a.ingestRawJSON(evt.RawJSON())
+	case map[string]interface{}:
+		a.ingestEventMap(evt)
 	}
-	var payload map[string]interface{}
-	if err := json.Unmarshal(data, &payload); err != nil {
-		return
-	}
-	a.ingestEventMap(payload)
 }
 
 func (a *StreamAccumulator) Content() guardrailscore.Content {

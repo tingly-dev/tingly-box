@@ -191,16 +191,13 @@ func (s *Server) attachGuardrailsHooks(c *gin.Context, hc *protocol.HandleContex
 	baseInput := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messages)
 	logrus.Debugf("Guardrails: attaching hook (scenario=%s model=%s)", baseInput.Scenario, baseInput.Model)
 
-	onEvent, onComplete, onError := NewGuardrailsHooks(
+	onEvent, onError := NewGuardrailsHooks(
 		c.Request.Context(),
 		s.guardrailsRuntime,
 		baseInput,
 	)
 	if onEvent != nil {
 		hc.WithOnStreamEvent(onEvent)
-	}
-	if onComplete != nil {
-		hc.WithOnStreamComplete(onComplete)
 	}
 	if onError != nil {
 		hc.WithOnStreamError(onError)

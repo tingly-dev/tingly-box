@@ -54,7 +54,7 @@ func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNe
 			}
 
 			if hc.EnableGuardrailsRewrite {
-				if handled, err := rewriteAnthropicGuardrailsEvent(hc.GinContext, false, evt.Type, int(evt.Index), evt.ContentBlock, evt.RawJSON()); err != nil {
+				if handled, err := rewriteAnthropicGuardrailsEvent(hc.GinContext, false, evt); err != nil {
 					return err
 				} else if handled {
 					return nil
@@ -142,7 +142,7 @@ func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, streamResp *anthrop
 			}
 
 			if hc.EnableGuardrailsRewrite {
-				if handled, err := rewriteAnthropicGuardrailsEvent(hc.GinContext, true, evt.Type, int(evt.Index), evt.ContentBlock, evt.RawJSON()); err != nil {
+				if handled, err := rewriteAnthropicGuardrailsEvent(hc.GinContext, true, evt); err != nil {
 					return err
 				} else if handled {
 					return nil

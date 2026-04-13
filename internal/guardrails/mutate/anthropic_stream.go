@@ -12,13 +12,27 @@ const (
 	anthropicEventTypeContentBlockStart = "content_block_start"
 	anthropicEventTypeContentBlockDelta = "content_block_delta"
 	anthropicEventTypeContentBlockStop  = "content_block_stop"
-	anthropicDeltaTypeTextDelta         = "text_delta"
 	anthropicDeltaTypeInputJSONDelta    = "input_json_delta"
 )
 
 type AnthropicBufferedEvent struct {
 	EventType string
 	Payload   map[string]interface{}
+}
+
+type AnthropicToolUseDecisionKind string
+
+const (
+	AnthropicToolUseDecisionNone        AnthropicToolUseDecisionKind = "none"
+	AnthropicToolUseDecisionBuffer      AnthropicToolUseDecisionKind = "buffer"
+	AnthropicToolUseDecisionBlock       AnthropicToolUseDecisionKind = "block"
+	AnthropicToolUseDecisionPassthrough AnthropicToolUseDecisionKind = "passthrough"
+)
+
+type AnthropicToolUseDecision struct {
+	Kind         AnthropicToolUseDecisionKind
+	BlockMessage string
+	Passthrough  []AnthropicBufferedEvent
 }
 
 type anthropicToolUseBufferState struct {
@@ -44,15 +58,12 @@ func ShouldRewriteAnthropicEvent(c *gin.Context, eventType string, block interfa
 	switch eventType {
 	case anthropicEventTypeContentBlockStart:
 		blockType, _ := extractAnthropicBlockTypeAndID(block)
-		if blockType == "tool_use" || blockType == "text" {
+		if blockType == "tool_use" {
 			return true
 		}
 	case anthropicEventTypeContentBlockDelta:
 		state := getAnthropicToolUseBufferState(c)
 		if len(state.ByIndex) > 0 {
-			return true
-		}
-		if maskState := getAnthropicCredentialMaskState(c); maskState != nil && len(maskState.AliasToReal) > 0 {
 			return true
 		}
 	case anthropicEventTypeContentBlockStop:
@@ -64,60 +75,25 @@ func ShouldRewriteAnthropicEvent(c *gin.Context, eventType string, block interfa
 	return false
 }
 
-func RestoreCredentialAliasesInAnthropicEventMap(c *gin.Context, eventMap map[string]interface{}) {
-	state := getAnthropicCredentialMaskState(c)
-	if state == nil || len(state.AliasToReal) == 0 || eventMap == nil {
-		return
-	}
-	eventType, _ := eventMap["type"].(string)
-	switch eventType {
-	case anthropicEventTypeContentBlockDelta:
-		delta, _ := eventMap["delta"].(map[string]interface{})
-		deltaType, _ := delta["type"].(string)
-		if deltaType == anthropicDeltaTypeTextDelta {
-			if text, ok := delta["text"].(string); ok {
-				if !guardrailscore.MayContainAliasToken(text) {
-					return
-				}
-				if restored, changed := guardrailscore.RestoreText(text, state); changed {
-					delta["text"] = restored
-				}
-			}
-		}
-	case anthropicEventTypeContentBlockStart:
-		contentBlock, _ := eventMap["content_block"].(map[string]interface{})
-		if blockType, _ := contentBlock["type"].(string); blockType == "text" {
-			if text, ok := contentBlock["text"].(string); ok {
-				if !guardrailscore.MayContainAliasToken(text) {
-					return
-				}
-				if restored, changed := guardrailscore.RestoreText(text, state); changed {
-					contentBlock["text"] = restored
-				}
-			}
-		}
-	}
-}
-
-func HandleAnthropicToolUseBuffer(c *gin.Context, eventType string, index int, block interface{}, eventMap map[string]interface{}) (handled bool, blockMessage string, passthrough []AnthropicBufferedEvent) {
+func HandleAnthropicToolUseBuffer(c *gin.Context, eventType string, index int, block interface{}, eventMap map[string]interface{}) AnthropicToolUseDecision {
 	switch eventType {
 	case anthropicEventTypeContentBlockStart:
 		blockType, toolID := extractAnthropicBlockTypeAndID(block)
 		if blockType != "tool_use" {
-			return false, "", nil
+			return AnthropicToolUseDecision{}
 		}
 		state := getAnthropicToolUseBufferState(c)
 		state.ToolIDByIndex[index] = toolID
 		state.ByIndex[index] = append(state.ByIndex[index], AnthropicBufferedEvent{EventType: eventType, Payload: eventMap})
-		return true, "", nil
+		return AnthropicToolUseDecision{Kind: AnthropicToolUseDecisionBuffer}
 	case anthropicEventTypeContentBlockDelta, anthropicEventTypeContentBlockStop:
 		state := getAnthropicToolUseBufferState(c)
 		if _, ok := state.ByIndex[index]; !ok {
-			return false, "", nil
+			return AnthropicToolUseDecision{}
 		}
 		state.ByIndex[index] = append(state.ByIndex[index], AnthropicBufferedEvent{EventType: eventType, Payload: eventMap})
 		if eventType != anthropicEventTypeContentBlockStop {
-			return true, "", nil
+			return AnthropicToolUseDecision{Kind: AnthropicToolUseDecisionBuffer}
 		}
 
 		toolID := state.ToolIDByIndex[index]
@@ -125,20 +101,29 @@ func HandleAnthropicToolUseBuffer(c *gin.Context, eventType string, index int, b
 		if message, ok := blockState.ToolMessages[toolID]; ok {
 			delete(state.ByIndex, index)
 			delete(state.ToolIDByIndex, index)
-			return true, message, nil
+			return AnthropicToolUseDecision{
+				Kind:         AnthropicToolUseDecisionBlock,
+				BlockMessage: message,
+			}
 		}
 
 		buffered := state.ByIndex[index]
 		if rebuilt, ok := RebuildBufferedAnthropicToolUseEvents(c, buffered); ok {
 			delete(state.ByIndex, index)
 			delete(state.ToolIDByIndex, index)
-			return true, "", rebuilt
+			return AnthropicToolUseDecision{
+				Kind:        AnthropicToolUseDecisionPassthrough,
+				Passthrough: rebuilt,
+			}
 		}
 		delete(state.ByIndex, index)
 		delete(state.ToolIDByIndex, index)
-		return true, "", buffered
+		return AnthropicToolUseDecision{
+			Kind:        AnthropicToolUseDecisionPassthrough,
+			Passthrough: buffered,
+		}
 	}
-	return false, "", nil
+	return AnthropicToolUseDecision{}
 }
 
 func RebuildBufferedAnthropicToolUseEvents(c *gin.Context, events []AnthropicBufferedEvent) ([]AnthropicBufferedEvent, bool) {
