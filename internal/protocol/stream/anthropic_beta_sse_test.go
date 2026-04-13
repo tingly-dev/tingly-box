@@ -16,7 +16,7 @@ type recorderFlusher struct {
 
 func (rec recorderFlusher) Flush() {}
 
-func TestSendBetaStopEventsSkipsAlreadyStoppedBlocks(t *testing.T) {
+func TestSendStopEventsSkipsAlreadyStoppedBlocks(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	state := newStreamState()
@@ -31,7 +31,7 @@ func TestSendBetaStopEventsSkipsAlreadyStoppedBlocks(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	flusher := recorderFlusher{w}
 
-	sendBetaStopEvents(c, state, flusher)
+	sendStopEvents(c, state, flusher)
 
 	indexes := collectStopEventIndexes(w.Body.String())
 	require.Equal(t, []int{2, 5, 7}, indexes)
@@ -42,7 +42,7 @@ func TestSendBetaStopEventsSkipsAlreadyStoppedBlocks(t *testing.T) {
 	require.True(t, state.stoppedBlocks[1])
 }
 
-func TestSendBetaStopEventsIdempotent(t *testing.T) {
+func TestSendStopEventsIdempotent(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	state := newStreamState()
@@ -52,14 +52,14 @@ func TestSendBetaStopEventsIdempotent(t *testing.T) {
 
 	w1 := httptest.NewRecorder()
 	c1, _ := gin.CreateTestContext(w1)
-	sendBetaStopEvents(c1, state, recorderFlusher{w1})
+	sendStopEvents(c1, state, recorderFlusher{w1})
 
 	firstIndexes := collectStopEventIndexes(w1.Body.String())
 	require.Equal(t, []int{3, 4}, firstIndexes)
 
 	w2 := httptest.NewRecorder()
 	c2, _ := gin.CreateTestContext(w2)
-	sendBetaStopEvents(c2, state, recorderFlusher{w2})
+	sendStopEvents(c2, state, recorderFlusher{w2})
 
 	require.Empty(t, strings.TrimSpace(w2.Body.String()))
 }

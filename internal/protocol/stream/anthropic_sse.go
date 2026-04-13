@@ -9,7 +9,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// sendAnthropicStreamEvent helper function to send an event in Anthropic SSE format
+// sendAnthropicStreamEvent sends one Anthropic SSE event and optionally records it
+// via StreamEventRecorder if one is stored in the Gin context.
 func sendAnthropicStreamEvent(c *gin.Context, eventType string, eventData map[string]interface{}, flusher http.Flusher) {
 	eventJSON, err := json.Marshal(eventData)
 	if err != nil {
@@ -20,6 +21,12 @@ func sendAnthropicStreamEvent(c *gin.Context, eventType string, eventData map[st
 	// Anthropic SSE format: event: <type>\ndata: <json>\n\n
 	c.SSEvent(eventType, string(eventJSON))
 	flusher.Flush()
+
+	if recorder, exists := c.Get("stream_event_recorder"); exists {
+		if r, ok := recorder.(StreamEventRecorder); ok {
+			r.RecordRawMapEvent(eventType, eventData)
+		}
+	}
 }
 
 // sendStopEvents sends content_block_stop events for all active blocks in index order

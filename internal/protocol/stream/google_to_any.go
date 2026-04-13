@@ -259,7 +259,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 			},
 		},
 	}
-	sendAnthropicStreamEventFromG(c, "message_start", messageStartEvent, flusher)
+	sendAnthropicStreamEvent(c, "message_start", messageStartEvent, flusher)
 
 	// Process the stream
 	for googleResp, err := range stream {
@@ -286,7 +286,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 					"code":    "stream_failed",
 				},
 			}
-			sendAnthropicStreamEventFromG(c, "error", errorEvent, flusher)
+			sendAnthropicStreamEvent(c, "error", errorEvent, flusher)
 			return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), err
 		}
 
@@ -310,7 +310,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 									"text": "",
 								},
 							}
-							sendAnthropicStreamEventFromG(c, "content_block_start", contentBlockStartEvent, flusher)
+							sendAnthropicStreamEvent(c, "content_block_start", contentBlockStartEvent, flusher)
 						}
 
 						// Send content_block_delta with text
@@ -322,7 +322,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 								"text": part.Text,
 							},
 						}
-						sendAnthropicStreamEventFromG(c, "content_block_delta", deltaEvent, flusher)
+						sendAnthropicStreamEvent(c, "content_block_delta", deltaEvent, flusher)
 					}
 
 					// Handle function calls
@@ -339,14 +339,14 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 								"input": part.FunctionCall.Args,
 							},
 						}
-						sendAnthropicStreamEventFromG(c, "content_block_start", contentBlockStartEvent, flusher)
+						sendAnthropicStreamEvent(c, "content_block_start", contentBlockStartEvent, flusher)
 
 						// Send content_block_stop for this tool block
 						contentBlockStopEvent := map[string]interface{}{
 							"type":  "content_block_stop",
 							"index": toolBlockIndex,
 						}
-						sendAnthropicStreamEventFromG(c, "content_block_stop", contentBlockStopEvent, flusher)
+						sendAnthropicStreamEvent(c, "content_block_stop", contentBlockStopEvent, flusher)
 					}
 				}
 			}
@@ -361,7 +361,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 						"type":  "content_block_stop",
 						"index": textBlockIndex,
 					}
-					sendAnthropicStreamEventFromG(c, "content_block_stop", contentBlockStopEvent, flusher)
+					sendAnthropicStreamEvent(c, "content_block_stop", contentBlockStopEvent, flusher)
 				}
 
 				// Collect usage info
@@ -382,13 +382,13 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 						"output_tokens": outputTokens,
 					},
 				}
-				sendAnthropicStreamEventFromG(c, "message_delta", messageDeltaEvent, flusher)
+				sendAnthropicStreamEvent(c, "message_delta", messageDeltaEvent, flusher)
 
 				// Send message_stop
 				messageStopEvent := map[string]interface{}{
 					"type": "message_stop",
 				}
-				sendAnthropicStreamEventFromG(c, "message_stop", messageStopEvent, flusher)
+				sendAnthropicStreamEvent(c, "message_stop", messageStopEvent, flusher)
 				return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
 			}
 		}
@@ -402,19 +402,6 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 	}
 
 	return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
-}
-
-// sendAnthropicStreamEventFromG helper function (rename to avoid duplicate)
-func sendAnthropicStreamEventFromG(c *gin.Context, eventType string, eventData map[string]interface{}, flusher http.Flusher) {
-	eventJSON, err := json.Marshal(eventData)
-	if err != nil {
-		logrus.Errorf("Failed to marshal Anthropic stream event: %v", err)
-		return
-	}
-
-	// Anthropic SSE format: event: <type>\ndata: <json>\n\n
-	c.Writer.Write([]byte(fmt.Sprintf("event: %s\ndata: %s\n\n", eventType, string(eventJSON))))
-	flusher.Flush()
 }
 
 // HandleGoogleToAnthropicBetaStreamResponse processes Google streaming events and converts them to Anthropic beta format.
@@ -475,7 +462,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 			},
 		},
 	}
-	sendAnthropicBetaStreamEventFromG(c, eventTypeMessageStart, messageStartEvent, flusher)
+	sendAnthropicStreamEvent(c, eventTypeMessageStart, messageStartEvent, flusher)
 
 	// Process the stream
 	for googleResp, err := range stream {
@@ -502,7 +489,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 					"code":    "stream_failed",
 				},
 			}
-			sendAnthropicBetaStreamEventFromG(c, "error", errorEvent, flusher)
+			sendAnthropicStreamEvent(c, "error", errorEvent, flusher)
 			return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), err
 		}
 
@@ -526,7 +513,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 									"text": "",
 								},
 							}
-							sendAnthropicBetaStreamEventFromG(c, eventTypeContentBlockStart, contentBlockStartEvent, flusher)
+							sendAnthropicStreamEvent(c, eventTypeContentBlockStart, contentBlockStartEvent, flusher)
 						}
 
 						// Send content_block_delta with text
@@ -538,7 +525,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 								"text": part.Text,
 							},
 						}
-						sendAnthropicBetaStreamEventFromG(c, eventTypeContentBlockDelta, deltaEvent, flusher)
+						sendAnthropicStreamEvent(c, eventTypeContentBlockDelta, deltaEvent, flusher)
 					}
 
 					// Handle function calls
@@ -555,14 +542,14 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 								"input": part.FunctionCall.Args,
 							},
 						}
-						sendAnthropicBetaStreamEventFromG(c, eventTypeContentBlockStart, contentBlockStartEvent, flusher)
+						sendAnthropicStreamEvent(c, eventTypeContentBlockStart, contentBlockStartEvent, flusher)
 
 						// Send content_block_stop for this tool block
 						contentBlockStopEvent := map[string]interface{}{
 							"type":  eventTypeContentBlockStop,
 							"index": toolBlockIndex,
 						}
-						sendAnthropicBetaStreamEventFromG(c, eventTypeContentBlockStop, contentBlockStopEvent, flusher)
+						sendAnthropicStreamEvent(c, eventTypeContentBlockStop, contentBlockStopEvent, flusher)
 					}
 				}
 			}
@@ -577,7 +564,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 						"type":  eventTypeContentBlockStop,
 						"index": textBlockIndex,
 					}
-					sendAnthropicBetaStreamEventFromG(c, eventTypeContentBlockStop, contentBlockStopEvent, flusher)
+					sendAnthropicStreamEvent(c, eventTypeContentBlockStop, contentBlockStopEvent, flusher)
 				}
 
 				// Collect usage info
@@ -598,7 +585,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 						"output_tokens": outputTokens,
 					},
 				}
-				sendAnthropicBetaStreamEventFromG(c, eventTypeMessageDelta, messageDeltaEvent, flusher)
+				sendAnthropicStreamEvent(c, eventTypeMessageDelta, messageDeltaEvent, flusher)
 
 				// Send message_stop
 				messageStopEvent := map[string]interface{}{
@@ -616,7 +603,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 						},
 					},
 				}
-				sendAnthropicBetaStreamEventFromG(c, eventTypeMessageStop, messageStopEvent, flusher)
+				sendAnthropicStreamEvent(c, eventTypeMessageStop, messageStopEvent, flusher)
 
 				// Send final simple data with type (without event, aka empty)
 				c.SSEvent("", map[string]interface{}{"type": eventTypeMessageStop})
@@ -634,17 +621,4 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 	}
 
 	return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
-}
-
-// sendAnthropicBetaStreamEventFromG helper function for beta streaming
-func sendAnthropicBetaStreamEventFromG(c *gin.Context, eventType string, eventData map[string]interface{}, flusher http.Flusher) {
-	eventJSON, err := json.Marshal(eventData)
-	if err != nil {
-		logrus.Errorf("Failed to marshal Anthropic beta stream event: %v", err)
-		return
-	}
-
-	// Anthropic beta SSE format: event: <type>\ndata: <json>\n\n
-	c.SSEvent(eventType, string(eventJSON))
-	flusher.Flush()
 }
