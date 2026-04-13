@@ -293,15 +293,19 @@ func (s *Server) applyGuardrailsToAnthropicV1NonStreamResponse(c *gin.Context, r
 		return false
 	}
 
+	maskState := ensureGuardrailsCredentialMaskState(c)
 	messageHistory := guardrailsadapter.AdaptMessagesFromAnthropicV1(req.System, req.Messages)
 	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messageHistory)
-	s.applyGuardrailsCredentialMaskState(&input, ensureGuardrailsCredentialMaskState(c))
+	s.applyGuardrailsCredentialMaskState(&input, maskState)
 	input.Payload.Protocol = "anthropic_v1"
 	input.Payload.Response = resp
 
 	mutation, err := guardrailspipeline.ProcessAnthropicV1NonStreamResponse(c.Request.Context(), s.guardrailsRuntime, input, resp)
 	if err != nil {
 		return false
+	}
+	if !mutation.Changed {
+		s.restoreGuardrailsCredentialAliasesV1Response(maskState, resp)
 	}
 	return mutation.Changed
 }
@@ -313,15 +317,19 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Contex
 		return false
 	}
 
+	maskState := ensureGuardrailsCredentialMaskState(c)
 	messageHistory := guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages)
 	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messageHistory)
-	s.applyGuardrailsCredentialMaskState(&input, ensureGuardrailsCredentialMaskState(c))
+	s.applyGuardrailsCredentialMaskState(&input, maskState)
 	input.Payload.Protocol = "anthropic_beta"
 	input.Payload.Response = resp
 
 	mutation, err := guardrailspipeline.ProcessAnthropicV1BetaNonStreamResponse(c.Request.Context(), s.guardrailsRuntime, input, resp)
 	if err != nil {
 		return false
+	}
+	if !mutation.Changed {
+		s.restoreGuardrailsCredentialAliasesV1BetaResponse(maskState, resp)
 	}
 	return mutation.Changed
 }

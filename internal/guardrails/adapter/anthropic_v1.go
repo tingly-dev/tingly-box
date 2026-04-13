@@ -61,10 +61,7 @@ func commandFromAnthropicV1Blocks(blocks []anthropic.ContentBlockUnion) *guardra
 		if block.Type != "tool_use" && block.Type != "server_tool_use" {
 			continue
 		}
-		return &guardrailscore.Command{
-			Name:      block.Name,
-			Arguments: parseAnthropicInput(block.Input),
-		}
+		return BuildCommand(block.Name, parseAnthropicInput(block.Input))
 	}
 	return nil
 }

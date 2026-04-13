@@ -115,13 +115,7 @@ func (a *StreamAccumulator) Content() guardrailscore.Content {
 		return content
 	}
 
-	cmd := &guardrailscore.Command{Name: a.commandName}
-	args := strings.TrimSpace(a.commandArgs.String())
-	if args != "" {
-		cmd.Arguments = ParseToolArguments(args)
-	}
-
-	content.Command = cmd
+	content.Command = BuildCommandFromRawArguments(a.commandName, strings.TrimSpace(a.commandArgs.String()))
 	return content
 }
 

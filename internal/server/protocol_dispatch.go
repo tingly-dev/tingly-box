@@ -142,11 +142,7 @@ func (s *Server) dispatchChainResultToAnthropicV1(
 		_, _, _, _, scenario, _, _ := GetTrackingContext(c)
 		blocked := false
 		if s.guardrailsEnabledForScenario(scenario) {
-			maskState := ensureGuardrailsCredentialMaskState(c)
 			blocked = s.applyGuardrailsToAnthropicV1NonStreamResponse(c, req, actualModel, provider, anthropicResp)
-			if !blocked {
-				s.restoreGuardrailsCredentialAliasesV1Response(maskState, anthropicResp)
-			}
 		}
 
 		if recorder != nil {
@@ -211,11 +207,7 @@ func (s *Server) dispatchChainResultToAnthropicBeta(
 		_, _, _, _, scenario, _, _ := GetTrackingContext(c)
 		blocked := false
 		if s.guardrailsEnabledForScenario(scenario) {
-			maskState := ensureGuardrailsCredentialMaskState(c)
 			blocked = s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, req, actualModel, provider, anthropicResp)
-			if !blocked {
-				s.restoreGuardrailsCredentialAliasesV1BetaResponse(maskState, anthropicResp)
-			}
 		}
 
 		if recorder != nil {

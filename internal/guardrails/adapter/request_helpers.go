@@ -78,20 +78,6 @@ func extractToolResultTextV1BetaFromMessage(msg anthropic.BetaMessageParam) (str
 	return b.String(), blocks, parts
 }
 
-func FilterMessages(messages []guardrailscore.Message) []guardrailscore.Message {
-	if len(messages) == 0 {
-		return messages
-	}
-	filtered := make([]guardrailscore.Message, 0, len(messages))
-	for _, msg := range messages {
-		if strings.HasPrefix(msg.Content, BlockPrefix) {
-			continue
-		}
-		filtered = append(filtered, msg)
-	}
-	return filtered
-}
-
 func ReplaceToolResultContentV1(messages []anthropic.MessageParam, message string) {
 	for i := range messages {
 		msg := &messages[i]
@@ -124,28 +110,9 @@ func ReplaceToolResultContentV1Beta(messages []anthropic.BetaMessageParam, messa
 	}
 }
 
-func TextResponse(model, message string) map[string]interface{} {
-	return map[string]interface{}{
-		"id":   "guardrails_blocked",
-		"type": "message",
-		"role": "assistant",
-		"content": []map[string]interface{}{{
-			"type": "text",
-			"text": message,
-		}},
-		"model":         model,
-		"stop_reason":   "guardrails",
-		"stop_sequence": nil,
-		"usage": map[string]interface{}{
-			"input_tokens":  0,
-			"output_tokens": 0,
-		},
-	}
-}
-
-// ParseToolArguments decodes a raw JSON argument string into a structured map.
+// parseToolArguments decodes a raw JSON argument string into a structured map.
 // When decoding fails, the raw payload is preserved under `_raw`.
-func ParseToolArguments(raw string) map[string]interface{} {
+func parseToolArguments(raw string) map[string]interface{} {
 	if strings.TrimSpace(raw) == "" {
 		return nil
 	}
@@ -154,4 +121,24 @@ func ParseToolArguments(raw string) map[string]interface{} {
 		return parsed
 	}
 	return map[string]interface{}{"_raw": raw}
+}
+
+// BuildCommand constructs a normalized command payload from already-parsed
+// tool arguments.
+func BuildCommand(name string, args map[string]interface{}) *guardrailscore.Command {
+	if name == "" && len(args) == 0 {
+		return nil
+	}
+	cmd := &guardrailscore.Command{
+		Name:      name,
+		Arguments: args,
+	}
+	cmd.AttachDerivedFields()
+	return cmd
+}
+
+// BuildCommandFromRawArguments parses raw JSON-ish tool arguments and returns
+// a derived command ready for evaluation/mutation use.
+func BuildCommandFromRawArguments(name, raw string) *guardrailscore.Command {
+	return BuildCommand(name, parseToolArguments(raw))
 }

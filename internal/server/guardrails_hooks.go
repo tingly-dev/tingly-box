@@ -37,14 +37,18 @@ func NewGuardrailsHooks(ctx context.Context, runtime *guardrails.Guardrails, bas
 		ingestGuardrailsStreamEvent(acc, event)
 
 		if toolUse, ok := acc.PopCompletedToolUse(); ok {
+			command := guardrailsadapter.BuildCommandFromRawArguments(toolUse.Name, toolUse.Args)
+			commandName := toolUse.Name
+			var commandArgs map[string]interface{}
+			if command != nil {
+				commandName = command.Name
+				commandArgs = command.Arguments
+			}
 			input := baseInput
 			input.Direction = guardrailscore.DirectionResponse
 			input.Content = guardrailscore.Content{
 				Messages: input.Content.Messages,
-				Command: &guardrailscore.Command{
-					Name:      toolUse.Name,
-					Arguments: guardrailsadapter.ParseToolArguments(toolUse.Args),
-				},
+				Command:  command,
 			}
 			result, err := runtime.Evaluate(ctx, input)
 			if err == nil && result.Verdict == guardrailscore.VerdictBlock {
@@ -54,7 +58,7 @@ func NewGuardrailsHooks(ctx context.Context, runtime *guardrails.Guardrails, bas
 					streamState,
 					toolUse.ID,
 					toolUse.Index,
-					guardrailsmutate.BlockMessageForCommand(result, toolUse.Name, guardrailsadapter.ParseToolArguments(toolUse.Args)),
+					guardrailsmutate.BlockMessageForCommand(result, commandName, commandArgs),
 				)
 			}
 		}
