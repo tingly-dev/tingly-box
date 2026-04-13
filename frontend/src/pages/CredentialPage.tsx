@@ -108,12 +108,6 @@ const CredentialPage = () => {
         refreshQuota,
     } = useProviderQuota(providers, { fetchOnMount: true });
 
-    // Debug logging
-    useEffect(() => {
-        console.log('[CredentialPage] quotaData updated:', quotaData);
-        console.log('[CredentialPage] providers:', providers);
-    }, [quotaData, providers]);
-
     const showNotification = (message: string, severity: 'success' | 'error') => {
         setSnackbar({ open: true, message, severity });
     };
