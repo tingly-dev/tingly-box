@@ -26,10 +26,10 @@ import (
 
 const (
 	// URL templates for displaying to users
-	webUITpl             = "%s://localhost:%d/"
-	webUILoginTpl        = "%s://localhost:%d/login/%s"
-	openAIEndpointTpl    = "%s://localhost:%d/tingly/openai/v1/chat/completions"
-	anthropicEndpointTpl = "%s://localhost:%d/tingly/anthropic/v1/messages"
+	webUITpl             = "http://localhost:%d/"
+	webUILoginTpl        = "http://localhost:%d/login/%s"
+	openAIEndpointTpl    = "http://localhost:%d/tingly/openai/v1/chat/completions"
+	anthropicEndpointTpl = "http://localhost:%d/tingly/anthropic/v1/messages"
 )
 
 // BannerConfig holds configuration for banner display
@@ -39,20 +39,14 @@ type BannerConfig struct {
 	EnableUI     bool
 	GlobalConfig *serverconfig.Config
 	IsDaemon     bool
-	HTTPEnabled  bool
 }
 
 // printBanner prints the server access banner
 func printBanner(cfg BannerConfig) {
-	scheme := "http"
-	if cfg.HTTPEnabled {
-		scheme = "https"
-	}
-
 	if !cfg.EnableUI {
 		// Resolve host for display
 		resolvedHost := network.ResolveHost(cfg.Host)
-		fmt.Printf("API endpoint: %s://%s:%d/v1/chat/completions\n", scheme, resolvedHost, cfg.Port)
+		fmt.Printf("API endpoint: http://%s:%d/v1/chat/completions\n", resolvedHost, cfg.Port)
 		return
 	}
 
@@ -61,12 +55,12 @@ func printBanner(cfg BannerConfig) {
 	fmt.Println("                         Access Information                            ")
 	fmt.Println("├────────────────────────────────────────────────────────────────────┤")
 	if cfg.GlobalConfig.HasUserToken() {
-		fmt.Printf("  Web UI:       %s\n", fmt.Sprintf(webUILoginTpl, scheme, cfg.Port, cfg.GlobalConfig.GetUserToken()))
+		fmt.Printf("  Web UI:       http://localhost:%d/login/%s\n", cfg.Port, cfg.GlobalConfig.GetUserToken())
 	} else {
-		fmt.Printf("  Web UI:       %s\n", fmt.Sprintf(webUITpl, scheme, cfg.Port))
+		fmt.Printf("  Web UI:       http://localhost:%d/\n", cfg.Port)
 	}
-	fmt.Printf("  OpenAI API:   %s\n", fmt.Sprintf(openAIEndpointTpl, scheme, cfg.Port))
-	fmt.Printf("  Anthropic API: %s\n", fmt.Sprintf(anthropicEndpointTpl, scheme, cfg.Port))
+	fmt.Printf("  OpenAI API:   http://localhost:%d/tingly/openai/v1/chat/completions\n", cfg.Port)
+	fmt.Printf("  Anthropic API: http://localhost:%d/tingly/anthropic/v1/messages\n", cfg.Port)
 
 	// Show login token for easy copy
 	if cfg.GlobalConfig.HasUserToken() {
@@ -181,7 +175,6 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 				EnableUI:     opts.EnableUI,
 				GlobalConfig: appConfig.GetGlobalConfig(),
 				IsDaemon:     true,
-				HTTPEnabled:  opts.HTTPS.Enabled,
 			})
 
 			// Fork and detach
@@ -216,7 +209,6 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 			EnableUI:     opts.EnableUI,
 			GlobalConfig: appConfig.GetGlobalConfig(),
 			IsDaemon:     false,
-			HTTPEnabled:  opts.HTTPS.Enabled,
 		})
 
 		// If prompt-restart is enabled, ask user if they want to restart
@@ -258,9 +250,6 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 		server.WithUI(opts.EnableUI),
 		server.WithOpenBrowser(opts.EnableOpenBrowser),
 		server.WithHost(opts.Host),
-		server.WithHTTPSEnabled(opts.HTTPS.Enabled),
-		server.WithHTTPSCertDir(opts.HTTPS.CertDir),
-		server.WithHTTPSRegenerate(opts.HTTPS.Regenerate),
 		server.WithRecordMode(obs.RecordMode(opts.RecordMode)),
 		server.WithRecordDir(opts.RecordDir),
 		server.WithExperimentalFeatures(opts.ExperimentalFeatures),
@@ -295,7 +284,6 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 		EnableUI:     opts.EnableUI,
 		GlobalConfig: appConfig.GetGlobalConfig(),
 		IsDaemon:     false,
-		HTTPEnabled:  opts.HTTPS.Enabled,
 	})
 
 	// Wait for either server error, shutdown signal, or web UI stop request
@@ -583,10 +571,6 @@ If the server is not running, it will be started first.`,
 				// Server is running, just open the browser
 				port := appConfig.GetServerPort()
 				globalConfig := appConfig.GetGlobalConfig()
-				scheme := "http"
-				if opts.HTTPS.Enabled {
-					scheme = "https"
-				}
 
 				// Resolve host for display
 				host := opts.Host
@@ -596,9 +580,9 @@ If the server is not running, it will be started first.`,
 				resolvedHost := network.ResolveHost(host)
 
 				// Build web UI URL
-				webUIURL := fmt.Sprintf("%s://%s:%d/", scheme, resolvedHost, port)
+				webUIURL := fmt.Sprintf("http://%s:%d/", resolvedHost, port)
 				if globalConfig.HasUserToken() {
-					webUIURL = fmt.Sprintf("%s://%s:%d/login/%s", scheme, resolvedHost, port, globalConfig.GetUserToken())
+					webUIURL = fmt.Sprintf("http://%s:%d/login/%s", resolvedHost, port, globalConfig.GetUserToken())
 				}
 
 				fmt.Printf("Opening web UI: %s\n", webUIURL)
