@@ -318,11 +318,7 @@ func (dm *ErrorLogMiddleware) logEntry(entry *logEntry) {
 
 	// Add response body if it's JSON and status code indicates error
 	if entry.StatusCode >= 400 && len(entry.ResponseBody) > 0 {
-		if json.Valid(entry.ResponseBody) {
-			logData["response_body"] = json.RawMessage(entry.ResponseBody)
-		} else {
-			logData["response_body"] = string(entry.ResponseBody)
-		}
+		logData["response_body"] = string(entry.ResponseBody)
 	}
 
 	// Convert to JSON
