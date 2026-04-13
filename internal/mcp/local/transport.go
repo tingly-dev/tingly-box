@@ -6,21 +6,39 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/mcpruntime"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // TransportHandler handles MCP transport (HTTP/SSE) requests for local mode.
 type TransportHandler struct {
 	servers   map[string]*MCPServer // client name -> server
 	serversMu sync.RWMutex
-	handler   MCPConnectionHandler
+	runtime   *mcpruntime.Runtime
+	registry  *Registry
+	baseURL   string
+	cfg       *config.Config
 }
 
 // NewTransportHandler creates a new transport handler.
-func NewTransportHandler(handler MCPConnectionHandler) *TransportHandler {
+func NewTransportHandler(runtime *mcpruntime.Runtime, registry *Registry, baseURL string, cfg *config.Config) *TransportHandler {
 	return &TransportHandler{
 		servers: make(map[string]*MCPServer),
-		handler: handler,
+		runtime: runtime,
+		registry: registry,
+		baseURL:  baseURL,
+		cfg:      cfg,
 	}
+}
+
+// isMCPEnabled checks if MCP feature is enabled via scenario flag
+func (t *TransportHandler) isMCPEnabled() bool {
+	if t.cfg == nil {
+		return false
+	}
+	return t.cfg.GetScenarioFlag(typ.ScenarioGlobal, "mcp") ||
+		t.cfg.GetScenarioFlag(typ.ScenarioClaudeCode, "mcp")
 }
 
 // GetServer returns the MCPServer for a client, creating it if needed.
@@ -33,6 +51,27 @@ func (t *TransportHandler) GetServer(clientName string) (*MCPServer, error) {
 		return server, nil
 	}
 
+	// Auto-register if not in registry
+	if t.registry != nil {
+		_, err := t.registry.GetByName(clientName)
+		if err != nil {
+			// Client not found, auto-register
+			config := typ.MCPSourceConfig{
+				Name:           clientName,
+				ConnectionType: typ.MCPConnectionTypeHTTP,
+				AuthType:       typ.MCPAuthTypeNone,
+				ToolsToExecute: []string{"*"},
+				Endpoint:       t.baseURL + "/mcp/" + clientName,
+				AutoRegistered: true,
+			}
+			if _, regErr := t.registry.Register(config); regErr != nil {
+				logrus.Warnf("mcp local: failed to auto-register client %s: %v", clientName, regErr)
+			} else {
+				logrus.Infof("mcp local: auto-registered client %s", clientName)
+			}
+		}
+	}
+
 	// Create new server
 	t.serversMu.Lock()
 	defer t.serversMu.Unlock()
@@ -42,15 +81,50 @@ func (t *TransportHandler) GetServer(clientName string) (*MCPServer, error) {
 		return server, nil
 	}
 
-	server = NewMCPServer(clientName, t.handler)
+	// Build adapter with source filtering based on client name
+	// If clientName matches a configured source ID, expose only that source's tools
+	// Special clientName "all" exposes all sources; unknown names also get all sources
+	var adapter MCPConnectionHandler
+	if t.runtime != nil {
+		var allowedSources []string
+		if clientName != "all" && t.isKnownSource(clientName) {
+			allowedSources = []string{clientName}
+		}
+		adapter = NewMCPRuntimeAdapter(t.runtime, allowedSources...)
+	}
+
+	server = NewMCPServer(clientName, adapter, t.registry)
 	t.servers[clientName] = server
 
 	return server, nil
 }
 
+// isKnownSource checks if a client name matches a configured MCP source ID.
+func (t *TransportHandler) isKnownSource(name string) bool {
+	if t.runtime == nil {
+		return false
+	}
+	cfg := t.runtime.GetConfig()
+	if cfg == nil {
+		return false
+	}
+	for _, source := range cfg.Sources {
+		if source.ID == name {
+			return true
+		}
+	}
+	return false
+}
+
 // HandleMCP is the Gin handler for MCP HTTP/SSE transport.
 // It handles both POST (JSON-RPC) and GET (SSE) requests.
 func (t *TransportHandler) HandleMCP(c *gin.Context) {
+	// Check if MCP is enabled
+	if !t.isMCPEnabled() {
+		c.JSON(http.StatusForbidden, gin.H{"error": "MCP feature is disabled"})
+		return
+	}
+
 	clientName := c.Param("client_name")
 	if clientName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "client_name is required"})

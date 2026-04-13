@@ -314,6 +314,11 @@ func (r *Runtime) getConfigOrDefault() *typ.MCPRuntimeConfig {
 	return cfg
 }
 
+// GetConfig returns the current MCP runtime configuration.
+func (r *Runtime) GetConfig() *typ.MCPRuntimeConfig {
+	return r.getConfigOrDefault()
+}
+
 func buildAllowList(names []string) (bool, map[string]bool) {
 	if len(names) == 0 {
 		return true, nil

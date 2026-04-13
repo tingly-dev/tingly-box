@@ -208,8 +208,8 @@ type OAuthDetail struct {
 type MCPMode string
 
 const (
-	MCPModeIntercept MCPMode = "intercept" // intercept mode (default)
-	MCPModeLocal     MCPMode = "local"     // local mode (client-install)
+	MCPModeServertool MCPMode = "servertool" // servertool mode: tingly-box connects to external MCP servers and injects tools into AI requests
+	MCPModeClienttool MCPMode = "clienttool" // clienttool mode (default): external clients connect to tingly-box
 )
 
 // MCPConnectionType defines connection type
@@ -271,6 +271,7 @@ type MCPSourceConfig struct {
 	ToolsToExecute  []string           `json:"tools_to_execute,omitempty"`     // available tools
 	ToolsAutoExec   []string           `json:"tools_to_auto_execute,omitempty"` // auto-execute tools (agent mode)
 	IsPingAvailable *bool              `json:"is_ping_available,omitempty"`   // health check method
+	AutoRegistered  bool               `json:"auto_registered,omitempty"`     // true if auto-registered on first connect
 }
 
 // MCPStdioConfig STDIO connection configuration

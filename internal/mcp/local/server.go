@@ -19,6 +19,7 @@ type MCPServer struct {
 	httpServer *server.StreamableHTTPServer
 	serverMu   sync.RWMutex
 	handler    MCPConnectionHandler
+	registry   *Registry
 }
 
 // MCPTool represents a tool exposed by the MCP server.
@@ -35,10 +36,11 @@ type MCPConnectionHandler interface {
 }
 
 // NewMCPServer creates a new MCP server instance.
-func NewMCPServer(name string, handler MCPConnectionHandler) *MCPServer {
+func NewMCPServer(name string, handler MCPConnectionHandler, registry *Registry) *MCPServer {
 	return &MCPServer{
-		name:    name,
-		handler: handler,
+		name:     name,
+		handler:  handler,
+		registry: registry,
 	}
 }
 
@@ -65,7 +67,10 @@ func (s *MCPServer) Start() error {
 		tools = []MCPTool{}
 	}
 
-	for _, tool := range tools {
+	// Filter tools based on client registry configuration
+	filteredTools := s.filterTools(tools)
+
+	for _, tool := range filteredTools {
 		mcpTool := mcp.Tool{
 			Name:        tool.Name,
 			Description: tool.Description,
@@ -127,6 +132,40 @@ func (s *MCPServer) Start() error {
 
 	logrus.Infof("mcp local: server started for client %s", s.name)
 	return nil
+}
+
+// filterTools filters tools based on the client's configured ToolsToExecute.
+// If registry has a client config, apply tool filtering; otherwise allow all.
+func (s *MCPServer) filterTools(allTools []MCPTool) []MCPTool {
+	if s.registry == nil {
+		return allTools
+	}
+
+	client, err := s.registry.GetByName(s.name)
+	if err != nil {
+		// Client not registered, allow all
+		return allTools
+	}
+
+	allowedTools := client.Config.ToolsToExecute
+	if len(allowedTools) == 0 || (len(allowedTools) == 1 && allowedTools[0] == "*") {
+		// No restrictions, allow all
+		return allTools
+	}
+
+	// Filter to only allowed tools
+	allowedSet := make(map[string]bool)
+	for _, t := range allowedTools {
+		allowedSet[t] = true
+	}
+
+	var filtered []MCPTool
+	for _, tool := range allTools {
+		if allowedSet[tool.Name] {
+			filtered = append(filtered, tool)
+		}
+	}
+	return filtered
 }
 
 // Stop stops the underlying MCP server.
