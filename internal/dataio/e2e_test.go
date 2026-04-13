@@ -1,14 +1,13 @@
 //go:build e2e
 // +build e2e
 
-package dataexport
+package dataio
 
 import (
 	"strings"
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/internal/config"
-	"github.com/tingly-dev/tingly-box/internal/dataimport"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -115,12 +114,12 @@ func TestEndToEndExportImportJSONL(t *testing.T) {
 	destConfig := destAppConfig.GetGlobalConfig()
 
 	// Import the exported data
-	importOpts := dataimport.ImportOptions{
+	importOpts := ImportOptions{
 		OnProviderConflict: "use", // Will create new since none exist
 		OnRuleConflict:     "skip",
 	}
 
-	importer := dataimport.NewJSONLImporter()
+	importer := NewJSONLImporter()
 	importResult, err := importer.Import(result.Content, destConfig, importOpts)
 	if err != nil {
 		t.Fatalf("Failed to import rule: %v", err)
@@ -295,12 +294,12 @@ func TestEndToEndExportImportBase64(t *testing.T) {
 	destConfig := destAppConfig.GetGlobalConfig()
 
 	// Import the Base64 export
-	importOpts := dataimport.ImportOptions{
+	importOpts := ImportOptions{
 		OnProviderConflict: "use",
 		OnRuleConflict:     "skip",
 	}
 
-	importer := dataimport.NewBase64Importer()
+	importer := NewBase64Importer()
 	importResult, err := importer.Import(base64Content, destConfig, importOpts)
 	if err != nil {
 		t.Fatalf("Failed to import Base64 export: %v", err)
@@ -415,8 +414,8 @@ func TestEndToEndMultipleProviders(t *testing.T) {
 	}
 	destConfig := destAppConfig.GetGlobalConfig()
 
-	importer := dataimport.NewJSONLImporter()
-	importResult, err := importer.Import(result.Content, destConfig, dataimport.ImportOptions{
+	importer := NewJSONLImporter()
+	importResult, err := importer.Import(result.Content, destConfig, ImportOptions{
 		OnProviderConflict: "use",
 		OnRuleConflict:     "skip",
 	})

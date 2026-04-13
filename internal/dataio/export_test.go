@@ -1,26 +1,8 @@
-package dataexport
+package dataio
 
 import (
 	"testing"
 )
-
-func TestFormatConstants(t *testing.T) {
-	tests := []struct {
-		name   string
-		format Format
-		want   string
-	}{
-		{"JSONL format", FormatJSONL, "jsonl"},
-		{"Base64 format", FormatBase64, "base64"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := string(tt.format); got != tt.want {
-				t.Errorf("Format = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
 
 func TestBase64Prefix(t *testing.T) {
 	if Base64Prefix != "TGB64" {

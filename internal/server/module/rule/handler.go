@@ -7,8 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/dataio"
 
-	"github.com/tingly-dev/tingly-box/internal/dataimport"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -304,13 +304,13 @@ func (h *Handler) ImportRule(c *gin.Context) {
 		req.OnRuleConflict = "new" // Create new rule with suffixed name if conflict
 	}
 
-	opts := dataimport.ImportOptions{
+	opts := dataio.ImportOptions{
 		OnProviderConflict: req.OnProviderConflict,
 		OnRuleConflict:     req.OnRuleConflict,
 		Quiet:              true,
 	}
 
-	result, err := dataimport.Import(req.Data, cfg, dataimport.FormatAuto, opts)
+	result, err := dataio.Import(req.Data, cfg, dataio.FormatAuto, opts)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,

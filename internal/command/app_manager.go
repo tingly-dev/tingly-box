@@ -1,16 +1,10 @@
 package command
 
 import (
-	"bufio"
-	"encoding/json"
 	"fmt"
-	"strings"
 
-	"github.com/google/uuid"
 	"github.com/tingly-dev/tingly-box/internal/config"
-	exportpkg "github.com/tingly-dev/tingly-box/internal/dataexport"
-	importpkg "github.com/tingly-dev/tingly-box/internal/dataimport"
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	exportpkg "github.com/tingly-dev/tingly-box/internal/dataio"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
@@ -230,50 +224,6 @@ func (am *AppManager) HasModelToken() bool {
 // Import/Export Types
 // ============
 
-// ExportLine represents a generic line in the export file
-type ExportLine struct {
-	Type string `json:"type"`
-}
-
-// ExportMetadata represents the metadata line
-type ExportMetadata struct {
-	Type       string `json:"type"`
-	Version    string `json:"version"`
-	ExportedAt string `json:"exported_at"`
-}
-
-// ExportRuleData represents the rule export data
-type ExportRuleData struct {
-	Type          string                 `json:"type"`
-	UUID          string                 `json:"uuid"`
-	Scenario      string                 `json:"scenario"`
-	RequestModel  string                 `json:"request_model"`
-	ResponseModel string                 `json:"response_model"`
-	Description   string                 `json:"description"`
-	Services      []*loadbalance.Service `json:"services"`
-	LBTactic      typ.Tactic             `json:"lb_tactic"`
-	Active        bool                   `json:"active"`
-	SmartEnabled  bool                   `json:"smart_enabled"`
-	SmartRouting  []interface{}          `json:"smart_routing"`
-}
-
-// ExportProviderData represents the provider export data
-type ExportProviderData struct {
-	Type        string           `json:"type"`
-	UUID        string           `json:"uuid"`
-	Name        string           `json:"name"`
-	APIBase     string           `json:"api_base"`
-	APIStyle    string           `json:"api_style"`
-	AuthType    string           `json:"auth_type"`
-	Token       string           `json:"token"`
-	OAuthDetail *typ.OAuthDetail `json:"oauth_detail"`
-	Enabled     bool             `json:"enabled"`
-	ProxyURL    string           `json:"proxy_url"`
-	Timeout     int64            `json:"timeout"`
-	Tags        []string         `json:"tags"`
-	Models      []string         `json:"models"`
-}
-
 // ImportOptions controls how imports are handled when conflicts occur.
 type ImportOptions struct {
 	// OnProviderConflict specifies what to do when a provider already exists.
@@ -286,12 +236,20 @@ type ImportOptions struct {
 	Quiet bool
 }
 
+// ProviderImportInfo contains information about an imported or used provider
+type ProviderImportInfo struct {
+	UUID   string
+	Name   string
+	Action string // "created", "used", "skipped"
+}
+
 // ImportResult contains the results of an import operation.
 type ImportResult struct {
 	RuleCreated      bool
 	RuleUpdated      bool
 	ProvidersCreated int
 	ProvidersUsed    int
+	Providers        []ProviderImportInfo
 	ProviderMap      map[string]string // old UUID -> new UUID
 }
 
@@ -300,183 +258,44 @@ type ImportResult struct {
 // - Line 1: metadata (type="metadata")
 // - Line 2: rule data (type="rule")
 // - Subsequent lines: provider data (type="provider")
+//
+// Deprecated: Use ImportRule with FormatAuto instead. This method is kept for backward compatibility.
 func (am *AppManager) ImportRuleFromJSONL(data string, opts ImportOptions) (*ImportResult, error) {
-	result := &ImportResult{
-		ProviderMap: make(map[string]string),
+	// Convert command.ImportOptions to dataio.ImportOptions
+	importOpts := exportpkg.ImportOptions{
+		OnProviderConflict: opts.OnProviderConflict,
+		OnRuleConflict:     opts.OnRuleConflict,
+		Quiet:              opts.Quiet,
 	}
 
-	// Set defaults
-	if opts.OnProviderConflict == "" {
-		opts.OnProviderConflict = "use"
-	}
-	if opts.OnRuleConflict == "" {
-		opts.OnRuleConflict = "skip"
+	// Use dataio.Import with FormatAuto (will detect JSONL automatically)
+	result, err := exportpkg.Import(data, am.appConfig.GetGlobalConfig(), exportpkg.FormatAuto, importOpts)
+	if err != nil {
+		return nil, err
 	}
 
-	// Parse lines
-	scanner := bufio.NewScanner(strings.NewReader(data))
-	var metadata *ExportMetadata
-	var ruleData *ExportRuleData
-	providersData := []*ExportProviderData{}
+	// Convert dataio.ImportResult to command.ImportResult
+	return &ImportResult{
+		RuleCreated:      result.RuleCreated,
+		RuleUpdated:      result.RuleUpdated,
+		ProvidersCreated: result.ProvidersCreated,
+		ProvidersUsed:    result.ProvidersUsed,
+		Providers:        convertProviderInfoList(result.Providers),
+		ProviderMap:      result.ProviderMap,
+	}, nil
+}
 
-	lineNum := 0
-	for scanner.Scan() {
-		lineNum++
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue // Skip empty lines
-		}
-
-		// Parse line type
-		var base ExportLine
-		if err := json.Unmarshal([]byte(line), &base); err != nil {
-			return nil, fmt.Errorf("line %d: invalid JSON: %w", lineNum, err)
-		}
-
-		switch base.Type {
-		case "metadata":
-			if err := json.Unmarshal([]byte(line), &metadata); err != nil {
-				return nil, fmt.Errorf("line %d: invalid metadata: %w", lineNum, err)
-			}
-			if metadata.Version != "1.0" {
-				return nil, fmt.Errorf("unsupported export version: %s", metadata.Version)
-			}
-
-		case "rule":
-			if err := json.Unmarshal([]byte(line), &ruleData); err != nil {
-				return nil, fmt.Errorf("line %d: invalid rule data: %w", lineNum, err)
-			}
-
-		case "provider":
-			var provider ExportProviderData
-			if err := json.Unmarshal([]byte(line), &provider); err != nil {
-				return nil, fmt.Errorf("line %d: invalid provider data: %w", lineNum, err)
-			}
-			providersData = append(providersData, &provider)
-
-		default:
-			return nil, fmt.Errorf("line %d: unknown type '%s'", lineNum, base.Type)
+// convertProviderInfoList converts dataio.ProviderImportInfo to command.ProviderImportInfo
+func convertProviderInfoList(dataioList []exportpkg.ProviderImportInfo) []ProviderImportInfo {
+	result := make([]ProviderImportInfo, len(dataioList))
+	for i, p := range dataioList {
+		result[i] = ProviderImportInfo{
+			UUID:   p.UUID,
+			Name:   p.Name,
+			Action: p.Action,
 		}
 	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading input: %w", err)
-	}
-
-	if ruleData == nil && len(providersData) == 0 {
-		return nil, fmt.Errorf("no rule or provider data found in export")
-	}
-
-	globalConfig := am.appConfig.GetGlobalConfig()
-
-	// Import providers
-	for _, p := range providersData {
-		// Check if provider with same name exists
-		existingProvider, err := globalConfig.GetProviderByName(p.Name)
-		if err == nil && existingProvider != nil {
-			switch opts.OnProviderConflict {
-			case "use":
-				result.ProviderMap[p.UUID] = existingProvider.UUID
-				result.ProvidersUsed++
-				continue
-			case "skip":
-				continue
-			case "suffix":
-				// Create with suffixed name
-				suffix := 2
-				newName := fmt.Sprintf("%s-%d", p.Name, suffix)
-				for {
-					_, err := globalConfig.GetProviderByName(newName)
-					if err != nil {
-						break // Name is available
-					}
-					suffix++
-					newName = fmt.Sprintf("%s-%d", p.Name, suffix)
-				}
-				p.Name = newName
-			default:
-				result.ProviderMap[p.UUID] = existingProvider.UUID
-				result.ProvidersUsed++
-				continue
-			}
-		}
-
-		// Create new provider
-		newProvider := &typ.Provider{
-			UUID:        uuid.New().String(),
-			Name:        p.Name,
-			APIBase:     p.APIBase,
-			APIStyle:    protocol.APIStyle(p.APIStyle),
-			AuthType:    typ.AuthType(p.AuthType),
-			Token:       p.Token,
-			OAuthDetail: p.OAuthDetail,
-			Enabled:     p.Enabled,
-			ProxyURL:    p.ProxyURL,
-			Timeout:     p.Timeout,
-			Tags:        p.Tags,
-			Models:      p.Models,
-		}
-
-		if err := globalConfig.AddProvider(newProvider); err != nil {
-			return nil, fmt.Errorf("failed to add provider '%s': %w", p.Name, err)
-		}
-
-		result.ProviderMap[p.UUID] = newProvider.UUID
-		result.ProvidersCreated++
-	}
-
-	// If we don't have rule data, we're done (provider-only import)
-	if ruleData == nil {
-		return result, nil
-	}
-
-	// Check for existing rule
-	existingRule := globalConfig.GetRuleByRequestModelAndScenario(ruleData.RequestModel, typ.RuleScenario(ruleData.Scenario))
-
-	// Remap provider UUIDs in services
-	for i := range ruleData.Services {
-		if oldUUID, ok := result.ProviderMap[ruleData.Services[i].Provider]; ok {
-			ruleData.Services[i].Provider = oldUUID
-		}
-	}
-
-	// Create rule
-	rule := typ.Rule{
-		UUID:          uuid.New().String(),
-		Scenario:      typ.RuleScenario(ruleData.Scenario),
-		RequestModel:  ruleData.RequestModel,
-		ResponseModel: ruleData.ResponseModel,
-		Description:   ruleData.Description,
-		Services:      ruleData.Services,
-		LBTactic:      ruleData.LBTactic,
-		Active:        ruleData.Active,
-	}
-
-	if existingRule != nil {
-		switch opts.OnRuleConflict {
-		case "skip":
-			return result, nil
-		case "update":
-			rule.UUID = existingRule.UUID
-			if err := globalConfig.UpdateRule(existingRule.UUID, rule); err != nil {
-				return nil, fmt.Errorf("failed to update rule: %w", err)
-			}
-			result.RuleUpdated = true
-		case "new":
-			rule.RequestModel = fmt.Sprintf("%s-imported", ruleData.RequestModel)
-			if err := globalConfig.AddRule(rule); err != nil {
-				return nil, fmt.Errorf("failed to add rule: %w", err)
-			}
-			result.RuleCreated = true
-		}
-	} else {
-		if err := globalConfig.AddRule(rule); err != nil {
-			return nil, fmt.Errorf("failed to add rule: %w", err)
-		}
-		result.RuleCreated = true
-	}
-
-	return result, nil
+	return result
 }
 
 // ============
@@ -544,18 +363,18 @@ func (am *AppManager) getProviderUUIDsFromRule(rule *typ.Rule) []string {
 // ============
 
 // ImportRule imports a rule from data in the specified format
-func (am *AppManager) ImportRule(data string, format importpkg.Format, opts ImportOptions) (*ImportResult, error) {
+func (am *AppManager) ImportRule(data string, format exportpkg.Format, opts ImportOptions) (*ImportResult, error) {
 	globalConfig := am.appConfig.GetGlobalConfig()
 
 	// Convert command.ImportOptions to import.ImportOptions
-	importOpts := importpkg.ImportOptions{
+	importOpts := exportpkg.ImportOptions{
 		OnProviderConflict: opts.OnProviderConflict,
 		OnRuleConflict:     opts.OnRuleConflict,
 		Quiet:              opts.Quiet,
 	}
 
 	// Perform import
-	result, err := importpkg.Import(data, globalConfig, format, importOpts)
+	result, err := exportpkg.Import(data, globalConfig, format, importOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to import rule: %w", err)
 	}

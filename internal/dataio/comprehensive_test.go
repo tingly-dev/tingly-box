@@ -1,4 +1,4 @@
-package dataimport
+package dataio
 
 import (
 	"fmt"
@@ -109,10 +109,9 @@ func TestBase64FormatVersioning(t *testing.T) {
 		},
 	}
 
-	importer := NewBase64Importer()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := importer.decodeBase64Export(tt.data)
+			_, err := DecodeBase64Export(tt.data)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("decodeBase64Export() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -126,7 +125,6 @@ func TestBase64FormatVersioning(t *testing.T) {
 // TestEmptyAndMalformedInput tests handling of bad input
 func TestEmptyAndMalformedInput(t *testing.T) {
 	detector := NewDetector()
-	importer := NewBase64Importer()
 
 	tests := []struct {
 		name       string
@@ -170,7 +168,7 @@ func TestEmptyAndMalformedInput(t *testing.T) {
 			}
 
 			if tt.testImport {
-				_, err := importer.decodeBase64Export(tt.data)
+				_, err := DecodeBase64Export(tt.data)
 				// We don't assert error here because some cases might be valid
 				// We just want to ensure it doesn't panic
 				_ = err
@@ -247,7 +245,7 @@ func TestServiceUUIDRemapping(t *testing.T) {
 // TestExportDataStructureValidation validates the structure of export data
 func TestExportDataStructureValidation(t *testing.T) {
 	// Test that export data structures have required fields
-	metadata := ImportMetadata{
+	metadata := Metadata{
 		Type:       "metadata",
 		Version:    "1.0",
 		ExportedAt: "2024-01-01T00:00:00Z",
@@ -260,7 +258,7 @@ func TestExportDataStructureValidation(t *testing.T) {
 		t.Error("Metadata version field incorrect")
 	}
 
-	ruleData := ImportRuleData{
+	ruleData := RuleData{
 		Type:         "rule",
 		UUID:         "test-uuid",
 		Scenario:     "general",
@@ -275,7 +273,7 @@ func TestExportDataStructureValidation(t *testing.T) {
 		t.Error("Rule data UUID is required")
 	}
 
-	providerData := ImportProviderData{
+	providerData := ProviderData{
 		Type:    "provider",
 		UUID:    "prov-uuid",
 		Name:    "Test Provider",
@@ -301,8 +299,7 @@ func TestCrossFormatCompatibility(t *testing.T) {
 
 	base64Content := "TGB64:1.0:eyJ0eXBlIjoibWV0YWRhdGEiLCJ2ZXJzaW9uIjoiMS4wIn0KeyJ0eXBlIjoicnVsZSIsInV1aWQiOiJ0ZXN0LXV1aWQiLCJyZXF1ZXN0X21vZGVsIjoiZ3B0LTQifQp7InR5cGUiOiJwcm92aWRlciIsInV1aWQiOiJwcm92LTEiLCJuYW1lIjoiVGVzdCJ9"
 
-	importer := NewBase64Importer()
-	decoded, err := importer.decodeBase64Export(base64Content)
+	decoded, err := DecodeBase64Export(base64Content)
 
 	if err != nil {
 		t.Fatalf("Failed to decode: %v", err)
