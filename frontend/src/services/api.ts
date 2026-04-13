@@ -1690,6 +1690,158 @@ export const api = {
             body: JSON.stringify(config),
         });
     },
+
+    // ========== MCP Local Mode API ==========
+
+    // Get MCP mode (servertool or clienttool)
+    getMCPMode: async (): Promise<any> => {
+        return uiAPI('/mcp/mode', {
+            method: 'GET',
+        });
+    },
+
+    // Set MCP mode
+    setMCPMode: async (mode: 'servertool' | 'clienttool'): Promise<any> => {
+        return uiAPI('/mcp/mode', {
+            method: 'PUT',
+            body: JSON.stringify({ mode }),
+        });
+    },
+
+    // List all registered MCP clients
+    listMCPClients: async (): Promise<any> => {
+        return uiAPI('/mcp/clients', {
+            method: 'GET',
+        });
+    },
+
+    // Get a specific MCP client by ID
+    getMCPClient: async (id: string): Promise<any> => {
+        return uiAPI(`/mcp/client/${id}`, {
+            method: 'GET',
+        });
+    },
+
+    // Create a new MCP client
+    createMCPClient: async (data: {
+        name: string;
+        connection_type: 'stdio' | 'http' | 'sse';
+        enabled?: boolean;
+        stdio_config?: {
+            command: string;
+            args?: string[];
+            cwd?: string;
+            env?: string[];
+        };
+        connection_string?: string;
+        auth_type?: 'none' | 'headers' | 'oauth';
+        headers?: Record<string, string>;
+        oauth_config?: {
+            client_id: string;
+            client_secret?: string;
+            authorize_url: string;
+            token_url: string;
+            scopes?: string[];
+        };
+        tools_to_execute?: string[];
+        tools_to_auto_execute?: string[];
+        allowed_extra_headers?: string[];
+        proxy_url?: string;
+        env?: Record<string, string>;
+    }): Promise<any> => {
+        return uiAPI('/mcp/client', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    // Update an MCP client
+    updateMCPClient: async (id: string, data: {
+        name?: string;
+        connection_type?: 'stdio' | 'http' | 'sse';
+        enabled?: boolean;
+        stdio_config?: {
+            command?: string;
+            args?: string[];
+            cwd?: string;
+            env?: string[];
+        };
+        connection_string?: string;
+        auth_type?: 'none' | 'headers' | 'oauth';
+        headers?: Record<string, string>;
+        oauth_config?: {
+            client_id?: string;
+            client_secret?: string;
+            authorize_url?: string;
+            token_url?: string;
+            scopes?: string[];
+        };
+        tools_to_execute?: string[];
+        tools_to_auto_execute?: string[];
+        allowed_extra_headers?: string[];
+        proxy_url?: string;
+        env?: Record<string, string>;
+    }): Promise<any> => {
+        return uiAPI(`/mcp/client/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    },
+
+    // Delete an MCP client
+    deleteMCPClient: async (id: string): Promise<any> => {
+        return uiAPI(`/mcp/client/${id}`, {
+            method: 'DELETE',
+        });
+    },
+
+    // Reconnect an MCP client
+    reconnectMCPClient: async (id: string): Promise<any> => {
+        return uiAPI(`/mcp/client/${id}/reconnect`, {
+            method: 'POST',
+        });
+    },
+
+    // Get install command for an MCP client
+    getMCPInstallCommand: async (name: string): Promise<any> => {
+        return uiAPI(`/mcp/install/${name}`, {
+            method: 'GET',
+        });
+    },
+
+    // ========== MCP Tool Testing API ==========
+
+    // Execute an MCP tool (for tool testing interface)
+    // NOTE: This requires backend implementation
+    executeMCPTool: async (
+        clientId: string,
+        toolName: string,
+        args: Record<string, unknown>
+    ): Promise<{
+        success: boolean;
+        result?: string;
+        error?: string;
+        executionTime?: number;
+    }> => {
+        // TODO: Backend needs to implement this endpoint
+        // POST /api/v1/mcp/execute
+        // Body: { client_id, tool_name, arguments }
+        try {
+            return uiAPI('/mcp/execute', {
+                method: 'POST',
+                body: JSON.stringify({
+                    client_id: clientId,
+                    tool_name: toolName,
+                    arguments: args,
+                }),
+            });
+        } catch (error: any) {
+            return {
+                success: false,
+                error: error.message || 'Tool execution API not implemented',
+            };
+        }
+    },
 };
 
 export default api;

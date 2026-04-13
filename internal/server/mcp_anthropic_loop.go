@@ -57,7 +57,7 @@ func (s *Server) handleAnthropicV1MCPToolCalls(
 	req *anthropic.MessageNewParams,
 	resp *anthropic.Message,
 ) (*anthropic.Message, *anthropic.MessageNewParams, error) {
-	if s.mcpRuntime == nil {
+	if s.mcpRuntime == nil || !s.mcpEnabled() {
 		return resp, req, nil
 	}
 
@@ -147,7 +147,7 @@ func (s *Server) handleAnthropicBetaMCPToolCalls(
 	req *anthropic.BetaMessageNewParams,
 	resp *anthropic.BetaMessage,
 ) (*anthropic.BetaMessage, *anthropic.BetaMessageNewParams, error) {
-	if s.mcpRuntime == nil {
+	if s.mcpRuntime == nil || !s.mcpEnabled() {
 		return resp, req, nil
 	}
 

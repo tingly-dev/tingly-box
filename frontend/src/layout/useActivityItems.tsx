@@ -142,8 +142,8 @@ export function useActivityItems(): ActivityItem[] {
                 icon: <SettingsApplications sx={{ fontSize: 22 }} />,
                 label: 'MCP',
                 children: [
-                    { path: '/mcp/builtin', label: 'Builtin', icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
-                    { path: '/mcp/custom', label: 'Custom', icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
+                    { path: '/mcp/sources', label: 'Sources', icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
+                    { path: '/mcp/local-mode', label: 'Local Mode', icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
                 ] as NavItem[],
             }] as ActivityItem[] : []),
             {
