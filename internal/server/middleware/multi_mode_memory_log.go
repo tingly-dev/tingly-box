@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -117,11 +116,7 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		// Add response body for error responses (4xx/5xx)
 		if statusCode >= 400 && w.body.Len() > 0 {
 			respBytes := w.body.Bytes()
-			if json.Valid(respBytes) {
-				fields["response_body"] = json.RawMessage(respBytes)
-			} else {
-				fields["response_body"] = string(respBytes)
-			}
+			fields["response_body"] = string(respBytes)
 		}
 
 		// Log with structured fields including error details
