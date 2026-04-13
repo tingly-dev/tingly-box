@@ -58,6 +58,8 @@ import DiscordPage from './pages/remote-control/DiscordPage';
 import SlackPage from './pages/remote-control/SlackPage';
 import MCPCustom from './pages/mcp/MCPCustom';
 import MCPBuiltin from './pages/mcp/MCPBuiltin';
+import MCPLocalMode from './pages/mcp/MCPLocalMode';
+import MCPRegisteredServers from './pages/mcp/MCPRegisteredServers';
 
 // Loading fallback component - kept for potential future use with async data
 
@@ -342,9 +344,12 @@ function AppContent() {
                     <Route path="/guardrails/credentials" element={<GuardrailsCredentialsPage />} />
                     <Route path="/guardrails/history" element={<GuardrailsHistoryPage />} />
                     {/* MCP Settings */}
-                    <Route path="/mcp/builtin" element={<MCPBuiltin />} />
-                    <Route path="/mcp/custom" element={<MCPCustom />} />
-                    <Route path="/mcp" element={<Navigate to="/mcp/builtin" replace />} />
+                    <Route path="/mcp/sources" element={<MCPRegisteredServers />} />
+                    <Route path="/mcp/builtin" element={<Navigate to="/mcp/sources" replace />} />
+                    <Route path="/mcp/custom" element={<Navigate to="/mcp/sources" replace />} />
+                    <Route path="/mcp/local-mode" element={<MCPLocalMode />} />
+                    <Route path="/mcp/clients" element={<Navigate to="/mcp/local-mode" replace />} />
+                    <Route path="/mcp" element={<Navigate to="/mcp/sources" replace />} />
                     {/* Catch-all redirect for unknown routes */}
                     <Route path="*" element={<Navigate to="/dashboard/7d" replace />} />
                 </Route>

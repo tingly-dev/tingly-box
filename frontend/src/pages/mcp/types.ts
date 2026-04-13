@@ -1,5 +1,6 @@
 export interface MCPSourceConfig {
     id?: string;
+    name?: string;
     enabled?: boolean;
     transport?: 'http' | 'stdio';
     endpoint?: string;
@@ -10,6 +11,13 @@ export interface MCPSourceConfig {
     cwd?: string;
     env?: Record<string, string>;
     proxy_url?: string;
+    // Local mode specific fields
+    connection_type?: 'stdio' | 'http' | 'sse';
+    auth_type?: 'none' | 'headers' | 'oauth';
+    tools_to_execute?: string[];
+    tools_auto_exec?: string[];
+    allowed_extra_headers?: string[];
+    auto_registered?: boolean;
 }
 
 export interface MCPRuntimeConfig {

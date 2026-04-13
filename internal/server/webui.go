@@ -123,7 +123,7 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 
 	// MCP runtime API routes
 	mcpHandler := mcpmodule.NewHandler(s.config)
-	mcpmodule.RegisterRoutes(apiV1, mcpHandler)
+	mcpmodule.RegisterRoutes(apiV1, mcpHandler, mcpHandler.GetLocalHandler(), mcpHandler.GetTransportHandler())
 
 	// Provider quota API routes
 	if s.quotaManager != nil {

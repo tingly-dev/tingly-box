@@ -1,11 +1,12 @@
 package mcp
 
 import (
+	"github.com/tingly-dev/tingly-box/internal/mcp/local"
 	"github.com/tingly-dev/tingly-box/pkg/swagger"
 )
 
 // RegisterRoutes registers all MCP configuration routes with swagger documentation
-func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
+func RegisterRoutes(router *swagger.RouteGroup, handler *Handler, localHandler *local.Handler, transportHandler *local.TransportHandler) {
 	router.GET("/mcp/config", handler.GetMCPRuntimeConfig,
 		swagger.WithDescription("Get global MCP runtime configuration"),
 		swagger.WithTags("mcp"),
@@ -17,4 +18,70 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		swagger.WithTags("mcp"),
 		swagger.WithResponseModel(MCPRuntimeConfigResponse{}),
 	)
+
+	// Local mode routes
+	router.GET("/mcp/mode", localHandler.GetMCPMode,
+		swagger.WithDescription("Get MCP runtime mode (intercept or local)"),
+		swagger.WithTags("mcp"),
+	)
+
+	router.PUT("/mcp/mode", localHandler.SetMCPMode,
+		swagger.WithDescription("Set MCP runtime mode (intercept or local)"),
+		swagger.WithTags("mcp"),
+	)
+
+	router.GET("/mcp/clients", localHandler.ListClients,
+		swagger.WithDescription("List all registered MCP clients"),
+		swagger.WithTags("mcp"),
+	)
+
+	router.POST("/mcp/client", localHandler.CreateClient,
+		swagger.WithDescription("Register a new MCP client"),
+		swagger.WithTags("mcp"),
+	)
+
+	router.GET("/mcp/client/:id", localHandler.GetClient,
+		swagger.WithDescription("Get a specific MCP client by ID"),
+		swagger.WithTags("mcp"),
+	)
+
+	router.PUT("/mcp/client/:id", localHandler.UpdateClient,
+		swagger.WithDescription("Update an MCP client configuration"),
+		swagger.WithTags("mcp"),
+	)
+
+	router.DELETE("/mcp/client/:id", localHandler.DeleteClient,
+		swagger.WithDescription("Remove an MCP client"),
+		swagger.WithTags("mcp"),
+	)
+
+	router.POST("/mcp/client/:id/reconnect", localHandler.ReconnectClient,
+		swagger.WithDescription("Reconnect an MCP client"),
+		swagger.WithTags("mcp"),
+	)
+
+	router.GET("/mcp/install/:name", localHandler.GetInstallCommand,
+		swagger.WithDescription("Get MCP install command for a client"),
+		swagger.WithTags("mcp"),
+	)
+
+	// Tool execution endpoint for testing
+	router.POST("/mcp/execute", localHandler.ExecuteTool,
+		swagger.WithDescription("Execute an MCP tool for testing"),
+		swagger.WithTags("mcp"),
+	)
+
+	// MCP Transport endpoints for local mode
+	// These handle HTTP/SSE connections from external MCP clients
+	if transportHandler != nil {
+		router.POST("/mcp/:client_name", transportHandler.HandleMCP,
+			swagger.WithDescription("MCP HTTP transport endpoint"),
+			swagger.WithTags("mcp-transport"),
+		)
+
+		router.GET("/mcp/:client_name/stream", transportHandler.HandleMCPStream,
+			swagger.WithDescription("MCP SSE transport endpoint"),
+			swagger.WithTags("mcp-transport"),
+		)
+	}
 }

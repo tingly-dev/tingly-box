@@ -1,22 +1,73 @@
 package mcp
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/mcp/local"
+	"github.com/tingly-dev/tingly-box/internal/mcpruntime"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // Handler handles MCP configuration HTTP requests
 type Handler struct {
-	cfg *config.Config
+	cfg             *config.Config
+	localHandler    *local.Handler
+	transportHandler *local.TransportHandler
 }
 
 // NewHandler creates a new MCP handler
 func NewHandler(cfg *config.Config) *Handler {
-	return &Handler{cfg: cfg}
+	h := &Handler{cfg: cfg}
+
+	// Create registry for local mode clients
+	registry := local.NewRegistry()
+	h.localHandler = local.NewHandler(cfg, registry, "")
+
+	// Create mcpruntime for local mode
+	runtime := mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig {
+		var mcpCfg typ.MCPRuntimeConfig
+		if cfg != nil {
+			cfg.GetToolConfig(db.ToolTypeMCPRuntime, &mcpCfg)
+		}
+		return &mcpCfg
+	})
+
+	// Set runtime on local handler for tool execution
+	h.localHandler.SetRuntime(runtime)
+
+	// Get base URL from config (use localhost as fallback for auto-registration)
+	baseURL := "http://localhost"
+	if cfg != nil {
+		baseURL = fmt.Sprintf("http://localhost:%d", cfg.GetServerPort())
+	}
+
+	// Create transport handler for local mode with registry for auto-registration
+	h.transportHandler = local.NewTransportHandler(runtime, registry, baseURL, cfg)
+
+	return h
+}
+
+// GetLocalHandler returns the local mode handler
+func (h *Handler) GetLocalHandler() *local.Handler {
+	return h.localHandler
+}
+
+// GetTransportHandler returns the transport handler for local mode
+func (h *Handler) GetTransportHandler() *local.TransportHandler {
+	return h.transportHandler
+}
+
+// IsMCPEnabled checks if MCP feature is enabled via scenario flag
+func (h *Handler) IsMCPEnabled() bool {
+	if h.cfg == nil {
+		return false
+	}
+	return h.cfg.GetScenarioFlag(typ.ScenarioGlobal, "mcp") ||
+		h.cfg.GetScenarioFlag(typ.ScenarioClaudeCode, "mcp")
 }
 
 // MCPRuntimeConfigResponse is the API response for MCP runtime config
@@ -34,6 +85,15 @@ type MCPRuntimeConfigRequest struct {
 
 // GetMCPRuntimeConfig returns the global MCP runtime configuration
 func (h *Handler) GetMCPRuntimeConfig(c *gin.Context) {
+	// Check if MCP is enabled
+	if !h.IsMCPEnabled() {
+		c.JSON(http.StatusForbidden, MCPRuntimeConfigResponse{
+			Success: false,
+			Error:   "MCP feature is disabled",
+		})
+		return
+	}
+
 	if h.cfg == nil {
 		c.JSON(http.StatusInternalServerError, MCPRuntimeConfigResponse{
 			Success: false,
@@ -63,6 +123,15 @@ func (h *Handler) GetMCPRuntimeConfig(c *gin.Context) {
 
 // SetMCPRuntimeConfig sets the global MCP runtime configuration
 func (h *Handler) SetMCPRuntimeConfig(c *gin.Context) {
+	// Check if MCP is enabled
+	if !h.IsMCPEnabled() {
+		c.JSON(http.StatusForbidden, MCPRuntimeConfigResponse{
+			Success: false,
+			Error:   "MCP feature is disabled",
+		})
+		return
+	}
+
 	if h.cfg == nil {
 		c.JSON(http.StatusInternalServerError, MCPRuntimeConfigResponse{
 			Success: false,

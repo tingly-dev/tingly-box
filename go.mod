@@ -118,6 +118,7 @@ require (
 	github.com/larksuite/oapi-sdk-go/v3 v3.5.3 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
+	github.com/mark3labs/mcp-go v0.47.1 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
 	github.com/mattn/go-runewidth v0.0.21 // indirect
 	github.com/mdp/qrterminal/v3 v3.2.1 // indirect

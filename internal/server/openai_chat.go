@@ -152,7 +152,7 @@ func hasOnlyMCPToolCalls(toolCalls []openai.ChatCompletionMessageToolCallUnion) 
 
 // handleMCPToolCalls executes MCP-prefixed tool calls and loops until model returns a non-MCP tool step.
 func (s *Server) handleMCPToolCalls(ctx context.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, toolCallResponse *openai.ChatCompletion) (*openai.ChatCompletion, error) {
-	if s.mcpRuntime == nil {
+	if s.mcpRuntime == nil || !s.mcpEnabled() {
 		return nil, fmt.Errorf("mcp runtime is not initialized")
 	}
 
