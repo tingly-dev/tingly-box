@@ -7,7 +7,37 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
+
+// OpenAISSE marshals v to JSON and writes it as an OpenAI-style SSE data line, then flushes.
+// MENTION: Must keep extra space after "data:" to match OpenAI wire format.
+func OpenAISSE(c *gin.Context, v any) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		logrus.Errorf("OpenAISSE: failed to marshal: %v", err)
+		return
+	}
+	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", data))
+	if flusher, ok := c.Writer.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+// OpenAISSEDone writes the SSE [DONE] terminator and flushes.
+func OpenAISSEDone(c *gin.Context) {
+	c.Writer.WriteString("data: [DONE]\n\n")
+	if flusher, ok := c.Writer.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+func nextSequenceNumber(state *chatToResponsesState) int64 {
+	state.sequenceNumber++
+	return state.sequenceNumber
+}
 
 // FilterSpecialFields removes special fields that have dedicated content blocks
 // e.g., reasoning_content is handled as thinking block, not merged into text_delta

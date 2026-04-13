@@ -2,7 +2,6 @@ package stream
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -215,9 +214,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 			completedSent = true
 
 			// Send final [DONE] message
-			c.Writer.WriteString("data: [DONE]\n\n")
-			flusher.Flush()
-
+			OpenAISSEDone(c)
 			return false
 		}
 
@@ -239,9 +236,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 			"sequence_number": nextSequenceNumber(state),
 			"error":           map[string]interface{}{"message": err.Error(), "type": "stream_error"},
 		}
-		errorJSON, _ := json.Marshal(errorEvent)
-		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", string(errorJSON)))
-		flusher.Flush()
+		OpenAISSE(c, errorEvent)
 
 		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), err
 	}
@@ -259,8 +254,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		}
 
 		sendResponsesCompletedEvent(c, state, responseModel, finishReason, flusher)
-		c.Writer.WriteString("data: [DONE]\n\n")
-		flusher.Flush()
+		OpenAISSEDone(c)
 	}
 
 	return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
@@ -290,7 +284,7 @@ func sendResponsesCreatedEvent(c *gin.Context, state *chatToResponsesState, flus
 			},
 		},
 	}
-	sendChatToResponsesEvent(c, event, flusher)
+	OpenAISSE(c, event)
 }
 
 func sendResponsesOutputTextItemAdded(c *gin.Context, state *chatToResponsesState, flusher http.Flusher) {
@@ -315,7 +309,7 @@ func sendResponsesOutputTextItemAdded(c *gin.Context, state *chatToResponsesStat
 			},
 		},
 	}
-	sendChatToResponsesEvent(c, event, flusher)
+	OpenAISSE(c, event)
 }
 
 // sendResponsesOutputTextDelta sends response.output_text.delta event
@@ -329,7 +323,7 @@ func sendResponsesOutputTextDelta(c *gin.Context, state *chatToResponsesState, d
 		"delta":           delta,
 		"logprobs":        []interface{}{},
 	}
-	sendChatToResponsesEvent(c, event, flusher)
+	OpenAISSE(c, event)
 }
 
 // sendResponsesOutputItemAdded sends response.output_item.added event for tool calls
@@ -350,7 +344,7 @@ func sendResponsesOutputItemAdded(c *gin.Context, state *chatToResponsesState, i
 		},
 		"output_index": outputIndex,
 	}
-	sendChatToResponsesEvent(c, event, flusher)
+	OpenAISSE(c, event)
 }
 
 // sendResponsesFunctionCallArgumentsDelta sends response.function_call_arguments.delta event
@@ -362,7 +356,7 @@ func sendResponsesFunctionCallArgumentsDelta(c *gin.Context, state *chatToRespon
 		"output_index":    outputIndex,
 		"delta":           delta,
 	}
-	sendChatToResponsesEvent(c, event, flusher)
+	OpenAISSE(c, event)
 }
 
 // sendResponsesCompletedEvent sends the response.completed event
@@ -377,7 +371,7 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 			"text":            state.accumulatedText.String(),
 			"logprobs":        []interface{}{},
 		}
-		sendChatToResponsesEvent(c, textDone, flusher)
+		OpenAISSE(c, textDone)
 
 		textItemDone := map[string]interface{}{
 			"type":            "response.output_item.done",
@@ -397,7 +391,7 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 				},
 			},
 		}
-		sendChatToResponsesEvent(c, textItemDone, flusher)
+		OpenAISSE(c, textItemDone)
 	}
 
 	sortedIndexes := make([]int, 0, len(state.pendingToolCalls))
@@ -420,7 +414,7 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 			"name":            ptc.name,
 			"arguments":       ptc.arguments.String(),
 		}
-		sendChatToResponsesEvent(c, argumentsDone, flusher)
+		OpenAISSE(c, argumentsDone)
 
 		itemDone := map[string]interface{}{
 			"type":            "response.output_item.done",
@@ -435,7 +429,7 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 				"status":    "completed",
 			},
 		}
-		sendChatToResponsesEvent(c, itemDone, flusher)
+		OpenAISSE(c, itemDone)
 	}
 
 	// Build output array
@@ -503,22 +497,5 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 		event["response"].(map[string]interface{})["model"] = model
 	}
 
-	sendChatToResponsesEvent(c, event, flusher)
-}
-
-// sendChatToResponsesEvent sends an event in Responses API SSE format (specific to Chat → Responses conversion)
-func sendChatToResponsesEvent(c *gin.Context, event map[string]interface{}, flusher http.Flusher) {
-	eventJSON, err := json.Marshal(event)
-	if err != nil {
-		logrus.Errorf("Failed to marshal Responses event: %v", err)
-		return
-	}
-	// Responses API SSE format: data: <json>\n\n
-	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", string(eventJSON)))
-	flusher.Flush()
-}
-
-func nextSequenceNumber(state *chatToResponsesState) int64 {
-	state.sequenceNumber++
-	return state.sequenceNumber
+	OpenAISSE(c, event)
 }
