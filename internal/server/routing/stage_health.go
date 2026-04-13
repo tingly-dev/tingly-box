@@ -33,10 +33,18 @@ func (s *HealthStage) Evaluate(_ *SelectionContext, state *selectionState) (*Sel
 
 	before := len(state.candidateServices)
 	healthy := s.filter.Filter(state.candidateServices)
+	filteredCount := before - len(healthy)
 
-	if len(healthy) < before {
-		logrus.Debugf("[health] filtered %d unhealthy services, %d remaining",
-			before-len(healthy), len(healthy))
+	if filteredCount > 0 {
+		logrus.Warnf("[health] Filtered %d unhealthy services, %d remaining (of %d total)",
+			filteredCount, len(healthy), before)
+		// Log each filtered service for debugging
+		for _, svc := range state.candidateServices {
+			if !s.filter.IsHealthy(svc.ServiceID()) {
+				logrus.Warnf("[health] Service %s:%s is unhealthy (rate limited/auth error)",
+					svc.Provider, svc.Model)
+			}
+		}
 	}
 
 	// Continue pipeline (don't select, just filter)

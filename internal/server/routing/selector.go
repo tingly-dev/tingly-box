@@ -210,13 +210,29 @@ func (s *ServiceSelector) Select(ctx *SelectionContext) (*SelectionResult, error
 
 // selectPipeline picks the appropriate pre-built pipeline based on rule configuration.
 func (s *ServiceSelector) selectPipeline(rule *typ.Rule) []SelectionStage {
+	logrus.Debugf("[selector] selectPipeline for rule %s: SmartAffinity=%v, SmartEnabled=%v, SmartRouting count=%d",
+		rule.RequestModel, rule.SmartAffinity, rule.SmartEnabled, len(rule.SmartRouting))
 	if !rule.SmartAffinity {
-		return s.pipelines[pipelineModeNoAffinity]
+		// Even without smart affinity, use health filtering
+		// Build pipeline on-the-fly with health stage
+		pipeline := []SelectionStage{
+			NewHealthStage(s.getHealthFilter()),
+			NewSmartRoutingStage(s.loadBalancer, s.affinityStore),
+			NewLoadBalancerStage(s.loadBalancer),
+		}
+		return pipeline
 	}
 
-	// Default to global affinity scope.
-	// TODO: Read from rule.AffinityScope when field is added.
-	return s.pipelines[pipelineModeGlobalAffinity]
+	// When SmartAffinity is enabled, use smart_rule affinity scope with health filtering
+	return s.pipelines[pipelineModeSmartAffinity]
+}
+
+// getHealthFilter returns the health filter from the load balancer
+func (s *ServiceSelector) getHealthFilter() *typ.HealthFilter {
+	if p, ok := s.loadBalancer.(healthFilterProvider); ok {
+		return p.HealthFilter()
+	}
+	return nil
 }
 
 // postProcess handles post-selection logic like affinity locking.

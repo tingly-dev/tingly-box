@@ -4,6 +4,8 @@ import (
 	"errors"
 	"sync"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 // HealthStatus represents the health state of a service
@@ -35,6 +37,7 @@ type ServiceHealth struct {
 	ConsecutiveErrors int           // Count of consecutive errors
 	RateLimited       bool          // True if last error was 429
 	AuthError         bool          // True if last error was 401/403
+	RateLimitedUntil  time.Time     // Earliest time when rate limit can be cleared
 	LastHealthCheck   time.Time     // Last time health was checked
 	RecoveryTimeout   time.Duration // Time before auto-recovery
 	mutex             sync.RWMutex  // Thread safety
@@ -127,12 +130,22 @@ func (hm *HealthMonitor) IsHealthy(serviceID string) bool {
 
 	health.mutex.RLock()
 	status := health.Status
+	rateLimited := health.RateLimited
+	rateLimitedUntil := health.RateLimitedUntil
 	lastErrorTime := health.LastErrorTime
 	recoveryTimeout := health.RecoveryTimeout
 	health.mutex.RUnlock()
 
 	if status == HealthHealthy {
 		return true
+	}
+
+	now := time.Now()
+
+	// If rate limited, check if the rate limit window has passed
+	if rateLimited && now.Before(rateLimitedUntil) {
+		// Still within rate limit window
+		return false
 	}
 
 	// Check if recovery timeout has elapsed
@@ -174,6 +187,7 @@ func (hm *HealthMonitor) recoverService(serviceID string) {
 		health.Status = HealthHealthy
 		health.RateLimited = false
 		health.AuthError = false
+		health.RateLimitedUntil = time.Time{} // Clear rate limit time
 		health.ConsecutiveErrors = 0
 		health.LastError = nil
 	}
@@ -202,11 +216,20 @@ func (hm *HealthMonitor) ReportRateLimit(serviceID string) {
 	health.mutex.Lock()
 	defer health.mutex.Unlock()
 
+	now := time.Now()
 	health.Status = HealthUnhealthy
 	health.RateLimited = true
-	health.LastErrorTime = time.Now()
+	health.LastErrorTime = now
 	health.ConsecutiveErrors = 0 // Reset consecutive errors on 429
-	health.LastHealthCheck = time.Now()
+	health.LastHealthCheck = now
+
+	// Set rate limit recovery time
+	// If already rate limited, extend the timeout (push it back)
+	// Otherwise, set it to now + recovery timeout
+	newUntil := now.Add(health.RecoveryTimeout)
+	if health.RateLimitedUntil.IsZero() || newUntil.After(health.RateLimitedUntil) {
+		health.RateLimitedUntil = newUntil
+	}
 }
 
 // ReportAuthError reports a 401/403 auth error for a service
@@ -250,18 +273,31 @@ func (hm *HealthMonitor) ReportSuccess(serviceID string) {
 	health.mutex.Lock()
 	defer health.mutex.Unlock()
 
-	// Any success immediately recovers
+	now := time.Now()
+
+	// If rate limited, check if the recovery timeout has elapsed
+	if health.RateLimited && now.Before(health.RateLimitedUntil) {
+		// Still within rate limit window, don't recover yet
+		// Update LastHealthCheck to show we're alive
+		health.LastHealthCheck = now
+		return
+	}
+
+	// Safe to recover (either not rate limited, or timeout has elapsed)
 	if health.Status == HealthUnhealthy {
+		logrus.Infof("[health] Recovering service %s from unhealthy state (rate limit window expired)",
+			serviceID)
 		health.Status = HealthHealthy
 		health.RateLimited = false
 		health.AuthError = false
+		health.RateLimitedUntil = time.Time{} // Clear rate limit time
 		health.ConsecutiveErrors = 0
 		health.LastError = nil
 	} else {
 		// Reset consecutive errors even if already healthy
 		health.ConsecutiveErrors = 0
 	}
-	health.LastHealthCheck = time.Now()
+	health.LastHealthCheck = now
 }
 
 // GetHealth returns the health status for a service
