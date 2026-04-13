@@ -27,10 +27,16 @@ export function QuotaInlineDisplay({
   onRefresh,
   maxInlineItems = 3,
 }: QuotaInlineDisplayProps) {
+  // Debug logging at component entry
+  console.log('[QuotaInlineDisplay] Component rendered, quota:', quota);
+
   // Collect all available windows
   const windows: Array<{ key: string; window: any; label: string }> = [];
 
+  console.log('[QuotaInlineDisplay] Checking quota.primary:', quota?.primary);
+
   if (quota?.primary) {
+    console.log('[QuotaInlineDisplay] Found primary window:', quota.primary);
     windows.push({ key: 'primary', window: quota.primary, label: quota.primary.label });
   }
   if (quota?.secondary) {
@@ -44,6 +50,9 @@ export function QuotaInlineDisplay({
   const hasHiddenItems = windows.length > maxInlineItems;
   const visibleWindows = windows.slice(0, maxInlineItems);
   const hiddenWindows = windows.slice(maxInlineItems);
+
+  console.log('[QuotaInlineDisplay] windows collected:', windows);
+  console.log('[QuotaInlineDisplay] hasQuota:', hasQuota);
 
   // No quota available - don't show anything
   if (!hasQuota) {

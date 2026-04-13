@@ -86,8 +86,7 @@
                 "o1-mini": 8192,
                 "o3-mini": 200000
             },
-            "supports_models_endpoint": true,
-            "icon": "openai"
+            "supports_models_endpoint": true
         },
         "anthropic": {
             "id": "anthropic",
@@ -115,8 +114,7 @@
                 "claude-sonnet-4-20250514": 8192
             },
             "supports_models_endpoint": true,
-            "web_search_schema": "web_search_anthropic",
-            "icon": "anthropic"
+            "web_search_schema": "web_search_anthropic"
         },
         "dashscope": {
             "id": "dashscope",
@@ -139,8 +137,7 @@
                 "qwen-turbo": 8192,
                 "qwen-long": 8192
             },
-            "supports_models_endpoint": true,
-            "icon": "qwen"
+            "supports_models_endpoint": true
         },
         "dashscope-intl": {
             "id": "dashscope-intl",
@@ -162,8 +159,7 @@
                 "qwen-turbo": 8192,
                 "qwen-long": 8192
             },
-            "supports_models_endpoint": true,
-            "icon": "qwen"
+            "supports_models_endpoint": true
         },
         "deepseek": {
             "id": "deepseek",
@@ -186,8 +182,7 @@
                 "deepseek-chat": 4000,
                 "deepseek-reasoner": 32000
             },
-            "supports_models_endpoint": true,
-            "icon": "deepseek"
+            "supports_models_endpoint": true
         },
         "minimax": {
             "id": "minimax",
@@ -215,8 +210,7 @@
                 "MiniMax-M2.1-lightning": 8192,
                 "MiniMax-M2": 8192
             },
-            "supports_models_endpoint": false,
-            "icon": "minimax"
+            "supports_models_endpoint": false
         },
         "minimax-intl": {
             "id": "minimax-intl",
@@ -243,8 +237,7 @@
                 "MiniMax-M2.1-lightning": 8192,
                 "MiniMax-M2": 8192
             },
-            "supports_models_endpoint": false,
-            "icon": "minimax"
+            "supports_models_endpoint": false
         },
         "zai-intl": {
             "id": "zai-intl",
@@ -268,8 +261,7 @@
                 "glm-4.7": 8000
             },
             "supports_models_endpoint": true,
-            "web_search_schema": "web_search_glm",
-            "icon": "zhipu"
+            "web_search_schema": "web_search_glm"
         },
         "zai-intl-coding-plan": {
             "id": "zai-intl-coding",
@@ -293,8 +285,7 @@
                 "glm-4.7": 8000
             },
             "supports_models_endpoint": true,
-            "web_search_schema": "web_search_glm",
-            "icon": "zhipu"
+            "web_search_schema": "web_search_glm"
         },
         "zai-cn": {
             "id": "zai",
@@ -344,8 +335,7 @@
                 "glm-4.7": 8000
             },
             "supports_models_endpoint": true,
-            "web_search_schema": "web_search_glm",
-            "icon": "zhipu"
+            "web_search_schema": "web_search_glm"
         },
         "xai": {
             "id": "xai",
@@ -384,8 +374,7 @@
                 "grok-2-vision-1212": 32768,
                 "grok-2-image-1212": 256000
             },
-            "supports_models_endpoint": true,
-            "icon": "xai"
+            "supports_models_endpoint": true
         },
         "gemini": {
             "id": "gemini",
@@ -406,8 +395,7 @@
                 "gemini-1.5-pro": 8192,
                 "gemini-1.5-flash": 8192
             },
-            "supports_models_endpoint": true,
-            "icon": "gemini"
+            "supports_models_endpoint": true
         },
         "mistral": {
             "id": "mistral",
@@ -429,8 +417,7 @@
                 "mistral-medium": 8192,
                 "codestral": 8192
             },
-            "supports_models_endpoint": true,
-            "icon": "mistral"
+            "supports_models_endpoint": true
         },
         "moonshot-intl": {
             "id": "moonshot-intl",
@@ -450,8 +437,7 @@
                 "moonshot-v1-32k": 8192,
                 "moonshot-v1-128k": 8192
             },
-            "supports_models_endpoint": true,
-            "icon": "kimi"
+            "supports_models_endpoint": true
         },
         "moonshot": {
             "id": "moonshot",
@@ -472,8 +458,7 @@
                 "moonshot-v1-32k": 8192,
                 "moonshot-v1-128k": 8192
             },
-            "supports_models_endpoint": true,
-            "icon": "kimi"
+            "supports_models_endpoint": true
         },
         "openrouter": {
             "id": "openrouter",
@@ -489,8 +474,7 @@
             "base_url_anthropic": null,
             "models": [],
             "model_limits": {},
-            "supports_models_endpoint": true,
-            "icon": "openrouter"
+            "supports_models_endpoint": true
         },
         "claude_code": {
             "id": "claude_code",
@@ -537,8 +521,7 @@
             },
             "supports_models_endpoint": true,
             "oauth_provider": "claude_code",
-            "web_search_schema": "web_search_anthropic",
-            "icon": "claudecode"
+            "web_search_schema": "web_search_anthropic"
         },
         "qwen_code": {
             "id": "qwen_code",
@@ -564,8 +547,7 @@
                 "vision-model": 2048
             },
             "supports_models_endpoint": false,
-            "oauth_provider": "qwen_code",
-            "icon": "qwen"
+            "oauth_provider": "qwen_code"
         },
         "gemini_oauth": {
             "id": "gemini_oauth",
@@ -587,8 +569,7 @@
                 "gemini-1.5-flash": 8192
             },
             "supports_models_endpoint": true,
-            "oauth_provider": "gemini",
-            "icon": "gemini"
+            "oauth_provider": "gemini"
         },
         "codex_oauth": {
             "id": "codex_oauth",
@@ -624,8 +605,7 @@
                 "gpt-5.4-mini": 8192
             },
             "supports_models_endpoint": false,
-            "oauth_provider": "codex",
-            "icon": "opencode"
+            "oauth_provider": "codex"
         },
         "antigravity": {
             "id": "antigravity",
@@ -643,8 +623,7 @@
             "models": [],
             "model_limits": {},
             "supports_models_endpoint": false,
-            "oauth_provider": "antigravity",
-            "icon": "google"
+            "oauth_provider": "antigravity"
         },
         "xiaomimimo": {
             "id": "xiaomimimo",
@@ -661,8 +640,7 @@
             "base_url_anthropic": "https://api.xiaomimimo.com/anthropic",
             "models": [
                 "mimo-v2-flash"
-            ],
-            "icon": "xiaomi"
+            ]
         },
         "open_code": {
             "id": "open_code",
@@ -679,8 +657,7 @@
             "base_url_anthropic": null,
             "models": [],
             "model_limits": {},
-            "supports_models_endpoint": true,
-            "icon": "opencode"
+            "supports_models_endpoint": true
         },
         "qwen-coding-plan-cn": {
             "id": "qwen-coding-plan",
@@ -716,8 +693,7 @@
                 "MiniMax-M2.5": 32768,
                 "kimi-k2.5": 32768
             },
-            "supports_models_endpoint": false,
-            "icon": "qwen"
+            "supports_models_endpoint": false
         },
         "qwen-coding-plan": {
             "id": "qwen-coding-plan",
@@ -753,8 +729,7 @@
                 "MiniMax-M2.5": 32768,
                 "kimi-k2.5": 32768
             },
-            "supports_models_endpoint": false,
-            "icon": "qwen"
+            "supports_models_endpoint": false
         },
         "kimi-code": {
             "id": "kimi-code",
@@ -775,8 +750,7 @@
             "model_limits": {
                 "kimi-for-coding": 32768
             },
-            "supports_models_endpoint": false,
-            "icon": "kimi"
+            "supports_models_endpoint": false
         }
     },
     "version": "1.3.0",
