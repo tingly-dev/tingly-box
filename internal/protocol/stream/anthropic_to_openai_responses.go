@@ -2,7 +2,6 @@ package stream
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -540,8 +539,7 @@ func handleMessageStop(
 	sendResponsesEvent(c, doneEvent, flusher)
 
 	// Send final [DONE] message
-	c.Writer.WriteString("data: [DONE]\n\n")
-	flusher.Flush()
+	OpenAISSEDone(c)
 }
 
 // sendResponsesEvent sends a single Responses API event as SSE
@@ -558,13 +556,7 @@ func sendResponsesEvent(c *gin.Context, event map[string]interface{}, flusher ht
 	default:
 	}
 
-	eventJSON, err := json.Marshal(event)
-	if err != nil {
-		logrus.Errorf("Failed to marshal Responses event: %v", err)
-		return
-	}
-	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", eventJSON))
-	flusher.Flush()
+	OpenAISSE(c, event)
 }
 
 // sendResponsesErrorEvent sends an error event in Responses API format
@@ -664,6 +656,5 @@ func sendFinalCompletionEvent(c *gin.Context, state *responsesConverterState, fl
 	sendResponsesEvent(c, doneEvent, flusher)
 
 	// Send final [DONE] message
-	c.Writer.WriteString("data: [DONE]\n\n")
-	flusher.Flush()
+	OpenAISSEDone(c)
 }

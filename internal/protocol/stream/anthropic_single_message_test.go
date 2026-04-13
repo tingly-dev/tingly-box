@@ -31,7 +31,7 @@ func TestStreamAnthropicV1SingleMessage(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	err := StreamAnthropicV1SingleMessage(c, &resp, "proxy-model")
+	err := AnthropicSingleMessage(c, &resp, "proxy-model")
 	require.NoError(t, err)
 
 	body := w.Body.String()
@@ -65,7 +65,7 @@ func TestStreamAnthropicBetaSingleMessage(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	err := StreamAnthropicBetaSingleMessage(c, &resp, "proxy-beta-model")
+	err := AnthropicSingleBetaMessage(c, &resp, "proxy-beta-model")
 	require.NoError(t, err)
 
 	body := w.Body.String()

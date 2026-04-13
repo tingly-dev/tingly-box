@@ -10,53 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// buildStreamState creates a streamState from Anthropic usage stats.
-func buildStreamState(inputTokens, outputTokens int64) *streamState {
-	s := newStreamState()
-	s.inputTokens = inputTokens
-	s.outputTokens = outputTokens
-	return s
-}
-
-// setAnthropicSSEHeaders sets standard SSE headers for Anthropic streaming responses.
-func setAnthropicSSEHeaders(c *gin.Context) {
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("Access-Control-Allow-Origin", "*")
-	c.Header("Access-Control-Allow-Headers", "Cache-Control")
-}
-
-// sendMessageStart emits the message_start SSE event with the given id/model.
-func sendMessageStart(
-	c *gin.Context,
-	flusher http.Flusher,
-	model string,
-	eventType string,
-	sendEvent func(*gin.Context, string, map[string]interface{}, http.Flusher),
-	inputTokens int64,
-) {
-	event := map[string]interface{}{
-		"type": eventType,
-		"message": map[string]interface{}{
-			"id":            fmt.Sprintf("msg_%d", time.Now().Unix()),
-			"type":          "message",
-			"role":          "assistant",
-			"content":       []interface{}{},
-			"model":         model,
-			"stop_reason":   nil,
-			"stop_sequence": nil,
-			"usage": map[string]interface{}{
-				"input_tokens":  inputTokens,
-				"output_tokens": 0,
-			},
-		},
-	}
-	sendEvent(c, eventType, event, flusher)
-}
-
-// StreamAnthropicV1SingleMessage emits a single assembled Anthropic v1 message using SSE events.
-func StreamAnthropicV1SingleMessage(c *gin.Context, resp *anthropic.Message, responseModel string) error {
+// AnthropicSingleMessage emits a single assembled Anthropic v1 message using SSE events.
+func AnthropicSingleMessage(c *gin.Context, resp *anthropic.Message, responseModel string) error {
 	if resp == nil {
 		return errors.New("nil anthropic v1 response")
 	}
@@ -69,7 +24,7 @@ func StreamAnthropicV1SingleMessage(c *gin.Context, resp *anthropic.Message, res
 
 	model := responseModel
 	if model == "" {
-		model = string(resp.Model)
+		model = resp.Model
 	}
 
 	state := buildStreamState(resp.Usage.InputTokens, resp.Usage.OutputTokens)
@@ -111,8 +66,8 @@ func StreamAnthropicV1SingleMessage(c *gin.Context, resp *anthropic.Message, res
 	return nil
 }
 
-// StreamAnthropicBetaSingleMessage emits a single assembled Anthropic beta message using SSE events.
-func StreamAnthropicBetaSingleMessage(c *gin.Context, resp *anthropic.BetaMessage, responseModel string) error {
+// AnthropicSingleBetaMessage emits a single assembled Anthropic beta message using SSE events.
+func AnthropicSingleBetaMessage(c *gin.Context, resp *anthropic.BetaMessage, responseModel string) error {
 	if resp == nil {
 		return errors.New("nil anthropic beta response")
 	}
