@@ -37,8 +37,8 @@ func (f OutputFormat) String() string {
 	return string(f)
 }
 
-// PermissionMode defines how permission requests are handled
-// Deprecated: Use ask.Mode instead
+// PermissionMode defines how permission requests are handled.
+// Use ask.Mode for the ask-subsystem-specific mode values.
 type PermissionMode string
 
 const (
@@ -50,15 +50,6 @@ const (
 // String returns the string representation of PermissionMode
 func (m PermissionMode) String() string {
 	return string(m)
-}
-
-// PermissionHandler is the interface for permission handling
-// This is defined here to avoid circular dependencies
-// Deprecated: Use ask.Handler instead
-type PermissionHandler interface {
-	CanUseTool(ctx context.Context, req PermissionRequest) (PermissionResult, error)
-	SetMode(scopeID string, mode PermissionMode) error
-	GetMode(scopeID string) (PermissionMode, error)
 }
 
 // MessageHandler is the primary interface for handling agent callbacks

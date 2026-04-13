@@ -59,8 +59,8 @@ func (b *StreamPromptBuilder) AddUserMessage(content string) error {
 	return b.Add(msg)
 }
 
-// Close closes the stream and returns the channel for use with Query
-func (b *StreamPromptBuilder) Close() StreamPrompt {
+// Close closes the stream and returns the channel for use as stdin input.
+func (b *StreamPromptBuilder) Close() chan any {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -72,8 +72,8 @@ func (b *StreamPromptBuilder) Close() StreamPrompt {
 	return b.messages
 }
 
-// Messages returns the underlying message channel
-func (b *StreamPromptBuilder) Messages() StreamPrompt {
+// Messages returns the underlying message channel.
+func (b *StreamPromptBuilder) Messages() chan any {
 	return b.messages
 }
 
