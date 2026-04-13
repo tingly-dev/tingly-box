@@ -204,18 +204,56 @@ type OAuthDetail struct {
 	ExtraFields  map[string]interface{} `json:"extra_fields"`  // Any extra field for some special clients
 }
 
+// MCPMode defines MCP runtime mode
+type MCPMode string
+
+const (
+	MCPModeIntercept MCPMode = "intercept" // intercept mode (default)
+	MCPModeLocal     MCPMode = "local"     // local mode (client-install)
+)
+
+// MCPConnectionType defines connection type
+type MCPConnectionType string
+
+const (
+	MCPConnectionTypeSTDIO MCPConnectionType = "stdio"
+	MCPConnectionTypeHTTP  MCPConnectionType = "http"
+	MCPConnectionTypeSSE   MCPConnectionType = "sse"
+)
+
+// MCPAuthType defines authentication type
+type MCPAuthType string
+
+const (
+	MCPAuthTypeNone   MCPAuthType = "none"
+	MCPAuthTypeHeader MCPAuthType = "headers"
+	MCPAuthTypeOAuth  MCPAuthType = "oauth"
+)
+
+// MCPClientState defines client connection state
+type MCPClientState string
+
+const (
+	MCPClientStateConnected    MCPClientState = "connected"
+	MCPClientStateConnecting   MCPClientState = "connecting"
+	MCPClientStateDisconnected MCPClientState = "disconnected"
+	MCPClientStateError       MCPClientState = "error"
+)
+
 // MCPRuntimeConfig contains global MCP runtime configuration.
 type MCPRuntimeConfig struct {
-	Sources        []MCPSourceConfig `json:"sources,omitempty"`
-	RequestTimeout int               `json:"request_timeout,omitempty"` // seconds, default: 30
+	Mode          MCPMode        `json:"mode,omitempty"`           // runtime mode: intercept (default) or local
+	Sources       []MCPSourceConfig `json:"sources,omitempty"`
+	RequestTimeout int            `json:"request_timeout,omitempty"` // seconds, default: 30
 }
 
 // MCPSourceConfig defines one MCP source connection.
 type MCPSourceConfig struct {
 	ID        string            `json:"id,omitempty"`        // unique source id for normalized tool names
+	Name      string            `json:"name,omitempty"`       // client name (unique, no spaces/hyphens)
 	Enabled   *bool             `json:"enabled,omitempty"`   // nil means enabled (backward-compatible default)
-	Transport string            `json:"transport,omitempty"` // "http" or "stdio" (stdio reserved for future path)
-	Endpoint  string            `json:"endpoint,omitempty"`  // endpoint URL for HTTP transport
+	Transport string            `json:"transport,omitempty"`  // "http", "stdio", or "sse"
+	Endpoint  string            `json:"endpoint,omitempty"`  // endpoint URL for HTTP/SSE transport
 	Headers   map[string]string `json:"headers,omitempty"`   // static headers for MCP calls
 	Tools     []string          `json:"tools,omitempty"`     // allow list, empty means all
 	Command   string            `json:"command,omitempty"`   // command for stdio transport
@@ -223,6 +261,47 @@ type MCPSourceConfig struct {
 	Cwd       string            `json:"cwd,omitempty"`       // working directory for stdio command
 	Env       map[string]string `json:"env,omitempty"`       // extra env vars for stdio command
 	ProxyURL  string            `json:"proxy_url,omitempty"` // HTTP proxy URL for outgoing requests
+
+	// Local mode specific fields
+	ConnectionType   MCPConnectionType   `json:"connection_type,omitempty"`    // stdio/http/sse
+	AuthType        MCPAuthType        `json:"auth_type,omitempty"`           // headers/oauth
+	AllowedExtraHeaders []string        `json:"allowed_extra_headers,omitempty"` // allowed request headers to forward
+	StdioConfig     *MCPStdioConfig    `json:"stdio_config,omitempty"`
+	OAuthConfig     *MCPOAuthConfig    `json:"oauth_config,omitempty"`
+	ToolsToExecute  []string           `json:"tools_to_execute,omitempty"`     // available tools
+	ToolsAutoExec   []string           `json:"tools_to_auto_execute,omitempty"` // auto-execute tools (agent mode)
+	IsPingAvailable *bool              `json:"is_ping_available,omitempty"`   // health check method
+}
+
+// MCPStdioConfig STDIO connection configuration
+type MCPStdioConfig struct {
+	Command string   `json:"command"`            // execution command
+	Args    []string `json:"args,omitempty"`     // command arguments
+	Env     []string `json:"env,omitempty"`      // inherited environment variables
+	Cwd     string   `json:"cwd,omitempty"`      // working directory
+}
+
+// MCPOAuthConfig OAuth 2.0 configuration
+type MCPOAuthConfig struct {
+	ClientID     string   `json:"client_id"`
+	ClientSecret string   `json:"client_secret,omitempty"`
+	AuthorizeURL string   `json:"authorize_url"`
+	TokenURL     string   `json:"token_url"`
+	Scopes       []string `json:"scopes,omitempty"`
+}
+
+// MCPTool represents an MCP tool definition
+type MCPTool struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
+// MCPClient represents a registered MCP client
+type MCPClient struct {
+	ID     string          `json:"id"`
+	Config MCPSourceConfig `json:"config"`
+	Tools  []MCPTool       `json:"tools"`
+	State  MCPClientState  `json:"state"`
 }
 
 // ApplyMCPRuntimeDefaults applies default values to MCP runtime config.

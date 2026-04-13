@@ -2,21 +2,57 @@ package mcp
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/mcp/local"
+	"github.com/tingly-dev/tingly-box/internal/mcpruntime"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // Handler handles MCP configuration HTTP requests
 type Handler struct {
-	cfg *config.Config
+	cfg             *config.Config
+	localHandler    *local.Handler
+	transportHandler *local.TransportHandler
 }
 
 // NewHandler creates a new MCP handler
 func NewHandler(cfg *config.Config) *Handler {
-	return &Handler{cfg: cfg}
+	h := &Handler{cfg: cfg}
+
+	// Create local mode handler
+	localHandler := local.NewHandler(cfg, local.NewRegistry(), "")
+	h.localHandler = localHandler
+
+	// Create mcpruntime adapter for local mode
+	// We need to get the config provider from the runtime
+	runtime := mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig {
+		var mcpCfg typ.MCPRuntimeConfig
+		if cfg != nil {
+			cfg.GetToolConfig(db.ToolTypeMCPRuntime, &mcpCfg)
+		}
+		return &mcpCfg
+	})
+	adapter := local.NewMCPRuntimeAdapter(runtime)
+
+	// Create transport handler for local mode
+	transportHandler := local.NewTransportHandler(adapter, 5*time.Minute)
+	h.transportHandler = transportHandler
+
+	return h
+}
+
+// GetLocalHandler returns the local mode handler
+func (h *Handler) GetLocalHandler() *local.Handler {
+	return h.localHandler
+}
+
+// GetTransportHandler returns the transport handler for local mode
+func (h *Handler) GetTransportHandler() *local.TransportHandler {
+	return h.transportHandler
 }
 
 // MCPRuntimeConfigResponse is the API response for MCP runtime config

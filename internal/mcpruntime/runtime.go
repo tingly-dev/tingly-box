@@ -227,6 +227,81 @@ func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments
 	return result, nil
 }
 
+// SourceTool represents a tool from a specific MCP source with its original name.
+type SourceTool struct {
+	SourceID    string
+	SourceName  string
+	Name        string
+	Description string
+	InputSchema json.RawMessage
+}
+
+// ListSourceTools returns all MCP tools grouped by source with their original names.
+// This is used by local mode to expose tools to external MCP clients.
+func (r *Runtime) ListSourceTools(ctx context.Context) (map[string][]SourceTool, error) {
+	cfg := r.getConfigOrDefault()
+	if cfg == nil || len(cfg.Sources) == 0 {
+		return nil, nil
+	}
+
+	result := make(map[string][]SourceTool)
+
+	for _, source := range cfg.Sources {
+		if !typ.IsMCPSourceEnabled(source) {
+			continue
+		}
+
+		transport := strings.TrimSpace(source.Transport)
+		if transport == "" {
+			transport = "stdio"
+		}
+
+		ss, _, err := r.sc.getOrCreate(ctx, source, time.Duration(cfg.RequestTimeout)*time.Second)
+		if err != nil {
+			logrus.WithFields(logrus.Fields{
+				"source":    source.ID,
+				"transport": transport,
+				"error":     err.Error(),
+			}).Warn("mcp: connect failed for ListSourceTools")
+			continue
+		}
+
+		tools, err := func() ([]mcpTool, error) {
+			ss.mu.RLock()
+			defer ss.mu.RUnlock()
+			return ss.listTools(ctx)
+		}()
+		if err != nil {
+			logrus.WithFields(logrus.Fields{
+				"source":    source.ID,
+				"transport": transport,
+				"error":     err.Error(),
+			}).Warn("mcp: list tools failed for ListSourceTools")
+			continue
+		}
+
+		allowAll, allowSet := buildAllowList(source.Tools)
+		for _, t := range tools {
+			if strings.TrimSpace(t.Name) == "" {
+				continue
+			}
+			if !allowAll && !allowSet[t.Name] {
+				continue
+			}
+
+			result[source.ID] = append(result[source.ID], SourceTool{
+				SourceID:    source.ID,
+				SourceName:  source.Name,
+				Name:        t.Name,
+				Description: t.Description,
+				InputSchema: t.InputSchema,
+			})
+		}
+	}
+
+	return result, nil
+}
+
 func (r *Runtime) getConfigOrDefault() *typ.MCPRuntimeConfig {
 	if r == nil || r.getConfig == nil {
 		return nil
