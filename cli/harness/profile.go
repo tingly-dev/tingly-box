@@ -203,7 +203,7 @@ func executeClaudeTest(prompt string) (*ProfileTestResult, error) {
 }
 
 // executeCodexTest executes codex CLI non-interactively backed by an ephemeral gateway + virtual server.
-// Flow: NewProfileTestEnv → SetupProfile → codex exec -c model_providers.harness.base_url=<gatewayURL> ... <prompt>
+// Uses CODEX_HOME to inject a fully isolated config.toml pointing at the ephemeral gateway.
 func executeCodexTest(prompt string) (*ProfileTestResult, error) {
 	start := time.Now()
 	result := &ProfileTestResult{
@@ -229,6 +229,36 @@ func executeCodexTest(prompt string) (*ProfileTestResult, error) {
 	gatewayURL := env.BaseURL() + "/tingly/codex"
 	apiKey := env.ModelToken()
 
+	// 3. Write config.toml into a temp CODEX_HOME dir
+	codexHome, err := os.MkdirTemp("", "harness-codex-*")
+	if err != nil {
+		return nil, fmt.Errorf("create temp codex home: %w", err)
+	}
+	defer os.RemoveAll(codexHome)
+
+	// config.toml: define harness provider with the ephemeral gateway URL and token
+	configTOML := fmt.Sprintf(`model = %q
+model_provider = %q
+disable_response_storage = true
+
+[model_providers.%s]
+name = "Harness"
+base_url = %q
+wire_api = "responses"
+`, model, providerKey, providerKey, gatewayURL)
+
+	configPath := filepath.Join(codexHome, "config.toml")
+	result.SettingsPath = configPath
+	if err := os.WriteFile(configPath, []byte(configTOML), 0644); err != nil {
+		return nil, fmt.Errorf("write codex config: %w", err)
+	}
+
+	// auth.json: provide the API key that codex sends as Authorization: Bearer
+	authJSON := fmt.Sprintf(`{"auth_mode":"apikey","OPENAI_API_KEY":%q}`, apiKey)
+	if err := os.WriteFile(filepath.Join(codexHome, "auth.json"), []byte(authJSON), 0644); err != nil {
+		return nil, fmt.Errorf("write codex auth: %w", err)
+	}
+
 	binPath, err := exec.LookPath("codex")
 	if err != nil {
 		result.Duration = time.Since(start)
@@ -238,22 +268,11 @@ func executeCodexTest(prompt string) (*ProfileTestResult, error) {
 	}
 
 	fmt.Printf("🔧 Gateway: %s\n", gatewayURL)
-	fmt.Printf("🚀 Command: codex exec -c model_providers.%s.base_url=%s ... %q\n\n", providerKey, gatewayURL, prompt)
+	fmt.Printf("🔧 Config: %s\n", configPath)
+	fmt.Printf("🚀 Command: CODEX_HOME=%s codex exec --dangerously-bypass-approvals-and-sandbox %q\n\n", codexHome, prompt)
 
-	execArgs := []string{
-		"exec",
-		"-c", fmt.Sprintf("model_providers.%s.name=%s", providerKey, providerKey),
-		"-c", fmt.Sprintf("model_providers.%s.base_url=%s", providerKey, gatewayURL),
-		"-c", fmt.Sprintf("model_providers.%s.wire_api=responses", providerKey),
-		"-c", fmt.Sprintf("model_providers.%s.requires_openai_auth=false", providerKey),
-		"-c", fmt.Sprintf("model=%s", model),
-		"-c", fmt.Sprintf("model_provider=%s", providerKey),
-		"-c", fmt.Sprintf("provider_api_keys.%s=%s", providerKey, apiKey),
-		"--dangerously-bypass-approvals-and-sandbox",
-		prompt,
-	}
-
-	cmd := exec.Command(binPath, execArgs...)
+	cmd := exec.Command(binPath, "exec", "--dangerously-bypass-approvals-and-sandbox", prompt)
+	cmd.Env = append(os.Environ(), fmt.Sprintf("CODEX_HOME=%s", codexHome))
 	output, err := cmd.CombinedOutput()
 
 	result.Duration = time.Since(start)

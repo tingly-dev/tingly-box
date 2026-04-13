@@ -36,57 +36,43 @@ func ProfileTextScenario() ProfileScenario {
 		MockResponses: map[server_validate.APIStyle]server_validate.MockResponseBuilder{
 			protocol.APIStyleAnthropic: {
 				NonStream: func() (int, []byte) {
-					return 200, []byte(`{
-						"id": "msg_123",
-						"type": "message",
-						"role": "assistant",
-						"content": [
-							{"type": "text", "text": "Hello, world!"}
-						],
-						"model": "claude-3-5-sonnet-20241022",
-						"stop_reason": "end_turn"
-					}`)
+					return 200, []byte(`{"id":"msg_123","type":"message","role":"assistant","content":[{"type":"text","text":"Hello, world!"}],"model":"claude-3-5-sonnet-20241022","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}}`)
 				},
 				Stream: func() []string {
 					return []string{
 						"event: message_start",
-						"data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_123\",\"role\":\"assistant\"}}",
+						`data: {"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","content":[],"model":"claude-3-5-sonnet-20241022","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}}`,
 						"",
 						"event: content_block_start",
-						"data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}",
+						`data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
+						"",
+						"event: ping",
+						`data: {"type":"ping"}`,
 						"",
 						"event: content_block_delta",
-						"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"}}",
+						`data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}`,
 						"",
 						"event: content_block_stop",
-						"data: {\"type\":\"content_block_stop\",\"index\":0}",
+						`data: {"type":"content_block_stop","index":0}`,
+						"",
+						"event: message_delta",
+						`data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":1}}`,
 						"",
 						"event: message_stop",
-						"data: {\"type\":\"message_stop\"}",
+						`data: {"type":"message_stop"}`,
 						"",
 					}
 				},
 			},
 			protocol.APIStyleOpenAI: {
 				NonStream: func() (int, []byte) {
-					return 200, []byte(`{
-						"id": "chatcmpl-123",
-						"object": "chat.completion",
-						"created": 1234567890,
-						"model": "gpt-4",
-						"choices": [{
-							"index": 0,
-							"message": {"role": "assistant", "content": "Hello, world!"},
-							"finish_reason": "stop"
-						}],
-						"usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
-					}`)
+					return 200, []byte(`{"id":"chatcmpl-123","object":"chat.completion","created":1234567890,"model":"gpt-4","choices":[{"index":0,"message":{"role":"assistant","content":"Hello, world!"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`)
 				},
 				Stream: func() []string {
 					return []string{
-						"data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"created\":1234567890,\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hello\"},\"finish_reason\":null}]}",
+						`data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1234567890,"model":"gpt-4","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},"finish_reason":null}]}`,
 						"",
-						"data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"created\":1234567890,\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}",
+						`data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1234567890,"model":"gpt-4","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`,
 						"",
 						"data: [DONE]",
 						"",
@@ -113,79 +99,47 @@ func ProfileToolUseScenario() ProfileScenario {
 		MockResponses: map[server_validate.APIStyle]server_validate.MockResponseBuilder{
 			protocol.APIStyleAnthropic: {
 				NonStream: func() (int, []byte) {
-					return 200, []byte(`{
-						"id": "msg_456",
-						"type": "message",
-						"role": "assistant",
-						"content": [
-							{
-								"type": "tool_use",
-								"id": "toolu_123",
-								"name": "bash",
-								"input": {"command": "echo 'hello'"}
-							}
-						],
-						"model": "claude-3-5-sonnet-20241022",
-						"stop_reason": "tool_use"
-					}`)
+					return 200, []byte(`{"id":"msg_456","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_123","name":"bash","input":{"command":"echo 'hello'"}}],"model":"claude-3-5-sonnet-20241022","stop_reason":"tool_use","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":20}}`)
 				},
 				Stream: func() []string {
 					return []string{
 						"event: message_start",
-						"data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_456\",\"role\":\"assistant\"}}",
+						`data: {"type":"message_start","message":{"id":"msg_456","type":"message","role":"assistant","content":[],"model":"claude-3-5-sonnet-20241022","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}}`,
 						"",
 						"event: content_block_start",
-						"data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_123\",\"name\":\"bash\"}}",
+						`data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_123","name":"bash","input":{}}}`,
 						"",
 						"event: content_block_delta",
-						"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"command\\\":\\\"echo}}}",
+						`data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"command\":\"echo"}}`,
 						"",
 						"event: content_block_delta",
-						"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\" 'hello'\\\"}\"}}",
+						`data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":" 'hello'\"}"}}`,
 						"",
 						"event: content_block_stop",
-						"data: {\"type\":\"content_block_stop\",\"index\":0}",
+						`data: {"type":"content_block_stop","index":0}`,
+						"",
+						"event: message_delta",
+						`data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":20}}`,
 						"",
 						"event: message_stop",
-						"data: {\"type\":\"message_stop\"}",
+						`data: {"type":"message_stop"}`,
 						"",
 					}
 				},
 			},
 			protocol.APIStyleOpenAI: {
 				NonStream: func() (int, []byte) {
-					return 200, []byte(`{
-						"id": "chatcmpl-456",
-						"object": "chat.completion",
-						"created": 1234567890,
-						"model": "gpt-4",
-						"choices": [{
-							"index": 0,
-							"message": {
-								"role": "assistant",
-								"tool_calls": [{
-									"id": "call_123",
-									"type": "function",
-									"function": {
-										"name": "bash",
-										"arguments": "{\"command\":\"echo 'hello'\"}"
-									}
-								}]
-							},
-							"finish_reason": "tool_calls"
-						}],
-						"usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
-					}`)
+					return 200, []byte(`{"id":"chatcmpl-456","object":"chat.completion","created":1234567890,"model":"gpt-4","choices":[{"index":0,"message":{"role":"assistant","tool_calls":[{"id":"call_123","type":"function","function":{"name":"bash","arguments":"{\"command\":\"echo 'hello'\"}"}}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`)
 				},
 				Stream: func() []string {
 					return []string{
-						"data: {\"id\":\"chatcmpl-456\",\"object\":\"chat.completion.chunk\",\"created\":1234567890,\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"call_123\",\"type\":\"function\",\"function\":{\"name\":\"bash\",\"arguments\":\"\"}}]},\"finish_reason\":null}]}",
+						`data: {"id":"chatcmpl-456","object":"chat.completion.chunk","created":1234567890,"model":"gpt-4","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_123","type":"function","function":{"name":"bash","arguments":""}}]},"finish_reason":null}]}`,
 						"",
-						"data: {\"id\":\"chatcmpl-456\",\"object\":\"chat.completion.chunk\",\"created\":1234567890,\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"command\\\":\\\"echo\"}}}]},\"finish_reason\":null}]}",
+						`data: {"id":"chatcmpl-456","object":"chat.completion.chunk","created":1234567890,"model":"gpt-4","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"command\":\"echo"}}]},"finish_reason":null}]}`,
 						"",
-						"data: {\"id\":\"chatcmpl-456\",\"object\":\"chat.completion.chunk\",\"created\":1234567890,\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\" 'hello'\\\"}\"}}}],\"finish_reason\":null}]}",
+						`data: {"id":"chatcmpl-456","object":"chat.completion.chunk","created":1234567890,"model":"gpt-4","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":" 'hello'\""}}]},"finish_reason":null}]}`,
 						"",
-						"data: {\"id\":\"chatcmpl-456\",\"object\":\"chat.completion.chunk\",\"created\":1234567890,\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+						`data: {"id":"chatcmpl-456","object":"chat.completion.chunk","created":1234567890,"model":"gpt-4","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`,
 						"",
 						"data: [DONE]",
 						"",

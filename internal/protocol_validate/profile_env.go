@@ -145,8 +145,14 @@ func NewProfileTestEnv(profileType ProfileType) (*ProfileTestEnv, error) {
 		return nil, fmt.Errorf("create app config: %w", err)
 	}
 
-	// Start virtual server (mock provider)
+	// Start virtual server (mock provider) and register default scenarios
 	virtualServer := server_validate.NewVirtualServerForCLI()
+	for _, ps := range ProfileScenarios() {
+		virtualServer.RegisterScenario(server_validate.Scenario{
+			Name:          ps.Name,
+			MockResponses: ps.MockResponses,
+		})
+	}
 
 	// Create gateway server with real routing
 	gatewayServer := server.NewServer(appConfig.GetGlobalConfig(), server.WithAdaptor(false))
