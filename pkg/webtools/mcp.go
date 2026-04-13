@@ -7,12 +7,13 @@ import (
 	"net/http"
 )
 
-// MCPServer is an MCP tool server.
-// Reference: libs/go-genai/examples/mcptoolbox/mcp_toolbox.go
+// MCPServer is a single-use MCP tool server.
+// It shuts down automatically after executing a tool.
 type MCPServer struct {
 	tools    []Tool
 	httpAddr string
 	server   *http.Server
+	cancel   context.CancelFunc
 }
 
 // NewMCPServer creates a new MCP server instance.
@@ -75,7 +76,7 @@ func (m *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// executeTool executes a tool.
+// executeTool executes a tool and shuts down the server.
 func (m *MCPServer) executeTool(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -108,6 +109,12 @@ func (m *MCPServer) executeTool(w http.ResponseWriter, r *http.Request) {
 
 	// Execute tool
 	result, err := tool.Execute(context.Background(), req.Params)
+
+	// Shutdown after execution (single-use server)
+	if m.cancel != nil {
+		m.cancel()
+	}
+
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -120,16 +127,25 @@ func (m *MCPServer) executeTool(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Start starts the MCP server.
-func (m *MCPServer) Start() error {
+// Start starts the MCP server with the given context.
+// The server runs until the context is cancelled or a tool is executed.
+func (m *MCPServer) Start(ctx context.Context) error {
+	ctx, m.cancel = context.WithCancel(ctx)
 	m.server = &http.Server{
 		Addr:    m.httpAddr,
 		Handler: m,
 	}
+	go func() {
+		<-ctx.Done()
+		_ = m.server.Shutdown(context.Background())
+	}()
 	return m.server.ListenAndServe()
 }
 
 // Stop stops the MCP server.
-func (m *MCPServer) Stop(ctx context.Context) error {
-	return m.server.Shutdown(ctx)
+func (m *MCPServer) Stop() error {
+	if m.cancel != nil {
+		m.cancel()
+	}
+	return nil
 }
