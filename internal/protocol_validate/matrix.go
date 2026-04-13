@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
@@ -170,4 +171,163 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max] + "..."
+}
+
+// ExecuteAll runs all matrix combinations and returns structured results.
+// This is a pure function that can be called from both tests and CLI.
+// It does not use testing.T, making it suitable for standalone execution.
+func (m *Matrix) ExecuteAll() []TestResult {
+	var results []TestResult
+
+	for _, scenario := range m.Scenarios {
+		for _, source := range m.Sources {
+			for _, target := range m.Targets {
+				for _, streaming := range m.Streaming {
+					scenario := scenario
+					source := source
+					target := target
+					streaming := streaming
+
+					// Check skip conditions first
+					pairKey := fmt.Sprintf("%s|%s", source, target)
+					if reason, skip := skipPairs[pairKey]; skip {
+						results = append(results, TestResult{
+							Name:       m.buildTestName(scenario.Name, source, target, streaming),
+							Scenario:   scenario.Name,
+							Source:     source,
+							Target:     target,
+							Streaming:  streaming,
+							Skipped:    true,
+							SkipReason: reason,
+						})
+						continue
+					}
+
+					srcScenarioKey := fmt.Sprintf("%s|%s", source, scenario.Name)
+					if reason, skip := skipSourceScenarios[srcScenarioKey]; skip {
+						results = append(results, TestResult{
+							Name:       m.buildTestName(scenario.Name, source, target, streaming),
+							Scenario:   scenario.Name,
+							Source:     source,
+							Target:     target,
+							Streaming:  streaming,
+							Skipped:    true,
+							SkipReason: reason,
+						})
+						continue
+					}
+
+					// Check streaming compatibility
+					if streaming && !scenarioSupportsStreaming(scenario) {
+						results = append(results, TestResult{
+							Name:       m.buildTestName(scenario.Name, source, target, streaming),
+							Scenario:   scenario.Name,
+							Source:     source,
+							Target:     target,
+							Streaming:  streaming,
+							Skipped:    true,
+							SkipReason: "scenario does not support streaming",
+						})
+						continue
+					}
+
+					if !streaming && scenarioRequiresStreaming(scenario) {
+						results = append(results, TestResult{
+							Name:       m.buildTestName(scenario.Name, source, target, streaming),
+							Scenario:   scenario.Name,
+							Source:     source,
+							Target:     target,
+							Streaming:  streaming,
+							Skipped:    true,
+							SkipReason: "scenario requires streaming mode",
+						})
+						continue
+					}
+
+					// Execute test (sequentially for simplicity)
+					result := m.executeOne(scenario, source, target, streaming)
+					results = append(results, result)
+				}
+			}
+		}
+	}
+
+	return results
+}
+
+// executeOne runs a single test combination and returns the result.
+func (m *Matrix) executeOne(s Scenario, source, target protocol.APIType, streaming bool) TestResult {
+	start := time.Now()
+
+	// Create test environment
+	env, err := NewTestEnvForCLI()
+	if err != nil {
+		return TestResult{
+			Name:      m.buildTestName(s.Name, source, target, streaming),
+			Scenario:  s.Name,
+			Source:    source,
+			Target:    target,
+			Streaming: streaming,
+			Passed:    false,
+			Errors: []AssertionError{{
+				Assertion: "setup",
+				Error:     fmt.Sprintf("failed to create test env: %v", err),
+			}},
+		}
+	}
+	defer env.Close()
+
+	env.SetupRoute(source, target, s)
+	result, err := env.SendAsCLI(source, s, streaming)
+	if err != nil {
+		return TestResult{
+			Name:      m.buildTestName(s.Name, source, target, streaming),
+			Scenario:  s.Name,
+			Source:    source,
+			Target:    target,
+			Streaming: streaming,
+			Passed:    false,
+			Errors: []AssertionError{{
+				Assertion: "send",
+				Error:     fmt.Sprintf("failed to send request: %v", err),
+			}},
+			Duration: time.Since(start),
+		}
+	}
+
+	// Check assertions
+	var errors []AssertionError
+	passed := true
+	for _, a := range s.Assertions {
+		if err := a.Check(result); err != nil {
+			passed = false
+			errors = append(errors, AssertionError{
+				Assertion: a.Name,
+				Error:     err.Error(),
+				Context:   truncate(string(result.RawBody), 300),
+			})
+		}
+	}
+
+	return TestResult{
+		Name:       m.buildTestName(s.Name, source, target, streaming),
+		Scenario:   s.Name,
+		Source:     source,
+		Target:     target,
+		Streaming:  streaming,
+		Passed:     passed,
+		Errors:     errors,
+		Duration:   time.Since(start),
+		HTTPStatus: result.HTTPStatus,
+		Response:   result,
+	}
+}
+
+// buildTestName constructs a test name from its components.
+func (m *Matrix) buildTestName(scenario string, source, target protocol.APIType, streaming bool) string {
+	mode := "nonstream"
+	if streaming {
+		mode = "stream"
+	}
+	return fmt.Sprintf("%s/%s/%s/%s", scenario, source, target, mode)
 }

@@ -34,6 +34,7 @@ type TestEnv struct {
 
 	mu          sync.Mutex
 	routeModels map[string]string // key → requestModel
+	configDir   string            // config directory for cleanup (CLI mode only)
 }
 
 // NewTestEnv creates a TestEnv with a fresh gateway config and a new VirtualServer.
@@ -67,8 +68,58 @@ func NewTestEnv(t *testing.T) *TestEnv {
 	}
 }
 
-// Close is a no-op; resources are cleaned up via t.Cleanup registered in NewTestEnv.
-func (env *TestEnv) Close() {}
+// Close cleans up resources. For testing mode, it's a no-op (resources are cleaned up via t.Cleanup).
+// For CLI mode, it closes the servers and removes the config directory.
+func (env *TestEnv) Close() {
+	// For CLI mode, close the gateway server
+	if env.gatewayServer != nil {
+		env.gatewayServer.Close()
+	}
+	// For CLI mode, clean up virtual server
+	if env.virtual != nil {
+		env.virtual.Close()
+	}
+	// For CLI mode, remove config directory
+	if env.configDir != "" {
+		os.RemoveAll(env.configDir)
+	}
+}
+
+// NewTestEnvForCLI creates a TestEnv for CLI use (without testing.T).
+// Resources must be cleaned up via explicit Close() call.
+func NewTestEnvForCLI() (*TestEnv, error) {
+	configDir, err := os.MkdirTemp("", "pv-cli-*")
+	if err != nil {
+		return nil, fmt.Errorf("create temp config dir: %w", err)
+	}
+
+	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
+	if err != nil {
+		os.RemoveAll(configDir)
+		return nil, fmt.Errorf("create app config: %w", err)
+	}
+
+	gatewayServer := server.NewServer(appConfig.GetGlobalConfig(), server.WithAdaptor(false))
+	router := gatewayServer.GetRouter()
+	ts := httptest.NewServer(router)
+
+	virtual := server_validate.NewVirtualServerForCLI()
+	if virtual == nil {
+		ts.Close()
+		os.RemoveAll(configDir)
+		return nil, fmt.Errorf("failed to create virtual server")
+	}
+
+	return &TestEnv{
+		appConfig:     appConfig,
+		ginEngine:     router,
+		gatewayServer: ts,
+		virtual:       virtual,
+		modelToken:    appConfig.GetGlobalConfig().GetModelToken(),
+		routeModels:   make(map[string]string),
+		configDir:     configDir, // Store for cleanup
+	}, nil
+}
 
 // VirtualURL returns the URL of the underlying virtual server.
 func (env *TestEnv) VirtualURL() string { return env.virtual.URL() }
@@ -196,6 +247,67 @@ func (env *TestEnv) SendAs(t *testing.T, source protocol.APIType, s Scenario, st
 	}
 
 	return result
+}
+
+// SendAsCLI sends a request to the gateway as the given source protocol,
+// using the request model configured by SetupRoute, and returns the parsed result.
+// This version is for CLI use and returns errors instead of calling t.Fatalf.
+//
+// Streaming requests use the real httptest.Server (env.gatewayServer) because
+// httptest.ResponseRecorder does not support Gin's streaming/SSE machinery.
+// Non-streaming requests use the recorder for simplicity.
+func (env *TestEnv) SendAsCLI(source protocol.APIType, s Scenario, streaming bool) (*RoundTripResult, error) {
+	requestModel := env.findRouteModel(source, s.Name)
+	if requestModel == "" {
+		return nil, fmt.Errorf("no route configured for source=%s scenario=%s — call SetupRoute first", source, s.Name)
+	}
+
+	path, body := buildRequest(source, requestModel, streaming)
+
+	result := &RoundTripResult{
+		SourceProtocol: source,
+		ScenarioName:   s.Name,
+		IsStreaming:    streaming,
+	}
+
+	if streaming {
+		url := env.gatewayServer.URL + path
+		req, err := http.NewRequest("POST", url, bytes.NewReader(body))
+		if err != nil {
+			return nil, fmt.Errorf("new request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+env.modelToken)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("do streaming request: %w", err)
+		}
+		defer resp.Body.Close()
+
+		result.HTTPStatus = resp.StatusCode
+		result.StreamEvents, result.RawBody = sse.ReadSSELines(resp.Body)
+		fillFromParsedResult(result, sse.ParsedResult{}, sourceToStyle(source), true)
+		parsed := assembleFromEvents(result.StreamEvents, sourceToStyle(source))
+		fillFromParsedResult(result, parsed, sourceToStyle(source), true)
+	} else {
+		req, err := http.NewRequest("POST", path, bytes.NewReader(body))
+		if err != nil {
+			return nil, fmt.Errorf("new request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+env.modelToken)
+
+		w := httptest.NewRecorder()
+		env.ginEngine.ServeHTTP(w, req)
+
+		result.HTTPStatus = w.Code
+		result.RawBody = w.Body.Bytes()
+		parsed := parseFromJSON(result.RawBody, sourceToStyle(source))
+		fillFromParsedResult(result, parsed, sourceToStyle(source), false)
+	}
+
+	return result, nil
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
