@@ -176,16 +176,47 @@ func truncate(s string, max int) string {
 // ExecuteAll runs all matrix combinations and returns structured results.
 // This is a pure function that can be called from both tests and CLI.
 // It does not use testing.T, making it suitable for standalone execution.
+//
+// Optimization: Reuses TestEnv per scenario to reduce server startup overhead.
+// Each scenario creates one TestEnv that is reused for all its combinations.
 func (m *Matrix) ExecuteAll() []TestResult {
 	var results []TestResult
 
+	// For each scenario, create one TestEnv and reuse it for all combinations
 	for _, scenario := range m.Scenarios {
+		scenario := scenario
+
+		// Create TestEnv for this scenario
+		env, err := NewTestEnvForCLI()
+		if err != nil {
+			// All tests for this scenario fail with setup error
+			for _, source := range m.Sources {
+				for _, target := range m.Targets {
+					for _, streaming := range m.Streaming {
+						results = append(results, TestResult{
+							Name:      m.buildTestName(scenario.Name, source, target, streaming),
+							Scenario:  scenario.Name,
+							Source:    source,
+							Target:    target,
+							Streaming: streaming,
+							Passed:    false,
+							Errors: []AssertionError{{
+								Assertion: "setup",
+								Error:     fmt.Sprintf("failed to create test env: %v", err),
+							}},
+						})
+					}
+				}
+			}
+			continue
+		}
+
+		// Run all combinations for this scenario
 		for _, source := range m.Sources {
+			source := source
 			for _, target := range m.Targets {
+				target := target
 				for _, streaming := range m.Streaming {
-					scenario := scenario
-					source := source
-					target := target
 					streaming := streaming
 
 					// Check skip conditions first
@@ -244,18 +275,22 @@ func (m *Matrix) ExecuteAll() []TestResult {
 						continue
 					}
 
-					// Execute test (sequentially for simplicity)
-					result := m.executeOne(scenario, source, target, streaming)
+					// Execute test with shared env
+					result := m.executeOneWithEnv(env, scenario, source, target, streaming)
 					results = append(results, result)
 				}
 			}
 		}
+
+		// Close env explicitly after processing all combinations for this scenario
+		env.Close()
 	}
 
 	return results
 }
 
 // executeOne runs a single test combination and returns the result.
+// Creates a new TestEnv for this test only.
 func (m *Matrix) executeOne(s Scenario, source, target protocol.APIType, streaming bool) TestResult {
 	start := time.Now()
 
@@ -276,6 +311,57 @@ func (m *Matrix) executeOne(s Scenario, source, target protocol.APIType, streami
 		}
 	}
 	defer env.Close()
+
+	env.SetupRoute(source, target, s)
+	result, err := env.SendAsCLI(source, s, streaming)
+	if err != nil {
+		return TestResult{
+			Name:      m.buildTestName(s.Name, source, target, streaming),
+			Scenario:  s.Name,
+			Source:    source,
+			Target:    target,
+			Streaming: streaming,
+			Passed:    false,
+			Errors: []AssertionError{{
+				Assertion: "send",
+				Error:     fmt.Sprintf("failed to send request: %v", err),
+			}},
+			Duration: time.Since(start),
+		}
+	}
+
+	// Check assertions
+	var errors []AssertionError
+	passed := true
+	for _, a := range s.Assertions {
+		if err := a.Check(result); err != nil {
+			passed = false
+			errors = append(errors, AssertionError{
+				Assertion: a.Name,
+				Error:     err.Error(),
+				Context:   truncate(string(result.RawBody), 300),
+			})
+		}
+	}
+
+	return TestResult{
+		Name:       m.buildTestName(s.Name, source, target, streaming),
+		Scenario:   s.Name,
+		Source:     source,
+		Target:     target,
+		Streaming:  streaming,
+		Passed:     passed,
+		Errors:     errors,
+		Duration:   time.Since(start),
+		HTTPStatus: result.HTTPStatus,
+		Response:   result,
+	}
+}
+
+// executeOneWithEnv runs a single test combination using the provided TestEnv.
+// Used by ExecuteAll for optimized batch testing.
+func (m *Matrix) executeOneWithEnv(env *TestEnv, s Scenario, source, target protocol.APIType, streaming bool) TestResult {
+	start := time.Now()
 
 	env.SetupRoute(source, target, s)
 	result, err := env.SendAsCLI(source, s, streaming)
