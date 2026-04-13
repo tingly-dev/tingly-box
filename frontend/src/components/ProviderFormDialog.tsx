@@ -25,6 +25,7 @@ import { useTranslation } from 'react-i18next';
 import { useProviderTemplates, type UniqueProvider } from '../services/serviceProviders';
 import { api } from '../services/api';
 import { OpenAI, Anthropic } from './BrandIcons';
+import ProviderIcon from './ProviderIcon';
 
 export interface EnhancedProviderFormData {
     uuid?: string;
@@ -417,9 +418,14 @@ const ProviderFormDialog = ({
                             }}
                             renderOption={(props, option) => (
                                 <Box component="li" {...props} sx={{ fontSize: '0.875rem' }}>
-                                    <Typography variant="body2" fontWeight="medium">
-                                        {option.alias || option.name}
-                                    </Typography>
+                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                        {option.icon && (
+                                            <ProviderIcon identifier={option.icon} size={18} />
+                                        )}
+                                        <Typography variant="body2" fontWeight="medium">
+                                            {option.alias || option.name}
+                                        </Typography>
+                                    </Stack>
                                 </Box>
                             )}
                             renderInput={(params) => (

@@ -13,6 +13,12 @@ import OpenClawSvg from '@lobehub/icons-static-svg/icons/openclaw.svg?url';
 import OpenAISvg from '@lobehub/icons-static-svg/icons/openai.svg?url';
 import OpenCodeSvg from '@lobehub/icons-static-svg/icons/opencode.svg?url';
 import QwenSvg from '@lobehub/icons-static-svg/icons/qwen.svg?url';
+import DeepSeekSvg from '@lobehub/icons-static-svg/icons/deepseek.svg?url';
+import MinimaxSvg from '@lobehub/icons-static-svg/icons/minimax.svg?url';
+import ZhipuSvg from '@lobehub/icons-static-svg/icons/zhipu.svg?url';
+import XAISvg from '@lobehub/icons-static-svg/icons/xai.svg?url';
+import MistralSvg from '@lobehub/icons-static-svg/icons/mistral.svg?url';
+import OpenRouterSvg from '@lobehub/icons-static-svg/icons/openrouter.svg?url';
 
 import DingTalkSvg from '@/assets/icons/dingtalk.svg?url';
 import DiscordSvg from '@/assets/icons/discord.svg?url';
@@ -76,6 +82,12 @@ export const Kimi = createBrandIcon(KimiSvg, 'Kimi');
 export const OpenClaw = createBrandIcon(OpenClawSvg, 'OpenClaw');
 export const Qwen = createBrandIcon(QwenSvg, 'Qwen');
 export const OpenCode = createBrandIcon(OpenCodeSvg, 'OpenCode');
+export const DeepSeek = createBrandIcon(DeepSeekSvg, 'DeepSeek');
+export const Minimax = createBrandIcon(MinimaxSvg, 'Minimax');
+export const Zhipu = createBrandIcon(ZhipuSvg, 'Zhipu');
+export const XAI = createBrandIcon(XAISvg, 'xAI');
+export const Mistral = createBrandIcon(MistralSvg, 'Mistral');
+export const OpenRouter = createBrandIcon(OpenRouterSvg, 'OpenRouter');
 export const Xcode = createBrandIcon(XcodeSvg, 'Xcode', true);
 export const VSCode = createBrandIcon(VSCodeSvg, 'VS Code', true);
 
