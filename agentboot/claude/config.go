@@ -80,8 +80,8 @@ type Config struct {
 }
 
 // DefaultConfig returns a config with sensible defaults
-func DefaultConfig() *Config {
-	return &Config{
+func DefaultConfig() Config {
+	return Config{
 		EnableStreamJSON: true,
 		StreamBufferSize: 100,
 		Model:            "", // Empty means use Claude default

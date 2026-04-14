@@ -411,7 +411,7 @@ func exampleSimpleQuery() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	agent := claude.NewAgentWithConfig(*claude.DefaultConfig())
+	agent := claude.NewAgentWithConfig(claude.DefaultConfig())
 	handler := NewStdinHandler()
 
 	fmt.Println("=== Example 1: Simple Query ===")
@@ -435,7 +435,7 @@ func exampleStreamQuery() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	agent := claude.NewAgentWithConfig(*claude.DefaultConfig())
+	agent := claude.NewAgentWithConfig(claude.DefaultConfig())
 	handler := NewStdinHandler()
 
 	fmt.Println("=== Example 2: Stream Format Query ===")
@@ -459,7 +459,7 @@ func exampleWithModel() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	agent := claude.NewAgentWithConfig(*claude.DefaultConfig())
+	agent := claude.NewAgentWithConfig(claude.DefaultConfig())
 	handler := NewStdinHandler()
 
 	fmt.Println("=== Example 3: With Model Selection ===")
@@ -483,7 +483,7 @@ func exampleResume() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	agent := claude.NewAgentWithConfig(*claude.DefaultConfig())
+	agent := claude.NewAgentWithConfig(claude.DefaultConfig())
 	handler := NewStdinHandler()
 
 	// In real usage, you'd get sessionID from a previous execution
@@ -514,7 +514,7 @@ func exampleContinue() {
 
 	cfg := claude.DefaultConfig()
 	cfg.ContinueConversation = true
-	agent := claude.NewAgentWithConfig(*cfg)
+	agent := claude.NewAgentWithConfig(cfg)
 	handler := NewStdinHandler()
 
 	fmt.Println("=== Example 5: Continue Conversation ===")
@@ -537,7 +537,7 @@ func exampleWithToolFiltering() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	agent := claude.NewAgentWithConfig(*claude.DefaultConfig())
+	agent := claude.NewAgentWithConfig(claude.DefaultConfig())
 	handler := NewStdinHandler()
 
 	fmt.Println("=== Example 6: With Tool Filtering ===")
@@ -562,7 +562,7 @@ func exampleWithTimeout() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	agent := claude.NewAgentWithConfig(*claude.DefaultConfig())
+	agent := claude.NewAgentWithConfig(claude.DefaultConfig())
 	handler := NewStdinHandler()
 
 	fmt.Println("=== Example 7: With Timeout ===")
@@ -586,7 +586,7 @@ func exampleAskUserQuestion() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	agent := claude.NewAgentWithConfig(*claude.DefaultConfig())
+	agent := claude.NewAgentWithConfig(claude.DefaultConfig())
 	handler := NewStdinHandler()
 
 	fmt.Println("=== Example 8: AskUserQuestion Handling ===")
@@ -609,7 +609,7 @@ func exampleApprovePermission() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	agent := claude.NewAgentWithConfig(*claude.DefaultConfig())
+	agent := claude.NewAgentWithConfig(claude.DefaultConfig())
 	handler := NewStdinHandler()
 
 	fmt.Println("=== Example 9: Approve Handling ===")

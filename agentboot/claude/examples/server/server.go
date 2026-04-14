@@ -499,7 +499,7 @@ type Server struct {
 // NewServer creates a new server instance
 func NewServer() *Server {
 	return &Server{
-		agent:   claude.NewAgentWithConfig(*claude.DefaultConfig()),
+		agent:   claude.NewAgentWithConfig(claude.DefaultConfig()),
 		handler: NewStdinHandler(),
 	}
 }
@@ -524,8 +524,8 @@ func (s *Server) SetDebug(debug bool) {
 func (s *Server) QueryAgent(ctx context.Context, userPrompt string, continueConversation bool) (string, error) {
 	// Build execution options
 	opts := agentboot.ExecutionOptions{
-		Handler:    s.handler,
-		Model:      s.model,
+		Handler:     s.handler,
+		Model:       s.model,
 		ProjectPath: s.cwd,
 	}
 
