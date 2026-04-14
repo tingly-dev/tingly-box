@@ -1,8 +1,6 @@
 package server
 
 import (
-	"encoding/json"
-
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -10,6 +8,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
+	guardrailsmutate "github.com/tingly-dev/tingly-box/internal/guardrails/mutate"
 	guardrailspipeline "github.com/tingly-dev/tingly-box/internal/guardrails/pipeline"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -225,13 +224,6 @@ func (s *Server) attachGuardrailsHooks(c *gin.Context, hc *protocol.HandleContex
 	}
 }
 
-func (s *Server) applyGuardrailsCredentialMaskState(input *guardrailscore.Input, state *guardrailscore.CredentialMaskState) {
-	if input == nil {
-		return
-	}
-	input.State.CredentialMask = state
-}
-
 // ----------------------------------------------------------------------
 // Request Guardrails
 // ----------------------------------------------------------------------
@@ -245,7 +237,7 @@ func (s *Server) applyGuardrailsToAnthropicV1Request(c *gin.Context, req *anthro
 	}
 
 	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionRequest, nil)
-	s.applyGuardrailsCredentialMaskState(&input, ensureGuardrailsCredentialMaskState(c))
+	input.State.CredentialMask = ensureGuardrailsCredentialMaskState(c)
 	input.Payload.Protocol = "anthropic_v1"
 	input.Payload.Request = req
 
@@ -268,7 +260,7 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaRequest(c *gin.Context, req *an
 	}
 
 	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionRequest, nil)
-	s.applyGuardrailsCredentialMaskState(&input, ensureGuardrailsCredentialMaskState(c))
+	input.State.CredentialMask = ensureGuardrailsCredentialMaskState(c)
 	input.Payload.Protocol = "anthropic_beta"
 	input.Payload.Request = req
 
@@ -296,7 +288,7 @@ func (s *Server) applyGuardrailsToAnthropicV1NonStreamResponse(c *gin.Context, r
 	maskState := ensureGuardrailsCredentialMaskState(c)
 	messageHistory := guardrailsadapter.AdaptMessagesFromAnthropicV1(req.System, req.Messages)
 	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messageHistory)
-	s.applyGuardrailsCredentialMaskState(&input, maskState)
+	input.State.CredentialMask = maskState
 	input.Payload.Protocol = "anthropic_v1"
 	input.Payload.Response = resp
 
@@ -305,7 +297,7 @@ func (s *Server) applyGuardrailsToAnthropicV1NonStreamResponse(c *gin.Context, r
 		return false
 	}
 	if !mutation.Changed {
-		s.restoreGuardrailsCredentialAliasesV1Response(maskState, resp)
+		guardrailsmutate.RestoreAnthropicV1ResponseCredentials(maskState, resp)
 	}
 	return mutation.Changed
 }
@@ -320,7 +312,7 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Contex
 	maskState := ensureGuardrailsCredentialMaskState(c)
 	messageHistory := guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages)
 	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messageHistory)
-	s.applyGuardrailsCredentialMaskState(&input, maskState)
+	input.State.CredentialMask = maskState
 	input.Payload.Protocol = "anthropic_beta"
 	input.Payload.Response = resp
 
@@ -329,101 +321,7 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Contex
 		return false
 	}
 	if !mutation.Changed {
-		s.restoreGuardrailsCredentialAliasesV1BetaResponse(maskState, resp)
+		guardrailsmutate.RestoreAnthropicV1BetaResponseCredentials(maskState, resp)
 	}
 	return mutation.Changed
-}
-
-// ----------------------------------------------------------------------
-// Response Alias Restoration
-// ----------------------------------------------------------------------
-
-func (s *Server) restoreGuardrailsCredentialAliasesV1Response(state *guardrailscore.CredentialMaskState, resp *anthropic.Message) bool {
-	if resp == nil {
-		return false
-	}
-	return restoreAnthropicResponseBlocks(resp.Content, state)
-}
-
-func (s *Server) restoreGuardrailsCredentialAliasesV1BetaResponse(state *guardrailscore.CredentialMaskState, resp *anthropic.BetaMessage) bool {
-	if resp == nil {
-		return false
-	}
-	return restoreAnthropicBetaResponseBlocks(resp.Content, state)
-}
-
-func restoreAnthropicResponseBlocks(blocks []anthropic.ContentBlockUnion, state *guardrailscore.CredentialMaskState) bool {
-	if state == nil || len(state.AliasToReal) == 0 {
-		return false
-	}
-	changed := false
-	for i := range blocks {
-		block := &blocks[i]
-		if guardrailscore.MayContainAliasToken(block.Text) {
-			if text, ok := guardrailscore.RestoreText(block.Text, state); ok {
-				block.Text = text
-				changed = true
-			}
-		}
-		if len(block.Input) == 0 || !guardrailscore.MayContainAliasToken(string(block.Input)) {
-			continue
-		}
-		var parsed interface{}
-		if err := json.Unmarshal(block.Input, &parsed); err != nil {
-			if restored, ok := guardrailscore.RestoreText(string(block.Input), state); ok {
-				block.Input = json.RawMessage(restored)
-				changed = true
-			}
-			continue
-		}
-		restored, ok := guardrailscore.RestoreStructuredValue(parsed, state)
-		if !ok {
-			continue
-		}
-		payload, err := json.Marshal(restored)
-		if err != nil {
-			continue
-		}
-		block.Input = payload
-		changed = true
-	}
-	return changed
-}
-
-func restoreAnthropicBetaResponseBlocks(blocks []anthropic.BetaContentBlockUnion, state *guardrailscore.CredentialMaskState) bool {
-	if state == nil || len(state.AliasToReal) == 0 {
-		return false
-	}
-	changed := false
-	for i := range blocks {
-		block := &blocks[i]
-		if guardrailscore.MayContainAliasToken(block.Text) {
-			if text, ok := guardrailscore.RestoreText(block.Text, state); ok {
-				block.Text = text
-				changed = true
-			}
-		}
-		if len(block.Input) == 0 || !guardrailscore.MayContainAliasToken(string(block.Input)) {
-			continue
-		}
-		var parsed interface{}
-		if err := json.Unmarshal(block.Input, &parsed); err != nil {
-			if restored, ok := guardrailscore.RestoreText(string(block.Input), state); ok {
-				block.Input = json.RawMessage(restored)
-				changed = true
-			}
-			continue
-		}
-		restored, ok := guardrailscore.RestoreStructuredValue(parsed, state)
-		if !ok {
-			continue
-		}
-		payload, err := json.Marshal(restored)
-		if err != nil {
-			continue
-		}
-		block.Input = payload
-		changed = true
-	}
-	return changed
 }
