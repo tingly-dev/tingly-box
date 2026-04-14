@@ -60,6 +60,16 @@ import MCPCustom from './pages/mcp/MCPCustom';
 import MCPBuiltin from './pages/mcp/MCPBuiltin';
 import MCPLocalMode from './pages/mcp/MCPLocalMode';
 import MCPRegisteredServers from './pages/mcp/MCPRegisteredServers';
+import {
+    ZenClaudeCodePage,
+    ZenCodexPage,
+    ZenOpenCodePage,
+    ZenXcodePage,
+    ZenVSCodePage,
+    ZenOpenAIPage,
+    ZenAnthropicPage,
+    ZenAgentPage,
+} from './pages/zen';
 
 // Loading fallback component - kept for potential future use with async data
 
@@ -350,6 +360,16 @@ function AppContent() {
                     <Route path="/mcp/local-mode" element={<MCPLocalMode />} />
                     <Route path="/mcp/clients" element={<Navigate to="/mcp/local-mode" replace />} />
                     <Route path="/mcp" element={<Navigate to="/mcp/sources" replace />} />
+                    {/* Zen Mode Routes - Use zen layout when in zen mode */}
+                    <Route path="/zen/claude-code" element={<ZenClaudeCodePage />} />
+                    <Route path="/zen/codex" element={<ZenCodexPage />} />
+                    <Route path="/zen/opencode" element={<ZenOpenCodePage />} />
+                    <Route path="/zen/xcode" element={<ZenXcodePage />} />
+                    <Route path="/zen/vscode" element={<ZenVSCodePage />} />
+                    <Route path="/zen/openai" element={<ZenOpenAIPage />} />
+                    <Route path="/zen/anthropic" element={<ZenAnthropicPage />} />
+                    <Route path="/zen/agent" element={<ZenAgentPage />} />
+                    <Route path="/zen" element={<Navigate to="/zen/claude-code" replace />} />
                     {/* Catch-all redirect for unknown routes */}
                     <Route path="*" element={<Navigate to="/dashboard/7d" replace />} />
                 </Route>
