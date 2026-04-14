@@ -60,6 +60,16 @@ import MCPCustom from './pages/mcp/MCPCustom';
 import MCPBuiltin from './pages/mcp/MCPBuiltin';
 import MCPLocalMode from './pages/mcp/MCPLocalMode';
 import MCPRegisteredServers from './pages/mcp/MCPRegisteredServers';
+import {
+    ZenClaudeCodePage,
+    ZenCodexPage,
+    ZenOpenCodePage,
+    ZenXcodePage,
+    ZenVSCodePage,
+    ZenOpenAIPage,
+    ZenAnthropicPage,
+    ZenAgentPage,
+} from './pages/zen';
 
 // Loading fallback component - kept for potential future use with async data
 
@@ -286,15 +296,25 @@ function AppContent() {
                     {/* Default redirect */}
                     <Route index element={<Navigate to="/dashboard/7d" replace />} />
                     {/* Function panel routes */}
-                    <Route path="/use-openai" element={<UseOpenAIPage />} />
-                    <Route path="/use-anthropic" element={<UseAnthropicPage />} />
-                    <Route path="/use-codex" element={<UseCodexPage />} />
-                    <Route path="/use-claude-code" element={<UseClaudeCodePage />} />
-                    <Route path="/use-claude-code/profile/:profileId" element={<ClaudeCodeProfilePage />} />
-                    <Route path="/use-agent" element={<UseAgentPage />} />
-                    <Route path="/use-opencode" element={<UseOpenCodePage />} />
-                    <Route path="/use-xcode" element={<UseXcodePage />} />
-                    <Route path="/use-vscode" element={<UseVSCodePage />} />
+                    <Route path="/agent/openai" element={<UseOpenAIPage />} />
+                    <Route path="/agent/anthropic" element={<UseAnthropicPage />} />
+                    <Route path="/agent/codex" element={<UseCodexPage />} />
+                    <Route path="/agent/claude_code" element={<UseClaudeCodePage />} />
+                    <Route path="/agent/claude_code/profile/:profileId" element={<ClaudeCodeProfilePage />} />
+                    <Route path="/agent/agent" element={<UseAgentPage />} />
+                    <Route path="/agent/opencode" element={<UseOpenCodePage />} />
+                    <Route path="/agent/xcode" element={<UseXcodePage />} />
+                    <Route path="/agent/vscode" element={<UseVSCodePage />} />
+                    {/* Legacy redirects */}
+                    <Route path="/use-openai" element={<Navigate to="/agent/openai" replace />} />
+                    <Route path="/use-anthropic" element={<Navigate to="/agent/anthropic" replace />} />
+                    <Route path="/use-codex" element={<Navigate to="/agent/codex" replace />} />
+                    <Route path="/use-claude-code" element={<Navigate to="/agent/claude_code" replace />} />
+                    <Route path="/use-claude-code/profile/:profileId" element={<Navigate to="/agent/claude_code" replace />} />
+                    <Route path="/use-agent" element={<Navigate to="/agent/agent" replace />} />
+                    <Route path="/use-opencode" element={<Navigate to="/agent/opencode" replace />} />
+                    <Route path="/use-xcode" element={<Navigate to="/agent/xcode" replace />} />
+                    <Route path="/use-vscode" element={<Navigate to="/agent/vscode" replace />} />
                     {/* Credential routes - new unified page */}
                     <Route path="/credentials" element={<CredentialPage />} />
                     <Route path="/credentials/:tab" element={<CredentialPage />} />
@@ -350,6 +370,18 @@ function AppContent() {
                     <Route path="/mcp/local-mode" element={<MCPLocalMode />} />
                     <Route path="/mcp/clients" element={<Navigate to="/mcp/local-mode" replace />} />
                     <Route path="/mcp" element={<Navigate to="/mcp/sources" replace />} />
+                    {/* Zen Mode Routes - Use zen layout when in zen mode */}
+                    <Route path="/zen/claude_code" element={<ZenClaudeCodePage />} />
+                    <Route path="/zen/codex" element={<ZenCodexPage />} />
+                    <Route path="/zen/opencode" element={<ZenOpenCodePage />} />
+                    <Route path="/zen/xcode" element={<ZenXcodePage />} />
+                    <Route path="/zen/vscode" element={<ZenVSCodePage />} />
+                    <Route path="/zen/openai" element={<ZenOpenAIPage />} />
+                    <Route path="/zen/anthropic" element={<ZenAnthropicPage />} />
+                    <Route path="/zen/agent" element={<ZenAgentPage />} />
+                    <Route path="/zen" element={<Navigate to="/zen/claude_code" replace />} />
+                    {/* Legacy zen redirects */}
+                    <Route path="/zen/claude-code" element={<Navigate to="/zen/claude_code" replace />} />
                     {/* Catch-all redirect for unknown routes */}
                     <Route path="*" element={<Navigate to="/dashboard/7d" replace />} />
                 </Route>

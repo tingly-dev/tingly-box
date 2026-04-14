@@ -2,17 +2,21 @@ import {
     IconAlertCircle,
     IconBrush,
     IconMoon,
+    IconSparkles,
     IconStar,
     IconSun,
     IconSunHigh,
     IconUser,
+    IconYinYang,
+    IconDots,
 } from '@tabler/icons-react';
 import { Box, Divider, ListItemButton, ListItemIcon, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
 import React, { useState } from 'react';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import { useHealth } from '../contexts/HealthContext';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
 import { useThemeMode } from '../contexts/ThemeContext';
+import { Claude, Codex, OpenCode, Xcode, VSCode, OpenAI, Anthropic, OpenClaw } from '@/components/BrandIcons';
 import {
     activityBarWidth,
     activityContainerPaddingY,
@@ -29,19 +33,26 @@ interface ActivityBarProps {
     activeActivity: string;
     onActivityClick: (item: ActivityItem) => void;
     onUserClick: (event: React.MouseEvent<HTMLElement>) => void;
+    onZenToggle?: () => void;
+    zenEnabled?: boolean;
+    onMoreClick?: (event: React.MouseEvent<HTMLElement>) => void;
 }
 
-export const ActivityBar: React.FC<ActivityBarProps> = ({
+export const ZenActivityBar: React.FC<ActivityBarProps> = ({
     activityItems,
     activeActivity,
     onActivityClick,
     onUserClick,
+    onZenToggle,
+    zenEnabled = false,
+    onMoreClick,
 }) => {
     const { currentVersion } = useAppVersion();
     const { hasUpdate, showUpdateDialog } = useAppVersion();
     const { isHealthy, showDisconnectDialog } = useHealth();
     const { mode, setTheme } = useThemeMode();
     const [themeMenuAnchorEl, setThemeMenuAnchorEl] = useState<HTMLElement | null>(null);
+    const [zenMenuAnchorEl, setZenMenuAnchorEl] = useState<HTMLElement | null>(null);
 
     const handleThemeMenuClick = (event: React.MouseEvent<HTMLElement>) => {
         setThemeMenuAnchorEl(event.currentTarget);
@@ -49,6 +60,22 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
 
     const handleThemeMenuClose = () => {
         setThemeMenuAnchorEl(null);
+    };
+
+    const handleZenMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+        setZenMenuAnchorEl(event.currentTarget);
+    };
+
+    const handleZenMenuClose = () => {
+        setZenMenuAnchorEl(null);
+    };
+
+    const handleZenAgentSelect = (zenPath: string) => {
+        // Set zen mode flag with the selected agent
+        const agent = zenPath.replace('/zen/', '').replace('-', '_');
+        localStorage.setItem('mock-flag-_global-zen', agent);
+        // Reload page to activate zen mode
+        window.location.href = zenPath;
     };
 
     return (
@@ -207,73 +234,191 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                     </Tooltip>
                 )}
 
-                {/* Theme toggle button */}
-                <Tooltip title="Theme" placement="right" arrow>
-                    <ListItemButton
-                        onClick={handleThemeMenuClick}
-                        sx={activityItemSx({
-                            '&:hover': { bgcolor: 'action.hover' },
-                        })}
-                    >
-                        <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                            <IconBrush size={22} />
-                        </ListItemIcon>
-                        <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
-                            Theme
-                        </Typography>
-                    </ListItemButton>
-                </Tooltip>
+                {/* Theme toggle button - only show in normal mode */}
+                {!zenEnabled && (
+                    <Tooltip title="Theme" placement="right" arrow>
+                        <ListItemButton
+                            onClick={handleThemeMenuClick}
+                            sx={activityItemSx({
+                                '&:hover': { bgcolor: 'action.hover' },
+                            })}
+                        >
+                            <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
+                                <IconBrush size={22} />
+                            </ListItemIcon>
+                            <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
+                                Theme
+                            </Typography>
+                        </ListItemButton>
+                    </Tooltip>
+                )}
 
-                {/* Theme menu */}
-                <Menu
-                    anchorEl={themeMenuAnchorEl}
-                    open={Boolean(themeMenuAnchorEl)}
-                    onClose={handleThemeMenuClose}
-                    anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-                    transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-                    slotProps={{
-                        paper: {
-                            sx: {
-                                minWidth: 160,
-                                mt: 1,
+                {/* Theme menu - only show in normal mode */}
+                {!zenEnabled && (
+                    <Menu
+                        anchorEl={themeMenuAnchorEl}
+                        open={Boolean(themeMenuAnchorEl)}
+                        onClose={handleThemeMenuClose}
+                        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                        slotProps={{
+                            paper: {
+                                sx: {
+                                    minWidth: 160,
+                                    mt: 1,
+                                },
                             },
-                        },
-                    }}
-                >
-                    <MenuItem
-                        selected={mode === 'light'}
-                        onClick={() => {
-                            setTheme('light');
-                            handleThemeMenuClose();
                         }}
-                        sx={{ gap: 1.5 }}
                     >
-                        <IconSun size={18} />
-                        <Typography>Light</Typography>
-                    </MenuItem>
-                    <MenuItem
-                        selected={mode === 'dark'}
-                        onClick={() => {
-                            setTheme('dark');
-                            handleThemeMenuClose();
-                        }}
-                        sx={{ gap: 1.5 }}
-                    >
-                        <IconMoon size={18} />
-                        <Typography>Dark</Typography>
-                    </MenuItem>
-                    <MenuItem
-                        selected={mode === 'sunlit'}
-                        onClick={() => {
-                            setTheme('sunlit');
-                            handleThemeMenuClose();
-                        }}
-                        sx={{ gap: 1.5 }}
-                    >
-                        <IconSunHigh size={18} />
-                        <Typography>Sunlit</Typography>
-                    </MenuItem>
-                </Menu>
+                        <MenuItem
+                            selected={mode === 'light'}
+                            onClick={() => {
+                                setTheme('light');
+                                handleThemeMenuClose();
+                            }}
+                            sx={{ gap: 1.5 }}
+                        >
+                            <IconSun size={18} />
+                            <Typography>Light</Typography>
+                        </MenuItem>
+                        <MenuItem
+                            selected={mode === 'dark'}
+                            onClick={() => {
+                                setTheme('dark');
+                                handleThemeMenuClose();
+                            }}
+                            sx={{ gap: 1.5 }}
+                        >
+                            <IconMoon size={18} />
+                            <Typography>Dark</Typography>
+                        </MenuItem>
+                        <MenuItem
+                            selected={mode === 'sunlit'}
+                            onClick={() => {
+                                setTheme('sunlit');
+                                handleThemeMenuClose();
+                            }}
+                            sx={{ gap: 1.5 }}
+                        >
+                            <IconSunHigh size={18} />
+                            <Typography>Sunlit</Typography>
+                        </MenuItem>
+                    </Menu>
+                )}
+
+                {/* Zen mode toggle button - only show in normal mode */}
+                {!zenEnabled && (
+                    <>
+                        <Tooltip title="Zen Mode" placement="right" arrow>
+                            <ListItemButton
+                                onClick={handleZenMenuClick}
+                                sx={activityItemSx({
+                                    '&:hover': { bgcolor: 'action.hover' },
+                                })}
+                            >
+                                <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
+                                    <IconYinYang size={22} />
+                                </ListItemIcon>
+                                <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
+                                    Zen
+                                </Typography>
+                            </ListItemButton>
+                        </Tooltip>
+
+                        {/* Zen Agent Selection Menu */}
+                        <Menu
+                            anchorEl={zenMenuAnchorEl}
+                            open={Boolean(zenMenuAnchorEl)}
+                            onClose={handleZenMenuClose}
+                            anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                            transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                            slotProps={{
+                                paper: {
+                                    sx: {
+                                        minWidth: 180,
+                                        mt: 1,
+                                    },
+                                },
+                            }}
+                        >
+                            <MenuItem disabled sx={{ opacity: 0.6 }}>
+                                <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                                    Enter Zen Mode:
+                                </Typography>
+                            </MenuItem>
+                            <MenuItem onClick={() => handleZenAgentSelect('/zen/claude_code')} sx={{ gap: 1.5 }}>
+                                <Claude size={18} />
+                                <Typography>Claude Code</Typography>
+                            </MenuItem>
+                            <MenuItem onClick={() => handleZenAgentSelect('/zen/codex')} sx={{ gap: 1.5 }}>
+                                <Codex size={18} />
+                                <Typography>Codex</Typography>
+                            </MenuItem>
+                            <MenuItem onClick={() => handleZenAgentSelect('/zen/opencode')} sx={{ gap: 1.5 }}>
+                                <OpenCode size={18} />
+                                <Typography>OpenCode</Typography>
+                            </MenuItem>
+                            {/*<MenuItem onClick={() => handleZenAgentSelect('/zen/xcode')} sx={{ gap: 1.5 }}>*/}
+                            {/*    <Xcode size={18} />*/}
+                            {/*    <Typography>Xcode</Typography>*/}
+                            {/*</MenuItem>*/}
+                            {/*<MenuItem onClick={() => handleZenAgentSelect('/zen/vscode')} sx={{ gap: 1.5 }}>*/}
+                            {/*    <VSCode size={18} />*/}
+                            {/*    <Typography>VS Code</Typography>*/}
+                            {/*</MenuItem>*/}
+                            {/*<MenuItem onClick={() => handleZenAgentSelect('/zen/openai')} sx={{ gap: 1.5 }}>*/}
+                            {/*    <OpenAI size={18} />*/}
+                            {/*    <Typography>OpenAI</Typography>*/}
+                            {/*</MenuItem>*/}
+                            {/*<MenuItem onClick={() => handleZenAgentSelect('/zen/anthropic')} sx={{ gap: 1.5 }}>*/}
+                            {/*    <Anthropic size={18} />*/}
+                            {/*    <Typography>Anthropic</Typography>*/}
+                            {/*</MenuItem>*/}
+                            {/*<MenuItem onClick={() => handleZenAgentSelect('/zen/agent')} sx={{ gap: 1.5 }}>*/}
+                            {/*    <OpenClaw size={18} />*/}
+                            {/*    <Typography>OpenClaw</Typography>*/}
+                            {/*</MenuItem>*/}
+                        </Menu>
+                    </>
+                )}
+
+                {/* More button - only show in zen mode */}
+                {zenEnabled && onMoreClick && (
+                    <Tooltip title="More" placement="right" arrow>
+                        <ListItemButton
+                            onClick={onMoreClick}
+                            sx={activityItemSx({
+                                '&:hover': { bgcolor: 'action.hover' },
+                            })}
+                        >
+                            <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
+                                <IconDots size={22} />
+                            </ListItemIcon>
+                            <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
+                                More
+                            </Typography>
+                        </ListItemButton>
+                    </Tooltip>
+                )}
+
+                {/* Exit Zen button - only show in zen mode */}
+                {zenEnabled && onZenToggle && (
+                    <Tooltip title="Exit Zen" placement="right" arrow>
+                        <ListItemButton
+                            onClick={onZenToggle}
+                            sx={activityItemSx({
+                                '&:hover': { bgcolor: 'action.hover' },
+                            })}
+                        >
+                            <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
+                                <IconYinYang size={22} />
+                            </ListItemIcon>
+                            <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
+                                Exit
+                            </Typography>
+                        </ListItemButton>
+                    </Tooltip>
+                )}
             </Box>
 
             {/* Bottom: User icon */}

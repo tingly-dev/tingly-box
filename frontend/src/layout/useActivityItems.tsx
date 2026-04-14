@@ -56,7 +56,7 @@ export function useActivityItems(): ActivityItem[] {
     return useMemo(() => {
         const claudeCodeProfiles = profiles['claude_code'] || [];
         const profileNavItems: NavItem[] = claudeCodeProfiles.map(p => ({
-            path: `/use-claude-code/profile/${p.id}`,
+            path: `/agent/claude_code/profile/${p.id}`,
             label: 'Claude Code',
             subtitle: `${p.id} - ${p.name}`,
             icon: <Claude size={20} />,
@@ -85,7 +85,7 @@ export function useActivityItems(): ActivityItem[] {
                 label: t('layout.nav.home'),
                 children: [
                     {
-                        path: '/use-claude-code',
+                        path: '/agent/claude_code',
                         subtitle: 'default',
                         label: t('layout.nav.useClaudeCode', { defaultValue: 'Claude Code' }),
                         icon: <Claude size={20} />,
@@ -93,15 +93,15 @@ export function useActivityItems(): ActivityItem[] {
                     ...profileNavItems,
                     { path: '#add-profile', label: 'Add Profile', icon: <IconPlus size={20} /> },
                     { type: 'divider' },
-                    { path: '/use-codex', label: t('layout.nav.useCodex', { defaultValue: 'Codex' }), icon: <Codex size={20} /> },
-                    { path: '/use-opencode', label: t('layout.nav.useOpenCode', { defaultValue: 'OpenCode' }), icon: <OpenCode size={20} /> },
-                    { path: '/use-xcode', label: t('layout.nav.useXcode', { defaultValue: 'Xcode' }), icon: <Xcode size={20} /> },
-                    { path: '/use-vscode', label: t('layout.nav.useVSCode', { defaultValue: 'VS Code' }), icon: <VSCode size={20} /> },
+                    { path: '/agent/codex', label: t('layout.nav.useCodex', { defaultValue: 'Codex' }), icon: <Codex size={20} /> },
+                    { path: '/agent/opencode', label: t('layout.nav.useOpenCode', { defaultValue: 'OpenCode' }), icon: <OpenCode size={20} /> },
+                    { path: '/agent/xcode', label: t('layout.nav.useXcode', { defaultValue: 'Xcode' }), icon: <Xcode size={20} /> },
+                    { path: '/agent/vscode', label: t('layout.nav.useVSCode', { defaultValue: 'VS Code' }), icon: <VSCode size={20} /> },
                     { type: 'divider' },
-                    { path: '/use-openai', label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }), icon: <OpenAI size={20} /> },
-                    { path: '/use-anthropic', label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }), icon: <Anthropic size={20} /> },
+                    { path: '/agent/openai', label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }), icon: <OpenAI size={20} /> },
+                    { path: '/agent/anthropic', label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }), icon: <Anthropic size={20} /> },
                     { type: 'divider' },
-                    { path: '/use-agent', label: 'OpenClaw', icon: <OpenClaw size={20} /> },
+                    { path: '/agent/agent', label: 'OpenClaw', icon: <OpenClaw size={20} /> },
                 ],
             },
             ...(isFullEdition && promptMenuItems.length > 0 ? [{

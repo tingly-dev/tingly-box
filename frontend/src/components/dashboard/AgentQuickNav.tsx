@@ -24,54 +24,14 @@ const AgentQuickNav: React.FC = () => {
     const navigate = useNavigate();
 
     const agents: AgentItem[] = [
-        {
-            path: '/use-claude-code',
-            label: 'Claude Code',
-            icon: <Claude size={20} />,
-            description: 'AI-powered coding assistant',
-        },
-        {
-            path: '/use-codex',
-            label: 'Codex',
-            icon: <Codex size={20} />,
-            description: 'OpenAI Codex integration',
-        },
-        {
-            path: '/use-opencode',
-            label: 'OpenCode',
-            icon: <OpenCode size={20} />,
-            description: 'OpenCode agent',
-        },
-        {
-            path: '/use-xcode',
-            label: 'Xcode',
-            icon: <Xcode size={20} />,
-            description: 'Xcode integration',
-        },
-        {
-            path: '/use-vscode',
-            label: 'VS Code',
-            icon: <VSCode size={20} />,
-            description: 'VS Code integration',
-        },
-        {
-            path: '/use-openai',
-            label: 'OpenAI',
-            icon: <OpenAIIcon size={20} />,
-            description: 'OpenAI SDK',
-        },
-        {
-            path: '/use-anthropic',
-            label: 'Anthropic',
-            icon: <AnthropicIcon size={20} />,
-            description: 'Anthropic SDK',
-        },
-        {
-            path: '/use-agent',
-            label: 'OpenClaw',
-            icon: <OpenClaw size={20} />,
-            description: 'Advanced agent framework',
-        },
+        { path: '/agent/claude_code', label: 'Claude Code', icon: <Claude size={20} />, description: 'AI-powered coding assistant' },
+        { path: '/agent/codex',       label: 'Codex',       icon: <Codex size={20} />, description: 'OpenAI Codex integration' },
+        { path: '/agent/opencode',    label: 'OpenCode',    icon: <OpenCode size={20} />, description: 'OpenCode agent' },
+        { path: '/agent/xcode',       label: 'Xcode',       icon: <Xcode size={20} />, description: 'Xcode integration' },
+        { path: '/agent/vscode',      label: 'VS Code',     icon: <VSCode size={20} />, description: 'VS Code integration' },
+        { path: '/agent/openai',      label: 'OpenAI',      icon: <OpenAIIcon size={20} />, description: 'OpenAI SDK' },
+        { path: '/agent/anthropic',   label: 'Anthropic',   icon: <AnthropicIcon size={20} />, description: 'Anthropic SDK' },
+        { path: '/agent/agent',       label: 'OpenClaw',    icon: <OpenClaw size={20} />, description: 'Advanced agent framework' },
     ];
 
     return (
