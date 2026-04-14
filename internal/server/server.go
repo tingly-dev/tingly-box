@@ -261,6 +261,21 @@ func (s *Server) mcpEnabled() bool {
 		s.config.GetScenarioFlag(typ.ScenarioClaudeCode, "mcp")
 }
 
+// mcpMode returns the current MCP runtime mode
+func (s *Server) mcpMode() typ.MCPMode {
+	if s.config == nil {
+		return ""
+	}
+	var mcpCfg typ.MCPRuntimeConfig
+	if s.config.GetToolConfig(db.ToolTypeMCPRuntime, &mcpCfg) {
+		if mcpCfg.Mode == "" {
+			return typ.MCPModeClienttool // default mode
+		}
+		return mcpCfg.Mode
+	}
+	return typ.MCPModeClienttool // default mode
+}
+
 func (s *Server) syncGuardrailsFromConfig() {
 	if s.config == nil {
 		return
@@ -609,9 +624,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Set template manager in config for model fetching fallback
 	server.config.SetTemplateManager(templateManager)
 
-	server.mcpRuntime = mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig {
-		return cfg.GetMCPRuntimeConfig()
-	})
+	server.mcpRuntime = mcpruntime.NewRuntime(cfg.GetMCPRuntimeConfig)
 	if err := mcpruntime.EnsureBuiltinScripts(cfg.ConfigDir); err != nil {
 		logrus.WithError(err).Warn("mcp: failed to ensure builtin scripts in config dir")
 	}
