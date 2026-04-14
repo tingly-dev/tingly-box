@@ -489,18 +489,18 @@ var _ agentboot.MessageHandler = (*StdinHandler)(nil)
 
 // Server handles Claude interaction with simplified input/output
 type Server struct {
-	launcher *claude.Launcher
-	handler  *StdinHandler
-	model    string
-	cwd      string
-	debug    bool
+	agent   *claude.Agent
+	handler *StdinHandler
+	model   string
+	cwd     string
+	debug   bool
 }
 
 // NewServer creates a new server instance
 func NewServer() *Server {
 	return &Server{
-		launcher: claude.NewLauncher(claude.Config{}),
-		handler:  NewStdinHandler(),
+		agent:   claude.NewAgentWithConfig(*claude.DefaultConfig()),
+		handler: NewStdinHandler(),
 	}
 }
 
@@ -532,8 +532,8 @@ func (s *Server) QueryAgent(ctx context.Context, userPrompt string, continueConv
 	// Use stream-json format for proper message handling
 	opts.OutputFormat = agentboot.OutputFormatStreamJSON
 
-	// Execute using Launcher
-	result, err := s.launcher.Execute(ctx, userPrompt, opts)
+	// Execute using Agent
+	result, err := s.agent.Execute(ctx, userPrompt, opts)
 	if err != nil {
 		return "", fmt.Errorf("failed to execute: %w", err)
 	}
