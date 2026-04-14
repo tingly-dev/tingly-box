@@ -196,7 +196,7 @@ const Layout = ({ children }: LayoutProps) => {
 
         const getAgentInfo = (agent: string) => {
             const info: Record<string, { key: string; icon: any; label: string; path: string }> = {
-                'claude_code': { key: 'zen-claude_code', icon: <Claude size={22} />, label: 'Claude Code', path: '/zen/claude_code' },
+                'claude_code': { key: 'zen-claude_code', icon: <Claude size={22} />, label: 'Claude', path: '/zen/claude_code' },
                 'codex':       { key: 'zen-codex',       icon: <Codex size={22} />,   label: 'Codex',       path: '/zen/codex' },
                 'opencode':    { key: 'zen-opencode',    icon: <OpenCode size={22} />, label: 'OpenCode',    path: '/zen/opencode' },
                 'xcode':       { key: 'zen-xcode',       icon: <Xcode size={22} />,   label: 'Xcode',       path: '/zen/xcode' },
