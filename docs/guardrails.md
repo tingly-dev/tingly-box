@@ -17,6 +17,8 @@ Built-in policies are shown directly inside the Policies page under the matching
 Guardrails configuration is stored under the app config directory:
 
 - `guardrails/guardrails.yaml`
+- `guardrails/builtin/*.yaml`
+- `guardrails/custom/*.yaml`
 - `guardrails/history.json`
 - `guardrails/db/guardrails.db`
 
@@ -24,11 +26,16 @@ The server still checks legacy flat config paths such as `guardrails.yaml` in th
 
 ## Config structure
 
-Guardrails config is policy-first:
+Guardrails config is policy-first. The root file owns groups and global settings,
+while imported child files own policy fragments:
 
 ```yaml
 strategy: most_severe
 error_strategy: review
+
+imports:
+  - builtin/filesystem_access.yaml
+  - custom/team_rules.yaml
 
 groups:
   - id: default
@@ -37,30 +44,34 @@ groups:
     severity: high
 
 policies:
-  - id: block-ssh-read
-    name: Block SSH directory reads
-    groups: [default]
-    kind: resource_access
-    enabled: true
-    scope:
-      scenarios: [claude_code]
-    match:
-      actions:
-        include: [read]
-      resources:
-        type: path
-        mode: prefix
-        values: ["~/.ssh", "/etc/ssh"]
-    verdict: block
-    reason: Reading SSH directories is blocked.
 ```
 
 ### Top-level fields
 
 - `strategy`: How multiple policy results are merged.
 - `error_strategy`: Fallback behavior if a policy evaluation fails.
+- `imports`: Additional policy fragment files, resolved relative to `guardrails.yaml`.
 - `groups`: Policy collections and activation buckets.
-- `policies`: Concrete guardrail rules.
+- `policies`: Optional concrete guardrail rules defined directly in the root file.
+
+### Imported policy files
+
+Imported child files are intentionally narrow:
+
+- they may declare `policies`
+- they must not declare `groups`
+- they must not declare `strategy`
+- they must not declare `error_strategy`
+- they must not declare nested `imports`
+
+This keeps group ownership centralized in `guardrails.yaml` and makes file boundaries predictable.
+
+Current limitation:
+
+- the raw config editor can manage `imports`
+- policy CRUD can now update imported policy fragments
+- new policies created from the UI are written to `guardrails/custom/policies.yaml`, and the root config will add the import automatically when needed
+- group CRUD still assumes root-file ownership and does not rewrite imported policy files
 
 ## Policy kinds
 
@@ -161,15 +172,26 @@ This means credential masking is driven directly by the Protected Credentials pa
 
 ## Built-in policies
 
-Built-in policies are shipped as templates and appear directly inside the Policies page.
+Built-in policies are shipped as embedded examples using the same standard policy format as runtime config fragments.
 
 Behavior:
 - built-ins start disabled
 - users can enable them manually
 - built-ins are not deletable from the UI
 
+At runtime, the intended layout is:
+
+- embedded builtins act as the catalog/example source
+- the first enable can materialize a policy file under `guardrails/builtin/`
+- project-specific policies live under `guardrails/custom/`
+
 ## Example file
 
-See the full example config here:
+See the root example config here:
 
 - `/Users/seviezhou/github/tingly-box/docs/examples/guardrails.yaml`
+
+Related imported fragments:
+
+- `/Users/seviezhou/github/tingly-box/docs/examples/builtin/filesystem_access.yaml`
+- `/Users/seviezhou/github/tingly-box/docs/examples/custom/team_rules.yaml`

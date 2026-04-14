@@ -152,6 +152,8 @@ type protectedCredentialMutationResponse struct {
 const (
 	guardrailsDirName         = "guardrails"
 	guardrailsConfigBaseName  = "guardrails"
+	guardrailsBuiltinDirName  = "builtin"
+	guardrailsCustomDirName   = "custom"
 	guardrailsDBDirName       = "db"
 	guardrailsDBFileName      = "guardrails.db"
 	guardrailsHistoryFileName = "history.json"
@@ -222,6 +224,12 @@ func marshalGuardrailsConfig(cfg guardrailscore.Config) ([]byte, error) {
 	return yaml.Marshal(guardrailsevaluate.StorageConfig(cfg))
 }
 
+func marshalGuardrailsPolicyFragment(cfg guardrailscore.Config) ([]byte, error) {
+	return yaml.Marshal(guardrailscore.Config{
+		Policies: cfg.Policies,
+	})
+}
+
 func countGuardrailsPolicies(cfg guardrailscore.Config) int {
 	return len(cfg.Policies)
 }
@@ -242,6 +250,14 @@ func GetGuardrailsHistoryPath(configDir string) string {
 
 func GetGuardrailsDBDir(configDir string) string {
 	return filepath.Join(GetGuardrailsDir(configDir), guardrailsDBDirName)
+}
+
+func GetGuardrailsCustomDir(configDir string) string {
+	return filepath.Join(GetGuardrailsDir(configDir), guardrailsCustomDirName)
+}
+
+func GetGuardrailsBuiltinDir(configDir string) string {
+	return filepath.Join(GetGuardrailsDir(configDir), guardrailsBuiltinDirName)
 }
 
 func GetGuardrailsDBPath(configDir string) string {
@@ -341,7 +357,7 @@ func (s *Server) GetGuardrailsConfig(c *gin.Context) {
 		return
 	}
 
-	cfg, err := decodeGuardrailsConfig(data)
+	cfg, err := guardrails.LoadConfig(path)
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
@@ -457,68 +473,73 @@ func (s *Server) UpdateGuardrailsPolicy(c *gin.Context) {
 		return
 	}
 
-	data, err := os.ReadFile(path)
+	rootCfg, importedCfgs, fullCfg, err := loadGuardrailsConfigSources(path)
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-
-	cfg, err := decodeGuardrailsConfig(data)
-	if err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-	if !guardrailsevaluate.IsPolicyConfig(cfg) {
+	if !guardrailsevaluate.IsPolicyConfig(fullCfg) {
 		c.JSON(400, gin.H{"success": false, "error": "policy editor APIs require a policy config"})
 		return
 	}
 
+	sourcePath, err := findGuardrailsPolicySourcePath(path, rootCfg, importedCfgs, policyID)
+	if err != nil {
+		c.JSON(404, gin.H{"success": false, "error": "policy not found"})
+		return
+	}
+
+	sourceCfg := rootCfg
+	if sourcePath != path {
+		sourceCfg = importedCfgs[sourcePath]
+	}
+
 	found := false
 	supportedScenarios := s.getGuardrailsSupportedScenarios()
-	for i := range cfg.Policies {
-		if cfg.Policies[i].ID != policyID {
+	for i := range sourceCfg.Policies {
+		if sourceCfg.Policies[i].ID != policyID {
 			continue
 		}
 		if req.ID != nil && strings.TrimSpace(*req.ID) != "" && *req.ID != policyID {
-			for _, existing := range cfg.Policies {
-				if existing.ID == *req.ID {
+			for _, existing := range fullCfg.Policies {
+				if existing.ID == *req.ID && existing.ID != policyID {
 					c.JSON(409, gin.H{"success": false, "error": "policy already exists"})
 					return
 				}
 			}
-			cfg.Policies[i].ID = *req.ID
+			sourceCfg.Policies[i].ID = *req.ID
 		}
 		if req.Name != nil {
-			cfg.Policies[i].Name = *req.Name
+			sourceCfg.Policies[i].Name = *req.Name
 		}
 		if req.Groups != nil {
 			nextGroups := normalizeGuardrailsPolicyGroups(*req.Groups)
-			if !guardrailsGroupsExist(cfg.Groups, nextGroups) {
+			if !guardrailsGroupsExist(fullCfg.Groups, nextGroups) {
 				c.JSON(400, gin.H{"success": false, "error": "one or more policy groups do not exist"})
 				return
 			}
-			cfg.Policies[i].Groups = nextGroups
+			sourceCfg.Policies[i].Groups = nextGroups
 		}
 		if req.Kind != nil && strings.TrimSpace(*req.Kind) != "" {
-			cfg.Policies[i].Kind = guardrailscore.PolicyKind(*req.Kind)
+			sourceCfg.Policies[i].Kind = guardrailscore.PolicyKind(*req.Kind)
 		}
 		if req.Enabled != nil {
-			cfg.Policies[i].Enabled = req.Enabled
+			sourceCfg.Policies[i].Enabled = req.Enabled
 		}
 		if req.Scope != nil {
-			cfg.Policies[i].Scope = normalizeGuardrailsPolicyScope(*req.Scope, supportedScenarios)
+			sourceCfg.Policies[i].Scope = normalizeGuardrailsPolicyScope(*req.Scope, supportedScenarios)
 		}
 		if req.Match != nil {
-			cfg.Policies[i].Match = *req.Match
+			sourceCfg.Policies[i].Match = *req.Match
 		}
 		if req.Verdict != nil {
-			cfg.Policies[i].Verdict = guardrailscore.Verdict(*req.Verdict)
+			sourceCfg.Policies[i].Verdict = guardrailscore.Verdict(*req.Verdict)
 		}
 		if req.Reason != nil {
-			cfg.Policies[i].Reason = *req.Reason
+			sourceCfg.Policies[i].Reason = *req.Reason
 		}
 		found = true
-		policyID = cfg.Policies[i].ID
+		policyID = sourceCfg.Policies[i].ID
 		break
 	}
 	if !found {
@@ -526,12 +547,26 @@ func (s *Server) UpdateGuardrailsPolicy(c *gin.Context) {
 		return
 	}
 
-	updated, err := marshalGuardrailsConfig(cfg)
+	if sourcePath == path {
+		rootCfg = sourceCfg
+	} else {
+		importedCfgs[sourcePath] = sourceCfg
+	}
+	mergedCfg := mergeGuardrailsImportedConfigs(rootCfg, importedCfgs, path)
+
+	updated, err := marshalGuardrailsPolicyFragment(sourceCfg)
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	if err := s.persistGuardrailsConfigAndReload(path, cfg, updated, "guardrails policy update"); err != nil {
+	if sourcePath == path {
+		updated, err = marshalGuardrailsConfig(sourceCfg)
+		if err != nil {
+			c.JSON(500, gin.H{"success": false, "error": err.Error()})
+			return
+		}
+	}
+	if err := s.persistGuardrailsFilesAndReload(mergedCfg, []guardrailsFileWrite{{Path: sourcePath, Data: updated}}, "guardrails policy update"); err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
 	}
@@ -539,7 +574,7 @@ func (s *Server) UpdateGuardrailsPolicy(c *gin.Context) {
 
 	c.JSON(200, guardrailsPolicyUpdateResponse{
 		Success:  true,
-		Path:     path,
+		Path:     sourcePath,
 		PolicyID: policyID,
 	})
 }
@@ -567,38 +602,37 @@ func (s *Server) CreateGuardrailsPolicy(c *gin.Context) {
 		return
 	}
 
-	data, err := os.ReadFile(path)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-
-	cfg := guardrailscore.Config{}
-	if len(data) > 0 {
-		cfg, err = decodeGuardrailsConfig(data)
+	rootCfg := guardrailscore.Config{}
+	importedCfgs := map[string]guardrailscore.Config{}
+	fullCfg := guardrailscore.Config{}
+	if _, err := os.Stat(path); err == nil {
+		rootCfg, importedCfgs, fullCfg, err = loadGuardrailsConfigSources(path)
 		if err != nil {
 			c.JSON(400, gin.H{"success": false, "error": err.Error()})
 			return
 		}
-		if !guardrailsevaluate.IsPolicyConfig(cfg) {
+		if !guardrailsevaluate.IsPolicyConfig(fullCfg) {
 			c.JSON(400, gin.H{"success": false, "error": "policy editor APIs require a policy config"})
 			return
 		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
 	}
 
-	for _, policy := range cfg.Policies {
+	for _, policy := range fullCfg.Policies {
 		if policy.ID == req.ID {
 			c.JSON(409, gin.H{"success": false, "error": "policy already exists"})
 			return
 		}
 	}
 	policyGroups := normalizeGuardrailsPolicyGroups(req.Groups)
-	if !guardrailsGroupsExist(cfg.Groups, policyGroups) {
+	if !guardrailsGroupsExist(fullCfg.Groups, policyGroups) {
 		c.JSON(400, gin.H{"success": false, "error": "one or more policy groups do not exist"})
 		return
 	}
 
-	cfg.Policies = append(cfg.Policies, guardrailscore.Policy{
+	newPolicy := guardrailscore.Policy{
 		ID:      req.ID,
 		Name:    req.Name,
 		Groups:  policyGroups,
@@ -608,14 +642,40 @@ func (s *Server) CreateGuardrailsPolicy(c *gin.Context) {
 		Match:   req.Match,
 		Verdict: guardrailscore.Verdict(req.Verdict),
 		Reason:  req.Reason,
-	})
+	}
 
-	updated, err := marshalGuardrailsConfig(cfg)
+	builtinIDs, err := builtinGuardrailsPolicyIDSet()
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	if err := s.persistGuardrailsConfigAndReload(path, cfg, updated, "guardrails policy create"); err != nil {
+
+	targetPath := filepath.Join(GetGuardrailsCustomDir(s.config.ConfigDir), "policies.yaml")
+	if _, isBuiltin := builtinIDs[newPolicy.ID]; isBuiltin {
+		targetPath = filepath.Join(GetGuardrailsBuiltinDir(s.config.ConfigDir), newPolicy.ID+".yaml")
+	}
+	rootUpdated := ensureGuardrailsImport(&rootCfg, path, targetPath)
+	targetCfg := importedCfgs[targetPath]
+	targetCfg.Policies = append(targetCfg.Policies, newPolicy)
+
+	importedCfgs[targetPath] = targetCfg
+	mergedCfg := mergeGuardrailsImportedConfigs(rootCfg, importedCfgs, path)
+
+	targetData, err := marshalGuardrailsPolicyFragment(targetCfg)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	writes := []guardrailsFileWrite{{Path: targetPath, Data: targetData}}
+	if rootUpdated {
+		rootData, err := marshalGuardrailsConfig(rootCfg)
+		if err != nil {
+			c.JSON(500, gin.H{"success": false, "error": err.Error()})
+			return
+		}
+		writes = append(writes, guardrailsFileWrite{Path: path, Data: rootData})
+	}
+	if err := s.persistGuardrailsFilesAndReload(mergedCfg, writes, "guardrails policy create"); err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
 	}
@@ -623,7 +683,7 @@ func (s *Server) CreateGuardrailsPolicy(c *gin.Context) {
 
 	c.JSON(200, guardrailsPolicyUpdateResponse{
 		Success:  true,
-		Path:     path,
+		Path:     targetPath,
 		PolicyID: req.ID,
 	})
 }
@@ -647,25 +707,30 @@ func (s *Server) DeleteGuardrailsPolicy(c *gin.Context) {
 		return
 	}
 
-	data, err := os.ReadFile(path)
+	rootCfg, importedCfgs, fullCfg, err := loadGuardrailsConfigSources(path)
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-
-	cfg, err := decodeGuardrailsConfig(data)
-	if err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-	if !guardrailsevaluate.IsPolicyConfig(cfg) {
+	if !guardrailsevaluate.IsPolicyConfig(fullCfg) {
 		c.JSON(400, gin.H{"success": false, "error": "policy editor APIs require a policy config"})
 		return
 	}
 
-	nextPolicies := make([]guardrailscore.Policy, 0, len(cfg.Policies))
+	sourcePath, err := findGuardrailsPolicySourcePath(path, rootCfg, importedCfgs, policyID)
+	if err != nil {
+		c.JSON(404, gin.H{"success": false, "error": "policy not found"})
+		return
+	}
+
+	sourceCfg := rootCfg
+	if sourcePath != path {
+		sourceCfg = importedCfgs[sourcePath]
+	}
+
+	nextPolicies := make([]guardrailscore.Policy, 0, len(sourceCfg.Policies))
 	found := false
-	for _, policy := range cfg.Policies {
+	for _, policy := range sourceCfg.Policies {
 		if policy.ID == policyID {
 			found = true
 			continue
@@ -676,14 +741,28 @@ func (s *Server) DeleteGuardrailsPolicy(c *gin.Context) {
 		c.JSON(404, gin.H{"success": false, "error": "policy not found"})
 		return
 	}
-	cfg.Policies = nextPolicies
+	sourceCfg.Policies = nextPolicies
 
-	updated, err := marshalGuardrailsConfig(cfg)
+	if sourcePath == path {
+		rootCfg = sourceCfg
+	} else {
+		importedCfgs[sourcePath] = sourceCfg
+	}
+	mergedCfg := mergeGuardrailsImportedConfigs(rootCfg, importedCfgs, path)
+
+	updated, err := marshalGuardrailsPolicyFragment(sourceCfg)
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	if err := s.persistGuardrailsConfigAndReload(path, cfg, updated, "guardrails policy delete"); err != nil {
+	if sourcePath == path {
+		updated, err = marshalGuardrailsConfig(sourceCfg)
+		if err != nil {
+			c.JSON(500, gin.H{"success": false, "error": err.Error()})
+			return
+		}
+	}
+	if err := s.persistGuardrailsFilesAndReload(mergedCfg, []guardrailsFileWrite{{Path: sourcePath, Data: updated}}, "guardrails policy delete"); err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
 	}
@@ -691,7 +770,7 @@ func (s *Server) DeleteGuardrailsPolicy(c *gin.Context) {
 
 	c.JSON(200, guardrailsPolicyUpdateResponse{
 		Success:  true,
-		Path:     path,
+		Path:     sourcePath,
 		PolicyID: policyID,
 	})
 }
@@ -736,6 +815,10 @@ func (s *Server) UpdateGuardrailsGroup(c *gin.Context) {
 	}
 	if !guardrailsevaluate.IsPolicyConfig(cfg) {
 		c.JSON(400, gin.H{"success": false, "error": "group editor APIs require a policy config"})
+		return
+	}
+	if err := validateInlineGuardrailsEditing(cfg, "group"); err != nil {
+		c.JSON(400, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
@@ -841,6 +924,10 @@ func (s *Server) CreateGuardrailsGroup(c *gin.Context) {
 			c.JSON(400, gin.H{"success": false, "error": "group editor APIs require a policy config"})
 			return
 		}
+		if err := validateInlineGuardrailsEditing(cfg, "group"); err != nil {
+			c.JSON(400, gin.H{"success": false, "error": err.Error()})
+			return
+		}
 	}
 
 	for _, group := range cfg.Groups {
@@ -911,6 +998,10 @@ func (s *Server) DeleteGuardrailsGroup(c *gin.Context) {
 	}
 	if !guardrailsevaluate.IsPolicyConfig(cfg) {
 		c.JSON(400, gin.H{"success": false, "error": "group editor APIs require a policy config"})
+		return
+	}
+	if err := validateInlineGuardrailsEditing(cfg, "group"); err != nil {
+		c.JSON(400, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
@@ -1179,6 +1270,135 @@ func decodeGuardrailsConfig(data []byte) (guardrailscore.Config, error) {
 	return cfg, fmt.Errorf("invalid guardrails config: failed to decode yaml or json")
 }
 
+func validateInlineGuardrailsEditing(cfg guardrailscore.Config, resource string) error {
+	if len(cfg.Imports) > 0 {
+		return fmt.Errorf("%s editor APIs do not support guardrails configs with imports; edit guardrails.yaml directly", resource)
+	}
+	return nil
+}
+
+func decodeGuardrailsConfigFile(data []byte) (guardrailscore.Config, error) {
+	var cfg guardrailscore.Config
+	if err := yaml.Unmarshal(data, &cfg); err == nil {
+		return cfg, nil
+	}
+	if err := json.Unmarshal(data, &cfg); err == nil {
+		return cfg, nil
+	}
+	return cfg, fmt.Errorf("invalid guardrails config: failed to decode yaml or json")
+}
+
+func loadGuardrailsConfigFile(path string) (guardrailscore.Config, error) {
+	var cfg guardrailscore.Config
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return cfg, err
+	}
+	return decodeGuardrailsConfigFile(data)
+}
+
+func resolveGuardrailsImportPath(rootPath, importPath string) string {
+	if filepath.IsAbs(importPath) {
+		return importPath
+	}
+	return filepath.Join(filepath.Dir(rootPath), importPath)
+}
+
+func mergeGuardrailsImportedConfigs(rootCfg guardrailscore.Config, imported map[string]guardrailscore.Config, rootPath string) guardrailscore.Config {
+	merged := rootCfg
+	merged.Policies = append([]guardrailscore.Policy(nil), rootCfg.Policies...)
+	for _, importPath := range rootCfg.Imports {
+		resolved := resolveGuardrailsImportPath(rootPath, importPath)
+		child, ok := imported[resolved]
+		if !ok {
+			continue
+		}
+		merged.Policies = append(merged.Policies, child.Policies...)
+	}
+	return merged
+}
+
+func loadGuardrailsConfigSources(rootPath string) (guardrailscore.Config, map[string]guardrailscore.Config, guardrailscore.Config, error) {
+	var zero guardrailscore.Config
+
+	rootCfg, err := loadGuardrailsConfigFile(rootPath)
+	if err != nil {
+		return zero, nil, zero, err
+	}
+
+	imported := make(map[string]guardrailscore.Config, len(rootCfg.Imports))
+	for _, importPath := range rootCfg.Imports {
+		if strings.TrimSpace(importPath) == "" {
+			continue
+		}
+		resolved := resolveGuardrailsImportPath(rootPath, importPath)
+		childCfg, err := loadGuardrailsConfigFile(resolved)
+		if err != nil {
+			return zero, nil, zero, err
+		}
+		imported[resolved] = childCfg
+	}
+
+	merged, err := guardrails.LoadConfig(rootPath)
+	if err != nil {
+		return zero, nil, zero, err
+	}
+	return rootCfg, imported, merged, nil
+}
+
+func findGuardrailsPolicySourcePath(rootPath string, rootCfg guardrailscore.Config, imported map[string]guardrailscore.Config, policyID string) (string, error) {
+	for _, policy := range rootCfg.Policies {
+		if policy.ID == policyID {
+			return rootPath, nil
+		}
+	}
+	for _, importPath := range rootCfg.Imports {
+		resolved := resolveGuardrailsImportPath(rootPath, importPath)
+		childCfg, ok := imported[resolved]
+		if !ok {
+			continue
+		}
+		for _, policy := range childCfg.Policies {
+			if policy.ID == policyID {
+				return resolved, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("policy not found")
+}
+
+func builtinGuardrailsPolicyIDSet() (map[string]struct{}, error) {
+	policies, err := guardrails.LoadBuiltinPolicies()
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]struct{}, len(policies))
+	for _, policy := range policies {
+		out[policy.ID] = struct{}{}
+	}
+	return out, nil
+}
+
+func ensureGuardrailsImport(rootCfg *guardrailscore.Config, rootPath, targetPath string) bool {
+	relPath, err := filepath.Rel(filepath.Dir(rootPath), targetPath)
+	if err != nil {
+		relPath = targetPath
+	}
+	relPath = filepath.ToSlash(relPath)
+	for _, importPath := range rootCfg.Imports {
+		if resolveGuardrailsImportPath(rootPath, importPath) == targetPath {
+			return false
+		}
+	}
+	rootCfg.Imports = append(rootCfg.Imports, relPath)
+	return true
+}
+
+type guardrailsFileWrite struct {
+	Path string
+	Data []byte
+}
+
 func ensureGuardrailsPath(configDir string) (string, error) {
 	path, err := FindGuardrailsConfig(configDir)
 	if err == nil {
@@ -1204,12 +1424,54 @@ func (s *Server) rebuildGuardrailsRuntime(cfg guardrailscore.Config, context str
 }
 
 func (s *Server) persistGuardrailsConfigAndReload(path string, cfg guardrailscore.Config, data []byte, context string) error {
-	policy, err := guardrailsevaluate.BuildPolicyEngine(cfg, guardrailsevaluate.Dependencies{})
+	policy, err := buildGuardrailsPolicyEngineForConfigData(path, cfg, data)
 	if err != nil {
 		return err
 	}
 	if err := writeFileAtomic(path, data); err != nil {
 		return err
+	}
+	s.setGuardrailsRuntime(&guardrails.Guardrails{Policy: policy}, context)
+	return nil
+}
+
+func buildGuardrailsPolicyEngineForConfigData(path string, cfg guardrailscore.Config, data []byte) (*guardrailsevaluate.PolicyEngine, error) {
+	if len(cfg.Imports) == 0 {
+		return guardrailsevaluate.BuildPolicyEngine(cfg, guardrailsevaluate.Dependencies{})
+	}
+
+	dir := filepath.Dir(path)
+	pattern := "guardrails-config-*" + filepath.Ext(path)
+	tmp, err := os.CreateTemp(dir, pattern)
+	if err != nil {
+		return nil, err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return nil, err
+	}
+	if err := tmp.Close(); err != nil {
+		return nil, err
+	}
+
+	resolvedCfg, err := guardrails.LoadConfig(tmpPath)
+	if err != nil {
+		return nil, err
+	}
+	return guardrailsevaluate.BuildPolicyEngine(resolvedCfg, guardrailsevaluate.Dependencies{})
+}
+
+func (s *Server) persistGuardrailsFilesAndReload(mergedCfg guardrailscore.Config, writes []guardrailsFileWrite, context string) error {
+	policy, err := guardrailsevaluate.BuildPolicyEngine(mergedCfg, guardrailsevaluate.Dependencies{})
+	if err != nil {
+		return err
+	}
+	for _, write := range writes {
+		if err := writeFileAtomic(write.Path, write.Data); err != nil {
+			return err
+		}
 	}
 	s.setGuardrailsRuntime(&guardrails.Guardrails{Policy: policy}, context)
 	return nil

@@ -74,7 +74,15 @@ func validatePolicyConfig(cfg guardrailscore.Config) error {
 		groupByID[group.ID] = group
 	}
 
+	seenPolicyIDs := make(map[string]struct{}, len(cfg.Policies))
 	for _, policy := range cfg.Policies {
+		if policy.ID == "" {
+			return fmt.Errorf("policy id is required")
+		}
+		if _, exists := seenPolicyIDs[policy.ID]; exists {
+			return fmt.Errorf("duplicate policy id: %s", policy.ID)
+		}
+		seenPolicyIDs[policy.ID] = struct{}{}
 		if _, err := buildPolicyEvaluator(policy, groupByID, Dependencies{}); err != nil {
 			return err
 		}
@@ -86,4 +94,3 @@ func validatePolicyConfig(cfg guardrailscore.Config) error {
 func boolPtr(value bool) *bool {
 	return &value
 }
-
