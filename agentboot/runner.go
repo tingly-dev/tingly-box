@@ -154,9 +154,9 @@ func (r *Runner) run(
 		}
 	}()
 	mitmRunner.InputSource = inputSource
-	defer inputSource.Close()
 
 	var processIntentionallyKilled bool
+	var inputSourceClosed bool
 
 	write := func(msg any) error {
 		return inputSource.WriteWait(ctx, msg)
@@ -181,6 +181,11 @@ func (r *Runner) run(
 			processIntentionallyKilled = true
 			_ = cmd.Process.Kill()
 			logrus.Debugf("runner: killed process %d after result event", cmd.Process.Pid)
+			// Close inputSource to unblock handleInput goroutine
+			if !inputSourceClosed {
+				inputSource.Close()
+				inputSourceClosed = true
+			}
 			return &mitm.OutputResult{Action: mitm.Stop}, nil
 
 		default:
@@ -199,6 +204,11 @@ func (r *Runner) run(
 
 	runErr := mitmRunner.Run(ctx)
 	<-feederDone
+
+	// Close inputSource if not already closed
+	if !inputSourceClosed {
+		inputSource.Close()
+	}
 
 	if runErr != nil && processIntentionallyKilled {
 		if exitErr, ok := runErr.(*exec.ExitError); ok {
