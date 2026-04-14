@@ -195,6 +195,7 @@ const GuardrailsRulesPage = () => {
     const [builtins, setBuiltins] = useState<BuiltinTemplate[]>([]);
     const [pendingPolicyId, setPendingPolicyId] = useState<string | null>(null);
     const [pendingSave, setPendingSave] = useState(false);
+    const [pendingBulkPolicyAction, setPendingBulkPolicyAction] = useState<'enable' | 'disable' | null>(null);
     const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null);
     const [isNewPolicy, setIsNewPolicy] = useState(false);
     const [editorOpen, setEditorOpen] = useState(false);
@@ -292,10 +293,16 @@ const GuardrailsRulesPage = () => {
     };
     const effectiveListValues = (field: EditorListField, rawValue: string) => {
         const oversized = oversizedListFields[field];
-        if (oversized) {
-            return oversized.values;
+        if (!oversized) {
+            return splitLines(rawValue);
         }
-        return splitLines(rawValue);
+        const rawRows = textListRows(rawValue);
+        const editablePrefixCount = Math.max(0, rawRows.length - oversized.preview.length);
+        const additions = rawRows
+            .slice(0, editablePrefixCount)
+            .map((item) => item.trim())
+            .filter(Boolean);
+        return [...additions, ...oversized.values];
     };
     const normalizeGroup = (value?: string) => value?.trim() || DEFAULT_GROUP_ID;
     const normalizePolicyGroups = (values?: string[]) => {
@@ -310,6 +317,13 @@ const GuardrailsRulesPage = () => {
             out.push(next);
         });
         return out;
+    };
+    const ensureDefaultGroupMembership = (values?: string[]) => {
+        const groups = normalizePolicyGroups(values);
+        if (groups.includes(DEFAULT_GROUP_ID)) {
+            return groups;
+        }
+        return [DEFAULT_GROUP_ID, ...groups];
     };
 
     const toggleValue = (values: string[], value: string) => {
@@ -349,7 +363,9 @@ const GuardrailsRulesPage = () => {
     const buildBuiltinPayload = (builtin: BuiltinTemplate, enabled: boolean): GuardrailsPolicy => ({
         id: builtin.policy?.id || builtin.id,
         name: builtin.policy?.name || builtin.name,
-        groups: normalizePolicyGroups(builtin.policy?.groups),
+        groups: enabled
+            ? ensureDefaultGroupMembership(builtin.policy?.groups)
+            : normalizePolicyGroups(builtin.policy?.groups),
         kind: builtin.policy?.kind || builtin.kind,
         enabled,
         scope: builtin.policy?.scope || { scenarios: [] },
@@ -427,6 +443,24 @@ const GuardrailsRulesPage = () => {
         () => displayPolicies.filter((policy) => policy.kind === 'content'),
         [displayPolicies]
     );
+    const selectedTabPolicies = useMemo(() => {
+        if (selectedPolicyTab === 'resource_access') {
+            return resourceAccessPolicies;
+        }
+        if (selectedPolicyTab === 'command_execution') {
+            return commandExecutionPolicies;
+        }
+        return contentPolicies;
+    }, [commandExecutionPolicies, contentPolicies, resourceAccessPolicies, selectedPolicyTab]);
+    const selectedTabLabel = useMemo(() => {
+        if (selectedPolicyTab === 'resource_access') {
+            return 'Resource Access';
+        }
+        if (selectedPolicyTab === 'command_execution') {
+            return 'Command Execution';
+        }
+        return 'Privacy';
+    }, [selectedPolicyTab]);
 
     const getEffectivePolicyState = (policy: GuardrailsPolicy) => {
         const policyGroups = normalizePolicyGroups(policy.groups);
@@ -435,6 +469,18 @@ const GuardrailsRulesPage = () => {
             inheritedDisabled: noActiveGroup,
             visibleEnabled: policy.enabled !== false && !noActiveGroup,
         };
+    };
+    const policyNeedsEnableWithDefault = (policy: DisplayPolicy) => {
+        const installedPolicy = policies.find((item) => item.id === policy.id);
+        if (!installedPolicy) {
+            return policy.isBuiltin;
+        }
+        const groups = normalizePolicyGroups(installedPolicy.groups);
+        return installedPolicy.enabled === false || !groups.includes(DEFAULT_GROUP_ID);
+    };
+    const policyNeedsDisable = (policy: DisplayPolicy) => {
+        const installedPolicy = policies.find((item) => item.id === policy.id);
+        return Boolean(installedPolicy && installedPolicy.enabled !== false);
     };
 
     const generatePolicyId = (name: string, kind: EditorState['kind'], currentId?: string) => {
@@ -915,20 +961,32 @@ const GuardrailsRulesPage = () => {
             const result =
                 !installedPolicy && builtin
                     ? await api.createGuardrailsPolicy(buildBuiltinPayload(builtin, enabled))
-                    : await api.updateGuardrailsPolicy(policyId, { enabled });
+                    : await api.updateGuardrailsPolicy(policyId, {
+                          enabled,
+                          ...(enabled
+                              ? { groups: ensureDefaultGroupMembership(installedPolicy?.groups) }
+                              : {}),
+                      });
             if (!result?.success) {
                 setActionMessage({ type: 'error', text: result?.error || 'Failed to update policy' });
                 return;
             }
             await loadPolicies(true);
             if (selectedPolicyId === policyId) {
-                setEditorState((state) => ({ ...state, enabled }));
+                setEditorState((state) => ({
+                    ...state,
+                    enabled,
+                    groups: enabled ? ensureDefaultGroupMembership(state.groups) : state.groups,
+                }));
                 setEditorSnapshot((snapshot) => {
                     if (!snapshot) {
                         return snapshot;
                     }
                     const nextSnapshot = JSON.parse(snapshot);
                     nextSnapshot.enabled = enabled;
+                    if (enabled) {
+                        nextSnapshot.groups = ensureDefaultGroupMembership(nextSnapshot.groups);
+                    }
                     return JSON.stringify(nextSnapshot);
                 });
             }
@@ -937,6 +995,92 @@ const GuardrailsRulesPage = () => {
             setActionMessage({ type: 'error', text: error?.message || 'Failed to update policy' });
         } finally {
             setPendingPolicyId(null);
+        }
+    };
+
+    const handleSetPoliciesEnabled = async (enabled: boolean) => {
+        try {
+            setPendingBulkPolicyAction(enabled ? 'enable' : 'disable');
+            const policiesToUpdate = selectedTabPolicies.filter((policy) =>
+                enabled ? policyNeedsEnableWithDefault(policy) : policyNeedsDisable(policy)
+            );
+            if (policiesToUpdate.length === 0) {
+                setActionMessage({
+                    type: 'success',
+                    text: enabled
+                        ? `All ${selectedTabLabel} policies are already enabled and assigned to Default.`
+                        : `All ${selectedTabLabel} policies are already disabled.`,
+                });
+                return;
+            }
+            const results: Array<{ id: string; result: any }> = [];
+            for (const policy of policiesToUpdate) {
+                const builtin = builtinMap.get(policy.id);
+                const installedPolicy = policies.find((item) => item.id === policy.id);
+                if (enabled && !installedPolicy && builtin) {
+                    results.push({
+                        id: policy.id,
+                        result: await api.createGuardrailsPolicy(buildBuiltinPayload(builtin, true)),
+                    });
+                    continue;
+                }
+                results.push({
+                    id: policy.id,
+                    result: await api.updateGuardrailsPolicy(policy.id, {
+                        enabled,
+                        ...(enabled
+                            ? { groups: ensureDefaultGroupMembership(installedPolicy?.groups) }
+                            : {}),
+                    }),
+                });
+            }
+
+            const failed = results.filter(({ result }) => !result?.success);
+            await loadPolicies(true);
+
+            if (selectedPolicyId) {
+                const selected = displayPolicies.find((policy) => policy.id === selectedPolicyId);
+                if (selected) {
+                    setEditorState((state) => ({
+                        ...state,
+                        enabled,
+                        groups: enabled ? ensureDefaultGroupMembership(state.groups) : state.groups,
+                    }));
+                    setEditorSnapshot((snapshot) => {
+                        if (!snapshot) {
+                            return snapshot;
+                        }
+                        const nextSnapshot = JSON.parse(snapshot);
+                        nextSnapshot.enabled = enabled;
+                        if (enabled) {
+                            nextSnapshot.groups = ensureDefaultGroupMembership(nextSnapshot.groups);
+                        }
+                        return JSON.stringify(nextSnapshot);
+                    });
+                }
+            }
+
+            if (failed.length > 0) {
+                setActionMessage({
+                    type: 'error',
+                    text: `${enabled ? 'Enabled' : 'Disabled'} ${results.length - failed.length} ${selectedTabLabel} policies. ${failed.length} failed.`,
+                });
+                return;
+            }
+
+            setActionMessage({
+                type: 'success',
+                text: enabled
+                    ? `Enabled ${results.length} ${selectedTabLabel} policies and assigned them to Default.`
+                    : `Disabled ${results.length} ${selectedTabLabel} policies.`,
+            });
+        } catch (error: any) {
+            setActionMessage({
+                type: 'error',
+                text: error?.message || `Failed to ${enabled ? 'enable' : 'disable'} ${selectedTabLabel.toLowerCase()} policies`,
+            });
+        } finally {
+            setPendingBulkPolicyAction(null);
         }
     };
 
@@ -1181,9 +1325,9 @@ const GuardrailsRulesPage = () => {
         const rows = textListRows(value);
         const isEmpty = rows.length === 1 && rows[0] === '';
         const showEmptyState = isEmpty && selectedIndex < 0;
-        const canRemove = !showEmptyState && !oversizedField;
         const visibleRows = showEmptyState ? [] : rows;
-        const isReadOnly = Boolean(oversizedField);
+        const editablePrefixCount = oversizedField ? Math.max(0, rows.length - oversizedField.preview.length) : rows.length;
+        const canRemove = !showEmptyState && (!oversizedField || selectedIndex < editablePrefixCount);
 
         return (
             <Stack spacing={1.5}>
@@ -1197,6 +1341,8 @@ const GuardrailsRulesPage = () => {
                     <Stack
                         direction="row"
                         spacing={0.5}
+                        justifyContent="space-between"
+                        alignItems="center"
                         sx={{
                             px: 1,
                             py: 0.5,
@@ -1205,41 +1351,50 @@ const GuardrailsRulesPage = () => {
                             bgcolor: 'action.hover',
                         }}
                     >
-                        <IconButton
-                            size="small"
-                            color="primary"
-                            disabled={isReadOnly}
-                            onClick={() => {
-                                if (showEmptyState) {
-                                    onSelectedIndexChange(0);
-                                    return;
-                                }
-                                onChange(appendTextListValue(value));
-                                onSelectedIndexChange(rows.length);
-                            }}
-                        >
-                            <Add fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                            size="small"
-                            disabled={!canRemove}
-                            onClick={() => {
-                                if (showEmptyState) {
-                                    return;
-                                }
-                                const index = Math.min(selectedIndex, rows.length - 1);
-                                const nextValue = removeTextListValue(value, index);
-                                onChange(nextValue);
-                                const nextRows = textListRows(nextValue);
-                                if (nextRows.length === 1 && nextRows[0] === '') {
-                                    onSelectedIndexChange(-1);
-                                } else {
-                                    onSelectedIndexChange(Math.max(0, Math.min(selectedIndex - 1, nextRows.length - 1)));
-                                }
-                            }}
-                        >
-                            <Remove fontSize="small" />
-                        </IconButton>
+                        <Stack direction="row" spacing={0.5}>
+                            <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={() => {
+                                    if (showEmptyState) {
+                                        onSelectedIndexChange(0);
+                                        return;
+                                    }
+                                    if (oversizedField) {
+                                        onChange(['', ...rows].join('\n'));
+                                        onSelectedIndexChange(0);
+                                        return;
+                                    }
+                                    onChange(appendTextListValue(value));
+                                    onSelectedIndexChange(rows.length);
+                                }}
+                            >
+                                <Add fontSize="small" />
+                            </IconButton>
+                            <IconButton
+                                size="small"
+                                disabled={!canRemove}
+                                onClick={() => {
+                                    if (showEmptyState) {
+                                        return;
+                                    }
+                                    if (oversizedField && selectedIndex >= editablePrefixCount) {
+                                        return;
+                                    }
+                                    const index = Math.min(selectedIndex, rows.length - 1);
+                                    const nextValue = removeTextListValue(value, index);
+                                    onChange(nextValue);
+                                    const nextRows = textListRows(nextValue);
+                                    if (nextRows.length === 1 && nextRows[0] === '') {
+                                        onSelectedIndexChange(-1);
+                                    } else {
+                                        onSelectedIndexChange(Math.max(0, Math.min(selectedIndex - 1, nextRows.length - 1)));
+                                    }
+                                }}
+                            >
+                                <Remove fontSize="small" />
+                            </IconButton>
+                        </Stack>
                     </Stack>
                     <Table size="small">
                         <TableHead>
@@ -1267,7 +1422,7 @@ const GuardrailsRulesPage = () => {
                                             <InputBase
                                                 fullWidth
                                                 value={item}
-                                                readOnly={isReadOnly}
+                                                readOnly={Boolean(oversizedField) && index >= editablePrefixCount}
                                                 placeholder={index === 0 ? placeholder : 'Add another entry'}
                                                 onFocus={() => onSelectedIndexChange(index)}
                                                 onChange={(e) => onChange(updateTextListValue(value, index, e.target.value))}
@@ -1282,7 +1437,7 @@ const GuardrailsRulesPage = () => {
                 </TableContainer>
                 <FormHelperText>
                     {oversizedField
-                        ? `This field contains ${oversizedField.total.toLocaleString()} entries. Showing the first ${oversizedField.preview.length}. Inline editing is disabled to keep the page responsive. Saving preserves the full list.`
+                        ? `This field contains ${oversizedField.total.toLocaleString()} entries. Showing the first ${oversizedField.preview.length} existing entries. Existing rows stay read-only, but you can prepend new entries without loading the full list. Saving preserves the rest of the list.`
                         : helperText}
                 </FormHelperText>
             </Stack>
@@ -1442,6 +1597,22 @@ const GuardrailsRulesPage = () => {
                     size="full"
                     rightAction={
                         <Stack direction="row" spacing={1}>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => handleSetPoliciesEnabled(true)}
+                                disabled={pendingBulkPolicyAction !== null || selectedTabPolicies.length === 0}
+                            >
+                                Enable All
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => handleSetPoliciesEnabled(false)}
+                                disabled={pendingBulkPolicyAction !== null || selectedTabPolicies.length === 0}
+                            >
+                                Disable All
+                            </Button>
                             <Button
                                 variant="contained"
                                 size="small"
