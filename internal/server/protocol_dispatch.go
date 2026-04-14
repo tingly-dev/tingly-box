@@ -140,9 +140,8 @@ func (s *Server) dispatchChainResultToAnthropicV1(
 
 		// response guardrails
 		_, _, _, _, scenario, _, _ := GetTrackingContext(c)
-		blocked := false
 		if s.guardrailsEnabledForScenario(scenario) {
-			blocked = s.applyGuardrailsToAnthropicV1NonStreamResponse(c, req, actualModel, provider, anthropicResp)
+			s.applyGuardrailsToAnthropicV1NonStreamResponse(c, req, actualModel, provider, anthropicResp)
 		}
 
 		if recorder != nil {
@@ -205,9 +204,8 @@ func (s *Server) dispatchChainResultToAnthropicBeta(
 
 		// response guardrails
 		_, _, _, _, scenario, _, _ := GetTrackingContext(c)
-		blocked := false
 		if s.guardrailsEnabledForScenario(scenario) {
-			blocked = s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, req, actualModel, provider, anthropicResp)
+			s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, req, actualModel, provider, anthropicResp)
 		}
 
 		if recorder != nil {
