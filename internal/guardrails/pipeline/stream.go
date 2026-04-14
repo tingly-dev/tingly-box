@@ -1,35 +1,40 @@
-package server
+package pipeline
 
 import (
 	"context"
+	"sync"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
-	"sync"
-
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/internal/guardrails"
+	guardrails "github.com/tingly-dev/tingly-box/internal/guardrails"
 	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	guardrailsmutate "github.com/tingly-dev/tingly-box/internal/guardrails/mutate"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
-func NewGuardrailsHooks(ctx context.Context, runtime *guardrails.Guardrails, baseInput guardrailscore.Input, streamState *protocol.GuardrailsStreamState) (onStreamEvent func(event interface{}) error, onStreamError func(err error)) {
+// NewGuardrailsHooks builds the request-scoped stream hooks used for early
+// tool_use interception. Server wiring passes in the already-prepared guardrails
+// input and stream state; the hook itself stays inside guardrails.
+func NewGuardrailsHooks(
+	ctx context.Context,
+	runtime *guardrails.Guardrails,
+	baseInput guardrailscore.Input,
+	streamState *protocol.GuardrailsStreamState,
+) (onStreamEvent func(event interface{}) error, onStreamError func(err error)) {
 	if runtime == nil || runtime.Policy == nil {
 		return nil, nil
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
+
 	acc := &guardrailsadapter.StreamAccumulator{}
 	var mu sync.Mutex
 
-	// Stream guardrails now only perform early tool_use interception. Final
-	// response-wide evaluation has been removed, so each event only needs to
-	// update the accumulator and check whether a complete tool call is ready.
 	onStreamEvent = func(event interface{}) error {
 		mu.Lock()
 		defer mu.Unlock()
@@ -44,12 +49,14 @@ func NewGuardrailsHooks(ctx context.Context, runtime *guardrails.Guardrails, bas
 				commandName = command.Name
 				commandArgs = command.Arguments
 			}
+
 			input := baseInput
 			input.Direction = guardrailscore.DirectionResponse
 			input.Content = guardrailscore.Content{
 				Messages: input.Content.Messages,
 				Command:  command,
 			}
+
 			result, err := runtime.Evaluate(ctx, input)
 			if err == nil && result.Verdict == guardrailscore.VerdictBlock {
 				handleGuardrailsBlock(
@@ -92,7 +99,14 @@ func ingestGuardrailsStreamEvent(acc *guardrailsadapter.StreamAccumulator, event
 	}
 }
 
-func handleGuardrailsBlock(runtime *guardrails.Guardrails, input guardrailscore.Input, streamState *protocol.GuardrailsStreamState, toolID string, blockIndex int, blockMessage string) {
+func handleGuardrailsBlock(
+	runtime *guardrails.Guardrails,
+	input guardrailscore.Input,
+	streamState *protocol.GuardrailsStreamState,
+	toolID string,
+	blockIndex int,
+	blockMessage string,
+) {
 	if toolID == "" || blockMessage == "" {
 		return
 	}
