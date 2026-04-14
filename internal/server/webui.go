@@ -736,7 +736,7 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithTags("guardrails"),
 	)
 	apiV1.GET("/guardrails/builtins", s.GetGuardrailsBuiltins,
-		swagger.WithDescription("Get curated builtin guardrails policy templates"),
+		swagger.WithDescription("Get curated builtin guardrails policies"),
 		swagger.WithTags("guardrails"),
 	)
 	apiV1.GET("/guardrails/credentials", s.GetGuardrailsCredentials,

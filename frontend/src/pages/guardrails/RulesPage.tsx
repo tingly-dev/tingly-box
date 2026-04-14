@@ -88,17 +88,6 @@ type GuardrailsPolicy = {
     reason?: string;
 };
 
-type BuiltinTemplate = {
-    id: string;
-    name: string;
-    summary?: string;
-    description?: string;
-    kind: 'resource_access' | 'command_execution' | 'content';
-    topic?: string;
-    tags?: string[];
-    policy: any;
-};
-
 type DisplayPolicy = GuardrailsPolicy & {
     isBuiltin?: boolean;
     builtinSummary?: string;
@@ -192,7 +181,7 @@ const GuardrailsRulesPage = () => {
     const [supportedScenarios, setSupportedScenarios] = useState<string[]>([]);
     const [groups, setGroups] = useState<PolicyGroup[]>([]);
     const [policies, setPolicies] = useState<GuardrailsPolicy[]>([]);
-    const [builtins, setBuiltins] = useState<BuiltinTemplate[]>([]);
+    const [builtins, setBuiltins] = useState<GuardrailsPolicy[]>([]);
     const [pendingPolicyId, setPendingPolicyId] = useState<string | null>(null);
     const [pendingSave, setPendingSave] = useState(false);
     const [pendingBulkPolicyAction, setPendingBulkPolicyAction] = useState<'enable' | 'disable' | null>(null);
@@ -360,18 +349,18 @@ const GuardrailsRulesPage = () => {
         return items.join('\n');
     };
 
-    const buildBuiltinPayload = (builtin: BuiltinTemplate, enabled: boolean): GuardrailsPolicy => ({
-        id: builtin.policy?.id || builtin.id,
-        name: builtin.policy?.name || builtin.name,
+    const buildBuiltinPayload = (builtin: GuardrailsPolicy, enabled: boolean): GuardrailsPolicy => ({
+        id: builtin.id,
+        name: builtin.name,
         groups: enabled
-            ? ensureDefaultGroupMembership(builtin.policy?.groups)
-            : normalizePolicyGroups(builtin.policy?.groups),
-        kind: builtin.policy?.kind || builtin.kind,
+            ? ensureDefaultGroupMembership(builtin.groups)
+            : normalizePolicyGroups(builtin.groups),
+        kind: builtin.kind,
         enabled,
-        scope: builtin.policy?.scope || { scenarios: [] },
-        match: builtin.policy?.match || {},
-        verdict: builtin.policy?.verdict || 'block',
-        reason: builtin.policy?.reason || '',
+        scope: builtin.scope || { scenarios: [] },
+        match: builtin.match || {},
+        verdict: builtin.verdict || 'block',
+        reason: builtin.reason || '',
     });
 
     const isEditorDirty = useMemo(() => {
@@ -403,7 +392,7 @@ const GuardrailsRulesPage = () => {
         const merged: DisplayPolicy[] = policies.map((policy) => ({
             ...policy,
             isBuiltin: builtinMap.has(policy.id),
-            builtinSummary: builtinMap.get(policy.id)?.summary || builtinMap.get(policy.id)?.description,
+            builtinSummary: builtinMap.get(policy.id)?.reason,
         }));
         for (const builtin of builtins) {
             if (installedPolicyIds.has(builtin.id)) {
@@ -411,16 +400,16 @@ const GuardrailsRulesPage = () => {
             }
             merged.push({
                 id: builtin.id,
-                name: builtin.policy?.name || builtin.name,
+                name: builtin.name,
                 groups: [],
                 kind: builtin.kind,
                 enabled: false,
-                scope: builtin.policy?.scope,
-                match: builtin.policy?.match,
-                verdict: builtin.policy?.verdict || 'block',
-                reason: builtin.policy?.reason || '',
+                scope: builtin.scope,
+                match: builtin.match,
+                verdict: builtin.verdict || 'block',
+                reason: builtin.reason || '',
                 isBuiltin: true,
-                builtinSummary: builtin.summary || builtin.description,
+                builtinSummary: builtin.reason,
             });
         }
         const rank = (policy: DisplayPolicy) => (policy.enabled !== false ? 0 : 1);
@@ -683,7 +672,7 @@ const GuardrailsRulesPage = () => {
             setSupportedScenarios(scenarios);
             setGroups(Array.isArray(config.groups) ? config.groups : []);
             setPolicies(Array.isArray(config.policies) ? config.policies : []);
-            setBuiltins(Array.isArray(builtinResponse?.templates) ? builtinResponse.templates : []);
+            setBuiltins(Array.isArray(builtinResponse?.policies) ? builtinResponse.policies : []);
             setLoadError(null);
         } catch (error) {
             console.error('Failed to load guardrails config:', error);

@@ -49,7 +49,7 @@ type guardrailsReloadResponse struct {
 }
 
 type guardrailsBuiltinsResponse struct {
-	Templates []guardrails.BuiltinPolicyTemplate `json:"templates"`
+	Policies []guardrailscore.Policy `json:"policies"`
 }
 
 // Policy/group editor payloads.
@@ -301,14 +301,14 @@ func toProtectedCredentialResponse(credential guardrailscore.ProtectedCredential
 
 // Guardrails Builtins And Config Handlers
 
-// GetGuardrailsBuiltins returns curated builtin policy templates for the Guardrails UI.
+// GetGuardrailsBuiltins returns curated builtin policies for the Guardrails UI.
 func (s *Server) GetGuardrailsBuiltins(c *gin.Context) {
-	templates, err := guardrails.LoadBuiltinPolicyTemplates()
+	policies, err := guardrails.LoadBuiltinPolicies()
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	c.JSON(200, guardrailsBuiltinsResponse{Templates: templates})
+	c.JSON(200, guardrailsBuiltinsResponse{Policies: policies})
 }
 
 // GetGuardrailsConfig returns the current guardrails config file content and parsed config.
