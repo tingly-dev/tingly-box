@@ -11,7 +11,7 @@ export type ZenAgentType =
   | 'vscode'
   | 'openai'
   | 'anthropic'
-  | 'agent'; // OpenClaw
+  | 'agent';
 
 /**
  * Zen mode state and actions

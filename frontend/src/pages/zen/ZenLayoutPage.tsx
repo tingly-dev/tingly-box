@@ -22,19 +22,19 @@ const ZenLayoutPage: React.FC = () => {
     // Get agent info
     const getAgentInfo = (agentKey: string) => {
         const info: Record<string, { icon: any; label: string; path: string; scenario: string; zenPath: string }> = {
-            'claude-code': { icon: <Claude size={22} />, label: 'Claude', path: '/use-claude-code', scenario: 'claude_code', zenPath: '/zen/claude-code' },
-            'codex': { icon: <Codex size={22} />, label: 'Codex', path: '/use-codex', scenario: 'codex', zenPath: '/zen/codex' },
-            'opencode': { icon: <OpenCode size={22} />, label: 'OpenCode', path: '/use-opencode', scenario: 'opencode', zenPath: '/zen/opencode' },
-            'xcode': { icon: <Xcode size={22} />, label: 'Xcode', path: '/use-xcode', scenario: 'xcode', zenPath: '/zen/xcode' },
-            'vscode': { icon: <VSCode size={22} />, label: 'VS Code', path: '/use-vscode', scenario: 'vscode', zenPath: '/zen/vscode' },
-            'openai': { icon: <OpenAI size={22} />, label: 'OpenAI', path: '/use-openai', scenario: 'openai', zenPath: '/zen/openai' },
-            'anthropic': { icon: <Anthropic size={22} />, label: 'Anthropic', path: '/use-anthropic', scenario: 'anthropic', zenPath: '/zen/anthropic' },
-            'agent': { icon: <OpenClaw size={22} />, label: 'OpenClaw', path: '/use-agent', scenario: 'agent', zenPath: '/zen/agent' },
+            'claude_code': { icon: <Claude size={22} />, label: 'Claude', path: '/agent/claude_code', scenario: 'claude_code', zenPath: '/zen/claude_code' },
+            'codex':       { icon: <Codex size={22} />,   label: 'Codex',     path: '/agent/codex',       scenario: 'codex',       zenPath: '/zen/codex' },
+            'opencode':    { icon: <OpenCode size={22} />, label: 'OpenCode',  path: '/agent/opencode',    scenario: 'opencode',    zenPath: '/zen/opencode' },
+            'xcode':       { icon: <Xcode size={22} />,   label: 'Xcode',     path: '/agent/xcode',       scenario: 'xcode',       zenPath: '/zen/xcode' },
+            'vscode':      { icon: <VSCode size={22} />,  label: 'VS Code',   path: '/agent/vscode',      scenario: 'vscode',      zenPath: '/zen/vscode' },
+            'openai':      { icon: <OpenAI size={22} />,  label: 'OpenAI',    path: '/agent/openai',      scenario: 'openai',      zenPath: '/zen/openai' },
+            'anthropic':   { icon: <Anthropic size={22} />, label: 'Anthropic', path: '/agent/anthropic', scenario: 'anthropic',   zenPath: '/zen/anthropic' },
+            'agent':       { icon: <OpenClaw size={22} />, label: 'OpenClaw', path: '/agent/agent',       scenario: 'agent',       zenPath: '/zen/agent' },
         };
-        return info[agentKey || 'claude-code'] || info['claude-code'];
+        return info[agentKey || 'claude_code'] || info['claude_code'];
     };
 
-    const agentInfo = getAgentInfo(agent || 'claude-code');
+    const agentInfo = getAgentInfo(agent || 'claude_code');
 
     // Build sidebar items: agent page + profiles + divider + add profile
     const sidebarItems: ActivityItem['children'] = [

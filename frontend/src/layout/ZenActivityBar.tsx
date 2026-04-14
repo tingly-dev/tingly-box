@@ -346,7 +346,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                                     Enter Zen Mode:
                                 </Typography>
                             </MenuItem>
-                            <MenuItem onClick={() => handleZenAgentSelect('/zen/claude-code')} sx={{ gap: 1.5 }}>
+                            <MenuItem onClick={() => handleZenAgentSelect('/zen/claude_code')} sx={{ gap: 1.5 }}>
                                 <Claude size={18} />
                                 <Typography>Claude Code</Typography>
                             </MenuItem>

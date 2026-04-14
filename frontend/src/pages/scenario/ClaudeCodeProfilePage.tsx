@@ -126,7 +126,7 @@ const ClaudeCodeProfilePage: React.FC = () => {
                 showNotification(t('claudeCode.profile.profileDeleted'), 'success');
                 setDeleteProfileOpen(false);
                 refreshProfiles();
-                navigate('/use-claude-code');
+                navigate('/agent/claude_code');
             } else {
                 showNotification(`${t('claudeCode.profile.deleteFailed')}: ${result.error || 'Unknown error'}`, 'error');
             }

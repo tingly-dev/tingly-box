@@ -37,10 +37,7 @@ const Layout = ({ children }: LayoutProps) => {
     const getCurrentZenAgent = (): string => {
         if (isInZenPath) {
             const match = location.pathname.match(/^\/zen\/([^/]+)$/);
-            if (match) {
-                // Convert URL format (claude-code) to internal format (claude_code)
-                return match[1].replace('-', '_');
-            }
+            if (match) return match[1];
         }
         return zenAgentFromHook || '';
     };
@@ -68,14 +65,9 @@ const Layout = ({ children }: LayoutProps) => {
     // In zen mode, active activity is based on current zen path
     const zenActiveActivity = useMemo(() => {
         if (effectiveZenEnabled) {
-            // Check if current path is a zen path
             const zenPathMatch = location.pathname.match(/^\/zen\/([^/]+)$/);
-            if (zenPathMatch) {
-                const agent = zenPathMatch[1];
-                return `zen-${agent.replace('-', '_')}`;
-            }
-            // Default to claude-code if in zen mode but not on a zen path
-            return 'zen-claude-code';
+            if (zenPathMatch) return `zen-${zenPathMatch[1]}`;
+            return 'zen-claude_code';
         }
         return activeActivity;
     }, [effectiveZenEnabled, location.pathname, activeActivity]);
@@ -107,21 +99,22 @@ const Layout = ({ children }: LayoutProps) => {
                 // Default to claude_code if agent is empty
                 const normalizedAgent = agent || 'claude_code';
                 const info: Record<string, { icon: any; label: string; path: string; scenario: string; hasProfiles: boolean }> = {
-                    claude_code: { icon: <Claude size={20} />, label: 'Claude Code', path: '/use-claude-code', scenario: 'claude_code', hasProfiles: true },
-                    codex: { icon: <Codex size={20} />, label: 'Codex', path: '/use-codex', scenario: 'codex', hasProfiles: false },
-                    opencode: { icon: <OpenCode size={20} />, label: 'OpenCode', path: '/use-opencode', scenario: 'opencode', hasProfiles: false },
-                    xcode: { icon: <Xcode size={20} />, label: 'Xcode', path: '/use-xcode', scenario: 'xcode', hasProfiles: false },
-                    vscode: { icon: <VSCode size={20} />, label: 'VS Code', path: '/use-vscode', scenario: 'vscode', hasProfiles: false },
-                    openai: { icon: <OpenAI size={20} />, label: 'OpenAI', path: '/use-openai', scenario: 'openai', hasProfiles: false },
-                    anthropic: { icon: <Anthropic size={20} />, label: 'Anthropic', path: '/use-anthropic', scenario: 'anthropic', hasProfiles: false },
-                    agent: { icon: <OpenClaw size={20} />, label: 'OpenClaw', path: '/use-agent', scenario: 'agent', hasProfiles: false },
+                    claude_code: { icon: <Claude size={20} />, label: 'Claude Code', path: '/agent/claude_code', scenario: 'claude_code', hasProfiles: true },
+                    codex: { icon: <Codex size={20} />, label: 'Codex', path: '/agent/codex', scenario: 'codex', hasProfiles: false },
+                    opencode: { icon: <OpenCode size={20} />, label: 'OpenCode', path: '/agent/opencode', scenario: 'opencode', hasProfiles: false },
+                    xcode: { icon: <Xcode size={20} />, label: 'Xcode', path: '/agent/xcode', scenario: 'xcode', hasProfiles: false },
+                    vscode: { icon: <VSCode size={20} />, label: 'VS Code', path: '/agent/vscode', scenario: 'vscode', hasProfiles: false },
+                    openai: { icon: <OpenAI size={20} />, label: 'OpenAI', path: '/agent/openai', scenario: 'openai', hasProfiles: false },
+                    anthropic: { icon: <Anthropic size={20} />, label: 'Anthropic', path: '/agent/anthropic', scenario: 'anthropic', hasProfiles: false },
+                    agent: { icon: <OpenClaw size={20} />, label: 'OpenClaw', path: '/agent/agent', scenario: 'agent', hasProfiles: false },
                 };
                 return info[normalizedAgent] || info.claude_code;
             };
 
             const agentInfo = getAgentInfo(zenAgent);
+            const zenAgentPath = `/zen/${zenAgent}`;
             const zenSidebarItems: ActivityItem['children'] = [
-                { path: agentInfo.path, label: agentInfo.label, icon: agentInfo.icon, subtitle: 'default' },
+                { path: zenAgentPath, label: agentInfo.label, icon: agentInfo.icon, subtitle: 'default' },
             ];
 
             // Only add profiles for Claude Code
@@ -129,7 +122,7 @@ const Layout = ({ children }: LayoutProps) => {
                 const agentProfiles = profiles[agentInfo.scenario] || [];
                 agentProfiles.forEach(profile => {
                     zenSidebarItems.push({
-                        path: `/use-${zenAgent.replace('_', '-')}/profile/${profile.id}`,
+                        path: `/zen/${zenAgent}/profile/${profile.id}`,
                         label: agentInfo.label,
                         icon: agentInfo.icon,
                         subtitle: `${profile.id} - ${profile.name}`,
@@ -198,35 +191,25 @@ const Layout = ({ children }: LayoutProps) => {
 
     // Get zen mode activity items
     const getZenActivityItems = (): ActivityItem[] => {
-        // Extract current agent from URL path
         const zenPathMatch = location.pathname.match(/^\/zen\/([^/]+)$/);
-        const currentAgent = zenPathMatch ? zenPathMatch[1] : 'claude-code';
+        const currentAgent = zenPathMatch ? zenPathMatch[1] : 'claude_code';
 
         const getAgentInfo = (agent: string) => {
             const info: Record<string, { key: string; icon: any; label: string; path: string }> = {
-                'claude-code': { key: 'zen-claude-code', icon: <Claude size={22} />, label: 'Claude Code', path: '/zen/claude-code' },
-                'codex': { key: 'zen-codex', icon: <Codex size={22} />, label: 'Codex', path: '/zen/codex' },
-                'opencode': { key: 'zen-opencode', icon: <OpenCode size={22} />, label: 'OpenCode', path: '/zen/opencode' },
-                'xcode': { key: 'zen-xcode', icon: <Xcode size={22} />, label: 'Xcode', path: '/zen/xcode' },
-                'vscode': { key: 'zen-vscode', icon: <VSCode size={22} />, label: 'VS Code', path: '/zen/vscode' },
-                'openai': { key: 'zen-openai', icon: <OpenAI size={22} />, label: 'OpenAI', path: '/zen/openai' },
-                'anthropic': { key: 'zen-anthropic', icon: <Anthropic size={22} />, label: 'Anthropic', path: '/zen/anthropic' },
-                'agent': { key: 'zen-agent', icon: <OpenClaw size={22} />, label: 'OpenClaw', path: '/zen/agent' },
+                'claude_code': { key: 'zen-claude_code', icon: <Claude size={22} />, label: 'Claude Code', path: '/zen/claude_code' },
+                'codex':       { key: 'zen-codex',       icon: <Codex size={22} />,   label: 'Codex',       path: '/zen/codex' },
+                'opencode':    { key: 'zen-opencode',    icon: <OpenCode size={22} />, label: 'OpenCode',    path: '/zen/opencode' },
+                'xcode':       { key: 'zen-xcode',       icon: <Xcode size={22} />,   label: 'Xcode',       path: '/zen/xcode' },
+                'vscode':      { key: 'zen-vscode',      icon: <VSCode size={22} />,  label: 'VS Code',     path: '/zen/vscode' },
+                'openai':      { key: 'zen-openai',      icon: <OpenAI size={22} />,  label: 'OpenAI',      path: '/zen/openai' },
+                'anthropic':   { key: 'zen-anthropic',   icon: <Anthropic size={22} />, label: 'Anthropic', path: '/zen/anthropic' },
+                'agent':       { key: 'zen-agent',       icon: <OpenClaw size={22} />, label: 'OpenClaw',   path: '/zen/agent' },
             };
-            return info[agent] || info['claude-code'];
+            return info[agent] || info['claude_code'];
         };
 
         const agentInfo = getAgentInfo(currentAgent);
-
-        // Zen mode: only show the current agent
-        return [
-            {
-                key: agentInfo.key,
-                icon: agentInfo.icon,
-                label: agentInfo.label,
-                path: agentInfo.path,
-            },
-        ];
+        return [{ key: agentInfo.key, icon: agentInfo.icon, label: agentInfo.label, path: agentInfo.path }];
     };
 
     const zenActivityItems = getZenActivityItems();
