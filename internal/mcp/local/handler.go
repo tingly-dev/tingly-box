@@ -117,7 +117,7 @@ func (h *Handler) SetMCPMode(c *gin.Context) {
 	if req.Mode != typ.MCPModeServertool && req.Mode != typ.MCPModeClienttool {
 		c.JSON(http.StatusBadRequest, MCPModeResponse{
 			Success: false,
-			Error:   "Invalid mode. Must be 'intercept' or 'local'",
+			Error:   "Invalid mode. Must be 'servertool' or 'clienttool'",
 		})
 		return
 	}
