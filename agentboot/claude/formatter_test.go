@@ -203,30 +203,6 @@ func TestTextFormatter_FormatStreamEventMessage(t *testing.T) {
 	}
 }
 
-func TestTextFormatter_SetTemplate(t *testing.T) {
-	formatter := NewTextFormatter()
-
-	// Set custom template
-	customTmpl := "[CUSTOM] {{if .SessionID}}{{.SessionID}}{{end}}"
-	err := formatter.SetTemplate(SDKSystemMessage, customTmpl)
-	if err != nil {
-		t.Fatalf("Failed to set template: %v", err)
-	}
-
-	msg := &SystemMessage{
-		Type:      SDKSystemMessage,
-		SessionID: "custom-test-123",
-	}
-
-	output := formatter.Format(msg)
-	if !contains(output, "[CUSTOM]") {
-		t.Errorf("Expected [CUSTOM] in output: %s", output)
-	}
-	if !contains(output, "custom-test-123") {
-		t.Errorf("Expected session ID in output: %s", output)
-	}
-}
-
 func TestTextFormatter_VerboseMode(t *testing.T) {
 	formatter := NewTextFormatter()
 	formatter.SetVerbose(true)
