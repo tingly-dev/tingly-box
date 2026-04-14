@@ -1,12 +1,15 @@
 package command
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
@@ -17,10 +20,7 @@ import (
 
 // CCCommand creates the `cc` subcommand that configures and launches Claude Code.
 func CCCommand(appManager *AppManager) *cobra.Command {
-	var profile string
-	var unified bool
-
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "cc",
 		Short: "Launch Claude Code with tingly-box routing",
 		Long: `Launch Claude Code with tingly-box as the API proxy.
@@ -29,85 +29,62 @@ A temporary settings file is created and passed to Claude Code via --settings,
 so the existing Claude Code configuration is not modified.
 
 Profiles can be used to switch between different rule sets for the same scenario.
+If a profile name or ID is not found, an interactive list will be shown.
+
+Tingly-box flags must come before any Claude Code arguments. Everything after
+the last recognized tingly-box flag is forwarded verbatim to Claude Code.
 
 Flags:
   -p, --profile <id>     Profile ID or name (e.g., p1, Premium)
-  -u, --unified          Unified mode (all models use same rule)
-  -s, --no-unified       Separate mode (individual model rules)`,
+
+Examples:
+  tingly-box cc                                     # launch without profile
+  tingly-box cc -p Premium                          # launch with named profile
+  tingly-box cc -p p1 resume                        # pass "resume" to claude
+  tingly-box cc -p p1 --print "hello"               # pass --print to claude
+  tingly-box cc --dangerously-skip-permissions       # forwarded to claude`,
 		DisableFlagParsing: true,
 		Args:               cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Re-parse flags: everything before "--" belongs to tingly-box,
-			// everything after is passthrough to claude.
-			var tinglyArgs, claudeArgs []string
-			seenDashDash := false
-			for _, arg := range args {
-				if arg == "--" {
-					seenDashDash = true
-					continue
-				}
-				if seenDashDash {
-					claudeArgs = append(claudeArgs, arg)
-				} else {
-					tinglyArgs = append(tinglyArgs, arg)
-				}
-			}
-
-			// Parse tingly-box flags from tinglyArgs
-			parsedProfile, parsedUnified, remaining, err := parseCCFlags(tinglyArgs)
+			// Consume only tingly-box flags from the front of args.
+			// Everything after the last recognized tingly-box flag is passed
+			// verbatim to claude — no "--" separator required.
+			profile, claudeArgs, err := parseCCFlags(args)
 			if err != nil {
 				return err
 			}
-			// Explicit flags override defaults
-			if profile == "" && parsedProfile != "" {
-				profile = parsedProfile
-			}
-			if !cmd.Flags().Changed("unified") && parsedUnified != nil {
-				unified = *parsedUnified
-			}
-			// Remaining tingly args that aren't our flags → treat as claude args
-			claudeArgs = append(remaining, claudeArgs...)
-
-			return runCC(appManager, profile, unified, claudeArgs)
+			return runCC(appManager, profile, claudeArgs)
 		},
 	}
-
-	cmd.Flags().StringVar(&profile, "profile", "", "Profile ID or name (e.g., p1, Premium)")
-	cmd.Flags().BoolVar(&unified, "unified", true, "Unified mode (all models point to same rule)")
-
-	return cmd
 }
 
-// parseCCFlags extracts known tingly-box flags from args.
-// Returns parsed profile, unified, and remaining unknown args.
-func parseCCFlags(args []string) (profile string, unified *bool, remaining []string, err error) {
-	for i := 0; i < len(args); i++ {
+// parseCCFlags consumes tingly-box-specific flags from the beginning of args
+// and returns the remaining args verbatim for claude.
+//
+// Only -p/--profile is consumed. Scanning stops at the first token that is not
+// a recognized tingly-box flag, so everything from that point on is passed to
+// claude unchanged — no "--" separator required.
+func parseCCFlags(args []string) (profile string, claudeArgs []string, err error) {
+	i := 0
+	for i < len(args) {
 		switch {
 		case args[i] == "--profile" || args[i] == "-p":
 			if i+1 >= len(args) {
-				return "", nil, nil, fmt.Errorf("flag %s requires a value", args[i])
+				return "", nil, fmt.Errorf("flag %s requires a value", args[i])
 			}
 			profile = args[i+1]
-			i++ // skip next
-
-		case args[i] == "--unified" || args[i] == "-u":
-			v := true
-			unified = &v
-
-		case args[i] == "--no-unified" || args[i] == "-s":
-			v := false
-			unified = &v
+			i += 2
 
 		default:
-			// Unknown flag → passthrough to claude
-			remaining = append(remaining, args[i])
+			// First unrecognized token — everything from here is claude's
+			return profile, args[i:], nil
 		}
 	}
-	return profile, unified, remaining, nil
+	return profile, nil, nil
 }
 
 // runCC orchestrates: ensure server → resolve profile → write settings → exec claude.
-func runCC(appManager *AppManager, profile string, unified bool, claudeArgs []string) error {
+func runCC(appManager *AppManager, profile string, claudeArgs []string) error {
 	globalConfig := appManager.GetGlobalConfig()
 	scenario := typ.ScenarioClaudeCode
 
@@ -117,11 +94,17 @@ func runCC(appManager *AppManager, profile string, unified bool, claudeArgs []st
 	if profile != "" {
 		resolved, err := globalConfig.ResolveProfileNameOrID(scenario, profile)
 		if err != nil {
-			return fmt.Errorf("profile error: %w", err)
+			// Profile not found — show interactive list so user can pick one
+			profiles := globalConfig.GetProfiles(scenario)
+			selected, selErr := selectProfileInteractive(profiles, profile)
+			if selErr != nil {
+				return fmt.Errorf("profile error: %w", err)
+			}
+			resolved = selected
 		}
 		profileID = resolved
 
-		// Get profile metadata to check Unified setting
+		// Get profile metadata
 		profiles := globalConfig.GetProfiles(scenario)
 		for i := range profiles {
 			if profiles[i].ID == profileID {
@@ -145,18 +128,10 @@ func runCC(appManager *AppManager, profile string, unified bool, claudeArgs []st
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 	apiKey := globalConfig.GetModelToken()
 
-	// Determine unified mode: CLI flag > profile setting > default (false for profiles)
-	envUnified := unified
-	if profileID != "" {
-		if !unified {
-			// No explicit CLI flag, use profile's setting
-			if profileMeta != nil {
-				envUnified = profileMeta.Unified
-			} else {
-				envUnified = false // default to separate for backward compatibility
-			}
-		}
-		// If unified flag was explicitly set, it overrides profile setting
+	// Unified mode comes from profile config only; no CLI override allowed
+	var envUnified bool
+	if profileMeta != nil {
+		envUnified = profileMeta.Unified
 	}
 	env := generateCCEnv(baseURL, apiKey, scenarioPath, envUnified, profileID != "")
 
@@ -198,6 +173,48 @@ func runCC(appManager *AppManager, profile string, unified bool, claudeArgs []st
 		return fmt.Errorf("failed to run claude CLI: %w", err)
 	}
 	return nil
+}
+
+// selectProfileInteractive shows a numbered list of profiles and prompts the
+// user to select one. notFoundName is the profile name/ID the user originally
+// requested (used in the error message when profiles is empty).
+// Returns the selected profile ID, or an error if no selection can be made.
+func selectProfileInteractive(profiles []typ.ProfileMeta, notFoundName string) (string, error) {
+	if len(profiles) == 0 {
+		if notFoundName != "" {
+			return "", fmt.Errorf("profile '%s' not found and no profiles are configured", notFoundName)
+		}
+		return "", fmt.Errorf("no profiles configured")
+	}
+
+	if notFoundName != "" {
+		fmt.Fprintf(os.Stderr, "Profile '%s' not found. Available profiles:\n", notFoundName)
+	} else {
+		fmt.Fprintln(os.Stderr, "Available profiles:")
+	}
+	for i, p := range profiles {
+		mode := "separate"
+		if p.Unified {
+			mode = "unified"
+		}
+		fmt.Fprintf(os.Stderr, "  [%d] %s (%s, %s)\n", i+1, p.Name, p.ID, mode)
+	}
+	fmt.Fprintf(os.Stderr, "  [0] Continue without profile\n")
+	fmt.Fprintf(os.Stderr, "Select profile [1-%d, 0 to skip]: ", len(profiles))
+
+	scanner := bufio.NewScanner(os.Stdin)
+	if !scanner.Scan() {
+		return "", fmt.Errorf("no input")
+	}
+	line := strings.TrimSpace(scanner.Text())
+	if line == "" || line == "0" {
+		return "", nil
+	}
+	n, err := strconv.Atoi(line)
+	if err != nil || n < 1 || n > len(profiles) {
+		return "", fmt.Errorf("invalid selection '%s'", line)
+	}
+	return profiles[n-1].ID, nil
 }
 
 // buildProfileSettings copies the user's ~/.claude/settings.json to
