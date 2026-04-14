@@ -240,3 +240,7 @@ func (d *Driver) buildArgs(
 
 	return args, nil
 }
+
+func isRoot() bool {
+	return os.Getuid() == 0
+}

@@ -164,7 +164,7 @@ func TestLauncherTimeout(t *testing.T) {
 		Timeout:      1 * time.Nanosecond,
 	}
 
-	result, err := launcher.Execute(ctx, "count to 100 slowly", opts)
+	result, err := launcher.Execute(ctx, "tell 1+1", opts)
 
 	assert.Error(t, err, "execution should timeout")
 	assert.NotNil(t, result)

@@ -413,7 +413,7 @@ func TestGenerateRequestID(t *testing.T) {
 	assert.Len(t, id1, 36)
 }
 
-// TestLauncherWithNewConfig tests launcher with new config options
+// TestLauncherWithNewConfig tests launcher initialisation with config options
 func TestLauncherWithNewConfig(t *testing.T) {
 	config := Config{
 		Model:                "claude-sonnet-4-6",
@@ -425,20 +425,25 @@ func TestLauncherWithNewConfig(t *testing.T) {
 
 	launcher := NewLauncher(config)
 
-	// Get the config back
-	assert.Equal(t, "claude-sonnet-4-6", launcher.config.Model)
-	assert.True(t, launcher.config.ContinueConversation)
-	assert.Equal(t, PermissionModeAuto, launcher.config.PermissionMode)
-	assert.Equal(t, "You are a helpful assistant", launcher.config.CustomSystemPrompt)
-	assert.Equal(t, []string{"bash", "editor"}, launcher.config.AllowedTools)
-
-	// Test control manager and discovery are initialized
+	// Control manager and discovery should be reachable.
 	assert.NotNil(t, launcher.GetControlManager())
 	assert.NotNil(t, launcher.GetDiscovery())
+
+	// Driver should carry the config.
+	driver := launcher.driver
+	driver.mu.RLock()
+	driverConfig := driver.config
+	driver.mu.RUnlock()
+
+	assert.Equal(t, "claude-sonnet-4-6", driverConfig.Model)
+	assert.True(t, driverConfig.ContinueConversation)
+	assert.Equal(t, PermissionModeAuto, driverConfig.PermissionMode)
+	assert.Equal(t, "You are a helpful assistant", driverConfig.CustomSystemPrompt)
+	assert.Equal(t, []string{"bash", "editor"}, driverConfig.AllowedTools)
 }
 
-// TestLauncherWithConfig tests buildCommandArgs with new options
-func TestLauncherWithConfig(t *testing.T) {
+// TestDriverBuildArgs tests Driver.buildArgs with various options
+func TestDriverBuildArgs(t *testing.T) {
 	tests := []struct {
 		name           string
 		config         Config
@@ -499,11 +504,14 @@ func TestLauncherWithConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			launcher := NewLauncher(tt.config)
-			args, err := launcher.buildCommandArgs(tt.opts.OutputFormat, "test prompt", tt.opts)
+			driver := NewDriver(tt.config)
+			format := tt.opts.OutputFormat
+			if format == "" {
+				format = agentboot.OutputFormatStreamJSON
+			}
+			args, err := driver.buildArgs(format, "test prompt", tt.opts, tt.config, false)
 			require.NoError(t, err)
 			argsStr := strings.Join(args, " ")
-
 			for _, substr := range tt.expectedSubstr {
 				assert.Contains(t, argsStr, substr)
 			}
@@ -511,27 +519,22 @@ func TestLauncherWithConfig(t *testing.T) {
 	}
 }
 
-// TestLauncherBuildMCPArgs tests MCP argument building
-func TestLauncherBuildMCPArgs(t *testing.T) {
-	launcher := NewLauncher(Config{})
-
-	servers := map[string]interface{}{
-		"filesystem": map[string]interface{}{
-			"command": "npx",
-			"args":    []string{"-y", "@modelcontextprotocol/server-filesystem", "/tmp"},
-		},
-		"brave-search": map[string]interface{}{
-			"apiKey": "test-key",
+// TestDriverBuildMCPArgs tests MCP argument building via BuildCommonArgs
+func TestDriverBuildMCPArgs(t *testing.T) {
+	config := Config{
+		MCPServers: map[string]interface{}{
+			"filesystem": map[string]interface{}{
+				"command": "npx",
+			},
+			"brave-search": map[string]interface{}{
+				"apiKey": "test-key",
+			},
 		},
 	}
 
-	args, err := launcher.buildMCPArgs(servers)
-	require.NoError(t, err)
-
-	// Check that we have MCP server arguments
-	assert.NotEmpty(t, args)
+	args := BuildCommonArgs(config, CommonOptions{})
 	argsStr := strings.Join(args, " ")
-	assert.Contains(t, argsStr, "--mcp-server")
+	assert.Contains(t, argsStr, "--mcp-config")
 	assert.Contains(t, argsStr, "filesystem")
 	assert.Contains(t, argsStr, "brave-search")
 }
