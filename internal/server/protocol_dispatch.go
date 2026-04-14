@@ -346,6 +346,9 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 			if inputTokens > 0 || outputTokens > 0 {
 				tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
 				s.trackUsageWithTokenUsage(c, tokenUsage, err)
+			} else {
+				// Track error even when no tokens were received (e.g., early 1302 rate limit)
+				s.trackUsageFromContext(c, 0, 0, err)
 			}
 			sendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
 			if recorder != nil {

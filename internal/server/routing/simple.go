@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -58,6 +59,23 @@ func (s *SimpleSelector) SelectService(
 
 	// Store result metadata for observability
 	c.Set("routing_source", result.Source)
+
+	// Add debug headers when X-TBE-Debug-Routing is enabled
+	debugHeader := c.GetHeader("X-TBE-Debug-Routing")
+	logrus.Debugf("[routing-debug] X-TBE-Debug-Routing header = %q", debugHeader)
+	if debugHeader == "1" {
+		providerName := result.Provider.Name
+		modelName := result.Service.Model
+		source := result.Source
+		c.Header("X-TBE-Selected-Provider", providerName)
+		c.Header("X-TBE-Selected-Provider-UUID", result.Provider.UUID)
+		c.Header("X-TBE-Selected-Model", modelName)
+		c.Header("X-TBE-Routing-Source", source)
+		if result.MatchedSmartRuleIndex >= 0 {
+			c.Header("X-TBE-Matched-Smart-Rule", fmt.Sprintf("%d", result.MatchedSmartRuleIndex))
+		}
+		logrus.Infof("[routing-debug] Set debug headers: provider=%s model=%s source=%s", providerName, modelName, source)
+	}
 
 	return result.Provider, result.Service, nil
 }

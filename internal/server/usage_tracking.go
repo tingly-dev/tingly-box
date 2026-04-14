@@ -147,6 +147,15 @@ func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens
 func (s *Server) trackUsageWithTokenUsage(c *gin.Context, usage *protocol.TokenUsage, err error) {
 	rule, provider, model, requestModel, scenario, streamed, startTime := GetTrackingContext(c)
 
+	logrus.WithFields(logrus.Fields{
+		"has_rule":   rule != nil,
+		"has_provider": provider != nil,
+		"has_model":   model != "",
+		"has_usage":   usage != nil,
+		"has_error":   err != nil,
+		"model":       model,
+	}).Trace("[trackUsage] trackUsageWithTokenUsage called")
+
 	if rule == nil || provider == nil || model == "" || usage == nil {
 		return
 	}
@@ -254,7 +263,8 @@ func isRateLimitError(err error) bool {
 	errStr := strings.ToLower(err.Error())
 	return strings.Contains(errStr, "429") ||
 		strings.Contains(errStr, "rate limit") ||
-		strings.Contains(errStr, "ratelimit")
+		strings.Contains(errStr, "ratelimit") ||
+		strings.Contains(errStr, "1302")
 }
 
 // recordDetailedUsage writes a detailed usage record to the database.
@@ -400,11 +410,24 @@ func (s *Server) TrackUsage(ctx context.Context, inputTokens, outputTokens int, 
 // reportHealthStatus reports the health status of a service based on request outcome.
 // It uses the health monitor to track service health for load balancing decisions.
 func (s *Server) reportHealthStatus(provider *typ.Provider, model string, err error, errorCode string) {
-	if s.healthMonitor == nil || provider == nil || model == "" {
+	if s.healthMonitor == nil {
+		logrus.Warn("[health] healthMonitor is nil - cannot report health status")
+		return
+	}
+	if provider == nil || model == "" {
+		logrus.Warn("[health] provider or model is empty - cannot report health status")
 		return
 	}
 
 	serviceID := fmt.Sprintf("%s:%s", provider.UUID, model)
+
+	logrus.WithFields(logrus.Fields{
+		"provider":   provider.Name,
+		"model":      model,
+		"service_id": serviceID,
+		"error":      err != nil,
+		"errorCode":  errorCode,
+	}).Info("[health] Reporting health status")
 
 	if err == nil {
 		// Success - report to health monitor
@@ -415,8 +438,15 @@ func (s *Server) reportHealthStatus(provider *typ.Provider, model string, err er
 	// Error - classify and report appropriately
 	errStr := err.Error()
 
-	// Check for rate limit (429)
-	if strings.Contains(errStr, "429") || strings.Contains(errStr, "rate limit") || strings.Contains(errStr, "RateLimit") {
+	// Check for rate limit (429, 1302)
+	if strings.Contains(errStr, "429") || strings.Contains(errStr, "rate limit") || strings.Contains(errStr, "RateLimit") ||
+		strings.Contains(errStr, "1302") || strings.Contains(errStr, "\"code\":\"1302\"") {
+		logrus.WithFields(logrus.Fields{
+			"service_id": serviceID,
+			"provider":   provider.Name,
+			"model":      model,
+			"error":      errStr,
+		}).Warn("[health] Rate limit detected - marking service unhealthy")
 		s.healthMonitor.ReportRateLimit(serviceID)
 		return
 	}

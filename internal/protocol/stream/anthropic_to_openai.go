@@ -285,7 +285,8 @@ func AnthropicToOpenAIStream(c *gin.Context, req *anthropic.BetaMessageNewParams
 		}
 		logrus.Errorf("Anthropic stream error: %v", err)
 		sendOpenAIStreamError(c, err.Error(), "stream_error")
-		return inputTokens, outputTokens, nil
+		// Return the error so TB's usage tracking can detect and report health status
+		return inputTokens, outputTokens, fmt.Errorf("anthropic stream error: %w", err)
 	}
 
 	return inputTokens, outputTokens, nil
