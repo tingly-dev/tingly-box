@@ -121,6 +121,7 @@ func AnthropicToOpenAIStream(c *gin.Context, req *anthropic.BetaMessageNewParams
 						{
 							Index: 0,
 							Delta: openai.ChatCompletionChunkChoiceDelta{
+								Role: "assistant",
 								ToolCalls: []openai.ChatCompletionChunkChoiceDeltaToolCall{
 									{
 										Index: 0,
@@ -160,6 +161,7 @@ func AnthropicToOpenAIStream(c *gin.Context, req *anthropic.BetaMessageNewParams
 						{
 							Index: 0,
 							Delta: openai.ChatCompletionChunkChoiceDelta{
+								Role:    "assistant",
 								Content: text,
 							},
 						},
@@ -180,6 +182,7 @@ func AnthropicToOpenAIStream(c *gin.Context, req *anthropic.BetaMessageNewParams
 						{
 							Index: 0,
 							Delta: openai.ChatCompletionChunkChoiceDelta{
+								Role: "assistant",
 								ToolCalls: []openai.ChatCompletionChunkChoiceDeltaToolCall{
 									{
 										Index: 0,
