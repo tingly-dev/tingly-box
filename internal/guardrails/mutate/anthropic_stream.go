@@ -3,6 +3,7 @@ package mutate
 import (
 	"encoding/json"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
@@ -37,6 +38,100 @@ func RegisterAnthropicGuardrailsBlock(state *protocol.GuardrailsStreamState, too
 	}
 	state.PendingBlockMessages[toolID] = message
 	state.PendingBlockedIndex[index] = toolID
+}
+
+// RewriteAnthropicToolUseEvent decides whether an Anthropic stream event should
+// be buffered, replaced, or flushed, and returns the exact events the caller
+// should emit. It only rewrites tool_use-related events.
+func RewriteAnthropicToolUseEvent(
+	credentialMask *guardrailscore.CredentialMaskState,
+	streamState *protocol.GuardrailsStreamState,
+	event interface{},
+) (bool, []AnthropicBufferedEvent, error) {
+	var (
+		eventType string
+		index     int
+		block     interface{}
+		rawJSON   string
+	)
+
+	switch evt := event.(type) {
+	case *anthropic.MessageStreamEventUnion:
+		if evt == nil {
+			return false, nil, nil
+		}
+		eventType = evt.Type
+		index = int(evt.Index)
+		block = evt.ContentBlock
+		rawJSON = evt.RawJSON()
+	case *anthropic.BetaRawMessageStreamEventUnion:
+		if evt == nil {
+			return false, nil, nil
+		}
+		eventType = evt.Type
+		index = int(evt.Index)
+		block = evt.ContentBlock
+		rawJSON = evt.RawJSON()
+	default:
+		return false, nil, nil
+	}
+
+	if !ShouldRewriteAnthropicEvent(streamState, eventType, block) {
+		return false, nil, nil
+	}
+
+	var eventMap map[string]interface{}
+	if err := json.Unmarshal([]byte(rawJSON), &eventMap); err != nil {
+		return false, nil, err
+	}
+	if eventType != "" {
+		eventMap["type"] = eventType
+	}
+
+	decision := HandleAnthropicToolUseBuffer(credentialMask, streamState, eventType, index, block, eventMap)
+	switch decision.Kind {
+	case AnthropicToolUseDecisionBuffer:
+		return true, nil, nil
+	case AnthropicToolUseDecisionBlock:
+		if decision.BlockMessage == "" {
+			return true, nil, nil
+		}
+		return true, []AnthropicBufferedEvent{
+			{
+				EventType: anthropicEventTypeContentBlockStart,
+				Payload: map[string]interface{}{
+					"type":  anthropicEventTypeContentBlockStart,
+					"index": index,
+					"content_block": map[string]interface{}{
+						"type": "text",
+						"text": "",
+					},
+				},
+			},
+			{
+				EventType: anthropicEventTypeContentBlockDelta,
+				Payload: map[string]interface{}{
+					"type":  anthropicEventTypeContentBlockDelta,
+					"index": index,
+					"delta": map[string]interface{}{
+						"type": "text_delta",
+						"text": decision.BlockMessage,
+					},
+				},
+			},
+			{
+				EventType: anthropicEventTypeContentBlockStop,
+				Payload: map[string]interface{}{
+					"type":  anthropicEventTypeContentBlockStop,
+					"index": index,
+				},
+			},
+		}, nil
+	case AnthropicToolUseDecisionPassthrough:
+		return true, decision.Passthrough, nil
+	default:
+		return false, nil, nil
+	}
 }
 
 // ShouldRewriteAnthropicEvent is the fast-path gate for stream rewriting. It

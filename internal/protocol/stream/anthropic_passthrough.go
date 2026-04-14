@@ -8,6 +8,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/sirupsen/logrus"
+	guardrailsmutate "github.com/tingly-dev/tingly-box/internal/guardrails/mutate"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
@@ -54,9 +55,12 @@ func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNe
 			}
 
 			if hc.Guardrails != nil && hc.Guardrails.Enabled {
-				if handled, err := rewriteAnthropicGuardrailsEvent(hc, false, evt); err != nil {
+				if handled, rewritten, err := guardrailsmutate.RewriteAnthropicToolUseEvent(hc.Guardrails.CredentialMask, hc.Guardrails.Stream, evt); err != nil {
 					return err
 				} else if handled {
+					for _, rewrittenEvent := range rewritten {
+						sendAnthropicStreamEvent(hc.GinContext, rewrittenEvent.EventType, rewrittenEvent.Payload, hc.GinContext.Writer)
+					}
 					return nil
 				}
 			}
@@ -142,9 +146,12 @@ func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, streamResp *anthrop
 			}
 
 			if hc.Guardrails != nil && hc.Guardrails.Enabled {
-				if handled, err := rewriteAnthropicGuardrailsEvent(hc, true, evt); err != nil {
+				if handled, rewritten, err := guardrailsmutate.RewriteAnthropicToolUseEvent(hc.Guardrails.CredentialMask, hc.Guardrails.Stream, evt); err != nil {
 					return err
 				} else if handled {
+					for _, rewrittenEvent := range rewritten {
+						sendAnthropicBetaStreamEvent(hc.GinContext, rewrittenEvent.EventType, rewrittenEvent.Payload, hc.GinContext.Writer)
+					}
 					return nil
 				}
 			}
