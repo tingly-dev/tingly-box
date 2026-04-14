@@ -64,6 +64,9 @@ func normalizeShellCommand(shell *ShellCommand) *NormalizedCommand {
 		terms = appendUniqueString(terms, cmd.Program)
 		actions = appendUniqueString(actions, ActionExecute)
 		actions = appendUniqueString(actions, normalizeShellAction(cmd.Program))
+		if isInstallCommand(cmd) {
+			actions = appendUniqueString(actions, ActionInstall)
+		}
 
 		for _, arg := range cmd.Args {
 			terms = appendUniqueString(terms, arg)
@@ -114,6 +117,108 @@ func normalizeShellAction(program string) string {
 	default:
 		return ActionExecute
 	}
+}
+
+func isInstallCommand(cmd ShellSimpleCommand) bool {
+	program := strings.ToLower(strings.TrimSpace(cmd.Program))
+	args := lowerTrimmed(cmd.Args)
+	if program == "" {
+		return false
+	}
+
+	switch program {
+	case "pip", "pip2", "pip3", "pipx":
+		return firstArgIn(args, "install")
+	case "uv":
+		return hasArgSequence(args, "pip", "install") || hasArgSequence(args, "tool", "install")
+	case "npm", "npm.cmd":
+		return firstArgIn(args, "install", "i", "add")
+	case "pnpm":
+		return firstArgIn(args, "install", "i", "add")
+	case "yarn":
+		return firstArgIn(args, "install", "add") || hasArgSequence(args, "global", "add")
+	case "cargo":
+		return firstArgIn(args, "install", "add")
+	case "go":
+		return firstArgIn(args, "install", "get")
+	case "dotnet":
+		return hasArgSequence(args, "add", "package") || hasArgSequence(args, "tool", "install")
+	case "nuget", "paket":
+		return firstArgIn(args, "install", "add")
+	case "gem":
+		return firstArgIn(args, "install")
+	case "bundle", "bundler":
+		return firstArgIn(args, "install", "add")
+	case "mvn", "mvnw":
+		return firstArgIn(args, "dependency:get", "dependency:copy", "dependency:resolve")
+	case "code", "code-insiders", "codium":
+		return containsArg(args, "--install-extension")
+	case "openvsx", "ovsx":
+		return firstArgIn(args, "install")
+	case "git":
+		return firstArgIn(args, "clone")
+	default:
+		if strings.HasPrefix(program, "python") {
+			return hasArgSequence(args, "-m", "pip", "install")
+		}
+		return false
+	}
+}
+
+func lowerTrimmed(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.ToLower(strings.TrimSpace(value))
+		if value == "" {
+			continue
+		}
+		out = append(out, value)
+	}
+	return out
+}
+
+func firstArgIn(args []string, values ...string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	first := args[0]
+	for _, value := range values {
+		if first == value {
+			return true
+		}
+	}
+	return false
+}
+
+func containsArg(args []string, target string) bool {
+	for _, arg := range args {
+		if arg == target {
+			return true
+		}
+	}
+	return false
+}
+
+func hasArgSequence(args []string, sequence ...string) bool {
+	if len(args) < len(sequence) || len(sequence) == 0 {
+		return false
+	}
+	for i := 0; i <= len(args)-len(sequence); i++ {
+		match := true
+		for j := range sequence {
+			if args[i+j] != sequence[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }
 
 func isResourceLikeToken(token string) bool {
