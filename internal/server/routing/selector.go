@@ -213,17 +213,11 @@ func (s *ServiceSelector) selectPipeline(rule *typ.Rule) []SelectionStage {
 	logrus.Debugf("[selector] selectPipeline for rule %s: SmartAffinity=%v, SmartEnabled=%v, SmartRouting count=%d",
 		rule.RequestModel, rule.SmartAffinity, rule.SmartEnabled, len(rule.SmartRouting))
 	if !rule.SmartAffinity {
-		// Even without smart affinity, use health filtering
-		// Build pipeline on-the-fly with health stage
-		pipeline := []SelectionStage{
-			NewHealthStage(s.getHealthFilter()),
-			NewSmartRoutingStage(s.loadBalancer, s.affinityStore),
-			NewLoadBalancerStage(s.loadBalancer),
-		}
-		return pipeline
+		return s.pipelines[pipelineModeNoAffinity]
 	}
 
-	// When SmartAffinity is enabled, use smart_rule affinity scope with health filtering
+	// Default to global affinity scope.
+	// TODO: Read from rule.AffinityScope when field is added.
 	return s.pipelines[pipelineModeSmartAffinity]
 }
 
