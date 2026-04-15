@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"sync"
 	"time"
@@ -13,12 +14,12 @@ import (
 
 // HealthMonitor provides health monitoring for persistent connections.
 type HealthMonitor struct {
-	source       ToolSource
-	interval     time.Duration
-	stopCh       chan struct{}
-	stoppedCh    chan struct{}
+	source          ToolSource
+	interval        time.Duration
+	stopCh          chan struct{}
+	stoppedCh       chan struct{}
 	errorClassifier ErrorClassifier
-	mu           sync.RWMutex
+	mu              sync.RWMutex
 }
 
 // NewHealthMonitor creates a new health monitor.
@@ -222,6 +223,12 @@ func (s *ExponentialBackoffStrategy) NextRetry(retryCount int) time.Duration {
 	// Add jitter (±25%)
 	jitter := time.Duration(float64(interval) * 0.25 * (2.0*randFloat64() - 1.0))
 	interval += jitter
+	if interval > s.MaxInterval {
+		interval = s.MaxInterval
+	}
+	if interval < s.InitialInterval {
+		interval = s.InitialInterval
+	}
 
 	return interval
 }
@@ -232,6 +239,5 @@ func (s *ExponentialBackoffStrategy) ShouldRetry(retryCount int) bool {
 }
 
 func randFloat64() float64 {
-	// Simple random float between 0 and 1
-	return float64(time.Now().UnixNano()%1000) / 1000.0
+	return rand.Float64()
 }

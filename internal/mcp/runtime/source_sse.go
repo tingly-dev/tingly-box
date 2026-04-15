@@ -18,12 +18,13 @@ import (
 // This is a persistent connection type with health monitoring.
 type SSEToolSource struct {
 	*BaseToolSource
-	sourceConfig     typ.MCPSourceConfig
-	sessionCache     *sessionCache
-	session          *sourceSession
-	healthMonitor    *HealthMonitor
+	sourceConfig      typ.MCPSourceConfig
+	sessionCache      *sessionCache
+	session           *sourceSession
+	healthMonitor     *HealthMonitor
 	reconnectStrategy *ExponentialBackoffStrategy
-	mu               sync.RWMutex
+	lastHealthCheck   time.Time
+	mu                sync.RWMutex
 }
 
 // NewSSEToolSource creates a new SSE tool source.
@@ -31,10 +32,10 @@ func NewSSEToolSource(sourceConfig typ.MCPSourceConfig, sc *sessionCache) (*SSET
 	base := NewBaseToolSource(sourceConfig.ID, TransportSSE)
 
 	return &SSEToolSource{
-		BaseToolSource:     base,
-		sourceConfig:       sourceConfig,
-		sessionCache:       sc,
-		reconnectStrategy:  NewExponentialBackoffStrategy(),
+		BaseToolSource:    base,
+		sourceConfig:      sourceConfig,
+		sessionCache:      sc,
+		reconnectStrategy: NewExponentialBackoffStrategy(),
 	}, nil
 }
 
@@ -175,7 +176,17 @@ func (s *SSEToolSource) HealthCheck(ctx context.Context) error {
 		return &ConnectionError{Source: s.GetSourceID(), Reason: "not connected"}
 	}
 
-	// Try to list tools as a simple health check
+	// Avoid hitting ListTools on every monitor tick; reconnect path still handles errors.
+	const minListToolsProbeInterval = 2 * time.Minute
+
+	s.mu.Lock()
+	if !s.lastHealthCheck.IsZero() && time.Since(s.lastHealthCheck) < minListToolsProbeInterval {
+		s.mu.Unlock()
+		return nil
+	}
+	s.lastHealthCheck = time.Now()
+	s.mu.Unlock()
+
 	_, err := s.ListTools(ctx)
 	if err != nil {
 		return &ConnectionError{Source: s.GetSourceID(), Reason: "health check failed", Err: err}
