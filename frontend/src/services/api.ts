@@ -602,10 +602,10 @@ export const api = {
     },
     getGuardrailsRegistry: async (forceRefresh = false): Promise<any> => {
         const query = forceRefresh ? '?refresh=1' : '';
-        return fetchUIAPI(`/guardrails/registry${query}`);
+        return uiAPI(`/guardrails/registry${query}`);
     },
     installGuardrailsRegistryPolicy: async (id: string): Promise<any> => {
-        return fetchUIAPI('/guardrails/registry/install', {
+        return uiAPI('/guardrails/registry/install', {
             method: 'POST',
             body: JSON.stringify({ id }),
         });
