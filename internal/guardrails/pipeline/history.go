@@ -15,7 +15,11 @@ func recordGuardrailsMaskHistory(
 	state *guardrailscore.CredentialMaskState,
 	phase string,
 ) {
-	if runtime == nil || runtime.History == nil || state == nil {
+	if runtime == nil || state == nil {
+		return
+	}
+	history := runtime.HistoryStore()
+	if history == nil {
 		return
 	}
 
@@ -54,7 +58,7 @@ func recordGuardrailsMaskHistory(
 	if input.Content.Command != nil {
 		entry.CommandName = input.Content.Command.Name
 	}
-	runtime.History.Add(entry)
+	history.Add(entry)
 }
 
 func sortedKeys(values map[string]struct{}) []string {

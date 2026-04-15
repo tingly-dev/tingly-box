@@ -96,7 +96,8 @@ type Server struct {
 	toolInterceptor *toolinterceptor.Interceptor
 
 	// guardrails runtime (optional)
-	guardrailsRuntime *guardrails.Guardrails
+	guardrailsRuntime   *guardrails.Guardrails
+	guardrailsRuntimeMu sync.RWMutex
 
 	// recording sinks
 	recordSink *obs.Sink
@@ -169,7 +170,8 @@ func (s *Server) UsageStore() *db.UsageStore {
 }
 
 func (s *Server) initGuardrailsRuntime() {
-	if (s.guardrailsRuntime != nil && s.guardrailsRuntime.Policy != nil) || s.config == nil {
+	runtime := s.currentGuardrailsRuntime()
+	if (runtime != nil && runtime.PolicyEngine() != nil) || s.config == nil {
 		return
 	}
 
@@ -253,7 +255,7 @@ func (s *Server) syncGuardrailsFromConfig() {
 		return
 	}
 
-	if s.guardrailsRuntime == nil {
+	if s.currentGuardrailsRuntime() == nil {
 		s.initGuardrailsRuntime()
 	}
 }
@@ -350,7 +352,7 @@ func WithRecording(enabled bool) ServerOption {
 // WithGuardrails sets a guardrails runtime for stream evaluation.
 func WithGuardrails(runtime *guardrails.Guardrails) ServerOption {
 	return func(s *Server) {
-		s.guardrailsRuntime = runtime
+		s.setGuardrailsRuntimeRef(runtime)
 	}
 }
 
@@ -490,10 +492,11 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.errorMW = errorMW
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
 	historyStore := guardrailsutils.NewStore(200, GetGuardrailsHistoryPath(cfg.ConfigDir))
-	if server.guardrailsRuntime == nil {
-		server.guardrailsRuntime = &guardrails.Guardrails{History: historyStore}
-	} else if server.guardrailsRuntime.History == nil {
-		server.guardrailsRuntime.History = historyStore
+	runtime := server.currentGuardrailsRuntime()
+	if runtime == nil {
+		server.setGuardrailsRuntimeRef(&guardrails.Guardrails{History: historyStore})
+	} else if runtime.HistoryStore() == nil {
+		runtime.SetHistoryStore(historyStore)
 	}
 
 	// Auto-load guardrails if enabled and not injected explicitly.

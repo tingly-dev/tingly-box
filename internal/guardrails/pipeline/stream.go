@@ -25,7 +25,7 @@ func NewGuardrailsHooks(
 	baseInput guardrailscore.Input,
 	streamState *protocol.GuardrailsStreamState,
 ) (onStreamEvent func(event interface{}) error, onStreamError func(err error)) {
-	if runtime == nil || runtime.Policy == nil {
+	if runtime == nil || runtime.PolicyEngine() == nil {
 		return nil, nil
 	}
 	if ctx == nil {

@@ -19,6 +19,37 @@ var guardrailsSupportedScenarios = []string{
 	string(typ.ScenarioClaudeCode),
 }
 
+func (s *Server) currentGuardrailsRuntime() *guardrails.Guardrails {
+	if s == nil {
+		return nil
+	}
+	s.guardrailsRuntimeMu.RLock()
+	runtime := s.guardrailsRuntime
+	s.guardrailsRuntimeMu.RUnlock()
+	return runtime
+}
+
+func (s *Server) setGuardrailsRuntimeRef(runtime *guardrails.Guardrails) {
+	if s == nil {
+		return
+	}
+	s.guardrailsRuntimeMu.Lock()
+	s.guardrailsRuntime = runtime
+	s.guardrailsRuntimeMu.Unlock()
+}
+
+func cloneGuardrailsRuntime(src *guardrails.Guardrails) *guardrails.Guardrails {
+	if src == nil {
+		return nil
+	}
+	cloned := &guardrails.Guardrails{}
+	cloned.SetPolicyEngine(src.PolicyEngine())
+	cloned.SetHistoryStore(src.HistoryStore())
+	cloned.SetCredentialCache(src.CredentialCacheSnapshot())
+	cloned.SetActivation(src.ConfigSnapshot(), src.IsActive())
+	return cloned
+}
+
 // ----------------------------------------------------------------------
 // Runtime Gate And Shared State
 // ----------------------------------------------------------------------
@@ -26,7 +57,8 @@ var guardrailsSupportedScenarios = []string{
 // guardrailsEnabledForScenario centralizes feature-flag checks so protocol handlers
 // do not repeat scenario/global guardrails gating logic.
 func (s *Server) guardrailsEnabledForScenario(scenario string) bool {
-	if s.guardrailsRuntime == nil || s.guardrailsRuntime.Policy == nil || s.config == nil || !s.guardrailsRuntime.HasActivePolicies {
+	runtime := s.currentGuardrailsRuntime()
+	if runtime == nil || runtime.PolicyEngine() == nil || s.config == nil || !runtime.IsActive() {
 		return false
 	}
 	if !s.guardrailsSupportsScenario(scenario) {
@@ -83,10 +115,14 @@ func (s *Server) getGuardrailsSupportedScenarios() []string {
 // Credential cache and activation state live alongside the runtime gate because
 // they are shared by request masking, history rendering, and runtime reloads.
 func (s *Server) refreshGuardrailsCredentialCache() error {
-	if s.guardrailsRuntime == nil || s.config == nil || s.config.ConfigDir == "" {
-		if s.guardrailsRuntime != nil {
-			s.guardrailsRuntime.SetCredentialCache(guardrails.NewCredentialCache())
-		}
+	runtime := s.currentGuardrailsRuntime()
+	if runtime == nil {
+		return nil
+	}
+	if s.config == nil || s.config.ConfigDir == "" {
+		next := cloneGuardrailsRuntime(runtime)
+		next.SetCredentialCache(guardrails.NewCredentialCache())
+		s.setGuardrailsRuntimeRef(next)
 		return nil
 	}
 
@@ -99,7 +135,9 @@ func (s *Server) refreshGuardrailsCredentialCache() error {
 		return err
 	}
 	built := guardrails.BuildCredentialCache(credentials, s.getGuardrailsSupportedScenarios())
-	s.guardrailsRuntime.SetCredentialCache(built)
+	next := cloneGuardrailsRuntime(runtime)
+	next.SetCredentialCache(built)
+	s.setGuardrailsRuntimeRef(next)
 	return nil
 }
 
@@ -110,12 +148,17 @@ func (s *Server) refreshGuardrailsCredentialCacheOrWarn(context string) {
 }
 
 func (s *Server) refreshGuardrailsActivationState() {
-	if s.guardrailsRuntime == nil {
+	runtime := s.currentGuardrailsRuntime()
+	if runtime == nil {
 		return
 	}
-	s.guardrailsRuntime.HasActivePolicies = false
-	s.guardrailsRuntime.Config = guardrailscore.Config{}
+
+	nextCfg := guardrailscore.Config{}
+	nextActive := false
 	if s.config == nil || s.config.ConfigDir == "" {
+		next := cloneGuardrailsRuntime(runtime)
+		next.SetActivation(nextCfg, nextActive)
+		s.setGuardrailsRuntimeRef(next)
 		return
 	}
 
@@ -127,23 +170,30 @@ func (s *Server) refreshGuardrailsActivationState() {
 	cfg, err := guardrails.LoadConfig(cfgPath)
 	if err != nil {
 		logrus.WithError(err).Debug("Guardrails activation state: failed to load config")
+		next := cloneGuardrailsRuntime(runtime)
+		next.SetActivation(nextCfg, nextActive)
+		s.setGuardrailsRuntimeRef(next)
 		return
 	}
-
-	s.guardrailsRuntime.Config = cfg
-	s.guardrailsRuntime.HasActivePolicies = hasActiveGuardrailsPolicies(cfg)
+	nextCfg = cfg
+	nextActive = hasActiveGuardrailsPolicies(cfg)
+	next := cloneGuardrailsRuntime(runtime)
+	next.SetActivation(nextCfg, nextActive)
+	s.setGuardrailsRuntimeRef(next)
 }
 
 func (s *Server) setGuardrailsRuntime(runtime *guardrails.Guardrails, context string) {
-	if runtime != nil && s.guardrailsRuntime != nil {
-		if runtime.History == nil {
-			runtime.History = s.guardrailsRuntime.History
+	prev := s.currentGuardrailsRuntime()
+	if runtime != nil && prev != nil {
+		if runtime.HistoryStore() == nil {
+			runtime.SetHistoryStore(prev.HistoryStore())
 		}
-		if len(runtime.CredentialCache.ByID) == 0 && len(runtime.CredentialCache.ByScenario) == 0 {
-			runtime.CredentialCache = s.guardrailsRuntime.CredentialCache
+		cache := runtime.CredentialCacheSnapshot()
+		if len(cache.ByID) == 0 && len(cache.ByScenario) == 0 {
+			runtime.SetCredentialCache(prev.CredentialCacheSnapshot())
 		}
 	}
-	s.guardrailsRuntime = runtime
+	s.setGuardrailsRuntimeRef(runtime)
 	if runtime != nil {
 		s.refreshGuardrailsActivationState()
 		s.refreshGuardrailsCredentialCacheOrWarn(context)
@@ -212,7 +262,7 @@ func (s *Server) attachGuardrailsHooks(c *gin.Context, hc *protocol.HandleContex
 
 	onEvent, onError := guardrailspipeline.NewGuardrailsHooks(
 		c.Request.Context(),
-		s.guardrailsRuntime,
+		s.currentGuardrailsRuntime(),
 		baseInput,
 		streamState,
 	)
@@ -243,7 +293,7 @@ func (s *Server) applyGuardrailsToAnthropicV1Request(c *gin.Context, req *anthro
 
 	err := guardrailspipeline.ProcessAnthropicV1Request(
 		c.Request.Context(),
-		s.guardrailsRuntime,
+		s.currentGuardrailsRuntime(),
 		input,
 	)
 	if err != nil {
@@ -266,7 +316,7 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaRequest(c *gin.Context, req *an
 
 	err := guardrailspipeline.ProcessAnthropicBetaRequest(
 		c.Request.Context(),
-		s.guardrailsRuntime,
+		s.currentGuardrailsRuntime(),
 		input,
 	)
 	if err != nil {
@@ -292,7 +342,7 @@ func (s *Server) applyGuardrailsToAnthropicV1NonStreamResponse(c *gin.Context, r
 	input.Payload.Protocol = "anthropic_v1"
 	input.Payload.Response = resp
 
-	mutation, err := guardrailspipeline.ProcessAnthropicV1NonStreamResponse(c.Request.Context(), s.guardrailsRuntime, input, resp)
+	mutation, err := guardrailspipeline.ProcessAnthropicV1NonStreamResponse(c.Request.Context(), s.currentGuardrailsRuntime(), input, resp)
 	if err != nil {
 		return false
 	}
@@ -316,7 +366,7 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Contex
 	input.Payload.Protocol = "anthropic_beta"
 	input.Payload.Response = resp
 
-	mutation, err := guardrailspipeline.ProcessAnthropicV1BetaNonStreamResponse(c.Request.Context(), s.guardrailsRuntime, input, resp)
+	mutation, err := guardrailspipeline.ProcessAnthropicV1BetaNonStreamResponse(c.Request.Context(), s.currentGuardrailsRuntime(), input, resp)
 	if err != nil {
 		return false
 	}

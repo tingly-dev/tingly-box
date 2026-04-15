@@ -145,12 +145,18 @@ func ShouldRewriteAnthropicEvent(state *protocol.GuardrailsStreamState, eventTyp
 			return true
 		}
 	case anthropicEventTypeContentBlockDelta:
-		if state != nil && len(state.AnthropicToolEvents) > 0 {
-			return true
+		if state != nil {
+			hasBuffered := len(state.AnthropicToolEvents) > 0
+			if hasBuffered {
+				return true
+			}
 		}
 	case anthropicEventTypeContentBlockStop:
-		if state != nil && len(state.AnthropicToolEvents) > 0 {
-			return true
+		if state != nil {
+			hasBuffered := len(state.AnthropicToolEvents) > 0
+			if hasBuffered {
+				return true
+			}
 		}
 	}
 	return false
@@ -166,6 +172,7 @@ func HandleAnthropicToolUseBuffer(credentialMask *guardrailscore.CredentialMaskS
 	if streamState == nil {
 		return AnthropicToolUseDecision{}
 	}
+
 	switch eventType {
 	case anthropicEventTypeContentBlockStart:
 		blockType, toolID := extractAnthropicBlockTypeAndID(block)

@@ -94,6 +94,93 @@ type Guardrails struct {
 	mu sync.RWMutex
 }
 
+func (g *Guardrails) PolicyEngine() PolicyRunner {
+	if g == nil {
+		return nil
+	}
+	g.mu.RLock()
+	policy := g.Policy
+	g.mu.RUnlock()
+	return policy
+}
+
+func (g *Guardrails) SetPolicyEngine(policy PolicyRunner) {
+	if g == nil {
+		return
+	}
+	g.mu.Lock()
+	g.Policy = policy
+	g.mu.Unlock()
+}
+
+func (g *Guardrails) SetActivation(cfg guardrailscore.Config, active bool) {
+	if g == nil {
+		return
+	}
+	g.mu.Lock()
+	g.Config = cfg
+	g.HasActivePolicies = active
+	g.mu.Unlock()
+}
+
+func (g *Guardrails) IsActive() bool {
+	if g == nil {
+		return false
+	}
+	g.mu.RLock()
+	active := g.HasActivePolicies
+	g.mu.RUnlock()
+	return active
+}
+
+func (g *Guardrails) ConfigSnapshot() guardrailscore.Config {
+	if g == nil {
+		return guardrailscore.Config{}
+	}
+	g.mu.RLock()
+	cfg := g.Config
+	g.mu.RUnlock()
+	return cfg
+}
+
+func (g *Guardrails) HistoryStore() *guardrailsutils.Store {
+	if g == nil {
+		return nil
+	}
+	g.mu.RLock()
+	history := g.History
+	g.mu.RUnlock()
+	return history
+}
+
+func (g *Guardrails) SetHistoryStore(history *guardrailsutils.Store) {
+	if g == nil {
+		return
+	}
+	g.mu.Lock()
+	g.History = history
+	g.mu.Unlock()
+}
+
+func (g *Guardrails) CredentialCacheSnapshot() CredentialCache {
+	if g == nil {
+		return NewCredentialCache()
+	}
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	out := NewCredentialCache()
+	for id, credential := range g.CredentialCache.ByID {
+		out.ByID[id] = credential
+	}
+	for scenario, credentials := range g.CredentialCache.ByScenario {
+		copied := make([]guardrailscore.ProtectedCredential, len(credentials))
+		copy(copied, credentials)
+		out.ByScenario[scenario] = copied
+	}
+	return out
+}
+
 // Evaluate delegates to the configured policy engine when present.
 func (g *Guardrails) Evaluate(ctx context.Context, input guardrailscore.Input) (guardrailscore.Result, error) {
 	if g == nil {
@@ -143,7 +230,11 @@ func (g *Guardrails) CredentialNames(ids []string) []string {
 }
 
 func (g *Guardrails) AddHistory(input guardrailscore.Input, result guardrailscore.Result, phase, blockMessage string) {
-	if g == nil || g.History == nil {
+	if g == nil {
+		return
+	}
+	history := g.HistoryStore()
+	if history == nil {
 		return
 	}
 
@@ -165,5 +256,5 @@ func (g *Guardrails) AddHistory(input guardrailscore.Input, result guardrailscor
 	if input.Content.Command != nil {
 		entry.CommandName = input.Content.Command.Name
 	}
-	g.History.Add(entry)
+	history.Add(entry)
 }
