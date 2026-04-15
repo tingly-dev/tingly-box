@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -57,13 +58,15 @@ type guardrailsBuiltinsResponse struct {
 }
 
 type guardrailsRegistryEntry struct {
-	ID   string `json:"id" yaml:"id"`
-	Path string `json:"path" yaml:"path"`
+	ID     string `json:"id" yaml:"id"`
+	Name   string `json:"name,omitempty" yaml:"name,omitempty"`
+	Reason string `json:"reason,omitempty" yaml:"reason,omitempty"`
+	Path   string `json:"path" yaml:"path"`
 }
 
 type guardrailsRegistryResponse struct {
-	URL      string                  `json:"url"`
-	Policies []guardrailscore.Policy `json:"policies"`
+	URL      string                    `json:"url"`
+	Policies []guardrailsRegistryEntry `json:"policies"`
 }
 
 type guardrailsRegistryInstallRequest struct {
@@ -179,14 +182,16 @@ type protectedCredentialMutationResponse struct {
 }
 
 const (
-	guardrailsDirName         = "guardrails"
-	guardrailsConfigBaseName  = "guardrails"
-	guardrailsBuiltinDirName  = "builtin"
-	guardrailsCustomDirName   = "custom"
-	guardrailsRemoteDirName   = "remote"
-	guardrailsDBDirName       = "db"
-	guardrailsDBFileName      = "guardrails.db"
-	guardrailsHistoryFileName = "history.json"
+	guardrailsDirName               = "guardrails"
+	guardrailsConfigBaseName        = "guardrails"
+	guardrailsBuiltinDirName        = "builtin"
+	guardrailsCacheDirName          = "cache"
+	guardrailsCustomDirName         = "custom"
+	guardrailsRemoteDirName         = "remote"
+	guardrailsDBDirName             = "db"
+	guardrailsDBFileName            = "guardrails.db"
+	guardrailsHistoryFileName       = "history.json"
+	guardrailsRegistryCacheFileName = "registry_index.json"
 )
 
 // Leave the remote registry unset until the dedicated policy repository is
@@ -295,12 +300,20 @@ func GetGuardrailsBuiltinDir(configDir string) string {
 	return filepath.Join(GetGuardrailsDir(configDir), guardrailsBuiltinDirName)
 }
 
+func GetGuardrailsCacheDir(configDir string) string {
+	return filepath.Join(GetGuardrailsDir(configDir), guardrailsCacheDirName)
+}
+
 func GetGuardrailsRemoteDir(configDir string) string {
 	return filepath.Join(GetGuardrailsDir(configDir), guardrailsRemoteDirName)
 }
 
 func GetGuardrailsDBPath(configDir string) string {
 	return filepath.Join(GetGuardrailsDBDir(configDir), guardrailsDBFileName)
+}
+
+func GetGuardrailsRegistryCachePath(configDir string) string {
+	return filepath.Join(GetGuardrailsCacheDir(configDir), guardrailsRegistryCacheFileName)
 }
 
 // Prefer the new nested guardrails directory, but keep the legacy flat-file
@@ -373,32 +386,21 @@ func (s *Server) GetGuardrailsRegistry(c *gin.Context) {
 		return
 	}
 
-	index, err := fetchGuardrailsRegistry(c.Request.Context(), GuardrailsRegistryGitHubURL)
+	if s.config == nil || s.config.ConfigDir == "" {
+		c.JSON(500, gin.H{"success": false, "error": "config directory not set"})
+		return
+	}
+
+	forceRefresh := c.Query("refresh") == "1" || strings.EqualFold(c.Query("refresh"), "true")
+	index, err := s.loadGuardrailsRegistryIndex(c.Request.Context(), forceRefresh)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
-	policies := make([]guardrailscore.Policy, 0, len(index.Policies))
-	for _, entry := range index.Policies {
-		_, fragmentCfg, err := downloadGuardrailsRegistryFragment(c.Request.Context(), GuardrailsRegistryGitHubURL, entry)
-		if err != nil {
-			c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
-			return
-		}
-		if len(fragmentCfg.Policies) != 1 || fragmentCfg.Policies[0].ID != entry.ID {
-			c.JSON(http.StatusBadGateway, gin.H{
-				"success": false,
-				"error":   fmt.Sprintf("registry fragment for %s must contain exactly one matching policy", entry.ID),
-			})
-			return
-		}
-		policies = append(policies, fragmentCfg.Policies[0])
-	}
-
 	c.JSON(http.StatusOK, guardrailsRegistryResponse{
 		URL:      GuardrailsRegistryGitHubURL,
-		Policies: policies,
+		Policies: index.Policies,
 	})
 }
 
@@ -545,7 +547,7 @@ func (s *Server) InstallGuardrailsRegistryPolicy(c *gin.Context) {
 		return
 	}
 
-	index, err := fetchGuardrailsRegistry(c.Request.Context(), GuardrailsRegistryGitHubURL)
+	index, err := s.loadGuardrailsRegistryIndex(c.Request.Context(), false)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
 		return
@@ -1656,6 +1658,58 @@ func fetchGuardrailsRegistry(ctx context.Context, registryURL string) (guardrail
 	return index, nil
 }
 
+func readGuardrailsRegistryCache(path string) (guardrailsRegistryResponse, error) {
+	var cached guardrailsRegistryResponse
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return cached, err
+	}
+	if err := json.Unmarshal(data, &cached); err != nil {
+		return cached, err
+	}
+	return cached, nil
+}
+
+func writeGuardrailsRegistryCache(path string, resp guardrailsRegistryResponse) error {
+	data, err := json.Marshal(resp)
+	if err != nil {
+		return err
+	}
+	return writeFileAtomic(path, data)
+}
+
+func (s *Server) loadGuardrailsRegistryIndex(ctx context.Context, forceRefresh bool) (guardrailsRegistryIndex, error) {
+	var index guardrailsRegistryIndex
+	if s.config == nil || s.config.ConfigDir == "" {
+		return index, fmt.Errorf("config directory not set")
+	}
+
+	cachePath := GetGuardrailsRegistryCachePath(s.config.ConfigDir)
+	if !forceRefresh {
+		cached, err := readGuardrailsRegistryCache(cachePath)
+		if err == nil {
+			return guardrailsRegistryIndex{Policies: cached.Policies}, nil
+		}
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			logrus.WithError(err).Warn("guardrails registry: failed to read cache")
+		}
+	}
+
+	fetched, err := fetchGuardrailsRegistry(ctx, GuardrailsRegistryGitHubURL)
+	if err != nil {
+		return index, err
+	}
+
+	cache := guardrailsRegistryResponse{
+		URL:      GuardrailsRegistryGitHubURL,
+		Policies: fetched.Policies,
+	}
+	if err := writeGuardrailsRegistryCache(cachePath, cache); err != nil {
+		logrus.WithError(err).Warn("guardrails registry: failed to write cache")
+	}
+	return fetched, nil
+}
+
 func downloadGuardrailsRegistryFragment(ctx context.Context, registryURL string, entry guardrailsRegistryEntry) ([]byte, guardrailscore.Config, error) {
 	var cfg guardrailscore.Config
 
@@ -1690,25 +1744,103 @@ func resolveGuardrailsRegistryURL(registryURL, pathValue string) (string, error)
 }
 
 func fetchGuardrailsURL(ctx context.Context, rawURL string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+	const maxAttempts = 3
+	baseTimeout := 15 * time.Second
+	backoffs := []time.Duration{0, 750 * time.Millisecond, 1500 * time.Millisecond}
+
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if attempt < len(backoffs) && backoffs[attempt] > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(backoffs[attempt]):
+			}
+		}
+
+		timeout := baseTimeout + (time.Duration(attempt) * 15 * time.Second)
+		attemptCtx, cancel := context.WithTimeout(ctx, timeout)
+
+		req, err := http.NewRequestWithContext(attemptCtx, http.MethodGet, rawURL, nil)
+		if err != nil {
+			cancel()
+			return nil, fmt.Errorf("create request: %w", err)
+		}
+
+		client := &http.Client{Timeout: timeout}
+		resp, err := client.Do(req)
+		if err != nil {
+			cancel()
+			lastErr = fmt.Errorf("fetch %s: %w", rawURL, err)
+			if !shouldRetryGuardrailsFetch(err, 0) || attempt == maxAttempts-1 {
+				return nil, lastErr
+			}
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+			resp.Body.Close()
+			cancel()
+			lastErr = fmt.Errorf("fetch %s: status %d: %s", rawURL, resp.StatusCode, strings.TrimSpace(string(body)))
+			if !shouldRetryGuardrailsFetch(nil, resp.StatusCode) || attempt == maxAttempts-1 {
+				return nil, lastErr
+			}
+			continue
+		}
+
+		data, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		cancel()
+		if err != nil {
+			lastErr = fmt.Errorf("read %s: %w", rawURL, err)
+			if !shouldRetryGuardrailsFetch(err, 0) || attempt == maxAttempts-1 {
+				return nil, lastErr
+			}
+			continue
+		}
+
+		return data, nil
 	}
-	client := &http.Client{Timeout: 20 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("fetch %s: %w", rawURL, err)
+
+	if lastErr != nil {
+		return nil, lastErr
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return nil, fmt.Errorf("fetch %s: status %d: %s", rawURL, resp.StatusCode, strings.TrimSpace(string(body)))
+	return nil, fmt.Errorf("fetch %s: unknown error", rawURL)
+}
+
+func shouldRetryGuardrailsFetch(err error, statusCode int) bool {
+	if statusCode != 0 {
+		return statusCode == http.StatusRequestTimeout ||
+			statusCode == http.StatusTooManyRequests ||
+			statusCode == http.StatusBadGateway ||
+			statusCode == http.StatusServiceUnavailable ||
+			statusCode == http.StatusGatewayTimeout
 	}
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", rawURL, err)
+
+	if err == nil {
+		return false
 	}
-	return data, nil
+	if errors.Is(err, context.Canceled) {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		if netErr.Timeout() || netErr.Temporary() {
+			return true
+		}
+	}
+
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "tls handshake timeout") ||
+		strings.Contains(msg, "timeout") ||
+		strings.Contains(msg, "temporary") ||
+		strings.Contains(msg, "connection reset by peer") ||
+		strings.Contains(msg, "unexpected eof")
 }
 
 type guardrailsFileWrite struct {

@@ -62,3 +62,51 @@ policies:
         type: path
         mode: contains
         values: [".zsh_history", ".bash_history"]
+
+  - id: block-aws-credential-read
+    name: Block AWS credential reads
+    groups: [default]
+    enabled: false
+    kind: resource_access
+    verdict: block
+    reason: This policy blocks attempts to read local AWS credential files.
+    match:
+      tool_names: [bash]
+      actions:
+        include: [read]
+      resources:
+        type: path
+        mode: contains
+        values: ["~/.aws/credentials", "~/.aws/config", ".aws/credentials", ".aws/config"]
+
+  - id: block-cloud-config-read
+    name: Block cloud config reads
+    groups: [default]
+    enabled: false
+    kind: resource_access
+    verdict: block
+    reason: This policy blocks attempts to read cloud and registry credential files.
+    match:
+      tool_names: [bash]
+      actions:
+        include: [read]
+      resources:
+        type: path
+        mode: contains
+        values: ["~/.kube/config", "~/.docker/config.json", ".npmrc", ".pypirc", ".netrc"]
+
+  - id: block-private-key-file-read
+    name: Block private key file reads
+    groups: [default]
+    enabled: false
+    kind: resource_access
+    verdict: block
+    reason: This policy blocks attempts to read private key files.
+    match:
+      tool_names: [bash]
+      actions:
+        include: [read]
+      resources:
+        type: path
+        mode: contains
+        values: [".pem", ".key", "id_rsa", "id_ed25519", ".p12", ".pfx"]

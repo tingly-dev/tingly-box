@@ -47,6 +47,7 @@ import {
     ExpandMore,
     HelpOutline,
     LaptopMac,
+    Refresh,
     Rule,
     Remove,
     Terminal,
@@ -91,6 +92,13 @@ type GuardrailsPolicy = {
 type DisplayPolicy = GuardrailsPolicy & {
     isBuiltin?: boolean;
     builtinSummary?: string;
+};
+
+type RegistryPolicyEntry = {
+    id: string;
+    name?: string;
+    reason?: string;
+    path: string;
 };
 
 type EditorState = {
@@ -183,7 +191,8 @@ const GuardrailsRulesPage = () => {
     const [policies, setPolicies] = useState<GuardrailsPolicy[]>([]);
     const [builtins, setBuiltins] = useState<GuardrailsPolicy[]>([]);
     const [registryURL, setRegistryURL] = useState('');
-    const [registryPolicies, setRegistryPolicies] = useState<GuardrailsPolicy[]>([]);
+    const [registryPolicies, setRegistryPolicies] = useState<RegistryPolicyEntry[]>([]);
+    const [registryLoading, setRegistryLoading] = useState(true);
     const [registryLoadError, setRegistryLoadError] = useState<string | null>(null);
     const [pendingRegistryInstallId, setPendingRegistryInstallId] = useState<string | null>(null);
     const [pendingPolicyId, setPendingPolicyId] = useState<string | null>(null);
@@ -403,7 +412,7 @@ const GuardrailsRulesPage = () => {
             merged.push({
                 id: builtin.id,
                 name: builtin.name,
-                groups: [],
+                groups: ensureDefaultGroupMembership(builtin.groups),
                 kind: builtin.kind,
                 enabled: false,
                 scope: builtin.scope,
@@ -423,7 +432,7 @@ const GuardrailsRulesPage = () => {
         return merged;
     }, [builtinMap, builtins, installedPolicyIds, policies]);
     const downloadablePolicies = useMemo(
-        () => registryPolicies.slice().sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id)),
+        () => registryPolicies.slice().sort((a, b) => a.id.localeCompare(b.id)),
         [registryPolicies]
     );
     const resourceAccessPolicies = useMemo(
@@ -458,7 +467,7 @@ const GuardrailsRulesPage = () => {
     }, [selectedPolicyTab]);
 
     const getEffectivePolicyState = (policy: GuardrailsPolicy) => {
-        const policyGroups = normalizePolicyGroups(policy.groups);
+        const policyGroups = ensureDefaultGroupMembership(policy.groups);
         const noActiveGroup = policyGroups.length === 0 || policyGroups.every((groupID) => groupsById.get(groupID)?.enabled !== true);
         return {
             inheritedDisabled: noActiveGroup,
@@ -667,10 +676,9 @@ const GuardrailsRulesPage = () => {
             if (!silent) {
                 setLoading(true);
             }
-            const [guardrailsConfig, builtinResponse, registryResponse] = await Promise.allSettled([
+            const [guardrailsConfig, builtinResponse] = await Promise.allSettled([
                 api.getGuardrailsConfig(),
                 api.getGuardrailsBuiltins(),
-                api.getGuardrailsRegistry(),
             ]);
 
             if (guardrailsConfig.status !== 'fulfilled' || builtinResponse.status !== 'fulfilled') {
@@ -685,24 +693,12 @@ const GuardrailsRulesPage = () => {
             setGroups(Array.isArray(config.groups) ? config.groups : []);
             setPolicies(Array.isArray(config.policies) ? config.policies : []);
             setBuiltins(Array.isArray(builtinResponse.value?.policies) ? builtinResponse.value.policies : []);
-            if (registryResponse.status === 'fulfilled') {
-                setRegistryURL(registryResponse.value?.url || '');
-                setRegistryPolicies(Array.isArray(registryResponse.value?.policies) ? registryResponse.value.policies : []);
-                setRegistryLoadError(null);
-            } else {
-                setRegistryURL('');
-                setRegistryPolicies([]);
-                setRegistryLoadError(registryResponse.reason?.message || 'Failed to load registry');
-            }
             setLoadError(null);
         } catch (error) {
             console.error('Failed to load guardrails config:', error);
             setGroups([]);
             setPolicies([]);
             setBuiltins([]);
-            setRegistryURL('');
-            setRegistryPolicies([]);
-            setRegistryLoadError(null);
             setSupportedScenarios([]);
             setLoadError('Failed to load guardrails config');
         } finally {
@@ -712,8 +708,32 @@ const GuardrailsRulesPage = () => {
         }
     };
 
+    const loadRegistry = async (force = false) => {
+        try {
+            setRegistryLoading(true);
+            setRegistryLoadError(null);
+            const response = await api.getGuardrailsRegistry(force);
+            if (response?.success === false) {
+                throw new Error(response?.error || 'Failed to load registry');
+            }
+            setRegistryURL(response?.url || '');
+            setRegistryPolicies(Array.isArray(response?.policies) ? response.policies : []);
+            setRegistryLoadError(null);
+        } catch (error: any) {
+            setRegistryURL('');
+            setRegistryPolicies([]);
+            setRegistryLoadError(error?.message || 'Failed to load registry');
+        } finally {
+            setRegistryLoading(false);
+        }
+    };
+
     useEffect(() => {
         loadPolicies();
+    }, []);
+
+    useEffect(() => {
+        loadRegistry();
     }, []);
 
     useEffect(() => {
@@ -1696,27 +1716,41 @@ const GuardrailsRulesPage = () => {
                     subtitle="Install additional policy fragments from the curated remote registry. After install, enable or disable them from the policy list above."
                     size="full"
                     rightAction={
-                        registryURL ? (
+                        <Stack direction="row" spacing={1}>
                             <Button
                                 variant="outlined"
                                 size="small"
-                                component="a"
-                                href={registryURL}
-                                target="_blank"
-                                rel="noreferrer"
-                                startIcon={<ArticleOutlined />}
+                                startIcon={<Refresh />}
+                                disabled={registryLoading}
+                                onClick={() => loadRegistry(true)}
                             >
-                                Open Registry
+                                {registryLoading ? 'Refreshing…' : 'Retry'}
                             </Button>
-                        ) : null
+                            {registryURL ? (
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    component="a"
+                                    href={registryURL}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    startIcon={<ArticleOutlined />}
+                                >
+                                    Open Registry
+                                </Button>
+                            ) : null}
+                        </Stack>
                     }
                 >
                     <Stack spacing={2}>
                         {registryLoadError && <Alert severity="warning">{registryLoadError}</Alert>}
-                        {!registryLoadError && downloadablePolicies.length === 0 && (
+                        {!registryLoadError && registryLoading && (
+                            <Alert severity="info">Loading remote registry…</Alert>
+                        )}
+                        {!registryLoadError && !registryLoading && downloadablePolicies.length === 0 && (
                             <Alert severity="info">No downloadable policies are currently listed in the remote registry.</Alert>
                         )}
-                        {!registryLoadError && downloadablePolicies.length > 0 && (
+                        {!registryLoadError && !registryLoading && downloadablePolicies.length > 0 && (
                             <List dense sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, py: 0, overflow: 'hidden' }}>
                                 {downloadablePolicies.map((policy) => {
                                     const installedPolicy = policies.find((item) => item.id === policy.id);
@@ -1742,25 +1776,22 @@ const GuardrailsRulesPage = () => {
                                                     {isInstalled && <Chip size="small" label={isEnabled ? 'Installed · Enabled' : 'Installed'} />}
                                                 </Stack>
                                                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                                                    {policy.name || 'Unnamed policy'}
+                                                    {policy.name || policy.path}
                                                 </Typography>
                                             </Box>
                                             <Box sx={{ flex: 1, minWidth: 0 }}>
                                                 <Typography variant="body2" color="text.primary">
-                                                    {policy.reason || 'No description provided.'}
-                                                </Typography>
-                                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                                                    {policy.kind || 'unknown kind'}
+                                                    {policy.reason || 'Download this policy fragment from the remote registry and manage enable/disable from the local policy list.'}
                                                 </Typography>
                                             </Box>
                                             <Box sx={{ width: { xs: '100%', md: 'auto' }, display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>
                                                 <Button
                                                     variant={isInstalled ? 'outlined' : 'contained'}
                                                     size="small"
-                                                    disabled={isInstalled || pendingRegistryInstallId === policy.id}
+                                                    disabled={isInstalled || pendingRegistryInstallId !== null}
                                                     onClick={() => handleInstallRegistryPolicy(policy.id)}
                                                 >
-                                                    {isInstalled ? 'Installed' : 'Install'}
+                                                    {isInstalled ? 'Installed' : pendingRegistryInstallId === policy.id ? 'Installing…' : 'Install'}
                                                 </Button>
                                             </Box>
                                         </Box>

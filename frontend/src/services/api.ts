@@ -622,8 +622,9 @@ export const api = {
     getGuardrailsBuiltins: async (): Promise<any> => {
         return fetchUIAPI('/guardrails/builtins');
     },
-    getGuardrailsRegistry: async (): Promise<any> => {
-        return fetchUIAPI('/guardrails/registry');
+    getGuardrailsRegistry: async (forceRefresh = false): Promise<any> => {
+        const query = forceRefresh ? '?refresh=1' : '';
+        return fetchUIAPI(`/guardrails/registry${query}`);
     },
     installGuardrailsRegistryPolicy: async (id: string): Promise<any> => {
         return fetchUIAPI('/guardrails/registry/install', {
