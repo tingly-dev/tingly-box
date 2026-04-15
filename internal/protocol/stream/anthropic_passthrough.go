@@ -146,7 +146,7 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 					return err
 				} else if handled {
 					for _, rewrittenEvent := range rewritten {
-						sendAnthropicBetaStreamEvent(hc.GinContext, rewrittenEvent.EventType, rewrittenEvent.Payload, hc.GinContext.Writer)
+						sendAnthropicStreamEvent(hc.GinContext, rewrittenEvent.EventType, rewrittenEvent.Payload, hc.GinContext.Writer)
 					}
 					return nil
 				}
