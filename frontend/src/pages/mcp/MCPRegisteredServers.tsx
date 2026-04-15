@@ -138,7 +138,7 @@ const MCPRegisteredServers = () => {
         setSaving(true);
         const result = await saveConfig(updated);
         if (result.success) {
-            setNotification({ open: true, message: enabled ? 'Enabled. Restart server to apply.' : 'Disabled. Restart server to apply.', severity: 'success' });
+            setNotification({ open: true, message: enabled ? 'Enabled. Reconnect MCP client to refresh tool list.' : 'Disabled. Reconnect MCP client to refresh tool list.', severity: 'success' });
         } else {
             setNotification({ open: true, message: result.error || 'Failed to update', severity: 'error' });
             // Revert on failure
@@ -160,7 +160,7 @@ const MCPRegisteredServers = () => {
         setSaving(true);
         const result = await saveConfig(updated);
         if (result.success) {
-            setNotification({ open: true, message: 'Deleted. Restart server to apply.', severity: 'success' });
+            setNotification({ open: true, message: 'Deleted. Reconnect MCP client to refresh tool list.', severity: 'success' });
         } else {
             setNotification({ open: true, message: result.error || 'Failed to delete', severity: 'error' });
             // Revert on failure
@@ -211,7 +211,7 @@ const MCPRegisteredServers = () => {
         setSaving(true);
         const result = await saveConfig(next);
         if (result.success) {
-            setNotification({ open: true, message: 'Saved. Restart server to apply.', severity: 'success' });
+            setNotification({ open: true, message: 'Saved. Reconnect MCP client to refresh tool list.', severity: 'success' });
             setAllSources(next);
             setEditorMode('none');
             setEditingId('');
