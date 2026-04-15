@@ -88,9 +88,15 @@ func (s *AdvisorToolSource) ListTools(ctx context.Context) ([]ToolDefinition, er
 		"required": []string{"reason"},
 	}
 	schemaBytes, _ := json.Marshal(schema)
+
+	remainingUses := s.config.MaxUsesPerRequest
+	if actx, ok := GetAdvisorContext(ctx); ok {
+		remainingUses = actx.UsesRemaining
+	}
+
 	return []ToolDefinition{{
 		Name:        "advisor",
-		Description: s.description(3), // placeholder; will be dynamic later
+		Description: s.description(remainingUses),
 		InputSchema: schemaBytes,
 	}}, nil
 }

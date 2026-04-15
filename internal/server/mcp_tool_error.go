@@ -6,6 +6,22 @@ import (
 	"fmt"
 )
 
+func (s *Server) advisorMaxUses() int {
+	if s == nil || s.mcpRuntime == nil {
+		return 0
+	}
+	cfg := s.mcpRuntime.GetConfig()
+	if cfg == nil {
+		return 0
+	}
+	for _, source := range cfg.Sources {
+		if source.Advisor != nil && source.Advisor.MaxUsesPerRequest > 0 {
+			return source.Advisor.MaxUsesPerRequest
+		}
+	}
+	return 0
+}
+
 func (s *Server) isEnabledMCPToolName(ctx context.Context, toolName string) bool {
 	if s == nil || s.mcpRuntime == nil {
 		return false
