@@ -7,8 +7,6 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
-
-	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 )
 
 type StreamToolUse struct {
@@ -105,18 +103,6 @@ func (a *StreamAccumulator) IngestAnyEvent(event interface{}) {
 	case map[string]interface{}:
 		a.ingestEventMap(evt)
 	}
-}
-
-func (a *StreamAccumulator) Content() guardrailscore.Content {
-	text := strings.TrimSpace(a.textBuilder.String())
-
-	content := guardrailscore.Content{Text: text}
-	if !a.commandFound {
-		return content
-	}
-
-	content.Command = BuildCommandFromRawArguments(a.commandName, strings.TrimSpace(a.commandArgs.String()))
-	return content
 }
 
 func (a *StreamAccumulator) NextBlockIndex() int {
