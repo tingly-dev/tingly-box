@@ -109,11 +109,10 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 			s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
 			anthropicResp.Model = anthropic.Model(responseModel)
 
-			session := s.guardrailsSessionFromContext(c, actualModel, provider)
-			messageHistory := serverguardrails.MessagesFromAnthropicV1(req.System, req.Messages)
-			blocked := s.applyGuardrailsToAnthropicV1NonStreamResponse(c, session, messageHistory, anthropicResp)
-			if !blocked {
-				s.restoreGuardrailsCredentialAliasesV1Response(c, anthropicResp)
+			// response guardrails
+			_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+			if s.guardrailsEnabledForScenario(scenario) {
+				s.applyGuardrailsToAnthropicV1NonStreamResponse(c, req, actualModel, provider, anthropicResp)
 			}
 
 			if err := stream.AnthropicSingleMessage(c, anthropicResp, responseModel); err != nil {
@@ -459,11 +458,10 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 				s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
 				anthropicResp.Model = anthropic.Model(responseModel)
 
-				session := s.guardrailsSessionFromContext(c, actualModel, provider)
-				messageHistory := serverguardrails.MessagesFromAnthropicV1Beta(req.System, req.Messages)
-				blocked := s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, session, messageHistory, anthropicResp)
-				if !blocked {
-					s.restoreGuardrailsCredentialAliasesV1BetaResponse(c, anthropicResp)
+				// response guardrails
+				_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+				if s.guardrailsEnabledForScenario(scenario) {
+					s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, req, actualModel, provider, anthropicResp)
 				}
 
 				if err := stream.AnthropicSingleBetaMessage(c, anthropicResp, responseModel); err != nil {
@@ -524,11 +522,11 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 			// FIXME: now we use req model as resp model
 			anthropicResp.Model = anthropic.Model(responseModel)
 
-		// response guardrails
-		_, _, _, _, scenario, _, _ := GetTrackingContext(c)
-		if s.guardrailsEnabledForScenario(scenario) {
-			s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, req, actualModel, provider, anthropicResp)
-		}
+			// response guardrails
+			_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+			if s.guardrailsEnabledForScenario(scenario) {
+				s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, req, actualModel, provider, anthropicResp)
+			}
 
 			if recorder != nil {
 				recorder.SetAssembledResponse(anthropicResp)
