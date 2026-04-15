@@ -6,18 +6,18 @@ import (
 	"fmt"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/mcpruntime"
+	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 )
 
 // MCPRuntimeAdapter adapts mcpruntime.Runtime to local.MCPConnectionHandler interface.
 // It aggregates tools from configured MCP sources and executes them.
 type MCPRuntimeAdapter struct {
-	runtime        *mcpruntime.Runtime
+	runtime        *runtime.Runtime
 	allowedSources []string // empty means allow all sources
 }
 
 // NewMCPRuntimeAdapter creates a new adapter wrapping the mcpruntime.Runtime.
-func NewMCPRuntimeAdapter(runtime *mcpruntime.Runtime, allowedSources ...string) *MCPRuntimeAdapter {
+func NewMCPRuntimeAdapter(runtime *runtime.Runtime, allowedSources ...string) *MCPRuntimeAdapter {
 	return &MCPRuntimeAdapter{
 		runtime:        runtime,
 		allowedSources: allowedSources,
@@ -55,7 +55,7 @@ func (a *MCPRuntimeAdapter) ListTools(ctx context.Context) ([]MCPTool, error) {
 		}
 		for _, t := range srcTools {
 			// Create normalized tool name for calling
-			normalizedName := mcpruntime.NormalizeToolName(sourceID, t.Name)
+			normalizedName := runtime.NormalizeToolName(sourceID, t.Name)
 
 			inputSchema := make(map[string]any)
 			if len(t.InputSchema) > 0 {
@@ -80,7 +80,7 @@ func (a *MCPRuntimeAdapter) CallTool(ctx context.Context, name string, arguments
 	}
 
 	// Verify this is a normalized name
-	sourceID, toolName, ok := mcpruntime.ParseNormalizedToolName(name)
+	sourceID, toolName, ok := runtime.ParseNormalizedToolName(name)
 	if !ok {
 		return "", fmt.Errorf("invalid normalized tool name: %s", name)
 	}
@@ -109,10 +109,10 @@ func (a *MCPRuntimeAdapter) CallTool(ctx context.Context, name string, arguments
 
 // BuildNormalizedToolName creates a normalized tool name from source ID and tool name.
 func BuildNormalizedToolName(sourceID, toolName string) string {
-	return mcpruntime.NormalizeToolName(sourceID, toolName)
+	return runtime.NormalizeToolName(sourceID, toolName)
 }
 
 // ParseNormalizedToolName parses a normalized tool name.
 func ParseNormalizedToolName(name string) (string, string, bool) {
-	return mcpruntime.ParseNormalizedToolName(name)
+	return runtime.ParseNormalizedToolName(name)
 }

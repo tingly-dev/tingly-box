@@ -1,4 +1,4 @@
-package mcpruntime
+package runtime
 
 import (
 	"context"
@@ -125,7 +125,7 @@ func (sc *sessionCache) getOrCreate(ctx context.Context, source typ.MCPSourceCon
 			return nil, nil, cmdErr
 		}
 		t = &mcp.CommandTransport{
-			Command:          cmd,
+			Command:           cmd,
 			TerminateDuration: 5 * time.Second,
 		}
 	case "http":

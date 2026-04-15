@@ -1,4 +1,4 @@
-package mcpruntime
+package runtime
 
 import (
 	"context"
