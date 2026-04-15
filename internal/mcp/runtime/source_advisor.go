@@ -77,10 +77,10 @@ func (s *AdvisorToolSource) IsConnected() bool {
 
 // ListTools returns the advisor tool definition.
 func (s *AdvisorToolSource) ListTools(ctx context.Context) ([]ToolDefinition, error) {
-	schema := map[string]interface{}{
+	schema := map[string]any{
 		"type": "object",
-		"properties": map[string]interface{}{
-			"reason": map[string]interface{}{
+		"properties": map[string]any{
+			"reason": map[string]any{
 				"type":        "string",
 				"description": "Why the executor is consulting the advisor.",
 			},
@@ -106,12 +106,21 @@ func (s *AdvisorToolSource) CallTool(ctx context.Context, toolName string, argum
 	var input struct {
 		Reason string `json:"reason"`
 	}
-	_ = json.Unmarshal([]byte(arguments), &input)
+	if err := json.Unmarshal([]byte(arguments), &input); err != nil {
+		logrus.WithError(err).Warn("advisor: failed to unmarshal arguments, using empty reason")
+	}
 
 	actx, ok := GetAdvisorContext(ctx)
 	if !ok || actx.UsesRemaining <= 0 {
+		logrus.Debug("advisor: consultations exhausted for this request")
 		return "Advisor consultations exhausted for this request.", nil
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"reason":          input.Reason,
+		"uses_remaining":  actx.UsesRemaining,
+		"format":          detectAdvisorFormat(s.config),
+	}).Debug("advisor: consulting advisor model")
 
 	var result string
 	var err error
@@ -122,9 +131,11 @@ func (s *AdvisorToolSource) CallTool(ctx context.Context, toolName string, argum
 		result, err = s.callAnthropic(ctx, input.Reason, actx)
 	}
 	if err != nil {
+		logrus.WithError(err).Error("advisor: consultation failed")
 		return "", err
 	}
 	actx.UsesRemaining--
+	logrus.WithField("uses_remaining", actx.UsesRemaining).Debug("advisor: consultation completed")
 	return result, nil
 }
 
@@ -279,7 +290,7 @@ func normalizeAdvisorResponse(raw string) string {
 }
 
 // GetSourceConfig returns the source configuration.
-func (s *AdvisorToolSource) GetSourceConfig() interface{} {
+func (s *AdvisorToolSource) GetSourceConfig() any {
 	return s.config
 }
 
