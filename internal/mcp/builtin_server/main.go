@@ -13,6 +13,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
 )
 
 const (
@@ -32,7 +33,7 @@ func Serve() error {
 
 	// Register web search tool
 	webSearchTool := mcp.Tool{
-		Name:        "mcp_web_search",
+		Name:        mcptools.BuiltinWebSearchToolName,
 		Description: "Search web pages with Serper and return top organic results.",
 	}
 
@@ -64,7 +65,7 @@ func Serve() error {
 
 	// Register web fetch tool
 	webFetchTool := mcp.Tool{
-		Name:        "mcp_web_fetch",
+		Name:        mcptools.BuiltinWebFetchToolName,
 		Description: "Fetch and convert a URL to markdown-like text via Jina Reader.",
 	}
 
