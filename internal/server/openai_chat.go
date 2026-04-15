@@ -224,7 +224,7 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 		reqForMCP := *req
 		reqForMCP.StreamOptions = openai.ChatCompletionStreamOptionsParam{}
 
-		wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
+		wrapper := s.clientPool.GetOpenAIClient(ctx, provider, req.Model)
 		fc := NewForwardContext(nil, provider)
 		resp, _, err := ForwardOpenAIChat(fc, wrapper, &reqForMCP)
 		if err != nil {
@@ -240,7 +240,7 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 		}
 
 		if len(resp.Choices) > 0 && len(resp.Choices[0].Message.ToolCalls) > 0 && hasOnlyMCPToolCalls(resp.Choices[0].Message.ToolCalls) {
-			resp, err = s.handleMCPToolCalls(c.Request.Context(), provider, &reqForMCP, resp)
+			resp, err = s.handleMCPToolCalls(ctx, provider, &reqForMCP, resp)
 			if err != nil {
 				usage := protocol.NewTokenUsageWithCache(0, 0, 0)
 				s.trackUsageWithTokenUsage(c, usage, err)
@@ -264,8 +264,8 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 		return
 	}
 
-	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
-	fc := NewForwardContext(c.Request.Context(), provider)
+	wrapper := s.clientPool.GetOpenAIClient(ctx, provider, req.Model)
+	fc := NewForwardContext(ctx, provider)
 	streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, req)
 	if cancel != nil {
 		defer cancel()
