@@ -279,10 +279,10 @@ type MCPSourceConfig struct {
 
 // AdvisorConfig configures the in-process advisor tool source.
 type AdvisorConfig struct {
-	BaseURL           string `json:"base_url"`
-	Model             string `json:"model"`
-	APIKey            string `json:"api_key"`
-	MaxUsesPerRequest int    `json:"max_uses_per_request"`
+	BaseURL           string `json:"base_url,omitempty" yaml:"base_url,omitempty"`
+	Model             string `json:"model,omitempty" yaml:"model,omitempty"`
+	APIKey            string `json:"api_key,omitempty" yaml:"api_key,omitempty"`
+	MaxUsesPerRequest int    `json:"max_uses_per_request,omitempty" yaml:"max_uses_per_request,omitempty"`
 }
 
 // MCPStdioConfig STDIO connection configuration
