@@ -43,8 +43,8 @@ const (
 
 // Constants for transport TTL and cleanup interval
 const (
-	DefaultTransportTTL             = 120 * time.Minute // Default time-to-live for cached transports
-	DefaultTransportCleanupInterval = 60 * time.Minute  // Default interval for cleanup task
+	DefaultTransportTTL             = 15 * time.Minute // Default time-to-live for cached transports (reduced from 120min for better session lifecycle management)
+	DefaultTransportCleanupInterval = 5 * time.Minute  // Default interval for cleanup task
 )
 
 // pooledTransport wraps a transport with its last access timestamp for TTL tracking
