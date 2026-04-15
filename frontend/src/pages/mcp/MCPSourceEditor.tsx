@@ -86,7 +86,8 @@ const MCPSourceEditor = ({
                     sx={{ '& .MuiToggleButton-root': { border: 'none', borderRadius: 0, py: 1.25, fontWeight: 700 } }}
                 >
                     <ToggleButton value="stdio">STDIO</ToggleButton>
-                    <ToggleButton value="http">Streamable HTTP / SSE</ToggleButton>
+                    <ToggleButton value="http">HTTP</ToggleButton>
+                    <ToggleButton value="sse">SSE</ToggleButton>
                 </ToggleButtonGroup>
             </Box>
 
@@ -155,10 +156,10 @@ const MCPSourceEditor = ({
                 </>
             ) : (
                 <Box sx={sectionSx}>
-                    <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>Streamable HTTP endpoint</Typography>
+                    <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>{value.transport === 'sse' ? 'SSE endpoint' : 'HTTP endpoint'}</Typography>
                     <TextField
                         fullWidth
-                        placeholder="http://localhost:3000/mcp"
+                        placeholder={value.transport === 'sse' ? "http://localhost:3000/mcp" : "http://localhost:3000/mcp"}
                         value={value.endpoint}
                         onChange={(e) => set({ endpoint: e.target.value })}
                     />
