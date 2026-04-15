@@ -157,3 +157,65 @@ func TestContentPolicyTargetsCommandIgnoresDescriptionNoise(t *testing.T) {
 		t.Fatalf("expected allow verdict, got %s", res.Verdict)
 	}
 }
+
+func TestContentPolicyCredentialRefsOnlyRequiresObservedRefs(t *testing.T) {
+	policy, err := NewContentPolicy(
+		"credential-only",
+		"Credential Only",
+		true,
+		guardrailscore.Scope{},
+		TextMatchConfig{
+			CredentialRefs: []string{"cred_a", "cred_b"},
+			Verdict:        guardrailscore.VerdictBlock,
+			Reason:         "credential ref matched",
+		},
+	)
+	if err != nil {
+		t.Fatalf("new policy: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		state   *guardrailscore.CredentialMaskState
+		verdict guardrailscore.Verdict
+	}{
+		{
+			name:    "no state",
+			state:   nil,
+			verdict: guardrailscore.VerdictAllow,
+		},
+		{
+			name: "state without matching refs",
+			state: &guardrailscore.CredentialMaskState{
+				UsedRefs: []string{"cred_x"},
+			},
+			verdict: guardrailscore.VerdictAllow,
+		},
+		{
+			name: "state with matching refs",
+			state: &guardrailscore.CredentialMaskState{
+				UsedRefs: []string{"cred_b", "cred_x"},
+			},
+			verdict: guardrailscore.VerdictBlock,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input := guardrailscore.Input{
+				Scenario:  "openai",
+				Direction: guardrailscore.DirectionRequest,
+				Content:   guardrailscore.Content{Text: "safe input"},
+			}
+			input.State.CredentialMask = tt.state
+
+			res, err := policy.Evaluate(context.Background(), input)
+			if err != nil {
+				t.Fatalf("evaluate: %v", err)
+			}
+			if res.Verdict != tt.verdict {
+				t.Fatalf("expected verdict %s, got %s", tt.verdict, res.Verdict)
+			}
+		})
+	}
+}
