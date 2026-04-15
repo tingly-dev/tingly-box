@@ -99,6 +99,7 @@ type Server struct {
 	// guardrails runtime (optional)
 	guardrailsRuntime   *guardrails.Guardrails
 	guardrailsRuntimeMu sync.RWMutex
+	guardrailsConfigMu  sync.Mutex
 
 	// recording sinks
 	recordSink *obs.Sink

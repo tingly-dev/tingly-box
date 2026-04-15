@@ -179,6 +179,56 @@ const resourceAccessActionOptions = [
 ] as const;
 
 const DEFAULT_GROUP_ID = 'default';
+const PENDING_REGISTRY_INSTALLS_STORAGE_KEY = 'guardrails.pendingRegistryInstalls';
+
+const readPendingRegistryInstallIds = (): Set<string> => {
+    if (typeof window === 'undefined') {
+        return new Set<string>();
+    }
+    try {
+        const raw = window.sessionStorage.getItem(PENDING_REGISTRY_INSTALLS_STORAGE_KEY);
+        if (!raw) {
+            return new Set<string>();
+        }
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) {
+            return new Set<string>();
+        }
+        return new Set<string>(
+            parsed
+                .map((value) => (typeof value === 'string' ? value.trim() : ''))
+                .filter(Boolean)
+        );
+    } catch {
+        return new Set<string>();
+    }
+};
+
+const writePendingRegistryInstallIds = (pending: Set<string>) => {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    try {
+        if (pending.size === 0) {
+            window.sessionStorage.removeItem(PENDING_REGISTRY_INSTALLS_STORAGE_KEY);
+            return;
+        }
+        window.sessionStorage.setItem(PENDING_REGISTRY_INSTALLS_STORAGE_KEY, JSON.stringify(Array.from(pending)));
+    } catch {
+    }
+};
+
+const addPendingRegistryInstallId = (policyId: string) => {
+    const next = readPendingRegistryInstallIds();
+    next.add(policyId);
+    writePendingRegistryInstallIds(next);
+};
+
+const removePendingRegistryInstallId = (policyId: string) => {
+    const next = readPendingRegistryInstallIds();
+    next.delete(policyId);
+    writePendingRegistryInstallIds(next);
+};
 
 const GuardrailsRulesPage = () => {
     const location = useLocation();
@@ -194,7 +244,7 @@ const GuardrailsRulesPage = () => {
     const [registryPolicies, setRegistryPolicies] = useState<RegistryPolicyEntry[]>([]);
     const [registryLoading, setRegistryLoading] = useState(true);
     const [registryLoadError, setRegistryLoadError] = useState<string | null>(null);
-    const [pendingRegistryInstallId, setPendingRegistryInstallId] = useState<string | null>(null);
+    const [pendingRegistryInstallIds, setPendingRegistryInstallIds] = useState<Set<string>>(() => readPendingRegistryInstallIds());
     const [pendingPolicyId, setPendingPolicyId] = useState<string | null>(null);
     const [pendingSave, setPendingSave] = useState(false);
     const [pendingBulkPolicyAction, setPendingBulkPolicyAction] = useState<'enable' | 'disable' | null>(null);
@@ -737,6 +787,10 @@ const GuardrailsRulesPage = () => {
     }, []);
 
     useEffect(() => {
+        writePendingRegistryInstallIds(pendingRegistryInstallIds);
+    }, [pendingRegistryInstallIds]);
+
+    useEffect(() => {
         if (loading || loadError || initializingDefaultGroup || supportedScenarios.length === 0) {
             return;
         }
@@ -1143,8 +1197,16 @@ const GuardrailsRulesPage = () => {
     };
 
     const handleInstallRegistryPolicy = async (policyId: string) => {
+        if (pendingRegistryInstallIds.has(policyId)) {
+            return;
+        }
         try {
-            setPendingRegistryInstallId(policyId);
+            addPendingRegistryInstallId(policyId);
+            setPendingRegistryInstallIds((prev) => {
+                const next = new Set(prev);
+                next.add(policyId);
+                return next;
+            });
             const result = await api.installGuardrailsRegistryPolicy(policyId);
             if (!result?.success) {
                 setActionMessage({ type: 'error', text: result?.error || 'Failed to install policy' });
@@ -1155,7 +1217,15 @@ const GuardrailsRulesPage = () => {
         } catch (error: any) {
             setActionMessage({ type: 'error', text: error?.message || 'Failed to install policy' });
         } finally {
-            setPendingRegistryInstallId(null);
+            removePendingRegistryInstallId(policyId);
+            setPendingRegistryInstallIds((prev) => {
+                if (!prev.has(policyId)) {
+                    return prev;
+                }
+                const next = new Set(prev);
+                next.delete(policyId);
+                return next;
+            });
         }
     };
 
@@ -1761,6 +1831,7 @@ const GuardrailsRulesPage = () => {
                                     const installedPolicy = policies.find((item) => item.id === policy.id);
                                     const isInstalled = Boolean(installedPolicy);
                                     const isEnabled = installedPolicy?.enabled === true;
+                                    const isInstalling = pendingRegistryInstallIds.has(policy.id);
                                     return (
                                     <ListItem
                                         key={policy.id}
@@ -1793,10 +1864,10 @@ const GuardrailsRulesPage = () => {
                                                 <Button
                                                     variant={isInstalled ? 'outlined' : 'contained'}
                                                     size="small"
-                                                    disabled={isInstalled || pendingRegistryInstallId !== null}
+                                                    disabled={isInstalled || isInstalling}
                                                     onClick={() => handleInstallRegistryPolicy(policy.id)}
                                                 >
-                                                    {isInstalled ? 'Installed' : pendingRegistryInstallId === policy.id ? 'Installing…' : 'Install'}
+                                                    {isInstalled ? 'Installed' : isInstalling ? 'Installing…' : 'Install'}
                                                 </Button>
                                             </Box>
                                         </Box>

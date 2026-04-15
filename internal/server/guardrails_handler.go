@@ -472,6 +472,9 @@ func (s *Server) UpdateGuardrailsConfig(c *gin.Context) {
 		return
 	}
 
+	s.guardrailsConfigMu.Lock()
+	defer s.guardrailsConfigMu.Unlock()
+
 	path, err := ensureGuardrailsPath(s.config.ConfigDir)
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
@@ -546,10 +549,16 @@ func (s *Server) InstallGuardrailsRegistryPolicy(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "id is required"})
 		return
 	}
+	installLog := logrus.WithField("policy_id", policyID)
+	installLog.Info("Guardrails registry install started")
 
-	index, err := s.loadGuardrailsRegistryIndex(c.Request.Context(), false)
+	installCtx, cancel := context.WithTimeout(c.Request.Context(), 75*time.Second)
+	defer cancel()
+
+	index, err := s.loadGuardrailsRegistryIndex(installCtx, false)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
+		installLog.WithError(err).Warn("Guardrails registry install failed loading registry index")
+		c.JSON(guardrailsFetchStatus(err), gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
@@ -568,6 +577,30 @@ func (s *Server) InstallGuardrailsRegistryPolicy(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "registry policy is missing path"})
 		return
 	}
+	installLog.WithField("entry_path", entry.Path).Info("Guardrails registry downloading policy fragment")
+
+	fragmentData, fragmentCfg, err := downloadGuardrailsRegistryFragment(installCtx, GuardrailsRegistryGitHubURL, *entry)
+	if err != nil {
+		installLog.WithError(err).Warn("Guardrails registry install failed downloading fragment")
+		c.JSON(guardrailsFetchStatus(err), gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	fragmentCfg, err = selectGuardrailsRegistryPolicyFragment(fragmentCfg, policyID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+	fragmentData, err = marshalGuardrailsPolicyFragment(fragmentCfg)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	s.guardrailsConfigMu.Lock()
+	defer s.guardrailsConfigMu.Unlock()
 
 	path, err := ensureGuardrailsPath(s.config.ConfigDir)
 	if err != nil {
@@ -596,25 +629,6 @@ func (s *Server) InstallGuardrailsRegistryPolicy(c *gin.Context) {
 		}
 	}
 
-	fragmentData, fragmentCfg, err := downloadGuardrailsRegistryFragment(c.Request.Context(), GuardrailsRegistryGitHubURL, *entry)
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-	fragmentCfg, err = selectGuardrailsRegistryPolicyFragment(fragmentCfg, policyID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
-		return
-	}
-	fragmentData, err = marshalGuardrailsPolicyFragment(fragmentCfg)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-
 	rootGroupUpdated := false
 	if usesGroupID(fragmentCfg.Policies, defaultGuardrailsGroup.ID) {
 		rootGroupUpdated = ensureGuardrailsDefaultGroup(&rootCfg)
@@ -628,6 +642,7 @@ func (s *Server) InstallGuardrailsRegistryPolicy(c *gin.Context) {
 	}
 
 	targetPath := filepath.Join(GetGuardrailsRemoteDir(s.config.ConfigDir), policyID+".yaml")
+	installLog.WithField("target_path", targetPath).Info("Guardrails registry writing installed policy")
 	rootUpdated := ensureGuardrailsImport(&rootCfg, path, targetPath)
 	importedCfgs[targetPath] = fragmentCfg
 	mergedCfg := mergeGuardrailsImportedConfigs(rootCfg, importedCfgs, path)
@@ -642,9 +657,11 @@ func (s *Server) InstallGuardrailsRegistryPolicy(c *gin.Context) {
 		writes = append(writes, guardrailsFileWrite{Path: path, Data: rootData})
 	}
 	if err := s.persistGuardrailsFilesAndReload(mergedCfg, writes, "guardrails registry install"); err != nil {
+		installLog.WithError(err).Warn("Guardrails registry install failed persisting files")
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
+	installLog.Info("Guardrails registry install completed")
 
 	c.JSON(http.StatusOK, guardrailsRegistryInstallResponse{
 		Success:     true,
@@ -690,6 +707,9 @@ func (s *Server) UpdateGuardrailsPolicy(c *gin.Context) {
 		c.JSON(400, gin.H{"success": false, "error": err.Error()})
 		return
 	}
+
+	s.guardrailsConfigMu.Lock()
+	defer s.guardrailsConfigMu.Unlock()
 
 	path, err := ensureGuardrailsPath(s.config.ConfigDir)
 	if err != nil {
@@ -820,6 +840,9 @@ func (s *Server) CreateGuardrailsPolicy(c *gin.Context) {
 		return
 	}
 
+	s.guardrailsConfigMu.Lock()
+	defer s.guardrailsConfigMu.Unlock()
+
 	path, err := ensureGuardrailsPath(s.config.ConfigDir)
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
@@ -925,6 +948,9 @@ func (s *Server) DeleteGuardrailsPolicy(c *gin.Context) {
 		return
 	}
 
+	s.guardrailsConfigMu.Lock()
+	defer s.guardrailsConfigMu.Unlock()
+
 	path, err := ensureGuardrailsPath(s.config.ConfigDir)
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
@@ -1019,6 +1045,9 @@ func (s *Server) UpdateGuardrailsGroup(c *gin.Context) {
 		c.JSON(400, gin.H{"success": false, "error": err.Error()})
 		return
 	}
+
+	s.guardrailsConfigMu.Lock()
+	defer s.guardrailsConfigMu.Unlock()
 
 	path, err := ensureGuardrailsPath(s.config.ConfigDir)
 	if err != nil {
@@ -1130,6 +1159,9 @@ func (s *Server) CreateGuardrailsGroup(c *gin.Context) {
 		return
 	}
 
+	s.guardrailsConfigMu.Lock()
+	defer s.guardrailsConfigMu.Unlock()
+
 	path, err := ensureGuardrailsPath(s.config.ConfigDir)
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
@@ -1203,6 +1235,9 @@ func (s *Server) DeleteGuardrailsGroup(c *gin.Context) {
 		c.JSON(400, gin.H{"success": false, "error": "default group cannot be deleted"})
 		return
 	}
+
+	s.guardrailsConfigMu.Lock()
+	defer s.guardrailsConfigMu.Unlock()
 
 	path, err := ensureGuardrailsPath(s.config.ConfigDir)
 	if err != nil {
@@ -1772,21 +1807,63 @@ func resolveGuardrailsRegistryURL(registryURL, pathValue string) (string, error)
 }
 
 func fetchGuardrailsURL(ctx context.Context, rawURL string) ([]byte, error) {
-	const maxAttempts = 3
-	baseTimeout := 15 * time.Second
-	backoffs := []time.Duration{0, 750 * time.Millisecond, 1500 * time.Millisecond}
+	candidates := guardrailsURLCandidates(rawURL)
+	var lastErr error
+	for i, candidate := range candidates {
+		attempts, baseTimeout, timeoutStep := guardrailsFetchPlan(i, len(candidates))
+		data, err := fetchGuardrailsURLWithRetries(ctx, candidate, attempts, baseTimeout, timeoutStep)
+		if err == nil {
+			if i > 0 {
+				logrus.WithFields(logrus.Fields{
+					"source_url": rawURL,
+					"used_url":   candidate,
+				}).Info("guardrails download succeeded via fallback source")
+			}
+			return data, nil
+		}
+		lastErr = err
+		if i < len(candidates)-1 {
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"failed_url":   candidate,
+				"fallback_url": candidates[i+1],
+				"attempts":     attempts,
+				"base_timeout": baseTimeout.String(),
+			}).Warn("guardrails download failed, trying fallback source")
+		}
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, fmt.Errorf("fetch %s: unknown error", rawURL)
+}
+
+func guardrailsFetchPlan(candidateIndex, candidateCount int) (attempts int, baseTimeout, timeoutStep time.Duration) {
+	// When a fallback source is available, fail fast on the primary source so
+	// we do not consume the whole request budget before trying the mirror.
+	if candidateCount > 1 && candidateIndex == 0 {
+		return 1, 12 * time.Second, 0
+	}
+	// Fallback sources still get retries, but keep total budget bounded.
+	return 2, 20 * time.Second, 15 * time.Second
+}
+
+func fetchGuardrailsURLWithRetries(ctx context.Context, rawURL string, maxAttempts int, baseTimeout, timeoutStep time.Duration) ([]byte, error) {
+	if maxAttempts <= 0 {
+		maxAttempts = 1
+	}
 
 	var lastErr error
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		if attempt < len(backoffs) && backoffs[attempt] > 0 {
+		if attempt > 0 {
+			backoff := time.Duration(attempt) * 750 * time.Millisecond
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
-			case <-time.After(backoffs[attempt]):
+			case <-time.After(backoff):
 			}
 		}
 
-		timeout := baseTimeout + (time.Duration(attempt) * 15 * time.Second)
+		timeout := baseTimeout + (time.Duration(attempt) * timeoutStep)
 		attemptCtx, cancel := context.WithTimeout(ctx, timeout)
 
 		req, err := http.NewRequestWithContext(attemptCtx, http.MethodGet, rawURL, nil)
@@ -1831,10 +1908,47 @@ func fetchGuardrailsURL(ctx context.Context, rawURL string) ([]byte, error) {
 		return data, nil
 	}
 
-	if lastErr != nil {
-		return nil, lastErr
+	return nil, lastErr
+}
+
+func guardrailsURLCandidates(rawURL string) []string {
+	candidates := []string{rawURL}
+	if fallback := guardrailsRawGitHubFallback(rawURL); fallback != "" && fallback != rawURL {
+		candidates = append(candidates, fallback)
 	}
-	return nil, fmt.Errorf("fetch %s: unknown error", rawURL)
+	return candidates
+}
+
+func guardrailsRawGitHubFallback(rawURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return ""
+	}
+	if parsed.Scheme != "https" || parsed.Host != "raw.githubusercontent.com" {
+		return ""
+	}
+	parts := strings.Split(strings.TrimPrefix(parsed.Path, "/"), "/")
+	if len(parts) < 4 {
+		return ""
+	}
+	owner := parts[0]
+	repo := parts[1]
+	branch := parts[2]
+	filePath := strings.Join(parts[3:], "/")
+	if owner == "" || repo == "" || branch == "" || filePath == "" {
+		return ""
+	}
+	return fmt.Sprintf("https://cdn.jsdelivr.net/gh/%s/%s@%s/%s", owner, repo, branch, filePath)
+}
+
+func guardrailsFetchStatus(err error) int {
+	if err == nil {
+		return http.StatusBadGateway
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return http.StatusGatewayTimeout
+	}
+	return http.StatusBadGateway
 }
 
 func shouldRetryGuardrailsFetch(err error, statusCode int) bool {
