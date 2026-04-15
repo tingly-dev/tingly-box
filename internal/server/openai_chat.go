@@ -24,12 +24,29 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+func extractOpenAIMessages(messages []openai.ChatCompletionMessageParamUnion) []map[string]any {
+	if len(messages) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(messages)
+	var out []map[string]any
+	_ = json.Unmarshal(b, &out)
+	return out
+}
+
 // handleNonStreamingRequest handles non-streaming chat completion requests with MCP runtime support.
 func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, stripUsage bool) {
+	ctx := c.Request.Context()
+	if maxUses := s.advisorMaxUses(); maxUses > 0 {
+		ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
+			Messages:      extractOpenAIMessages(originalReq.Messages),
+			UsesRemaining: maxUses,
+		})
+	}
 	req := originalReq
 
 	// Forward request to provider
-	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
+	wrapper := s.clientPool.GetOpenAIClient(ctx, provider, req.Model)
 	fc := NewForwardContext(nil, provider)
 	response, _, err := ForwardOpenAIChat(fc, wrapper, req)
 	if err != nil {
@@ -50,7 +67,7 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 		choice := response.Choices[0]
 		if len(choice.Message.ToolCalls) > 0 {
 			if hasOnlyMCPToolCalls(choice.Message.ToolCalls) {
-				finalResponse, err := s.handleMCPToolCalls(c.Request.Context(), provider, req, response)
+				finalResponse, err := s.handleMCPToolCalls(ctx, provider, req, response)
 				if err != nil {
 					usage := protocol.NewTokenUsageWithCache(0, 0, 0)
 					s.trackUsageWithTokenUsage(c, usage, err)
@@ -195,6 +212,13 @@ func (s *Server) handleMCPToolCalls(ctx context.Context, provider *typ.Provider,
 
 // handleOpenAIChatStreamingRequest handles streaming chat completion requests.
 func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
+	ctx := c.Request.Context()
+	if maxUses := s.advisorMaxUses(); maxUses > 0 {
+		ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
+			Messages:      extractOpenAIMessages(originalReq.Messages),
+			UsesRemaining: maxUses,
+		})
+	}
 	req := originalReq
 	if hasDeclaredMCPTools(req) {
 		reqForMCP := *req
