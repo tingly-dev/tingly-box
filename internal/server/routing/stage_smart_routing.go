@@ -11,13 +11,15 @@ import (
 // SmartRoutingStage evaluates smart routing rules and returns matched services.
 // If multiple services match, applies load balancing within the matched set.
 type SmartRoutingStage struct {
-	loadBalancer LoadBalancer
+	loadBalancer  LoadBalancer
+	affinityStore AffinityStore
 }
 
 // NewSmartRoutingStage creates a new smart routing stage
-func NewSmartRoutingStage(lb LoadBalancer) *SmartRoutingStage {
+func NewSmartRoutingStage(lb LoadBalancer, affinity AffinityStore) *SmartRoutingStage {
 	return &SmartRoutingStage{
-		loadBalancer: lb,
+		loadBalancer:  lb,
+		affinityStore: affinity,
 	}
 }
 
@@ -27,11 +29,13 @@ func (s *SmartRoutingStage) Name() string {
 }
 
 // Evaluate evaluates smart routing rules and selects a service
-func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext) (*SelectionResult, bool) {
+func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionState) (*SelectionResult, bool) {
 	rule := ctx.Rule
 
 	// Skip if smart routing not enabled
 	if !rule.SmartEnabled || len(rule.SmartRouting) == 0 || ctx.Request == nil {
+		logrus.Debugf("[smart_routing] skipped - SmartEnabled=%v, SmartRoutingCount=%d, Request=%v",
+			rule.SmartEnabled, len(rule.SmartRouting), ctx.Request != nil)
 		return nil, false
 	}
 
@@ -44,6 +48,10 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext) (*SelectionResult, b
 		return nil, false
 	}
 
+	// Pre-collect capacity info for all services across all smart routing rules.
+	// evaluateRule will filter this down to per-rule services when evaluating.
+	reqCtx.ServiceCapacity = s.collectAllCapacityInfo(rule.SmartRouting)
+
 	// Create router and evaluate
 	router, err := smartrouting.NewRouter(rule.SmartRouting)
 	if err != nil {
@@ -53,7 +61,17 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext) (*SelectionResult, b
 
 	matchedServices, matchedRuleIndex, matched := router.EvaluateRequestWithIndex(reqCtx)
 	if !matched || len(matchedServices) == 0 {
-		logrus.Debugf("[smart_routing] no rule matched")
+		logrus.Debugf("[smart_routing] no rule matched - matched=%v, services=%d", matched, len(matchedServices))
+		return nil, false
+	}
+
+	if state != nil && len(state.candidateServices) > 0 {
+		beforeCount := len(matchedServices)
+		matchedServices = IntersectServices(matchedServices, state.candidateServices)
+		logrus.Debugf("[smart_routing] intersection: %d -> %d services", beforeCount, len(matchedServices))
+	}
+	if len(matchedServices) == 0 {
+		logrus.Debugf("[smart_routing] matched rule has no services in current candidate set")
 		return nil, false
 	}
 
@@ -108,4 +126,37 @@ func (s *SmartRoutingStage) selectFromServices(services []*loadbalance.Service, 
 		return nil
 	}
 	return service
+}
+
+// collectAllCapacityInfo collects seat-capacity info for all services across all smart routing rules.
+// Deduplicates by serviceID. evaluateRule will filter down to per-rule services.
+func (s *SmartRoutingStage) collectAllCapacityInfo(rules []smartrouting.SmartRouting) []smartrouting.ServiceCapacityInfo {
+	seen := make(map[string]struct{})
+	var result []smartrouting.ServiceCapacityInfo
+	for _, r := range rules {
+		for _, svc := range r.Services {
+			id := svc.ServiceID()
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+
+			cap := 0
+			if svc.ModelCapacity != nil {
+				cap = *svc.ModelCapacity
+			}
+
+			active := 0
+			if s.affinityStore != nil {
+				active = s.affinityStore.CountByService(id)
+			}
+
+			result = append(result, smartrouting.ServiceCapacityInfo{
+				ServiceID:   id,
+				Capacity:    cap,
+				ActiveCount: active,
+			})
+		}
+	}
+	return result
 }

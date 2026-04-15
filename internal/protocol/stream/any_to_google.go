@@ -21,7 +21,7 @@ import (
 // HandleOpenAIToGoogleStreamResponse processes OpenAI streaming events and converts them to Google format
 // This handler writes Google-format streaming responses to the gin.Context
 func HandleOpenAIToGoogleStreamResponse(c *gin.Context, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) error {
-	logrus.Info("Starting OpenAI to Google streaming response handler")
+	logrus.Debug("Starting OpenAI to Google streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
 			logrus.Errorf("Panic in OpenAI to Google streaming handler: %v", r)

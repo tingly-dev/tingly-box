@@ -409,7 +409,7 @@ func TestConvertGoogleToAnthropicResponseComplex(t *testing.T) {
 
 	t.Run("nil response", func(t *testing.T) {
 		result := ConvertGoogleToAnthropicResponse(nil, "gemini-pro")
-		assert.Equal(t, anthropic.Message{}, result)
+		assert.Equal(t, &anthropic.BetaMessage{}, result)
 	})
 }
 

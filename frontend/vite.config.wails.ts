@@ -12,14 +12,14 @@ export default defineConfig(({mode}) => {
             react(),
             // Wails plugin for binding generation
             wails("./src/bindings"),
-            // Bundle analyzer
-            visualizer({
-                open: false,
+            // Bundle analyzer - only in analyze mode
+            mode === 'analyze' && visualizer({
+                open: true,
                 gzipSize: true,
                 brotliSize: true,
                 filename: 'dist/stats.html',
             }),
-        ],
+        ].filter(Boolean),
         resolve: {
             alias: {
                 // Wails mode: use real bindings

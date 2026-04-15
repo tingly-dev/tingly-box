@@ -15,6 +15,7 @@ import {
     MenuItem,
     Paper,
     Divider,
+    useTheme,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CallMadeIcon from '@mui/icons-material/CallMade';
@@ -23,7 +24,7 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import StreamIcon from '@mui/icons-material/Stream';
 import SpeedIcon from '@mui/icons-material/Speed';
 import CachedIcon from '@mui/icons-material/Cached';
-import { StatCard, TokenUsageChart, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable } from '@/components/dashboard';
+import { StatCard, TokenUsageChart, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav } from '@/components/dashboard';
 import type { TimeSeriesData, AggregatedStat } from '@/components/dashboard';
 import { switchControlLabelStyle } from '@/styles/toggleStyles';
 import api from '../services/api';
@@ -66,6 +67,7 @@ const getLocalMidnight = (date: Date): Date => {
 };
 
 export default function DashboardPage() {
+    const theme = useTheme();
     const { timeRange: urlTimeRange } = useParams<{ timeRange: TimeRange }>();
     const navigate = useNavigate();
 
@@ -77,7 +79,7 @@ export default function DashboardPage() {
 
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [autoRefresh, setAutoRefresh] = useState(true);
+    const [autoRefresh, setAutoRefresh] = useState(false);
     const [stats, setStats] = useState<AggregatedStat[]>([]);
     const [timeSeries, setTimeSeries] = useState<TimeSeriesData[]>([]);
     const [providers, setProviders] = useState<Provider[]>([]);
@@ -312,7 +314,7 @@ export default function DashboardPage() {
                 </Box>
             </Paper>
 
-            {/* Main Content: Two Column Layout */}
+            {/* Main Content: Three Column Layout */}
             <Box
                 sx={{
                     display: 'flex',
@@ -321,8 +323,13 @@ export default function DashboardPage() {
                     flexDirection: { xs: 'column', md: 'row' },
                 }}
             >
-                {/* Left Column (70%) */}
-                <Box sx={{ flex: { xs: 1, md: 7 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {/* Left Column (12%) - Agent Quick Nav */}
+                <Box sx={{ flex: { xs: 1, md: 0, lg: 1.2 }, display: { xs: 'none', lg: 'flex' }, minWidth: 160 }}>
+                    <AgentQuickNav />
+                </Box>
+
+                {/* Middle Column (68%) */}
+                <Box sx={{ flex: { xs: 1, md: 7, lg: 6.8 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {/* Stat Cards Row - 5 cards */}
                     <Grid container spacing={{ xs: 1.5, sm: 2 }}>
                         <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
@@ -382,8 +389,8 @@ export default function DashboardPage() {
                     </Box>
                 </Box>
 
-                {/* Right Column (30%) - Token Usage List */}
-                <Box sx={{ flex: { xs: 1, md: 3 } }}>
+                {/* Right Column (20%) - Token Usage List */}
+                <Box sx={{ flex: { xs: 1, md: 3, lg: 2 } }}>
                     <Paper
                         elevation={0}
                         sx={{
@@ -413,13 +420,15 @@ export default function DashboardPage() {
                                         componentsProps={{
                                             tooltip: {
                                                 sx: {
-                                                    backgroundColor: '#1a1a1a',
-                                                    color: '#ffffff',
+                                                    backgroundColor: theme.palette.mode === 'dark' ? '#1e293b' : '#ffffff',
+                                                    color: theme.palette.mode === 'dark' ? '#f1f5f9' : '#1a1a1a',
                                                     fontSize: '0.75rem',
                                                     p: 1.5,
                                                     borderRadius: 1.5,
+                                                    border: '1px solid',
+                                                    borderColor: theme.palette.mode === 'dark' ? '#334155' : '#e2e8f0',
                                                     '& .MuiTooltip-arrow': {
-                                                        color: '#1a1a1a',
+                                                        color: theme.palette.mode === 'dark' ? '#1e293b' : '#ffffff',
                                                     },
                                                 },
                                             },
@@ -427,8 +436,8 @@ export default function DashboardPage() {
                                         title={
                                             <Box>
                                                 <Typography sx={{ fontWeight: 600, fontSize: '0.8rem', mb: 0.5 }}>{item.model}</Typography>
-                                                <Typography sx={{ color: '#a0a0a0', fontSize: '0.75rem' }}>{item.provider}</Typography>
-                                                <Typography sx={{ color: '#a0a0a0', fontSize: '0.7rem', mt: 0.75 }}>
+                                                <Typography sx={{ color: theme.palette.mode === 'dark' ? '#94a3b8' : '#a0a0a0', fontSize: '0.75rem' }}>{item.provider}</Typography>
+                                                <Typography sx={{ color: theme.palette.mode === 'dark' ? '#94a3b8' : '#a0a0a0', fontSize: '0.7rem', mt: 0.75 }}>
                                                     Total: {formatNumber(totalTokens)} | Input: {formatNumber(item.inputTokens)} | Output: {formatNumber(item.outputTokens)}
                                                 </Typography>
                                             </Box>
@@ -454,16 +463,17 @@ export default function DashboardPage() {
                                             {/* Rank Badge */}
                                             <Box
                                                 sx={{
-                                                    minWidth: 20,
-                                                    height: 20,
+                                                    minWidth: 18,
+                                                    height: 18,
                                                     borderRadius: 1,
                                                     backgroundColor: 'action.selected',
                                                     color: 'text.secondary',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
-                                                    fontSize: '0.7rem',
+                                                    fontSize: '0.65rem',
                                                     fontWeight: 600,
+                                                    flexShrink: 0,
                                                 }}
                                             >
                                                 {index + 1}
@@ -472,11 +482,12 @@ export default function DashboardPage() {
                                             {/* Content */}
                                             <Box sx={{ flex: 1, minWidth: 0 }}>
                                                 {/* Model Name */}
-                                                <Typography
-                                                    variant="body2"
+                                                <Box
+                                                    component="span"
                                                     sx={{
+                                                        display: 'block',
                                                         fontWeight: 500,
-                                                        fontSize: '0.8rem',
+                                                        fontSize: '0.7rem',
                                                         overflow: 'hidden',
                                                         textOverflow: 'ellipsis',
                                                         whiteSpace: 'nowrap',
@@ -484,7 +495,7 @@ export default function DashboardPage() {
                                                     }}
                                                 >
                                                     {item.model}
-                                                </Typography>
+                                                </Box>
 
                                                 {/* Progress Bar + Value */}
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -510,9 +521,10 @@ export default function DashboardPage() {
                                                     <Typography
                                                         variant="caption"
                                                         sx={{
-                                                            fontSize: '0.7rem',
+                                                            fontSize: '0.65rem',
                                                             color: 'text.secondary',
-                                                            minWidth: 50,
+                                                            minWidth: 40,
+                                                            flexShrink: 0,
                                                             textAlign: 'right',
                                                         }}
                                                     >

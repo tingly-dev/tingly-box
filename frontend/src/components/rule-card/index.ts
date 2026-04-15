@@ -1,5 +1,5 @@
 // Main component
-export { default as RuleCard, RuleCardProps } from '../RuleCard';
+export { default as RuleCard, type RuleCardProps } from '../RuleCard';
 
 // Hooks
 export * from './useRuleCardHooks';

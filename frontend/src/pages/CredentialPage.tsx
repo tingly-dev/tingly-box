@@ -22,6 +22,7 @@ import OAuthTable from '@/components/OAuthTable.tsx';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import OAuthDialog from '@/components/OAuthDialog.tsx';
 import OAuthDetailDialog from '@/components/OAuthDetailDialog.tsx';
+import { useProviderQuota } from '@/hooks/useProviderQuota';
 
 type ProviderFormData = EnhancedProviderFormData;
 
@@ -99,6 +100,13 @@ const CredentialPage = () => {
     useEffect(() => {
         loadProviders();
     }, []);
+
+    // Quota data fetching
+    const {
+        quotaData,
+        refreshing,
+        refreshQuota,
+    } = useProviderQuota(providers, { fetchOnMount: true });
 
     const showNotification = (message: string, severity: 'success' | 'error') => {
         setSnackbar({ open: true, message, severity });
@@ -319,14 +327,13 @@ const CredentialPage = () => {
 
     const handleRefreshToken = async (providerUuid: string) => {
         try {
-            const { oauthApi } = await api.instances();
-            const response = await oauthApi.apiV1OauthRefreshPost({ provider_uuid: providerUuid });
+            const response = await api.oauthRefresh({ provider_uuid: providerUuid });
 
-            if (response.data.success) {
+            if (response.success) {
                 showNotification('Token refreshed successfully!', 'success');
                 await loadProviders();
             } else {
-                showNotification(`Failed to refresh token: ${response.data.message || 'Unknown error'}`, 'error');
+                showNotification(`Failed to refresh token: ${response.message || 'Unknown error'}`, 'error');
             }
         } catch (error: any) {
             const errorMessage = error?.response?.data?.error || error?.message || 'Unknown error';
@@ -446,6 +453,9 @@ const CredentialPage = () => {
                             onNotification={(message, severity) => {
                                 setSnackbar({ open: true, message, severity });
                             }}
+                            providerQuotas={quotaData}
+                            refreshingQuotas={refreshing}
+                            onQuotaRefresh={refreshQuota}
                         />
                     ) : (
                         <EmptyStateGuide
@@ -484,6 +494,9 @@ const CredentialPage = () => {
                             onNotification={(message, severity) => {
                                 setSnackbar({ open: true, message, severity });
                             }}
+                            providerQuotas={quotaData}
+                            refreshingQuotas={refreshing}
+                            onQuotaRefresh={refreshQuota}
                         />
                     ) : (
                         <EmptyStateGuide

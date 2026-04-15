@@ -1,0 +1,59 @@
+package virtualserver
+
+import (
+	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
+)
+
+// Service manages the virtual model service.
+type Service struct {
+	registry *virtualmodel.Registry
+	handler  *Handler
+}
+
+// NewService creates a fully initialized Service with default models registered.
+func NewService() *Service {
+	registry := virtualmodel.NewRegistry()
+	registry.RegisterDefaults()
+	return &Service{
+		registry: registry,
+		handler:  NewHandler(registry),
+	}
+}
+
+// GetRegistry returns the model registry.
+func (s *Service) GetRegistry() *virtualmodel.Registry {
+	return s.registry
+}
+
+// GetHandler returns the HTTP handler.
+func (s *Service) GetHandler() *Handler {
+	return s.handler
+}
+
+// RegisterModel registers a new virtual model.
+func (s *Service) RegisterModel(vm virtualmodel.VirtualModel) error {
+	return s.registry.Register(vm)
+}
+
+// UnregisterModel unregisters a virtual model.
+func (s *Service) UnregisterModel(id string) {
+	s.registry.Unregister(id)
+}
+
+// GetModel retrieves a virtual model by ID.
+func (s *Service) GetModel(id string) virtualmodel.VirtualModel {
+	return s.registry.Get(id)
+}
+
+// ListModels returns all registered models.
+func (s *Service) ListModels() []virtualmodel.Model {
+	return s.registry.ListModels()
+}
+
+// SetupRoutes sets up virtual model routes on a Gin router group.
+func (s *Service) SetupRoutes(group *gin.RouterGroup) {
+	group.GET("/models", s.handler.ListModels)
+	group.POST("/chat/completions", s.handler.ChatCompletions)
+	group.POST("/messages", s.handler.Messages)
+}

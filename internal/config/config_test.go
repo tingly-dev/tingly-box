@@ -116,12 +116,10 @@ func TestConfig_DebugVerbose_Persistence(t *testing.T) {
 		t.Fatalf("Failed to unmarshal config JSON: %v", err)
 	}
 
-	// Verify Debug is in JSON and set to true
-	debugVal, ok := jsonConfig["debug"]
-	if !ok {
-		t.Error("Debug field not found in JSON config")
-	} else if debugVal != true {
-		t.Errorf("Expected debug to be true in JSON, got %v", debugVal)
+	// Verify Debug is NOT in JSON (it has json:"-" tag - runtime only)
+	_, debugOk := jsonConfig["debug"]
+	if debugOk {
+		t.Error("Debug field should NOT be in JSON config (it has json:\"-\" tag - runtime only)")
 	}
 
 	// Verify Verbose is in JSON and set to true
@@ -169,10 +167,12 @@ func TestConfig_DebugVerbose_Load(t *testing.T) {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Verify Debug and Verbose are loaded correctly
-	if !cfg.GetDebug() {
-		t.Error("Expected Debug to be loaded as true from JSON")
+	// Verify Debug defaults to false (it has json:"-" tag - not persisted)
+	if cfg.GetDebug() {
+		t.Error("Expected Debug to default to false (not persisted in JSON)")
 	}
+
+	// Verify Verbose is loaded correctly (it is persisted)
 	if !cfg.GetVerbose() {
 		t.Error("Expected Verbose to be loaded as true from JSON")
 	}
@@ -210,12 +210,10 @@ func TestConfig_DebugVerbose_FalseValuesInJSON(t *testing.T) {
 		t.Fatalf("Failed to unmarshal config JSON: %v", err)
 	}
 
-	// Verify Debug is false in JSON
-	debugVal, ok := jsonConfig["debug"]
-	if !ok {
-		t.Error("Debug field not found in JSON config")
-	} else if debugVal != false {
-		t.Errorf("Expected debug to be false in JSON, got %v", debugVal)
+	// Verify Debug is NOT in JSON (it has json:"-" tag - runtime only)
+	_, debugOk := jsonConfig["debug"]
+	if debugOk {
+		t.Error("Debug field should NOT be in JSON config (it has json:\"-\" tag - runtime only)")
 	}
 
 	// Verify Verbose is false in JSON

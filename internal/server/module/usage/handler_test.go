@@ -69,7 +69,26 @@ func setupTestRouter(store *mockUsageStore) *gin.Engine {
 		stats, _ := store.GetAggregatedStats(query)
 		data := make([]AggregatedStat, len(stats))
 		for i, s := range stats {
-			data[i] = AggregatedStat(s)
+			data[i] = AggregatedStat{
+				Key:              s.Key,
+				ProviderUUID:     s.ProviderUUID,
+				ProviderName:     s.ProviderName,
+				Model:            s.Model,
+				Scenario:         s.Scenario,
+				UserID:           s.UserID,
+				RequestCount:     s.RequestCount,
+				TotalTokens:      s.TotalTokens,
+				InputTokens:      s.InputTokens,
+				OutputTokens:     s.OutputTokens,
+				AvgInputTokens:   s.AvgInputTokens,
+				AvgOutputTokens:  s.AvgOutputTokens,
+				AvgLatencyMs:     s.AvgLatencyMs,
+				ErrorCount:       s.ErrorCount,
+				ErrorRate:        s.ErrorRate,
+				StreamedCount:    s.StreamedCount,
+				StreamedRate:     s.StreamedRate,
+				CacheInputTokens: s.CacheInputTokens,
+			}
 		}
 		c.JSON(http.StatusOK, UsageStatsResponse{
 			Meta: UsageStatsMeta{

@@ -13,12 +13,12 @@ import (
 
 // Benchmark tests
 func BenchmarkConvertAnthropicResponseToOpenAI(b *testing.B) {
-	anthropicResp := &anthropic.Message{
+	anthropicResp := &anthropic.BetaMessage{
 		ID:    "msg_benchmark",
 		Model: "claude-3-sonnet",
 		Role:  "assistant",
 		Type:  "message",
-		Content: []anthropic.ContentBlockUnion{
+		Content: []anthropic.BetaContentBlockUnion{
 			{
 				Type: "text",
 				Text: "This is a benchmark test response.",
@@ -30,7 +30,7 @@ func BenchmarkConvertAnthropicResponseToOpenAI(b *testing.B) {
 				Input: json.RawMessage(`{"param1":"value1","param2":42}`),
 			},
 		},
-		Usage: anthropic.Usage{
+		Usage: anthropic.BetaUsage{
 			InputTokens:  100,
 			OutputTokens: 200,
 		},

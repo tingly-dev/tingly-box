@@ -26,7 +26,7 @@ export default {
     "slogan": "Your Intelligence, Orchestrated.",
     "version": "version {{version}}",
     "nav": {
-      "home": "Scenario",
+      "home": "Agent",
       "settings": "Settings",
       "useOpenAI": "OpenAI SDK",
       "useAnthropic": "Anthropic SDK",
@@ -325,6 +325,17 @@ export default {
       "tokenGenerated": "Token generated successfully",
       "tokenGenerateFailed": "{{error}}"
     },
+    "proxy": {
+      "title": "Proxy Settings",
+      "respectEnvProxy": {
+        "label": "Respect Environment Proxy",
+        "helper": "When enabled, providers without explicit proxy configuration will use system proxy settings (HTTP_PROXY, HTTPS_PROXY, macOS system proxy, Clash, etc.)"
+      },
+      "notifications": {
+        "updateSuccess": "Proxy settings updated successfully",
+        "updateFailed": "Failed to update proxy settings: {{error}}"
+      }
+    },
     "accessControl": {
       "userToken": "User Token (Control Panel)",
       "modelToken": "Model Token (API Proxy)",
@@ -443,7 +454,14 @@ export default {
       "profileRenamed": "Profile renamed",
       "profileDeleted": "Profile deleted",
       "renameFailed": "Failed to rename profile",
-      "deleteFailed": "Failed to delete profile"
+      "deleteFailed": "Failed to delete profile",
+      "mode": "Mode",
+      "unified": "Unified",
+      "separate": "Separate",
+      "unifiedDescription": "All models use the same routing rule (tingly/cc)",
+      "separateDescription": "Each model uses its own routing rule",
+      "modeUpdated": "Profile mode updated to {{mode}}",
+      "modeUpdateFailed": "Failed to update profile mode"
     }
   },
   "prompt": {
@@ -623,5 +641,54 @@ export default {
       "message": "Your new user token has been generated and saved to your session. Make sure to save it securely.",
       "saved": "I've Saved My Token"
     }
+  },
+  "dashboard": {
+    "agentNav": {
+      "title": "Quick Start",
+      "description": "Select agent to start"
+    }
+  },
+  "mcp": {
+    "pageTitle": "MCP Tools",
+    "info": "Configure MCP (Model Context Protocol) tools to enable web search and web fetch capabilities. The MCP server runs as a local stdio subprocess or connects to a remote HTTP endpoint.",
+    "connection": {
+      "title": "Connection Settings",
+      "endpoint": "MCP Server Endpoint",
+      "endpointPlaceholder": "http://localhost:3000",
+      "endpointHelp": "HTTP endpoint for the MCP server (e.g., npx @modelcontextprotocol/server-filesystem)",
+      "command": "Command",
+      "commandPlaceholder": "python3",
+      "scriptPath": "Script Path",
+      "scriptPathPlaceholder": "./scripts/mcp_web_tools.py",
+      "scriptPathHelp": "Path to the MCP server script",
+      "workingDir": "Working directory",
+      "timeout": "Request Timeout (seconds)",
+      "timeoutHelp": "Timeout for MCP tool calls",
+      "transportHttp": "Use HTTP Transport (uncheck for stdio)",
+      "transportStdio": "Use Stdio Transport"
+    },
+    "tools": {
+      "title": "Tool Configuration",
+      "description": "Select which MCP tools to enable:",
+      "webSearch": "Web Search",
+      "webSearchDesc": "Search web pages with Serper API. Requires SERPER_API_KEY environment variable.",
+      "webFetch": "Web Fetch",
+      "webFetchDesc": "Fetch and convert URLs to markdown via Jina Reader. Optional JINA_API_KEY."
+    },
+    "proxy": {
+      "title": "Proxy Settings",
+      "useGlobal": "Use Global Proxy Configuration",
+      "useGlobalHelp": "When enabled, the MCP server will inherit HTTP_PROXY, HTTPS_PROXY, and NO_PROXY environment variables from the system."
+    },
+    "actions": {
+      "save": "Save Configuration",
+      "reset": "Reset to Default",
+      "reload": "Reload",
+      "docs": "MCP Protocol Docs",
+      "saving": "Saving...",
+      "savedSuccess": "MCP configuration saved successfully",
+      "savedError": "Failed to save MCP configuration"
+    },
+    "currentConfig": "Current Configuration"
   }
 };

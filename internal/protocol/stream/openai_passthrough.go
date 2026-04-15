@@ -227,16 +227,8 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 				chunkMap["obfuscation"] = obfuscationValue
 			}
 
-			// Convert to JSON and send as SSE
-			chunkJSON, err := json.Marshal(chunkMap)
-			if err != nil {
-				return err
-			}
-
 			// Send the chunk
-			// MENTION: Must keep extra space
-			c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", chunkJSON))
-			flusher.Flush()
+			OpenAISSE(c, chunkMap)
 			return nil
 		},
 	)
@@ -343,7 +335,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		}
 	}()
 
-	flusher, ok := c.Writer.(http.Flusher)
+	_, ok := c.Writer.(http.Flusher)
 	if !ok {
 		c.JSON(http.StatusInternalServerError, protocol.ErrorResponse{
 			Error: protocol.ErrorDetail{
@@ -417,8 +409,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		}
 
 		// Send SSE event with event type (e.g., "response.created", "response.output_text.delta")
-		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", jsonBytes))
-		flusher.Flush()
+		OpenAISSE(c, json.RawMessage(jsonBytes))
 		return true
 	})
 
@@ -447,15 +438,12 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 			},
 		}
 
-		errorJSON, _ := json.Marshal(errorChunk)
-		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", string(errorJSON)))
-		flusher.Flush()
+		OpenAISSE(c, errorChunk)
 		return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), err
 	}
 
 	// Send final [DONE] message
-	c.Writer.WriteString("data: [DONE]\n\n")
-	flusher.Flush()
+	OpenAISSEDone(c)
 
 	// Track successful streaming completion
 	if hasUsage {
@@ -483,10 +471,10 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 // and transforms it to Anthropic message format.
 // This is used for ChatGPT backend API providers when the original request was in Anthropic format.
 // Returns (TokenUsage, error)
-func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string, useV1Format bool) (*protocol.TokenUsage, error) {
+func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {
 	defer stream.Close()
 
-	logrus.Info("[ChatGPT] Starting OpenAI Responses to Anthropic streaming handler")
+	logrus.Debug("[ChatGPT] Starting OpenAI Responses to Anthropic streaming handler")
 	defer func() {
 		if r := recover(); r != nil {
 			logrus.Errorf("[ChatGPT] Panic in streaming handler: %v", r)
@@ -519,18 +507,10 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream
 	messageID := fmt.Sprintf("msg_%d", time.Now().Unix())
 
 	// Send message_start event
-	if useV1Format {
-		sendAnthropicV1MessageStart(c, messageID, responseModel, flusher)
-	} else {
-		sendAnthropicBetaMessageStart(c, messageID, responseModel, flusher)
-	}
+	sendAnthropicV1MessageStart(c, messageID, responseModel, flusher)
 
 	// Send content_block_start event
-	if useV1Format {
-		sendAnthropicV1ContentBlockStart(c, flusher)
-	} else {
-		sendAnthropicBetaContentBlockStart(c, flusher)
-	}
+	sendAnthropicV1ContentBlockStart(c, flusher)
 
 	// Process the stream using the SDK
 	chunkCount := 0
@@ -560,11 +540,7 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream
 					if content.Type == "output_text" || content.Type == "text" {
 						if content.Text != "" {
 							// Send content_block_delta event
-							if useV1Format {
-								sendAnthropicV1ContentBlockDelta(c, content.Text, flusher)
-							} else {
-								sendAnthropicBetaContentBlockDelta(c, content.Text, flusher)
-							}
+							sendAnthropicV1ContentBlockDelta(c, content.Text, flusher)
 						}
 					}
 				}
@@ -592,18 +568,10 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream
 	logrus.Infof("[ChatGPT] Finished reading SSE stream: %d chunks, tokens: %d in, %d out", chunkCount, inputTokens, outputTokens)
 
 	// Send content_block_stop event
-	if useV1Format {
-		sendAnthropicV1ContentBlockStop(c, flusher)
-	} else {
-		sendAnthropicBetaContentBlockStop(c, flusher)
-	}
+	sendAnthropicV1ContentBlockStop(c, flusher)
 
 	// Send message_stop event with usage
-	if useV1Format {
-		sendAnthropicV1MessageStop(c, inputTokens, outputTokens, flusher)
-	} else {
-		sendAnthropicBetaMessageStop(c, inputTokens, outputTokens, flusher)
-	}
+	sendAnthropicV1MessageStop(c, inputTokens, outputTokens, flusher)
 
 	return protocol.NewTokenUsage(inputTokens, outputTokens), nil
 }

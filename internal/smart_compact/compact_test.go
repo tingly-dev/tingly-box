@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
 func TestRemoveV1ThinkingBlocks_TextOnly(t *testing.T) {
@@ -95,7 +96,7 @@ func TestHandleV1_RemovesThinkingFromPastRounds(t *testing.T) {
 		},
 	}
 
-	transformer := NewCompactTransformer(1)
+	transformer := NewCompactTransformer(1, WithMinAssistant(1))
 	err := transformer.HandleV1(req)
 
 	require.NoError(t, err)
@@ -800,10 +801,10 @@ func TestDeduplicate(t *testing.T) {
 	assert.Equal(t, expected, result)
 }
 
-// TransformerWrapper Tests
+// Transform API Tests - tests using transform.Transform interface
 
-func TestTransformerWrapper_RoundOnly(t *testing.T) {
-	wrapper := NewRoundOnlyTransformer()
+func TestTransformAPI_RoundOnly(t *testing.T) {
+	transformer := NewRoundOnlyTransformer()
 
 	req := &anthropic.MessageNewParams{
 		Messages: []anthropic.MessageParam{
@@ -816,7 +817,8 @@ func TestTransformerWrapper_RoundOnly(t *testing.T) {
 		},
 	}
 
-	err := wrapper.HandleV1(req)
+	ctx := transform.NewTransformContext(req)
+	err := transformer.Apply(ctx)
 	require.NoError(t, err)
 
 	// First round: thinking removed
@@ -827,8 +829,8 @@ func TestTransformerWrapper_RoundOnly(t *testing.T) {
 	assert.Equal(t, "New", req.Messages[2].Content[0].OfText.Text)
 }
 
-func TestTransformerWrapper_RoundFiles(t *testing.T) {
-	wrapper := NewRoundFilesTransformer()
+func TestTransformAPI_RoundFiles(t *testing.T) {
+	transformer := NewRoundFilesTransformer()
 
 	req := &anthropic.MessageNewParams{
 		Messages: []anthropic.MessageParam{
@@ -844,7 +846,8 @@ func TestTransformerWrapper_RoundFiles(t *testing.T) {
 		},
 	}
 
-	err := wrapper.HandleV1(req)
+	ctx := transform.NewTransformContext(req)
+	err := transformer.Apply(ctx)
 	require.NoError(t, err)
 
 	// Should have virtual tool calls
@@ -885,4 +888,3 @@ func TestGroupV1MessagesIntoRounds(t *testing.T) {
 	assert.True(t, rounds[1].IsCurrentRound)
 	assert.Len(t, rounds[1].Messages, 2)
 }
-

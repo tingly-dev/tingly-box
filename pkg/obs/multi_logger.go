@@ -453,6 +453,23 @@ func (s *ScopedLogger) ClearMemory() {
 	}
 }
 
+// LogAction logs a user action with structured data
+// This is a convenience method for logging user actions to the action source
+//
+// Parameters:
+//   - action: The action type (e.g., "add_provider", "delete_provider")
+//   - details: Additional details about the action (can be nil)
+//   - success: Whether the action was successful
+//   - message: A human-readable message about the action
+func (s *ScopedLogger) LogAction(action string, details map[string]interface{}, success bool, message string) {
+	logger := s.GetLogrusLogger()
+	logger.WithFields(logrus.Fields{
+		"action":  action,
+		"details": details,
+		"success": success,
+	}).Info(message)
+}
+
 // readLogEntriesBackwards reads log entries from the end of the file for efficiency
 // Returns entries in reverse chronological order (newest first)
 func readLogEntriesBackwards(filePath string, limit int) ([]LogEntry, error) {

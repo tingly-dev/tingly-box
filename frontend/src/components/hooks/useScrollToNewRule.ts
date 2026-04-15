@@ -38,8 +38,8 @@ export const useScrollToNewRule = ({
     }, [newRuleUuid]);
 
     return {
-        scrollContainerRef,
-        lastRuleRef,
+        scrollContainerRef: scrollContainerRef as React.RefObject<HTMLDivElement>,
+        lastRuleRef: lastRuleRef as React.RefObject<HTMLDivElement>,
         newRuleUuid,
         setNewRuleUuid,
     };

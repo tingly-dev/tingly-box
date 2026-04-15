@@ -12,13 +12,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
-// ===================================================================
-// Anthropic Handle Functions
-// ===================================================================
-
-// HandleAnthropicV1Stream handles Anthropic v1 streaming response.
+// HandleAnthropic handles Anthropic v1 streaming response.
 // Returns (UsageStat, error)
-func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNewParams, streamResp *anthropicstream.Stream[anthropic.MessageStreamEventUnion]) (*protocol.TokenUsage, error) {
+func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Stream[anthropic.MessageStreamEventUnion]) (*protocol.TokenUsage, error) {
 	defer streamResp.Close()
 
 	hc.SetupSSEHeaders()
@@ -107,9 +103,9 @@ func HandleAnthropicV1Stream(hc *protocol.HandleContext, req anthropic.MessageNe
 	return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 }
 
-// HandleAnthropicV1BetaStream handles Anthropic v1 beta streaming response.
+// HandleAnthropicBeta handles Anthropic v1 beta streaming response.
 // Returns (UsageStat, error)
-func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion]) (*protocol.TokenUsage, error) {
+func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion]) (*protocol.TokenUsage, error) {
 	defer streamResp.Close()
 
 	hc.SetupSSEHeaders()
@@ -197,7 +193,3 @@ func HandleAnthropicV1BetaStream(hc *protocol.HandleContext, streamResp *anthrop
 
 	return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 }
-
-// ===================================================================
-// OpenAI Handle Functions
-// ===================================================================

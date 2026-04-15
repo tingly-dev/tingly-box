@@ -57,7 +57,7 @@ func testSmartRule(uuid, model string, services []*loadbalance.Service, ops ...s
 func testContext(rule *typ.Rule, sessionID string) *SelectionContext {
 	return &SelectionContext{
 		Rule:                  rule,
-		SessionID:             sessionID,
+		SessionID:             typ.SessionID{Source: typ.SessionSourceHeader, Value: sessionID},
 		MatchedSmartRuleIndex: -1,
 	}
 }
@@ -123,6 +123,18 @@ func (m *mockAffinityStore) Set(ruleUUID, sessionID string, entry *AffinityEntry
 	m.sets = append(m.sets, setCall{ruleUUID: ruleUUID, sessionID: sessionID})
 }
 
+func (m *mockAffinityStore) CountByService(serviceID string) int {
+	cutoff := time.Now().Add(-30 * time.Minute)
+	count := 0
+	for _, entry := range m.entries {
+		if entry.LockedAt.After(cutoff) && entry.Service != nil &&
+			entry.Service.ServiceID() == serviceID {
+			count++
+		}
+	}
+	return count
+}
+
 // mockConfig implements ProviderResolver for ServiceSelector tests.
 type mockConfig struct {
 	providers map[string]*typ.Provider
@@ -167,7 +179,7 @@ func TestFixtures_helpers(t *testing.T) {
 
 	ctx := testContext(rule, "session-1")
 	require.NotNil(t, ctx)
-	require.Equal(t, "session-1", ctx.SessionID)
+	require.Equal(t, "session-1", ctx.SessionID.Value)
 
 	store := newMockAffinityStore()
 	require.NotNil(t, store)

@@ -292,5 +292,18 @@ func TestUpdateServiceIndex(t *testing.T) {
 	require.True(t, lb.updateIndexCalled, "UpdateServiceIndex should call LB")
 }
 
+func TestNewServiceSelector_SmartAffinityPipelineOrder(t *testing.T) {
+	lb := &mockLoadBalancer{}
+	store := newMockAffinityStore()
+	sel := NewServiceSelector(&mockConfig{}, store, lb)
+
+	pipeline := sel.pipelines[pipelineModeSmartAffinity]
+	require.Len(t, pipeline, 4)
+	require.Equal(t, "health", pipeline[0].Name())
+	require.Equal(t, "affinity", pipeline[1].Name())
+	require.Equal(t, "smart_routing", pipeline[2].Name())
+	require.Equal(t, "load_balancer", pipeline[3].Name())
+}
+
 // ErrNoService is a sentinel error for tests
 var ErrNoService = errors.New("no service available")

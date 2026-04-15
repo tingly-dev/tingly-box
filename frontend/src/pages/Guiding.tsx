@@ -1,6 +1,6 @@
 import { Box, Button, Card, CardContent, CardActions, Typography, alpha } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { OpenAI, Anthropic, ClaudeCode } from '../components/BrandIcons';
+import { OpenAI, Anthropic, Claude, Codex } from '../components/BrandIcons';
 import { Settings as SystemIcon, Code as CodeIcon, BarChart as BarChartIcon, Lock as LockIcon, AutoAwesome } from '@mui/icons-material';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useTranslation } from 'react-i18next';
@@ -65,44 +65,44 @@ const Guiding = () => {
                 {
                     title: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }),
                     description: 'Use OpenAI SDK to visit models',
-                    path: '/use-openai',
+                    path: '/agent/openai',
                     icon: <OpenAI size={40} />,
                     color: '#10a37f',
                 },
                 {
                     title: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }),
                     description: 'Use Anthropic SDK to visit models',
-                    path: '/use-anthropic',
+                    path: '/agent/anthropic',
                     icon: <Anthropic size={40} />,
                     color: '#D4915D',
                 },
                 {
                     title: 'Claw | Agent',
                     description: 'Use Agent for AI-powered assistance',
-                    path: '/use-agent',
+                    path: '/agent/agent',
                     icon: <AutoAwesome sx={{ fontSize: 40 }} />,
                     color: '#0891b2',
                 },
                 {
                     title: t('layout.nav.useClaudeCode', { defaultValue: 'Claude Code' }),
                     description: 'Use Claude Code for AI coding workflows',
-                    path: '/use-claude-code',
-                    icon: <ClaudeCode size={40} />,
+                    path: '/agent/claude_code',
+                    icon: <Claude size={40} />,
                     color: '#cc785c',
                 },
                 {
                     title: t('layout.nav.useCodex', { defaultValue: 'Codex' }),
                     description: 'Use Codex for AI coding workflows',
-                    path: '/use-codex',
-                    icon: <OpenAI size={40} />,
+                    path: '/agent/codex',
+                    icon: <Codex size={40} />,
                     color: '#111827',
                 },
                 {
                     title: t('layout.nav.useOpenCode', { defaultValue: 'OpenCode' }),
                     description: 'Use OpenCode for AI coding workflows',
-                    path: '/use-opencode',
+                    path: '/agent/opencode',
                     icon: <CodeIcon sx={{ fontSize: 40 }} />,
-                    color: '#f59e0b',
+                    color: '#0ea5e9',
                 },
             ],
         },

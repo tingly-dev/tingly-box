@@ -70,8 +70,8 @@ func TestContentCombinedTextUsesShellParseForBash(t *testing.T) {
 	if !strings.Contains(got, "normalized.resources: ~/.ssh") {
 		t.Fatalf("expected normalized resource in %q", got)
 	}
-	if !strings.Contains(got, "normalized.actions: read") {
-		t.Fatalf("expected normalized action in %q", got)
+	if !strings.Contains(got, "normalized.actions: execute read") {
+		t.Fatalf("expected normalized actions 'execute read' in %q", got)
 	}
 	if !strings.Contains(got, "normalized.terms: ls -la ~/.ssh") {
 		t.Fatalf("expected normalized terms in %q", got)

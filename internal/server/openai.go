@@ -4,16 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/request"
-	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -206,17 +202,37 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	cursorCompat := resolveCursorCompat(c, rule)
 	applyCursorCompatFlag(&req.ChatCompletionNewParams, cursorCompat)
 
+	// Inject session ID into request context so all downstream code can access it
+	sessionID := resolveSessionID(c, &req.ChatCompletionNewParams)
+	c.Request = c.Request.WithContext(typ.WithSessionID(c.Request.Context(), sessionID))
+
 	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, isStreaming)
 
 	apiStyle := provider.APIStyle
-	// === Check if provider has built-in web_search ===
-	hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
+	// === Cursor compat content normalization (before transform) ===
+	if cursorCompat {
+		ops.ApplyCursorCompatContentNormalization(&req.ChatCompletionNewParams)
+	}
+	transform.AlignToolMessagesForOpenAI(&req.ChatCompletionNewParams)
 
-	// === Tool Interceptor: Check if enabled and should be used ===
-	shouldIntercept, shouldStripTools, _ := s.resolveToolInterceptor(provider, hasBuiltInWebSearch)
+	// === Cap max_tokens at model's maximum ===
+	if req.MaxTokens.Valid() && req.MaxTokens.Value > int64(maxAllowed) {
+		req.MaxTokens.Value = int64(maxAllowed)
+	}
 
+	// === Determine target API type ===
+	apiStyle = provider.APIStyle
+	target := protocol.TypeOpenAIChat
 	switch apiStyle {
+	case protocol.APIStyleAnthropic:
+		target = protocol.TypeAnthropicBeta
+	case protocol.APIStyleGoogle:
+		target = protocol.TypeGoogle
+	case protocol.APIStyleOpenAI:
+		if s.GetPreferredEndpointForModel(provider, actualModel) == "responses" {
+			target = protocol.TypeOpenAIResponses
+		}
 	default:
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -225,175 +241,23 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 			},
 		})
 		return
-	case protocol.APIStyleAnthropic:
-		// Apply cursor_compat content normalization before converting to Anthropic format
-		// This ensures rich content is flattened for all providers when cursor_compat is enabled
-		if cursorCompat {
-			ops.ApplyCursorCompatContentNormalization(&req.ChatCompletionNewParams)
-		}
-
-		// Align tool messages to ensure valid message sequence for OpenAI API compatibility
-		// This prevents "role 'tool' must be a response to preceding message with 'tool_calls'" errors
-		transform.AlignToolMessagesForOpenAI(&req.ChatCompletionNewParams)
-
-		anthropicReq := request.ConvertOpenAIToAnthropicRequest(&req.ChatCompletionNewParams, int64(maxAllowed))
-		if isStreaming {
-			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
-			fc := NewForwardContext(c.Request.Context(), provider)
-			streamResp, cancel, err := ForwardAnthropicV1Stream(fc, wrapper, anthropicReq)
-			if cancel != nil {
-				defer cancel()
-			}
-			if err != nil {
-				// Track error with no usage
-				s.trackUsageFromContext(c, 0, 0, err)
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Failed to create streaming request: " + err.Error(),
-						Type:    "api_error",
-					},
-				})
-				return
-			}
-
-			// Get scenario config for DisableStreamUsage flag
-			disableStreamUsage := cursorCompat
-			if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
-				disableStreamUsage = disableStreamUsage || scenarioConfig.Flags.DisableStreamUsage
-			}
-
-			inputTokens, outputTokens, err := stream.HandleAnthropicToOpenAIStreamResponse(c, anthropicReq, streamResp, responseModel, disableStreamUsage)
-			if err != nil {
-				// Track usage with error status
-				if inputTokens > 0 || outputTokens > 0 {
-					tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
-					s.trackUsageWithTokenUsage(c, tokenUsage, err)
-				}
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Failed to create streaming request: " + err.Error(),
-						Type:    "api_error",
-					},
-				})
-				return
-			}
-
-			// Track successful streaming completion
-			if inputTokens > 0 || outputTokens > 0 {
-				tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
-				s.trackUsageWithTokenUsage(c, tokenUsage, nil)
-			}
-			return
-		} else {
-			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
-			fc := NewForwardContext(nil, provider)
-			anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, anthropicReq)
-			if cancel != nil {
-				defer cancel()
-			}
-			if err != nil {
-				// Track error with no usage
-				s.trackUsageFromContext(c, 0, 0, err)
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Failed to forward Anthropic request: " + err.Error(),
-						Type:    "api_error",
-					},
-				})
-				return
-			}
-
-			// Track usage from response
-			inputTokens := int(anthropicResp.Usage.InputTokens)
-			outputTokens := int(anthropicResp.Usage.OutputTokens)
-			cacheTokens := int(anthropicResp.Usage.CacheReadInputTokens + anthropicResp.Usage.CacheCreationInputTokens)
-			tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
-			s.trackUsageWithTokenUsage(c, tokenUsage, nil)
-
-			// Use provider-aware conversion for provider-specific handling
-			openaiResp := ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
-			if ShouldRoundtripResponse(c, "anthropic") {
-				roundtripped, err := RoundtripOpenAIMapViaAnthropic(openaiResp, responseModel, provider, actualModel)
-				if err != nil {
-					c.JSON(http.StatusInternalServerError, ErrorResponse{
-						Error: ErrorDetail{
-							Message: "Failed to roundtrip response: " + err.Error(),
-							Type:    "api_error",
-						},
-					})
-					return
-				}
-				openaiResp = roundtripped
-			}
-			if cursorCompat {
-				delete(openaiResp, "usage")
-			}
-			c.JSON(http.StatusOK, openaiResp)
-			return
-		}
-	case protocol.APIStyleOpenAI:
-		// Check if model prefers responses endpoint (for models like Codex)
-
-		// For now, all models with "codex" in their name (case insensitive) prefer completions
-		// In the future, this can be extended to support more models or be configured per-model
-		if strings.Contains(strings.ToLower(actualModel), "codex") {
-			// Convert chat request to responses request
-			s.handleResponsesForChatRequest(c, provider, &req, responseModel, actualModel, isStreaming)
-			return
-		}
-
-		// Cap max_tokens at the model's maximum to prevent API errors
-		// This is critical for providers like DeepSeek which have strict max_tokens limits
-		if req.MaxTokens.Valid() && req.MaxTokens.Value > int64(maxAllowed) {
-			req.MaxTokens.Value = int64(maxAllowed)
-		}
-
-		// Use Transform Chain for request transformation (Consistency + Vendor transforms)
-		// Note: Base transform is not needed since the request is already in OpenAI Chat format
-		// Chain: Consistency Transform → Vendor Transform
-		chain := transform.NewTransformChain([]transform.Transform{
-			transform.NewConsistencyTransform(protocol.TypeOpenAIChat),
-			transform.NewVendorTransform(provider.APIBase),
-		})
-
-		// Create transform context
-		var scenarioFlags *typ.ScenarioFlags
-		if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
-			scenarioFlags = &scenarioConfig.Flags
-		}
-
-		transformCtx := transform.NewTransformContext(
-			&req.ChatCompletionNewParams,
-			transform.WithProviderURL(provider.APIBase),
-			transform.WithScenarioFlags(scenarioFlags),
-			transform.WithStreaming(isStreaming),
-		)
-
-		// Execute transform chain
-		finalCtx, err := chain.Execute(transformCtx)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Transform chain failed: " + err.Error(),
-					Type:    "invalid_request_error",
-				},
-			})
-			return
-		}
-
-		// Get final transformed request
-		transformedReq := finalCtx.Request.(*openai.ChatCompletionNewParams)
-
-		if isStreaming {
-			// Get scenario config for DisableStreamUsage flag
-			disableStreamUsage := cursorCompat
-			if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
-				disableStreamUsage = disableStreamUsage || scenarioConfig.Flags.DisableStreamUsage
-			}
-
-			s.handleOpenAIChatStreamingRequest(c, provider, transformedReq, responseModel, shouldIntercept, shouldStripTools, disableStreamUsage)
-		} else {
-			s.handleNonStreamingRequest(c, provider, transformedReq, responseModel, shouldIntercept, shouldStripTools, cursorCompat)
-		}
 	}
+
+	// === Transform via pipeline ===
+	reqCtx, err := s.transformOpenAIChat(c, req, target, provider, isStreaming, nil, scenarioType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Transform failed: " + err.Error(),
+				Type:    "api_error",
+			},
+		})
+		return
+	}
+	reqCtx.Extra["cursor_compat"] = cursorCompat
+
+	// === Dispatch via transform chain ===
+	reqCtx.RequestModel = actualModel
+	reqCtx.ResponseModel = responseModel
+	s.dispatchChainResult(c, reqCtx, rule, provider, isStreaming, nil)
 }

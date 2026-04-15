@@ -270,7 +270,7 @@ func TestRegisterTools(t *testing.T) {
 	getStatusFunc := func(chatID string) (*StatusInfo, error) { return nil, nil }
 	updateProjectFunc := func(chatID string, projectPath string) error { return nil }
 
-	err := RegisterTools(toolkit, executor, "test-chat", getStatusFunc, updateProjectFunc)
+	err := RegisterTools(toolkit, executor, "test-chat", getStatusFunc, updateProjectFunc, nil)
 	assert.NoError(t, err)
 
 	// Verify schemas are registered (tools should be available)
@@ -343,4 +343,52 @@ func TestToolExecutor_ApprovalCallback(t *testing.T) {
 	assert.NoError(t, err) // Call doesn't return error, error is in response text
 	text = extractTextFromResponse(resp)
 	assert.Contains(t, text, "Error: approval request failed")
+}
+
+func TestBashTool_DirectoryTracking(t *testing.T) {
+	ctx := context.Background()
+
+	// Create a temporary directory structure
+	rootTempDir := t.TempDir()
+	subDir1 := filepath.Join(rootTempDir, "sub1")
+	subDir2 := filepath.Join(rootTempDir, "sub2")
+	assert.NoError(t, os.Mkdir(subDir1, 0755))
+	assert.NoError(t, os.Mkdir(subDir2, 0755))
+
+	// Create executor and set initial directory
+	// Empty allowlist means allow all (for testing convenience)
+	executor := NewToolExecutor([]string{})
+	executor.SetWorkingDirectory(rootTempDir)
+
+	// Create bash tool with empty allowlist (allows all commands)
+	bashTool := NewBashTool(executor, []string{})
+
+	// Test 1: Initial directory
+	assert.Equal(t, rootTempDir, executor.GetWorkingDirectory(), "Initial directory should be rootTempDir")
+
+	// Test 2: Execute cd command - should update executor's working directory
+	resp, err := bashTool.Call(ctx, BashParams{Command: "cd sub1 && pwd"})
+	assert.NoError(t, err)
+	text := extractTextFromResponse(resp)
+	assert.Contains(t, text, subDir1, "Response should show new directory")
+	assert.Equal(t, subDir1, executor.GetWorkingDirectory(), "Executor's working directory should be updated")
+
+	// Test 3: Execute another command in the new directory
+	resp, err = bashTool.Call(ctx, BashParams{Command: "pwd"})
+	assert.NoError(t, err)
+	text = extractTextFromResponse(resp)
+	assert.Contains(t, text, subDir1, "pwd should show we're still in sub1")
+
+	// Test 4: Change directory again
+	resp, err = bashTool.Call(ctx, BashParams{Command: "cd ../sub2 && pwd"})
+	assert.NoError(t, err)
+	text = extractTextFromResponse(resp)
+	assert.Contains(t, text, subDir2, "Response should show sub2 directory")
+	assert.Equal(t, subDir2, executor.GetWorkingDirectory(), "Executor's working directory should be sub2")
+
+	// Test 5: Chain multiple commands with cd
+	resp, err = bashTool.Call(ctx, BashParams{Command: "cd .. && cd sub1 && ls"})
+	assert.NoError(t, err)
+	text = extractTextFromResponse(resp)
+	assert.Equal(t, subDir1, executor.GetWorkingDirectory(), "Should end up in sub1")
 }

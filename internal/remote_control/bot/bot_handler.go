@@ -203,6 +203,9 @@ func NewBotHandler(
 		SendText:                   handler.SendText,
 		SendTextWithReply:          handler.sendTextWithReply,
 		SendTextWithActionKeyboard: handler.sendTextWithActionKeyboard,
+		SendFile: func(hCtx HandlerContext, filePath, caption string) error {
+			return handler.SendFile(context.Background(), hCtx, filePath, caption)
+		},
 		NewStreamingMessageHandler: handler.newStreamingMessageHandler,
 	}
 	handler.agentRouter = NewAgentRouter(deps)
@@ -247,8 +250,8 @@ func (h *BotHandler) SetVerbose(chatID string, verbose bool) {
 
 	// Also update in-memory default (fallback)
 	h.verboseMu.Lock()
-	h.verboseMu.Unlock()
 	h.verbose = verbose
+	h.verboseMu.Unlock()
 }
 
 // HandleMessage is the main entry point for handling bot messages
@@ -318,6 +321,7 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	if msg.IsMediaContent() {
 		media := msg.GetMedia()
 		if len(media) > 0 {
+			h.reactReceived(hCtx)
 			h.handleMediaMessage(hCtx, media)
 		} else {
 			h.SendText(hCtx, fmt.Sprintf("Empty media from %s %s.", msg.ChatType, chatID))
@@ -348,6 +352,9 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 		return
 	}
 
+	// React to indicate the message is being processed (after stop check, before all other handling)
+	h.reactReceived(hCtx)
+
 	// Handle commands
 	if strings.HasPrefix(hCtx.Text(), "/") {
 		h.handleSlashCommands(hCtx)
@@ -364,6 +371,7 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	if h.handlePermissionTextResponse(hCtx) {
 		return
 	}
+
 
 	// NEW: Route all messages through agent router
 	// The router now defaults to @tb (Smart Guide) for new users
@@ -804,6 +812,11 @@ func (h *BotHandler) completeBind(hCtx HandlerContext, projectPath string) {
 		return
 	}
 
+	// Also update bash cwd to match the new project path
+	if err := h.chatStore.SetBashCwd(hCtx.ChatID, expandedPath); err != nil {
+		logrus.WithError(err).Warn("Failed to update bash cwd after project bind")
+	}
+
 	// With new design, sessions are created on-demand when agent processes a message
 	// No need to create session here
 
@@ -880,6 +893,30 @@ func (h *BotHandler) handleCustomPathInput(hCtx HandlerContext) {
 // BuildBindConfirmPrompt returns the text for bind confirmation prompt
 func BuildBindConfirmPrompt(proposedPath string) string {
 	return fmt.Sprintf("📁 *No project bound.*\n\nBind to current directory?\n\n`%s`", proposedPath)
+}
+
+// reactReceived sends a "received" reaction on the user's message to indicate it is being processed.
+// Errors are silently ignored — platforms that don't support reactions degrade gracefully.
+func (h *BotHandler) reactReceived(hCtx HandlerContext) {
+	if hCtx.MessageID == "" {
+		return
+	}
+	emoji := imbot.ResolveReaction(hCtx.Platform, imbot.ReactionToken(imbot.ReactionReceived))
+	if err := hCtx.Bot.React(context.Background(), hCtx.MessageID, emoji); err != nil {
+		logrus.WithError(err).WithField("messageID", hCtx.MessageID).Warn("React received failed")
+	}
+}
+
+// reactDone sends a "done" reaction on the user's message to indicate processing is complete.
+// Errors are silently ignored — platforms that don't support reactions degrade gracefully.
+func (h *BotHandler) reactDone(hCtx HandlerContext) {
+	if hCtx.MessageID == "" {
+		return
+	}
+	emoji := imbot.ResolveReaction(hCtx.Platform, imbot.ReactionToken(imbot.ReactionDone))
+	if err := hCtx.Bot.React(context.Background(), hCtx.MessageID, emoji); err != nil {
+		logrus.WithError(err).WithField("messageID", hCtx.MessageID).Warn("React done failed")
+	}
 }
 
 // BuildCustomPathPrompt returns the text for custom path input prompt

@@ -44,21 +44,21 @@ func useSystray(app *application.App) {
 	SystrayMenuOpenAI = SystrayMenu.
 		Add("OpenAI").
 		OnClick(func(ctx *application.Context) {
-			navigateToPath("/use-openai")
+			navigateToPath("/agent/openai")
 		})
 
 	// Anthropic menu item - navigate to Anthropic page
 	SystrayMenuAnthropic = SystrayMenu.
 		Add("Anthropic").
 		OnClick(func(ctx *application.Context) {
-			navigateToPath("/use-anthropic")
+			navigateToPath("/agent/anthropic")
 		})
 
 	// Claude Code menu item - navigate to Claude Code page
 	SystrayMenuClaudeCode = SystrayMenu.
 		Add("Claude Code").
 		OnClick(func(ctx *application.Context) {
-			navigateToPath("/use-claude-code")
+			navigateToPath("/agent/claude-code")
 		})
 
 	SystrayMenu.AddSeparator()

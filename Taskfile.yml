@@ -54,20 +54,19 @@ tasks:
       - go run ./cli/tingly-box --verbose start --port 12580 --record-mode=scenario --debug --browser=false
 
   swagger:
+    aliases:
+      - openapi
     cmds:
       - |
         curl -s http://localhost:{{.PORT}}/swagger.json > swagger.json
+        curl -s http://localhost:{{.PORT}}/openapi.json > openapi.json
 
   codegen:
     cmds:
       - |
-        echo install openapi-generator
-        echo darwin: brew install openapi-generator
-        echo others: npm install @openapitools/openapi-generator-cli -g
-        echo ref: https://openapi-generator.tech/docs/installation
-      - |
-        openapi-generator-cli generate -g typescript-axios -i ./swagger.json -o ./frontend/src/client \
-            --global-property apiDocs=false,modelDocs=false
+        cd frontend
+        pnpm install
+        pnpm gen:api
 
   go:build:
     env:
@@ -86,6 +85,8 @@ tasks:
         mkdir -p build
         LDFLAGS="-X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME} -X main.goVersion=${GO_VERSION} -X main.platform=${PLATFORM}"
         GOOS={{.OS}} GOARCH={{.ARCH}} go build -ldflags="${LDFLAGS}" -o ./build/{{.BIN_NAME}} ./cli/tingly-box
+        # Copy MCP scripts alongside the binary
+        task mcp:copy-scripts
 
   go:test:
     cmds:
@@ -98,7 +99,23 @@ tasks:
       - |
         python -m tests.test_automation
 
-  web:dev:
+  mcp:web-tools:
+    summary: Run local MCP stdio server exposing mcp_web_search/mcp_web_fetch tools
+    cmds:
+      - |
+        python3 ./scripts/mcp_web_tools.py
+
+  mcp:copy-scripts:
+    summary: Copy MCP scripts to build directory (for distribution)
+    cmds:
+      - |
+        mkdir -p build/scripts
+        cp scripts/mcp_web_tools.py build/scripts/
+        cp scripts/mcp_weather_tools.py build/scripts/
+
+  web:
+    aliases:
+      - web:dev
     cmds:
       - |
         echo "This is only for frontend dev, please start your tingly-box server too"
@@ -211,6 +228,9 @@ tasks:
             cd - > /dev/null
           fi
         done
+      - |
+        git submodule sync
+        git submodule update --remote
 
   changelog:
     cmds:

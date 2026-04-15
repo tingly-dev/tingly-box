@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Alert, Box, Button, Container, Paper, Snackbar, TextField, Typography } from '@mui/material';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -8,6 +8,7 @@ const Login: React.FC = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const location = useLocation();
+    const { token: tokenParam } = useParams<{ token: string }>();
     const [token, setToken] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -15,7 +16,45 @@ const Login: React.FC = () => {
     const { login } = useAuth();
 
     // Get the redirect path from router state or sessionStorage, default to '/'
-    const from = (location.state as any)?.from?.pathname || sessionStorage.getItem('redirectAfterLogin') || '/';
+    // Avoid redirect loops by checking if the target is a login page
+    const fromPath = (location.state as any)?.from?.pathname || sessionStorage.getItem('redirectAfterLogin') || '/';
+    const from = (fromPath.startsWith('/login') ? '/' : fromPath);
+
+    const handleAutoLogin = useCallback(async (urlToken: string) => {
+        setLoading(true);
+        setError('');
+
+        try {
+            const response = await fetch('/api/v1/auth/validate', {
+                headers: {
+                    'Authorization': `Bearer ${urlToken}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (response.ok) {
+                await login(urlToken);
+                setShowSuccess(true);
+                sessionStorage.removeItem('redirectAfterLogin');
+                setTimeout(() => {
+                    navigate(from, { replace: true });
+                }, 500);
+            } else {
+                setError(t('login.errors.invalidToken'));
+                setLoading(false);
+            }
+        } catch (err) {
+            setError(t('login.errors.validationFailed'));
+            setLoading(false);
+        }
+    }, [login, navigate, from, t]);
+
+    // Auto-login if token is in URL path
+    useEffect(() => {
+        if (tokenParam) {
+            handleAutoLogin(tokenParam);
+        }
+    }, [tokenParam, handleAutoLogin]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

@@ -11,7 +11,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/assembler"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 
 	"github.com/tingly-dev/tingly-box/internal/obs"
@@ -277,7 +277,7 @@ func headerToMap(h http.Header) map[string]string {
 // It provides a unified way to handle both v1 and v1beta Anthropic streaming events
 type streamRecorder struct {
 	recorder     *ProtocolRecorder
-	assembler    *stream.AnthropicStreamAssembler
+	assembler    *assembler.AnthropicStreamAssembler
 	inputTokens  int
 	outputTokens int
 	hasUsage     bool
@@ -291,7 +291,7 @@ func newStreamRecorder(recorder *ProtocolRecorder) *streamRecorder {
 	recorder.EnableStreaming()
 	return &streamRecorder{
 		recorder:  recorder,
-		assembler: stream.NewAnthropicStreamAssembler(),
+		assembler: assembler.NewAnthropicStreamAssembler(),
 	}
 }
 

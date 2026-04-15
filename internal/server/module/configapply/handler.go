@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -24,6 +25,85 @@ func NewHandler(cfg *config.Config, host string) *Handler {
 		config: cfg,
 		host:   host,
 	}
+}
+
+// HTTPTransportConfigUpdate represents the update request for HTTP transport settings
+type HTTPTransportConfigUpdate struct {
+	RespectEnvProxy *bool `json:"respect_env_proxy"` // nil = no change
+}
+
+// GetConfig returns the current system configuration
+// Only returns settings that are safe to expose to the UI
+func (h *Handler) GetConfig(c *gin.Context) {
+	cfg := h.config
+	if cfg == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Global config not available",
+		})
+		return
+	}
+
+	response := gin.H{
+		"success": true,
+		"data": gin.H{
+			"http_transport": gin.H{
+				"respect_env_proxy": cfg.HTTPTransport.RespectEnvProxy,
+			},
+		},
+	}
+	c.JSON(http.StatusOK, response)
+}
+
+// UpdateConfig updates the system configuration
+// Only allows updating specific safe fields
+func (h *Handler) UpdateConfig(c *gin.Context) {
+	cfg := h.config
+	if cfg == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Global config not available",
+		})
+		return
+	}
+
+	var req struct {
+		HTTPTransport HTTPTransportConfigUpdate `json:"http_transport"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request body: " + err.Error(),
+		})
+		return
+	}
+
+	// Update respect_env_proxy if provided
+	if req.HTTPTransport.RespectEnvProxy != nil {
+		cfg.HTTPTransport.RespectEnvProxy = req.HTTPTransport.RespectEnvProxy
+	}
+
+	// Save the configuration
+	if err := cfg.Save(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to save configuration: " + err.Error(),
+		})
+		return
+	}
+
+	// Apply the new transport configuration
+	cfg.ApplyHTTPTransportConfig()
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"http_transport": gin.H{
+				"respect_env_proxy": cfg.HTTPTransport.RespectEnvProxy,
+			},
+		},
+	})
 }
 
 // ApplyClaudeConfig generates and applies Claude Code configuration from system state
@@ -92,29 +172,8 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 	baseURL := fmt.Sprintf("http://%s:%d", h.host, port)
 
 	// Generate env vars based on mode
-	env := map[string]string{
-		"DISABLE_TELEMETRY":                        "1",
-		"DISABLE_ERROR_REPORTING":                  "1",
-		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-		"API_TIMEOUT_MS":                           "3000000",
-		"ANTHROPIC_BASE_URL":                       baseURL + "/tingly/claude_code",
-		"ANTHROPIC_AUTH_TOKEN":                     h.config.GetModelToken(),
-	}
-
-	if req.Mode == "separate" {
-		env["ANTHROPIC_MODEL"] = "tingly/cc-default"
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "tingly/cc-haiku"
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "tingly/cc-opus"
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "tingly/cc-sonnet"
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = "tingly/cc-subagent"
-	} else {
-		// Unified mode - all point to same model
-		env["ANTHROPIC_MODEL"] = "tingly/cc"
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "tingly/cc"
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "tingly/cc"
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "tingly/cc"
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = "tingly/cc"
-	}
+	unified := req.Mode != "separate"
+	env := agent.GenerateClaudeCodeEnv(baseURL, h.config.GetModelToken(), unified)
 
 	// Install status line script if requested (before applying settings)
 	var statusLineInstalled bool
@@ -286,22 +345,7 @@ func (h *Handler) ApplyOpenCodeConfigFromState(c *gin.Context) {
 	}
 
 	// Generate OpenCode config with all models
-	providerConfig := map[string]interface{}{
-		"tingly-box": map[string]interface{}{
-			"name": "tingly-box",
-			"npm":  "@ai-sdk/anthropic",
-			"options": map[string]interface{}{
-				"baseURL": configBaseURL,
-				"apiKey":  apiKey,
-			},
-			"models": models,
-		},
-	}
-
-	payload := map[string]interface{}{
-		"$schema":  "https://opencode.ai/config.json",
-		"provider": providerConfig,
-	}
+	payload := agent.GenerateOpenCodePayload(configBaseURL, apiKey, models)
 
 	result, err := config.ApplyOpenCodeConfig(payload)
 	if err != nil {
@@ -394,22 +438,7 @@ func (h *Handler) GetOpenCodeConfigPreview(c *gin.Context) {
 	}
 
 	// Generate OpenCode config JSON
-	providerConfig := map[string]interface{}{
-		"tingly-box": map[string]interface{}{
-			"name": "tingly-box",
-			"npm":  "@ai-sdk/anthropic",
-			"options": map[string]interface{}{
-				"baseURL": configBaseURL,
-				"apiKey":  apiKey,
-			},
-			"models": models,
-		},
-	}
-
-	configPayload := map[string]interface{}{
-		"$schema":  "https://opencode.ai/config.json",
-		"provider": providerConfig,
-	}
+	configPayload := agent.GenerateOpenCodePayload(configBaseURL, apiKey, models)
 
 	configJSON, err := json.MarshalIndent(configPayload, "", "  ")
 	if err != nil {

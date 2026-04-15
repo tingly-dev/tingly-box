@@ -1,4 +1,4 @@
-import { Paper, Typography, Box, Tabs, Tab } from '@mui/material';
+import { Paper, Typography, Box, Tabs, Tab, useTheme } from '@mui/material';
 import {
     ComposedChart,
     Line,
@@ -11,6 +11,7 @@ import {
     Legend,
 } from 'recharts';
 import { useState } from 'react';
+import { getThemeChartStyles } from './chartStyles';
 
 interface TimeSeriesData {
     timestamp: string;
@@ -30,7 +31,17 @@ interface RequestErrorChartProps {
 type TabValue = 'requests' | 'errors' | 'both';
 
 export default function RequestErrorChart({ data, interval = 'hour' }: RequestErrorChartProps) {
+    const theme = useTheme();
+    const chartStyles = getThemeChartStyles(theme);
     const [tabValue, setTabValue] = useState<TabValue>('both');
+
+    // Get error colors based on theme
+    const errorColor = theme.palette.error.main;
+    const successColor = theme.palette.success.main;
+    const warningColor = theme.palette.warning.main;
+    const warningFill = theme.palette.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.15)'
+        : 'rgba(245, 158, 11, 0.1)';
 
     // Format timestamp based on aggregation interval
     const formatTimeLabel = (timestamp: string) => {
@@ -191,7 +202,6 @@ export default function RequestErrorChart({ data, interval = 'hour' }: RequestEr
                 <Tabs
                     value={tabValue}
                     onChange={(_, value) => setTabValue(value)}
-                    size="small"
                     sx={{ minHeight: 36, '& .MuiTabs-indicator': { height: 3 } }}
                 >
                     <Tab label="Requests" value="requests" sx={{ minHeight: 36, py: 0.5, fontSize: '0.875rem' }} />
@@ -219,29 +229,29 @@ export default function RequestErrorChart({ data, interval = 'hour' }: RequestEr
             ) : (
                 <ResponsiveContainer width="100%" height={300}>
                     <ComposedChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <CartesianGrid strokeDasharray="3 3" stroke={chartStyles.chart.grid} />
                         <XAxis
                             dataKey="time"
-                            tick={{ fontSize: 11 }}
+                            tick={{ fontSize: 11, fill: 'text.secondary' }}
                             tickLine={false}
-                            axisLine={{ stroke: '#e0e0e0' }}
+                            axisLine={{ stroke: chartStyles.chart.axis }}
                             interval={labelInterval}
                         />
                         <YAxis
                             yAxisId="left"
                             tickFormatter={formatYAxis}
-                            tick={{ fontSize: 11 }}
+                            tick={{ fontSize: 11, fill: 'text.secondary' }}
                             tickLine={false}
-                            axisLine={{ stroke: '#e0e0e0' }}
+                            axisLine={{ stroke: chartStyles.chart.axis }}
                         />
                         {tabValue === 'errors' && (
                             <YAxis
                                 yAxisId="right"
                                 orientation="right"
                                 tickFormatter={formatPercent}
-                                tick={{ fontSize: 11 }}
+                                tick={{ fontSize: 11, fill: 'text.secondary' }}
                                 tickLine={false}
-                                axisLine={{ stroke: '#e0e0e0' }}
+                                axisLine={{ stroke: chartStyles.chart.axis }}
                             />
                         )}
                         <Tooltip content={<CustomTooltip />} />
@@ -255,8 +265,8 @@ export default function RequestErrorChart({ data, interval = 'hour' }: RequestEr
                                     type="monotone"
                                     dataKey="requests"
                                     name="Requests"
-                                    stroke="#ff9800"
-                                    fill="#fff3e0"
+                                    stroke={warningColor}
+                                    fill={warningFill}
                                     strokeWidth={2}
                                 />
                             </>
@@ -270,7 +280,7 @@ export default function RequestErrorChart({ data, interval = 'hour' }: RequestEr
                                     type="monotone"
                                     dataKey="errors"
                                     name="Errors"
-                                    stroke="#d32f2f"
+                                    stroke={errorColor}
                                     strokeWidth={2}
                                     dot={{ r: 3 }}
                                 />
@@ -279,7 +289,7 @@ export default function RequestErrorChart({ data, interval = 'hour' }: RequestEr
                                     type="monotone"
                                     dataKey="successRate"
                                     name="Success Rate"
-                                    stroke="#2e7d32"
+                                    stroke={successColor}
                                     strokeWidth={2}
                                     strokeDasharray="5 5"
                                     dot={false}
@@ -295,8 +305,8 @@ export default function RequestErrorChart({ data, interval = 'hour' }: RequestEr
                                     type="monotone"
                                     dataKey="requests"
                                     name="Requests"
-                                    stroke="#ff9800"
-                                    fill="#fff3e0"
+                                    stroke={warningColor}
+                                    fill={warningFill}
                                     strokeWidth={2}
                                 />
                                 <Line

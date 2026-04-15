@@ -165,8 +165,9 @@ type RuleFlags struct {
 // Profiles allow multiple Rule + ScenarioFlags configurations per base scenario.
 // A profile is identified by a short service-generated ID (e.g. "p1", "p2").
 type ProfileMeta struct {
-	ID   string `json:"id" yaml:"id"`     // Profile ID (e.g. "p1")
-	Name string `json:"name" yaml:"name"` // Human-readable name (unique within base scenario)
+	ID      string `json:"id" yaml:"id"`           // Profile ID (e.g. "p1")
+	Name    string `json:"name" yaml:"name"`       // Human-readable name (unique within base scenario)
+	Unified bool   `json:"unified" yaml:"unified"` // true=unified mode (single model), false=separate mode (individual models, default)
 }
 
 // ScenarioConfig represents configuration for a specific scenario
@@ -203,49 +204,131 @@ type OAuthDetail struct {
 	ExtraFields  map[string]interface{} `json:"extra_fields"`  // Any extra field for some special clients
 }
 
-// ToolInterceptorConfig contains configuration for tool interceptor (search & fetch)
-type ToolInterceptorConfig struct {
-	PreferLocalSearch FlexibleBool `json:"prefer_local_search,omitempty"` // Prefer local tool interception even if provider has built-in search
-	SearchAPI         string       `json:"search_api,omitempty"`          // "brave" or "google"
-	SearchKey         string       `json:"search_key,omitempty"`          // API key for search service
-	MaxResults        int          `json:"max_results,omitempty"`         // Max search results to return (default: 10)
+// MCPMode defines MCP runtime mode
+type MCPMode string
 
-	// Proxy configuration
-	ProxyURL string `json:"proxy_url,omitempty"` // HTTP proxy URL (e.g., "http://127.0.0.1:7897")
+const (
+	MCPModeServertool MCPMode = "servertool" // servertool mode: tingly-box connects to external MCP servers and injects tools into AI requests
+	MCPModeClienttool MCPMode = "clienttool" // clienttool mode (default): external clients connect to tingly-box
+)
 
-	// Fetch configuration
-	MaxFetchSize int64 `json:"max_fetch_size,omitempty"` // Max content size for fetch in bytes (default: 1MB)
-	FetchTimeout int64 `json:"fetch_timeout,omitempty"`  // Fetch timeout in seconds (default: 30)
-	MaxURLLength int   `json:"max_url_length,omitempty"` // Max URL length (default: 2000)
+// MCPConnectionType defines connection type
+type MCPConnectionType string
+
+const (
+	MCPConnectionTypeSTDIO MCPConnectionType = "stdio"
+	MCPConnectionTypeHTTP  MCPConnectionType = "http"
+	MCPConnectionTypeSSE   MCPConnectionType = "sse"
+)
+
+// MCPAuthType defines authentication type
+type MCPAuthType string
+
+const (
+	MCPAuthTypeNone   MCPAuthType = "none"
+	MCPAuthTypeHeader MCPAuthType = "headers"
+	MCPAuthTypeOAuth  MCPAuthType = "oauth"
+)
+
+// MCPClientState defines client connection state
+type MCPClientState string
+
+const (
+	MCPClientStateConnected    MCPClientState = "connected"
+	MCPClientStateConnecting   MCPClientState = "connecting"
+	MCPClientStateDisconnected MCPClientState = "disconnected"
+	MCPClientStateError       MCPClientState = "error"
+)
+
+// MCPRuntimeConfig contains global MCP runtime configuration.
+type MCPRuntimeConfig struct {
+	Mode          MCPMode        `json:"mode,omitempty"`           // runtime mode: intercept (default) or local
+	Sources       []MCPSourceConfig `json:"sources,omitempty"`
+	RequestTimeout int            `json:"request_timeout,omitempty"` // seconds, default: 30
 }
 
-// ToolInterceptorOverride contains provider-level overrides for tool interceptor
-type ToolInterceptorOverride struct {
-	// Disabled allows provider to explicitly disable when globally enabled
-	Disabled bool `json:"disabled,omitempty"`
+// MCPSourceConfig defines one MCP source connection.
+type MCPSourceConfig struct {
+	ID        string            `json:"id,omitempty"`        // unique source id for normalized tool names
+	Name      string            `json:"name,omitempty"`       // client name (unique, no spaces/hyphens)
+	Enabled   *bool             `json:"enabled,omitempty"`   // nil means enabled (backward-compatible default)
+	Transport string            `json:"transport,omitempty"`  // "http", "stdio", or "sse"
+	Endpoint  string            `json:"endpoint,omitempty"`  // endpoint URL for HTTP/SSE transport
+	Headers   map[string]string `json:"headers,omitempty"`   // static headers for MCP calls
+	Tools     []string          `json:"tools,omitempty"`     // allow list, empty means all
+	Command   string            `json:"command,omitempty"`   // command for stdio transport
+	Args      []string          `json:"args,omitempty"`      // args for stdio command
+	Cwd       string            `json:"cwd,omitempty"`       // working directory for stdio command
+	Env       map[string]string `json:"env,omitempty"`       // extra env vars for stdio command
+	ProxyURL  string            `json:"proxy_url,omitempty"` // HTTP proxy URL for outgoing requests
 
-	// MaxResults override for this specific provider
-	MaxResults *int `json:"max_results,omitempty"`
+	// Local mode specific fields
+	ConnectionType   MCPConnectionType   `json:"connection_type,omitempty"`    // stdio/http/sse
+	AuthType        MCPAuthType        `json:"auth_type,omitempty"`           // headers/oauth
+	AllowedExtraHeaders []string        `json:"allowed_extra_headers,omitempty"` // allowed request headers to forward
+	StdioConfig     *MCPStdioConfig    `json:"stdio_config,omitempty"`
+	OAuthConfig     *MCPOAuthConfig    `json:"oauth_config,omitempty"`
+	ToolsToExecute  []string           `json:"tools_to_execute,omitempty"`     // available tools
+	ToolsAutoExec   []string           `json:"tools_to_auto_execute,omitempty"` // auto-execute tools (agent mode)
+	IsPingAvailable *bool              `json:"is_ping_available,omitempty"`   // health check method
+	AutoRegistered  bool               `json:"auto_registered,omitempty"`     // true if auto-registered on first connect
 }
 
-// ApplyToolInterceptorDefaults applies default values to tool interceptor config
-func ApplyToolInterceptorDefaults(config *ToolInterceptorConfig) {
-	if config.MaxResults == 0 {
-		config.MaxResults = 10
+// MCPStdioConfig STDIO connection configuration
+type MCPStdioConfig struct {
+	Command string   `json:"command"`            // execution command
+	Args    []string `json:"args,omitempty"`     // command arguments
+	Env     []string `json:"env,omitempty"`      // inherited environment variables
+	Cwd     string   `json:"cwd,omitempty"`      // working directory
+}
+
+// MCPOAuthConfig OAuth 2.0 configuration
+type MCPOAuthConfig struct {
+	ClientID     string   `json:"client_id"`
+	ClientSecret string   `json:"client_secret,omitempty"`
+	AuthorizeURL string   `json:"authorize_url"`
+	TokenURL     string   `json:"token_url"`
+	Scopes       []string `json:"scopes,omitempty"`
+}
+
+// MCPTool represents an MCP tool definition
+type MCPTool struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
+// MCPClient represents a registered MCP client
+type MCPClient struct {
+	ID     string          `json:"id"`
+	Config MCPSourceConfig `json:"config"`
+	Tools  []MCPTool       `json:"tools"`
+	State  MCPClientState  `json:"state"`
+}
+
+// ApplyMCPRuntimeDefaults applies default values to MCP runtime config.
+func ApplyMCPRuntimeDefaults(config *MCPRuntimeConfig) {
+	if config == nil {
+		return
 	}
-	if config.MaxFetchSize == 0 {
-		config.MaxFetchSize = 1 * 1024 * 1024 // 1MB
+	if config.RequestTimeout == 0 {
+		config.RequestTimeout = 30
 	}
-	if config.FetchTimeout == 0 {
-		config.FetchTimeout = 30 // 30 seconds
+	for i := range config.Sources {
+		if config.Sources[i].Enabled == nil {
+			config.Sources[i].Enabled = BoolPtr(true)
+		}
 	}
-	if config.MaxURLLength == 0 {
-		config.MaxURLLength = 2000
-	}
-	// Default to duckduckgo if no search API specified
-	if config.SearchAPI == "" {
-		config.SearchAPI = "duckduckgo"
-	}
+}
+
+// BoolPtr returns a pointer to the given bool.
+func BoolPtr(v bool) *bool {
+	return &v
+}
+
+// IsMCPSourceEnabled returns whether a source is enabled.
+// Nil means enabled for backward compatibility with existing configs.
+func IsMCPSourceEnabled(source MCPSourceConfig) bool {
+	return source.Enabled == nil || *source.Enabled
 }
 
 // IsExpired checks if the OAuth token is expired

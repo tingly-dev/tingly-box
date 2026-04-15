@@ -12,7 +12,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/smart_compact"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -95,10 +94,11 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 			}
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
-					Message: "Message error",
+					Message: fmt.Sprintf("Message error: %s", string(bodyBytes)),
 					Type:    "invalid_request_error",
 				},
 			})
+			logrus.WithError(err).WithField("body", string(bodyBytes)).Errorf("Anthropic decode error")
 			return
 		}
 		requestModel = string(betaMessages.Model)
@@ -112,10 +112,11 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 			}
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
-					Message: "Message error",
+					Message: fmt.Sprintf("Message error: %s", string(bodyBytes)),
 					Type:    "invalid_request_error",
 				},
 			})
+			logrus.WithError(err).WithField("body", string(bodyBytes)).Errorf("Anthropic decode error")
 			return
 		}
 
@@ -148,6 +149,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 				Type:    "invalid_request_error",
 			},
 		})
+		logrus.WithError(err).Errorf("Select service error")
 		return
 	}
 
@@ -165,23 +167,9 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 	actualModel := selectedService.Model
 	// Delegate to the appropriate implementation based on beta parameter
 	if beta {
-
-		// Apply compact transformation only if the compact feature is enabled for this scenario
-		if s.ApplySmartCompact(scenarioType) {
-			tf := smart_compact.NewCompactTransformer(2)
-			tf.HandleV1Beta(&betaMessages.BetaMessageNewParams)
-			logrus.Infoln("smart compact triggered")
-		}
 		s.AnthropicMessagesV1Beta(c, betaMessages, requestModel, provider, actualModel, rule)
 
 	} else {
-
-		// Apply compact transformation only if the compact feature is enabled for this scenario
-		if s.ApplySmartCompact(scenarioType) {
-			tf := smart_compact.NewCompactTransformer(2)
-			tf.HandleV1(&messages.MessageNewParams)
-			logrus.Infoln("smart compact triggered")
-		}
 		s.AnthropicMessagesV1(c, messages, requestModel, provider, actualModel, rule)
 	}
 }

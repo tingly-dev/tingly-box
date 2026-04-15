@@ -1,4 +1,4 @@
-**Announcement:** We have identified a critical bug in protocol and remote control in v0.260306.0. Please update to the latest version to resolve this issue. Thank you for your continued support.
+**Announcement:** Here is [fault record](https://github.com/tingly-dev/tingly-box/discussions/626). Please update to the latest version to resolve known issues. Thank you for your continued support.
 
 ---
 
@@ -52,7 +52,7 @@ npx tingly-box@latest
 
 **From source code**
 
-*Requires: Go 1.25+, Node.js 20+, pnpm, task, openapi-generator-cli*
+*Requires: Go 1.25+, Node.js 20+, pnpm, task, openapi*
 
 ```bash
 # Install dependencies
@@ -60,7 +60,7 @@ npx tingly-box@latest
 # - Node.js: https://nodejs.org/
 # - pnpm: `npm install -g pnpm`
 # - task: https://taskfile.dev/installation/, or `go install github.com/go-task/task/v3/cmd/task@latest`
-# - openapi-generator-cli: `npm install @openapitools/openapi-generator-cli -g`
+# - shell: copy and run shell command in taskfile directly
 
 git submodule update --init --recursive
 
@@ -157,6 +157,9 @@ Tingly Box now supports remote control through popular IM platforms. Interact wi
 - ✅ Telegram
 - ✅ DingTalk
 - ✅ Feishu
+- ✅ Lark
+- ✅ Weixin
+- WeCom
 - Slack
 - Discord
 
@@ -186,6 +189,8 @@ npx tingly-box@latest
 **[User Manual](./docs/user-manual.md)** – Installation, configuration, and operational guide
 
 **[Guardrails](./docs/guardrails.md)** – Policy-based safety checks, built-in protections, and protected credential masking
+
+**[MCP Web Tools](./docs/mcp-web-tools.md)** – Local stdio MCP server for `web_search` / `web_fetch`
 
 
 ## **Philosophy**
