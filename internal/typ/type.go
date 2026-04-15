@@ -273,6 +273,15 @@ type MCPSourceConfig struct {
 	ToolsAutoExec       []string          `json:"tools_to_auto_execute,omitempty"` // auto-execute tools (agent mode)
 	IsPingAvailable     *bool             `json:"is_ping_available,omitempty"`     // health check method
 	AutoRegistered      bool              `json:"auto_registered,omitempty"`       // true if auto-registered on first connect
+	Advisor             *AdvisorConfig    `json:"advisor,omitempty" yaml:"advisor,omitempty"`
+}
+
+// AdvisorConfig configures the in-process advisor tool source.
+type AdvisorConfig struct {
+	BaseURL           string `json:"base_url"`
+	Model             string `json:"model"`
+	APIKey            string `json:"api_key"`
+	MaxUsesPerRequest int    `json:"max_uses_per_request"`
 }
 
 // MCPStdioConfig STDIO connection configuration
