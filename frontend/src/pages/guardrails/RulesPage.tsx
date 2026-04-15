@@ -581,7 +581,7 @@ const GuardrailsRulesPage = () => {
     };
 
     const buildPolicyScope = (policy: DisplayPolicy) => {
-        const scenarios = policy.scope?.scenarios?.join(', ') || 'all scenarios';
+        const scenarios = policy.scope?.scenarios?.join(', ') || '';
         return scenarios;
     };
 
@@ -1235,7 +1235,7 @@ const GuardrailsRulesPage = () => {
                                 <Box
                                     sx={{
                                         display: 'flex',
-                                        alignItems: { xs: 'flex-start', lg: 'center' },
+                                        alignItems: 'flex-start',
                                         flexDirection: { xs: 'column', lg: 'row' },
                                         gap: 1.5,
                                         width: '100%',
@@ -1249,14 +1249,21 @@ const GuardrailsRulesPage = () => {
                                     onClick={() => openPolicyEditor(policy)}
                                 >
                                     <Box sx={{ minWidth: { lg: 220 }, flexShrink: 0, minHeight: 0 }}>
-                                        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                        <Stack direction="row" spacing={0.75} alignItems="center" useFlexGap flexWrap="wrap">
                                             <Typography
                                                 variant="body2"
                                                 sx={{ fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}
                                             >
                                                 {policy.id}
                                             </Typography>
-                                            {policy.isBuiltin && <Chip size="small" label="Built-in" variant="outlined" />}
+                                            {policy.isBuiltin && (
+                                                <Chip
+                                                    size="small"
+                                                    label="Built-in"
+                                                    variant="outlined"
+                                                    sx={{ height: 20, fontSize: '0.7rem', '& .MuiChip-label': { px: 0.5 } }}
+                                                />
+                                            )}
                                             {effectiveState.inheritedDisabled && (
                                                 <Chip size="small" label="No active group" variant="outlined" />
                                             )}
@@ -1282,9 +1289,6 @@ const GuardrailsRulesPage = () => {
                                         >
                                             {buildPolicySummary(policy)}
                                         </Typography>
-                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, whiteSpace: 'normal' }}>
-                                            {buildPolicyScope(policy)}
-                                        </Typography>
                                     </Box>
 
                                     <Stack
@@ -1296,6 +1300,7 @@ const GuardrailsRulesPage = () => {
                                             minWidth: { lg: 220 },
                                             justifyContent: { xs: 'space-between', lg: 'flex-end' },
                                             flexShrink: 0,
+                                            alignSelf: 'center',
                                         }}
                                     >
                                         <Chip
@@ -1767,24 +1772,24 @@ const GuardrailsRulesPage = () => {
                                             '&:last-child': { borderBottom: 'none' },
                                         }}
                                     >
-                                        <Box sx={{ display: 'flex', alignItems: { xs: 'flex-start', md: 'center' }, flexDirection: { xs: 'column', md: 'row' }, gap: 1.5, width: '100%' }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'flex-start', flexDirection: { xs: 'column', md: 'row' }, gap: 1.5, width: '100%' }}>
                                             <Box sx={{ minWidth: { md: 240 }, flexShrink: 0 }}>
-                                                <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-                                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                                        {policy.id}
-                                                    </Typography>
-                                                    {isInstalled && <Chip size="small" label={isEnabled ? 'Installed · Enabled' : 'Installed'} />}
-                                                </Stack>
+                                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                                    {policy.id}
+                                                </Typography>
                                                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
                                                     {policy.name || policy.path}
                                                 </Typography>
                                             </Box>
-                                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                            <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
                                                 <Typography variant="body2" color="text.primary">
                                                     {policy.reason || 'Download this policy fragment from the remote registry and manage enable/disable from the local policy list.'}
                                                 </Typography>
                                             </Box>
-                                            <Box sx={{ width: { xs: '100%', md: 'auto' }, display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>
+                                            <Box sx={{ width: { xs: '100%', md: 'auto' }, display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' }, alignItems: 'center', alignSelf: 'center' }}>
+                                                {isInstalled && isEnabled && (
+                                                    <Chip size="small" color="success" label="Enabled" sx={{ mr: 1 }} />
+                                                )}
                                                 <Button
                                                     variant={isInstalled ? 'outlined' : 'contained'}
                                                     size="small"
