@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"time"
 
@@ -110,7 +111,7 @@ func (s *AdvisorToolSource) DisableHealthCheck(ctx context.Context) {}
 func (s *AdvisorToolSource) description(remainingUses int) string {
 	return "Consult a more powerful advisor model for strategic guidance. " +
 		"Use this when facing architectural decisions, complex debugging, unclear trade-offs, or when stuck. " +
-		"You have " + string(rune('0'+remainingUses)) + " advisor consultation(s) remaining this request."
+		"You have " + strconv.Itoa(remainingUses) + " advisor consultation(s) remaining this request."
 }
 
 const advisorSystemPrompt = `You are an advisor to a coding agent. You share the agent's full conversation context and provide strategic guidance.
