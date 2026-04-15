@@ -93,9 +93,9 @@ export const sourceToFormValue = (source?: MCPSourceConfig): MCPSourceFormValue 
         }
     }
 
-    let command = source.command || '';
-    let args = source.args || [];
     // Detect builtin tools: tingly-box + mcp-builtin subcommand
+    let command = source.command || 'builtin';
+    let args = source.args || [];
     if (source.command === 'tingly-box' && source.args && source.args.includes('mcp-builtin')) {
         command = 'builtin';
         args = [];
