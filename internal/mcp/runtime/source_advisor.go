@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/openai/openai-go/v3"
+	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -105,11 +106,19 @@ func (s *AdvisorToolSource) CallTool(ctx context.Context, toolName string, argum
 		return "Advisor consultations exhausted for this request.", nil
 	}
 
+	var result string
+	var err error
 	format := detectAdvisorFormat(s.config)
 	if format == FormatOpenAI {
-		return s.callOpenAI(ctx, input.Reason, actx)
+		result, err = s.callOpenAI(ctx, input.Reason, actx)
+	} else {
+		result, err = s.callAnthropic(ctx, input.Reason, actx)
 	}
-	return s.callAnthropic(ctx, input.Reason, actx)
+	if err != nil {
+		return "", err
+	}
+	actx.UsesRemaining--
+	return result, nil
 }
 
 func (s *AdvisorToolSource) callOpenAI(ctx context.Context, reason string, actx *AdvisorContext) (string, error) {
@@ -143,6 +152,12 @@ func (s *AdvisorToolSource) callOpenAI(ctx context.Context, reason string, actx 
 			messages = append(messages, openai.AssistantMessage(content))
 		case "system":
 			messages = append(messages, openai.SystemMessage(content))
+		case "tool":
+			messages = append(messages, openai.UserMessage("[tool result]: "+content))
+		default:
+			if content != "" {
+				logrus.WithField("role", role).Warn("advisor: dropping unknown message role")
+			}
 		}
 	}
 	if reason == "" {
