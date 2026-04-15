@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/mcpruntime"
+	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -15,17 +15,17 @@ import (
 type TransportHandler struct {
 	servers   map[string]*MCPServer // client name -> server
 	serversMu sync.RWMutex
-	runtime   *mcpruntime.Runtime
+	runtime   *runtime.Runtime
 	registry  *Registry
 	baseURL   string
 	cfg       *config.Config
 }
 
 // NewTransportHandler creates a new transport handler.
-func NewTransportHandler(runtime *mcpruntime.Runtime, registry *Registry, baseURL string, cfg *config.Config) *TransportHandler {
+func NewTransportHandler(runtime *runtime.Runtime, registry *Registry, baseURL string, cfg *config.Config) *TransportHandler {
 	return &TransportHandler{
-		servers: make(map[string]*MCPServer),
-		runtime: runtime,
+		servers:  make(map[string]*MCPServer),
+		runtime:  runtime,
 		registry: registry,
 		baseURL:  baseURL,
 		cfg:      cfg,
