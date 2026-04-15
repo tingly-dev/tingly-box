@@ -409,7 +409,7 @@ func TestRuntime_EndToEndToolCall(t *testing.T) {
 // TestToolSourceFactory_AllTransports tests factory creates all transport types
 func TestToolSourceFactory_AllTransports(t *testing.T) {
 	sc := newSessionCache()
-	factory := NewToolSourceFactory(sc)
+	factory := NewToolSourceFactory(sc, nil)
 
 	testCases := []struct {
 		name      string
@@ -638,7 +638,7 @@ func TestRuntime_ConcurrentAccess(t *testing.T) {
 // BenchmarkToolSourceFactory_Creation benchmarks tool source creation
 func BenchmarkToolSourceFactory_Creation(b *testing.B) {
 	sc := newSessionCache()
-	factory := NewToolSourceFactory(sc)
+	factory := NewToolSourceFactory(sc, nil)
 
 	config := typ.MCPSourceConfig{
 		ID:        "bench-stdio",

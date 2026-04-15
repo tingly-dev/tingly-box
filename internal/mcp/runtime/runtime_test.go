@@ -86,7 +86,7 @@ func TestRuntimeGetOrCreateSource(t *testing.T) {
 	r := &Runtime{
 		getConfig:         func() *typ.MCPRuntimeConfig { return cfg },
 		sc:                newSessionCache(),
-		toolSourceFactory: NewToolSourceFactory(newSessionCache()),
+		toolSourceFactory: NewToolSourceFactory(newSessionCache(), nil),
 		activeSources:     make(map[string]ToolSource),
 	}
 

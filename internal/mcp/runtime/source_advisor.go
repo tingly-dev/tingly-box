@@ -3,10 +3,15 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/openai/openai-go/v3"
+
+	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -30,11 +35,12 @@ func detectAdvisorFormat(cfg typ.AdvisorConfig) AdvisorFormat {
 // AdvisorToolSource is an in-process ToolSource that serves the advisor tool.
 type AdvisorToolSource struct {
 	*BaseToolSource
-	config typ.AdvisorConfig
+	config     typ.AdvisorConfig
+	clientPool *client.ClientPool
 }
 
 // NewAdvisorToolSource creates a new advisor tool source.
-func NewAdvisorToolSource(sourceConfig typ.MCPSourceConfig) (*AdvisorToolSource, error) {
+func NewAdvisorToolSource(sourceConfig typ.MCPSourceConfig, cp *client.ClientPool) (*AdvisorToolSource, error) {
 	base := NewBaseToolSource(sourceConfig.ID, TransportType("advisor"))
 	cfg := typ.AdvisorConfig{MaxUsesPerRequest: 3}
 	if sourceConfig.Advisor != nil {
@@ -46,6 +52,7 @@ func NewAdvisorToolSource(sourceConfig typ.MCPSourceConfig) (*AdvisorToolSource,
 	return &AdvisorToolSource{
 		BaseToolSource: base,
 		config:         cfg,
+		clientPool:     cp,
 	}, nil
 }
 
@@ -88,8 +95,100 @@ func (s *AdvisorToolSource) ListTools(ctx context.Context) ([]ToolDefinition, er
 
 // CallTool executes the advisor tool.
 func (s *AdvisorToolSource) CallTool(ctx context.Context, toolName string, arguments string) (string, error) {
-	// Skeleton only for now.
-	return `{"assessment":"not yet implemented","recommendation":"please wait"}`, nil
+	var input struct {
+		Reason string `json:"reason"`
+	}
+	_ = json.Unmarshal([]byte(arguments), &input)
+
+	actx, ok := GetAdvisorContext(ctx)
+	if !ok || actx.UsesRemaining <= 0 {
+		return "Advisor consultations exhausted for this request.", nil
+	}
+
+	format := detectAdvisorFormat(s.config)
+	if format == FormatOpenAI {
+		return s.callOpenAI(ctx, input.Reason, actx)
+	}
+	return s.callAnthropic(ctx, input.Reason, actx)
+}
+
+func (s *AdvisorToolSource) callOpenAI(ctx context.Context, reason string, actx *AdvisorContext) (string, error) {
+	if s.clientPool == nil {
+		return "", fmt.Errorf("advisor: client pool not available")
+	}
+
+	provider := &typ.Provider{
+		Name:     "advisor",
+		APIBase:  s.config.BaseURL,
+		Token:    s.config.APIKey,
+		APIStyle: protocol.APIStyleOpenAI,
+		Enabled:  true,
+	}
+
+	wrapper := s.clientPool.GetOpenAIClient(ctx, provider, s.config.Model)
+	if wrapper == nil {
+		return "", fmt.Errorf("advisor: failed to create OpenAI client")
+	}
+
+	messages := []openai.ChatCompletionMessageParamUnion{
+		openai.SystemMessage(advisorSystemPrompt),
+	}
+	for _, m := range actx.Messages {
+		role, _ := m["role"].(string)
+		content, _ := m["content"].(string)
+		switch role {
+		case "user":
+			messages = append(messages, openai.UserMessage(content))
+		case "assistant":
+			messages = append(messages, openai.AssistantMessage(content))
+		case "system":
+			messages = append(messages, openai.SystemMessage(content))
+		}
+	}
+	if reason == "" {
+		reason = "The executor has requested strategic guidance."
+	}
+	messages = append(messages, openai.UserMessage(reason))
+
+	req := openai.ChatCompletionNewParams{
+		Model:    s.config.Model,
+		Messages: messages,
+	}
+
+	resp, err := wrapper.ChatCompletionsNew(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("advisor: OpenAI request failed: %w", err)
+	}
+
+	if len(resp.Choices) == 0 {
+		return "", fmt.Errorf("advisor: empty response from OpenAI")
+	}
+
+	content := resp.Choices[0].Message.Content
+	return normalizeAdvisorResponse(content), nil
+}
+
+func (s *AdvisorToolSource) callAnthropic(ctx context.Context, reason string, actx *AdvisorContext) (string, error) {
+	return "", fmt.Errorf("advisor: Anthropic path not yet implemented")
+}
+
+type AdvisorResponse struct {
+	Assessment          string `json:"assessment"`
+	Recommendation      string `json:"recommendation"`
+	UnsolicitedFindings string `json:"unsolicited_findings,omitempty"`
+}
+
+func normalizeAdvisorResponse(raw string) string {
+	var r AdvisorResponse
+	if err := json.Unmarshal([]byte(raw), &r); err == nil {
+		return raw
+	}
+	fallback := AdvisorResponse{
+		Assessment:     "Advisor returned non-JSON response.",
+		Recommendation: raw,
+	}
+	b, _ := json.Marshal(fallback)
+	return string(b)
 }
 
 // GetSourceConfig returns the source configuration.

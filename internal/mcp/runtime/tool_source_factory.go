@@ -2,19 +2,27 @@ package runtime
 
 import (
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // ToolSourceFactory creates tool sources based on configuration.
 type ToolSourceFactory struct {
 	sessionCache *sessionCache
+	clientPool   *client.ClientPool
 }
 
 // NewToolSourceFactory creates a new tool source factory.
-func NewToolSourceFactory(sc *sessionCache) *ToolSourceFactory {
+func NewToolSourceFactory(sc *sessionCache, cp *client.ClientPool) *ToolSourceFactory {
 	return &ToolSourceFactory{
 		sessionCache: sc,
+		clientPool:   cp,
 	}
+}
+
+// SetClientPool sets the client pool on the factory.
+func (f *ToolSourceFactory) SetClientPool(cp *client.ClientPool) {
+	f.clientPool = cp
 }
 
 // CreateToolSource creates a tool source based on the transport type.
@@ -28,7 +36,7 @@ func (f *ToolSourceFactory) CreateToolSource(sourceConfig typ.MCPSourceConfig) (
 
 	// In-process advisor tool source takes precedence over transport matching.
 	if sourceConfig.Advisor != nil || transport == "advisor" {
-		return NewAdvisorToolSource(sourceConfig)
+		return NewAdvisorToolSource(sourceConfig, f.clientPool)
 	}
 
 	switch transport {
