@@ -543,10 +543,10 @@
         "qwen_code": {
             "id": "qwen_code",
             "name": "Qwen Code (OAuth)",
-            "status": "active",
+            "status": "disabled",
             "valid": true,
             "website": "https://portal.qwen.ai",
-            "description": "Qwen Code API via OAuth device code flow",
+            "description": "Qwen Code API via OAuth device code flow (DISABLED: Aliyun WAF blocking)",
             "auth_type": "oauth",
             "api_doc": "https://portal.qwen.ai/docs",
             "model_doc": "https://portal.qwen.ai/docs/models",
