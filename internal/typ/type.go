@@ -237,50 +237,51 @@ const (
 	MCPClientStateConnected    MCPClientState = "connected"
 	MCPClientStateConnecting   MCPClientState = "connecting"
 	MCPClientStateDisconnected MCPClientState = "disconnected"
-	MCPClientStateError       MCPClientState = "error"
+	MCPClientStateError        MCPClientState = "error"
 )
 
 // MCPRuntimeConfig contains global MCP runtime configuration.
 type MCPRuntimeConfig struct {
-	Mode          MCPMode        `json:"mode,omitempty"`           // runtime mode: intercept (default) or local
-	Sources       []MCPSourceConfig `json:"sources,omitempty"`
-	RequestTimeout int            `json:"request_timeout,omitempty"` // seconds, default: 30
+	Mode                  MCPMode           `json:"mode,omitempty"` // deprecated: kept only for backward compatibility
+	Sources               []MCPSourceConfig `json:"sources,omitempty"`
+	RequestTimeout        int               `json:"request_timeout,omitempty"`          // seconds, default: 30
+	StripDisabledMCPTools bool              `json:"strip_disabled_mcp_tools,omitempty"` // dangerous: strip disabled MCP declarations/tool_calls
 }
 
 // MCPSourceConfig defines one MCP source connection.
 type MCPSourceConfig struct {
-	ID        string            `json:"id,omitempty"`        // unique source id for normalized tool names
-	Name      string            `json:"name,omitempty"`       // client name (unique, no spaces/hyphens)
-	Enabled   *bool             `json:"enabled,omitempty"`   // nil means enabled (backward-compatible default)
-	Transport string            `json:"transport,omitempty"`  // "http", "stdio", or "sse"
-	Endpoint  string            `json:"endpoint,omitempty"`  // endpoint URL for HTTP/SSE transport
-	Headers   map[string]string `json:"headers,omitempty"`   // static headers for MCP calls
-	Tools     []string          `json:"tools,omitempty"`     // allow list, empty means all
-	Command   string            `json:"command,omitempty"`   // command for stdio transport
-	Args      []string          `json:"args,omitempty"`      // args for stdio command
-	Cwd       string            `json:"cwd,omitempty"`       // working directory for stdio command
-	Env       map[string]string `json:"env,omitempty"`       // extra env vars for stdio command
-	ProxyURL  string            `json:"proxy_url,omitempty"` // HTTP proxy URL for outgoing requests
-	IsClientTool *bool          `json:"is_client_tool,omitempty"` // nil means servertool (default for backward compatibility)
+	ID           string            `json:"id,omitempty"`             // unique source id for normalized tool names
+	Name         string            `json:"name,omitempty"`           // client name (unique, no spaces/hyphens)
+	Enabled      *bool             `json:"enabled,omitempty"`        // nil means enabled (backward-compatible default)
+	Transport    string            `json:"transport,omitempty"`      // "http", "stdio", or "sse"
+	Endpoint     string            `json:"endpoint,omitempty"`       // endpoint URL for HTTP/SSE transport
+	Headers      map[string]string `json:"headers,omitempty"`        // static headers for MCP calls
+	Tools        []string          `json:"tools,omitempty"`          // allow list, empty means all
+	Command      string            `json:"command,omitempty"`        // command for stdio transport
+	Args         []string          `json:"args,omitempty"`           // args for stdio command
+	Cwd          string            `json:"cwd,omitempty"`            // working directory for stdio command
+	Env          map[string]string `json:"env,omitempty"`            // extra env vars for stdio command
+	ProxyURL     string            `json:"proxy_url,omitempty"`      // HTTP proxy URL for outgoing requests
+	IsClientTool *bool             `json:"is_client_tool,omitempty"` // nil means servertool (default for backward compatibility)
 
 	// Local mode specific fields
-	ConnectionType   MCPConnectionType   `json:"connection_type,omitempty"`    // stdio/http/sse
-	AuthType        MCPAuthType        `json:"auth_type,omitempty"`           // headers/oauth
-	AllowedExtraHeaders []string        `json:"allowed_extra_headers,omitempty"` // allowed request headers to forward
-	StdioConfig     *MCPStdioConfig    `json:"stdio_config,omitempty"`
-	OAuthConfig     *MCPOAuthConfig    `json:"oauth_config,omitempty"`
-	ToolsToExecute  []string           `json:"tools_to_execute,omitempty"`     // available tools
-	ToolsAutoExec   []string           `json:"tools_to_auto_execute,omitempty"` // auto-execute tools (agent mode)
-	IsPingAvailable *bool              `json:"is_ping_available,omitempty"`   // health check method
-	AutoRegistered  bool               `json:"auto_registered,omitempty"`     // true if auto-registered on first connect
+	ConnectionType      MCPConnectionType `json:"connection_type,omitempty"`       // stdio/http/sse
+	AuthType            MCPAuthType       `json:"auth_type,omitempty"`             // headers/oauth
+	AllowedExtraHeaders []string          `json:"allowed_extra_headers,omitempty"` // allowed request headers to forward
+	StdioConfig         *MCPStdioConfig   `json:"stdio_config,omitempty"`
+	OAuthConfig         *MCPOAuthConfig   `json:"oauth_config,omitempty"`
+	ToolsToExecute      []string          `json:"tools_to_execute,omitempty"`      // available tools
+	ToolsAutoExec       []string          `json:"tools_to_auto_execute,omitempty"` // auto-execute tools (agent mode)
+	IsPingAvailable     *bool             `json:"is_ping_available,omitempty"`     // health check method
+	AutoRegistered      bool              `json:"auto_registered,omitempty"`       // true if auto-registered on first connect
 }
 
 // MCPStdioConfig STDIO connection configuration
 type MCPStdioConfig struct {
-	Command string   `json:"command"`            // execution command
-	Args    []string `json:"args,omitempty"`     // command arguments
-	Env     []string `json:"env,omitempty"`      // inherited environment variables
-	Cwd     string   `json:"cwd,omitempty"`      // working directory
+	Command string   `json:"command"`        // execution command
+	Args    []string `json:"args,omitempty"` // command arguments
+	Env     []string `json:"env,omitempty"`  // inherited environment variables
+	Cwd     string   `json:"cwd,omitempty"`  // working directory
 }
 
 // MCPOAuthConfig OAuth 2.0 configuration

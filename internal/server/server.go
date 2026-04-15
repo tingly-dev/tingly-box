@@ -258,6 +258,18 @@ func (s *Server) mcpEnabled() bool {
 		s.config.GetScenarioFlag(typ.ScenarioClaudeCode, "mcp")
 }
 
+// mcpStripDisabledToolsEnabled returns whether dangerous disabled MCP strip is enabled.
+func (s *Server) mcpStripDisabledToolsEnabled() bool {
+	if s.config == nil {
+		return false
+	}
+	cfg := s.config.GetMCPRuntimeConfig()
+	if cfg == nil {
+		return false
+	}
+	return cfg.StripDisabledMCPTools
+}
+
 // mcpMode returns the current MCP runtime mode
 func (s *Server) mcpMode() typ.MCPMode {
 	if s.config == nil {

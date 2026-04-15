@@ -21,11 +21,11 @@ type configProvider func() *typ.MCPRuntimeConfig
 
 // Runtime handles MCP tool source discovery and tool execution.
 type Runtime struct {
-	getConfig        configProvider
-	sc               *sessionCache
+	getConfig         configProvider
+	sc                *sessionCache
 	toolSourceFactory *ToolSourceFactory
-	activeSources    map[string]ToolSource // source ID -> ToolSource
-	sourcesMu        sync.RWMutex
+	activeSources     map[string]ToolSource // source ID -> ToolSource
+	sourcesMu         sync.RWMutex
 }
 
 // NewRuntime creates a new MCP runtime.
@@ -237,6 +237,37 @@ func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments
 	return result, nil
 }
 
+// isSourceEnabled checks if a source is enabled in the current configuration
+func (r *Runtime) isSourceEnabled(sourceID string) bool {
+	cfg := r.getConfigOrDefault()
+	if cfg == nil {
+		return false
+	}
+
+	for i := range cfg.Sources {
+		if cfg.Sources[i].ID == sourceID {
+			return typ.IsMCPSourceEnabled(cfg.Sources[i])
+		}
+	}
+	return false
+}
+
+// invalidateSource removes a source from the cache and disconnects it
+func (r *Runtime) invalidateSource(ctx context.Context, sourceID string) {
+	r.sourcesMu.Lock()
+	defer r.sourcesMu.Unlock()
+
+	if source, exists := r.activeSources[sourceID]; exists {
+		// Disconnect the source
+		if err := source.Disconnect(ctx); err != nil {
+			logrus.WithField("source", sourceID).WithError(err).
+				Warn("mcp: failed to disconnect source during invalidation")
+		}
+		delete(r.activeSources, sourceID)
+		logrus.WithField("source", sourceID).Debug("mcp: invalidated cached source")
+	}
+}
+
 // getOrCreateSource gets an existing tool source or creates a new one.
 func (r *Runtime) getOrCreateSource(ctx context.Context, sourceID string) (ToolSource, error) {
 	// Fast path: check cache
@@ -245,6 +276,12 @@ func (r *Runtime) getOrCreateSource(ctx context.Context, sourceID string) (ToolS
 	r.sourcesMu.RUnlock()
 
 	if source != nil {
+		// Check if source is still enabled in current config
+		if !r.isSourceEnabled(sourceID) {
+			// Source is disabled, remove from cache and return error
+			r.invalidateSource(ctx, sourceID)
+			return nil, &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " is disabled"}
+		}
 		return source, nil
 	}
 
@@ -255,6 +292,16 @@ func (r *Runtime) getOrCreateSource(ctx context.Context, sourceID string) (ToolS
 	// Double-check
 	source = r.activeSources[sourceID]
 	if source != nil {
+		// Check if source is still enabled in current config
+		if !r.isSourceEnabled(sourceID) {
+			// Source is disabled, remove from cache and return error
+			if err := source.Disconnect(ctx); err != nil {
+				logrus.WithField("source", sourceID).WithError(err).
+					Warn("mcp: failed to disconnect source")
+			}
+			delete(r.activeSources, sourceID)
+			return nil, &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " is disabled"}
+		}
 		return source, nil
 	}
 
@@ -423,4 +470,17 @@ func (r *Runtime) HasServerTools() bool {
 		}
 	}
 	return false
+}
+
+// ListEnabledServerToolNames returns normalized MCP tool names from enabled server-tool sources.
+func (r *Runtime) ListEnabledServerToolNames(ctx context.Context) map[string]struct{} {
+	out := make(map[string]struct{})
+	for _, t := range r.ListOpenAITools(ctx) {
+		fn := t.GetFunction()
+		if fn == nil || fn.Name == "" {
+			continue
+		}
+		out[fn.Name] = struct{}{}
+	}
+	return out
 }
