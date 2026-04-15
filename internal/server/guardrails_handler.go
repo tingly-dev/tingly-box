@@ -601,11 +601,17 @@ func (s *Server) InstallGuardrailsRegistryPolicy(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	if len(fragmentCfg.Policies) != 1 || fragmentCfg.Policies[0].ID != policyID {
+	fragmentCfg, err = selectGuardrailsRegistryPolicyFragment(fragmentCfg, policyID)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   "registry fragment must contain exactly one policy matching the requested id",
+			"error":   err.Error(),
 		})
+		return
+	}
+	fragmentData, err = marshalGuardrailsPolicyFragment(fragmentCfg)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
@@ -646,6 +652,22 @@ func (s *Server) InstallGuardrailsRegistryPolicy(c *gin.Context) {
 		Path:        targetPath,
 		PolicyID:    policyID,
 	})
+}
+
+func selectGuardrailsRegistryPolicyFragment(cfg guardrailscore.Config, policyID string) (guardrailscore.Config, error) {
+	filtered := guardrailscore.Config{}
+	for _, policy := range cfg.Policies {
+		if policy.ID == policyID {
+			filtered.Policies = append(filtered.Policies, policy)
+		}
+	}
+	if len(filtered.Policies) == 0 {
+		return guardrailscore.Config{}, fmt.Errorf("registry fragment does not contain policy %q", policyID)
+	}
+	if len(filtered.Policies) > 1 {
+		return guardrailscore.Config{}, fmt.Errorf("registry fragment contains duplicate policy id %q", policyID)
+	}
+	return filtered, nil
 }
 
 // Guardrails Policy Handlers
@@ -1429,7 +1451,12 @@ func (s *Server) DeleteGuardrailsCredential(c *gin.Context) {
 
 // GetGuardrailsHistory returns the most recent guardrails history rows.
 func (s *Server) GetGuardrailsHistory(c *gin.Context) {
-	if s.guardrailsRuntime == nil || s.guardrailsRuntime.History == nil {
+	runtime := s.currentGuardrailsRuntime()
+	history := (*guardrailsutils.Store)(nil)
+	if runtime != nil {
+		history = runtime.HistoryStore()
+	}
+	if history == nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"data":    []guardrailsutils.Entry{},
@@ -1438,14 +1465,15 @@ func (s *Server) GetGuardrailsHistory(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    s.guardrailsRuntime.History.List(200),
+		"data":    history.List(200),
 	})
 }
 
 // ClearGuardrailsHistory deletes all persisted guardrails history rows.
 func (s *Server) ClearGuardrailsHistory(c *gin.Context) {
-	if s.guardrailsRuntime != nil && s.guardrailsRuntime.History != nil {
-		s.guardrailsRuntime.History.Clear()
+	runtime := s.currentGuardrailsRuntime()
+	if runtime != nil && runtime.HistoryStore() != nil {
+		runtime.HistoryStore().Clear()
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
