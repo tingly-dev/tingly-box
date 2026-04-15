@@ -428,6 +428,7 @@ jobs:
         with:
           image_name: tingly-box
           version: ${{ needs.setup.outputs.release_tag }}
+          github_token: ${{ github.token }}
           build_args: |
             TINGLY_VERSION=${{ needs.setup.outputs.npx_version }}
 
