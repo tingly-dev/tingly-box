@@ -12,6 +12,7 @@ import (
 	"github.com/openai/openai-go/v3/shared"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -44,8 +45,18 @@ func NewRuntime(getConfig configProvider) *Runtime {
 	return &Runtime{
 		getConfig:         getConfig,
 		sc:                sc,
-		toolSourceFactory: NewToolSourceFactory(sc),
+		toolSourceFactory: NewToolSourceFactory(sc, nil),
 		activeSources:     make(map[string]ToolSource),
+	}
+}
+
+// SetClientPool injects the client pool into the runtime's tool source factory.
+func (r *Runtime) SetClientPool(cp *client.ClientPool) {
+	if r == nil {
+		return
+	}
+	if r.toolSourceFactory != nil {
+		r.toolSourceFactory.SetClientPool(cp)
 	}
 }
 
