@@ -55,8 +55,8 @@ const defaultBuiltinForm = (): MCPSourceFormValue => ({
     id: 'webtools',
     name: 'Built-in Web Tools',
     transport: 'stdio',
-    command: 'builtin', // Special marker for built-in Go tools
-    args: [],
+    command: 'tingly-box', // Actual command for built-in Go tools
+    args: ['mcp-builtin'],
     tools: ['mcp_web_search', 'mcp_web_fetch'],
     envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'SERPER_API_KEY'],
     useGlobalProxy: true,

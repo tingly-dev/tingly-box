@@ -64,7 +64,7 @@ export const defaultMCPSourceFormValue = (): MCPSourceFormValue => ({
     enabled: true,
     transport: 'stdio',
     endpoint: '',
-    command: 'builtin', // Special marker for built-in tools
+    command: '', // STDIO command (empty default; no special 'builtin' marker)
     args: [],
     env: [],
     envPassthrough: [],
@@ -93,9 +93,9 @@ export const sourceToFormValue = (source?: MCPSourceConfig): MCPSourceFormValue 
         }
     }
 
-    // Detect builtin tools: tingly-box + mcp-builtin subcommand
-    let command = source.command || 'builtin';
+    let command = source.command || '';
     let args = source.args || [];
+    // Detect builtin tools: tingly-box + mcp-builtin subcommand
     if (source.command === 'tingly-box' && source.args && source.args.includes('mcp-builtin')) {
         command = 'builtin';
         args = [];
