@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 
@@ -184,7 +185,72 @@ func (s *AdvisorToolSource) callOpenAI(ctx context.Context, reason string, actx 
 }
 
 func (s *AdvisorToolSource) callAnthropic(ctx context.Context, reason string, actx *AdvisorContext) (string, error) {
-	return "", fmt.Errorf("advisor: Anthropic path not yet implemented")
+	if s.clientPool == nil {
+		return "", fmt.Errorf("advisor: client pool not available")
+	}
+
+	provider := &typ.Provider{
+		Name:     "advisor",
+		APIBase:  s.config.BaseURL,
+		Token:    s.config.APIKey,
+		APIStyle: protocol.APIStyleAnthropic,
+		Enabled:  true,
+	}
+
+	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, s.config.Model)
+	if wrapper == nil {
+		return "", fmt.Errorf("advisor: failed to create Anthropic client")
+	}
+
+	var messages []anthropic.MessageParam
+	for _, m := range actx.Messages {
+		role, _ := m["role"].(string)
+		content, _ := m["content"].(string)
+		switch role {
+		case "user":
+			messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(content)))
+		case "assistant":
+			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(content)))
+		case "system":
+			// System messages go in the System field, not messages list
+			continue
+		case "tool":
+			messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock("[tool result]: "+content)))
+		default:
+			if content != "" {
+				logrus.WithField("role", role).Warn("advisor: dropping unknown message role")
+			}
+		}
+	}
+	if reason == "" {
+		reason = "The executor has requested strategic guidance."
+	}
+	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(reason)))
+
+	req := anthropic.MessageNewParams{
+		Model:     anthropic.Model(s.config.Model),
+		MaxTokens: 4096,
+		Messages:  messages,
+		System:    []anthropic.TextBlockParam{{Text: advisorSystemPrompt}},
+	}
+
+	resp, err := wrapper.MessagesNew(ctx, &req)
+	if err != nil {
+		return "", fmt.Errorf("advisor: Anthropic request failed: %w", err)
+	}
+
+	if len(resp.Content) == 0 {
+		return "", fmt.Errorf("advisor: empty response from Anthropic")
+	}
+
+	var content strings.Builder
+	for _, block := range resp.Content {
+		if block.Type == "text" {
+			content.WriteString(block.Text)
+		}
+	}
+
+	return normalizeAdvisorResponse(content.String()), nil
 }
 
 type AdvisorResponse struct {
