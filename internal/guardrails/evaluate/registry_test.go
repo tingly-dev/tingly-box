@@ -12,7 +12,7 @@ func TestBuildEvaluatorsCreatesResourceAccessPolicyEvaluator(t *testing.T) {
 		Groups: []guardrailscore.PolicyGroup{
 			{
 				ID:      "high-risk",
-				Enabled: &enabled,
+				Enabled: enabled,
 			},
 		},
 		Policies: []guardrailscore.Policy{
@@ -20,7 +20,7 @@ func TestBuildEvaluatorsCreatesResourceAccessPolicyEvaluator(t *testing.T) {
 				ID:      "block-ssh-read",
 				Kind:    guardrailscore.PolicyKindResourceAccess,
 				Groups:  []string{"high-risk"},
-				Enabled: &enabled,
+				Enabled: enabled,
 				Scope: guardrailscore.Scope{
 					Scenarios:  []string{"claude_code"},
 					Directions: []guardrailscore.Direction{guardrailscore.DirectionResponse},
