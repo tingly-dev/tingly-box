@@ -495,7 +495,6 @@ func (r *Runtime) ListEnabledServerToolNames(ctx context.Context) map[string]str
 	if r.enabledNamesCache != nil && time.Now().Before(r.enabledNamesExpires) {
 		return r.enabledNamesCache
 	}
-
 	out := make(map[string]struct{})
 	for _, t := range r.ListOpenAITools(ctx) {
 		fn := t.GetFunction()
