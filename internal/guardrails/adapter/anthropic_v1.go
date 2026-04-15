@@ -49,7 +49,7 @@ func RefreshInputFromAnthropicV1Response(input guardrailscore.Input, resp *anthr
 func responseTextFromAnthropicV1Blocks(blocks []anthropic.ContentBlockUnion) string {
 	parts := make([]string, 0, len(blocks))
 	for _, block := range blocks {
-		if (block.Type == "text" || block.Type == "thinking") && strings.TrimSpace(block.Text) != "" {
+		if block.Type == "text" && strings.TrimSpace(block.Text) != "" {
 			parts = append(parts, block.Text)
 		}
 	}
