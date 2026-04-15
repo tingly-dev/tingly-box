@@ -9,7 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/mcpruntime"
+	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -19,7 +19,7 @@ type Handler struct {
 	cfg      *config.Config
 	registry *Registry
 	baseURL  string
-	runtime  *mcpruntime.Runtime
+	runtime  *runtime.Runtime
 }
 
 // NewHandler creates a new Local mode handler
@@ -640,7 +640,7 @@ func (h *Handler) ExecuteTool(c *gin.Context) {
 	startTime := time.Now()
 
 	// Build the normalized tool name: tingly_box_mcp__<source_id>__<tool_name>
-	normalizedToolName := mcpruntime.NormalizeToolName(client.Config.ID, req.ToolName)
+	normalizedToolName := runtime.NormalizeToolName(client.Config.ID, req.ToolName)
 
 	// Serialize arguments
 	argsJSON, err := json.Marshal(req.Arguments)
@@ -681,7 +681,7 @@ func (h *Handler) ExecuteTool(c *gin.Context) {
 }
 
 // SetRuntime sets the MCP runtime for tool execution
-func (h *Handler) SetRuntime(runtime *mcpruntime.Runtime) {
+func (h *Handler) SetRuntime(runtime *runtime.Runtime) {
 	h.runtime = runtime
 }
 

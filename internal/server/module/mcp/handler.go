@@ -7,15 +7,15 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/mcp/local"
-	"github.com/tingly-dev/tingly-box/internal/mcpruntime"
+	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // Handler handles MCP configuration HTTP requests
 type Handler struct {
-	cfg             *config.Config
-	localHandler    *local.Handler
+	cfg              *config.Config
+	localHandler     *local.Handler
 	transportHandler *local.TransportHandler
 }
 
@@ -28,7 +28,7 @@ func NewHandler(cfg *config.Config) *Handler {
 	h.localHandler = local.NewHandler(cfg, registry, "")
 
 	// Create mcpruntime for local mode
-	runtime := mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig {
+	runtime := runtime.NewRuntime(func() *typ.MCPRuntimeConfig {
 		var mcpCfg typ.MCPRuntimeConfig
 		if cfg != nil {
 			cfg.GetToolConfig(db.ToolTypeMCPRuntime, &mcpCfg)
@@ -72,9 +72,9 @@ func (h *Handler) IsMCPEnabled() bool {
 
 // MCPRuntimeConfigResponse is the API response for MCP runtime config
 type MCPRuntimeConfigResponse struct {
-	Success bool                       `json:"success"`
-	Config  *typ.MCPRuntimeConfig      `json:"config,omitempty"`
-	Error   string                     `json:"error,omitempty"`
+	Success bool                  `json:"success"`
+	Config  *typ.MCPRuntimeConfig `json:"config,omitempty"`
+	Error   string                `json:"error,omitempty"`
 }
 
 // MCPRuntimeConfigRequest is the API request for setting MCP runtime config

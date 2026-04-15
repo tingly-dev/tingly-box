@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/internal/mcpruntime"
+	runtime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -20,7 +20,7 @@ func hasOnlyMCPToolUsesV1(content []anthropic.ContentBlockUnion) ([]anthropic.To
 	for _, block := range content {
 		switch v := block.AsAny().(type) {
 		case anthropic.ToolUseBlock:
-			if !mcpruntime.IsMCPToolName(v.Name) {
+			if !runtime.IsMCPToolName(v.Name) {
 				return nil, false
 			}
 			toolUses = append(toolUses, v)
@@ -37,7 +37,7 @@ func hasOnlyMCPToolUsesBeta(content []anthropic.BetaContentBlockUnion) ([]anthro
 	for _, block := range content {
 		switch v := block.AsAny().(type) {
 		case anthropic.BetaToolUseBlock:
-			if !mcpruntime.IsMCPToolName(v.Name) {
+			if !runtime.IsMCPToolName(v.Name) {
 				return nil, false
 			}
 			toolUses = append(toolUses, v)

@@ -16,7 +16,7 @@ import (
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/mcpruntime"
+	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
@@ -143,7 +143,7 @@ func hasOnlyMCPToolCalls(toolCalls []openai.ChatCompletionMessageToolCallUnion) 
 		return false
 	}
 	for _, tc := range toolCalls {
-		if !mcpruntime.IsMCPToolName(tc.Function.Name) {
+		if !runtime.IsMCPToolName(tc.Function.Name) {
 			return false
 		}
 	}
@@ -290,7 +290,7 @@ func hasDeclaredMCPTools(req *openai.ChatCompletionNewParams) bool {
 		if fn == nil {
 			continue
 		}
-		if mcpruntime.IsMCPToolName(fn.Name) {
+		if runtime.IsMCPToolName(fn.Name) {
 			return true
 		}
 	}

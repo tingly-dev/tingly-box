@@ -13,7 +13,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/mcpruntime"
+	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
@@ -544,7 +544,7 @@ func hasDeclaredMCPAnthropicV1Tools(req *anthropic.MessageNewParams) bool {
 		return false
 	}
 	for _, t := range req.Tools {
-		if t.OfTool != nil && mcpruntime.IsMCPToolName(t.OfTool.Name) {
+		if t.OfTool != nil && runtime.IsMCPToolName(t.OfTool.Name) {
 			return true
 		}
 	}
@@ -557,7 +557,7 @@ func hasDeclaredMCPAnthropicBetaTools(req *anthropic.BetaMessageNewParams) bool 
 		return false
 	}
 	for _, t := range req.Tools {
-		if t.OfTool != nil && mcpruntime.IsMCPToolName(t.OfTool.Name) {
+		if t.OfTool != nil && runtime.IsMCPToolName(t.OfTool.Name) {
 			return true
 		}
 	}

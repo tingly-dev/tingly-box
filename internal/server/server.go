@@ -20,7 +20,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
-	"github.com/tingly-dev/tingly-box/internal/mcpruntime"
+	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
@@ -92,7 +92,7 @@ type Server struct {
 	capabilityStore *db.ModelCapabilityStore
 
 	// mcp runtime for external MCP tools
-	mcpRuntime *mcpruntime.Runtime
+	mcpRuntime *runtime.Runtime
 
 	// guardrails engine (optional)
 	guardrailsEngine            guardrails.Guardrails
@@ -624,8 +624,8 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Set template manager in config for model fetching fallback
 	server.config.SetTemplateManager(templateManager)
 
-	server.mcpRuntime = mcpruntime.NewRuntime(cfg.GetMCPRuntimeConfig)
-	if err := mcpruntime.EnsureBuiltinScripts(cfg.ConfigDir); err != nil {
+	server.mcpRuntime = runtime.NewRuntime(cfg.GetMCPRuntimeConfig)
+	if err := runtime.EnsureBuiltinScripts(cfg.ConfigDir); err != nil {
 		logrus.WithError(err).Warn("mcp: failed to ensure builtin scripts in config dir")
 	}
 
