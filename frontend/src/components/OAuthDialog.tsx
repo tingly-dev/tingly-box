@@ -70,7 +70,7 @@ const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         description: 'Access Qwen Code via device code flow',
         icon: <Qwen size={32}/>,
         color: '#00A8E1',
-        enabled: true,
+        enabled: false,  // DISABLED: Aliyun WAF blocking OAuth requests
         deviceCodeFlow: true,
     },
     {
