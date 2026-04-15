@@ -1701,27 +1701,11 @@ export const api = {
             env?: Record<string, string>;
         }>;
         request_timeout?: number;
+        strip_disabled_mcp_tools?: boolean;
     }): Promise<any> => {
         return uiAPI('/mcp/config', {
             method: 'PUT',
             body: JSON.stringify(config),
-        });
-    },
-
-    // ========== MCP Local Mode API ==========
-
-    // Get MCP mode (servertool or clienttool)
-    getMCPMode: async (): Promise<any> => {
-        return uiAPI('/mcp/mode', {
-            method: 'GET',
-        });
-    },
-
-    // Set MCP mode
-    setMCPMode: async (mode: 'servertool' | 'clienttool'): Promise<any> => {
-        return uiAPI('/mcp/mode', {
-            method: 'PUT',
-            body: JSON.stringify({ mode }),
         });
     },
 

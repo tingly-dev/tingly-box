@@ -2,7 +2,7 @@ export interface MCPSourceConfig {
     id?: string;
     name?: string;
     enabled?: boolean;
-    transport?: 'http' | 'stdio';
+    transport?: 'http' | 'stdio' | 'sse';
     endpoint?: string;
     headers?: Record<string, string>;
     tools?: string[];
@@ -24,6 +24,7 @@ export interface MCPSourceConfig {
 export interface MCPRuntimeConfig {
     sources?: MCPSourceConfig[];
     request_timeout?: number;
+    strip_disabled_mcp_tools?: boolean;
 }
 
 export interface MCPConfigResponse {
@@ -43,7 +44,7 @@ export interface MCPKVPair {
 export interface MCPSourceFormValue {
     id: string;
     enabled: boolean;
-    transport: 'http' | 'stdio';
+    transport: 'http' | 'stdio' | 'sse';
     endpoint: string;
     command: string;
     args: string[];
@@ -91,13 +92,22 @@ export const sourceToFormValue = (source?: MCPSourceConfig): MCPSourceFormValue 
             env.push({ key, value });
         }
     }
+
+    // Detect builtin tools: tingly-box + mcp-builtin subcommand
+    let command = source.command || 'builtin';
+    let args = source.args || [];
+    if (source.command === 'tingly-box' && source.args && source.args.includes('mcp-builtin')) {
+        command = 'builtin';
+        args = [];
+    }
+
     return {
         id: source.id || '',
         enabled: source.enabled ?? true,
-        transport: (source.transport as 'http' | 'stdio') || 'stdio',
+        transport: (source.transport as 'http' | 'stdio' | 'sse') || 'stdio',
         endpoint: source.endpoint || '',
-        command: source.command || 'builtin',
-        args: source.args || [],
+        command,
+        args,
         env,
         envPassthrough,
         cwd: source.cwd || MCP_DEFAULT_CWD,
@@ -132,8 +142,15 @@ export const formValueToSource = (form: MCPSourceFormValue): MCPSourceConfig => 
     if (form.transport === 'http') {
         source.endpoint = form.endpoint.trim();
     } else {
-        source.command = form.command.trim();
-        source.args = (form.args || []).map((a) => a.trim()).filter(Boolean);
+        // Handle builtin command marker
+        if (form.command === 'builtin') {
+            // Convert builtin marker to actual tingly-box command
+            source.command = 'tingly-box';
+            source.args = ['mcp-builtin'];
+        } else {
+            source.command = form.command.trim();
+            source.args = (form.args || []).map((a) => a.trim()).filter(Boolean);
+        }
         source.cwd = form.cwd.trim();
     }
 
