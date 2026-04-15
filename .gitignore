@@ -1,6 +1,7 @@
 # doc
 docs
 script
+.worktrees
 
 # codegen
 internal/web/dist
