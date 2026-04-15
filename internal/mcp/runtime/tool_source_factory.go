@@ -26,10 +26,6 @@ func (f *ToolSourceFactory) CreateToolSource(sourceConfig typ.MCPSourceConfig) (
 
 	logrus.Debugf("mcp: creating tool source id=%s transport=%s", sourceConfig.ID, transport)
 
-	if sourceConfig.Advisor != nil || transport == "advisor" {
-		return NewAdvisorToolSource(sourceConfig)
-	}
-
 	switch transport {
 	case "stdio":
 		return NewStdioToolSource(sourceConfig, f.sessionCache)
