@@ -16,7 +16,7 @@ const DefaultPolicyGroupID = "default"
 type PolicyGroup struct {
 	ID       string `json:"id" yaml:"id"`
 	Name     string `json:"name,omitempty" yaml:"name,omitempty"`
-	Enabled  *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Enabled  bool   `json:"enabled" yaml:"enabled"`
 	Severity string `json:"severity,omitempty" yaml:"severity,omitempty"`
 }
 
@@ -26,7 +26,7 @@ type Policy struct {
 	Name    string      `json:"name,omitempty" yaml:"name,omitempty"`
 	Groups  []string    `json:"groups,omitempty" yaml:"groups,omitempty"`
 	Kind    PolicyKind  `json:"kind" yaml:"kind"`
-	Enabled *bool       `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Enabled bool        `json:"enabled" yaml:"enabled"`
 	Scope   Scope       `json:"scope,omitempty" yaml:"scope,omitempty"`
 	Match   PolicyMatch `json:"match" yaml:"match"`
 	Verdict Verdict     `json:"verdict,omitempty" yaml:"verdict,omitempty"`

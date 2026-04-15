@@ -739,6 +739,14 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithDescription("Get curated builtin guardrails policies"),
 		swagger.WithTags("guardrails"),
 	)
+	apiV1.GET("/guardrails/registry", s.GetGuardrailsRegistry,
+		swagger.WithDescription("List downloadable guardrails policies from a remote registry"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.POST("/guardrails/registry/install", s.InstallGuardrailsRegistryPolicy,
+		swagger.WithDescription("Download a guardrails policy from a remote registry into the local guardrails directory"),
+		swagger.WithTags("guardrails"),
+	)
 	apiV1.GET("/guardrails/credentials", s.GetGuardrailsCredentials,
 		swagger.WithDescription("List protected credentials used by guardrails pseudonymization"),
 		swagger.WithTags("guardrails"),

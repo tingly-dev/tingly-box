@@ -1,6 +1,7 @@
 policies:
   - id: block-destructive-rm
     name: Block destructive rm commands
+    groups: [default]
     enabled: false
     kind: command_execution
     verdict: block
@@ -15,6 +16,7 @@ policies:
 
   - id: block-download-and-exec
     name: Block download-and-exec patterns
+    groups: [default]
     enabled: false
     kind: command_execution
     verdict: block
@@ -29,6 +31,7 @@ policies:
 
   - id: review-external-post
     name: Review external POST requests
+    groups: [default]
     enabled: false
     kind: command_execution
     verdict: review

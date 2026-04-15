@@ -46,7 +46,7 @@ func normalizePolicyConfig(cfg guardrailscore.Config) guardrailscore.Config {
 			next.Groups = append(append([]guardrailscore.PolicyGroup(nil), cfg.Groups...), guardrailscore.PolicyGroup{
 				ID:      guardrailscore.DefaultPolicyGroupID,
 				Name:    "Default",
-				Enabled: boolPtr(true),
+				Enabled: true,
 			})
 		}
 	}
@@ -89,8 +89,4 @@ func validatePolicyConfig(cfg guardrailscore.Config) error {
 	}
 
 	return nil
-}
-
-func boolPtr(value bool) *bool {
-	return &value
 }

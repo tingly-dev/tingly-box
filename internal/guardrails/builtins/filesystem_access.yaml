@@ -1,6 +1,7 @@
 policies:
   - id: block-ssh-read
     name: Block SSH directory reads
+    groups: [default]
     enabled: false
     kind: resource_access
     verdict: block
@@ -16,6 +17,7 @@ policies:
 
   - id: block-env-read
     name: Block .env file reads
+    groups: [default]
     enabled: false
     kind: resource_access
     verdict: block
@@ -31,6 +33,7 @@ policies:
 
   - id: block-git-config-read
     name: Block Git credential config reads
+    groups: [default]
     enabled: false
     kind: resource_access
     verdict: block
@@ -46,6 +49,7 @@ policies:
 
   - id: block-shell-history-read
     name: Block shell history reads
+    groups: [default]
     enabled: false
     kind: resource_access
     verdict: block

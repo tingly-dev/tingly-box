@@ -1,13 +1,17 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -50,6 +54,31 @@ type guardrailsReloadResponse struct {
 
 type guardrailsBuiltinsResponse struct {
 	Policies []guardrailscore.Policy `json:"policies"`
+}
+
+type guardrailsRegistryEntry struct {
+	ID   string `json:"id" yaml:"id"`
+	Path string `json:"path" yaml:"path"`
+}
+
+type guardrailsRegistryResponse struct {
+	URL      string                  `json:"url"`
+	Policies []guardrailscore.Policy `json:"policies"`
+}
+
+type guardrailsRegistryInstallRequest struct {
+	ID string `json:"id" binding:"required"`
+}
+
+type guardrailsRegistryInstallResponse struct {
+	Success     bool   `json:"success"`
+	RegistryURL string `json:"registry_url"`
+	Path        string `json:"path"`
+	PolicyID    string `json:"policy_id"`
+}
+
+type guardrailsRegistryIndex struct {
+	Policies []guardrailsRegistryEntry `json:"policies" yaml:"policies"`
 }
 
 // Policy/group editor payloads.
@@ -154,10 +183,16 @@ const (
 	guardrailsConfigBaseName  = "guardrails"
 	guardrailsBuiltinDirName  = "builtin"
 	guardrailsCustomDirName   = "custom"
+	guardrailsRemoteDirName   = "remote"
 	guardrailsDBDirName       = "db"
 	guardrailsDBFileName      = "guardrails.db"
 	guardrailsHistoryFileName = "history.json"
 )
+
+// Leave the remote registry unset until the dedicated policy repository is
+// ready. The API will surface this as an unavailable registry instead of
+// coupling guardrails downloads to the main code repository.
+const GuardrailsRegistryGitHubURL = "https://raw.githubusercontent.com/tingly-dev/tingly-guardrails-registry/main/index.yaml"
 
 // Shared validation helpers used by the policy/group editor endpoints.
 func filterSupportedGuardrailsScenarios(values []string, supportedScenarios []string) []string {
@@ -260,6 +295,10 @@ func GetGuardrailsBuiltinDir(configDir string) string {
 	return filepath.Join(GetGuardrailsDir(configDir), guardrailsBuiltinDirName)
 }
 
+func GetGuardrailsRemoteDir(configDir string) string {
+	return filepath.Join(GetGuardrailsDir(configDir), guardrailsRemoteDirName)
+}
+
 func GetGuardrailsDBPath(configDir string) string {
 	return filepath.Join(GetGuardrailsDBDir(configDir), guardrailsDBFileName)
 }
@@ -325,6 +364,42 @@ func (s *Server) GetGuardrailsBuiltins(c *gin.Context) {
 		return
 	}
 	c.JSON(200, guardrailsBuiltinsResponse{Policies: policies})
+}
+
+// GetGuardrailsRegistry lists downloadable policies from a remote registry.
+func (s *Server) GetGuardrailsRegistry(c *gin.Context) {
+	if strings.TrimSpace(GuardrailsRegistryGitHubURL) == "" {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "guardrails registry source is not configured"})
+		return
+	}
+
+	index, err := fetchGuardrailsRegistry(c.Request.Context(), GuardrailsRegistryGitHubURL)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	policies := make([]guardrailscore.Policy, 0, len(index.Policies))
+	for _, entry := range index.Policies {
+		_, fragmentCfg, err := downloadGuardrailsRegistryFragment(c.Request.Context(), GuardrailsRegistryGitHubURL, entry)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
+			return
+		}
+		if len(fragmentCfg.Policies) != 1 || fragmentCfg.Policies[0].ID != entry.ID {
+			c.JSON(http.StatusBadGateway, gin.H{
+				"success": false,
+				"error":   fmt.Sprintf("registry fragment for %s must contain exactly one matching policy", entry.ID),
+			})
+			return
+		}
+		policies = append(policies, fragmentCfg.Policies[0])
+	}
+
+	c.JSON(http.StatusOK, guardrailsRegistryResponse{
+		URL:      GuardrailsRegistryGitHubURL,
+		Policies: policies,
+	})
 }
 
 // GetGuardrailsConfig returns the current guardrails config file content and parsed config.
@@ -446,6 +521,131 @@ func (s *Server) ReloadGuardrailsConfig(c *gin.Context) {
 	})
 }
 
+// InstallGuardrailsRegistryPolicy downloads a remote policy fragment into
+// guardrails/remote and wires it into root imports.
+func (s *Server) InstallGuardrailsRegistryPolicy(c *gin.Context) {
+	if s.config == nil || s.config.ConfigDir == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "config directory not set"})
+		return
+	}
+	if strings.TrimSpace(GuardrailsRegistryGitHubURL) == "" {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "guardrails registry source is not configured"})
+		return
+	}
+
+	var req guardrailsRegistryInstallRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	policyID := strings.TrimSpace(req.ID)
+	if policyID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "id is required"})
+		return
+	}
+
+	index, err := fetchGuardrailsRegistry(c.Request.Context(), GuardrailsRegistryGitHubURL)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	var entry *guardrailsRegistryEntry
+	for i := range index.Policies {
+		if index.Policies[i].ID == policyID {
+			entry = &index.Policies[i]
+			break
+		}
+	}
+	if entry == nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "policy not found in registry"})
+		return
+	}
+	if strings.TrimSpace(entry.Path) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "registry policy is missing path"})
+		return
+	}
+
+	path, err := ensureGuardrailsPath(s.config.ConfigDir)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	rootCfg := guardrailscore.Config{}
+	importedCfgs := map[string]guardrailscore.Config{}
+	fullCfg := guardrailscore.Config{}
+	if _, err := os.Stat(path); err == nil {
+		rootCfg, importedCfgs, fullCfg, err = loadGuardrailsConfigSources(path)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+			return
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	for _, policy := range fullCfg.Policies {
+		if policy.ID == policyID {
+			c.JSON(http.StatusConflict, gin.H{"success": false, "error": "policy already exists"})
+			return
+		}
+	}
+
+	fragmentData, fragmentCfg, err := downloadGuardrailsRegistryFragment(c.Request.Context(), GuardrailsRegistryGitHubURL, *entry)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	if len(fragmentCfg.Policies) != 1 || fragmentCfg.Policies[0].ID != policyID {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "registry fragment must contain exactly one policy matching the requested id",
+		})
+		return
+	}
+
+	rootGroupUpdated := false
+	if usesGroupID(fragmentCfg.Policies, defaultGuardrailsGroup.ID) {
+		rootGroupUpdated = ensureGuardrailsDefaultGroup(&rootCfg)
+	}
+	if !guardrailsGroupsExist(rootCfg.Groups, collectGuardrailsPolicyGroups(fragmentCfg.Policies)) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "registry policy references unknown policy groups",
+		})
+		return
+	}
+
+	targetPath := filepath.Join(GetGuardrailsRemoteDir(s.config.ConfigDir), policyID+".yaml")
+	rootUpdated := ensureGuardrailsImport(&rootCfg, path, targetPath)
+	importedCfgs[targetPath] = fragmentCfg
+	mergedCfg := mergeGuardrailsImportedConfigs(rootCfg, importedCfgs, path)
+
+	writes := []guardrailsFileWrite{{Path: targetPath, Data: fragmentData}}
+	if rootUpdated || rootGroupUpdated {
+		rootData, err := marshalGuardrailsConfig(rootCfg)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+			return
+		}
+		writes = append(writes, guardrailsFileWrite{Path: path, Data: rootData})
+	}
+	if err := s.persistGuardrailsFilesAndReload(mergedCfg, writes, "guardrails registry install"); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, guardrailsRegistryInstallResponse{
+		Success:     true,
+		RegistryURL: GuardrailsRegistryGitHubURL,
+		Path:        targetPath,
+		PolicyID:    policyID,
+	})
+}
+
 // Guardrails Policy Handlers
 
 // UpdateGuardrailsPolicy updates a single policy and reloads the engine.
@@ -524,7 +724,7 @@ func (s *Server) UpdateGuardrailsPolicy(c *gin.Context) {
 			sourceCfg.Policies[i].Kind = guardrailscore.PolicyKind(*req.Kind)
 		}
 		if req.Enabled != nil {
-			sourceCfg.Policies[i].Enabled = req.Enabled
+			sourceCfg.Policies[i].Enabled = *req.Enabled
 		}
 		if req.Scope != nil {
 			sourceCfg.Policies[i].Scope = normalizeGuardrailsPolicyScope(*req.Scope, supportedScenarios)
@@ -637,7 +837,7 @@ func (s *Server) CreateGuardrailsPolicy(c *gin.Context) {
 		Name:    req.Name,
 		Groups:  policyGroups,
 		Kind:    guardrailscore.PolicyKind(req.Kind),
-		Enabled: req.Enabled,
+		Enabled: req.Enabled != nil && *req.Enabled,
 		Scope:   normalizeGuardrailsPolicyScope(req.Scope, s.getGuardrailsSupportedScenarios()),
 		Match:   req.Match,
 		Verdict: guardrailscore.Verdict(req.Verdict),
@@ -802,52 +1002,43 @@ func (s *Server) UpdateGuardrailsGroup(c *gin.Context) {
 		return
 	}
 
-	data, err := os.ReadFile(path)
+	rootCfg, importedCfgs, fullCfg, err := loadGuardrailsConfigSources(path)
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-
-	cfg, err := decodeGuardrailsConfig(data)
-	if err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-	if !guardrailsevaluate.IsPolicyConfig(cfg) {
+	if !guardrailsevaluate.IsPolicyConfig(fullCfg) {
 		c.JSON(400, gin.H{"success": false, "error": "group editor APIs require a policy config"})
-		return
-	}
-	if err := validateInlineGuardrailsEditing(cfg, "group"); err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
 	found := false
 	renamed := false
-	for i := range cfg.Groups {
-		if cfg.Groups[i].ID != groupID {
+	originalGroupID := groupID
+	for i := range rootCfg.Groups {
+		if rootCfg.Groups[i].ID != groupID {
 			continue
 		}
 		if req.ID != nil && strings.TrimSpace(*req.ID) != "" && *req.ID != groupID {
-			for _, existing := range cfg.Groups {
+			for _, existing := range rootCfg.Groups {
 				if existing.ID == *req.ID {
 					c.JSON(409, gin.H{"success": false, "error": "group already exists"})
 					return
 				}
 			}
-			cfg.Groups[i].ID = *req.ID
+			rootCfg.Groups[i].ID = *req.ID
 			renamed = true
 		}
 		if req.Name != nil {
-			cfg.Groups[i].Name = *req.Name
+			rootCfg.Groups[i].Name = *req.Name
 		}
 		if req.Enabled != nil {
-			cfg.Groups[i].Enabled = req.Enabled
+			rootCfg.Groups[i].Enabled = *req.Enabled
 		}
 		if req.Severity != nil {
-			cfg.Groups[i].Severity = *req.Severity
+			rootCfg.Groups[i].Severity = *req.Severity
 		}
-		groupID = cfg.Groups[i].ID
+		groupID = rootCfg.Groups[i].ID
 		found = true
 		break
 	}
@@ -856,22 +1047,36 @@ func (s *Server) UpdateGuardrailsGroup(c *gin.Context) {
 		return
 	}
 
-	if renamed && req.ID != nil {
-		for i := range cfg.Policies {
-			for j, groupID := range cfg.Policies[i].Groups {
-				if groupID == c.Param("id") {
-					cfg.Policies[i].Groups[j] = *req.ID
-				}
+	writes := make([]guardrailsFileWrite, 0, len(importedCfgs)+1)
+	if renamed {
+		renameGuardrailsPolicyGroupRefs(rootCfg.Policies, originalGroupID, groupID)
+		for _, importPath := range rootCfg.Imports {
+			resolved := resolveGuardrailsImportPath(path, importPath)
+			childCfg, ok := importedCfgs[resolved]
+			if !ok {
+				continue
 			}
+			if !renameGuardrailsPolicyGroupRefs(childCfg.Policies, originalGroupID, groupID) {
+				continue
+			}
+			importedCfgs[resolved] = childCfg
+			childData, err := marshalGuardrailsPolicyFragment(childCfg)
+			if err != nil {
+				c.JSON(500, gin.H{"success": false, "error": err.Error()})
+				return
+			}
+			writes = append(writes, guardrailsFileWrite{Path: resolved, Data: childData})
 		}
 	}
 
-	updated, err := marshalGuardrailsConfig(cfg)
+	mergedCfg := mergeGuardrailsImportedConfigs(rootCfg, importedCfgs, path)
+	updated, err := marshalGuardrailsConfig(rootCfg)
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	if err := s.persistGuardrailsConfigAndReload(path, cfg, updated, "guardrails group update"); err != nil {
+	writes = append(writes, guardrailsFileWrite{Path: path, Data: updated})
+	if err := s.persistGuardrailsFilesAndReload(mergedCfg, writes, "guardrails group update"); err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
 	}
@@ -907,49 +1112,45 @@ func (s *Server) CreateGuardrailsGroup(c *gin.Context) {
 		return
 	}
 
-	data, err := os.ReadFile(path)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-
-	cfg := guardrailscore.Config{}
-	if len(data) > 0 {
-		cfg, err = decodeGuardrailsConfig(data)
+	rootCfg := guardrailscore.Config{}
+	importedCfgs := map[string]guardrailscore.Config{}
+	fullCfg := guardrailscore.Config{}
+	if _, err := os.Stat(path); err == nil {
+		rootCfg, importedCfgs, fullCfg, err = loadGuardrailsConfigSources(path)
 		if err != nil {
 			c.JSON(400, gin.H{"success": false, "error": err.Error()})
 			return
 		}
-		if !guardrailsevaluate.IsPolicyConfig(cfg) {
+		if !guardrailsevaluate.IsPolicyConfig(fullCfg) {
 			c.JSON(400, gin.H{"success": false, "error": "group editor APIs require a policy config"})
 			return
 		}
-		if err := validateInlineGuardrailsEditing(cfg, "group"); err != nil {
-			c.JSON(400, gin.H{"success": false, "error": err.Error()})
-			return
-		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
 	}
 
-	for _, group := range cfg.Groups {
+	for _, group := range rootCfg.Groups {
 		if group.ID == req.ID {
 			c.JSON(409, gin.H{"success": false, "error": "group already exists"})
 			return
 		}
 	}
 
-	cfg.Groups = append(cfg.Groups, guardrailscore.PolicyGroup{
+	rootCfg.Groups = append(rootCfg.Groups, guardrailscore.PolicyGroup{
 		ID:       req.ID,
 		Name:     req.Name,
-		Enabled:  req.Enabled,
+		Enabled:  req.Enabled != nil && *req.Enabled,
 		Severity: req.Severity,
 	})
 
-	updated, err := marshalGuardrailsConfig(cfg)
+	mergedCfg := mergeGuardrailsImportedConfigs(rootCfg, importedCfgs, path)
+	updated, err := marshalGuardrailsConfig(rootCfg)
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	if err := s.persistGuardrailsConfigAndReload(path, cfg, updated, "guardrails group create"); err != nil {
+	if err := s.persistGuardrailsFilesAndReload(mergedCfg, []guardrailsFileWrite{{Path: path, Data: updated}}, "guardrails group create"); err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
 	}
@@ -985,27 +1186,17 @@ func (s *Server) DeleteGuardrailsGroup(c *gin.Context) {
 		return
 	}
 
-	data, err := os.ReadFile(path)
+	rootCfg, importedCfgs, fullCfg, err := loadGuardrailsConfigSources(path)
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-
-	cfg, err := decodeGuardrailsConfig(data)
-	if err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-	if !guardrailsevaluate.IsPolicyConfig(cfg) {
+	if !guardrailsevaluate.IsPolicyConfig(fullCfg) {
 		c.JSON(400, gin.H{"success": false, "error": "group editor APIs require a policy config"})
 		return
 	}
-	if err := validateInlineGuardrailsEditing(cfg, "group"); err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
-		return
-	}
 
-	for _, policy := range cfg.Policies {
+	for _, policy := range fullCfg.Policies {
 		for _, policyGroupID := range normalizeGuardrailsPolicyGroups(policy.Groups) {
 			if policyGroupID == groupID {
 				c.JSON(400, gin.H{"success": false, "error": "group is still referenced by one or more policies"})
@@ -1014,9 +1205,9 @@ func (s *Server) DeleteGuardrailsGroup(c *gin.Context) {
 		}
 	}
 
-	nextGroups := make([]guardrailscore.PolicyGroup, 0, len(cfg.Groups))
+	nextGroups := make([]guardrailscore.PolicyGroup, 0, len(rootCfg.Groups))
 	found := false
-	for _, group := range cfg.Groups {
+	for _, group := range rootCfg.Groups {
 		if group.ID == groupID {
 			found = true
 			continue
@@ -1027,14 +1218,15 @@ func (s *Server) DeleteGuardrailsGroup(c *gin.Context) {
 		c.JSON(404, gin.H{"success": false, "error": "group not found"})
 		return
 	}
-	cfg.Groups = nextGroups
+	rootCfg.Groups = nextGroups
 
-	updated, err := marshalGuardrailsConfig(cfg)
+	mergedCfg := mergeGuardrailsImportedConfigs(rootCfg, importedCfgs, path)
+	updated, err := marshalGuardrailsConfig(rootCfg)
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	if err := s.persistGuardrailsConfigAndReload(path, cfg, updated, "guardrails group delete"); err != nil {
+	if err := s.persistGuardrailsFilesAndReload(mergedCfg, []guardrailsFileWrite{{Path: path, Data: updated}}, "guardrails group delete"); err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
 	}
@@ -1392,6 +1584,131 @@ func ensureGuardrailsImport(rootCfg *guardrailscore.Config, rootPath, targetPath
 	}
 	rootCfg.Imports = append(rootCfg.Imports, relPath)
 	return true
+}
+
+func renameGuardrailsPolicyGroupRefs(policies []guardrailscore.Policy, fromID, toID string) bool {
+	changed := false
+	for i := range policies {
+		for j, groupID := range policies[i].Groups {
+			if groupID == fromID {
+				policies[i].Groups[j] = toID
+				changed = true
+			}
+		}
+	}
+	return changed
+}
+
+func collectGuardrailsPolicyGroups(policies []guardrailscore.Policy) []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0)
+	for _, policy := range policies {
+		for _, groupID := range normalizeGuardrailsPolicyGroups(policy.Groups) {
+			if _, ok := seen[groupID]; ok {
+				continue
+			}
+			seen[groupID] = struct{}{}
+			out = append(out, groupID)
+		}
+	}
+	return out
+}
+
+var defaultGuardrailsGroup = guardrailscore.PolicyGroup{
+	ID:       guardrailscore.DefaultPolicyGroupID,
+	Name:     "Default",
+	Enabled:  true,
+	Severity: "high",
+}
+
+func ensureGuardrailsDefaultGroup(rootCfg *guardrailscore.Config) bool {
+	for _, group := range rootCfg.Groups {
+		if group.ID == defaultGuardrailsGroup.ID {
+			return false
+		}
+	}
+	rootCfg.Groups = append(rootCfg.Groups, defaultGuardrailsGroup)
+	return true
+}
+
+func usesGroupID(policies []guardrailscore.Policy, groupID string) bool {
+	for _, policy := range policies {
+		for _, candidate := range policy.Groups {
+			if candidate == groupID {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func fetchGuardrailsRegistry(ctx context.Context, registryURL string) (guardrailsRegistryIndex, error) {
+	var index guardrailsRegistryIndex
+	data, err := fetchGuardrailsURL(ctx, registryURL)
+	if err != nil {
+		return index, err
+	}
+	if err := yaml.Unmarshal(data, &index); err != nil {
+		if err := json.Unmarshal(data, &index); err != nil {
+			return index, fmt.Errorf("decode registry: %w", err)
+		}
+	}
+	return index, nil
+}
+
+func downloadGuardrailsRegistryFragment(ctx context.Context, registryURL string, entry guardrailsRegistryEntry) ([]byte, guardrailscore.Config, error) {
+	var cfg guardrailscore.Config
+
+	targetURL, err := resolveGuardrailsRegistryURL(registryURL, entry.Path)
+	if err != nil {
+		return nil, cfg, err
+	}
+	data, err := fetchGuardrailsURL(ctx, targetURL)
+	if err != nil {
+		return nil, cfg, err
+	}
+	cfg, err = decodeGuardrailsConfigFile(data)
+	if err != nil {
+		return nil, cfg, err
+	}
+	if err := guardrails.ValidateImportedFragment(cfg); err != nil {
+		return nil, cfg, err
+	}
+	return data, cfg, nil
+}
+
+func resolveGuardrailsRegistryURL(registryURL, pathValue string) (string, error) {
+	baseURL, err := url.Parse(strings.TrimSpace(registryURL))
+	if err != nil {
+		return "", fmt.Errorf("parse registry url: %w", err)
+	}
+	refURL, err := url.Parse(strings.TrimSpace(pathValue))
+	if err != nil {
+		return "", fmt.Errorf("parse registry path: %w", err)
+	}
+	return baseURL.ResolveReference(refURL).String(), nil
+}
+
+func fetchGuardrailsURL(ctx context.Context, rawURL string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	client := &http.Client{Timeout: 20 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch %s: %w", rawURL, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return nil, fmt.Errorf("fetch %s: status %d: %s", rawURL, resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", rawURL, err)
+	}
+	return data, nil
 }
 
 type guardrailsFileWrite struct {

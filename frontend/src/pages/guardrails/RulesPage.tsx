@@ -182,6 +182,10 @@ const GuardrailsRulesPage = () => {
     const [groups, setGroups] = useState<PolicyGroup[]>([]);
     const [policies, setPolicies] = useState<GuardrailsPolicy[]>([]);
     const [builtins, setBuiltins] = useState<GuardrailsPolicy[]>([]);
+    const [registryURL, setRegistryURL] = useState('');
+    const [registryPolicies, setRegistryPolicies] = useState<GuardrailsPolicy[]>([]);
+    const [registryLoadError, setRegistryLoadError] = useState<string | null>(null);
+    const [pendingRegistryInstallId, setPendingRegistryInstallId] = useState<string | null>(null);
     const [pendingPolicyId, setPendingPolicyId] = useState<string | null>(null);
     const [pendingSave, setPendingSave] = useState(false);
     const [pendingBulkPolicyAction, setPendingBulkPolicyAction] = useState<'enable' | 'disable' | null>(null);
@@ -205,7 +209,7 @@ const GuardrailsRulesPage = () => {
         name: '',
         groups: [DEFAULT_GROUP_ID],
         kind: '',
-        enabled: true,
+        enabled: false,
         verdict: 'block',
         scenarios: [],
         toolNames: '',
@@ -352,9 +356,7 @@ const GuardrailsRulesPage = () => {
     const buildBuiltinPayload = (builtin: GuardrailsPolicy, enabled: boolean): GuardrailsPolicy => ({
         id: builtin.id,
         name: builtin.name,
-        groups: enabled
-            ? ensureDefaultGroupMembership(builtin.groups)
-            : normalizePolicyGroups(builtin.groups),
+        groups: ensureDefaultGroupMembership(builtin.groups),
         kind: builtin.kind,
         enabled,
         scope: builtin.scope || { scenarios: [] },
@@ -412,7 +414,7 @@ const GuardrailsRulesPage = () => {
                 builtinSummary: builtin.reason,
             });
         }
-        const rank = (policy: DisplayPolicy) => (policy.enabled !== false ? 0 : 1);
+        const rank = (policy: DisplayPolicy) => (policy.enabled === true ? 0 : 1);
         merged.sort((a, b) => {
             const rankDiff = rank(a) - rank(b);
             if (rankDiff !== 0) return rankDiff;
@@ -420,6 +422,10 @@ const GuardrailsRulesPage = () => {
         });
         return merged;
     }, [builtinMap, builtins, installedPolicyIds, policies]);
+    const downloadablePolicies = useMemo(
+        () => registryPolicies.slice().sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id)),
+        [registryPolicies]
+    );
     const resourceAccessPolicies = useMemo(
         () => displayPolicies.filter((policy) => policy.kind === 'resource_access' || policy.kind === 'operation'),
         [displayPolicies]
@@ -453,10 +459,10 @@ const GuardrailsRulesPage = () => {
 
     const getEffectivePolicyState = (policy: GuardrailsPolicy) => {
         const policyGroups = normalizePolicyGroups(policy.groups);
-        const noActiveGroup = policyGroups.length === 0 || policyGroups.every((groupID) => groupsById.get(groupID)?.enabled === false);
+        const noActiveGroup = policyGroups.length === 0 || policyGroups.every((groupID) => groupsById.get(groupID)?.enabled !== true);
         return {
             inheritedDisabled: noActiveGroup,
-            visibleEnabled: policy.enabled !== false && !noActiveGroup,
+            visibleEnabled: policy.enabled === true && !noActiveGroup,
         };
     };
     const policyNeedsEnableWithDefault = (policy: DisplayPolicy) => {
@@ -465,11 +471,11 @@ const GuardrailsRulesPage = () => {
             return policy.isBuiltin;
         }
         const groups = normalizePolicyGroups(installedPolicy.groups);
-        return installedPolicy.enabled === false || !groups.includes(DEFAULT_GROUP_ID);
+        return installedPolicy.enabled !== true || !groups.includes(DEFAULT_GROUP_ID);
     };
     const policyNeedsDisable = (policy: DisplayPolicy) => {
         const installedPolicy = policies.find((item) => item.id === policy.id);
-        return Boolean(installedPolicy && installedPolicy.enabled !== false);
+        return Boolean(installedPolicy && installedPolicy.enabled === true);
     };
 
     const generatePolicyId = (name: string, kind: EditorState['kind'], currentId?: string) => {
@@ -605,7 +611,7 @@ const GuardrailsRulesPage = () => {
             name: policy?.name || '',
             groups: normalizePolicyGroups(policy?.groups),
             kind: policy?.kind === 'operation' ? 'resource_access' : policy?.kind || '',
-            enabled: policy?.enabled !== false,
+            enabled: policy?.enabled === true,
             verdict: sanitizeVerdictForKind(
                 policy?.kind === 'operation' ? 'resource_access' : policy?.kind || '',
                 policy?.verdict || 'block'
@@ -661,24 +667,42 @@ const GuardrailsRulesPage = () => {
             if (!silent) {
                 setLoading(true);
             }
-            const [guardrailsConfig, builtinResponse] = await Promise.all([
+            const [guardrailsConfig, builtinResponse, registryResponse] = await Promise.allSettled([
                 api.getGuardrailsConfig(),
                 api.getGuardrailsBuiltins(),
+                api.getGuardrailsRegistry(),
             ]);
-            const config = guardrailsConfig?.config || {};
-            const scenarios = Array.isArray(guardrailsConfig?.supported_scenarios)
-                ? guardrailsConfig.supported_scenarios.filter((value: string) => value && value !== '_global')
+
+            if (guardrailsConfig.status !== 'fulfilled' || builtinResponse.status !== 'fulfilled') {
+                throw (guardrailsConfig.status === 'rejected' ? guardrailsConfig.reason : builtinResponse.reason);
+            }
+
+            const config = guardrailsConfig.value?.config || {};
+            const scenarios = Array.isArray(guardrailsConfig.value?.supported_scenarios)
+                ? guardrailsConfig.value.supported_scenarios.filter((value: string) => value && value !== '_global')
                 : [];
             setSupportedScenarios(scenarios);
             setGroups(Array.isArray(config.groups) ? config.groups : []);
             setPolicies(Array.isArray(config.policies) ? config.policies : []);
-            setBuiltins(Array.isArray(builtinResponse?.policies) ? builtinResponse.policies : []);
+            setBuiltins(Array.isArray(builtinResponse.value?.policies) ? builtinResponse.value.policies : []);
+            if (registryResponse.status === 'fulfilled') {
+                setRegistryURL(registryResponse.value?.url || '');
+                setRegistryPolicies(Array.isArray(registryResponse.value?.policies) ? registryResponse.value.policies : []);
+                setRegistryLoadError(null);
+            } else {
+                setRegistryURL('');
+                setRegistryPolicies([]);
+                setRegistryLoadError(registryResponse.reason?.message || 'Failed to load registry');
+            }
             setLoadError(null);
         } catch (error) {
             console.error('Failed to load guardrails config:', error);
             setGroups([]);
             setPolicies([]);
             setBuiltins([]);
+            setRegistryURL('');
+            setRegistryPolicies([]);
+            setRegistryLoadError(null);
             setSupportedScenarios([]);
             setLoadError('Failed to load guardrails config');
         } finally {
@@ -1098,6 +1122,23 @@ const GuardrailsRulesPage = () => {
         }
     };
 
+    const handleInstallRegistryPolicy = async (policyId: string) => {
+        try {
+            setPendingRegistryInstallId(policyId);
+            const result = await api.installGuardrailsRegistryPolicy(policyId);
+            if (!result?.success) {
+                setActionMessage({ type: 'error', text: result?.error || 'Failed to install policy' });
+                return;
+            }
+            await loadPolicies(true);
+            setActionMessage({ type: 'success', text: `Policy "${policyId}" installed.` });
+        } catch (error: any) {
+            setActionMessage({ type: 'error', text: error?.message || 'Failed to install policy' });
+        } finally {
+            setPendingRegistryInstallId(null);
+        }
+    };
+
     const handleCloseEditor = () => {
         if (isEditorDirty) {
             setConfirmCloseOpen(true);
@@ -1242,7 +1283,7 @@ const GuardrailsRulesPage = () => {
                                             label={
                                                 effectiveState.inheritedDisabled
                                                     ? 'No active group'
-                                                    : policy.enabled === false
+                                                    : policy.enabled !== true
                                                       ? 'Disabled'
                                                       : 'Enabled'
                                             }
@@ -1253,7 +1294,7 @@ const GuardrailsRulesPage = () => {
                                             control={
                                                 <Switch
                                                     size="small"
-                                                    checked={policy.enabled !== false}
+                                                    checked={policy.enabled === true}
                                                     disabled={pendingPolicyId === policy.id}
                                                     onChange={(e) => handleTogglePolicy(policy.id, e.target.checked)}
                                                 />
@@ -1647,6 +1688,87 @@ const GuardrailsRulesPage = () => {
                                 contentPolicies,
                                 'content'
                             )}
+                    </Stack>
+                </UnifiedCard>
+
+                <UnifiedCard
+                    title="Download Management"
+                    subtitle="Install additional policy fragments from the curated remote registry. After install, enable or disable them from the policy list above."
+                    size="full"
+                    rightAction={
+                        registryURL ? (
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                component="a"
+                                href={registryURL}
+                                target="_blank"
+                                rel="noreferrer"
+                                startIcon={<ArticleOutlined />}
+                            >
+                                Open Registry
+                            </Button>
+                        ) : null
+                    }
+                >
+                    <Stack spacing={2}>
+                        {registryLoadError && <Alert severity="warning">{registryLoadError}</Alert>}
+                        {!registryLoadError && downloadablePolicies.length === 0 && (
+                            <Alert severity="info">No downloadable policies are currently listed in the remote registry.</Alert>
+                        )}
+                        {!registryLoadError && downloadablePolicies.length > 0 && (
+                            <List dense sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, py: 0, overflow: 'hidden' }}>
+                                {downloadablePolicies.map((policy) => {
+                                    const installedPolicy = policies.find((item) => item.id === policy.id);
+                                    const isInstalled = Boolean(installedPolicy);
+                                    const isEnabled = installedPolicy?.enabled === true;
+                                    return (
+                                    <ListItem
+                                        key={policy.id}
+                                        sx={{
+                                            px: 2,
+                                            py: 1.5,
+                                            borderBottom: '1px solid',
+                                            borderColor: 'divider',
+                                            '&:last-child': { borderBottom: 'none' },
+                                        }}
+                                    >
+                                        <Box sx={{ display: 'flex', alignItems: { xs: 'flex-start', md: 'center' }, flexDirection: { xs: 'column', md: 'row' }, gap: 1.5, width: '100%' }}>
+                                            <Box sx={{ minWidth: { md: 240 }, flexShrink: 0 }}>
+                                                <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                                        {policy.id}
+                                                    </Typography>
+                                                    {isInstalled && <Chip size="small" label={isEnabled ? 'Installed · Enabled' : 'Installed'} />}
+                                                </Stack>
+                                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                                    {policy.name || 'Unnamed policy'}
+                                                </Typography>
+                                            </Box>
+                                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                <Typography variant="body2" color="text.primary">
+                                                    {policy.reason || 'No description provided.'}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                                    {policy.kind || 'unknown kind'}
+                                                </Typography>
+                                            </Box>
+                                            <Box sx={{ width: { xs: '100%', md: 'auto' }, display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>
+                                                <Button
+                                                    variant={isInstalled ? 'outlined' : 'contained'}
+                                                    size="small"
+                                                    disabled={isInstalled || pendingRegistryInstallId === policy.id}
+                                                    onClick={() => handleInstallRegistryPolicy(policy.id)}
+                                                >
+                                                    {isInstalled ? 'Installed' : 'Install'}
+                                                </Button>
+                                            </Box>
+                                        </Box>
+                                    </ListItem>
+                                    );
+                                })}
+                            </List>
+                        )}
                     </Stack>
                 </UnifiedCard>
             </Stack>

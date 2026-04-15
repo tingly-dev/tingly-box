@@ -178,18 +178,14 @@ func mergePolicyScope(policyScope guardrailscore.Scope) guardrailscore.Scope {
 }
 
 func resolvePolicyEnabled(policy guardrailscore.Policy, groups []guardrailscore.PolicyGroup) bool {
-	policyEnabled := true
-	if policy.Enabled != nil {
-		policyEnabled = *policy.Enabled
-	}
-	if !policyEnabled {
+	if !policy.Enabled {
 		return false
 	}
 	if len(groups) == 0 {
 		return false
 	}
 	for _, group := range groups {
-		if group.Enabled == nil || *group.Enabled {
+		if group.Enabled {
 			return true
 		}
 	}

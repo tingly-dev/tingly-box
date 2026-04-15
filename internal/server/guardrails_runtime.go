@@ -43,7 +43,7 @@ func hasActiveGuardrailsPolicies(cfg guardrailscore.Config) bool {
 
 	enabledGroups := make(map[string]struct{}, len(cfg.Groups))
 	for _, group := range cfg.Groups {
-		if group.Enabled != nil && !*group.Enabled {
+		if !group.Enabled {
 			continue
 		}
 		enabledGroups[group.ID] = struct{}{}
@@ -53,7 +53,7 @@ func hasActiveGuardrailsPolicies(cfg guardrailscore.Config) bool {
 	}
 
 	for _, policy := range cfg.Policies {
-		if policy.Enabled != nil && !*policy.Enabled {
+		if !policy.Enabled {
 			continue
 		}
 		for _, groupID := range policy.Groups {

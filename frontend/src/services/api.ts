@@ -622,6 +622,15 @@ export const api = {
     getGuardrailsBuiltins: async (): Promise<any> => {
         return fetchUIAPI('/guardrails/builtins');
     },
+    getGuardrailsRegistry: async (): Promise<any> => {
+        return fetchUIAPI('/guardrails/registry');
+    },
+    installGuardrailsRegistryPolicy: async (id: string): Promise<any> => {
+        return fetchUIAPI('/guardrails/registry/install', {
+            method: 'POST',
+            body: JSON.stringify({ id }),
+        });
+    },
     getGuardrailsCredentials: async (): Promise<any> => {
         return fetchUIAPI('/guardrails/credentials');
     },

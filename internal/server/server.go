@@ -212,13 +212,12 @@ func (s *Server) ensureDefaultGuardrailsConfig() (string, error) {
 	}
 
 	path := GetGuardrailsConfigPath(s.config.ConfigDir)
-	enabled := true
 	cfg := guardrailscore.Config{
 		Groups: []guardrailscore.PolicyGroup{
 			{
 				ID:      guardrailscore.DefaultPolicyGroupID,
 				Name:    "Default",
-				Enabled: &enabled,
+				Enabled: true,
 			},
 		},
 	}

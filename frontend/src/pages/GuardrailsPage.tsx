@@ -75,8 +75,8 @@ const GuardrailsPage = () => {
 
     const stats = useMemo(() => {
         const total = policies.length;
-        const enabled = policies.filter((item) => item?.enabled !== false).length;
-        const disabled = policies.filter((item) => item?.enabled === false).length;
+        const enabled = policies.filter((item) => item?.enabled === true).length;
+        const disabled = policies.filter((item) => item?.enabled !== true).length;
         const resourceAccessPolicies = policies.filter((item) => item?.kind === 'resource_access');
         const commandExecutionPolicies = policies.filter((item) => item?.kind === 'command_execution');
         const contentPolicies = policies.filter((item) => item?.kind === 'content');
@@ -89,14 +89,14 @@ const GuardrailsPage = () => {
             enabled,
             disabled,
             resourceAccess: resourceAccessPolicies.length,
-            resourceAccessEnabled: resourceAccessPolicies.filter((item) => item?.enabled !== false).length,
-            resourceAccessDisabled: resourceAccessPolicies.filter((item) => item?.enabled === false).length,
+            resourceAccessEnabled: resourceAccessPolicies.filter((item) => item?.enabled === true).length,
+            resourceAccessDisabled: resourceAccessPolicies.filter((item) => item?.enabled !== true).length,
             commandExecution: commandExecutionPolicies.length,
-            commandExecutionEnabled: commandExecutionPolicies.filter((item) => item?.enabled !== false).length,
-            commandExecutionDisabled: commandExecutionPolicies.filter((item) => item?.enabled === false).length,
+            commandExecutionEnabled: commandExecutionPolicies.filter((item) => item?.enabled === true).length,
+            commandExecutionDisabled: commandExecutionPolicies.filter((item) => item?.enabled !== true).length,
             content: contentPolicies.length,
-            contentEnabled: contentPolicies.filter((item) => item?.enabled !== false).length,
-            contentDisabled: contentPolicies.filter((item) => item?.enabled === false).length,
+            contentEnabled: contentPolicies.filter((item) => item?.enabled === true).length,
+            contentDisabled: contentPolicies.filter((item) => item?.enabled !== true).length,
             historyCount: historyEntries.length,
             allowedEvents,
             reviewedEvents,

@@ -1,6 +1,7 @@
 policies:
   - id: block-private-key-output
     name: Block private key output
+    groups: [default]
     enabled: false
     kind: content
     verdict: block
@@ -12,6 +13,7 @@ policies:
 
   - id: block-access-token-output
     name: Block access token output
+    groups: [default]
     enabled: false
     kind: content
     verdict: block
@@ -26,6 +28,7 @@ policies:
 
   - id: block-env-output
     name: Block environment variable output
+    groups: [default]
     enabled: false
     kind: content
     verdict: block

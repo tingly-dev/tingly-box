@@ -92,17 +92,26 @@ func decodeConfigFile(path string) (guardrailscore.Config, error) {
 }
 
 func validateImportedConfig(path string, cfg guardrailscore.Config) error {
+	if err := ValidateImportedFragment(cfg); err != nil {
+		return fmt.Errorf("imported guardrails config %s %w", path, err)
+	}
+	return nil
+}
+
+// ValidateImportedFragment enforces the narrow fragment shape accepted by
+// guardrails imports.
+func ValidateImportedFragment(cfg guardrailscore.Config) error {
 	if len(cfg.Imports) > 0 {
-		return fmt.Errorf("imported guardrails config %s must not declare imports", path)
+		return fmt.Errorf("must not declare imports")
 	}
 	if len(cfg.Groups) > 0 {
-		return fmt.Errorf("imported guardrails config %s must not declare groups", path)
+		return fmt.Errorf("must not declare groups")
 	}
 	if cfg.Strategy != "" {
-		return fmt.Errorf("imported guardrails config %s must not declare strategy", path)
+		return fmt.Errorf("must not declare strategy")
 	}
 	if cfg.ErrorStrategy != "" {
-		return fmt.Errorf("imported guardrails config %s must not declare error_strategy", path)
+		return fmt.Errorf("must not declare error_strategy")
 	}
 	return nil
 }

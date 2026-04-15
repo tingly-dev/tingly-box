@@ -19,6 +19,7 @@ Guardrails configuration is stored under the app config directory:
 - `guardrails/guardrails.yaml`
 - `guardrails/builtin/*.yaml`
 - `guardrails/custom/*.yaml`
+- `guardrails/remote/*.yaml`
 - `guardrails/history.json`
 - `guardrails/db/guardrails.db`
 
@@ -71,7 +72,8 @@ Current limitation:
 - the raw config editor can manage `imports`
 - policy CRUD can now update imported policy fragments
 - new policies created from the UI are written to `guardrails/custom/policies.yaml`, and the root config will add the import automatically when needed
-- group CRUD still assumes root-file ownership and does not rewrite imported policy files
+- group definitions stay in `guardrails.yaml`
+- group rename now rewrites imported policy references when needed
 
 ## Policy kinds
 
@@ -184,6 +186,57 @@ At runtime, the intended layout is:
 - embedded builtins act as the catalog/example source
 - the first enable can materialize a policy file under `guardrails/builtin/`
 - project-specific policies live under `guardrails/custom/`
+- downloaded policies can be installed under `guardrails/remote/`
+
+## Remote registry
+
+Guardrails can also install policy fragments from a remote registry.
+
+Recommended shape:
+
+- one `index.yaml` file that lists installable policies
+- one fragment file per policy
+- fragment files use the same imported-policy format as local runtime files
+
+Example registry index:
+
+```yaml
+policies:
+  - id: block-env-read
+    path: policies/block-env-read.yaml
+```
+
+The index should stay minimal. UI-facing fields such as `name`, `kind`, and
+`reason` should come from the fragment file itself.
+
+Remote fragment files stay narrow, just like local imports:
+
+```yaml
+policies:
+  - id: block-env-read
+    name: Block .env Reads
+    groups: [default]
+    kind: resource_access
+    enabled: false
+    verdict: block
+    reason: Block reads of environment files that may contain secrets.
+    match:
+      tool_names: [bash]
+      actions:
+        include: [read]
+      resources:
+        type: path
+        mode: contains
+        values: [.env, .env.local]
+```
+
+Install behavior:
+
+- the app can use a fixed curated registry URL once the dedicated policy repository is configured
+- registry install writes the fragment to `guardrails/remote/<id>.yaml`
+- the root config will add an `imports` entry automatically when needed
+- after install, the policy behaves like any other local imported policy
+- enable/disable still updates the policy's own `enabled` field
 
 ## Example file
 
