@@ -23,6 +23,9 @@ inputs:
     description: 'Target platforms'
     required: false
     default: 'linux/amd64'
+  github_token:
+    description: 'GitHub token for registry authentication'
+    required: true
 outputs:
   image_digest:
     description: 'Digest of the pushed image'
@@ -41,7 +44,7 @@ runs:
       with:
         registry: ${{ inputs.registry }}
         username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        password: ${{ inputs.github_token }}
 
     - name: Extract metadata for Docker
       id: meta
