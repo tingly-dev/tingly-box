@@ -871,20 +871,27 @@ export const api = {
 
     // Initiate OAuth authorization flow
     oauthAuthorize: async (data: {
-        provider_type: string;
-        provider_uuid?: string;
-        redirect_uri?: string;
+        provider: string;
+        proxy_url?: string;
+        redirect?: string;
         state?: string;
     }): Promise<any> => {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
+            console.log('[OAuth API] Sending request:', data);
             const response = await client.POST('/api/v1/oauth/authorize', {
                 headers,
                 body: data as any
             });
+            console.log('[OAuth API] Response:', response);
+            if (response.error) {
+                console.error('[OAuth API] Error response:', response.error);
+                return { success: false, error: 'Request failed', data: response.error };
+            }
             return response.data;
         } catch (error: any) {
+            console.error('[OAuth API] Exception:', error);
             return { success: false, error: error.message };
         }
     },

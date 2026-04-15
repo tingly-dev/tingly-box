@@ -642,13 +642,13 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
             const redirectUri = await getOAuthRedirectPath();
             const response = await api.oauthAuthorize(
                 {
-                    provider_type: provider.id,
-                    provider_uuid: proxyUrl || undefined,
-                    redirect_uri: redirectUri,
+                    provider: provider.id,
+                    proxy_url: proxyUrl || undefined,
+                    redirect: redirectUri,
                 } as any,
             );
 
-            if (response.success) {
+            if (response?.success) {
                 const data = response.data as any;
 
                 // Determine flow type and set auth data
@@ -680,6 +680,9 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
 
         } catch (error: any) {
             // Handle network or other errors
+            console.error('[OAuth] Full error object:', error);
+            console.error('[OAuth] Error response:', error?.response);
+            console.error('[OAuth] Error data:', error?.response?.data);
             const errorMsg = error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Failed to initiate OAuth flow';
             setInitError(`OAuth authorization failed: ${errorMsg}`);
             console.error('OAuth authorization failed:', error);
