@@ -92,6 +92,7 @@ tasks:
         # Build with ldflags
         mkdir -p build
         LDFLAGS="-X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME} -X main.goVersion=${GO_VERSION} -X main.platform=${PLATFORM}"
+        GOOS={{.OS}} GOARCH={{.ARCH}} go build -ldflags="${LDFLAGS}" -o ./build/{{.BIN_NAME}} ./cli/tingly-box
         CGO_ENABLED=${CGO_ENABLED} GOOS={{.OS}} GOARCH={{.ARCH}} go build -ldflags="${LDFLAGS}" -o ./build/{{.BIN_NAME}}${BINARY_EXT} ./cli/tingly-box
 
   go:test:
