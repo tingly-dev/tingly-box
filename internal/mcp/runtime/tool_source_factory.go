@@ -26,6 +26,11 @@ func (f *ToolSourceFactory) CreateToolSource(sourceConfig typ.MCPSourceConfig) (
 
 	logrus.Debugf("mcp: creating tool source id=%s transport=%s", sourceConfig.ID, transport)
 
+	// In-process advisor tool source takes precedence over transport matching.
+	if sourceConfig.Advisor != nil || transport == "advisor" {
+		return NewAdvisorToolSource(sourceConfig)
+	}
+
 	switch transport {
 	case "stdio":
 		return NewStdioToolSource(sourceConfig, f.sessionCache)
