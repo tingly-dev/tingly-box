@@ -261,6 +261,7 @@ type MCPSourceConfig struct {
 	Cwd       string            `json:"cwd,omitempty"`       // working directory for stdio command
 	Env       map[string]string `json:"env,omitempty"`       // extra env vars for stdio command
 	ProxyURL  string            `json:"proxy_url,omitempty"` // HTTP proxy URL for outgoing requests
+	IsClientTool *bool          `json:"is_client_tool,omitempty"` // nil means servertool (default for backward compatibility)
 
 	// Local mode specific fields
 	ConnectionType   MCPConnectionType   `json:"connection_type,omitempty"`    // stdio/http/sse

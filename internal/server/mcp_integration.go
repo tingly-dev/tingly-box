@@ -89,6 +89,11 @@ func (s *Server) injectMCPToolsIntoOpenAIRequest(ctx context.Context, req *opena
 		logrus.Debugf("mcp: inject - mcpRuntime is nil")
 		return req
 	}
+	// Only inject tools if there are server tools configured
+	if !s.mcpRuntime.HasServerTools() {
+		logrus.Debugf("mcp: inject - no server tools configured, skipping injection")
+		return req
+	}
 	mcpTools := s.mcpRuntime.ListOpenAITools(ctx)
 	if len(mcpTools) == 0 {
 		logrus.Debugf("mcp: inject - no tools returned")
@@ -102,6 +107,10 @@ func (s *Server) injectMCPToolsIntoOpenAIRequest(ctx context.Context, req *opena
 
 func (s *Server) injectMCPToolsIntoAnthropicV1Request(ctx context.Context, req *anthropic.MessageNewParams) *anthropic.MessageNewParams {
 	if s.mcpRuntime == nil {
+		return req
+	}
+	// Only inject tools if there are server tools configured
+	if !s.mcpRuntime.HasServerTools() {
 		return req
 	}
 	mcpTools := s.mcpRuntime.ListOpenAITools(ctx)
@@ -128,6 +137,10 @@ func (s *Server) injectMCPToolsIntoAnthropicV1Request(ctx context.Context, req *
 
 func (s *Server) injectMCPToolsIntoAnthropicBetaRequest(ctx context.Context, req *anthropic.BetaMessageNewParams) *anthropic.BetaMessageNewParams {
 	if s.mcpRuntime == nil {
+		return req
+	}
+	// Only inject tools if there are server tools configured
+	if !s.mcpRuntime.HasServerTools() {
 		return req
 	}
 	mcpTools := s.mcpRuntime.ListOpenAITools(ctx)

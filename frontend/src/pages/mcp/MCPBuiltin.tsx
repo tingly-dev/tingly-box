@@ -23,17 +23,19 @@ import {
 } from '@mui/icons-material';
 import { useEffect, useState } from 'react';
 import MCPSourceEditor from './MCPSourceEditor';
-import { BUILTIN_IDS, MCP_DEFAULT_CWD, defaultMCPSourceFormValue, formValueToSource, sourceToFormValue, type MCPConfigResponse, type MCPSourceConfig, type MCPSourceFormValue } from './types';
+import { MCP_DEFAULT_CWD, defaultMCPSourceFormValue, formValueToSource, sourceToFormValue, type MCPConfigResponse, type MCPSourceConfig, type MCPSourceFormValue } from './types';
 
 const defaultBuiltinForm = (): MCPSourceFormValue => ({
     ...defaultMCPSourceFormValue(),
     id: 'webtools',
+    name: 'Built-in Web Tools',
     transport: 'stdio',
-    command: 'python3',
-    args: ['mcp_web_tools.py'],
+    command: 'builtin', // Special marker for built-in tools
+    args: [],
     tools: ['mcp_web_search', 'mcp_web_fetch'],
     envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'],
     useGlobalProxy: true,
+    isClientTool: true, // Built-in tools are client tools by default
 });
 
 const MCPBuiltin = () => {
@@ -171,6 +173,11 @@ const MCPBuiltin = () => {
                             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                                 <Chip label="webtools" color="primary" />
                                 <Chip label={builtinSource.transport || 'stdio'} />
+                                <Chip
+                                    label={builtinSource.is_client_tool ? 'Client Tool' : 'Server Tool'}
+                                    color={builtinSource.is_client_tool ? 'info' : 'success'}
+                                    size="small"
+                                />
                                 {(builtinSource.tools || []).map((t) => <Chip key={t} label={t} variant="outlined" />)}
                                 <FormControlLabel
                                     sx={{ ml: 0.5 }}

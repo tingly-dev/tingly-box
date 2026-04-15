@@ -9,14 +9,14 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 )
 
-// MCPRuntimeAdapter adapts mcpruntime.Runtime to local.MCPConnectionHandler interface.
+// MCPRuntimeAdapter adapts runtime.Runtime to local.MCPConnectionHandler interface.
 // It aggregates tools from configured MCP sources and executes them.
 type MCPRuntimeAdapter struct {
 	runtime        *runtime.Runtime
 	allowedSources []string // empty means allow all sources
 }
 
-// NewMCPRuntimeAdapter creates a new adapter wrapping the mcpruntime.Runtime.
+// NewMCPRuntimeAdapter creates a new adapter wrapping the runtime.Runtime.
 func NewMCPRuntimeAdapter(runtime *runtime.Runtime, allowedSources ...string) *MCPRuntimeAdapter {
 	return &MCPRuntimeAdapter{
 		runtime:        runtime,

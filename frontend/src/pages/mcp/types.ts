@@ -11,6 +11,7 @@ export interface MCPSourceConfig {
     cwd?: string;
     env?: Record<string, string>;
     proxy_url?: string;
+    is_client_tool?: boolean; // undefined means servertool (default for backward compatibility)
     // Local mode specific fields
     connection_type?: 'stdio' | 'http' | 'sse';
     auth_type?: 'none' | 'headers' | 'oauth';
@@ -52,6 +53,7 @@ export interface MCPSourceFormValue {
     tools: string[];
     useGlobalProxy: boolean;
     proxyUrl: string;
+    isClientTool: boolean; // true if this source is a client tool
 }
 
 export const MCP_DEFAULT_CWD = '~/.tingly-box/mcp';
@@ -61,14 +63,15 @@ export const defaultMCPSourceFormValue = (): MCPSourceFormValue => ({
     enabled: true,
     transport: 'stdio',
     endpoint: '',
-    command: 'python3',
-    args: ['mcp_web_tools.py'],
+    command: 'builtin', // Special marker for built-in tools
+    args: [],
     env: [],
     envPassthrough: [],
     cwd: MCP_DEFAULT_CWD,
     tools: ['*'],
     useGlobalProxy: true,
     proxyUrl: '',
+    isClientTool: false, // default is client tool
 });
 
 const isPassthroughValue = (key: string, value: string): boolean => value === `\${${key}}`;
@@ -93,7 +96,7 @@ export const sourceToFormValue = (source?: MCPSourceConfig): MCPSourceFormValue 
         enabled: source.enabled ?? true,
         transport: (source.transport as 'http' | 'stdio') || 'stdio',
         endpoint: source.endpoint || '',
-        command: source.command || 'python3',
+        command: source.command || 'builtin',
         args: source.args || [],
         env,
         envPassthrough,
@@ -101,6 +104,7 @@ export const sourceToFormValue = (source?: MCPSourceConfig): MCPSourceFormValue 
         tools: source.tools && source.tools.length > 0 ? source.tools : ['*'],
         useGlobalProxy: !source.proxy_url,
         proxyUrl: source.proxy_url || '',
+        isClientTool: source.is_client_tool ?? false,
     };
 };
 
@@ -122,6 +126,7 @@ export const formValueToSource = (form: MCPSourceFormValue): MCPSourceConfig => 
         enabled: form.enabled,
         transport: form.transport,
         tools: (form.tools || []).map((t) => t.trim()).filter(Boolean),
+        is_client_tool: form.isClientTool,
     };
 
     if (form.transport === 'http') {

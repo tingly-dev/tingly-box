@@ -65,12 +65,14 @@ const emptyCustomTemplate = (): MCPSourceFormValue => ({
 const defaultBuiltinForm = (): MCPSourceFormValue => ({
     ...defaultMCPSourceFormValue(),
     id: 'webtools',
+    name: 'Built-in Web Tools',
     transport: 'stdio',
-    command: 'python3',
-    args: ['mcp_web_tools.py'],
+    command: 'builtin', // Special marker for built-in Go tools
+    args: [],
     tools: ['mcp_web_search', 'mcp_web_fetch'],
     envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'],
     useGlobalProxy: true,
+    isClientTool: true, // Built-in tools are client tools by default
 });
 
 const MCPRegisteredServers = () => {
