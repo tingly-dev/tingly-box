@@ -23,6 +23,26 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+func extractAnthropicV1Messages(messages []anthropic.MessageParam) []map[string]any {
+	if len(messages) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(messages)
+	var out []map[string]any
+	_ = json.Unmarshal(b, &out)
+	return out
+}
+
+func extractAnthropicBetaMessages(messages []anthropic.BetaMessageParam) []map[string]any {
+	if len(messages) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(messages)
+	var out []map[string]any
+	_ = json.Unmarshal(b, &out)
+	return out
+}
+
 func (s *Server) dispatchChainResult(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
@@ -75,8 +95,16 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 	req := reqCtx.Request.(*anthropic.MessageNewParams)
 
-	wrapper := s.clientPool.GetAnthropicClient(c.Request.Context(), provider, actualModel)
-	fc := NewForwardContext(c.Request.Context(), provider)
+	ctx := c.Request.Context()
+	if maxUses := s.advisorMaxUses(); maxUses > 0 {
+		ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
+			Messages:      extractAnthropicV1Messages(req.Messages),
+			UsesRemaining: maxUses,
+		})
+	}
+
+	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, actualModel)
+	fc := NewForwardContext(ctx, provider)
 
 	if isStreaming {
 		if hasDeclaredMCPAnthropicV1Tools(req) {
@@ -93,7 +121,7 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 				return
 			}
 
-			anthropicResp, req, err = s.handleAnthropicV1MCPToolCalls(c.Request.Context(), provider, req, anthropicResp)
+			anthropicResp, req, err = s.handleAnthropicV1MCPToolCalls(ctx, provider, req, anthropicResp)
 			if err != nil {
 				recordMCPError(s, c, err, recorder)
 				return
@@ -191,7 +219,7 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 			return
 		}
 
-		anthropicResp, req, err = s.handleAnthropicV1MCPToolCalls(c.Request.Context(), provider, req, anthropicResp)
+		anthropicResp, req, err = s.handleAnthropicV1MCPToolCalls(ctx, provider, req, anthropicResp)
 		if err != nil {
 			recordMCPForwardingError(s, c, err, recorder)
 			return
@@ -242,8 +270,16 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 
-	wrapper := s.clientPool.GetAnthropicClient(c.Request.Context(), provider, actualModel)
-	fc := NewForwardContext(c.Request.Context(), provider)
+	ctx := c.Request.Context()
+	if maxUses := s.advisorMaxUses(); maxUses > 0 {
+		ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
+			Messages:      extractAnthropicBetaMessages(req.Messages),
+			UsesRemaining: maxUses,
+		})
+	}
+
+	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, actualModel)
+	fc := NewForwardContext(ctx, provider)
 
 	if isStreaming {
 		disableStreamUsage := false
@@ -273,7 +309,7 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 				return
 			}
 
-			anthropicResp, req, err = s.handleAnthropicBetaMCPToolCalls(c.Request.Context(), provider, req, anthropicResp)
+			anthropicResp, req, err = s.handleAnthropicBetaMCPToolCalls(ctx, provider, req, anthropicResp)
 			if err != nil {
 				respondMCPError(s, c, recorder, err, "Failed to handle MCP tool calls")
 				return
@@ -375,7 +411,7 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 			return
 		}
 
-		anthropicResp, req, err = s.handleAnthropicBetaMCPToolCalls(c.Request.Context(), provider, req, anthropicResp)
+		anthropicResp, req, err = s.handleAnthropicBetaMCPToolCalls(ctx, provider, req, anthropicResp)
 		if err != nil {
 			respondMCPError(s, c, recorder, err, "Failed to handle MCP tool calls")
 			return
@@ -424,8 +460,16 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 		actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 		req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 
-		wrapper := s.clientPool.GetAnthropicClient(c.Request.Context(), provider, actualModel)
-		fc := NewForwardContext(c.Request.Context(), provider)
+		ctx := c.Request.Context()
+		if maxUses := s.advisorMaxUses(); maxUses > 0 {
+			ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
+				Messages:      extractAnthropicBetaMessages(req.Messages),
+				UsesRemaining: maxUses,
+			})
+		}
+
+		wrapper := s.clientPool.GetAnthropicClient(ctx, provider, actualModel)
+		fc := NewForwardContext(ctx, provider)
 
 		if isStreaming {
 			if hasDeclaredMCPAnthropicBetaTools(req) {
@@ -442,7 +486,7 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 					return
 				}
 
-				anthropicResp, req, err = s.handleAnthropicBetaMCPToolCalls(c.Request.Context(), provider, req, anthropicResp)
+				anthropicResp, req, err = s.handleAnthropicBetaMCPToolCalls(ctx, provider, req, anthropicResp)
 				if err != nil {
 					recordMCPError(s, c, err, recorder)
 					return
@@ -505,7 +549,7 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 				return
 			}
 
-			anthropicResp, req, err = s.handleAnthropicBetaMCPToolCalls(c.Request.Context(), provider, req, anthropicResp)
+			anthropicResp, req, err = s.handleAnthropicBetaMCPToolCalls(ctx, provider, req, anthropicResp)
 			if err != nil {
 				recordMCPForwardingError(s, c, err, recorder)
 				return
@@ -1237,7 +1281,15 @@ func (s *Server) nonstreamAnthropicV1ToResponses(
 	responseModel := reqCtx.ResponseModel
 	anthropicReq := reqCtx.Request.(*anthropic.MessageNewParams)
 
-	wrapper := s.clientPool.GetAnthropicClient(c.Request.Context(), provider, string(anthropicReq.Model))
+	ctx := c.Request.Context()
+	if maxUses := s.advisorMaxUses(); maxUses > 0 {
+		ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
+			Messages:      extractAnthropicV1Messages(anthropicReq.Messages),
+			UsesRemaining: maxUses,
+		})
+	}
+
+	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, string(anthropicReq.Model))
 	fc := NewForwardContext(nil, provider)
 	anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, anthropicReq)
 	if cancel != nil {
@@ -1267,8 +1319,16 @@ func (s *Server) streamAnthropicV1ToResponses(
 	responseModel := reqCtx.ResponseModel
 	anthropicReq := reqCtx.Request.(*anthropic.MessageNewParams)
 
-	wrapper := s.clientPool.GetAnthropicClient(c.Request.Context(), provider, string(anthropicReq.Model))
-	fc := NewForwardContext(c.Request.Context(), provider)
+	ctx := c.Request.Context()
+	if maxUses := s.advisorMaxUses(); maxUses > 0 {
+		ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
+			Messages:      extractAnthropicV1Messages(anthropicReq.Messages),
+			UsesRemaining: maxUses,
+		})
+	}
+
+	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, string(anthropicReq.Model))
+	fc := NewForwardContext(ctx, provider)
 	anthropicStream, cancel, err := ForwardAnthropicV1Stream(fc, wrapper, anthropicReq)
 	if cancel != nil {
 		defer cancel()
