@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -50,6 +51,13 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		path := c.Request.URL.Path
 		raw := c.Request.URL.RawQuery
 
+		// Wrap response writer to capture body for error responses
+		w := &responseBodyWriter{
+			ResponseWriter: c.Writer,
+			body:           &bytes.Buffer{},
+		}
+		c.Writer = w
+
 		// Process request
 		c.Next()
 
@@ -64,8 +72,29 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 			path = path + "?" + raw
 		}
 
-		// Log with structured fields
-		m.logger.WithFields(logrus.Fields{
+		// Extract error details if any (including panics caught by gin.Recovery)
+		var errorMsg string
+		var errorType string
+		if len(c.Errors) > 0 {
+			// Get the last error (most recent)
+			lastErr := c.Errors.Last()
+			errorMsg = lastErr.Error()
+
+			// For panic errors, include additional context
+			if lastErr.Type == gin.ErrorTypeBind {
+				errorType = "bind_error"
+			} else if lastErr.Type == gin.ErrorTypePublic {
+				errorType = "public_error"
+			} else if lastErr.Type == gin.ErrorTypePrivate {
+				errorType = "private_error"
+			} else {
+				// Convert ErrorType to string safely
+				errorType = fmt.Sprintf("error_type_%d", lastErr.Type)
+			}
+		}
+
+		// Build fields with error message if available
+		fields := logrus.Fields{
 			"type":       "http_request",
 			"status":     statusCode,
 			"latency":    latency,
@@ -74,7 +103,24 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 			"path":       path,
 			"body_size":  bodySize,
 			"user_agent": c.Request.UserAgent(),
-		}).Log(getLogLevel(statusCode), fmt.Sprintf("%s %s %d %v %s %d",
+		}
+
+		// Add error message field if error occurred
+		if errorMsg != "" {
+			fields["error"] = errorMsg
+			if errorType != "" {
+				fields["error_type"] = errorType
+			}
+		}
+
+		// Add response body for error responses (4xx/5xx)
+		if statusCode >= 400 && w.body.Len() > 0 {
+			respBytes := w.body.Bytes()
+			fields["response_body"] = string(respBytes)
+		}
+
+		// Log with structured fields including error details
+		m.logger.WithFields(fields).Log(getLogLevel(statusCode), fmt.Sprintf("%s %s %d %v %s %d",
 			method,
 			path,
 			statusCode,

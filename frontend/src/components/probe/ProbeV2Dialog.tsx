@@ -52,7 +52,7 @@ const TEST_MODE_LABELS: Record<ProbeV2TestMode, string> = {
     tool: 'Tool Calling',
 };
 
-const TEST_MODE_ICONS: Record<ProbeV2TestMode, React.ReactNode> = {
+const TEST_MODE_ICONS: Record<ProbeV2TestMode, React.ReactElement> = {
     simple: <SpeedIcon fontSize="small" />,
     streaming: <SpeedIcon fontSize="small" />,
     tool: <ToolIcon fontSize="small" />,

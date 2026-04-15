@@ -6,10 +6,14 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
+	"github.com/openai/openai-go/v3"
+	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -166,14 +170,33 @@ func (s *Server) resolveProviderTarget(_ context.Context, req *ProbeV2Request) (
 	return provider, model, nil
 }
 
-// resolveRuleTarget resolves a rule target to provider and model
+// resolveRuleTarget resolves a rule target to provider and model.
+// When smart routing is enabled, it evaluates smart routing rules first
+// instead of falling back to the base service list.
 func (s *Server) resolveRuleTarget(_ context.Context, req *ProbeV2Request) (*typ.Provider, string, error) {
 	rule := s.config.GetRuleByUUID(req.RuleUUID)
 	if rule == nil {
 		return nil, "", fmt.Errorf("rule not found: %s", req.RuleUUID)
 	}
 
-	// Get the first active service from the rule
+	// Try smart routing first if enabled
+	if rule.SmartEnabled && len(rule.SmartRouting) > 0 {
+		selectedService, err := s.resolveSmartRoutingForProbe(rule)
+		if err == nil && selectedService != nil {
+			provider, err := s.config.GetProviderByUUID(selectedService.Provider)
+			if err == nil && provider != nil && provider.Enabled {
+				model := selectedService.Model
+				if model == "" {
+					model = rule.RequestModel
+				}
+				logrus.Debugf("[probe_v2] smart routing selected service: %s -> %s", provider.Name, model)
+				return provider, model, nil
+			}
+		}
+		logrus.Debugf("[probe_v2] smart routing evaluation failed: %v, falling back to base services", err)
+	}
+
+	// Fallback: get the first active service from the rule's base services
 	services := rule.GetServices()
 	if len(services) == 0 {
 		return nil, "", fmt.Errorf("rule has no services: %s", req.RuleUUID)
@@ -208,4 +231,52 @@ func (s *Server) resolveRuleTarget(_ context.Context, req *ProbeV2Request) (*typ
 	}
 
 	return provider, model, nil
+}
+
+// resolveSmartRoutingForProbe evaluates smart routing rules for a probe request.
+// It builds a minimal request based on the rule's scenario to extract context
+// and then runs the smart routing evaluator.
+func (s *Server) resolveSmartRoutingForProbe(rule *typ.Rule) (*loadbalance.Service, error) {
+	_, apiStyle := getScenarioEndpoint(string(rule.Scenario))
+
+	var reqCtx *smartrouting.RequestContext
+	switch apiStyle {
+	case protocol.APIStyleAnthropic:
+		probeReq := &anthropic.MessageNewParams{
+			Model:     anthropic.Model(rule.RequestModel),
+			MaxTokens: 5,
+			Messages: []anthropic.MessageParam{
+				anthropic.NewUserMessage(anthropic.NewTextBlock("hi")),
+			},
+		}
+		reqCtx = smartrouting.ExtractContextFromAnthropicRequest(probeReq)
+	default:
+		probeReq := &openai.ChatCompletionNewParams{
+			Model: openai.ChatModel(rule.RequestModel),
+			Messages: []openai.ChatCompletionMessageParamUnion{
+				openai.UserMessage("hi"),
+			},
+		}
+		reqCtx = smartrouting.ExtractContextFromOpenAIRequest(probeReq)
+	}
+
+	router, err := smartrouting.NewRouter(rule.SmartRouting)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create smart routing router: %w", err)
+	}
+
+	matchedServices, matched := router.EvaluateRequest(reqCtx)
+	if !matched || len(matchedServices) == 0 {
+		return nil, fmt.Errorf("no smart routing rule matched")
+	}
+
+	selectedService, err := s.SelectServiceFromSmartRouting(matchedServices, rule)
+	if err != nil {
+		return nil, fmt.Errorf("failed to select service from smart routing matches: %w", err)
+	}
+	if selectedService == nil {
+		return nil, fmt.Errorf("smart routing returned no selectable service")
+	}
+
+	return selectedService, nil
 }

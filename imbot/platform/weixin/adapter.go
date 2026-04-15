@@ -6,31 +6,30 @@ import (
 	"fmt"
 
 	"github.com/tingly-dev/tingly-box/imbot/core"
-	"github.com/tingly-dev/weixin"
-	"github.com/tingly-dev/weixin/channel"
+	"github.com/tingly-dev/weixin/types"
 )
 
-// Adapter adapts Weixin channel messages to core.Message
+// Adapter converts Weixin channel messages to core.Message format.
 type Adapter struct {
 	*core.BaseAdapter
-	account *weixin.WeChatAccount
+	account *types.WeChatAccount
 }
 
-// NewAdapter creates a new Weixin adapter
-func NewAdapter(config *core.Config, account *weixin.WeChatAccount) *Adapter {
+// NewAdapter creates a new Weixin adapter with the given config and account.
+func NewAdapter(config *core.Config, account *types.WeChatAccount) *Adapter {
 	return &Adapter{
 		BaseAdapter: core.NewBaseAdapter(config),
 		account:     account,
 	}
 }
 
-// Platform returns core.PlatformWeixin
+// Platform returns core.PlatformWeixin.
 func (a *Adapter) Platform() core.Platform {
 	return core.PlatformWeixin
 }
 
-// AdaptMessage converts a channel.Message to core.Message
-func (a *Adapter) AdaptMessage(ctx context.Context, msg *channel.Message) (*core.Message, error) {
+// AdaptMessage converts a types.Message to core.Message.
+func (a *Adapter) AdaptMessage(ctx context.Context, msg *types.Message) (*core.Message, error) {
 	if msg == nil {
 		return nil, fmt.Errorf("nil message")
 	}
@@ -66,41 +65,8 @@ func (a *Adapter) AdaptMessage(ctx context.Context, msg *channel.Message) (*core
 	return messageBuilder.Build(), nil
 }
 
-// ConvertToOutboundMessage converts SendMessageOptions to Weixin outbound message format
-func (a *Adapter) ConvertToOutboundMessage(opts *core.SendMessageOptions) (*channel.OutboundMessage, string, []weixin.MessageItem) {
-	outbound := &channel.OutboundMessage{
-		To:           "", // Will be set by caller
-		Text:         opts.Text,
-		ContextToken: "", // Will be set by caller
-	}
-
-	var items []weixin.MessageItem
-
-	// Add text item
-	if opts.Text != "" {
-		items = append(items, weixin.MessageItem{
-			Type: weixin.MessageItemTypeText,
-			TextItem: &weixin.TextItem{
-				Text: opts.Text,
-			},
-		})
-	}
-
-	// Add media items
-	if len(opts.Media) > 0 {
-		for _, media := range opts.Media {
-			item := a.mediaToItem(media)
-			if item != nil {
-				items = append(items, *item)
-			}
-		}
-	}
-
-	return outbound, "", items
-}
-
-// extractContent extracts content from a channel.Message
-func (a *Adapter) extractContent(msg *channel.Message) core.Content {
+// extractContent extracts the content from a types.Message.
+func (a *Adapter) extractContent(msg *types.Message) core.Content {
 	// Check if there's text
 	if msg.Text != "" {
 		// Check if there are also attachments
@@ -136,7 +102,7 @@ func (a *Adapter) extractContent(msg *channel.Message) core.Content {
 	return core.NewSystemContent("unknown", nil)
 }
 
-// mapContentType maps Weixin content type to core media type
+// mapContentType maps Weixin content type to core media type.
 func (a *Adapter) mapContentType(contentType string) string {
 	switch contentType {
 	case "image":
@@ -154,77 +120,12 @@ func (a *Adapter) mapContentType(contentType string) string {
 	}
 }
 
-// mediaToItem converts a core MediaAttachment to Weixin MessageItem
-func (a *Adapter) mediaToItem(media core.MediaAttachment) *weixin.MessageItem {
-	switch media.Type {
-	case "image":
-		return &weixin.MessageItem{
-			Type: weixin.MessageItemTypeImage,
-			ImageItem: &weixin.ImageItem{
-				URL: media.URL,
-			},
-		}
-	case "video":
-		return &weixin.MessageItem{
-			Type:      weixin.MessageItemTypeVideo,
-			VideoItem: &weixin.VideoItem{},
-		}
-	case "audio", "voice":
-		return &weixin.MessageItem{
-			Type:      weixin.MessageItemTypeVoice,
-			VoiceItem: &weixin.VoiceItem{},
-		}
-	default:
-		// Treat as file
-		return &weixin.MessageItem{
-			Type: weixin.MessageItemTypeFile,
-			FileItem: &weixin.FileItem{
-				FileName: media.Filename,
-			},
-		}
-	}
-}
-
-// AdaptCoreToChannel converts a core.Message to channel.OutboundMessage
-func (a *Adapter) AdaptCoreToChannel(ctx context.Context, msg *core.Message) (*channel.OutboundMessage, error) {
-	if msg == nil {
-		return nil, fmt.Errorf("nil message")
-	}
-
-	outbound := &channel.OutboundMessage{
-		To: msg.GetReplyTarget(),
-	}
-
-	// Extract text
-	if msg.IsTextContent() {
-		outbound.Text = msg.GetText()
-	} else if mc, ok := msg.Content.(*core.MediaContent); ok {
-		// Media content with caption
-		if len(mc.Media) > 0 {
-			outbound.Text = mc.Caption
-		}
-	}
-
-	// Extract media
-	if msg.IsMediaContent() {
-		media := msg.GetMedia()
-		if len(media) > 0 {
-			firstMedia := media[0]
-			outbound.MediaURL = firstMedia.URL
-			outbound.ContentType = firstMedia.Type
-			outbound.FileName = firstMedia.Filename
-		}
-	}
-
-	return outbound, nil
-}
-
-// BuildReplyTarget builds the reply target from sender/recipient info
+// BuildReplyTarget builds the reply target from sender/recipient info.
+//
+// For Weixin, we use the other party's ID as the reply target:
+// - If we're the sender (bot), reply to the recipient
+// - If we're the recipient, reply to the sender
 func (a *Adapter) BuildReplyTarget(senderID, recipientID, sessionID string) string {
-	// For Weixin, use the other party's ID as reply target
-	// If we're the sender (bot), reply to the recipient
-	// If we're the recipient, reply to the sender
-
 	// Check if the sender is the bot (matches our account ID)
 	if a.account != nil && senderID == a.account.UserID {
 		return recipientID
@@ -233,13 +134,12 @@ func (a *Adapter) BuildReplyTarget(senderID, recipientID, sessionID string) stri
 	return senderID
 }
 
-// GetMessageLimit returns the message length limit for Weixin
+// GetMessageLimit returns the message length limit for Weixin (2048 bytes).
 func (a *Adapter) GetMessageLimit() int {
-	// Weixin message limit is typically 2048 bytes
 	return 2048
 }
 
-// ShouldChunkText determines if text should be chunked
+// ShouldChunkText reports whether text should be chunked.
 func (a *Adapter) ShouldChunkText(text string) bool {
 	return len([]rune(text)) > a.GetMessageLimit()
 }

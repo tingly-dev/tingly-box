@@ -30,14 +30,12 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 
 	req.Model = anthropic.Model(actualModel)
 
+	// Inject session ID into request context so all downstream code can access it
+	sessionID := resolveSessionID(c, &req.BetaMessageNewParams)
+	c.Request = c.Request.WithContext(typ.WithSessionID(c.Request.Context(), sessionID))
+
 	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
 	SetTrackingContext(c, rule, provider, actualModel, proxyModel, isStreaming)
-
-	// === Check if provider has built-in web_search ===
-	hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
-
-	// === Tool Interceptor: Check if enabled and should be used ===
-	shouldIntercept, shouldStripTools, _ := s.resolveToolInterceptor(provider, hasBuiltInWebSearch)
 
 	// Get scenario config for flags
 	scenarioConfig := s.config.GetScenarioConfig(scenarioType)
@@ -55,13 +53,8 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	// Set provider UUID in context (Service.Provider uses UUID, not name)
 	c.Set("provider", provider.UUID)
 	c.Set("model", actualModel)
-
-	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
-	if shouldIntercept {
-		preparedReq, _ := s.toolInterceptor.PrepareAnthropicBetaRequest(provider, &req.BetaMessageNewParams)
-		req.BetaMessageNewParams = *preparedReq
-	} else if shouldStripTools {
-		req.BetaMessageNewParams.Tools = toolinterceptor.StripSearchFetchToolsAnthropicBeta(req.BetaMessageNewParams.Tools)
+	if s.mcpEnabled() && s.mcpMode() == typ.MCPModeServertool {
+		req.BetaMessageNewParams = *s.injectMCPToolsIntoAnthropicBetaRequest(c.Request.Context(), &req.BetaMessageNewParams)
 	}
 
 	// request guardrails
@@ -143,7 +136,7 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req *anthro
 		s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages))
 	}
 
-	usageStat, err := stream.HandleAnthropicV1BetaStream(hc, streamResp)
+	usageStat, err := stream.HandleAnthropicBeta(hc, streamResp)
 	s.trackUsageWithTokenUsage(c, usageStat, err)
 }
 
@@ -165,8 +158,8 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context
 	var err error
 	var cancel context.CancelFunc
 
-	// Use standard OpenAI Responses API
-	wrapper := s.clientPool.GetOpenAIClient(provider, responsesReq.Model)
+	// Use standard OpenAI Responses API (session ID already in c.Request.Context)
+	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
 	fc := NewForwardContext(nil, provider)
 
 	response, cancel, err = ForwardOpenAIResponses(fc, wrapper, responsesReq)
@@ -218,8 +211,8 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, p
 		streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
 	}
 
-	// For standard OpenAI providers, use the OpenAI SDK
-	wrapper := s.clientPool.GetOpenAIClient(provider, responsesReq.Model)
+	// For standard OpenAI providers, use the OpenAI SDK (session ID already in c.Request.Context)
+	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
 	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
 	if cancel != nil {
@@ -271,8 +264,8 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPIAssembly(c *gin.Context, pr
 		streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
 	}
 
-	// For standard OpenAI providers, use the OpenAI SDK
-	wrapper := s.clientPool.GetOpenAIClient(provider, responsesReq.Model)
+	// For standard OpenAI providers, use the OpenAI SDK (session ID already in c.Request.Context)
+	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
 	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
 	if cancel != nil {

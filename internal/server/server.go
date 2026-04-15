@@ -23,17 +23,18 @@ import (
 	guardrailsevaluate "github.com/tingly-dev/tingly-box/internal/guardrails/evaluate"
 	guardrailsutils "github.com/tingly-dev/tingly-box/internal/guardrails/utils"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/hooks"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
+	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
+	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
-	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
-	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
+	"github.com/tingly-dev/tingly-box/internal/virtualserver"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 	pkgoauth "github.com/tingly-dev/tingly-box/pkg/oauth"
@@ -92,8 +93,8 @@ type Server struct {
 	// capability store for persistent model capabilities
 	capabilityStore *db.ModelCapabilityStore
 
-	// tool interceptor for local tool execution
-	toolInterceptor *toolinterceptor.Interceptor
+	// mcp runtime for external MCP tools
+	mcpRuntime *runtime.Runtime
 
 	// guardrails runtime (optional)
 	guardrailsRuntime   *guardrails.Guardrails
@@ -117,7 +118,10 @@ type Server struct {
 	tokenTracker *tracker.TokenTracker
 
 	// virtual model service for testing
-	virtualModelService *virtualmodel.Service
+	virtualModelService *virtualserver.Service
+
+	// quota manager for provider quota tracking
+	quotaManager providerQuotaModule.Manager
 
 	// options
 	enableUI      bool
@@ -125,11 +129,6 @@ type Server struct {
 	openBrowser   bool
 	host          string
 	debug         bool
-
-	// https options
-	httpsEnabled    bool
-	httpsCertDir    string
-	httpsRegenerate bool
 
 	// record options
 	recordMode obs.RecordMode
@@ -167,6 +166,11 @@ func (s *Server) UsageStore() *db.UsageStore {
 		return nil
 	}
 	return sm.Usage()
+}
+
+// GetRoutingSelector returns the server's routing selector for service selection.
+func (s *Server) GetRoutingSelector() *routing.SimpleSelector {
+	return s.routingSelector
 }
 
 func (s *Server) initGuardrailsRuntime() {
@@ -244,6 +248,30 @@ func (s *Server) guardrailsEnabled() bool {
 		s.config.GetScenarioFlag(typ.ScenarioClaudeCode, "guardrails")
 }
 
+// mcpEnabled checks if MCP feature is enabled via scenario flag
+func (s *Server) mcpEnabled() bool {
+	if s.config == nil {
+		return false
+	}
+	return s.config.GetScenarioFlag(typ.ScenarioGlobal, "mcp") ||
+		s.config.GetScenarioFlag(typ.ScenarioClaudeCode, "mcp")
+}
+
+// mcpMode returns the current MCP runtime mode
+func (s *Server) mcpMode() typ.MCPMode {
+	if s.config == nil {
+		return ""
+	}
+	var mcpCfg typ.MCPRuntimeConfig
+	if s.config.GetToolConfig(db.ToolTypeMCPRuntime, &mcpCfg) {
+		if mcpCfg.Mode == "" {
+			return typ.MCPModeClienttool // default mode
+		}
+		return mcpCfg.Mode
+	}
+	return typ.MCPModeClienttool // default mode
+}
+
 func (s *Server) syncGuardrailsFromConfig() {
 	if s.config == nil {
 		return
@@ -306,27 +334,6 @@ func WithOpenBrowser(enabled bool) ServerOption {
 	}
 }
 
-// WithHTTPSEnabled enables or disables HTTPS
-func WithHTTPSEnabled(enabled bool) ServerOption {
-	return func(s *Server) {
-		s.httpsEnabled = enabled
-	}
-}
-
-// WithHTTPSCertDir sets the HTTPS certificate directory
-func WithHTTPSCertDir(certDir string) ServerOption {
-	return func(s *Server) {
-		s.httpsCertDir = certDir
-	}
-}
-
-// WithHTTPSRegenerate sets the HTTPS certificate regenerate flag
-func WithHTTPSRegenerate(regenerate bool) ServerOption {
-	return func(s *Server) {
-		s.httpsRegenerate = regenerate
-	}
-}
-
 // WithRecordMode sets the record mode for request/response recording
 // mode: empty string = disabled, "all" = record all, "response" = response only, "scenario" = record scenario only
 func WithRecordMode(mode obs.RecordMode) ServerOption {
@@ -374,6 +381,17 @@ func WithDebug(enabled bool) ServerOption {
 func WithMultiLogger(logger *pkgobs.MultiLogger) ServerOption {
 	return func(s *Server) {
 		s.multiLogger = logger
+	}
+}
+
+// WithTemplateManager allows TBE to inject a custom TemplateManager.
+// This follows the same pattern as WithAuthMiddleware for consistency.
+func WithTemplateManager(tm *data.TemplateManager) ServerOption {
+	return func(s *Server) {
+		s.templateManager = tm
+		if s.config != nil {
+			s.config.SetTemplateManager(tm)
+		}
 	}
 }
 
@@ -536,6 +554,20 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize health filter
 	healthFilter := typ.NewHealthFilter(healthMonitor)
 
+	// Initialize template manager first (needed for capacity config)
+	var templateURL string
+	if cfg.ProviderTemplateSource != "" {
+		templateURL = cfg.ProviderTemplateSource
+	} else {
+		templateURL = data.TemplateGitHubURL
+	}
+	templateManager := data.NewTemplateManager(templateURL)
+	if err := templateManager.Initialize(context.Background()); err != nil {
+		logrus.Debugf("Failed to fetch from GitHub, using embedded provider templates: %v", err)
+	} else {
+		logrus.Debugf("Provider templates initialized (version: %s)", templateManager.GetVersion())
+	}
+
 	// Initialize load balancer
 	loadBalancer := NewLoadBalancer(cfg, healthFilter)
 
@@ -549,17 +581,11 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize load balancer API
 	loadBalancerAPI := NewLoadBalancerAPI(loadBalancer, cfg)
 
-	// Determine protocol for OAuth BaseURL
-	protocol := "http"
-	if server.httpsEnabled {
-		protocol = "https"
-	}
-
 	// Initialize OAuth manager and handler
 	// Note: BaseURL will be dynamically updated for providers with port constraints
 	registry := pkgoauth.DefaultRegistry()
 	oauthConfig := &pkgoauth.Config{
-		BaseURL:           fmt.Sprintf("%s://localhost:%d", protocol, cfg.GetServerPort()),
+		BaseURL:           fmt.Sprintf("http://localhost:%d", cfg.GetServerPort()),
 		ProviderConfigs:   make(map[pkgoauth.ProviderType]*pkgoauth.ProviderConfig),
 		TokenStorage:      pkgoauth.NewMemoryTokenStorage(),
 		StateExpiry:       10 * time.Minute,
@@ -595,23 +621,15 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Set callback server manager (the server itself implements this interface)
 	server.oauthHandler.SetCallbackServerManager(server)
 
-	// Initialize template manager with GitHub URL for template sync
-	templateManager := data.NewTemplateManager(data.TemplateGitHubURL)
-	if err := templateManager.Initialize(context.Background()); err != nil {
-		logrus.Debugf("Failed to fetch from GitHub, using embedded provider templates: %v", err)
-	} else {
-		logrus.Debugf("Provider templates initialized (version: %s)", templateManager.GetVersion())
-	}
 	server.templateManager = templateManager
 
 	// Set template manager in config for model fetching fallback
 	server.config.SetTemplateManager(templateManager)
 
-	// Initialize tool interceptor (local web_search/web_fetch)
-	// Pass a config provider function that gets effective config for each provider
-	server.toolInterceptor = toolinterceptor.NewInterceptor(func(providerUUID string) (*typ.ToolInterceptorConfig, bool) {
-		return cfg.GetToolInterceptorConfigForProvider(providerUUID)
-	})
+	server.mcpRuntime = runtime.NewRuntime(cfg.GetMCPRuntimeConfig)
+	if err := runtime.EnsureBuiltinScripts(cfg.ConfigDir); err != nil {
+		logrus.WithError(err).Warn("mcp: failed to ensure builtin scripts in config dir")
+	}
 
 	// Initialize probe cache with 24-hour TTL
 	server.probeCache = NewProbeCache(24 * time.Hour)
@@ -649,8 +667,13 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	}
 
 	// Initialize virtual model service
-	server.virtualModelService = virtualmodel.NewService()
+	server.virtualModelService = virtualserver.NewService()
 	logrus.Debugf("Virtual model service initialized with default models")
+
+	// Initialize provider quota manager
+	if err := server.initQuotaManager(cfg); err != nil {
+		logrus.WithError(err).Warn("Failed to initialize provider quota manager")
+	}
 
 	// Setup middleware
 	server.setupMiddleware()
@@ -667,7 +690,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Set up health monitor probe function using existing probe infrastructure
 	if server.healthMonitor != nil {
 		server.healthMonitor.SetProbeFunc(func(serviceID string) bool {
-			// Extract provider UUID from serviceID (format: providerUUID:model)
+			// serviceID format: "<providerUUID>:<model>" (from Service.ServiceID())
 			parts := strings.Split(serviceID, ":")
 			if len(parts) < 2 {
 				return false
@@ -700,6 +723,14 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	}
 
 	return server
+}
+
+func (s *Server) Context() context.Context {
+	return s.ctx
+}
+
+func (s *Server) Cancel() context.CancelFunc {
+	return s.cancel
 }
 
 // setupConfigWatcher initializes the configuration hot-reload watcher
@@ -902,10 +933,6 @@ func (s *Server) setupMiddleware() {
 
 // setupRoutes configures server routes
 func (s *Server) setupRoutes(ctx context.Context) {
-	// Integrate Web UI routes if enabled
-	if s.enableUI {
-		s.UseUIEndpoints(ctx)
-	}
 
 	s.UseAIEndpoints()
 
@@ -913,6 +940,11 @@ func (s *Server) setupRoutes(ctx context.Context) {
 
 	// Virtual model endpoints for testing
 	s.UseVirtualModelEndpoints()
+
+	// Integrate Web UI routes if enabled
+	if s.enableUI {
+		s.UseUIEndpoints(ctx)
+	}
 }
 
 func (s *Server) UseAIEndpoints() {
@@ -1059,9 +1091,15 @@ func (s *Server) SetupPassthroughAnthropicEndpoints(group *gin.RouterGroup) {
 
 // UseVirtualModelEndpoints sets up virtual model endpoints for testing
 func (s *Server) UseVirtualModelEndpoints() {
-	virtual := s.engine.Group("/virtual/v1")
-	virtual.GET("/models", s.authMW.VirtualModelAuthMiddleware(), s.virtualModelService.GetHandler().ListModels)
-	virtual.POST("/chat/completions", s.authMW.VirtualModelAuthMiddleware(), s.virtualModelService.GetHandler().ChatCompletions)
+	virtual := s.engine.Group("/virtual")
+	virtual.GET("/models", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().ListModels)
+	virtual.POST("/chat/completions", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().ChatCompletions)
+	virtual.POST("/messages", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().Messages)
+
+	virtualV1 := s.engine.Group("/virtual/v1")
+	virtualV1.GET("/models", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().ListModels)
+	virtualV1.POST("/chat/completions", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().ChatCompletions)
+	virtualV1.POST("/messages", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().Messages)
 }
 
 func (s *Server) UseLoadBalanceEndpoints() {
@@ -1084,6 +1122,12 @@ func (s *Server) Start(port int) error {
 		log.Println("OAuth token auto-refresh started")
 	}
 
+	// Start provider quota auto-refresh
+	if s.quotaManager != nil {
+		s.quotaManager.StartAutoRefresh(ctx)
+		log.Println("Provider quota auto-refresh started")
+	}
+
 	// Start configuration watcher
 	if s.watcher != nil {
 		if err := s.watcher.Start(); err != nil {
@@ -1100,26 +1144,6 @@ func (s *Server) Start(port int) error {
 		logrus.Info("Remote-coder auto-start initiated")
 	}
 
-	// Determine scheme and handle HTTPS setup
-	scheme := "http"
-	if s.httpsEnabled {
-		scheme = "https"
-
-		// Determine certificate directory
-		certDir := s.httpsCertDir
-		if certDir == "" {
-			certDir = servertls.GetDefaultCertDir(s.config.ConfigDir)
-		}
-
-		// Ensure certificates exist
-		certGen := servertls.NewCertificateGenerator(certDir)
-		if err := certGen.EnsureCertificates(s.httpsRegenerate); err != nil {
-			return fmt.Errorf("failed to setup HTTPS certificates: %w", err)
-		}
-
-		logrus.Debugf("HTTPS enabled, using certificates from: %s", certDir)
-	}
-
 	addr := fmt.Sprintf("%s:%d", s.host, port)
 	s.httpServer = &http.Server{
 		Addr:              addr,
@@ -1131,6 +1155,7 @@ func (s *Server) Start(port int) error {
 	}
 
 	resolvedHost := network.ResolveHost(s.host)
+	scheme := "http"
 
 	// CASE 1: Non-UI Mode ---
 	if !s.enableUI {
@@ -1139,23 +1164,13 @@ func (s *Server) Start(port int) error {
 		fmt.Printf("Virtual Model API endpoint: %s://%s:%d/virtual/v1/chat/completions\n", scheme, resolvedHost, port)
 		fmt.Printf("Mode name: %s\n", constant.DefaultModeName)
 		fmt.Printf("Model API key: %s\n", s.config.GetModelToken())
-		fmt.Printf("Virtual Model API key: %s\n", s.config.GetVirtualModelToken())
-
-		if s.httpsEnabled {
-			certDir := s.httpsCertDir
-			if certDir == "" {
-				certDir = servertls.GetDefaultCertDir(s.config.ConfigDir)
-			}
-			certGen := servertls.NewCertificateGenerator(certDir)
-			return s.engine.RunTLS(addr, certGen.GetCertFile(), certGen.GetKeyFile())
-		}
 		return s.httpServer.ListenAndServe()
 	}
 
 	// CASE 2: Web UI Mode ---
 	webUIURL := fmt.Sprintf("%s://%s:%d", scheme, resolvedHost, port)
 	if s.config.HasUserToken() {
-		webUIURL = fmt.Sprintf("%s/?user_auth_token=%s", webUIURL, s.config.GetUserToken())
+		webUIURL = fmt.Sprintf("%s/login/%s", webUIURL, s.config.GetUserToken())
 	}
 
 	fmt.Printf("Web UI: %s\n", webUIURL)
@@ -1168,16 +1183,7 @@ func (s *Server) Start(port int) error {
 	// Use a channel to capture the immediate error if ListenAndServe fails
 	serverError := make(chan error, 1)
 	go func() {
-		if s.httpsEnabled {
-			certDir := s.httpsCertDir
-			if certDir == "" {
-				certDir = servertls.GetDefaultCertDir(s.config.ConfigDir)
-			}
-			certGen := servertls.NewCertificateGenerator(certDir)
-			serverError <- s.engine.RunTLS(addr, certGen.GetCertFile(), certGen.GetKeyFile())
-		} else {
-			serverError <- s.httpServer.ListenAndServe()
-		}
+		serverError <- s.httpServer.ListenAndServe()
 	}()
 
 	// Instead of a fixed 100ms sleep, we poll the port
@@ -1361,6 +1367,16 @@ func (s *Server) Stop(ctx context.Context) error {
 		log.Println("OAuth token auto-refresh stopped")
 	}
 
+	// Stop provider quota auto-refresh
+	if s.quotaManager != nil {
+		s.quotaManager.StopAutoRefresh()
+		log.Println("Provider quota auto-refresh stopped")
+	}
+
+	if err := s.undoCodexImportOnStop(); err != nil {
+		logrus.WithError(err).Warn("Failed to auto-undo Codex import on stop")
+	}
+
 	// Stop debug middleware
 	if s.errorMW != nil {
 		s.errorMW.Stop()
@@ -1370,6 +1386,12 @@ func (s *Server) Stop(ctx context.Context) error {
 	if s.watcher != nil {
 		s.watcher.Stop()
 		log.Println("Configuration watcher stopped")
+	}
+
+	// Close all MCP sessions and terminate subprocesses
+	if s.mcpRuntime != nil {
+		s.mcpRuntime.Close()
+		log.Println("MCP runtime stopped: all sessions closed and subprocesses terminated")
 	}
 
 	// Close all scenario recording sinks
@@ -1399,4 +1421,44 @@ func (s *Server) Stop(ctx context.Context) error {
 
 	fmt.Println("Shutting down server...")
 	return s.httpServer.Shutdown(ctx)
+}
+
+func (s *Server) undoCodexImportOnStop() error {
+	if s == nil || s.config == nil {
+		return nil
+	}
+	if !s.config.GetScenarioExtensionBool(typ.ScenarioCodex, codeximport.ImportStateAutoUndoOnStopKey()) {
+		return nil
+	}
+	if !s.config.GetScenarioExtensionBool(typ.ScenarioCodex, codeximport.ImportStateActiveKey()) {
+		return nil
+	}
+
+	targetProvider := s.config.GetScenarioExtensionString(typ.ScenarioCodex, codeximport.ImportStateSourceProviderKey())
+	sourceProvider := s.config.GetScenarioExtensionString(typ.ScenarioCodex, codeximport.ImportStateTargetProviderKey())
+	if sourceProvider == "" || targetProvider == "" {
+		return nil
+	}
+
+	importer := codeximport.NewImporter()
+	_, err := importer.ImportOpenAISessions(codeximport.ImportOpenAISessionsRequest{
+		SourceProvider: sourceProvider,
+		TargetProvider: targetProvider,
+		CodexHome:      s.config.GetScenarioExtensionString(typ.ScenarioCodex, codeximport.ImportStateCodexHomeKey()),
+		SqliteHome:     s.config.GetScenarioExtensionString(typ.ScenarioCodex, codeximport.ImportStateSqliteHomeKey()),
+		StateDBPath:    s.config.GetScenarioExtensionString(typ.ScenarioCodex, codeximport.ImportStateStateDBPathKey()),
+		DryRun:         false,
+	})
+	if err != nil {
+		return err
+	}
+	return s.config.SetScenarioExtensions(typ.ScenarioCodex, map[string]interface{}{
+		codeximport.ImportStateActiveKey():         false,
+		codeximport.ImportStateSourceProviderKey(): nil,
+		codeximport.ImportStateTargetProviderKey(): nil,
+		codeximport.ImportStateCodexHomeKey():      nil,
+		codeximport.ImportStateSqliteHomeKey():     nil,
+		codeximport.ImportStateStateDBPathKey():    nil,
+		codeximport.ImportStateAutoUndoOnStopKey(): false,
+	})
 }

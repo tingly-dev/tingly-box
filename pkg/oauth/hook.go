@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"runtime"
 	"strings"
 
 	"github.com/google/uuid"
@@ -324,6 +326,27 @@ func (h *IFlowHook) AfterToken(ctx context.Context, accessToken string, httpClie
 	return metadata, nil
 }
 
+type KimiHook struct{}
+
+func (h *KimiHook) BeforeAuth(params map[string]string) error {
+	return nil
+}
+
+func (h *KimiHook) BeforeToken(body map[string]string, header http.Header) error {
+	// Kimi 需要设备信息头，模拟 kimi-cli 的请求头
+	header.Set("X-Msh-Platform", "mac")
+	header.Set("X-Msh-Version", "1.0.0")
+	header.Set("X-Msh-Device-Name", getKimiDeviceName())
+	header.Set("X-Msh-Device-Model", getKimiDeviceModel())
+	header.Set("X-Msh-Os-Version", getKimiOsVersion())
+	header.Set("X-Msh-Device-Id", getKimiDeviceId())
+	return nil
+}
+
+func (h *KimiHook) AfterToken(ctx context.Context, accessToken string, httpClient *http.Client) (map[string]any, error) {
+	return nil, nil
+}
+
 // CodexHook implements Codex (OpenAI) OAuth specific behavior.
 type CodexHook struct{}
 
@@ -388,4 +411,96 @@ func (h *CodexHook) AfterToken(ctx context.Context, accessToken string, httpClie
 		metadata["name"] = info.Name
 	}
 	return metadata, nil
+}
+
+// Kimi device info helpers
+// These functions generate device information headers required by Kimi OAuth
+
+var (
+	kimiDeviceId     string
+	kimiDeviceIdOnce bool
+)
+
+// getKimiDeviceId returns a persistent device ID for Kimi OAuth
+// Attempts to read from ~/.kimi/device_id, generates a new UUID if not found
+func getKimiDeviceId() string {
+	if kimiDeviceIdOnce {
+		return kimiDeviceId
+	}
+
+	// Try to read from kimi-cli's device file
+	homeDir, err := os.UserHomeDir()
+	if err == nil {
+		deviceIDPath := homeDir + "/.kimi/device_id"
+		if data, err := os.ReadFile(deviceIDPath); err == nil {
+			kimiDeviceId = strings.TrimSpace(string(data))
+			kimiDeviceIdOnce = true
+			if kimiDeviceId != "" {
+				return kimiDeviceId
+			}
+		}
+	}
+
+	// Generate a new device ID
+	kimiDeviceId = uuid.New().String()
+	kimiDeviceIdOnce = true
+
+	// Try to save to kimi-cli's device file
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		kimiDir := homeDir + "/.kimi"
+		if err := os.MkdirAll(kimiDir, 0755); err == nil {
+			deviceIDPath := kimiDir + "/device_id"
+			_ = os.WriteFile(deviceIDPath, []byte(kimiDeviceId), 0644)
+		}
+	}
+
+	return kimiDeviceId
+}
+
+// getKimiDeviceName returns the hostname for Kimi OAuth
+func getKimiDeviceName() string {
+	if hostname, err := os.Hostname(); err == nil {
+		return hostname
+	}
+	return "unknown"
+}
+
+// getKimiDeviceModel returns the device model for Kimi OAuth
+func getKimiDeviceModel() string {
+	// Return a generic model identifier based on OS and architecture
+	os := runtime.GOOS
+	arch := runtime.GOARCH
+
+	// Map to Kimi's expected format
+	switch os {
+	case "darwin":
+		if arch == "arm64" {
+			return "Mac14,6" // Apple Silicon Mac
+		}
+		return "MacBookPro18,1" // Intel Mac
+	case "linux":
+		return "Linux-" + arch
+	case "windows":
+		return "Windows-" + arch
+	default:
+		return os + "-" + arch
+	}
+}
+
+// getKimiOsVersion returns the OS version for Kimi OAuth
+func getKimiOsVersion() string {
+	os := runtime.GOOS
+
+	switch os {
+	case "darwin":
+		// Return macOS version (placeholder, should be dynamic in production)
+		return "14.5.0"
+	case "linux":
+		// Return a generic Linux version string
+		return "5.15.0-generic"
+	case "windows":
+		return "10.0.22621"
+	default:
+		return "1.0.0"
+	}
 }

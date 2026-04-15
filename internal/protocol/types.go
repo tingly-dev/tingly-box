@@ -1,7 +1,6 @@
 package protocol
 
 import (
-	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3/shared"
 )
 
@@ -44,16 +43,6 @@ type Client interface {
 
 	// Close closes any resources held by the client
 	Close() error
-}
-
-// Transformer defines the interface for request compacting transformations.
-// Each handler method is responsible for a different request model type.
-type Transformer interface {
-	// HandleV1 handles compacting for Anthropic v1 requests.
-	HandleV1(req *anthropic.MessageNewParams) error
-
-	// HandleV1Beta handles compacting for Anthropic v1beta requests.
-	HandleV1Beta(req *anthropic.BetaMessageNewParams) error
 }
 
 // OpenAIConfig contains additional metadata that may be used by provider transforms

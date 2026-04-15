@@ -121,7 +121,7 @@ func TestScopedLoggerLogAction(t *testing.T) {
 
 		// Add 5 actions
 		for i := 0; i < 5; i++ {
-			actionLogger.LogAction("test", i, true, "test")
+			actionLogger.LogAction("test", map[string]interface{}{"index": i}, true, "test")
 		}
 
 		// Get latest 3
@@ -168,27 +168,34 @@ func TestMultiLoggerSourceFiltering(t *testing.T) {
 	require.NoError(t, err)
 	defer multiLogger.Close()
 
-	t.Run("ReadJSONLogs filters by source", func(t *testing.T) {
+	t.Run("ReadJSONLogs preserves source field", func(t *testing.T) {
 		actionLogger := multiLogger.WithSource(LogSourceAction)
 		httpLogger := multiLogger.WithSource(LogSourceHTTP)
 
 		// Write action logs
 		for i := 0; i < 3; i++ {
-			actionLogger.LogAction("test_action", i, true, "action")
+			actionLogger.LogAction("test_action", map[string]interface{}{"index": i}, true, "action")
 		}
 
 		// Write HTTP logs
 		httpLogger.GetLogrusLogger().WithField("path", "/test").Info("HTTP request")
 
-		// Read only action logs
-		actionLogs, err := multiLogger.ReadJSONLogs(100)
+		// Read logs from JSON file
+		logs, err := multiLogger.ReadJSONLogs(100)
 		require.NoError(t, err)
 
-		// All should have source="action"
-		for _, entry := range actionLogs {
-			if entry.Source != "" {
-				assert.Equal(t, string(LogSourceAction), entry.Source)
+		// Verify that both action and HTTP sources are preserved
+		foundAction := false
+		foundHTTP := false
+		for _, entry := range logs {
+			if entry.Source == string(LogSourceAction) {
+				foundAction = true
+			}
+			if entry.Source == string(LogSourceHTTP) {
+				foundHTTP = true
 			}
 		}
+		assert.True(t, foundAction, "Expected to find action source entries")
+		assert.True(t, foundHTTP, "Expected to find HTTP source entries")
 	})
 }

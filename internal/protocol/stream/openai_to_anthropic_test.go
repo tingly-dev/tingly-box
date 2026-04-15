@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
@@ -11,9 +12,27 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	openaiOption "github.com/openai/openai-go/v3/option"
+	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type fakeOpenAIDecoder struct{}
+
+func (f *fakeOpenAIDecoder) Event() openaistream.Event { return openaistream.Event{} }
+func (f *fakeOpenAIDecoder) Next() bool                { return false }
+func (f *fakeOpenAIDecoder) Close() error              { return nil }
+func (f *fakeOpenAIDecoder) Err() error                { return nil }
+
+type closeNotifyRecorder struct {
+	*httptest.ResponseRecorder
+}
+
+func (r *closeNotifyRecorder) CloseNotify() <-chan bool {
+	ch := make(chan bool)
+	close(ch)
+	return ch
+}
 
 // TestHandleOpenAIToAnthropicStreamResponse tests the OpenAI to Anthropic stream conversion
 func TestHandleOpenAIToAnthropicStreamResponse(t *testing.T) {
@@ -246,6 +265,25 @@ func TestHandleOpenAIToAnthropicStreamResponseWithThinking(t *testing.T) {
 
 	// Verify SSE headers
 	assert.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
+}
+
+func TestHandleOpenAIToAnthropicStreamResponse_ClientCanceled(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	c, _ := gin.CreateTestContext(w)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	ctx, cancel := context.WithCancel(req.Context())
+	cancel()
+	c.Request = req.WithContext(ctx)
+
+	stream := openaistream.NewStream[openai.ChatCompletionChunk](&fakeOpenAIDecoder{}, nil)
+
+	usage, err := HandleOpenAIToAnthropicStreamResponse(c, nil, stream, "test-model")
+	require.ErrorIs(t, err, context.Canceled)
+	require.NotNil(t, usage)
+	assert.Equal(t, 0, usage.InputTokens)
+	assert.Equal(t, 0, usage.OutputTokens)
 }
 
 // parseSSEEvents parses SSE response body into a map of events

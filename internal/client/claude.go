@@ -8,25 +8,33 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
+
+	"github.com/sirupsen/logrus"
+	"github.com/tidwall/gjson"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
 )
 
 const (
 	// Claude Code client identification
-	claudeCLIUserAgent      = "claude-cli/2.1.81 (external, cli)"
+	claudeCLIUserAgent      = "claude-cli/2.1.86 (external, cli)"
 	claudeXApp              = "cli"
 	stainlessHelperMethod   = "stream"
 	stainlessRetryCount     = "0"
-	stainlessRuntimeVersion = "v25.3.0"
+	stainlessRuntimeVersion = "v24.3.0"
 	stainlessPackageVersion = "0.74.0"
 	stainlessRuntime        = "node"
 	stainlessLang           = "js"
 	stainlessTimeout        = "3000"
 
 	// Anthropic API headers
-	anthropicBeta                         = "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05"
+	anthropicBeta                         = "claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,effort-2025-11-24"
 	anthropicOAuthBeta                    = "oauth-2025-04-20"
 	anthropicDangerousDirectBrowserAccess = "true"
 	anthropicVersion                      = "2023-06-01"
+
+	// Model-specific beta flags
+	anthropicContext1m = "context-1m-2025-08-07"
 
 	// Content negotiation
 	acceptHeader = "application/json"
@@ -45,6 +53,47 @@ func stainlessArch() string {
 	return runtime.GOARCH // e.g., "amd64", "arm64"
 }
 
+// claudeModelPrefixes that support context-1m beta flag.
+var context1mModelPrefixes = []string{
+	"claude-sonnet-4-6",
+	"claude-opus-4-6",
+}
+
+// supportsContext1M checks if the model supports the context-1m-2025-08-07 beta flag.
+func supportsContext1M(model string) bool {
+	m := strings.ToLower(model)
+	for _, prefix := range context1mModelPrefixes {
+		if strings.HasPrefix(m, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// extractSessionIDFromBody extracts the session_id from the request body's
+// metadata.user_id field. The user_id field has two variants:
+//   - JSON: {"device_id":"...","account_uuid":"...","session_id":"..."}
+//   - Legacy string: user_{64hex}_account_{uuid}_session_{uuid}
+func extractSessionIDFromBody(body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+	raw := gjson.GetBytes(body, "metadata.user_id").String()
+	if raw == "" {
+		return ""
+	}
+	m := ops.ParseMetadataUserID(raw)
+	if m == nil {
+		return ""
+	}
+	return m.SessionID
+}
+
+// extractModelFromBody parses the "model" field from JSON body without full unmarshal.
+func extractModelFromBody(body []byte) string {
+	return gjson.GetBytes(body, "model").String()
+}
+
 // claudeRoundTripper wraps an http.RoundTripper to handle Claude Code OAuth
 // specific request/response transformations:
 // - Applies tool prefix to request body for OAuth tokens
@@ -56,6 +105,16 @@ type claudeRoundTripper struct {
 }
 
 func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Reject /models endpoint for Claude Code OAuth (by design)
+	if req.URL != nil && strings.HasSuffix(req.URL.Path, "/models") && req.Method == http.MethodGet {
+		return &http.Response{
+			StatusCode: http.StatusNotFound,
+			Status:     http.StatusText(http.StatusNotFound),
+			Header:     make(http.Header),
+			Body:       io.NopCloser(bytes.NewReader([]byte(`{"error":{"type":"not_found_error","message":"models endpoint is not supported for Claude Code"}}`))),
+		}, nil
+	}
+
 	// claudeHook applies Claude Code OAuth specific request modifications:
 	// - Detects OAuth token (sk-ant-oat prefix)
 	// - Applies tool prefix to request body for OAuth tokens
@@ -67,11 +126,12 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	var modifiedBody []byte
 	var isOAuthToken bool
 
-	if req.Body != nil && req.Method == "POST" {
+	if req.Body != nil {
 		var err error
 		originalBody, err = io.ReadAll(req.Body)
 		_ = req.Body.Close()
 		if err != nil {
+			logrus.WithError(err).Errorf("error reading body")
 			return nil, fmt.Errorf("failed to read request body: %w", err)
 		}
 
@@ -98,8 +158,12 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 		}
 	}
 
+	// Extract model and session ID from request body
+	model := extractModelFromBody(originalBody)
+	sessionID := extractSessionIDFromBody(originalBody)
+
 	// Set Claude Code specific headers
-	t.applyClaudeCodeHeaders(req, isOAuthToken)
+	t.applyClaudeCodeHeaders(req, isOAuthToken, model, sessionID)
 
 	// Add beta query parameter if not already present
 	q := req.URL.Query()
@@ -111,6 +175,7 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	// Execute the request
 	resp, err := t.RoundTripper.RoundTrip(req)
 	if err != nil {
+		logrus.WithError(err).Errorf("failed to round trip request: %v", err)
 		return nil, err
 	}
 
@@ -128,7 +193,7 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 }
 
 // applyClaudeCodeHeaders sets all Claude Code specific headers
-func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthToken bool) {
+func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthToken bool, model string, sessionID string) {
 	key := req.Header.Get("X-Api-Key")
 	if key == "" {
 		return
@@ -136,56 +201,77 @@ func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthTo
 
 	// Check if target is Anthropic's API
 	isAnthropicBase := req.URL != nil && strings.Contains(strings.ToLower(req.URL.Host), "api.anthropic.com")
-	// /models endpoint should always use x-api-key header
-	isModelsEndpoint := req.URL != nil && strings.HasSuffix(req.URL.Path, "/models")
 
-	if isAnthropicBase && !isOAuthToken {
-		// Use x-api-key header for API keys to Anthropic, or for /models endpoint
+	if !isAnthropicBase {
+		panic("Impossible to use claude client for server not anthropic")
+	}
+
+	if isOAuthToken {
 		req.Header.Del("X-Api-Key")
-		// may force lower, but ok now
-		req.Header.Set("X-Api-Key", key)
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
+
 	} else {
-		// Use Bearer for OAuth tokens (except /models endpoint) or non-Anthropic endpoints
 		req.Header.Del("X-Api-Key")
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
-	}
-
-	if isModelsEndpoint {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
-		// Use x-api-key header for /models endpoint
-		req.Header.Del("X-Api-Key")
-		// may force lower, but ok now
 		req.Header.Set("X-Api-Key", key)
 	}
 
-	// Set Claude Code specific headers
-	req.Header.Set("accept", acceptHeader)
+	// Clear and set Claude Code specific headers
+	// First, clear headers that may have been set by the SDK
+	for k := range req.Header {
+		if strings.HasPrefix(strings.ToLower(k), "x-stainless-") ||
+			strings.HasPrefix(strings.ToLower(k), "anthropic-") ||
+			k == "User-Agent" || k == "X-App" {
+			delete(req.Header, k)
+		}
+	}
 
 	// Build beta header with all required flags
 	baseBetas := anthropicBeta
 
-	// If user provides custom betas, merge them while ensuring oauth is included
+	// Add context-1m for models that support it (Sonnet/Opus, not Haiku)
+	//if model != "" && supportsContext1M(model) {
+	//	baseBetas = strings.TrimRight(baseBetas, ",") + "," + anthropicContext1m
+	//}
+
+	// If user provides custom betas, use them
 	if val := strings.TrimSpace(req.Header.Get("Anthropic-Beta")); val != "" {
 		baseBetas = val
-		if !strings.Contains(val, "oauth") {
-			baseBetas = fmt.Sprintf("%s,%s", val, anthropicOAuthBeta)
-		}
 	}
 
-	req.Header.Set("anthropic-beta", baseBetas)
-	req.Header.Set("anthropic-dangerous-direct-browser-access", anthropicDangerousDirectBrowserAccess)
-	req.Header.Set("anthropic-version", anthropicVersion)
-	req.Header.Set("user-agent", claudeCLIUserAgent)
-	req.Header.Set("x-app", claudeXApp)
-	req.Header.Set("x-stainless-helper-method", stainlessHelperMethod)
-	req.Header.Set("x-stainless-retry-count", stainlessRetryCount)
-	req.Header.Set("x-stainless-runtime-version", stainlessRuntimeVersion)
-	req.Header.Set("x-stainless-package-version", stainlessPackageVersion)
-	req.Header.Set("x-stainless-runtime", stainlessRuntime)
-	req.Header.Set("x-stainless-lang", stainlessLang)
-	req.Header.Set("x-stainless-arch", stainlessArch())
-	req.Header.Set("x-stainless-os", stainlessOS())
-	req.Header.Set("x-stainless-timeout", stainlessTimeout)
+	baseBetas = strings.TrimRight(baseBetas, ",")
+
+	// Ensure oauth is always present at the end
+	if !strings.Contains(baseBetas, "oauth") {
+		baseBetas = strings.TrimRight(baseBetas, ",")
+		baseBetas = fmt.Sprintf("%s,%s", baseBetas, anthropicOAuthBeta)
+	}
+
+	// Set all headers via map
+	headers := map[string]string{
+		"accept":         acceptHeader,
+		"anthropic-beta": baseBetas,
+		"anthropic-dangerous-direct-browser-access": anthropicDangerousDirectBrowserAccess,
+		"anthropic-version":                         anthropicVersion,
+		"user-agent":                                claudeCLIUserAgent,
+		"x-app":                                     claudeXApp,
+		"x-stainless-helper-method":                 stainlessHelperMethod,
+		"x-stainless-retry-count":                   stainlessRetryCount,
+		"x-stainless-runtime-version":               stainlessRuntimeVersion,
+		"x-stainless-package-version":               stainlessPackageVersion,
+		"x-stainless-runtime":                       stainlessRuntime,
+		"x-stainless-lang":                          stainlessLang,
+		"x-stainless-arch":                          stainlessArch(),
+		"x-stainless-os":                            stainlessOS(),
+		"x-stainless-timeout":                       stainlessTimeout,
+	}
+
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	if sessionID != "" {
+		req.Header.Set("X-Claude-Code-Session-Id", sessionID)
+	}
 }
 
 // isStreamingResponse checks if the response is a streaming SSE response

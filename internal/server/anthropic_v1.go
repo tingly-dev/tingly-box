@@ -11,7 +11,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
-	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -27,14 +26,12 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 
 	req.Model = anthropic.Model(actualModel)
 
+	// Inject session ID into request context so all downstream code can access it
+	sessionID := resolveSessionID(c, &req.MessageNewParams)
+	c.Request = c.Request.WithContext(typ.WithSessionID(c.Request.Context(), sessionID))
+
 	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
 	SetTrackingContext(c, rule, provider, actualModel, proxyModel, isStreaming)
-
-	// === Check if provider has built-in web_search ===
-	hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
-
-	// === Tool Interceptor: Check if enabled and should be used ===
-	shouldIntercept, shouldStripTools, _ := s.resolveToolInterceptor(provider, hasBuiltInWebSearch)
 
 	// Get scenario config for flags
 	scenarioConfig := s.config.GetScenarioConfig(scenarioType)
@@ -53,13 +50,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	c.Set("provider", provider.UUID)
 	c.Set("model", actualModel)
 
-	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
-	if shouldIntercept {
-		preparedReq, _ := s.toolInterceptor.PrepareAnthropicRequest(provider, &req.MessageNewParams)
-		req.MessageNewParams = *preparedReq
-	} else if shouldStripTools {
-		req.MessageNewParams.Tools = toolinterceptor.StripSearchFetchToolsAnthropic(req.MessageNewParams.Tools)
-	}
+	req.MessageNewParams = *s.injectMCPToolsIntoAnthropicV1Request(c.Request.Context(), &req.MessageNewParams)
 
 	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
 	if s.guardrailsEnabledForScenario(scenario) {
@@ -114,8 +105,8 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, pr
 	var err error
 	var cancel context.CancelFunc
 
-	// Use standard OpenAI Responses API
-	wrapper := s.clientPool.GetOpenAIClient(provider, responsesReq.Model)
+	// Use standard OpenAI Responses API (session ID already in c.Request.Context)
+	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
 	fc := NewForwardContext(nil, provider)
 
 	response, cancel, err = ForwardOpenAIResponses(fc, wrapper, responsesReq)
@@ -143,14 +134,16 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, pr
 
 	// Convert Responses API response back to Anthropic v1 format
 	anthropicResp := nonstream.ConvertResponsesToAnthropicV1Response(response, proxyModel)
-	if ShouldRoundtripResponse(c, "openai") {
-		roundtripped, err := RoundtripAnthropicResponseViaOpenAI(&anthropicResp, proxyModel, provider, actualModel)
-		if err != nil {
-			stream.SendInternalError(c, "Failed to roundtrip response: "+err.Error())
-			return
-		}
-		anthropicResp = *roundtripped
-	}
+
+	// TODO: require anthropic <-> anthropic beta
+	//if ShouldRoundtripResponse(c, "openai") {
+	//	roundtripped, err := RoundtripAnthropicBetaResponseViaOpenAI(&anthropicResp, proxyModel, provider, actualModel)
+	//	if err != nil {
+	//		stream.SendInternalError(c, "Failed to roundtrip response: "+err.Error())
+	//		return
+	//	}
+	//	anthropicResp = *roundtripped
+	//}
 
 	// Record response if scenario recording is enabled
 	if recorder != nil {
@@ -173,8 +166,8 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, proxy
 		streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
 	}
 
-	// For standard OpenAI providers, use the OpenAI SDK
-	wrapper := s.clientPool.GetOpenAIClient(provider, responsesReq.Model)
+	// For standard OpenAI providers, use the OpenAI SDK (session ID already in c.Request.Context)
+	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
 	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
 	if cancel != nil {
@@ -226,8 +219,8 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIAssembly(c *gin.Context, proxyM
 		streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
 	}
 
-	// For standard OpenAI providers, use the OpenAI SDK
-	wrapper := s.clientPool.GetOpenAIClient(provider, responsesReq.Model)
+	// For standard OpenAI providers, use the OpenAI SDK (session ID already in c.Request.Context)
+	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
 	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
 	if cancel != nil {

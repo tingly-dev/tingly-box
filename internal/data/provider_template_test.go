@@ -144,8 +144,8 @@ func TestTemplateManagerGetTemplate(t *testing.T) {
 	}
 }
 
-// TestTemplateManagerFetchFromGitHub tests GitHub template fetching
-func TestTemplateManagerFetchFromGitHub(t *testing.T) {
+// TestTemplateManagerFetchTemplates tests template fetching from various sources
+func TestTemplateManagerFetchTemplates(t *testing.T) {
 	tests := []struct {
 		name        string
 		githubURL   string
@@ -174,7 +174,7 @@ func TestTemplateManagerFetchFromGitHub(t *testing.T) {
 			// Initialize first to load embedded templates
 			_ = tm.Initialize(context.Background())
 
-			registry, err := tm.FetchFromGitHub(context.Background())
+			registry, err := tm.FetchTemplates(context.Background())
 			if tt.expectError {
 				if err == nil {
 					t.Error("expected error, got nil")

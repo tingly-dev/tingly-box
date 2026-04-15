@@ -6,6 +6,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/openai/openai-go/v3/shared"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 )
@@ -77,7 +78,7 @@ func (t *BaseTransform) convertToOpenAIChat(ctx *TransformContext, disableStream
 			disableStreamUsage,
 		)
 		ctx.Request = openaiReq
-		ctx.Extra["openaiConfig"] = config
+		ctx.Config.OpenAIConfig = config
 
 	case *anthropic.BetaMessageNewParams:
 		// Anthropic beta request
@@ -88,27 +89,24 @@ func (t *BaseTransform) convertToOpenAIChat(ctx *TransformContext, disableStream
 			disableStreamUsage,
 		)
 		ctx.Request = openaiReq
-		ctx.Extra["openaiConfig"] = config
+		ctx.Config.OpenAIConfig = config
 
 	case *openai.ChatCompletionNewParams:
-		// Already in OpenAI Chat format, no conversion needed
-		// Still create a default config for consistency
-		config := &protocol.OpenAIConfig{
-			HasThinking:     false,
-			ReasoningEffort: "none",
-		}
-		ctx.Extra["openaiConfig"] = config
+		// Already in OpenAI Chat format, no protocol conversion needed
+		// Build fresh config for vendor transforms to detect thinking/cursor settings
+		ctx.Config.OpenAIConfig = buildOpenAIConfigFromRequest(req)
+
+		ctx.Request = req
 
 	case *responses.ResponseNewParams:
 		// OpenAI Responses API request - convert to Chat format
-		chatReq := request.ConvertOpenAIResponsesToChat(*req, 0)
+		chatReq := request.ConvertOpenAIResponsesToChat(*req, ctx.Config.MaxTokens)
 		ctx.Request = chatReq
 		// Create a default config for consistency
-		config := &protocol.OpenAIConfig{
+		ctx.Config.OpenAIConfig = &protocol.OpenAIConfig{
 			HasThinking:     false,
 			ReasoningEffort: "none",
 		}
-		ctx.Extra["openaiConfig"] = config
 
 	default:
 		return fmt.Errorf("unsupported request type for OpenAI Chat conversion: %T", ctx.Request)
@@ -128,8 +126,7 @@ func (t *BaseTransform) convertToOpenAIResponses(ctx *TransformContext, disableS
 		// Anthropic v1 request
 		responsesReq := request.ConvertAnthropicV1ToResponsesRequest(req)
 		ctx.Request = &responsesReq
-		// Store minimal config for Responses API
-		ctx.Extra["responsesConfig"] = &protocol.OpenAIConfig{
+		ctx.Config.ResponsesConfig = &protocol.OpenAIConfig{
 			HasThinking:     false,
 			ReasoningEffort: "none",
 		}
@@ -138,8 +135,7 @@ func (t *BaseTransform) convertToOpenAIResponses(ctx *TransformContext, disableS
 		// Anthropic beta request
 		responsesReq := request.ConvertAnthropicBetaToResponsesRequest(req)
 		ctx.Request = &responsesReq
-		// Store minimal config for Responses API
-		ctx.Extra["responsesConfig"] = &protocol.OpenAIConfig{
+		ctx.Config.ResponsesConfig = &protocol.OpenAIConfig{
 			HasThinking:     false,
 			ReasoningEffort: "none",
 		}
@@ -152,11 +148,10 @@ func (t *BaseTransform) convertToOpenAIResponses(ctx *TransformContext, disableS
 	case *responses.ResponseNewParams:
 		// Already in Responses API format, no conversion needed
 		// Still create a default config for consistency
-		config := &protocol.OpenAIConfig{
+		ctx.Config.ResponsesConfig = &protocol.OpenAIConfig{
 			HasThinking:     false,
 			ReasoningEffort: "none",
 		}
-		ctx.Extra["responsesConfig"] = config
 
 	default:
 		return fmt.Errorf("unsupported request type for Responses API conversion: %T", ctx.Request)
@@ -189,12 +184,7 @@ func (t *BaseTransform) convertToAnthropicV1(ctx *TransformContext) error {
 
 	case *responses.ResponseNewParams:
 		// OpenAI Responses to Anthropic v1 conversion
-		// Convert Responses to Chat first, then to Anthropic
-		chatReq := request.ConvertOpenAIResponsesToChat(*req, 0)
-		ctx.Request = request.ConvertOpenAIToAnthropicRequest(
-			chatReq,
-			4096, // defaultMaxTokens
-		)
+		ctx.Request = request.ConvertOpenAIResponsesToAnthropicRequest(*req, ctx.Config.MaxTokens)
 		return nil
 
 	default:
@@ -205,7 +195,7 @@ func (t *BaseTransform) convertToAnthropicV1(ctx *TransformContext) error {
 // convertToAnthropicBeta converts the request to Anthropic beta format
 func (t *BaseTransform) convertToAnthropicBeta(ctx *TransformContext) error {
 	// Detect request type and convert accordingly
-	switch ctx.Request.(type) {
+	switch req := ctx.Request.(type) {
 	case *anthropic.BetaMessageNewParams:
 		// Already in Anthropic beta format, no conversion needed
 		// Consistency transform will handle normalization
@@ -218,13 +208,14 @@ func (t *BaseTransform) convertToAnthropicBeta(ctx *TransformContext) error {
 
 	case *openai.ChatCompletionNewParams:
 		// OpenAI Chat to Anthropic beta conversion
-		// This conversion is not yet implemented
-		return fmt.Errorf("OpenAI Chat to Anthropic beta conversion is not yet implemented")
+		ctx.Request = request.ConvertOpenAIToAnthropicRequest(req, 4096)
+		return nil
 
 	case *responses.ResponseNewParams:
 		// OpenAI Responses to Anthropic beta conversion
-		// This conversion is not yet implemented
-		return fmt.Errorf("OpenAI Responses to Anthropic beta conversion is not yet implemented")
+		anthropicReq := request.ConvertOpenAIResponsesToAnthropicBetaRequest(*req, ctx.Config.MaxTokens)
+		ctx.Request = anthropicReq
+		return nil
 
 	default:
 		return fmt.Errorf("unsupported request type for Anthropic beta conversion: %T", ctx.Request)
@@ -284,4 +275,49 @@ func (t *BaseTransform) convertToGoogle(ctx *TransformContext) error {
 	}
 
 	return nil
+}
+
+// buildOpenAIConfigFromRequest builds OpenAIConfig from an OpenAI Chat request.
+// This detects thinking configuration and other vendor-specific settings.
+func buildOpenAIConfigFromRequest(req *openai.ChatCompletionNewParams) *protocol.OpenAIConfig {
+	config := &protocol.OpenAIConfig{
+		HasThinking:     false,
+		ReasoningEffort: "",
+	}
+
+	// Check if request has thinking configuration in extra_fields
+	extraFields := req.ExtraFields()
+	if extraFields == nil {
+		return config
+	}
+
+	// Check for thinking field (used by Anthropic client → OpenAI Chat conversion)
+	if thinking, ok := extraFields["thinking"]; ok {
+		if thinkingMap, ok := thinking.(map[string]interface{}); ok {
+			config.HasThinking = true
+			// Extract reasoning effort if specified
+			// Valid values per OpenAI docs: "none", "minimal", "low", "medium", "high", "xhigh"
+			// See: https://platform.openai.com/docs/guides/reasoning
+			if effortRaw, ok := thinkingMap["effort"]; ok {
+				if effort, ok := effortRaw.(string); ok {
+					config.ReasoningEffort = shared.ReasoningEffort(effort)
+				} else {
+					// Non-string effort: default to low as safe fallback
+					config.ReasoningEffort = shared.ReasoningEffortLow
+				}
+			} else {
+				// No effort specified: default to low
+				config.ReasoningEffort = shared.ReasoningEffortLow
+			}
+		}
+	}
+
+	// Check for cursor_compat field
+	if cursorCompatRaw, ok := extraFields["cursor_compat"]; ok {
+		if enabled, ok := cursorCompatRaw.(bool); ok && enabled {
+			config.CursorCompat = true
+		}
+	}
+
+	return config
 }

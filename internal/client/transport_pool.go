@@ -1,18 +1,23 @@
 package client
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/proxy"
 
+	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/oauth"
+)
+
+// Constants for proxy URL values
+const (
+	ProxyURLNone = "none" // Special value to force direct connection (disable proxy)
 )
 
 // TransportConfig holds the configuration for HTTP transport connection pooling
@@ -22,6 +27,12 @@ type TransportConfig struct {
 	MaxIdleConnsPerHost *int  // nil = use Go default (2)
 	MaxConnsPerHost     *int  // nil = use Go default (0, no limit)
 	DisableKeepAlives   *bool // nil = use Go default (false)
+
+	// RespectEnvProxy controls whether providers without explicit proxy configuration
+	// should use environment/system proxy settings (HTTP_PROXY, HTTPS_PROXY, macOS system proxy, etc.)
+	// Default (nil): false - providers without proxy_url connect directly
+	// Set to true: providers without proxy_url will use system/environment proxy
+	RespectEnvProxy *bool // nil = use default (false)
 }
 
 // Go defaults for reference (not used directly, only for documentation)
@@ -32,8 +43,8 @@ const (
 
 // Constants for transport TTL and cleanup interval
 const (
-	DefaultTransportTTL             = 120 * time.Minute // Default time-to-live for cached transports
-	DefaultTransportCleanupInterval = 60 * time.Minute  // Default interval for cleanup task
+	DefaultTransportTTL             = 15 * time.Minute // Default time-to-live for cached transports (reduced from 120min for better session lifecycle management)
+	DefaultTransportCleanupInterval = 5 * time.Minute  // Default interval for cleanup task
 )
 
 // pooledTransport wraps a transport with its last access timestamp for TTL tracking
@@ -43,9 +54,13 @@ type pooledTransport struct {
 }
 
 // TransportPool manages shared HTTP transports for clients
-// Transports are keyed by: providerUUID + proxyURL
+// Transports are keyed by: providerUUID + sessionID (for OAuth providers)
 // This allows multiple clients to share the same connection pool
-// when they use the same provider+proxy combination.
+// when they use the same provider+session combination.
+// For OAuth providers, transports are session-scoped to prevent cross-session contamination.
+//
+// Note: ProxyURL is NOT part of the transport key. It's used to configure
+// how the transport is created, but doesn't create a separate pool.
 type TransportPool struct {
 	transports map[string]*pooledTransport
 	config     *TransportConfig // nil = use Go defaults
@@ -92,11 +107,12 @@ func SetTransportConfig(config *TransportConfig) {
 	}
 }
 
-// GetTransport returns or creates a shared HTTP transport for the given configuration
-// The transport key is based on: providerUUID + proxyURL
-// oauthType is used for logging only, not part of the key
-func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType) *http.Transport {
-	key := tp.generateTransportKey(providerUUID, proxyURL)
+// GetTransport returns or creates a shared HTTP transport for the given configuration.
+// The transport key is based on: providerUUID + sessionID (for OAuth providers).
+// proxyURL is used to configure the transport but is NOT part of the key.
+// sessionID is used to scope transports for OAuth providers that require per-session isolation.
+func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType, sessionID typ.SessionID) *http.Transport {
+	key := NewTransportKey(providerUUID, "", oauthType, sessionID).String()
 
 	// Try to get existing transport with read lock first
 	tp.mutex.RLock()
@@ -123,7 +139,8 @@ func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oaut
 	}
 
 	// Create new transport
-	logrus.Infof("Creating new transport for provider: %s, model: %s, proxy: %s, oauth: %s", providerUUID, model, proxyURL, oauthType)
+	logrus.Infof("Creating new transport for provider: %s, model: %s, proxy: %s, oauth: %s, session: %s",
+		providerUUID, model, proxyURL, oauthType, sessionID.Value)
 	transport := tp.createTransport(proxyURL)
 	tp.transports[key] = &pooledTransport{
 		transport:  transport,
@@ -133,26 +150,43 @@ func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oaut
 	return transport
 }
 
-// generateTransportKey creates a unique key for transport caching
-// The key is based on providerUUID + proxyURL to ensure:
-// - Same provider + same proxy = shared transport (connection reuse)
+// generateTransportKey creates a unique key for transport caching.
+// Kept for reference; production code uses typ.NewTransportKey directly.
+// The key is based on providerUUID + sessionID (for OAuth) to ensure:
+// - Same provider + same session = shared transport (connection reuse)
 // - Different providers = separate transports
-// - Same provider + different proxies = separate transports
-func (tp *TransportPool) generateTransportKey(providerUUID, proxyURL string) string {
-	// Build key string
-	keyStr := providerUUID + "|" + proxyURL
+// - OAuth providers + different sessions = separate transports
+//
+// Note: ProxyURL is NOT part of the key - it's a provider configuration.
+func (tp *TransportPool) generateTransportKey(providerUUID, proxyURL string, oauthType oauth.ProviderType, sessionID typ.SessionID) string {
+	return NewTransportKey(providerUUID, "", oauthType, sessionID).String()
+}
 
-	// Hash the key to create a fixed-length identifier
-	h := sha256.New()
-	h.Write([]byte(keyStr))
-	return hex.EncodeToString(h.Sum(nil))[:16]
+// newDirectTransport returns a transport with env proxy disabled (direct connection).
+func (tp *TransportPool) newDirectTransport() *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	return transport
+}
+
+// respectEnvProxy returns true if providers without explicit proxy should use env/system proxy.
+// Default is false — only use proxy when explicitly configured.
+func (tp *TransportPool) respectEnvProxy() bool {
+	if tp.config != nil && tp.config.RespectEnvProxy != nil {
+		return *tp.config.RespectEnvProxy
+	}
+	return false
 }
 
 // createTransport creates a new HTTP transport with proxy support
 func (tp *TransportPool) createTransport(proxyURL string) *http.Transport {
 	if proxyURL == "" {
-		// Return a copy of default transport to avoid mutation issues
+		// Clone default transport for connection pool settings, then clear proxy
+		// unless the user has explicitly opted into env proxy via RespectEnvProxy.
 		transport := http.DefaultTransport.(*http.Transport).Clone()
+		if !tp.respectEnvProxy() {
+			transport.Proxy = nil
+		}
 		tp.applyConfig(transport)
 		return transport
 	}
@@ -161,14 +195,15 @@ func (tp *TransportPool) createTransport(proxyURL string) *http.Transport {
 	parsedURL, err := url.Parse(proxyURL)
 	if err != nil {
 		logrus.Errorf("Failed to parse proxy URL %s: %v, using default transport", proxyURL, err)
-		return http.DefaultTransport.(*http.Transport).Clone()
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		if !tp.respectEnvProxy() {
+			transport.Proxy = nil
+		}
+		return transport
 	}
 
-	// Create transport with proxy
-	transport := &http.Transport{
-		// Use same defaults as http.DefaultTransport
-		Proxy: http.ProxyFromEnvironment,
-	}
+	// Create transport with explicit proxy — no env proxy fallback
+	transport := &http.Transport{}
 
 	switch parsedURL.Scheme {
 	case "http", "https":
@@ -176,18 +211,18 @@ func (tp *TransportPool) createTransport(proxyURL string) *http.Transport {
 	case "socks5":
 		dialer, err := proxy.SOCKS5("tcp", parsedURL.Host, nil, proxy.Direct)
 		if err != nil {
-			logrus.Errorf("Failed to create SOCKS5 proxy dialer: %v, using default transport", err)
-			return http.DefaultTransport.(*http.Transport).Clone()
+			logrus.Errorf("Failed to create SOCKS5 proxy dialer: %v, using direct transport", err)
+			return tp.newDirectTransport()
 		}
 		dialContext, ok := dialer.(proxy.ContextDialer)
 		if ok {
 			transport.DialContext = dialContext.DialContext
 		} else {
-			return http.DefaultTransport.(*http.Transport).Clone()
+			return tp.newDirectTransport()
 		}
 	default:
 		logrus.Errorf("Unsupported proxy scheme %s, supported schemes are http, https, socks5", parsedURL.Scheme)
-		return http.DefaultTransport.(*http.Transport).Clone()
+		return tp.newDirectTransport()
 	}
 
 	tp.applyConfig(transport)
@@ -237,6 +272,61 @@ func (tp *TransportPool) Clear() {
 	}
 	tp.transports = make(map[string]*pooledTransport)
 	logrus.Info("Transport pool cleared")
+}
+
+// InvalidateProvider removes all transports associated with a specific provider UUID.
+// This should be called when provider credentials are updated (e.g., OAuth token refresh).
+func (tp *TransportPool) InvalidateProvider(providerUUID string) {
+	if providerUUID == "" {
+		return
+	}
+
+	tp.mutex.Lock()
+	defer tp.mutex.Unlock()
+
+	uuidToken := `"` + providerUUID + `"`
+	count := 0
+
+	for key, pooled := range tp.transports {
+		if strings.Contains(key, uuidToken) {
+			pooled.transport.CloseIdleConnections()
+			delete(tp.transports, key)
+			count++
+		}
+	}
+
+	if count > 0 {
+		logrus.Infof("Invalidated %d transport(s) for provider UUID: %s", count, providerUUID)
+	}
+}
+
+// InvalidateSession removes all transports associated with a specific session for a provider.
+// This should be called when a session ends or its OAuth token is revoked.
+func (tp *TransportPool) InvalidateSession(providerUUID, sessionID string) {
+	if sessionID == "" {
+		return
+	}
+
+	tp.mutex.Lock()
+	defer tp.mutex.Unlock()
+
+	// Keys are JSON from TransportKey.String(); match both provider_uuid and session_id value fields.
+	uuidToken := `"` + providerUUID + `"`
+	sessionToken := `"` + sessionID + `"`
+	count := 0
+
+	for key, pooled := range tp.transports {
+		// Note: ProxyURL is no longer part of the key, so we don't need to match it
+		if strings.Contains(key, uuidToken) && strings.Contains(key, sessionToken) {
+			pooled.transport.CloseIdleConnections()
+			delete(tp.transports, key)
+			count++
+		}
+	}
+
+	if count > 0 {
+		logrus.Infof("Invalidated %d transport(s) for provider UUID: %s session: %s", count, providerUUID, sessionID)
+	}
 }
 
 // cleanupExpiredTransports removes transports that haven't been accessed within the TTL period

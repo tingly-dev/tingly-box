@@ -53,6 +53,16 @@ func (r *Router) EvaluateRequestWithIndex(ctx *RequestContext) ([]*loadbalance.S
 
 // evaluateRule evaluates if a context matches a single rule
 func (r *Router) evaluateRule(ctx *RequestContext, rule *SmartRouting) bool {
+	// Inject per-rule service data to avoid cross-rule contamination
+	origStats := ctx.ServiceStats
+	origCap := ctx.ServiceCapacity
+	ctx.ServiceStats = collectRuleStats(rule.Services)
+	ctx.ServiceCapacity = filterCapacityForRule(ctx.ServiceCapacity, rule.Services)
+	defer func() {
+		ctx.ServiceStats = origStats
+		ctx.ServiceCapacity = origCap
+	}()
+
 	// All operations must match (AND logic)
 	for _, op := range rule.Ops {
 		if !r.evaluateOp(ctx, &op) {
@@ -79,6 +89,10 @@ func (r *Router) evaluateOp(ctx *RequestContext, op *SmartOp) bool {
 		return r.evaluateToolUseOp(ctx, op)
 	case PositionToken:
 		return r.evaluateTokenOp(ctx, op)
+	case PositionServiceTTFT:
+		return r.evaluateServiceTTFTOp(ctx, op)
+	case PositionServiceCapacity:
+		return r.evaluateServiceCapacityOp(ctx, op)
 	default:
 		return false
 	}
@@ -387,4 +401,139 @@ func EstimateTokens(text string) int {
 // GetRules returns the router's rules
 func (r *Router) GetRules() []SmartRouting {
 	return r.rules
+}
+
+// evaluateServiceTTFTOp evaluates operations on service TTFT characteristics.
+// Operates on ctx.ServiceStats, which is pre-filtered per-rule by evaluateRule.
+// Returns true (pass) when there is no data (cold-start friendliness).
+func (r *Router) evaluateServiceTTFTOp(ctx *RequestContext, op *SmartOp) bool {
+	if len(ctx.ServiceStats) == 0 {
+		return true
+	}
+
+	threshold, err := op.Int()
+	if err != nil {
+		log.Printf("[smart_routing] invalid service_ttft value '%s': %v", op.Value, err)
+		return false
+	}
+
+	var values []float64
+	for _, s := range ctx.ServiceStats {
+		switch op.Operation {
+		case OpServiceTTFTAvgLe, OpServiceTTFTAvgGe:
+			if s.AvgTTFTMs > 0 {
+				values = append(values, s.AvgTTFTMs)
+			}
+		case OpServiceTTFTMaxLe, OpServiceTTFTMaxGe:
+			if s.P99TTFTMs > 0 {
+				values = append(values, s.P99TTFTMs)
+			}
+		}
+	}
+
+	if len(values) == 0 {
+		return true // no samples yet — do not block
+	}
+
+	thresholdF := float64(threshold)
+	switch op.Operation {
+	case OpServiceTTFTAvgLe:
+		return minFloat(values) <= thresholdF
+	case OpServiceTTFTAvgGe:
+		return avgFloat(values) >= thresholdF
+	case OpServiceTTFTMaxLe:
+		return minFloat(values) <= thresholdF
+	case OpServiceTTFTMaxGe:
+		return avgFloat(values) >= thresholdF
+	}
+	return false
+}
+
+// evaluateServiceCapacityOp evaluates seat-utilization operations.
+// Utilization = activeCount / capacity * 100 per service; averaged across services that have a capacity set.
+// Services with no ModelCapacity (capacity == 0) are treated as unlimited and skipped.
+// Returns true (pass) when no service has a capacity configured.
+func (r *Router) evaluateServiceCapacityOp(ctx *RequestContext, op *SmartOp) bool {
+	if len(ctx.ServiceCapacity) == 0 {
+		return true
+	}
+
+	threshold, err := op.Int()
+	if err != nil {
+		log.Printf("[smart_routing] invalid service_capacity value '%s': %v", op.Value, err)
+		return false
+	}
+
+	var utilValues []float64
+	for _, c := range ctx.ServiceCapacity {
+		if c.Capacity <= 0 {
+			continue // unlimited — skip
+		}
+		util := float64(c.ActiveCount) / float64(c.Capacity) * 100
+		utilValues = append(utilValues, util)
+	}
+
+	if len(utilValues) == 0 {
+		return true // no capacity-configured services — do not block
+	}
+
+	avg := avgFloat(utilValues)
+	thresholdF := float64(threshold)
+
+	switch op.Operation {
+	case OpServiceCapacityUtilLe:
+		return avg <= thresholdF
+	case OpServiceCapacityUtilGe:
+		return avg >= thresholdF
+	case OpServiceCapacityUtilLt:
+		return avg < thresholdF
+	case OpServiceCapacityUtilGt:
+		return avg > thresholdF
+	}
+	return false
+}
+
+// collectRuleStats returns a snapshot of ServiceStats for each service in the rule.
+func collectRuleStats(services []*loadbalance.Service) []loadbalance.ServiceStats {
+	result := make([]loadbalance.ServiceStats, 0, len(services))
+	for _, svc := range services {
+		result = append(result, svc.Stats.GetStats())
+	}
+	return result
+}
+
+// filterCapacityForRule filters all capacity info down to services belonging to this rule.
+func filterCapacityForRule(all []ServiceCapacityInfo, services []*loadbalance.Service) []ServiceCapacityInfo {
+	if len(all) == 0 {
+		return nil
+	}
+	ids := make(map[string]struct{}, len(services))
+	for _, svc := range services {
+		ids[svc.ServiceID()] = struct{}{}
+	}
+	var result []ServiceCapacityInfo
+	for _, c := range all {
+		if _, ok := ids[c.ServiceID]; ok {
+			result = append(result, c)
+		}
+	}
+	return result
+}
+
+func minFloat(vals []float64) float64 {
+	m := vals[0]
+	for _, v := range vals[1:] {
+		if v < m {
+			m = v
+		}
+	}
+	return m
+}
+
+func avgFloat(vals []float64) float64 {
+	var sum float64
+	for _, v := range vals {
+		sum += v
+	}
+	return sum / float64(len(vals))
 }

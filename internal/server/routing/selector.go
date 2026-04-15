@@ -27,6 +27,7 @@ type LoadBalancer interface {
 type AffinityStore interface {
 	Get(ruleUUID, sessionID string) (*AffinityEntry, bool)
 	Set(ruleUUID, sessionID string, entry *AffinityEntry)
+	CountByService(serviceID string) int // count active sessions locked to this service
 }
 
 // AffinityEntry represents a locked service for a session
@@ -57,6 +58,51 @@ type ServiceSelector struct {
 	pipelines map[pipelineMode][]SelectionStage
 }
 
+type healthFilterProvider interface {
+	HealthFilter() *typ.HealthFilter
+}
+
+type selectionState struct {
+	candidateServices []*loadbalance.Service
+}
+
+func newSelectionState(rule *typ.Rule) *selectionState {
+	if rule == nil {
+		return &selectionState{candidateServices: nil}
+	}
+
+	// Use a map to deduplicate services by service ID
+	serviceMap := make(map[string]*loadbalance.Service)
+
+	// Add default services
+	if rule.Services != nil {
+		for _, svc := range rule.Services {
+			if svc != nil {
+				serviceMap[svc.GetServiceID().String()] = svc
+			}
+		}
+	}
+
+	// Add smart_routing services (override defaults if same ID)
+	for _, sr := range rule.SmartRouting {
+		if sr.Services != nil {
+			for _, svc := range sr.Services {
+				if svc != nil {
+					serviceMap[svc.GetServiceID().String()] = svc
+				}
+			}
+		}
+	}
+
+	// Convert map back to slice
+	services := make([]*loadbalance.Service, 0, len(serviceMap))
+	for _, svc := range serviceMap {
+		services = append(services, svc)
+	}
+
+	return &selectionState{candidateServices: services}
+}
+
 // NewServiceSelector creates a new service selector
 func NewServiceSelector(
 	cfg ProviderResolver,
@@ -70,19 +116,25 @@ func NewServiceSelector(
 		pipelines:     make(map[pipelineMode][]SelectionStage),
 	}
 
+	var healthFilter *typ.HealthFilter
+	if p, ok := lb.(healthFilterProvider); ok {
+		healthFilter = p.HealthFilter()
+	}
+
 	// Pre-build all pipeline variants
 	s.pipelines[pipelineModeNoAffinity] = []SelectionStage{
-		NewSmartRoutingStage(lb),
+		NewSmartRoutingStage(lb, affinity),
 		NewLoadBalancerStage(lb),
 	}
 	s.pipelines[pipelineModeGlobalAffinity] = []SelectionStage{
 		NewAffinityStage(affinity, "global"),
-		NewSmartRoutingStage(lb),
+		NewSmartRoutingStage(lb, affinity),
 		NewLoadBalancerStage(lb),
 	}
 	s.pipelines[pipelineModeSmartAffinity] = []SelectionStage{
-		NewSmartRoutingStage(lb),
+		NewHealthStage(healthFilter),
 		NewAffinityStage(affinity, "smart_rule"),
+		NewSmartRoutingStage(lb, affinity),
 		NewLoadBalancerStage(lb),
 	}
 
@@ -93,6 +145,7 @@ func NewServiceSelector(
 // It picks a pre-built pipeline based on rule configuration and executes it.
 func (s *ServiceSelector) Select(ctx *SelectionContext) (*SelectionResult, error) {
 	pipeline := s.selectPipeline(ctx.Rule)
+	state := newSelectionState(ctx.Rule)
 
 	logrus.Debugf("[selector] executing pipeline with %d stages for rule %s",
 		len(pipeline), ctx.Rule.UUID)
@@ -102,11 +155,14 @@ func (s *ServiceSelector) Select(ctx *SelectionContext) (*SelectionResult, error
 		stageName := stage.Name()
 		logrus.Debugf("[selector] evaluating stage: %s", stageName)
 
-		result, handled := stage.Evaluate(ctx)
+		result, handled := stage.Evaluate(ctx, state)
 
 		// Track that this stage was evaluated
 		if result != nil {
 			result.AddEvaluatedStage(stageName)
+			if result.FilteredServices != nil {
+				state.candidateServices = result.FilteredServices
+			}
 		}
 
 		if handled {
@@ -154,30 +210,40 @@ func (s *ServiceSelector) Select(ctx *SelectionContext) (*SelectionResult, error
 
 // selectPipeline picks the appropriate pre-built pipeline based on rule configuration.
 func (s *ServiceSelector) selectPipeline(rule *typ.Rule) []SelectionStage {
+	logrus.Debugf("[selector] selectPipeline for rule %s: SmartAffinity=%v, SmartEnabled=%v, SmartRouting count=%d",
+		rule.RequestModel, rule.SmartAffinity, rule.SmartEnabled, len(rule.SmartRouting))
 	if !rule.SmartAffinity {
 		return s.pipelines[pipelineModeNoAffinity]
 	}
 
 	// Default to global affinity scope.
 	// TODO: Read from rule.AffinityScope when field is added.
-	return s.pipelines[pipelineModeGlobalAffinity]
+	return s.pipelines[pipelineModeSmartAffinity]
+}
+
+// getHealthFilter returns the health filter from the load balancer
+func (s *ServiceSelector) getHealthFilter() *typ.HealthFilter {
+	if p, ok := s.loadBalancer.(healthFilterProvider); ok {
+		return p.HealthFilter()
+	}
+	return nil
 }
 
 // postProcess handles post-selection logic like affinity locking.
 // Locks affinity whenever affinity is enabled and the source is not "affinity"
 // (i.e., don't re-lock an already-locked entry).
 func (s *ServiceSelector) postProcess(ctx *SelectionContext, result *SelectionResult) {
-	if result.Source == "affinity" || !ctx.Rule.SmartAffinity || ctx.SessionID == "" {
+	if result.Source == "affinity" || !ctx.Rule.SmartAffinity || ctx.SessionID.IsEmpty() {
 		return
 	}
 
-	s.affinityStore.Set(ctx.Rule.UUID, ctx.SessionID, &AffinityEntry{
+	s.affinityStore.Set(ctx.Rule.UUID, ctx.SessionID.String(), &AffinityEntry{
 		Service:   result.Service,
 		LockedAt:  time.Now(),
 		ExpiresAt: time.Now().Add(2 * time.Hour), // TODO: make configurable
 	})
 	logrus.Infof("[affinity] locked service %s -> %s for session %s",
-		result.Provider.Name, result.Service.Model, ctx.SessionID)
+		result.Provider.Name, result.Service.Model, ctx.SessionID.String())
 }
 
 // UpdateServiceIndex updates the current service index for round-robin.

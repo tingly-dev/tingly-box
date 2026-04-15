@@ -3,17 +3,19 @@ import { ContentCopy, Error as ErrorIcon, GitHub, AppRegistration as NPM, Refres
 import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, Paper, Stack, Typography } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
+import { SunlitBackground } from './components/SunlitBackground';
 import { AuthProvider } from './contexts/AuthContext';
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
 import { HealthProvider, useHealth } from './contexts/HealthContext';
+import { ThemeModeProvider, useThemeMode } from './contexts/ThemeContext';
 import { useVersion, VersionProvider } from './contexts/VersionContext';
 import { ProfileProvider } from './contexts/ProfileContext';
 import Layout from './layout/Layout';
-import theme from './theme';
+import createAppTheme from './theme';
 
 import Login from './pages/Login';
 import Guiding from './pages/Guiding';
@@ -54,6 +56,20 @@ import WeComPage from './pages/remote-control/WeComPage';
 import QQPage from './pages/remote-control/QQPage';
 import DiscordPage from './pages/remote-control/DiscordPage';
 import SlackPage from './pages/remote-control/SlackPage';
+import MCPCustom from './pages/mcp/MCPCustom';
+import MCPBuiltin from './pages/mcp/MCPBuiltin';
+import MCPLocalMode from './pages/mcp/MCPLocalMode';
+import MCPRegisteredServers from './pages/mcp/MCPRegisteredServers';
+import {
+    ZenClaudeCodePage,
+    ZenCodexPage,
+    ZenOpenCodePage,
+    ZenXcodePage,
+    ZenVSCodePage,
+    ZenOpenAIPage,
+    ZenAnthropicPage,
+    ZenAgentPage,
+} from './pages/zen';
 
 // Loading fallback component - kept for potential future use with async data
 
@@ -268,6 +284,7 @@ function AppContent() {
     return (
             <Routes>
                 <Route path="/login" element={<Login />} />
+                <Route path="/login/:token" element={<Login />} />
                 {/* Protected routes with Layout */}
                 <Route
                     element={
@@ -279,15 +296,25 @@ function AppContent() {
                     {/* Default redirect */}
                     <Route index element={<Navigate to="/dashboard/7d" replace />} />
                     {/* Function panel routes */}
-                    <Route path="/use-openai" element={<UseOpenAIPage />} />
-                    <Route path="/use-anthropic" element={<UseAnthropicPage />} />
-                    <Route path="/use-codex" element={<UseCodexPage />} />
-                    <Route path="/use-claude-code" element={<UseClaudeCodePage />} />
-                    <Route path="/use-claude-code/profile/:profileId" element={<ClaudeCodeProfilePage />} />
-                    <Route path="/use-agent" element={<UseAgentPage />} />
-                    <Route path="/use-opencode" element={<UseOpenCodePage />} />
-                    <Route path="/use-xcode" element={<UseXcodePage />} />
-                    <Route path="/use-vscode" element={<UseVSCodePage />} />
+                    <Route path="/agent/openai" element={<UseOpenAIPage />} />
+                    <Route path="/agent/anthropic" element={<UseAnthropicPage />} />
+                    <Route path="/agent/codex" element={<UseCodexPage />} />
+                    <Route path="/agent/claude_code" element={<UseClaudeCodePage />} />
+                    <Route path="/agent/claude_code/profile/:profileId" element={<ClaudeCodeProfilePage />} />
+                    <Route path="/agent/agent" element={<UseAgentPage />} />
+                    <Route path="/agent/opencode" element={<UseOpenCodePage />} />
+                    <Route path="/agent/xcode" element={<UseXcodePage />} />
+                    <Route path="/agent/vscode" element={<UseVSCodePage />} />
+                    {/* Legacy redirects */}
+                    <Route path="/use-openai" element={<Navigate to="/agent/openai" replace />} />
+                    <Route path="/use-anthropic" element={<Navigate to="/agent/anthropic" replace />} />
+                    <Route path="/use-codex" element={<Navigate to="/agent/codex" replace />} />
+                    <Route path="/use-claude-code" element={<Navigate to="/agent/claude_code" replace />} />
+                    <Route path="/use-claude-code/profile/:profileId" element={<Navigate to="/agent/claude_code" replace />} />
+                    <Route path="/use-agent" element={<Navigate to="/agent/agent" replace />} />
+                    <Route path="/use-opencode" element={<Navigate to="/agent/opencode" replace />} />
+                    <Route path="/use-xcode" element={<Navigate to="/agent/xcode" replace />} />
+                    <Route path="/use-vscode" element={<Navigate to="/agent/vscode" replace />} />
                     {/* Credential routes - new unified page */}
                     <Route path="/credentials" element={<CredentialPage />} />
                     <Route path="/credentials/:tab" element={<CredentialPage />} />
@@ -336,6 +363,25 @@ function AppContent() {
                     <Route path="/guardrails/rules" element={<GuardrailsRulesPage />} />
                     <Route path="/guardrails/credentials" element={<GuardrailsCredentialsPage />} />
                     <Route path="/guardrails/history" element={<GuardrailsHistoryPage />} />
+                    {/* MCP Settings */}
+                    <Route path="/mcp/sources" element={<MCPRegisteredServers />} />
+                    <Route path="/mcp/builtin" element={<Navigate to="/mcp/sources" replace />} />
+                    <Route path="/mcp/custom" element={<Navigate to="/mcp/sources" replace />} />
+                    <Route path="/mcp/local-mode" element={<MCPLocalMode />} />
+                    <Route path="/mcp/clients" element={<Navigate to="/mcp/local-mode" replace />} />
+                    <Route path="/mcp" element={<Navigate to="/mcp/sources" replace />} />
+                    {/* Zen Mode Routes - Use zen layout when in zen mode */}
+                    <Route path="/zen/claude_code" element={<ZenClaudeCodePage />} />
+                    <Route path="/zen/codex" element={<ZenCodexPage />} />
+                    <Route path="/zen/opencode" element={<ZenOpenCodePage />} />
+                    <Route path="/zen/xcode" element={<ZenXcodePage />} />
+                    <Route path="/zen/vscode" element={<ZenVSCodePage />} />
+                    <Route path="/zen/openai" element={<ZenOpenAIPage />} />
+                    <Route path="/zen/anthropic" element={<ZenAnthropicPage />} />
+                    <Route path="/zen/agent" element={<ZenAgentPage />} />
+                    <Route path="/zen" element={<Navigate to="/zen/claude_code" replace />} />
+                    {/* Legacy zen redirects */}
+                    <Route path="/zen/claude-code" element={<Navigate to="/zen/claude_code" replace />} />
                     {/* Catch-all redirect for unknown routes */}
                     <Route path="*" element={<Navigate to="/dashboard/7d" replace />} />
                 </Route>
@@ -343,10 +389,16 @@ function AppContent() {
     )
 }
 
-function App() {
+// Inner component that uses theme context
+function AppWithTheme() {
+    const { mode } = useThemeMode();
+    const theme = useMemo(() => createAppTheme(mode), [mode]);
+
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
+            {/* Sunlit background effect */}
+            {mode === 'sunlit' && <SunlitBackground />}
             <BrowserRouter>
                 <HealthProvider>
                     <VersionProvider>
@@ -362,6 +414,14 @@ function App() {
                 </HealthProvider>
             </BrowserRouter>
         </ThemeProvider>
+    );
+}
+
+function App() {
+    return (
+        <ThemeModeProvider>
+            <AppWithTheme />
+        </ThemeModeProvider>
     );
 }
 

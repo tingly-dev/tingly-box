@@ -1,0 +1,496 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  GREETING: Hello, World!
+  VERSION: ""
+  BUILD_DIR: build
+  DIST_DIR: build/dist
+  
+  APP_NAME: "model-box"
+  BIN_DIR: "bin"
+  VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
+  TINGLY_BOX_KEY: tingly-box-?
+  TINGLY_BOX_ENTERPRISE_KEY:
+
+tasks:
+  default:
+    cmds:
+      - echo "{{.GREETING}}"
+    silent: true
+  
+  request-o2a:
+    cmds:
+      - |
+        curl -X POST http://localhost:12580/tingly/openai/chat/completions \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+        		"messages": [{
+        			"role": "user",
+        			"content": "请帮我计算 3+5，并告诉我北京天气"
+        		}],
+        		"model": "tingly-anthropic",
+        		"stream": false,
+        		 "tools": [
+                  {
+                    "type": "function",
+                    "function": {
+                      "name": "add_numbers",
+                      "description": "Add two numbers",
+                      "parameters": {
+                        "type": "object",
+                        "properties": {
+                          "a": { "type": "number" },
+                          "b": { "type": "number" }
+                        },
+                        "required": ["a", "b"]
+                      }
+                    }
+                  }
+                ]
+        	}'
+  
+  
+  
+  request-a2o:
+    cmds:
+      - |
+        curl -X POST http://localhost:12580/tingly/anthropic/v1/messages \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+        		"messages": [{
+        			"role": "user",
+        			"content": "调用工具计算 3+5，并告诉我北京天气"
+        		}],
+        		"model": "tingly-openai",
+        		"stream": true,
+        		"tools": [{
+                  "name": "add_numbers",
+                  "description": "Add two numbers",
+                  "input_schema": {
+                      "type": "object",
+                      "properties": {
+                          "a": {"type": "number"},
+                          "b": {"type": "number"}
+                      },
+                      "required": ["a", "b"]
+                  }
+              }]
+        	}'
+  
+  anthropic-stream:
+    cmds:
+      - |
+        curl -X POST http://localhost:12580/tingly/openai/v1/messages \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+        		"messages": [{
+        			"role": "user",
+        			"content": "请帮我计算 3+5，并告诉我北京天气"
+        		}],
+        		"model": "tingly-qwen",
+        		"stream": true,
+        		"tools": [{
+                  "name": "add_numbers",
+                  "description": "Add two numbers",
+                  "input_schema": {
+                      "type": "object",
+                      "properties": {
+                          "a": {"type": "number"},
+                          "b": {"type": "number"}
+                      },
+                      "required": ["a", "b"]
+                  }
+              }]
+        	}'
+      - |
+        curl -X POST -k http://localhost:12580/tingly/claude_code/v1/messages \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "thinking": {
+              "type": "enabled",
+              "budget_tokens": 100
+          },
+          "temperature":0.2,
+          "model": "tingly/cc",
+          "messages": [{"role": "user", "content": "who are you!"}],
+          "max_tokens": 100,
+        "stream":true
+        }'
+      # - |
+      #   curl -X POST http://localhost:12580/tingly/openai/v1/responses \
+      #   -H "Content-Type: application/json" \
+      #   -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+      #   -d '{
+      #   		"input": [{
+      #   			"role": "user",
+      #   			"content": "请帮我计算 3+5，并告诉我北京天气"
+      #   		}],
+      #   		"model": "tingly-gpt",
+      #   		"stream": true,
+      #   		"tools": [{
+      #   			"type": "function",
+      #   			"name": "add_numbers",
+      #   			"description": "Add two numbers",
+      #   			"parameters": {
+      #   				"type": "object",
+      #   				"properties": {
+      #   					"a": {"type": "number"},
+      #   					"b": {"type": "number"}
+      #   				},
+      #   				"required": ["a", "b"]
+      #   			}
+      #   		}]
+      #   	}'
+      # - |
+      #   curl -X POST http://localhost:12580/tingly/openai/v1/responses \
+      #   -H "Content-Type: application/json" \
+      #   -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+      #   -d '{
+      #     "model": "tingly-gpt",
+      #     "input": [{"role": "user", "content": "Hello!"}],
+      #     "stream": true
+      #   }'
+  
+  anthropic:
+    cmds:
+      - |
+        curl -X POST http://localhost:12580/tingly/anthropic/v1/messages \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+        		"messages": [{
+        			"role": "user",
+        			"content": "请帮我计算 3+5，并告诉我北京天气"
+        		}],
+        		"model": "tingly-claude",
+        		"tools": [{
+                  "name": "add_numbers",
+                  "description": "Add two numbers",
+                  "input_schema": {
+                      "type": "object",
+                      "properties": {
+                          "a": {"type": "number"},
+                          "b": {"type": "number"}
+                      },
+                      "required": ["a", "b"]
+                  }
+              }]
+        	}'
+  
+  openai-responses-tool:
+    cmds:
+      - |
+        curl -X POST http://localhost:12580/tingly/openai/v1/responses \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+        		"input": [{
+        			"role": "user",
+        			"content": "请帮我计算 3+5，并告诉我北京天气"
+        		}],
+        		"model": "tingly-gpt",
+        		"stream": true,
+        		"tools": [{
+        			"type": "function",
+        			"name": "add_numbers",
+        			"description": "Add two numbers",
+        			"parameters": {
+        				"type": "object",
+        				"properties": {
+        					"a": {"type": "number"},
+        					"b": {"type": "number"}
+        				},
+        				"required": ["a", "b"]
+        			}
+        		}]
+        	}'
+  
+  openai-responses-simple:
+    cmds:
+      - |
+        curl -X POST http://localhost:12580/tingly/openai/v1/responses \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "model": "tingly-gpt",
+          "input": [{"role": "user", "content": "Hello!"}],
+          "stream": true
+        }'
+  
+  openai-responses:
+    cmds:
+      - |
+        curl -X POST http://localhost:12580/tingly/openai/v1/responses \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "model": "tingly-gpt",
+          "input": "Hello, world!"
+        }'
+  
+  openai-chat:
+    cmds:
+      - |
+        curl -X POST -k https://localhost:12580/tingly/openai/v1/chat/completions \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "model": "tingly-gpt",
+          "messages": [{"role": "user", "content": "Hello!"}],
+          "stream": true
+        }'
+  
+  chat2responses:
+    cmds:
+      - |
+        curl -X POST -k http://localhost:12580/tingly/openai/v1/chat/completions \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "model": "tingly-codex",
+          "messages": [{"role": "user", "content": "Hello!"}],
+          "stream": true
+        }'
+  
+  codex-responses:
+    cmds:
+      - |
+        curl -X POST -k http://localhost:12580/tingly/codex/v1/responses \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "model": "tingly-codex",
+          "input": [{"role": "user", "content": "Hello!"}],
+          "stream": true
+        }'
+  
+  openai-stream:
+    cmds:
+      # - |
+      #   curl http://localhost:12580/tingly/openai/v1/models \
+      #   -H "Content-Type: application/json" \
+      #   -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}"
+      - |
+        curl -X POST -k http://localhost:12580/tingly/openai/v1/chat/completions \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "model": "codex",
+          "messages": [{"role": "user", "content": "Hello!"}],
+          "stream": true
+        }'
+      # - |
+      #   curl -X POST -k http://localhost:12580/anthropic/v1/messages \
+      #   -H "Content-Type: application/json" \
+      #   -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+      #   -d '{
+      #     "model": "tingly",
+      #     "messages": [{"role": "user", "content": "Hello!"}],
+      #     "stream": true
+      #   }'
+  
+  smart-rule:
+    cmds:
+      - |
+        curl -X POST http://localhost:12580/tingly/anthropic/v1/chat/completions \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "model": "smart",
+          "messages": [
+            {"role":"system","content":"You are a professional language assistant."},
+            {"role": "user", "content": "who are you?"}
+          ]
+        }'
+  
+  anthropic-simple:
+    cmds:
+      - |
+        curl -X POST -k http://localhost:12580/tingly/anthropic/v1/messages \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "model": "codex",
+          "messages": [{"role": "user", "content": "who are you"}],
+          "stream": true,
+          "max_tokens": 10000
+        }'
+  
+  anthropic-thinking:
+    cmds:
+      - |
+        curl -X POST -k http://localhost:12580/tingly/anthropic/v1/messages?beta=true \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "thinking": {
+              "type": "enabled",
+              "budget_tokens": 100
+          },
+          "model": "tingly-claude",
+          "messages": [{"role": "user", "content": "do some thinking and say hi!"}],
+          "stream": true,
+          "max_tokens": 100
+        }'
+  
+  
+  tingly-qwen:
+    cmds:
+      - |
+        curl -X POST -k http://localhost:12580/tingly/openai/v1/chat/completions \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "model": "tingly-gpt",
+          "messages": [{"role": "user", "content": "who are you!"}]
+        }'
+  
+  tingly-gpt:
+    cmds:
+      - |
+        curl -v -X POST -k http://localhost:12580/tingly/openai/v1/chat/completions \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "model": "tingly-codex",
+          "messages": [{"role": "user", "content": "Hello!"}],
+          "stream": true
+        }'
+  
+  anthropic-count-tokens:
+    cmds:
+      - |
+        curl "http://localhost:12580/tingly/anthropic/v1/messages/count_tokens?beta=true" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "model": "tingly-claude",
+          "messages": [
+            {"role": "user", "content": "Hello, how are you today? Can you help me understand how token counting works in language models?"}
+          ]
+        }'
+  
+  xcode-models:
+    cmds:
+      - |
+        curl "http://localhost:12580/tingly/xcode/v1/models" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}"
+  
+  xcode:
+    cmds:
+      - |
+        curl http://localhost:12580/tingly/xcode/v1/models \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}"
+      - |
+        curl -X POST -k http://localhost:12580/tingly/xcode/v1/chat/completions \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "model": "tingly",
+          "messages": [{"role": "user", "content": "who are you! @@xcode"}],
+          "stream": true
+        }'
+  
+  
+  vscode:
+    cmds:
+      - |
+        curl -X POST "http://localhost:12580/tingly/vscode/chat/completions" \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+          -d '{
+        		"messages": [{
+        			"role": "user",
+        			"content": "请帮我计算 3+5，并告诉我北京天气"
+        		}],
+        		"model": "tingly",
+        		"stream": true,
+                  "tools": [
+                    {
+                      "type": "function",
+                      "function": {
+                        "name": "add_numbers",
+                        "description": "Add two numbers",
+                        "parameters": {
+                          "type": "object",
+                          "properties": {
+                            "a": { "type": "number" },
+                            "b": { "type": "number" }
+                          },
+                          "required": ["a", "b"]
+                        }
+                      }
+                    }
+                  ]
+        	}'
+  
+  
+  
+  claude:
+    cmds:
+      - |
+        curl -X POST -k https://api.tingly.dev/tingly/anthropic/v1/messages \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "model": "tingly-sonnet",
+          "system": [
+              {
+                "text": "You are Claude Code, Anthropic''s official CLI for Claude.",
+                "type": "text"
+              }
+          ],
+          "messages": [{"role": "user", "content": "who are you"}],
+          "stream": true,
+          "max_tokens": 10000
+        }'
+  
+  openai-models:
+    cmds:
+      - |
+        curl -X GET -k https://api.tingly.dev/tingly/openai/v1/models \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}"
+  
+  enterprise-chat:
+    cmds:
+      - |
+        curl -X POST http://localhost:23333/tbe/openai/chat/completions \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_ENTERPRISE_KEY}}" \
+        -d '{
+        		"messages": [{
+        			"role": "user",
+        			"content": "请帮我计算 3+5，并告诉我北京天气"
+        		}],
+        		"model": "deepseek",
+        		"stream": true,
+                  "tools": [
+                    {
+                      "type": "function",
+                      "function": {
+                        "name": "add_numbers",
+                        "description": "Add two numbers",
+                        "parameters": {
+                          "type": "object",
+                          "properties": {
+                            "a": { "type": "number" },
+                            "b": { "type": "number" }
+                          },
+                          "required": ["a", "b"]
+                        }
+                      }
+                    }
+                  ]
+        	}'
+        
+        
+    

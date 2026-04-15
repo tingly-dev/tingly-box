@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -464,6 +465,15 @@ func (s *Server) UpdateProviderModelsByUUID(c *gin.Context) {
 		Models: models,
 	}
 
+	// Attach quota information if quota manager is available
+	if s.quotaManager != nil {
+		var ctx context.Context = c.Request.Context()
+		quotaData, err := s.quotaManager.GetQuota(ctx, uid)
+		if err == nil && quotaData != nil {
+			providerModels.Quota = quotaData
+		}
+	}
+
 	response := ProviderModelsResponse{
 		Success: true,
 		Message: fmt.Sprintf("Successfully fetched %d models for provider %s", len(models), uid),
@@ -488,6 +498,17 @@ func (s *Server) GetProviderModelsByUUID(c *gin.Context) {
 	models := providerModelManager.GetModels(uid)
 	providerModels := ProviderModelInfo{
 		Models: models,
+	}
+
+	// Attach quota information if quota manager is available
+	// Use GetQuotaNoCache to always get fresh data from DB (bypasses cache/expiration logic)
+	if s.quotaManager != nil {
+		var ctx context.Context = c.Request.Context()
+		quotaData, err := s.quotaManager.GetQuotaNoCache(ctx, uid)
+		if err == nil && quotaData != nil {
+			providerModels.Quota = quotaData
+		}
+		// Silently ignore quota errors - models should work without quota
 	}
 
 	response := ProviderModelsResponse{

@@ -14,9 +14,11 @@ import {
     Stack,
     TextField,
     Typography,
+    Divider,
 } from '@mui/material';
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Provider } from '@/types/provider';
+import type { ProviderQuota, UsageWindow } from '@/types/quota';
 import { getModelTypeInfo } from '@/utils/modelUtils';
 import { useCustomModels } from '@/hooks/useCustomModels';
 import { useProviderModels } from '@/hooks/useProviderModels';
@@ -28,6 +30,54 @@ import CustomModelCard from './CustomModelCard';
 import ModelCard from './ModelCard';
 import RecentModelsSection from './RecentModelsSection';
 import NewModelsSection from './NewModelsSection';
+import { QuotaBar } from './QuotaBar';
+
+async function fetchUIAPI(url: string, options: RequestInit = {}): Promise<any> {
+    const basePath = window.location.origin;
+    const fullUrl = `${basePath}/api/v1${url}`;
+
+    const token = localStorage.getItem('user_auth_token');
+
+    const response = await fetch(fullUrl, {
+        ...options,
+        headers: {
+            'Content-Type': 'application/json',
+            ...(token && { Authorization: `Bearer ${token}` }),
+            ...options.headers,
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+    }
+
+    return response.json();
+}
+
+// Convert ProviderModelData.quota to ProviderQuota type
+function convertToProviderQuota(
+    quota: { primary?: any; cost?: any } | undefined,
+    provider: Provider,
+    lastUpdated?: string
+): ProviderQuota | undefined {
+    if (!quota) return undefined;
+
+    return {
+        provider_uuid: provider.uuid,
+        provider_name: provider.name,
+        provider_type: provider.api_style,
+        fetched_at: lastUpdated || new Date().toISOString(),
+        expires_at: '',
+        primary: quota.primary as UsageWindow | undefined,
+        secondary: undefined,
+        tertiary: undefined,
+        cost: quota.cost,
+        account: undefined,
+        breakdowns: undefined,
+        last_error: undefined,
+        last_error_at: undefined,
+    };
+}
 
 export interface ModelsPanelProps {
     provider: Provider;
@@ -56,9 +106,26 @@ export function ModelsPanel({
 }: ModelsPanelProps) {
     const { customModels } = useCustomModels();
     const { providerModels, refreshingProviders, refreshModels, fetchModels } = useProviderModels();
-    const { isModelProbing, refreshTrigger } = useModelSelectContext();
+    const { refreshTrigger } = useModelSelectContext();
     const { recentModels } = useRecentModels();
     const { newModels, clearNewModels } = useNewModels();
+
+    // Quota refresh state
+    const [isRefreshingQuota, setIsRefreshingQuota] = useState(false);
+
+    // Get quota data for this provider
+    const providerQuota = useMemo(() => {
+        return convertToProviderQuota(
+            providerModels?.[provider.uuid]?.quota,
+            provider,
+            providerModels?.[provider.uuid]?.last_updated
+        );
+    }, [providerModels, provider.uuid, provider.name, provider.api_style]);
+
+    // Prepare quota prop for ModelCard
+    const quotaProp = useMemo(() => {
+        return providerQuota;  // Pass full quota object, QuotaBar will handle breakdowns
+    }, [providerQuota]);
 
     // Re-fetch provider models when refresh trigger changes (e.g., after custom model deletion)
     useEffect(() => {
@@ -152,9 +219,27 @@ export function ModelsPanel({
         }));
     }, [provider.uuid, providerModels]);
 
+    // Refresh quota for this provider
+    const refreshQuota = useCallback(async (providerUuid: string) => {
+        setIsRefreshingQuota(true);
+        try {
+            await fetchUIAPI(`/provider-quota/${providerUuid}/refresh`, {
+                method: 'POST',
+            });
+            // Refresh provider models to get updated quota
+            await fetchModels(providerUuid);
+        } catch (error) {
+            console.error('Failed to refresh quota:', error);
+        } finally {
+            setIsRefreshingQuota(false);
+        }
+    }, [fetchModels]);
+
     return (
-        <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
-            <Stack spacing={2}>
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {/* Scrollable content area */}
+            <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
+                <Stack spacing={2}>
                 {/* Controls */}
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                     <Stack direction="row" alignItems="center" spacing={1}>
@@ -257,7 +342,6 @@ export function ModelsPanel({
                                     isSelected={isProviderSelected && selectedModel === starModel}
                                     onClick={() => onModelSelect(provider, starModel)}
                                     variant="starred"
-                                    loading={provider.auth_type === 'oauth' && isModelProbing(`${provider.uuid}-${starModel}`)}
                                 />
                             ))}
                         </Box>
@@ -290,7 +374,6 @@ export function ModelsPanel({
                                         onDelete={() => onCustomModelDelete(provider, model)}
                                         onSelect={() => onModelSelect(provider, model)}
                                         variant={variant}
-                                        loading={provider.auth_type === 'oauth' && isModelProbing(`${provider.uuid}-${model}`)}
                                     />
                                 );
                             } else {
@@ -301,7 +384,6 @@ export function ModelsPanel({
                                         isSelected={isModelSelected}
                                         onClick={() => onModelSelect(provider, model)}
                                         variant="standard"
-                                        loading={provider.auth_type === 'oauth' && isModelProbing(`${provider.uuid}-${model}`)}
                                     />
                                 );
                             }
@@ -343,6 +425,73 @@ export function ModelsPanel({
                     </Box>
                 )}
             </Stack>
+            </Box>
+
+            {/* Provider Quota Bars - fixed at the bottom */}
+            {quotaProp && quotaProp.primary && (
+                <Box sx={{ p: 2, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+                            Provider Quota
+                        </Typography>
+                        <IconButton
+                            size="small"
+                            onClick={() => refreshQuota(provider.uuid)}
+                            disabled={isRefreshingQuota}
+                            sx={{
+                                p: 0.5,
+                                color: 'text.primary',
+                                '&:hover': {
+                                    bgcolor: 'action.hover',
+                                },
+                            }}
+                            title="Refresh quota"
+                        >
+                            <RefreshIcon
+                                sx={{
+                                    fontSize: 16,
+                                    ...(isRefreshingQuota && {
+                                        '@keyframes spin': {
+                                            '0%': { transform: 'rotate(0deg)' },
+                                            '100%': { transform: 'rotate(360deg)' },
+                                        },
+                                        animation: 'spin 1s linear infinite',
+                                    }),
+                                }}
+                            />
+                        </IconButton>
+                    </Stack>
+                    <Stack spacing={1.5}>
+                        {/* Primary quota */}
+                        <Box>
+                            <Typography variant="caption" sx={{ mb: 0.5, display: 'block', color: '#64748b' }}>
+                                {quotaProp.primary.label}
+                            </Typography>
+                            <QuotaBar quota={quotaProp} windowIndex={0} />
+                        </Box>
+
+                        {/* Secondary quota */}
+                        {quotaProp.secondary && (
+                            <Box>
+                                <Typography variant="caption" sx={{ mb: 0.5, display: 'block', color: '#64748b' }}>
+                                    {quotaProp.secondary.label}
+                                </Typography>
+                                <QuotaBar quota={quotaProp} windowIndex={1} />
+                            </Box>
+                        )}
+
+                        {/* Tertiary quota */}
+                        {quotaProp.tertiary && (
+                            <Box>
+                                <Typography variant="caption" sx={{ mb: 0.5, display: 'block', color: '#64748b' }}>
+                                    {quotaProp.tertiary.label}
+                                </Typography>
+                                <QuotaBar quota={quotaProp} windowIndex={2} />
+                            </Box>
+                        )}
+                    </Stack>
+                </Box>
+            )}
         </Box>
     );
 }

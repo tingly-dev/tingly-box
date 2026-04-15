@@ -21,7 +21,7 @@ func ShouldRoundtripResponse(c *gin.Context, target string) bool {
 
 func RoundtripOpenAIResponseViaAnthropic(openaiResp *openai.ChatCompletion, responseModel string, provider *typ.Provider, actualModel string) (map[string]interface{}, error) {
 	anthropicResp := nonstream.ConvertOpenAIToAnthropicResponse(openaiResp, responseModel)
-	return ConvertAnthropicToOpenAIResponseWithProvider(&anthropicResp, responseModel, provider, actualModel), nil
+	return ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel), nil
 }
 
 func RoundtripOpenAIMapViaAnthropic(openaiResp map[string]interface{}, responseModel string, provider *typ.Provider, actualModel string) (map[string]interface{}, error) {
@@ -36,7 +36,7 @@ func RoundtripOpenAIMapViaAnthropic(openaiResp map[string]interface{}, responseM
 	return RoundtripOpenAIResponseViaAnthropic(&parsed, responseModel, provider, actualModel)
 }
 
-func RoundtripAnthropicResponseViaOpenAI(anthropicResp *anthropic.Message, responseModel string, provider *typ.Provider, actualModel string) (*anthropic.Message, error) {
+func RoundtripAnthropicBetaResponseViaOpenAI(anthropicResp *anthropic.BetaMessage, responseModel string, provider *typ.Provider, actualModel string) (*anthropic.BetaMessage, error) {
 	openaiResp := ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
 	raw, err := json.Marshal(openaiResp)
 	if err != nil {
@@ -47,17 +47,12 @@ func RoundtripAnthropicResponseViaOpenAI(anthropicResp *anthropic.Message, respo
 		return nil, err
 	}
 	roundtrip := nonstream.ConvertOpenAIToAnthropicResponse(&parsed, responseModel)
-	return &roundtrip, nil
+	return roundtrip, nil
 }
 
 // ConvertAnthropicToOpenAIResponseWithProvider converts an Anthropic response to OpenAI format
 // and applies provider-specific transformations to the response
-func ConvertAnthropicToOpenAIResponseWithProvider(
-	anthropicResp *anthropic.Message,
-	responseModel string,
-	provider *typ.Provider,
-	model string,
-) map[string]interface{} {
+func ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp *anthropic.BetaMessage, responseModel string, provider *typ.Provider, model string) map[string]interface{} {
 	// Base conversion
 	openaiResp := nonstream.ConvertAnthropicToOpenAIResponse(anthropicResp, responseModel)
 

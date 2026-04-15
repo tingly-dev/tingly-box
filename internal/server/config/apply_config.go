@@ -216,6 +216,166 @@ func InstallStatusLineScript() (scriptPath string, created bool, err error) {
 	return scriptPath, !fileExists, nil
 }
 
+// InstallNotifyScript installs the claude-notify.sh script to ~/.claude/
+// Returns the path to the installed script and whether it was newly created
+func InstallNotifyScript() (scriptPath string, created bool, err error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", false, fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	scriptPath = filepath.Join(homeDir, ".claude", "tingly-notify.sh")
+
+	// Read script from embedded assets
+	content, err := internal.ScriptAssets.ReadFile("script/claude-notify.sh")
+	if err != nil {
+		return "", false, fmt.Errorf("failed to read notify script from assets: %w", err)
+	}
+
+	// Ensure directory exists
+	if err := ensureDir(scriptPath); err != nil {
+		return "", false, fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Check if file exists
+	_, err = os.Stat(scriptPath)
+	fileExists := err == nil
+
+	// Write the script
+	if err := os.WriteFile(scriptPath, content, 0755); err != nil {
+		return "", false, fmt.Errorf("failed to write script: %w", err)
+	}
+
+	return scriptPath, !fileExists, nil
+}
+
+// NotifyHookEntries defines the Claude Code hooks to install for notifications.
+// This can be passed to ApplyNotifyHooks or used directly in settings.json.
+func NotifyHookEntries() map[string]interface{} {
+	scriptCmd := "~/.claude/tingly-notify.sh"
+	return map[string]interface{}{
+		"Stop": []map[string]interface{}{
+			{"matcher": "", "hooks": []map[string]interface{}{
+				{"type": "command", "command": scriptCmd},
+			}},
+		},
+		"Notification": []map[string]interface{}{
+			{"matcher": "permission", "hooks": []map[string]interface{}{
+				{"type": "command", "command": scriptCmd},
+			}},
+		},
+		"PreToolUse": []map[string]interface{}{
+			{"matcher": "AskUserQuestion", "hooks": []map[string]interface{}{
+				{"type": "command", "command": scriptCmd},
+			}},
+		},
+	}
+}
+
+// ApplyNotifyHooks installs the notify script and merges notification hooks into settings.json.
+// This is independent of the agent apply flow — it can be called standalone.
+// Existing hooks with different matchers are preserved.
+func ApplyNotifyHooks() (*ApplyResult, error) {
+	_, _, err := InstallNotifyScript()
+	if err != nil {
+		return nil, fmt.Errorf("failed to install notify script: %w", err)
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get home directory: %w", err)
+	}
+	targetPath := filepath.Join(homeDir, ".claude", "settings.json")
+
+	result := &ApplyResult{}
+
+	// Read existing or create new
+	var existingConfig map[string]interface{}
+	data, err := os.ReadFile(targetPath)
+	if err != nil {
+		existingConfig = make(map[string]interface{})
+		result.Created = true
+	} else {
+		if err := json.Unmarshal(data, &existingConfig); err != nil {
+			return nil, fmt.Errorf("failed to parse settings.json: %w", err)
+		}
+		backupPath, err := backupFile(targetPath)
+		if err != nil {
+			return nil, err
+		}
+		result.BackupPath = backupPath
+		result.Updated = true
+	}
+
+	// Merge hooks: append tingly-box entries, skip if same event+matcher+command already exists
+	newHooks := NotifyHookEntries()
+	existingHooks, ok := existingConfig["hooks"].(map[string]interface{})
+	if !ok {
+		existingHooks = make(map[string]interface{})
+	}
+	for event, newEntries := range newHooks {
+		// Preserve existing entries for this event
+		var merged []interface{}
+		if cur, ok := existingHooks[event]; ok {
+			if arr, ok := cur.([]interface{}); ok {
+				merged = arr
+			}
+		}
+		// Append new entries that don't already exist (matched by event+matcher+command)
+		for _, ne := range newEntries.([]map[string]interface{}) {
+			if hasHookEntry(merged, ne) {
+				continue // already configured, skip
+			}
+			merged = append(merged, ne)
+		}
+		existingHooks[event] = merged
+	}
+	existingConfig["hooks"] = existingHooks
+
+	// Write
+	output, err := json.MarshalIndent(existingConfig, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+	if err := os.WriteFile(targetPath, output, 0644); err != nil {
+		return nil, fmt.Errorf("failed to write settings.json: %w", err)
+	}
+
+	result.Success = true
+	if result.Created {
+		result.Message = "Created " + targetPath
+	} else {
+		result.Message = "Updated " + targetPath
+	}
+	return result, nil
+}
+
+// hasHookEntry checks if an entry with the same matcher and command already exists in entries.
+func hasHookEntry(entries []interface{}, needle map[string]interface{}) bool {
+	needleMatcher, _ := needle["matcher"].(string)
+	for _, e := range entries {
+		entry, ok := e.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		matcher, _ := entry["matcher"].(string)
+		if matcher != needleMatcher {
+			continue
+		}
+		// Check if any hook in this entry has the same command
+		if hooks, ok := entry["hooks"].([]interface{}); ok {
+			for _, h := range hooks {
+				if hMap, ok := h.(map[string]interface{}); ok {
+					if cmd, _ := hMap["command"].(string); cmd == needle["command"] {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
 // ApplyClaudeOnboarding applies Claude onboarding configuration
 // It merges top-level keys, preserving existing keys not in payload
 func ApplyClaudeOnboarding(payload map[string]interface{}) (*ApplyResult, error) {

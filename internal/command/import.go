@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	dataimportpkg "github.com/tingly-dev/tingly-box/internal/dataimport"
+	dataimportpkg "github.com/tingly-dev/tingly-box/internal/dataio"
 )
 
 // ImportCommand represents the import rule command

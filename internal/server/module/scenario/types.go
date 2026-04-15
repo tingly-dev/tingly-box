@@ -20,7 +20,14 @@ type ScenarioUpdateRequest struct {
 
 // ProfileCreateRequest represents the request to create or rename a profile
 type ProfileCreateRequest struct {
-	Name string `json:"name" binding:"required"`
+	Name    string `json:"name" binding:"required"`
+	Unified bool   `json:"unified"` // Optional, defaults to false (separate mode)
+}
+
+// ProfileUpdateRequest represents the request to update a profile
+type ProfileUpdateRequest struct {
+	Name    string `json:"name"`
+	Unified *bool  `json:"unified"` // Pointer to distinguish zero from unset; nil = no change
 }
 
 // ScenariosResponse represents the response for getting all scenarios

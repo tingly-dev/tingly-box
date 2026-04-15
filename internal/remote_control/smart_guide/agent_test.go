@@ -146,21 +146,26 @@ func TestTinglyBoxAgent_ReplyWithContext(t *testing.T) {
 		ChatID:      "test-chat",
 		ProjectPath: "/tmp/test-project",
 	}
+
+	// Set working directory before calling ReplyWithContext (as done in agent_smart_guide.go)
+	executor.SetWorkingDirectory(toolCtx.ProjectPath)
+
 	response, err := testAgent.ReplyWithContext(context.Background(), "test message", toolCtx)
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
-	assert.Equal(t, "/tmp/test-project", executor.GetWorkingDirectory()) // Verify working directory updated
+	assert.Equal(t, "/tmp/test-project", executor.GetWorkingDirectory()) // Verify working directory is set
 
 	// Test without ProjectPath in ToolContext
 	executor.SetWorkingDirectory("") // Reset
 	toolCtx = &ToolContext{
 		ChatID: "test-chat",
 	}
+	// Don't set working directory - it should remain empty or default
 	response, err = testAgent.ReplyWithContext(context.Background(), "test message", toolCtx)
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
-	// Working directory should remain unchanged from default (or whatever os.Getwd() returns)
-	assert.NotEqual(t, "/tmp/test-project", executor.GetWorkingDirectory())
+	// Working directory should be empty since not set
+	assert.Equal(t, "", executor.GetWorkingDirectory())
 }
 
 func TestTinglyBoxAgent_GetGreeting(t *testing.T) {

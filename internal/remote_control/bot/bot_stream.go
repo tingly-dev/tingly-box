@@ -115,9 +115,9 @@ func (f *streamingMessageHandler) OnComplete(result *agentboot.CompletionResult)
 	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
 	// Prepare completion message based on verbose mode
-	completionText := IconDone + " " + MsgTaskDone + ". \n" + MsgContinueOrHelp + BuildFooter(f.meta.AgentType, f.meta.ProjectPath)
+	completionText := IconDone + " " + MsgTaskDone + ". " + MsgContinueOrHelp + BuildFooter(f.meta.AgentType, f.meta.ProjectPath)
 	if !f.verbose {
-		completionText = IconDone + " " + MsgTaskDone + ". (Quiet mode: /verbose to show details)\n" + MsgContinueOrHelp + BuildFooter(f.meta.AgentType, f.meta.ProjectPath)
+		completionText = IconDone + " " + MsgTaskDone + ". (Quiet mode: /verbose to show details) " + MsgContinueOrHelp + BuildFooter(f.meta.AgentType, f.meta.ProjectPath)
 	}
 
 	_, err := f.bot.SendMessage(context.Background(), f.chatID, &imbot.SendMessageOptions{
@@ -216,11 +216,22 @@ func (h *streamingMessageHandler) handleClaudeMessage(claudeMsg claude.Message) 
 	logrus.Infof("[bot] Raw: %s", d)
 	logrus.Infof("[bot] Formatted: %s", formatted)
 
-	if strings.TrimSpace(formatted) != "" {
-		h.sendMessage(formatted)
-	} else {
+	if strings.TrimSpace(formatted) == "" {
 		logrus.WithField("msgType", claudeMsg.GetType()).Debug("Skipping empty formatted message")
+		return nil
 	}
+
+	// In non-verbose mode, only show the final result (assistant turn end), not tool use / intermediate
+	if !h.verbose {
+		msgType := claudeMsg.GetType()
+		// Only forward "result" type messages in quiet mode; skip tool use, system etc.
+		if msgType != "result" && msgType != "assistant" {
+			logrus.WithField("msgType", msgType).Debug("Quiet mode: suppressing non-result message")
+			return nil
+		}
+	}
+
+	h.sendMessage(formatted)
 	return nil
 }
 

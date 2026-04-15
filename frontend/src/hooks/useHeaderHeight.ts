@@ -1,4 +1,5 @@
-import { useEffect, useState, RefObject } from 'react';
+import { useEffect, useState } from 'react';
+import type { RefObject } from 'react';
 
 /**
  * Custom hook to measure and track the height of a header element.

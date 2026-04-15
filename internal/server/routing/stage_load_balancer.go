@@ -23,8 +23,13 @@ func (s *LoadBalancerStage) Name() string {
 }
 
 // Evaluate selects a service using load balancing
-func (s *LoadBalancerStage) Evaluate(ctx *SelectionContext) (*SelectionResult, bool) {
-	service, err := s.loadBalancer.SelectService(ctx.Rule)
+func (s *LoadBalancerStage) Evaluate(ctx *SelectionContext, state *selectionState) (*SelectionResult, bool) {
+	tempRule := *ctx.Rule
+	if state != nil {
+		tempRule.Services = state.candidateServices
+	}
+
+	service, err := s.loadBalancer.SelectService(&tempRule)
 	if err != nil {
 		logrus.Errorf("[load_balancer] selection failed: %v", err)
 		return nil, false

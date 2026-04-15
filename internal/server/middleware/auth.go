@@ -13,7 +13,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 )
@@ -27,6 +26,21 @@ type AuthMiddleware struct {
 // ErrorResponse represents an error response
 type ErrorResponse struct {
 	Error ErrorDetail `json:"error"`
+}
+
+// abortWithError sends an error response and adds the error to gin context for logging
+func abortWithError(c *gin.Context, statusCode int, message string, errorType string) {
+	// Add error to context so logging middleware can capture it
+	c.Error(fmt.Errorf("%s: %s", errorType, message)).SetType(gin.ErrorTypePublic)
+
+	// Send JSON response
+	c.JSON(statusCode, ErrorResponse{
+		Error: ErrorDetail{
+			Message: message,
+			Type:    errorType,
+		},
+	})
+	c.Abort()
 }
 
 // ErrorDetail represents error details
@@ -227,26 +241,14 @@ func (am *AuthMiddleware) UserAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Authorization header required",
-					Type:    "invalid_request_error",
-				},
-			})
-			c.Abort()
+			abortWithError(c, http.StatusUnauthorized, "User authorization header required", "invalid_request_error")
 			return
 		}
 
 		// Extract token from "Bearer <token>" format
 		tokenParts := strings.Split(authHeader, " ")
 		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
-			c.JSON(http.StatusUnauthorized, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Invalid authorization header format. Expected: 'Bearer <token>'",
-					Type:    "invalid_request_error",
-				},
-			})
-			c.Abort()
+			abortWithError(c, http.StatusUnauthorized, "Invalid user authorization header format. Expected: 'Bearer <token>'", "invalid_request_error")
 			return
 		}
 
@@ -271,14 +273,7 @@ func (am *AuthMiddleware) UserAuthMiddleware() gin.HandlerFunc {
 			}
 		}
 
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Invalid authorization header format. Expected: 'Bearer <token>'",
-				Type:    "invalid_request_error",
-			},
-		})
-		c.Abort()
-		return
+		abortWithError(c, http.StatusUnauthorized, "Invalid user authorization token.", "invalid_request_error")
 	}
 }
 
@@ -289,14 +284,12 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 		authHeader := c.GetHeader("Authorization")
 		xApiKey := c.GetHeader("X-Api-Key")
 		if authHeader == "" && xApiKey == "" {
-			c.JSON(http.StatusUnauthorized, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Authorization header required",
-					Type:    "invalid_request_error",
-				},
-			})
-			c.Abort()
+			abortWithError(c, http.StatusUnauthorized, "Model authorization header required", "invalid_request_error")
 			return
+		}
+
+		if authHeader == "" {
+			authHeader = xApiKey
 		}
 
 		token := authHeader
@@ -310,12 +303,7 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 		// Check against global config model token first
 		cfg := am.config
 		if cfg == nil || !cfg.HasModelToken() {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "config or config model token missing",
-					Type:    "invalid_request_error",
-				},
-			})
+			abortWithError(c, http.StatusInternalServerError, "config or config model token missing", "invalid_request_error")
 			return
 		}
 
@@ -328,13 +316,7 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 			if contextJWT != "" {
 				claims, verifyErr := verifyEnterpriseContextJWT(cfg, contextJWT)
 				if verifyErr != nil {
-					c.JSON(http.StatusUnauthorized, ErrorResponse{
-						Error: ErrorDetail{
-							Message: "Invalid enterprise context jwt",
-							Type:    "invalid_request_error",
-						},
-					})
-					c.Abort()
+					abortWithError(c, http.StatusUnauthorized, "Invalid enterprise context jwt", "invalid_request_error")
 					return
 				}
 				if claims != nil {
@@ -356,132 +338,10 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 			requestToken = xApiKey
 		}
 		if strings.HasPrefix(strings.TrimSpace(requestToken), "sk-tbe-") {
-			c.JSON(http.StatusUnauthorized, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Virtual key must be used through TBE /tbe/* endpoints",
-					Type:    "invalid_request_error",
-				},
-			})
-			c.Abort()
+			abortWithError(c, http.StatusUnauthorized, "Virtual key must be used through TBE /tbe/* endpoints", "invalid_request_error")
 			return
 		}
 
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Invalid authorization header format. Expected: 'Bearer <token>'",
-				Type:    "invalid_request_error",
-			},
-		})
-		c.Abort()
-		return
-	}
-}
-
-// VirtualModelAuthMiddleware middleware for virtual model API authentication
-// Uses an independent token separate from the main model token
-func (am *AuthMiddleware) VirtualModelAuthMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		xApiKey := c.GetHeader("X-Api-Key")
-		if authHeader == "" && xApiKey == "" {
-			c.JSON(http.StatusUnauthorized, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Authorization header required for virtual model access",
-					Type:    "invalid_request_error",
-				},
-			})
-			c.Abort()
-			return
-		}
-
-		token := authHeader
-		// Remove "Bearer " prefix if present in the token
-		if strings.HasPrefix(token, "Bearer ") {
-			token = token[7:]
-		}
-
-		// Check against virtual model token
-		cfg := am.config
-		if cfg == nil || !cfg.HasVirtualModelToken() {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "virtual model token not configured",
-					Type:    "invalid_request_error",
-				},
-			})
-			c.Abort()
-			return
-		}
-
-		configToken := cfg.GetVirtualModelToken()
-
-		// Direct token comparison
-		if token == configToken || xApiKey == configToken {
-			// Token matches, allow access
-			c.Set("client_id", "virtual_model_authenticated")
-			c.Next()
-			return
-		}
-
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Invalid virtual model authorization",
-				Type:    "invalid_request_error",
-			},
-		})
-		c.Abort()
-		return
-	}
-}
-
-// AuthMiddleware validates the authentication token
-func (am *AuthMiddleware) AuthMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Get the auth token from global config
-		cfg := am.config
-		if cfg == nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   "Global config not available",
-			})
-			c.Abort()
-			return
-		}
-
-		expectedToken := cfg.GetUserToken()
-		if expectedToken == "" {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   "User auth token not configured",
-			})
-			c.Abort()
-			return
-		}
-
-		// Get token from Authorization header
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"success": false,
-				"error":   "Authorization header required",
-			})
-			c.Abort()
-			return
-		}
-
-		// Support both "Bearer token" and just "token" formats
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		token = strings.TrimSpace(token)
-
-		if token != expectedToken {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"success": false,
-				"error":   "Invalid authentication token",
-			})
-			c.Abort()
-			return
-		}
-
-		c.Next()
+		abortWithError(c, http.StatusUnauthorized, "Invalid model authorization token.", "invalid_request_error")
 	}
 }

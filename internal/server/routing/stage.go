@@ -12,5 +12,5 @@ type SelectionStage interface {
 	// Returns:
 	//   - (result, true) if this stage selected a service (stops pipeline)
 	//   - (nil, false) if this stage cannot select (continue to next stage)
-	Evaluate(ctx *SelectionContext) (*SelectionResult, bool)
+	Evaluate(ctx *SelectionContext, state *selectionState) (*SelectionResult, bool)
 }

@@ -36,7 +36,7 @@ func setupTestRouter(cfg *config.Config) *gin.Engine {
 	router := gin.New()
 
 	cache := NewCache()
-	handler := NewHandler(cfg, &mockLoadBalancer{}, cache)
+	handler := NewHandler(cfg, &mockLoadBalancer{}, cache, nil) // nil quota manager for tests
 
 	router.POST("/status/:scenario", handler.GetClaudeCodeStatus)
 	router.POST("/statusline/:scenario", handler.GetClaudeCodeStatusLine)
@@ -49,7 +49,7 @@ func TestNewHandler(t *testing.T) {
 	cache := NewCache()
 	lb := &mockLoadBalancer{}
 
-	handler := NewHandler(cfg, lb, cache)
+	handler := NewHandler(cfg, lb, cache, nil)
 
 	if handler == nil {
 		t.Fatal("expected non-nil handler")
@@ -135,15 +135,21 @@ func TestGetClaudeCodeStatusLine_Success(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
+	// The /statusline endpoint returns plain text, not JSON
 	body := w.Body.String()
-	assert.Contains(t, body, `"success":true`)
+	if body == "" {
+		t.Error("expected non-empty body")
+	}
 }
 
 func TestCacheOperations(t *testing.T) {
 	cache := NewCache()
 
+	sessionID := "test-session-123"
+
 	// Test empty cache
 	input1 := &StatusInput{
+		SessionID: sessionID,
 		Model: Model{
 			ID: "test-model",
 		},
@@ -156,6 +162,7 @@ func TestCacheOperations(t *testing.T) {
 
 	// Update cache
 	input2 := &StatusInput{
+		SessionID: sessionID,
 		Model: Model{
 			ID:          "test-model-2",
 			DisplayName: "Test Model 2",
@@ -166,8 +173,9 @@ func TestCacheOperations(t *testing.T) {
 	}
 	cache.Update(input2)
 
-	// Get updated value
+	// Get updated value - input with same session ID but missing fields should get them from cache
 	input3 := &StatusInput{
+		SessionID: sessionID,
 		Model: Model{
 			ID: "test-model-2",
 		},

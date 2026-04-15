@@ -24,6 +24,7 @@ const (
 	ProviderIFlow       ProviderType = "iflow"
 	ProviderCodex       ProviderType = "codex"
 	ProviderMock        ProviderType = "mock"
+	ProviderKimi        ProviderType = "kimi_code"
 )
 
 // DefaultSessionExpiry is the default expiration time for OAuth sessions
@@ -35,7 +36,7 @@ func ParseProviderType(s string) (ProviderType, error) {
 	p := ProviderType(s)
 	// Validate by checking against known providers
 	switch p {
-	case ProviderClaudeCode, ProviderOpenAI, ProviderGoogle, ProviderGemini, ProviderGitHub, ProviderQwenCode, ProviderAntigravity, ProviderIFlow, ProviderCodex, ProviderMock:
+	case ProviderClaudeCode, ProviderOpenAI, ProviderGoogle, ProviderGemini, ProviderGitHub, ProviderQwenCode, ProviderAntigravity, ProviderIFlow, ProviderCodex, ProviderMock, ProviderKimi:
 		return p, nil
 	default:
 		return "", fmt.Errorf("unknown provider type: %s", s)
@@ -78,12 +79,12 @@ type Config struct {
 // DefaultConfig returns a default OAuth configuration
 func DefaultConfig() *Config {
 	cfg := &Config{
-		BaseURL:         "http://localhost:12580",
-		ProviderConfigs: make(map[ProviderType]*ProviderConfig),
-		TokenStorage:    NewMemoryTokenStorage(),
-		StateStorage:    NewMemoryStateStorage(),
-		SessionStorage:  NewMemorySessionStorage(),
-		StateExpiry:     10 * time.Minute,
+		BaseURL:           "http://localhost:12580",
+		ProviderConfigs:   make(map[ProviderType]*ProviderConfig),
+		TokenStorage:      NewMemoryTokenStorage(),
+		StateStorage:      NewMemoryStateStorage(),
+		SessionStorage:    NewMemorySessionStorage(),
+		StateExpiry:       10 * time.Minute,
 		TokenExpiryBuffer: 5 * time.Minute,
 	}
 
@@ -97,20 +98,22 @@ func DefaultConfig() *Config {
 	return cfg
 }
 
-// GetHTTPClient returns an HTTP client configured with proxy if set
+// GetHTTPClient returns an HTTP client configured with proxy if set.
+// When no proxy is configured, uses a direct transport (no env/system proxy).
 func (c *Config) GetHTTPClient() *http.Client {
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 	}
 
 	if c.ProxyURL != nil {
-		transport := &http.Transport{
+		client.Transport = &http.Transport{
 			Proxy: http.ProxyURL(c.ProxyURL),
 		}
-		client.Transport = transport
 		logrus.Infof("[OAuth] Using proxy: %s for token request", c.ProxyURL.String())
 	} else {
-		logrus.Debug("[OAuth] No proxy configured for token request")
+		// Explicit no-proxy transport — avoids inheriting http.DefaultTransport's ProxyFromEnvironment.
+		client.Transport = &http.Transport{}
+		logrus.Debug("[OAuth] No proxy configured for token request, using direct connection")
 	}
 
 	return client

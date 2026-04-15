@@ -2,12 +2,13 @@ import { ApiStyleBadge } from '@/components/ApiStyleBadge.tsx';
 import ModelListDialog from '@/components/ModelListDialog';
 import ProviderExportMenu from '@/components/ProviderExportMenu';
 import { exportProvider, exportProviderAsBase64ToClipboard, exportProviderAsJsonlToClipboard } from '@/components/rule-card/utils';
+import { ProviderQuotaDetailRow } from '@/components/credential/ProviderQuotaDetailRow';
 import { Cancel, ContentCopy, Delete, Edit, ListAlt, Route, Visibility } from '@mui/icons-material';
 import {
     Box,
     Button,
+    Chip,
     Divider,
-    FormControlLabel,
     IconButton,
     Modal,
     Paper,
@@ -23,7 +24,8 @@ import {
     Typography,
 } from '@mui/material';
 import type { ExportFormat } from '@/components/rule-card/utils';
-import {useCallback, useState} from 'react';
+import type { ProviderQuota } from '@/types/quota';
+import React, {useCallback, useState} from 'react';
 import api from '../services/api';
 import type { Provider } from '../types/provider';
 
@@ -33,6 +35,9 @@ interface ApiKeyTableProps {
     onToggle?: (providerUuid: string) => void;
     onDelete?: (providerUuid: string) => void;
     onNotification?: (message: string, severity: 'success' | 'error') => void;
+    providerQuotas?: { [uuid: string]: ProviderQuota };
+    refreshingQuotas?: Set<string>;
+    onQuotaRefresh?: (providerUuid: string) => void;
 }
 
 interface TokenModalState {
@@ -53,7 +58,7 @@ interface ModelListDialogState {
     provider: Provider | null;
 }
 
-const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification }: ApiKeyTableProps) => {
+const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification, providerQuotas, refreshingQuotas, onQuotaRefresh }: ApiKeyTableProps) => {
     const [tokenModal, setTokenModal] = useState<TokenModalState>({
         open: false,
         providerName: '',
@@ -176,38 +181,39 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification }: 
 
     return (
         <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
-            <Table>
+            <Table sx={{ tableLayout: 'fixed' }}>
                 <TableHead>
                     <TableRow>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Status</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>Name</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>API Style</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120, maxWidth: 120 }}>API Base URL</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120, maxWidth: 120 }}>API Key</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 80 }}>Proxy</TableCell>
-                        <TableCell sx={{ fontWeight: 600, width: 240 }}>Actions</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 90 }}>Status</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 140 }}>Name</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 140 }}>API Style</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 200 }}>API Base URL</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 140 }}>API Key</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 60 }}>Proxy</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 200 }}>Actions</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
                     {providers.map((provider) => (
-                        <TableRow key={provider.uuid}>
+                        <React.Fragment key={provider.uuid}>
+                            {/* Main provider row */}
+                            <TableRow>
                             {/* Status */}
                             <TableCell>
                                 <Stack direction="row" alignItems="center" spacing={1}>
-                                    <FormControlLabel
-                                        control={
-                                            <Switch
-                                                checked={provider.enabled}
-                                                onChange={() => onToggle?.(provider.uuid)}
-                                                size="small"
-                                                color="success"
-                                            />
-                                        }
-                                        label=""
+                                    <Switch
+                                        checked={provider.enabled}
+                                        onChange={() => onToggle?.(provider.uuid)}
+                                        size="small"
+                                        color="success"
                                     />
-                                    <Typography variant="body2" color={provider.enabled ? 'success.main' : 'error.main'}>
-                                        {provider.enabled ? 'Enabled' : 'Disabled'}
-                                    </Typography>
+                                    <Chip
+                                        label={provider.enabled ? 'On' : 'Off'}
+                                        size="small"
+                                        color={provider.enabled ? 'success' : 'default'}
+                                        variant={provider.enabled ? 'filled' : 'outlined'}
+                                        sx={{ height: 22, fontSize: '0.7rem', minWidth: 40 }}
+                                    />
                                 </Stack>
                             </TableCell>
                             {/* Name */}
@@ -287,7 +293,7 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification }: 
                                         borderRadius: 1.5,
                                         p: 0.5,
                                         pr: 1,
-                                        width: 240,
+                                        width: 200,
                                     }}
                                 >
                                     <ProviderExportMenu
@@ -330,7 +336,18 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification }: 
                                 </Box>
                             </TableCell>
                         </TableRow>
-                    ))}
+
+                    {/* Quota detail row */}
+                    {providerQuotas && onQuotaRefresh && (
+                        <ProviderQuotaDetailRow
+                            provider={provider}
+                            quota={providerQuotas[provider.uuid]}
+                            isRefreshing={refreshingQuotas?.has(provider.uuid) || false}
+                            onRefresh={onQuotaRefresh}
+                        />
+                    )}
+                </React.Fragment>
+                ))}
                 </TableBody>
             </Table>
 

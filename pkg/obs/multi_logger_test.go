@@ -107,16 +107,25 @@ func TestMultiLogger(t *testing.T) {
 		err = logger.WriteEntry(systemEntry)
 		require.NoError(t, err)
 
-		// Read only HTTP logs
-		httpLogs, err := logger.ReadJSONLogs(10)
+		// Read logs from JSON file
+		logs, err := logger.ReadJSONLogs(10)
 		require.NoError(t, err)
-		assert.True(t, len(httpLogs) > 0, "Expected at least one HTTP log entry")
-		// Verify all entries are HTTP source
-		for _, entry := range httpLogs {
-			if entry.Source != "" {
-				assert.Equal(t, string(LogSourceHTTP), entry.Source)
+		assert.True(t, len(logs) >= 2, "Expected at least two log entries")
+
+		// Verify that source field is preserved correctly
+		// Look for our specific entries by message
+		foundHTTP := false
+		foundSystem := false
+		for _, entry := range logs {
+			if entry.Message == "http request" && entry.Source == string(LogSourceHTTP) {
+				foundHTTP = true
+			}
+			if entry.Message == "system log" && entry.Source == string(LogSourceSystem) {
+				foundSystem = true
 			}
 		}
+		assert.True(t, foundHTTP, "Expected to find HTTP source entry with 'http request' message")
+		assert.True(t, foundSystem, "Expected to find system source entry with 'system log' message")
 	})
 
 	t.Run("level filtering", func(t *testing.T) {

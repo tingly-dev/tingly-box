@@ -7,8 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tingly-dev/tingly-box/internal/data/db"
-	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
 )
 
 // UsageTracker provides usage tracking methods for handlers.

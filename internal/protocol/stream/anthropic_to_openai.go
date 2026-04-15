@@ -17,9 +17,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// HandleAnthropicToOpenAIStreamResponse processes Anthropic streaming events and converts them to OpenAI format
+// AnthropicToOpenAIStream processes Anthropic streaming events and converts them to OpenAI format
 // Returns inputTokens, outputTokens, and error for usage tracking
-func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.MessageNewParams, stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion], responseModel string, disableStreamUsage bool) (int, int, error) {
+func AnthropicToOpenAIStream(c *gin.Context, req *anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], responseModel string, disableStreamUsage bool) (int, int, error) {
 	logrus.Info("Starting Anthropic to OpenAI streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
@@ -51,7 +51,7 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 		chatID       = fmt.Sprintf("chatcmpl-%d", time.Now().Unix())
 		created      = time.Now().Unix()
 		contentText  = strings.Builder{}
-		usage        *anthropic.MessageDeltaUsage
+		usage        *anthropic.BetaMessageDeltaUsage
 		inputTokens  int
 		outputTokens int
 		finished     bool
@@ -121,6 +121,7 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 						{
 							Index: 0,
 							Delta: openai.ChatCompletionChunkChoiceDelta{
+								Role: "assistant",
 								ToolCalls: []openai.ChatCompletionChunkChoiceDeltaToolCall{
 									{
 										Index: 0,
@@ -160,6 +161,7 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 						{
 							Index: 0,
 							Delta: openai.ChatCompletionChunkChoiceDelta{
+								Role:    "assistant",
 								Content: text,
 							},
 						},
@@ -180,6 +182,7 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 						{
 							Index: 0,
 							Delta: openai.ChatCompletionChunkChoiceDelta{
+								Role: "assistant",
 								ToolCalls: []openai.ChatCompletionChunkChoiceDeltaToolCall{
 									{
 										Index: 0,
@@ -282,7 +285,8 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 		}
 		logrus.Errorf("Anthropic stream error: %v", err)
 		sendOpenAIStreamError(c, err.Error(), "stream_error")
-		return inputTokens, outputTokens, nil
+		// Return the error so TB's usage tracking can detect and report health status
+		return inputTokens, outputTokens, fmt.Errorf("anthropic stream error: %w", err)
 	}
 
 	return inputTokens, outputTokens, nil
@@ -301,16 +305,7 @@ func sendOpenAIStreamChunk(c *gin.Context, chunk openai.ChatCompletionChunk, dis
 		delete(chunkMap, "usage")
 	}
 
-	chunkJSON, err := json.Marshal(chunkMap)
-	if err != nil {
-		logrus.Errorf("Failed to marshal chunk: %v", err)
-		return
-	}
-	// MENTION: Must keep extra space (matching openai_chat.go:365)
-	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", chunkJSON))
-	if flusher, ok := c.Writer.(http.Flusher); ok {
-		flusher.Flush()
-	}
+	OpenAISSE(c, chunkMap)
 }
 
 func chunkToMap(chunk openai.ChatCompletionChunk) (map[string]interface{}, error) {
@@ -327,16 +322,7 @@ func chunkToMap(chunk openai.ChatCompletionChunk) (map[string]interface{}, error
 
 // sendOpenAIStreamChunk helper function to send a chunk in OpenAI format
 func sendOpenAIStreamChunkForce(c *gin.Context, chunk map[string]interface{}) {
-	chunkJSON, err := json.Marshal(chunk)
-	if err != nil {
-		logrus.Errorf("Failed to marshal chunk: %v", err)
-		return
-	}
-	// MENTION: Must keep extra space (matching openai_chat.go:365)
-	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", chunkJSON))
-	if flusher, ok := c.Writer.(http.Flusher); ok {
-		flusher.Flush()
-	}
+	OpenAISSE(c, chunk)
 }
 
 // sendOpenAIStreamError sends an error chunk in OpenAI format
@@ -347,11 +333,7 @@ func sendOpenAIStreamError(c *gin.Context, message, errorType string) {
 			"type":    errorType,
 		},
 	}
-	errorJSON, _ := json.Marshal(errorMap)
-	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", errorJSON))
-	if flusher, ok := c.Writer.(http.Flusher); ok {
-		flusher.Flush()
-	}
+	OpenAISSE(c, errorMap)
 }
 
 // createReasoningContentChunk creates a chunk with reasoning_content field

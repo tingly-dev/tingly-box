@@ -1,5 +1,5 @@
 import { Box } from '@mui/material';
-import { styled } from '@mui/material/styles';
+import { styled, type Theme } from '@mui/material/styles';
 
 // Node dimensions constants
 export const MODEL_NODE_STYLES = {
@@ -51,7 +51,7 @@ export const ConnectionLine = styled(Box)(() => ({
 }));
 
 // Provider node container
-export const ProviderNodeContainer = styled(Box)(({ theme }) => ({
+export const ProviderNodeContainer = styled(Box)(({ theme }: { theme: Theme }) => ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -75,7 +75,7 @@ export const ProviderNodeContainer = styled(Box)(({ theme }) => ({
 // Styled model node with unified fixed size
 export const StyledModelNode = styled(Box, { shouldForwardProp: (prop) => prop !== 'compact' })<{
     compact?: boolean;
-}>(({ compact, theme }) => ({
+}>(({ compact, theme }: { compact?: boolean; theme: Theme }) => ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -100,7 +100,7 @@ export const StyledModelNode = styled(Box, { shouldForwardProp: (prop) => prop !
 }));
 
 // Action button container
-export const ActionButtonsBox = styled(Box)(({ theme }) => ({
+export const ActionButtonsBox = styled(Box)(({ theme }: { theme: Theme }) => ({
     position: 'absolute',
     top: 4,
     right: 4,
@@ -111,13 +111,13 @@ export const ActionButtonsBox = styled(Box)(({ theme }) => ({
 }));
 
 // Smart node wrapper
-export const StyledSmartNodeWrapper = styled(Box)(({ theme }) => ({
+export const StyledSmartNodeWrapper = styled(Box)(({ theme }: { theme: Theme }) => ({
     position: 'relative',
     '&:hover .action-buttons': { opacity: 1 },
 }));
 
 // Base smart node styles
-const baseSmartNodeStyles = ({ active, theme }: { active: boolean; theme: any }) => ({
+const baseSmartNodeStyles = ({ active, theme }: { active: boolean; theme: Theme }) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center',
@@ -127,7 +127,7 @@ const baseSmartNodeStyles = ({ active, theme }: { active: boolean; theme: any })
     border: '1px solid',
     borderColor: active ? 'text.secondary' : 'divider',
     backgroundColor: active ? 'action.hover' : 'background.paper',
-    textAlign: 'center',
+    textAlign: 'center' as const,
     width: smartNode.width,
     height: smartNode.height,
     boxShadow: theme.shadows[2],
@@ -143,12 +143,12 @@ const baseSmartNodeStyles = ({ active, theme }: { active: boolean; theme: any })
 });
 
 export const StyledSmartNodePrimary = styled(Box, { shouldForwardProp: (prop) => prop !== 'active' })<{
-    active: boolean;
-}>(({ active, theme }) => baseSmartNodeStyles({ active, theme }));
+    active?: boolean;
+}>(({ active = false, theme }) => baseSmartNodeStyles({ active, theme }));
 
 export const StyledSmartNodeWarning = styled(Box, { shouldForwardProp: (prop) => prop !== 'active' })<{
-    active: boolean;
-}>(({ active, theme }) => baseSmartNodeStyles({ active, theme }));
+    active?: boolean;
+}>(({ active = false, theme }) => baseSmartNodeStyles({ active, theme }));
 
 // Shared node layer styles for two-layer layout
 export const NODE_LAYER_STYLES = {

@@ -71,6 +71,10 @@ type AgentConfig struct {
 	ChatID   string                   // Chat ID for approval routing
 	Platform string                   // Platform identifier
 	BotUUID  string                   // Bot UUID for routing
+
+	// ToolContext for injecting file send capability and cross-path approval.
+	// If nil, send_file tool will not be registered.
+	ToolCtx *ToolContext
 }
 
 // NewTinglyBoxAgent creates a new smart guide agent
@@ -127,7 +131,7 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 	toolkit := tool.NewToolkit()
 
 	// Register tools
-	if err := RegisterTools(toolkit, executor, config.ChatID, config.GetStatusFunc, config.UpdateProjectFunc); err != nil {
+	if err := RegisterTools(toolkit, executor, config.ChatID, config.GetStatusFunc, config.UpdateProjectFunc, config.ToolCtx); err != nil {
 		return nil, fmt.Errorf("failed to register tools: %w", err)
 	}
 

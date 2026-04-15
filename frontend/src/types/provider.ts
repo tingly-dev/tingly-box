@@ -25,6 +25,24 @@ export interface ProviderModelData {
     star_models?: string[];
     last_updated?: string;
     custom_model?: string;
+    quota?: {
+        primary?: {
+            type: string;
+            used: number;
+            limit: number;
+            used_percent: number;
+            resets_at?: string;
+            unit: string;
+            label: string;
+            description?: string;
+        };
+        cost?: {
+            used: number;
+            limit: number;
+            currency_code: string;
+            label?: string;
+        };
+    };
 }
 
 // Provider models data indexed by provider name (legacy)

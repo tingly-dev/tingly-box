@@ -1,1022 +1,505 @@
-import { OpenAI, Anthropic, Claude, OpenCode, Xcode, VSCode, Telegram, Feishu, Lark, DingTalk, Weixin } from '../components/BrandIcons';
-import tingyIcon from '../assets/logos/icon.png';
-import {
-    AccountCircle as AccountIcon,
-    Add as AddIcon,
-    AutoAwesome,
-    BarChart as BarChartIcon,
-    CalendarToday as CalendarIcon,
-    ChatBubble,
-    Code as CodeIcon,
-    DateRange as DateRangeIcon,
-    ErrorOutline,
-    GridOn as GridOnIcon,
-    ListAlt as LogsIcon,
-    Menu as MenuIcon,
-    NewReleases,
-    Psychology as PromptIcon,
-    Lan as RemoteIcon,
-    Bolt as SkillIcon,
-    Settings as SystemIcon,
-    Today as TodayIcon,
-    Send as UserPromptIcon,
-    Extension as VSCodeIcon,
-    Rule,
-    History as HistoryIcon,
-    VpnKey as VpnKeyIcon,
-    Security as AccessControlIcon
-} from '@mui/icons-material';
-import LockIcon from '@mui/icons-material/Lock';
-import {
-    Box,
-    Button,
-    Divider,
-    Drawer,
-    IconButton,
-    List,
-    ListItem,
-    ListItemButton,
-    ListItemIcon,
-    ListItemText,
-    Popover,
-    TextField,
-    Tooltip,
-    Typography,
-} from '@mui/material';
-import type { ReactNode } from 'react';
-import React, {useCallback, useMemo, useRef, useState} from 'react';
-import { useTranslation } from 'react-i18next';
-import { Link as RouterLink, useLocation, useNavigate, Outlet } from 'react-router-dom';
-import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
-import { useHealth } from '../contexts/HealthContext';
+import { Box, Drawer, IconButton, Popover, Typography, Menu, MenuItem } from '@mui/material';
+import { IconMenu, IconDots, IconYinYang, IconSun, IconMoon, IconSunHigh } from '@tabler/icons-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
-import { isFullEdition } from '@/utils/edition';
-import { useProfileContext } from '@/contexts/ProfileContext';
-import { api } from '@/services/api';
-
-interface LayoutProps {
-    children?: ReactNode;
-}
-
-const activityBarWidth = 88;
-const sidebarWidth = 200;
-const headerHeight = 60;
-const footerHeight = 60;
-
-// --- Activity Bar Item Styles (extracted for easy tuning) ---
-const activityItemMinHeight = 64;       // was 56
-const activityItemGap = 0.5;            // was 0.25
-const activityItemRadius = 1.25;
-const activityItemPaddingX = 1;
-const activityItemPaddingY = 1.25;      // was 1
-const activityContainerPaddingY = 1;    // was 0.5
-
-const activityItemSx = (extra?: Record<string, unknown>) => ({
-    minHeight: activityItemMinHeight,
-    mx: 0.5,
-    px: activityItemPaddingX,
-    py: activityItemPaddingY,
-    flexDirection: 'column' as const,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: activityItemGap,
-    position: 'relative' as const,
-    color: 'text.secondary',
-    borderRadius: activityItemRadius,
-    cursor: 'pointer',
-    ...extra,
-});
-
-interface NavItem {
-    path: string;
-    label: string;
-    icon?: ReactNode;
-    subtitle?: string;
-    divider?: boolean;
-}
-
-interface ActivityItem {
-    key: string;
-    icon: ReactNode;
-    label: string;
-    path?: string; // Direct navigation if no children
-    children?: NavItem[];
-}
+import { useThemeMode } from '../contexts/ThemeContext';
+import { Z_INDEX } from '../constants/zIndex';
+import { activityBarWidth, sidebarWidth } from './constants';
+import { ZenActivityBar } from './ZenActivityBar.tsx';
+import { Sidebar } from './Sidebar';
+import { useActivityItems } from './useActivityItems.tsx';
+import { useZenMode } from '../hooks/useZenMode';
+import { useProfileContext } from '../contexts/ProfileContext';
+import type { ActivityItem, LayoutProps } from './types';
+import { Claude, Codex, OpenCode, Xcode, VSCode, OpenAI, Anthropic, OpenClaw } from '../components/BrandIcons';
+import { IconPlus } from '@tabler/icons-react';
 
 const Layout = ({ children }: LayoutProps) => {
-    const { t } = useTranslation();
     const location = useLocation();
     const navigate = useNavigate();
-    const { hasUpdate, currentVersion, showUpdateDialog } = useAppVersion();
-    const { isHealthy, showDisconnectDialog } = useHealth();
-    const { skillUser, skillIde, enableGuardrails} = useFeatureFlags();
+    const { currentVersion } = useAppVersion();
+    const { setTheme } = useThemeMode();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
-    const { profiles, refresh } = useProfileContext();
+    const [moreMenuAnchorEl, setMoreMenuAnchorEl] = useState<HTMLElement | null>(null);
+    // When a "More" menu item is selected in zen mode, track which activity's sidebar to show
+    const [zenMoreActivity, setZenMoreActivity] = useState<string | null>(null);
 
-    // Add Profile popover state
-    const [addProfileAnchorEl, setAddProfileAnchorEl] = useState<HTMLElement | null>(null);
-    const [newProfileName, setNewProfileName] = useState('');
-    const [isCreating, setIsCreating] = useState(false);
-    const addProfileInputRef = useRef<HTMLInputElement>(null);
+    // Zen mode state
+    const { enabled: zenEnabled, agent: zenAgentFromHook, loading: zenLoading, setZenMode } = useZenMode();
 
-    const handleAddProfileClick = useCallback((e: React.MouseEvent<HTMLElement>) => {
-        setAddProfileAnchorEl(e.currentTarget);
-        setNewProfileName('');
-        setTimeout(() => addProfileInputRef.current?.focus(), 100);
-    }, []);
+    // Determine if we're in zen mode (either from flag or from URL path)
+    const isInZenPath = /^\/zen\//.test(location.pathname);
+    const effectiveZenEnabled = zenEnabled || isInZenPath;
 
-    const handleAddProfileClose = useCallback(() => {
-        setAddProfileAnchorEl(null);
-        setNewProfileName('');
-    }, []);
-
-    const handleCreateProfile = useCallback(async () => {
-        if (!newProfileName.trim()) return;
-        try {
-            setIsCreating(true);
-            const result = await api.createProfile('claude_code', newProfileName.trim());
-            if (result.success) {
-                handleAddProfileClose();
-                refresh();
-            }
-        } catch {
-            // silent fail - could add a snackbar here
-        } finally {
-            setIsCreating(false);
+    // Extract current zen agent from URL path if in zen mode
+    const getCurrentZenAgent = (): string => {
+        if (isInZenPath) {
+            const match = location.pathname.match(/^\/zen\/([^/]+)$/);
+            if (match) return match[1];
         }
-    }, [newProfileName, refresh, handleAddProfileClose]);
-
-    const handleEasterEgg = (event: React.MouseEvent<HTMLElement>) => {
-        setEasterEggAnchorEl(event.currentTarget);
+        return zenAgentFromHook || '';
     };
 
-    const handleEasterEggClose = () => {
-        setEasterEggAnchorEl(null);
-    };
+    const zenAgent = getCurrentZenAgent();
+    const { profiles } = useProfileContext();
 
-    const isActive = (path: string) => {
-        return location.pathname === path;
-    };
+    const activityItems = useActivityItems();
 
-    const isChildActive = (children?: NavItem[]) => {
-        return children?.some(item => isActive(item.path)) ?? false;
-    };
+    const isActive = (path: string) => location.pathname === path;
+    const isChildActive = (children?: ActivityItem['children']) =>
+        children?.some(item => item.type !== 'divider' && isActive(item.path)) ?? false;
 
-    // Build prompt menu items based on feature flags
-    const promptMenuItems = useMemo(() => {
-        const items: NavItem[] = [];
-        if (skillUser) {
-            items.push({
-                path: '/prompt/user',
-                label: 'User Request',
-                icon: <UserPromptIcon sx={{ fontSize: 20 }} />,
-            });
-        }
-        if (skillIde) {
-            items.push({
-                path: '/prompt/skill',
-                label: 'Skills',
-                icon: <SkillIcon sx={{ fontSize: 20 }} />,
-            });
-        }
-        return items;
-    }, [skillUser, skillIde]);
-
-    // Activity bar items
-    const activityItems: ActivityItem[] = useMemo(() => {
-        // Build profile sidebar items dynamically
-        const claudeCodeProfiles = profiles['claude_code'] || [];
-        const profileNavItems: NavItem[] = claudeCodeProfiles.map(p => ({
-            path: `/use-claude-code/profile/${p.id}`,
-            label: 'Claude Code',
-            subtitle: `${p.id} - ${p.name}`,
-            icon: <Claude size={20} />,
-        }));
-
-        const items: ActivityItem[] = [
-            {
-                key: 'dashboard',
-                icon: <BarChartIcon sx={{ fontSize: 22 }} />,
-                label: 'Dashboard',
-                path: '/dashboard/7d',
-                children: [
-                    {
-                        path: '/overview/90d',
-                        label: 'Heatmap',
-                        icon: <GridOnIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        divider: true,
-                        path: '/dashboard/today',
-                        label: 'Today',
-                        icon: <TodayIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/dashboard/yesterday',
-                        label: 'Yesterday',
-                        icon: <CalendarIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/dashboard/3d',
-                        label: '3 Days',
-                        icon: <DateRangeIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/dashboard/7d',
-                        label: '7 Days',
-                        icon: <DateRangeIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/dashboard/30d',
-                        label: '30 Days',
-                        icon: <DateRangeIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/dashboard/90d',
-                        label: '90 Days',
-                        icon: <DateRangeIcon sx={{ fontSize: 20 }} />,
-                    },
-                ],
-            },
-            {
-                key: 'scenario',
-                icon: <CodeIcon sx={{ fontSize: 22 }} />,
-                label: t('layout.nav.home'),
-                children: [
-                    {
-                        // divider: true,
-                        path: '/use-claude-code',
-                        subtitle: "default",
-                        label: t('layout.nav.useClaudeCode', { defaultValue: 'Claude Code' }),
-                        icon: <Claude size={20} />,
-                    },
-                    ...profileNavItems,
-                    {
-                        path: '#add-profile',
-                        label: 'Add Profile',
-                        icon: <AddIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        divider: true,
-                        path: '/use-codex',
-                        label: t('layout.nav.useCodex', { defaultValue: 'Codex' }),
-                        icon: <OpenAI size={20} />,
-                    },
-                    {
-                        path: '/use-opencode',
-                        label: t('layout.nav.useOpenCode', { defaultValue: 'OpenCode' }),
-                        icon: <OpenCode size={20} />,
-                    },
-                    {
-                        path: '/use-xcode',
-                        label: t('layout.nav.useXcode', { defaultValue: 'Xcode' }),
-                        icon: <Xcode size={20} />,
-                    },
-                    {
-                        path: '/use-vscode',
-                        label: t('layout.nav.useVSCode', { defaultValue: 'VS Code' }),
-                        icon: <VSCode size={20} />,
-                    },
-                    {
-                        divider: true,
-                        path: '/use-openai',
-                        label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }),
-                        icon: <OpenAI size={20} />,
-                    },
-                    {
-                        path: '/use-anthropic',
-                        label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }),
-                        icon: <Anthropic size={20} />,
-                    },
-                    {
-                        divider: true,
-                        path: '/use-agent',
-                        label: 'OpenClaw',
-                        icon: <AutoAwesome sx={{ fontSize: 20 }} />,
-                    },
-                ],
-            },
-            // Only add Prompt menu if full edition
-            ...(isFullEdition && promptMenuItems.length > 0 ? [{
-                key: 'prompt' as const,
-                icon: <PromptIcon sx={{ fontSize: 22 }} />,
-                label: 'Prompt',
-                children: promptMenuItems,
-            }] : []),
-            // Only add Remote menu if full edition
-            ...(isFullEdition ? [{
-                key: 'remote-control' as const,
-                icon: <RemoteIcon sx={{fontSize: 22}}/>,
-                label: 'Remote',
-                children: [
-                    {
-                        path: '/remote-control',
-                        label: 'Overview',
-                        icon: <ChatBubble sx={{fontSize: 20}}/>,
-                    },
-                    // {
-                    //     path: '/remote-control/agent',
-                    //     label: 'Agent Assistant',
-                    //     icon: <AutoAwesome sx={{fontSize: 20}}/>,
-                    // },
-                    {
-                        divider: true,
-                        path: '/remote-control/weixin',
-                        label: 'Weixin',
-                        icon: <Weixin size={20}/>,
-                    },
-                    {
-                        path: '/remote-control/telegram',
-                        label: 'Telegram',
-                        icon: <Telegram size={20}/>,
-                    },
-                    {
-                        path: '/remote-control/feishu',
-                        label: 'Feishu',
-                        icon: <Feishu size={20}/>,
-                    },
-                    {
-                        path: '/remote-control/lark',
-                        label: 'Lark',
-                        icon: <Lark size={20}/>,
-                    },
-                    {
-                        path: '/remote-control/dingtalk',
-                        label: 'DingTalk',
-                        icon: <DingTalk size={20}/>,
-                    },
-                ],
-            }] : []),
-            ...(enableGuardrails ? [{
-                key: 'guardrails',
-                icon: <AccessControlIcon sx={{ fontSize: 22 }} />,
-                label: 'Guardrails',
-                children: [
-                    {
-                        path: '/guardrails',
-                        label: 'Overview',
-                        icon: <AccessControlIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/guardrails/groups',
-                        label: 'Policy Groups',
-                        icon: <Rule sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/guardrails/rules',
-                        label: 'Policies',
-                        icon: <Rule sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/guardrails/credentials',
-                        label: 'Credentials',
-                        icon: <VpnKeyIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/guardrails/history',
-                        label: 'History',
-                        icon: <HistoryIcon sx={{ fontSize: 20 }} />,
-                    },
-                ],
-            }] : []),
-            {
-                key: 'credential',
-                icon: <LockIcon sx={{ fontSize: 22 }} />,
-                label: t('layout.nav.credential', { defaultValue: 'Credentials' }),
-                children: [
-                    {
-                        path: '/credentials',
-                        label: 'Model Key',
-                        icon: <LockIcon sx={{ fontSize: 20 }} />,
-                    },
-                ],
-            },
-            {
-                key: 'system',
-                icon: <SystemIcon sx={{ fontSize: 22 }} />,
-                label: 'System',
-                children: [
-                     {
-                        path: '/access-control',
-                        label: 'Access Control',
-                        icon: <AccessControlIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/system',
-                        label: 'Status',
-                        icon: <SystemIcon sx={{ fontSize: 20 }} />,
-                    },
-                    {
-                        path: '/system/logs',
-                        label: 'Logs',
-                        icon: <LogsIcon sx={{ fontSize: 20 }} />,
-                    },
-                ],
-            },
-        ];
-        return items;
-    }, [t, promptMenuItems, enableGuardrails, profiles]);
-
-    // Find current active activity
+    // Determine active activity from current path, falling back to sessionStorage
     const activeActivity = useMemo(() => {
         for (const item of activityItems) {
             if (item.path && isActive(item.path)) return item.key;
             if (item.children && isChildActive(item.children)) return item.key;
         }
+        const saved = sessionStorage.getItem('layout.activeActivity');
+        if (saved && activityItems.some(item => item.key === saved)) return saved;
         return 'dashboard';
     }, [activityItems, location.pathname]);
 
-    // Get sidebar items for active activity
+    // In zen mode, active activity is based on current zen path
+    const zenActiveActivity = useMemo(() => {
+        if (effectiveZenEnabled) {
+            const zenPathMatch = location.pathname.match(/^\/zen\/([^/]+)$/);
+            if (zenPathMatch) return `zen-${zenPathMatch[1]}`;
+            return 'zen-claude_code';
+        }
+        return activeActivity;
+    }, [effectiveZenEnabled, location.pathname, activeActivity]);
+
+    // Persist active activity + last visited path
+    useEffect(() => {
+        sessionStorage.setItem('layout.activeActivity', activeActivity);
+        sessionStorage.setItem(`layout.activityPath.${activeActivity}`, location.pathname);
+    }, [activeActivity, location.pathname]);
+
+    // When navigating to a zen path, clear zenMoreActivity
+    useEffect(() => {
+        if (isInZenPath) {
+            setZenMoreActivity(null);
+        }
+    }, [isInZenPath]);
+
+    // Sidebar items - normal mode or zen mode showing other activities
     const sidebarItems = useMemo(() => {
+        // Zen mode with a "More" activity selected - show that activity's children
+        if (effectiveZenEnabled && zenMoreActivity) {
+            const activity = activityItems.find(item => item.key === zenMoreActivity);
+            return activity?.children || [];
+        }
+
+        // Zen mode - get agent + profiles
+        if (effectiveZenEnabled && zenAgent) {
+            const getAgentInfo = (agent: string) => {
+                // Default to claude_code if agent is empty
+                const normalizedAgent = agent || 'claude_code';
+                const info: Record<string, { icon: any; label: string; path: string; scenario: string; hasProfiles: boolean }> = {
+                    claude_code: { icon: <Claude size={20} />, label: 'Claude Code', path: '/agent/claude_code', scenario: 'claude_code', hasProfiles: true },
+                    codex: { icon: <Codex size={20} />, label: 'Codex', path: '/agent/codex', scenario: 'codex', hasProfiles: false },
+                    opencode: { icon: <OpenCode size={20} />, label: 'OpenCode', path: '/agent/opencode', scenario: 'opencode', hasProfiles: false },
+                    xcode: { icon: <Xcode size={20} />, label: 'Xcode', path: '/agent/xcode', scenario: 'xcode', hasProfiles: false },
+                    vscode: { icon: <VSCode size={20} />, label: 'VS Code', path: '/agent/vscode', scenario: 'vscode', hasProfiles: false },
+                    openai: { icon: <OpenAI size={20} />, label: 'OpenAI', path: '/agent/openai', scenario: 'openai', hasProfiles: false },
+                    anthropic: { icon: <Anthropic size={20} />, label: 'Anthropic', path: '/agent/anthropic', scenario: 'anthropic', hasProfiles: false },
+                    agent: { icon: <OpenClaw size={20} />, label: 'OpenClaw', path: '/agent/agent', scenario: 'agent', hasProfiles: false },
+                };
+                return info[normalizedAgent] || info.claude_code;
+            };
+
+            const agentInfo = getAgentInfo(zenAgent);
+            const zenAgentPath = `/zen/${zenAgent}`;
+            const zenSidebarItems: ActivityItem['children'] = [
+                { path: zenAgentPath, label: agentInfo.label, icon: agentInfo.icon, subtitle: 'default' },
+            ];
+
+            // Only add profiles for Claude Code
+            if (agentInfo.hasProfiles) {
+                const agentProfiles = profiles[agentInfo.scenario] || [];
+                agentProfiles.forEach(profile => {
+                    zenSidebarItems.push({
+                        path: `/zen/${zenAgent}/profile/${profile.id}`,
+                        label: agentInfo.label,
+                        icon: agentInfo.icon,
+                        subtitle: `${profile.id} - ${profile.name}`,
+                    });
+                });
+
+                // Add profile divider and add profile button
+                zenSidebarItems.push({ type: 'divider' });
+                zenSidebarItems.push({
+                    path: '#add-profile',
+                    label: 'Add Profile',
+                    icon: <IconPlus size={20} />,
+                });
+            }
+
+            return zenSidebarItems;
+        }
+
+        // Normal mode
         const activity = activityItems.find(item => item.key === activeActivity);
         return activity?.children || [];
-    }, [activityItems, activeActivity]);
+    }, [effectiveZenEnabled, zenAgent, zenMoreActivity, activityItems, activeActivity, profiles]);
 
-    // Get current activity label
     const activeActivityLabel = useMemo(() => {
+        if (effectiveZenEnabled && zenMoreActivity) {
+            const activity = activityItems.find(item => item.key === zenMoreActivity);
+            return activity?.label || '';
+        }
+        if (effectiveZenEnabled && zenAgent && zenActiveActivity === 'zen-agent') {
+            const labelMap: Record<string, string> = {
+                claude_code: 'Claude Code',
+                codex: 'Codex',
+                opencode: 'OpenCode',
+                xcode: 'Xcode',
+                vscode: 'VS Code',
+                openai: 'OpenAI',
+                anthropic: 'Anthropic',
+                agent: 'OpenClaw',
+            };
+            return labelMap[zenAgent] || zenAgent;
+        }
         const activity = activityItems.find(item => item.key === activeActivity);
         return activity?.label || '';
-    }, [activityItems, activeActivity]);
+    }, [effectiveZenEnabled, zenAgent, zenMoreActivity, zenActiveActivity, activityItems, activeActivity]);
 
-    // Activity bar content (first column - icon only)
-    const activityBarContent = (
-        <Box
-            sx={{
-                width: activityBarWidth,
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                bgcolor: 'background.paper',
-                borderRight: '1px solid',
-                borderColor: 'divider',
-            }}
-        >
-            {/* Logo */}
-            <Box
-                sx={{
-                    height: headerHeight,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                }}
-            >
-                <Tooltip title={`Tingly-Box v${currentVersion}`} placement="right" arrow>
-                    <Box
-                        component="a"
-                        href="https://github.com/tingly-dev/tingly-box"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        sx={{
-                            width: 36,
-                            height: 36,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            textDecoration: 'none',
-                            cursor: 'pointer',
-                            transition: 'transform 0.2s',
-                            '&:hover': {
-                                transform: 'scale(1.08)',
-                            },
-                        }}
-                    >
-                        <img src={tingyIcon} alt="Tingly-Box" style={{ width: 36, height: 36, borderRadius: 8 }} />
-                    </Box>
-                </Tooltip>
-            </Box>
+    const handleActivityClick = (item: ActivityItem) => {
+        setMobileOpen(false);
+        setMoreMenuAnchorEl(null); // Close more menu if open
 
-            {/* Activity Icons */}
-            <Box sx={{ flex: 1, py: activityContainerPaddingY, overflowY: 'auto' }}>
-                {activityItems.map((item) => {
-                    const isActiveItem = activeActivity === item.key;
+        // If clicking a zen path item, clear the zenMoreActivity to restore zen sidebar
+        if (item.path?.startsWith('/zen/')) {
+            setZenMoreActivity(null);
+            navigate(item.path);
+            return;
+        }
 
-                    // Handle click: if has path, navigate to path; otherwise navigate to first child
-                    const handleClick = () => {
-                        setMobileOpen(false);
-                        if (item.path) {
-                            navigate(item.path);
-                        } else if (item.children && item.children.length > 0) {
-                            navigate(item.children[0].path);
-                        }
-                    };
+        sessionStorage.setItem('layout.activeActivity', item.key);
 
-                    // Short label for display (max 8 chars)
-                    const shortLabel = item.label.length > 12 ? item.label.slice(0, 7) + '…' : item.label;
+        const firstNavChild = item.children?.find(c => c.type !== 'divider');
+        const targetPath =
+            item.path ||
+            sessionStorage.getItem(`layout.activityPath.${item.key}`) ||
+            firstNavChild?.path;
+        if (targetPath) navigate(targetPath);
+    };
 
-                    return (
-                        <ListItemButton
-                            key={item.key}
-                            component={item.path && !item.children ? RouterLink : 'div'}
-                            to={item.path && !item.children ? item.path : undefined}
-                            onClick={handleClick}
-                            sx={activityItemSx({
-                                '&:hover': {
-                                    bgcolor: isActiveItem ? 'primary.dark' : 'action.hover',
-                                    color: isActiveItem ? 'primary.contrastText' : 'primary.main',
-                                },
-                                ...(isActiveItem && {
-                                    bgcolor: 'primary.main',
-                                    color: 'primary.contrastText',
-                                    '&::before': {
-                                        content: '""',
-                                        position: 'absolute',
-                                        left: 0,
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        width: 3,
-                                        height: 28,
-                                        bgcolor: 'primary.light',
-                                        borderRadius: '0 2px 2px 0',
-                                        boxShadow: '0 0 8px rgba(37, 99, 235, 0.5)',
-                                    },
-                                }),
-                            })}
-                        >
-                            <ListItemIcon
-                                sx={{
-                                    minWidth: 0,
-                                    color: 'inherit',
-                                    justifyContent: 'center',
-                                }}
-                            >
-                                {item.icon}
-                            </ListItemIcon>
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    fontSize: '0.65rem',
-                                    fontWeight: isActiveItem ? 600 : 400,
-                                    color: 'inherit',
-                                    textAlign: 'center',
-                                    lineHeight: 1.2,
-                                    maxWidth: '100%',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                }}
-                            >
-                                {shortLabel}
-                            </Typography>
-                        </ListItemButton>
-                    );
-                })}
+    // Get zen mode activity items
+    const getZenActivityItems = (): ActivityItem[] => {
+        const zenPathMatch = location.pathname.match(/^\/zen\/([^/]+)$/);
+        const currentAgent = zenPathMatch ? zenPathMatch[1] : 'claude_code';
 
-                {/* Divider before status icons */}
-                <Divider sx={{ mx: 2, my: 1 }} />
+        const getAgentInfo = (agent: string) => {
+            const info: Record<string, { key: string; icon: any; label: string; path: string }> = {
+                'claude_code': { key: 'zen-claude_code', icon: <Claude size={22} />, label: 'Claude', path: '/zen/claude_code' },
+                'codex':       { key: 'zen-codex',       icon: <Codex size={22} />,   label: 'Codex',       path: '/zen/codex' },
+                'opencode':    { key: 'zen-opencode',    icon: <OpenCode size={22} />, label: 'OpenCode',    path: '/zen/opencode' },
+                'xcode':       { key: 'zen-xcode',       icon: <Xcode size={22} />,   label: 'Xcode',       path: '/zen/xcode' },
+                'vscode':      { key: 'zen-vscode',      icon: <VSCode size={22} />,  label: 'VS Code',     path: '/zen/vscode' },
+                'openai':      { key: 'zen-openai',      icon: <OpenAI size={22} />,  label: 'OpenAI',      path: '/zen/openai' },
+                'anthropic':   { key: 'zen-anthropic',   icon: <Anthropic size={22} />, label: 'Anthropic', path: '/zen/anthropic' },
+                'agent':       { key: 'zen-agent',       icon: <OpenClaw size={22} />, label: 'OpenClaw',   path: '/zen/agent' },
+            };
+            return info[agent] || info['claude_code'];
+        };
 
-                {/* Status Indicators - Inline with other icons */}
-                {(!isHealthy || import.meta.env.DEV) && (
-                    <Tooltip title={import.meta.env.DEV && isHealthy ? 'Disconnected (Debug)' : 'Disconnected'} placement="right" arrow>
-                        <ListItemButton
-                            onClick={showDisconnectDialog}
-                            sx={activityItemSx({
-                                color: 'error.main',
-                                '&:hover': {
-                                    bgcolor: 'action.hover',
-                                },
-                            })}
-                        >
-                            <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                                <ErrorOutline sx={{ fontSize: 22 }} />
-                            </ListItemIcon>
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    fontSize: '0.65rem',
-                                    fontWeight: 400,
-                                    color: 'inherit',
-                                    textAlign: 'center',
-                                    lineHeight: 1.2,
-                                    maxWidth: '100%',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                }}
-                            >
-                                Error
-                            </Typography>
-                        </ListItemButton>
-                    </Tooltip>
-                )}
+        const agentInfo = getAgentInfo(currentAgent);
+        return [{ key: agentInfo.key, icon: agentInfo.icon, label: agentInfo.label, path: agentInfo.path }];
+    };
 
-                {(hasUpdate || import.meta.env.DEV) && (
-                    <Tooltip
-                        title={import.meta.env.DEV && !hasUpdate ? 'Dev Mode' : 'New Version Available'}
-                        placement="right"
-                        arrow
-                    >
-                        <ListItemButton
-                            onClick={showUpdateDialog}
-                            sx={activityItemSx({
-                                color: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main',
-                                '&:hover': {
-                                    bgcolor: 'action.hover',
-                                },
-                            })}
-                        >
-                            <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                                <NewReleases sx={{ fontSize: 22 }} />
-                            </ListItemIcon>
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    fontSize: '0.65rem',
-                                    fontWeight: 400,
-                                    color: 'inherit',
-                                    textAlign: 'center',
-                                    lineHeight: 1.2,
-                                    maxWidth: '100%',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                }}
-                            >
-                                {import.meta.env.DEV && !hasUpdate ? 'Dev' : 'Update'}
-                            </Typography>
-                        </ListItemButton>
-                    </Tooltip>
-                )}
+    const zenActivityItems = getZenActivityItems();
 
-                {/* User Icon - Inline with other icons */}
-            </Box>
-
-            {/* Bottom Section: User/About Icon */}
-            <Box
-                sx={{
-                    py: 1,
-                    borderTop: '1px solid',
-                    borderColor: 'divider',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 0.5,
-                    height: footerHeight,
-                }}
-            >
-                <Tooltip title="Click" placement="right" arrow>
-                    <ListItemButton
-                        onClick={handleEasterEgg}
-                        sx={activityItemSx({
-                            '&:hover': {
-                                bgcolor: 'action.hover',
-                                color: 'text.primary',
-                            },
-                        })}
-                    >
-                        <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                            <AccountIcon sx={{ fontSize: 22 }} />
-                        </ListItemIcon>
-                        <Typography
-                            variant="caption"
-                            sx={{
-                                fontSize: '0.65rem',
-                                fontWeight: 400,
-                                color: 'inherit',
-                                textAlign: 'center',
-                                lineHeight: 1.2,
-                                maxWidth: '100%',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                            }}
-                        >
-                        </Typography>
-                    </ListItemButton>
-                </Tooltip>
-            </Box>
-        </Box>
-    );
-
-    // Sidebar panel content (second column - shows sub-items)
-    const sidebarContent = (
-        <Box
-            sx={{
-                width: sidebarWidth,
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                bgcolor: 'background.paper',
-                borderRight: '1px solid',
-                borderColor: 'divider',
-                overflow: 'hidden',
-            }}
-        >
-            {/* Sidebar Header */}
-            <Box
-                sx={{
-                    height: headerHeight,
-                    px: 2,
-                    display: 'flex',
-                    alignItems: 'center',
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                }}
-            >
-                <Typography
-                    variant="subtitle2"
-                    sx={{
-                        color: 'text.primary',
-                        fontWeight: 600,
-                        fontSize: '0.875rem',
-                    }}
-                >
-                    {activeActivityLabel}
-                </Typography>
-            </Box>
-
-            {/* Sidebar Items */}
-            <List sx={{
-                flex: 1,
-                py: 1,
-                overflowY: 'auto',
-                '&::-webkit-scrollbar': { width: 6 },
-                '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
-                '&::-webkit-scrollbar-thumb': {
-                    backgroundColor: 'grey.300',
-                    borderRadius: 1,
-                    '&:hover': { backgroundColor: 'grey.400' }
-                }
-            }}>
-                {sidebarItems.map((item) => {
-                    const isAddProfile = item.path === '#add-profile';
-                    return (
-                    <React.Fragment key={item.path}>
-                        {item.divider && <Divider sx={{ mx: 2, my: 1 }} />}
-                        <ListItem disablePadding>
-                            <ListItemButton
-                                {...(isAddProfile
-                                    ? { onClick: handleAddProfileClick }
-                                    : { component: RouterLink, to: item.path, onClick: () => setMobileOpen(false) }
-                                )}
-                                sx={{
-                                    mx: 1.5,
-                                    borderRadius: 1.25,
-                                    py: 1.25,
-                                    px: 2,
-                                    color: 'text.secondary',
-                                    position: 'relative',
-                                    ...(!isAddProfile && isActive(item.path) && {
-                                        backgroundColor: 'primary.main',
-                                        color: 'primary.contrastText',
-                                        '& img': { filter: 'none !important' },
-                                        '& .MuiListItemIcon-root > div': {
-                                            bgcolor: 'white',
-                                            borderRadius: 0.5,
-                                            p: 0.25,
-                                        },
-                                        '&::before': {
-                                            content: '""',
-                                            position: 'absolute',
-                                            left: 0,
-                                            top: '50%',
-                                            transform: 'translateY(-50%)',
-                                            width: 3,
-                                            height: 28,
-                                            backgroundColor: 'primary.light',
-                                            borderRadius: '0 2px 2px 0',
-                                            boxShadow: '0 0 8px rgba(37, 99, 235, 0.5)',
-                                        },
-                                        '&:hover': {
-                                            backgroundColor: 'primary.dark',
-                                        },
-                                        '& .MuiListItemIcon-root': {
-                                            color: 'primary.contrastText',
-                                        },
-                                        '& .MuiListItemText-primary': {
-                                            color: 'primary.contrastText',
-                                            fontWeight: 600,
-                                        },
-                                    }),
-                                    '&:hover': {
-                                        backgroundColor: (!isAddProfile && isActive(item.path)) ? 'primary.dark' : 'action.hover',
-                                        color: (!isAddProfile && isActive(item.path)) ? 'primary.contrastText' : 'text.primary',
-                                    },
-                                }}
-                            >
-                                {item.icon && (
-                                    <ListItemIcon
-                                        sx={{
-                                            minWidth: 32,
-                                            color: 'inherit',
-                                            '& svg': { fontSize: 20 },
-                                        }}
-                                    >
-                                        {item.icon}
-                                    </ListItemIcon>
-                                )}
-                                <ListItemText
-                                    primary={item.label}
-                                    secondary={item.subtitle}
-                                    slotProps={{
-                                        primary: {
-                                            fontWeight: (!isAddProfile && isActive(item.path)) ? 600 : 400,
-                                            fontSize: '0.875rem',
-                                            lineHeight: 1.3,
-                                        },
-                                        secondary: {
-                                            fontSize: '0.6875rem',
-                                            lineHeight: 1.2,
-                                        },
-                                    }}
-                                    sx={{
-                                        '& .MuiListItemText-secondary': {
-                                            color: (!isAddProfile && isActive(item.path)) ? 'rgba(255,255,255,0.7)' : 'text.secondary',
-                                        },
-                                    }}
-                                />
-                            </ListItemButton>
-                        </ListItem>
-                    </React.Fragment>
-                    );
-                })}
-            </List>
-
-            {/* Add Profile Popover */}
-            <Popover
-                open={Boolean(addProfileAnchorEl)}
-                anchorEl={addProfileAnchorEl}
-                onClose={handleAddProfileClose}
-                anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-                transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-                slotProps={{ paper: { sx: { p: 2, width: 220, mt: -0.5 } } }}
-            >
-                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>New Profile</Typography>
-                <TextField
-                    inputRef={addProfileInputRef}
-                    fullWidth
-                    size="small"
-                    placeholder="Profile name"
-                    value={newProfileName}
-                    onChange={(e) => setNewProfileName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleCreateProfile()}
-                    disabled={isCreating}
-                />
-                <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                    <Button size="small" onClick={handleAddProfileClose} disabled={isCreating}>Cancel</Button>
-                    <Button size="small" variant="contained" onClick={handleCreateProfile} disabled={!newProfileName.trim() || isCreating}>Create</Button>
-                </Box>
-            </Popover>
-
-            {/* Bottom Slogan */}
-            <Box
-                sx={{
-                    height: footerHeight,
-                    py: 1.5,
-                    px: 2,
-                    borderTop: '1px solid',
-                    borderColor: 'divider',
-                }}
-            >
-                <Tooltip title="For all Solo Builders, Dev Teams and Agents." placement="top" arrow>
-                    <Typography
-                        variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            fontSize: '0.7rem',
-                            textAlign: 'center',
-                            display: 'block',
-                            fontStyle: 'italic',
-                            cursor: 'default',
-                        }}
-                    >
-                        {t('layout.slogan')}
-                    </Typography>
-                </Tooltip>
-            </Box>
-        </Box>
-    );
-
-    // Combined navigation for desktop (activity bar + conditional sidebar)
-    const desktopNavigation = (
-        <Box sx={{ display: 'flex', height: '100vh' }}>
-            {activityBarContent}
-            {sidebarItems.length > 0 && sidebarContent}
-        </Box>
-    );
-
-    // Mobile drawer content
-    const mobileDrawerContent = (
+    const navigationContent = (
         <Box sx={{ display: 'flex', height: '100%' }}>
-            {activityBarContent}
-            {sidebarItems.length > 0 && sidebarContent}
+            <ZenActivityBar
+                activityItems={activityItems}
+                activeActivity={activeActivity}
+                onActivityClick={handleActivityClick}
+                onUserClick={(e) => setEasterEggAnchorEl(e.currentTarget)}
+                onZenToggle={() => {
+                    // Enter zen mode
+                    localStorage.setItem('mock-flag-_global-zen', 'claude_code');
+                    window.location.reload();
+                }}
+                zenEnabled={effectiveZenEnabled}
+            />
+            {sidebarItems.length > 0 && (
+                <Sidebar
+                    sidebarItems={sidebarItems}
+                    activeActivityLabel={activeActivityLabel}
+                    onClose={() => setMobileOpen(false)}
+                />
+            )}
+        </Box>
+    );
+
+    const zenNavigationContent = (
+        <Box sx={{ display: 'flex', height: '100%' }}>
+            <ZenActivityBar
+                activityItems={zenActivityItems}
+                activeActivity={zenActiveActivity}
+                onActivityClick={handleActivityClick}
+                onUserClick={(e) => setEasterEggAnchorEl(e.currentTarget)}
+                onZenToggle={() => {
+                    // Exit zen mode - clear flag and redirect to dashboard
+                    localStorage.removeItem('mock-flag-_global-zen');
+                    window.location.href = '/dashboard/7d';
+                }}
+                zenEnabled={effectiveZenEnabled}
+                onMoreClick={(e) => setMoreMenuAnchorEl(e.currentTarget)}
+            />
+            {sidebarItems.length > 0 && (
+                <Sidebar
+                    sidebarItems={sidebarItems}
+                    activeActivityLabel={activeActivityLabel}
+                    onClose={() => setMobileOpen(false)}
+                />
+            )}
         </Box>
     );
 
     return (
-        <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
-            {/* Desktop Layout */}
-            <Box component="nav" sx={{ display: { xs: 'none', md: 'block' } }}>
-                {desktopNavigation}
-            </Box>
+        <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', position: 'relative', zIndex: Z_INDEX.main }}>
+            {/* Zen Mode Layout */}
+            {effectiveZenEnabled && !zenLoading && zenAgent ? (
+                <>
+                    {/* Desktop nav - Zen mode */}
+                    <Box component="nav" sx={{ display: { xs: 'none', md: 'flex' }, height: '100%', position: 'relative', zIndex: Z_INDEX.drawer + 1 }}>
+                        {zenNavigationContent}
+                    </Box>
 
-            {/* Mobile Drawer */}
-            <Drawer
-                variant="temporary"
-                open={mobileOpen}
-                onClose={() => setMobileOpen(false)}
-                ModalProps={{ keepMounted: true }}
-                sx={{
-                    display: { xs: 'block', md: 'none' },
-                    '& .MuiDrawer-paper': {
-                        boxSizing: 'border-box',
-                        width: sidebarItems.length > 0 ? activityBarWidth + sidebarWidth : activityBarWidth,
-                        bgcolor: 'background.paper',
-                    },
-                }}
-            >
-                {mobileDrawerContent}
-            </Drawer>
-
-            {/* Mobile Toggle Button */}
-            <IconButton
-                color="primary"
-                aria-label="Open navigation menu"
-                onClick={() => setMobileOpen(!mobileOpen)}
-                sx={{
-                    display: { xs: 'flex', md: 'none' },
-                    position: 'fixed',
-                    top: 12,
-                    left: 12,
-                    zIndex: 1300,
-                    bgcolor: 'background.paper',
-                    boxShadow: 3,
-                    width: 44,
-                    height: 44,
-                    '&:hover': {
-                        bgcolor: 'action.hover',
-                        transform: 'scale(1.05)',
-                    },
-                    transition: 'all 0.15s',
-                }}
-            >
-                <MenuIcon />
-            </IconButton>
-
-            {/* Main Content */}
-            <Box
-                component="main"
-                sx={{
-                    flexGrow: 1,
-                    height: '100vh',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    overflowX: 'hidden',
-                }}
-            >
-                <Box
-                    sx={{
-                        flex: 1,
-                        p: 3,
-                        overflowY: 'auto',
-                        scrollBehavior: 'smooth',
-                        '&::-webkit-scrollbar': {
-                            width: 8,
-                        },
-                        '&::-webkit-scrollbar-track': {
-                            backgroundColor: 'grey.100',
-                            borderRadius: 1,
-                        },
-                        '&::-webkit-scrollbar-thumb': {
-                            backgroundColor: 'grey.300',
-                            borderRadius: 1,
-                            '&:hover': {
-                                backgroundColor: 'grey.400',
+                    {/* Mobile Drawer - Zen mode */}
+                    <Drawer
+                        variant="temporary"
+                        open={mobileOpen}
+                        onClose={() => setMobileOpen(false)}
+                        ModalProps={{ keepMounted: true }}
+                        sx={{
+                            display: { xs: 'block', md: 'none' },
+                            '& .MuiDrawer-paper': {
+                                boxSizing: 'border-box',
+                                width: activityBarWidth + sidebarWidth,
+                                zIndex: Z_INDEX.drawer,
                             },
-                        },
-                    }}
-                >
-                    {children ?? <Outlet />}
-                </Box>
-            </Box>
+                        }}
+                    >
+                        {zenNavigationContent}
+                    </Drawer>
 
-            {/* Easter Egg Popover */}
-            <Popover
-                open={Boolean(easterEggAnchorEl)}
-                anchorEl={easterEggAnchorEl}
-                onClose={handleEasterEggClose}
-                anchorOrigin={{
-                    vertical: 'top',
-                    horizontal: 'center',
-                }}
-                transformOrigin={{
-                    vertical: 'bottom',
-                    horizontal: 'center',
-                }}
-                sx={{
-                    '& .MuiPopover-paper': {
-                        bgcolor: 'primary.main',
-                        color: 'white',
-                        borderRadius: 2,
-                        px: 2,
-                        py: 1,
-                        fontSize: '0.875rem',
-                    },
-                }}
-            >
-                Hi, I'm Tingly-Box, Your Smart AI Orchestrator · {currentVersion}
-            </Popover>
+                    {/* Mobile toggle */}
+                    <IconButton
+                        color="primary"
+                        aria-label="Open navigation menu"
+                        onClick={() => setMobileOpen(!mobileOpen)}
+                        sx={{
+                            display: { xs: 'flex', md: 'none' },
+                            position: 'fixed',
+                            top: 12,
+                            left: 12,
+                            zIndex: Z_INDEX.mobileToggle,
+                            boxShadow: 3,
+                            width: 44,
+                            height: 44,
+                            '&:hover': { bgcolor: 'action.hover', transform: 'scale(1.05)' },
+                            transition: 'all 0.15s',
+                        }}
+                    >
+                        <IconMenu size={24} />
+                    </IconButton>
+
+                    {/* Main content */}
+                    <Box
+                        component="main"
+                        sx={{ flexGrow: 1, height: '100vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden', position: 'relative', zIndex: 1 }}
+                    >
+                        <Box
+                            sx={{
+                                flex: 1,
+                                p: 3,
+                                overflowY: 'auto',
+                                scrollBehavior: 'smooth',
+                                '&::-webkit-scrollbar': { width: 8 },
+                                '&::-webkit-scrollbar-track': { backgroundColor: 'grey.100', borderRadius: 1 },
+                                '&::-webkit-scrollbar-thumb': {
+                                    backgroundColor: 'grey.300',
+                                    borderRadius: 1,
+                                    '&:hover': { backgroundColor: 'grey.400' },
+                                },
+                            }}
+                        >
+                            {children ?? <Outlet />}
+                        </Box>
+                    </Box>
+
+                    {/* More Menu */}
+                    <Menu
+                        anchorEl={moreMenuAnchorEl}
+                        open={Boolean(moreMenuAnchorEl)}
+                        onClose={() => setMoreMenuAnchorEl(null)}
+                        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                        slotProps={{
+                            paper: {
+                                sx: { minWidth: 200, maxHeight: 400 },
+                            },
+                        }}
+                    >
+                        <MenuItem disabled sx={{ opacity: 0.6 }}>
+                            <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                                Switch to:
+                            </Typography>
+                        </MenuItem>
+                        {activityItems.map((activity) => (
+                            <MenuItem
+                                key={activity.key}
+                                onClick={() => {
+                                    if (activity.children && activity.children.length > 0) {
+                                        // Show the secondary sidebar for this activity
+                                        setZenMoreActivity(activity.key);
+                                        sessionStorage.setItem('layout.activeActivity', activity.key);
+                                        // Navigate to first child
+                                        const firstNavChild = activity.children.find(c => c.type !== 'divider');
+                                        const targetPath = activity.path || firstNavChild?.path;
+                                        if (targetPath) navigate(targetPath);
+                                    } else {
+                                        sessionStorage.setItem('layout.activeActivity', activity.key);
+                                        const targetPath = activity.path;
+                                        if (targetPath) navigate(targetPath);
+                                    }
+                                    setMoreMenuAnchorEl(null);
+                                }}
+                                selected={zenActiveActivity === activity.key || zenMoreActivity === activity.key}
+                            >
+                                {activity.icon}
+                                <Typography sx={{ ml: 1 }}>{activity.label}</Typography>
+                            </MenuItem>
+                        ))}
+
+                        {/* Theme options - only in zen mode */}
+                        {effectiveZenEnabled && (
+                            <>
+                                <MenuItem disabled sx={{ opacity: 0.6 }}>
+                                    <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                                        Theme:
+                                    </Typography>
+                                </MenuItem>
+                                <MenuItem onClick={() => setTheme('light')} sx={{ gap: 1.5 }}>
+                                    <IconSun size={18} />
+                                    <Typography>Light</Typography>
+                                </MenuItem>
+                                <MenuItem onClick={() => setTheme('dark')} sx={{ gap: 1.5 }}>
+                                    <IconMoon size={18} />
+                                    <Typography>Dark</Typography>
+                                </MenuItem>
+                                <MenuItem onClick={() => setTheme('sunlit')} sx={{ gap: 1.5 }}>
+                                    <IconSunHigh size={18} />
+                                    <Typography>Sunlit</Typography>
+                                </MenuItem>
+                            </>
+                        )}
+                    </Menu>
+
+                    {/* Easter Egg Popover */}
+                    <Popover
+                        open={Boolean(easterEggAnchorEl)}
+                        anchorEl={easterEggAnchorEl}
+                        onClose={() => setEasterEggAnchorEl(null)}
+                        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+                        transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                        sx={{ zIndex: Z_INDEX.popover, '& .MuiPopover-paper': { bgcolor: 'primary.main', color: 'white', borderRadius: 2, px: 2, py: 1, fontSize: '0.875rem' } }}
+                    >
+                        Hi, I'm Tingly-Box, Your Smart AI Orchestrator · {currentVersion}
+                    </Popover>
+                </>
+            ) : (
+                <>
+                    {/* Normal Mode Layout */}
+                    {/* Desktop nav */}
+                    <Box component="nav" sx={{ display: { xs: 'none', md: 'flex' }, height: '100%', position: 'relative', zIndex: Z_INDEX.drawer + 1 }}>
+                        {navigationContent}
+                    </Box>
+
+                    {/* Mobile Drawer */}
+                    <Drawer
+                        variant="temporary"
+                        open={mobileOpen}
+                        onClose={() => setMobileOpen(false)}
+                        ModalProps={{ keepMounted: true }}
+                        sx={{
+                            display: { xs: 'block', md: 'none' },
+                            '& .MuiDrawer-paper': {
+                                boxSizing: 'border-box',
+                                width: sidebarItems.length > 0 ? activityBarWidth + sidebarWidth : activityBarWidth,
+                                zIndex: Z_INDEX.drawer,
+                            },
+                        }}
+                    >
+                        {navigationContent}
+                    </Drawer>
+
+                    {/* Mobile toggle */}
+                    <IconButton
+                        color="primary"
+                        aria-label="Open navigation menu"
+                        onClick={() => setMobileOpen(!mobileOpen)}
+                        sx={{
+                            display: { xs: 'flex', md: 'none' },
+                            position: 'fixed',
+                            top: 12,
+                            left: 12,
+                            zIndex: Z_INDEX.mobileToggle,
+                            boxShadow: 3,
+                            width: 44,
+                            height: 44,
+                            '&:hover': { bgcolor: 'action.hover', transform: 'scale(1.05)' },
+                            transition: 'all 0.15s',
+                        }}
+                    >
+                        <IconMenu size={24} />
+                    </IconButton>
+
+                    {/* Main content */}
+                    <Box
+                        component="main"
+                        sx={{ flexGrow: 1, height: '100vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden', position: 'relative', zIndex: 1 }}
+                    >
+                        <Box
+                            sx={{
+                                flex: 1,
+                                p: 3,
+                                overflowY: 'auto',
+                                scrollBehavior: 'smooth',
+                                '&::-webkit-scrollbar': { width: 8 },
+                                '&::-webkit-scrollbar-track': { backgroundColor: 'grey.100', borderRadius: 1 },
+                                '&::-webkit-scrollbar-thumb': {
+                                    backgroundColor: 'grey.300',
+                                    borderRadius: 1,
+                                    '&:hover': { backgroundColor: 'grey.400' },
+                                },
+                            }}
+                        >
+                            {children ?? <Outlet />}
+                        </Box>
+                    </Box>
+
+                    {/* Easter Egg Popover */}
+                    <Popover
+                        open={Boolean(easterEggAnchorEl)}
+                        anchorEl={easterEggAnchorEl}
+                        onClose={() => setEasterEggAnchorEl(null)}
+                        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+                        transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                        sx={{ zIndex: Z_INDEX.popover, '& .MuiPopover-paper': { bgcolor: 'primary.main', color: 'white', borderRadius: 2, px: 2, py: 1, fontSize: '0.875rem' } }}
+                    >
+                        Hi, I'm Tingly-Box, Your Smart AI Orchestrator · {currentVersion}
+                    </Popover>
+                </>
+            )}
         </Box>
     );
 };

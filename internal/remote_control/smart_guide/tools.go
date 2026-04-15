@@ -24,6 +24,16 @@ type ToolContext struct {
 	ChatID      string
 	ProjectPath string
 	SessionID   string
+
+	// SendFile sends a local file to the user via the IM bot.
+	// Injected by the bot layer; nil if file sending is not available.
+	SendFile func(ctx context.Context, filePath, caption string) error
+
+	// RequestApproval requests explicit user approval for sensitive operations
+	// (e.g. sending files outside the project path). This callback must NOT be
+	// bypassed by yolo mode — it is distinct from the bash approval callback.
+	// Returns (false, nil) if denied. Returns (false, err) on failure.
+	RequestApproval func(ctx context.Context, prompt string) (approved bool, err error)
 }
 
 // ApprovalRequest represents a request for user approval
@@ -320,35 +330,89 @@ func (t *BashTool) Call(ctx context.Context, params BashParams) (*tool.ToolRespo
 // executeCommand executes a bash command using the extension tool
 // If skipAllowlist is true, the command is executed without allowlist restriction
 func (t *BashTool) executeCommand(ctx context.Context, command string, skipAllowlist bool) (*tool.ToolResponse, error) {
+	// Store original working directory
+	oldDir := t.Executor.GetWorkingDirectory()
+
 	// Create extension bash tool with current working directory
-	cwd := t.Executor.GetWorkingDirectory()
+	cwd := oldDir
 
-	// For approved commands not in allowlist, use empty allowlist to allow execution
-	allowedCommands := t.AllowedCommands
-	if skipAllowlist {
-		allowedCommands = []string{} // Empty allowlist means allow all
-	}
+	// Build a composite command: { command; pwd; }
+	// Using { } instead of ( ) ensures cd affects the current shell context
+	// The semicolon ensures pwd runs even if command fails
+	compositeCommand := fmt.Sprintf("{ %s; pwd; }", command)
 
+	// Use empty allowlist for extension tool since allowlist check was already done in Call method
+	// This design allows:
+	// 1. Single allowlist enforcement point (Call method)
+	// 2. Clean composite command format without allowlist conflicts
+	// 3. Simplified extension tool invocation
 	extBash := extTools.NewBashTool(
-		extTools.BashOptions(allowedCommands, nil, 120*time.Second, cwd),
+		extTools.BashOptions([]string{}, nil, 120*time.Second, cwd),
 		extTools.BashAllowChaining(true), // Allow command chaining
 	)
 
 	// Execute using extension tool
-	result, err := extBash.Call(ctx, extTools.BashParams{Command: command})
+	result, err := extBash.Call(ctx, extTools.BashParams{Command: compositeCommand})
 	if err != nil {
 		return result, err
 	}
 
-	// Add working directory context to response
+	// Extract the directory from the last line (pwd output)
+	newDir := t.extractDirectoryFromResult(result)
+	if newDir != "" && newDir != oldDir {
+		t.Executor.SetWorkingDirectory(newDir)
+		logrus.WithFields(logrus.Fields{
+			"oldDir": oldDir,
+			"newDir": newDir,
+		}).Info("BashTool: Working directory changed after command execution")
+		cwd = newDir
+	}
+
+	// Add working directory context to response (remove trailing pwd for cleaner output)
 	if result != nil && len(result.Content) > 0 {
-		// Extract text from content block and prepend cwd
 		if textBlock, ok := result.Content[0].(*message.TextBlock); ok {
-			result.Content[0] = message.Text(fmt.Sprintf("(cwd: %s)\n%s", cwd, textBlock.Text))
+			displayText := t.removeTrailingPwd(textBlock.Text)
+			result.Content[0] = message.Text(fmt.Sprintf("(cwd: %s)\n%s", cwd, displayText))
 		}
 	}
 
 	return result, nil
+}
+
+// extractDirectoryFromResult extracts the directory from the command result
+// The last line should be the pwd output from our composite command
+func (t *BashTool) extractDirectoryFromResult(result *tool.ToolResponse) string {
+	if result == nil || len(result.Content) == 0 {
+		return ""
+	}
+
+	if textBlock, ok := result.Content[0].(*message.TextBlock); ok {
+		// Trim trailing whitespace/newlines before splitting
+		text := strings.TrimRight(textBlock.Text, "\n\r\t ")
+		lines := strings.Split(text, "\n")
+
+		if len(lines) > 0 {
+			// The last line is the pwd output
+			potentialDir := strings.TrimSpace(lines[len(lines)-1])
+			// Verify it's a valid absolute path
+			if filepath.IsAbs(potentialDir) {
+				return potentialDir
+			}
+		}
+	}
+	return ""
+}
+
+// removeTrailingPwd removes the trailing pwd line from the command output
+func (t *BashTool) removeTrailingPwd(text string) string {
+	lines := strings.Split(text, "\n")
+	if len(lines) > 1 {
+		lastLine := strings.TrimSpace(lines[len(lines)-1])
+		if filepath.IsAbs(lastLine) {
+			return strings.Join(lines[:len(lines)-1], "\n")
+		}
+	}
+	return text
 }
 
 // isCommandAllowed checks if a command is in the allowlist
@@ -365,8 +429,27 @@ func (t *BashTool) isCommandAllowed(baseCmd string) bool {
 }
 
 // extractBaseCommand extracts the base command name from a command string
+// Handles subshells by extracting the first actual command inside parentheses
 func (t *BashTool) extractBaseCommand(command string) string {
 	trimmed := strings.TrimSpace(command)
+	// Handle subshell format: (cmd...)
+	if len(trimmed) > 0 && trimmed[0] == '(' {
+		// Find the closing parenthesis or first command inside
+		for i := 1; i < len(trimmed); i++ {
+			if trimmed[i] == ')' || trimmed[i] == ' ' || trimmed[i] == '\t' {
+				// Extract the command inside parentheses
+				innerCmd := strings.TrimSpace(trimmed[1:i])
+				return t.extractBaseCommand(innerCmd)
+			}
+		}
+		// If no closing paren found, extract what's inside
+		if len(trimmed) > 1 {
+			innerCmd := strings.TrimSpace(trimmed[1:])
+			return t.extractBaseCommand(innerCmd)
+		}
+	}
+
+	// Normal case: extract first word
 	for i, r := range trimmed {
 		if r == ' ' || r == '\t' {
 			return strings.ToLower(trimmed[:i])
@@ -562,6 +645,7 @@ func RegisterTools(
 	toolkit *tool.Toolkit, executor *ToolExecutor, chatID string,
 	getStatusFunc func(chatID string) (*StatusInfo, error),
 	updateProjectFunc func(chatID string, projectPath string) error,
+	toolCtx *ToolContext,
 ) error {
 
 	// Create tool groups
@@ -610,6 +694,14 @@ func RegisterTools(
 	if err := extTools.RegisterEditTool(toolkit,
 		extTools.EditOptions(nil)); err != nil {
 		return fmt.Errorf("failed to register edit tool: %w", err)
+	}
+
+	// Register send_file tool (if SendFile callback is available)
+	if toolCtx != nil && toolCtx.SendFile != nil {
+		sendFileTool := NewSendFileTool(executor, toolCtx)
+		if err := toolkit.RegisterAll(sendFileTool); err != nil {
+			return fmt.Errorf("failed to register send_file tool: %w", err)
+		}
 	}
 
 	// Note: handoff_to_cc is not registered for now

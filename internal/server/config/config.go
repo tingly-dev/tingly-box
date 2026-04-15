@@ -34,18 +34,17 @@ const (
 
 // Config represents the global configuration
 type Config struct {
-	Rules             []typ.Rule           `yaml:"rules" json:"rules"`                             // List of request configurations
-	DefaultRequestID  int                  `yaml:"default_request_id" json:"default_request_id"`   // Index of the default Rule
-	UserToken         string               `yaml:"user_token" json:"user_token"`                   // User token for UI and control API authentication
-	ModelToken        string               `yaml:"model_token" json:"model_token"`                 // Model token for OpenAI and Anthropic API authentication
-	VirtualModelToken string               `yaml:"virtual_model_token" json:"virtual_model_token"` // Virtual model token for testing (independent from ModelToken)
-	InternalAPIToken  string               `json:"-"`                                              // Internal API token for probe testing (generated at startup, not persisted)
-	EncryptProviders  bool                 `yaml:"encrypt_providers" json:"encrypt_providers"`     // Whether to encrypt provider info (default false)
-	Scenarios         []typ.ScenarioConfig `yaml:"scenarios" json:"scenarios"`                     // Scenario-specific configurations
-	GUI               GUIConfig            `json:"gui"`                                            // GUI-specific settings
-	RemoteCoder       RemoteCoderConfig    `json:"remote_coder"`                                   // Remote-coder service settings
-	RandomUUID        string               `json:"random_uuid"`                                    // A random uuid to help protocol transform for some special provider
-	Random256         string               `json:"-"`                                              // Calc from random uuid with sha256
+	Rules              []typ.Rule           `yaml:"rules" json:"rules"`                           // List of request configurations
+	DefaultRequestID   int                  `yaml:"default_request_id" json:"default_request_id"` // Index of the default Rule
+	UserToken          string               `yaml:"user_token" json:"user_token"`                 // User token for UI and control API authentication
+	ModelToken         string               `yaml:"model_token" json:"model_token"`               // Model token for OpenAI and Anthropic API authentication
+	InternalAPIToken   string               `json:"-"`                                            // Internal API token for probe testing (generated at startup, not persisted)
+	EncryptProviders   bool                 `yaml:"encrypt_providers" json:"encrypt_providers"`   // Whether to encrypt provider info (default false)
+	Scenarios          []typ.ScenarioConfig `yaml:"scenarios" json:"scenarios"`                   // Scenario-specific configurations
+	GUI                GUIConfig            `json:"gui"`                                          // GUI-specific settings
+	RemoteCoder        RemoteCoderConfig    `json:"remote_coder"`                                 // Remote-coder service settings
+	RandomUUID         string               `json:"random_uuid"`                                  // A random uuid to help protocol transform for some special provider
+	ClaudeCodeDeviceID string               `json:"claude_code_device_id"`                        // Calc from random claude code device id with sha256
 
 	// Merged fields from Config struct
 	ProvidersV1 map[string]*typ.Provider `json:"providers"`
@@ -79,6 +78,12 @@ type Config struct {
 
 	// HTTP Transport settings for upstream API connections
 	HTTPTransport HTTPTransportConfig `json:"http_transport,omitempty" yaml:"http_transport,omitempty"`
+
+	// ProviderTemplateSource supports three modes:
+	// 1. Empty/default -> use embedded templates (default GitHub sync behavior)
+	// 2. file:///path/to/template.json -> load from local file
+	// 3. https://example.com/template.json -> load from HTTP URL
+	ProviderTemplateSource string `yaml:"provider_template_source,omitempty" json:"provider_template_source,omitempty"`
 
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
@@ -127,6 +132,12 @@ type HTTPTransportConfig struct {
 	// Default (nil): false
 	// WARNING: Setting this to true will significantly impact performance
 	DisableKeepAlives *bool `json:"disable_keep_alives,omitempty" yaml:"disable_keep_alives,omitempty"`
+
+	// RespectEnvProxy controls whether providers without explicit proxy configuration
+	// should use environment/system proxy settings (HTTP_PROXY, HTTPS_PROXY, macOS system proxy, etc.)
+	// Default (nil): false - providers without proxy_url connect directly
+	// Set to true: providers without proxy_url will use system/environment proxy
+	RespectEnvProxy *bool `json:"respect_env_proxy,omitempty" yaml:"respect_env_proxy,omitempty"`
 }
 
 // ConfigOption is a function that modifies a Config during initialization
@@ -252,9 +263,6 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 		logrus.Warnf("built-in rules disabled")
 	} else {
 		cfg.InsertDefaultRule()
-		if cfg.VirtualModelToken == "" {
-			cfg.VirtualModelToken = constant.DefaultVirtualModelToken
-		}
 	}
 
 	// Ensure default scenario configs are set
@@ -269,7 +277,7 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 	}
 	if cfg.UserToken == "" {
 		// Generate secure random token instead of using default
-		userToken, err := GenerateSecureToken()
+		userToken, err := GenerateUserToken()
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to generate secure user token, using default")
 			cfg.UserToken = constant.DefaultUserToken
@@ -279,7 +287,7 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 			logrus.Info("Generated new UserToken for control panel:")
 			logrus.Infof("  %s", cfg.UserToken)
 			logrus.Info("Use this token to log in to the web UI at:")
-			logrus.Infof("  http://localhost:%d/login", cfg.ServerPort)
+			logrus.Infof("  http://localhost:%d/login/%s", cfg.ServerPort, cfg.UserToken)
 			logrus.Info("=============================================")
 		}
 		updated = true
@@ -303,10 +311,13 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 
 	if cfg.RandomUUID == "" {
 		cfg.RandomUUID = uuid.New().String()
+	}
+	if cfg.ClaudeCodeDeviceID == "" {
+		cfg.RandomUUID = uuid.New().String()
 		hash := sha3.Sum256([]byte(cfg.RandomUUID))
 		hashString := hex.EncodeToString(hash[:])
-		cfg.Random256 = hashString
-		logrus.Info("Generated new random 256:", hashString)
+		cfg.ClaudeCodeDeviceID = hashString
+		logrus.Info("Generated new random claude code device id:", hashString)
 	}
 
 	// Generate internal API token for probe testing (always regenerated at startup)
@@ -669,7 +680,9 @@ func (c *Config) IsRequestModelInScenario(modelName string, scenario typ.RuleSce
 	return false
 }
 
-// IsWildcardRuleName checks if the given rule name is a wildcard that matches any model
+// IsWildcardRuleName checks if the given rule name is a wildcard that matches any model.
+// This function is thread-safe as it only performs constant string comparisons
+// and does not access any shared state. It can be called without holding Config.mu.
 func IsWildcardRuleName(name string) bool {
 	return name == WildcardRuleName || name == WildcardRuleNameAlt
 }
@@ -883,31 +896,6 @@ func (c *Config) HasModelToken() bool {
 	return c.ModelToken != ""
 }
 
-// SetVirtualModelToken sets the virtual model token for testing
-func (c *Config) SetVirtualModelToken(token string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.VirtualModelToken = token
-	return c.Save()
-}
-
-// GetVirtualModelToken returns the virtual model token
-func (c *Config) GetVirtualModelToken() string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	return c.VirtualModelToken
-}
-
-// HasVirtualModelToken checks if a virtual model token is configured
-func (c *Config) HasVirtualModelToken() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	return c.VirtualModelToken != ""
-}
-
 // GetInternalAPIToken returns the internal API token for probe testing
 // The token is generated at startup and stored in memory only (not persisted to config file)
 func (c *Config) GetInternalAPIToken() string {
@@ -969,15 +957,16 @@ func (c *Config) GetDefaultMaxTokens() int {
 	return c.DefaultMaxTokens
 }
 
-// GetToolInterceptorConfig returns the global tool interceptor config
-func (c *Config) GetToolInterceptorConfig() *typ.ToolInterceptorConfig {
+// GetMCPRuntimeConfig returns the global MCP runtime config.
+func (c *Config) GetMCPRuntimeConfig() *typ.MCPRuntimeConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	var config typ.ToolInterceptorConfig
+	var config typ.MCPRuntimeConfig
 	if c.ToolConfigs != nil {
-		if data, ok := c.ToolConfigs[db.ToolTypeInterceptor]; ok {
+		if data, ok := c.ToolConfigs[db.ToolTypeMCPRuntime]; ok {
 			if err := json.Unmarshal(data, &config); err == nil {
+				typ.ApplyMCPRuntimeDefaults(&config)
 				return &config
 			}
 		}
@@ -1028,112 +1017,12 @@ func (c *Config) SetToolConfig(toolType string, config interface{}) error {
 	return c.Save()
 }
 
-// GetToolInterceptorConfigForProvider returns the effective tool interceptor config for a specific provider
-// This merges the global config with provider-specific config from the tool config store
-func (c *Config) GetToolInterceptorConfigForProvider(providerUUID string) (*typ.ToolInterceptorConfig, bool) {
-	global := c.GetToolInterceptorConfig()
-	if global == nil && c.toolConfigStore == nil {
-		return nil, false
-	}
-
-	// Try to get provider-specific config from the store
-	providerConfig, enabled, err := c.toolConfigStore.GetToolInterceptorConfig(providerUUID)
-	if err != nil {
-		logrus.Warnf("Failed to get tool interceptor config for provider %s: %v", providerUUID, err)
-	}
-
-	// If provider explicitly disabled, return disabled
-	if providerConfig != nil && !enabled {
-		return nil, false
-	}
-
-	// If provider has config, merge with global (provider takes precedence)
-	if providerConfig != nil {
-		// Start with an empty config or copy from global if available
-		effective := &typ.ToolInterceptorConfig{}
-
-		// Copy global config values if global is not nil
-		if global != nil {
-			effective.PreferLocalSearch = global.PreferLocalSearch
-			effective.SearchAPI = global.SearchAPI
-			effective.SearchKey = global.SearchKey
-			effective.MaxResults = global.MaxResults
-			effective.ProxyURL = global.ProxyURL
-			effective.MaxFetchSize = global.MaxFetchSize
-			effective.FetchTimeout = global.FetchTimeout
-			effective.MaxURLLength = global.MaxURLLength
-		}
-
-		// Apply provider overrides
-		if providerConfig.PreferLocalSearch {
-			effective.PreferLocalSearch = true
-		}
-		if providerConfig.SearchAPI != "" {
-			effective.SearchAPI = providerConfig.SearchAPI
-		}
-		if providerConfig.SearchKey != "" {
-			effective.SearchKey = providerConfig.SearchKey
-		}
-		if providerConfig.MaxResults != 0 {
-			effective.MaxResults = providerConfig.MaxResults
-		}
-		if providerConfig.ProxyURL != "" {
-			effective.ProxyURL = providerConfig.ProxyURL
-		}
-		if providerConfig.MaxFetchSize != 0 {
-			effective.MaxFetchSize = providerConfig.MaxFetchSize
-		}
-		if providerConfig.FetchTimeout != 0 {
-			effective.FetchTimeout = providerConfig.FetchTimeout
-		}
-		if providerConfig.MaxURLLength != 0 {
-			effective.MaxURLLength = providerConfig.MaxURLLength
-		}
-
-		// Apply defaults
-		typ.ApplyToolInterceptorDefaults(effective)
-		return effective, true
-	}
-
-	// No provider-specific config, use global if enabled
-	if global == nil {
-		return nil, false
-	}
-
-	effective := &typ.ToolInterceptorConfig{
-		PreferLocalSearch: global.PreferLocalSearch,
-		SearchAPI:         global.SearchAPI,
-		SearchKey:         global.SearchKey,
-		MaxResults:        global.MaxResults,
-		ProxyURL:          global.ProxyURL,
-		MaxFetchSize:      global.MaxFetchSize,
-		FetchTimeout:      global.FetchTimeout,
-		MaxURLLength:      global.MaxURLLength,
-	}
-
-	typ.ApplyToolInterceptorDefaults(effective)
-	return effective, true
-}
-
 // GetEffectiveToolConfig returns the effective tool config for a specific provider and tool type
 // This is a generic method that works for any tool type
 // The mergeFunc parameter defines how to merge global and provider-specific configs
 //
-// Usage:
-//
-//	var globalCfg typ.ToolInterceptorConfig
-//	if !c.GetToolConfig(db.ToolTypeInterceptor, &globalCfg) {
-//	    // No global config
-//	    return nil, false
-//	}
-//
-//	effective, enabled := c.GetEffectiveToolConfig(providerUUID, db.ToolTypeInterceptor,
-//	    func(globalJSON, providerJSON []byte) ([]byte, error) {
-//	        // Custom merge logic
-//	        return mergedJSON, nil
-//	    },
-//	    &globalCfg,
-//	)
+// Usage: load global config with GetToolConfig(), then call this helper to merge
+// provider-specific overrides by tool type.
 func (c *Config) GetEffectiveToolConfig(providerUUID, toolType string, mergeFunc func(global, provider interface{}) interface{}, globalConfig interface{}) (interface{}, bool) {
 	if c.toolConfigStore == nil {
 		return nil, false
@@ -1313,7 +1202,8 @@ func (c *Config) GetProfile(baseScenario typ.RuleScenario, profileID string) (ty
 }
 
 // CreateProfile adds a new profile to a base scenario. Returns the created ProfileMeta.
-func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string) (typ.ProfileMeta, error) {
+// The unified parameter determines whether to use unified mode (single model) or separate mode (individual models).
+func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unified bool) (typ.ProfileMeta, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -1342,20 +1232,41 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string) (typ.
 	}
 
 	meta := typ.ProfileMeta{
-		ID:   fmt.Sprintf("p%d", nextID),
-		Name: name,
+		ID:      fmt.Sprintf("p%d", nextID),
+		Name:    name,
+		Unified: unified,
 	}
 
 	c.Profiles[base] = append(c.Profiles[base], meta)
 
 	// Clone rules from base scenario to the new profiled scenario.
-	// For claude_code, profiles only support "separate" mode, so skip the unified rule.
+	// For claude_code, mode determines which rules to include:
+	// - unified mode: include built-in-cc rule as "*" (wildcard), skip individual model rules
+	// - separate mode: skip built-in-cc rule, include individual model rules
 	profiledScenario := typ.ProfiledScenarioName(baseScenario, meta.ID)
 	for _, rule := range c.Rules {
 		if rule.Scenario == baseScenario {
-			if baseScenario == typ.ScenarioClaudeCode && rule.UUID == RuleUUIDBuiltinCC {
-				continue // skip unified rule for claude_code profiles
+			// Handle claude_code scenario specially based on mode
+			if baseScenario == typ.ScenarioClaudeCode {
+				if unified {
+					// Unified mode: only include built-in-cc, rename request model to "*"
+					if rule.UUID == RuleUUIDBuiltinCC {
+						cloned := rule
+						cloned.UUID = uuid.New().String()
+						cloned.Scenario = profiledScenario
+						cloned.RequestModel = "*" // Use "*" as wildcard for all models
+						c.Rules = append(c.Rules, cloned)
+					}
+					// Skip individual model rules (haiku, sonnet, opus, default, subagent)
+					continue
+				} else {
+					// Separate mode: skip built-in-cc, include individual model rules
+					if rule.UUID == RuleUUIDBuiltinCC {
+						continue
+					}
+				}
 			}
+
 			cloned := rule
 			cloned.UUID = uuid.New().String()
 			cloned.Scenario = profiledScenario
@@ -1363,7 +1274,12 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string) (typ.
 			if strings.HasPrefix(cloned.RequestModel, "tingly/cc-") {
 				cloned.RequestModel = strings.TrimPrefix(cloned.RequestModel, "tingly/cc-")
 			} else if cloned.RequestModel == "tingly/cc" {
-				continue // skip unified model name
+				// Skip unified model name for separate mode
+				if !unified {
+					continue
+				}
+				// For unified mode, rename to "*"
+				cloned.RequestModel = "*"
 			}
 			c.Rules = append(c.Rules, cloned)
 		}
@@ -1372,8 +1288,9 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string) (typ.
 	return meta, c.Save()
 }
 
-// UpdateProfile updates the name of an existing profile.
-func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, name string) error {
+// UpdateProfile updates the name and/or mode of an existing profile.
+// Pass nil for unified to keep existing mode, or bool pointer to change it.
+func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, name string, unified *bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -1401,7 +1318,61 @@ func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, 
 		}
 	}
 
+	oldUnified := profiles[idx].Unified
+
+	// Update fields
 	profiles[idx].Name = name
+	if unified != nil {
+		profiles[idx].Unified = *unified
+	}
+
+	// If mode changed, we need to update the rules
+	if unified != nil && *unified != oldUnified && baseScenario == typ.ScenarioClaudeCode {
+		profiledScenario := typ.ProfiledScenarioName(baseScenario, profileID)
+
+		// Remove existing profile rules
+		c.Rules = slices.DeleteFunc(c.Rules, func(r typ.Rule) bool {
+			return r.Scenario == profiledScenario
+		})
+
+		// Re-clone rules with new mode setting
+		for _, rule := range c.Rules {
+			if rule.Scenario == baseScenario {
+				if *unified {
+					// Unified mode: only include built-in-cc, rename to "*"
+					if rule.UUID == RuleUUIDBuiltinCC {
+						cloned := rule
+						cloned.UUID = uuid.New().String()
+						cloned.Scenario = profiledScenario
+						cloned.RequestModel = "*" // Use "*" as wildcard for all models
+						c.Rules = append(c.Rules, cloned)
+					}
+					continue
+				} else {
+					// Separate mode: skip built-in-cc, include individual model rules
+					if rule.UUID == RuleUUIDBuiltinCC {
+						continue
+					}
+				}
+
+				cloned := rule
+				cloned.UUID = uuid.New().String()
+				cloned.Scenario = profiledScenario
+				// Strip "tingly/cc-" prefix for profile rules
+				if strings.HasPrefix(cloned.RequestModel, "tingly/cc-") {
+					cloned.RequestModel = strings.TrimPrefix(cloned.RequestModel, "tingly/cc-")
+				} else if cloned.RequestModel == "tingly/cc" {
+					if !*unified {
+						continue
+					}
+					// For unified mode, rename to "*"
+					cloned.RequestModel = "*"
+				}
+				c.Rules = append(c.Rules, cloned)
+			}
+		}
+	}
+
 	return c.Save()
 }
 
@@ -1503,6 +1474,11 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 			return val
 		}
 		return false
+	case "mcp":
+		if val, ok := config.Extensions["mcp"].(bool); ok {
+			return val
+		}
+		return false
 	default:
 		return false
 	}
@@ -1566,6 +1542,11 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 			config.Extensions = make(map[string]interface{})
 		}
 		config.Extensions["guardrails"] = value
+	case "mcp":
+		if config.Extensions == nil {
+			config.Extensions = make(map[string]interface{})
+		}
+		config.Extensions["mcp"] = value
 	default:
 		return fmt.Errorf("unknown flag name: %s", flagName)
 	}
@@ -1637,6 +1618,72 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 	return c.Save()
 }
 
+// GetScenarioExtensionBool returns a boolean value from scenario extensions.
+func (c *Config) GetScenarioExtensionBool(scenario typ.RuleScenario, key string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	config := c.GetScenarioConfig(scenario)
+	if config == nil || config.Extensions == nil {
+		return false
+	}
+	val, ok := config.Extensions[key].(bool)
+	if !ok {
+		return false
+	}
+	return val
+}
+
+// GetScenarioExtensionString returns a string value from scenario extensions.
+func (c *Config) GetScenarioExtensionString(scenario typ.RuleScenario, key string) string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	config := c.GetScenarioConfig(scenario)
+	if config == nil || config.Extensions == nil {
+		return ""
+	}
+	val, ok := config.Extensions[key].(string)
+	if !ok {
+		return ""
+	}
+	return val
+}
+
+// SetScenarioExtensions merges extension values into a scenario config.
+func (c *Config) SetScenarioExtensions(scenario typ.RuleScenario, values map[string]interface{}) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	var config *typ.ScenarioConfig
+	for i := range c.Scenarios {
+		if c.Scenarios[i].Scenario == scenario {
+			config = &c.Scenarios[i]
+			break
+		}
+	}
+
+	if config == nil {
+		newConfig := typ.ScenarioConfig{
+			Scenario:   scenario,
+			Flags:      typ.ScenarioFlags{},
+			Extensions: make(map[string]interface{}),
+		}
+		c.Scenarios = append(c.Scenarios, newConfig)
+		config = &c.Scenarios[len(c.Scenarios)-1]
+	}
+
+	if config.Extensions == nil {
+		config.Extensions = make(map[string]interface{})
+	}
+	for key, value := range values {
+		if value == nil {
+			delete(config.Extensions, key)
+			continue
+		}
+		config.Extensions[key] = value
+	}
+	return c.Save()
+}
+
 // GetScenarioRecordingMode returns the effective recording mode for a scenario
 // It checks both legacy Recording (bool) and new RecordV2 (RecordingMode)
 // Priority: RecordV2 > legacy Recording
@@ -1677,17 +1724,18 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	var apiErr error
 
 	// Create appropriate client based on provider API style
+	// Note: For model listing, we use empty SessionID as no user session is involved
 	var lister client.ModelLister
 	switch provider.APIStyle {
 	case protocol.APIStyleAnthropic:
-		aClient, err := client.NewAnthropicClient(provider, "")
+		aClient, err := client.NewAnthropicClient(provider, "", typ.SessionID{})
 		if err == nil {
 			defer aClient.Close()
 			lister = aClient
 		}
 		apiErr = err
 	case protocol.APIStyleGoogle:
-		gClient, err := client.NewGoogleClient(provider, "")
+		gClient, err := client.NewGoogleClient(provider, "", typ.SessionID{})
 		if err == nil {
 			defer gClient.Close()
 			lister = gClient
@@ -1696,7 +1744,7 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	case protocol.APIStyleOpenAI:
 		fallthrough
 	default:
-		oClient, err := client.NewOpenAIClient(provider, "")
+		oClient, err := client.NewOpenAIClient(provider, "", typ.SessionID{})
 		if err == nil {
 			defer oClient.Close()
 			lister = oClient
@@ -1812,10 +1860,7 @@ func (c *Config) CreateDefaultConfig() error {
 		}
 		c.ModelToken = "tingly-box-" + modelToken
 	}
-	// Set default virtual model token (independent from model token)
-	if c.VirtualModelToken == "" {
-		c.VirtualModelToken = constant.DefaultVirtualModelToken
-	}
+
 	// Initialize merged fields with defaults
 	c.ProvidersV1 = make(map[string]*typ.Provider)
 	c.Providers = make([]*typ.Provider, 0)
@@ -1892,12 +1937,13 @@ func (c *Config) EnsureDefaultScenarioConfigs() {
 
 // ApplyHTTPTransportConfig applies the HTTP transport configuration to the global transport pool
 // This is called by TBE during initialization to configure connection pooling
-// For TB (tingly-box), this is a no-op since HTTPTransport will be empty (zero values)
+// For TB (tingly-box), this applies the proxy settings (default: respect_env_proxy=true)
 func (c *Config) ApplyHTTPTransportConfig() {
 	if c.HTTPTransport.MaxIdleConns == nil &&
 		c.HTTPTransport.MaxIdleConnsPerHost == nil &&
 		c.HTTPTransport.MaxConnsPerHost == nil &&
-		c.HTTPTransport.DisableKeepAlives == nil {
+		c.HTTPTransport.DisableKeepAlives == nil &&
+		c.HTTPTransport.RespectEnvProxy == nil {
 		// No custom transport config, use Go defaults (backward compatible with TB)
 		return
 	}
@@ -1909,6 +1955,7 @@ func (c *Config) ApplyHTTPTransportConfig() {
 		MaxIdleConnsPerHost: c.HTTPTransport.MaxIdleConnsPerHost,
 		MaxConnsPerHost:     c.HTTPTransport.MaxConnsPerHost,
 		DisableKeepAlives:   c.HTTPTransport.DisableKeepAlives,
+		RespectEnvProxy:     c.HTTPTransport.RespectEnvProxy,
 	}
 	client.SetTransportConfig(config)
 }

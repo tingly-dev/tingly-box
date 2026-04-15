@@ -1,8 +1,12 @@
 package dingtalk
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"sync"
 	"time"
 
@@ -27,6 +31,11 @@ type Bot struct {
 	wg         sync.WaitGroup
 	mu         sync.RWMutex
 	webhookMap map[string]string // conversationID -> webhook URL
+
+	// access token cache for REST API calls (e.g. reactions)
+	tokenMu      sync.Mutex
+	cachedToken  string
+	tokenExpiry  time.Time
 }
 
 // NewDingTalkBot creates a new DingTalk bot
@@ -190,9 +199,80 @@ func (b *Bot) SendMedia(ctx context.Context, target string, media []core.MediaAt
 	})
 }
 
-// React reacts to a message (not supported in current implementation)
+// React adds an emoji reaction to a message via DingTalk REST API.
+// messageID must be the DingTalk msgId (from incoming message data.MsgId).
 func (b *Bot) React(ctx context.Context, messageID string, emoji string) error {
-	return core.NewBotError(core.ErrPlatformError, "react not yet implemented for DingTalk", false)
+	token, err := b.getAccessToken(ctx)
+	if err != nil {
+		return fmt.Errorf("dingtalk react: get token: %w", err)
+	}
+
+	url := "https://api.dingtalk.com/v1.0/im/messages/" + messageID + "/reactions"
+	body, _ := json.Marshal(map[string]interface{}{
+		"reactionType": map[string]string{"emojiCode": emoji},
+	})
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("dingtalk react: build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-acs-dingtalk-access-token", token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("dingtalk react: http: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("dingtalk react: status %d: %s", resp.StatusCode, string(data))
+	}
+	return nil
+}
+
+// getAccessToken returns a cached or fresh DingTalk access token.
+func (b *Bot) getAccessToken(ctx context.Context) (string, error) {
+	b.tokenMu.Lock()
+	defer b.tokenMu.Unlock()
+
+	if b.cachedToken != "" && time.Now().Before(b.tokenExpiry) {
+		return b.cachedToken, nil
+	}
+
+	clientID := b.Config().Auth.ClientID
+	clientSecret := b.Config().Auth.ClientSecret
+
+	url := fmt.Sprintf("https://oapi.dingtalk.com/gettoken?appkey=%s&appsecret=%s", clientID, clientSecret)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("get token request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		AccessToken string `json:"access_token"`
+		ExpiresIn   int    `json:"expires_in"`
+		Errcode     int    `json:"errcode"`
+		Errmsg      string `json:"errmsg"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("decode token response: %w", err)
+	}
+	if result.Errcode != 0 {
+		return "", fmt.Errorf("dingtalk gettoken error %d: %s", result.Errcode, result.Errmsg)
+	}
+
+	b.cachedToken = result.AccessToken
+	// Expire 5 minutes early to avoid edge cases
+	b.tokenExpiry = time.Now().Add(time.Duration(result.ExpiresIn-300) * time.Second)
+	return b.cachedToken, nil
 }
 
 // EditMessage edits a message (not supported)

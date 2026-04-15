@@ -52,7 +52,7 @@ func useSlimSystray(app *application.App, tinglyService *services.TinglyService)
 	_ = menu.
 		Add("Dashboard").
 		OnClick(func(ctx *application.Context) {
-			url := fmt.Sprintf("http://localhost:%d/?token=%s",
+			url := fmt.Sprintf("http://localhost:%d/login/%s",
 				tinglyService.GetPort(),
 				tinglyService.GetUserAuthToken())
 			if err := openBrowser(url); err != nil {
@@ -66,7 +66,7 @@ func useSlimSystray(app *application.App, tinglyService *services.TinglyService)
 	_ = menu.
 		Add("OpenAI").
 		OnClick(func(ctx *application.Context) {
-			url := fmt.Sprintf("http://localhost:%d/use-openai?token=%s",
+			url := fmt.Sprintf("http://localhost:%d/login/%s",
 				tinglyService.GetPort(),
 				tinglyService.GetUserAuthToken())
 			if err := openBrowser(url); err != nil {
@@ -78,7 +78,7 @@ func useSlimSystray(app *application.App, tinglyService *services.TinglyService)
 	_ = menu.
 		Add("Anthropic").
 		OnClick(func(ctx *application.Context) {
-			url := fmt.Sprintf("http://localhost:%d/use-anthropic?token=%s",
+			url := fmt.Sprintf("http://localhost:%d/login/%s",
 				tinglyService.GetPort(),
 				tinglyService.GetUserAuthToken())
 			if err := openBrowser(url); err != nil {
@@ -90,7 +90,7 @@ func useSlimSystray(app *application.App, tinglyService *services.TinglyService)
 	_ = menu.
 		Add("Claude Code").
 		OnClick(func(ctx *application.Context) {
-			url := fmt.Sprintf("http://localhost:%d/use-claude-code?token=%s",
+			url := fmt.Sprintf("http://localhost:%d/login/%s",
 				tinglyService.GetPort(),
 				tinglyService.GetUserAuthToken())
 			if err := openBrowser(url); err != nil {
@@ -154,7 +154,7 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 		OnClick(func(ctx *application.Context) {
 			WindowSlim.Show()
 			WindowSlim.Focus()
-			WindowSlim.EmitEvent("systray-navigate", "/use-openai")
+			WindowSlim.EmitEvent("systray-navigate", "/agent/openai")
 		})
 
 	// Anthropic menu item - show window and navigate to Anthropic page
@@ -163,7 +163,7 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 		OnClick(func(ctx *application.Context) {
 			WindowSlim.Show()
 			WindowSlim.Focus()
-			WindowSlim.EmitEvent("systray-navigate", "/use-anthropic")
+			WindowSlim.EmitEvent("systray-navigate", "/agent/anthropic")
 		})
 
 	// Claude Code menu item - show window and navigate to Claude Code page
@@ -172,7 +172,7 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 		OnClick(func(ctx *application.Context) {
 			WindowSlim.Show()
 			WindowSlim.Focus()
-			WindowSlim.EmitEvent("systray-navigate", "/use-claude-code")
+			WindowSlim.EmitEvent("systray-navigate", "/agent/claude-code")
 		})
 
 	menu.AddSeparator()
@@ -203,7 +203,7 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 			TitleBar: application.MacTitleBarDefault,
 		},
 		BackgroundColour: application.NewRGB(27, 38, 54),
-		URL:              fmt.Sprintf("/?token=%s", tinglyService.GetUserAuthToken()),
+		URL:              fmt.Sprintf("/login/%s", tinglyService.GetUserAuthToken()),
 		Hidden:           true, // Start hidden
 	})
 
