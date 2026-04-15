@@ -23,7 +23,7 @@ import (
 	guardrailsevaluate "github.com/tingly-dev/tingly-box/internal/guardrails/evaluate"
 	guardrailsutils "github.com/tingly-dev/tingly-box/internal/guardrails/utils"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
-	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
@@ -94,7 +94,7 @@ type Server struct {
 	capabilityStore *db.ModelCapabilityStore
 
 	// mcp runtime for external MCP tools
-	mcpRuntime *runtime.Runtime
+	mcpRuntime *mcpruntime.Runtime
 
 	// guardrails runtime (optional)
 	guardrailsRuntime   *guardrails.Guardrails
@@ -510,11 +510,11 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.errorMW = errorMW
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
 	historyStore := guardrailsutils.NewStore(200, GetGuardrailsHistoryPath(cfg.ConfigDir))
-	runtime := server.currentGuardrailsRuntime()
-	if runtime == nil {
+	grRuntime := server.currentGuardrailsRuntime()
+	if grRuntime == nil {
 		server.setGuardrailsRuntimeRef(&guardrails.Guardrails{History: historyStore})
-	} else if runtime.HistoryStore() == nil {
-		runtime.SetHistoryStore(historyStore)
+	} else if grRuntime.HistoryStore() == nil {
+		grRuntime.SetHistoryStore(historyStore)
 	}
 
 	// Auto-load guardrails if enabled and not injected explicitly.
@@ -626,8 +626,8 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Set template manager in config for model fetching fallback
 	server.config.SetTemplateManager(templateManager)
 
-	server.mcpRuntime = runtime.NewRuntime(cfg.GetMCPRuntimeConfig)
-	if err := runtime.EnsureBuiltinScripts(cfg.ConfigDir); err != nil {
+	server.mcpRuntime = mcpruntime.NewRuntime(cfg.GetMCPRuntimeConfig)
+	if err := mcpruntime.EnsureBuiltinScripts(cfg.ConfigDir); err != nil {
 		logrus.WithError(err).Warn("mcp: failed to ensure builtin scripts in config dir")
 	}
 
