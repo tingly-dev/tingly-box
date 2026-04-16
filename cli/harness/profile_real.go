@@ -100,7 +100,7 @@ Examples:
 	}
 
 	cmd.Flags().StringVar(&output, "output", "", "Output file path (default: models.yaml or models.csv based on format)")
-	cmd.Flags().StringVar(&format, "format", "yaml", "Config format: yaml or csv")
+	cmd.Flags().StringVar(&format, "format", "csv", "Config format: yaml or csv")
 
 	return cmd
 }
