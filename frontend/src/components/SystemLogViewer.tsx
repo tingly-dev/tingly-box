@@ -2,7 +2,6 @@ import {
     Box,
     Button,
     Chip,
-    Paper,
     Stack,
     Table,
     TableBody,
@@ -13,11 +12,18 @@ import {
     Typography,
     IconButton,
     Collapse,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    TextField,
+    Alert,
 } from '@mui/material';
 import { useState, useEffect, useRef } from 'react';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import CloseIcon from '@mui/icons-material/Close';
 
 export interface SystemLogEntry {
     time: string;
@@ -33,11 +39,12 @@ export interface SystemLogsResponse {
 
 interface SystemLogViewerProps {
     getLogs: (params?: { limit?: number; level?: string; since?: string }) => Promise<SystemLogsResponse>;
+    getRequestBody?: (bodyRef: string) => Promise<{ id: string; method: string; path: string; body: string; truncated: boolean } | null>;
 }
 
 const LOG_LEVELS = ['debug', 'info', 'warn', 'error', 'fatal', 'panic'];
 
-const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
+const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
     const [logs, setLogs] = useState<SystemLogEntry[]>([]);
     const [allLogs, setAllLogs] = useState<SystemLogEntry[]>([]);
     const [loading, setLoading] = useState(false);
@@ -46,6 +53,13 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
     const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
     const [autoRefresh, setAutoRefresh] = useState(false);
     const tableContainerRef = useRef<HTMLDivElement>(null);
+
+    // Request body dialog state
+    const [bodyDialogOpen, setBodyDialogOpen] = useState(false);
+    const [selectedBodyRef, setSelectedBodyRef] = useState<string | null>(null);
+    const [requestBody, setRequestBody] = useState<{ id: string; method: string; path: string; body: string; truncated: boolean } | null>(null);
+    const [loadingBody, setLoadingBody] = useState(false);
+    const [bodyError, setBodyError] = useState<string | null>(null);
 
     const loadLogs = async () => {
         setLoading(true);
@@ -72,6 +86,40 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
             newExpanded.add(index);
         }
         setExpandedRows(newExpanded);
+    };
+
+    const openRequestBodyDialog = async (bodyRef: string) => {
+        setSelectedBodyRef(bodyRef);
+        setBodyDialogOpen(true);
+        setRequestBody(null);
+        setBodyError(null);
+        setLoadingBody(true);
+
+        if (!getRequestBody) {
+            setBodyError('Request body viewing not available');
+            setLoadingBody(false);
+            return;
+        }
+
+        try {
+            const result = await getRequestBody(bodyRef);
+            if (result) {
+                setRequestBody(result);
+            } else {
+                setBodyError('Request body not found (may have been evicted from memory)');
+            }
+        } catch (error: any) {
+            setBodyError(error instanceof Error ? error.message : 'Failed to load request body');
+        } finally {
+            setLoadingBody(false);
+        }
+    };
+
+    const closeRequestBodyDialog = () => {
+        setBodyDialogOpen(false);
+        setSelectedBodyRef(null);
+        setRequestBody(null);
+        setBodyError(null);
     };
 
     const toggleLevel = (level: string) => {
@@ -147,10 +195,19 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
         }
     }, [logs]);
 
+    const formatRequestBody = (body: string): string => {
+        try {
+            const parsed = JSON.parse(body);
+            return JSON.stringify(parsed, null, 2);
+        } catch {
+            return body;
+        }
+    };
+
     return (
-        <Stack spacing={1.5} sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Stack spacing={1.5} sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Toolbar */}
-            <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap sx={{ flexShrink: 0 }}>
                 {/* Actions */}
                 <Stack direction="row" spacing={1} alignItems="center">
                     <Button
@@ -221,21 +278,29 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
             </Stack>
 
             {/* Logs Table — fills remaining space */}
-            <TableContainer
-                component={Paper}
+            <Box
                 ref={tableContainerRef}
-                sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}
+                sx={{
+                    flex: 1,
+                    overflow: 'auto',
+                    minHeight: 0,
+                    backgroundColor: 'background.paper',
+                    borderRadius: 1,
+                    border: 1,
+                    borderColor: 'divider',
+                }}
             >
-                <Table stickyHeader size="small">
-                    <TableHead>
-                        <TableRow>
-                            <TableCell padding="checkbox" />
-                            <TableCell sx={{ width: 180 }}>Time</TableCell>
-                            <TableCell sx={{ width: 90 }}>Level</TableCell>
-                            <TableCell sx={{ width: 80 }}>Status</TableCell>
-                            <TableCell>Message</TableCell>
-                        </TableRow>
-                    </TableHead>
+                <TableContainer sx={{ maxHeight: 'none', height: '100%' }}>
+                    <Table stickyHeader size="small">
+                        <TableHead>
+                            <TableRow>
+                                <TableCell padding="checkbox" />
+                                <TableCell sx={{ width: 180 }}>Time</TableCell>
+                                <TableCell sx={{ width: 90 }}>Level</TableCell>
+                                <TableCell sx={{ width: 80 }}>Status</TableCell>
+                                <TableCell>Message</TableCell>
+                            </TableRow>
+                        </TableHead>
                     <TableBody>
                         {logs.length === 0 ? (
                             <TableRow>
@@ -327,9 +392,30 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                             {Object.entries(log.fields)
                                                                 .filter(([key]) => key !== 'error' && key !== 'error_type')
                                                                 .map(([key, value]) => (
-                                                                    <Typography key={key} variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
-                                                                        <strong>{key}:</strong> {typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)}
-                                                                    </Typography>
+                                                                    <Box key={key}>
+                                                                        {key === 'body_ref' ? (
+                                                                            <Stack direction="row" spacing={1} alignItems="center">
+                                                                                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                                                                                    <strong>body_ref:</strong> {String(value)}
+                                                                                </Typography>
+                                                                                <Button
+                                                                                    size="small"
+                                                                                    variant="outlined"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        openRequestBodyDialog(String(value));
+                                                                                    }}
+                                                                                    sx={{ fontSize: '0.7rem', py: 0.25, px: 1 }}
+                                                                                >
+                                                                                    View Request Body
+                                                                                </Button>
+                                                                            </Stack>
+                                                                        ) : (
+                                                                            <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                                                                                <strong>{key}:</strong> {typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)}
+                                                                            </Typography>
+                                                                        )}
+                                                                    </Box>
                                                                 ))}
                                                         </Stack>
                                                     ) : (
@@ -346,7 +432,86 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                         )}
                     </TableBody>
                 </Table>
-            </TableContainer>
+                </TableContainer>
+            </Box>
+
+            {/* Request Body Dialog */}
+            <Dialog
+                open={bodyDialogOpen}
+                onClose={closeRequestBodyDialog}
+                maxWidth="md"
+                fullWidth
+            >
+                <DialogTitle>
+                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                        <Stack direction="row" spacing={1} alignItems="center">
+                            <Typography variant="h6">Request Body</Typography>
+                            {requestBody?.truncated && (
+                                <Chip
+                                    label="Truncated"
+                                    size="small"
+                                    color="warning"
+                                    sx={{ fontSize: '0.7rem', height: 20 }}
+                                />
+                            )}
+                        </Stack>
+                        <IconButton onClick={closeRequestBodyDialog} size="small">
+                            <CloseIcon />
+                        </IconButton>
+                    </Stack>
+                </DialogTitle>
+                <DialogContent>
+                    {loadingBody && (
+                        <Typography color="text.secondary">Loading...</Typography>
+                    )}
+                    {bodyError && (
+                        <Typography color="error">{bodyError}</Typography>
+                    )}
+                    {requestBody && (
+                        <Stack spacing={2}>
+                            <Stack direction="row" spacing={2}>
+                                <Box>
+                                    <Typography variant="caption" color="text.secondary">Method</Typography>
+                                    <Typography variant="body2">{requestBody.method}</Typography>
+                                </Box>
+                                <Box>
+                                    <Typography variant="caption" color="text.secondary">Path</Typography>
+                                    <Typography variant="body2">{requestBody.path}</Typography>
+                                </Box>
+                            </Stack>
+                            {requestBody.truncated && (
+                                <Alert severity="warning" sx={{ py: 0.5 }}>
+                                    <Typography variant="caption">
+                                        Request body was truncated to 1MB. Original size was larger.
+                                    </Typography>
+                                </Alert>
+                            )}
+                            <TextField
+                                fullWidth
+                                multiline
+                                rows={15}
+                                value={formatRequestBody(requestBody.body)}
+                                InputProps={{
+                                    readOnly: true,
+                                    sx: {
+                                        fontFamily: 'monospace',
+                                        fontSize: '0.75rem',
+                                    },
+                                }}
+                                sx={{
+                                    '& .MuiInputBase-input': {
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-word',
+                                    },
+                                }}
+                            />
+                        </Stack>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={closeRequestBodyDialog}>Close</Button>
+                </DialogActions>
+            </Dialog>
         </Stack>
     );
 };
