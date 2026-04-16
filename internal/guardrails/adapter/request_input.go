@@ -1,0 +1,55 @@
+package adapter
+
+import (
+	"github.com/anthropics/anthropic-sdk-go"
+
+	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
+)
+
+// RefreshInputFromAnthropicV1Request rebuilds the normalized request-side
+// guardrails input from the latest Anthropic v1 raw request state.
+func RefreshInputFromAnthropicV1Request(input guardrailscore.Input) guardrailscore.Input {
+	req, _ := input.Payload.Request.(*anthropic.MessageNewParams)
+	if req == nil {
+		return input
+	}
+	text, blockCount, partCount := ExtractToolResultTextV1(req.Messages)
+
+	input.Direction = guardrailscore.DirectionRequest
+	input.Content = guardrailscore.Content{
+		Text:     text,
+		Messages: AdaptMessagesFromAnthropicV1(req.System, req.Messages),
+	}
+	input.HasToolResult = blockCount > 0
+	input.ToolResultBlockCount = blockCount
+	input.ToolResultPartCount = partCount
+	if input.Payload.Protocol == "" {
+		input.Payload.Protocol = "anthropic_v1"
+	}
+	input.Payload.Request = req
+	return input
+}
+
+// RefreshInputFromAnthropicBetaRequest rebuilds the normalized request-side
+// guardrails input from the latest Anthropic beta raw request state.
+func RefreshInputFromAnthropicBetaRequest(input guardrailscore.Input) guardrailscore.Input {
+	req, _ := input.Payload.Request.(*anthropic.BetaMessageNewParams)
+	if req == nil {
+		return input
+	}
+	text, blockCount, partCount := ExtractToolResultTextV1Beta(req.Messages)
+
+	input.Direction = guardrailscore.DirectionRequest
+	input.Content = guardrailscore.Content{
+		Text:     text,
+		Messages: AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages),
+	}
+	input.HasToolResult = blockCount > 0
+	input.ToolResultBlockCount = blockCount
+	input.ToolResultPartCount = partCount
+	if input.Payload.Protocol == "" {
+		input.Payload.Protocol = "anthropic_beta"
+	}
+	input.Payload.Request = req
+	return input
+}

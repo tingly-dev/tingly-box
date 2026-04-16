@@ -13,13 +13,13 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -109,11 +109,10 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 			s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
 			anthropicResp.Model = anthropic.Model(responseModel)
 
-			session := s.guardrailsSessionFromContext(c, actualModel, provider)
-			messageHistory := serverguardrails.MessagesFromAnthropicV1(req.System, req.Messages)
-			blocked := s.applyGuardrailsToAnthropicV1NonStreamResponse(c, session, messageHistory, anthropicResp)
-			if !blocked {
-				s.restoreGuardrailsCredentialAliasesV1Response(c, anthropicResp)
+			// response guardrails
+			_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+			if s.guardrailsEnabledForScenario(scenario) {
+				s.applyGuardrailsToAnthropicV1NonStreamResponse(c, req, actualModel, provider, anthropicResp)
 			}
 
 			if err := stream.AnthropicSingleMessage(c, anthropicResp, responseModel); err != nil {
@@ -169,10 +168,12 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 			}
 		}
 
-		// Anthropic v1 only adapts request history; the shared runtime owns all
-		// enablement checks and hook wiring after this point.
-		session := s.guardrailsSessionFromContext(c, actualModel, provider)
-		s.attachGuardrailsHooks(c, hc, session, serverguardrails.MessagesFromAnthropicV1(req.System, req.Messages))
+		// response guardrails
+		_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+		if s.guardrailsEnabledForScenario(scenario) {
+			hc.EnsureGuardrails().Enabled = true
+			s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1(req.System, req.Messages))
+		}
 
 		usageStat, err := stream.HandleAnthropic(hc, streamResp)
 		s.trackUsageWithTokenUsage(c, usageStat, err)
@@ -217,11 +218,10 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 		//	anthropicResp = roundtripped
 		//}
 
-		session := s.guardrailsSessionFromContext(c, actualModel, provider)
-		messageHistory := serverguardrails.MessagesFromAnthropicV1(req.System, req.Messages)
-		blocked := s.applyGuardrailsToAnthropicV1NonStreamResponse(c, session, messageHistory, anthropicResp)
-		if !blocked {
-			s.restoreGuardrailsCredentialAliasesV1Response(c, anthropicResp)
+		// response guardrails
+		_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+		if s.guardrailsEnabledForScenario(scenario) {
+			s.applyGuardrailsToAnthropicV1NonStreamResponse(c, req, actualModel, provider, anthropicResp)
 		}
 
 		if recorder != nil {
@@ -458,11 +458,10 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 				s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
 				anthropicResp.Model = anthropic.Model(responseModel)
 
-				session := s.guardrailsSessionFromContext(c, actualModel, provider)
-				messageHistory := serverguardrails.MessagesFromAnthropicV1Beta(req.System, req.Messages)
-				blocked := s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, session, messageHistory, anthropicResp)
-				if !blocked {
-					s.restoreGuardrailsCredentialAliasesV1BetaResponse(c, anthropicResp)
+				// response guardrails
+				_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+				if s.guardrailsEnabledForScenario(scenario) {
+					s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, req, actualModel, provider, anthropicResp)
 				}
 
 				if err := stream.AnthropicSingleBetaMessage(c, anthropicResp, responseModel); err != nil {
@@ -523,11 +522,10 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 			// FIXME: now we use req model as resp model
 			anthropicResp.Model = anthropic.Model(responseModel)
 
-			session := s.guardrailsSessionFromContext(c, actualModel, provider)
-			messageHistory := serverguardrails.MessagesFromAnthropicV1Beta(req.System, req.Messages)
-			blocked := s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, session, messageHistory, anthropicResp)
-			if !blocked {
-				s.restoreGuardrailsCredentialAliasesV1BetaResponse(c, anthropicResp)
+			// response guardrails
+			_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+			if s.guardrailsEnabledForScenario(scenario) {
+				s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, req, actualModel, provider, anthropicResp)
 			}
 
 			if recorder != nil {

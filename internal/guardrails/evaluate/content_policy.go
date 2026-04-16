@@ -1,0 +1,219 @@
+package evaluate
+
+import (
+	"context"
+	"fmt"
+	"regexp"
+	"strings"
+
+	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
+)
+
+// PolicyTypeContent identifies content policies backed by pattern matching.
+const PolicyTypeContent guardrailscore.PolicyType = "text_match"
+
+// MatchMode determines how patterns are combined.
+type MatchMode string
+
+const (
+	MatchAny MatchMode = "any"
+	MatchAll MatchMode = "all"
+)
+
+// TextMatchConfig configures text matching rules.
+type TextMatchConfig struct {
+	Patterns       []string                     `json:"patterns" yaml:"patterns"`
+	CredentialRefs []string                     `json:"credential_refs,omitempty" yaml:"credential_refs,omitempty"`
+	Targets        []guardrailscore.ContentType `json:"targets,omitempty" yaml:"targets,omitempty"`
+	Mode           MatchMode                    `json:"mode,omitempty" yaml:"mode,omitempty"`
+	CaseSensitive  bool                         `json:"case_sensitive,omitempty" yaml:"case_sensitive,omitempty"`
+	UseRegex       bool                         `json:"use_regex,omitempty" yaml:"use_regex,omitempty"`
+	MinMatches     int                          `json:"min_matches,omitempty" yaml:"min_matches,omitempty"`
+	Verdict        guardrailscore.Verdict       `json:"verdict,omitempty" yaml:"verdict,omitempty"`
+	Reason         string                       `json:"reason,omitempty" yaml:"reason,omitempty"`
+}
+
+// ContentPolicy evaluates content policies using literal or regex pattern matching.
+type ContentPolicy struct {
+	id       string
+	name     string
+	enabled  bool
+	scope    guardrailscore.Scope
+	config   TextMatchConfig
+	patterns []string
+	regex    []*regexp.Regexp
+}
+
+// NewContentPolicy creates a content policy from typed policy data.
+func NewContentPolicy(id, name string, enabled bool, scope guardrailscore.Scope, params TextMatchConfig) (*ContentPolicy, error) {
+	if len(params.Patterns) == 0 && len(params.CredentialRefs) == 0 {
+		return nil, fmt.Errorf("patterns or credential refs cannot be empty")
+	}
+
+	if params.Mode == "" {
+		params.Mode = MatchAny
+	}
+	if params.Verdict == "" {
+		params.Verdict = guardrailscore.VerdictBlock
+	}
+
+	policy := &ContentPolicy{
+		id:      id,
+		name:    name,
+		enabled: enabled,
+		scope:   scope,
+		config:  params,
+	}
+
+	if params.UseRegex {
+		policy.regex = make([]*regexp.Regexp, 0, len(params.Patterns))
+		for _, pattern := range params.Patterns {
+			re, err := regexp.Compile(pattern)
+			if err != nil {
+				return nil, fmt.Errorf("invalid regex %q: %w", pattern, err)
+			}
+			policy.regex = append(policy.regex, re)
+		}
+	} else {
+		policy.patterns = make([]string, 0, len(params.Patterns))
+		for _, pattern := range params.Patterns {
+			policy.patterns = append(policy.patterns, pattern)
+		}
+	}
+
+	return policy, nil
+}
+
+func (r *ContentPolicy) ID() string { return r.id }
+
+func (r *ContentPolicy) Name() string { return r.name }
+
+func (r *ContentPolicy) Type() guardrailscore.PolicyType { return PolicyTypeContent }
+
+func (r *ContentPolicy) Enabled() bool { return r.enabled }
+
+// Evaluate matches text against configured patterns.
+func (r *ContentPolicy) Evaluate(_ context.Context, input guardrailscore.Input) (guardrailscore.PolicyResult, error) {
+	if !r.enabled {
+		return guardrailscore.PolicyResult{Verdict: guardrailscore.VerdictAllow}, nil
+	}
+	if !r.scope.Matches(input) {
+		return guardrailscore.PolicyResult{Verdict: guardrailscore.VerdictAllow}, nil
+	}
+
+	if len(r.config.Targets) > 0 && !input.Content.HasAny(r.config.Targets) {
+		return guardrailscore.PolicyResult{Verdict: guardrailscore.VerdictAllow}, nil
+	}
+
+	if len(r.config.Patterns) == 0 && len(r.config.CredentialRefs) > 0 {
+		state := input.CredentialMaskState()
+		if state == nil || len(state.UsedRefs) == 0 {
+			return guardrailscore.PolicyResult{Verdict: guardrailscore.VerdictAllow}, nil
+		}
+		matchedRefs := matchCredentialRefs(r.config.CredentialRefs, state.UsedRefs)
+		if !r.isTriggered(len(matchedRefs), len(r.config.CredentialRefs)) {
+			return guardrailscore.PolicyResult{Verdict: guardrailscore.VerdictAllow}, nil
+		}
+		reason := r.config.Reason
+		if reason == "" {
+			reason = "matched prohibited content"
+		}
+		return guardrailscore.PolicyResult{
+			PolicyID:   r.id,
+			PolicyName: r.name,
+			PolicyType: r.Type(),
+			Verdict:    r.config.Verdict,
+			Reason:     reason,
+			Evidence: map[string]interface{}{
+				"credential_refs":         append([]string(nil), r.config.CredentialRefs...),
+				"matched_credential_refs": matchedRefs,
+			},
+		}, nil
+	}
+
+	text := input.Content.CombinedTextFor(r.config.Targets)
+	if text == "" {
+		return guardrailscore.PolicyResult{Verdict: guardrailscore.VerdictAllow}, nil
+	}
+
+	matched := make([]string, 0)
+	matches := 0
+
+	if r.config.UseRegex {
+		for i, re := range r.regex {
+			if re.MatchString(text) {
+				matches++
+				matched = append(matched, r.config.Patterns[i])
+			}
+		}
+	} else {
+		searchText := text
+		if !r.config.CaseSensitive {
+			searchText = strings.ToLower(searchText)
+		}
+		for _, pattern := range r.patterns {
+			check := pattern
+			if !r.config.CaseSensitive {
+				check = strings.ToLower(check)
+			}
+			if strings.Contains(searchText, check) {
+				matches++
+				matched = append(matched, pattern)
+			}
+		}
+	}
+
+	if !r.isTriggered(matches, len(r.config.Patterns)) {
+		return guardrailscore.PolicyResult{Verdict: guardrailscore.VerdictAllow}, nil
+	}
+
+	reason := r.config.Reason
+	if reason == "" {
+		reason = "matched prohibited content"
+	}
+
+	return guardrailscore.PolicyResult{
+		PolicyID:   r.id,
+		PolicyName: r.name,
+		PolicyType: r.Type(),
+		Verdict:    r.config.Verdict,
+		Reason:     reason,
+		Evidence: map[string]interface{}{
+			"matches":          matches,
+			"matched_patterns": matched,
+		},
+	}, nil
+}
+
+func (r *ContentPolicy) isTriggered(matches, total int) bool {
+	if r.config.MinMatches > 0 {
+		return matches >= r.config.MinMatches
+	}
+	if r.config.Mode == MatchAll {
+		return total > 0 && matches == total
+	}
+	return matches > 0
+}
+
+func matchCredentialRefs(configured, used []string) []string {
+	if len(configured) == 0 || len(used) == 0 {
+		return nil
+	}
+	usedSet := make(map[string]struct{}, len(used))
+	for _, ref := range used {
+		if ref == "" {
+			continue
+		}
+		usedSet[ref] = struct{}{}
+	}
+	matched := make([]string, 0, len(configured))
+	for _, ref := range configured {
+		if ref == "" {
+			continue
+		}
+		if _, ok := usedSet[ref]; ok {
+			matched = append(matched, ref)
+		}
+	}
+	return matched
+}

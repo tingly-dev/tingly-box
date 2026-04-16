@@ -19,12 +19,14 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
+	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
+	guardrailsevaluate "github.com/tingly-dev/tingly-box/internal/guardrails/evaluate"
+	guardrailsutils "github.com/tingly-dev/tingly-box/internal/guardrails/utils"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
-	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
-	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/server/hooks"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
@@ -92,17 +94,12 @@ type Server struct {
 	capabilityStore *db.ModelCapabilityStore
 
 	// mcp runtime for external MCP tools
-	mcpRuntime *runtime.Runtime
+	mcpRuntime *mcpruntime.Runtime
 
-	// guardrails engine (optional)
-	guardrailsEngine            guardrails.Guardrails
-	guardrailsHasActivePolicies bool
-	guardrailsHistory           *serverguardrails.HistoryStore
-
-	// Protected credential aliasing needs a fast request-path lookup from
-	// scenario -> active mask credentials, plus ID -> credential metadata.
-	guardrailsCredentialCache   guardrailsCredentialCache
-	guardrailsCredentialCacheMu sync.RWMutex
+	// guardrails runtime (optional)
+	guardrailsRuntime   *guardrails.Guardrails
+	guardrailsRuntimeMu sync.RWMutex
+	guardrailsConfigMu  sync.Mutex
 
 	// recording sinks
 	recordSink *obs.Sink
@@ -177,8 +174,9 @@ func (s *Server) GetRoutingSelector() *routing.SimpleSelector {
 	return s.routingSelector
 }
 
-func (s *Server) initGuardrailsEngine() {
-	if s.guardrailsEngine != nil || s.config == nil {
+func (s *Server) initGuardrailsRuntime() {
+	runtime := s.currentGuardrailsRuntime()
+	if (runtime != nil && runtime.PolicyEngine() != nil) || s.config == nil {
 		return
 	}
 
@@ -186,7 +184,7 @@ func (s *Server) initGuardrailsEngine() {
 		return
 	}
 
-	cfgPath, err := serverguardrails.FindGuardrailsConfig(s.config.ConfigDir)
+	cfgPath, err := FindGuardrailsConfig(s.config.ConfigDir)
 	if err != nil {
 		if !strings.Contains(err.Error(), "no guardrails config") {
 			logrus.WithError(err).Warn("Failed to locate guardrails config")
@@ -205,13 +203,13 @@ func (s *Server) initGuardrailsEngine() {
 		return
 	}
 
-	engine, err := guardrails.BuildEngine(cfg, guardrails.Dependencies{})
+	policy, err := guardrailsevaluate.BuildPolicyEngine(cfg, guardrailsevaluate.Dependencies{})
 	if err != nil {
-		logrus.WithError(err).Warn("Failed to build guardrails engine")
+		logrus.WithError(err).Warn("Failed to build guardrails policy engine")
 		return
 	}
 
-	s.setGuardrailsEngine(engine, "guardrails init")
+	s.setGuardrailsRuntime(&guardrails.Guardrails{Policy: policy}, "guardrails init")
 	logrus.Infof("Guardrails enabled with config: %s", cfgPath)
 }
 
@@ -220,14 +218,13 @@ func (s *Server) ensureDefaultGuardrailsConfig() (string, error) {
 		return "", fmt.Errorf("config directory not set")
 	}
 
-	path := serverguardrails.GetGuardrailsConfigPath(s.config.ConfigDir)
-	enabled := true
-	cfg := guardrails.Config{
-		Groups: []guardrails.PolicyGroup{
+	path := GetGuardrailsConfigPath(s.config.ConfigDir)
+	cfg := guardrailscore.Config{
+		Groups: []guardrailscore.PolicyGroup{
 			{
-				ID:      guardrails.DefaultPolicyGroupID,
+				ID:      guardrailscore.DefaultPolicyGroupID,
 				Name:    "Default",
-				Enabled: &enabled,
+				Enabled: true,
 			},
 		},
 	}
@@ -282,13 +279,13 @@ func (s *Server) syncGuardrailsFromConfig() {
 	}
 
 	if !s.guardrailsEnabled() {
-		s.setGuardrailsEngine(nil, "guardrails disable")
+		s.setGuardrailsRuntime(&guardrails.Guardrails{}, "guardrails disable")
 		logrus.Debug("Guardrails disabled via config")
 		return
 	}
 
-	if s.guardrailsEngine == nil {
-		s.initGuardrailsEngine()
+	if s.currentGuardrailsRuntime() == nil {
+		s.initGuardrailsRuntime()
 	}
 }
 
@@ -360,10 +357,10 @@ func WithRecording(enabled bool) ServerOption {
 	}
 }
 
-// WithGuardrails sets a guardrails engine for stream evaluation.
-func WithGuardrails(engine guardrails.Guardrails) ServerOption {
+// WithGuardrails sets a guardrails runtime for stream evaluation.
+func WithGuardrails(runtime *guardrails.Guardrails) ServerOption {
 	return func(s *Server) {
-		s.guardrailsEngine = engine
+		s.setGuardrailsRuntimeRef(runtime)
 	}
 }
 
@@ -513,10 +510,16 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.clientPool = client.NewClientPool() // Initialize client pool (once mode with auto-cleanup via finalizer)
 	server.errorMW = errorMW
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
-	server.guardrailsHistory = serverguardrails.NewHistoryStore(200, serverguardrails.GetGuardrailsHistoryPath(cfg.ConfigDir))
+	historyStore := guardrailsutils.NewStore(200, GetGuardrailsHistoryPath(cfg.ConfigDir))
+	grRuntime := server.currentGuardrailsRuntime()
+	if grRuntime == nil {
+		server.setGuardrailsRuntimeRef(&guardrails.Guardrails{History: historyStore})
+	} else if grRuntime.HistoryStore() == nil {
+		grRuntime.SetHistoryStore(historyStore)
+	}
 
 	// Auto-load guardrails if enabled and not injected explicitly.
-	server.initGuardrailsEngine()
+	server.initGuardrailsRuntime()
 	server.refreshGuardrailsCredentialCacheOrWarn("server init")
 
 	// Initialize record sink if recording is enabled
@@ -624,8 +627,8 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Set template manager in config for model fetching fallback
 	server.config.SetTemplateManager(templateManager)
 
-	server.mcpRuntime = runtime.NewRuntime(cfg.GetMCPRuntimeConfig)
-	if err := runtime.EnsureBuiltinScripts(cfg.ConfigDir); err != nil {
+	server.mcpRuntime = mcpruntime.NewRuntime(cfg.GetMCPRuntimeConfig)
+	if err := mcpruntime.EnsureBuiltinScripts(cfg.ConfigDir); err != nil {
 		logrus.WithError(err).Warn("mcp: failed to ensure builtin scripts in config dir")
 	}
 

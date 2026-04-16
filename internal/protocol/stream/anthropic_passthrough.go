@@ -8,6 +8,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/sirupsen/logrus"
+	guardrailsmutate "github.com/tingly-dev/tingly-box/internal/guardrails/mutate"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
@@ -49,10 +50,15 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 				hasUsage = true
 			}
 
-			if handled, err := rewriteAnthropicGuardrailsEvent(hc.GinContext, false, evt.Type, int(evt.Index), evt.ContentBlock, evt); err != nil {
-				return err
-			} else if handled {
-				return nil
+			if hc.Guardrails != nil && hc.Guardrails.Enabled {
+				if handled, rewritten, err := guardrailsmutate.RewriteAnthropicToolUseEvent(hc.Guardrails.CredentialMask, hc.Guardrails.Stream, evt); err != nil {
+					return err
+				} else if handled {
+					for _, rewrittenEvent := range rewritten {
+						sendAnthropicStreamEvent(hc.GinContext, rewrittenEvent.EventType, rewrittenEvent.Payload, hc.GinContext.Writer)
+					}
+					return nil
+				}
 			}
 
 			// For message_start events, modify the model in the raw JSON
@@ -90,10 +96,6 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 
 		MarshalAndSendErrorEvent(hc.GinContext, err.Error(), "stream_error", "stream_failed")
 		return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), err
-	}
-
-	if err := injectAnthropicGuardrailsBlock(hc.GinContext, false); err != nil {
-		logrus.Debugf("Guardrails inject error: %v", err)
 	}
 
 	SendFinishEvent(hc.GinContext)
@@ -139,10 +141,15 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 				hasUsage = true
 			}
 
-			if handled, err := rewriteAnthropicGuardrailsEvent(hc.GinContext, true, evt.Type, int(evt.Index), evt.ContentBlock, evt); err != nil {
-				return err
-			} else if handled {
-				return nil
+			if hc.Guardrails != nil && hc.Guardrails.Enabled {
+				if handled, rewritten, err := guardrailsmutate.RewriteAnthropicToolUseEvent(hc.Guardrails.CredentialMask, hc.Guardrails.Stream, evt); err != nil {
+					return err
+				} else if handled {
+					for _, rewrittenEvent := range rewritten {
+						sendAnthropicStreamEvent(hc.GinContext, rewrittenEvent.EventType, rewrittenEvent.Payload, hc.GinContext.Writer)
+					}
+					return nil
+				}
 			}
 
 			// For message_start events, modify the model in the raw JSON
@@ -180,10 +187,6 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 
 		MarshalAndSendErrorEvent(hc.GinContext, err.Error(), "stream_error", "stream_failed")
 		return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), err
-	}
-
-	if err := injectAnthropicGuardrailsBlock(hc.GinContext, true); err != nil {
-		logrus.Debugf("Guardrails inject error: %v", err)
 	}
 
 	SendFinishEvent(hc.GinContext)

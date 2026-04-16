@@ -1,66 +1,81 @@
 package server
 
 import (
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
+	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
+	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
+	guardrailsmutate "github.com/tingly-dev/tingly-box/internal/guardrails/mutate"
+	guardrailspipeline "github.com/tingly-dev/tingly-box/internal/guardrails/pipeline"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
-	serverguardrails "github.com/tingly-dev/tingly-box/internal/server/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-// guardrailsSession carries the request-scoped metadata needed to evaluate guardrails.
-// Keep this small and protocol-agnostic so provider handlers only need to adapt their
-// request/response payloads into guardrails.Content and can reuse the same runtime flow.
-type guardrailsSession struct {
-	Scenario     string
-	Model        string
-	RequestModel string
-	ProviderName string
-}
 
 var guardrailsSupportedScenarios = []string{
 	string(typ.ScenarioAnthropic),
 	string(typ.ScenarioClaudeCode),
 }
 
-func (s *Server) guardrailsSessionFromContext(c *gin.Context, actualModel string, provider *typ.Provider) guardrailsSession {
-	_, _, _, requestModel, scenario, _, _ := GetTrackingContext(c)
-	providerName := ""
-	if provider != nil {
-		providerName = provider.Name
+func (s *Server) currentGuardrailsRuntime() *guardrails.Guardrails {
+	if s == nil {
+		return nil
 	}
-	return guardrailsSession{
-		Scenario:     scenario,
-		Model:        actualModel,
-		RequestModel: requestModel,
-		ProviderName: providerName,
-	}
+	s.guardrailsRuntimeMu.RLock()
+	runtime := s.guardrailsRuntime
+	s.guardrailsRuntimeMu.RUnlock()
+	return runtime
 }
 
-// guardrailsEnabledForSession centralizes feature-flag checks so protocol handlers
+func (s *Server) setGuardrailsRuntimeRef(runtime *guardrails.Guardrails) {
+	if s == nil {
+		return
+	}
+	s.guardrailsRuntimeMu.Lock()
+	s.guardrailsRuntime = runtime
+	s.guardrailsRuntimeMu.Unlock()
+}
+
+func cloneGuardrailsRuntime(src *guardrails.Guardrails) *guardrails.Guardrails {
+	if src == nil {
+		return nil
+	}
+	cloned := &guardrails.Guardrails{}
+	cloned.SetPolicyEngine(src.PolicyEngine())
+	cloned.SetHistoryStore(src.HistoryStore())
+	cloned.SetCredentialCache(src.CredentialCacheSnapshot())
+	cloned.SetActivation(src.ConfigSnapshot(), src.IsActive())
+	return cloned
+}
+
+// ----------------------------------------------------------------------
+// Runtime Gate And Shared State
+// ----------------------------------------------------------------------
+
+// guardrailsEnabledForScenario centralizes feature-flag checks so protocol handlers
 // do not repeat scenario/global guardrails gating logic.
-func (s *Server) guardrailsEnabledForSession(session guardrailsSession) bool {
-	if s.guardrailsEngine == nil || s.config == nil || !s.guardrailsHasActivePolicies {
+func (s *Server) guardrailsEnabledForScenario(scenario string) bool {
+	runtime := s.currentGuardrailsRuntime()
+	if runtime == nil || runtime.PolicyEngine() == nil || s.config == nil || !runtime.IsActive() {
 		return false
 	}
-	if !s.guardrailsSupportsScenario(session.Scenario) {
+	if !s.guardrailsSupportsScenario(scenario) {
 		return false
 	}
-	return s.config.GetScenarioFlag(typ.RuleScenario(session.Scenario), "guardrails") ||
+	return s.config.GetScenarioFlag(typ.RuleScenario(scenario), "guardrails") ||
 		s.config.GetScenarioFlag(typ.ScenarioGlobal, "guardrails")
 }
 
-func hasActiveGuardrailsPolicies(cfg guardrails.Config) bool {
+func hasActiveGuardrailsPolicies(cfg guardrailscore.Config) bool {
 	if len(cfg.Policies) == 0 || len(cfg.Groups) == 0 {
 		return false
 	}
 
 	enabledGroups := make(map[string]struct{}, len(cfg.Groups))
 	for _, group := range cfg.Groups {
-		if group.Enabled != nil && !*group.Enabled {
+		if !group.Enabled {
 			continue
 		}
 		enabledGroups[group.ID] = struct{}{}
@@ -70,7 +85,7 @@ func hasActiveGuardrailsPolicies(cfg guardrails.Config) bool {
 	}
 
 	for _, policy := range cfg.Policies {
-		if policy.Enabled != nil && !*policy.Enabled {
+		if !policy.Enabled {
 			continue
 		}
 		for _, groupID := range policy.Groups {
@@ -97,95 +112,266 @@ func (s *Server) getGuardrailsSupportedScenarios() []string {
 	return out
 }
 
+// Credential cache and activation state live alongside the runtime gate because
+// they are shared by request masking, history rendering, and runtime reloads.
+func (s *Server) refreshGuardrailsCredentialCache() error {
+	runtime := s.currentGuardrailsRuntime()
+	if runtime == nil {
+		return nil
+	}
+	if s.config == nil || s.config.ConfigDir == "" {
+		next := cloneGuardrailsRuntime(runtime)
+		next.SetCredentialCache(guardrails.NewCredentialCache())
+		s.setGuardrailsRuntimeRef(next)
+		return nil
+	}
+
+	store, err := s.guardrailsCredentialStore()
+	if err != nil {
+		return err
+	}
+	credentials, err := store.List()
+	if err != nil {
+		return err
+	}
+	built := guardrails.BuildCredentialCache(credentials, s.getGuardrailsSupportedScenarios())
+	next := cloneGuardrailsRuntime(runtime)
+	next.SetCredentialCache(built)
+	s.setGuardrailsRuntimeRef(next)
+	return nil
+}
+
+func (s *Server) refreshGuardrailsCredentialCacheOrWarn(context string) {
+	if err := s.refreshGuardrailsCredentialCache(); err != nil {
+		logrus.WithError(err).Warnf("Guardrails credential cache refresh failed after %s", context)
+	}
+}
+
+func (s *Server) refreshGuardrailsActivationState() {
+	runtime := s.currentGuardrailsRuntime()
+	if runtime == nil {
+		return
+	}
+
+	nextCfg := guardrailscore.Config{}
+	nextActive := false
+	if s.config == nil || s.config.ConfigDir == "" {
+		next := cloneGuardrailsRuntime(runtime)
+		next.SetActivation(nextCfg, nextActive)
+		s.setGuardrailsRuntimeRef(next)
+		return
+	}
+
+	cfgPath, err := FindGuardrailsConfig(s.config.ConfigDir)
+	if err != nil {
+		return
+	}
+
+	cfg, err := guardrails.LoadConfig(cfgPath)
+	if err != nil {
+		logrus.WithError(err).Debug("Guardrails activation state: failed to load config")
+		next := cloneGuardrailsRuntime(runtime)
+		next.SetActivation(nextCfg, nextActive)
+		s.setGuardrailsRuntimeRef(next)
+		return
+	}
+	nextCfg = cfg
+	nextActive = hasActiveGuardrailsPolicies(cfg)
+	next := cloneGuardrailsRuntime(runtime)
+	next.SetActivation(nextCfg, nextActive)
+	s.setGuardrailsRuntimeRef(next)
+}
+
+func (s *Server) setGuardrailsRuntime(runtime *guardrails.Guardrails, context string) {
+	prev := s.currentGuardrailsRuntime()
+	if runtime != nil && prev != nil {
+		if runtime.HistoryStore() == nil {
+			runtime.SetHistoryStore(prev.HistoryStore())
+		}
+		cache := runtime.CredentialCacheSnapshot()
+		if len(cache.ByID) == 0 && len(cache.ByScenario) == 0 {
+			runtime.SetCredentialCache(prev.CredentialCacheSnapshot())
+		}
+	}
+	s.setGuardrailsRuntimeRef(runtime)
+	if runtime != nil {
+		s.refreshGuardrailsActivationState()
+		s.refreshGuardrailsCredentialCacheOrWarn(context)
+	}
+}
+
+func ensureGuardrailsCredentialMaskState(c *gin.Context) *guardrailscore.CredentialMaskState {
+	if c == nil {
+		return nil
+	}
+	if existing, ok := c.Get(guardrailscore.CredentialMaskStateContextKey); ok {
+		if state, ok := existing.(*guardrailscore.CredentialMaskState); ok && state != nil {
+			return state
+		}
+	}
+	state := guardrailscore.NewCredentialMaskState()
+	c.Set(guardrailscore.CredentialMaskStateContextKey, state)
+	return state
+}
+
+// ----------------------------------------------------------------------
+// Shared Input Construction
+// ----------------------------------------------------------------------
+
 // buildGuardrailsBaseInput creates the shared evaluation envelope; adapters can then
 // add request/response-specific content without rebuilding metadata each time.
-func (s *Server) buildGuardrailsBaseInput(session guardrailsSession, direction guardrails.Direction, messages []guardrails.Message) guardrails.Input {
-	return guardrails.Input{
-		Scenario:  session.Scenario,
-		Model:     session.Model,
+func (s *Server) buildGuardrailsBaseInput(c *gin.Context, actualModel string, provider *typ.Provider, direction guardrailscore.Direction, messages []guardrailscore.Message) guardrailscore.Input {
+	_, _, _, requestModel, scenario, _, _ := GetTrackingContext(c)
+	providerName := ""
+	if provider != nil {
+		providerName = provider.Name
+	}
+	return guardrailscore.Input{
+		Scenario:  scenario,
+		Model:     actualModel,
 		Direction: direction,
-		Content: guardrails.Content{
+		Content: guardrailscore.Content{
 			Messages: messages,
 		},
 		Metadata: map[string]interface{}{
-			"provider":      session.ProviderName,
-			"request_model": session.RequestModel,
+			"provider":      providerName,
+			"request_model": requestModel,
+		},
+		Runtime: guardrailscore.InputRuntime{
+			Context: c,
 		},
 	}
 }
 
+// ----------------------------------------------------------------------
+// Stream Response Guardrails
+// ----------------------------------------------------------------------
+
 // attachGuardrailsHooks wires the shared stream guardrails runtime into a protocol
 // handle context. Provider-specific handlers only need to provide already-normalized
 // message history.
-func (s *Server) attachGuardrailsHooks(c *gin.Context, hc *protocol.HandleContext, session guardrailsSession, messages []guardrails.Message) {
-	if !s.guardrailsEnabledForSession(session) {
-		return
-	}
+func (s *Server) attachGuardrailsHooks(c *gin.Context, hc *protocol.HandleContext, actualModel string, provider *typ.Provider, messages []guardrailscore.Message) {
+	guardrailsState := hc.EnsureGuardrails()
+	baseInput := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messages)
+	maskState := ensureGuardrailsCredentialMaskState(c)
+	baseInput.State.CredentialMask = maskState
+	guardrailsState.Enabled = true
+	guardrailsState.CredentialMask = baseInput.State.CredentialMask
+	streamState := hc.EnsureGuardrailsStream()
+	logrus.Debugf("Guardrails: attaching hook (scenario=%s model=%s)", baseInput.Scenario, baseInput.Model)
 
-	logrus.Debugf("Guardrails: attaching hook (scenario=%s model=%s)", session.Scenario, session.Model)
-	baseInput := s.buildGuardrailsBaseInput(session, guardrails.DirectionResponse, messages)
-
-	onEvent, onComplete, onError := serverguardrails.NewGuardrailsHooks(
-		s.guardrailsEngine,
+	onEvent, onError := guardrailspipeline.NewGuardrailsHooks(
+		c.Request.Context(),
+		s.currentGuardrailsRuntime(),
 		baseInput,
-		serverguardrails.WithGuardrailsContext(c.Request.Context()),
-		serverguardrails.WithGuardrailsOnBlock(func(result serverguardrails.GuardrailsHookResult) {
-			if result.BlockToolID == "" || result.BlockMessage == "" {
-				return
-			}
-			s.recordGuardrailsHistory(c, session, baseInput, result.Result, "tool_use", result.BlockMessage)
-			stream.RegisterGuardrailsBlock(c, result.BlockToolID, result.BlockIndex, result.BlockMessage)
-		}),
-		serverguardrails.WithGuardrailsOnVerdict(func(result serverguardrails.GuardrailsHookResult) {
-			c.Set("guardrails_result", result.Result)
-			if result.BlockMessage != "" {
-				c.Set("guardrails_block_message", result.BlockMessage)
-				c.Set("guardrails_block_index", result.BlockIndex)
-				if result.BlockToolID != "" {
-					c.Set("guardrails_block_tool_id", result.BlockToolID)
-				}
-				// Early tool_use blocks are already recorded in onBlock. Skip adding a
-				// second near-identical response entry when the final verdict points at
-				// the same blocked tool_use.
-				if result.BlockToolID == "" {
-					s.recordGuardrailsHistory(c, session, baseInput, result.Result, "response", result.BlockMessage)
-				}
-			}
-			if result.Err != nil {
-				c.Set("guardrails_error", result.Err.Error())
-			}
-		}),
+		streamState,
 	)
 	if onEvent != nil {
 		hc.WithOnStreamEvent(onEvent)
-	}
-	if onComplete != nil {
-		hc.WithOnStreamComplete(onComplete)
 	}
 	if onError != nil {
 		hc.WithOnStreamError(onError)
 	}
 }
 
-// evaluateGuardrailsToolResult centralizes request-side tool_result filtering so
-// v1 and beta handlers only deal with protocol-specific extract/replace code.
-func (s *Server) evaluateGuardrailsToolResult(c *gin.Context, session guardrailsSession, toolResultText string, history []guardrails.Message) (guardrails.Result, bool) {
-	if !s.guardrailsEnabledForSession(session) {
-		return guardrails.Result{}, false
-	}
-	if toolResultText == "" {
-		return guardrails.Result{}, false
+// ----------------------------------------------------------------------
+// Request Guardrails
+// ----------------------------------------------------------------------
+
+// applyGuardrailsToAnthropicV1Request is the merged request-side entry for
+// Anthropic v1 requests. It runs request tool_result filtering first and then
+// request credential masking on the latest raw request state.
+func (s *Server) applyGuardrailsToAnthropicV1Request(c *gin.Context, req *anthropic.MessageNewParams, actualModel string, provider *typ.Provider) {
+	if req == nil {
+		return
 	}
 
-	input := s.buildGuardrailsBaseInput(session, guardrails.DirectionRequest, serverguardrails.FilterMessages(history))
-	input.Content.Text = toolResultText
+	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionRequest, nil)
+	input.State.CredentialMask = ensureGuardrailsCredentialMaskState(c)
+	input.Payload.Protocol = "anthropic_v1"
+	input.Payload.Request = req
 
-	result, err := s.guardrailsEngine.Evaluate(c.Request.Context(), input)
+	err := guardrailspipeline.ProcessAnthropicV1Request(
+		c.Request.Context(),
+		s.currentGuardrailsRuntime(),
+		input,
+	)
 	if err != nil {
-		return guardrails.Result{}, false
+		return
 	}
-	if result.Verdict == guardrails.VerdictBlock {
-		s.recordGuardrailsHistory(c, session, input, result, "tool_result", "")
+}
+
+// applyGuardrailsToAnthropicV1BetaRequest is the merged request-side entry for
+// Anthropic beta requests. It runs request tool_result filtering first and then
+// request credential masking on the latest raw request state.
+func (s *Server) applyGuardrailsToAnthropicV1BetaRequest(c *gin.Context, req *anthropic.BetaMessageNewParams, actualModel string, provider *typ.Provider) {
+	if req == nil {
+		return
 	}
-	return result, true
+
+	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionRequest, nil)
+	input.State.CredentialMask = ensureGuardrailsCredentialMaskState(c)
+	input.Payload.Protocol = "anthropic_beta"
+	input.Payload.Request = req
+
+	err := guardrailspipeline.ProcessAnthropicBetaRequest(
+		c.Request.Context(),
+		s.currentGuardrailsRuntime(),
+		input,
+	)
+	if err != nil {
+		return
+	}
+}
+
+// ----------------------------------------------------------------------
+// Non-Stream Response Guardrails
+// ----------------------------------------------------------------------
+
+// applyGuardrailsToAnthropicV1NonStreamResponse evaluates a fully assembled
+// Anthropic v1 response and rewrites it when guardrails block it.
+func (s *Server) applyGuardrailsToAnthropicV1NonStreamResponse(c *gin.Context, req *anthropic.MessageNewParams, actualModel string, provider *typ.Provider, resp *anthropic.Message) bool {
+	if req == nil || resp == nil {
+		return false
+	}
+
+	maskState := ensureGuardrailsCredentialMaskState(c)
+	messageHistory := guardrailsadapter.AdaptMessagesFromAnthropicV1(req.System, req.Messages)
+	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messageHistory)
+	input.State.CredentialMask = maskState
+	input.Payload.Protocol = "anthropic_v1"
+	input.Payload.Response = resp
+
+	mutation, err := guardrailspipeline.ProcessAnthropicV1NonStreamResponse(c.Request.Context(), s.currentGuardrailsRuntime(), input, resp)
+	if err != nil {
+		return false
+	}
+	if !mutation.Changed {
+		guardrailsmutate.RestoreAnthropicV1ResponseCredentials(maskState, resp)
+	}
+	return mutation.Changed
+}
+
+// applyGuardrailsToAnthropicV1BetaNonStreamResponse is the beta equivalent of
+// applyGuardrailsToAnthropicV1NonStreamResponse.
+func (s *Server) applyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Context, req *anthropic.BetaMessageNewParams, actualModel string, provider *typ.Provider, resp *anthropic.BetaMessage) bool {
+	if req == nil || resp == nil {
+		return false
+	}
+
+	maskState := ensureGuardrailsCredentialMaskState(c)
+	messageHistory := guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages)
+	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messageHistory)
+	input.State.CredentialMask = maskState
+	input.Payload.Protocol = "anthropic_beta"
+	input.Payload.Response = resp
+
+	mutation, err := guardrailspipeline.ProcessAnthropicV1BetaNonStreamResponse(c.Request.Context(), s.currentGuardrailsRuntime(), input, resp)
+	if err != nil {
+		return false
+	}
+	if !mutation.Changed {
+		guardrailsmutate.RestoreAnthropicV1BetaResponseCredentials(maskState, resp)
+	}
+	return mutation.Changed
 }

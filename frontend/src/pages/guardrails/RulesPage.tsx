@@ -47,6 +47,7 @@ import {
     ExpandMore,
     HelpOutline,
     LaptopMac,
+    Refresh,
     Rule,
     Remove,
     Terminal,
@@ -88,20 +89,16 @@ type GuardrailsPolicy = {
     reason?: string;
 };
 
-type BuiltinTemplate = {
-    id: string;
-    name: string;
-    summary?: string;
-    description?: string;
-    kind: 'resource_access' | 'command_execution' | 'content';
-    topic?: string;
-    tags?: string[];
-    policy: any;
-};
-
 type DisplayPolicy = GuardrailsPolicy & {
     isBuiltin?: boolean;
     builtinSummary?: string;
+};
+
+type RegistryPolicyEntry = {
+    id: string;
+    name?: string;
+    reason?: string;
+    path: string;
 };
 
 type EditorState = {
@@ -122,6 +119,41 @@ type EditorState = {
     caseSensitive: boolean;
     reason: string;
 };
+
+type EditorListField = 'toolNames' | 'commandTerms' | 'resources' | 'patterns';
+
+type OversizedListField = {
+    values: string[];
+    preview: string[];
+    total: number;
+};
+
+type PreparedEditorState = {
+    state: EditorState;
+    oversized: Partial<Record<EditorListField, OversizedListField>>;
+};
+
+const MAX_SUMMARY_VALUES = 2;
+const MAX_SUMMARY_CHARS = 140;
+// Heuristic editability thresholds for large generated guardrail lists.
+// These optimize for Rules page responsiveness, not persistence size: once a
+// list grows into the hundreds of entries, joining it into one large string,
+// repeatedly splitting it on render, and mounting one editable row per value
+// starts to make the dialog sluggish. We keep normal hand-authored policies
+// fully editable, but switch machine-generated blocklists into preview mode
+// before they become expensive to render.
+//
+// The specific cutoffs are intentionally conservative and were chosen around
+// the datasets introduced in this PR:
+// - medium generated lists such as the NuGet and RubyGems malicious package
+//   blocklists are already well above 400 entries and should use preview mode
+// - very large PyPI and npm blocklists always use preview mode
+// - smaller policies remain inline-editable
+const MAX_INLINE_LIST_ITEMS = 400;
+// Secondary guardrail for cases where the item count is moderate but the total
+// joined text is still large enough to hurt UI responsiveness.
+const MAX_INLINE_LIST_CHARS = 16000;
+const OVERSIZED_LIST_PREVIEW_ITEMS = 25;
 
 const resourceAccessActionOptions = [
     {
@@ -147,6 +179,56 @@ const resourceAccessActionOptions = [
 ] as const;
 
 const DEFAULT_GROUP_ID = 'default';
+const PENDING_REGISTRY_INSTALLS_STORAGE_KEY = 'guardrails.pendingRegistryInstalls';
+
+const readPendingRegistryInstallIds = (): Set<string> => {
+    if (typeof window === 'undefined') {
+        return new Set<string>();
+    }
+    try {
+        const raw = window.sessionStorage.getItem(PENDING_REGISTRY_INSTALLS_STORAGE_KEY);
+        if (!raw) {
+            return new Set<string>();
+        }
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) {
+            return new Set<string>();
+        }
+        return new Set<string>(
+            parsed
+                .map((value) => (typeof value === 'string' ? value.trim() : ''))
+                .filter(Boolean)
+        );
+    } catch {
+        return new Set<string>();
+    }
+};
+
+const writePendingRegistryInstallIds = (pending: Set<string>) => {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    try {
+        if (pending.size === 0) {
+            window.sessionStorage.removeItem(PENDING_REGISTRY_INSTALLS_STORAGE_KEY);
+            return;
+        }
+        window.sessionStorage.setItem(PENDING_REGISTRY_INSTALLS_STORAGE_KEY, JSON.stringify(Array.from(pending)));
+    } catch {
+    }
+};
+
+const addPendingRegistryInstallId = (policyId: string) => {
+    const next = readPendingRegistryInstallIds();
+    next.add(policyId);
+    writePendingRegistryInstallIds(next);
+};
+
+const removePendingRegistryInstallId = (policyId: string) => {
+    const next = readPendingRegistryInstallIds();
+    next.delete(policyId);
+    writePendingRegistryInstallIds(next);
+};
 
 const GuardrailsRulesPage = () => {
     const location = useLocation();
@@ -157,9 +239,15 @@ const GuardrailsRulesPage = () => {
     const [supportedScenarios, setSupportedScenarios] = useState<string[]>([]);
     const [groups, setGroups] = useState<PolicyGroup[]>([]);
     const [policies, setPolicies] = useState<GuardrailsPolicy[]>([]);
-    const [builtins, setBuiltins] = useState<BuiltinTemplate[]>([]);
+    const [builtins, setBuiltins] = useState<GuardrailsPolicy[]>([]);
+    const [registryURL, setRegistryURL] = useState('');
+    const [registryPolicies, setRegistryPolicies] = useState<RegistryPolicyEntry[]>([]);
+    const [registryLoading, setRegistryLoading] = useState(true);
+    const [registryLoadError, setRegistryLoadError] = useState<string | null>(null);
+    const [pendingRegistryInstallIds, setPendingRegistryInstallIds] = useState<Set<string>>(() => readPendingRegistryInstallIds());
     const [pendingPolicyId, setPendingPolicyId] = useState<string | null>(null);
     const [pendingSave, setPendingSave] = useState(false);
+    const [pendingBulkPolicyAction, setPendingBulkPolicyAction] = useState<'enable' | 'disable' | null>(null);
     const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null);
     const [isNewPolicy, setIsNewPolicy] = useState(false);
     const [editorOpen, setEditorOpen] = useState(false);
@@ -174,12 +262,13 @@ const GuardrailsRulesPage = () => {
     const [selectedResourceRow, setSelectedResourceRow] = useState(-1);
     const [selectedCommandTermRow, setSelectedCommandTermRow] = useState(-1);
     const [selectedPatternRow, setSelectedPatternRow] = useState(-1);
+    const [oversizedListFields, setOversizedListFields] = useState<Partial<Record<EditorListField, OversizedListField>>>({});
     const [editorState, setEditorState] = useState<EditorState>({
         id: '',
         name: '',
         groups: [DEFAULT_GROUP_ID],
         kind: '',
-        enabled: true,
+        enabled: false,
         verdict: 'block',
         scenarios: [],
         toolNames: '',
@@ -211,6 +300,62 @@ const GuardrailsRulesPage = () => {
     };
 
     const joinLines = (values?: string[]) => (Array.isArray(values) ? values.join('\n') : '');
+    const isOversizedList = (values?: string[]) => {
+        if (!Array.isArray(values) || values.length === 0) {
+            return false;
+        }
+        if (values.length > MAX_INLINE_LIST_ITEMS) {
+            return true;
+        }
+        let chars = 0;
+        for (const value of values) {
+            chars += value.length + 1;
+            if (chars > MAX_INLINE_LIST_CHARS) {
+                return true;
+            }
+        }
+        return false;
+    };
+    const prepareListField = (values?: string[]) => {
+        const list = Array.isArray(values) ? values.filter(Boolean) : [];
+        if (!isOversizedList(list)) {
+            return { text: joinLines(list), oversized: undefined };
+        }
+        return {
+            text: joinLines(list.slice(0, OVERSIZED_LIST_PREVIEW_ITEMS)),
+            oversized: {
+                values: list,
+                preview: list.slice(0, OVERSIZED_LIST_PREVIEW_ITEMS),
+                total: list.length,
+            } satisfies OversizedListField,
+        };
+    };
+    const summarizeValues = (values?: string[], emptyLabel = 'none') => {
+        const list = Array.isArray(values) ? values.filter(Boolean) : [];
+        if (list.length === 0) {
+            return emptyLabel;
+        }
+        const preview = list.slice(0, MAX_SUMMARY_VALUES).join(', ');
+        const suffix = list.length > MAX_SUMMARY_VALUES ? ` (+${list.length - MAX_SUMMARY_VALUES} more)` : '';
+        const text = `${preview}${suffix}`;
+        if (text.length <= MAX_SUMMARY_CHARS) {
+            return text;
+        }
+        return `${text.slice(0, MAX_SUMMARY_CHARS - 1)}…`;
+    };
+    const effectiveListValues = (field: EditorListField, rawValue: string) => {
+        const oversized = oversizedListFields[field];
+        if (!oversized) {
+            return splitLines(rawValue);
+        }
+        const rawRows = textListRows(rawValue);
+        const editablePrefixCount = Math.max(0, rawRows.length - oversized.preview.length);
+        const additions = rawRows
+            .slice(0, editablePrefixCount)
+            .map((item) => item.trim())
+            .filter(Boolean);
+        return [...additions, ...oversized.values];
+    };
     const normalizeGroup = (value?: string) => value?.trim() || DEFAULT_GROUP_ID;
     const normalizePolicyGroups = (values?: string[]) => {
         const seen = new Set<string>();
@@ -224,6 +369,13 @@ const GuardrailsRulesPage = () => {
             out.push(next);
         });
         return out;
+    };
+    const ensureDefaultGroupMembership = (values?: string[]) => {
+        const groups = normalizePolicyGroups(values);
+        if (groups.includes(DEFAULT_GROUP_ID)) {
+            return groups;
+        }
+        return [DEFAULT_GROUP_ID, ...groups];
     };
 
     const toggleValue = (values: string[], value: string) => {
@@ -260,16 +412,16 @@ const GuardrailsRulesPage = () => {
         return items.join('\n');
     };
 
-    const buildBuiltinPayload = (builtin: BuiltinTemplate, enabled: boolean): GuardrailsPolicy => ({
-        id: builtin.policy?.id || builtin.id,
-        name: builtin.policy?.name || builtin.name,
-        groups: normalizePolicyGroups(builtin.policy?.groups),
-        kind: builtin.policy?.kind || builtin.kind,
+    const buildBuiltinPayload = (builtin: GuardrailsPolicy, enabled: boolean): GuardrailsPolicy => ({
+        id: builtin.id,
+        name: builtin.name,
+        groups: ensureDefaultGroupMembership(builtin.groups),
+        kind: builtin.kind,
         enabled,
-        scope: builtin.policy?.scope || { scenarios: [] },
-        match: builtin.policy?.match || {},
-        verdict: builtin.policy?.verdict || 'block',
-        reason: builtin.policy?.reason || '',
+        scope: builtin.scope || { scenarios: [] },
+        match: builtin.match || {},
+        verdict: builtin.verdict || 'block',
+        reason: builtin.reason || '',
     });
 
     const isEditorDirty = useMemo(() => {
@@ -301,7 +453,7 @@ const GuardrailsRulesPage = () => {
         const merged: DisplayPolicy[] = policies.map((policy) => ({
             ...policy,
             isBuiltin: builtinMap.has(policy.id),
-            builtinSummary: builtinMap.get(policy.id)?.summary || builtinMap.get(policy.id)?.description,
+            builtinSummary: builtinMap.get(policy.id)?.reason,
         }));
         for (const builtin of builtins) {
             if (installedPolicyIds.has(builtin.id)) {
@@ -309,19 +461,19 @@ const GuardrailsRulesPage = () => {
             }
             merged.push({
                 id: builtin.id,
-                name: builtin.policy?.name || builtin.name,
-                groups: [],
+                name: builtin.name,
+                groups: ensureDefaultGroupMembership(builtin.groups),
                 kind: builtin.kind,
                 enabled: false,
-                scope: builtin.policy?.scope,
-                match: builtin.policy?.match,
-                verdict: builtin.policy?.verdict || 'block',
-                reason: builtin.policy?.reason || '',
+                scope: builtin.scope,
+                match: builtin.match,
+                verdict: builtin.verdict || 'block',
+                reason: builtin.reason || '',
                 isBuiltin: true,
-                builtinSummary: builtin.summary || builtin.description,
+                builtinSummary: builtin.reason,
             });
         }
-        const rank = (policy: DisplayPolicy) => (policy.enabled !== false ? 0 : 1);
+        const rank = (policy: DisplayPolicy) => (policy.enabled === true ? 0 : 1);
         merged.sort((a, b) => {
             const rankDiff = rank(a) - rank(b);
             if (rankDiff !== 0) return rankDiff;
@@ -329,6 +481,10 @@ const GuardrailsRulesPage = () => {
         });
         return merged;
     }, [builtinMap, builtins, installedPolicyIds, policies]);
+    const downloadablePolicies = useMemo(
+        () => registryPolicies.slice().sort((a, b) => a.id.localeCompare(b.id)),
+        [registryPolicies]
+    );
     const resourceAccessPolicies = useMemo(
         () => displayPolicies.filter((policy) => policy.kind === 'resource_access' || policy.kind === 'operation'),
         [displayPolicies]
@@ -341,14 +497,44 @@ const GuardrailsRulesPage = () => {
         () => displayPolicies.filter((policy) => policy.kind === 'content'),
         [displayPolicies]
     );
+    const selectedTabPolicies = useMemo(() => {
+        if (selectedPolicyTab === 'resource_access') {
+            return resourceAccessPolicies;
+        }
+        if (selectedPolicyTab === 'command_execution') {
+            return commandExecutionPolicies;
+        }
+        return contentPolicies;
+    }, [commandExecutionPolicies, contentPolicies, resourceAccessPolicies, selectedPolicyTab]);
+    const selectedTabLabel = useMemo(() => {
+        if (selectedPolicyTab === 'resource_access') {
+            return 'Resource Access';
+        }
+        if (selectedPolicyTab === 'command_execution') {
+            return 'Command Execution';
+        }
+        return 'Privacy';
+    }, [selectedPolicyTab]);
 
     const getEffectivePolicyState = (policy: GuardrailsPolicy) => {
-        const policyGroups = normalizePolicyGroups(policy.groups);
-        const noActiveGroup = policyGroups.length === 0 || policyGroups.every((groupID) => groupsById.get(groupID)?.enabled === false);
+        const policyGroups = ensureDefaultGroupMembership(policy.groups);
+        const noActiveGroup = policyGroups.length === 0 || policyGroups.every((groupID) => groupsById.get(groupID)?.enabled !== true);
         return {
             inheritedDisabled: noActiveGroup,
-            visibleEnabled: policy.enabled !== false && !noActiveGroup,
+            visibleEnabled: policy.enabled === true && !noActiveGroup,
         };
+    };
+    const policyNeedsEnableWithDefault = (policy: DisplayPolicy) => {
+        const installedPolicy = policies.find((item) => item.id === policy.id);
+        if (!installedPolicy) {
+            return policy.isBuiltin;
+        }
+        const groups = normalizePolicyGroups(installedPolicy.groups);
+        return installedPolicy.enabled !== true || !groups.includes(DEFAULT_GROUP_ID);
+    };
+    const policyNeedsDisable = (policy: DisplayPolicy) => {
+        const installedPolicy = policies.find((item) => item.id === policy.id);
+        return Boolean(installedPolicy && installedPolicy.enabled === true);
     };
 
     const generatePolicyId = (name: string, kind: EditorState['kind'], currentId?: string) => {
@@ -423,15 +609,15 @@ const GuardrailsRulesPage = () => {
 
     const buildPolicySummary = (policy: DisplayPolicy) => {
         if (policy.kind === 'command_execution') {
-            const terms = policy.match?.terms?.join(', ') || 'any command';
-            const resources = policy.match?.resources?.values?.join(', ');
-            const toolNames = policy.match?.tool_names?.join(', ') || 'any tool';
-            return resources ? `${toolNames} · execute · ${terms} · ${resources}` : `${toolNames} · execute · ${terms}`;
+            const terms = summarizeValues(policy.match?.terms, 'any command');
+            const resources = summarizeValues(policy.match?.resources?.values, '');
+            const toolNames = summarizeValues(policy.match?.tool_names, 'any tool');
+            return resources && resources !== 'none' ? `${toolNames} · execute · ${terms} · ${resources}` : `${toolNames} · execute · ${terms}`;
         }
         if (policy.kind === 'resource_access' || policy.kind === 'operation') {
-            const actions = policy.match?.actions?.include?.join(', ') || 'any action';
-            const resources = policy.match?.resources?.values?.join(', ') || 'any resource';
-            const toolNames = policy.match?.tool_names?.join(', ') || 'any tool';
+            const actions = summarizeValues(policy.match?.actions?.include, 'any action');
+            const resources = summarizeValues(policy.match?.resources?.values, 'any resource');
+            const toolNames = summarizeValues(policy.match?.tool_names, 'any tool');
             return `${toolNames} · ${actions} · ${resources}`;
         }
         const patterns = policy.match?.patterns || [];
@@ -441,11 +627,11 @@ const GuardrailsRulesPage = () => {
             }
             return 'No patterns configured';
         }
-        return patterns.slice(0, 2).join(', ');
+        return summarizeValues(patterns, 'No patterns configured');
     };
 
     const buildPolicyScope = (policy: DisplayPolicy) => {
-        const scenarios = policy.scope?.scenarios?.join(', ') || 'all scenarios';
+        const scenarios = policy.scope?.scenarios?.join(', ') || '';
         return scenarios;
     };
 
@@ -465,37 +651,46 @@ const GuardrailsRulesPage = () => {
         }
     };
 
-    const makeEditorState = (policy?: GuardrailsPolicy): EditorState => {
+    const makeEditorState = (policy?: GuardrailsPolicy): PreparedEditorState => {
         const scenarios =
             policy?.scope?.scenarios && policy.scope.scenarios.length > 0
                 ? policy.scope.scenarios
                 : scenarioOptions;
+        const toolNamesField = prepareListField(policy?.match?.tool_names);
+        const commandTermsField = prepareListField(policy?.match?.terms);
+        const resourcesField = prepareListField(policy?.match?.resources?.values);
+        const patternsField = prepareListField(policy?.match?.patterns);
+        const oversized: Partial<Record<EditorListField, OversizedListField>> = {};
+        if (toolNamesField.oversized) oversized.toolNames = toolNamesField.oversized;
+        if (commandTermsField.oversized) oversized.commandTerms = commandTermsField.oversized;
+        if (resourcesField.oversized) oversized.resources = resourcesField.oversized;
+        if (patternsField.oversized) oversized.patterns = patternsField.oversized;
         const nextState: EditorState = {
             id: policy?.id || '',
             name: policy?.name || '',
             groups: normalizePolicyGroups(policy?.groups),
             kind: policy?.kind === 'operation' ? 'resource_access' : policy?.kind || '',
-            enabled: policy?.enabled !== false,
+            enabled: policy?.enabled === true,
             verdict: sanitizeVerdictForKind(
                 policy?.kind === 'operation' ? 'resource_access' : policy?.kind || '',
                 policy?.verdict || 'block'
             ),
             scenarios,
-            toolNames: joinLines(policy?.match?.tool_names),
+            toolNames: toolNamesField.text,
             actions: policy?.match?.actions?.include || [],
-            commandTerms: joinLines(policy?.match?.terms),
-            resources: joinLines(policy?.match?.resources?.values),
+            commandTerms: commandTermsField.text,
+            resources: resourcesField.text,
             resourceMode: policy?.match?.resources?.mode || 'prefix',
-            patterns: joinLines(policy?.match?.patterns),
+            patterns: patternsField.text,
             patternMode: policy?.match?.pattern_mode || 'substring',
             caseSensitive: !!policy?.match?.case_sensitive,
             reason: policy?.reason || '',
         };
-        return nextState;
+        return { state: nextState, oversized };
     };
 
     const makeEditorStateFromDraft = (draft: Partial<EditorState>): EditorState => {
-        const baseState = makeEditorState();
+        const baseState = makeEditorState().state;
         const nextKind = draft.kind || baseState.kind;
         const nextName = draft.name || baseState.name;
         const nextID =
@@ -531,18 +726,23 @@ const GuardrailsRulesPage = () => {
             if (!silent) {
                 setLoading(true);
             }
-            const [guardrailsConfig, builtinResponse] = await Promise.all([
+            const [guardrailsConfig, builtinResponse] = await Promise.allSettled([
                 api.getGuardrailsConfig(),
                 api.getGuardrailsBuiltins(),
             ]);
-            const config = guardrailsConfig?.config || {};
-            const scenarios = Array.isArray(guardrailsConfig?.supported_scenarios)
-                ? guardrailsConfig.supported_scenarios.filter((value: string) => value && value !== '_global')
+
+            if (guardrailsConfig.status !== 'fulfilled' || builtinResponse.status !== 'fulfilled') {
+                throw (guardrailsConfig.status === 'rejected' ? guardrailsConfig.reason : builtinResponse.reason);
+            }
+
+            const config = guardrailsConfig.value?.config || {};
+            const scenarios = Array.isArray(guardrailsConfig.value?.supported_scenarios)
+                ? guardrailsConfig.value.supported_scenarios.filter((value: string) => value && value !== '_global')
                 : [];
             setSupportedScenarios(scenarios);
             setGroups(Array.isArray(config.groups) ? config.groups : []);
             setPolicies(Array.isArray(config.policies) ? config.policies : []);
-            setBuiltins(Array.isArray(builtinResponse?.templates) ? builtinResponse.templates : []);
+            setBuiltins(Array.isArray(builtinResponse.value?.policies) ? builtinResponse.value.policies : []);
             setLoadError(null);
         } catch (error) {
             console.error('Failed to load guardrails config:', error);
@@ -558,9 +758,37 @@ const GuardrailsRulesPage = () => {
         }
     };
 
+    const loadRegistry = async (force = false) => {
+        try {
+            setRegistryLoading(true);
+            setRegistryLoadError(null);
+            const response = await api.getGuardrailsRegistry(force);
+            if (response?.success === false) {
+                throw new Error(response?.error || 'Failed to load registry');
+            }
+            setRegistryURL(response?.url || '');
+            setRegistryPolicies(Array.isArray(response?.policies) ? response.policies : []);
+            setRegistryLoadError(null);
+        } catch (error: any) {
+            setRegistryURL('');
+            setRegistryPolicies([]);
+            setRegistryLoadError(error?.message || 'Failed to load registry');
+        } finally {
+            setRegistryLoading(false);
+        }
+    };
+
     useEffect(() => {
         loadPolicies();
     }, []);
+
+    useEffect(() => {
+        loadRegistry();
+    }, []);
+
+    useEffect(() => {
+        writePendingRegistryInstallIds(pendingRegistryInstallIds);
+    }, [pendingRegistryInstallIds]);
 
     useEffect(() => {
         if (loading || loadError || initializingDefaultGroup || supportedScenarios.length === 0) {
@@ -604,11 +832,13 @@ const GuardrailsRulesPage = () => {
         if (!policy) {
             return;
         }
-        const nextState = makeEditorState(policy);
+        const prepared = makeEditorState(policy);
+        const nextState = prepared.state;
         setSelectedPolicyId(policy.id);
         setIsNewPolicy(false);
         setEditorOpen(true);
         setAdvancedOpen(false);
+        setOversizedListFields(prepared.oversized);
         setEditorState(nextState);
         setEditorSnapshot(JSON.stringify(nextState));
         navigate('/guardrails/rules', { replace: true });
@@ -627,6 +857,7 @@ const GuardrailsRulesPage = () => {
         setIsNewPolicy(true);
         setEditorOpen(true);
         setAdvancedOpen(false);
+        setOversizedListFields({});
         setSelectedResourceRow(splitLines(nextState.resources).length > 0 ? 0 : -1);
         setSelectedCommandTermRow(splitLines(nextState.commandTerms).length > 0 ? 0 : -1);
         setSelectedPatternRow(splitLines(nextState.patterns).length > 0 ? 0 : -1);
@@ -638,11 +869,13 @@ const GuardrailsRulesPage = () => {
     const openPolicyEditor = (policy: DisplayPolicy) => {
         const builtin = policy.isBuiltin ? builtinMap.get(policy.id) : undefined;
         const isVirtualBuiltin = !!builtin && !policies.some((existing) => existing.id === policy.id);
-        const nextState = isVirtualBuiltin ? makeEditorState(buildBuiltinPayload(builtin, false)) : makeEditorState(policy);
+        const prepared = isVirtualBuiltin ? makeEditorState(buildBuiltinPayload(builtin, false)) : makeEditorState(policy);
+        const nextState = prepared.state;
         setSelectedPolicyId(isVirtualBuiltin ? null : policy.id);
         setIsNewPolicy(isVirtualBuiltin);
         setEditorOpen(true);
         setAdvancedOpen(false);
+        setOversizedListFields(prepared.oversized);
         setSelectedResourceRow(splitLines(nextState.resources).length > 0 ? 0 : -1);
         setSelectedCommandTermRow(splitLines(nextState.commandTerms).length > 0 ? 0 : -1);
         setSelectedPatternRow(splitLines(nextState.patterns).length > 0 ? 0 : -1);
@@ -651,12 +884,13 @@ const GuardrailsRulesPage = () => {
     };
 
     const handleNewPolicy = (kind?: 'resource_access' | 'command_execution' | 'content') => {
-        const baseState = makeEditorState();
+        const baseState = makeEditorState().state;
         const nextState = kind ? applyKindDefaults(kind, baseState) : baseState;
         setSelectedPolicyId(null);
         setIsNewPolicy(true);
         setEditorOpen(true);
         setAdvancedOpen(false);
+        setOversizedListFields({});
         setSelectedResourceRow(splitLines(nextState.resources).length > 0 ? 0 : -1);
         setSelectedCommandTermRow(splitLines(nextState.commandTerms).length > 0 ? 0 : -1);
         setSelectedPatternRow(splitLines(nextState.patterns).length > 0 ? 0 : -1);
@@ -673,18 +907,18 @@ const GuardrailsRulesPage = () => {
 
     const buildPolicyPayload = (state: EditorState) => {
         const operationMatch = {
-            tool_names: splitLines(state.toolNames),
+            tool_names: effectiveListValues('toolNames', state.toolNames),
             actions: {
                 include:
                     state.kind === 'command_execution'
                         ? ['execute']
                         : state.actions.filter((action) => action !== 'execute'),
             },
-            terms: state.kind === 'command_execution' ? splitLines(state.commandTerms) : [],
+            terms: state.kind === 'command_execution' ? effectiveListValues('commandTerms', state.commandTerms) : [],
             resources: {
                 type: 'path',
                 mode: state.resourceMode,
-                values: splitLines(state.resources),
+                values: effectiveListValues('resources', state.resources),
             },
         };
         const payload = {
@@ -701,7 +935,7 @@ const GuardrailsRulesPage = () => {
             match:
                 state.kind === 'content'
                     ? {
-                          patterns: splitLines(state.patterns),
+                          patterns: effectiveListValues('patterns', state.patterns),
                           pattern_mode: state.patternMode,
                           case_sensitive: state.caseSensitive,
                       }
@@ -726,24 +960,24 @@ const GuardrailsRulesPage = () => {
                       ...editorState,
                       id: generatePolicyId(editorState.name, editorState.kind, isNewPolicy ? undefined : selectedPolicyId || editorState.id),
                   };
-        if (editorState.kind === 'content' && splitLines(editorState.patterns).length === 0) {
+        if (editorState.kind === 'content' && effectiveListValues('patterns', editorState.patterns).length === 0) {
             setActionMessage({ type: 'error', text: 'Privacy policies require at least one pattern.' });
             return false;
         }
         if (
             editorState.kind === 'resource_access' &&
-            splitLines(editorState.resources).length === 0 &&
+            effectiveListValues('resources', editorState.resources).length === 0 &&
             editorState.actions.length === 0 &&
-            splitLines(editorState.toolNames).length === 0
+            effectiveListValues('toolNames', editorState.toolNames).length === 0
         ) {
             setActionMessage({ type: 'error', text: 'Resource access policies require at least one action, resource, or tool filter.' });
             return false;
         }
         if (
             editorState.kind === 'command_execution' &&
-            splitLines(editorState.commandTerms).length === 0 &&
-            splitLines(editorState.toolNames).length === 0 &&
-            splitLines(editorState.resources).length === 0
+            effectiveListValues('commandTerms', editorState.commandTerms).length === 0 &&
+            effectiveListValues('toolNames', editorState.toolNames).length === 0 &&
+            effectiveListValues('resources', editorState.resources).length === 0
         ) {
             setActionMessage({ type: 'error', text: 'Command execution policies require a command match, tool filter, or resource filter.' });
             return false;
@@ -814,20 +1048,32 @@ const GuardrailsRulesPage = () => {
             const result =
                 !installedPolicy && builtin
                     ? await api.createGuardrailsPolicy(buildBuiltinPayload(builtin, enabled))
-                    : await api.updateGuardrailsPolicy(policyId, { enabled });
+                    : await api.updateGuardrailsPolicy(policyId, {
+                          enabled,
+                          ...(enabled
+                              ? { groups: ensureDefaultGroupMembership(installedPolicy?.groups) }
+                              : {}),
+                      });
             if (!result?.success) {
                 setActionMessage({ type: 'error', text: result?.error || 'Failed to update policy' });
                 return;
             }
             await loadPolicies(true);
             if (selectedPolicyId === policyId) {
-                setEditorState((state) => ({ ...state, enabled }));
+                setEditorState((state) => ({
+                    ...state,
+                    enabled,
+                    groups: enabled ? ensureDefaultGroupMembership(state.groups) : state.groups,
+                }));
                 setEditorSnapshot((snapshot) => {
                     if (!snapshot) {
                         return snapshot;
                     }
                     const nextSnapshot = JSON.parse(snapshot);
                     nextSnapshot.enabled = enabled;
+                    if (enabled) {
+                        nextSnapshot.groups = ensureDefaultGroupMembership(nextSnapshot.groups);
+                    }
                     return JSON.stringify(nextSnapshot);
                 });
             }
@@ -836,6 +1082,92 @@ const GuardrailsRulesPage = () => {
             setActionMessage({ type: 'error', text: error?.message || 'Failed to update policy' });
         } finally {
             setPendingPolicyId(null);
+        }
+    };
+
+    const handleSetPoliciesEnabled = async (enabled: boolean) => {
+        try {
+            setPendingBulkPolicyAction(enabled ? 'enable' : 'disable');
+            const policiesToUpdate = selectedTabPolicies.filter((policy) =>
+                enabled ? policyNeedsEnableWithDefault(policy) : policyNeedsDisable(policy)
+            );
+            if (policiesToUpdate.length === 0) {
+                setActionMessage({
+                    type: 'success',
+                    text: enabled
+                        ? `All ${selectedTabLabel} policies are already enabled and assigned to Default.`
+                        : `All ${selectedTabLabel} policies are already disabled.`,
+                });
+                return;
+            }
+            const results: Array<{ id: string; result: any }> = [];
+            for (const policy of policiesToUpdate) {
+                const builtin = builtinMap.get(policy.id);
+                const installedPolicy = policies.find((item) => item.id === policy.id);
+                if (enabled && !installedPolicy && builtin) {
+                    results.push({
+                        id: policy.id,
+                        result: await api.createGuardrailsPolicy(buildBuiltinPayload(builtin, true)),
+                    });
+                    continue;
+                }
+                results.push({
+                    id: policy.id,
+                    result: await api.updateGuardrailsPolicy(policy.id, {
+                        enabled,
+                        ...(enabled
+                            ? { groups: ensureDefaultGroupMembership(installedPolicy?.groups) }
+                            : {}),
+                    }),
+                });
+            }
+
+            const failed = results.filter(({ result }) => !result?.success);
+            await loadPolicies(true);
+
+            if (selectedPolicyId) {
+                const selected = displayPolicies.find((policy) => policy.id === selectedPolicyId);
+                if (selected) {
+                    setEditorState((state) => ({
+                        ...state,
+                        enabled,
+                        groups: enabled ? ensureDefaultGroupMembership(state.groups) : state.groups,
+                    }));
+                    setEditorSnapshot((snapshot) => {
+                        if (!snapshot) {
+                            return snapshot;
+                        }
+                        const nextSnapshot = JSON.parse(snapshot);
+                        nextSnapshot.enabled = enabled;
+                        if (enabled) {
+                            nextSnapshot.groups = ensureDefaultGroupMembership(nextSnapshot.groups);
+                        }
+                        return JSON.stringify(nextSnapshot);
+                    });
+                }
+            }
+
+            if (failed.length > 0) {
+                setActionMessage({
+                    type: 'error',
+                    text: `${enabled ? 'Enabled' : 'Disabled'} ${results.length - failed.length} ${selectedTabLabel} policies. ${failed.length} failed.`,
+                });
+                return;
+            }
+
+            setActionMessage({
+                type: 'success',
+                text: enabled
+                    ? `Enabled ${results.length} ${selectedTabLabel} policies and assigned them to Default.`
+                    : `Disabled ${results.length} ${selectedTabLabel} policies.`,
+            });
+        } catch (error: any) {
+            setActionMessage({
+                type: 'error',
+                text: error?.message || `Failed to ${enabled ? 'enable' : 'disable'} ${selectedTabLabel.toLowerCase()} policies`,
+            });
+        } finally {
+            setPendingBulkPolicyAction(null);
         }
     };
 
@@ -861,6 +1193,39 @@ const GuardrailsRulesPage = () => {
         } finally {
             setPendingPolicyId(null);
             setDeletePolicyId(null);
+        }
+    };
+
+    const handleInstallRegistryPolicy = async (policyId: string) => {
+        if (pendingRegistryInstallIds.has(policyId)) {
+            return;
+        }
+        try {
+            addPendingRegistryInstallId(policyId);
+            setPendingRegistryInstallIds((prev) => {
+                const next = new Set(prev);
+                next.add(policyId);
+                return next;
+            });
+            const result = await api.installGuardrailsRegistryPolicy(policyId);
+            if (!result?.success) {
+                setActionMessage({ type: 'error', text: result?.error || 'Failed to install policy' });
+                return;
+            }
+            await loadPolicies(true);
+            setActionMessage({ type: 'success', text: `Policy "${policyId}" installed.` });
+        } catch (error: any) {
+            setActionMessage({ type: 'error', text: error?.message || 'Failed to install policy' });
+        } finally {
+            removePendingRegistryInstallId(policyId);
+            setPendingRegistryInstallIds((prev) => {
+                if (!prev.has(policyId)) {
+                    return prev;
+                }
+                const next = new Set(prev);
+                next.delete(policyId);
+                return next;
+            });
         }
     };
 
@@ -940,7 +1305,7 @@ const GuardrailsRulesPage = () => {
                                 <Box
                                     sx={{
                                         display: 'flex',
-                                        alignItems: { xs: 'flex-start', lg: 'center' },
+                                        alignItems: 'flex-start',
                                         flexDirection: { xs: 'column', lg: 'row' },
                                         gap: 1.5,
                                         width: '100%',
@@ -953,17 +1318,31 @@ const GuardrailsRulesPage = () => {
                                     }}
                                     onClick={() => openPolicyEditor(policy)}
                                 >
-                                    <Box sx={{ minWidth: { lg: 220 }, flexShrink: 0 }}>
-                                        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-                                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                    <Box sx={{ minWidth: { lg: 220 }, flexShrink: 0, minHeight: 0 }}>
+                                        <Stack direction="row" spacing={0.75} alignItems="center" useFlexGap flexWrap="wrap">
+                                            <Typography
+                                                variant="body2"
+                                                sx={{ fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}
+                                            >
                                                 {policy.id}
                                             </Typography>
-                                            {policy.isBuiltin && <Chip size="small" label="Built-in" variant="outlined" />}
+                                            {policy.isBuiltin && (
+                                                <Chip
+                                                    size="small"
+                                                    label="Built-in"
+                                                    variant="outlined"
+                                                    sx={{ height: 20, fontSize: '0.7rem', '& .MuiChip-label': { px: 0.5 } }}
+                                                />
+                                            )}
                                             {effectiveState.inheritedDisabled && (
                                                 <Chip size="small" label="No active group" variant="outlined" />
                                             )}
                                         </Stack>
-                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                        <Typography
+                                            variant="caption"
+                                            color="text.secondary"
+                                            sx={{ display: 'block', mt: 0.5, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                        >
                                             {policy.name || 'Unnamed policy'}
                                         </Typography>
                                     </Box>
@@ -980,9 +1359,6 @@ const GuardrailsRulesPage = () => {
                                         >
                                             {buildPolicySummary(policy)}
                                         </Typography>
-                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, whiteSpace: 'normal' }}>
-                                            {buildPolicyScope(policy)}
-                                        </Typography>
                                     </Box>
 
                                     <Stack
@@ -994,6 +1370,7 @@ const GuardrailsRulesPage = () => {
                                             minWidth: { lg: 220 },
                                             justifyContent: { xs: 'space-between', lg: 'flex-end' },
                                             flexShrink: 0,
+                                            alignSelf: 'center',
                                         }}
                                     >
                                         <Chip
@@ -1001,7 +1378,7 @@ const GuardrailsRulesPage = () => {
                                             label={
                                                 effectiveState.inheritedDisabled
                                                     ? 'No active group'
-                                                    : policy.enabled === false
+                                                    : policy.enabled !== true
                                                       ? 'Disabled'
                                                       : 'Enabled'
                                             }
@@ -1012,7 +1389,7 @@ const GuardrailsRulesPage = () => {
                                             control={
                                                 <Switch
                                                     size="small"
-                                                    checked={policy.enabled !== false}
+                                                    checked={policy.enabled === true}
                                                     disabled={pendingPolicyId === policy.id}
                                                     onChange={(e) => handleTogglePolicy(policy.id, e.target.checked)}
                                                 />
@@ -1057,6 +1434,7 @@ const GuardrailsRulesPage = () => {
         onChange,
         placeholder,
         helperText,
+        oversizedField,
     }: {
         title: string;
         description: string;
@@ -1067,12 +1445,14 @@ const GuardrailsRulesPage = () => {
         onChange: (value: string) => void;
         placeholder: string;
         helperText: string;
+        oversizedField?: OversizedListField;
     }) => {
         const rows = textListRows(value);
         const isEmpty = rows.length === 1 && rows[0] === '';
         const showEmptyState = isEmpty && selectedIndex < 0;
-        const canRemove = !showEmptyState;
         const visibleRows = showEmptyState ? [] : rows;
+        const editablePrefixCount = oversizedField ? Math.max(0, rows.length - oversizedField.preview.length) : rows.length;
+        const canRemove = !showEmptyState && (!oversizedField || selectedIndex < editablePrefixCount);
 
         return (
             <Stack spacing={1.5}>
@@ -1086,6 +1466,8 @@ const GuardrailsRulesPage = () => {
                     <Stack
                         direction="row"
                         spacing={0.5}
+                        justifyContent="space-between"
+                        alignItems="center"
                         sx={{
                             px: 1,
                             py: 0.5,
@@ -1094,40 +1476,50 @@ const GuardrailsRulesPage = () => {
                             bgcolor: 'action.hover',
                         }}
                     >
-                        <IconButton
-                            size="small"
-                            color="primary"
-                            onClick={() => {
-                                if (showEmptyState) {
-                                    onSelectedIndexChange(0);
-                                    return;
-                                }
-                                onChange(appendTextListValue(value));
-                                onSelectedIndexChange(rows.length);
-                            }}
-                        >
-                            <Add fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                            size="small"
-                            disabled={!canRemove}
-                            onClick={() => {
-                                if (showEmptyState) {
-                                    return;
-                                }
-                                const index = Math.min(selectedIndex, rows.length - 1);
-                                const nextValue = removeTextListValue(value, index);
-                                onChange(nextValue);
-                                const nextRows = textListRows(nextValue);
-                                if (nextRows.length === 1 && nextRows[0] === '') {
-                                    onSelectedIndexChange(-1);
-                                } else {
-                                    onSelectedIndexChange(Math.max(0, Math.min(selectedIndex - 1, nextRows.length - 1)));
-                                }
-                            }}
-                        >
-                            <Remove fontSize="small" />
-                        </IconButton>
+                        <Stack direction="row" spacing={0.5}>
+                            <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={() => {
+                                    if (showEmptyState) {
+                                        onSelectedIndexChange(0);
+                                        return;
+                                    }
+                                    if (oversizedField) {
+                                        onChange(['', ...rows].join('\n'));
+                                        onSelectedIndexChange(0);
+                                        return;
+                                    }
+                                    onChange(appendTextListValue(value));
+                                    onSelectedIndexChange(rows.length);
+                                }}
+                            >
+                                <Add fontSize="small" />
+                            </IconButton>
+                            <IconButton
+                                size="small"
+                                disabled={!canRemove}
+                                onClick={() => {
+                                    if (showEmptyState) {
+                                        return;
+                                    }
+                                    if (oversizedField && selectedIndex >= editablePrefixCount) {
+                                        return;
+                                    }
+                                    const index = Math.min(selectedIndex, rows.length - 1);
+                                    const nextValue = removeTextListValue(value, index);
+                                    onChange(nextValue);
+                                    const nextRows = textListRows(nextValue);
+                                    if (nextRows.length === 1 && nextRows[0] === '') {
+                                        onSelectedIndexChange(-1);
+                                    } else {
+                                        onSelectedIndexChange(Math.max(0, Math.min(selectedIndex - 1, nextRows.length - 1)));
+                                    }
+                                }}
+                            >
+                                <Remove fontSize="small" />
+                            </IconButton>
+                        </Stack>
                     </Stack>
                     <Table size="small">
                         <TableHead>
@@ -1155,6 +1547,7 @@ const GuardrailsRulesPage = () => {
                                             <InputBase
                                                 fullWidth
                                                 value={item}
+                                                readOnly={Boolean(oversizedField) && index >= editablePrefixCount}
                                                 placeholder={index === 0 ? placeholder : 'Add another entry'}
                                                 onFocus={() => onSelectedIndexChange(index)}
                                                 onChange={(e) => onChange(updateTextListValue(value, index, e.target.value))}
@@ -1167,7 +1560,11 @@ const GuardrailsRulesPage = () => {
                         </TableBody>
                     </Table>
                 </TableContainer>
-                <FormHelperText>{helperText}</FormHelperText>
+                <FormHelperText>
+                    {oversizedField
+                        ? `This field contains ${oversizedField.total.toLocaleString()} entries. Showing the first ${oversizedField.preview.length} existing entries. Existing rows stay read-only, but you can prepend new entries without loading the full list. Saving preserves the rest of the list.`
+                        : helperText}
+                </FormHelperText>
             </Stack>
         );
     };
@@ -1326,6 +1723,22 @@ const GuardrailsRulesPage = () => {
                     rightAction={
                         <Stack direction="row" spacing={1}>
                             <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => handleSetPoliciesEnabled(true)}
+                                disabled={pendingBulkPolicyAction !== null || selectedTabPolicies.length === 0}
+                            >
+                                Enable All
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => handleSetPoliciesEnabled(false)}
+                                disabled={pendingBulkPolicyAction !== null || selectedTabPolicies.length === 0}
+                            >
+                                Disable All
+                            </Button>
+                            <Button
                                 variant="contained"
                                 size="small"
                                 startIcon={<Rule />}
@@ -1370,6 +1783,99 @@ const GuardrailsRulesPage = () => {
                                 contentPolicies,
                                 'content'
                             )}
+                    </Stack>
+                </UnifiedCard>
+
+                <UnifiedCard
+                    title="Download Management"
+                    subtitle="Install additional policy fragments from the curated remote registry. After install, enable or disable them from the policy list above."
+                    size="full"
+                    rightAction={
+                        <Stack direction="row" spacing={1}>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<Refresh />}
+                                disabled={registryLoading}
+                                onClick={() => loadRegistry(true)}
+                            >
+                                {registryLoading ? 'Refreshing…' : 'Retry'}
+                            </Button>
+                            {registryURL ? (
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    component="a"
+                                    href={registryURL}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    startIcon={<ArticleOutlined />}
+                                >
+                                    Open Registry
+                                </Button>
+                            ) : null}
+                        </Stack>
+                    }
+                >
+                    <Stack spacing={2}>
+                        {registryLoadError && <Alert severity="warning">{registryLoadError}</Alert>}
+                        {!registryLoadError && registryLoading && (
+                            <Alert severity="info">Loading remote registry…</Alert>
+                        )}
+                        {!registryLoadError && !registryLoading && downloadablePolicies.length === 0 && (
+                            <Alert severity="info">No downloadable policies are currently listed in the remote registry.</Alert>
+                        )}
+                        {!registryLoadError && !registryLoading && downloadablePolicies.length > 0 && (
+                            <List dense sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, py: 0, overflow: 'hidden' }}>
+                                {downloadablePolicies.map((policy) => {
+                                    const installedPolicy = policies.find((item) => item.id === policy.id);
+                                    const isInstalled = Boolean(installedPolicy);
+                                    const isEnabled = installedPolicy?.enabled === true;
+                                    const isInstalling = pendingRegistryInstallIds.has(policy.id);
+                                    return (
+                                    <ListItem
+                                        key={policy.id}
+                                        sx={{
+                                            px: 2,
+                                            py: 1.5,
+                                            borderBottom: '1px solid',
+                                            borderColor: 'divider',
+                                            '&:last-child': { borderBottom: 'none' },
+                                        }}
+                                    >
+                                        <Box sx={{ display: 'flex', alignItems: 'flex-start', flexDirection: { xs: 'column', md: 'row' }, gap: 1.5, width: '100%' }}>
+                                            <Box sx={{ minWidth: { md: 240 }, flexShrink: 0 }}>
+                                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                                    {policy.id}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                                    {policy.name || policy.path}
+                                                </Typography>
+                                            </Box>
+                                            <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
+                                                <Typography variant="body2" color="text.primary">
+                                                    {policy.reason || 'Download this policy fragment from the remote registry and manage enable/disable from the local policy list.'}
+                                                </Typography>
+                                            </Box>
+                                            <Box sx={{ width: { xs: '100%', md: 'auto' }, display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' }, alignItems: 'center', alignSelf: 'center' }}>
+                                                {isInstalled && isEnabled && (
+                                                    <Chip size="small" color="success" label="Enabled" sx={{ mr: 1 }} />
+                                                )}
+                                                <Button
+                                                    variant={isInstalled ? 'outlined' : 'contained'}
+                                                    size="small"
+                                                    disabled={isInstalled || isInstalling}
+                                                    onClick={() => handleInstallRegistryPolicy(policy.id)}
+                                                >
+                                                    {isInstalled ? 'Installed' : isInstalling ? 'Installing…' : 'Install'}
+                                                </Button>
+                                            </Box>
+                                        </Box>
+                                    </ListItem>
+                                    );
+                                })}
+                            </List>
+                        )}
                     </Stack>
                 </UnifiedCard>
             </Stack>
@@ -1650,6 +2156,7 @@ const GuardrailsRulesPage = () => {
                                                     description: 'Define the files, directories, URLs, or other resources this policy protects.',
                                                     columnLabel: 'Path / URL / Resource',
                                                     value: editorState.resources,
+                                                    oversizedField: oversizedListFields.resources,
                                                     selectedIndex: selectedResourceRow,
                                                     onSelectedIndexChange: setSelectedResourceRow,
                                                     onChange: (resources) => setEditorState((state) => ({ ...state, resources })),
@@ -1684,16 +2191,17 @@ const GuardrailsRulesPage = () => {
                                         }}
                                     >
                                         <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
-                                            {renderCompactListEditor({
-                                                title: 'Command Match',
-                                                description: 'Describe the command patterns you want to block or review. This is the main selector for execution policies.',
-                                                columnLabel: 'Command Pattern',
-                                                value: editorState.commandTerms,
-                                                selectedIndex: selectedCommandTermRow,
-                                                onSelectedIndexChange: setSelectedCommandTermRow,
-                                                onChange: (commandTerms) => setEditorState((state) => ({ ...state, commandTerms })),
-                                                placeholder: 'rm -rf',
-                                                helperText: 'One pattern per row, such as `rm -rf`, `curl | sh`, or `python -c`.',
+                                                {renderCompactListEditor({
+                                                    title: 'Command Match',
+                                                    description: 'Describe the command patterns you want to block or review. This is the main selector for execution policies.',
+                                                    columnLabel: 'Command Pattern',
+                                                    value: editorState.commandTerms,
+                                                    oversizedField: oversizedListFields.commandTerms,
+                                                    selectedIndex: selectedCommandTermRow,
+                                                    onSelectedIndexChange: setSelectedCommandTermRow,
+                                                    onChange: (commandTerms) => setEditorState((state) => ({ ...state, commandTerms })),
+                                                    placeholder: 'rm -rf',
+                                                    helperText: 'One pattern per row, such as `rm -rf`, `curl | sh`, or `python -c`.',
                                             })}
                                         </Box>
 
@@ -1704,6 +2212,7 @@ const GuardrailsRulesPage = () => {
                                                     description: 'Optional. Add paths only when the command rule should apply to a specific file, directory, URL, or other resource.',
                                                     columnLabel: 'Path / Resource',
                                                     value: editorState.resources,
+                                                    oversizedField: oversizedListFields.resources,
                                                     selectedIndex: selectedResourceRow,
                                                     onSelectedIndexChange: setSelectedResourceRow,
                                                     onChange: (resources) => setEditorState((state) => ({ ...state, resources })),
@@ -1744,6 +2253,7 @@ const GuardrailsRulesPage = () => {
                                                     description: 'Define the text you want to block or review. Each row becomes one pattern.',
                                                     columnLabel: 'Pattern',
                                                     value: editorState.patterns,
+                                                    oversizedField: oversizedListFields.patterns,
                                                     selectedIndex: selectedPatternRow,
                                                     onSelectedIndexChange: setSelectedPatternRow,
                                                     onChange: (patterns) => setEditorState((state) => ({ ...state, patterns })),

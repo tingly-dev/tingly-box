@@ -600,6 +600,16 @@ export const api = {
     getGuardrailsBuiltins: async (): Promise<any> => {
         return uiAPI('/guardrails/builtins');
     },
+    getGuardrailsRegistry: async (forceRefresh = false): Promise<any> => {
+        const query = forceRefresh ? '?refresh=1' : '';
+        return uiAPI(`/guardrails/registry${query}`);
+    },
+    installGuardrailsRegistryPolicy: async (id: string): Promise<any> => {
+        return uiAPI('/guardrails/registry/install', {
+            method: 'POST',
+            body: JSON.stringify({ id }),
+        });
+    },
     getGuardrailsCredentials: async (): Promise<any> => {
         return uiAPI('/guardrails/credentials');
     },

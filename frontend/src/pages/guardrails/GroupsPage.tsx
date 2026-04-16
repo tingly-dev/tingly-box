@@ -78,7 +78,7 @@ const GuardrailsGroupsPage = () => {
     const [groupEditorState, setGroupEditorState] = useState<GroupEditorState>({
         id: '',
         name: '',
-        enabled: true,
+        enabled: false,
         severity: 'medium',
     });
     const groupsById = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups]);
@@ -103,7 +103,7 @@ const GuardrailsGroupsPage = () => {
         [groups, groupsById, selectedGroupId]
     );
 
-    const groupPolicyCount = (groupId: string) => policies.filter((policy) => policy.enabled !== false && effectivePolicyGroups(policy).includes(groupId)).length;
+    const groupPolicyCount = (groupId: string) => policies.filter((policy) => policy.enabled === true && effectivePolicyGroups(policy).includes(groupId)).length;
 
     const buildGroupSummary = (group: PolicyGroup) => `${group.severity || 'medium'} severity`;
 
@@ -130,7 +130,7 @@ const GuardrailsGroupsPage = () => {
     const makeGroupEditorState = (group?: PolicyGroup): GroupEditorState => ({
         id: group?.id || '',
         name: group?.name || '',
-        enabled: group?.enabled !== false,
+        enabled: group?.enabled === true,
         severity: group?.severity || 'medium',
     });
 
@@ -340,7 +340,7 @@ const GuardrailsGroupsPage = () => {
     };
 
     const visiblePolicies = useMemo(
-        () => policies.filter((policy) => policy.enabled !== false),
+        () => policies.filter((policy) => policy.enabled === true),
         [policies]
     );
 
@@ -429,10 +429,10 @@ const GuardrailsGroupsPage = () => {
                                                 flexShrink: 0,
                                             }}
                                         >
-                                            <Chip size="small" label={group.enabled === false ? 'Disabled' : 'Enabled'} />
+                                            <Chip size="small" label={group.enabled === true ? 'Enabled' : 'Disabled'} />
                                             <Switch
                                                 size="small"
-                                                checked={group.enabled !== false}
+                                                checked={group.enabled === true}
                                                 disabled={pendingGroupId === group.id}
                                                 onClick={(e) => e.stopPropagation()}
                                                 onChange={(e) => handleToggleGroup(group.id, e.target.checked)}
