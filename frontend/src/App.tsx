@@ -62,6 +62,7 @@ import MCPLocalMode from './pages/mcp/MCPLocalMode';
 import MCPRegisteredServers from './pages/mcp/MCPRegisteredServers';
 import {
     ZenClaudeCodePage,
+    ZenClaudeCodeProfilePage,
     ZenCodexPage,
     ZenOpenCodePage,
     ZenXcodePage,
@@ -372,6 +373,7 @@ function AppContent() {
                     <Route path="/mcp" element={<Navigate to="/mcp/sources" replace />} />
                     {/* Zen Mode Routes - Use zen layout when in zen mode */}
                     <Route path="/zen/claude_code" element={<ZenClaudeCodePage />} />
+                    <Route path="/zen/claude_code/profile/:profileId" element={<ZenClaudeCodeProfilePage />} />
                     <Route path="/zen/codex" element={<ZenCodexPage />} />
                     <Route path="/zen/opencode" element={<ZenOpenCodePage />} />
                     <Route path="/zen/xcode" element={<ZenXcodePage />} />
