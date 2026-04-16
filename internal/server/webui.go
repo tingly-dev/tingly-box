@@ -812,6 +812,14 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithDescription("Update guardrails config and reload engine"),
 		swagger.WithTags("guardrails"),
 	)
+	apiV1.POST("/guardrails/fragment/import", s.ImportGuardrailsFragment,
+		swagger.WithDescription("Import one or more guardrails policies into the shared custom fragment"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.POST("/guardrails/fragment/export", s.ExportGuardrailsFragments,
+		swagger.WithDescription("Export one or more imported guardrails policy fragments"),
+		swagger.WithTags("guardrails"),
+	)
 	apiV1.PUT("/guardrails/policy/:id", s.UpdateGuardrailsPolicy,
 		swagger.WithDescription("Update a guardrails policy and reload engine"),
 		swagger.WithTags("guardrails"),
