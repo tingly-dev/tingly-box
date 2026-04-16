@@ -1,6 +1,7 @@
 package builtinserver
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -218,31 +219,45 @@ func webSearchImpl(ctx context.Context, args map[string]interface{}) (string, er
 		return "", fmt.Errorf("SERPER_API_KEY environment variable is not set")
 	}
 
-	// Build request
-	searchURL := serperAPIEndpoint + "?q=" + url.QueryEscape(query) + "&apiKey=" + apiKey
-
-	// Add optional domain filters
+	// Build search query with optional domain filters as a single q value
+	finalQuery := query
 	if allowedDomains, ok := args["allowed_domains"].([]interface{}); ok && len(allowedDomains) > 0 {
-		domainFilter := ""
+		var siteExprs []string
 		for _, d := range allowedDomains {
 			if domainStr, ok := d.(string); ok {
-				if domainFilter != "" {
-					domainFilter += "|"
-				}
-				domainFilter += url.QueryEscape(domainStr)
+				siteExprs = append(siteExprs, "site:"+domainStr)
 			}
 		}
-		if domainFilter != "" {
-			searchURL += "&q=" + url.QueryEscape("site:("+domainFilter+")")
+		if len(siteExprs) > 0 {
+			finalQuery = finalQuery + " (" + strings.Join(siteExprs, " OR ") + ")"
+		}
+	}
+	if blockedDomains, ok := args["blocked_domains"].([]interface{}); ok && len(blockedDomains) > 0 {
+		for _, d := range blockedDomains {
+			if domainStr, ok := d.(string); ok {
+				finalQuery = finalQuery + " -site:" + domainStr
+			}
 		}
 	}
 
-	// Make HTTP request
+	// Build POST payload
+	payload := map[string]interface{}{
+		"q":   finalQuery,
+		"num": 10,
+	}
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Make HTTP request with API key in header
 	client := &http.Client{Timeout: 30 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, "GET", searchURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "POST", serperAPIEndpoint, bytes.NewReader(payloadBytes))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
+	req.Header.Set("X-API-KEY", apiKey)
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -251,7 +266,7 @@ func webSearchImpl(ctx context.Context, args map[string]interface{}) (string, er
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096000))
 		return "", fmt.Errorf("search failed with status %d: %s", resp.StatusCode, string(body))
 	}
 

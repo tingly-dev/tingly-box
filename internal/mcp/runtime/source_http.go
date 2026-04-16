@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -296,8 +297,31 @@ func buildHTTPClient(source typ.MCPSourceConfig) *http.Client {
 		ForceAttemptHTTP2: true,
 	}
 
+	// Apply proxy configuration
+	transport.Proxy = http.ProxyFromEnvironment
+	if strings.TrimSpace(source.ProxyURL) != "" {
+		if proxyURL, err := url.Parse(source.ProxyURL); err == nil {
+			transport.Proxy = http.ProxyURL(proxyURL)
+		}
+	}
+
 	return &http.Client{
-		Transport: transport,
+		Transport: &headerInjectRoundTripper{Transport: transport, Headers: source.Headers},
 		Timeout:   120 * time.Second,
 	}
+}
+
+// headerInjectRoundTripper injects custom headers into outgoing requests.
+type headerInjectRoundTripper struct {
+	Transport *http.Transport
+	Headers   map[string]string
+}
+
+func (rt *headerInjectRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	for k, v := range rt.Headers {
+		if strings.TrimSpace(k) != "" {
+			req.Header.Set(k, v)
+		}
+	}
+	return rt.Transport.RoundTrip(req)
 }

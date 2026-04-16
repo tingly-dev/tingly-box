@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -28,7 +27,11 @@ func (t *MCPToolStripGuardTransform) Apply(ctx *protocoltransform.TransformConte
 		return nil
 	}
 
-	enabled := t.server.mcpRuntime.ListEnabledServerToolNames(context.Background())
+	listCtx := ctx.Context
+	if listCtx == nil {
+		listCtx = context.Background()
+	}
+	enabled := t.server.mcpRuntime.ListEnabledServerToolNames(listCtx)
 	stripEnabled := t.server.mcpStripDisabledToolsEnabled()
 
 	var hits int
@@ -176,8 +179,8 @@ func stripOpenAIChatDisabledMCP(req *openai.ChatCompletionNewParams, enabled map
 		}
 		out = append(out, converted)
 		for _, rc := range removedCalls {
-			errPayload := fmt.Sprintf(`{"error":"calling disabled tools: %s"}`, rc[1])
-			out = append(out, openai.ToolMessage(errPayload, rc[0]))
+			errPayload, _ := json.Marshal(map[string]string{"error": "calling disabled tools: " + rc[1]})
+			out = append(out, openai.ToolMessage(string(errPayload), rc[0]))
 		}
 	}
 	req.Messages = out
@@ -344,8 +347,8 @@ func stripAnthropicMessagesV1(messages *[]anthropic.MessageParam, enabled map[st
 		if len(removedCalls) > 0 {
 			toolResults := make([]anthropic.ContentBlockParamUnion, 0, len(removedCalls))
 			for _, rc := range removedCalls {
-				errPayload := fmt.Sprintf(`{"error":"calling disabled tools: %s"}`, rc[1])
-				toolResults = append(toolResults, anthropic.NewToolResultBlock(rc[0], errPayload, true))
+				errPayload, _ := json.Marshal(map[string]string{"error": "calling disabled tools: " + rc[1]})
+				toolResults = append(toolResults, anthropic.NewToolResultBlock(rc[0], string(errPayload), true))
 			}
 			out = append(out, anthropic.NewUserMessage(toolResults...))
 		}
@@ -454,8 +457,8 @@ func stripAnthropicMessagesBeta(messages *[]anthropic.BetaMessageParam, enabled 
 		if len(removedCalls) > 0 {
 			toolResults := make([]anthropic.BetaContentBlockParamUnion, 0, len(removedCalls))
 			for _, rc := range removedCalls {
-				errPayload := fmt.Sprintf(`{"error":"calling disabled tools: %s"}`, rc[1])
-				toolResults = append(toolResults, anthropic.NewBetaToolResultBlock(rc[0], errPayload, true))
+				errPayload, _ := json.Marshal(map[string]string{"error": "calling disabled tools: " + rc[1]})
+				toolResults = append(toolResults, anthropic.NewBetaToolResultBlock(rc[0], string(errPayload), true))
 			}
 			out = append(out, anthropic.NewBetaUserMessage(toolResults...))
 		}

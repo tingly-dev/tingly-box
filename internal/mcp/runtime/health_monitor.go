@@ -20,6 +20,8 @@ type HealthMonitor struct {
 	stoppedCh       chan struct{}
 	errorClassifier ErrorClassifier
 	mu              sync.RWMutex
+	// reconnecting prevents spawning multiple concurrent reconnection goroutines.
+	reconnecting bool
 }
 
 // NewHealthMonitor creates a new health monitor.
@@ -40,6 +42,9 @@ func (h *HealthMonitor) Start(ctx context.Context, interval time.Duration) {
 		return // Already running
 	}
 	h.interval = interval
+	// Re-create channels so Stop/Start cycles don't panic on closed channels.
+	h.stopCh = make(chan struct{})
+	h.stoppedCh = make(chan struct{})
 	h.mu.Unlock()
 
 	go h.monitor(ctx)
@@ -100,9 +105,21 @@ func (h *HealthMonitor) monitor(ctx context.Context) {
 					}
 				}
 
-				// For transient errors, trigger reconnection
+				// For transient errors, trigger reconnection (deduplicated)
 				if reconnectableSource, ok := h.source.(ReconnectableSource); ok {
-					go reconnectableSource.Reconnect(ctx)
+					h.mu.Lock()
+					if !h.reconnecting {
+						h.reconnecting = true
+						h.mu.Unlock()
+						go func() {
+							_ = reconnectableSource.Reconnect(ctx)
+							h.mu.Lock()
+							h.reconnecting = false
+							h.mu.Unlock()
+						}()
+					} else {
+						h.mu.Unlock()
+					}
 				}
 			}
 
@@ -207,13 +224,11 @@ func (s *ExponentialBackoffStrategy) NextRetry(retryCount int) time.Duration {
 		return s.InitialInterval
 	}
 
-	// Calculate next interval with exponential backoff: 2^(retryCount-1)
-	// Use integer math for the shift operation
-	multiplier := 1 << uint(retryCount-1)
-	interval := time.Duration(float64(s.InitialInterval) * float64(multiplier))
-
-	// Apply additional multiplier
-	interval = time.Duration(float64(interval) * s.Multiplier)
+	// Calculate next interval with exponential backoff using Multiplier only.
+	interval := s.InitialInterval
+	for i := 0; i < retryCount; i++ {
+		interval = time.Duration(float64(interval) * s.Multiplier)
+	}
 
 	// Cap at max interval
 	if interval > s.MaxInterval {

@@ -28,8 +28,10 @@ func (s *Server) BuildTransformChain(c *gin.Context, targetType protocol.APIType
 
 	// 2. Base transform (protocol conversion)
 	transforms = append(transforms, transform.NewBaseTransform(targetType))
-	transforms = append(transforms, NewMCPToolInjectionTransform(s))
-	transforms = append(transforms, NewMCPToolStripGuardTransform(s))
+	if s.mcpEnabled() {
+		transforms = append(transforms, NewMCPToolInjectionTransform(s))
+		transforms = append(transforms, NewMCPToolStripGuardTransform(s))
+	}
 	transforms = append(transforms, transform.NewVendorTransform(providerURL))
 
 	// 3. Post-transform recording (if request recording is enabled)

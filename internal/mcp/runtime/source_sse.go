@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -279,7 +280,7 @@ func (s *SSEToolSource) Reconnect(ctx context.Context) error {
 }
 
 // buildSSEHTTPClient creates an HTTP client for the SSE transport.
-func buildSSEHTTPClient() *http.Client {
+func buildSSEHTTPClient(source typ.MCPSourceConfig) *http.Client {
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: false, // SSE connections should be secure by default
@@ -296,8 +297,16 @@ func buildSSEHTTPClient() *http.Client {
 		ForceAttemptHTTP2: true,
 	}
 
+	// Apply proxy configuration
+	transport.Proxy = http.ProxyFromEnvironment
+	if strings.TrimSpace(source.ProxyURL) != "" {
+		if proxyURL, err := url.Parse(source.ProxyURL); err == nil {
+			transport.Proxy = http.ProxyURL(proxyURL)
+		}
+	}
+
 	return &http.Client{
-		Transport: transport,
+		Transport: &headerInjectRoundTripper{Transport: transport, Headers: source.Headers},
 		Timeout:   120 * time.Second,
 	}
 }

@@ -26,6 +26,11 @@ type Runtime struct {
 	toolSourceFactory *ToolSourceFactory
 	activeSources     map[string]ToolSource // source ID -> ToolSource
 	sourcesMu         sync.RWMutex
+
+	// Cache for enabled server tool names to avoid repeated full enumeration.
+	enabledNamesCache   map[string]struct{}
+	enabledNamesExpires time.Time
+	enabledNamesMu      sync.RWMutex
 }
 
 // NewRuntime creates a new MCP runtime.
@@ -35,10 +40,11 @@ func NewRuntime(getConfig configProvider) *Runtime {
 	if cfg == nil {
 		return nil
 	}
+	sc := newSessionCache()
 	return &Runtime{
 		getConfig:         getConfig,
-		sc:                newSessionCache(),
-		toolSourceFactory: NewToolSourceFactory(newSessionCache()),
+		sc:                sc,
+		toolSourceFactory: NewToolSourceFactory(sc),
 		activeSources:     make(map[string]ToolSource),
 	}
 }
@@ -472,8 +478,24 @@ func (r *Runtime) HasServerTools() bool {
 	return false
 }
 
+const enabledNamesCacheTTL = 5 * time.Second
+
 // ListEnabledServerToolNames returns normalized MCP tool names from enabled server-tool sources.
+// Results are cached with a short TTL to avoid repeated full source enumeration.
 func (r *Runtime) ListEnabledServerToolNames(ctx context.Context) map[string]struct{} {
+	r.enabledNamesMu.RLock()
+	if r.enabledNamesCache != nil && time.Now().Before(r.enabledNamesExpires) {
+		r.enabledNamesMu.RUnlock()
+		return r.enabledNamesCache
+	}
+	r.enabledNamesMu.RUnlock()
+
+	r.enabledNamesMu.Lock()
+	defer r.enabledNamesMu.Unlock()
+	if r.enabledNamesCache != nil && time.Now().Before(r.enabledNamesExpires) {
+		return r.enabledNamesCache
+	}
+
 	out := make(map[string]struct{})
 	for _, t := range r.ListOpenAITools(ctx) {
 		fn := t.GetFunction()
@@ -482,5 +504,7 @@ func (r *Runtime) ListEnabledServerToolNames(ctx context.Context) map[string]str
 		}
 		out[fn.Name] = struct{}{}
 	}
+	r.enabledNamesCache = out
+	r.enabledNamesExpires = time.Now().Add(enabledNamesCacheTTL)
 	return out
 }

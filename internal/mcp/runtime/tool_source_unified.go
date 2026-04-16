@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"time"
 )
 
@@ -67,14 +68,11 @@ type ToolSource interface {
 
 // BaseToolSource provides common functionality for all tool source implementations.
 type BaseToolSource struct {
-	sourceID string
+	sourceID  string
 	transport TransportType
 	state     ConnectionState
 	status    ConnectionStatus
-	mu        struct {
-		connection struct{}
-		state      struct{}
-	}
+	mu        sync.RWMutex
 }
 
 // NewBaseToolSource creates a new base tool source.
@@ -101,16 +99,22 @@ func (b *BaseToolSource) GetType() TransportType {
 
 // GetConnectionState returns the current connection state.
 func (b *BaseToolSource) GetConnectionState() ConnectionState {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 	return b.state
 }
 
 // GetConnectionStatus returns the current connection status.
 func (b *BaseToolSource) GetConnectionStatus() ConnectionStatus {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 	return b.status
 }
 
 // setState updates the connection state and status.
 func (b *BaseToolSource) setState(state ConnectionState, err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.state = state
 	b.status.State = state
 	if err != nil {

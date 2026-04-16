@@ -181,7 +181,6 @@ func (s *Server) handleMCPToolCalls(ctx context.Context, provider *typ.Provider,
 		followUpReq := *originalReq
 		followUpReq.Messages = newMessages
 		followUpReq.StreamOptions = openai.ChatCompletionStreamOptionsParam{}
-		followUpReq = *s.injectMCPToolsIntoOpenAIRequest(ctx, &followUpReq)
 
 		wrapper := s.clientPool.GetOpenAIClient(ctx, provider, string(followUpReq.Model))
 		fc := NewForwardContext(nil, provider)

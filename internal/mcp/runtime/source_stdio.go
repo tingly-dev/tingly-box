@@ -28,9 +28,9 @@ type StdioToolSource struct {
 	sessionCache   *sessionCache
 	session        *sourceSession
 	mu             sync.RWMutex
-	ready          bool        // Track if server is ready
-	readyMu        sync.Mutex  // Protect ready state
-	startupRetries int         // Retry counter during startup
+	ready          bool       // Track if server is ready
+	readyMu        sync.Mutex // Protect ready state
+	startupRetries int        // Retry counter during startup
 }
 
 // NewStdioToolSource creates a new stdio tool source.
@@ -100,10 +100,10 @@ func (s *StdioToolSource) waitForServerReady(ctx context.Context) error {
 
 		// Try to list tools as a readiness check
 		s.session.mu.RLock()
-		tools, err := s.session.listTools(ctx)
+		_, err := s.session.listTools(ctx)
 		s.session.mu.RUnlock()
 
-		if err == nil && len(tools) > 0 {
+		if err == nil {
 			s.ready = true
 			s.startupRetries = attempt
 			logrus.WithField("source", s.GetSourceID()).WithField("attempt", attempt+1).

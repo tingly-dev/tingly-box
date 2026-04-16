@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -260,6 +262,9 @@ func WebFetchTool(ctx context.Context, args map[string]interface{}) (string, err
 		source = "jina"
 	} else {
 		// Fallback to direct fetch
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
 		content, err = fetchDirect(ctx, url)
 		if err != nil {
 			return "", fmt.Errorf("both jina and direct fetch failed: %w", err)
@@ -312,9 +317,21 @@ func WebFetchTool(ctx context.Context, args map[string]interface{}) (string, err
 	return string(responseBytes), nil
 }
 
-// fetchDirect performs a direct HTTP GET request as fallback
-func fetchDirect(ctx context.Context, url string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+const maxDirectFetchBodySize = 10 * 1024 * 1024 // 10 MB
+
+// fetchDirect performs a direct HTTP GET request as fallback.
+// It blocks private/internal addresses to mitigate SSRF.
+func fetchDirect(ctx context.Context, targetURL string) (string, error) {
+	u, err := url.Parse(targetURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid url: %w", err)
+	}
+
+	if isPrivateOrInternalURL(u) {
+		return "", fmt.Errorf("fetching private or internal urls is not allowed")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", targetURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
@@ -329,12 +346,37 @@ func fetchDirect(ctx context.Context, url string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxDirectFetchBodySize))
 	if err != nil {
 		return "", fmt.Errorf("failed to read response: %w", err)
 	}
 
 	return string(body), nil
+}
+
+// isPrivateOrInternalURL reports whether u resolves to a private, loopback,
+// link-local, or multicast address.
+func isPrivateOrInternalURL(u *url.URL) bool {
+	host := u.Hostname()
+
+	// Block localhost by name.
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		// If DNS lookup fails, conservatively block.
+		return true
+	}
+
+	for _, ip := range ips {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() {
+			return true
+		}
+	}
+
+	return false
 }
 
 // extractSnippets extracts relevant lines from content based on prompt keywords
