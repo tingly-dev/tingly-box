@@ -152,3 +152,110 @@ func TestAdvisorToolLoop(t *testing.T) {
 	require.Equal(t, "Still unsure", receivedRequests[1]["messages"].([]any)[4].(map[string]any)["content"])
 	require.Equal(t, "One more time", receivedRequests[2]["messages"].([]any)[4].(map[string]any)["content"])
 }
+
+func TestAdvisorToolLoop_Anthropic(t *testing.T) {
+	var receivedRequests []map[string]any
+	var handlerErrors []error
+	var requestPaths []string
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestPaths = append(requestPaths, r.URL.Path)
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			handlerErrors = append(handlerErrors, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		var req map[string]any
+		if err := json.Unmarshal(body, &req); err != nil {
+			handlerErrors = append(handlerErrors, err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		receivedRequests = append(receivedRequests, req)
+
+		resp := map[string]any{
+			"id":      "msg_01Test",
+			"type":    "message",
+			"role":    "assistant",
+			"model":   "claude-opus-4-6",
+			"content": []map[string]any{
+				{"type": "text", "text": `{"assessment":"anthropic clear","recommendation":"proceed carefully"}`},
+			},
+			"stop_reason": "end_turn",
+			"usage": map[string]any{
+				"input_tokens":  10,
+				"output_tokens": 5,
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer mockServer.Close()
+
+	cp := client.NewClientPool()
+	source, err := runtime.NewAdvisorToolSource(typ.MCPSourceConfig{
+		ID: "test-advisor-anthropic",
+		Advisor: &typ.AdvisorConfig{
+			BaseURL:           mockServer.URL + "/v1",
+			Model:             "claude-opus-4-6",
+			APIKey:            "test-key",
+			MaxUsesPerRequest: 2,
+			MaxTokens:         2048,
+		},
+	}, cp)
+	require.NoError(t, err)
+
+	actx := &runtime.AdvisorContext{
+		Messages: []map[string]any{
+			{"role": "system", "content": "Executor system prompt."},
+			{"role": "user", "content": "Help me"},
+			{"role": "assistant", "content": "Sure!"},
+		},
+		UsesRemaining: 2,
+	}
+	ctx := runtime.WithAdvisorContext(context.Background(), actx)
+
+	result, err := source.CallTool(ctx, "advisor", `{"reason":"Need Anthropic guidance"}`)
+	require.NoError(t, err)
+	require.Contains(t, result, "anthropic clear")
+	require.Equal(t, 1, actx.UsesRemaining)
+
+	result, err = source.CallTool(ctx, "advisor", `{"reason":"Again"}`)
+	require.NoError(t, err)
+	require.Contains(t, result, "anthropic clear")
+	require.Equal(t, 0, actx.UsesRemaining)
+
+	result, err = source.CallTool(ctx, "advisor", `{"reason":"Exhausted"}`)
+	require.NoError(t, err)
+	require.Equal(t, "Advisor consultations exhausted for this request.", result)
+
+	require.Empty(t, handlerErrors)
+	require.Len(t, requestPaths, 2)
+	for _, path := range requestPaths {
+		require.Equal(t, "/v1/messages", path)
+	}
+
+	require.Len(t, receivedRequests, 2)
+	for i, req := range receivedRequests {
+		require.Equal(t, "claude-opus-4-6", req["model"])
+		require.Equal(t, float64(2048), req["max_tokens"])
+
+		systemBlocks, ok := req["system"].([]any)
+		require.True(t, ok, "request %d: expected system array", i)
+		require.Len(t, systemBlocks, 1, "request %d: expected 1 system block", i)
+		sysBlock, ok := systemBlocks[0].(map[string]any)
+		require.True(t, ok, "request %d: expected system block map", i)
+		systemText, ok := sysBlock["text"].(string)
+		require.True(t, ok, "request %d: expected system text", i)
+		require.Contains(t, systemText, "Executor system prompt.")
+		require.Contains(t, systemText, "You are an advisor to a coding agent.")
+
+		messages, ok := req["messages"].([]any)
+		require.True(t, ok, "request %d: expected messages array", i)
+		require.Len(t, messages, 3, "request %d: expected 3 messages", i)
+	}
+}
