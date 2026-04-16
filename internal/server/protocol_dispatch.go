@@ -96,11 +96,13 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 	req := reqCtx.Request.(*anthropic.MessageNewParams)
 
 	ctx := c.Request.Context()
-	if maxUses := s.advisorMaxUses(); maxUses > 0 {
-		ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
-			Messages:      extractAnthropicV1Messages(req.Messages),
-			UsesRemaining: maxUses,
-		})
+	if s.mcpRuntime != nil {
+		if maxUses := s.mcpRuntime.GetAdvisorMaxUses(); maxUses > 0 {
+			ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
+				Messages:      extractAnthropicV1Messages(req.Messages),
+				UsesRemaining: maxUses,
+			})
+		}
 	}
 
 	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, actualModel)
@@ -271,11 +273,13 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 
 	ctx := c.Request.Context()
-	if maxUses := s.advisorMaxUses(); maxUses > 0 {
-		ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
-			Messages:      extractAnthropicBetaMessages(req.Messages),
-			UsesRemaining: maxUses,
-		})
+	if s.mcpRuntime != nil {
+		if maxUses := s.mcpRuntime.GetAdvisorMaxUses(); maxUses > 0 {
+			ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
+				Messages:      extractAnthropicBetaMessages(req.Messages),
+				UsesRemaining: maxUses,
+			})
+		}
 	}
 
 	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, actualModel)
@@ -461,7 +465,7 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 		req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 
 		ctx := c.Request.Context()
-		if maxUses := s.advisorMaxUses(); maxUses > 0 {
+		if maxUses := s.mcpRuntime.GetAdvisorMaxUses(); maxUses > 0 {
 			ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
 				Messages:      extractAnthropicBetaMessages(req.Messages),
 				UsesRemaining: maxUses,
@@ -1282,7 +1286,7 @@ func (s *Server) nonstreamAnthropicV1ToResponses(
 	anthropicReq := reqCtx.Request.(*anthropic.MessageNewParams)
 
 	ctx := c.Request.Context()
-	if maxUses := s.advisorMaxUses(); maxUses > 0 {
+	if maxUses := s.mcpRuntime.GetAdvisorMaxUses(); maxUses > 0 {
 		ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
 			Messages:      extractAnthropicV1Messages(anthropicReq.Messages),
 			UsesRemaining: maxUses,
@@ -1320,7 +1324,7 @@ func (s *Server) streamAnthropicV1ToResponses(
 	anthropicReq := reqCtx.Request.(*anthropic.MessageNewParams)
 
 	ctx := c.Request.Context()
-	if maxUses := s.advisorMaxUses(); maxUses > 0 {
+	if maxUses := s.mcpRuntime.GetAdvisorMaxUses(); maxUses > 0 {
 		ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
 			Messages:      extractAnthropicV1Messages(anthropicReq.Messages),
 			UsesRemaining: maxUses,
