@@ -640,6 +640,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.config.SetTemplateManager(templateManager)
 
 	server.mcpRuntime = mcpruntime.NewRuntime(cfg.GetMCPRuntimeConfig)
+
 	server.mcpRuntime.SetClientPool(server.clientPool)
 	// Auto-register built-in tools (e.g., webtools) if not already present
 	if err := mcpruntime.RegisterBuiltinTools(cfg.GetMCPRuntimeConfig, cfg.SetToolConfig); err != nil {
