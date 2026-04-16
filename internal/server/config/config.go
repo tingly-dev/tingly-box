@@ -85,6 +85,9 @@ type Config struct {
 	// 3. https://example.com/template.json -> load from HTTP URL
 	ProviderTemplateSource string `yaml:"provider_template_source,omitempty" json:"provider_template_source,omitempty"`
 
+	// MultiTenantConfig holds settings for multi-tenant API token authentication
+	MultiTenantConfig MultiTenantConfig `yaml:"multi_tenant,omitempty" json:"multi_tenant,omitempty"`
+
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
 
@@ -138,6 +141,34 @@ type HTTPTransportConfig struct {
 	// Default (nil): false - providers without proxy_url connect directly
 	// Set to true: providers without proxy_url will use system/environment proxy
 	RespectEnvProxy *bool `json:"respect_env_proxy,omitempty" yaml:"respect_env_proxy,omitempty"`
+}
+
+// MultiTenantConfig holds settings for multi-tenant API token authentication
+type MultiTenantConfig struct {
+	// Enabled enables multi-tenant mode with JWT API token authentication
+	// When false, only the global model token is accepted (backward compatible)
+	Enabled bool `json:"enabled" yaml:"enabled"`
+
+	// DisableGlobalToken disables the global model token when true
+	// When enabled, only JWT API tokens are accepted for authentication
+	DisableGlobalToken bool `json:"disable_global_token" yaml:"disable_global_token"`
+
+	// APITokenSecret is the secret key for signing JWT tokens
+	// Use env: or file: references for secure secret management
+	// Default: Uses JWTSecret from main config
+	APITokenSecret string `json:"api_token_secret,omitempty" yaml:"api_token_secret,omitempty"`
+
+	// APITokenAlgorithm specifies the JWT signing algorithm
+	// Supported: "HS256" (default), "RS256"
+	APITokenAlgorithm string `json:"api_token_algorithm,omitempty" yaml:"api_token_algorithm,omitempty"`
+
+	// APITokenIssuer is the issuer claim for JWT tokens
+	// Default: "tingly-box"
+	APITokenIssuer string `json:"api_token_issuer,omitempty" yaml:"api_token_issuer,omitempty"`
+
+	// APITokenDefaultTTL is the default time-to-live for API tokens in days
+	// Default: 365 days
+	APITokenDefaultTTL int `json:"api_token_default_ttl_days,omitempty" yaml:"api_token_default_ttl_days,omitempty"`
 }
 
 // ConfigOption is a function that modifies a Config during initialization
@@ -938,6 +969,84 @@ func (c *Config) GetJWTSecret() string {
 	defer c.mu.RUnlock()
 
 	return c.JWTSecret
+}
+
+// Multi-tenant configuration methods
+
+// IsMultiTenantEnabled returns whether multi-tenant mode is enabled
+func (c *Config) IsMultiTenantEnabled() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.MultiTenantConfig.Enabled
+}
+
+// IsGlobalTokenDisabled returns whether the global model token is disabled
+func (c *Config) IsGlobalTokenDisabled() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.MultiTenantConfig.DisableGlobalToken
+}
+
+// GetAPITokenSecret returns the API token secret, falling back to JWTSecret
+func (c *Config) GetAPITokenSecret() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if c.MultiTenantConfig.APITokenSecret != "" {
+		return c.MultiTenantConfig.APITokenSecret
+	}
+	return c.JWTSecret
+}
+
+// GetAPITokenAlgorithm returns the JWT signing algorithm for API tokens
+func (c *Config) GetAPITokenAlgorithm() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if c.MultiTenantConfig.APITokenAlgorithm != "" {
+		return c.MultiTenantConfig.APITokenAlgorithm
+	}
+	return "HS256" // Default
+}
+
+// GetAPITokenIssuer returns the issuer claim for API tokens
+func (c *Config) GetAPITokenIssuer() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if c.MultiTenantConfig.APITokenIssuer != "" {
+		return c.MultiTenantConfig.APITokenIssuer
+	}
+	return "tingly-box" // Default
+}
+
+// GetAPITokenDefaultTTL returns the default TTL for API tokens in days
+func (c *Config) GetAPITokenDefaultTTL() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if c.MultiTenantConfig.APITokenDefaultTTL > 0 {
+		return c.MultiTenantConfig.APITokenDefaultTTL
+	}
+	return 365 // Default: 365 days
+}
+
+// SetMultiTenantEnabled updates the multi-tenant enabled flag
+func (c *Config) SetMultiTenantEnabled(enabled bool) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.MultiTenantConfig.Enabled = enabled
+	return c.Save()
+}
+
+// SetMultiTenantConfig updates the entire multi-tenant configuration
+func (c *Config) SetMultiTenantConfig(config MultiTenantConfig) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.MultiTenantConfig = config
+	return c.Save()
 }
 
 // SetServerPort updates the server port

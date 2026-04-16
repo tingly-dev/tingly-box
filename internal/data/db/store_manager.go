@@ -31,6 +31,7 @@ type StoreManager struct {
 	imbotSettingsStore   *ImBotSettingsStore
 	modelCapabilityStore *ModelCapabilityStore
 	modelStore           *ModelStore
+	apiTokenStore        *APITokenStore
 }
 
 // StoreManagerConfig holds configuration for StoreManager initialization.
@@ -156,6 +157,9 @@ func (sm *StoreManager) initStores() error {
 	if err := sm.initModelStore(); err != nil {
 		errs = append(errs, fmt.Errorf("model store: %w", err))
 	}
+	if err := sm.initAPITokenStore(); err != nil {
+		errs = append(errs, fmt.Errorf("api token store: %w", err))
+	}
 
 	if len(errs) > 0 {
 		return fmt.Errorf("failed to initialize stores: %v", errs)
@@ -260,6 +264,18 @@ func (sm *StoreManager) initModelStore() error {
 	return nil
 }
 
+// initAPITokenStore initializes the APITokenStore.
+func (sm *StoreManager) initAPITokenStore() error {
+	if err := sm.db.AutoMigrate(&APITokenRecord{}); err != nil {
+		return err
+	}
+	sm.apiTokenStore = &APITokenStore{
+		db:     sm.db,
+		dbPath: constant.GetDBFile(sm.baseDir),
+	}
+	return nil
+}
+
 // Stats returns the StatsStore (thread-safe).
 // Returns nil if the store is not initialized or after Close() has been called.
 func (sm *StoreManager) Stats() *StatsStore {
@@ -324,6 +340,14 @@ func (sm *StoreManager) Model() *ModelStore {
 	return sm.modelStore
 }
 
+// APIToken returns the APITokenStore (thread-safe).
+// Returns nil if the store is not initialized or after Close() has been called.
+func (sm *StoreManager) APIToken() *APITokenStore {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.apiTokenStore
+}
+
 // BaseDir returns the base directory for this StoreManager.
 func (sm *StoreManager) BaseDir() string {
 	sm.mu.RLock()
@@ -360,6 +384,7 @@ func (sm *StoreManager) Close() error {
 	sm.imbotSettingsStore = nil
 	sm.modelCapabilityStore = nil
 	sm.modelStore = nil
+	sm.apiTokenStore = nil
 	sm.db = nil
 
 	logrus.Info("StoreManager: Closed all stores")
@@ -373,7 +398,7 @@ func (sm *StoreManager) HealthCheck() (*HealthStatus, error) {
 	defer sm.mu.RUnlock()
 
 	status := &HealthStatus{
-		TotalStores: 8,
+		TotalStores: 9,
 		StoreStatus: make(map[string]string),
 	}
 
@@ -387,6 +412,7 @@ func (sm *StoreManager) HealthCheck() (*HealthStatus, error) {
 		"imbotSettings":   sm.imbotSettingsStore,
 		"modelCapability": sm.modelCapabilityStore,
 		"model":           sm.modelStore,
+		"apiToken":        sm.apiTokenStore,
 	}
 
 	for name, store := range stores {
