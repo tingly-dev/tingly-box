@@ -26,7 +26,11 @@ func (t *MCPToolInjectionTransform) Apply(ctx *protocoltransform.TransformContex
 		return nil
 	}
 
-	mcpTools := t.server.mcpRuntime.ListOpenAITools(context.Background())
+	listCtx := ctx.Context
+	if listCtx == nil {
+		listCtx = context.Background()
+	}
+	mcpTools := t.server.mcpRuntime.ListOpenAITools(listCtx)
 	if len(mcpTools) == 0 {
 		return nil
 	}

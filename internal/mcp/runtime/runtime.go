@@ -45,7 +45,6 @@ func NewRuntime(getConfig configProvider) *Runtime {
 	return &Runtime{
 		getConfig:         getConfig,
 		sc:                sc,
-		toolSourceFactory: NewToolSourceFactory(sc, nil),
 		activeSources:     make(map[string]ToolSource),
 	}
 }
