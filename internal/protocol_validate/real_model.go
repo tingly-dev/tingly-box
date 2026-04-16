@@ -57,9 +57,6 @@ func loadRealModelsConfigYAML(path string) (*RealModelsConfig, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse models config %q: %w", path, err)
 	}
-	if len(cfg.Models) == 0 {
-		return nil, fmt.Errorf("models config %q has no entries", path)
-	}
 	return &cfg, nil
 }
 
@@ -104,16 +101,13 @@ func loadRealModelsConfigCSV(path string) (*RealModelsConfig, error) {
 	}
 
 	cfg := &RealModelsConfig{}
-	for rowNum, row := range records[1:] {
+	for _, row := range records[1:] {
 		entry := RealModelEntry{
 			Name:     col(row, "name"),
 			BaseURL:  col(row, "baseurl"),
 			APIKey:   col(row, "apikey"),
 			Model:    col(row, "model"),
 			APIStyle: col(row, "api_style"),
-		}
-		if entry.Name == "" || entry.BaseURL == "" || entry.APIKey == "" || entry.Model == "" {
-			return nil, fmt.Errorf("models config %q row %d missing required field(s)", path, rowNum+2)
 		}
 		cfg.Models = append(cfg.Models, entry)
 	}
