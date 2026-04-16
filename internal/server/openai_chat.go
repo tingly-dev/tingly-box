@@ -24,8 +24,27 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+func extractOpenAIMessages(messages []openai.ChatCompletionMessageParamUnion) []map[string]any {
+	if len(messages) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(messages)
+	var out []map[string]any
+	_ = json.Unmarshal(b, &out)
+	return out
+}
+
 // handleNonStreamingRequest handles non-streaming chat completion requests with MCP runtime support.
 func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, stripUsage bool) {
+	ctx := c.Request.Context()
+	if s.mcpRuntime != nil {
+		if maxUses := s.mcpRuntime.GetAdvisorMaxUses(); maxUses > 0 {
+			ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
+				Messages:      extractOpenAIMessages(originalReq.Messages),
+				UsesRemaining: maxUses,
+			})
+		}
+	}
 	req := originalReq
 
 	// Forward request to provider
@@ -195,6 +214,13 @@ func (s *Server) handleMCPToolCalls(ctx context.Context, provider *typ.Provider,
 
 // handleOpenAIChatStreamingRequest handles streaming chat completion requests.
 func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
+	ctx := c.Request.Context()
+	if maxUses := s.advisorMaxUses(); maxUses > 0 {
+		ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
+			Messages:      extractOpenAIMessages(originalReq.Messages),
+			UsesRemaining: maxUses,
+		})
+	}
 	req := originalReq
 	if hasDeclaredMCPTools(req) {
 		reqForMCP := *req
@@ -756,22 +782,4 @@ func (s *Server) convertMessagesToResponseInputItems(messages []openai.ChatCompl
 // isValidRuleScenario checks if the given scenario is a valid RuleScenario
 func isValidRuleScenario(scenario typ.RuleScenario) bool {
 	return typ.CanUseScenarioInPath(scenario)
-}
-
-// advisorMaxUses returns the MaxUsesPerRequest from the advisor source config.
-// Returns 0 if no advisor is configured or the value is not positive.
-func (s *Server) advisorMaxUses() int {
-	if s.mcpRuntime == nil {
-		return 0
-	}
-	cfg := s.mcpRuntime.GetConfig()
-	if cfg == nil {
-		return 0
-	}
-	for _, source := range cfg.Sources {
-		if source.Advisor != nil && source.Advisor.MaxUsesPerRequest > 0 {
-			return source.Advisor.MaxUsesPerRequest
-		}
-	}
-	return 0
 }

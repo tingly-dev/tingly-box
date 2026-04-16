@@ -470,6 +470,21 @@ func buildAllowList(names []string) (bool, map[string]bool) {
 	return false, out
 }
 
+// GetAdvisorMaxUses returns the MaxUsesPerRequest from the advisor source config.
+// Returns 0 if no advisor is configured or the value is not positive.
+func (r *Runtime) GetAdvisorMaxUses() int {
+	cfg := r.GetConfig()
+	if cfg == nil {
+		return 0
+	}
+	for _, source := range cfg.Sources {
+		if source.Advisor != nil && source.Advisor.MaxUsesPerRequest > 0 {
+			return source.Advisor.MaxUsesPerRequest
+		}
+	}
+	return 0
+}
+
 // HasServerTools returns true if there are any server tools configured
 func (r *Runtime) HasServerTools() bool {
 	cfg := r.getConfigOrDefault()
