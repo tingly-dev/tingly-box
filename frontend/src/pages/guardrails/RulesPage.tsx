@@ -653,19 +653,23 @@ const GuardrailsRulesPage = () => {
             const actionList = policy.match?.actions?.include || [];
             const action = actionList.includes('install') ? 'install' : 'execute';
             const resources = summarizeValues(policy.match?.resources?.values, '');
-            const toolNames = summarizeValues(policy.match?.tool_names, 'any tool');
+            const toolNames = summarizeValues(policy.match?.tool_names, '');
             if (action === 'install') {
                 const terms = summarizeValues(policy.match?.terms, 'any install target');
-                return resources && resources !== 'none' ? `${toolNames} · install · ${terms} · ${resources}` : `${toolNames} · install · ${terms}`;
+                return [toolNames, 'install', terms, resources && resources !== 'none' ? resources : '']
+                    .filter(Boolean)
+                    .join(' · ');
             }
             const terms = summarizeValues(policy.match?.terms, 'any command');
-            return resources && resources !== 'none' ? `${toolNames} · execute · ${terms} · ${resources}` : `${toolNames} · execute · ${terms}`;
+            return [toolNames, 'execute', terms, resources && resources !== 'none' ? resources : '']
+                .filter(Boolean)
+                .join(' · ');
         }
         if (policy.kind === 'resource_access' || policy.kind === 'operation') {
             const actions = summarizeValues(policy.match?.actions?.include, 'any action');
             const resources = summarizeValues(policy.match?.resources?.values, 'any resource');
-            const toolNames = summarizeValues(policy.match?.tool_names, 'any tool');
-            return `${toolNames} · ${actions} · ${resources}`;
+            const toolNames = summarizeValues(policy.match?.tool_names, '');
+            return [toolNames, actions, resources].filter(Boolean).join(' · ');
         }
         const patterns = policy.match?.patterns || [];
         if (patterns.length === 0) {
