@@ -34,6 +34,7 @@ type guardrailsConfigResponse struct {
 	Exists             bool                  `json:"exists"`
 	Content            string                `json:"content"`
 	Config             guardrailscore.Config `json:"config"`
+	Imports            []guardrailsImportRef `json:"imports,omitempty"`
 	SupportedScenarios []string              `json:"supported_scenarios"`
 }
 
@@ -45,6 +46,13 @@ type guardrailsConfigUpdateResponse struct {
 	Success   bool   `json:"success"`
 	Path      string `json:"path"`
 	RuleCount int    `json:"rule_count"`
+}
+
+type guardrailsImportRef struct {
+	Path        string   `json:"path"`
+	Name        string   `json:"name"`
+	PolicyIDs   []string `json:"policy_ids,omitempty"`
+	PolicyCount int      `json:"policy_count"`
 }
 
 type guardrailsReloadResponse struct {
@@ -78,6 +86,33 @@ type guardrailsRegistryInstallResponse struct {
 	RegistryURL string `json:"registry_url"`
 	Path        string `json:"path"`
 	PolicyID    string `json:"policy_id"`
+}
+
+type guardrailsFragmentImportRequest struct {
+	Content  string `json:"content" binding:"required"`
+	FileName string `json:"file_name,omitempty"`
+}
+
+type guardrailsFragmentImportResponse struct {
+	Success   bool     `json:"success"`
+	Path      string   `json:"path"`
+	PolicyIDs []string `json:"policy_ids"`
+}
+
+type guardrailsFragmentExportRequest struct {
+	Paths []string `json:"paths" binding:"required"`
+}
+
+type guardrailsFragmentExportFile struct {
+	Path      string   `json:"path"`
+	Name      string   `json:"name"`
+	Content   string   `json:"content"`
+	PolicyIDs []string `json:"policy_ids,omitempty"`
+}
+
+type guardrailsFragmentExportResponse struct {
+	Success bool                           `json:"success"`
+	Files   []guardrailsFragmentExportFile `json:"files"`
 }
 
 type guardrailsRegistryIndex struct {
@@ -274,6 +309,66 @@ func countGuardrailsPolicies(cfg guardrailscore.Config) int {
 	return len(cfg.Policies)
 }
 
+func guardrailsImportRefs(rootPath string, rootCfg guardrailscore.Config, imported map[string]guardrailscore.Config) []guardrailsImportRef {
+	refs := make([]guardrailsImportRef, 0, len(rootCfg.Imports))
+	for _, importPath := range rootCfg.Imports {
+		if strings.TrimSpace(importPath) == "" {
+			continue
+		}
+		resolved := resolveGuardrailsImportPath(rootPath, importPath)
+		childCfg, ok := imported[resolved]
+		if !ok {
+			continue
+		}
+		policyIDs := make([]string, 0, len(childCfg.Policies))
+		for _, policy := range childCfg.Policies {
+			if strings.TrimSpace(policy.ID) == "" {
+				continue
+			}
+			policyIDs = append(policyIDs, policy.ID)
+		}
+		refs = append(refs, guardrailsImportRef{
+			Path:        importPath,
+			Name:        filepath.Base(resolved),
+			PolicyIDs:   policyIDs,
+			PolicyCount: len(policyIDs),
+		})
+	}
+	return refs
+}
+
+func guardrailsFragmentPolicyIDs(cfg guardrailscore.Config) []string {
+	ids := make([]string, 0, len(cfg.Policies))
+	for _, policy := range cfg.Policies {
+		if strings.TrimSpace(policy.ID) == "" {
+			continue
+		}
+		ids = append(ids, policy.ID)
+	}
+	return ids
+}
+
+func validateGuardrailsFragmentPolicyIDs(fragmentCfg guardrailscore.Config, existing guardrailscore.Config) error {
+	seen := make(map[string]struct{}, len(existing.Policies))
+	for _, policy := range existing.Policies {
+		if strings.TrimSpace(policy.ID) == "" {
+			continue
+		}
+		seen[policy.ID] = struct{}{}
+	}
+	for _, policy := range fragmentCfg.Policies {
+		policyID := strings.TrimSpace(policy.ID)
+		if policyID == "" {
+			return fmt.Errorf("imported policy id is required")
+		}
+		if _, ok := seen[policyID]; ok {
+			return fmt.Errorf("policy %q already exists", policyID)
+		}
+		seen[policyID] = struct{}{}
+	}
+	return nil
+}
+
 // Guardrails config and storage live under one dedicated subdirectory. Keeping
 // these path helpers next to the handlers makes the admin surface self-contained.
 func GetGuardrailsDir(configDir string) string {
@@ -420,6 +515,7 @@ func (s *Server) GetGuardrailsConfig(c *gin.Context) {
 				Exists:             false,
 				Content:            "",
 				Config:             guardrailscore.Config{},
+				Imports:            nil,
 				SupportedScenarios: s.getGuardrailsSupportedScenarios(),
 			})
 			return
@@ -434,7 +530,7 @@ func (s *Server) GetGuardrailsConfig(c *gin.Context) {
 		return
 	}
 
-	cfg, err := guardrails.LoadConfig(path)
+	rootCfg, importedCfgs, fullCfg, err := loadGuardrailsConfigSources(path)
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
@@ -444,7 +540,8 @@ func (s *Server) GetGuardrailsConfig(c *gin.Context) {
 		Path:               path,
 		Exists:             true,
 		Content:            string(data),
-		Config:             guardrailsevaluate.StorageConfig(cfg),
+		Config:             guardrailsevaluate.StorageConfig(fullCfg),
+		Imports:            guardrailsImportRefs(path, rootCfg, importedCfgs),
 		SupportedScenarios: s.getGuardrailsSupportedScenarios(),
 	})
 }
@@ -491,6 +588,190 @@ func (s *Server) UpdateGuardrailsConfig(c *gin.Context) {
 		Success:   true,
 		Path:      path,
 		RuleCount: countGuardrailsPolicies(cfg),
+	})
+}
+
+// ImportGuardrailsFragment appends one or more policies from a fragment file
+// into guardrails/custom/import.yaml and ensures the root config imports it.
+func (s *Server) ImportGuardrailsFragment(c *gin.Context) {
+	if s.config == nil || s.config.ConfigDir == "" {
+		c.JSON(500, gin.H{"success": false, "error": "config directory not set"})
+		return
+	}
+
+	var req guardrailsFragmentImportRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(req.Content) == "" {
+		c.JSON(400, gin.H{"success": false, "error": "content is empty"})
+		return
+	}
+
+	fragmentCfg, err := decodeGuardrailsConfigFile([]byte(req.Content))
+	if err != nil {
+		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	if err := guardrails.ValidateImportedFragment(fragmentCfg); err != nil {
+		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	if len(fragmentCfg.Policies) == 0 {
+		c.JSON(400, gin.H{"success": false, "error": "imported fragment does not contain any policies"})
+		return
+	}
+
+	s.guardrailsConfigMu.Lock()
+	defer s.guardrailsConfigMu.Unlock()
+
+	path, err := ensureGuardrailsPath(s.config.ConfigDir)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	rootCfg := guardrailscore.Config{}
+	importedCfgs := map[string]guardrailscore.Config{}
+	fullCfg := guardrailscore.Config{}
+	if _, err := os.Stat(path); err == nil {
+		rootCfg, importedCfgs, fullCfg, err = loadGuardrailsConfigSources(path)
+		if err != nil {
+			c.JSON(400, gin.H{"success": false, "error": err.Error()})
+			return
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	if err := validateGuardrailsFragmentPolicyIDs(fragmentCfg, fullCfg); err != nil {
+		c.JSON(409, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	rootGroupUpdated := false
+	if usesGroupID(fragmentCfg.Policies, defaultGuardrailsGroup.ID) {
+		rootGroupUpdated = ensureGuardrailsDefaultGroup(&rootCfg)
+	}
+	if !guardrailsGroupsExist(rootCfg.Groups, collectGuardrailsPolicyGroups(fragmentCfg.Policies)) {
+		c.JSON(400, gin.H{"success": false, "error": "imported fragment references unknown policy groups"})
+		return
+	}
+
+	targetPath := filepath.Join(GetGuardrailsCustomDir(s.config.ConfigDir), "import.yaml")
+	rootUpdated := ensureGuardrailsImport(&rootCfg, path, targetPath)
+	targetCfg := importedCfgs[targetPath]
+	targetCfg.Policies = append(targetCfg.Policies, fragmentCfg.Policies...)
+	importedCfgs[targetPath] = targetCfg
+	mergedCfg := mergeGuardrailsImportedConfigs(rootCfg, importedCfgs, path)
+
+	targetData, err := marshalGuardrailsPolicyFragment(targetCfg)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	writes := []guardrailsFileWrite{{Path: targetPath, Data: targetData}}
+	if rootUpdated || rootGroupUpdated {
+		rootData, err := marshalGuardrailsConfig(rootCfg)
+		if err != nil {
+			c.JSON(500, gin.H{"success": false, "error": err.Error()})
+			return
+		}
+		writes = append(writes, guardrailsFileWrite{Path: path, Data: rootData})
+	}
+	if err := s.persistGuardrailsFilesAndReload(mergedCfg, writes, "guardrails fragment import"); err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(200, guardrailsFragmentImportResponse{
+		Success:   true,
+		Path:      targetPath,
+		PolicyIDs: guardrailsFragmentPolicyIDs(fragmentCfg),
+	})
+}
+
+// ExportGuardrailsFragments returns the raw imported fragment files selected by
+// the user so the UI can download one or more source files directly.
+func (s *Server) ExportGuardrailsFragments(c *gin.Context) {
+	if s.config == nil || s.config.ConfigDir == "" {
+		c.JSON(500, gin.H{"success": false, "error": "config directory not set"})
+		return
+	}
+
+	var req guardrailsFragmentExportRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	if len(req.Paths) == 0 {
+		c.JSON(400, gin.H{"success": false, "error": "at least one import path is required"})
+		return
+	}
+
+	s.guardrailsConfigMu.Lock()
+	defer s.guardrailsConfigMu.Unlock()
+
+	path, err := FindGuardrailsConfig(s.config.ConfigDir)
+	if err != nil {
+		c.JSON(404, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	rootCfg, importedCfgs, _, err := loadGuardrailsConfigSources(path)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	allowed := make(map[string]string, len(rootCfg.Imports))
+	for _, importPath := range rootCfg.Imports {
+		if strings.TrimSpace(importPath) == "" {
+			continue
+		}
+		allowed[importPath] = resolveGuardrailsImportPath(path, importPath)
+	}
+
+	files := make([]guardrailsFragmentExportFile, 0, len(req.Paths))
+	seen := make(map[string]struct{}, len(req.Paths))
+	for _, importPath := range req.Paths {
+		importPath = strings.TrimSpace(importPath)
+		if importPath == "" {
+			continue
+		}
+		if _, ok := seen[importPath]; ok {
+			continue
+		}
+		seen[importPath] = struct{}{}
+
+		resolved, ok := allowed[importPath]
+		if !ok {
+			c.JSON(404, gin.H{"success": false, "error": fmt.Sprintf("import %q not found", importPath)})
+			return
+		}
+		data, err := os.ReadFile(resolved)
+		if err != nil {
+			c.JSON(500, gin.H{"success": false, "error": err.Error()})
+			return
+		}
+		childCfg := importedCfgs[resolved]
+		files = append(files, guardrailsFragmentExportFile{
+			Path:      importPath,
+			Name:      filepath.Base(resolved),
+			Content:   string(data),
+			PolicyIDs: guardrailsFragmentPolicyIDs(childCfg),
+		})
+	}
+	if len(files) == 0 {
+		c.JSON(400, gin.H{"success": false, "error": "no imports selected"})
+		return
+	}
+
+	c.JSON(200, guardrailsFragmentExportResponse{
+		Success: true,
+		Files:   files,
 	})
 }
 
