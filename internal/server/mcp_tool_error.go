@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 )
 
@@ -15,14 +16,16 @@ func (s *Server) isEnabledMCPToolName(ctx context.Context, toolName string) bool
 }
 
 func disabledMCPToolErrorPayload(toolName string) string {
-	return fmt.Sprintf(`{"error":"calling disabled tools: %s"}`, toolName)
+	payload, _ := json.Marshal(map[string]string{"error": "calling disabled tools: " + toolName})
+	return string(payload)
 }
 
 func normalizeMCPToolCallError(err error) string {
 	if err == nil {
 		return ""
 	}
-	return fmt.Sprintf(`{"error":"%s"}`, err.Error())
+	payload, _ := json.Marshal(map[string]string{"error": err.Error()})
+	return string(payload)
 }
 
 func (s *Server) callMCPToolWithGuard(ctx context.Context, toolName, arguments string) (string, error) {
