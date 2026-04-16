@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -164,10 +165,16 @@ func countGuardrailsPolicies(cfg guardrails.Config) int {
 
 // GetGuardrailsBuiltins returns curated builtin policy templates for the Guardrails UI.
 func (s *Server) GetGuardrailsBuiltins(c *gin.Context) {
+	log.Println("[DEBUG] GetGuardrailsBuiltins: API endpoint called")
 	templates, err := guardrails.LoadBuiltinPolicyTemplates()
 	if err != nil {
+		log.Printf("[DEBUG] GetGuardrailsBuiltins: ERROR loading builtin templates: %v", err)
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
+	}
+	log.Printf("[DEBUG] GetGuardrailsBuiltins: Successfully loaded %d builtin templates", len(templates))
+	for i, tpl := range templates {
+		log.Printf("[DEBUG] GetGuardrailsBuiltins: Template[%d]: id=%s, name=%s, kind=%s, topic=%s", i, tpl.ID, tpl.Name, tpl.Kind, tpl.Topic)
 	}
 	c.JSON(200, guardrailsBuiltinsResponse{Templates: templates})
 }

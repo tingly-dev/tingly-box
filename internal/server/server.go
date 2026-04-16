@@ -1111,6 +1111,19 @@ func (s *Server) UseLoadBalanceEndpoints() {
 
 // Start starts the HTTP server
 func (s *Server) Start(port int) error {
+	// Log builtin guardrails policies on startup
+	log.Println("=== Loading builtin guardrails policies ===")
+	builtinTemplates, err := guardrails.LoadBuiltinPolicyTemplates()
+	if err != nil {
+		log.Printf("[WARNING] Failed to load builtin guardrails policies: %v", err)
+	} else {
+		log.Printf("Successfully loaded %d builtin guardrails policy templates", len(builtinTemplates))
+		for _, tpl := range builtinTemplates {
+			log.Printf("  - [%s] %s (kind: %s, topic: %s)", tpl.ID, tpl.Name, tpl.Kind, tpl.Topic)
+		}
+	}
+	log.Println("==========================================")
+
 	// Start token refresher background goroutine
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
