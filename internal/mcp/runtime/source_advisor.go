@@ -51,6 +51,9 @@ func NewAdvisorToolSource(sourceConfig typ.MCPSourceConfig, cp *client.ClientPoo
 	if cfg.MaxUsesPerRequest <= 0 {
 		cfg.MaxUsesPerRequest = 3
 	}
+	if cfg.MaxTokens <= 0 {
+		cfg.MaxTokens = 4096
+	}
 	return &AdvisorToolSource{
 		BaseToolSource: base,
 		config:         cfg,
@@ -87,7 +90,10 @@ func (s *AdvisorToolSource) ListTools(ctx context.Context) ([]ToolDefinition, er
 		},
 		"required": []string{"reason"},
 	}
-	schemaBytes, _ := json.Marshal(schema)
+	schemaBytes, err := json.Marshal(schema)
+	if err != nil {
+		return nil, fmt.Errorf("advisor: failed to marshal tool schema: %w", err)
+	}
 
 	remainingUses := s.config.MaxUsesPerRequest
 	if actx, ok := GetAdvisorContext(ctx); ok {
@@ -122,13 +128,16 @@ func (s *AdvisorToolSource) CallTool(ctx context.Context, toolName string, argum
 		"format":          detectAdvisorFormat(s.config),
 	}).Debug("advisor: consulting advisor model")
 
+	advisorCtx, cancel := context.WithTimeout(ctx, advisorCallTimeout)
+	defer cancel()
+
 	var result string
 	var err error
 	format := detectAdvisorFormat(s.config)
 	if format == FormatOpenAI {
-		result, err = s.callOpenAI(ctx, input.Reason, actx)
+		result, err = s.callOpenAI(advisorCtx, input.Reason, actx)
 	} else {
-		result, err = s.callAnthropic(ctx, input.Reason, actx)
+		result, err = s.callAnthropic(advisorCtx, input.Reason, actx)
 	}
 	if err != nil {
 		logrus.WithError(err).Error("advisor: consultation failed")
@@ -139,18 +148,22 @@ func (s *AdvisorToolSource) CallTool(ctx context.Context, toolName string, argum
 	return result, nil
 }
 
+func (s *AdvisorToolSource) buildProvider(style protocol.APIStyle) *typ.Provider {
+	return &typ.Provider{
+		Name:     "advisor",
+		APIBase:  s.config.BaseURL,
+		Token:    s.config.APIKey,
+		APIStyle: style,
+		Enabled:  true,
+	}
+}
+
 func (s *AdvisorToolSource) callOpenAI(ctx context.Context, reason string, actx *AdvisorContext) (string, error) {
 	if s.clientPool == nil {
 		return "", fmt.Errorf("advisor: client pool not available")
 	}
 
-	provider := &typ.Provider{
-		Name:     "advisor",
-		APIBase:  s.config.BaseURL,
-		Token:    s.config.APIKey,
-		APIStyle: protocol.APIStyleOpenAI,
-		Enabled:  true,
-	}
+	provider := s.buildProvider(protocol.APIStyleOpenAI)
 
 	wrapper := s.clientPool.GetOpenAIClient(ctx, provider, s.config.Model)
 	if wrapper == nil {
@@ -206,13 +219,7 @@ func (s *AdvisorToolSource) callAnthropic(ctx context.Context, reason string, ac
 		return "", fmt.Errorf("advisor: client pool not available")
 	}
 
-	provider := &typ.Provider{
-		Name:     "advisor",
-		APIBase:  s.config.BaseURL,
-		Token:    s.config.APIKey,
-		APIStyle: protocol.APIStyleAnthropic,
-		Enabled:  true,
-	}
+	provider := s.buildProvider(protocol.APIStyleAnthropic)
 
 	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, s.config.Model)
 	if wrapper == nil {
@@ -220,6 +227,7 @@ func (s *AdvisorToolSource) callAnthropic(ctx context.Context, reason string, ac
 	}
 
 	var messages []anthropic.MessageParam
+	var systemParts []string
 	for _, m := range actx.Messages {
 		role, _ := m["role"].(string)
 		content, _ := m["content"].(string)
@@ -229,8 +237,7 @@ func (s *AdvisorToolSource) callAnthropic(ctx context.Context, reason string, ac
 		case "assistant":
 			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(content)))
 		case "system":
-			// System messages go in the System field, not messages list
-			continue
+			systemParts = append(systemParts, content)
 		case "tool":
 			messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock("[tool result]: "+content)))
 		default:
@@ -244,11 +251,16 @@ func (s *AdvisorToolSource) callAnthropic(ctx context.Context, reason string, ac
 	}
 	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(reason)))
 
+	systemPrompt := advisorSystemPrompt
+	if len(systemParts) > 0 {
+		systemPrompt = strings.Join(append(systemParts, advisorSystemPrompt), "\n\n")
+	}
+
 	req := anthropic.MessageNewParams{
 		Model:     anthropic.Model(s.config.Model),
-		MaxTokens: 4096,
+		MaxTokens: int64(s.config.MaxTokens),
 		Messages:  messages,
-		System:    []anthropic.TextBlockParam{{Text: advisorSystemPrompt}},
+		System:    []anthropic.TextBlockParam{{Text: systemPrompt}},
 	}
 
 	resp, err := wrapper.MessagesNew(ctx, &req)
@@ -285,7 +297,10 @@ func normalizeAdvisorResponse(raw string) string {
 		Assessment:     "Advisor returned non-JSON response.",
 		Recommendation: raw,
 	}
-	b, _ := json.Marshal(fallback)
+	b, err := json.Marshal(fallback)
+	if err != nil {
+		return fmt.Sprintf(`{"assessment":"Advisor returned non-JSON response.","recommendation":%q}`, raw)
+	}
 	return string(b)
 }
 
@@ -310,6 +325,8 @@ func (s *AdvisorToolSource) description(remainingUses int) string {
 		"Use this when facing architectural decisions, complex debugging, unclear trade-offs, or when stuck. " +
 		"You have " + strconv.Itoa(remainingUses) + " advisor consultation(s) remaining this request."
 }
+
+const advisorCallTimeout = 60 * time.Second
 
 const advisorSystemPrompt = `You are an advisor to a coding agent. You share the agent's full conversation context and provide strategic guidance.
 
