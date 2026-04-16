@@ -104,6 +104,73 @@ func TestBuildEvaluatorsPreservesExplicitResourceAccessToolNames(t *testing.T) {
 	}
 }
 
+func TestBuildEvaluatorsDefaultsCommandExecutionToolNames(t *testing.T) {
+	enabled := true
+	evaluators, err := BuildEvaluators(guardrailscore.Config{
+		Groups: []guardrailscore.PolicyGroup{
+			{
+				ID:      "high-risk",
+				Enabled: enabled,
+			},
+		},
+		Policies: []guardrailscore.Policy{
+			{
+				ID:      "block-destructive-rm",
+				Kind:    guardrailscore.PolicyKindCommandExecution,
+				Groups:  []string{"high-risk"},
+				Enabled: enabled,
+				Match: guardrailscore.PolicyMatch{
+					Terms: []string{"rm -rf"},
+				},
+			},
+		},
+	}, Dependencies{})
+	if err != nil {
+		t.Fatalf("BuildEvaluators() error = %v", err)
+	}
+	policyRule, ok := evaluators[0].(*OperationPolicy)
+	if !ok {
+		t.Fatalf("evaluators[0] type = %T, want *OperationPolicy", evaluators[0])
+	}
+	if got := policyRule.config.ToolNames; len(got) != 1 || got[0] != "bash" {
+		t.Fatalf("policyRule.config.ToolNames = %#v", got)
+	}
+}
+
+func TestBuildEvaluatorsPreservesExplicitCommandExecutionToolNames(t *testing.T) {
+	enabled := true
+	evaluators, err := BuildEvaluators(guardrailscore.Config{
+		Groups: []guardrailscore.PolicyGroup{
+			{
+				ID:      "high-risk",
+				Enabled: enabled,
+			},
+		},
+		Policies: []guardrailscore.Policy{
+			{
+				ID:      "block-custom-tool-command",
+				Kind:    guardrailscore.PolicyKindCommandExecution,
+				Groups:  []string{"high-risk"},
+				Enabled: enabled,
+				Match: guardrailscore.PolicyMatch{
+					ToolNames: []string{"shell_v2"},
+					Terms:     []string{"rm -rf"},
+				},
+			},
+		},
+	}, Dependencies{})
+	if err != nil {
+		t.Fatalf("BuildEvaluators() error = %v", err)
+	}
+	policyRule, ok := evaluators[0].(*OperationPolicy)
+	if !ok {
+		t.Fatalf("evaluators[0] type = %T, want *OperationPolicy", evaluators[0])
+	}
+	if got := policyRule.config.ToolNames; len(got) != 1 || got[0] != "shell_v2" {
+		t.Fatalf("policyRule.config.ToolNames = %#v", got)
+	}
+}
+
 func TestBuildEvaluatorsCreatesContentPolicyEvaluator(t *testing.T) {
 	evaluators, err := BuildEvaluators(guardrailscore.Config{
 		Policies: []guardrailscore.Policy{

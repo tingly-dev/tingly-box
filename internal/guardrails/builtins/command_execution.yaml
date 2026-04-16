@@ -7,7 +7,6 @@ policies:
     verdict: block
     reason: This policy blocks destructive recursive deletion commands.
     match:
-      tool_names: [bash]
       terms: ["rm -rf", "rm -fr"]
       resources:
         type: path
@@ -22,5 +21,4 @@ policies:
     verdict: block
     reason: This policy blocks download-and-execute command patterns.
     match:
-      tool_names: [bash]
       terms: ["curl | sh", "curl|sh", "wget | bash", "wget|bash"]

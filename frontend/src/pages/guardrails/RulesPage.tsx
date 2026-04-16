@@ -591,7 +591,7 @@ const GuardrailsRulesPage = () => {
             name: current.name,
             id: isNewPolicy && current.name.trim() ? generatePolicyId(current.name, kind) : current.id,
             verdict: sanitizeVerdictForKind(kind, current.verdict),
-            toolNames: kind === 'content' ? '' : current.toolNames || 'bash',
+            toolNames: kind === 'content' ? '' : current.toolNames,
             actions:
                 kind === 'resource_access'
                     ? current.actions.length > 0
