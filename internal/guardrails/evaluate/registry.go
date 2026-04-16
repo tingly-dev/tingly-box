@@ -6,6 +6,8 @@ import (
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 )
 
+var defaultResourceAccessToolNames = []string{"bash"}
+
 // Dependencies provides external services needed by some policy kinds.
 type Dependencies struct {
 	Judge Judge
@@ -43,7 +45,7 @@ func buildPolicyEvaluator(policy guardrailscore.Policy, groups map[string]guardr
 	}
 
 	switch policy.Kind {
-	case guardrailscore.PolicyKindResourceAccess, guardrailscore.PolicyKindOperationLegacy:
+	case guardrailscore.PolicyKindResourceAccess:
 		return buildResourceAccessPolicyEvaluator(policy, policyGroups)
 	case guardrailscore.PolicyKindCommandExecution:
 		return buildCommandExecutionPolicyEvaluator(policy, policyGroups)
@@ -91,7 +93,7 @@ func buildResourceAccessPolicyEvaluator(policy guardrailscore.Policy, groups []g
 	scope.Content = []guardrailscore.ContentType{guardrailscore.ContentTypeCommand}
 
 	params := CommandPolicyConfig{
-		ToolNames: append([]string(nil), policy.Match.ToolNames...),
+		ToolNames: defaultToolNamesForResourceAccess(policy.Match.ToolNames),
 		Terms:     append([]string(nil), policy.Match.Terms...),
 	}
 	if policy.Match.Actions != nil {
@@ -111,6 +113,13 @@ func buildResourceAccessPolicyEvaluator(policy guardrailscore.Policy, groups []g
 		scope,
 		params,
 	)
+}
+
+func defaultToolNamesForResourceAccess(toolNames []string) []string {
+	if len(toolNames) > 0 {
+		return append([]string(nil), toolNames...)
+	}
+	return append([]string(nil), defaultResourceAccessToolNames...)
 }
 
 func buildCommandExecutionPolicyEvaluator(policy guardrailscore.Policy, groups []guardrailscore.PolicyGroup) (guardrailscore.Evaluator, error) {

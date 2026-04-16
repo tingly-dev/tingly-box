@@ -26,7 +26,6 @@ func TestBuildEvaluatorsCreatesResourceAccessPolicyEvaluator(t *testing.T) {
 					Directions: []guardrailscore.Direction{guardrailscore.DirectionResponse},
 				},
 				Match: guardrailscore.PolicyMatch{
-					ToolNames: []string{"bash"},
 					Actions: &guardrailscore.ActionSelector{
 						Include: []string{"read"},
 					},
@@ -60,6 +59,47 @@ func TestBuildEvaluatorsCreatesResourceAccessPolicyEvaluator(t *testing.T) {
 		t.Fatalf("policyRule.scope.Content = %v", got)
 	}
 	if got := policyRule.config.ToolNames; len(got) != 1 || got[0] != "bash" {
+		t.Fatalf("policyRule.config.ToolNames = %#v", got)
+	}
+}
+
+func TestBuildEvaluatorsPreservesExplicitResourceAccessToolNames(t *testing.T) {
+	enabled := true
+	evaluators, err := BuildEvaluators(guardrailscore.Config{
+		Groups: []guardrailscore.PolicyGroup{
+			{
+				ID:      "high-risk",
+				Enabled: enabled,
+			},
+		},
+		Policies: []guardrailscore.Policy{
+			{
+				ID:      "block-custom-tool-read",
+				Kind:    guardrailscore.PolicyKindResourceAccess,
+				Groups:  []string{"high-risk"},
+				Enabled: enabled,
+				Match: guardrailscore.PolicyMatch{
+					ToolNames: []string{"shell_v2"},
+					Actions: &guardrailscore.ActionSelector{
+						Include: []string{"read"},
+					},
+					Resources: &guardrailscore.ResourceMatcher{
+						Type:   "path",
+						Mode:   "prefix",
+						Values: []string{"~/.ssh"},
+					},
+				},
+			},
+		},
+	}, Dependencies{})
+	if err != nil {
+		t.Fatalf("BuildEvaluators() error = %v", err)
+	}
+	policyRule, ok := evaluators[0].(*OperationPolicy)
+	if !ok {
+		t.Fatalf("evaluators[0] type = %T, want *OperationPolicy", evaluators[0])
+	}
+	if got := policyRule.config.ToolNames; len(got) != 1 || got[0] != "shell_v2" {
 		t.Fatalf("policyRule.config.ToolNames = %#v", got)
 	}
 }
