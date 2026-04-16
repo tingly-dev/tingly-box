@@ -1,4 +1,4 @@
-package server
+package transform
 
 import (
 	"context"
@@ -13,17 +13,18 @@ import (
 
 // MCPToolStripGuardTransform strips disabled MCP tool declarations/tool calls when enabled.
 type MCPToolStripGuardTransform struct {
-	server *Server
+	runtime      *runtime.Runtime
+	stripEnabled bool
 }
 
-func NewMCPToolStripGuardTransform(server *Server) *MCPToolStripGuardTransform {
-	return &MCPToolStripGuardTransform{server: server}
+func NewMCPToolStripGuardTransform(rt *runtime.Runtime, stripEnabled bool) *MCPToolStripGuardTransform {
+	return &MCPToolStripGuardTransform{runtime: rt, stripEnabled: stripEnabled}
 }
 
 func (t *MCPToolStripGuardTransform) Name() string { return "mcp_tool_strip_guard" }
 
 func (t *MCPToolStripGuardTransform) Apply(ctx *protocoltransform.TransformContext) error {
-	if t.server == nil || t.server.mcpRuntime == nil || !t.server.mcpEnabled() {
+	if t.runtime == nil {
 		return nil
 	}
 
@@ -31,25 +32,24 @@ func (t *MCPToolStripGuardTransform) Apply(ctx *protocoltransform.TransformConte
 	if listCtx == nil {
 		listCtx = context.Background()
 	}
-	enabled := t.server.mcpRuntime.ListEnabledServerToolNames(listCtx)
-	stripEnabled := t.server.mcpStripDisabledToolsEnabled()
+	enabled := t.runtime.ListEnabledServerToolNames(listCtx)
 
 	var hits int
 	var removed int
 
 	switch req := ctx.Request.(type) {
 	case *openai.ChatCompletionNewParams:
-		hits, removed = stripOpenAIChatDisabledMCP(req, enabled, stripEnabled)
+		hits, removed = stripOpenAIChatDisabledMCP(req, enabled, t.stripEnabled)
 	case *anthropic.MessageNewParams:
-		hits, removed = stripAnthropicV1DisabledMCP(req, enabled, stripEnabled)
+		hits, removed = stripAnthropicV1DisabledMCP(req, enabled, t.stripEnabled)
 	case *anthropic.BetaMessageNewParams:
-		hits, removed = stripAnthropicBetaDisabledMCP(req, enabled, stripEnabled)
+		hits, removed = stripAnthropicBetaDisabledMCP(req, enabled, t.stripEnabled)
 	}
 
 	if hits == 0 {
 		return nil
 	}
-	if stripEnabled {
+	if t.stripEnabled {
 		logrus.WithFields(logrus.Fields{
 			"hits":    hits,
 			"removed": removed,

@@ -1,4 +1,4 @@
-package server
+package transform
 
 import (
 	"context"
@@ -6,23 +6,24 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
+	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	protocoltransform "github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
 // MCPToolInjectionTransform injects enabled server-side MCP tools into requests.
 type MCPToolInjectionTransform struct {
-	server *Server
+	runtime *runtime.Runtime
 }
 
-func NewMCPToolInjectionTransform(server *Server) *MCPToolInjectionTransform {
-	return &MCPToolInjectionTransform{server: server}
+func NewMCPToolInjectionTransform(rt *runtime.Runtime) *MCPToolInjectionTransform {
+	return &MCPToolInjectionTransform{runtime: rt}
 }
 
 func (t *MCPToolInjectionTransform) Name() string { return "mcp_tool_injection" }
 
 func (t *MCPToolInjectionTransform) Apply(ctx *protocoltransform.TransformContext) error {
-	if t.server == nil || t.server.mcpRuntime == nil || !t.server.mcpEnabled() {
+	if t.runtime == nil {
 		return nil
 	}
 
@@ -30,7 +31,7 @@ func (t *MCPToolInjectionTransform) Apply(ctx *protocoltransform.TransformContex
 	if listCtx == nil {
 		listCtx = context.Background()
 	}
-	mcpTools := t.server.mcpRuntime.ListOpenAITools(listCtx)
+	mcpTools := t.runtime.ListOpenAITools(listCtx)
 	if len(mcpTools) == 0 {
 		return nil
 	}
