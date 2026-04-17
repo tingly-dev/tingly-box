@@ -15,6 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
+	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -132,21 +133,17 @@ func (t mcpTool) schema() json.RawMessage {
 	return nil
 }
 
-// ListOpenAITools returns all MCP tools in normalized OpenAI function-tool format.
-// Includes both remote sources and virtual tools (e.g., adviser).
-func (r *Runtime) ListOpenAITools(ctx context.Context) []openai.ChatCompletionToolUnionParam {
+// ListServerToolsForInjection returns MCP tools that should be injected into upstream model requests.
+// Injection is intentionally restricted to server-side virtual tools.
+// Client-facing non-virtual tools must be exposed through MCP transport endpoints instead.
+func (r *Runtime) ListServerToolsForInjection(ctx context.Context) []openai.ChatCompletionToolUnionParam {
 	out := make([]openai.ChatCompletionToolUnionParam, 0, 8)
-
-	// 1. Add virtual tools (kernel mode) first
 	if r.virtualRegistry != nil {
 		virtualTools := r.virtualRegistry.ListVirtualTools()
 		for _, vt := range virtualTools {
-			// Skip server tools - they should not be injected into client requests
-			if !vt.IsClientTool {
-				logrus.Debugf("mcp: skipping server tool=%s (not exposed to clients)", vt.Name)
+			if !r.isVirtualServerToolInjectable(vt) {
 				continue
 			}
-
 			// Virtual tools use "builtin" as source ID for normalization
 			normalized := NormalizeToolName("builtin", vt.Name)
 			params := shared.FunctionParameters{
@@ -169,96 +166,37 @@ func (r *Runtime) ListOpenAITools(ctx context.Context) []openai.ChatCompletionTo
 			out = append(out, openai.ChatCompletionFunctionTool(def))
 		}
 	}
-
-	// 2. Add remote tools (user mode)
-	cfg := r.getConfigOrDefault()
-	if cfg == nil || len(cfg.Sources) == 0 {
-		sourceCount := 0
-		if cfg != nil {
-			sourceCount = len(cfg.Sources)
-		}
-		logrus.Debugf("mcp: ListOpenAITools - no config or no sources (cfg=%v, sources=%d)", cfg != nil, sourceCount)
-		if len(out) == 0 {
-			return nil
-		}
-		return out
-	}
-	logrus.Debugf("mcp: ListOpenAITools - %d sources", len(cfg.Sources))
-	for _, source := range cfg.Sources {
-		if !typ.IsMCPSourceEnabled(source) {
-			logrus.Debugf("mcp: source=%s is disabled; skip tool listing", source.ID)
-			continue
-		}
-		// Skip client tools - they should not be injected into AI requests
-		if source.IsClientTool != nil && *source.IsClientTool {
-			logrus.Debugf("mcp: source=%s is a client tool; skip tool injection", source.ID)
-			continue
-		}
-
-		// Get or create tool source
-		toolSource, err := r.getOrCreateSource(ctx, source.ID)
-		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"source": source.ID,
-				"error":  err.Error(),
-			}).Warn("mcp: failed to get tool source")
-			continue
-		}
-
-		// Ensure source is connected
-		if !toolSource.IsConnected() {
-			if err := toolSource.Connect(ctx); err != nil {
-				logrus.WithFields(logrus.Fields{
-					"source":    source.ID,
-					"transport": toolSource.GetType(),
-					"error":     err.Error(),
-				}).Warn("mcp: connect failed")
-				continue
-			}
-		}
-
-		// List tools from source
-		tools, err := toolSource.ListTools(ctx)
-		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"source": source.ID,
-				"error":  err.Error(),
-			}).Warn("mcp: list tools failed")
-			continue
-		}
-
-		// Apply allow list filtering
-		allowAll, allowSet := buildAllowList(source.Tools)
-		for _, t := range tools {
-			if strings.TrimSpace(t.Name) == "" {
-				continue
-			}
-			if !allowAll && !allowSet[t.Name] {
-				continue
-			}
-
-			normalized := NormalizeToolName(source.ID, t.Name)
-			params := shared.FunctionParameters{
-				"type":       "object",
-				"properties": map[string]interface{}{},
-			}
-			if raw := t.InputSchema; len(raw) > 0 {
-				var schema map[string]interface{}
-				if err := json.Unmarshal(raw, &schema); err == nil && len(schema) > 0 {
-					params = schema
-				}
-			}
-			def := shared.FunctionDefinitionParam{
-				Name:       normalized,
-				Parameters: params,
-			}
-			if t.Description != "" {
-				def.Description = param.NewOpt(t.Description)
-			}
-			out = append(out, openai.ChatCompletionFunctionTool(def))
-		}
-	}
 	return out
+}
+
+func (r *Runtime) isVirtualServerToolInjectable(vt VirtualTool) bool {
+	if strings.TrimSpace(vt.Name) == "" || vt.IsClientTool {
+		return false
+	}
+
+	// Builtin adviser injection must follow source enablement and server-tool semantics.
+	if vt.Name == mcptools.BuiltinAdvisorToolName {
+		cfg := r.getConfigOrDefault()
+		if cfg == nil {
+			return false
+		}
+		for _, source := range cfg.Sources {
+			if source.ID != mcptools.BuiltinAdvisorSourceID {
+				continue
+			}
+			if !typ.IsMCPSourceEnabled(source) {
+				return false
+			}
+			if source.IsClientTool != nil && *source.IsClientTool {
+				return false
+			}
+			allowAll, allowSet := buildAllowList(source.Tools)
+			return allowAll || allowSet[vt.Name]
+		}
+		return false
+	}
+
+	return true
 }
 
 // IsMCPToolName checks whether a tool name is a normalized MCP tool.
@@ -562,6 +500,45 @@ func (r *Runtime) ListSourceTools(ctx context.Context) (map[string][]SourceTool,
 	return result, nil
 }
 
+// ListClientSourceToolsForMCP returns source tools that are eligible for MCP client exposure.
+// Rules:
+//   - source must be enabled
+//   - source must be client tool (is_client_tool=true)
+//   - tool must come from non-virtual source (ListSourceTools contract)
+func (r *Runtime) ListClientSourceToolsForMCP(ctx context.Context) (map[string][]SourceTool, error) {
+	sourceTools, err := r.ListSourceTools(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(sourceTools) == 0 {
+		return sourceTools, nil
+	}
+
+	cfg := r.getConfigOrDefault()
+	if cfg == nil {
+		return map[string][]SourceTool{}, nil
+	}
+
+	clientSources := make(map[string]bool)
+	for _, source := range cfg.Sources {
+		if !typ.IsMCPSourceEnabled(source) {
+			continue
+		}
+		if source.IsClientTool != nil && *source.IsClientTool {
+			clientSources[source.ID] = true
+		}
+	}
+
+	filtered := make(map[string][]SourceTool)
+	for sourceID, tools := range sourceTools {
+		if !clientSources[sourceID] {
+			continue
+		}
+		filtered[sourceID] = tools
+	}
+	return filtered, nil
+}
+
 func (r *Runtime) getConfigOrDefault() *typ.MCPRuntimeConfig {
 	if r == nil || r.getConfig == nil {
 		return nil
@@ -660,8 +637,8 @@ const enabledNamesCacheTTL = 5 * time.Second
 
 // ListEnabledServerToolNames returns normalized MCP tool names that are callable by
 // server-side MCP execution paths. This includes:
-//   - enabled remote sources (via ListOpenAITools)
-//   - server-only virtual tools (e.g. builtin advisor)
+//   - injected server-side virtual tools (via ListServerToolsForInjection)
+//   - backward-compatible aliases for server-only virtual tools (e.g. advisor source id)
 //
 // Results are cached with a short TTL to avoid repeated full source enumeration.
 func (r *Runtime) ListEnabledServerToolNames(ctx context.Context) map[string]struct{} {
@@ -678,14 +655,28 @@ func (r *Runtime) ListEnabledServerToolNames(ctx context.Context) map[string]str
 		return r.enabledNamesCache
 	}
 	out := make(map[string]struct{})
-	for _, t := range r.ListOpenAITools(ctx) {
+	// Include enabled client-facing non-virtual MCP tools so strip-guard does not
+	// incorrectly remove valid tools declared by MCP clients.
+	if clientTools, err := r.ListClientSourceToolsForMCP(ctx); err == nil {
+		for sourceID, tools := range clientTools {
+			for _, t := range tools {
+				if strings.TrimSpace(t.Name) == "" {
+					continue
+				}
+				out[NormalizeToolName(sourceID, t.Name)] = struct{}{}
+			}
+		}
+	}
+
+	// Include server-side injected virtual tools.
+	for _, t := range r.ListServerToolsForInjection(ctx) {
 		fn := t.GetFunction()
 		if fn == nil || fn.Name == "" {
 			continue
 		}
 		out[fn.Name] = struct{}{}
 	}
-	// Server-only virtual tools are intentionally hidden from ListOpenAITools,
+	// Server-only virtual tools are intentionally hidden from ListServerToolsForInjection,
 	// but still need to be executable by server-side MCP loops.
 	if r.virtualRegistry != nil {
 		for _, vt := range r.virtualRegistry.ListVirtualTools() {

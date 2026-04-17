@@ -67,6 +67,12 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler, localHandler *
 			swagger.WithDescription("MCP HTTP transport endpoint"),
 			swagger.WithTags("mcp-transport"),
 		)
+		// Some MCP clients perform GET-based health checks or negotiate streamable HTTP on the base endpoint.
+		// Keep GET on the same path to maximize compatibility.
+		router.GET("/mcp/:client_name", transportHandler.HandleMCP,
+			swagger.WithDescription("MCP HTTP transport endpoint (GET compatibility)"),
+			swagger.WithTags("mcp-transport"),
+		)
 
 		router.GET("/mcp/:client_name/stream", transportHandler.HandleMCPStream,
 			swagger.WithDescription("MCP SSE transport endpoint"),
