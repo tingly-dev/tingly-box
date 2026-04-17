@@ -1,0 +1,91 @@
+package runtime
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/typ"
+)
+
+func NewAdvisorVirtualTool(cfg typ.AdvisorConfig, cp *client.ClientPool) VirtualTool {
+	if cfg.MaxUsesPerRequest <= 0 {
+		cfg.MaxUsesPerRequest = 3
+	}
+	if cfg.MaxTokens <= 0 {
+		cfg.MaxTokens = 4096
+	}
+
+	schema := mcp.ToolInputSchema{Type: "object"}
+	props := map[string]any{
+		"reason": map[string]any{
+			"type":        "string",
+			"description": "Why the executor is consulting the advisor.",
+		},
+	}
+	schema.Properties = props
+	schema.Required = []string{"reason"}
+
+	return VirtualTool{
+		Name:        "advisor",
+		Description: fmt.Sprintf("Consult a more powerful advisor model for strategic guidance. Use when facing architectural decisions, complex debugging, unclear trade-offs, or when stuck. You have %d consultation(s) remaining this request.", cfg.MaxUsesPerRequest),
+		InputSchema: schema,
+		Handler:     newAdvisorHandler(cfg, cp),
+	}
+}
+
+func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool) VirtualToolHandler {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		// Extract arguments
+		args, ok := req.Params.Arguments.(map[string]any)
+		if !ok {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{mcp.NewTextContent("invalid arguments")},
+				IsError: true,
+			}, nil
+		}
+
+		reason, _ := args["reason"].(string)
+		if reason == "" {
+			reason = "The executor has requested strategic guidance."
+		}
+
+		// Check per-request quota from context
+		actx, ok := GetAdvisorContext(ctx)
+		if !ok || actx.UsesRemaining <= 0 {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{mcp.NewTextContent("Advisor consultations exhausted for this request.")},
+				IsError: true,
+			}, nil
+		}
+
+		// Execute advisor call
+		advisorCtx, cancel := context.WithTimeout(ctx, advisorCallTimeout)
+		defer cancel()
+
+		var result string
+		var err error
+		if detectAdvisorFormat(cfg) == FormatOpenAI {
+			result, err = callOpenAI(advisorCtx, cfg, cp, reason, actx)
+		} else {
+			result, err = callAnthropic(advisorCtx, cfg, cp, reason, actx)
+		}
+
+		if err != nil {
+			logrus.WithError(err).Error("advisor: consultation failed")
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{mcp.NewTextContent(fmt.Sprintf("Advisor error: %v", err))},
+				IsError: true,
+			}, nil
+		}
+
+		// Decrement uses
+		actx.UsesRemaining--
+		logrus.WithField("uses_remaining", actx.UsesRemaining).Debug("advisor: consultation completed")
+
+		return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(result)}}, nil
+	}
+}
