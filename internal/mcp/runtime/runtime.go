@@ -3,10 +3,12 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/shared"
@@ -112,7 +114,38 @@ func (t mcpTool) schema() json.RawMessage {
 }
 
 // ListOpenAITools returns all MCP tools in normalized OpenAI function-tool format.
+// Includes both remote sources and virtual tools (e.g., adviser).
 func (r *Runtime) ListOpenAITools(ctx context.Context) []openai.ChatCompletionToolUnionParam {
+	out := make([]openai.ChatCompletionToolUnionParam, 0, 8)
+
+	// 1. Add virtual tools (kernel mode) first
+	if r.virtualRegistry != nil {
+		virtualTools := r.virtualRegistry.List()
+		for _, vt := range virtualTools {
+			// Virtual tools use "builtin" as source ID for normalization
+			normalized := NormalizeToolName("builtin", vt.Name)
+			params := shared.FunctionParameters{
+				"type":       "object",
+				"properties": map[string]interface{}{},
+			}
+			// Convert mcp.ToolInputSchema to shared.FunctionParameters via JSON
+			schemaBytes, _ := json.Marshal(vt.InputSchema)
+			var schema map[string]interface{}
+			if err := json.Unmarshal(schemaBytes, &schema); err == nil && len(schema) > 0 {
+				params = shared.FunctionParameters(schema)
+			}
+			def := shared.FunctionDefinitionParam{
+				Name:       normalized,
+				Parameters: params,
+			}
+			if vt.Description != "" {
+				def.Description = param.NewOpt(vt.Description)
+			}
+			out = append(out, openai.ChatCompletionFunctionTool(def))
+		}
+	}
+
+	// 2. Add remote tools (user mode)
 	cfg := r.getConfigOrDefault()
 	if cfg == nil || len(cfg.Sources) == 0 {
 		sourceCount := 0
@@ -120,11 +153,12 @@ func (r *Runtime) ListOpenAITools(ctx context.Context) []openai.ChatCompletionTo
 			sourceCount = len(cfg.Sources)
 		}
 		logrus.Debugf("mcp: ListOpenAITools - no config or no sources (cfg=%v, sources=%d)", cfg != nil, sourceCount)
-		return nil
+		if len(out) == 0 {
+			return nil
+		}
+		return out
 	}
 	logrus.Debugf("mcp: ListOpenAITools - %d sources", len(cfg.Sources))
-
-	out := make([]openai.ChatCompletionToolUnionParam, 0, 8)
 	for _, source := range cfg.Sources {
 		if !typ.IsMCPSourceEnabled(source) {
 			logrus.Debugf("mcp: source=%s is disabled; skip tool listing", source.ID)
@@ -226,13 +260,21 @@ func ParseNormalizedToolName(name string) (string, string, bool) {
 }
 
 // CallTool executes a normalized MCP tool call and returns serialized result.
+// Dispatches virtual tools first (kernel mode), then remote tools (user mode).
 func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments string) (string, error) {
+	// 1. Check virtual registry first (kernel mode)
 	sourceID, toolName, ok := ParseNormalizedToolName(normalizedName)
 	if !ok {
 		return "", &sessionError{sourceID: sourceID, msg: "invalid normalized MCP tool name: " + normalizedName}
 	}
 
-	// Get or create tool source
+	if sourceID == "builtin" && r.virtualRegistry != nil {
+		if tool, ok := r.virtualRegistry.Get(toolName); ok {
+			return r.callVirtualTool(ctx, tool, arguments)
+		}
+	}
+
+	// 2. Forward to remote tool source (user mode)
 	source, err := r.getOrCreateSource(ctx, sourceID)
 	if err != nil {
 		return "", err
@@ -257,6 +299,52 @@ func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments
 	}
 
 	return result, nil
+}
+
+// callVirtualTool executes an in-process virtual tool with panic recovery.
+func (r *Runtime) callVirtualTool(ctx context.Context, tool VirtualTool, arguments string) (string, error) {
+	// Parse arguments
+	var argMap map[string]any
+	if arguments != "" {
+		if err := json.Unmarshal([]byte(arguments), &argMap); err != nil {
+			return "", fmt.Errorf("invalid arguments JSON: %w", err)
+		}
+	}
+
+	// Build mcp.CallToolRequest
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name:      tool.Name,
+			Arguments: argMap,
+		},
+	}
+
+	// Execute with panic recovery
+	defer func() {
+		if rec := recover(); rec != nil {
+			logrus.WithField("panic", rec).Error("mcp: virtual tool panic")
+		}
+	}()
+
+	result, err := tool.Handler(ctx, req)
+	if err != nil {
+		return "", err
+	}
+
+	// Serialize result
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize tool result: %w", err)
+	}
+
+	// Extract text content from result
+	if len(result.Content) > 0 {
+		if textContent, ok := result.Content[0].(mcp.TextContent); ok {
+			return string(textContent.Text), nil
+		}
+	}
+
+	return string(resultBytes), nil
 }
 
 // isSourceEnabled checks if a source is enabled in the current configuration
