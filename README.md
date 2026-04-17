@@ -26,14 +26,15 @@ Tingly Box **serves agents, coordinates AI models, optimizes context, and routes
 
 ## Key Features
 
-- **Unified API** – One mixin endpoint to rule them all, use what you like - OpenAI / Anthropic / Google, seamlessly bridge all of them with auto translation
-- **Smart Routing, Not Just Load Balancing** – Intelligently route requests across models and tokens based on cost, speed, or custom policies, not simple load balancing
-- **Smart Context Compression** – (Coming soon) Automatically distill context to its essential parts: sharper relevance, lower cost, and faster responses
-- **Blazing Fast** – Adds typically **< 1ms** of overhead—so you get flexibility without latency tax  
-- **Flexible Auth** – Support for both API keys and OAuth (e.g., Claude.ai), so you can use your existing quotas anywhere  
-- **Visual Control Plane** – Intuitive UI to manage providers, routes, aliases, and models at a glance
-- **Client Side Usage Stats** - Track token consumption, latency, cost estimates, and model selection per request—directly from your client
-- **Remote Control** - Control your AI agents remotely via IM bots (Slack, Discord, Telegram, DingTalk, Feishu). Interact with your agents from anywhere without direct server access
+- **Unified API Gateway** – One mixin endpoint to rule them all — seamlessly bridge OpenAI, Anthropic, Google Gemini, and more with automatic protocol translation
+- **Agent Integration** – One-click config for Claude Code, OpenCode, Codex, Xcode, and more — transparent proxying for SDKs and CLI tools
+- **Remote Control via IM Bots** – Control AI agents remotely through Telegram, DingTalk, Feishu, Lark, Weixin, WeCom, Slack, and Discord
+- **Multi-Tenant API Tokens** – Isolate data per user with dedicated API tokens — each user gets their own usage tracking, provider access, and configuration
+- **Smart Routing Engine** – Intelligently route requests across models and tokens based on cost, speed, or custom policies — far beyond simple load balancing
+- **Flexible Authentication** – Support for both API keys and OAuth providers (Claude.ai, Codex, etc.) — use your existing quotas anywhere
+- **Visual Control Plane** – Intuitive web UI to manage providers, routes, aliases, models, and remote bots at a glance — no config files needed
+- **Client-Side Usage Analytics** – Track token consumption, latency, cost estimates, and model selection per request — directly from your client
+- **Blazing Fast Performance** – Adds typically **< 1ms** of overhead — get flexibility without latency tax
 
 ## Quick Start
 
