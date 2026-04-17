@@ -99,8 +99,17 @@ const MCPRegisteredServers = () => {
     };
 
     const saveConfig = async (sources: MCPSourceConfig[]) => {
+        // Remove is_client_tool from all builtin tools before sending to backend
+        const cleanedSources = sources.map((source) => {
+            const isBuiltinSource = source.id === BUILTIN_WEBTOOLS_ID || source.id === BUILTIN_ADVISOR_ID;
+            if (isBuiltinSource && 'is_client_tool' in source) {
+                const { is_client_tool, ...rest } = source as any;
+                return rest;
+            }
+            return source;
+        });
         return api.setMCPConfig({
-            sources,
+            sources: cleanedSources,
             request_timeout: requestTimeout,
             strip_disabled_mcp_tools: stripDisabledMCPTools,
         });
@@ -212,20 +221,33 @@ const MCPRegisteredServers = () => {
                     setNotification({ open: true, message: 'At least one builtin tool must be enabled', severity: 'error' });
                     return;
                 }
-                source = formValueToSource({ ...editorForm, id: 'webtools' as const, tools });
+                // Create webtools source without is_client_tool field
+                source = {
+                    id: 'webtools',
+                    name: 'Built-in Web Tools',
+                    enabled: editorForm.enabled,
+                    transport: 'stdio' as const,
+                    tools,
+                    command: editorForm.command,
+                    args: editorForm.args,
+                    cwd: editorForm.cwd,
+                    env: Object.fromEntries(
+                        editorForm.env.map(e => [e.key, e.value])
+                            .concat(editorForm.envPassthrough.map(e => [e, `\${${e}}`]))
+                    ),
+                };
             } else if (isBuiltinAdvisor(editorForm.id)) {
                 const base = allSources.find((s) => s.id === BUILTIN_ADVISOR_ID);
                 const draft = formValueToSource({ ...editorForm, id: BUILTIN_ADVISOR_ID });
+                // Create advisor source without is_client_tool field
                 source = {
-                    ...(base || {}),
                     id: BUILTIN_ADVISOR_ID,
                     name: base?.name || 'Built-in Adviser',
-                    transport: 'advisor',
+                    transport: 'advisor' as const,
                     enabled: draft.enabled ?? true,
-                    is_client_tool: draft.is_client_tool ?? false,
                     tools: draft.tools && draft.tools.length > 0 ? draft.tools : ['advisor'],
                     env: draft.env,
-                    proxy_url: draft.proxy_url,
+                    advisor: draft.advisor,
                 };
             } else {
                 source = formValueToSource(editorForm);
@@ -347,9 +369,9 @@ const MCPRegisteredServers = () => {
                                                                 />
                                                             )}
                                                             <Chip
-                                                                label={source.is_client_tool ? 'Client Tool' : 'Server Tool'}
+                                                                label={source.is_client_tool ?? isBuiltinWebtools(source.id) ? 'Client Tool' : 'Server Tool'}
                                                                 size="small"
-                                                                color={source.is_client_tool ? 'info' : 'success'}
+                                                                color={source.is_client_tool ?? isBuiltinWebtools(source.id) ? 'info' : 'success'}
                                                                 variant="outlined"
                                                                 sx={{ fontSize: '0.65rem', height: 18 }}
                                                             />
