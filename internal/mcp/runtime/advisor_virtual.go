@@ -53,6 +53,15 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool) VirtualTool
 			reason = "The executor has requested strategic guidance."
 		}
 
+		// Check depth to prevent recursion
+		depth := GetAdvisorDepth(ctx)
+		if depth >= 1 {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{mcp.NewTextContent("Advisor recursion limit reached.")},
+				IsError: true,
+			}, nil
+		}
+
 		// Check per-request quota from context
 		actx, ok := GetAdvisorContext(ctx)
 		if !ok || actx.UsesRemaining <= 0 {

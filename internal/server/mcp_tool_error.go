@@ -95,6 +95,9 @@ func (s *Server) withAdvisorContext(ctx context.Context, messages []map[string]a
 func (s *Server) applyMCPResponseToolCallHooks(ctx context.Context, toolName string, messages []map[string]any) context.Context {
 	for _, hook := range s.mcpResponseToolCallHooks() {
 		if hook.Match(toolName) {
+			// Increment depth to prevent adviser recursion
+			depth := mcpruntime.GetAdvisorDepth(ctx)
+			ctx = mcpruntime.WithAdvisorDepth(ctx, depth+1)
 			ctx = hook.PrepareContext(s, ctx, messages)
 		}
 	}
