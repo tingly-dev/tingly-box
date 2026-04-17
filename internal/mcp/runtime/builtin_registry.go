@@ -95,6 +95,13 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 
 	// Create advisor configuration and register as virtual tool.
 	advisorEnabled := typ.BoolPtr(false) // default: disabled
+	advisorIsClientTool := false         // server tool
+	advisorTools := mcptools.DefaultBuiltinAdvisorToolNames()
+	advisorEnv := map[string]string{
+		"ADVISOR_BASE_URL": "${ADVISOR_BASE_URL}",
+		"ADVISOR_MODEL":    "${ADVISOR_MODEL}",
+		"ADVISOR_API_KEY":  "${ADVISOR_API_KEY}",
+	}
 	advisorCfg := &typ.AdvisorConfig{
 		BaseURL:           "${ADVISOR_BASE_URL}",
 		Model:             "${ADVISOR_MODEL}",
@@ -106,16 +113,29 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 		if existingAdvisor.Enabled != nil {
 			advisorEnabled = existingAdvisor.Enabled
 		}
+		if existingAdvisor.IsClientTool != nil {
+			advisorIsClientTool = *existingAdvisor.IsClientTool
+		}
+		if len(existingAdvisor.Tools) > 0 {
+			advisorTools = existingAdvisor.Tools
+		}
+		// Preserve user's custom environment variables
+		for k, v := range existingAdvisor.Env {
+			advisorEnv[k] = v
+		}
 		if existingAdvisor.Advisor != nil {
 			copied := *existingAdvisor.Advisor
 			advisorCfg = &copied
 		}
 	}
 	builtinAdvisor := typ.MCPSourceConfig{
-		ID:      mcptools.BuiltinAdvisorSourceID,
-		Name:    mcptools.BuiltinAdvisorSourceName,
-		Enabled: advisorEnabled,
-		Advisor: advisorCfg,
+		ID:           mcptools.BuiltinAdvisorSourceID,
+		Name:         mcptools.BuiltinAdvisorSourceName,
+		Enabled:      advisorEnabled,
+		IsClientTool: &advisorIsClientTool,
+		Tools:        advisorTools,
+		Env:          advisorEnv,
+		Advisor:      advisorCfg,
 	}
 
 	// Update or append advisor configuration
