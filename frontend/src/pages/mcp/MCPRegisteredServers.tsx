@@ -13,6 +13,7 @@ import {
     Paper,
     Snackbar,
     Stack,
+    Switch,
     Table,
     TableBody,
     TableCell,
