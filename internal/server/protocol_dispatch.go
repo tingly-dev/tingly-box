@@ -592,12 +592,13 @@ func hasDeclaredMCPAnthropicBetaTools(req *anthropic.BetaMessageNewParams) bool 
 			if isMCP {
 				mcpTools = append(mcpTools, toolName)
 			}
-			logrus.Debugf("[MCP-DEBUG] Tool declared: name=%s, isMCP=%v", toolName, isMCP)
 		}
 	}
 
 	hasMCP := len(mcpTools) > 0
-	logrus.Debugf("[MCP-DEBUG] hasDeclaredMCPAnthropicBetaTools: hasMCP=%v, mcpTools=%v", hasMCP, mcpTools)
+	if hasMCP {
+		logrus.Debugf("[MCP-DEBUG] MCP tools detected: %v", mcpTools)
+	}
 	return hasMCP
 }
 
