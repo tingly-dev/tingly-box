@@ -37,14 +37,6 @@ func extractOpenAIMessages(messages []openai.ChatCompletionMessageParamUnion) []
 // handleNonStreamingRequest handles non-streaming chat completion requests with MCP runtime support.
 func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, stripUsage bool) {
 	ctx := c.Request.Context()
-	if s.mcpRuntime != nil {
-		if maxUses := s.mcpRuntime.GetAdvisorMaxUses(); maxUses > 0 {
-			ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
-				Messages:      extractOpenAIMessages(originalReq.Messages),
-				UsesRemaining: maxUses,
-			})
-		}
-	}
 	req := originalReq
 
 	// Forward request to provider
@@ -189,8 +181,9 @@ func (s *Server) handleMCPToolCalls(ctx context.Context, provider *typ.Provider,
 		}
 
 		newMessages = append(newMessages, resp.Choices[0].Message.ToParam())
+		hookMessages := extractOpenAIMessages(newMessages)
 		for _, tc := range resp.Choices[0].Message.ToolCalls {
-			result, err := s.callMCPToolWithGuard(ctx, tc.Function.Name, tc.Function.Arguments)
+			result, err := s.callMCPToolWithHooks(ctx, tc.Function.Name, tc.Function.Arguments, hookMessages)
 			if err != nil {
 				logrus.WithError(err).Warnf("mcp: openai tool call failed name=%s arguments=%s", tc.Function.Name, tc.Function.Arguments)
 			}
@@ -215,12 +208,6 @@ func (s *Server) handleMCPToolCalls(ctx context.Context, provider *typ.Provider,
 // handleOpenAIChatStreamingRequest handles streaming chat completion requests.
 func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
 	ctx := c.Request.Context()
-	if maxUses := s.advisorMaxUses(); maxUses > 0 {
-		ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
-			Messages:      extractOpenAIMessages(originalReq.Messages),
-			UsesRemaining: maxUses,
-		})
-	}
 	req := originalReq
 	if hasDeclaredMCPTools(req) {
 		reqForMCP := *req
