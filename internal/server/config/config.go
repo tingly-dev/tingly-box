@@ -165,10 +165,6 @@ type MultiTenantConfig struct {
 	// APITokenIssuer is the issuer claim for JWT tokens
 	// Default: "tingly-box"
 	APITokenIssuer string `json:"api_token_issuer,omitempty" yaml:"api_token_issuer,omitempty"`
-
-	// APITokenDefaultTTL is the default time-to-live for API tokens in days
-	// Default: 365 days
-	APITokenDefaultTTL int `json:"api_token_default_ttl_days,omitempty" yaml:"api_token_default_ttl_days,omitempty"`
 }
 
 // ConfigOption is a function that modifies a Config during initialization
@@ -1018,17 +1014,6 @@ func (c *Config) GetAPITokenIssuer() string {
 		return c.MultiTenantConfig.APITokenIssuer
 	}
 	return "tingly-box" // Default
-}
-
-// GetAPITokenDefaultTTL returns the default TTL for API tokens in days
-func (c *Config) GetAPITokenDefaultTTL() int {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	if c.MultiTenantConfig.APITokenDefaultTTL > 0 {
-		return c.MultiTenantConfig.APITokenDefaultTTL
-	}
-	return 365 // Default: 365 days
 }
 
 // SetMultiTenantEnabled updates the multi-tenant enabled flag
@@ -1992,6 +1977,16 @@ func (c *Config) CreateDefaultConfig() error {
 		ClockSkewSeconds:  30,
 		RequireJTI:        true,
 	}
+
+	// Initialize multi-tenant config with defaults
+	c.MultiTenantConfig = MultiTenantConfig{
+		Enabled:            true,
+		DisableGlobalToken: false,
+		APITokenSecret:     generateSecret(),
+		APITokenAlgorithm:  "HS256",
+		APITokenIssuer:     "tingly-box",
+	}
+
 	c.applyRemoteCoderDefaults()
 	c.applyGuardrailsDefaults()
 	if err := c.Save(); err != nil {

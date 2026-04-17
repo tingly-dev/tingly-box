@@ -1,29 +1,28 @@
 package server
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tingly-dev/tingly-box/pkg/auth"
+	"github.com/google/uuid"
 )
 
 // TokenCreateRequest represents the request to create a new API token
 type TokenCreateRequest struct {
-	UserUUID      string `json:"user_uuid" binding:"required"`
-	DisplayName   string `json:"display_name" binding:"required"`
-	ExpiresInDays int    `json:"expires_in_days"` // Optional, defaults to config default
+	DisplayName string `json:"display_name" binding:"required"`
 }
 
 // TokenCreateResponse represents the response after creating a new API token
 type TokenCreateResponse struct {
-	Token      string    `json:"token"`
-	TokenID    string    `json:"token_id"`
-	UserUUID   string    `json:"user_uuid"`
-	DisplayName string   `json:"display_name"`
-	ExpiresAt  time.Time `json:"expires_at"`
-	CreatedAt  time.Time `json:"created_at"`
+	Token       string    `json:"token"`
+	TokenID     string    `json:"token_id"`
+	UserUUID    string    `json:"user_uuid"`
+	DisplayName string    `json:"display_name"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // APITokenInfo represents information about an API token (without the actual token)
@@ -32,11 +31,9 @@ type APITokenInfo struct {
 	UserUUID    string     `json:"user_uuid"`
 	DisplayName string     `json:"display_name"`
 	Enabled     bool       `json:"enabled"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
 	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 	CreatedBy   string     `json:"created_by,omitempty"`
-	RevokedAt   *time.Time `json:"revoked_at,omitempty"`
 }
 
 // TokenListResponse represents the response when listing tokens
@@ -45,19 +42,9 @@ type TokenListResponse struct {
 	Total  int64          `json:"total"`
 }
 
-// TokenRevokeRequest represents the request to revoke a token
-type TokenRevokeRequest struct {
-	Reason string `json:"reason"`
-}
-
 // registerTokenManagementAPI registers the token management API endpoints
 func (s *Server) registerTokenManagementAPI(router *gin.RouterGroup) {
 	if s.config == nil {
-		return
-	}
-
-	// Check if multi-tenant is enabled
-	if !s.config.IsMultiTenantEnabled() {
 		return
 	}
 
@@ -66,15 +53,33 @@ func (s *Server) registerTokenManagementAPI(router *gin.RouterGroup) {
 		// POST /api/v1/tokens - Create a new API token
 		tokens.POST("", s.createAPIToken)
 
-		// GET /api/v1/tokens - List all tokens (admin only)
+		// GET /api/v1/tokens - List all tokens
 		tokens.GET("", s.listAPITokens)
 
 		// GET /api/v1/tokens/:token_id - Get a specific token
 		tokens.GET("/:token_id", s.getAPIToken)
 
-		// DELETE /api/v1/tokens/:token_id - Revoke a token
-		tokens.DELETE("/:token_id", s.revokeAPIToken)
+		// PUT /api/v1/tokens/:token_id/enable - Enable a token
+		tokens.PUT("/:token_id/enable", s.enableAPIToken)
+
+		// PUT /api/v1/tokens/:token_id/disable - Disable a token
+		tokens.PUT("/:token_id/disable", s.disableAPIToken)
+
+		// POST /api/v1/tokens/:token_id/regenerate - Regenerate a token
+		tokens.POST("/:token_id/regenerate", s.regenerateAPIToken)
+
+		// DELETE /api/v1/tokens/:token_id - Delete a token
+		tokens.DELETE("/:token_id", s.deleteAPIToken)
 	}
+}
+
+// generateRandomToken generates a random API token string
+func generateRandomToken() (string, error) {
+	bytes := make([]byte, 24) // 24 bytes = 48 hex chars
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
 }
 
 // createAPIToken creates a new API token
@@ -113,46 +118,12 @@ func (s *Server) createAPIToken(c *gin.Context) {
 		return
 	}
 
-	// Calculate expiration
-	var expiresAt *time.Time
-	if req.ExpiresInDays > 0 {
-		t := time.Now().AddDate(0, 0, req.ExpiresInDays)
-		expiresAt = &t
-	} else {
-		// Use default TTL from config
-		t := time.Now().AddDate(0, 0, s.config.GetAPITokenDefaultTTL())
-		expiresAt = &t
-	}
+	// Generate a new user_uuid for this token
+	// Each token gets its own unique user_uuid for data isolation
+	userUUID := uuid.New().String()
 
-	// Create token record
-	record, err := apiTokenStore.CreateToken(req.UserUUID, req.DisplayName, "admin", expiresAt)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "Failed to create token: " + err.Error(),
-			},
-		})
-		return
-	}
-
-	// Generate JWT token
-	apiTokenManager, err := auth.NewAPITokenManager(auth.APITokenManagerConfig{
-		SecretKey:     s.config.GetAPITokenSecret(),
-		SigningMethod: s.config.GetAPITokenAlgorithm(),
-		Issuer:        s.config.GetAPITokenIssuer(),
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "Failed to create token manager: " + err.Error(),
-			},
-		})
-		return
-	}
-
-	tokenString, err := apiTokenManager.GenerateToken(record.UserUUID, record.TokenID, *expiresAt)
+	// Generate random API token string
+	randomToken, err := generateRandomToken()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": gin.H{
@@ -163,13 +134,27 @@ func (s *Server) createAPIToken(c *gin.Context) {
 		return
 	}
 
+	// Add prefix to identify this as a shared API token
+	tokenString := "tb-share-" + randomToken
+
+	// Create token record with the random token as TokenID (no expiration)
+	record, err := apiTokenStore.CreateTokenWithTokenID(userUUID, tokenString, req.DisplayName, "admin", nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"type":    "internal_error",
+				"message": "Failed to create token: " + err.Error(),
+			},
+		})
+		return
+	}
+
 	c.JSON(http.StatusCreated, TokenCreateResponse{
-		Token:      tokenString,
-		TokenID:    record.TokenID,
-		UserUUID:   record.UserUUID,
+		Token:       tokenString,
+		TokenID:     record.TokenID,
+		UserUUID:    record.UserUUID,
 		DisplayName: record.DisplayName,
-		ExpiresAt:  *expiresAt,
-		CreatedAt:  record.CreatedAt,
+		CreatedAt:   record.CreatedAt,
 	})
 }
 
@@ -241,11 +226,9 @@ func (s *Server) listAPITokens(c *gin.Context) {
 			UserUUID:    record.UserUUID,
 			DisplayName: record.DisplayName,
 			Enabled:     record.Enabled,
-			ExpiresAt:   record.ExpiresAt,
 			LastUsedAt:  record.LastUsedAt,
 			CreatedAt:   record.CreatedAt,
 			CreatedBy:   record.CreatedBy,
-			RevokedAt:   record.RevokedAt,
 		}
 	}
 
@@ -307,17 +290,15 @@ func (s *Server) getAPIToken(c *gin.Context) {
 		UserUUID:    record.UserUUID,
 		DisplayName: record.DisplayName,
 		Enabled:     record.Enabled,
-		ExpiresAt:   record.ExpiresAt,
 		LastUsedAt:  record.LastUsedAt,
 		CreatedAt:   record.CreatedAt,
 		CreatedBy:   record.CreatedBy,
-		RevokedAt:   record.RevokedAt,
 	})
 }
 
-// revokeAPIToken revokes a token
+// deleteAPIToken deletes a token
 // DELETE /api/v1/tokens/:token_id
-func (s *Server) revokeAPIToken(c *gin.Context) {
+func (s *Server) deleteAPIToken(c *gin.Context) {
 	tokenID := c.Param("token_id")
 	if tokenID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -328,10 +309,6 @@ func (s *Server) revokeAPIToken(c *gin.Context) {
 		})
 		return
 	}
-
-	// Parse request body for optional reason
-	var req TokenRevokeRequest
-	c.ShouldBindJSON(&req)
 
 	sm := s.config.StoreManager()
 	if sm == nil {
@@ -355,15 +332,196 @@ func (s *Server) revokeAPIToken(c *gin.Context) {
 		return
 	}
 
-	if err := apiTokenStore.RevokeToken(tokenID, req.Reason); err != nil {
+	if err := apiTokenStore.DeleteToken(tokenID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": gin.H{
 				"type":    "internal_error",
-				"message": "Failed to revoke token: " + err.Error(),
+				"message": "Failed to delete token: " + err.Error(),
 			},
 		})
 		return
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+// enableAPIToken enables a token
+// PUT /api/v1/tokens/:token_id/enable
+func (s *Server) enableAPIToken(c *gin.Context) {
+	tokenID := c.Param("token_id")
+	if tokenID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"type":    "invalid_request_error",
+				"message": "token_id is required",
+			},
+		})
+		return
+	}
+
+	sm := s.config.StoreManager()
+	if sm == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"type":    "internal_error",
+				"message": "Store manager not available",
+			},
+		})
+		return
+	}
+
+	apiTokenStore := sm.APIToken()
+	if apiTokenStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"type":    "internal_error",
+				"message": "API token store not available",
+			},
+		})
+		return
+	}
+
+	if err := apiTokenStore.SetTokenEnabled(tokenID, true); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"type":    "internal_error",
+				"message": "Failed to enable token: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+// disableAPIToken disables a token
+// PUT /api/v1/tokens/:token_id/disable
+func (s *Server) disableAPIToken(c *gin.Context) {
+	tokenID := c.Param("token_id")
+	if tokenID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"type":    "invalid_request_error",
+				"message": "token_id is required",
+			},
+		})
+		return
+	}
+
+	sm := s.config.StoreManager()
+	if sm == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"type":    "internal_error",
+				"message": "Store manager not available",
+			},
+		})
+		return
+	}
+
+	apiTokenStore := sm.APIToken()
+	if apiTokenStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"type":    "internal_error",
+				"message": "API token store not available",
+			},
+		})
+		return
+	}
+
+	if err := apiTokenStore.SetTokenEnabled(tokenID, false); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"type":    "internal_error",
+				"message": "Failed to disable token: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+// regenerateAPIToken regenerates a token (keeps the same token_id but generates new token string)
+// POST /api/v1/tokens/:token_id/regenerate
+func (s *Server) regenerateAPIToken(c *gin.Context) {
+	tokenID := c.Param("token_id")
+	if tokenID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"type":    "invalid_request_error",
+				"message": "token_id is required",
+			},
+		})
+		return
+	}
+
+	sm := s.config.StoreManager()
+	if sm == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"type":    "internal_error",
+				"message": "Store manager not available",
+			},
+		})
+		return
+	}
+
+	apiTokenStore := sm.APIToken()
+	if apiTokenStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"type":    "internal_error",
+				"message": "API token store not available",
+			},
+		})
+		return
+	}
+
+	// Get existing token record
+	record, err := apiTokenStore.GetToken(tokenID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": gin.H{
+				"type":    "not_found_error",
+				"message": "Token not found",
+			},
+		})
+		return
+	}
+
+	// Generate new random API token string
+	randomToken, err := generateRandomToken()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"type":    "internal_error",
+				"message": "Failed to generate token: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	// Add prefix
+	newTokenString := "tb-share-" + randomToken
+
+	// Update token with new token string (same token_id)
+	if err := apiTokenStore.UpdateTokenString(tokenID, newTokenString); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"type":    "internal_error",
+				"message": "Failed to regenerate token: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, TokenCreateResponse{
+		Token:       newTokenString,
+		TokenID:     record.TokenID,
+		UserUUID:    record.UserUUID,
+		DisplayName: record.DisplayName,
+		CreatedAt:   record.CreatedAt,
+	})
 }

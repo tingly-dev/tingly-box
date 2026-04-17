@@ -34,6 +34,7 @@ func Migrate(c *Config) error {
 	migrate20260114(c)
 	migrate20260210(c)
 	migrate20260306(c)
+	migrate20260416(c) // Enable multi-tenant by default
 	return nil
 }
 
@@ -339,4 +340,32 @@ func migrate20260306(c *Config) {
 			return
 		}
 	}
+}
+
+// migrate20260416 enables multi-tenant by default for existing configurations
+func migrate20260416(c *Config) {
+	// Skip migration if multi-tenant config has any values set
+	// This means the user has explicitly configured multi-tenant settings
+	if c.MultiTenantConfig.APITokenSecret != "" ||
+		c.MultiTenantConfig.APITokenAlgorithm != "" ||
+		c.MultiTenantConfig.APITokenIssuer != "" {
+		return
+	}
+
+	// Enable multi-tenant with default settings
+	// Only set values that are not already configured
+	if c.MultiTenantConfig.APITokenSecret == "" {
+		c.MultiTenantConfig.APITokenSecret = generateSecret()
+	}
+	if c.MultiTenantConfig.APITokenAlgorithm == "" {
+		c.MultiTenantConfig.APITokenAlgorithm = "HS256"
+	}
+	if c.MultiTenantConfig.APITokenIssuer == "" {
+		c.MultiTenantConfig.APITokenIssuer = "tingly-box"
+	}
+	// Always enable multi-tenant (this is the main purpose of the migration)
+	c.MultiTenantConfig.Enabled = true
+	// Keep global token enabled for backward compatibility
+
+	_ = c.Save()
 }

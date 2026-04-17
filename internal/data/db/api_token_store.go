@@ -112,6 +112,37 @@ func (s *APITokenStore) CreateToken(userUUID, displayName, createdBy string, exp
 	return record, nil
 }
 
+// CreateTokenWithTokenID creates a new API token record with a specific token ID
+func (s *APITokenStore) CreateTokenWithTokenID(userUUID, tokenID, displayName, createdBy string, expiresAt *time.Time) (*APITokenRecord, error) {
+	if userUUID == "" {
+		return nil, errors.New("user UUID cannot be empty")
+	}
+	if tokenID == "" {
+		return nil, errors.New("token ID cannot be empty")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	record := &APITokenRecord{
+		TokenID:     tokenID,
+		UserUUID:    userUUID,
+		DisplayName: displayName,
+		Enabled:     true,
+		ExpiresAt:   expiresAt,
+		CreatedAt:   now,
+		CreatedBy:   createdBy,
+	}
+
+	if err := s.db.Create(record).Error; err != nil {
+		return nil, fmt.Errorf("failed to create API token record: %w", err)
+	}
+
+	logrus.Debugf("Created API token: %s for user: %s", tokenID, userUUID)
+	return record, nil
+}
+
 // ValidateToken validates a token ID and returns the associated token record
 func (s *APITokenStore) ValidateToken(tokenID string) (*APITokenRecord, error) {
 	if tokenID == "" {
@@ -127,11 +158,6 @@ func (s *APITokenStore) ValidateToken(tokenID string) (*APITokenRecord, error) {
 			return nil, fmt.Errorf("token not found or disabled")
 		}
 		return nil, fmt.Errorf("failed to validate token: %w", err)
-	}
-
-	// Check expiration
-	if record.ExpiresAt != nil && time.Now().After(*record.ExpiresAt) {
-		return nil, errors.New("token has expired")
 	}
 
 	return &record, nil
@@ -229,6 +255,46 @@ func (s *APITokenStore) UpdateLastUsed(tokenID string) error {
 		return fmt.Errorf("failed to update last used: %w", result.Error)
 	}
 
+	return nil
+}
+
+// SetTokenEnabled enables or disables a token
+func (s *APITokenStore) SetTokenEnabled(tokenID string, enabled bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	result := s.db.Model(&APITokenRecord{}).
+		Where("token_id = ?", tokenID).
+		Update("enabled", enabled)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to update token enabled state: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("token with ID '%s' not found", tokenID)
+	}
+
+	logrus.Debugf("Token %s enabled state set to: %v", tokenID, enabled)
+	return nil
+}
+
+// UpdateTokenString updates the token string for a token (for regeneration)
+func (s *APITokenStore) UpdateTokenString(tokenID, newTokenString string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	result := s.db.Model(&APITokenRecord{}).
+		Where("token_id = ?", tokenID).
+		Update("token_id", newTokenString)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to update token string: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("token with ID '%s' not found", tokenID)
+	}
+
+	logrus.Debugf("Token regenerated, old ID: %s, new ID: %s", tokenID, newTokenString)
 	return nil
 }
 

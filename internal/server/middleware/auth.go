@@ -279,6 +279,9 @@ func (am *AuthMiddleware) UserAuthMiddleware() gin.HandlerFunc {
 			if token == configToken || strings.TrimPrefix(token, "Bearer ") == configToken {
 				// Token matches the one in global config, allow access
 				c.Set("client_id", "user_authenticated")
+				// For UI user authentication, set a default user_uuid
+				// In a real multi-tenant setup, this would come from the user's session/profile
+				c.Set("user_uuid", "default-admin-user")
 				c.Next()
 				return
 			}
@@ -317,26 +320,24 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 
 		cfg := am.config
 
-		// Try JWT API token authentication first (if multi-tenant is enabled)
-		if cfg != nil && cfg.IsMultiTenantEnabled() && am.apiTokenManager != nil {
-			claims, err := am.apiTokenManager.ValidateToken(token)
-			if err == nil && claims != nil {
-				// JWT is valid, now check if token exists in database and is enabled
-				if am.apiTokenStore != nil {
-					tokenRecord, validateErr := am.apiTokenStore.ValidateToken(claims.TokenID)
-					if validateErr == nil && tokenRecord != nil {
-						// Token is valid and enabled
-						c.Set("user_uuid", claims.UserUUID)
-						c.Set("token_id", claims.TokenID)
-						c.Set("client_id", "model_authenticated")
-						c.Set("auth_method", "api_token")
+		// Try API token authentication first (if multi-tenant is enabled)
+		// Check if token has tb-share- prefix
+		if cfg != nil && cfg.IsMultiTenantEnabled() && am.apiTokenStore != nil {
+			if strings.HasPrefix(token, "tb-share-") {
+				// This is an API token, validate it directly from database
+				tokenRecord, validateErr := am.apiTokenStore.ValidateToken(token)
+				if validateErr == nil && tokenRecord != nil {
+					// Token is valid and enabled
+					c.Set("user_uuid", tokenRecord.UserUUID)
+					c.Set("token_id", tokenRecord.TokenID)
+					c.Set("client_id", "model_authenticated")
+					c.Set("auth_method", "api_token")
 
-						// Update last used asynchronously
-						go am.apiTokenStore.UpdateLastUsed(claims.TokenID)
+					// Update last used asynchronously
+					go am.apiTokenStore.UpdateLastUsed(tokenRecord.TokenID)
 
-						c.Next()
-						return
-					}
+					c.Next()
+					return
 				}
 			}
 		}
