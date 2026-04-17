@@ -3,6 +3,7 @@ package mcp
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
@@ -159,13 +160,26 @@ func (h *Handler) SetMCPRuntimeConfig(c *gin.Context) {
 			})
 			return
 		}
-		if source.Transport != "" && source.Transport != "http" && source.Transport != "stdio" {
+		if source.Transport != "" && source.Transport != "http" && source.Transport != "stdio" && source.Transport != "sse" && source.Transport != "advisor" {
 			c.JSON(http.StatusBadRequest, MCPRuntimeConfigResponse{
 				Success: false,
-				Error:   "Invalid transport type: " + source.Transport + ". Must be 'http' or 'stdio'",
+				Error:   "Invalid transport type: " + source.Transport + ". Must be one of 'http', 'stdio', 'sse'",
 			})
 			return
 		}
+	}
+
+	issues := runtime.ValidateEnabledMCPSourceEnvRefs(req.Sources)
+	if len(issues) > 0 {
+		parts := make([]string, 0, len(issues))
+		for _, issue := range issues {
+			parts = append(parts, fmt.Sprintf("source=%s field=%s missing=${%s}", issue.SourceID, issue.FieldPath, issue.VarName))
+		}
+		c.JSON(http.StatusBadRequest, MCPRuntimeConfigResponse{
+			Success: false,
+			Error:   "missing environment variables for enabled MCP source(s): " + strings.Join(parts, "; "),
+		})
+		return
 	}
 
 	mcpCfg := &typ.MCPRuntimeConfig{
