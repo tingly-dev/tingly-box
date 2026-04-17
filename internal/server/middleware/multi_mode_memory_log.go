@@ -12,13 +12,23 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
+// Request body storage configuration
+const (
+	// MaxRequestBodySize is the maximum size of request body to store (1MB)
+	MaxRequestBodySize = 1024 * 1024
+	// MaxRequestBodies is the maximum number of request bodies to keep in memory
+	MaxRequestBodies = 50
+)
+
 // MultiModeMemoryLogMiddleware provides Gin middleware with both persistent and memory log storage
 // Logs are written to:
 // 1. Multi-mode logger (text + JSON files for persistence)
 // 2. Memory (circular buffer for quick API access)
+// 3. Request body store (pure memory, referenced by body_ref ID)
 type MultiModeMemoryLogMiddleware struct {
-	logger      *logrus.Logger
-	multiLogger *obs.MultiLogger
+	logger           *logrus.Logger
+	multiLogger      *obs.MultiLogger
+	requestBodyStore *obs.RequestBodyStore
 }
 
 // NewMultiModeMemoryLogMiddleware creates a new middleware with both persistent and memory logging
@@ -30,16 +40,18 @@ func NewMultiModeMemoryLogMiddleware(multiLogger *obs.MultiLogger) *MultiModeMem
 			l.SetOutput(io.Discard)
 		}
 		return &MultiModeMemoryLogMiddleware{
-			logger:      l,
-			multiLogger: nil,
+			logger:           l,
+			multiLogger:      nil,
+			requestBodyStore: nil,
 		}
 	}
 	// Get a logger scoped to HTTP source
 	httpLogger := multiLogger.GetLogrusLogger(obs.LogSourceHTTP)
 
 	return &MultiModeMemoryLogMiddleware{
-		logger:      httpLogger,
-		multiLogger: multiLogger,
+		logger:           httpLogger,
+		multiLogger:      multiLogger,
+		requestBodyStore: obs.NewRequestBodyStore(MaxRequestBodies),
 	}
 }
 
@@ -50,6 +62,25 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		start := time.Now()
 		path := c.Request.URL.Path
 		raw := c.Request.URL.RawQuery
+
+		// Read request body for storage (before it's consumed by handlers)
+		var bodyRef string
+		if m.requestBodyStore != nil && c.Request.Body != nil && c.Request.Method != "GET" && c.Request.Method != "HEAD" {
+			bodyBytes, err := io.ReadAll(c.Request.Body)
+			if err != nil {
+				// Log the error but continue processing
+				logrus.WithFields(logrus.Fields{
+					"method": c.Request.Method,
+					"path":   c.Request.URL.Path,
+					"error":  err.Error(),
+				}).Warn("Failed to read request body for storage")
+			} else if len(bodyBytes) > 0 {
+				// Store body and get reference ID
+				bodyRef = m.requestBodyStore.Store(c.Request.Method, c.Request.URL.Path, string(bodyBytes), MaxRequestBodySize)
+				// Restore body for downstream handlers
+				c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			}
+		}
 
 		// Wrap response writer to capture body for error responses
 		w := &responseBodyWriter{
@@ -103,6 +134,11 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 			"path":       path,
 			"body_size":  bodySize,
 			"user_agent": c.Request.UserAgent(),
+		}
+
+		// Add body reference if request body was stored
+		if bodyRef != "" {
+			fields["body_ref"] = bodyRef
 		}
 
 		// Add error message field if error occurred
@@ -196,4 +232,9 @@ func (m *MultiModeMemoryLogMiddleware) Size() int {
 		return 0
 	}
 	return memorySink.Size()
+}
+
+// GetRequestBodyStore returns the request body store for retrieving stored request bodies
+func (m *MultiModeMemoryLogMiddleware) GetRequestBodyStore() *obs.RequestBodyStore {
+	return m.requestBodyStore
 }

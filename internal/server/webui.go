@@ -660,6 +660,21 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithTags("logs"),
 	)
 
+	// Request Body API routes (stored request bodies from memory)
+	apiV1.GET("/log/request/:id", s.GetRequestBody,
+		swagger.WithDescription("Get a stored request body by its reference ID"),
+		swagger.WithTags("logs"),
+		swagger.WithResponseModel(RequestBodyResponse{}),
+	)
+	apiV1.GET("/log/request/stats", s.GetRequestBodyStats,
+		swagger.WithDescription("Get request body store statistics"),
+		swagger.WithTags("logs"),
+	)
+	apiV1.DELETE("/log/request", s.ClearRequestBodies,
+		swagger.WithDescription("Clear all stored request bodies"),
+		swagger.WithTags("logs"),
+	)
+
 	// System Log API routes (application logs from JSON file)
 	apiV1.GET("/system/logs", s.GetSystemLogs,
 		swagger.WithDescription("Get recent system logs with optional filtering (from JSON log file). Use 'limit' parameter to control how many recent entries to return."),
