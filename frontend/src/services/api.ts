@@ -1859,6 +1859,112 @@ export const api = {
             };
         }
     },
+
+    // ============================================
+    // API Token Management (Multi-Tenant)
+    // ============================================
+
+    // List all API tokens
+    listAPITokens: async (params?: {
+        user_uuid?: string;
+        enabled?: boolean;
+        limit?: number;
+        offset?: number;
+    }): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/tokens', {
+                headers,
+                params: { query: params as any }
+            });
+            // openapi-fetch returns { data, error, response }
+            if (response.error) {
+                return { success: false, error: response.error };
+            }
+            return { success: true, data: response.data };
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get a specific API token
+    getAPIToken: async (tokenId: string): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/tokens/{token_id}', {
+                headers,
+                params: { path: { token_id: tokenId } }
+            });
+            if (response.error) {
+                return { success: false, error: response.error };
+            }
+            return { success: true, data: response.data };
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Create a new API token
+    createAPIToken: async (data: {
+        display_name: string;
+        expires_in_days?: number;
+    }): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/tokens', {
+                headers,
+                body: data
+            });
+            if (response.error) {
+                return { success: false, error: response.error };
+            }
+            return { success: true, data: response.data };
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Delete an API token
+    deleteAPIToken: async (tokenId: string): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.DELETE('/api/v1/tokens/{token_id}', {
+                headers,
+                params: { path: { token_id: tokenId } }
+            });
+            if (response.error) {
+                return { success: false, error: response.error };
+            }
+            return { success: true, data: response.data };
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Enable an API token
+    setAPITokenEnabled: async (tokenId: string, enabled: boolean): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const endpoint = enabled
+                ? '/api/v1/tokens/{token_id}/enable'
+                : '/api/v1/tokens/{token_id}/disable';
+            const response = await client.PUT(endpoint, {
+                headers,
+                params: { path: { token_id: tokenId } }
+            });
+            if (response.error) {
+                return { success: false, error: response.error };
+            }
+            return { success: true, data: response.data };
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
 };
 
 export default api;
