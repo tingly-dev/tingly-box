@@ -3,6 +3,8 @@ package transform
 import (
 	"context"
 	"encoding/json"
+	"strconv"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -32,7 +34,7 @@ func (t *MCPToolInjectionTransform) Apply(ctx *protocoltransform.TransformContex
 	if listCtx == nil {
 		listCtx = context.Background()
 	}
-	mcpTools := t.runtime.ListOpenAITools(listCtx)
+	mcpTools := t.runtime.ListServerToolsForInjection(listCtx)
 	if len(mcpTools) == 0 {
 		logrus.Debug("[MCP-DEBUG] No MCP tools to inject")
 		return nil
@@ -53,10 +55,12 @@ func (t *MCPToolInjectionTransform) Apply(ctx *protocoltransform.TransformContex
 		if req.Tools != nil {
 			originalCount = len(req.Tools)
 		}
+		logOriginalToolNames("OpenAI", extractOpenAIToolNames(req.Tools))
 		req.Tools = mergeUniqueOpenAITools(req.Tools, mcpTools)
 		logrus.Debugf("[MCP-DEBUG] OpenAI tools: original=%d, injected=%d, total=%d",
 			originalCount, len(mcpTools), len(req.Tools))
 	case *anthropic.MessageNewParams:
+		logOriginalToolNames("Anthropic V1", extractAnthropicV1ToolNames(req.Tools))
 		betaTools := request.ConvertOpenAIToAnthropicTools(mcpTools)
 		if len(betaTools) == 0 {
 			return nil
@@ -75,6 +79,7 @@ func (t *MCPToolInjectionTransform) Apply(ctx *protocoltransform.TransformContex
 				originalCount, len(toolsV1), len(req.Tools))
 		}
 	case *anthropic.BetaMessageNewParams:
+		logOriginalToolNames("Anthropic Beta", extractAnthropicBetaToolNames(req.Tools))
 		tools := request.ConvertOpenAIToAnthropicTools(mcpTools)
 		if len(tools) > 0 {
 			originalCount := 0
@@ -82,10 +87,74 @@ func (t *MCPToolInjectionTransform) Apply(ctx *protocoltransform.TransformContex
 				originalCount = len(req.Tools)
 			}
 			req.Tools = mergeUniqueAnthropicBetaTools(req.Tools, tools)
-			logrus.Debugf("[MCP-DEBUG] Anthropic Beta tools: original=%d, injected=%d, total=%d",
-				originalCount, len(tools), len(req.Tools))
+			injectedNames := make([]string, 0, len(tools))
+			for _, t := range tools {
+				if t.OfTool != nil {
+					injectedNames = append(injectedNames, t.OfTool.Name)
+				}
+			}
+			logrus.Debugf("[MCP-DEBUG] Anthropic Beta tools: original=%d, injected=%d, total=%d, names=%v",
+				originalCount, len(tools), len(req.Tools), injectedNames)
 		}
 	}
 
 	return nil
+}
+
+const mcpOriginalNamesLogLimit = 12
+
+func logOriginalToolNames(api string, names []string) {
+	if len(names) == 0 {
+		logrus.Debugf("[MCP-DEBUG] %s original tool names: []", api)
+		return
+	}
+	limit := len(names)
+	if limit > mcpOriginalNamesLogLimit {
+		limit = mcpOriginalNamesLogLimit
+	}
+	clipped := names[:limit]
+	suffix := ""
+	if len(names) > limit {
+		suffix = " ...+" + strconv.Itoa(len(names)-limit)
+	}
+	logrus.Debugf("[MCP-DEBUG] %s original tool names: [%s]%s", api, strings.Join(clipped, ", "), suffix)
+}
+
+func extractOpenAIToolNames(tools []openai.ChatCompletionToolUnionParam) []string {
+	if len(tools) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(tools))
+	for _, t := range tools {
+		if fn := t.GetFunction(); fn != nil && strings.TrimSpace(fn.Name) != "" {
+			out = append(out, fn.Name)
+		}
+	}
+	return out
+}
+
+func extractAnthropicV1ToolNames(tools []anthropic.ToolUnionParam) []string {
+	if len(tools) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(tools))
+	for _, t := range tools {
+		if t.OfTool != nil && strings.TrimSpace(t.OfTool.Name) != "" {
+			out = append(out, t.OfTool.Name)
+		}
+	}
+	return out
+}
+
+func extractAnthropicBetaToolNames(tools []anthropic.BetaToolUnionParam) []string {
+	if len(tools) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(tools))
+	for _, t := range tools {
+		if t.OfTool != nil && strings.TrimSpace(t.OfTool.Name) != "" {
+			out = append(out, t.OfTool.Name)
+		}
+	}
+	return out
 }

@@ -43,26 +43,14 @@ func (a *MCPRuntimeAdapter) ListTools(ctx context.Context) ([]MCPTool, error) {
 		return nil, fmt.Errorf("runtime not initialized")
 	}
 
-	sourceTools, err := a.runtime.ListSourceTools(ctx)
+	sourceTools, err := a.runtime.ListClientSourceToolsForMCP(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list source tools: %w", err)
-	}
-	cfg := a.runtime.GetConfig()
-	clientToolSources := make(map[string]bool)
-	if cfg != nil {
-		for _, source := range cfg.Sources {
-			if source.IsClientTool != nil && *source.IsClientTool {
-				clientToolSources[source.ID] = true
-			}
-		}
 	}
 
 	var tools []MCPTool
 	for sourceID, srcTools := range sourceTools {
 		if !a.isSourceAllowed(sourceID) {
-			continue
-		}
-		if !clientToolSources[sourceID] {
 			continue
 		}
 		for _, t := range srcTools {
