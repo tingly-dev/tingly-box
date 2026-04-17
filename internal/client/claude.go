@@ -234,9 +234,10 @@ func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthTo
 	//}
 
 	// If user provides custom betas, use them
-	if val := strings.TrimSpace(req.Header.Get("Anthropic-Beta")); val != "" {
-		baseBetas = val
-	}
+	// we do never use users' beta headers
+	//if val := strings.TrimSpace(req.Header.Get("Anthropic-Beta")); val != "" {
+	//	baseBetas = val
+	//}
 
 	baseBetas = strings.TrimRight(baseBetas, ",")
 
