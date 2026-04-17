@@ -75,6 +75,13 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool) VirtualTool
 		}
 
 		// Execute advisor call
+		logrus.WithFields(logrus.Fields{
+			"reason":         reason,
+			"uses_remaining": actx.UsesRemaining,
+			"depth":          depth,
+			"format":         detectAdvisorFormat(cfg),
+		}).Debug("[MCP-DEBUG] ADVISOR: calling advisor model")
+
 		advisorCtx, cancel := context.WithTimeout(ctx, advisorCallTimeout)
 		defer cancel()
 
@@ -87,7 +94,7 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool) VirtualTool
 		}
 
 		if err != nil {
-			logrus.WithError(err).Error("advisor: consultation failed")
+			logrus.WithError(err).Error("[MCP-DEBUG] ADVISOR: consultation failed")
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{mcp.NewTextContent(fmt.Sprintf("Advisor error: %v", err))},
 				IsError: true,
@@ -96,7 +103,7 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool) VirtualTool
 
 		// Decrement uses
 		actx.UsesRemaining--
-		logrus.WithField("uses_remaining", actx.UsesRemaining).Debug("advisor: consultation completed")
+		logrus.WithField("uses_remaining", actx.UsesRemaining).Debug("[MCP-DEBUG] ADVISOR: consultation completed")
 
 		return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(result)}}, nil
 	}
