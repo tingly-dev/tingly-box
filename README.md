@@ -48,30 +48,9 @@ Tingly Box **coordinates AI models, optimizes context, and routes requests** for
 npx tingly-box@latest
 ```
 
-> if any trouble, please check tingly-box process and port 12580 and confirm to kill them.
+> if any trouble, please check tingly-box output, or call for an issue to help. 
 
-**From source code**
-
-*Requires: Go 1.25+, Node.js 20+, pnpm, task, openapi*
-
-```bash
-# Install dependencies
-# - Go: https://go.dev/doc/install
-# - Node.js: https://nodejs.org/
-# - pnpm: `npm install -g pnpm`
-# - task: https://taskfile.dev/installation/, or `go install github.com/go-task/task/v3/cmd/task@latest`
-# - shell: copy and run shell command in taskfile directly
-
-git submodule update --init --recursive
-
-# Build with frontend
-task build
-
-# Build GUI binary via wails3
-task wails:build
-```
-
-**From Docker (Github)**
+**From Docker (Github Host)**
 
 ```bash
 mkdir tingly-data
@@ -192,13 +171,6 @@ npx tingly-box@latest
 
 **[MCP Web Tools](./docs/mcp-web-tools.md)** – Local stdio MCP server for `web_search` / `web_fetch`
 
-
-## **Philosophy**
-
-- **One endpoint, many providers** – Consolidates multiple providers behind a single API with minimal configuration.
-- **Seamless integration** – Works with SDKs and CLI tools with minimal setup.
-
-
 ## Contributing
 
 By contributing to this repository, you agree that your contributions may be
@@ -207,48 +179,29 @@ under separate commercial licensing terms.
 
 See CONTRIBUTING.md and NOTICE for details.
 
-## **How to Contribute**
+---
 
-We welcome contributions! Follow these steps, inspired by popular open-source repositories:
+We welcome contributions!   
+Please check steps below to build from source code.
 
-1. **Fork the repository** – Click the “Fork” button on GitHub.
+*Requires: Go 1.25+, Node.js 20+, pnpm, task*
 
-2. **Clone your fork**
+```bash
+# Install dependencies
+# - Go: https://go.dev/doc/install
+# - Node.js: https://nodejs.org/
+# - pnpm: `npm install -g pnpm`
+# - task: https://taskfile.dev/installation/, or `go install github.com/go-task/task/v3/cmd/task@latest`
+# - shell: copy and run shell command in taskfile directly
 
-   ```bash
-   git clone https://github.com/your-username/tingly-box.git
-   cd tingly-box
-   ```
+git submodule update --init --recursive
 
-3. **Create a new branch**
+# Build with frontend
+task build
 
-   ```bash
-   git checkout -b feature/my-new-feature
-   ```
-
-4. **Make your changes** – Follow existing code style and add tests if applicable.
-
-5. **Run tests**
-
-   ```bash
-   task test
-   ```
-
-6. **Commit your changes**
-
-   ```bash
-   git commit -m "Add concise description of your change"
-   ```
-
-7. **Push your branch**
-
-   ```bash
-   git push origin feature/my-new-feature
-   ```
-
-8. **Open a Pull Request** – Go to the GitHub repository and open a PR against `main`.
-
-
+# Build GUI binary via wails3
+task wails:build
+```
 
 ## Support
 
