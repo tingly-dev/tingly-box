@@ -334,7 +334,7 @@ func inferProviderType(provider *typ.Provider) ProviderType {
 		return ProviderTypeMiniMaxCN
 	case contains(apiBase, "minimax"):
 		return ProviderTypeMiniMax
-	case contains(apiBase, "codex"):
+	case contains(apiBase, "chatgpt.com"), contains(apiBase, "codex"):
 		return ProviderTypeCodex
 	}
 	return ""
