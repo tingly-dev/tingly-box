@@ -1,6 +1,7 @@
 package transform
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -82,6 +83,11 @@ func WithDevice(device string) TransformOption {
 	return func(ctx *TransformContext) { ctx.Config.Device = device }
 }
 
+// WithContext sets the context in the transform context.
+func WithContext(c context.Context) TransformOption {
+	return func(ctx *TransformContext) { ctx.Context = c }
+}
+
 // Transform defines the interface for a single transformation step
 type Transform interface {
 	// Name returns the unique identifier for this transform
@@ -94,6 +100,10 @@ type Transform interface {
 
 // TransformContext carries state through the transform chain
 type TransformContext struct {
+	// Context carries the request-scoped context for cancellation and deadlines.
+	// Transforms should use this instead of context.Background().
+	Context context.Context
+
 	SourceAPI protocol.APIType
 	TargetAPI protocol.APIType
 

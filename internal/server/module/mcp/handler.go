@@ -79,8 +79,9 @@ type MCPRuntimeConfigResponse struct {
 
 // MCPRuntimeConfigRequest is the API request for setting MCP runtime config
 type MCPRuntimeConfigRequest struct {
-	Sources        []typ.MCPSourceConfig `json:"sources,omitempty"`
-	RequestTimeout int                   `json:"request_timeout,omitempty"` // seconds, default: 30
+	Sources               []typ.MCPSourceConfig `json:"sources,omitempty"`
+	RequestTimeout        int                   `json:"request_timeout,omitempty"`          // seconds, default: 30
+	StripDisabledMCPTools bool                  `json:"strip_disabled_mcp_tools,omitempty"` // dangerous: strip disabled MCP declarations/tool_calls
 }
 
 // GetMCPRuntimeConfig returns the global MCP runtime configuration
@@ -168,8 +169,9 @@ func (h *Handler) SetMCPRuntimeConfig(c *gin.Context) {
 	}
 
 	mcpCfg := &typ.MCPRuntimeConfig{
-		Sources:        req.Sources,
-		RequestTimeout: req.RequestTimeout,
+		Sources:               req.Sources,
+		RequestTimeout:        req.RequestTimeout,
+		StripDisabledMCPTools: req.StripDisabledMCPTools,
 	}
 	typ.ApplyMCPRuntimeDefaults(mcpCfg)
 

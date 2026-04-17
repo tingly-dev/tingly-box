@@ -3,8 +3,8 @@ package runtime
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/openai/openai-go/v3"
@@ -21,8 +21,16 @@ type configProvider func() *typ.MCPRuntimeConfig
 
 // Runtime handles MCP tool source discovery and tool execution.
 type Runtime struct {
-	getConfig configProvider
-	sc        *sessionCache
+	getConfig         configProvider
+	sc                *sessionCache
+	toolSourceFactory *ToolSourceFactory
+	activeSources     map[string]ToolSource // source ID -> ToolSource
+	sourcesMu         sync.RWMutex
+
+	// Cache for enabled server tool names to avoid repeated full enumeration.
+	enabledNamesCache   map[string]struct{}
+	enabledNamesExpires time.Time
+	enabledNamesMu      sync.RWMutex
 }
 
 // NewRuntime creates a new MCP runtime.
@@ -32,12 +40,40 @@ func NewRuntime(getConfig configProvider) *Runtime {
 	if cfg == nil {
 		return nil
 	}
-	return &Runtime{getConfig: getConfig, sc: newSessionCache()}
+	sc := newSessionCache()
+	return &Runtime{
+		getConfig:         getConfig,
+		sc:                sc,
+		toolSourceFactory: NewToolSourceFactory(sc),
+		activeSources:     make(map[string]ToolSource),
+	}
 }
 
-// Close releases all MCP sessions.
+// Close releases all MCP sessions and tool source connections.
 func (r *Runtime) Close() {
-	if r != nil && r.sc != nil {
+	if r == nil {
+		return
+	}
+
+	// Close all active tool sources
+	if r.activeSources != nil {
+		r.sourcesMu.Lock()
+		defer r.sourcesMu.Unlock()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		for sourceID, source := range r.activeSources {
+			if err := source.Disconnect(ctx); err != nil {
+				logrus.WithField("source", sourceID).WithError(err).
+					Warn("mcp: failed to disconnect source during close")
+			}
+		}
+		r.activeSources = make(map[string]ToolSource)
+	}
+
+	// Close all sessions
+	if r.sc != nil {
 		r.sc.closeAll()
 	}
 }
@@ -78,38 +114,45 @@ func (r *Runtime) ListOpenAITools(ctx context.Context) []openai.ChatCompletionTo
 			logrus.Debugf("mcp: source=%s is disabled; skip tool listing", source.ID)
 			continue
 		}
-		transport := strings.TrimSpace(source.Transport)
-		if transport == "" {
-			transport = "stdio"
-		}
-
-		ss, _, err := r.sc.getOrCreate(ctx, source, time.Duration(cfg.RequestTimeout)*time.Second)
-		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"source":    source.ID,
-				"transport": transport,
-				"error":     err.Error(),
-				"err_type":  fmt.Sprintf("%T", err),
-			}).Warn("mcp: connect failed")
+		// Skip client tools - they should not be injected into AI requests
+		if source.IsClientTool != nil && *source.IsClientTool {
+			logrus.Debugf("mcp: source=%s is a client tool; skip tool injection", source.ID)
 			continue
 		}
 
-		tools, err := func() ([]mcpTool, error) {
-			// Hold a read lock for the session; the SDK is safe for concurrent calls.
-			ss.mu.RLock()
-			defer ss.mu.RUnlock()
-			return ss.listTools(ctx)
-		}()
+		// Get or create tool source
+		toolSource, err := r.getOrCreateSource(ctx, source.ID)
 		if err != nil {
 			logrus.WithFields(logrus.Fields{
-				"source":    source.ID,
-				"transport": transport,
-				"error":     err.Error(),
-				"err_type":  fmt.Sprintf("%T", err),
+				"source": source.ID,
+				"error":  err.Error(),
+			}).Warn("mcp: failed to get tool source")
+			continue
+		}
+
+		// Ensure source is connected
+		if !toolSource.IsConnected() {
+			if err := toolSource.Connect(ctx); err != nil {
+				logrus.WithFields(logrus.Fields{
+					"source":    source.ID,
+					"transport": toolSource.GetType(),
+					"error":     err.Error(),
+				}).Warn("mcp: connect failed")
+				continue
+			}
+		}
+
+		// List tools from source
+		tools, err := toolSource.ListTools(ctx)
+		if err != nil {
+			logrus.WithFields(logrus.Fields{
+				"source": source.ID,
+				"error":  err.Error(),
 			}).Warn("mcp: list tools failed")
 			continue
 		}
 
+		// Apply allow list filtering
 		allowAll, allowSet := buildAllowList(source.Tools)
 		for _, t := range tools {
 			if strings.TrimSpace(t.Name) == "" {
@@ -118,12 +161,13 @@ func (r *Runtime) ListOpenAITools(ctx context.Context) []openai.ChatCompletionTo
 			if !allowAll && !allowSet[t.Name] {
 				continue
 			}
+
 			normalized := NormalizeToolName(source.ID, t.Name)
 			params := shared.FunctionParameters{
 				"type":       "object",
 				"properties": map[string]interface{}{},
 			}
-			if raw := t.schema(); len(raw) > 0 {
+			if raw := t.InputSchema; len(raw) > 0 {
 				var schema map[string]interface{}
 				if err := json.Unmarshal(raw, &schema); err == nil && len(schema) > 0 {
 					params = schema
@@ -172,59 +216,136 @@ func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments
 		return "", &sessionError{sourceID: sourceID, msg: "invalid normalized MCP tool name: " + normalizedName}
 	}
 
-	cfg := r.getConfigOrDefault()
-	if cfg == nil {
-		return "", &sessionError{sourceID: sourceID, msg: "mcp runtime config is not set"}
+	// Get or create tool source
+	source, err := r.getOrCreateSource(ctx, sourceID)
+	if err != nil {
+		return "", err
 	}
 
-	var source *typ.MCPSourceConfig
+	// Ensure source is connected
+	if !source.IsConnected() {
+		if err := source.Connect(ctx); err != nil {
+			return "", &sessionError{sourceID: sourceID, msg: "failed to connect source: " + err.Error()}
+		}
+
+		// Enable health monitoring for persistent connections
+		if transport := source.GetType(); transport == TransportHTTP || transport == TransportSSE {
+			source.EnableHealthCheck(ctx, 30*time.Second)
+		}
+	}
+
+	// Call the tool
+	result, err := source.CallTool(ctx, toolName, arguments)
+	if err != nil {
+		return "", err
+	}
+
+	return result, nil
+}
+
+// isSourceEnabled checks if a source is enabled in the current configuration
+func (r *Runtime) isSourceEnabled(sourceID string) bool {
+	cfg := r.getConfigOrDefault()
+	if cfg == nil {
+		return false
+	}
+
 	for i := range cfg.Sources {
 		if cfg.Sources[i].ID == sourceID {
-			source = &cfg.Sources[i]
+			return typ.IsMCPSourceEnabled(cfg.Sources[i])
+		}
+	}
+	return false
+}
+
+// invalidateSource removes a source from the cache and disconnects it
+func (r *Runtime) invalidateSource(ctx context.Context, sourceID string) {
+	r.sourcesMu.Lock()
+	defer r.sourcesMu.Unlock()
+
+	if source, exists := r.activeSources[sourceID]; exists {
+		// Disconnect the source
+		if err := source.Disconnect(ctx); err != nil {
+			logrus.WithField("source", sourceID).WithError(err).
+				Warn("mcp: failed to disconnect source during invalidation")
+		}
+		delete(r.activeSources, sourceID)
+		logrus.WithField("source", sourceID).Debug("mcp: invalidated cached source")
+	}
+}
+
+// getOrCreateSource gets an existing tool source or creates a new one.
+func (r *Runtime) getOrCreateSource(ctx context.Context, sourceID string) (ToolSource, error) {
+	// Fast path: check cache
+	r.sourcesMu.RLock()
+	source := r.activeSources[sourceID]
+	r.sourcesMu.RUnlock()
+
+	if source != nil {
+		// Check if source is still enabled in current config
+		if !r.isSourceEnabled(sourceID) {
+			// Source is disabled, remove from cache and return error
+			r.invalidateSource(ctx, sourceID)
+			return nil, &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " is disabled"}
+		}
+		return source, nil
+	}
+
+	// Slow path: create new source
+	r.sourcesMu.Lock()
+	defer r.sourcesMu.Unlock()
+
+	// Double-check
+	source = r.activeSources[sourceID]
+	if source != nil {
+		// Check if source is still enabled in current config
+		if !r.isSourceEnabled(sourceID) {
+			// Source is disabled, remove from cache and return error
+			if err := source.Disconnect(ctx); err != nil {
+				logrus.WithField("source", sourceID).WithError(err).
+					Warn("mcp: failed to disconnect source")
+			}
+			delete(r.activeSources, sourceID)
+			return nil, &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " is disabled"}
+		}
+		return source, nil
+	}
+
+	// Find source config
+	cfg := r.getConfigOrDefault()
+	if cfg == nil {
+		return nil, &sessionError{sourceID: sourceID, msg: "mcp runtime config is not set"}
+	}
+
+	var sourceConfig *typ.MCPSourceConfig
+	for i := range cfg.Sources {
+		if cfg.Sources[i].ID == sourceID {
+			sourceConfig = &cfg.Sources[i]
 			break
 		}
 	}
-	if source == nil {
-		return "", &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " not found"}
-	}
-	if !typ.IsMCPSourceEnabled(*source) {
-		return "", &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " is disabled"}
+
+	if sourceConfig == nil {
+		return nil, &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " not found"}
 	}
 
-	transport := strings.TrimSpace(source.Transport)
-	if transport == "" {
-		transport = "stdio"
-	}
-	switch transport {
-	case "http", "stdio":
-	default:
-		return "", &sessionError{sourceID: sourceID, msg: "mcp transport " + transport + " is not implemented"}
+	if !typ.IsMCPSourceEnabled(*sourceConfig) {
+		return nil, &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " is disabled"}
 	}
 
-	var argsMap map[string]interface{}
-	if strings.TrimSpace(arguments) != "" {
-		if err := json.Unmarshal([]byte(arguments), &argsMap); err != nil {
-			return "", &sessionError{sourceID: sourceID, msg: "invalid tool arguments: " + err.Error()}
-		}
-	}
-	if argsMap == nil {
-		argsMap = map[string]interface{}{}
-	}
-
-	ss, _, err := r.sc.getOrCreate(ctx, *source, time.Duration(cfg.RequestTimeout)*time.Second)
+	// Create tool source using factory
+	newSource, err := r.toolSourceFactory.CreateToolSource(*sourceConfig)
 	if err != nil {
-		return "", err
+		return nil, &sessionError{sourceID: sourceID, msg: "failed to create tool source: " + err.Error()}
 	}
 
-	result, err := func() (string, error) {
-		ss.mu.RLock()
-		defer ss.mu.RUnlock()
-		return ss.callTool(ctx, toolName, argsMap)
-	}()
-	if err != nil {
-		return "", err
-	}
-	return result, nil
+	// Cache the source
+	r.activeSources[sourceID] = newSource
+
+	logrus.WithField("source", sourceID).WithField("transport", newSource.GetType()).
+		Debug("mcp: created tool source")
+
+	return newSource, nil
 }
 
 // SourceTool represents a tool from a specific MCP source with its original name.
@@ -251,35 +372,38 @@ func (r *Runtime) ListSourceTools(ctx context.Context) (map[string][]SourceTool,
 			continue
 		}
 
-		transport := strings.TrimSpace(source.Transport)
-		if transport == "" {
-			transport = "stdio"
-		}
-
-		ss, _, err := r.sc.getOrCreate(ctx, source, time.Duration(cfg.RequestTimeout)*time.Second)
+		// Get or create tool source
+		toolSource, err := r.getOrCreateSource(ctx, source.ID)
 		if err != nil {
 			logrus.WithFields(logrus.Fields{
-				"source":    source.ID,
-				"transport": transport,
-				"error":     err.Error(),
-			}).Warn("mcp: connect failed for ListSourceTools")
+				"source": source.ID,
+				"error":  err.Error(),
+			}).Warn("mcp: failed to get tool source for ListSourceTools")
 			continue
 		}
 
-		tools, err := func() ([]mcpTool, error) {
-			ss.mu.RLock()
-			defer ss.mu.RUnlock()
-			return ss.listTools(ctx)
-		}()
+		// Ensure source is connected
+		if !toolSource.IsConnected() {
+			if err := toolSource.Connect(ctx); err != nil {
+				logrus.WithFields(logrus.Fields{
+					"source": source.ID,
+					"error":  err.Error(),
+				}).Warn("mcp: connect failed for ListSourceTools")
+				continue
+			}
+		}
+
+		// List tools from source
+		tools, err := toolSource.ListTools(ctx)
 		if err != nil {
 			logrus.WithFields(logrus.Fields{
-				"source":    source.ID,
-				"transport": transport,
-				"error":     err.Error(),
+				"source": source.ID,
+				"error":  err.Error(),
 			}).Warn("mcp: list tools failed for ListSourceTools")
 			continue
 		}
 
+		// Apply allow list filtering
 		allowAll, allowSet := buildAllowList(source.Tools)
 		for _, t := range tools {
 			if strings.TrimSpace(t.Name) == "" {
@@ -334,4 +458,53 @@ func buildAllowList(names []string) (bool, map[string]bool) {
 		}
 	}
 	return false, out
+}
+
+// HasServerTools returns true if there are any server tools configured
+func (r *Runtime) HasServerTools() bool {
+	cfg := r.getConfigOrDefault()
+	if cfg == nil || len(cfg.Sources) == 0 {
+		return false
+	}
+	for _, source := range cfg.Sources {
+		if !typ.IsMCPSourceEnabled(source) {
+			continue
+		}
+		// Check if this is a server tool (nil or false means server tool)
+		if source.IsClientTool == nil || !*source.IsClientTool {
+			return true
+		}
+	}
+	return false
+}
+
+const enabledNamesCacheTTL = 5 * time.Second
+
+// ListEnabledServerToolNames returns normalized MCP tool names from enabled server-tool sources.
+// Results are cached with a short TTL to avoid repeated full source enumeration.
+func (r *Runtime) ListEnabledServerToolNames(ctx context.Context) map[string]struct{} {
+	r.enabledNamesMu.RLock()
+	if r.enabledNamesCache != nil && time.Now().Before(r.enabledNamesExpires) {
+		r.enabledNamesMu.RUnlock()
+		return r.enabledNamesCache
+	}
+	r.enabledNamesMu.RUnlock()
+
+	r.enabledNamesMu.Lock()
+	defer r.enabledNamesMu.Unlock()
+	if r.enabledNamesCache != nil && time.Now().Before(r.enabledNamesExpires) {
+		return r.enabledNamesCache
+	}
+
+	out := make(map[string]struct{})
+	for _, t := range r.ListOpenAITools(ctx) {
+		fn := t.GetFunction()
+		if fn == nil || fn.Name == "" {
+			continue
+		}
+		out[fn.Name] = struct{}{}
+	}
+	r.enabledNamesCache = out
+	r.enabledNamesExpires = time.Now().Add(enabledNamesCacheTTL)
+	return out
 }

@@ -5,6 +5,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	servertransform "github.com/tingly-dev/tingly-box/internal/server/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -28,6 +29,10 @@ func (s *Server) BuildTransformChain(c *gin.Context, targetType protocol.APIType
 
 	// 2. Base transform (protocol conversion)
 	transforms = append(transforms, transform.NewBaseTransform(targetType))
+	if s.mcpEnabled() {
+		transforms = append(transforms, servertransform.NewMCPToolInjectionTransform(s.mcpRuntime))
+		transforms = append(transforms, servertransform.NewMCPToolStripGuardTransform(s.mcpRuntime, s.mcpStripDisabledToolsEnabled()))
+	}
 	transforms = append(transforms, transform.NewVendorTransform(providerURL))
 
 	// 3. Post-transform recording (if request recording is enabled)

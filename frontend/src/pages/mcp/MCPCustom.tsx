@@ -24,18 +24,6 @@ import { useEffect, useState } from 'react';
 import MCPSourceEditor from './MCPSourceEditor';
 import { BUILTIN_IDS, MCP_DEFAULT_CWD, defaultMCPSourceFormValue, formValueToSource, sourceToFormValue, type MCPConfigResponse, type MCPSourceConfig, type MCPSourceFormValue } from './types';
 
-const weatherTemplate = (): MCPSourceFormValue => ({
-    ...defaultMCPSourceFormValue(),
-    id: 'weather',
-    transport: 'stdio',
-    command: 'python3',
-    args: ['mcp_weather_tools.py'],
-    cwd: MCP_DEFAULT_CWD,
-    tools: ['get_current_weather'],
-    useGlobalProxy: true,
-    envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'],
-});
-
 const emptyCustomTemplate = (): MCPSourceFormValue => ({
     ...defaultMCPSourceFormValue(),
     args: [],
@@ -223,11 +211,6 @@ const MCPCustom = () => {
                             title="Connect to a custom MCP"
                             value={form}
                             onChange={setForm}
-                            onUseExample={() => {
-                                setEditingId('');
-                                setForm(weatherTemplate());
-                                setEditorMode('add');
-                            }}
                         />
 
                         <Stack direction="row" justifyContent="flex-start">

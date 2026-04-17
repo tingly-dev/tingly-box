@@ -23,17 +23,19 @@ import {
 } from '@mui/icons-material';
 import { useEffect, useState } from 'react';
 import MCPSourceEditor from './MCPSourceEditor';
-import { BUILTIN_IDS, MCP_DEFAULT_CWD, defaultMCPSourceFormValue, formValueToSource, sourceToFormValue, type MCPConfigResponse, type MCPSourceConfig, type MCPSourceFormValue } from './types';
+import { MCP_DEFAULT_CWD, defaultMCPSourceFormValue, formValueToSource, sourceToFormValue, type MCPConfigResponse, type MCPSourceConfig, type MCPSourceFormValue } from './types';
 
 const defaultBuiltinForm = (): MCPSourceFormValue => ({
     ...defaultMCPSourceFormValue(),
     id: 'webtools',
+    name: 'Built-in Web Tools',
     transport: 'stdio',
-    command: 'python3',
-    args: ['mcp_web_tools.py'],
+    command: 'tingly-box', // Actual command for built-in tools
+    args: ['mcp-builtin'],
     tools: ['mcp_web_search', 'mcp_web_fetch'],
-    envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'],
+    envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'SERPER_API_KEY'],
     useGlobalProxy: true,
+    isClientTool: true, // Built-in tools are client tools by default
 });
 
 const MCPBuiltin = () => {
@@ -93,11 +95,23 @@ const MCPBuiltin = () => {
         setNotification({ open: true, message: 'Builtin server removed from draft', severity: 'success' });
     };
 
-    const toggleBuiltinEnabled = (enabled: boolean) => {
-        setAllSources((prev) => prev.map((s) => (s.id === 'webtools' ? { ...s, enabled } : s)));
+    const toggleBuiltinEnabled = async (enabled: boolean) => {
+        const updated = allSources.map((s) => (s.id === 'webtools' ? { ...s, enabled } : s));
+        setAllSources(updated);
         if (builtinSource) {
             setForm((prev) => ({ ...prev, enabled }));
         }
+        // Auto-save after toggle
+        setSaving(true);
+        const result = await api.setMCPConfig({ sources: updated });
+        if (result.success) {
+            setNotification({ open: true, message: enabled ? 'Enabled. Restart server to apply.' : 'Disabled. Restart server to apply.', severity: 'success' });
+        } else {
+            setNotification({ open: true, message: result.error || 'Failed to update', severity: 'error' });
+            // Revert on failure
+            setAllSources(allSources);
+        }
+        setSaving(false);
     };
 
     const saveAll = async () => {
@@ -171,6 +185,11 @@ const MCPBuiltin = () => {
                             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                                 <Chip label="webtools" color="primary" />
                                 <Chip label={builtinSource.transport || 'stdio'} />
+                                <Chip
+                                    label={builtinSource.is_client_tool ? 'Client Tool' : 'Server Tool'}
+                                    color={builtinSource.is_client_tool ? 'info' : 'success'}
+                                    size="small"
+                                />
                                 {(builtinSource.tools || []).map((t) => <Chip key={t} label={t} variant="outlined" />)}
                                 <FormControlLabel
                                     sx={{ ml: 0.5 }}

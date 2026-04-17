@@ -86,8 +86,26 @@ const MCPSourceEditor = ({
                     sx={{ '& .MuiToggleButton-root': { border: 'none', borderRadius: 0, py: 1.25, fontWeight: 700 } }}
                 >
                     <ToggleButton value="stdio">STDIO</ToggleButton>
-                    <ToggleButton value="http">Streamable HTTP / SSE</ToggleButton>
+                    <ToggleButton value="http">HTTP</ToggleButton>
+                    <ToggleButton value="sse">SSE</ToggleButton>
                 </ToggleButtonGroup>
+            </Box>
+
+            <Box sx={sectionSx}>
+                <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>Tool Type</Typography>
+                <FormControlLabel
+                    control={
+                        <Checkbox
+                            checked={value.isClientTool}
+                            onChange={(e) => set({ isClientTool: e.target.checked })}
+                        />
+                    }
+                    label="Client Tool (expose to external MCP clients instead of injecting into AI requests)"
+                />
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    When enabled, tools from this source will be exposed to external MCP clients but will NOT be injected into AI model requests.
+                    When disabled (default), tools will be injected into AI model requests for automatic execution.
+                </Typography>
             </Box>
 
             {value.transport === 'stdio' ? (
@@ -138,10 +156,10 @@ const MCPSourceEditor = ({
                 </>
             ) : (
                 <Box sx={sectionSx}>
-                    <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>Streamable HTTP endpoint</Typography>
+                    <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>{value.transport === 'sse' ? 'SSE endpoint' : 'HTTP endpoint'}</Typography>
                     <TextField
                         fullWidth
-                        placeholder="http://localhost:3000/mcp"
+                        placeholder={value.transport === 'sse' ? "http://localhost:3000/mcp" : "http://localhost:3000/mcp"}
                         value={value.endpoint}
                         onChange={(e) => set({ endpoint: e.target.value })}
                     />

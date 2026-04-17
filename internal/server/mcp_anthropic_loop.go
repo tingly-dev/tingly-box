@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	runtime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -77,17 +77,15 @@ func (s *Server) handleAnthropicV1MCPToolCalls(
 			if arguments == "" {
 				arguments = "{}"
 			}
-			result, err := s.mcpRuntime.CallTool(ctx, tu.Name, arguments)
+			result, err := s.callMCPToolWithGuard(ctx, tu.Name, arguments)
 			if err != nil {
 				logrus.WithError(err).Warnf("mcp: tool call failed name=%s arguments=%s", tu.Name, arguments)
-				result = fmt.Sprintf(`{"error":"%s"}`, err.Error())
 			}
 			toolResults = append(toolResults, anthropic.NewToolResultBlock(tu.ID, result, err != nil))
 		}
 
 		nextReq := *currentReq
 		nextReq.Messages = append(append([]anthropic.MessageParam{}, currentReq.Messages...), currentResp.ToParam(), anthropic.NewUserMessage(toolResults...))
-		nextReq = *s.injectMCPToolsIntoAnthropicV1Request(ctx, &nextReq)
 
 		wrapper := s.clientPool.GetAnthropicClient(ctx, provider, nextReq.Model)
 		fc := NewForwardContext(nil, provider)
@@ -167,19 +165,16 @@ func (s *Server) handleAnthropicBetaMCPToolCalls(
 			if b, err := json.Marshal(tu.Input); err == nil && len(b) > 0 {
 				arguments = string(b)
 			}
-			result, err := s.mcpRuntime.CallTool(ctx, tu.Name, arguments)
+			result, err := s.callMCPToolWithGuard(ctx, tu.Name, arguments)
 			if err != nil {
 				logrus.WithError(err).Warnf("mcp: beta tool call failed name=%s arguments=%s", tu.Name, arguments)
-				result = fmt.Sprintf(`{"error":"%s"}`, err.Error())
 			}
 			toolResults = append(toolResults, anthropic.NewBetaToolResultBlock(tu.ID, result, err != nil))
 		}
 
 		nextReq := *currentReq
 		nextReq.Messages = append(append([]anthropic.BetaMessageParam{}, currentReq.Messages...), currentResp.ToParam(), anthropic.NewBetaUserMessage(toolResults...))
-		if s.mcpEnabled() && s.mcpMode() == typ.MCPModeServertool {
-			nextReq = *s.injectMCPToolsIntoAnthropicBetaRequest(ctx, &nextReq)
-		}
+
 		wrapper := s.clientPool.GetAnthropicClient(ctx, provider, nextReq.Model)
 		fc := NewForwardContext(nil, provider)
 		nextResp, cancel, err := ForwardAnthropicV1Beta(fc, wrapper, &nextReq)

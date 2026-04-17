@@ -2,7 +2,7 @@ export interface MCPSourceConfig {
     id?: string;
     name?: string;
     enabled?: boolean;
-    transport?: 'http' | 'stdio';
+    transport?: 'http' | 'stdio' | 'sse';
     endpoint?: string;
     headers?: Record<string, string>;
     tools?: string[];
@@ -11,6 +11,7 @@ export interface MCPSourceConfig {
     cwd?: string;
     env?: Record<string, string>;
     proxy_url?: string;
+    is_client_tool?: boolean; // undefined means servertool (default for backward compatibility)
     // Local mode specific fields
     connection_type?: 'stdio' | 'http' | 'sse';
     auth_type?: 'none' | 'headers' | 'oauth';
@@ -23,6 +24,7 @@ export interface MCPSourceConfig {
 export interface MCPRuntimeConfig {
     sources?: MCPSourceConfig[];
     request_timeout?: number;
+    strip_disabled_mcp_tools?: boolean;
 }
 
 export interface MCPConfigResponse {
@@ -42,7 +44,7 @@ export interface MCPKVPair {
 export interface MCPSourceFormValue {
     id: string;
     enabled: boolean;
-    transport: 'http' | 'stdio';
+    transport: 'http' | 'stdio' | 'sse';
     endpoint: string;
     command: string;
     args: string[];
@@ -52,6 +54,7 @@ export interface MCPSourceFormValue {
     tools: string[];
     useGlobalProxy: boolean;
     proxyUrl: string;
+    isClientTool: boolean; // true if this source is a client tool
 }
 
 export const MCP_DEFAULT_CWD = '~/.tingly-box/mcp';
@@ -61,14 +64,15 @@ export const defaultMCPSourceFormValue = (): MCPSourceFormValue => ({
     enabled: true,
     transport: 'stdio',
     endpoint: '',
-    command: 'python3',
-    args: ['mcp_web_tools.py'],
+    command: '', // STDIO command (empty default; no special 'builtin' marker)
+    args: [],
     env: [],
     envPassthrough: [],
     cwd: MCP_DEFAULT_CWD,
     tools: ['*'],
     useGlobalProxy: true,
     proxyUrl: '',
+    isClientTool: false, // default is client tool
 });
 
 const isPassthroughValue = (key: string, value: string): boolean => value === `\${${key}}`;
@@ -88,19 +92,29 @@ export const sourceToFormValue = (source?: MCPSourceConfig): MCPSourceFormValue 
             env.push({ key, value });
         }
     }
+
+    let command = source.command || '';
+    let args = source.args || [];
+    // Detect builtin tools: tingly-box + mcp-builtin subcommand
+    if (source.command === 'tingly-box' && source.args && source.args.includes('mcp-builtin')) {
+        command = 'builtin';
+        args = [];
+    }
+
     return {
         id: source.id || '',
         enabled: source.enabled ?? true,
-        transport: (source.transport as 'http' | 'stdio') || 'stdio',
+        transport: (source.transport as 'http' | 'stdio' | 'sse') || 'stdio',
         endpoint: source.endpoint || '',
-        command: source.command || 'python3',
-        args: source.args || [],
+        command,
+        args,
         env,
         envPassthrough,
         cwd: source.cwd || MCP_DEFAULT_CWD,
         tools: source.tools && source.tools.length > 0 ? source.tools : ['*'],
         useGlobalProxy: !source.proxy_url,
         proxyUrl: source.proxy_url || '',
+        isClientTool: source.is_client_tool ?? false,
     };
 };
 
@@ -122,13 +136,21 @@ export const formValueToSource = (form: MCPSourceFormValue): MCPSourceConfig => 
         enabled: form.enabled,
         transport: form.transport,
         tools: (form.tools || []).map((t) => t.trim()).filter(Boolean),
+        is_client_tool: form.isClientTool,
     };
 
     if (form.transport === 'http') {
         source.endpoint = form.endpoint.trim();
     } else {
-        source.command = form.command.trim();
-        source.args = (form.args || []).map((a) => a.trim()).filter(Boolean);
+        // Handle builtin command marker
+        if (form.command === 'builtin') {
+            // Convert builtin marker to actual tingly-box command
+            source.command = 'tingly-box';
+            source.args = ['mcp-builtin'];
+        } else {
+            source.command = form.command.trim();
+            source.args = (form.args || []).map((a) => a.trim()).filter(Boolean);
+        }
         source.cwd = form.cwd.trim();
     }
 

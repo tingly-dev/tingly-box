@@ -34,6 +34,7 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 	}
 
 	opts := []transform.TransformOption{
+		transform.WithContext(c.Request.Context()),
 		transform.WithProviderURL(provider.APIBase),
 		transform.WithScenarioFlags(scenarioFlags),
 		transform.WithStreaming(isStreaming),
