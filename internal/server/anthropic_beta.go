@@ -52,9 +52,6 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	// Set provider UUID in context (Service.Provider uses UUID, not name)
 	c.Set("provider", provider.UUID)
 	c.Set("model", actualModel)
-	if s.mcpEnabled() && s.mcpMode() == typ.MCPModeServertool {
-		req.BetaMessageNewParams = *s.injectMCPToolsIntoAnthropicBetaRequest(c.Request.Context(), &req.BetaMessageNewParams)
-	}
 
 	// request guardrails
 	_, _, _, _, scenario, _, _ := GetTrackingContext(c)

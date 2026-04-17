@@ -125,6 +125,7 @@ func init() {
 	rootCmd.AddCommand(command.RemoteCommand(appManager))
 	rootCmd.AddCommand(command.QuickstartCommand(appManager))
 	rootCmd.AddCommand(command.CCCommand(appManager))
+	rootCmd.AddCommand(command.MCPBuiltinCommand()) // Add builtin MCP server command
 }
 
 func main() {

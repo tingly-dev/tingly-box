@@ -49,9 +49,6 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	// Set provider UUID in context (Service.Provider uses UUID, not name)
 	c.Set("provider", provider.UUID)
 	c.Set("model", actualModel)
-
-	req.MessageNewParams = *s.injectMCPToolsIntoAnthropicV1Request(c.Request.Context(), &req.MessageNewParams)
-
 	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
 	if s.guardrailsEnabledForScenario(scenario) {
 		s.applyGuardrailsToAnthropicV1Request(c, &req.MessageNewParams, actualModel, provider)

@@ -42,18 +42,6 @@ import {
     type MCPSourceFormValue,
 } from './types';
 
-const weatherTemplate = (): MCPSourceFormValue => ({
-    ...defaultMCPSourceFormValue(),
-    id: 'weather',
-    transport: 'stdio',
-    command: 'python3',
-    args: ['mcp_weather_tools.py'],
-    cwd: MCP_DEFAULT_CWD,
-    tools: ['get_current_weather'],
-    useGlobalProxy: true,
-    envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'],
-});
-
 const emptyCustomTemplate = (): MCPSourceFormValue => ({
     ...defaultMCPSourceFormValue(),
     args: [],
@@ -65,12 +53,14 @@ const emptyCustomTemplate = (): MCPSourceFormValue => ({
 const defaultBuiltinForm = (): MCPSourceFormValue => ({
     ...defaultMCPSourceFormValue(),
     id: 'webtools',
+    name: 'Built-in Web Tools',
     transport: 'stdio',
-    command: 'python3',
-    args: ['mcp_web_tools.py'],
+    command: 'tingly-box', // Actual command for built-in Go tools
+    args: ['mcp-builtin'],
     tools: ['mcp_web_search', 'mcp_web_fetch'],
-    envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'],
+    envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'SERPER_API_KEY'],
     useGlobalProxy: true,
+    isClientTool: true, // Built-in tools are client tools by default
 });
 
 const MCPRegisteredServers = () => {
@@ -78,6 +68,8 @@ const MCPRegisteredServers = () => {
     const [saving, setSaving] = useState(false);
     const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
     const [allSources, setAllSources] = useState<MCPSourceConfig[]>([]);
+    const [requestTimeout, setRequestTimeout] = useState(30);
+    const [stripDisabledMCPTools, setStripDisabledMCPTools] = useState(false);
 
     // Editor state
     const [editingId, setEditingId] = useState<string>('');
@@ -98,9 +90,19 @@ const MCPRegisteredServers = () => {
         if (configResult.success && configResult.config) {
             const sources = configResult.config.sources || [];
             setAllSources(sources);
+            setRequestTimeout(configResult.config.request_timeout || 30);
+            setStripDisabledMCPTools(configResult.config.strip_disabled_mcp_tools || false);
         }
 
         setLoading(false);
+    };
+
+    const saveConfig = async (sources: MCPSourceConfig[]) => {
+        return api.setMCPConfig({
+            sources,
+            request_timeout: requestTimeout,
+            strip_disabled_mcp_tools: stripDisabledMCPTools,
+        });
     };
 
     const isBuiltin = (id?: string) => id ? BUILTIN_IDS.includes(id) : false;
@@ -125,15 +127,27 @@ const MCPRegisteredServers = () => {
         setEditorMode('edit');
     };
 
-    const toggleEnabled = (id: string | undefined, enabled: boolean) => {
+    const toggleEnabled = async (id: string | undefined, enabled: boolean) => {
         if (!id) return;
-        setAllSources((prev) => prev.map((s) => (s.id === id ? { ...s, enabled } : s)));
+        const updated = allSources.map((s) => (s.id === id ? { ...s, enabled } : s));
+        setAllSources(updated);
         if (editingId === id) {
             setEditorForm((prev) => ({ ...prev, enabled }));
         }
+        // Auto-save after toggle
+        setSaving(true);
+        const result = await saveConfig(updated);
+        if (result.success) {
+            setNotification({ open: true, message: enabled ? 'Enabled. Reconnect MCP client to refresh tool list.' : 'Disabled. Reconnect MCP client to refresh tool list.', severity: 'success' });
+        } else {
+            setNotification({ open: true, message: result.error || 'Failed to update', severity: 'error' });
+            // Revert on failure
+            setAllSources(allSources);
+        }
+        setSaving(false);
     };
 
-    const deleteSource = (id?: string) => {
+    const deleteSource = async (id?: string) => {
         if (!id) return;
         const updated = allSources.filter((s) => s.id !== id);
         setAllSources(updated);
@@ -142,6 +156,17 @@ const MCPRegisteredServers = () => {
             setEditorMode('none');
             setEditorForm(emptyCustomTemplate());
         }
+        // Auto-save after deletion
+        setSaving(true);
+        const result = await saveConfig(updated);
+        if (result.success) {
+            setNotification({ open: true, message: 'Deleted. Reconnect MCP client to refresh tool list.', severity: 'success' });
+        } else {
+            setNotification({ open: true, message: result.error || 'Failed to delete', severity: 'error' });
+            // Revert on failure
+            setAllSources(allSources);
+        }
+        setSaving(false);
     };
 
     const saveAll = async () => {
@@ -184,9 +209,9 @@ const MCPRegisteredServers = () => {
         }
 
         setSaving(true);
-        const result = await api.setMCPConfig({ sources: next });
+        const result = await saveConfig(next);
         if (result.success) {
-            setNotification({ open: true, message: 'Saved. Restart server to apply.', severity: 'success' });
+            setNotification({ open: true, message: 'Saved. Reconnect MCP client to refresh tool list.', severity: 'success' });
             setAllSources(next);
             setEditorMode('none');
             setEditingId('');
@@ -207,11 +232,18 @@ const MCPRegisteredServers = () => {
         );
     }
 
+    const enabledServerSources = allSources.filter((s) => (s.enabled ?? true) && !(s.is_client_tool ?? false));
+
     return (
         <PageLayout loading={false}>
             <Stack spacing={2.5}>
                 <Alert severity="info">
                     Manage registered MCP servers. Builtin servers are marked with a tag.
+                </Alert>
+                <Alert severity={enabledServerSources.length > 0 ? 'success' : 'warning'}>
+                    {enabledServerSources.length > 0
+                        ? `Tool injection active for ${enabledServerSources.length} server tool source(s).`
+                        : 'Tool injection inactive: no enabled server tool sources.'}
                 </Alert>
 
                 <UnifiedCard title="Registered Servers" size="full">
@@ -279,6 +311,13 @@ const MCPRegisteredServers = () => {
                                                                     sx={{ fontSize: '0.65rem', height: 18 }}
                                                                 />
                                                             )}
+                                                            <Chip
+                                                                label={source.is_client_tool ? 'Client Tool' : 'Server Tool'}
+                                                                size="small"
+                                                                color={source.is_client_tool ? 'info' : 'success'}
+                                                                variant="outlined"
+                                                                sx={{ fontSize: '0.65rem', height: 18 }}
+                                                            />
                                                         </Stack>
                                                     </TableCell>
                                                     <TableCell>
@@ -379,6 +418,23 @@ const MCPRegisteredServers = () => {
                     </Stack>
                 </UnifiedCard>
 
+                <UnifiedCard title="Safety Guard" size="full">
+                    <Stack spacing={1.5}>
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={stripDisabledMCPTools}
+                                    onChange={(e) => setStripDisabledMCPTools(e.target.checked)}
+                                />
+                            }
+                            label="Strip disabled MCP declarations/tool calls"
+                        />
+                        <Alert severity="warning">
+                            Dangerous capability. When enabled, disabled MCP tool declarations/calls are forcibly removed and a tool_error compensation message is added.
+                        </Alert>
+                    </Stack>
+                </UnifiedCard>
+
                 {editorMode !== 'none' && (
                     <>
                         {isBuiltin(editorForm.id) && (
@@ -399,11 +455,6 @@ const MCPRegisteredServers = () => {
                             value={editorForm}
                             onChange={setEditorForm}
                             lockId={isBuiltin(editorForm.id)}
-                            onUseExample={!isBuiltin(editorForm.id) && editorMode === 'add' ? () => {
-                                setEditingId('');
-                                setEditorForm(weatherTemplate());
-                                setEditorMode('add');
-                            } : undefined}
                         />
 
                         <Stack direction="row" justifyContent="space-between">

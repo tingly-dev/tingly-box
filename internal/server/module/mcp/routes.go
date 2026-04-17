@@ -19,17 +19,6 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler, localHandler *
 		swagger.WithResponseModel(MCPRuntimeConfigResponse{}),
 	)
 
-	// Local mode routes
-	router.GET("/mcp/mode", localHandler.GetMCPMode,
-		swagger.WithDescription("Get MCP runtime mode (intercept or local)"),
-		swagger.WithTags("mcp"),
-	)
-
-	router.PUT("/mcp/mode", localHandler.SetMCPMode,
-		swagger.WithDescription("Set MCP runtime mode (intercept or local)"),
-		swagger.WithTags("mcp"),
-	)
-
 	router.GET("/mcp/clients", localHandler.ListClients,
 		swagger.WithDescription("List all registered MCP clients"),
 		swagger.WithTags("mcp"),
