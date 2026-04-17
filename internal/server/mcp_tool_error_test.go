@@ -28,6 +28,31 @@ func TestCallMCPToolWithGuard_DisabledToolReturnsCallingDisabledTools(t *testing
 	require.Contains(t, result, `"error":"calling disabled tools: tingly_box_mcp__webtools__mcp_web_search"`)
 }
 
+func TestAdvisorResponseHook_MatchSupportsBuiltinAndAdvisorSourceIDs(t *testing.T) {
+	hook := advisorResponseHook{}
+	require.True(t, hook.Match("tingly_box_mcp__advisor__advisor"))
+	require.True(t, hook.Match("tingly_box_mcp__builtin__advisor"))
+	require.False(t, hook.Match("tingly_box_mcp__builtin__other"))
+}
+
+func TestRemapLegacyAdvisorToolName(t *testing.T) {
+	require.Equal(
+		t,
+		"tingly_box_mcp__builtin__advisor",
+		remapLegacyAdvisorToolName("tingly_box_mcp__advisor__advisor"),
+	)
+	require.Equal(
+		t,
+		"tingly_box_mcp__builtin__advisor",
+		remapLegacyAdvisorToolName("tingly_box_mcp__builtin__advisor"),
+	)
+	require.Equal(
+		t,
+		"tingly_box_mcp__webtools__mcp_web_search",
+		remapLegacyAdvisorToolName("tingly_box_mcp__webtools__mcp_web_search"),
+	)
+}
+
 func TestCallMCPToolWithHooks_AdvisorInjectsContext(t *testing.T) {
 	s := &Server{
 		mcpRuntime: mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig {

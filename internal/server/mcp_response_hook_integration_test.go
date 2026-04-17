@@ -10,11 +10,13 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -237,22 +239,14 @@ func TestHandleAnthropicV1MCPToolCalls_AdvisorResponseHook(t *testing.T) {
 	defer mockServer.Close()
 
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{
-		Sources: []typ.MCPSourceConfig{
-			{
-				ID:           "advisor",
-				Transport:    "advisor",
-				Enabled:      typ.BoolPtr(true),
-				IsClientTool: typ.BoolPtr(false),
-				Tools:        []string{"advisor"},
-				Advisor: &typ.AdvisorConfig{
-					BaseURL:           mockServer.URL,
-					Model:             "claude-opus-4-6",
-					APIKey:            "test-key",
-					MaxUsesPerRequest: 2,
-				},
-			},
-		},
+		Sources: []typ.MCPSourceConfig{},
 	})
+	s.mcpRuntime.RegisterAdviser(typ.AdvisorConfig{
+		BaseURL:           mockServer.URL,
+		Model:             "claude-opus-4-6",
+		APIKey:            "test-key",
+		MaxUsesPerRequest: 2,
+	}, s.clientPool)
 
 	provider := &typ.Provider{
 		Name:     "worker-anthropic-v1",
@@ -349,22 +343,14 @@ func TestHandleAnthropicBetaMCPToolCalls_AdvisorResponseHook(t *testing.T) {
 	defer mockServer.Close()
 
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{
-		Sources: []typ.MCPSourceConfig{
-			{
-				ID:           "advisor",
-				Transport:    "advisor",
-				Enabled:      typ.BoolPtr(true),
-				IsClientTool: typ.BoolPtr(false),
-				Tools:        []string{"advisor"},
-				Advisor: &typ.AdvisorConfig{
-					BaseURL:           mockServer.URL,
-					Model:             "claude-opus-4-6",
-					APIKey:            "test-key",
-					MaxUsesPerRequest: 2,
-				},
-			},
-		},
+		Sources: []typ.MCPSourceConfig{},
 	})
+	s.mcpRuntime.RegisterAdviser(typ.AdvisorConfig{
+		BaseURL:           mockServer.URL,
+		Model:             "claude-opus-4-6",
+		APIKey:            "test-key",
+		MaxUsesPerRequest: 2,
+	}, s.clientPool)
 
 	provider := &typ.Provider{
 		Name:     "worker-anthropic-beta",
@@ -495,4 +481,140 @@ func TestHandleMCPToolCalls_OpenAI_DisabledAdvisorReturnsCallingDisabledTools(t 
 	require.True(t, workerSawDisabledError)
 	require.Len(t, finalResp.Choices, 1)
 	require.Equal(t, "worker final after disabled tool", finalResp.Choices[0].Message.Content)
+}
+
+func TestDispatchAnthropicToAnthropicV1_Streaming_AdvisorSSEEndToEnd(t *testing.T) {
+	var advisorCalls int
+	var workerCalls int
+	var workerSawAdvisorToolResult bool
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+
+		var req map[string]any
+		require.NoError(t, json.Unmarshal(body, &req))
+		model, _ := req["model"].(string)
+
+		switch model {
+		case "claude-opus-4-6":
+			advisorCalls++
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":    "msg_advisor",
+				"type":  "message",
+				"role":  "assistant",
+				"model": "claude-opus-4-6",
+				"content": []map[string]any{
+					{"type": "text", "text": `{"assessment":"ok","recommendation":"stream-advisor-plan"}`},
+				},
+				"stop_reason": "end_turn",
+				"usage": map[string]any{
+					"input_tokens":  12,
+					"output_tokens": 6,
+				},
+			})
+		case "claude-worker-v1":
+			workerCalls++
+			if strings.Contains(string(body), `"tool_result"`) {
+				if strings.Contains(string(body), "stream-advisor-plan") {
+					workerSawAdvisorToolResult = true
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"id":    "msg_worker_final",
+					"type":  "message",
+					"role":  "assistant",
+					"model": "claude-worker-v1",
+					"content": []map[string]any{
+						{"type": "text", "text": "final answer uses stream-advisor-plan"},
+					},
+					"stop_reason": "end_turn",
+					"usage": map[string]any{
+						"input_tokens":  30,
+						"output_tokens": 10,
+					},
+				})
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":    "msg_worker_tool",
+				"type":  "message",
+				"role":  "assistant",
+				"model": "claude-worker-v1",
+				"content": []map[string]any{
+					{
+						"type":  "tool_use",
+						"id":    "toolu_1",
+						"name":  "tingly_box_mcp__builtin__advisor",
+						"input": map[string]any{"reason": "need strategy"},
+					},
+				},
+				"stop_reason": "tool_use",
+				"usage": map[string]any{
+					"input_tokens":  8,
+					"output_tokens": 4,
+				},
+			})
+		default:
+			t.Fatalf("unexpected model: %s", model)
+		}
+	}))
+	defer mockServer.Close()
+
+	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{
+		Sources: []typ.MCPSourceConfig{},
+	})
+	s.mcpRuntime.RegisterAdviser(typ.AdvisorConfig{
+		BaseURL:           mockServer.URL,
+		Model:             "claude-opus-4-6",
+		APIKey:            "test-key",
+		MaxUsesPerRequest: 2,
+	}, s.clientPool)
+
+	provider := &typ.Provider{
+		UUID:     "provider-worker-v1",
+		Name:     "worker-anthropic-v1",
+		APIBase:  mockServer.URL,
+		Token:    "worker-key",
+		APIStyle: protocol.APIStyleAnthropic,
+		Enabled:  true,
+	}
+
+	req := anthropic.MessageNewParams{
+		Model:     "claude-worker-v1",
+		MaxTokens: 1024,
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("help")),
+		},
+		Tools: []anthropic.ToolUnionParam{
+			anthropic.ToolUnionParamOfTool(anthropic.ToolInputSchemaParam{}, "tingly_box_mcp__builtin__advisor"),
+		},
+	}
+	require.True(t, hasDeclaredMCPAnthropicV1Tools(&req))
+
+	reqCtx := transform.NewTransformContext(&req)
+	reqCtx.RequestModel = "claude-worker-v1"
+	reqCtx.ResponseModel = "proxy-model"
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(`{}`))
+	rule := &typ.Rule{}
+	SetTrackingContext(c, rule, provider, reqCtx.RequestModel, reqCtx.ResponseModel, true)
+
+	s.dispatchAnthropicToAnthropicV1(c, reqCtx, rule, provider, true, nil)
+
+	require.Equal(t, 1, advisorCalls)
+	require.Equal(t, 2, workerCalls)
+	require.True(t, workerSawAdvisorToolResult)
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Contains(t, w.Header().Get("Content-Type"), "text/event-stream")
+
+	body := w.Body.String()
+	require.Contains(t, body, "event:message_start")
+	require.Contains(t, body, `"text":"final answer uses stream-advisor-plan"`)
+	require.Contains(t, body, `"stop_reason":"end_turn"`)
 }

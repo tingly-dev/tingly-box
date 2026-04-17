@@ -653,7 +653,11 @@ func (r *Runtime) HasServerTools() bool {
 
 const enabledNamesCacheTTL = 5 * time.Second
 
-// ListEnabledServerToolNames returns normalized MCP tool names from enabled server-tool sources.
+// ListEnabledServerToolNames returns normalized MCP tool names that are callable by
+// server-side MCP execution paths. This includes:
+//   - enabled remote sources (via ListOpenAITools)
+//   - server-only virtual tools (e.g. builtin advisor)
+//
 // Results are cached with a short TTL to avoid repeated full source enumeration.
 func (r *Runtime) ListEnabledServerToolNames(ctx context.Context) map[string]struct{} {
 	r.enabledNamesMu.RLock()
@@ -675,6 +679,20 @@ func (r *Runtime) ListEnabledServerToolNames(ctx context.Context) map[string]str
 			continue
 		}
 		out[fn.Name] = struct{}{}
+	}
+	// Server-only virtual tools are intentionally hidden from ListOpenAITools,
+	// but still need to be executable by server-side MCP loops.
+	if r.virtualRegistry != nil {
+		for _, vt := range r.virtualRegistry.ListVirtualTools() {
+			if vt.IsClientTool || strings.TrimSpace(vt.Name) == "" {
+				continue
+			}
+			out[NormalizeToolName("builtin", vt.Name)] = struct{}{}
+			// Backward compatibility: older flows may still reference advisor source id.
+			if vt.Name == "advisor" {
+				out[NormalizeToolName("advisor", vt.Name)] = struct{}{}
+			}
+		}
 	}
 	r.enabledNamesCache = out
 	r.enabledNamesExpires = time.Now().Add(enabledNamesCacheTTL)

@@ -23,7 +23,8 @@ func (h advisorResponseHook) Match(toolName string) bool {
 	if !ok {
 		return false
 	}
-	return sourceID == mcptools.BuiltinAdvisorSourceID && toolNameOnly == mcptools.BuiltinAdvisorToolName
+	isAdvisorSource := sourceID == mcptools.BuiltinAdvisorSourceID || sourceID == "builtin"
+	return isAdvisorSource && toolNameOnly == mcptools.BuiltinAdvisorToolName
 }
 
 func (h advisorResponseHook) PrepareContext(s *Server, ctx context.Context, messages []map[string]any) context.Context {
@@ -53,12 +54,24 @@ func normalizeMCPToolCallError(err error) string {
 	return string(payload)
 }
 
+func remapLegacyAdvisorToolName(toolName string) string {
+	sourceID, toolNameOnly, ok := mcpruntime.ParseNormalizedToolName(toolName)
+	if !ok {
+		return toolName
+	}
+	if sourceID == mcptools.BuiltinAdvisorSourceID && toolNameOnly == mcptools.BuiltinAdvisorToolName {
+		return mcpruntime.NormalizeToolName("builtin", mcptools.BuiltinAdvisorToolName)
+	}
+	return toolName
+}
+
 func (s *Server) callMCPToolWithGuard(ctx context.Context, toolName, arguments string) (string, error) {
-	if !s.isEnabledMCPToolName(ctx, toolName) {
+	resolvedToolName := remapLegacyAdvisorToolName(toolName)
+	if !s.isEnabledMCPToolName(ctx, resolvedToolName) {
 		return disabledMCPToolErrorPayload(toolName), fmt.Errorf("calling disabled tools: %s", toolName)
 	}
 
-	result, err := s.mcpRuntime.CallTool(ctx, toolName, arguments)
+	result, err := s.mcpRuntime.CallTool(ctx, resolvedToolName, arguments)
 	if err != nil {
 		return normalizeMCPToolCallError(err), err
 	}
