@@ -25,7 +25,7 @@ type ErrorDetail struct {
 }
 
 // sendErrorResponse registers the error into gin context for logging middleware and sends JSON response.
-func sendErrorResponse(c *gin.Context, statusCode int, err error, errType string) {
+func SendErrorResponse(c *gin.Context, statusCode int, err error, errType string) {
 	c.Error(fmt.Errorf("%s: %w", errType, err)).SetType(gin.ErrorTypePublic) //nolint:errcheck
 	c.JSON(statusCode, ErrorResponse{
 		Error: ErrorDetail{

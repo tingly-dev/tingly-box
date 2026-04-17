@@ -3,12 +3,14 @@ package server
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/tingly-dev/tingly-box/internal/data/db"
 )
 
 // TokenCreateRequest represents the request to create a new API token
@@ -73,6 +75,37 @@ func (s *Server) registerTokenManagementAPI(router *gin.RouterGroup) {
 	}
 }
 
+// getAPITokenStore retrieves the API token store, sending an error response if unavailable.
+// Returns (store, true) on success, (nil, false) if an error response was sent.
+func (s *Server) getAPITokenStore(c *gin.Context) (*db.APITokenStore, bool) {
+	sm := s.config.StoreManager()
+	if sm == nil {
+		SendErrorResponse(c, http.StatusInternalServerError, errors.New("store manager not available"), "internal_error")
+		return nil, false
+	}
+
+	store := sm.APIToken()
+	if store == nil {
+		SendErrorResponse(c, http.StatusInternalServerError, errors.New("API token store not available"), "internal_error")
+		return nil, false
+	}
+
+	return store, true
+}
+
+// recordToAPITokenInfo converts a database record to API response format
+func recordToAPITokenInfo(record *db.APITokenRecord) APITokenInfo {
+	return APITokenInfo{
+		TokenID:     record.TokenID,
+		UserUUID:    record.UserUUID,
+		DisplayName: record.DisplayName,
+		Enabled:     record.Enabled,
+		LastUsedAt:  record.LastUsedAt,
+		CreatedAt:   record.CreatedAt,
+		CreatedBy:   record.CreatedBy,
+	}
+}
+
 // generateRandomToken generates a random API token string
 func generateRandomToken() (string, error) {
 	bytes := make([]byte, 24) // 24 bytes = 48 hex chars
@@ -87,34 +120,12 @@ func generateRandomToken() (string, error) {
 func (s *Server) createAPIToken(c *gin.Context) {
 	var req TokenCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": gin.H{
-				"type":    "invalid_request_error",
-				"message": "Invalid request body: " + err.Error(),
-			},
-		})
+		SendErrorResponse(c, http.StatusBadRequest, err, "invalid_request_error")
 		return
 	}
 
-	sm := s.config.StoreManager()
-	if sm == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "Store manager not available",
-			},
-		})
-		return
-	}
-
-	apiTokenStore := sm.APIToken()
-	if apiTokenStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "API token store not available",
-			},
-		})
+	apiTokenStore, ok := s.getAPITokenStore(c)
+	if !ok {
 		return
 	}
 
@@ -125,12 +136,7 @@ func (s *Server) createAPIToken(c *gin.Context) {
 	// Generate random API token string
 	randomToken, err := generateRandomToken()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "Failed to generate token: " + err.Error(),
-			},
-		})
+		SendErrorResponse(c, http.StatusInternalServerError, errors.New("failed to generate token: "+err.Error()), "internal_error")
 		return
 	}
 
@@ -140,12 +146,7 @@ func (s *Server) createAPIToken(c *gin.Context) {
 	// Create token record with the random token as TokenID (no expiration)
 	record, err := apiTokenStore.CreateTokenWithTokenID(userUUID, tokenString, req.DisplayName, "admin", nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "Failed to create token: " + err.Error(),
-			},
-		})
+		SendErrorResponse(c, http.StatusInternalServerError, errors.New("failed to create token: "+err.Error()), "internal_error")
 		return
 	}
 
@@ -161,25 +162,8 @@ func (s *Server) createAPIToken(c *gin.Context) {
 // listAPITokens lists all API tokens
 // GET /api/v1/tokens
 func (s *Server) listAPITokens(c *gin.Context) {
-	sm := s.config.StoreManager()
-	if sm == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "Store manager not available",
-			},
-		})
-		return
-	}
-
-	apiTokenStore := sm.APIToken()
-	if apiTokenStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "API token store not available",
-			},
-		})
+	apiTokenStore, ok := s.getAPITokenStore(c)
+	if !ok {
 		return
 	}
 
@@ -209,27 +193,14 @@ func (s *Server) listAPITokens(c *gin.Context) {
 	// List tokens
 	records, total, err := apiTokenStore.ListTokens(userUUID, enabled, limit, offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "Failed to list tokens: " + err.Error(),
-			},
-		})
+		SendErrorResponse(c, http.StatusInternalServerError, errors.New("failed to list tokens: "+err.Error()), "internal_error")
 		return
 	}
 
 	// Convert to response format
 	tokens := make([]APITokenInfo, len(records))
 	for i, record := range records {
-		tokens[i] = APITokenInfo{
-			TokenID:     record.TokenID,
-			UserUUID:    record.UserUUID,
-			DisplayName: record.DisplayName,
-			Enabled:     record.Enabled,
-			LastUsedAt:  record.LastUsedAt,
-			CreatedAt:   record.CreatedAt,
-			CreatedBy:   record.CreatedBy,
-		}
+		tokens[i] = recordToAPITokenInfo(&record)
 	}
 
 	c.JSON(http.StatusOK, TokenListResponse{
@@ -243,57 +214,22 @@ func (s *Server) listAPITokens(c *gin.Context) {
 func (s *Server) getAPIToken(c *gin.Context) {
 	tokenID := c.Param("token_id")
 	if tokenID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": gin.H{
-				"type":    "invalid_request_error",
-				"message": "token_id is required",
-			},
-		})
+		SendErrorResponse(c, http.StatusBadRequest, errors.New("token_id is required"), "invalid_request_error")
 		return
 	}
 
-	sm := s.config.StoreManager()
-	if sm == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "Store manager not available",
-			},
-		})
-		return
-	}
-
-	apiTokenStore := sm.APIToken()
-	if apiTokenStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "API token store not available",
-			},
-		})
+	apiTokenStore, ok := s.getAPITokenStore(c)
+	if !ok {
 		return
 	}
 
 	record, err := apiTokenStore.GetToken(tokenID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": gin.H{
-				"type":    "not_found_error",
-				"message": "Token not found",
-			},
-		})
+		SendErrorResponse(c, http.StatusNotFound, errors.New("token not found"), "not_found_error")
 		return
 	}
 
-	c.JSON(http.StatusOK, APITokenInfo{
-		TokenID:     record.TokenID,
-		UserUUID:    record.UserUUID,
-		DisplayName: record.DisplayName,
-		Enabled:     record.Enabled,
-		LastUsedAt:  record.LastUsedAt,
-		CreatedAt:   record.CreatedAt,
-		CreatedBy:   record.CreatedBy,
-	})
+	c.JSON(http.StatusOK, recordToAPITokenInfo(record))
 }
 
 // deleteAPIToken deletes a token
@@ -301,44 +237,17 @@ func (s *Server) getAPIToken(c *gin.Context) {
 func (s *Server) deleteAPIToken(c *gin.Context) {
 	tokenID := c.Param("token_id")
 	if tokenID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": gin.H{
-				"type":    "invalid_request_error",
-				"message": "token_id is required",
-			},
-		})
+		SendErrorResponse(c, http.StatusBadRequest, errors.New("token_id is required"), "invalid_request_error")
 		return
 	}
 
-	sm := s.config.StoreManager()
-	if sm == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "Store manager not available",
-			},
-		})
-		return
-	}
-
-	apiTokenStore := sm.APIToken()
-	if apiTokenStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "API token store not available",
-			},
-		})
+	apiTokenStore, ok := s.getAPITokenStore(c)
+	if !ok {
 		return
 	}
 
 	if err := apiTokenStore.DeleteToken(tokenID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "Failed to delete token: " + err.Error(),
-			},
-		})
+		SendErrorResponse(c, http.StatusInternalServerError, errors.New("failed to delete token: "+err.Error()), "internal_error")
 		return
 	}
 
@@ -350,44 +259,17 @@ func (s *Server) deleteAPIToken(c *gin.Context) {
 func (s *Server) enableAPIToken(c *gin.Context) {
 	tokenID := c.Param("token_id")
 	if tokenID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": gin.H{
-				"type":    "invalid_request_error",
-				"message": "token_id is required",
-			},
-		})
+		SendErrorResponse(c, http.StatusBadRequest, errors.New("token_id is required"), "invalid_request_error")
 		return
 	}
 
-	sm := s.config.StoreManager()
-	if sm == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "Store manager not available",
-			},
-		})
-		return
-	}
-
-	apiTokenStore := sm.APIToken()
-	if apiTokenStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "API token store not available",
-			},
-		})
+	apiTokenStore, ok := s.getAPITokenStore(c)
+	if !ok {
 		return
 	}
 
 	if err := apiTokenStore.SetTokenEnabled(tokenID, true); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "Failed to enable token: " + err.Error(),
-			},
-		})
+		SendErrorResponse(c, http.StatusInternalServerError, errors.New("failed to enable token: "+err.Error()), "internal_error")
 		return
 	}
 
@@ -399,44 +281,17 @@ func (s *Server) enableAPIToken(c *gin.Context) {
 func (s *Server) disableAPIToken(c *gin.Context) {
 	tokenID := c.Param("token_id")
 	if tokenID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": gin.H{
-				"type":    "invalid_request_error",
-				"message": "token_id is required",
-			},
-		})
+		SendErrorResponse(c, http.StatusBadRequest, errors.New("token_id is required"), "invalid_request_error")
 		return
 	}
 
-	sm := s.config.StoreManager()
-	if sm == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "Store manager not available",
-			},
-		})
-		return
-	}
-
-	apiTokenStore := sm.APIToken()
-	if apiTokenStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "API token store not available",
-			},
-		})
+	apiTokenStore, ok := s.getAPITokenStore(c)
+	if !ok {
 		return
 	}
 
 	if err := apiTokenStore.SetTokenEnabled(tokenID, false); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "Failed to disable token: " + err.Error(),
-			},
-		})
+		SendErrorResponse(c, http.StatusInternalServerError, errors.New("failed to disable token: "+err.Error()), "internal_error")
 		return
 	}
 
@@ -448,58 +303,26 @@ func (s *Server) disableAPIToken(c *gin.Context) {
 func (s *Server) regenerateAPIToken(c *gin.Context) {
 	tokenID := c.Param("token_id")
 	if tokenID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": gin.H{
-				"type":    "invalid_request_error",
-				"message": "token_id is required",
-			},
-		})
+		SendErrorResponse(c, http.StatusBadRequest, errors.New("token_id is required"), "invalid_request_error")
 		return
 	}
 
-	sm := s.config.StoreManager()
-	if sm == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "Store manager not available",
-			},
-		})
-		return
-	}
-
-	apiTokenStore := sm.APIToken()
-	if apiTokenStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "API token store not available",
-			},
-		})
+	apiTokenStore, ok := s.getAPITokenStore(c)
+	if !ok {
 		return
 	}
 
 	// Get existing token record
 	record, err := apiTokenStore.GetToken(tokenID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": gin.H{
-				"type":    "not_found_error",
-				"message": "Token not found",
-			},
-		})
+		SendErrorResponse(c, http.StatusNotFound, errors.New("token not found"), "not_found_error")
 		return
 	}
 
 	// Generate new random API token string
 	randomToken, err := generateRandomToken()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "Failed to generate token: " + err.Error(),
-			},
-		})
+		SendErrorResponse(c, http.StatusInternalServerError, errors.New("failed to generate token: "+err.Error()), "internal_error")
 		return
 	}
 
@@ -508,12 +331,7 @@ func (s *Server) regenerateAPIToken(c *gin.Context) {
 
 	// Update token with new token string (same token_id)
 	if err := apiTokenStore.UpdateTokenString(tokenID, newTokenString); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "internal_error",
-				"message": "Failed to regenerate token: " + err.Error(),
-			},
-		})
+		SendErrorResponse(c, http.StatusInternalServerError, errors.New("failed to regenerate token: "+err.Error()), "internal_error")
 		return
 	}
 

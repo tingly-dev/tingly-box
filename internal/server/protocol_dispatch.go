@@ -334,7 +334,7 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 		}
 		if err != nil {
 			s.trackUsageFromContext(c, 0, 0, err)
-			sendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
+			SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -350,7 +350,7 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 				// Track error even when no tokens were received (e.g., early 1302 rate limit)
 				s.trackUsageFromContext(c, 0, 0, err)
 			}
-			sendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
+			SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -368,7 +368,7 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 		}
 		if err != nil {
 			s.trackUsageFromContext(c, 0, 0, err)
-			sendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to forward Anthropic request: : %w", err), "api_error")
+			SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to forward Anthropic request: : %w", err), "api_error")
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -391,7 +391,7 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 		if ShouldRoundtripResponse(c, "anthropic") {
 			roundtripped, err := RoundtripOpenAIMapViaAnthropic(openaiResp, responseModel, provider, actualModel)
 			if err != nil {
-				sendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to roundtrip response: : %w", err), "api_error")
+				SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to roundtrip response: : %w", err), "api_error")
 				return
 			}
 			openaiResp = roundtripped
@@ -1012,7 +1012,7 @@ func (s *Server) dispatchOpenAIChatFromResponses(
 		}
 		if err != nil {
 			s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-			sendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
+			SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -1040,7 +1040,7 @@ func (s *Server) dispatchOpenAIChatFromResponses(
 		}
 		if err != nil {
 			s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-			sendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to forward request: : %w", err), "api_error")
+			SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to forward request: : %w", err), "api_error")
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -1089,7 +1089,7 @@ func (s *Server) nonstreamOpenAIResponses(
 	if err != nil {
 		// Track error with no usage
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		sendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to forward request: : %w", err), "api_error")
+		SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to forward request: : %w", err), "api_error")
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -1148,7 +1148,7 @@ func (s *Server) streamOpenAIResponses(
 	if err != nil {
 		// Track error with no usage
 		s.trackUsageFromContext(c, 0, 0, err)
-		sendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
+		SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -1186,7 +1186,7 @@ func (s *Server) nonstreamOpenAIChatToResponses(
 	chatResp, _, err := ForwardOpenAIChat(fc, wrapper, chatReq)
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		sendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to forward request: : %w", err), "api_error")
+		SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to forward request: : %w", err), "api_error")
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -1217,7 +1217,7 @@ func (s *Server) streamOpenAIChatToResponses(
 	}
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		sendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
+		SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -1245,7 +1245,7 @@ func (s *Server) nonstreamAnthropicV1ToResponses(
 	}
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		sendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to forward request: : %w", err), "api_error")
+		SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to forward request: : %w", err), "api_error")
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -1275,7 +1275,7 @@ func (s *Server) streamAnthropicV1ToResponses(
 	}
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		sendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
+		SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
 		if recorder != nil {
 			recorder.RecordError(err)
 		}

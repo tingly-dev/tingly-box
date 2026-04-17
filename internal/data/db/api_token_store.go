@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -81,18 +80,9 @@ func NewAPITokenStore(baseDir string) (*APITokenStore, error) {
 	return store, nil
 }
 
-// CreateToken creates a new API token record and returns it with the generated token ID
-func (s *APITokenStore) CreateToken(userUUID, displayName, createdBy string, expiresAt *time.Time) (*APITokenRecord, error) {
-	if userUUID == "" {
-		return nil, errors.New("user UUID cannot be empty")
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Generate unique token ID
-	tokenID := "tok-" + uuid.New().String()
-
+// createTokenRecord is a private helper that creates a token record with the given parameters.
+// The caller must hold s.mu.Lock() before calling this function.
+func (s *APITokenStore) createTokenRecord(userUUID, tokenID, displayName, createdBy string, expiresAt *time.Time) (*APITokenRecord, error) {
 	now := time.Now()
 	record := &APITokenRecord{
 		TokenID:     tokenID,
@@ -124,23 +114,7 @@ func (s *APITokenStore) CreateTokenWithTokenID(userUUID, tokenID, displayName, c
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	now := time.Now()
-	record := &APITokenRecord{
-		TokenID:     tokenID,
-		UserUUID:    userUUID,
-		DisplayName: displayName,
-		Enabled:     true,
-		ExpiresAt:   expiresAt,
-		CreatedAt:   now,
-		CreatedBy:   createdBy,
-	}
-
-	if err := s.db.Create(record).Error; err != nil {
-		return nil, fmt.Errorf("failed to create API token record: %w", err)
-	}
-
-	logrus.Debugf("Created API token: %s for user: %s", tokenID, userUUID)
-	return record, nil
+	return s.createTokenRecord(userUUID, tokenID, displayName, createdBy, expiresAt)
 }
 
 // ValidateToken validates a token ID and returns the associated token record
