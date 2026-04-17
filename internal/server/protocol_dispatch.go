@@ -454,7 +454,9 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 		fc := NewForwardContext(ctx, provider)
 
 		if isStreaming {
+			logrus.Debugf("[MCP-DEBUG] Anthropic Beta: streaming request detected")
 			if hasDeclaredMCPAnthropicBetaTools(req) {
+				logrus.Warnf("[MCP-DEBUG] Anthropic Beta: CONVERTING streaming to non-streaming for MCP tool handling!")
 				anthropicResp, cancel, err := ForwardAnthropicV1Beta(fc, wrapper, req)
 				if cancel != nil {
 					defer cancel()
@@ -578,14 +580,25 @@ func hasDeclaredMCPAnthropicV1Tools(req *anthropic.MessageNewParams) bool {
 func hasDeclaredMCPAnthropicBetaTools(req *anthropic.BetaMessageNewParams) bool {
 	// FIXME: we can not use such a simple logic to check
 	if req == nil || len(req.Tools) == 0 {
+		logrus.Debug("[MCP-DEBUG] hasDeclaredMCPAnthropicBetaTools: no tools declared")
 		return false
 	}
+
+	mcpTools := make([]string, 0)
 	for _, t := range req.Tools {
-		if t.OfTool != nil && mcpruntime.IsMCPToolName(t.OfTool.Name) {
-			return true
+		if t.OfTool != nil {
+			toolName := t.OfTool.Name
+			isMCP := mcpruntime.IsMCPToolName(toolName)
+			if isMCP {
+				mcpTools = append(mcpTools, toolName)
+			}
+			logrus.Debugf("[MCP-DEBUG] Tool declared: name=%s, isMCP=%v", toolName, isMCP)
 		}
 	}
-	return false
+
+	hasMCP := len(mcpTools) > 0
+	logrus.Debugf("[MCP-DEBUG] hasDeclaredMCPAnthropicBetaTools: hasMCP=%v, mcpTools=%v", hasMCP, mcpTools)
+	return hasMCP
 }
 
 // ── Google ──────────────────────────────────────────────────────────────
