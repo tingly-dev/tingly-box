@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/client"
@@ -58,6 +59,15 @@ func TestAdvisorToolLoop(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer mockServer.Close()
+
+	// Set up SessionStore for completeness (even though adviser doesn't use it yet)
+	sessionStore := runtime.NewSessionStore(10 * time.Minute)
+	defer sessionStore.Sweep()
+
+	sessionID := "test-session-123"
+	sessionStore.Put(&runtime.SessionContext{
+		SessionID: sessionID,
+	})
 
 	cp := client.NewClientPool()
 	source, err := runtime.NewAdvisorToolSource(typ.MCPSourceConfig{
@@ -195,6 +205,15 @@ func TestAdvisorToolLoop_Anthropic(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer mockServer.Close()
+
+	// Set up SessionStore for completeness (even though adviser doesn't use it yet)
+	sessionStore := runtime.NewSessionStore(10 * time.Minute)
+	defer sessionStore.Sweep()
+
+	sessionID := "test-session-anthropic-456"
+	sessionStore.Put(&runtime.SessionContext{
+		SessionID: sessionID,
+	})
 
 	cp := client.NewClientPool()
 	source, err := runtime.NewAdvisorToolSource(typ.MCPSourceConfig{
