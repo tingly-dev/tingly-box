@@ -148,12 +148,12 @@ func (s *Server) trackUsageWithTokenUsage(c *gin.Context, usage *protocol.TokenU
 	rule, provider, model, requestModel, scenario, streamed, startTime := GetTrackingContext(c)
 
 	logrus.WithFields(logrus.Fields{
-		"has_rule":   rule != nil,
+		"has_rule":     rule != nil,
 		"has_provider": provider != nil,
-		"has_model":   model != "",
-		"has_usage":   usage != nil,
-		"has_error":   err != nil,
-		"model":       model,
+		"has_model":    model != "",
+		"has_usage":    usage != nil,
+		"has_error":    err != nil,
+		"model":        model,
 	}).Trace("[trackUsage] trackUsageWithTokenUsage called")
 
 	if rule == nil || provider == nil || model == "" || usage == nil {
@@ -427,7 +427,7 @@ func (s *Server) reportHealthStatus(provider *typ.Provider, model string, err er
 		"service_id": serviceID,
 		"error":      err != nil,
 		"errorCode":  errorCode,
-	}).Info("[health] Reporting health status")
+	}).Debug("[health] Reporting health status")
 
 	if err == nil {
 		// Success - report to health monitor
