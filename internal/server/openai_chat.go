@@ -54,7 +54,7 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 				if err != nil {
 					usage := protocol.NewTokenUsageWithCache(0, 0, 0)
 					s.trackUsageWithTokenUsage(c, usage, err)
-					sendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to handle tool calls: %w", err), "api_error")
+					SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to handle tool calls: %w", err), "api_error")
 					return
 				}
 

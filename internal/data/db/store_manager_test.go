@@ -116,6 +116,7 @@ func TestStoreManager_Accessors(t *testing.T) {
 		{"ImBotSettings", func() interface{} { return sm.ImBotSettings() }},
 		{"ModelCapability", func() interface{} { return sm.ModelCapability() }},
 		{"Model", func() interface{} { return sm.Model() }},
+		{"APIToken", func() interface{} { return sm.APIToken() }},
 	}
 
 	for _, tt := range tests {
@@ -167,6 +168,9 @@ func TestStoreManager_Close(t *testing.T) {
 	if sm.Model() != nil {
 		t.Error("Model() should return nil after Close()")
 	}
+	if sm.APIToken() != nil {
+		t.Error("APIToken() should return nil after Close()")
+	}
 
 	// Double close should not error
 	if err := sm.Close(); err != nil {
@@ -193,12 +197,12 @@ func TestStoreManager_HealthCheck(t *testing.T) {
 		t.Errorf("HealthCheck() returned unhealthy: %+v", status)
 	}
 
-	if status.TotalStores != 8 {
-		t.Errorf("TotalStores = %d, want 8", status.TotalStores)
+	if status.TotalStores != 9 {
+		t.Errorf("TotalStores = %d, want 9", status.TotalStores)
 	}
 
-	if status.HealthyStores != 8 {
-		t.Errorf("HealthyStores = %d, want 8", status.HealthyStores)
+	if status.HealthyStores != 9 {
+		t.Errorf("HealthyStores = %d, want 9", status.HealthyStores)
 	}
 
 	if status.UnhealthyStores != 0 {
@@ -207,7 +211,7 @@ func TestStoreManager_HealthCheck(t *testing.T) {
 
 	expectedStores := []string{
 		"stats", "usage", "ruleState", "provider",
-		"toolConfig", "imbotSettings", "modelCapability", "model",
+		"toolConfig", "imbotSettings", "modelCapability", "model", "apiToken",
 	}
 	for _, name := range expectedStores {
 		if status.StoreStatus[name] != HealthStatusOK {
@@ -236,8 +240,8 @@ func TestStoreManager_HealthCheckAfterClose(t *testing.T) {
 		t.Error("HealthCheck() should return unhealthy after Close()")
 	}
 
-	if status.UnhealthyStores != 8 {
-		t.Errorf("UnhealthyStores = %d, want 8", status.UnhealthyStores)
+	if status.UnhealthyStores != 9 {
+		t.Errorf("UnhealthyStores = %d, want 9", status.UnhealthyStores)
 	}
 }
 

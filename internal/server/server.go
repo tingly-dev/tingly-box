@@ -558,8 +558,23 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Logs are written to both multi-mode logger (persistence) and memory (quick access)
 	memoryLogMW := middleware.NewMultiModeMemoryLogMiddleware(server.multiLogger)
 
+	// Initialize API token manager (for multi-tenant authentication)
+	var apiTokenManager *auth.APITokenManager
+	if cfg.IsMultiTenantEnabled() {
+		apiTokenMgr, err := auth.NewAPITokenManager(auth.APITokenManagerConfig{
+			SecretKey:     cfg.GetAPITokenSecret(),
+			SigningMethod: cfg.GetAPITokenAlgorithm(),
+			Issuer:        cfg.GetAPITokenIssuer(),
+		})
+		if err != nil {
+			logrus.Warnf("Failed to create API token manager: %v", err)
+		} else {
+			apiTokenManager = apiTokenMgr
+		}
+	}
+
 	// Initialize auth middleware
-	authMW := middleware.NewAuthMiddleware(cfg, jwtManager)
+	authMW := middleware.NewAuthMiddleware(cfg, jwtManager, apiTokenManager, nil) // apiTokenStore will be set later
 
 	// Initialize health monitor
 	healthMonitor := loadbalance.NewHealthMonitor(cfg.HealthMonitor)
@@ -673,6 +688,16 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 			server.meterSetup = meterSetup
 			server.tokenTracker = meterSetup.Tracker()
 			logrus.Debugf("OTel meter setup initialized")
+		}
+
+		// Initialize API token store for multi-tenant authentication
+		if apiTokenManager != nil {
+			apiTokenStore := sm.APIToken()
+			if apiTokenStore != nil {
+				// Update auth middleware with API token store
+				server.authMW = middleware.NewAuthMiddleware(cfg, jwtManager, apiTokenManager, apiTokenStore)
+				logrus.Debugf("API token store initialized for multi-tenant authentication")
+			}
 		}
 	}
 
@@ -948,6 +973,9 @@ func (s *Server) setupRoutes(ctx context.Context) {
 
 	s.UseLoadBalanceEndpoints()
 
+	// Multi-tenant token management API
+	s.UseTokenManagementEndpoints()
+
 	// Virtual model endpoints for testing
 	s.UseVirtualModelEndpoints()
 
@@ -1119,6 +1147,16 @@ func (s *Server) UseLoadBalanceEndpoints() {
 
 	// Load balancer API routes
 	s.loadBalancerAPI.RegisterRoutes(api)
+}
+
+// UseTokenManagementEndpoints registers the token management API endpoints
+func (s *Server) UseTokenManagementEndpoints() {
+	// API routes for token management
+	api := s.engine.Group("/api/v1")
+	api.Use(s.getUserAuthMiddleware()) // Require user authentication for management APIs
+
+	// Token management API routes
+	s.registerTokenManagementAPI(api)
 }
 
 // Start starts the HTTP server

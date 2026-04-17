@@ -13,14 +13,23 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 )
 
 // AuthMiddleware provides authentication middleware for different types of authentication
 type AuthMiddleware struct {
-	config     *config.Config
-	jwtManager *auth.JWTManager
+	config          *config.Config
+	jwtManager      *auth.JWTManager
+	apiTokenManager *auth.APITokenManager
+	apiTokenStore   APITokenStore
+}
+
+// APITokenStore interface for token validation (abstracted for testability)
+type APITokenStore interface {
+	ValidateToken(tokenID string) (*db.APITokenRecord, error)
+	UpdateLastUsed(tokenID string) error
 }
 
 // ErrorResponse represents an error response
@@ -51,10 +60,12 @@ type ErrorDetail struct {
 }
 
 // NewAuthMiddleware creates a new authentication middleware
-func NewAuthMiddleware(cfg *config.Config, jwtManager *auth.JWTManager) *AuthMiddleware {
+func NewAuthMiddleware(cfg *config.Config, jwtManager *auth.JWTManager, apiTokenManager *auth.APITokenManager, apiTokenStore APITokenStore) *AuthMiddleware {
 	return &AuthMiddleware{
-		config:     cfg,
-		jwtManager: jwtManager,
+		config:          cfg,
+		jwtManager:      jwtManager,
+		apiTokenManager: apiTokenManager,
+		apiTokenStore:   apiTokenStore,
 	}
 }
 
@@ -268,6 +279,9 @@ func (am *AuthMiddleware) UserAuthMiddleware() gin.HandlerFunc {
 			if token == configToken || strings.TrimPrefix(token, "Bearer ") == configToken {
 				// Token matches the one in global config, allow access
 				c.Set("client_id", "user_authenticated")
+				// For UI user authentication, set a default user_uuid
+				// In a real multi-tenant setup, this would come from the user's session/profile
+				c.Set("user_uuid", "default-admin-user")
 				c.Next()
 				return
 			}
@@ -279,6 +293,10 @@ func (am *AuthMiddleware) UserAuthMiddleware() gin.HandlerFunc {
 
 // ModelAuthMiddleware middleware for OpenAI and Anthropic API authentication
 // The auth will support both `Authorization` and `X-Api-Key`
+// Supports three authentication methods (in order of precedence):
+// 1. JWT API tokens (when multi-tenant is enabled)
+// 2. Global config model token (backward compatibility)
+// 3. Enterprise context JWT (X-TBE-Context-JWT header)
 func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -300,10 +318,39 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 		token = strings.TrimSpace(token)
 		xApiKey = strings.TrimSpace(xApiKey)
 
-		// Check against global config model token first
 		cfg := am.config
+
+		// Try API token authentication first (if multi-tenant is enabled)
+		// Check if token has tb-share- prefix
+		if cfg != nil && cfg.IsMultiTenantEnabled() && am.apiTokenStore != nil {
+			if strings.HasPrefix(token, "tb-share-") {
+				// This is an API token, validate it directly from database
+				tokenRecord, validateErr := am.apiTokenStore.ValidateToken(token)
+				if validateErr == nil && tokenRecord != nil {
+					// Token is valid and enabled
+					c.Set("user_uuid", tokenRecord.UserUUID)
+					c.Set("token_id", tokenRecord.TokenID)
+					c.Set("client_id", "model_authenticated")
+					c.Set("auth_method", "api_token")
+
+					// Update last used asynchronously
+					go am.apiTokenStore.UpdateLastUsed(tokenRecord.TokenID)
+
+					c.Next()
+					return
+				}
+			}
+		}
+
+		// Check global config model token (backward compatibility)
 		if cfg == nil || !cfg.HasModelToken() {
 			abortWithError(c, http.StatusInternalServerError, "config or config model token missing", "invalid_request_error")
+			return
+		}
+
+		// If global token is disabled and multi-tenant is enabled, reject
+		if cfg.IsMultiTenantEnabled() && cfg.IsGlobalTokenDisabled() {
+			abortWithError(c, http.StatusUnauthorized, "Global token disabled, use API token", "invalid_token_error")
 			return
 		}
 
@@ -312,6 +359,7 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 		// Direct token comparison
 		if token == configToken || xApiKey == configToken {
 			c.Set("client_id", "model_authenticated")
+			c.Set("auth_method", "global_token")
 			contextJWT := strings.TrimSpace(c.GetHeader("X-TBE-Context-JWT"))
 			if contextJWT != "" {
 				claims, verifyErr := verifyEnterpriseContextJWT(cfg, contextJWT)

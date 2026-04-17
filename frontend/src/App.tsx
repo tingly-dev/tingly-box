@@ -19,6 +19,7 @@ import createAppTheme from './theme';
 
 import Login from './pages/Login';
 import Guiding from './pages/Guiding';
+import APITokensPage from './pages/APITokensPage';
 import UseOpenAIPage from './pages/scenario/UseOpenAIPage';
 import UseAnthropicPage from './pages/scenario/UseAnthropicPage';
 import UseCodexPage from './pages/scenario/UseCodexPage';
@@ -325,6 +326,7 @@ function AppContent() {
                     {/* Other routes */}
                     <Route path="/system" element={<System />} />
                     <Route path="/access-control" element={<AccessControl />} />
+                    <Route path="/tingly-box-token" element={<APITokensPage />} />
                     <Route path="/system/logs" element={<LogsPage />} />
                     {/* Legacy redirects for backward compatibility */}
                     <Route path="/system/http-logs" element={<Navigate to="/system/logs" replace />} />

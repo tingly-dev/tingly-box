@@ -30,7 +30,7 @@ func newModelAuthTestRouter(t *testing.T) (*gin.Engine, *config.Config, string) 
 	}
 
 	r := gin.New()
-	am := NewAuthMiddleware(cfg, nil)
+	am := NewAuthMiddleware(cfg, nil, nil, nil)
 	r.POST("/v1/chat/completions", am.ModelAuthMiddleware(), func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"enterprise_user_id":       c.GetString("enterprise_user_id"),

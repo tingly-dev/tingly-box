@@ -27,6 +27,21 @@ type MetricsData struct {
 	TPS          float64 // Tokens Per Second - generation speed (0 for non-streaming requests)
 }
 
+// GetUserIDFromContext extracts the user ID from gin context.
+// Priority: user_uuid (from JWT API token) > enterprise_user_id (from enterprise JWT) > ""
+// This ensures that JWT API token authentication takes precedence for user tracking.
+func GetUserIDFromContext(c *gin.Context) string {
+	// First, try user_uuid from JWT API token authentication
+	if userUUID := c.GetString("user_uuid"); userUUID != "" {
+		return userUUID
+	}
+	// Fall back to enterprise_user_id from enterprise context JWT
+	if enterpriseUserID := c.GetString("enterprise_user_id"); enterpriseUserID != "" {
+		return enterpriseUserID
+	}
+	return ""
+}
+
 var enterpriseRateLimitHook struct {
 	mu       sync.RWMutex
 	reporter func(context.Context, string, string, string, string) error
@@ -291,7 +306,7 @@ func (s *Server) recordDetailedUsage(c *gin.Context, rule *typ.Rule, provider *t
 		Model:        model,
 		Scenario:     scenario,
 		RequestModel: requestModel,
-		UserID:       c.GetString("enterprise_user_id"),
+		UserID:       GetUserIDFromContext(c), // Uses user_uuid or enterprise_user_id
 		InputTokens:  inputTokens,
 		OutputTokens: outputTokens,
 		TotalTokens:  inputTokens + outputTokens,
@@ -332,7 +347,7 @@ func (s *Server) recordDetailedUsageWithTokenUsage(c *gin.Context, rule *typ.Rul
 		Model:            model,
 		Scenario:         scenario,
 		RequestModel:     requestModel,
-		UserID:           c.GetString("enterprise_user_id"),
+		UserID:           GetUserIDFromContext(c), // Uses user_uuid or enterprise_user_id
 		InputTokens:      usage.InputTokens,
 		OutputTokens:     usage.OutputTokens,
 		CacheInputTokens: usage.CacheInputTokens,
