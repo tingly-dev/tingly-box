@@ -135,9 +135,9 @@ func (s *AdvisorToolSource) CallTool(ctx context.Context, toolName string, argum
 	var err error
 	format := detectAdvisorFormat(s.config)
 	if format == FormatOpenAI {
-		result, err = s.callOpenAI(advisorCtx, input.Reason, actx)
+		result, err = callOpenAI(advisorCtx, s.config, s.clientPool, input.Reason, actx)
 	} else {
-		result, err = s.callAnthropic(advisorCtx, input.Reason, actx)
+		result, err = callAnthropic(advisorCtx, s.config, s.clientPool, input.Reason, actx)
 	}
 	if err != nil {
 		logrus.WithError(err).Error("advisor: consultation failed")
@@ -148,24 +148,24 @@ func (s *AdvisorToolSource) CallTool(ctx context.Context, toolName string, argum
 	return result, nil
 }
 
-func (s *AdvisorToolSource) buildProvider(style protocol.APIStyle) *typ.Provider {
+func buildProvider(cfg typ.AdvisorConfig, style protocol.APIStyle) *typ.Provider {
 	return &typ.Provider{
 		Name:     "advisor",
-		APIBase:  s.config.BaseURL,
-		Token:    s.config.APIKey,
+		APIBase:  cfg.BaseURL,
+		Token:    cfg.APIKey,
 		APIStyle: style,
 		Enabled:  true,
 	}
 }
 
-func (s *AdvisorToolSource) callOpenAI(ctx context.Context, reason string, actx *AdvisorContext) (string, error) {
-	if s.clientPool == nil {
+func callOpenAI(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPool, reason string, actx *AdvisorContext) (string, error) {
+	if cp == nil {
 		return "", fmt.Errorf("advisor: client pool not available")
 	}
 
-	provider := s.buildProvider(protocol.APIStyleOpenAI)
+	provider := buildProvider(cfg, protocol.APIStyleOpenAI)
 
-	wrapper := s.clientPool.GetOpenAIClient(ctx, provider, s.config.Model)
+	wrapper := cp.GetOpenAIClient(ctx, provider, cfg.Model)
 	if wrapper == nil {
 		return "", fmt.Errorf("advisor: failed to create OpenAI client")
 	}
@@ -197,7 +197,7 @@ func (s *AdvisorToolSource) callOpenAI(ctx context.Context, reason string, actx 
 	messages = append(messages, openai.UserMessage(reason))
 
 	req := openai.ChatCompletionNewParams{
-		Model:    s.config.Model,
+		Model:    cfg.Model,
 		Messages: messages,
 	}
 
@@ -214,14 +214,14 @@ func (s *AdvisorToolSource) callOpenAI(ctx context.Context, reason string, actx 
 	return normalizeAdvisorResponse(content), nil
 }
 
-func (s *AdvisorToolSource) callAnthropic(ctx context.Context, reason string, actx *AdvisorContext) (string, error) {
-	if s.clientPool == nil {
+func callAnthropic(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPool, reason string, actx *AdvisorContext) (string, error) {
+	if cp == nil {
 		return "", fmt.Errorf("advisor: client pool not available")
 	}
 
-	provider := s.buildProvider(protocol.APIStyleAnthropic)
+	provider := buildProvider(cfg, protocol.APIStyleAnthropic)
 
-	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, s.config.Model)
+	wrapper := cp.GetAnthropicClient(ctx, provider, cfg.Model)
 	if wrapper == nil {
 		return "", fmt.Errorf("advisor: failed to create Anthropic client")
 	}
@@ -257,8 +257,8 @@ func (s *AdvisorToolSource) callAnthropic(ctx context.Context, reason string, ac
 	}
 
 	req := anthropic.MessageNewParams{
-		Model:     anthropic.Model(s.config.Model),
-		MaxTokens: int64(s.config.MaxTokens),
+		Model:     anthropic.Model(cfg.Model),
+		MaxTokens: int64(cfg.MaxTokens),
 		Messages:  messages,
 		System:    []anthropic.TextBlockParam{{Text: systemPrompt}},
 	}
