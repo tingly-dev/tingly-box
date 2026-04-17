@@ -24,6 +24,16 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+func extractOpenAIMessages(messages []openai.ChatCompletionMessageParamUnion) []map[string]any {
+	if len(messages) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(messages)
+	var out []map[string]any
+	_ = json.Unmarshal(b, &out)
+	return out
+}
+
 // handleNonStreamingRequest handles non-streaming chat completion requests with MCP runtime support.
 func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, stripUsage bool) {
 	req := originalReq
@@ -170,8 +180,9 @@ func (s *Server) handleMCPToolCalls(ctx context.Context, provider *typ.Provider,
 		}
 
 		newMessages = append(newMessages, resp.Choices[0].Message.ToParam())
+		hookMessages := extractOpenAIMessages(newMessages)
 		for _, tc := range resp.Choices[0].Message.ToolCalls {
-			result, err := s.callMCPToolWithGuard(ctx, tc.Function.Name, tc.Function.Arguments)
+			result, err := s.callMCPToolWithHooks(ctx, tc.Function.Name, tc.Function.Arguments, hookMessages)
 			if err != nil {
 				logrus.WithError(err).Warnf("mcp: openai tool call failed name=%s arguments=%s", tc.Function.Name, tc.Function.Arguments)
 			}

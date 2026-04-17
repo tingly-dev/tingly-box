@@ -274,6 +274,17 @@ type MCPSourceConfig struct {
 	ToolsAutoExec       []string          `json:"tools_to_auto_execute,omitempty"` // auto-execute tools (agent mode)
 	IsPingAvailable     *bool             `json:"is_ping_available,omitempty"`     // health check method
 	AutoRegistered      bool              `json:"auto_registered,omitempty"`       // true if auto-registered on first connect
+	Advisor             *AdvisorConfig    `json:"advisor,omitempty" yaml:"advisor,omitempty"`
+}
+
+// AdvisorConfig configures the in-process advisor tool source.
+type AdvisorConfig struct {
+	BaseURL           string `json:"base_url,omitempty" yaml:"base_url,omitempty"`
+	Model             string `json:"model,omitempty" yaml:"model,omitempty"`
+	APIKey            string `json:"api_key,omitempty" yaml:"api_key,omitempty"`
+	MaxUsesPerRequest int    `json:"max_uses_per_request,omitempty" yaml:"max_uses_per_request,omitempty"`
+	// The max token output by adviser. Too much explodes worker's context. 4k is enough for pure suggestions.
+	MaxTokens int `json:"max_tokens,omitempty" yaml:"max_tokens,omitempty"`
 }
 
 // MCPStdioConfig STDIO connection configuration
@@ -318,6 +329,18 @@ func ApplyMCPRuntimeDefaults(config *MCPRuntimeConfig) {
 	for i := range config.Sources {
 		if config.Sources[i].Enabled == nil {
 			config.Sources[i].Enabled = BoolPtr(true)
+		}
+		// Apply defaults for in-process advisor source.
+		if config.Sources[i].Transport == "advisor" || config.Sources[i].Advisor != nil {
+			if config.Sources[i].Advisor == nil {
+				config.Sources[i].Advisor = &AdvisorConfig{}
+			}
+			if config.Sources[i].Advisor.MaxUsesPerRequest <= 0 {
+				config.Sources[i].Advisor.MaxUsesPerRequest = 3
+			}
+			if config.Sources[i].Advisor.MaxTokens <= 0 {
+				config.Sources[i].Advisor.MaxTokens = 4096
+			}
 		}
 	}
 }

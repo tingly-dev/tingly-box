@@ -68,16 +68,25 @@ func (s *Server) handleAnthropicV1MCPToolCalls(
 	for round := 0; round < maxRounds; round++ {
 		toolUses, ok := hasOnlyMCPToolUsesV1(currentResp.Content)
 		if !ok {
+			logrus.Debugf("[MCP-DEBUG] V1 round %d: no MCP tool uses found, exiting loop", round)
 			return currentResp, currentReq, nil
 		}
 
+		// Log all tool uses for debugging
+		toolNames := make([]string, 0, len(toolUses))
+		for _, tu := range toolUses {
+			toolNames = append(toolNames, tu.Name)
+		}
+		logrus.Debugf("[MCP-DEBUG] V1 round %d: executing %d MCP tools: %v", round, len(toolUses), toolNames)
+
 		toolResults := make([]anthropic.ContentBlockParamUnion, 0, len(toolUses))
+		hookMessages := extractAnthropicV1Messages(append(append([]anthropic.MessageParam{}, currentReq.Messages...), currentResp.ToParam()))
 		for _, tu := range toolUses {
 			arguments := string(tu.Input)
 			if arguments == "" {
 				arguments = "{}"
 			}
-			result, err := s.callMCPToolWithGuard(ctx, tu.Name, arguments)
+			result, err := s.callMCPToolWithHooks(ctx, tu.Name, arguments, hookMessages)
 			if err != nil {
 				logrus.WithError(err).Warnf("mcp: tool call failed name=%s arguments=%s", tu.Name, arguments)
 			}
@@ -156,16 +165,25 @@ func (s *Server) handleAnthropicBetaMCPToolCalls(
 	for round := 0; round < maxRounds; round++ {
 		toolUses, ok := hasOnlyMCPToolUsesBeta(currentResp.Content)
 		if !ok {
+			logrus.Debugf("[MCP-DEBUG] Beta round %d: no MCP tool uses found, exiting loop", round)
 			return currentResp, currentReq, nil
 		}
 
+		// Log all tool uses for debugging
+		toolNames := make([]string, 0, len(toolUses))
+		for _, tu := range toolUses {
+			toolNames = append(toolNames, tu.Name)
+		}
+		logrus.Debugf("[MCP-DEBUG] Beta round %d: executing %d MCP tools: %v", round, len(toolUses), toolNames)
+
 		toolResults := make([]anthropic.BetaContentBlockParamUnion, 0, len(toolUses))
+		hookMessages := extractAnthropicBetaMessages(append(append([]anthropic.BetaMessageParam{}, currentReq.Messages...), currentResp.ToParam()))
 		for _, tu := range toolUses {
 			arguments := "{}"
 			if b, err := json.Marshal(tu.Input); err == nil && len(b) > 0 {
 				arguments = string(b)
 			}
-			result, err := s.callMCPToolWithGuard(ctx, tu.Name, arguments)
+			result, err := s.callMCPToolWithHooks(ctx, tu.Name, arguments, hookMessages)
 			if err != nil {
 				logrus.WithError(err).Warnf("mcp: beta tool call failed name=%s arguments=%s", tu.Name, arguments)
 			}
@@ -174,7 +192,6 @@ func (s *Server) handleAnthropicBetaMCPToolCalls(
 
 		nextReq := *currentReq
 		nextReq.Messages = append(append([]anthropic.BetaMessageParam{}, currentReq.Messages...), currentResp.ToParam(), anthropic.NewBetaUserMessage(toolResults...))
-
 		wrapper := s.clientPool.GetAnthropicClient(ctx, provider, nextReq.Model)
 		fc := NewForwardContext(nil, provider)
 		nextResp, cancel, err := ForwardAnthropicV1Beta(fc, wrapper, &nextReq)
