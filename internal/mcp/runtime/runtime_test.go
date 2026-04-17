@@ -176,3 +176,26 @@ func TestServerReadyCheck(t *testing.T) {
 		t.Errorf("Expected startupReadyCheckTimeout=5s, got %v", startupReadyCheckTimeout)
 	}
 }
+
+func TestListEnabledServerToolNames_IncludesServerVirtualTools(t *testing.T) {
+	r := NewRuntime(func() *typ.MCPRuntimeConfig {
+		return &typ.MCPRuntimeConfig{}
+	})
+	if r == nil {
+		t.Fatal("expected runtime")
+	}
+
+	r.RegisterAdviser(typ.AdvisorConfig{
+		BaseURL: "https://example.com",
+		Model:   "claude-opus-4-6",
+		APIKey:  "test-key",
+	}, nil)
+
+	names := r.ListEnabledServerToolNames(context.Background())
+	if _, ok := names[NormalizeToolName("builtin", "advisor")]; !ok {
+		t.Fatalf("expected %q to be enabled", NormalizeToolName("builtin", "advisor"))
+	}
+	if _, ok := names[NormalizeToolName("advisor", "advisor")]; !ok {
+		t.Fatalf("expected %q to be enabled for backward compatibility", NormalizeToolName("advisor", "advisor"))
+	}
+}

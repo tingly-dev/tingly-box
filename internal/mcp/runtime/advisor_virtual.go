@@ -30,10 +30,10 @@ func NewAdvisorVirtualTool(cfg typ.AdvisorConfig, cp *client.ClientPool) Virtual
 	schema.Required = []string{"reason"}
 
 	return VirtualTool{
-		Name:        "advisor",
-		Description: fmt.Sprintf("Consult a more powerful advisor model for strategic guidance. Use when facing architectural decisions, complex debugging, unclear trade-offs, or when stuck. You have %d consultation(s) remaining this request.", cfg.MaxUsesPerRequest),
-		InputSchema: schema,
-		Handler:     newAdvisorHandler(cfg, cp),
+		Name:         "advisor",
+		Description:  fmt.Sprintf("Consult a more powerful advisor model for strategic guidance. Use when facing architectural decisions, complex debugging, unclear trade-offs, or when stuck. You have %d consultation(s) remaining this request.", cfg.MaxUsesPerRequest),
+		InputSchema:  schema,
+		Handler:      newAdvisorHandler(cfg, cp),
 		IsClientTool: false, // Server tool: not exposed to clients
 	}
 }
@@ -54,9 +54,11 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool) VirtualTool
 			reason = "The executor has requested strategic guidance."
 		}
 
-		// Check depth to prevent recursion
+		// Check depth to prevent recursion.
+		// Depth is incremented by response hook before tool execution, so the first
+		// legitimate advisor call runs at depth=1 and must be allowed.
 		depth := GetAdvisorDepth(ctx)
-		if depth >= 1 {
+		if depth > 1 {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{mcp.NewTextContent("Advisor recursion limit reached.")},
 				IsError: true,
