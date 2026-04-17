@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Alert,
     Button,
+    Checkbox,
     Chip,
     Dialog,
     DialogActions,
@@ -35,17 +36,28 @@ type GuardrailsHistoryEntry = {
     credential_names?: string[];
 };
 
+type GuardrailsImportRef = {
+    path: string;
+    name: string;
+    policy_ids?: string[];
+    policy_count?: number;
+};
+
 const GuardrailsPage = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
-    const [configContent, setConfigContent] = useState('');
     const [policies, setPolicies] = useState<any[]>([]);
+    const [imports, setImports] = useState<GuardrailsImportRef[]>([]);
     const [historyEntries, setHistoryEntries] = useState<GuardrailsHistoryEntry[]>([]);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [importDialogOpen, setImportDialogOpen] = useState(false);
     const [importText, setImportText] = useState('');
+    const [importFileName, setImportFileName] = useState('');
     const [importing, setImporting] = useState(false);
+    const [exportDialogOpen, setExportDialogOpen] = useState(false);
+    const [selectedExportPaths, setSelectedExportPaths] = useState<string[]>([]);
+    const [exporting, setExporting] = useState(false);
 
     const loadGuardrails = async () => {
         try {
@@ -55,13 +67,13 @@ const GuardrailsPage = () => {
                 api.getGuardrailsHistory(),
             ]);
             setPolicies(guardrailsConfig?.config?.policies || []);
-            setConfigContent(guardrailsConfig?.content || '');
+            setImports(Array.isArray(guardrailsConfig?.imports) ? guardrailsConfig.imports : []);
             setHistoryEntries(Array.isArray(guardrailsHistory?.data) ? guardrailsHistory.data : []);
             setLoadError(null);
         } catch (error: any) {
             console.error('Failed to load guardrails config:', error);
             setPolicies([]);
-            setConfigContent('');
+            setImports([]);
             setHistoryEntries([]);
             setLoadError('Failed to load guardrails config');
         } finally {
@@ -105,8 +117,26 @@ const GuardrailsPage = () => {
         };
     }, [historyEntries, policies]);
 
+    const blurActiveElement = () => {
+        const active = document.activeElement;
+        if (active instanceof HTMLElement) {
+            active.blur();
+        }
+    };
+
+    const closeImportDialog = () => {
+        setImportDialogOpen(false);
+        blurActiveElement();
+    };
+
+    const closeExportDialog = () => {
+        setExportDialogOpen(false);
+        blurActiveElement();
+    };
+
     const handleImportClick = () => {
         setImportText('');
+        setImportFileName('');
         setImportDialogOpen(true);
     };
 
@@ -118,6 +148,7 @@ const GuardrailsPage = () => {
         try {
             const content = await file.text();
             setImportText(content);
+            setImportFileName(file.name);
         } catch (error: any) {
             setActionMessage({ type: 'error', text: error?.message || 'Failed to read config file' });
         } finally {
@@ -133,35 +164,88 @@ const GuardrailsPage = () => {
 
         try {
             setImporting(true);
-            const result = await api.updateGuardrailsConfig(importText);
+            const result = await api.importGuardrailsFragment(importText, importFileName || undefined);
             if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to update guardrails config' });
+                setActionMessage({ type: 'error', text: result?.error || 'Failed to import policy fragment' });
                 return;
             }
-            setImportDialogOpen(false);
+            closeImportDialog();
             setImportText('');
-            setActionMessage({ type: 'success', text: 'Guardrails config updated.' });
+            setImportFileName('');
+            const importedCount = Array.isArray(result?.policy_ids) ? result.policy_ids.length : 0;
+            setActionMessage({
+                type: 'success',
+                text: importedCount > 0 ? `Imported ${importedCount} policy fragment item(s).` : 'Imported policy fragment.',
+            });
             await loadGuardrails();
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to update guardrails config' });
+            setActionMessage({ type: 'error', text: error?.message || 'Failed to import policy fragment' });
         } finally {
             setImporting(false);
         }
     };
 
-    const handleExport = () => {
-        if (!configContent) {
-            setActionMessage({ type: 'error', text: 'No guardrails config content available to export.' });
+    const handleExportClick = () => {
+        if (imports.length === 0) {
+            setActionMessage({ type: 'error', text: 'No imported policy fragments are available to export.' });
             return;
         }
-        const blob = new Blob([configContent], { type: 'text/yaml' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = 'guardrails.yaml';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
+        setSelectedExportPaths(imports.map((item) => item.path));
+        setExportDialogOpen(true);
+    };
+
+    const handleToggleExportPath = (path: string) => {
+        setSelectedExportPaths((current) =>
+            current.includes(path) ? current.filter((item) => item !== path) : [...current, path]
+        );
+    };
+
+    const handleSelectAllExports = () => {
+        setSelectedExportPaths(imports.map((item) => item.path));
+    };
+
+    const handleClearExportSelection = () => {
+        setSelectedExportPaths([]);
+    };
+
+    const handleExportSubmit = async () => {
+        if (selectedExportPaths.length === 0) {
+            setActionMessage({ type: 'error', text: 'Select at least one imported fragment to export.' });
+            return;
+        }
+
+        try {
+            setExporting(true);
+            const result = await api.exportGuardrailsFragments(selectedExportPaths);
+            if (!result?.success) {
+                setActionMessage({ type: 'error', text: result?.error || 'Failed to export policy fragments' });
+                return;
+            }
+            const files = Array.isArray(result?.files) ? result.files : [];
+            if (files.length === 0) {
+                setActionMessage({ type: 'error', text: 'No fragment files were returned for export.' });
+                return;
+            }
+            files.forEach((file: { content?: string; name?: string }) => {
+                const blob = new Blob([file.content || ''], { type: 'text/yaml' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = file.name || 'guardrails-fragment.yaml';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(link.href);
+            });
+            closeExportDialog();
+            setActionMessage({
+                type: 'success',
+                text: files.length === 1 ? `Exported ${files[0].name || 'fragment'}.` : `Exported ${files.length} fragment files.`,
+            });
+        } catch (error: any) {
+            setActionMessage({ type: 'error', text: error?.message || 'Failed to export policy fragments' });
+        } finally {
+            setExporting(false);
+        }
     };
 
     const actionAlert = actionMessage ? (
@@ -180,10 +264,10 @@ const GuardrailsPage = () => {
                     rightAction={
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
                             <Button variant="outlined" startIcon={<FileUpload />} onClick={handleImportClick}>
-                                Import Config
+                                Import Policies
                             </Button>
-                            <Button variant="outlined" startIcon={<FileDownload />} onClick={handleExport}>
-                                Export Config
+                            <Button variant="outlined" startIcon={<FileDownload />} onClick={handleExportClick}>
+                                Export Imports
                             </Button>
                         </Stack>
                     }
@@ -292,38 +376,113 @@ const GuardrailsPage = () => {
             </Stack>
             <Dialog
                 open={importDialogOpen}
-                onClose={() => !importing && setImportDialogOpen(false)}
+                onClose={() => !importing && closeImportDialog()}
+                disableRestoreFocus
                 fullWidth
                 maxWidth="md"
             >
-                <DialogTitle>Import Guardrails Config</DialogTitle>
+                <DialogTitle>Import Policy Fragment</DialogTitle>
                 <DialogContent>
                     <Stack spacing={2} sx={{ pt: 1 }}>
+                        {importDialogOpen && actionMessage && (
+                            <Alert severity={actionMessage.type} onClose={() => setActionMessage(null)}>
+                                {actionMessage.text}
+                            </Alert>
+                        )}
                         <Typography variant="body2" color="text.secondary">
-                            Import from a local file or paste YAML or JSON directly. Saving replaces the current Guardrails config.
+                            Import a YAML or JSON policy fragment containing one or more policies. Imported policies are appended to `guardrails/custom/import.yaml`.
                         </Typography>
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
                             <Button variant="outlined" startIcon={<FileUpload />} onClick={() => fileInputRef.current?.click()}>
                                 Choose File
                             </Button>
+                            {importFileName ? (
+                                <Chip size="small" label={importFileName} />
+                            ) : null}
                         </Stack>
                         <TextField
-                            label="Config Content"
+                            label="Fragment Content"
                             value={importText}
                             onChange={(e) => setImportText(e.target.value)}
                             multiline
                             minRows={16}
                             fullWidth
-                            placeholder={'groups:\n  - id: high-risk\n    name: High Risk\npolicies:\n  - id: block-ssh-read\n    kind: resource_access\n    ...'}
+                            placeholder={'policies:\n  - id: block-ssh-read\n    name: Block SSH Read\n    kind: resource_access\n    enabled: false\n    groups: [default]\n    ...'}
                         />
                     </Stack>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setImportDialogOpen(false)} disabled={importing}>
+                    <Button onClick={closeImportDialog} disabled={importing}>
                         Cancel
                     </Button>
                     <Button variant="contained" onClick={handleImportSubmit} disabled={importing}>
                         Import
+                    </Button>
+                </DialogActions>
+            </Dialog>
+            <Dialog
+                open={exportDialogOpen}
+                onClose={() => !exporting && closeExportDialog()}
+                disableRestoreFocus
+                fullWidth
+                maxWidth="sm"
+            >
+                <DialogTitle>Export Imported Fragments</DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2} sx={{ pt: 1 }}>
+                        {exportDialogOpen && actionMessage && (
+                            <Alert severity={actionMessage.type} onClose={() => setActionMessage(null)}>
+                                {actionMessage.text}
+                            </Alert>
+                        )}
+                        <Typography variant="body2" color="text.secondary">
+                            Choose one or more imported fragment files to download as-is.
+                        </Typography>
+                        <Stack direction="row" spacing={1}>
+                            <Button size="small" variant="outlined" onClick={handleSelectAllExports}>
+                                Select All
+                            </Button>
+                            <Button size="small" variant="outlined" onClick={handleClearExportSelection}>
+                                Clear
+                            </Button>
+                        </Stack>
+                        <Stack spacing={1}>
+                            {imports.map((item) => (
+                                <Stack
+                                    key={item.path}
+                                    direction="row"
+                                    spacing={1.5}
+                                    alignItems="flex-start"
+                                    sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 1.5 }}
+                                >
+                                    <Checkbox
+                                        checked={selectedExportPaths.includes(item.path)}
+                                        onChange={() => handleToggleExportPath(item.path)}
+                                        sx={{ mt: -0.5 }}
+                                    />
+                                    <Stack spacing={0.5} sx={{ minWidth: 0 }}>
+                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                            {item.name || item.path}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            {item.path}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            {`${item.policy_count || 0} policies`}
+                                            {item.policy_ids && item.policy_ids.length > 0 ? ` · ${item.policy_ids.join(', ')}` : ''}
+                                        </Typography>
+                                    </Stack>
+                                </Stack>
+                            ))}
+                        </Stack>
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={closeExportDialog} disabled={exporting}>
+                        Cancel
+                    </Button>
+                    <Button variant="contained" onClick={handleExportSubmit} disabled={exporting}>
+                        Export
                     </Button>
                 </DialogActions>
             </Dialog>

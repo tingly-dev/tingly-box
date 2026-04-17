@@ -682,6 +682,18 @@ export const api = {
             body: JSON.stringify({ content }),
         });
     },
+    importGuardrailsFragment: async (content: string, fileName?: string): Promise<any> => {
+        return uiAPI('/guardrails/fragment/import', {
+            method: 'POST',
+            body: JSON.stringify({ content, file_name: fileName }),
+        });
+    },
+    exportGuardrailsFragments: async (paths: string[]): Promise<any> => {
+        return uiAPI('/guardrails/fragment/export', {
+            method: 'POST',
+            body: JSON.stringify({ paths }),
+        });
+    },
 
     reloadGuardrailsConfig: async (): Promise<any> => {
         return uiAPI('/guardrails/reload', {

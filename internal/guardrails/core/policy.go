@@ -7,7 +7,6 @@ const (
 	PolicyKindResourceAccess   PolicyKind = "resource_access"
 	PolicyKindCommandExecution PolicyKind = "command_execution"
 	PolicyKindContent          PolicyKind = "content"
-	PolicyKindOperationLegacy  PolicyKind = "operation"
 )
 
 const DefaultPolicyGroupID = "default"

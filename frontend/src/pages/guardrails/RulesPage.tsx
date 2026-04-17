@@ -178,6 +178,19 @@ const resourceAccessActionOptions = [
     },
 ] as const;
 
+const commandExecutionActionOptions = [
+    {
+        value: 'execute',
+        label: 'Execute',
+        description: 'Match explicit command patterns such as rm -rf, curl | sh, or python -c.',
+    },
+    {
+        value: 'install',
+        label: 'Install',
+        description: 'Match normalized package, tool, or extension install commands such as npm install or pip install.',
+    },
+] as const;
+
 const DEFAULT_GROUP_ID = 'default';
 const PENDING_REGISTRY_INSTALLS_STORAGE_KEY = 'guardrails.pendingRegistryInstalls';
 
@@ -543,8 +556,15 @@ const GuardrailsRulesPage = () => {
             .trim()
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/^-+|-+$/g, '');
-        const prefix = kind ? `${kind}-` : '';
-        const baseId = `${prefix}${normalizedName || 'policy'}`;
+        const fallbackBase =
+            kind === 'resource_access'
+                ? 'resource-policy'
+                : kind === 'command_execution'
+                  ? 'command-policy'
+                  : kind === 'content'
+                    ? 'content-policy'
+                    : 'policy';
+        const baseId = normalizedName || fallbackBase;
         const existingIds = new Set(
             policies.map((policy) => policy.id).filter((policyId) => policyId && policyId !== currentId)
         );
@@ -559,20 +579,26 @@ const GuardrailsRulesPage = () => {
     };
 
     const applyKindDefaults = (kind: 'resource_access' | 'command_execution' | 'content', current: EditorState): EditorState => {
+        const nextCommandAction =
+            current.actions.includes('install')
+                ? ['install']
+                : current.actions.includes('execute')
+                  ? ['execute']
+                  : ['execute'];
         return {
             ...current,
             kind,
             name: current.name,
             id: isNewPolicy && current.name.trim() ? generatePolicyId(current.name, kind) : current.id,
             verdict: sanitizeVerdictForKind(kind, current.verdict),
-            toolNames: kind === 'content' ? '' : current.toolNames || 'bash',
+            toolNames: kind === 'content' ? '' : current.toolNames,
             actions:
                 kind === 'resource_access'
                     ? current.actions.length > 0
                         ? current.actions.filter((action) => action !== 'execute')
                         : ['read']
                     : kind === 'command_execution'
-                      ? ['execute']
+                      ? nextCommandAction
                       : [],
             commandTerms: kind === 'command_execution' ? current.commandTerms : '',
             patterns: kind === 'content' ? current.patterns : '',
@@ -581,6 +607,21 @@ const GuardrailsRulesPage = () => {
 
     const buildSuggestedReason = (state: EditorState) => {
         if (state.kind === 'command_execution') {
+            if (state.actions.includes('install')) {
+                const commandTerms = splitLines(state.commandTerms);
+                if (commandTerms.length > 0) {
+                    return `This policy blocks install commands matching ${commandTerms.join(', ')}.`;
+                }
+                const resources = splitLines(state.resources);
+                if (resources.length > 0) {
+                    return `This policy blocks install commands that touch ${resources.join(', ')}.`;
+                }
+                const tools = splitLines(state.toolNames);
+                if (tools.length > 0) {
+                    return `This policy blocks install commands executed through ${tools.join(', ')}.`;
+                }
+                return 'This policy blocks install commands.';
+            }
             const commandTerms = splitLines(state.commandTerms);
             if (commandTerms.length > 0) {
                 return `This policy blocks execution of commands matching ${commandTerms.join(', ')}.`;
@@ -609,16 +650,26 @@ const GuardrailsRulesPage = () => {
 
     const buildPolicySummary = (policy: DisplayPolicy) => {
         if (policy.kind === 'command_execution') {
-            const terms = summarizeValues(policy.match?.terms, 'any command');
+            const actionList = policy.match?.actions?.include || [];
+            const action = actionList.includes('install') ? 'install' : 'execute';
             const resources = summarizeValues(policy.match?.resources?.values, '');
-            const toolNames = summarizeValues(policy.match?.tool_names, 'any tool');
-            return resources && resources !== 'none' ? `${toolNames} · execute · ${terms} · ${resources}` : `${toolNames} · execute · ${terms}`;
+            const toolNames = summarizeValues(policy.match?.tool_names, '');
+            if (action === 'install') {
+                const terms = summarizeValues(policy.match?.terms, 'any install target');
+                return [toolNames, 'install', terms, resources && resources !== 'none' ? resources : '']
+                    .filter(Boolean)
+                    .join(' · ');
+            }
+            const terms = summarizeValues(policy.match?.terms, 'any command');
+            return [toolNames, 'execute', terms, resources && resources !== 'none' ? resources : '']
+                .filter(Boolean)
+                .join(' · ');
         }
         if (policy.kind === 'resource_access' || policy.kind === 'operation') {
             const actions = summarizeValues(policy.match?.actions?.include, 'any action');
             const resources = summarizeValues(policy.match?.resources?.values, 'any resource');
-            const toolNames = summarizeValues(policy.match?.tool_names, 'any tool');
-            return `${toolNames} · ${actions} · ${resources}`;
+            const toolNames = summarizeValues(policy.match?.tool_names, '');
+            return [toolNames, actions, resources].filter(Boolean).join(' · ');
         }
         const patterns = policy.match?.patterns || [];
         if (patterns.length === 0) {
@@ -677,7 +728,12 @@ const GuardrailsRulesPage = () => {
             ),
             scenarios,
             toolNames: toolNamesField.text,
-            actions: policy?.match?.actions?.include || [],
+            actions:
+                (policy?.kind === 'command_execution'
+                    ? policy?.match?.actions?.include?.includes('install')
+                        ? ['install']
+                        : ['execute']
+                    : policy?.match?.actions?.include) || [],
             commandTerms: commandTermsField.text,
             resources: resourcesField.text,
             resourceMode: policy?.match?.resources?.mode || 'prefix',
@@ -906,12 +962,13 @@ const GuardrailsRulesPage = () => {
     };
 
     const buildPolicyPayload = (state: EditorState) => {
+        const commandActions = state.actions.includes('install') ? ['install'] : ['execute'];
         const operationMatch = {
             tool_names: effectiveListValues('toolNames', state.toolNames),
             actions: {
                 include:
                     state.kind === 'command_execution'
-                        ? ['execute']
+                        ? commandActions
                         : state.actions.filter((action) => action !== 'execute'),
             },
             terms: state.kind === 'command_execution' ? effectiveListValues('commandTerms', state.commandTerms) : [],
@@ -979,7 +1036,7 @@ const GuardrailsRulesPage = () => {
             effectiveListValues('toolNames', editorState.toolNames).length === 0 &&
             effectiveListValues('resources', editorState.resources).length === 0
         ) {
-            setActionMessage({ type: 'error', text: 'Command execution policies require a command match, tool filter, or resource filter.' });
+            setActionMessage({ type: 'error', text: 'Command execution policies require a term match, tool filter, or resource filter.' });
             return false;
         }
 
@@ -2144,7 +2201,7 @@ const GuardrailsRulesPage = () => {
                                                     })}
                                                 </Box>
                                                 <FormHelperText>
-                                                    `Command Execution` policies always use `execute`, so `execute` is not shown here. Shell redirection is treated as `write`.
+                                                    `Command Execution` policies use `execute` or `install`, so those categories are not shown here. Shell redirection is treated as `write`.
                                                 </FormHelperText>
                                             </Stack>
                                         </Box>
@@ -2191,17 +2248,83 @@ const GuardrailsRulesPage = () => {
                                         }}
                                     >
                                         <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
-                                                {renderCompactListEditor({
-                                                    title: 'Command Match',
-                                                    description: 'Describe the command patterns you want to block or review. This is the main selector for execution policies.',
-                                                    columnLabel: 'Command Pattern',
-                                                    value: editorState.commandTerms,
-                                                    oversizedField: oversizedListFields.commandTerms,
-                                                    selectedIndex: selectedCommandTermRow,
-                                                    onSelectedIndexChange: setSelectedCommandTermRow,
-                                                    onChange: (commandTerms) => setEditorState((state) => ({ ...state, commandTerms })),
-                                                    placeholder: 'rm -rf',
-                                                    helperText: 'One pattern per row, such as `rm -rf`, `curl | sh`, or `python -c`.',
+                                            <Stack spacing={1.5}>
+                                                <Stack direction="row" spacing={0.75} alignItems="center">
+                                                    <Typography variant="subtitle2">Command Category</Typography>
+                                                    <Tooltip title="Choose whether this policy targets general command execution patterns or normalized install commands.">
+                                                        <IconButton size="small" sx={{ p: 0.25 }}>
+                                                            <HelpOutline fontSize="inherit" />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                </Stack>
+                                                <Box
+                                                    sx={{
+                                                        display: 'grid',
+                                                        gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                                                        gap: 1.5,
+                                                    }}
+                                                >
+                                                    {commandExecutionActionOptions.map((option) => {
+                                                        const selected = editorState.actions.includes(option.value);
+                                                        return (
+                                                            <Box
+                                                                key={option.value}
+                                                                onClick={() =>
+                                                                    setEditorState((state) => ({
+                                                                        ...state,
+                                                                        actions: [option.value],
+                                                                    }))
+                                                                }
+                                                                sx={{
+                                                                    border: '1px solid',
+                                                                    borderColor: selected ? 'primary.main' : 'divider',
+                                                                    bgcolor: selected ? 'action.selected' : 'background.paper',
+                                                                    borderRadius: 2,
+                                                                    p: 1.5,
+                                                                    cursor: 'pointer',
+                                                                    transition: 'all 0.15s ease',
+                                                                    '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
+                                                                }}
+                                                            >
+                                                                <Stack spacing={0.75}>
+                                                                    <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                                                        <Typography variant="body2" fontWeight={600}>
+                                                                            {option.label}
+                                                                        </Typography>
+                                                                        {selected && (
+                                                                            <Tooltip title="Selected">
+                                                                                <CheckCircleRounded color="primary" sx={{ fontSize: 18 }} />
+                                                                            </Tooltip>
+                                                                        )}
+                                                                    </Stack>
+                                                                    <Typography variant="caption" color="text.secondary">
+                                                                        {option.description}
+                                                                    </Typography>
+                                                                </Stack>
+                                                            </Box>
+                                                        );
+                                                    })}
+                                                </Box>
+                                            </Stack>
+                                        </Box>
+
+                                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
+                                            {renderCompactListEditor({
+                                                title: editorState.actions.includes('install') ? 'Install Match' : 'Command Match',
+                                                description:
+                                                    editorState.actions.includes('install')
+                                                        ? 'Describe the install targets you want to block or review. This matches normalized command terms such as package, crate, gem, or extension names.'
+                                                        : 'Describe the command patterns you want to block or review. This is the main selector for execute policies.',
+                                                columnLabel: editorState.actions.includes('install') ? 'Install Term' : 'Command Pattern',
+                                                value: editorState.commandTerms,
+                                                oversizedField: oversizedListFields.commandTerms,
+                                                selectedIndex: selectedCommandTermRow,
+                                                onSelectedIndexChange: setSelectedCommandTermRow,
+                                                onChange: (commandTerms) => setEditorState((state) => ({ ...state, commandTerms })),
+                                                placeholder: editorState.actions.includes('install') ? 'left-pad' : 'rm -rf',
+                                                helperText: editorState.actions.includes('install')
+                                                    ? 'One term per row, such as `left-pad`, `requests`, `ripgrep`, or `ms-python.python`.'
+                                                    : 'One pattern per row, such as `rm -rf`, `curl | sh`, or `python -c`.',
                                             })}
                                         </Box>
 
@@ -2209,7 +2332,10 @@ const GuardrailsRulesPage = () => {
                                             <Stack spacing={1.5}>
                                                 {renderCompactListEditor({
                                                     title: 'Limit To Resources',
-                                                    description: 'Optional. Add paths only when the command rule should apply to a specific file, directory, URL, or other resource.',
+                                                    description:
+                                                        editorState.actions.includes('install')
+                                                            ? 'Optional. Add paths or resources only when the install rule should be limited to specific targets.'
+                                                            : 'Optional. Add paths only when the command rule should apply to a specific file, directory, URL, or other resource.',
                                                     columnLabel: 'Path / Resource',
                                                     value: editorState.resources,
                                                     oversizedField: oversizedListFields.resources,
