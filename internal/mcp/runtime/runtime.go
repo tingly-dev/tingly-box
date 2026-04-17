@@ -505,6 +505,15 @@ func buildAllowList(names []string) (bool, map[string]bool) {
 	return false, out
 }
 
+// RegisterAdviser registers the adviser as a virtual tool in the runtime.
+func (r *Runtime) RegisterAdviser(cfg typ.AdvisorConfig, cp *client.ClientPool) {
+	if r == nil || r.virtualRegistry == nil {
+		return
+	}
+	tool := NewAdvisorVirtualTool(cfg, cp)
+	r.virtualRegistry.Register(tool)
+}
+
 // GetAdvisorMaxUses returns the MaxUsesPerRequest from the advisor source config.
 // Returns 0 if no advisor is configured or the value is not positive.
 func (r *Runtime) GetAdvisorMaxUses() int {

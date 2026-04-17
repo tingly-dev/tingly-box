@@ -34,15 +34,15 @@ func TestRegisterBuiltinTools_RegistersWebtoolsAndAdvisor(t *testing.T) {
 	}
 	require.NotNil(t, webtools)
 	require.NotNil(t, advisor)
-	require.Equal(t, "advisor", advisor.Transport)
-	require.False(t, *advisor.IsClientTool)
 	require.False(t, *advisor.Enabled)
-	require.Equal(t, []string{mcptools.BuiltinAdvisorToolName}, advisor.Tools)
+	require.NotNil(t, advisor.Advisor)
+	require.Equal(t, "${ADVISOR_BASE_URL}", advisor.Advisor.BaseURL)
+	require.Equal(t, "${ADVISOR_MODEL}", advisor.Advisor.Model)
+	require.Equal(t, "${ADVISOR_API_KEY}", advisor.Advisor.APIKey)
 }
 
 func TestRegisterBuiltinTools_PreservesExistingAdvisorSettings(t *testing.T) {
 	enabled := typ.BoolPtr(true)
-	isClientTool := true
 	advisorCfg := &typ.AdvisorConfig{
 		BaseURL: "https://api.example.com/v1",
 		Model:   "gpt-4.1",
@@ -52,12 +52,9 @@ func TestRegisterBuiltinTools_PreservesExistingAdvisorSettings(t *testing.T) {
 	input := &typ.MCPRuntimeConfig{
 		Sources: []typ.MCPSourceConfig{
 			{
-				ID:           mcptools.BuiltinAdvisorSourceID,
-				Transport:    "advisor",
-				Enabled:      enabled,
-				IsClientTool: &isClientTool,
-				Tools:        []string{"advisor"},
-				Advisor:      advisorCfg,
+				ID:      mcptools.BuiltinAdvisorSourceID,
+				Enabled: enabled,
+				Advisor: advisorCfg,
 			},
 		},
 	}
@@ -84,7 +81,6 @@ func TestRegisterBuiltinTools_PreservesExistingAdvisorSettings(t *testing.T) {
 	}
 	require.NotNil(t, advisor)
 	require.True(t, *advisor.Enabled)
-	require.True(t, *advisor.IsClientTool)
 	require.NotNil(t, advisor.Advisor)
 	require.Equal(t, advisorCfg.APIKey, advisor.Advisor.APIKey)
 	require.Equal(t, advisorCfg.BaseURL, advisor.Advisor.BaseURL)
