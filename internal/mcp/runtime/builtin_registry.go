@@ -17,14 +17,19 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 		cfg = &typ.MCPRuntimeConfig{}
 	}
 
-	// Check if webtools already exists
+	// Check if builtins already exist
 	var existingWebtools *typ.MCPSourceConfig
-	var existingIndex = -1
+	var existingAdvisor *typ.MCPSourceConfig
+	webtoolsIndex := -1
+	advisorIndex := -1
 	for i, source := range cfg.Sources {
 		if source.ID == mcptools.BuiltinWebtoolsSourceID {
 			existingWebtools = &cfg.Sources[i]
-			existingIndex = i
-			break
+			webtoolsIndex = i
+		}
+		if source.ID == mcptools.BuiltinAdvisorSourceID {
+			existingAdvisor = &cfg.Sources[i]
+			advisorIndex = i
 		}
 	}
 
@@ -79,13 +84,65 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 		Env:          preservedEnv, // Preserve user's environment variables
 	}
 
-	// Update or append the configuration
-	if existingIndex >= 0 {
-		cfg.Sources[existingIndex] = builtinWebtools
+	// Update or append webtools configuration
+	if webtoolsIndex >= 0 {
+		cfg.Sources[webtoolsIndex] = builtinWebtools
 		logrus.Info("mcp: updated builtin webtools configuration")
 	} else {
 		cfg.Sources = append(cfg.Sources, builtinWebtools)
 		logrus.Info("mcp: registered builtin webtools configuration")
+	}
+
+	// Create advisor configuration (in-process source).
+	advisorEnabled := typ.BoolPtr(false) // default: disabled
+	advisorIsClientTool := false         // server tool
+	advisorTools := mcptools.DefaultBuiltinAdvisorToolNames()
+	advisorEnv := map[string]string{
+		"ADVISOR_BASE_URL": "${ADVISOR_BASE_URL}",
+		"ADVISOR_MODEL":    "${ADVISOR_MODEL}",
+		"ADVISOR_API_KEY":  "${ADVISOR_API_KEY}",
+	}
+	advisorCfg := &typ.AdvisorConfig{
+		BaseURL: "${ADVISOR_BASE_URL}",
+		Model:   "${ADVISOR_MODEL}",
+		APIKey:  "${ADVISOR_API_KEY}",
+	}
+	if existingAdvisor != nil {
+		if existingAdvisor.Enabled != nil {
+			advisorEnabled = existingAdvisor.Enabled
+		}
+		if existingAdvisor.IsClientTool != nil {
+			advisorIsClientTool = *existingAdvisor.IsClientTool
+		}
+		if len(existingAdvisor.Tools) > 0 {
+			advisorTools = existingAdvisor.Tools
+		}
+		for k, v := range existingAdvisor.Env {
+			advisorEnv[k] = v
+		}
+		if existingAdvisor.Advisor != nil {
+			copied := *existingAdvisor.Advisor
+			advisorCfg = &copied
+		}
+	}
+	builtinAdvisor := typ.MCPSourceConfig{
+		ID:           mcptools.BuiltinAdvisorSourceID,
+		Name:         mcptools.BuiltinAdvisorSourceName,
+		Transport:    "advisor",
+		Enabled:      advisorEnabled,
+		IsClientTool: &advisorIsClientTool,
+		Tools:        advisorTools,
+		Env:          advisorEnv,
+		Advisor:      advisorCfg,
+	}
+
+	// Update or append advisor configuration
+	if advisorIndex >= 0 {
+		cfg.Sources[advisorIndex] = builtinAdvisor
+		logrus.Info("mcp: updated builtin advisor configuration")
+	} else {
+		cfg.Sources = append(cfg.Sources, builtinAdvisor)
+		logrus.Info("mcp: registered builtin advisor configuration")
 	}
 
 	if err := setConfig("mcp_runtime", cfg); err != nil {
