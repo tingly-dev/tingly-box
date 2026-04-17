@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Platform" />
 </p>
 
-Tingly Box **coordinates AI models, optimizes context, and routes requests** for maximum efficiency — with built-in **remote control and secure, customizable integrations**.
+Tingly Box **serves agents, coordinates AI models, optimizes context, and routes requests** for maximum efficiency — with built-in **remote control and secure, customizable integrations**.
 
 ![Tingly Box Web UI Demo](./docs/images/output.gif)
 
@@ -59,9 +59,10 @@ docker run -d \
   ghcr.io/tingly-dev/tingly-box
 ```
 
-## **Use with IDE, CLI, SDK and any AI application**
+### Integration Guide
 
-**Tool Integration**
+<details>
+<summary><strong>Agent Integration - Claude Code / OpenCode / Codex / Xcode / VSCode / OpenClaw</strong></summary>
 
 - Claude Code (support 1-click config)
 - OpenCode (support 1-click config)
@@ -72,7 +73,44 @@ Any application is ready to use.
 
 > We've provided detailed config guide in application
 
-**OpenAI SDK**
+</details>
+
+
+<details>
+<summary><strong>Remote Control Agent via IM Bots - TG / DingTalk / Feishu / Lark / Weixin / WecCom</strong></summary>
+
+Tingly Box now supports remote control through popular IM platforms. Interact with your AI agents remotely without direct server access.
+
+**Supported Platforms**
+
+- ✅ Telegram
+- ✅ DingTalk
+- ✅ Feishu
+- ✅ Lark
+- ✅ Weixin
+- ✅ WeCom
+- Slack
+- Discord
+
+**Quick Setup**
+
+1. Open Web UI like `http://localhost:12580`
+2. Navigate to **Remote** section
+3. Configure your preferred IM platform bot
+4. Start interacting with your agents remotely
+
+**Use Cases**
+
+- Execute tasks and queries from your phone or any device
+- Team collaboration with shared agent access
+- Monitor and control agents while away from your workstation
+
+![Remote Control Demo](./docs/images/5-remote-control.png)
+
+</details>
+
+<details>
+<summary><strong>OpenAI SDK</strong></summary>
 
 ```python
 from openai import OpenAI
@@ -89,7 +127,10 @@ response = client.chat.completions.create(
 print(response)
 ```
 
-**Anthropic SDK**
+</details>
+
+<details>
+<summary><strong>Anthropic SDK</strong></summary>
 
 ```python
 from anthropic import Anthropic
@@ -111,7 +152,10 @@ print(response)
 
 > Tingly Box proxies requests transparently for SDKs and CLI tools.
 
-**Using OAuth Providers**
+</details>
+
+<details>
+<summary><strong>Using OAuth Providers</strong></summary>
 
 You can also add OAuth providers (like Claude Code) and use your existing quota in any OpenAI-compatible tool:
 
@@ -120,46 +164,24 @@ You can also add OAuth providers (like Claude Code) and use your existing quota 
 # 2. Configure your tool with Tingly Box endpoint
 ```
 
-
 Requests route through your OAuth-authorized provider, using your existing Claude Code quota instead of requiring a separate API key.
 
 This works with any tool that supports OpenAI-compatible endpoints: Cherry Studio, VS Code extensions, or custom AI agents.
 
-## Remote Control via IM Bots
+</details>
 
-Tingly Box now supports remote control through popular IM platforms. Interact with your AI agents remotely without direct server access.
+<details>
+<summary><strong>Web Management UI</strong></summary>
 
-**Supported Platforms**
-
-- ✅ Telegram
-- ✅ DingTalk
-- ✅ Feishu
-- ✅ Lark
-- ✅ Weixin
-- WeCom
-- Slack
-- Discord
-
-**Quick Setup**
-
-1. Open Web UI like `http://localhost:12580`
-2. Navigate to **Remote** section
-3. Configure your preferred IM platform bot
-4. Start interacting with your agents remotely
-
-**Use Cases**
-
-- Execute tasks and queries from your phone or any device
-- Team collaboration with shared agent access
-- Monitor and control agents while away from your workstation
-
-![Remote Control Demo](./docs/images/5-remote-control.png)
-
-## Web Management UI
+Launch the web management interface:
 
 ```bash
 npx tingly-box@latest
 ```
+
+Then open `http://localhost:12580` in your browser.
+
+</details>
 
 ## Documentation
 
