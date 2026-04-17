@@ -123,9 +123,9 @@ func (s *AdvisorToolSource) CallTool(ctx context.Context, toolName string, argum
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"reason":          input.Reason,
-		"uses_remaining":  actx.UsesRemaining,
-		"format":          detectAdvisorFormat(s.config),
+		"reason":         input.Reason,
+		"uses_remaining": actx.UsesRemaining,
+		"format":         detectAdvisorFormat(s.config),
 	}).Debug("advisor: consulting advisor model")
 
 	advisorCtx, cancel := context.WithTimeout(ctx, advisorCallTimeout)
