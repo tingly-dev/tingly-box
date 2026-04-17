@@ -13,10 +13,12 @@ type ToolSourceFactory struct {
 }
 
 // NewToolSourceFactory creates a new tool source factory.
-func NewToolSourceFactory(sc *sessionCache, cp *client.ClientPool) *ToolSourceFactory {
+// The cp parameter is kept for API compatibility but is no longer used.
+func NewToolSourceFactory(sc *sessionCache, cp interface{}) *ToolSourceFactory {
+	_ = cp // cp is no longer used but kept for API compatibility
 	return &ToolSourceFactory{
 		sessionCache: sc,
-		clientPool:   cp,
+		clientPool:   nil, // No longer used
 	}
 }
 

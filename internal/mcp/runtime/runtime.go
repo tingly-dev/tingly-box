@@ -56,14 +56,10 @@ func NewRuntime(getConfig configProvider) *Runtime {
 	return r
 }
 
-// SetClientPool injects the client pool into the runtime's tool source factory.
+// SetClientPool is a no-op retained for API compatibility.
+// The adviser is now handled as a virtual tool and doesn't need the client pool.
 func (r *Runtime) SetClientPool(cp *client.ClientPool) {
-	if r == nil {
-		return
-	}
-	if r.toolSourceFactory != nil {
-		r.toolSourceFactory.SetClientPool(cp)
-	}
+	// No-op: adviser is now a virtual tool, no longer uses tool source factory
 }
 
 // Close releases all MCP sessions and tool source connections.
