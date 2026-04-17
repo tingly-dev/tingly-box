@@ -1731,6 +1731,7 @@ export const api = {
     setMCPConfig: async (config: {
         sources?: Array<{
             id?: string;
+            enabled?: boolean;
             transport?: string;
             endpoint?: string;
             headers?: Record<string, string>;
@@ -1739,6 +1740,15 @@ export const api = {
             args?: string[];
             cwd?: string;
             env?: Record<string, string>;
+            proxy_url?: string;
+            is_client_tool?: boolean;
+            advisor?: {
+                base_url?: string;
+                model?: string;
+                api_key?: string;
+                max_uses_per_request?: number;
+                max_tokens?: number;
+            };
         }>;
         request_timeout?: number;
         strip_disabled_mcp_tools?: boolean;
