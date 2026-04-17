@@ -456,7 +456,7 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 		if isStreaming {
 			logrus.Debugf("[MCP-DEBUG] Anthropic Beta: streaming request detected")
 			if hasDeclaredMCPAnthropicBetaTools(req) {
-				logrus.Warnf("[MCP-DEBUG] Anthropic Beta: CONVERTING streaming to non-streaming for MCP tool handling!")
+				logrus.Debugf("[MCP-DEBUG] Anthropic Beta: MCP tools detected, using internal non-streaming + external SSE pattern")
 				anthropicResp, cancel, err := ForwardAnthropicV1Beta(fc, wrapper, req)
 				if cancel != nil {
 					defer cancel()
