@@ -27,6 +27,9 @@ type Runtime struct {
 	toolSourceFactory *ToolSourceFactory
 	activeSources     map[string]ToolSource // source ID -> ToolSource
 	sourcesMu         sync.RWMutex
+	virtualRegistry   *VirtualToolRegistry
+	sessionStore      *SessionStore
+	sweeper           *time.Ticker
 
 	// Cache for enabled server tool names to avoid repeated full enumeration.
 	enabledNamesCache   map[string]struct{}
@@ -42,11 +45,15 @@ func NewRuntime(getConfig configProvider) *Runtime {
 		return nil
 	}
 	sc := newSessionCache()
-	return &Runtime{
+	r := &Runtime{
 		getConfig:         getConfig,
 		sc:                sc,
 		activeSources:     make(map[string]ToolSource),
+		virtualRegistry:   NewVirtualToolRegistry(),
+		sessionStore:      NewSessionStore(10 * time.Minute),
 	}
+	r.sweeper = r.sessionStore.StartSweeper(1 * time.Minute)
+	return r
 }
 
 // SetClientPool injects the client pool into the runtime's tool source factory.
@@ -67,6 +74,9 @@ func (r *Runtime) Close() {
 
 	// Close all active tool sources
 	if r.activeSources != nil {
+		if r.sweeper != nil {
+			r.sweeper.Stop()
+		}
 		r.sourcesMu.Lock()
 		defer r.sourcesMu.Unlock()
 
