@@ -27,6 +27,7 @@ import {
     DeleteOutline as DeleteOutlineIcon,
     Edit as EditIcon,
     PowerSettingsNew as PowerIcon,
+    Switch,
 } from '@mui/icons-material';
 import { useEffect, useState } from 'react';
 import MCPSourceEditor from './MCPSourceEditor';
@@ -450,6 +451,23 @@ const MCPRegisteredServers = () => {
                                 No registered MCP servers yet.
                             </Typography>
                         )}
+                    </Stack>
+                </UnifiedCard>
+
+                <UnifiedCard title="Safety Guard" size="full">
+                    <Stack spacing={1.5}>
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={stripDisabledMCPTools}
+                                    onChange={(e) => setStripDisabledMCPTools(e.target.checked)}
+                                />
+                            }
+                            label="Strip disabled MCP declarations/tool calls"
+                        />
+                        <Alert severity="warning">
+                            Dangerous capability. When enabled, disabled MCP tool declarations/calls are forcibly removed and a tool_error compensation message is added.
+                        </Alert>
                     </Stack>
                 </UnifiedCard>
 
