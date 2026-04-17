@@ -66,8 +66,15 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		// Read request body for storage (before it's consumed by handlers)
 		var bodyRef string
 		if m.requestBodyStore != nil && c.Request.Body != nil && c.Request.Method != "GET" && c.Request.Method != "HEAD" {
-			bodyBytes, _ := io.ReadAll(c.Request.Body)
-			if len(bodyBytes) > 0 {
+			bodyBytes, err := io.ReadAll(c.Request.Body)
+			if err != nil {
+				// Log the error but continue processing
+				logrus.WithFields(logrus.Fields{
+					"method": c.Request.Method,
+					"path":   c.Request.URL.Path,
+					"error":  err.Error(),
+				}).Warn("Failed to read request body for storage")
+			} else if len(bodyBytes) > 0 {
 				// Store body and get reference ID
 				bodyRef = m.requestBodyStore.Store(c.Request.Method, c.Request.URL.Path, string(bodyBytes), MaxRequestBodySize)
 				// Restore body for downstream handlers

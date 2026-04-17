@@ -71,7 +71,7 @@ func (s *RequestBodyStore) Store(method, path, body string, maxBodySize int) str
 	idx := s.writeIdx % s.maxSize
 
 	// Evict oldest entry if buffer is full
-	if len(s.ids) == s.maxSize && idx < len(s.ids) {
+	if len(s.ids) >= s.maxSize && idx < len(s.ids) {
 		oldID := s.ids[idx]
 		delete(s.bodies, oldID)
 	}
