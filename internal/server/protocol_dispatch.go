@@ -14,7 +14,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
-	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
@@ -96,14 +96,6 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 	req := reqCtx.Request.(*anthropic.MessageNewParams)
 
 	ctx := c.Request.Context()
-	if s.mcpRuntime != nil {
-		if maxUses := s.mcpRuntime.GetAdvisorMaxUses(); maxUses > 0 {
-			ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
-				Messages:      extractAnthropicV1Messages(req.Messages),
-				UsesRemaining: maxUses,
-			})
-		}
-	}
 
 	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, actualModel)
 	fc := NewForwardContext(ctx, provider)
@@ -273,14 +265,6 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 
 	ctx := c.Request.Context()
-	if s.mcpRuntime != nil {
-		if maxUses := s.mcpRuntime.GetAdvisorMaxUses(); maxUses > 0 {
-			ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
-				Messages:      extractAnthropicBetaMessages(req.Messages),
-				UsesRemaining: maxUses,
-			})
-		}
-	}
 
 	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, actualModel)
 	fc := NewForwardContext(ctx, provider)
@@ -465,12 +449,6 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 		req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 
 		ctx := c.Request.Context()
-		if maxUses := s.mcpRuntime.GetAdvisorMaxUses(); maxUses > 0 {
-			ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
-				Messages:      extractAnthropicBetaMessages(req.Messages),
-				UsesRemaining: maxUses,
-			})
-		}
 
 		wrapper := s.clientPool.GetAnthropicClient(ctx, provider, actualModel)
 		fc := NewForwardContext(ctx, provider)
@@ -590,7 +568,7 @@ func hasDeclaredMCPAnthropicV1Tools(req *anthropic.MessageNewParams) bool {
 		return false
 	}
 	for _, t := range req.Tools {
-		if t.OfTool != nil && runtime.IsMCPToolName(t.OfTool.Name) {
+		if t.OfTool != nil && mcpruntime.IsMCPToolName(t.OfTool.Name) {
 			return true
 		}
 	}
@@ -603,7 +581,7 @@ func hasDeclaredMCPAnthropicBetaTools(req *anthropic.BetaMessageNewParams) bool 
 		return false
 	}
 	for _, t := range req.Tools {
-		if t.OfTool != nil && runtime.IsMCPToolName(t.OfTool.Name) {
+		if t.OfTool != nil && mcpruntime.IsMCPToolName(t.OfTool.Name) {
 			return true
 		}
 	}
@@ -1286,12 +1264,6 @@ func (s *Server) nonstreamAnthropicV1ToResponses(
 	anthropicReq := reqCtx.Request.(*anthropic.MessageNewParams)
 
 	ctx := c.Request.Context()
-	if maxUses := s.mcpRuntime.GetAdvisorMaxUses(); maxUses > 0 {
-		ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
-			Messages:      extractAnthropicV1Messages(anthropicReq.Messages),
-			UsesRemaining: maxUses,
-		})
-	}
 
 	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, string(anthropicReq.Model))
 	fc := NewForwardContext(nil, provider)
@@ -1324,12 +1296,6 @@ func (s *Server) streamAnthropicV1ToResponses(
 	anthropicReq := reqCtx.Request.(*anthropic.MessageNewParams)
 
 	ctx := c.Request.Context()
-	if maxUses := s.mcpRuntime.GetAdvisorMaxUses(); maxUses > 0 {
-		ctx = runtime.WithAdvisorContext(ctx, &runtime.AdvisorContext{
-			Messages:      extractAnthropicV1Messages(anthropicReq.Messages),
-			UsesRemaining: maxUses,
-		})
-	}
 
 	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, string(anthropicReq.Model))
 	fc := NewForwardContext(ctx, provider)
