@@ -42,8 +42,12 @@ Tingly Box **serves agents, coordinates AI models, optimizes context, and routes
 **From npm (recommended)**
 
 ```bash
-# Install and run (auto service migration without any args)
+# Install and run (auto restart, migrate and open webui while run without any args)
+# A golang binary release but npx to wrap cli for convenience
 npx tingly-box@latest
+
+# or -y for convenience
+npx -y tingly-box@latest
 ```
 
 > if any trouble, please check tingly-box output, or call for an issue to help. 
