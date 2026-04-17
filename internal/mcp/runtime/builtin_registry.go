@@ -93,32 +93,18 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 		logrus.Info("mcp: registered builtin webtools configuration")
 	}
 
-	// Create advisor configuration (in-process source).
+	// Create advisor configuration and register as virtual tool.
 	advisorEnabled := typ.BoolPtr(false) // default: disabled
-	advisorIsClientTool := false         // server tool
-	advisorTools := mcptools.DefaultBuiltinAdvisorToolNames()
-	advisorEnv := map[string]string{
-		"ADVISOR_BASE_URL": "${ADVISOR_BASE_URL}",
-		"ADVISOR_MODEL":    "${ADVISOR_MODEL}",
-		"ADVISOR_API_KEY":  "${ADVISOR_API_KEY}",
-	}
 	advisorCfg := &typ.AdvisorConfig{
-		BaseURL: "${ADVISOR_BASE_URL}",
-		Model:   "${ADVISOR_MODEL}",
-		APIKey:  "${ADVISOR_API_KEY}",
+		BaseURL:           "${ADVISOR_BASE_URL}",
+		Model:             "${ADVISOR_MODEL}",
+		APIKey:            "${ADVISOR_API_KEY}",
+		MaxUsesPerRequest: 3,
+		MaxTokens:         4096,
 	}
 	if existingAdvisor != nil {
 		if existingAdvisor.Enabled != nil {
 			advisorEnabled = existingAdvisor.Enabled
-		}
-		if existingAdvisor.IsClientTool != nil {
-			advisorIsClientTool = *existingAdvisor.IsClientTool
-		}
-		if len(existingAdvisor.Tools) > 0 {
-			advisorTools = existingAdvisor.Tools
-		}
-		for k, v := range existingAdvisor.Env {
-			advisorEnv[k] = v
 		}
 		if existingAdvisor.Advisor != nil {
 			copied := *existingAdvisor.Advisor
@@ -126,14 +112,10 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 		}
 	}
 	builtinAdvisor := typ.MCPSourceConfig{
-		ID:           mcptools.BuiltinAdvisorSourceID,
-		Name:         mcptools.BuiltinAdvisorSourceName,
-		Transport:    "advisor",
-		Enabled:      advisorEnabled,
-		IsClientTool: &advisorIsClientTool,
-		Tools:        advisorTools,
-		Env:          advisorEnv,
-		Advisor:      advisorCfg,
+		ID:      mcptools.BuiltinAdvisorSourceID,
+		Name:    mcptools.BuiltinAdvisorSourceName,
+		Enabled: advisorEnabled,
+		Advisor: advisorCfg,
 	}
 
 	// Update or append advisor configuration
@@ -144,6 +126,10 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 		cfg.Sources = append(cfg.Sources, builtinAdvisor)
 		logrus.Info("mcp: registered builtin advisor configuration")
 	}
+
+	// Note: We no longer create a transport-based MCPSourceConfig for adviser.
+	// Instead, the virtual tool is registered directly into the runtime's VirtualRegistry.
+	// This is done in Runtime initialization, not here.
 
 	if err := setConfig("mcp_runtime", cfg); err != nil {
 		logrus.WithError(err).Error("mcp: failed to save builtin webtools configuration")
