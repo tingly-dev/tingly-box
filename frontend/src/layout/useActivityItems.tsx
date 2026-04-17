@@ -152,7 +152,7 @@ export function useActivityItems(): ActivityItem[] {
                 label: t('layout.nav.credential', { defaultValue: 'Credentials' }),
                 children: [
                     { path: '/credentials', label: 'Model Key', icon: <IconLock size={20} /> },
-                    { path: '/tingly-box-tokens', label: 'Tingly Box', icon: <IconKey size={20} /> },
+                    { path: '/tingly-box-token', label: 'Tingly Box', icon: <IconKey size={20} /> },
                 ],
             },
             {
