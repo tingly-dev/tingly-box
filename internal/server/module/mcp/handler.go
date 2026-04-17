@@ -8,7 +8,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/mcp/local"
-	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -29,7 +30,7 @@ func NewHandler(cfg *config.Config) *Handler {
 	h.localHandler = local.NewHandler(cfg, registry, "")
 
 	// Create mcpruntime for local mode
-	runtime := runtime.NewRuntime(func() *typ.MCPRuntimeConfig {
+	mcpRuntime := mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig {
 		var mcpCfg typ.MCPRuntimeConfig
 		if cfg != nil {
 			cfg.GetToolConfig(db.ToolTypeMCPRuntime, &mcpCfg)
@@ -38,7 +39,7 @@ func NewHandler(cfg *config.Config) *Handler {
 	})
 
 	// Set runtime on local handler for tool execution
-	h.localHandler.SetRuntime(runtime)
+	h.localHandler.SetRuntime(mcpRuntime)
 
 	// Get base URL from config (use localhost as fallback for auto-registration)
 	baseURL := "http://localhost"
@@ -47,7 +48,7 @@ func NewHandler(cfg *config.Config) *Handler {
 	}
 
 	// Create transport handler for local mode with registry for auto-registration
-	h.transportHandler = local.NewTransportHandler(runtime, registry, baseURL, cfg)
+	h.transportHandler = local.NewTransportHandler(mcpRuntime, registry, baseURL, cfg)
 
 	return h
 }
@@ -151,25 +152,42 @@ func (h *Handler) SetMCPRuntimeConfig(c *gin.Context) {
 		return
 	}
 
-	// Validate sources
-	for _, source := range req.Sources {
-		if source.ID == "" {
-			c.JSON(http.StatusBadRequest, MCPRuntimeConfigResponse{
-				Success: false,
-				Error:   "MCP source ID cannot be empty",
-			})
-			return
-		}
-		if source.Transport != "" && source.Transport != "http" && source.Transport != "stdio" && source.Transport != "sse" && source.Transport != "advisor" {
-			c.JSON(http.StatusBadRequest, MCPRuntimeConfigResponse{
-				Success: false,
-				Error:   "Invalid transport type: " + source.Transport + ". Must be one of 'http', 'stdio', 'sse'",
-			})
-			return
-		}
-	}
 
-	issues := runtime.ValidateEnabledMCPSourceEnvRefs(req.Sources)
+		// Validate sources and apply defaults
+		for i, source := range req.Sources {
+			if source.ID == "" {
+				c.JSON(http.StatusBadRequest, MCPRuntimeConfigResponse{
+					Success: false,
+					Error:   "MCP source ID cannot be empty",
+				})
+				return
+			}
+			if source.Transport != "" && source.Transport != "http" && source.Transport != "stdio" && source.Transport != "sse" && source.Transport != "advisor" {
+				c.JSON(http.StatusBadRequest, MCPRuntimeConfigResponse{
+					Success: false,
+					Error:   "Invalid transport type: " + source.Transport + ". Must be one of 'http', 'stdio', 'sse'",
+				})
+				return
+			}
+
+			// Rule 1: Builtin tools cannot modify IsClientTool field
+			isBuiltin := source.ID == mcptools.BuiltinAdvisorSourceID || source.ID == mcptools.BuiltinWebtoolsSourceID
+			if isBuiltin && source.IsClientTool != nil {
+				c.JSON(http.StatusBadRequest, MCPRuntimeConfigResponse{
+					Success: false,
+					Error:   "Builtin tools '" + source.ID + "' cannot modify IsClientTool field",
+				})
+				return
+			}
+
+			// Rule 2: New tools default to client tool (IsClientTool=true)
+			if !isBuiltin && source.IsClientTool == nil {
+				isClientTool := true
+				req.Sources[i].IsClientTool = &isClientTool
+			}
+		}
+
+	issues := mcpruntime.ValidateEnabledMCPSourceEnvRefs(req.Sources)
 	if len(issues) > 0 {
 		parts := make([]string, 0, len(issues))
 		for _, issue := range issues {
