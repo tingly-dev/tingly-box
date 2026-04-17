@@ -283,6 +283,8 @@ type AdvisorConfig struct {
 	Model             string `json:"model,omitempty" yaml:"model,omitempty"`
 	APIKey            string `json:"api_key,omitempty" yaml:"api_key,omitempty"`
 	MaxUsesPerRequest int    `json:"max_uses_per_request,omitempty" yaml:"max_uses_per_request,omitempty"`
+	// The max token output by adviser. Too much explodes worker's context. 4k is enough for pure suggestions.
+	MaxTokens int `json:"max_tokens,omitempty" yaml:"max_tokens,omitempty"`
 }
 
 // MCPStdioConfig STDIO connection configuration

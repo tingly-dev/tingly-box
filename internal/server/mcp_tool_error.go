@@ -29,7 +29,6 @@ func (h advisorResponseHook) Match(toolName string) bool {
 
 func (h advisorResponseHook) PrepareContext(s *Server, ctx context.Context, messages []map[string]any) context.Context {
 	return s.withAdvisorContext(ctx, messages)
->>>>>>> 2831bb51 (feat(advisor): add response-phase hooks for advisor tool calls)
 }
 
 func (s *Server) isEnabledMCPToolName(ctx context.Context, toolName string) bool {
