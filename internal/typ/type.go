@@ -327,6 +327,18 @@ func ApplyMCPRuntimeDefaults(config *MCPRuntimeConfig) {
 		if config.Sources[i].Enabled == nil {
 			config.Sources[i].Enabled = BoolPtr(true)
 		}
+		// Apply defaults for in-process advisor source.
+		if config.Sources[i].Transport == "advisor" || config.Sources[i].Advisor != nil {
+			if config.Sources[i].Advisor == nil {
+				config.Sources[i].Advisor = &AdvisorConfig{}
+			}
+			if config.Sources[i].Advisor.MaxUsesPerRequest <= 0 {
+				config.Sources[i].Advisor.MaxUsesPerRequest = 3
+			}
+			if config.Sources[i].Advisor.MaxTokens <= 0 {
+				config.Sources[i].Advisor.MaxTokens = 4096
+			}
+		}
 	}
 }
 
