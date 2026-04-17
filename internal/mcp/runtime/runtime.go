@@ -342,6 +342,13 @@ func (r *Runtime) getOrCreateSource(ctx context.Context, sourceID string) (ToolS
 	if !typ.IsMCPSourceEnabled(*sourceConfig) {
 		return nil, &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " is disabled"}
 	}
+	if missing := ValidateEnabledMCPSourceEnvRefs([]typ.MCPSourceConfig{*sourceConfig}); len(missing) > 0 {
+		first := missing[0]
+		return nil, &sessionError{
+			sourceID: sourceID,
+			msg:      "missing environment variable " + first.VarName + " for " + first.FieldPath,
+		}
+	}
 
 	// Create tool source using factory
 	newSource, err := r.toolSourceFactory.CreateToolSource(*sourceConfig)
@@ -444,8 +451,26 @@ func (r *Runtime) getConfigOrDefault() *typ.MCPRuntimeConfig {
 	if cfg == nil {
 		return nil
 	}
-	typ.ApplyMCPRuntimeDefaults(cfg)
-	return cfg
+	var clone typ.MCPRuntimeConfig
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		logrus.WithError(err).Warn("mcp: failed to clone runtime config, using original")
+		clone = *cfg
+	} else if err := json.Unmarshal(b, &clone); err != nil {
+		logrus.WithError(err).Warn("mcp: failed to unmarshal cloned runtime config, using original")
+		clone = *cfg
+	}
+
+	typ.ApplyMCPRuntimeDefaults(&clone)
+	missing := ExpandMCPRuntimeEnvRefs(&clone)
+	for _, issue := range missing {
+		logrus.WithFields(logrus.Fields{
+			"source": issue.SourceID,
+			"field":  issue.FieldPath,
+			"var":    issue.VarName,
+		}).Warn("mcp: unresolved environment reference in runtime config")
+	}
+	return &clone
 }
 
 // GetConfig returns the current MCP runtime configuration.
