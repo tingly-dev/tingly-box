@@ -42,6 +42,7 @@ func TestStreamAnthropicV1SingleMessage(t *testing.T) {
 	require.Contains(t, body, "event:message_delta")
 	require.Contains(t, body, "event:message_stop")
 	require.Contains(t, body, `"model":"proxy-model"`)
+	require.Contains(t, body, `"stop_reason":"end_turn"`)
 }
 
 func TestStreamAnthropicBetaSingleMessage(t *testing.T) {
@@ -76,6 +77,76 @@ func TestStreamAnthropicBetaSingleMessage(t *testing.T) {
 	require.Contains(t, body, "event:message_delta")
 	require.Contains(t, body, "event:message_stop")
 	require.Contains(t, body, `"model":"proxy-beta-model"`)
+	require.Contains(t, body, `"stop_reason":"end_turn"`)
 	// Beta emitter also appends a simple trailing data event with message_stop type.
 	require.True(t, strings.Contains(body, `"type":"message_stop"`))
+}
+
+func TestStreamAnthropicV1SingleMessage_ToolUse(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	raw := `{
+	  "id":"msg_v1_tool_1",
+	  "content":[{"type":"tool_use","id":"toolu_1","name":"bash","input":{"command":"ls -la","description":"list files"}}],
+	  "model":"claude-3-5-sonnet",
+	  "role":"assistant",
+	  "stop_reason":"tool_use",
+	  "stop_sequence":"",
+	  "type":"message",
+	  "usage":{"input_tokens":12,"output_tokens":7}
+	}`
+
+	var resp anthropic.Message
+	require.NoError(t, json.Unmarshal([]byte(raw), &resp))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	err := AnthropicSingleMessage(c, &resp, "proxy-model")
+	require.NoError(t, err)
+
+	body := w.Body.String()
+	require.Contains(t, body, "event:content_block_start")
+	require.Contains(t, body, `"type":"tool_use"`)
+	require.Contains(t, body, `"name":"bash"`)
+	require.Contains(t, body, `"input":{}`)
+	require.Contains(t, body, "event:content_block_delta")
+	require.Contains(t, body, `"type":"input_json_delta"`)
+	require.Contains(t, body, `"partial_json":"{\"command\":\"ls -la\",\"description\":\"list files\"}"`)
+	require.Contains(t, body, `"stop_reason":"tool_use"`)
+}
+
+func TestStreamAnthropicBetaSingleMessage_ToolUse(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	raw := `{
+	  "id":"msg_beta_tool_1",
+	  "content":[{"type":"tool_use","id":"toolu_1","name":"bash","input":{"command":"ls -la","description":"list files"}}],
+	  "context_management":{"applied":null},
+	  "model":"claude-3-7-sonnet",
+	  "role":"assistant",
+	  "stop_reason":"tool_use",
+	  "stop_sequence":"",
+	  "type":"message",
+	  "usage":{"input_tokens":20,"output_tokens":9}
+	}`
+
+	var resp anthropic.BetaMessage
+	require.NoError(t, json.Unmarshal([]byte(raw), &resp))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	err := AnthropicSingleBetaMessage(c, &resp, "proxy-beta-model")
+	require.NoError(t, err)
+
+	body := w.Body.String()
+	require.Contains(t, body, "event:content_block_start")
+	require.Contains(t, body, `"type":"tool_use"`)
+	require.Contains(t, body, `"name":"bash"`)
+	require.Contains(t, body, `"input":{}`)
+	require.Contains(t, body, "event:content_block_delta")
+	require.Contains(t, body, `"type":"input_json_delta"`)
+	require.Contains(t, body, `"partial_json":"{\"command\":\"ls -la\",\"description\":\"list files\"}"`)
+	require.Contains(t, body, `"stop_reason":"tool_use"`)
 }
