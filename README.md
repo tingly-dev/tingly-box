@@ -1,9 +1,7 @@
-**Announcement:** Here is [fault record](https://github.com/tingly-dev/tingly-box/discussions/626). Please update to the latest version to resolve known issues. Thank you for your continued support.
-
----
-
-
 ![Tingly Box Web UI Demo](./docs/hero.png)
+
+> **Announcement:** Here is [fault record](https://github.com/tingly-dev/tingly-box/discussions/626). Please update to the latest version to resolve known issues. Thank you for your continued support.
+
 
 <h1 align="center">Tingly Box</h1>
 
