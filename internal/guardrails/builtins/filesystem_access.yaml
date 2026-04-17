@@ -7,7 +7,6 @@ policies:
     verdict: block
     reason: This policy blocks attempts to read SSH configuration and key directories.
     match:
-      tool_names: [bash]
       actions:
         include: [read]
       resources:
@@ -23,7 +22,6 @@ policies:
     verdict: block
     reason: This policy blocks attempts to read environment variable files that may contain secrets.
     match:
-      tool_names: [bash]
       actions:
         include: [read]
       resources:
@@ -39,7 +37,6 @@ policies:
     verdict: block
     reason: This policy blocks attempts to read Git credential and configuration files that may contain secrets.
     match:
-      tool_names: [bash]
       actions:
         include: [read]
       resources:
@@ -55,7 +52,6 @@ policies:
     verdict: block
     reason: This policy blocks attempts to read shell history files.
     match:
-      tool_names: [bash]
       actions:
         include: [read]
       resources:
@@ -71,7 +67,6 @@ policies:
     verdict: block
     reason: This policy blocks attempts to read local AWS credential files.
     match:
-      tool_names: [bash]
       actions:
         include: [read]
       resources:
@@ -87,7 +82,6 @@ policies:
     verdict: block
     reason: This policy blocks attempts to read cloud and registry credential files.
     match:
-      tool_names: [bash]
       actions:
         include: [read]
       resources:
@@ -103,7 +97,6 @@ policies:
     verdict: block
     reason: This policy blocks attempts to read private key files.
     match:
-      tool_names: [bash]
       actions:
         include: [read]
       resources:

@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -37,7 +38,7 @@ func LoadBuiltinPolicies() ([]guardrailscore.Policy, error) {
 		if ext != ".yaml" && ext != ".yml" {
 			continue
 		}
-		data, err := builtinTemplatesFS.ReadFile(filepath.Join("builtins", name))
+		data, err := builtinTemplatesFS.ReadFile(path.Join("builtins", name))
 		if err != nil {
 			return nil, fmt.Errorf("read builtin file %s: %w", name, err)
 		}

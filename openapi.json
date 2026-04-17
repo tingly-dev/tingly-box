@@ -297,8 +297,8 @@
         "tags": [
           "guardrails"
         ],
-        "summary": "Get curated builtin guardrails policy templates",
-        "description": "Get curated builtin guardrails policy templates",
+        "summary": "Get curated builtin guardrails policies",
+        "description": "Get curated builtin guardrails policies",
         "operationId": "apiV1GuardrailsBuiltinsGet",
         "responses": {
           "200": {
@@ -481,6 +481,50 @@
         "summary": "List protected credentials used by guardrails pseudonymization",
         "description": "List protected credentials used by guardrails pseudonymization",
         "operationId": "apiV1GuardrailsCredentialsGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/guardrails/fragment/export": {
+      "post": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Export one or more imported guardrails policy fragments",
+        "description": "Export one or more imported guardrails policy fragments",
+        "operationId": "apiV1GuardrailsFragmentExportPost",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/guardrails/fragment/import": {
+      "post": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Import one or more guardrails policies into the shared custom fragment",
+        "description": "Import one or more guardrails policies into the shared custom fragment",
+        "operationId": "apiV1GuardrailsFragmentImportPost",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -695,6 +739,50 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/guardrails/registry": {
+      "get": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "List downloadable guardrails policies from a remote registry",
+        "description": "List downloadable guardrails policies from a remote registry",
+        "operationId": "apiV1GuardrailsRegistryGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/guardrails/registry/install": {
+      "post": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Download a guardrails policy from a remote registry into the local guardrails directory",
+        "description": "Download a guardrails policy from a remote registry into the local guardrails directory",
+        "operationId": "apiV1GuardrailsRegistryInstallPost",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1346,6 +1434,178 @@
         }
       }
     },
+    "/api/v1/mcp/client": {
+      "post": {
+        "tags": [
+          "mcp"
+        ],
+        "summary": "Register a new MCP client",
+        "description": "Register a new MCP client",
+        "operationId": "apiV1McpClientPost",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/client/{id}": {
+      "get": {
+        "tags": [
+          "mcp"
+        ],
+        "summary": "Get a specific MCP client by ID",
+        "description": "Get a specific MCP client by ID",
+        "operationId": "apiV1McpClientIdGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "mcp"
+        ],
+        "summary": "Update an MCP client configuration",
+        "description": "Update an MCP client configuration",
+        "operationId": "apiV1McpClientIdPut",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "mcp"
+        ],
+        "summary": "Remove an MCP client",
+        "description": "Remove an MCP client",
+        "operationId": "apiV1McpClientIdDelete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/client/{id}/reconnect": {
+      "post": {
+        "tags": [
+          "mcp"
+        ],
+        "summary": "Reconnect an MCP client",
+        "description": "Reconnect an MCP client",
+        "operationId": "apiV1McpClientIdReconnectPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/clients": {
+      "get": {
+        "tags": [
+          "mcp"
+        ],
+        "summary": "List all registered MCP clients",
+        "description": "List all registered MCP clients",
+        "operationId": "apiV1McpClientsGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/mcp/config": {
       "get": {
         "tags": [
@@ -1381,6 +1641,169 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MCPRuntimeConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/execute": {
+      "post": {
+        "tags": [
+          "mcp"
+        ],
+        "summary": "Execute an MCP tool for testing",
+        "description": "Execute an MCP tool for testing",
+        "operationId": "apiV1McpExecutePost",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/install/{name}": {
+      "get": {
+        "tags": [
+          "mcp"
+        ],
+        "summary": "Get MCP install command for a client",
+        "description": "Get MCP install command for a client",
+        "operationId": "apiV1McpInstallNameGet",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Resource name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/mode": {
+      "get": {
+        "tags": [
+          "mcp"
+        ],
+        "summary": "Get MCP runtime mode (intercept or local)",
+        "description": "Get MCP runtime mode (intercept or local)",
+        "operationId": "apiV1McpModeGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "mcp"
+        ],
+        "summary": "Set MCP runtime mode (intercept or local)",
+        "description": "Set MCP runtime mode (intercept or local)",
+        "operationId": "apiV1McpModePut",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/{client_name}": {
+      "post": {
+        "tags": [
+          "mcp-transport"
+        ],
+        "summary": "MCP HTTP transport endpoint",
+        "description": "MCP HTTP transport endpoint",
+        "operationId": "apiV1McpClient_namePost",
+        "parameters": [
+          {
+            "name": "client_name",
+            "in": "path",
+            "description": "Path parameter 'client_name'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/{client_name}/stream": {
+      "get": {
+        "tags": [
+          "mcp-transport"
+        ],
+        "summary": "MCP SSE transport endpoint",
+        "description": "MCP SSE transport endpoint",
+        "operationId": "apiV1McpClient_nameStreamGet",
+        "parameters": [
+          {
+            "name": "client_name",
+            "in": "path",
+            "description": "Path parameter 'client_name'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
@@ -5120,9 +5543,46 @@
           "logs"
         ]
       },
+      "MCPOAuthConfig": {
+        "type": "object",
+        "properties": {
+          "authorize_url": {
+            "type": "string",
+            "description": "Field authorize_url"
+          },
+          "client_id": {
+            "type": "string",
+            "description": "Field client_id"
+          },
+          "client_secret": {
+            "type": "string",
+            "description": "Field client_secret"
+          },
+          "scopes": {
+            "type": "array",
+            "description": "Field scopes",
+            "items": {
+              "type": "string"
+            }
+          },
+          "token_url": {
+            "type": "string",
+            "description": "Field token_url"
+          }
+        },
+        "required": [
+          "client_id",
+          "authorize_url",
+          "token_url"
+        ]
+      },
       "MCPRuntimeConfig": {
         "type": "object",
         "properties": {
+          "mode": {
+            "type": "string",
+            "description": "Field mode"
+          },
           "request_timeout": {
             "type": "integer",
             "format": "int64",
@@ -5160,6 +5620,13 @@
       "MCPSourceConfig": {
         "type": "object",
         "properties": {
+          "allowed_extra_headers": {
+            "type": "array",
+            "description": "Field allowed_extra_headers",
+            "items": {
+              "type": "string"
+            }
+          },
           "args": {
             "type": "array",
             "description": "Field args",
@@ -5167,9 +5634,21 @@
               "type": "string"
             }
           },
+          "auth_type": {
+            "type": "string",
+            "description": "Field auth_type"
+          },
+          "auto_registered": {
+            "type": "boolean",
+            "description": "Field auto_registered"
+          },
           "command": {
             "type": "string",
             "description": "Field command"
+          },
+          "connection_type": {
+            "type": "string",
+            "description": "Field connection_type"
           },
           "cwd": {
             "type": "string",
@@ -5201,13 +5680,43 @@
             "type": "string",
             "description": "Field id"
           },
+          "is_ping_available": {
+            "type": "boolean",
+            "description": "Field is_ping_available"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "oauth_config": {
+            "description": "Field oauth_config",
+            "$ref": "#/components/schemas/MCPOAuthConfig"
+          },
           "proxy_url": {
             "type": "string",
             "description": "Field proxy_url"
           },
+          "stdio_config": {
+            "description": "Field stdio_config",
+            "$ref": "#/components/schemas/MCPStdioConfig"
+          },
           "tools": {
             "type": "array",
             "description": "Field tools",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tools_to_auto_execute": {
+            "type": "array",
+            "description": "Field tools_to_auto_execute",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tools_to_execute": {
+            "type": "array",
+            "description": "Field tools_to_execute",
             "items": {
               "type": "string"
             }
@@ -5217,6 +5726,36 @@
             "description": "Field transport"
           }
         }
+      },
+      "MCPStdioConfig": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "array",
+            "description": "Field args",
+            "items": {
+              "type": "string"
+            }
+          },
+          "command": {
+            "type": "string",
+            "description": "Field command"
+          },
+          "cwd": {
+            "type": "string",
+            "description": "Field cwd"
+          },
+          "env": {
+            "type": "array",
+            "description": "Field env",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "command"
+        ]
       },
       "ModelProbeData": {
         "type": "object",
@@ -6539,6 +7078,10 @@
           "description": {
             "type": "string",
             "description": "Field description"
+          },
+          "icon": {
+            "type": "string",
+            "description": "Field icon"
           },
           "id": {
             "type": "string",
@@ -8887,16 +9430,56 @@
   },
   "tags": [
     {
+      "name": "weixin",
+      "description": "Operations related to weixin"
+    },
+    {
+      "name": "codex",
+      "description": "Operations related to codex"
+    },
+    {
+      "name": "mcp-transport",
+      "description": "Operations related to mcp-transport"
+    },
+    {
+      "name": "guardrails",
+      "description": "Operations related to guardrails"
+    },
+    {
       "name": "actions",
       "description": "Operations related to actions"
     },
     {
-      "name": "server",
-      "description": "Operations related to server"
+      "name": "rules",
+      "description": "Operations related to rules"
     },
     {
       "name": "scenarios",
       "description": "Operations related to scenarios"
+    },
+    {
+      "name": "history",
+      "description": "Operations related to history"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
+    },
+    {
+      "name": "config",
+      "description": "Operations related to config"
+    },
+    {
+      "name": "mcp",
+      "description": "Operations related to mcp"
+    },
+    {
+      "name": "logs",
+      "description": "Operations related to logs"
+    },
+    {
+      "name": "server",
+      "description": "Operations related to server"
     },
     {
       "name": "models",
@@ -8907,72 +9490,36 @@
       "description": "Operations related to testing"
     },
     {
-      "name": "providers",
-      "description": "Operations related to providers"
+      "name": "token",
+      "description": "Operations related to token"
     },
     {
       "name": "oauth",
       "description": "Operations related to oauth"
     },
     {
+      "name": "usage",
+      "description": "Operations related to usage"
+    },
+    {
       "name": "imbot-settings",
       "description": "Operations related to imbot-settings"
-    },
-    {
-      "name": "info",
-      "description": "Operations related to info"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "skills",
-      "description": "Operations related to skills"
-    },
-    {
-      "name": "config",
-      "description": "Operations related to config"
-    },
-    {
-      "name": "codex",
-      "description": "Operations related to codex"
     },
     {
       "name": "auth",
       "description": "Operations related to auth"
     },
     {
-      "name": "logs",
-      "description": "Operations related to logs"
+      "name": "info",
+      "description": "Operations related to info"
     },
     {
       "name": "system-logs",
       "description": "Operations related to system-logs"
     },
     {
-      "name": "guardrails",
-      "description": "Operations related to guardrails"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "usage",
-      "description": "Operations related to usage"
-    },
-    {
-      "name": "weixin",
-      "description": "Operations related to weixin"
-    },
-    {
-      "name": "mcp",
-      "description": "Operations related to mcp"
+      "name": "skills",
+      "description": "Operations related to skills"
     }
   ]
 }

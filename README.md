@@ -1,16 +1,14 @@
-**Announcement:** Here is [fault record](https://github.com/tingly-dev/tingly-box/discussions/626). Please update to the latest version to resolve known issues. Thank you for your continued support.
-
----
-
-
 ![Tingly Box Web UI Demo](./docs/hero.png)
+
+> **Announcement:** Here is [fault record](https://github.com/tingly-dev/tingly-box/discussions/626). Please update to the latest version to resolve known issues. Thank you for your continued support.
+
 
 <h1 align="center">Tingly Box</h1>
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> •
   <a href="#key-features">Features</a> •
-  <a href="#use-with-openai-sdk-or-claude-code">Usage</a> •
+  <a href="#integration-guide">Integration</a> •
   <a href="#documentation">Documentation</a> •
   <a href="https://github.com/tingly-dev/tingly-box/issues">Issues</a>
 </p>
@@ -21,21 +19,22 @@
   <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Platform" />
 </p>
 
-Tingly Box **coordinates AI models, optimizes context, and routes requests** for maximum efficiency — with built-in **remote control and secure, customizable integrations**.
+Tingly Box **serves agents, coordinates AI models, optimizes context, and routes requests** for maximum efficiency — with built-in **remote control and secure, customizable integrations**.
 
 ![Tingly Box Web UI Demo](./docs/images/output.gif)
 
 
 ## Key Features
 
-- **Unified API** – One mixin endpoint to rule them all, use what you like - OpenAI / Anthropic / Google, seamlessly bridge all of them with auto translation
-- **Smart Routing, Not Just Load Balancing** – Intelligently route requests across models and tokens based on cost, speed, or custom policies, not simple load balancing
-- **Smart Context Compression** – (Coming soon) Automatically distill context to its essential parts: sharper relevance, lower cost, and faster responses
-- **Blazing Fast** – Adds typically **< 1ms** of overhead—so you get flexibility without latency tax  
-- **Flexible Auth** – Support for both API keys and OAuth (e.g., Claude.ai), so you can use your existing quotas anywhere  
-- **Visual Control Plane** – Intuitive UI to manage providers, routes, aliases, and models at a glance
-- **Client Side Usage Stats** - Track token consumption, latency, cost estimates, and model selection per request—directly from your client
-- **Remote Control** - Control your AI agents remotely via IM bots (Slack, Discord, Telegram, DingTalk, Feishu). Interact with your agents from anywhere without direct server access
+- **Unified API Gateway** – One mixin endpoint to rule them all — seamlessly bridge OpenAI, Anthropic, Google Gemini, and more with automatic protocol translation
+- **Agent Integration** – One-click config for Claude Code, OpenCode, Codex, Xcode, and more — transparent proxying for SDKs and CLI tools
+- **Remote Control via IM Bots** – Control AI agents remotely through Telegram, DingTalk, Feishu, Lark, Weixin, WeCom, Slack, and Discord
+- **Multi-Tenant API Tokens** – Isolate data per user with dedicated API tokens — each user gets their own usage tracking, provider access, and configuration
+- **Smart Routing Engine** – Intelligently route requests across models and tokens based on cost, speed, or custom policies — far beyond simple load balancing
+- **Flexible Authentication** – Support for both API keys and OAuth providers (Claude.ai, Codex, etc.) — use your existing quotas anywhere
+- **Visual Control Plane** – Intuitive web UI to manage providers, routes, aliases, models, and remote bots at a glance — no config files needed
+- **Client-Side Usage Analytics** – Track token consumption, latency, cost estimates, and model selection per request — directly from your client
+- **Blazing Fast Performance** – Adds typically **< 1ms** of overhead — get flexibility without latency tax
 
 ## Quick Start
 
@@ -44,34 +43,17 @@ Tingly Box **coordinates AI models, optimizes context, and routes requests** for
 **From npm (recommended)**
 
 ```bash
-# Install and run (auto service migration without any args)
+# Install and run (auto restart, migrate and open webui while run without any args)
+# A golang binary release but npx to wrap cli for convenience
 npx tingly-box@latest
+
+# or -y for convenience
+npx -y tingly-box@latest
 ```
 
-> if any trouble, please check tingly-box process and port 12580 and confirm to kill them.
+> if any trouble, please check tingly-box output, or call for an issue to help. 
 
-**From source code**
-
-*Requires: Go 1.25+, Node.js 20+, pnpm, task, openapi*
-
-```bash
-# Install dependencies
-# - Go: https://go.dev/doc/install
-# - Node.js: https://nodejs.org/
-# - pnpm: `npm install -g pnpm`
-# - task: https://taskfile.dev/installation/, or `go install github.com/go-task/task/v3/cmd/task@latest`
-# - shell: copy and run shell command in taskfile directly
-
-git submodule update --init --recursive
-
-# Build with frontend
-task build
-
-# Build GUI binary via wails3
-task wails:build
-```
-
-**From Docker (Github)**
+**From Docker (Github Host)**
 
 ```bash
 mkdir tingly-data
@@ -82,9 +64,10 @@ docker run -d \
   ghcr.io/tingly-dev/tingly-box
 ```
 
-## **Use with IDE, CLI, SDK and any AI application**
+### Integration Guide
 
-**Tool Integration**
+<details>
+<summary><strong>Agent Integration - Claude Code / OpenCode / Codex / Xcode / VSCode / OpenClaw</strong></summary>
 
 - Claude Code (support 1-click config)
 - OpenCode (support 1-click config)
@@ -95,7 +78,46 @@ Any application is ready to use.
 
 > We've provided detailed config guide in application
 
-**OpenAI SDK**
+![Agent Integration Demo](./docs/images/3-claude_code.png)
+
+</details>
+
+
+<details>
+<summary><strong>Remote Control Agent via IM Bots - TG / DingTalk / Feishu / Lark / Weixin / WecCom</strong></summary>
+
+Tingly Box now supports remote control through popular IM platforms. Interact with your AI agents remotely without direct server access.
+
+**Supported Platforms**
+
+- ✅ Telegram
+- ✅ DingTalk
+- ✅ Feishu
+- ✅ Lark
+- ✅ Weixin
+- ✅ WeCom
+- Slack
+- Discord
+
+**Quick Setup**
+
+1. Open Web UI like `http://localhost:12580`
+2. Navigate to **Remote** section
+3. Configure your preferred IM platform bot
+4. Start interacting with your agents remotely
+
+**Use Cases**
+
+- Execute tasks and queries from your phone or any device
+- Team collaboration with shared agent access
+- Monitor and control agents while away from your workstation
+
+![Remote Control Demo](./docs/images/5-remote-control.png)
+
+</details>
+
+<details>
+<summary><strong>OpenAI SDK</strong></summary>
 
 ```python
 from openai import OpenAI
@@ -112,7 +134,10 @@ response = client.chat.completions.create(
 print(response)
 ```
 
-**Anthropic SDK**
+</details>
+
+<details>
+<summary><strong>Anthropic SDK</strong></summary>
 
 ```python
 from anthropic import Anthropic
@@ -134,7 +159,10 @@ print(response)
 
 > Tingly Box proxies requests transparently for SDKs and CLI tools.
 
-**Using OAuth Providers**
+</details>
+
+<details>
+<summary><strong>Using OAuth Providers</strong></summary>
 
 You can also add OAuth providers (like Claude Code) and use your existing quota in any OpenAI-compatible tool:
 
@@ -143,46 +171,28 @@ You can also add OAuth providers (like Claude Code) and use your existing quota 
 # 2. Configure your tool with Tingly Box endpoint
 ```
 
-
 Requests route through your OAuth-authorized provider, using your existing Claude Code quota instead of requiring a separate API key.
 
 This works with any tool that supports OpenAI-compatible endpoints: Cherry Studio, VS Code extensions, or custom AI agents.
 
-## Remote Control via IM Bots
+![OAuth Provider Demo](./docs/images/6-oauth.png)
 
-Tingly Box now supports remote control through popular IM platforms. Interact with your AI agents remotely without direct server access.
+</details>
 
-**Supported Platforms**
+<details>
+<summary><strong>Web Management UI</strong></summary>
 
-- ✅ Telegram
-- ✅ DingTalk
-- ✅ Feishu
-- ✅ Lark
-- ✅ Weixin
-- WeCom
-- Slack
-- Discord
-
-**Quick Setup**
-
-1. Open Web UI like `http://localhost:12580`
-2. Navigate to **Remote** section
-3. Configure your preferred IM platform bot
-4. Start interacting with your agents remotely
-
-**Use Cases**
-
-- Execute tasks and queries from your phone or any device
-- Team collaboration with shared agent access
-- Monitor and control agents while away from your workstation
-
-![Remote Control Demo](./docs/images/5-remote-control.png)
-
-## Web Management UI
+Launch the web management interface:
 
 ```bash
 npx tingly-box@latest
 ```
+
+Then open `http://localhost:12580` in your browser.
+
+![Dashboard](./docs/images/0-dashboard.png)
+
+</details>
 
 ## Documentation
 
@@ -192,13 +202,6 @@ npx tingly-box@latest
 
 **[MCP Web Tools](./docs/mcp-web-tools.md)** – Local stdio MCP server for `web_search` / `web_fetch`
 
-
-## **Philosophy**
-
-- **One endpoint, many providers** – Consolidates multiple providers behind a single API with minimal configuration.
-- **Seamless integration** – Works with SDKs and CLI tools with minimal setup.
-
-
 ## Contributing
 
 By contributing to this repository, you agree that your contributions may be
@@ -207,56 +210,36 @@ under separate commercial licensing terms.
 
 See CONTRIBUTING.md and NOTICE for details.
 
-## **How to Contribute**
+---
 
-We welcome contributions! Follow these steps, inspired by popular open-source repositories:
+We welcome contributions!   
+Please check steps below to build from source code.
 
-1. **Fork the repository** – Click the “Fork” button on GitHub.
+*Requires: Go 1.25+, Node.js 20+, pnpm, task*
 
-2. **Clone your fork**
+```bash
+# Install dependencies
+# - Go: https://go.dev/doc/install
+# - Node.js: https://nodejs.org/
+# - pnpm: `npm install -g pnpm`
+# - task: https://taskfile.dev/installation/, or `go install github.com/go-task/task/v3/cmd/task@latest`
+# - shell: copy and run shell command in taskfile directly
 
-   ```bash
-   git clone https://github.com/your-username/tingly-box.git
-   cd tingly-box
-   ```
+git submodule update --init --recursive
 
-3. **Create a new branch**
+# Build with frontend
+task build
 
-   ```bash
-   git checkout -b feature/my-new-feature
-   ```
-
-4. **Make your changes** – Follow existing code style and add tests if applicable.
-
-5. **Run tests**
-
-   ```bash
-   task test
-   ```
-
-6. **Commit your changes**
-
-   ```bash
-   git commit -m "Add concise description of your change"
-   ```
-
-7. **Push your branch**
-
-   ```bash
-   git push origin feature/my-new-feature
-   ```
-
-8. **Open a Pull Request** – Go to the GitHub repository and open a PR against `main`.
-
-
+# Build GUI binary via wails3
+task wails:build
+```
 
 ## Support
 
 | Telegram    | Wechat |
 | :--------: | :-------: |
-| <img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/56022b70-97da-498f-bf83-822a11668fa7" /> | <img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/8a285ffa-bb2d-47db-8e5b-3645ce9eddd9" /> |
-| https://t.me/+V1sqeajw1pYwMzU1 | http://chv.ckcoa5.cn/t/OSFb |
-
+| <img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/56022b70-97da-498f-bf83-822a11668fa7" /> | <img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/30d24cc5-666c-425a-b8d2-5f353af453de" /> |
+| https://t.me/+V1sqeajw1pYwMzU1 | tingly-box |
 
 ## Early Contributors
 
@@ -272,11 +255,7 @@ Special badges are minted to recognize the contributions from following contribu
 ## License
 
 This project is available under:
-- **MPL-2.0** – See [LICENSE.txt](./LICENSE.txt)
-- **Commercial License** – See [LICENSE-COMMERCIAL.txt](./LICENSE-COMMERCIAL.txt)
+- **MPL-2.0 · © Tingly Dev** – See [LICENSE.txt](./LICENSE.txt)
+- **Commercial License · © Tingly Dev** – See [LICENSE-COMMERCIAL.txt](./LICENSE-COMMERCIAL.txt)
 
 For commercial licensing inquiries, contact [biz@tingly.dev](mailto:biz@tingly.dev).
-
----
-
-Mozilla Public License Version 2.0 · © Tingly Dev
