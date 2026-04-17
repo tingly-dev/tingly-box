@@ -58,8 +58,8 @@ tasks:
       - openapi
     cmds:
       - |
-        curl -s http://localhost:{{.PORT}}/swagger.json > swagger.json
-        curl -s http://localhost:{{.PORT}}/openapi.json > openapi.json
+        # Generate OpenAPI v3 schema directly without starting the server
+        go run ./cli/tingly-box swagger
 
   codegen:
     cmds:
