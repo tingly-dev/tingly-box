@@ -118,7 +118,7 @@ func (s *AdvisorToolSource) CallTool(ctx context.Context, toolName string, argum
 
 	actx, ok := GetAdvisorContext(ctx)
 	if !ok || actx.UsesRemaining <= 0 {
-		logrus.Debug("advisor: consultations exhausted for this request")
+		logrus.Debug("[MCP-DEBUG] ADVISOR: consultations exhausted for this request")
 		return "Advisor consultations exhausted for this request.", nil
 	}
 
@@ -126,7 +126,7 @@ func (s *AdvisorToolSource) CallTool(ctx context.Context, toolName string, argum
 		"reason":         input.Reason,
 		"uses_remaining": actx.UsesRemaining,
 		"format":         detectAdvisorFormat(s.config),
-	}).Debug("advisor: consulting advisor model")
+	}).Debug("[MCP-DEBUG] ADVISOR: calling advisor model")
 
 	advisorCtx, cancel := context.WithTimeout(ctx, advisorCallTimeout)
 	defer cancel()
@@ -140,11 +140,11 @@ func (s *AdvisorToolSource) CallTool(ctx context.Context, toolName string, argum
 		result, err = callAnthropic(advisorCtx, s.config, s.clientPool, input.Reason, actx)
 	}
 	if err != nil {
-		logrus.WithError(err).Error("advisor: consultation failed")
+		logrus.WithError(err).Error("[MCP-DEBUG] ADVISOR: consultation failed")
 		return "", err
 	}
 	actx.UsesRemaining--
-	logrus.WithField("uses_remaining", actx.UsesRemaining).Debug("advisor: consultation completed")
+	logrus.WithField("uses_remaining", actx.UsesRemaining).Debug("[MCP-DEBUG] ADVISOR: consultation completed")
 	return result, nil
 }
 
