@@ -13,7 +13,6 @@ import {
     Paper,
     Snackbar,
     Stack,
-    Switch,
     Table,
     TableBody,
     TableCell,
@@ -32,7 +31,9 @@ import {
 import { useEffect, useState } from 'react';
 import MCPSourceEditor from './MCPSourceEditor';
 import {
+    BUILTIN_ADVISOR_ID,
     BUILTIN_IDS,
+    BUILTIN_WEBTOOLS_ID,
     MCP_DEFAULT_CWD,
     defaultMCPSourceFormValue,
     formValueToSource,
@@ -106,6 +107,8 @@ const MCPRegisteredServers = () => {
     };
 
     const isBuiltin = (id?: string) => id ? BUILTIN_IDS.includes(id) : false;
+    const isBuiltinAdvisor = (id?: string) => id === BUILTIN_ADVISOR_ID;
+    const isBuiltinWebtools = (id?: string) => id === BUILTIN_WEBTOOLS_ID;
 
     const openAdd = () => {
         setEditingId('');
@@ -116,11 +119,25 @@ const MCPRegisteredServers = () => {
     const openEdit = (source: MCPSourceConfig) => {
         setEditingId(source.id || '');
         const mapped = sourceToFormValue(source);
-        if (isBuiltin(source.id)) {
+        if (isBuiltinWebtools(source.id)) {
             const tools = mapped.tools || [];
             setEnableSearch(tools.includes('*') || tools.includes('mcp_web_search'));
             setEnableFetch(tools.includes('*') || tools.includes('mcp_web_fetch'));
             setEditorForm({ ...mapped, id: 'webtools' as const, cwd: MCP_DEFAULT_CWD });
+        } else if (isBuiltinAdvisor(source.id)) {
+            const envPassthrough = new Set(mapped.envPassthrough || []);
+            envPassthrough.add('ADVISOR_BASE_URL');
+            envPassthrough.add('ADVISOR_MODEL');
+            envPassthrough.add('ADVISOR_API_KEY');
+            setEditorForm({
+                ...mapped,
+                id: BUILTIN_ADVISOR_ID,
+                transport: 'stdio',
+                command: mapped.command || 'builtin',
+                args: [],
+                cwd: MCP_DEFAULT_CWD,
+                envPassthrough: Array.from(envPassthrough),
+            });
         } else {
             setEditorForm(mapped);
         }
@@ -181,13 +198,13 @@ const MCPRegisteredServers = () => {
                 setNotification({ open: true, message: 'HTTP endpoint is required', severity: 'error' });
                 return;
             }
-            if (editorForm.transport === 'stdio' && !editorForm.command) {
+            if (editorForm.transport === 'stdio' && !editorForm.command && !isBuiltinAdvisor(editorForm.id)) {
                 setNotification({ open: true, message: 'Command is required', severity: 'error' });
                 return;
             }
 
             let source: MCPSourceConfig;
-            if (isBuiltin(editorForm.id)) {
+            if (isBuiltinWebtools(editorForm.id)) {
                 const tools: string[] = [];
                 if (enableSearch) tools.push('mcp_web_search');
                 if (enableFetch) tools.push('mcp_web_fetch');
@@ -196,6 +213,20 @@ const MCPRegisteredServers = () => {
                     return;
                 }
                 source = formValueToSource({ ...editorForm, id: 'webtools' as const, tools });
+            } else if (isBuiltinAdvisor(editorForm.id)) {
+                const base = allSources.find((s) => s.id === BUILTIN_ADVISOR_ID);
+                const draft = formValueToSource({ ...editorForm, id: BUILTIN_ADVISOR_ID });
+                source = {
+                    ...(base || {}),
+                    id: BUILTIN_ADVISOR_ID,
+                    name: base?.name || 'Built-in Adviser',
+                    transport: 'advisor',
+                    enabled: draft.enabled ?? true,
+                    is_client_tool: draft.is_client_tool ?? false,
+                    tools: draft.tools && draft.tools.length > 0 ? draft.tools : ['advisor'],
+                    env: draft.env,
+                    proxy_url: draft.proxy_url,
+                };
             } else {
                 source = formValueToSource(editorForm);
             }
@@ -240,6 +271,9 @@ const MCPRegisteredServers = () => {
                 <Alert severity="info">
                     Manage registered MCP servers. Builtin servers are marked with a tag.
                 </Alert>
+                <Alert severity="warning">
+                    Builtin adviser is experimental in current version. Use it only for hard decision points; quality may vary and it can increase latency.
+                </Alert>
                 <Alert severity={enabledServerSources.length > 0 ? 'success' : 'warning'}>
                     {enabledServerSources.length > 0
                         ? `Tool injection active for ${enabledServerSources.length} server tool source(s).`
@@ -270,7 +304,8 @@ const MCPRegisteredServers = () => {
                                     </TableHead>
                                     <TableBody>
                                         {allSources.map((source) => {
-                                            const connectionType = (source.transport || 'stdio').toUpperCase();
+                                            const displayTransport = isBuiltinAdvisor(source.id) ? 'stdio' : (source.transport || 'stdio');
+                                            const connectionType = displayTransport.toUpperCase();
                                             const connectionInfo = source.transport === 'http'
                                                 ? source.endpoint || '-'
                                                 : source.command
@@ -324,7 +359,7 @@ const MCPRegisteredServers = () => {
                                                         <Chip
                                                             label={connectionType}
                                                             size="small"
-                                                            color={source.transport === 'http' ? 'info' : 'default'}
+                                                            color={displayTransport === 'http' ? 'info' : 'default'}
                                                             variant="outlined"
                                                         />
                                                     </TableCell>
@@ -418,26 +453,14 @@ const MCPRegisteredServers = () => {
                     </Stack>
                 </UnifiedCard>
 
-                <UnifiedCard title="Safety Guard" size="full">
-                    <Stack spacing={1.5}>
-                        <FormControlLabel
-                            control={
-                                <Switch
-                                    checked={stripDisabledMCPTools}
-                                    onChange={(e) => setStripDisabledMCPTools(e.target.checked)}
-                                />
-                            }
-                            label="Strip disabled MCP declarations/tool calls"
-                        />
-                        <Alert severity="warning">
-                            Dangerous capability. When enabled, disabled MCP tool declarations/calls are forcibly removed and a tool_error compensation message is added.
-                        </Alert>
-                    </Stack>
-                </UnifiedCard>
-
                 {editorMode !== 'none' && (
                     <>
-                        {isBuiltin(editorForm.id) && (
+                        {isBuiltinAdvisor(editorForm.id) && (
+                            <Alert severity="info">
+                                Adviser uses env references. Please provide ADVISOR_BASE_URL, ADVISOR_MODEL, ADVISOR_API_KEY in Environment variable passthrough or explicit env values.
+                            </Alert>
+                        )}
+                        {isBuiltinWebtools(editorForm.id) && (
                             <Stack direction="row" spacing={2}>
                                 <FormControlLabel
                                     control={<Checkbox checked={enableSearch} onChange={(e) => setEnableSearch(e.target.checked)} />}
