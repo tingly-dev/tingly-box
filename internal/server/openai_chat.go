@@ -36,7 +36,6 @@ func extractOpenAIMessages(messages []openai.ChatCompletionMessageParamUnion) []
 
 // handleNonStreamingRequest handles non-streaming chat completion requests with MCP runtime support.
 func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, stripUsage bool) {
-	ctx := c.Request.Context()
 	req := originalReq
 
 	// Forward request to provider
@@ -207,7 +206,6 @@ func (s *Server) handleMCPToolCalls(ctx context.Context, provider *typ.Provider,
 
 // handleOpenAIChatStreamingRequest handles streaming chat completion requests.
 func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
-	ctx := c.Request.Context()
 	req := originalReq
 	if hasDeclaredMCPTools(req) {
 		reqForMCP := *req

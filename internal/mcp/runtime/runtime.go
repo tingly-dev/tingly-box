@@ -64,6 +64,7 @@ func NewRuntime(getConfig configProvider) *Runtime {
 	r := &Runtime{
 		getConfig:         getConfig,
 		sc:                sc,
+		toolSourceFactory: NewToolSourceFactory(sc, nil),
 		activeSources:     make(map[string]ToolSource),
 		virtualRegistry:   NewVirtualToolRegistry(),
 		sessionStore:      NewSessionStore(10 * time.Minute),
@@ -72,10 +73,14 @@ func NewRuntime(getConfig configProvider) *Runtime {
 	return r
 }
 
-// SetClientPool is a no-op retained for API compatibility.
-// The adviser is now handled as a virtual tool and doesn't need the client pool.
+// SetClientPool injects the client pool into the runtime's tool source factory.
 func (r *Runtime) SetClientPool(cp *client.ClientPool) {
-	// No-op: adviser is now a virtual tool, no longer uses tool source factory
+	if r == nil {
+		return
+	}
+	if r.toolSourceFactory != nil {
+		r.toolSourceFactory.SetClientPool(cp)
+	}
 }
 
 // Close releases all MCP sessions and tool source connections.
