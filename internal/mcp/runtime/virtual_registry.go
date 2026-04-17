@@ -16,6 +16,9 @@ type VirtualTool struct {
 	Description string
 	InputSchema mcp.ToolInputSchema
 	Handler     VirtualToolHandler
+	// IsClientTool indicates whether this tool should be exposed to client requests.
+	// If false, the tool is only available for internal server-side logic.
+	IsClientTool bool
 }
 
 // VirtualToolRegistry holds registered in-process tools.
@@ -51,6 +54,18 @@ func (r *VirtualToolRegistry) List() []mcp.Tool {
 			Description: t.Description,
 			InputSchema: t.InputSchema,
 		})
+	}
+	return out
+}
+
+// ListVirtualTools returns the full VirtualTool list with IsClientTool information.
+// This is used by Runtime to filter tools based on client exposure.
+func (r *VirtualToolRegistry) ListVirtualTools() []VirtualTool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]VirtualTool, 0, len(r.tools))
+	for _, t := range r.tools {
+		out = append(out, t)
 	}
 	return out
 }

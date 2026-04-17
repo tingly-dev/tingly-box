@@ -34,6 +34,7 @@ func NewAdvisorVirtualTool(cfg typ.AdvisorConfig, cp *client.ClientPool) Virtual
 		Description: fmt.Sprintf("Consult a more powerful advisor model for strategic guidance. Use when facing architectural decisions, complex debugging, unclear trade-offs, or when stuck. You have %d consultation(s) remaining this request.", cfg.MaxUsesPerRequest),
 		InputSchema: schema,
 		Handler:     newAdvisorHandler(cfg, cp),
+		IsClientTool: false, // Server tool: not exposed to clients
 	}
 }
 

@@ -134,8 +134,14 @@ func (r *Runtime) ListOpenAITools(ctx context.Context) []openai.ChatCompletionTo
 
 	// 1. Add virtual tools (kernel mode) first
 	if r.virtualRegistry != nil {
-		virtualTools := r.virtualRegistry.List()
+		virtualTools := r.virtualRegistry.ListVirtualTools()
 		for _, vt := range virtualTools {
+			// Skip server tools - they should not be injected into client requests
+			if !vt.IsClientTool {
+				logrus.Debugf("mcp: skipping server tool=%s (not exposed to clients)", vt.Name)
+				continue
+			}
+
 			// Virtual tools use "builtin" as source ID for normalization
 			normalized := NormalizeToolName("builtin", vt.Name)
 			params := shared.FunctionParameters{
