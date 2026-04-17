@@ -20,6 +20,20 @@ import (
 
 const normalizedPrefix = "tingly_box_mcp__"
 
+// advisorDepthKey is the context key for tracking adviser call depth.
+type advisorDepthKey struct{}
+
+// WithAdvisorDepth sets the adviser call depth in context.
+func WithAdvisorDepth(ctx context.Context, depth int) context.Context {
+	return context.WithValue(ctx, advisorDepthKey{}, depth)
+}
+
+// GetAdvisorDepth retrieves the current adviser call depth from context.
+func GetAdvisorDepth(ctx context.Context) int {
+	v, _ := ctx.Value(advisorDepthKey{}).(int)
+	return v
+}
+
 type configProvider func() *typ.MCPRuntimeConfig
 
 // Runtime handles MCP tool source discovery and tool execution.
