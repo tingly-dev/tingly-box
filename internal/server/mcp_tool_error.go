@@ -4,22 +4,31 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
 )
 
-func (s *Server) advisorMaxUses() int {
-	if s == nil || s.mcpRuntime == nil {
-		return 0
+// mcpResponseToolCallHook prepares runtime context for specific MCP servertool calls.
+// Hooks run after worker response arrives and before local tool execution.
+type mcpResponseToolCallHook interface {
+	Match(toolName string) bool
+	PrepareContext(s *Server, ctx context.Context, messages []map[string]any) context.Context
+}
+
+type advisorResponseHook struct{}
+
+func (h advisorResponseHook) Match(toolName string) bool {
+	sourceID, toolNameOnly, ok := mcpruntime.ParseNormalizedToolName(toolName)
+	if !ok {
+		return false
 	}
-	cfg := s.mcpRuntime.GetConfig()
-	if cfg == nil {
-		return 0
-	}
-	for _, source := range cfg.Sources {
-		if source.Advisor != nil && source.Advisor.MaxUsesPerRequest > 0 {
-			return source.Advisor.MaxUsesPerRequest
-		}
-	}
-	return 0
+	return sourceID == mcptools.BuiltinAdvisorSourceID && toolNameOnly == mcptools.BuiltinAdvisorToolName
+}
+
+func (h advisorResponseHook) PrepareContext(s *Server, ctx context.Context, messages []map[string]any) context.Context {
+	return s.withAdvisorContext(ctx, messages)
+>>>>>>> 2831bb51 (feat(advisor): add response-phase hooks for advisor tool calls)
 }
 
 func (s *Server) isEnabledMCPToolName(ctx context.Context, toolName string) bool {
@@ -55,4 +64,46 @@ func (s *Server) callMCPToolWithGuard(ctx context.Context, toolName, arguments s
 	}
 
 	return result, nil
+}
+
+func (s *Server) mcpResponseToolCallHooks() []mcpResponseToolCallHook {
+	return []mcpResponseToolCallHook{
+		advisorResponseHook{},
+	}
+}
+
+func (s *Server) withAdvisorContext(ctx context.Context, messages []map[string]any) context.Context {
+	if actx, ok := mcpruntime.GetAdvisorContext(ctx); ok {
+		actx.Messages = messages
+		return mcpruntime.WithAdvisorContext(ctx, actx)
+	}
+
+	maxUses := 0
+	if s != nil && s.mcpRuntime != nil {
+		maxUses = s.mcpRuntime.GetAdvisorMaxUses()
+	}
+	if maxUses <= 0 {
+		maxUses = 3
+	}
+
+	return mcpruntime.WithAdvisorContext(ctx, &mcpruntime.AdvisorContext{
+		Messages:      messages,
+		UsesRemaining: maxUses,
+	})
+}
+
+func (s *Server) applyMCPResponseToolCallHooks(ctx context.Context, toolName string, messages []map[string]any) context.Context {
+	for _, hook := range s.mcpResponseToolCallHooks() {
+		if hook.Match(toolName) {
+			ctx = hook.PrepareContext(s, ctx, messages)
+		}
+	}
+	return ctx
+}
+
+// callMCPToolWithHooks executes response-phase MCP servertool hooks before the runtime call.
+// Hooks run when we consume worker-returned tool calls.
+func (s *Server) callMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (string, error) {
+	ctx = s.applyMCPResponseToolCallHooks(ctx, toolName, messages)
+	return s.callMCPToolWithGuard(ctx, toolName, arguments)
 }
