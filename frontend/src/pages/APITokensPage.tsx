@@ -212,8 +212,9 @@ const APITokensPage = () => {
 
                 {/* Info Alert */}
                 <Alert severity="info" icon={<IconInfoCircle size={20} />}>
-                    API tokens allow you to authenticate with the system. Each token is automatically associated with your user account
-                    and isolates usage data. Tokens can be revoked at any time.
+                    <strong>Share Model Tokens</strong> let you distribute access to your Tingly Box models without sharing your credentials.
+                    Create multiple tokens for different clients or environments — each token tracks usage independently so you can monitor
+                    consumption per token and revoke any of them at any time without affecting others.
                 </Alert>
 
                 {/* Tokens Table */}
