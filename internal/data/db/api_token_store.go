@@ -20,7 +20,7 @@ import (
 type APITokenRecord struct {
 	ID           uint       `gorm:"primaryKey;autoIncrement;column:id"`
 	TokenID      string     `gorm:"uniqueIndex;column:token_id;not null;size:64"` // Token identifier (jti)
-	UserID       string     `gorm:"index:idx_api_token_user_id;column:user_id;size:64"`
+	UserID       string     `gorm:"index:idx_api_token_user_id;not null;column:user_id;size:64"`
 	DisplayName  string     `gorm:"column:display_name;size:256"`
 	Enabled      bool       `gorm:"column:enabled;default:true"`
 	ExpiresAt    *time.Time `gorm:"column:expires_at;index"`
@@ -89,12 +89,25 @@ func NewAPITokenStore(baseDir string) (*APITokenStore, error) {
 func ensureAPITokenSchema(db *gorm.DB) error {
 	// Migrate user_uuid column to user_id for consistency
 	if db.Migrator().HasColumn(&APITokenRecord{}, "user_uuid") {
-		if err := db.Migrator().RenameColumn(&APITokenRecord{}, "user_uuid", "user_id"); err != nil {
-			return fmt.Errorf("failed to rename user_uuid to user_id: %w", err)
-		}
-		// Drop old index and create new one
-		if err := db.Exec(`DROP INDEX IF EXISTS idx_api_token_user_uuid`).Error; err != nil {
-			logrus.WithError(err).Warn("Failed to drop old index idx_api_token_user_uuid")
+		// Check if user_id already exists (both columns present - migration incomplete)
+		if db.Migrator().HasColumn(&APITokenRecord{}, "user_id") {
+			// Copy data from user_uuid to user_id where user_id is empty
+			if err := db.Exec(`UPDATE api_tokens SET user_id = user_uuid WHERE user_id IS NULL OR user_id = ''`).Error; err != nil {
+				logrus.WithError(err).Warn("Failed to copy user_uuid to user_id")
+			}
+			// Drop the old user_uuid column
+			if err := db.Migrator().DropColumn(&APITokenRecord{}, "user_uuid"); err != nil {
+				logrus.WithError(err).Warn("Failed to drop user_uuid column")
+			}
+			// Drop old index
+			db.Exec(`DROP INDEX IF EXISTS idx_api_token_user_uuid`)
+		} else {
+			// Only user_uuid exists - rename it to user_id
+			if err := db.Migrator().RenameColumn(&APITokenRecord{}, "user_uuid", "user_id"); err != nil {
+				return fmt.Errorf("failed to rename user_uuid to user_id: %w", err)
+			}
+			// Drop old index and create new one
+			db.Exec(`DROP INDEX IF EXISTS idx_api_token_user_uuid`)
 		}
 	}
 	return nil
