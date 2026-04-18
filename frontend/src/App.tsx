@@ -326,7 +326,7 @@ function AppContent() {
                     {/* Other routes */}
                     <Route path="/system" element={<System />} />
                     <Route path="/access-control" element={<AccessControl />} />
-                    <Route path="/tingly-box-token" element={<APITokensPage />} />
+                    {/*<Route path="/tingly-box-token" element={<APITokensPage />} />*/}
                     <Route path="/system/logs" element={<LogsPage />} />
                     {/* Legacy redirects for backward compatibility */}
                     <Route path="/system/http-logs" element={<Navigate to="/system/logs" replace />} />
