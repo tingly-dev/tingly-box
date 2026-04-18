@@ -23,7 +23,6 @@ func NewHandler(usageStore *db.UsageStore) *Handler {
 }
 
 // GetStats returns aggregated usage statistics
-// When multi-tenant is enabled, non-admin users can only see their own usage data
 func (h *Handler) GetStats(c *gin.Context) {
 	if h.usageStore == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Usage store not available"})
@@ -42,14 +41,8 @@ func (h *Handler) GetStats(c *gin.Context) {
 		Model:     c.Query("model"),
 		Scenario:  c.Query("scenario"),
 		RuleUUID:  c.Query("rule_uuid"),
-		UserID:    c.Query("user_id"),
+		UserID:    c.Query("user_id"), // Only filter if explicitly provided
 		Status:    c.Query("status"),
-	}
-
-	// For multi-tenant: if user_uuid is set in context, filter by that user
-	// This ensures users can only see their own usage data
-	if userID := c.GetString("user_id"); userID != "" {
-		query.UserID = userID
 	}
 
 	// Validate limit
@@ -102,7 +95,6 @@ func (h *Handler) GetStats(c *gin.Context) {
 }
 
 // GetTimeSeries returns time-series data for usage
-// When multi-tenant is enabled, non-admin users can only see their own usage data
 func (h *Handler) GetTimeSeries(c *gin.Context) {
 	if h.usageStore == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Usage store not available"})
@@ -125,13 +117,9 @@ func (h *Handler) GetTimeSeries(c *gin.Context) {
 	if scenario := c.Query("scenario"); scenario != "" {
 		filters["scenario"] = scenario
 	}
-
-	// For multi-tenant: if user_uuid is set in context, filter by that user
-	// This ensures users can only see their own usage data
-	if userID := c.GetString("user_id"); userID != "" {
-		filters["user_id"] = userID
-	} else if userID := c.Query("user_id"); userID != "" {
-		// Fall back to query parameter for backward compatibility
+	// Only filter by user_id if explicitly provided as query parameter
+	// This allows dashboard to show all data by default
+	if userID := c.Query("user_id"); userID != "" {
 		filters["user_id"] = userID
 	}
 
@@ -169,7 +157,6 @@ func (h *Handler) GetTimeSeries(c *gin.Context) {
 }
 
 // GetRecords returns individual usage records
-// When multi-tenant is enabled, non-admin users can only see their own usage data
 func (h *Handler) GetRecords(c *gin.Context) {
 	if h.usageStore == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Usage store not available"})
@@ -201,13 +188,8 @@ func (h *Handler) GetRecords(c *gin.Context) {
 	if status := c.Query("status"); status != "" {
 		filters["status"] = status
 	}
-
-	// For multi-tenant: if user_uuid is set in context, filter by that user
-	// This ensures users can only see their own usage data
-	if userID := c.GetString("user_id"); userID != "" {
-		filters["user_id"] = userID
-	} else if userID := c.Query("user_id"); userID != "" {
-		// Fall back to query parameter for backward compatibility
+	// Only filter by user_id if explicitly provided as query parameter
+	if userID := c.Query("user_id"); userID != "" {
 		filters["user_id"] = userID
 	}
 
