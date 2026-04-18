@@ -22,7 +22,7 @@ type TokenCreateRequest struct {
 type TokenCreateResponse struct {
 	Token       string    `json:"token"`
 	TokenID     string    `json:"token_id"`
-	UserUUID    string    `json:"user_uuid"`
+	UserID      string    `json:"user_id"`
 	DisplayName string    `json:"display_name"`
 	CreatedAt   time.Time `json:"created_at"`
 }
@@ -30,7 +30,7 @@ type TokenCreateResponse struct {
 // APITokenInfo represents information about an API token (without the actual token)
 type APITokenInfo struct {
 	TokenID     string     `json:"token_id"`
-	UserUUID    string     `json:"user_uuid"`
+	UserID      string     `json:"user_id"`
 	DisplayName string     `json:"display_name"`
 	Enabled     bool       `json:"enabled"`
 	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
@@ -97,7 +97,7 @@ func (s *Server) getAPITokenStore(c *gin.Context) (*db.APITokenStore, bool) {
 func recordToAPITokenInfo(record *db.APITokenRecord) APITokenInfo {
 	return APITokenInfo{
 		TokenID:     record.TokenID,
-		UserUUID:    record.UserUUID,
+		UserID:      record.UserID,
 		DisplayName: record.DisplayName,
 		Enabled:     record.Enabled,
 		LastUsedAt:  record.LastUsedAt,
@@ -129,8 +129,8 @@ func (s *Server) createAPIToken(c *gin.Context) {
 		return
 	}
 
-	// Generate a new user_uuid for this token
-	// Each token gets its own unique user_uuid for data isolation
+	// Generate a new user_id for this token
+	// Each token gets its own unique user_id for data isolation
 	userUUID := uuid.New().String()
 
 	// Generate random API token string
@@ -153,7 +153,7 @@ func (s *Server) createAPIToken(c *gin.Context) {
 	c.JSON(http.StatusCreated, TokenCreateResponse{
 		Token:       tokenString,
 		TokenID:     record.TokenID,
-		UserUUID:    record.UserUUID,
+		UserID:      record.UserID,
 		DisplayName: record.DisplayName,
 		CreatedAt:   record.CreatedAt,
 	})
@@ -168,7 +168,7 @@ func (s *Server) listAPITokens(c *gin.Context) {
 	}
 
 	// Parse query parameters
-	userUUID := c.Query("user_uuid")
+	userUUID := c.Query("user_id")
 	var enabled *bool
 	if enabledStr := c.Query("enabled"); enabledStr != "" {
 		if enabledBool, err := strconv.ParseBool(enabledStr); err == nil {
@@ -338,7 +338,7 @@ func (s *Server) regenerateAPIToken(c *gin.Context) {
 	c.JSON(http.StatusOK, TokenCreateResponse{
 		Token:       newTokenString,
 		TokenID:     record.TokenID,
-		UserUUID:    record.UserUUID,
+		UserID:      record.UserID,
 		DisplayName: record.DisplayName,
 		CreatedAt:   record.CreatedAt,
 	})

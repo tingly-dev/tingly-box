@@ -48,8 +48,8 @@ func (h *Handler) GetStats(c *gin.Context) {
 
 	// For multi-tenant: if user_uuid is set in context, filter by that user
 	// This ensures users can only see their own usage data
-	if userUUID := c.GetString("user_uuid"); userUUID != "" {
-		query.UserID = userUUID
+	if userID := c.GetString("user_id"); userID != "" {
+		query.UserID = userID
 	}
 
 	// Validate limit
@@ -128,8 +128,8 @@ func (h *Handler) GetTimeSeries(c *gin.Context) {
 
 	// For multi-tenant: if user_uuid is set in context, filter by that user
 	// This ensures users can only see their own usage data
-	if userUUID := c.GetString("user_uuid"); userUUID != "" {
-		filters["user_id"] = userUUID
+	if userID := c.GetString("user_id"); userID != "" {
+		filters["user_id"] = userID
 	} else if userID := c.Query("user_id"); userID != "" {
 		// Fall back to query parameter for backward compatibility
 		filters["user_id"] = userID
@@ -204,8 +204,8 @@ func (h *Handler) GetRecords(c *gin.Context) {
 
 	// For multi-tenant: if user_uuid is set in context, filter by that user
 	// This ensures users can only see their own usage data
-	if userUUID := c.GetString("user_uuid"); userUUID != "" {
-		filters["user_id"] = userUUID
+	if userID := c.GetString("user_id"); userID != "" {
+		filters["user_id"] = userID
 	} else if userID := c.Query("user_id"); userID != "" {
 		// Fall back to query parameter for backward compatibility
 		filters["user_id"] = userID

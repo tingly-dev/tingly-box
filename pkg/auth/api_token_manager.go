@@ -9,8 +9,8 @@ import (
 
 // APITokenClaims represents the JWT claims for API tokens
 type APITokenClaims struct {
-	UserUUID string `json:"user_uuid"`
-	TokenID  string `json:"token_id"` // jti - for revocation check
+	UserID  string `json:"user_id"`
+	TokenID string `json:"token_id"` // jti - for revocation check
 	jwt.RegisteredClaims
 }
 
@@ -76,8 +76,8 @@ func (m *APITokenManager) GenerateToken(userUUID, tokenID string, expiresAt time
 	}
 
 	claims := &APITokenClaims{
-		UserUUID: userUUID,
-		TokenID:  tokenID,
+		UserID:  userUUID,
+		TokenID: tokenID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   userUUID,
 			ID:        tokenID, // jti
@@ -119,8 +119,8 @@ func (m *APITokenManager) ValidateToken(tokenString string) (*APITokenClaims, er
 	}
 
 	// Validate required claims
-	if claims.UserUUID == "" {
-		return nil, fmt.Errorf("token missing user_uuid claim")
+	if claims.UserID == "" {
+		return nil, fmt.Errorf("token missing user_id claim")
 	}
 	if claims.TokenID == "" {
 		return nil, fmt.Errorf("token missing token_id claim")
@@ -133,4 +133,3 @@ func (m *APITokenManager) ValidateToken(tokenString string) (*APITokenClaims, er
 func (m *APITokenManager) GetIssuer() string {
 	return m.issuer
 }
-

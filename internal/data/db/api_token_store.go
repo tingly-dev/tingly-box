@@ -20,7 +20,7 @@ import (
 type APITokenRecord struct {
 	ID           uint       `gorm:"primaryKey;autoIncrement;column:id"`
 	TokenID      string     `gorm:"uniqueIndex;column:token_id;not null;size:64"` // Token identifier (jti)
-	UserUUID     string     `gorm:"index:idx_api_token_user_uuid;column:user_uuid;not null;size:64"`
+	UserID       string     `gorm:"index:idx_api_token_user_id;column:user_id;not null;size:64"`
 	DisplayName  string     `gorm:"column:display_name;size:256"`
 	Enabled      bool       `gorm:"column:enabled;default:true"`
 	ExpiresAt    *time.Time `gorm:"column:expires_at;index"`
@@ -75,18 +75,38 @@ func NewAPITokenStore(baseDir string) (*APITokenStore, error) {
 	if err := db.AutoMigrate(&APITokenRecord{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate API token database: %w", err)
 	}
-	logrus.Debugf("API token store initialization completed")
 
+	// Rename user_uuid column to user_id for consistency
+	if err := ensureAPITokenSchema(db); err != nil {
+		return nil, fmt.Errorf("failed to align API token schema: %w", err)
+	}
+
+	logrus.Debugf("API token store initialization completed")
 	return store, nil
+}
+
+// ensureAPITokenSchema ensures the API token table schema is up to date
+func ensureAPITokenSchema(db *gorm.DB) error {
+	// Migrate user_uuid column to user_id for consistency
+	if db.Migrator().HasColumn(&APITokenRecord{}, "user_uuid") {
+		if err := db.Migrator().RenameColumn(&APITokenRecord{}, "user_uuid", "user_id"); err != nil {
+			return fmt.Errorf("failed to rename user_uuid to user_id: %w", err)
+		}
+		// Drop old index and create new one
+		if err := db.Exec(`DROP INDEX IF EXISTS idx_api_token_user_uuid`).Error; err != nil {
+			logrus.WithError(err).Warn("Failed to drop old index idx_api_token_user_uuid")
+		}
+	}
+	return nil
 }
 
 // createTokenRecord is a private helper that creates a token record with the given parameters.
 // The caller must hold s.mu.Lock() before calling this function.
-func (s *APITokenStore) createTokenRecord(userUUID, tokenID, displayName, createdBy string, expiresAt *time.Time) (*APITokenRecord, error) {
+func (s *APITokenStore) createTokenRecord(userID, tokenID, displayName, createdBy string, expiresAt *time.Time) (*APITokenRecord, error) {
 	now := time.Now()
 	record := &APITokenRecord{
 		TokenID:     tokenID,
-		UserUUID:    userUUID,
+		UserID:      userID,
 		DisplayName: displayName,
 		Enabled:     true,
 		ExpiresAt:   expiresAt,
@@ -98,14 +118,14 @@ func (s *APITokenStore) createTokenRecord(userUUID, tokenID, displayName, create
 		return nil, fmt.Errorf("failed to create API token record: %w", err)
 	}
 
-	logrus.Debugf("Created API token: %s for user: %s", tokenID, userUUID)
+	logrus.Debugf("Created API token: %s for user: %s", tokenID, userID)
 	return record, nil
 }
 
 // CreateTokenWithTokenID creates a new API token record with a specific token ID
-func (s *APITokenStore) CreateTokenWithTokenID(userUUID, tokenID, displayName, createdBy string, expiresAt *time.Time) (*APITokenRecord, error) {
-	if userUUID == "" {
-		return nil, errors.New("user UUID cannot be empty")
+func (s *APITokenStore) CreateTokenWithTokenID(userID, tokenID, displayName, createdBy string, expiresAt *time.Time) (*APITokenRecord, error) {
+	if userID == "" {
+		return nil, errors.New("user ID cannot be empty")
 	}
 	if tokenID == "" {
 		return nil, errors.New("token ID cannot be empty")
@@ -114,7 +134,7 @@ func (s *APITokenStore) CreateTokenWithTokenID(userUUID, tokenID, displayName, c
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return s.createTokenRecord(userUUID, tokenID, displayName, createdBy, expiresAt)
+	return s.createTokenRecord(userID, tokenID, displayName, createdBy, expiresAt)
 }
 
 // ValidateToken validates a token ID and returns the associated token record
@@ -167,14 +187,14 @@ func (s *APITokenStore) RevokeToken(tokenID, reason string) error {
 }
 
 // ListTokens returns tokens matching filters
-func (s *APITokenStore) ListTokens(userUUID string, enabled *bool, limit, offset int) ([]APITokenRecord, int64, error) {
+func (s *APITokenStore) ListTokens(userID string, enabled *bool, limit, offset int) ([]APITokenRecord, int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	db := s.db.Model(&APITokenRecord{})
 
-	if userUUID != "" {
-		db = db.Where("user_uuid = ?", userUUID)
+	if userID != "" {
+		db = db.Where("user_id = ?", userID)
 	}
 	if enabled != nil {
 		db = db.Where("enabled = ?", *enabled)

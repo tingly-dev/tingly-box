@@ -279,9 +279,9 @@ func (am *AuthMiddleware) UserAuthMiddleware() gin.HandlerFunc {
 			if token == configToken || strings.TrimPrefix(token, "Bearer ") == configToken {
 				// Token matches the one in global config, allow access
 				c.Set("client_id", "user_authenticated")
-				// For UI user authentication, set a default user_uuid
-				// In a real multi-tenant setup, this would come from the user's session/profile
-				c.Set("user_uuid", db.DefaultAdminUserID)
+				// For UI user authentication, set user_id to default admin
+				// This matches the migrated user_id in usage_records
+				c.Set("user_id", db.DefaultAdminUserID)
 				c.Next()
 				return
 			}
@@ -328,7 +328,7 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 				tokenRecord, validateErr := am.apiTokenStore.ValidateToken(token)
 				if validateErr == nil && tokenRecord != nil {
 					// Token is valid and enabled
-					c.Set("user_uuid", tokenRecord.UserUUID)
+					c.Set("user_id", tokenRecord.UserID)
 					c.Set("token_id", tokenRecord.TokenID)
 					c.Set("client_id", "model_authenticated")
 					c.Set("auth_method", "api_token")
@@ -360,9 +360,9 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 		if token == configToken || xApiKey == configToken {
 			c.Set("client_id", "model_authenticated")
 			c.Set("auth_method", "global_token")
-			// Set user_uuid to default admin for usage tracking consistency
+			// Set UserID to default admin for usage tracking consistency
 			// This matches the migrated user_id values in usage_records
-			c.Set("user_uuid", db.DefaultAdminUserID)
+			c.Set("user_id", db.DefaultAdminUserID)
 			contextJWT := strings.TrimSpace(c.GetHeader("X-TBE-Context-JWT"))
 			if contextJWT != "" {
 				claims, verifyErr := verifyEnterpriseContextJWT(cfg, contextJWT)

@@ -28,12 +28,12 @@ type MetricsData struct {
 }
 
 // GetUserIDFromContext extracts the user ID from gin context.
-// Priority: user_uuid (from JWT API token) > enterprise_user_id (from enterprise JWT) > ""
+// Priority: user_id (from JWT API token or global auth) > enterprise_user_id (from enterprise JWT) > ""
 // This ensures that JWT API token authentication takes precedence for user tracking.
 func GetUserIDFromContext(c *gin.Context) string {
-	// First, try user_uuid from JWT API token authentication
-	if userUUID := c.GetString("user_uuid"); userUUID != "" {
-		return userUUID
+	// First, try user_id from JWT API token authentication or global auth
+	if userID := c.GetString("user_id"); userID != "" {
+		return userID
 	}
 	// Fall back to enterprise_user_id from enterprise context JWT
 	if enterpriseUserID := c.GetString("enterprise_user_id"); enterpriseUserID != "" {
@@ -163,12 +163,12 @@ func (s *Server) trackUsageWithTokenUsage(c *gin.Context, usage *protocol.TokenU
 	rule, provider, model, requestModel, scenario, streamed, startTime := GetTrackingContext(c)
 
 	logrus.WithFields(logrus.Fields{
-		"has_rule":   rule != nil,
+		"has_rule":     rule != nil,
 		"has_provider": provider != nil,
-		"has_model":   model != "",
-		"has_usage":   usage != nil,
-		"has_error":   err != nil,
-		"model":       model,
+		"has_model":    model != "",
+		"has_usage":    usage != nil,
+		"has_error":    err != nil,
+		"model":        model,
 	}).Trace("[trackUsage] trackUsageWithTokenUsage called")
 
 	if rule == nil || provider == nil || model == "" || usage == nil {
@@ -306,7 +306,7 @@ func (s *Server) recordDetailedUsage(c *gin.Context, rule *typ.Rule, provider *t
 		Model:        model,
 		Scenario:     scenario,
 		RequestModel: requestModel,
-		UserID:       GetUserIDFromContext(c), // Uses user_uuid or enterprise_user_id
+		UserID:       GetUserIDFromContext(c), // Uses user_id or enterprise_user_id
 		InputTokens:  inputTokens,
 		OutputTokens: outputTokens,
 		TotalTokens:  inputTokens + outputTokens,
@@ -347,7 +347,7 @@ func (s *Server) recordDetailedUsageWithTokenUsage(c *gin.Context, rule *typ.Rul
 		Model:            model,
 		Scenario:         scenario,
 		RequestModel:     requestModel,
-		UserID:           GetUserIDFromContext(c), // Uses user_uuid or enterprise_user_id
+		UserID:           GetUserIDFromContext(c), // Uses user_id or enterprise_user_id
 		InputTokens:      usage.InputTokens,
 		OutputTokens:     usage.OutputTokens,
 		CacheInputTokens: usage.CacheInputTokens,
