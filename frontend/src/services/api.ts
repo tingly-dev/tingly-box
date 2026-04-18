@@ -1862,7 +1862,7 @@ export const api = {
 
     // List all API tokens
     listAPITokens: async (params?: {
-        user_uuid?: string;
+        user_id?: string;
         enabled?: boolean;
         limit?: number;
         offset?: number;

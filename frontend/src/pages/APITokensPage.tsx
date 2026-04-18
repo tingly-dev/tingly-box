@@ -41,7 +41,7 @@ import { useTranslation } from 'react-i18next';
 
 interface APIToken {
     token_id: string;
-    user_uuid: string;
+    user_id: string;
     display_name: string;
     enabled: boolean;
     last_used_at?: string;
@@ -302,14 +302,14 @@ const APITokensPage = () => {
                                                 </Stack>
                                             </TableCell>
                                             <TableCell>
-                                                <Tooltip title={token.user_uuid} placement="top">
+                                                <Tooltip title={token.user_id} placement="top">
                                                     <Stack direction="row" spacing={0.5} alignItems="center" sx={{ width: 'fit-content', cursor: 'default' }}>
                                                         <IconUser size={13} style={{ opacity: 0.4, flexShrink: 0 }} />
                                                         <Typography
                                                             variant="caption"
                                                             sx={{ fontFamily: 'monospace', color: 'text.secondary' }}
                                                         >
-                                                            {token.user_uuid.slice(0, 8)}…
+                                                            {token.user_id.slice(0, 8)}…
                                                         </Typography>
                                                     </Stack>
                                                 </Tooltip>
