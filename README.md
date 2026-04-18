@@ -49,6 +49,9 @@ npx tingly-box@latest
 
 # or -y for convenience
 npx -y tingly-box@latest
+
+# if any network trouble, try bundle with binary built-in
+npx -y tingly-box-bundle@latest
 ```
 
 > if any trouble, please check tingly-box output, or call for an issue to help. 
