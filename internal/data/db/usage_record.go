@@ -40,6 +40,12 @@ type UsageRecord struct {
 	Streamed     bool   `gorm:"column:streamed;type:integer"`
 }
 
+const (
+	// DefaultAdminUserID is the user ID for the default admin user
+	// This is used for usage records created before multi-tenant support
+	DefaultAdminUserID = "admin"
+)
+
 // TableName specifies the table name for GORM
 func (UsageRecord) TableName() string {
 	return "usage_records"
@@ -165,6 +171,20 @@ func ensureUsageRecordSchema(db *gorm.DB) error {
 			return err
 		}
 	}
+
+	// Migrate empty user_id to default admin user
+	// This ensures backward compatibility after multi-tenant support was added
+	// Records created before multi-tenant have empty user_id, which should be
+	// associated with the default admin user
+	if err := db.Exec(`
+		UPDATE usage_records
+		SET user_id = ?
+		WHERE user_id = '' OR user_id IS NULL
+	`, DefaultAdminUserID).Error; err != nil {
+		logrus.WithError(err).Warn("Failed to migrate empty user_id to default admin user")
+		// Don't fail initialization for this migration, it's not critical
+	}
+
 	return nil
 }
 
