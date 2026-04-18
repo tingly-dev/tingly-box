@@ -56,7 +56,7 @@ npx -y tingly-box-bundle@latest
 
 > if any trouble, please check tingly-box output, or call for an issue to help. 
 
-**From Docker (Github Host)**
+**From Docker (GitHub Host)**
 
 ```bash
 mkdir tingly-data
