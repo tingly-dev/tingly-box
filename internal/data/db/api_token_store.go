@@ -20,7 +20,7 @@ import (
 type APITokenRecord struct {
 	ID           uint       `gorm:"primaryKey;autoIncrement;column:id"`
 	TokenID      string     `gorm:"uniqueIndex;column:token_id;not null;size:64"` // Token identifier (jti)
-	UserID       string     `gorm:"index:idx_api_token_user_id;column:user_id;not null;size:64"`
+	UserID       string     `gorm:"index:idx_api_token_user_id;column:user_id;size:64"`
 	DisplayName  string     `gorm:"column:display_name;size:256"`
 	Enabled      bool       `gorm:"column:enabled;default:true"`
 	ExpiresAt    *time.Time `gorm:"column:expires_at;index"`
