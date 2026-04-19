@@ -18,6 +18,7 @@ import (
 type RealAgentTestResult struct {
 	EntryName string
 	Agent     string
+	APIStyle  string
 	Prompt    string
 	Model     string
 	Success   bool
@@ -365,6 +366,7 @@ func runOneRealAgentTest(agentType protocol_validate.AgentType, entry protocol_v
 		result.Duration = time.Since(start)
 		return result
 	}
+	result.APIStyle = apiStyle
 	providerName := fmt.Sprintf("real-%s", entry.Name)
 
 	if err := env.SetupRealAgent(agentType, providerName, entry.Model, entry.BaseURL, entry.APIKey, apiStyle); err != nil {
@@ -467,18 +469,20 @@ func printRealAgentSummary(results []*RealAgentTestResult) {
 	fmt.Printf("Total: %d | ✓ Pass: %d | ✗ Fail: %d\n\n", len(results), pass, fail)
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "Entry\tModel\tStatus\tDuration")
-	fmt.Fprintln(w, "-----\t-----\t------\t--------")
+	fmt.Fprintln(w, "Agent\tEntry\tModel\tStatus\tDuration\tAPI Style")
+	fmt.Fprintln(w, "-----\t-----\t-----\t------\t--------\t---------")
 	for _, r := range results {
 		status := "✓ PASS"
 		if !r.Success {
 			status = "✗ FAIL"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+			r.Agent,
 			r.EntryName,
 			r.Model,
 			status,
 			r.Duration.Round(time.Millisecond),
+			r.APIStyle,
 		)
 	}
 	w.Flush()
