@@ -60,8 +60,10 @@ func loadRealModelsConfig(path string) (*protocol_validate.RealModelsConfig, err
 //
 // If writer is non-nil, each per-entry result is appended durably as soon as
 // it completes. Any (agent, entry) key already present in skip is bypassed so
-// --resume can pick up where a previous run left off.
-func runRealAgentTests(agentName string, modelsFile string, prompt string, writer *summaryWriter, skip map[resumeKey]struct{}) ([]*RealAgentTestResult, error) {
+// --resume can pick up where a previous run left off. If filter is non-empty,
+// only entries whose name matches (case-insensitive) are considered; unknown
+// filter names are warned about but do not fail the run.
+func runRealAgentTests(agentName string, modelsFile string, prompt string, writer *summaryWriter, skip map[resumeKey]struct{}, filter []string) ([]*RealAgentTestResult, error) {
 	profileType := parseAgentType(agentName)
 	if profileType == "" {
 		return nil, fmt.Errorf("unknown agent: %q (available: claude, codex, opencode)", agentName)
@@ -80,15 +82,47 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string, write
 		return nil, err
 	}
 
+	// Build a case-insensitive lookup of filter names, if any.
+	var wanted map[string]struct{}
+	if len(filter) > 0 {
+		wanted = make(map[string]struct{}, len(filter))
+		for _, name := range filter {
+			n := strings.ToLower(strings.TrimSpace(name))
+			if n != "" {
+				wanted[n] = struct{}{}
+			}
+		}
+	}
+	matched := make(map[string]struct{}, len(wanted))
+
 	// Separate runnable entries from incomplete ones.
 	var runnable []protocol_validate.RealModelEntry
 	var skipped []string
 	for _, entry := range cfg.Models {
+		if wanted != nil {
+			if _, ok := wanted[strings.ToLower(strings.TrimSpace(entry.Name))]; !ok {
+				continue
+			}
+			matched[strings.ToLower(strings.TrimSpace(entry.Name))] = struct{}{}
+		}
 		miss := missingFields(entry)
 		if len(miss) > 0 {
 			skipped = append(skipped, fmt.Sprintf("%s (missing: %s)", entry.Name, strings.Join(miss, ", ")))
 		} else {
 			runnable = append(runnable, entry)
+		}
+	}
+
+	// Warn about filter names that didn't match any config entry.
+	if wanted != nil {
+		var unknown []string
+		for name := range wanted {
+			if _, ok := matched[name]; !ok {
+				unknown = append(unknown, name)
+			}
+		}
+		if len(unknown) > 0 {
+			fmt.Printf("⚠️  --filter names not found in config: %s\n\n", strings.Join(unknown, ", "))
 		}
 	}
 
@@ -101,6 +135,9 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string, write
 	}
 
 	if len(runnable) == 0 {
+		if wanted != nil {
+			return nil, fmt.Errorf("no runnable entries in %s matched --filter %v", modelsFile, filter)
+		}
 		return nil, fmt.Errorf("no runnable entries in %s — fill in apikey, baseurl, and model fields", modelsFile)
 	}
 

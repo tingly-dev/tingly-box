@@ -23,6 +23,7 @@ func newAgentCommand() *cobra.Command {
 	var prompt string
 	var summaryFile string
 	var resume bool
+	var filter []string
 
 	cmd := &cobra.Command{
 		Use:   "agent <claude|codex|opencode|batch> [prompt]",
@@ -82,6 +83,10 @@ Examples:
   # Resume an interrupted run (skips every (agent,entry) already in the CSV)
   harness agent batch  --config models.yaml --resume
 
+  # Run only specific entries by name (real-provider mode)
+  harness agent claude --config models.yaml --filter acme,beta
+  harness agent batch  --config models.yaml --filter acme
+
 Persistence:
   Every run appends per-row results to harness-summary.csv in the working
   directory (override with --summary <file>). Rows are flushed immediately, so
@@ -121,14 +126,17 @@ Generate a config template with: harness init-config`,
 			fmt.Println()
 
 			if strings.EqualFold(agentName, "batch") {
-				return runBatchAgentTests(useMock, configFile, prompt, writer, skip)
+				return runBatchAgentTests(useMock, configFile, prompt, writer, skip, filter)
 			}
 
 			var results []*RealAgentTestResult
 			var runErr error
 			if configFile != "" {
-				results, runErr = runRealAgentTests(agentName, configFile, prompt, writer, skip)
+				results, runErr = runRealAgentTests(agentName, configFile, prompt, writer, skip, filter)
 			} else {
+				if len(filter) > 0 {
+					fmt.Printf("⚠️  --filter is ignored in --mock mode (no named entries)\n\n")
+				}
 				results, runErr = runVirtualAgentTest(agentName, prompt, writer, skip)
 			}
 			if len(results) > 0 {
@@ -143,6 +151,7 @@ Generate a config template with: harness init-config`,
 	cmd.Flags().StringVar(&prompt, "prompt", "", "Prompt to send (overrides positional arg and default)")
 	cmd.Flags().StringVar(&summaryFile, "summary", DefaultSummaryFile, "Path to CSV summary file (per-row results, written durably)")
 	cmd.Flags().BoolVar(&resume, "resume", false, "Skip (agent,entry) rows already recorded in the summary file")
+	cmd.Flags().StringSliceVar(&filter, "filter", nil, "Only run entries whose name matches (comma-separated or repeat; case-insensitive). Real-provider mode only.")
 
 	return cmd
 }
@@ -256,13 +265,17 @@ var batchAgents = []string{"claude", "codex", "opencode"}
 // regardless of earlier failures; the command returns an error iff any agent
 // failed. In virtual mode each agent uses its own default prompt unless
 // `prompt` is non-empty. In real mode the same config file is reused across
-// agents.
-func runBatchAgentTests(useMock bool, configFile string, prompt string, writer *summaryWriter, skip map[resumeKey]struct{}) error {
+// agents. If filter is non-empty, only config entries whose name matches (case-
+// insensitive) are run; ignored in virtual mode.
+func runBatchAgentTests(useMock bool, configFile string, prompt string, writer *summaryWriter, skip map[resumeKey]struct{}, filter []string) error {
 	fmt.Printf("🧪 Batch agent test: %v\n", batchAgents)
 	if configFile != "" {
 		fmt.Printf("📋 Config: %s\n", configFile)
 	} else {
 		fmt.Printf("📋 Mode: virtual upstream (--mock)\n")
+	}
+	if len(filter) > 0 {
+		fmt.Printf("🔍 Filter: %v\n", filter)
 	}
 	if prompt != "" {
 		fmt.Printf("📝 Prompt: %s\n", prompt)
@@ -284,7 +297,7 @@ func runBatchAgentTests(useMock bool, configFile string, prompt string, writer *
 		var err error
 		switch {
 		case configFile != "":
-			results, err = runRealAgentTests(agentName, configFile, prompt, writer, skip)
+			results, err = runRealAgentTests(agentName, configFile, prompt, writer, skip, filter)
 		case useMock:
 			results, err = runVirtualAgentTest(agentName, prompt, writer, skip)
 		default:
