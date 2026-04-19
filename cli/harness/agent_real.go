@@ -373,18 +373,33 @@ func runOneRealAgentTest(agentType protocol_validate.AgentType, entry protocol_v
 		return result
 	}
 
-	var agentResult *AgentTestResult
+	// The client CLI must send the gateway rule's RequestModel (the fixed
+	// tingly/* name), not entry.Model. The gateway matches the built-in-<agent>
+	// rule by RequestModel, then forwards upstream via Service{Provider, Model=entry.Model}.
+	// Sending entry.Model directly bypasses rule matching and breaks the
+	// provider → rule → service routing contract.
+	var requestModel string
 	switch agentType {
 	case protocol_validate.AgentTypeClaudeCode:
-		agentResult, err = executeClaudeWithEnv(env, entry.Model, prompt)
+		requestModel = "tingly/cc"
 	case protocol_validate.AgentTypeCodex:
-		agentResult, err = executeCodexWithEnv(env, entry.Model, prompt)
+		requestModel = "tingly-codex"
 	case protocol_validate.AgentTypeOpenCode:
-		agentResult, err = executeOpenCodeWithEnv(env, entry.Model, prompt)
+		requestModel = "tingly-opencode"
 	default:
 		result.Error = fmt.Sprintf("unsupported Agent type: %s", agentType)
 		result.Duration = time.Since(start)
 		return result
+	}
+
+	var agentResult *AgentTestResult
+	switch agentType {
+	case protocol_validate.AgentTypeClaudeCode:
+		agentResult, err = executeClaudeWithEnv(env, requestModel, prompt)
+	case protocol_validate.AgentTypeCodex:
+		agentResult, err = executeCodexWithEnv(env, requestModel, prompt)
+	case protocol_validate.AgentTypeOpenCode:
+		agentResult, err = executeOpenCodeWithEnv(env, requestModel, prompt)
 	}
 
 	result.Duration = time.Since(start)
