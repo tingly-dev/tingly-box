@@ -51,10 +51,14 @@ func loadRealModelsConfig(path string) (*protocol_validate.RealModelsConfig, err
 }
 
 // runRealAgentTests iterates over all model entries and runs the agent against each.
-func runRealAgentTests(agentName string, modelsFile string, prompt string) error {
+// It returns the per-entry results and a terminal error if the entire run could
+// not proceed (e.g., bad config, no runnable entries). A non-nil results slice
+// with failed entries returns a non-nil error summarising the failure count, so
+// callers can still render the detailed report.
+func runRealAgentTests(agentName string, modelsFile string, prompt string) ([]*RealAgentTestResult, error) {
 	profileType := parseAgentType(agentName)
 	if profileType == "" {
-		return fmt.Errorf("unknown agent: %q (available: claude, codex, opencode)", agentName)
+		return nil, fmt.Errorf("unknown agent: %q (available: claude, codex, opencode)", agentName)
 	}
 
 	if prompt == "" {
@@ -67,7 +71,7 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string) error
 
 	cfg, err := loadRealModelsConfig(modelsFile)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Separate runnable entries from incomplete ones.
@@ -91,7 +95,7 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string) error
 	}
 
 	if len(runnable) == 0 {
-		return fmt.Errorf("no runnable entries in %s — fill in apikey, baseurl, and model fields", modelsFile)
+		return nil, fmt.Errorf("no runnable entries in %s — fill in apikey, baseurl, and model fields", modelsFile)
 	}
 
 	fmt.Printf("🧪 Real Agent test: %s\n", agentName)
@@ -107,14 +111,16 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string) error
 		fmt.Println()
 	}
 
-	printRealAgentSummary(results)
-
+	failed := 0
 	for _, r := range results {
 		if !r.Success {
-			return fmt.Errorf("one or more real Agent tests failed")
+			failed++
 		}
 	}
-	return nil
+	if failed > 0 {
+		return results, fmt.Errorf("%d of %d real Agent tests failed", failed, len(results))
+	}
+	return results, nil
 }
 
 // runOneRealAgentTest runs the agent CLI for a single model entry.
@@ -230,8 +236,10 @@ func printRealAgentTestResult(r *RealAgentTestResult) {
 	}
 }
 
-// printRealAgentSummary prints a summary table of all real Agent results.
-func printRealAgentSummary(results []*RealAgentTestResult) {
+// printAgentSummary prints the unified Agent-test summary table. It is shared
+// by every path — mock, real, and batch — so the report shape is identical
+// regardless of mode or single-vs-batch invocation.
+func printAgentSummary(results []*RealAgentTestResult) {
 	pass, fail := 0, 0
 	for _, r := range results {
 		if r.Success {
@@ -241,7 +249,7 @@ func printRealAgentSummary(results []*RealAgentTestResult) {
 		}
 	}
 
-	fmt.Printf("📊 Real Agent Test Summary\n")
+	fmt.Printf("📊 Agent Test Summary\n")
 	fmt.Printf("Total: %d | ✓ Pass: %d | ✗ Fail: %d\n\n", len(results), pass, fail)
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)

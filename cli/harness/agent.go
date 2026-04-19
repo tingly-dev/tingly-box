@@ -95,10 +95,17 @@ Generate a config template with: harness init-config`,
 				return runBatchAgentTests(useMock, configFile, prompt)
 			}
 
+			var results []*RealAgentTestResult
+			var runErr error
 			if configFile != "" {
-				return runRealAgentTests(agentName, configFile, prompt)
+				results, runErr = runRealAgentTests(agentName, configFile, prompt)
+			} else {
+				results, runErr = runVirtualAgentTest(agentName, prompt)
 			}
-			return runVirtualAgentTest(agentName, prompt)
+			if len(results) > 0 {
+				printAgentSummary(results)
+			}
+			return runErr
 		},
 	}
 
@@ -118,36 +125,77 @@ var defaultPrompts = map[string]string{
 
 // runVirtualAgentTest executes a virtual-model e2e test by running the actual
 // agent CLI command against an in-process gateway wired to a mock upstream.
-func runVirtualAgentTest(agentName string, prompt string) error {
+// It returns a slice of results (always length 1) so every caller — single-agent
+// or batch — sees the same structured shape as the real-provider path.
+func runVirtualAgentTest(agentName string, prompt string) ([]*RealAgentTestResult, error) {
 	if prompt == "" {
 		prompt = defaultPrompts[agentName]
 	}
 
 	agentType := parseAgentType(agentName)
 	if agentType == "" {
-		return fmt.Errorf("unknown agent: %q (available: claude, codex, opencode)", agentName)
+		return nil, fmt.Errorf("unknown agent: %q (available: claude, codex, opencode)", agentName)
 	}
 
 	fmt.Printf("🧪 Virtual-model test: %s\n", agentName)
 	fmt.Printf("📝 Prompt: %s\n", prompt)
 	fmt.Println()
 
-	// Execute the agent command
-	result, err := executeAgentCommand(agentType, prompt)
+	start := time.Now()
+	inner, err := executeAgentCommand(agentType, prompt)
+
+	// Wrap the agent-CLI outcome in the unified result shape.
+	r := &RealAgentTestResult{
+		EntryName: "mock",
+		Agent:     agentName,
+		APIStyle:  virtualAPIStyle(agentType),
+		Prompt:    prompt,
+		Model:     builtinRequestModel(agentType),
+	}
 	if err != nil {
+		r.Duration = time.Since(start)
+		r.Error = err.Error()
 		fmt.Printf("❌ Execution failed: %v\n", err)
-		return err
+		printRealAgentTestResult(r)
+		fmt.Println()
+		return []*RealAgentTestResult{r}, nil
 	}
 
-	// Print results
-	printAgentTestResult(result)
+	r.Success = inner.Success
+	r.Output = inner.Output
+	r.Error = inner.Error
+	r.ExitCode = inner.ExitCode
+	r.Duration = inner.Duration
 
-	// Return error if test failed
-	if !result.Success {
-		return fmt.Errorf("virtual-model agent test failed")
+	printRealAgentTestResult(r)
+	fmt.Println()
+	return []*RealAgentTestResult{r}, nil
+}
+
+// virtualAPIStyle returns the API style used by the virtual upstream for a given agent.
+// It mirrors the branches in AgentTestEnv.SetupAgent.
+func virtualAPIStyle(agentType protocol_validate.AgentType) string {
+	switch agentType {
+	case protocol_validate.AgentTypeClaudeCode, protocol_validate.AgentTypeOpenCode:
+		return "anthropic"
+	case protocol_validate.AgentTypeCodex:
+		return "openai"
 	}
+	return ""
+}
 
-	return nil
+// builtinRequestModel returns the fixed RequestModel used by the built-in rule
+// for each agent type. This is what the agent CLI actually sends to the gateway.
+func builtinRequestModel(agentType protocol_validate.AgentType) string {
+	switch agentType {
+	case protocol_validate.AgentTypeClaudeCode:
+		return "tingly/cc"
+	case protocol_validate.AgentTypeCodex:
+		return "tingly-codex"
+	case protocol_validate.AgentTypeOpenCode:
+		return "tingly-opencode"
+	}
+	return ""
 }
 
 // batchAgents is the ordered list of agents to run in batch mode.
@@ -172,45 +220,52 @@ func runBatchAgentTests(useMock bool, configFile string, prompt string) error {
 	}
 	fmt.Println()
 
-	type batchOutcome struct {
-		agent string
-		err   error
-	}
-	outcomes := make([]batchOutcome, 0, len(batchAgents))
+	// Collect all per-entry results across all agents so we can render a single
+	// unified detail table at the end. Fatal per-agent errors (e.g. bad config,
+	// no runnable entries) are captured as synthetic failed result rows so they
+	// still show up in the summary rather than vanishing into a log line.
+	allResults := make([]*RealAgentTestResult, 0, len(batchAgents))
 
 	for i, agentName := range batchAgents {
 		fmt.Printf("══ [%d/%d] agent=%s ══\n", i+1, len(batchAgents), agentName)
 
+		var results []*RealAgentTestResult
 		var err error
 		switch {
 		case configFile != "":
-			err = runRealAgentTests(agentName, configFile, prompt)
+			results, err = runRealAgentTests(agentName, configFile, prompt)
 		case useMock:
-			err = runVirtualAgentTest(agentName, prompt)
+			results, err = runVirtualAgentTest(agentName, prompt)
 		default:
-			// Caller already validated one of the two flags is set.
 			err = fmt.Errorf("internal: batch invoked without mode")
 		}
-		outcomes = append(outcomes, batchOutcome{agent: agentName, err: err})
+
+		if len(results) > 0 {
+			allResults = append(allResults, results...)
+		} else if err != nil {
+			// No per-entry results produced (e.g. config load failure). Emit a
+			// synthetic row so the unified report still lists this agent.
+			allResults = append(allResults, &RealAgentTestResult{
+				EntryName: "-",
+				Agent:     agentName,
+				APIStyle:  virtualAPIStyle(parseAgentType(agentName)),
+				Error:     err.Error(),
+			})
+		}
 		fmt.Println()
 	}
 
-	// Aggregate summary.
-	fmt.Printf("📊 Batch Summary\n")
-	passCount, failCount := 0, 0
-	for _, o := range outcomes {
-		if o.err == nil {
-			passCount++
-			fmt.Printf("  ✓ %s\n", o.agent)
-		} else {
+	// Unified summary: same shape as the single-agent path.
+	printAgentSummary(allResults)
+
+	failCount := 0
+	for _, r := range allResults {
+		if !r.Success {
 			failCount++
-			fmt.Printf("  ✗ %s — %v\n", o.agent, o.err)
 		}
 	}
-	fmt.Printf("Total: %d | ✓ Pass: %d | ✗ Fail: %d\n", len(outcomes), passCount, failCount)
-
 	if failCount > 0 {
-		return fmt.Errorf("%d of %d agents failed in batch", failCount, len(outcomes))
+		return fmt.Errorf("%d of %d agent runs failed in batch", failCount, len(allResults))
 	}
 	return nil
 }
@@ -511,38 +566,6 @@ func exitCode(err error) int {
 		}
 	}
 	return 1
-}
-
-// printAgentTestResult prints the test result
-func printAgentTestResult(result *AgentTestResult) {
-	duration := fmt.Sprintf("%dms", result.Duration.Milliseconds())
-
-	if result.Success {
-		fmt.Printf("✅ PASS  %s  Duration: %s\n", result.Agent, duration)
-		if result.Output != "" {
-			fmt.Printf("┌─────────────────────────────────────┐\n")
-			fmt.Printf("│ Output:                              │\n")
-			fmt.Printf("└─────────────────────────────────────┘\n")
-			lines := strings.Split(strings.TrimSpace(result.Output), "\n")
-			for i, line := range lines {
-				if i >= 10 {
-					fmt.Printf("... (%d more lines)\n", len(lines)-10)
-					break
-				}
-				fmt.Printf("%s\n", line)
-			}
-		}
-	} else {
-		fmt.Printf("❌ FAIL  %s  Duration: %s\n", result.Agent, duration)
-		fmt.Printf("┌─────────────────────────────────────┐\n")
-		fmt.Printf("│ Error:                               │\n")
-		fmt.Printf("└─────────────────────────────────────┘\n")
-		fmt.Printf("Exit Code: %d\n", result.ExitCode)
-		fmt.Printf("Error: %s\n", result.Error)
-		if result.Output != "" {
-			fmt.Printf("Output:\n%s\n", result.Output)
-		}
-	}
 }
 
 // parseAgentType converts a string to AgentType
