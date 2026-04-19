@@ -49,6 +49,7 @@ Examples:
 	}
 
 	cmd.AddCommand(newAgentRealCommand())
+	cmd.AddCommand(newInitConfigCommand())
 
 	return cmd
 }
