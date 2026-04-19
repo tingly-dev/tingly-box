@@ -149,7 +149,7 @@ func runOneRealAgentTest(agentType protocol_validate.AgentType, entry protocol_v
 		return result
 	}
 	result.APIStyle = apiStyle
-	providerName := fmt.Sprintf("real-%s", entry.Name)
+	providerName := fmt.Sprintf("%s", entry.Name)
 
 	if err := env.SetupRealAgent(agentType, providerName, entry.Model, entry.BaseURL, entry.APIKey, apiStyle); err != nil {
 		result.Error = fmt.Sprintf("setup real Agent: %v", err)
