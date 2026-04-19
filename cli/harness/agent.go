@@ -538,9 +538,9 @@ func executeOpenCodeWithEnv(env *protocol_validate.AgentTestEnv, model string, p
 
 	fmt.Printf("🔧 Gateway: %s\n", gatewayURL)
 	fmt.Printf("🔧 Config: %s\n", configPath)
-	fmt.Printf("🚀 Command: opencode run --dangerously-skip-permissions -m %s/%s %q\n\n", providerKey, model, prompt)
+	fmt.Printf("🚀 Command: opencode run -m %s/%s %q\n\n", providerKey, model, prompt)
 
-	cmd := exec.Command(binPath, "run", "--dangerously-skip-permissions", "-m", fmt.Sprintf("%s/%s", providerKey, model), prompt)
+	cmd := exec.Command(binPath, "run", "-m", fmt.Sprintf("%s/%s", providerKey, model), prompt)
 	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_CONFIG_HOME=%s", xdgDir))
 	output, err := cmd.CombinedOutput()
 
