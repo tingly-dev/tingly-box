@@ -106,7 +106,7 @@ Examples:
 	return cmd
 }
 
-const csvConfigHeader = "name,baseurl,apikey,model,api_style,api_type\n"
+const csvConfigHeader = "name,baseurl,apikey,model,api_style\n"
 
 // runInitConfig writes a pre-filled config file built from embedded provider templates.
 func runInitConfig(output string, format string) error {
@@ -225,13 +225,7 @@ func buildYAMLConfig(entries []configEntry) string {
 	sb.WriteString("models:\n")
 	for _, e := range entries {
 		apiKey := e.APIKey
-		if apiKey == "" {
-			apiKey = "YOUR_API_KEY"
-		}
 		model := e.Model
-		if model == "" {
-			model = "MODEL_NAME"
-		}
 		sb.WriteString(fmt.Sprintf("  - name: %q\n", e.Name))
 		sb.WriteString(fmt.Sprintf("    baseurl: %q\n", e.BaseURL))
 		sb.WriteString(fmt.Sprintf("    apikey: %q\n", apiKey))
@@ -247,13 +241,7 @@ func buildCSVConfig(entries []configEntry) string {
 	sb.WriteString(csvConfigHeader)
 	for _, e := range entries {
 		apiKey := e.APIKey
-		if apiKey == "" {
-			apiKey = "YOUR_API_KEY"
-		}
 		model := e.Model
-		if model == "" {
-			model = "MODEL_NAME"
-		}
 		sb.WriteString(fmt.Sprintf("%s,%s,%s,%s,%s\n", e.Name, e.BaseURL, apiKey, model, e.APIStyle))
 	}
 	return sb.String()

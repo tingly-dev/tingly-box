@@ -187,9 +187,11 @@ func executeClaudeWithEnv(env *protocol_validate.AgentTestEnv, model string, pro
 
 	fmt.Printf("🔧 Gateway: %s\n", env.BaseURL())
 	fmt.Printf("🔧 Settings: %s\n", settingsPath)
-	fmt.Printf("🚀 Command: claude --settings %s -p %s\n\n", settingsPath, prompt)
+	fmt.Printf("🚀 Command: claude --settings %s -p \"%s\"\n\n", settingsPath, prompt)
 
 	cmd := exec.Command(variant.Path, "--settings", settingsPath, "-p", prompt)
+	cmd.Env = append(os.Environ())
+
 	output, err := cmd.CombinedOutput()
 
 	result.Duration = time.Since(start)
