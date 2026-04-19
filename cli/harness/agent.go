@@ -23,10 +23,19 @@ func newAgentCommand() *cobra.Command {
 	var prompt string
 
 	cmd := &cobra.Command{
-		Use:   "agent <claude|codex|opencode> [prompt]",
+		Use:   "agent <claude|codex|opencode|batch> [prompt]",
 		Short: "Run end-to-end tests of an agent CLI through the tingly-box gateway",
 		Long: `Run an agent CLI (claude, codex, opencode) against a tingly-box gateway
 and validate that the full provider → rule → service routing works end-to-end.
+
+Agent argument:
+
+  claude | codex | opencode   Run a single agent
+  batch                       Run every supported agent in sequence. Each agent
+                              uses its own default prompt unless --prompt or a
+                              positional prompt is provided. All agents run even
+                              if one fails; the command exits non-zero if any
+                              agent failed.
 
 Two modes, selected by an explicit flag:
 
@@ -61,10 +70,12 @@ Examples:
   harness agent claude   --mock
   harness agent claude   --mock "What is 2+2?"
   harness agent opencode --mock "Hello, world!"
+  harness agent batch    --mock
 
   # Real-provider mode
   harness agent claude --config models.yaml
   harness agent codex  --config providers.csv "What is 2+2?"
+  harness agent batch  --config models.yaml
 
 Generate a config template with: harness init-config`,
 		Args: cobra.MinimumNArgs(1),
@@ -76,13 +87,18 @@ Generate a config template with: harness init-config`,
 			switch {
 			case useMock && configFile != "":
 				return fmt.Errorf("--mock and --config are mutually exclusive; pick exactly one")
-			case configFile != "":
-				return runRealAgentTests(agentName, configFile, prompt)
-			case useMock:
-				return runVirtualAgentTest(agentName, prompt)
-			default:
+			case !useMock && configFile == "":
 				return fmt.Errorf("must specify a mode: --mock (virtual upstream) or --config <file> (real providers)")
 			}
+
+			if strings.EqualFold(agentName, "batch") {
+				return runBatchAgentTests(useMock, configFile, prompt)
+			}
+
+			if configFile != "" {
+				return runRealAgentTests(agentName, configFile, prompt)
+			}
+			return runVirtualAgentTest(agentName, prompt)
 		},
 	}
 
@@ -131,6 +147,71 @@ func runVirtualAgentTest(agentName string, prompt string) error {
 		return fmt.Errorf("virtual-model agent test failed")
 	}
 
+	return nil
+}
+
+// batchAgents is the ordered list of agents to run in batch mode.
+var batchAgents = []string{"claude", "codex", "opencode"}
+
+// runBatchAgentTests runs every supported agent in sequence. All agents run
+// regardless of earlier failures; the command returns an error iff any agent
+// failed. In virtual mode each agent uses its own default prompt unless
+// `prompt` is non-empty. In real mode the same config file is reused across
+// agents.
+func runBatchAgentTests(useMock bool, configFile string, prompt string) error {
+	fmt.Printf("🧪 Batch agent test: %v\n", batchAgents)
+	if configFile != "" {
+		fmt.Printf("📋 Config: %s\n", configFile)
+	} else {
+		fmt.Printf("📋 Mode: virtual upstream (--mock)\n")
+	}
+	if prompt != "" {
+		fmt.Printf("📝 Prompt: %s\n", prompt)
+	} else {
+		fmt.Printf("📝 Prompt: <per-agent default>\n")
+	}
+	fmt.Println()
+
+	type batchOutcome struct {
+		agent string
+		err   error
+	}
+	outcomes := make([]batchOutcome, 0, len(batchAgents))
+
+	for i, agentName := range batchAgents {
+		fmt.Printf("══ [%d/%d] agent=%s ══\n", i+1, len(batchAgents), agentName)
+
+		var err error
+		switch {
+		case configFile != "":
+			err = runRealAgentTests(agentName, configFile, prompt)
+		case useMock:
+			err = runVirtualAgentTest(agentName, prompt)
+		default:
+			// Caller already validated one of the two flags is set.
+			err = fmt.Errorf("internal: batch invoked without mode")
+		}
+		outcomes = append(outcomes, batchOutcome{agent: agentName, err: err})
+		fmt.Println()
+	}
+
+	// Aggregate summary.
+	fmt.Printf("📊 Batch Summary\n")
+	passCount, failCount := 0, 0
+	for _, o := range outcomes {
+		if o.err == nil {
+			passCount++
+			fmt.Printf("  ✓ %s\n", o.agent)
+		} else {
+			failCount++
+			fmt.Printf("  ✗ %s — %v\n", o.agent, o.err)
+		}
+	}
+	fmt.Printf("Total: %d | ✓ Pass: %d | ✗ Fail: %d\n", len(outcomes), passCount, failCount)
+
+	if failCount > 0 {
+		return fmt.Errorf("%d of %d agents failed in batch", failCount, len(outcomes))
+	}
 	return nil
 }
 
