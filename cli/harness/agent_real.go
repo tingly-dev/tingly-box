@@ -7,7 +7,6 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/internal/protocol_validate"
 )
 
@@ -23,55 +22,6 @@ type RealAgentTestResult struct {
 	Output    string
 	Error     string
 	ExitCode  int
-}
-
-// newAgentRealCommand creates the `harness Agent real` subcommand.
-func newAgentRealCommand() *cobra.Command {
-	var modelsFile string
-	var prompt string
-
-	cmd := &cobra.Command{
-		Use:   "real <claude|codex|opencode>",
-		Short: "Test Agent against real providers from a models config file",
-		Long: `Test the real agent CLI against actual upstream providers defined in a YAML config file.
-
-For each model entry in the config, the harness:
-  1. Starts an isolated gateway instance
-  2. Wires the gateway to the real upstream provider
-  3. Runs the agent CLI (claude/codex/opencode) against the gateway
-  4. Reports pass/fail for each entry
-
-Config file format — YAML (.yaml/.yml):
-  models:
-    - name: "my-provider"
-      baseurl: "https://api.anthropic.com"
-      apikey: "sk-ant-..."
-      model: "claude-3-5-sonnet-20241022"
-      api_style: "anthropic"   # required; auto-detected from baseurl if omitted
-      api_type: "anthropic_v1" # optional; defaults based on api_style
-
-Config file format — CSV (.csv, header row required):
-  name,baseurl,apikey,model,api_style,api_type
-  my-provider,https://api.anthropic.com,sk-ant-...,claude-3-5-sonnet-20241022,anthropic,anthropic_v1
-
-Examples:
-  harness Agent real claude --config models.yaml
-  harness Agent real claude --config models.csv
-  harness Agent real codex --config providers.csv "What is 2+2?"`,
-		Args: cobra.MinimumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			agentName := args[0]
-			if prompt == "" && len(args) > 1 {
-				prompt = strings.Join(args[1:], " ")
-			}
-			return runRealAgentTests(agentName, modelsFile, prompt)
-		},
-	}
-
-	cmd.Flags().StringVar(&modelsFile, "config", "models.yaml", "Path to models config YAML file")
-	cmd.Flags().StringVar(&prompt, "prompt", "", "Prompt to send (overrides positional arg and default)")
-
-	return cmd
 }
 
 // missingFields returns the names of fields required to run a test that are missing or placeholder.

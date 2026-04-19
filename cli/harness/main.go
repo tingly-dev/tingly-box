@@ -25,10 +25,13 @@ var rootCmd = &cobra.Command{
 	Short: "Tingly-Box Protocol Validation Harness",
 	Long: `Test harness for Tingly-Box protocol validation.
 
-Provides three testing modes:
-  matrix    - Virtual provider e2e tests (protocol transformations)
-  profile   - Real profile-based e2e tests (config, agent interaction)
-  provider  - Real provider API e2e tests (live API compatibility)
+Commands:
+  matrix       Virtual-provider e2e tests for protocol transformations
+  agent        Run an agent CLI (claude/codex/opencode) end-to-end through the
+               tingly-box gateway; use --mock (virtual upstream) or
+               --config <file> (real providers)
+  provider     Real provider API e2e tests (live API compatibility)
+  init-config  Create a real-provider config file template for 'agent --config'
 
 Run 'harness <command> --help' for command-specific usage.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -50,4 +53,5 @@ func init() {
 	rootCmd.AddCommand(newMatrixCommand())
 	rootCmd.AddCommand(newAgentCommand())
 	rootCmd.AddCommand(newProviderCommand())
+	rootCmd.AddCommand(newInitConfigCommand())
 }

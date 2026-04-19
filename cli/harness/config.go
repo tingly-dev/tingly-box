@@ -11,23 +11,24 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/data"
 )
 
-// newInitConfigCommand creates the `harness Agent real init-config` subcommand.
+// newInitConfigCommand creates the top-level `harness init-config` command.
 func newInitConfigCommand() *cobra.Command {
 	var output string
 	var format string
 
 	cmd := &cobra.Command{
 		Use:   "init-config",
-		Short: "Create an empty models config file template",
-		Long: `Generate a template config file for use with 'harness Agent real --config'.
+		Short: "Create a real-provider config file template",
+		Long: `Generate a template config file for use with 'harness agent <agent> --config <file>'.
 
-Generates a starter config with example entries so you can fill in your provider
-credentials and model names.
+The template is pre-filled with entries for all known providers from the
+embedded provider templates (OAuth-only providers are skipped). Fill in the
+apikey (and model where blank) fields of the providers you want to test.
 
 Examples:
-  harness Agent real init-config
-  harness Agent real init-config --output providers.yaml
-  harness Agent real init-config --output providers.csv --format csv`,
+  harness init-config
+  harness init-config --output providers.yaml --format yaml
+  harness init-config --output providers.csv --format csv`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInitConfig(output, format)
 		},
@@ -83,7 +84,7 @@ func runInitConfig(output string, format string) error {
 
 	fmt.Printf("✅ Created %s (%d providers, %d with models pre-filled)\n", output, len(entries), countWithModels(entries))
 	fmt.Printf("📝 Fill in your API keys, then run:\n")
-	fmt.Printf("   harness Agent real claude --config %s\n", output)
+	fmt.Printf("   harness agent claude --config %s\n", output)
 	fmt.Printf("   (entries with empty apikey/model are automatically skipped)\n")
 	return nil
 }
@@ -151,7 +152,7 @@ func countWithModels(entries []configEntry) int {
 
 func buildYAMLConfig(entries []configEntry) string {
 	var sb strings.Builder
-	sb.WriteString("# Harness models config — used with: harness Agent real <agent> --config <this-file>\n")
+	sb.WriteString("# Harness models config — used with: harness agent <agent> --config <this-file>\n")
 	sb.WriteString("#\n")
 	sb.WriteString("# Fill in the 'apikey' fields. Entries with empty apikey/baseurl/model are skipped.\n")
 	sb.WriteString("#\n")

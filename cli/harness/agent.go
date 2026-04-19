@@ -16,40 +16,79 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol_validate"
 )
 
-// newAgentCommand creates the profile test subcommand.
+// newAgentCommand creates the agent test subcommand.
 func newAgentCommand() *cobra.Command {
+	var configFile string
+	var useMock bool
+	var prompt string
+
 	cmd := &cobra.Command{
 		Use:   "agent <claude|codex|opencode> [prompt]",
-		Short: "Agent-based e2e tests with real agent CLI",
-		Long: `Test real profiles by executing actual agent CLI commands.
+		Short: "Run end-to-end tests of an agent CLI through the tingly-box gateway",
+		Long: `Run an agent CLI (claude, codex, opencode) against a tingly-box gateway
+and validate that the full provider → rule → service routing works end-to-end.
 
-Agent tests execute real agent commands (claude, codex, opencode)
-against virtual models to validate end-to-end functionality:
+Two modes, selected by an explicit flag:
 
-  - claude:   Execute 'claude --settings <test-settings> -p <prompt>'
-  - codex:    Execute 'codex exec -c ... <prompt>'
-  - opencode: Execute 'opencode run -m ... <prompt>'
+  --mock                 Virtual-model mode
+    Spins up an in-process gateway wired to a virtual upstream (mock responses)
+    and runs the real agent CLI against it. Exercises protocol translation and
+    rule matching without touching any real upstream.
+
+  --config <file>        Real-provider mode
+    Reads a list of real providers from a YAML/CSV config file. For each entry,
+    spins up an isolated gateway, registers the provider, binds the built-in
+    rule (built-in-cc / built-in-codex / built-in-opencode) to a Service pointing
+    at that provider+model, and runs the agent CLI against the gateway. Reports
+    pass/fail per entry.
+
+Exactly one of --mock or --config must be supplied.
+
+Config file format — YAML (.yaml/.yml):
+  models:
+    - name: "my-provider"
+      baseurl: "https://api.anthropic.com"
+      apikey: "sk-ant-..."
+      model: "claude-3-5-sonnet-20241022"
+      api_style: "anthropic"   # required; auto-detected from baseurl if omitted
+
+Config file format — CSV (.csv, header row required):
+  name,baseurl,apikey,model,api_style
+  my-provider,https://api.anthropic.com,sk-ant-...,claude-3-5-sonnet-20241022,anthropic
 
 Examples:
-  # Test claude with default prompt
-  harness profile claude
+  # Virtual-model mode
+  harness agent claude   --mock
+  harness agent claude   --mock "What is 2+2?"
+  harness agent opencode --mock "Hello, world!"
 
-  # Test claude with custom prompt
-  harness profile claude "What is 2+2?"
+  # Real-provider mode
+  harness agent claude --config models.yaml
+  harness agent codex  --config providers.csv "What is 2+2?"
 
-  # Test opencode profile
-  harness profile opencode "Hello, world!"
-
-  # Test with real providers from a config file
-  harness profile real claude --models models.yaml`,
+Generate a config template with: harness init-config`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAgentTest(args)
+			agentName := args[0]
+			if prompt == "" && len(args) > 1 {
+				prompt = strings.Join(args[1:], " ")
+			}
+			switch {
+			case useMock && configFile != "":
+				return fmt.Errorf("--mock and --config are mutually exclusive; pick exactly one")
+			case configFile != "":
+				return runRealAgentTests(agentName, configFile, prompt)
+			case useMock:
+				return runVirtualAgentTest(agentName, prompt)
+			default:
+				return fmt.Errorf("must specify a mode: --mock (virtual upstream) or --config <file> (real providers)")
+			}
 		},
 	}
 
-	cmd.AddCommand(newAgentRealCommand())
-	cmd.AddCommand(newInitConfigCommand())
+	cmd.Flags().BoolVar(&useMock, "mock", false, "Virtual-model mode: run against an in-process mock upstream")
+	cmd.Flags().StringVar(&configFile, "config", "", "Real-provider mode: path to provider config file (YAML or CSV)")
+	cmd.Flags().StringVar(&prompt, "prompt", "", "Prompt to send (overrides positional arg and default)")
 
 	return cmd
 }
@@ -61,32 +100,24 @@ var defaultPrompts = map[string]string{
 	"opencode": "Hello, world!",
 }
 
-// runAgentTest executes a profile test by running the actual agent CLI command
-func runAgentTest(args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: harness profile <claude|codex|opencode> [prompt]")
+// runVirtualAgentTest executes a virtual-model e2e test by running the actual
+// agent CLI command against an in-process gateway wired to a mock upstream.
+func runVirtualAgentTest(agentName string, prompt string) error {
+	if prompt == "" {
+		prompt = defaultPrompts[agentName]
 	}
 
-	profileName := args[0]
-	prompt := ""
-	if len(args) > 1 {
-		prompt = strings.Join(args[1:], " ")
-	} else {
-		prompt = defaultPrompts[profileName]
+	agentType := parseAgentType(agentName)
+	if agentType == "" {
+		return fmt.Errorf("unknown agent: %q (available: claude, codex, opencode)", agentName)
 	}
 
-	// Resolve profile type
-	profileType := parseAgentType(profileName)
-	if profileType == "" {
-		return fmt.Errorf("unknown profile: %s (available: claude, codex, opencode)", profileName)
-	}
-
-	fmt.Printf("🧪 Testing profile: %s\n", profileName)
+	fmt.Printf("🧪 Virtual-model test: %s\n", agentName)
 	fmt.Printf("📝 Prompt: %s\n", prompt)
 	fmt.Println()
 
 	// Execute the agent command
-	result, err := executeAgentCommand(profileType, prompt)
+	result, err := executeAgentCommand(agentType, prompt)
 	if err != nil {
 		fmt.Printf("❌ Execution failed: %v\n", err)
 		return err
@@ -97,7 +128,7 @@ func runAgentTest(args []string) error {
 
 	// Return error if test failed
 	if !result.Success {
-		return fmt.Errorf("profile test failed")
+		return fmt.Errorf("virtual-model agent test failed")
 	}
 
 	return nil
@@ -115,9 +146,9 @@ type AgentTestResult struct {
 	SettingsPath string
 }
 
-// executeAgentCommand executes the actual agent CLI command
-func executeAgentCommand(profileType protocol_validate.AgentType, prompt string) (*AgentTestResult, error) {
-	switch profileType {
+// executeAgentCommand executes the actual agent CLI command against the virtual-model gateway.
+func executeAgentCommand(agentType protocol_validate.AgentType, prompt string) (*AgentTestResult, error) {
+	switch agentType {
 	case protocol_validate.AgentTypeClaudeCode:
 		return executeClaudeTest(prompt)
 	case protocol_validate.AgentTypeCodex:
@@ -125,7 +156,7 @@ func executeAgentCommand(profileType protocol_validate.AgentType, prompt string)
 	case protocol_validate.AgentTypeOpenCode:
 		return executeOpenCodeTest(prompt)
 	default:
-		return nil, fmt.Errorf("unknown profile type: %s", profileType)
+		return nil, fmt.Errorf("unknown agent type: %s", agentType)
 	}
 }
 
