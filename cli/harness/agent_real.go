@@ -20,6 +20,7 @@ type RealAgentTestResult struct {
 	RequestModel string // gateway-facing rule RequestModel (tingly/cc, tingly-codex, tingly-opencode)
 	BaseURL      string // upstream base URL (real mode); empty for mock mode
 	Success      bool
+	TimedOut     bool // true if the agent CLI was killed by the per-entry timeout
 	Duration     time.Duration
 	Output       string
 	Error        string
@@ -241,6 +242,7 @@ func runOneRealAgentTest(agentType protocol_validate.AgentType, entry protocol_v
 	}
 
 	result.Success = agentResult.Success
+	result.TimedOut = agentResult.TimedOut
 	result.Output = agentResult.Output
 	result.Error = agentResult.Error
 	result.ExitCode = agentResult.ExitCode
@@ -250,7 +252,8 @@ func runOneRealAgentTest(agentType protocol_validate.AgentType, entry protocol_v
 // printRealAgentTestResult prints the result of one model entry.
 func printRealAgentTestResult(r *RealAgentTestResult) {
 	duration := fmt.Sprintf("%dms", r.Duration.Milliseconds())
-	if r.Success {
+	switch {
+	case r.Success:
 		fmt.Printf("✅ PASS  [%s]  model=%s  duration=%s\n", r.EntryName, r.Model, duration)
 		if r.Output != "" {
 			lines := strings.Split(strings.TrimSpace(r.Output), "\n")
@@ -265,7 +268,12 @@ func printRealAgentTestResult(r *RealAgentTestResult) {
 				fmt.Printf("  ... (%d more lines)\n", len(lines)-10)
 			}
 		}
-	} else {
+	case r.TimedOut:
+		fmt.Printf("⏱  TIMEOUT  [%s]  model=%s  duration=%s\n", r.EntryName, r.Model, duration)
+		if r.Error != "" {
+			fmt.Printf("  %s\n", r.Error)
+		}
+	default:
 		fmt.Printf("❌ FAIL  [%s]  model=%s  duration=%s\n", r.EntryName, r.Model, duration)
 		if r.Error != "" {
 			fmt.Printf("  Error: %s\n", r.Error)
@@ -287,24 +295,32 @@ func printRealAgentTestResult(r *RealAgentTestResult) {
 // by every path — mock, real, and batch — so the report shape is identical
 // regardless of mode or single-vs-batch invocation.
 func printAgentSummary(results []*RealAgentTestResult) {
-	pass, fail := 0, 0
+	pass, fail, timedOut := 0, 0, 0
 	for _, r := range results {
-		if r.Success {
+		switch {
+		case r.Success:
 			pass++
-		} else {
+		case r.TimedOut:
+			timedOut++
+		default:
 			fail++
 		}
 	}
 
 	fmt.Printf("📊 Agent Test Summary\n")
-	fmt.Printf("Total: %d | ✓ Pass: %d | ✗ Fail: %d\n\n", len(results), pass, fail)
+	fmt.Printf("Total: %d | ✓ Pass: %d | ✗ Fail: %d | ⏱ Timeout: %d\n\n", len(results), pass, fail, timedOut)
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "Agent\tEntry\tModel\tStatus\tDuration\tAPI Style")
 	fmt.Fprintln(w, "-----\t-----\t-----\t------\t--------\t---------")
 	for _, r := range results {
-		status := "✓ PASS"
-		if !r.Success {
+		var status string
+		switch {
+		case r.Success:
+			status = "✓ PASS"
+		case r.TimedOut:
+			status = "⏱ TIMEOUT"
+		default:
 			status = "✗ FAIL"
 		}
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -24,6 +25,7 @@ func newAgentCommand() *cobra.Command {
 	var summaryFile string
 	var resume bool
 	var filter []string
+	var timeout time.Duration
 
 	cmd := &cobra.Command{
 		Use:   "agent <claude|codex|opencode|batch> [prompt]",
@@ -93,6 +95,11 @@ Persistence:
   partial progress survives Ctrl-C / crashes. With --resume, any (agent,entry)
   pair already recorded in the summary file is skipped.
 
+Timeouts:
+  Each per-entry agent CLI invocation is capped by --timeout (default 2m). On
+  timeout the child process is killed and the row is recorded with status
+  TIMEOUT in the summary. Pass --timeout 0 to disable.
+
 Generate a config template with: harness init-config`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -105,6 +112,13 @@ Generate a config template with: harness init-config`,
 				return fmt.Errorf("--mock and --config are mutually exclusive; pick exactly one")
 			case !useMock && configFile == "":
 				return fmt.Errorf("must specify a mode: --mock (virtual upstream) or --config <file> (real providers)")
+			}
+
+			// Make the per-entry timeout visible to the executors (they read
+			// the package-level variable before launching the agent CLI).
+			agentRunTimeout = timeout
+			if timeout > 0 {
+				fmt.Printf("⏱  Per-entry timeout: %s\n", timeout)
 			}
 
 			// Open durable summary writer and load resume keys before any work runs.
@@ -152,6 +166,7 @@ Generate a config template with: harness init-config`,
 	cmd.Flags().StringVar(&summaryFile, "summary", DefaultSummaryFile, "Path to CSV summary file (per-row results, written durably)")
 	cmd.Flags().BoolVar(&resume, "resume", false, "Skip (agent,entry) rows already recorded in the summary file")
 	cmd.Flags().StringSliceVar(&filter, "filter", nil, "Only run entries whose name matches (comma-separated or repeat; case-insensitive). Real-provider mode only.")
+	cmd.Flags().DurationVar(&timeout, "timeout", 2*time.Minute, "Per-entry timeout for the agent CLI invocation (e.g. 30s, 2m). 0 disables.")
 
 	return cmd
 }
@@ -217,6 +232,7 @@ func runVirtualAgentTest(agentName string, prompt string, writer *summaryWriter,
 	}
 
 	r.Success = inner.Success
+	r.TimedOut = inner.TimedOut
 	r.Output = inner.Output
 	r.Error = inner.Error
 	r.ExitCode = inner.ExitCode
@@ -260,6 +276,46 @@ func builtinRequestModel(agentType protocol_validate.AgentType) string {
 
 // batchAgents is the ordered list of agents to run in batch mode.
 var batchAgents = []string{"claude", "codex", "opencode"}
+
+// agentRunTimeout is the max wall-clock duration for a single agent CLI
+// invocation. Set by the `--timeout` flag in newAgentCommand before any work
+// runs. A zero value disables the timeout. Exposed as a package-level var
+// (rather than threaded through every executor signature) because it's a
+// cross-cutting concern shared by all agent paths — mock, real, batch.
+var agentRunTimeout time.Duration
+
+// runAgentCmdWithTimeout runs cmd, capturing stdout+stderr into one buffer,
+// under the configured per-entry timeout. Returns the captured output, a
+// timed-out flag, and the Wait/Start error (if any). On timeout the process
+// is killed and context.DeadlineExceeded is returned as the error.
+// When agentRunTimeout <= 0 the timeout is disabled and this behaves like
+// cmd.CombinedOutput().
+func runAgentCmdWithTimeout(cmd *exec.Cmd) ([]byte, bool, error) {
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+
+	if agentRunTimeout <= 0 {
+		err := cmd.Run()
+		return buf.Bytes(), false, err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return buf.Bytes(), false, err
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+
+	select {
+	case <-time.After(agentRunTimeout):
+		_ = cmd.Process.Kill()
+		<-done // reap the goroutine so it doesn't leak
+		return buf.Bytes(), true, context.DeadlineExceeded
+	case err := <-done:
+		return buf.Bytes(), false, err
+	}
+}
 
 // runBatchAgentTests runs every supported agent in sequence. All agents run
 // regardless of earlier failures; the command returns an error iff any agent
@@ -345,6 +401,7 @@ type AgentTestResult struct {
 	Agent        string
 	Prompt       string
 	Success      bool
+	TimedOut     bool
 	Duration     time.Duration
 	Output       string
 	Error        string
@@ -428,18 +485,24 @@ func executeClaudeWithEnv(env *protocol_validate.AgentTestEnv, model string, pro
 	fmt.Printf("🚀 Command: claude --settings %s -p \"%s\"\n\n", settingsPath, prompt)
 
 	cmd := exec.Command(variant.Path, "--settings", settingsPath, "-p", prompt)
-	cmd.Env = append(os.Environ())
+	cmd.Env = os.Environ()
 
-	output, err := cmd.CombinedOutput()
+	output, timedOut, err := runAgentCmdWithTimeout(cmd)
 
 	result.Duration = time.Since(start)
 	result.Output = string(output)
 
-	if err != nil {
+	switch {
+	case timedOut:
+		result.Error = fmt.Sprintf("timeout after %s", agentRunTimeout)
+		result.ExitCode = -1
+		result.Success = false
+		result.TimedOut = true
+	case err != nil:
 		result.Error = err.Error()
 		result.ExitCode = exitCode(err)
 		result.Success = false
-	} else {
+	default:
 		result.Success = true
 	}
 
@@ -516,16 +579,22 @@ wire_api = "responses"
 
 	cmd := exec.Command(binPath, "exec", "--dangerously-bypass-approvals-and-sandbox", prompt)
 	cmd.Env = append(os.Environ(), fmt.Sprintf("CODEX_HOME=%s", codexHome))
-	output, err := cmd.CombinedOutput()
+	output, timedOut, err := runAgentCmdWithTimeout(cmd)
 
 	result.Duration = time.Since(start)
 	result.Output = string(output)
 
-	if err != nil {
+	switch {
+	case timedOut:
+		result.Error = fmt.Sprintf("timeout after %s", agentRunTimeout)
+		result.ExitCode = -1
+		result.Success = false
+		result.TimedOut = true
+	case err != nil:
 		result.Error = err.Error()
 		result.ExitCode = exitCode(err)
 		result.Success = false
-	} else {
+	default:
 		result.Success = true
 	}
 
@@ -612,16 +681,22 @@ func executeOpenCodeWithEnv(env *protocol_validate.AgentTestEnv, model string, p
 
 	cmd := exec.Command(binPath, "run", "-m", fmt.Sprintf("%s/%s", providerKey, model), prompt)
 	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_CONFIG_HOME=%s", xdgDir))
-	output, err := cmd.CombinedOutput()
+	output, timedOut, err := runAgentCmdWithTimeout(cmd)
 
 	result.Duration = time.Since(start)
 	result.Output = string(output)
 
-	if err != nil {
+	switch {
+	case timedOut:
+		result.Error = fmt.Sprintf("timeout after %s", agentRunTimeout)
+		result.ExitCode = -1
+		result.Success = false
+		result.TimedOut = true
+	case err != nil:
 		result.Error = err.Error()
 		result.ExitCode = exitCode(err)
 		result.Success = false
-	} else {
+	default:
 		result.Success = true
 	}
 
