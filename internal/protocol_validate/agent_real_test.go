@@ -19,19 +19,20 @@ import (
 // upstream so no actual API keys are needed.
 //
 // Flow:
-//   NewProfileTestEnv  →  gateway + virtual server
-//   SetupRealProfile   →  provider points at virtual server URL (acting as real)
-//   HTTP POST          →  gateway /tingly/claude_code/v1/messages?beta=true
-//   Assert             →  200, Anthropic message response with content
+//
+//	NewProfileTestEnv  →  gateway + virtual server
+//	SetupRealProfile   →  provider points at virtual server URL (acting as real)
+//	HTTP POST          →  gateway /tingly/claude_code/v1/messages?beta=true
+//	Assert             →  200, Anthropic message response with content
 func TestSetupRealProfile_ClaudeCode(t *testing.T) {
-	env, err := pt.NewProfileTestEnv(pt.ProfileTypeClaudeCode)
+	env, err := pt.NewAgentTestEnv(pt.AgentTypeClaudeCode)
 	require.NoError(t, err)
 	defer env.Close(false)
 
 	// Point the "real" provider at the virtual server — simulates a real provider
 	// without needing actual credentials.
-	err = env.SetupRealProfile(
-		pt.ProfileTypeClaudeCode,
+	err = env.SetupRealAgent(
+		pt.AgentTypeClaudeCode,
 		"virtual-as-real",
 		"claude-3-5-sonnet-20241022",
 		env.VirtualServerURL(),
@@ -76,37 +77,57 @@ func TestSetupRealProfile_ClaudeCode(t *testing.T) {
 }
 
 // TestSetupRealProfile_LoadConfig verifies YAML config loading and api_style
-// auto-detection without starting any servers.
+// validation without starting any servers.
 func TestSetupRealProfile_LoadConfig(t *testing.T) {
-	t.Run("anthropic auto-detected from baseurl", func(t *testing.T) {
+	t.Run("anthropic api_style is valid", func(t *testing.T) {
 		entry := pt.RealModelEntry{
-			Name:    "test",
-			BaseURL: "https://api.anthropic.com",
-			APIKey:  "sk-ant-xxx",
-			Model:   "claude-3-5-sonnet-20241022",
+			Name:     "test",
+			BaseURL:  "https://api.anthropic.com",
+			APIKey:   "sk-ant-xxx",
+			Model:    "claude-3-5-sonnet-20241022",
+			APIStyle: "anthropic",
 		}
-		assert.Equal(t, "anthropic", pt.ResolveAPIStyle(entry))
+		apiStyle, err := pt.ResolveAPIStyle(entry)
+		require.NoError(t, err)
+		assert.Equal(t, "anthropic", apiStyle)
 	})
 
-	t.Run("openai auto-detected from baseurl", func(t *testing.T) {
+	t.Run("openai api_style is valid", func(t *testing.T) {
+		entry := pt.RealModelEntry{
+			Name:     "test",
+			BaseURL:  "https://api.openai.com/v1",
+			APIKey:   "sk-xxx",
+			Model:    "gpt-4o",
+			APIStyle: "openai",
+		}
+		apiStyle, err := pt.ResolveAPIStyle(entry)
+		require.NoError(t, err)
+		assert.Equal(t, "openai", apiStyle)
+	})
+
+	t.Run("empty api_style returns error", func(t *testing.T) {
 		entry := pt.RealModelEntry{
 			Name:    "test",
 			BaseURL: "https://api.openai.com/v1",
 			APIKey:  "sk-xxx",
 			Model:   "gpt-4o",
 		}
-		assert.Equal(t, "openai", pt.ResolveAPIStyle(entry))
+		_, err := pt.ResolveAPIStyle(entry)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "api_style is required")
 	})
 
-	t.Run("explicit api_style overrides detection", func(t *testing.T) {
+	t.Run("invalid api_style returns error", func(t *testing.T) {
 		entry := pt.RealModelEntry{
 			Name:     "test",
 			BaseURL:  "https://api.openai.com/v1",
 			APIKey:   "sk-xxx",
 			Model:    "gpt-4o",
-			APIStyle: "anthropic",
+			APIStyle: "invalid",
 		}
-		assert.Equal(t, "anthropic", pt.ResolveAPIStyle(entry))
+		_, err := pt.ResolveAPIStyle(entry)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid api_style")
 	})
 }
 
@@ -118,6 +139,7 @@ models:
     baseurl: https://api.anthropic.com
     apikey: sk-ant-aaa
     model: claude-3-5-sonnet-20241022
+    api_style: anthropic
   - name: provider-b
     baseurl: https://api.openai.com/v1
     apikey: sk-bbb
@@ -130,6 +152,7 @@ models:
 	require.Len(t, cfg.Models, 2)
 	assert.Equal(t, "provider-a", cfg.Models[0].Name)
 	assert.Equal(t, "claude-3-5-sonnet-20241022", cfg.Models[0].Model)
+	assert.Equal(t, "anthropic", cfg.Models[0].APIStyle)
 	assert.Equal(t, "openai", cfg.Models[1].APIStyle)
 }
 
@@ -148,15 +171,19 @@ func TestLoadRealModelsConfig_CSV(t *testing.T) {
 		assert.Equal(t, "sk-bbb", cfg.Models[1].APIKey)
 	})
 
-	t.Run("without api_style column", func(t *testing.T) {
+	t.Run("without api_style column - entry loads but validation fails", func(t *testing.T) {
 		content := "name,baseurl,apikey,model\n" +
 			"provider-a,https://api.anthropic.com,sk-ant-aaa,claude-3-5-sonnet-20241022\n"
 		f := writeTempFile(t, "models-*.csv", content)
 		cfg, err := pt.LoadRealModelsConfig(f)
-		require.NoError(t, err)
+		require.NoError(t, err) // Config loads successfully
 		require.Len(t, cfg.Models, 1)
-		assert.Equal(t, "", cfg.Models[0].APIStyle)
-		assert.Equal(t, "anthropic", pt.ResolveAPIStyle(cfg.Models[0]))
+		assert.Equal(t, "", cfg.Models[0].APIStyle) // api_style is empty
+
+		// But ResolveAPIStyle fails validation
+		_, err = pt.ResolveAPIStyle(cfg.Models[0])
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "api_style is required")
 	})
 
 	t.Run("missing required column", func(t *testing.T) {

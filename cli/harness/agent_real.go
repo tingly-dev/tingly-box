@@ -14,10 +14,10 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol_validate"
 )
 
-// RealProfileTestResult holds the result of one real-model profile run.
-type RealProfileTestResult struct {
+// RealAgentTestResult holds the result of one real-model Agent run.
+type RealAgentTestResult struct {
 	EntryName string
-	Profile   string
+	Agent     string
 	Prompt    string
 	Model     string
 	Success   bool
@@ -27,14 +27,14 @@ type RealProfileTestResult struct {
 	ExitCode  int
 }
 
-// newProfileRealCommand creates the `harness profile real` subcommand.
-func newProfileRealCommand() *cobra.Command {
+// newAgentRealCommand creates the `harness Agent real` subcommand.
+func newAgentRealCommand() *cobra.Command {
 	var modelsFile string
 	var prompt string
 
 	cmd := &cobra.Command{
 		Use:   "real <claude|codex|opencode>",
-		Short: "Test profile against real providers from a models config file",
+		Short: "Test Agent against real providers from a models config file",
 		Long: `Test the real agent CLI against actual upstream providers defined in a YAML config file.
 
 For each model entry in the config, the harness:
@@ -49,23 +49,24 @@ Config file format — YAML (.yaml/.yml):
       baseurl: "https://api.anthropic.com"
       apikey: "sk-ant-..."
       model: "claude-3-5-sonnet-20241022"
-      api_style: "anthropic"   # optional; auto-detected from baseurl if omitted
+      api_style: "anthropic"   # required; auto-detected from baseurl if omitted
+      api_type: "anthropic_v1" # optional; defaults based on api_style
 
 Config file format — CSV (.csv, header row required):
-  name,baseurl,apikey,model,api_style
-  my-provider,https://api.anthropic.com,sk-ant-...,claude-3-5-sonnet-20241022,anthropic
+  name,baseurl,apikey,model,api_style,api_type
+  my-provider,https://api.anthropic.com,sk-ant-...,claude-3-5-sonnet-20241022,anthropic,anthropic_v1
 
 Examples:
-  harness profile real claude --config models.yaml
-  harness profile real claude --config models.csv
-  harness profile real codex --config providers.csv "What is 2+2?"`,
+  harness Agent real claude --config models.yaml
+  harness Agent real claude --config models.csv
+  harness Agent real codex --config providers.csv "What is 2+2?"`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			agentName := args[0]
 			if prompt == "" && len(args) > 1 {
 				prompt = strings.Join(args[1:], " ")
 			}
-			return runRealProfileTests(agentName, modelsFile, prompt)
+			return runRealAgentTests(agentName, modelsFile, prompt)
 		},
 	}
 
@@ -77,7 +78,7 @@ Examples:
 	return cmd
 }
 
-// newInitConfigCommand creates the `harness profile real init-config` subcommand.
+// newInitConfigCommand creates the `harness Agent real init-config` subcommand.
 func newInitConfigCommand() *cobra.Command {
 	var output string
 	var format string
@@ -85,15 +86,15 @@ func newInitConfigCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init-config",
 		Short: "Create an empty models config file template",
-		Long: `Generate a template config file for use with 'harness profile real --config'.
+		Long: `Generate a template config file for use with 'harness Agent real --config'.
 
 Generates a starter config with example entries so you can fill in your provider
 credentials and model names.
 
 Examples:
-  harness profile real init-config
-  harness profile real init-config --output providers.yaml
-  harness profile real init-config --output providers.csv --format csv`,
+  harness Agent real init-config
+  harness Agent real init-config --output providers.yaml
+  harness Agent real init-config --output providers.csv --format csv`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInitConfig(output, format)
 		},
@@ -105,7 +106,7 @@ Examples:
 	return cmd
 }
 
-const csvConfigHeader = "name,baseurl,apikey,model,api_style\n"
+const csvConfigHeader = "name,baseurl,apikey,model,api_style,api_type\n"
 
 // runInitConfig writes a pre-filled config file built from embedded provider templates.
 func runInitConfig(output string, format string) error {
@@ -149,7 +150,7 @@ func runInitConfig(output string, format string) error {
 
 	fmt.Printf("✅ Created %s (%d providers, %d with models pre-filled)\n", output, len(entries), countWithModels(entries))
 	fmt.Printf("📝 Fill in your API keys, then run:\n")
-	fmt.Printf("   harness profile real claude --config %s\n", output)
+	fmt.Printf("   harness Agent real claude --config %s\n", output)
 	fmt.Printf("   (entries with empty apikey/model are automatically skipped)\n")
 	return nil
 }
@@ -161,6 +162,7 @@ type configEntry struct {
 	APIKey   string // placeholder or empty
 	Model    string // first model or empty
 	APIStyle string
+	APIType  string // optional
 }
 
 // buildConfigEntries converts provider templates into config entries.
@@ -195,6 +197,7 @@ func buildConfigEntries(templates map[string]*data.ProviderTemplate) []configEnt
 			APIKey:   "", // user must fill in
 			Model:    model,
 			APIStyle: apiStyle,
+			APIType:  "", // optional, leave empty for default
 		})
 	}
 
@@ -215,7 +218,7 @@ func countWithModels(entries []configEntry) int {
 
 func buildYAMLConfig(entries []configEntry) string {
 	var sb strings.Builder
-	sb.WriteString("# Harness models config — used with: harness profile real <agent> --config <this-file>\n")
+	sb.WriteString("# Harness models config — used with: harness Agent real <agent> --config <this-file>\n")
 	sb.WriteString("#\n")
 	sb.WriteString("# Fill in the 'apikey' fields. Entries with empty apikey/baseurl/model are skipped.\n")
 	sb.WriteString("#\n")
@@ -270,6 +273,10 @@ func missingFields(entry protocol_validate.RealModelEntry) []string {
 	if model == "" || model == "MODEL_NAME" {
 		miss = append(miss, "model")
 	}
+	// api_style is now required
+	if strings.TrimSpace(entry.APIStyle) == "" {
+		miss = append(miss, "api_style")
+	}
 	return miss
 }
 
@@ -278,9 +285,9 @@ func loadRealModelsConfig(path string) (*protocol_validate.RealModelsConfig, err
 	return protocol_validate.LoadRealModelsConfig(path)
 }
 
-// runRealProfileTests iterates over all model entries and runs the agent against each.
-func runRealProfileTests(agentName string, modelsFile string, prompt string) error {
-	profileType := parseProfileType(agentName)
+// runRealAgentTests iterates over all model entries and runs the agent against each.
+func runRealAgentTests(agentName string, modelsFile string, prompt string) error {
+	profileType := parseAgentType(agentName)
 	if profileType == "" {
 		return fmt.Errorf("unknown agent: %q (available: claude, codex, opencode)", agentName)
 	}
@@ -322,41 +329,41 @@ func runRealProfileTests(agentName string, modelsFile string, prompt string) err
 		return fmt.Errorf("no runnable entries in %s — fill in apikey, baseurl, and model fields", modelsFile)
 	}
 
-	fmt.Printf("🧪 Real profile test: %s\n", agentName)
+	fmt.Printf("🧪 Real Agent test: %s\n", agentName)
 	fmt.Printf("📝 Prompt: %s\n", prompt)
 	fmt.Printf("📋 Models: %d runnable entries from %s\n\n", len(runnable), modelsFile)
 
-	results := make([]*RealProfileTestResult, 0, len(runnable))
+	results := make([]*RealAgentTestResult, 0, len(runnable))
 	for i, entry := range runnable {
 		fmt.Printf("── [%d/%d] %s ──\n", i+1, len(runnable), entry.Name)
-		r := runOneRealProfileTest(profileType, entry, prompt)
+		r := runOneRealAgentTest(profileType, entry, prompt)
 		results = append(results, r)
-		printRealProfileTestResult(r)
+		printRealAgentTestResult(r)
 		fmt.Println()
 	}
 
-	printRealProfileSummary(results)
+	printRealAgentSummary(results)
 
 	for _, r := range results {
 		if !r.Success {
-			return fmt.Errorf("one or more real profile tests failed")
+			return fmt.Errorf("one or more real Agent tests failed")
 		}
 	}
 	return nil
 }
 
-// runOneRealProfileTest runs the agent CLI for a single model entry.
-func runOneRealProfileTest(profileType protocol_validate.ProfileType, entry protocol_validate.RealModelEntry, prompt string) *RealProfileTestResult {
-	result := &RealProfileTestResult{
+// runOneRealAgentTest runs the agent CLI for a single model entry.
+func runOneRealAgentTest(agentType protocol_validate.AgentType, entry protocol_validate.RealModelEntry, prompt string) *RealAgentTestResult {
+	result := &RealAgentTestResult{
 		EntryName: entry.Name,
-		Profile:   string(profileType),
+		Agent:     string(agentType),
 		Prompt:    prompt,
 		Model:     entry.Model,
 	}
 	start := time.Now()
 
 	// Start isolated gateway (virtual server is also started but unused here)
-	env, err := protocol_validate.NewProfileTestEnv(profileType)
+	env, err := protocol_validate.NewAgentTestEnv(agentType)
 	if err != nil {
 		result.Error = fmt.Sprintf("create test env: %v", err)
 		result.Duration = time.Since(start)
@@ -364,25 +371,30 @@ func runOneRealProfileTest(profileType protocol_validate.ProfileType, entry prot
 	}
 	defer env.Close(false)
 
-	apiStyle := protocol_validate.ResolveAPIStyle(entry)
+	apiStyle, err := protocol_validate.ResolveAPIStyle(entry)
+	if err != nil {
+		result.Error = fmt.Sprintf("resolve api_style: %v", err)
+		result.Duration = time.Since(start)
+		return result
+	}
 	providerName := fmt.Sprintf("real-%s", entry.Name)
 
-	if err := env.SetupRealProfile(profileType, providerName, entry.Model, entry.BaseURL, entry.APIKey, apiStyle); err != nil {
-		result.Error = fmt.Sprintf("setup real profile: %v", err)
+	if err := env.SetupRealAgent(agentType, providerName, entry.Model, entry.BaseURL, entry.APIKey, apiStyle); err != nil {
+		result.Error = fmt.Sprintf("setup real Agent: %v", err)
 		result.Duration = time.Since(start)
 		return result
 	}
 
-	var agentResult *ProfileTestResult
-	switch profileType {
-	case protocol_validate.ProfileTypeClaudeCode:
+	var agentResult *AgentTestResult
+	switch agentType {
+	case protocol_validate.AgentTypeClaudeCode:
 		agentResult, err = executeClaudeWithEnv(env, entry.Model, prompt)
-	case protocol_validate.ProfileTypeCodex:
+	case protocol_validate.AgentTypeCodex:
 		agentResult, err = executeCodexWithEnv(env, entry.Model, prompt)
-	case protocol_validate.ProfileTypeOpenCode:
+	case protocol_validate.AgentTypeOpenCode:
 		agentResult, err = executeOpenCodeWithEnv(env, entry.Model, prompt)
 	default:
-		result.Error = fmt.Sprintf("unsupported profile type: %s", profileType)
+		result.Error = fmt.Sprintf("unsupported Agent type: %s", agentType)
 		result.Duration = time.Since(start)
 		return result
 	}
@@ -401,8 +413,8 @@ func runOneRealProfileTest(profileType protocol_validate.ProfileType, entry prot
 	return result
 }
 
-// printRealProfileTestResult prints the result of one model entry.
-func printRealProfileTestResult(r *RealProfileTestResult) {
+// printRealAgentTestResult prints the result of one model entry.
+func printRealAgentTestResult(r *RealAgentTestResult) {
 	duration := fmt.Sprintf("%dms", r.Duration.Milliseconds())
 	if r.Success {
 		fmt.Printf("✅ PASS  [%s]  model=%s  duration=%s\n", r.EntryName, r.Model, duration)
@@ -437,8 +449,8 @@ func printRealProfileTestResult(r *RealProfileTestResult) {
 	}
 }
 
-// printRealProfileSummary prints a summary table of all real profile results.
-func printRealProfileSummary(results []*RealProfileTestResult) {
+// printRealAgentSummary prints a summary table of all real Agent results.
+func printRealAgentSummary(results []*RealAgentTestResult) {
 	pass, fail := 0, 0
 	for _, r := range results {
 		if r.Success {
@@ -448,7 +460,7 @@ func printRealProfileSummary(results []*RealProfileTestResult) {
 		}
 	}
 
-	fmt.Printf("📊 Real Profile Test Summary\n")
+	fmt.Printf("📊 Real Agent Test Summary\n")
 	fmt.Printf("Total: %d | ✓ Pass: %d | ✗ Fail: %d\n\n", len(results), pass, fail)
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)

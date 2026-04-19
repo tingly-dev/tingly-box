@@ -12,9 +12,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol_validate"
 )
 
-// runClaudeProfileTest executes a single claude profile test
+// runClaudeAgentTest executes a single claude profile test
 // It uses a real client (claudeRoundTripper) against the virtual server
-func runClaudeProfileTest(env *protocol_validate.ProfileTestEnv, scenario protocol_validate.ProfileScenario, streaming bool) protocol_validate.ProfileTestResult {
+func runClaudeAgentTest(env *protocol_validate.AgentTestEnv, scenario protocol_validate.AgentScenario, streaming bool) protocol_validate.AgentTestResult {
 	name := fmt.Sprintf("claude/%s", scenario.Name)
 	if streaming {
 		name += "/streaming"
@@ -22,9 +22,9 @@ func runClaudeProfileTest(env *protocol_validate.ProfileTestEnv, scenario protoc
 		name += "/nonstream"
 	}
 
-	result := protocol_validate.ProfileTestResult{
+	result := protocol_validate.AgentTestResult{
 		Name:     name,
-		Profile:  protocol_validate.ProfileTypeClaudeCode,
+		Agent:    protocol_validate.AgentTypeClaudeCode,
 		Scenario: scenario.Name,
 		Passed:   false,
 	}
@@ -210,9 +210,9 @@ func runClaudeProfileTest(env *protocol_validate.ProfileTestEnv, scenario protoc
 	return result
 }
 
-// runCodexProfileTest executes a single codex profile test
+// runCodexAgentTest executes a single codex profile test
 // It validates path rewriting and parameter filtering
-func runCodexProfileTest(env *protocol_validate.ProfileTestEnv, scenario protocol_validate.ProfileScenario, streaming bool) protocol_validate.ProfileTestResult {
+func runCodexAgentTest(env *protocol_validate.AgentTestEnv, scenario protocol_validate.AgentScenario, streaming bool) protocol_validate.AgentTestResult {
 	name := fmt.Sprintf("codex/%s", scenario.Name)
 	if streaming {
 		name += "/streaming"
@@ -220,9 +220,9 @@ func runCodexProfileTest(env *protocol_validate.ProfileTestEnv, scenario protoco
 		name += "/nonstream"
 	}
 
-	result := protocol_validate.ProfileTestResult{
+	result := protocol_validate.AgentTestResult{
 		Name:     name,
-		Profile:  protocol_validate.ProfileTypeCodex,
+		Agent:    protocol_validate.AgentTypeCodex,
 		Scenario: scenario.Name,
 		Passed:   false,
 	}
@@ -355,8 +355,8 @@ func runCodexProfileTest(env *protocol_validate.ProfileTestEnv, scenario protoco
 	return result
 }
 
-// runOpenCodeProfileTest executes a single opencode profile test
-func runOpenCodeProfileTest(env *protocol_validate.ProfileTestEnv, scenario protocol_validate.ProfileScenario, streaming bool) protocol_validate.ProfileTestResult {
+// runOpenCodeAgentTest executes a single opencode profile test
+func runOpenCodeAgentTest(env *protocol_validate.AgentTestEnv, scenario protocol_validate.AgentScenario, streaming bool) protocol_validate.AgentTestResult {
 	name := fmt.Sprintf("opencode/%s", scenario.Name)
 	if streaming {
 		name += "/streaming"
@@ -364,9 +364,9 @@ func runOpenCodeProfileTest(env *protocol_validate.ProfileTestEnv, scenario prot
 		name += "/nonstream"
 	}
 
-	result := protocol_validate.ProfileTestResult{
+	result := protocol_validate.AgentTestResult{
 		Name:     name,
-		Profile:  protocol_validate.ProfileTypeOpenCode,
+		Agent:    protocol_validate.AgentTypeOpenCode,
 		Scenario: scenario.Name,
 		Passed:   false,
 	}

@@ -15,41 +15,41 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// ProfileType represents the type of agent profile to test
-type ProfileType string
+// AgentType represents the type of agent Agent to test
+type AgentType string
 
 const (
-	ProfileTypeClaudeCode ProfileType = "claude"
-	ProfileTypeCodex      ProfileType = "codex"
-	ProfileTypeOpenCode   ProfileType = "opencode"
+	AgentTypeClaudeCode AgentType = "claude"
+	AgentTypeCodex      AgentType = "codex"
+	AgentTypeOpenCode   AgentType = "opencode"
 )
 
-// String returns the string representation of ProfileType
-func (pt ProfileType) String() string {
+// String returns the string representation of AgentType
+func (pt AgentType) String() string {
 	return string(pt)
 }
 
-// Scenario returns the corresponding RuleScenario for this profile
-func (pt ProfileType) Scenario() typ.RuleScenario {
+// Scenario returns the corresponding RuleScenario for this Agent
+func (pt AgentType) Scenario() typ.RuleScenario {
 	switch pt {
-	case ProfileTypeClaudeCode:
+	case AgentTypeClaudeCode:
 		return typ.ScenarioClaudeCode
-	case ProfileTypeCodex:
+	case AgentTypeCodex:
 		return typ.ScenarioCodex
-	case ProfileTypeOpenCode:
+	case AgentTypeOpenCode:
 		return typ.ScenarioOpenCode
 	default:
 		return ""
 	}
 }
 
-// ProfileTestResult represents the result of a single profile test
-type ProfileTestResult struct {
+// AgentTestResult represents the result of a single Agent test
+type AgentTestResult struct {
 	// Name is the test name
 	Name string
 
-	// Profile is the profile type being tested
-	Profile ProfileType
+	// Agent is the Agent type being tested
+	Agent AgentType
 
 	// Scenario is the test scenario (e.g., "text", "streaming", "tool_use")
 	Scenario string
@@ -82,13 +82,13 @@ type ProfileTestResult struct {
 	ResponseBody []byte
 }
 
-// ProfileTestEnv provides an isolated test environment for profile testing
+// AgentTestEnv provides an isolated test environment for Agent testing
 // It includes:
 // - A temporary config directory
 // - A gateway server with virtual provider
-// - Routing rules configured for the profile
+// - Routing rules configured for the Agent
 // - A virtual server that captures requests for validation
-type ProfileTestEnv struct {
+type AgentTestEnv struct {
 	// configDir is the temporary configuration directory
 	configDir string
 
@@ -129,12 +129,12 @@ type CapturedRequest struct {
 	Path string
 }
 
-// NewProfileTestEnv creates a new profile test environment
+// NewAgentTestEnv creates a new Agent test environment
 // The environment is isolated with a temporary config directory
 // and must be cleaned up with Close() when done
-func NewProfileTestEnv(profileType ProfileType) (*ProfileTestEnv, error) {
+func NewAgentTestEnv(AgentType AgentType) (*AgentTestEnv, error) {
 	// Create temporary config directory
-	configDir, err := os.MkdirTemp("", "harness-profile-*")
+	configDir, err := os.MkdirTemp("", "harness-Agent-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp config dir: %w", err)
 	}
@@ -148,7 +148,7 @@ func NewProfileTestEnv(profileType ProfileType) (*ProfileTestEnv, error) {
 
 	// Start virtual server (mock provider) and register default scenarios
 	virtualServer := server_validate.NewVirtualServerForCLI()
-	for _, ps := range ProfileScenarios() {
+	for _, ps := range AgentScenarios() {
 		virtualServer.RegisterScenario(server_validate.Scenario{
 			Name:          ps.Name,
 			MockResponses: ps.MockResponses,
@@ -160,7 +160,7 @@ func NewProfileTestEnv(profileType ProfileType) (*ProfileTestEnv, error) {
 	router := gatewayServer.GetRouter()
 	ts := httptest.NewServer(router)
 
-	return &ProfileTestEnv{
+	return &AgentTestEnv{
 		configDir:        configDir,
 		appConfig:        appConfig,
 		gatewayServer:    ts,
@@ -174,7 +174,7 @@ func NewProfileTestEnv(profileType ProfileType) (*ProfileTestEnv, error) {
 
 // Close cleans up the test environment
 // If preserve is true, the config directory is kept for inspection
-func (env *ProfileTestEnv) Close(preserve bool) error {
+func (env *AgentTestEnv) Close(preserve bool) error {
 	if env.closed {
 		return nil
 	}
@@ -201,31 +201,31 @@ func (env *ProfileTestEnv) Close(preserve bool) error {
 }
 
 // ConfigDir returns the temporary config directory path
-func (env *ProfileTestEnv) ConfigDir() string {
+func (env *AgentTestEnv) ConfigDir() string {
 	return env.configDir
 }
 
 // BaseURL returns the base URL of the gateway server
-func (env *ProfileTestEnv) BaseURL() string {
+func (env *AgentTestEnv) BaseURL() string {
 	return env.baseURL
 }
 
 // ModelToken returns the model token for requests
-func (env *ProfileTestEnv) ModelToken() string {
+func (env *AgentTestEnv) ModelToken() string {
 	return env.modelToken
 }
 
 // VirtualServerURL returns the URL of the virtual server
-func (env *ProfileTestEnv) VirtualServerURL() string {
+func (env *AgentTestEnv) VirtualServerURL() string {
 	if env.virtualServer == nil {
 		return ""
 	}
 	return env.virtualServer.URL()
 }
 
-// SetupProfile configures the environment for a specific profile type
+// SetupAgent configures the environment for a specific Agent type
 // This creates the necessary provider and routing rules
-func (env *ProfileTestEnv) SetupProfile(profileType ProfileType, providerName string, modelName string) error {
+func (env *AgentTestEnv) SetupAgent(AgentType AgentType, providerName string, modelName string) error {
 	virtualURL := env.VirtualServerURL()
 	if virtualURL == "" {
 		return fmt.Errorf("virtual server not initialized")
@@ -236,19 +236,19 @@ func (env *ProfileTestEnv) SetupProfile(profileType ProfileType, providerName st
 		UUID:     providerName,
 		Name:     providerName,
 		APIBase:  virtualURL,
-		APIStyle: "openai", // Default, will be adjusted per profile
+		APIStyle: "openai", // Default, will be adjusted per Agent
 		Token:    "test-virtual-token",
 		Enabled:  true,
 		Timeout:  30000,
 	}
 
-	// Adjust API style based on profile type
-	switch profileType {
-	case ProfileTypeClaudeCode:
+	// Adjust API style based on Agent type
+	switch AgentType {
+	case AgentTypeClaudeCode:
 		provider.APIStyle = "anthropic"
-	case ProfileTypeCodex:
+	case AgentTypeCodex:
 		provider.APIStyle = "openai"
-	case ProfileTypeOpenCode:
+	case AgentTypeOpenCode:
 		provider.APIStyle = "anthropic"
 	}
 
@@ -259,23 +259,23 @@ func (env *ProfileTestEnv) SetupProfile(profileType ProfileType, providerName st
 
 	// Find the existing built-in rule and update it with our test service.
 	// Built-in rules are initialized with empty services; we inject the virtual server service.
-	scenario := profileType.Scenario()
+	scenario := AgentType.Scenario()
 
 	// Resolve the built-in rule UUID and its request model
 	var builtinUUID string
 	var requestModel string
-	switch profileType {
-	case ProfileTypeClaudeCode:
+	switch AgentType {
+	case AgentTypeClaudeCode:
 		builtinUUID = "built-in-cc"
 		requestModel = "tingly/cc"
-	case ProfileTypeCodex:
+	case AgentTypeCodex:
 		builtinUUID = "built-in-codex"
 		requestModel = "tingly-codex"
-	case ProfileTypeOpenCode:
+	case AgentTypeOpenCode:
 		builtinUUID = "built-in-opencode"
 		requestModel = "tingly-opencode"
 	default:
-		return fmt.Errorf("unknown profile type: %s", profileType)
+		return fmt.Errorf("unknown Agent type: %s", AgentType)
 	}
 
 	rule := typ.Rule{
@@ -305,10 +305,12 @@ func (env *ProfileTestEnv) SetupProfile(profileType ProfileType, providerName st
 	return nil
 }
 
-// SetupRealProfile configures the environment to route through a real upstream provider.
-// Unlike SetupProfile, it does not use the virtual server — the provider points at the
+// SetupRealAgent configures the environment to route through a real upstream provider.
+// Unlike SetupAgent, it does not use the virtual server — the provider points at the
 // real apiBase with the real apiKey. apiStyle must be "openai" or "anthropic".
-func (env *ProfileTestEnv) SetupRealProfile(profileType ProfileType, providerName string, modelName string, apiBase string, apiKey string, apiStyle string) error {
+// apiType is optional and specifies the target API type (e.g., "anthropic_v1", "openai_chat").
+// If empty, a default is chosen based on apiStyle.
+func (env *AgentTestEnv) SetupRealAgent(AgentType AgentType, providerName string, modelName string, apiBase string, apiKey string, apiStyle string) error {
 	provider := &typ.Provider{
 		UUID:     providerName,
 		Name:     providerName,
@@ -323,22 +325,22 @@ func (env *ProfileTestEnv) SetupRealProfile(profileType ProfileType, providerNam
 		return fmt.Errorf("add provider: %w", err)
 	}
 
-	scenario := profileType.Scenario()
+	scenario := AgentType.Scenario()
 
 	var builtinUUID string
 	var requestModel string
-	switch profileType {
-	case ProfileTypeClaudeCode:
+	switch AgentType {
+	case AgentTypeClaudeCode:
 		builtinUUID = "built-in-cc"
 		requestModel = "tingly/cc"
-	case ProfileTypeCodex:
+	case AgentTypeCodex:
 		builtinUUID = "built-in-codex"
 		requestModel = "tingly-codex"
-	case ProfileTypeOpenCode:
+	case AgentTypeOpenCode:
 		builtinUUID = "built-in-opencode"
 		requestModel = "tingly-opencode"
 	default:
-		return fmt.Errorf("unknown profile type: %s", profileType)
+		return fmt.Errorf("unknown Agent type: %s", AgentType)
 	}
 
 	rule := typ.Rule{
@@ -369,6 +371,6 @@ func (env *ProfileTestEnv) SetupRealProfile(profileType ProfileType, providerNam
 }
 
 // AppConfig returns the application configuration
-func (env *ProfileTestEnv) AppConfig() *serverconfig.Config {
+func (env *AgentTestEnv) AppConfig() *serverconfig.Config {
 	return env.appConfig.GetGlobalConfig()
 }

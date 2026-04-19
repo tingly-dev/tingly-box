@@ -16,7 +16,8 @@ type RealModelEntry struct {
 	BaseURL  string `yaml:"baseurl"`
 	APIKey   string `yaml:"apikey"`
 	Model    string `yaml:"model"`
-	APIStyle string `yaml:"api_style"` // optional: "openai" | "anthropic"; auto-detected if blank
+	APIStyle string `yaml:"api_style"` // required: "openai" | "anthropic" | "google"
+	APIType  string `yaml:"api_type"`  // optional: "openai_chat" | "openai_responses" | "anthropic_v1" | "anthropic_beta" | "google"
 }
 
 // RealModelsConfig is the top-level structure of the models YAML file.
@@ -25,16 +26,59 @@ type RealModelsConfig struct {
 }
 
 // ResolveAPIStyle returns the effective api_style for an entry.
-// If the entry specifies one it is used directly; otherwise it is inferred
-// from the BaseURL: "anthropic.com" → "anthropic", everything else → "openai".
-func ResolveAPIStyle(entry RealModelEntry) string {
-	if entry.APIStyle != "" {
-		return entry.APIStyle
+// Returns an error if api_style is empty or contains an invalid value.
+// Valid values are: "openai", "anthropic", "google".
+func ResolveAPIStyle(entry RealModelEntry) (string, error) {
+	if entry.APIStyle == "" {
+		return "", fmt.Errorf("api_style is required but was empty for entry %q", entry.Name)
 	}
-	if strings.Contains(entry.BaseURL, "anthropic.com") {
-		return "anthropic"
+	// Validate against allowed values
+	switch entry.APIStyle {
+	case "openai", "anthropic", "google":
+		return entry.APIStyle, nil
+	default:
+		return "", fmt.Errorf("invalid api_style %q for entry %q (must be: openai, anthropic, google)", entry.APIStyle, entry.Name)
 	}
-	return "openai"
+}
+
+// ResolveAPIType returns the effective api_type for an entry.
+// If the entry specifies one, it is validated and returned.
+// If empty, returns a default based on api_style:
+//   - "anthropic" → "anthropic_v1"
+//   - "openai" → "openai_chat"
+//   - "google" → "google"
+func ResolveAPIType(entry RealModelEntry) (string, error) {
+	if entry.APIType != "" {
+		// Validate the provided api_type
+		validTypes := map[string]bool{
+			"openai_chat":      true,
+			"openai_responses": true,
+			"anthropic_v1":     true,
+			"anthropic_beta":   true,
+			"google":           true,
+		}
+		if !validTypes[entry.APIType] {
+			return "", fmt.Errorf("invalid api_type %q (valid: openai_chat, openai_responses, anthropic_v1, anthropic_beta, google)", entry.APIType)
+		}
+		return entry.APIType, nil
+	}
+
+	// Default based on api_style
+	apiStyle, err := ResolveAPIStyle(entry)
+	if err != nil {
+		return "", fmt.Errorf("resolve api_style: %w", err)
+	}
+	switch apiStyle {
+	case "anthropic":
+		return "anthropic_v1", nil
+	case "openai":
+		return "openai_chat", nil
+	case "google":
+		return "google", nil
+	default:
+		// This should never happen since ResolveAPIStyle validates
+		return "openai_chat", nil
+	}
 }
 
 // LoadRealModelsConfig reads and parses a models config file.
@@ -108,6 +152,7 @@ func loadRealModelsConfigCSV(path string) (*RealModelsConfig, error) {
 			APIKey:   col(row, "apikey"),
 			Model:    col(row, "model"),
 			APIStyle: col(row, "api_style"),
+			APIType:  col(row, "api_type"),
 		}
 		cfg.Models = append(cfg.Models, entry)
 	}

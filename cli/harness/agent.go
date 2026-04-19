@@ -16,14 +16,14 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol_validate"
 )
 
-// newProfileCommand creates the profile test subcommand.
-func newProfileCommand() *cobra.Command {
+// newAgentCommand creates the profile test subcommand.
+func newAgentCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "profile <claude|codex|opencode> [prompt]",
-		Short: "Profile-based e2e tests with real agent CLI",
+		Use:   "agent <claude|codex|opencode> [prompt]",
+		Short: "Agent-based e2e tests with real agent CLI",
 		Long: `Test real profiles by executing actual agent CLI commands.
 
-Profile tests execute real agent commands (claude, codex, opencode)
+Agent tests execute real agent commands (claude, codex, opencode)
 against virtual models to validate end-to-end functionality:
 
   - claude:   Execute 'claude --settings <test-settings> -p <prompt>'
@@ -44,11 +44,11 @@ Examples:
   harness profile real claude --models models.yaml`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runProfileTest(args)
+			return runAgentTest(args)
 		},
 	}
 
-	cmd.AddCommand(newProfileRealCommand())
+	cmd.AddCommand(newAgentRealCommand())
 
 	return cmd
 }
@@ -60,8 +60,8 @@ var defaultPrompts = map[string]string{
 	"opencode": "Hello, world!",
 }
 
-// runProfileTest executes a profile test by running the actual agent CLI command
-func runProfileTest(args []string) error {
+// runAgentTest executes a profile test by running the actual agent CLI command
+func runAgentTest(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: harness profile <claude|codex|opencode> [prompt]")
 	}
@@ -75,7 +75,7 @@ func runProfileTest(args []string) error {
 	}
 
 	// Resolve profile type
-	profileType := parseProfileType(profileName)
+	profileType := parseAgentType(profileName)
 	if profileType == "" {
 		return fmt.Errorf("unknown profile: %s (available: claude, codex, opencode)", profileName)
 	}
@@ -92,7 +92,7 @@ func runProfileTest(args []string) error {
 	}
 
 	// Print results
-	printProfileTestResult(result)
+	printAgentTestResult(result)
 
 	// Return error if test failed
 	if !result.Success {
@@ -102,9 +102,9 @@ func runProfileTest(args []string) error {
 	return nil
 }
 
-// ProfileTestResult represents the result of a profile test
-type ProfileTestResult struct {
-	Profile      string
+// AgentTestResult represents the result of a profile test
+type AgentTestResult struct {
+	Agent        string
 	Prompt       string
 	Success      bool
 	Duration     time.Duration
@@ -115,13 +115,13 @@ type ProfileTestResult struct {
 }
 
 // executeAgentCommand executes the actual agent CLI command
-func executeAgentCommand(profileType protocol_validate.ProfileType, prompt string) (*ProfileTestResult, error) {
+func executeAgentCommand(profileType protocol_validate.AgentType, prompt string) (*AgentTestResult, error) {
 	switch profileType {
-	case protocol_validate.ProfileTypeClaudeCode:
+	case protocol_validate.AgentTypeClaudeCode:
 		return executeClaudeTest(prompt)
-	case protocol_validate.ProfileTypeCodex:
+	case protocol_validate.AgentTypeCodex:
 		return executeCodexTest(prompt)
-	case protocol_validate.ProfileTypeOpenCode:
+	case protocol_validate.AgentTypeOpenCode:
 		return executeOpenCodeTest(prompt)
 	default:
 		return nil, fmt.Errorf("unknown profile type: %s", profileType)
@@ -129,16 +129,16 @@ func executeAgentCommand(profileType protocol_validate.ProfileType, prompt strin
 }
 
 // executeClaudeTest executes claude CLI backed by an ephemeral gateway + virtual server.
-func executeClaudeTest(prompt string) (*ProfileTestResult, error) {
+func executeClaudeTest(prompt string) (*AgentTestResult, error) {
 	const model = "tingly/cc"
 
-	env, err := protocol_validate.NewProfileTestEnv(protocol_validate.ProfileTypeClaudeCode)
+	env, err := protocol_validate.NewAgentTestEnv(protocol_validate.AgentTypeClaudeCode)
 	if err != nil {
 		return nil, fmt.Errorf("create test env: %w", err)
 	}
 	defer env.Close(false)
 
-	if err := env.SetupProfile(protocol_validate.ProfileTypeClaudeCode, "virtual-claude", model); err != nil {
+	if err := env.SetupAgent(protocol_validate.AgentTypeClaudeCode, "virtual-claude", model); err != nil {
 		return nil, fmt.Errorf("setup profile: %w", err)
 	}
 
@@ -146,11 +146,11 @@ func executeClaudeTest(prompt string) (*ProfileTestResult, error) {
 }
 
 // executeClaudeWithEnv writes settings.json and runs claude CLI against a pre-configured env.
-func executeClaudeWithEnv(env *protocol_validate.ProfileTestEnv, model string, prompt string) (*ProfileTestResult, error) {
+func executeClaudeWithEnv(env *protocol_validate.AgentTestEnv, model string, prompt string) (*AgentTestResult, error) {
 	start := time.Now()
-	result := &ProfileTestResult{
-		Profile: "claude",
-		Prompt:  prompt,
+	result := &AgentTestResult{
+		Agent:  "claude",
+		Prompt: prompt,
 	}
 
 	settingsDir, err := os.MkdirTemp("", "harness-claude-*")
@@ -207,16 +207,16 @@ func executeClaudeWithEnv(env *protocol_validate.ProfileTestEnv, model string, p
 }
 
 // executeCodexTest executes codex CLI backed by an ephemeral gateway + virtual server.
-func executeCodexTest(prompt string) (*ProfileTestResult, error) {
+func executeCodexTest(prompt string) (*AgentTestResult, error) {
 	const model = "tingly-codex"
 
-	env, err := protocol_validate.NewProfileTestEnv(protocol_validate.ProfileTypeCodex)
+	env, err := protocol_validate.NewAgentTestEnv(protocol_validate.AgentTypeCodex)
 	if err != nil {
 		return nil, fmt.Errorf("create test env: %w", err)
 	}
 	defer env.Close(false)
 
-	if err := env.SetupProfile(protocol_validate.ProfileTypeCodex, "virtual-codex", model); err != nil {
+	if err := env.SetupAgent(protocol_validate.AgentTypeCodex, "virtual-codex", model); err != nil {
 		return nil, fmt.Errorf("setup profile: %w", err)
 	}
 
@@ -224,11 +224,11 @@ func executeCodexTest(prompt string) (*ProfileTestResult, error) {
 }
 
 // executeCodexWithEnv writes CODEX_HOME config and runs codex CLI against a pre-configured env.
-func executeCodexWithEnv(env *protocol_validate.ProfileTestEnv, model string, prompt string) (*ProfileTestResult, error) {
+func executeCodexWithEnv(env *protocol_validate.AgentTestEnv, model string, prompt string) (*AgentTestResult, error) {
 	start := time.Now()
-	result := &ProfileTestResult{
-		Profile: "codex",
-		Prompt:  prompt,
+	result := &AgentTestResult{
+		Agent:  "codex",
+		Prompt: prompt,
 	}
 
 	const providerKey = "harness"
@@ -293,16 +293,16 @@ wire_api = "responses"
 }
 
 // executeOpenCodeTest executes opencode CLI backed by an ephemeral gateway + virtual server.
-func executeOpenCodeTest(prompt string) (*ProfileTestResult, error) {
+func executeOpenCodeTest(prompt string) (*AgentTestResult, error) {
 	const model = "tingly-opencode"
 
-	env, err := protocol_validate.NewProfileTestEnv(protocol_validate.ProfileTypeOpenCode)
+	env, err := protocol_validate.NewAgentTestEnv(protocol_validate.AgentTypeOpenCode)
 	if err != nil {
 		return nil, fmt.Errorf("create test env: %w", err)
 	}
 	defer env.Close(false)
 
-	if err := env.SetupProfile(protocol_validate.ProfileTypeOpenCode, "virtual-opencode", model); err != nil {
+	if err := env.SetupAgent(protocol_validate.AgentTypeOpenCode, "virtual-opencode", model); err != nil {
 		return nil, fmt.Errorf("setup profile: %w", err)
 	}
 
@@ -310,11 +310,11 @@ func executeOpenCodeTest(prompt string) (*ProfileTestResult, error) {
 }
 
 // executeOpenCodeWithEnv writes XDG config and runs opencode CLI against a pre-configured env.
-func executeOpenCodeWithEnv(env *protocol_validate.ProfileTestEnv, model string, prompt string) (*ProfileTestResult, error) {
+func executeOpenCodeWithEnv(env *protocol_validate.AgentTestEnv, model string, prompt string) (*AgentTestResult, error) {
 	start := time.Now()
-	result := &ProfileTestResult{
-		Profile: "opencode",
-		Prompt:  prompt,
+	result := &AgentTestResult{
+		Agent:  "opencode",
+		Prompt: prompt,
 	}
 
 	const providerKey = "harness"
@@ -398,12 +398,12 @@ func exitCode(err error) int {
 	return 1
 }
 
-// printProfileTestResult prints the test result
-func printProfileTestResult(result *ProfileTestResult) {
+// printAgentTestResult prints the test result
+func printAgentTestResult(result *AgentTestResult) {
 	duration := fmt.Sprintf("%dms", result.Duration.Milliseconds())
 
 	if result.Success {
-		fmt.Printf("✅ PASS  %s  Duration: %s\n", result.Profile, duration)
+		fmt.Printf("✅ PASS  %s  Duration: %s\n", result.Agent, duration)
 		if result.Output != "" {
 			fmt.Printf("┌─────────────────────────────────────┐\n")
 			fmt.Printf("│ Output:                              │\n")
@@ -418,7 +418,7 @@ func printProfileTestResult(result *ProfileTestResult) {
 			}
 		}
 	} else {
-		fmt.Printf("❌ FAIL  %s  Duration: %s\n", result.Profile, duration)
+		fmt.Printf("❌ FAIL  %s  Duration: %s\n", result.Agent, duration)
 		fmt.Printf("┌─────────────────────────────────────┐\n")
 		fmt.Printf("│ Error:                               │\n")
 		fmt.Printf("└─────────────────────────────────────┘\n")
@@ -430,15 +430,15 @@ func printProfileTestResult(result *ProfileTestResult) {
 	}
 }
 
-// parseProfileType converts a string to ProfileType
-func parseProfileType(s string) protocol_validate.ProfileType {
+// parseAgentType converts a string to AgentType
+func parseAgentType(s string) protocol_validate.AgentType {
 	switch strings.ToLower(s) {
 	case "claude", "claude-code", "claudecode", "cc":
-		return protocol_validate.ProfileTypeClaudeCode
+		return protocol_validate.AgentTypeClaudeCode
 	case "codex":
-		return protocol_validate.ProfileTypeCodex
+		return protocol_validate.AgentTypeCodex
 	case "opencode", "open-code", "oc":
-		return protocol_validate.ProfileTypeOpenCode
+		return protocol_validate.AgentTypeOpenCode
 	default:
 		return ""
 	}

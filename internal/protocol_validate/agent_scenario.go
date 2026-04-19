@@ -5,10 +5,10 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server_validate"
 )
 
-// ProfileScenario defines a test scenario for profile testing
+// AgentScenario defines a test scenario for profile testing
 // Unlike matrix scenarios which test protocol transformations,
 // profile scenarios test client implementations (OAuth, path rewriting, etc.)
-type ProfileScenario struct {
+type AgentScenario struct {
 	// Name is the scenario name
 	Name string
 
@@ -19,18 +19,18 @@ type ProfileScenario struct {
 	MockResponses map[server_validate.APIStyle]server_validate.MockResponseBuilder
 }
 
-// ProfileScenarios returns all built-in profile test scenarios
-func ProfileScenarios() []ProfileScenario {
-	return []ProfileScenario{
-		ProfileTextScenario(),
-		ProfileStreamingTextScenario(),
-		ProfileToolUseScenario(),
+// AgentScenarios returns all built-in profile test scenarios
+func AgentScenarios() []AgentScenario {
+	return []AgentScenario{
+		AgentTextScenario(),
+		AgentStreamingTextScenario(),
+		AgentToolUseScenario(),
 	}
 }
 
-// ProfileTextScenario returns a scenario for basic text request/response
-func ProfileTextScenario() ProfileScenario {
-	return ProfileScenario{
+// AgentTextScenario returns a scenario for basic text request/response
+func AgentTextScenario() AgentScenario {
+	return AgentScenario{
 		Name:        "text",
 		Description: "Basic text message request and response",
 		MockResponses: map[server_validate.APIStyle]server_validate.MockResponseBuilder{
@@ -83,17 +83,17 @@ func ProfileTextScenario() ProfileScenario {
 	}
 }
 
-// ProfileStreamingTextScenario returns a scenario for streaming text response
-func ProfileStreamingTextScenario() ProfileScenario {
-	scenario := ProfileTextScenario()
+// AgentStreamingTextScenario returns a scenario for streaming text response
+func AgentStreamingTextScenario() AgentScenario {
+	scenario := AgentTextScenario()
 	scenario.Name = "streaming"
 	scenario.Description = "Streaming text message response"
 	return scenario
 }
 
-// ProfileToolUseScenario returns a scenario for tool use request/response
-func ProfileToolUseScenario() ProfileScenario {
-	return ProfileScenario{
+// AgentToolUseScenario returns a scenario for tool use request/response
+func AgentToolUseScenario() AgentScenario {
+	return AgentScenario{
 		Name:        "tool_use",
 		Description: "Tool use request and response",
 		MockResponses: map[server_validate.APIStyle]server_validate.MockResponseBuilder{
@@ -151,11 +151,11 @@ func ProfileToolUseScenario() ProfileScenario {
 }
 
 // GetScenarioByName returns a profile scenario by name
-func GetScenarioByName(name string) (ProfileScenario, bool) {
-	for _, s := range ProfileScenarios() {
+func GetScenarioByName(name string) (AgentScenario, bool) {
+	for _, s := range AgentScenarios() {
 		if s.Name == name {
 			return s, true
 		}
 	}
-	return ProfileScenario{}, false
+	return AgentScenario{}, false
 }

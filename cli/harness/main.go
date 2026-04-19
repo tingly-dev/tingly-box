@@ -48,6 +48,6 @@ func main() {
 func init() {
 	// Add subcommands
 	rootCmd.AddCommand(newMatrixCommand())
-	rootCmd.AddCommand(newProfileCommand())
+	rootCmd.AddCommand(newAgentCommand())
 	rootCmd.AddCommand(newProviderCommand())
 }
