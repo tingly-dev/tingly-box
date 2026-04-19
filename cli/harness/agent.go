@@ -21,6 +21,8 @@ func newAgentCommand() *cobra.Command {
 	var configFile string
 	var useMock bool
 	var prompt string
+	var summaryFile string
+	var resume bool
 
 	cmd := &cobra.Command{
 		Use:   "agent <claude|codex|opencode|batch> [prompt]",
@@ -77,6 +79,15 @@ Examples:
   harness agent codex  --config providers.csv "What is 2+2?"
   harness agent batch  --config models.yaml
 
+  # Resume an interrupted run (skips every (agent,entry) already in the CSV)
+  harness agent batch  --config models.yaml --resume
+
+Persistence:
+  Every run appends per-row results to harness-summary.csv in the working
+  directory (override with --summary <file>). Rows are flushed immediately, so
+  partial progress survives Ctrl-C / crashes. With --resume, any (agent,entry)
+  pair already recorded in the summary file is skipped.
+
 Generate a config template with: harness init-config`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -91,16 +102,34 @@ Generate a config template with: harness init-config`,
 				return fmt.Errorf("must specify a mode: --mock (virtual upstream) or --config <file> (real providers)")
 			}
 
+			// Open durable summary writer and load resume keys before any work runs.
+			writer, err := openSummaryWriter(summaryFile)
+			if err != nil {
+				return err
+			}
+			defer writer.Close()
+			fmt.Printf("📒 Summary: %s (per-row, append-on-write)\n", summaryFile)
+
+			var skip map[resumeKey]struct{}
+			if resume {
+				skip, err = loadResumeKeys(summaryFile)
+				if err != nil {
+					return err
+				}
+				fmt.Printf("⏭  Resume: skipping %d previously-recorded (agent,entry) rows\n", len(skip))
+			}
+			fmt.Println()
+
 			if strings.EqualFold(agentName, "batch") {
-				return runBatchAgentTests(useMock, configFile, prompt)
+				return runBatchAgentTests(useMock, configFile, prompt, writer, skip)
 			}
 
 			var results []*RealAgentTestResult
 			var runErr error
 			if configFile != "" {
-				results, runErr = runRealAgentTests(agentName, configFile, prompt)
+				results, runErr = runRealAgentTests(agentName, configFile, prompt, writer, skip)
 			} else {
-				results, runErr = runVirtualAgentTest(agentName, prompt)
+				results, runErr = runVirtualAgentTest(agentName, prompt, writer, skip)
 			}
 			if len(results) > 0 {
 				printAgentSummary(results)
@@ -112,6 +141,8 @@ Generate a config template with: harness init-config`,
 	cmd.Flags().BoolVar(&useMock, "mock", false, "Virtual-model mode: run against an in-process mock upstream")
 	cmd.Flags().StringVar(&configFile, "config", "", "Real-provider mode: path to provider config file (YAML or CSV)")
 	cmd.Flags().StringVar(&prompt, "prompt", "", "Prompt to send (overrides positional arg and default)")
+	cmd.Flags().StringVar(&summaryFile, "summary", DefaultSummaryFile, "Path to CSV summary file (per-row results, written durably)")
+	cmd.Flags().BoolVar(&resume, "resume", false, "Skip (agent,entry) rows already recorded in the summary file")
 
 	return cmd
 }
@@ -127,7 +158,11 @@ var defaultPrompts = map[string]string{
 // agent CLI command against an in-process gateway wired to a mock upstream.
 // It returns a slice of results (always length 1) so every caller — single-agent
 // or batch — sees the same structured shape as the real-provider path.
-func runVirtualAgentTest(agentName string, prompt string) ([]*RealAgentTestResult, error) {
+//
+// If writer is non-nil, the produced result row is appended immediately. If
+// the (agent, "mock") key is already present in skip, the run is skipped and
+// an empty slice is returned with a message.
+func runVirtualAgentTest(agentName string, prompt string, writer *summaryWriter, skip map[resumeKey]struct{}) ([]*RealAgentTestResult, error) {
 	if prompt == "" {
 		prompt = defaultPrompts[agentName]
 	}
@@ -135,6 +170,11 @@ func runVirtualAgentTest(agentName string, prompt string) ([]*RealAgentTestResul
 	agentType := parseAgentType(agentName)
 	if agentType == "" {
 		return nil, fmt.Errorf("unknown agent: %q (available: claude, codex, opencode)", agentName)
+	}
+
+	if _, ok := skip[resumeKey{Agent: agentName, Entry: "mock"}]; ok {
+		fmt.Printf("⏭  Skipping (resume) %s / mock\n\n", agentName)
+		return nil, nil
 	}
 
 	fmt.Printf("🧪 Virtual-model test: %s\n", agentName)
@@ -146,11 +186,12 @@ func runVirtualAgentTest(agentName string, prompt string) ([]*RealAgentTestResul
 
 	// Wrap the agent-CLI outcome in the unified result shape.
 	r := &RealAgentTestResult{
-		EntryName: "mock",
-		Agent:     agentName,
-		APIStyle:  virtualAPIStyle(agentType),
-		Prompt:    prompt,
-		Model:     builtinRequestModel(agentType),
+		EntryName:    "mock",
+		Agent:        agentName,
+		APIStyle:     virtualAPIStyle(agentType),
+		Prompt:       prompt,
+		Model:        builtinRequestModel(agentType),
+		RequestModel: builtinRequestModel(agentType),
 	}
 	if err != nil {
 		r.Duration = time.Since(start)
@@ -158,6 +199,11 @@ func runVirtualAgentTest(agentName string, prompt string) ([]*RealAgentTestResul
 		fmt.Printf("❌ Execution failed: %v\n", err)
 		printRealAgentTestResult(r)
 		fmt.Println()
+		if writer != nil {
+			if aerr := writer.Append(r); aerr != nil {
+				fmt.Printf("⚠️  summary append failed: %v\n", aerr)
+			}
+		}
 		return []*RealAgentTestResult{r}, nil
 	}
 
@@ -169,6 +215,11 @@ func runVirtualAgentTest(agentName string, prompt string) ([]*RealAgentTestResul
 
 	printRealAgentTestResult(r)
 	fmt.Println()
+	if writer != nil {
+		if aerr := writer.Append(r); aerr != nil {
+			fmt.Printf("⚠️  summary append failed: %v\n", aerr)
+		}
+	}
 	return []*RealAgentTestResult{r}, nil
 }
 
@@ -206,7 +257,7 @@ var batchAgents = []string{"claude", "codex", "opencode"}
 // failed. In virtual mode each agent uses its own default prompt unless
 // `prompt` is non-empty. In real mode the same config file is reused across
 // agents.
-func runBatchAgentTests(useMock bool, configFile string, prompt string) error {
+func runBatchAgentTests(useMock bool, configFile string, prompt string, writer *summaryWriter, skip map[resumeKey]struct{}) error {
 	fmt.Printf("🧪 Batch agent test: %v\n", batchAgents)
 	if configFile != "" {
 		fmt.Printf("📋 Config: %s\n", configFile)
@@ -233,9 +284,9 @@ func runBatchAgentTests(useMock bool, configFile string, prompt string) error {
 		var err error
 		switch {
 		case configFile != "":
-			results, err = runRealAgentTests(agentName, configFile, prompt)
+			results, err = runRealAgentTests(agentName, configFile, prompt, writer, skip)
 		case useMock:
-			results, err = runVirtualAgentTest(agentName, prompt)
+			results, err = runVirtualAgentTest(agentName, prompt, writer, skip)
 		default:
 			err = fmt.Errorf("internal: batch invoked without mode")
 		}
@@ -245,12 +296,18 @@ func runBatchAgentTests(useMock bool, configFile string, prompt string) error {
 		} else if err != nil {
 			// No per-entry results produced (e.g. config load failure). Emit a
 			// synthetic row so the unified report still lists this agent.
-			allResults = append(allResults, &RealAgentTestResult{
+			synthetic := &RealAgentTestResult{
 				EntryName: "-",
 				Agent:     agentName,
 				APIStyle:  virtualAPIStyle(parseAgentType(agentName)),
 				Error:     err.Error(),
-			})
+			}
+			allResults = append(allResults, synthetic)
+			if writer != nil {
+				if aerr := writer.Append(synthetic); aerr != nil {
+					fmt.Printf("⚠️  summary append failed: %v\n", aerr)
+				}
+			}
 		}
 		fmt.Println()
 	}

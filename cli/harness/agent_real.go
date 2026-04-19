@@ -12,16 +12,18 @@ import (
 
 // RealAgentTestResult holds the result of one real-model Agent run.
 type RealAgentTestResult struct {
-	EntryName string
-	Agent     string
-	APIStyle  string
-	Prompt    string
-	Model     string
-	Success   bool
-	Duration  time.Duration
-	Output    string
-	Error     string
-	ExitCode  int
+	EntryName    string
+	Agent        string
+	APIStyle     string
+	Prompt       string
+	Model        string // upstream model name (entry.Model in real mode, builtin RequestModel in mock mode)
+	RequestModel string // gateway-facing rule RequestModel (tingly/cc, tingly-codex, tingly-opencode)
+	BaseURL      string // upstream base URL (real mode); empty for mock mode
+	Success      bool
+	Duration     time.Duration
+	Output       string
+	Error        string
+	ExitCode     int
 }
 
 // missingFields returns the names of fields required to run a test that are missing or placeholder.
@@ -55,7 +57,11 @@ func loadRealModelsConfig(path string) (*protocol_validate.RealModelsConfig, err
 // not proceed (e.g., bad config, no runnable entries). A non-nil results slice
 // with failed entries returns a non-nil error summarising the failure count, so
 // callers can still render the detailed report.
-func runRealAgentTests(agentName string, modelsFile string, prompt string) ([]*RealAgentTestResult, error) {
+//
+// If writer is non-nil, each per-entry result is appended durably as soon as
+// it completes. Any (agent, entry) key already present in skip is bypassed so
+// --resume can pick up where a previous run left off.
+func runRealAgentTests(agentName string, modelsFile string, prompt string, writer *summaryWriter, skip map[resumeKey]struct{}) ([]*RealAgentTestResult, error) {
 	profileType := parseAgentType(agentName)
 	if profileType == "" {
 		return nil, fmt.Errorf("unknown agent: %q (available: claude, codex, opencode)", agentName)
@@ -104,10 +110,19 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string) ([]*R
 
 	results := make([]*RealAgentTestResult, 0, len(runnable))
 	for i, entry := range runnable {
+		if _, ok := skip[resumeKey{Agent: agentName, Entry: entry.Name}]; ok {
+			fmt.Printf("⏭  [%d/%d] %s — skip (resume)\n\n", i+1, len(runnable), entry.Name)
+			continue
+		}
 		fmt.Printf("── [%d/%d] %s ──\n", i+1, len(runnable), entry.Name)
 		r := runOneRealAgentTest(profileType, entry, prompt)
 		results = append(results, r)
 		printRealAgentTestResult(r)
+		if writer != nil {
+			if aerr := writer.Append(r); aerr != nil {
+				fmt.Printf("⚠️  summary append failed: %v\n", aerr)
+			}
+		}
 		fmt.Println()
 	}
 
@@ -130,6 +145,7 @@ func runOneRealAgentTest(agentType protocol_validate.AgentType, entry protocol_v
 		Agent:     string(agentType),
 		Prompt:    prompt,
 		Model:     entry.Model,
+		BaseURL:   entry.BaseURL,
 	}
 	start := time.Now()
 
@@ -162,19 +178,13 @@ func runOneRealAgentTest(agentType protocol_validate.AgentType, entry protocol_v
 	// rule by RequestModel, then forwards upstream via Service{Provider, Model=entry.Model}.
 	// Sending entry.Model directly bypasses rule matching and breaks the
 	// provider → rule → service routing contract.
-	var requestModel string
-	switch agentType {
-	case protocol_validate.AgentTypeClaudeCode:
-		requestModel = "tingly/cc"
-	case protocol_validate.AgentTypeCodex:
-		requestModel = "tingly-codex"
-	case protocol_validate.AgentTypeOpenCode:
-		requestModel = "tingly-opencode"
-	default:
+	requestModel := builtinRequestModel(agentType)
+	if requestModel == "" {
 		result.Error = fmt.Sprintf("unsupported Agent type: %s", agentType)
 		result.Duration = time.Since(start)
 		return result
 	}
+	result.RequestModel = requestModel
 
 	var agentResult *AgentTestResult
 	switch agentType {
