@@ -2,17 +2,18 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
-	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
 	"github.com/openai/openai-go/v3"
+	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/anthropics/anthropic-sdk-go"
 )
 
 // ===================================================================
@@ -38,8 +39,7 @@ func (a *serverOpsAdapter) TrackUsage(c *gin.Context, input, output, cache int) 
 }
 
 func (a *serverOpsAdapter) CallMCPTool(ctx context.Context, toolName, arguments string, messages []map[string]any) (string, error) {
-	// Call through the MCP runtime
-	return a.server.mcpRuntime.CallTool(ctx, toolName, arguments)
+	return a.server.callMCPToolWithHooks(ctx, toolName, arguments, messages)
 }
 
 func (a *serverOpsAdapter) GetRecorder() mcp.ProtocolRecorder {
@@ -91,6 +91,153 @@ func (p *forwardContextProvider) NewForwardContext(ctx context.Context, provider
 	return forwarding.NewForwardContext(ctx, provider)
 }
 
+func (s *Server) runGenericOpenAIChatNonStream(
+	ctx context.Context,
+	provider *typ.Provider,
+	req *openai.ChatCompletionNewParams,
+	recorder *ProtocolRecorder,
+) (*openai.ChatCompletion, *mcp.TokenUsage, error) {
+	adapter := mcp.NewOpenAIChatAdapter()
+	forwarder := mcp.NewOpenAIChatForwarder(s.clientPool, &forwardContextProvider{server: s})
+	virtualRegistry := s.mcpRuntime.VirtualRegistry()
+	serverOps := newServerOpsAdapter(s, recorder)
+	pendingManager := mcp.NewServerPendingResultsManager(s, s, s, s)
+	toolExecutor := mcp.NewServerToolExecutor(serverOps)
+
+	var recorderAdapter mcp.ProtocolRecorder
+	if recorder != nil {
+		recorderAdapter = &protocolRecorderAdapter{recorder: recorder}
+	}
+
+	processor := mcp.NewGenericLoopProcessor(
+		ctx,
+		serverOps,
+		provider,
+		nil,
+		virtualRegistry,
+		recorderAdapter,
+		adapter,
+		forwarder,
+		toolExecutor,
+		pendingManager,
+		mcp.InterceptorConfig{MaxRounds: 6},
+	)
+
+	response, err := processor.Run(req)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	openaiResp, ok := response.(*openai.ChatCompletion)
+	if !ok {
+		return nil, nil, fmt.Errorf("unexpected generic response type: %T", response)
+	}
+
+	usage, err := adapter.ExtractUsage(response)
+	if err != nil {
+		return openaiResp, nil, nil
+	}
+	return openaiResp, &usage, nil
+}
+
+func (s *Server) runGenericAnthropicV1NonStream(
+	ctx context.Context,
+	provider *typ.Provider,
+	req *anthropic.MessageNewParams,
+	recorder *ProtocolRecorder,
+) (*anthropic.Message, *mcp.TokenUsage, error) {
+	adapter := mcp.NewAnthropicV1Adapter()
+	forwarder := mcp.NewAnthropicV1Forwarder(s.clientPool, &forwardContextProvider{server: s})
+	virtualRegistry := s.mcpRuntime.VirtualRegistry()
+	serverOps := newServerOpsAdapter(s, recorder)
+	pendingManager := mcp.NewServerPendingResultsManager(s, s, s, s)
+	toolExecutor := mcp.NewServerToolExecutor(serverOps)
+
+	var recorderAdapter mcp.ProtocolRecorder
+	if recorder != nil {
+		recorderAdapter = &protocolRecorderAdapter{recorder: recorder}
+	}
+
+	processor := mcp.NewGenericLoopProcessor(
+		ctx,
+		serverOps,
+		provider,
+		nil,
+		virtualRegistry,
+		recorderAdapter,
+		adapter,
+		forwarder,
+		toolExecutor,
+		pendingManager,
+		mcp.InterceptorConfig{MaxRounds: 6},
+	)
+
+	response, err := processor.Run(req)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	v1Resp, ok := response.(*anthropic.Message)
+	if !ok {
+		return nil, nil, fmt.Errorf("unexpected generic response type: %T", response)
+	}
+
+	usage, err := adapter.ExtractUsage(response)
+	if err != nil {
+		return v1Resp, nil, nil
+	}
+	return v1Resp, &usage, nil
+}
+
+func (s *Server) runGenericAnthropicBetaNonStream(
+	ctx context.Context,
+	provider *typ.Provider,
+	req *anthropic.BetaMessageNewParams,
+	recorder *ProtocolRecorder,
+) (*anthropic.BetaMessage, *mcp.TokenUsage, error) {
+	adapter := mcp.NewAnthropicBetaAdapter()
+	forwarder := mcp.NewAnthropicBetaForwarder(s.clientPool, &forwardContextProvider{server: s})
+	virtualRegistry := s.mcpRuntime.VirtualRegistry()
+	serverOps := newServerOpsAdapter(s, recorder)
+	pendingManager := mcp.NewServerPendingResultsManager(s, s, s, s)
+	toolExecutor := mcp.NewServerToolExecutor(serverOps)
+
+	var recorderAdapter mcp.ProtocolRecorder
+	if recorder != nil {
+		recorderAdapter = &protocolRecorderAdapter{recorder: recorder}
+	}
+
+	processor := mcp.NewGenericLoopProcessor(
+		ctx,
+		serverOps,
+		provider,
+		nil,
+		virtualRegistry,
+		recorderAdapter,
+		adapter,
+		forwarder,
+		toolExecutor,
+		pendingManager,
+		mcp.InterceptorConfig{MaxRounds: 6},
+	)
+
+	response, err := processor.Run(req)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	betaResp, ok := response.(*anthropic.BetaMessage)
+	if !ok {
+		return nil, nil, fmt.Errorf("unexpected generic response type: %T", response)
+	}
+
+	usage, err := adapter.ExtractUsage(response)
+	if err != nil {
+		return betaResp, nil, nil
+	}
+	return betaResp, &usage, nil
+}
+
 // dispatchGenericAnthropicV1NonStream handles A→A non-streaming with generic processor
 func (s *Server) dispatchGenericAnthropicV1NonStream(
 	c *gin.Context,
@@ -118,6 +265,7 @@ func (s *Server) dispatchGenericAnthropicV1NonStream(
 
 	// Create server ops adapter
 	serverOps := newServerOpsAdapter(s, recorder)
+	pendingManager := mcp.NewServerPendingResultsManager(s, s, s, s)
 
 	// Create tool executor
 	toolExecutor := mcp.NewServerToolExecutor(serverOps)
@@ -139,7 +287,7 @@ func (s *Server) dispatchGenericAnthropicV1NonStream(
 		adapter,
 		forwarder,
 		toolExecutor,
-		nil,
+		pendingManager,
 		mcp.InterceptorConfig{MaxRounds: 6},
 	)
 
@@ -205,6 +353,7 @@ func (s *Server) dispatchGenericAnthropicV1Stream(
 
 	// Create server ops adapter
 	serverOps := newServerOpsAdapter(s, recorder)
+	pendingManager := mcp.NewServerPendingResultsManager(s, s, s, s)
 
 	// Create recorder adapter
 	var recorderAdapter mcp.ProtocolRecorder
@@ -258,6 +407,7 @@ func (s *Server) dispatchGenericAnthropicV1Stream(
 		forwarder,
 		mcp.InterceptorConfig{MaxRounds: 6},
 	)
+	interceptor.SetPendingResultsManager(pendingManager)
 
 	if err := interceptor.Run(req); err != nil {
 		recordMCPError(s, c, err, recorder)
@@ -273,72 +423,23 @@ func (s *Server) dispatchGenericOpenAIChatNonStream(
 	recorder *ProtocolRecorder,
 ) {
 	req := reqCtx.Request.(*openai.ChatCompletionNewParams)
-	actualModel := reqCtx.RequestModel
 
 	// Inject pending results if any
 	s.injectPendingVirtualResultsOpenAI(req)
 
-	ctx := c.Request.Context()
-
-	// Create adapter
-	adapter := mcp.NewOpenAIChatAdapter()
-
-	// Create forwarder
-	forwarder := mcp.NewOpenAIChatForwarder(s.clientPool, &forwardContextProvider{server: s})
-
-	// Get virtual registry
-	virtualRegistry := s.mcpRuntime.VirtualRegistry()
-
-	// Create server ops adapter
-	serverOps := newServerOpsAdapter(s, recorder)
-
-	// Create tool executor
-	toolExecutor := mcp.NewServerToolExecutor(serverOps)
-
-	// Create recorder adapter
-	var recorderAdapter mcp.ProtocolRecorder
-	if recorder != nil {
-		recorderAdapter = &protocolRecorderAdapter{recorder: recorder}
-	}
-
-	// Create processor
-	processor := mcp.NewGenericLoopProcessor(
-		ctx,
-		serverOps,
-		provider,
-		nil,
-		virtualRegistry,
-		recorderAdapter,
-		adapter,
-		forwarder,
-		toolExecutor,
-		nil,
-		mcp.InterceptorConfig{MaxRounds: 6},
-	)
-
-	// Run processor
-	response, err := processor.Run(req)
+	response, usage, err := s.runGenericOpenAIChatNonStream(c.Request.Context(), provider, req, recorder)
 	if err != nil {
 		recordMCPError(s, c, err, recorder)
 		return
 	}
 
-	// Extract usage
-	usage, err := adapter.ExtractUsage(response)
-	if err == nil {
-		serverOps.TrackUsage(c, usage.InputTokens, usage.OutputTokens, usage.CacheTokens)
+	if usage != nil {
+		tokenUsage := protocol.NewTokenUsageWithCache(usage.InputTokens, usage.OutputTokens, usage.CacheTokens)
+		s.trackUsageWithTokenUsage(c, tokenUsage, nil)
 	}
 
 	// Update affinity
-	if resp, ok := response.(*openai.ChatCompletion); ok {
-		s.updateAffinityMessageID(c, rule, string(resp.ID))
-	}
-
-	// Record response if not already recorded
-	if recorder != nil && recorderAdapter == nil {
-		recorder.SetAssembledResponse(response)
-		recorder.RecordResponse(provider, actualModel)
-	}
+	s.updateAffinityMessageID(c, rule, string(response.ID))
 
 	// Return response (OpenAI format)
 	c.JSON(http.StatusOK, response)
@@ -370,6 +471,7 @@ func (s *Server) dispatchGenericOpenAIChatStream(
 
 	// Create server ops adapter
 	serverOps := newServerOpsAdapter(s, recorder)
+	pendingManager := mcp.NewServerPendingResultsManager(s, s, s, s)
 
 	// Create recorder adapter
 	var recorderAdapter mcp.ProtocolRecorder
@@ -416,6 +518,7 @@ func (s *Server) dispatchGenericOpenAIChatStream(
 		forwarder,
 		mcp.InterceptorConfig{MaxRounds: 6},
 	)
+	interceptor.SetPendingResultsManager(pendingManager)
 
 	if err := interceptor.Run(req); err != nil {
 		recordMCPError(s, c, err, recorder)
@@ -435,75 +538,24 @@ func (s *Server) dispatchGenericAnthropicBetaNonStream(
 
 	// Inject pending results if any
 	s.injectPendingVirtualResultsAnthropicBeta(req)
-
-	ctx := c.Request.Context()
-
-	// Create adapter
-	adapter := mcp.NewAnthropicBetaAdapter()
-
-	// Create forwarder
-	forwarder := mcp.NewAnthropicBetaForwarder(s.clientPool, &forwardContextProvider{server: s})
-
-	// Get virtual registry
-	virtualRegistry := s.mcpRuntime.VirtualRegistry()
-
-	// Create server ops adapter
-	serverOps := newServerOpsAdapter(s, recorder)
-
-	// Create tool executor
-	toolExecutor := mcp.NewServerToolExecutor(serverOps)
-
-	// Create recorder adapter
-	var recorderAdapter mcp.ProtocolRecorder
-	if recorder != nil {
-		recorderAdapter = &protocolRecorderAdapter{recorder: recorder}
-	}
-
-	// Create processor
-	processor := mcp.NewGenericLoopProcessor(
-		ctx,
-		serverOps,
-		provider,
-		nil,
-		virtualRegistry,
-		recorderAdapter,
-		adapter,
-		forwarder,
-		toolExecutor,
-		nil,
-		mcp.InterceptorConfig{MaxRounds: 6},
-	)
-
-	// Run processor
-	response, err := processor.Run(req)
+	response, usage, err := s.runGenericAnthropicBetaNonStream(c.Request.Context(), provider, req, recorder)
 	if err != nil {
 		recordMCPError(s, c, err, recorder)
 		return
 	}
 
-	// Extract usage
-	usage, err := adapter.ExtractUsage(response)
-	if err == nil {
-		serverOps.TrackUsage(c, usage.InputTokens, usage.OutputTokens, usage.CacheTokens)
+	if usage != nil {
+		tokenUsage := protocol.NewTokenUsageWithCache(usage.InputTokens, usage.OutputTokens, usage.CacheTokens)
+		s.trackUsageWithTokenUsage(c, tokenUsage, nil)
 	}
 
 	// Update affinity and get typed message
-	var betaMsg *anthropic.BetaMessage
-	if msg, ok := response.(*anthropic.BetaMessage); ok {
-		s.updateAffinityMessageID(c, rule, string(msg.ID))
-		betaMsg = msg
-	}
+	s.updateAffinityMessageID(c, rule, string(response.ID))
 
 	// Response guardrails
 	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
-	if betaMsg != nil && s.guardrailsEnabledForScenario(scenario) {
-		s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, req, actualModel, provider, betaMsg)
-	}
-
-	// Record response if not already recorded
-	if recorder != nil && recorderAdapter == nil {
-		recorder.SetAssembledResponse(response)
-		recorder.RecordResponse(provider, actualModel)
+	if s.guardrailsEnabledForScenario(scenario) {
+		s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, req, actualModel, provider, response)
 	}
 
 	// Return response
@@ -536,6 +588,7 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 
 	// Create server ops adapter
 	serverOps := newServerOpsAdapter(s, recorder)
+	pendingManager := mcp.NewServerPendingResultsManager(s, s, s, s)
 
 	// Create recorder adapter
 	var recorderAdapter mcp.ProtocolRecorder
@@ -589,6 +642,7 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 		forwarder,
 		mcp.InterceptorConfig{MaxRounds: 6},
 	)
+	interceptor.SetPendingResultsManager(pendingManager)
 
 	if err := interceptor.Run(req); err != nil {
 		recordMCPError(s, c, err, recorder)

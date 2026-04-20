@@ -13,6 +13,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/shared"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
@@ -48,9 +49,10 @@ func newMCPEnabledTestServer(t *testing.T, cfg *typ.MCPRuntimeConfig) *Server {
 	require.NoError(t, conf.SetScenarioFlag(typ.ScenarioGlobal, "mcp", true))
 
 	return &Server{
-		clientPool: cp,
-		mcpRuntime: rt,
-		config:     conf,
+		clientPool:                cp,
+		mcpRuntime:                rt,
+		config:                    conf,
+		pendingVirtualToolResults: newPendingVirtualToolResultStore(),
 	}
 }
 
@@ -89,6 +91,7 @@ func TestHandleMCPToolCalls_OpenAI_AdvisorResponseHook(t *testing.T) {
 			})
 		case "worker-model":
 			workerCalls++
+			hasToolMsg := false
 			if msgs, ok := req["messages"].([]any); ok {
 				for _, m := range msgs {
 					mm, _ := m.(map[string]any)
@@ -96,11 +99,40 @@ func TestHandleMCPToolCalls_OpenAI_AdvisorResponseHook(t *testing.T) {
 					if role != "tool" {
 						continue
 					}
+					hasToolMsg = true
 					content, _ := mm["content"].(string)
 					if strings.Contains(content, "advisor-plan") {
 						workerSawAdvisorToolResult = true
 					}
 				}
+			}
+			if !hasToolMsg {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"id":      "chatcmpl-worker-tool",
+					"object":  "chat.completion",
+					"created": 1,
+					"model":   "worker-model",
+					"choices": []map[string]any{
+						{
+							"index": 0,
+							"message": map[string]any{
+								"role":    "assistant",
+								"content": "",
+								"tool_calls": []map[string]any{
+									{"id": "call_1", "type": "function", "function": map[string]any{"name": "tingly_box_mcp__advisor__advisor", "arguments": `{"reason":"need strategy"}`}},
+								},
+							},
+							"finish_reason": "tool_calls",
+						},
+					},
+					"usage": map[string]any{
+						"prompt_tokens":     1,
+						"completion_tokens": 1,
+						"total_tokens":      2,
+					},
+				})
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -161,22 +193,15 @@ func TestHandleMCPToolCalls_OpenAI_AdvisorResponseHook(t *testing.T) {
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage("help"),
 		},
+		Tools: []openai.ChatCompletionToolUnionParam{
+			openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{Name: "tingly_box_mcp__advisor__advisor"}),
+		},
 	}
 
-	var toolCallResp openai.ChatCompletion
-	require.NoError(t, json.Unmarshal([]byte(`{
-		"id":"chatcmpl-worker-tool",
-		"object":"chat.completion",
-		"created":1,
-		"model":"worker-model",
-		"choices":[{"index":0,"message":{"role":"assistant","content":"","tool_calls":[{"id":"call_1","type":"function","function":{"name":"tingly_box_mcp__advisor__advisor","arguments":"{\"reason\":\"need strategy\"}"}}]},"finish_reason":"tool_calls"}],
-		"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}
-	}`), &toolCallResp))
-
-	finalResp, err := s.handleMCPToolCalls(context.Background(), provider, req, &toolCallResp)
+	finalResp, _, err := s.runGenericOpenAIChatNonStream(context.Background(), provider, req, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, advisorCalls)
-	require.Equal(t, 1, workerCalls)
+	require.Equal(t, 2, workerCalls)
 	require.True(t, workerSawAdvisorToolResult)
 	require.Len(t, finalResp.Choices, 1)
 	require.Equal(t, "worker final answer", finalResp.Choices[0].Message.Content)
@@ -215,6 +240,7 @@ func TestHandleAnthropicV1MCPToolCalls_AdvisorResponseHook(t *testing.T) {
 			})
 		case "claude-worker-v1":
 			workerCalls++
+			hasToolResult := strings.Contains(string(body), `"tool_result"`)
 			if messages, ok := req["messages"].([]any); ok {
 				for _, m := range messages {
 					mm, _ := m.(map[string]any)
@@ -229,6 +255,21 @@ func TestHandleAnthropicV1MCPToolCalls_AdvisorResponseHook(t *testing.T) {
 						}
 					}
 				}
+			}
+			if !hasToolResult {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"id":    "msg_worker_tool",
+					"type":  "message",
+					"role":  "assistant",
+					"model": "claude-worker-v1",
+					"content": []map[string]any{
+						{"type": "tool_use", "id": "toolu_1", "name": "tingly_box_mcp__advisor__advisor", "input": map[string]any{"reason": "need strategy"}},
+					},
+					"stop_reason": "tool_use",
+					"usage":       map[string]any{"input_tokens": 1, "output_tokens": 1},
+				})
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -275,23 +316,15 @@ func TestHandleAnthropicV1MCPToolCalls_AdvisorResponseHook(t *testing.T) {
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock("help")),
 		},
+		Tools: []anthropic.ToolUnionParam{
+			anthropic.ToolUnionParamOfTool(anthropic.ToolInputSchemaParam{}, "tingly_box_mcp__advisor__advisor"),
+		},
 	}
 
-	var toolResp anthropic.Message
-	require.NoError(t, json.Unmarshal([]byte(`{
-		"id":"msg_worker_tool",
-		"type":"message",
-		"role":"assistant",
-		"model":"claude-worker-v1",
-		"content":[{"type":"tool_use","id":"toolu_1","name":"tingly_box_mcp__advisor__advisor","input":{"reason":"need strategy"}}],
-		"stop_reason":"tool_use",
-		"usage":{"input_tokens":1,"output_tokens":1}
-	}`), &toolResp))
-
-	finalResp, _, err := s.handleAnthropicV1MCPToolCalls(context.Background(), provider, req, &toolResp)
+	finalResp, _, err := s.runGenericAnthropicV1NonStream(context.Background(), provider, req, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, advisorCalls)
-	require.Equal(t, 1, workerCalls)
+	require.Equal(t, 2, workerCalls)
 	require.True(t, workerSawToolResult)
 	require.Len(t, finalResp.Content, 1)
 	require.Equal(t, "text", string(finalResp.Content[0].Type))
@@ -331,8 +364,24 @@ func TestHandleAnthropicBetaMCPToolCalls_AdvisorResponseHook(t *testing.T) {
 			})
 		case "claude-worker-beta":
 			workerCalls++
-			if strings.Contains(string(body), "beta-advisor-plan") {
+			hasToolResult := strings.Contains(string(body), `"tool_result"`)
+			if hasToolResult && strings.Contains(string(body), "beta-advisor-plan") {
 				workerSawToolResult = true
+			}
+			if !hasToolResult {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"id":    "msg_worker_tool",
+					"type":  "message",
+					"role":  "assistant",
+					"model": "claude-worker-beta",
+					"content": []map[string]any{
+						{"type": "tool_use", "id": "toolu_1", "name": "tingly_box_mcp__advisor__advisor", "input": map[string]any{"reason": "need strategy"}},
+					},
+					"stop_reason": "tool_use",
+					"usage":       map[string]any{"input_tokens": 1, "output_tokens": 1},
+				})
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -379,23 +428,15 @@ func TestHandleAnthropicBetaMCPToolCalls_AdvisorResponseHook(t *testing.T) {
 		Messages: []anthropic.BetaMessageParam{
 			anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("help")),
 		},
+		Tools: []anthropic.BetaToolUnionParam{
+			anthropic.BetaToolUnionParamOfTool(anthropic.BetaToolInputSchemaParam{}, "tingly_box_mcp__advisor__advisor"),
+		},
 	}
 
-	var toolResp anthropic.BetaMessage
-	require.NoError(t, json.Unmarshal([]byte(`{
-		"id":"msg_worker_tool",
-		"type":"message",
-		"role":"assistant",
-		"model":"claude-worker-beta",
-		"content":[{"type":"tool_use","id":"toolu_1","name":"tingly_box_mcp__advisor__advisor","input":{"reason":"need strategy"}}],
-		"stop_reason":"tool_use",
-		"usage":{"input_tokens":1,"output_tokens":1}
-	}`), &toolResp))
-
-	finalResp, _, err := s.handleAnthropicBetaMCPToolCalls(context.Background(), provider, req, &toolResp)
+	finalResp, _, err := s.runGenericAnthropicBetaNonStream(context.Background(), provider, req, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, advisorCalls)
-	require.Equal(t, 1, workerCalls)
+	require.Equal(t, 2, workerCalls)
 	require.True(t, workerSawToolResult)
 	require.Len(t, finalResp.Content, 1)
 	require.Equal(t, "text", string(finalResp.Content[0].Type))
@@ -416,8 +457,37 @@ func TestHandleMCPToolCalls_OpenAI_DisabledAdvisorReturnsCallingDisabledTools(t 
 		require.Equal(t, "worker-model", model)
 		workerCalls++
 
-		if strings.Contains(string(body), "calling disabled tools: tingly_box_mcp__advisor__advisor") {
+		hasToolMsg := strings.Contains(string(body), `"role":"tool"`)
+		if hasToolMsg && strings.Contains(string(body), "calling disabled tools: tingly_box_mcp__advisor__advisor") {
 			workerSawDisabledError = true
+		}
+		if !hasToolMsg {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":      "chatcmpl-worker-tool",
+				"object":  "chat.completion",
+				"created": 1,
+				"model":   "worker-model",
+				"choices": []map[string]any{
+					{
+						"index": 0,
+						"message": map[string]any{
+							"role":    "assistant",
+							"content": "",
+							"tool_calls": []map[string]any{
+								{"id": "call_1", "type": "function", "function": map[string]any{"name": "tingly_box_mcp__advisor__advisor", "arguments": `{"reason":"need strategy"}`}},
+							},
+						},
+						"finish_reason": "tool_calls",
+					},
+				},
+				"usage": map[string]any{
+					"prompt_tokens":     1,
+					"completion_tokens": 1,
+					"total_tokens":      2,
+				},
+			})
+			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -476,21 +546,14 @@ func TestHandleMCPToolCalls_OpenAI_DisabledAdvisorReturnsCallingDisabledTools(t 
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage("help"),
 		},
+		Tools: []openai.ChatCompletionToolUnionParam{
+			openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{Name: "tingly_box_mcp__advisor__advisor"}),
+		},
 	}
 
-	var toolCallResp openai.ChatCompletion
-	require.NoError(t, json.Unmarshal([]byte(`{
-		"id":"chatcmpl-worker-tool",
-		"object":"chat.completion",
-		"created":1,
-		"model":"worker-model",
-		"choices":[{"index":0,"message":{"role":"assistant","content":"","tool_calls":[{"id":"call_1","type":"function","function":{"name":"tingly_box_mcp__advisor__advisor","arguments":"{\"reason\":\"need strategy\"}"}}]},"finish_reason":"tool_calls"}],
-		"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}
-	}`), &toolCallResp))
-
-	finalResp, err := s.handleMCPToolCalls(context.Background(), provider, req, &toolCallResp)
+	finalResp, _, err := s.runGenericOpenAIChatNonStream(context.Background(), provider, req, nil)
 	require.NoError(t, err)
-	require.Equal(t, 1, workerCalls)
+	require.Equal(t, 2, workerCalls)
 	require.True(t, workerSawDisabledError)
 	require.Len(t, finalResp.Choices, 1)
 	require.Equal(t, "worker final after disabled tool", finalResp.Choices[0].Message.Content)

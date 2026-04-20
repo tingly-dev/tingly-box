@@ -47,12 +47,14 @@ func (o *OpenAIChatAdapter) ExtractTools(response any) ([]Tool, error) {
 }
 
 func (o *OpenAIChatAdapter) IsVirtualTool(tool Tool, registry *runtime.VirtualToolRegistry) bool {
-	if registry == nil {
+	sourceID, toolName, ok := runtime.ParseNormalizedToolName(tool.Name())
+	if !ok {
 		return false
 	}
-
-	_, toolName, ok := runtime.ParseNormalizedToolName(tool.Name())
-	if !ok {
+	if sourceID == "advisor" || (sourceID == "builtin" && toolName == "advisor") {
+		return true
+	}
+	if registry == nil {
 		return false
 	}
 

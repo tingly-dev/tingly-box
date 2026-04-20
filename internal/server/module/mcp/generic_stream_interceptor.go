@@ -1,7 +1,10 @@
 package mcp
 
 import (
+	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
@@ -19,17 +22,17 @@ const (
 
 // GenericStreamInterceptor implements format-agnostic streaming MCP tool handling
 type GenericStreamInterceptor struct {
-	c                 *gin.Context
-	s                 ServerOps
-	provider          *typ.Provider
-	hc                *protocol.HandleContext
-	virtualRegistry   *runtime.VirtualToolRegistry
-	recorder          ProtocolRecorder
-	adapter           FormatAdapter
-	forwarder         Forwarder
-	toolExecutor      ToolExecutor
-	pendingManager    PendingResultsManager
-	config            InterceptorConfig
+	c               *gin.Context
+	s               ServerOps
+	provider        *typ.Provider
+	hc              *protocol.HandleContext
+	virtualRegistry *runtime.VirtualToolRegistry
+	recorder        ProtocolRecorder
+	adapter         FormatAdapter
+	forwarder       Forwarder
+	toolExecutor    ToolExecutor
+	pendingManager  PendingResultsManager
+	config          InterceptorConfig
 
 	// Cross-round state (not reset)
 	ttftRecorded      bool
@@ -38,7 +41,21 @@ type GenericStreamInterceptor struct {
 	totalCacheTokens  int64
 
 	// Per-round state (reset each round)
-	round             int
+	round int
+
+	roundAnthropicV1   *anthropic.Message
+	roundAnthropicBeta *anthropic.BetaMessage
+	roundOpenAI        *openai.ChatCompletion
+	openAIToolStates   map[int]*genericOpenAIToolCallState
+	roundTools         []Tool
+	roundToolSeen      map[string]struct{}
+}
+
+type genericOpenAIToolCallState struct {
+	index     int
+	id        string
+	name      string
+	arguments strings.Builder
 }
 
 // NewGenericStreamInterceptor creates a new generic streaming interceptor
@@ -70,6 +87,11 @@ func NewGenericStreamInterceptor(
 	}
 }
 
+// SetPendingResultsManager injects optional pending-result stashing behavior for mixed tool outputs.
+func (i *GenericStreamInterceptor) SetPendingResultsManager(manager PendingResultsManager) {
+	i.pendingManager = manager
+}
+
 // Run executes the streaming interceptor loop
 func (i *GenericStreamInterceptor) Run(req any) error {
 	// Setup SSE headers
@@ -79,6 +101,7 @@ func (i *GenericStreamInterceptor) Run(req any) error {
 	currentReq := req
 
 	for i.round = 0; i.round < i.config.MaxRounds; i.round++ {
+		i.resetRoundState()
 		logrus.Debugf("[MCP-Interceptor] Round %d: starting", i.round)
 
 		// Forward request to upstream
@@ -130,6 +153,7 @@ func (i *GenericStreamInterceptor) Run(req any) error {
 func (i *GenericStreamInterceptor) consumeRound(stream StreamHandle) (any, error) {
 	for stream.Next() {
 		event := stream.Current()
+		i.accumulateRoundEvent(event)
 
 		// Call guardrails hooks if enabled
 		if i.config.EnableGuardrails && i.hc != nil {
@@ -152,7 +176,129 @@ func (i *GenericStreamInterceptor) consumeRound(stream StreamHandle) (any, error
 	}
 
 	// Build complete response from accumulated state
-	return i.adapter.NewResponse(), nil
+	return i.roundResponse(), nil
+}
+
+func (i *GenericStreamInterceptor) resetRoundState() {
+	i.roundAnthropicV1 = nil
+	i.roundAnthropicBeta = nil
+	i.roundOpenAI = nil
+	i.openAIToolStates = make(map[int]*genericOpenAIToolCallState)
+	i.roundTools = nil
+	i.roundToolSeen = make(map[string]struct{})
+}
+
+func (i *GenericStreamInterceptor) roundResponse() any {
+	if i.roundAnthropicV1 != nil {
+		return i.roundAnthropicV1
+	}
+	if i.roundAnthropicBeta != nil {
+		return i.roundAnthropicBeta
+	}
+	if i.roundOpenAI != nil {
+		return i.roundOpenAI
+	}
+	return i.adapter.NewResponse()
+}
+
+func (i *GenericStreamInterceptor) accumulateRoundEvent(event any) {
+	switch e := event.(type) {
+	case anthropic.MessageStreamEventUnion:
+		if i.roundAnthropicV1 == nil {
+			i.roundAnthropicV1 = &anthropic.Message{}
+		}
+		i.roundAnthropicV1.Accumulate(e)
+	case *anthropic.MessageStreamEventUnion:
+		if i.roundAnthropicV1 == nil {
+			i.roundAnthropicV1 = &anthropic.Message{}
+		}
+		i.roundAnthropicV1.Accumulate(*e)
+	case anthropic.BetaRawMessageStreamEventUnion:
+		if i.roundAnthropicBeta == nil {
+			i.roundAnthropicBeta = &anthropic.BetaMessage{}
+		}
+		i.roundAnthropicBeta.Accumulate(e)
+	case *anthropic.BetaRawMessageStreamEventUnion:
+		if i.roundAnthropicBeta == nil {
+			i.roundAnthropicBeta = &anthropic.BetaMessage{}
+		}
+		i.roundAnthropicBeta.Accumulate(*e)
+	case openai.ChatCompletionChunk:
+		i.accumulateOpenAIChunk(e)
+	}
+}
+
+func (i *GenericStreamInterceptor) accumulateOpenAIChunk(chunk openai.ChatCompletionChunk) {
+	if i.roundOpenAI == nil {
+		i.roundOpenAI = &openai.ChatCompletion{}
+	}
+	if len(chunk.Choices) == 0 {
+		return
+	}
+	if len(i.roundOpenAI.Choices) == 0 {
+		i.roundOpenAI.Choices = append(i.roundOpenAI.Choices, openai.ChatCompletionChoice{})
+	}
+	choice := chunk.Choices[0]
+	msg := &i.roundOpenAI.Choices[0].Message
+	if choice.Delta.Content != "" {
+		msg.Content += choice.Delta.Content
+	}
+	for _, tc := range choice.Delta.ToolCalls {
+		idx := int(tc.Index)
+		state := i.openAIToolStates[idx]
+		if state == nil {
+			state = &genericOpenAIToolCallState{index: idx}
+			i.openAIToolStates[idx] = state
+		}
+		if tc.ID != "" {
+			state.id = tc.ID
+		}
+		if tc.Function.Name != "" {
+			state.name = tc.Function.Name
+		}
+		if tc.Function.Arguments != "" {
+			state.arguments.WriteString(tc.Function.Arguments)
+		}
+	}
+
+	if len(i.openAIToolStates) > 0 {
+		indices := make([]int, 0, len(i.openAIToolStates))
+		for idx := range i.openAIToolStates {
+			indices = append(indices, idx)
+		}
+		sort.Ints(indices)
+		toolCalls := make([]openai.ChatCompletionMessageToolCallUnion, 0, len(indices))
+		for _, idx := range indices {
+			state := i.openAIToolStates[idx]
+			toolCall := map[string]any{
+				"id":   state.id,
+				"type": "function",
+				"function": map[string]any{
+					"name":      state.name,
+					"arguments": state.arguments.String(),
+				},
+			}
+			b, _ := json.Marshal(toolCall)
+			var union openai.ChatCompletionMessageToolCallUnion
+			if err := json.Unmarshal(b, &union); err == nil {
+				toolCalls = append(toolCalls, union)
+			}
+		}
+		msg.ToolCalls = toolCalls
+	}
+
+	if choice.FinishReason != "" {
+		i.roundOpenAI.Choices[0].FinishReason = choice.FinishReason
+	}
+	if chunk.Usage.PromptTokens != 0 {
+		i.roundOpenAI.Usage.PromptTokens = chunk.Usage.PromptTokens
+	}
+	if chunk.Usage.CompletionTokens != 0 {
+		i.roundOpenAI.Usage.CompletionTokens = chunk.Usage.CompletionTokens
+	}
+	if chunk.Usage.PromptTokensDetails.CachedTokens != 0 {
+		i.roundOpenAI.Usage.PromptTokensDetails.CachedTokens = chunk.Usage.PromptTokensDetails.CachedTokens
+	}
 }
 
 // routeEvent routes a single event based on its type
@@ -211,6 +357,7 @@ func (i *GenericStreamInterceptor) handleToolStartEvent(event any) error {
 		}
 		return i.adapter.SendEvent(i.c, "content_block_start", payload)
 	}
+	i.recordRoundTool(tool)
 
 	// Check if virtual tool
 	if i.adapter.IsVirtualTool(tool, i.virtualRegistry) {
@@ -228,6 +375,9 @@ func (i *GenericStreamInterceptor) handleToolStartEvent(event any) error {
 
 // handleToolDeltaEvent handles tool parameter delta event
 func (i *GenericStreamInterceptor) handleToolDeltaEvent(event any) error {
+	if tool, ok := i.adapter.ExtractToolFromEvent(event); ok {
+		i.recordRoundTool(tool)
+	}
 	if i.adapter.ShouldSuppressEvent(event, i.virtualRegistry) {
 		// Suppress virtual tool delta
 		return nil
@@ -258,7 +408,7 @@ func (i *GenericStreamInterceptor) handleToolStopEvent(event any) error {
 
 // classifyResponse classifies the response to determine next action
 func (i *GenericStreamInterceptor) classifyResponse(response any) ResponseDecision {
-	tools, err := i.adapter.ExtractTools(response)
+	tools, err := i.extractRoundTools(response)
 	if err != nil || len(tools) == 0 {
 		return DecisionNoTools
 	}
@@ -285,7 +435,7 @@ func (i *GenericStreamInterceptor) classifyResponse(response any) ResponseDecisi
 
 // handlePureVirtual executes virtual tools and continues loop
 func (i *GenericStreamInterceptor) handlePureVirtual(response, req any) error {
-	tools, err := i.adapter.ExtractTools(response)
+	tools, err := i.extractRoundTools(response)
 	if err != nil {
 		return err
 	}
@@ -317,12 +467,12 @@ func (i *GenericStreamInterceptor) handlePureVirtual(response, req any) error {
 
 // handleMixed executes virtual tools, stashes results, returns external to client
 func (i *GenericStreamInterceptor) handleMixed(response, req any) error {
-	tools, err := i.adapter.ExtractTools(response)
+	tools, err := i.extractRoundTools(response)
 	if err != nil {
 		return err
 	}
 
-	virtual, external, externalIDs := i.adapter.SplitVirtualExternal(tools, i.virtualRegistry)
+	virtual, _, externalIDs := i.adapter.SplitVirtualExternal(tools, i.virtualRegistry)
 
 	// Execute virtual tools
 	results := make([]ToolExecutionResult, 0, len(virtual))
@@ -339,12 +489,6 @@ func (i *GenericStreamInterceptor) handleMixed(response, req any) error {
 		if err := i.pendingManager.Stash(externalIDs, results); err != nil {
 			logrus.WithError(err).Warn("failed to stash pending results")
 		}
-	}
-
-	// Filter response to only include external tools
-	_, err = i.adapter.FilterVirtualTools(response, external)
-	if err != nil {
-		return err
 	}
 
 	// Send final message (external tools already streamed to client)
@@ -390,7 +534,11 @@ func (i *GenericStreamInterceptor) extractEventPayload(event any) ([]byte, error
 	// Extract raw JSON payload from streaming events
 	// Different SDK types have different methods to access raw data
 	switch e := event.(type) {
+	case anthropic.MessageStreamEventUnion:
+		return []byte(e.RawJSON()), nil
 	case *anthropic.MessageStreamEventUnion:
+		return []byte(e.RawJSON()), nil
+	case anthropic.BetaRawMessageStreamEventUnion:
 		return []byte(e.RawJSON()), nil
 	case *anthropic.BetaRawMessageStreamEventUnion:
 		return []byte(e.RawJSON()), nil
@@ -452,4 +600,30 @@ func (i *GenericStreamInterceptor) continueLoop(req any) error {
 	// Store updated request for next round
 	// This is handled by the Run() loop
 	return nil
+}
+
+func (i *GenericStreamInterceptor) recordRoundTool(tool Tool) {
+	if tool == nil {
+		return
+	}
+	key := tool.ID()
+	if key == "" {
+		key = tool.Name() + "|" + tool.Arguments()
+	}
+	if _, exists := i.roundToolSeen[key]; exists {
+		return
+	}
+	i.roundToolSeen[key] = struct{}{}
+	i.roundTools = append(i.roundTools, tool)
+}
+
+func (i *GenericStreamInterceptor) extractRoundTools(response any) ([]Tool, error) {
+	tools, err := i.adapter.ExtractTools(response)
+	if err == nil && len(tools) > 0 {
+		return tools, nil
+	}
+	if len(i.roundTools) > 0 {
+		return i.roundTools, nil
+	}
+	return tools, err
 }

@@ -46,12 +46,14 @@ func (a *AnthropicV1Adapter) ExtractTools(response any) ([]Tool, error) {
 }
 
 func (a *AnthropicV1Adapter) IsVirtualTool(tool Tool, registry *runtime.VirtualToolRegistry) bool {
-	if registry == nil {
+	sourceID, toolName, ok := runtime.ParseNormalizedToolName(tool.Name())
+	if !ok {
 		return false
 	}
-
-	_, toolName, ok := runtime.ParseNormalizedToolName(tool.Name())
-	if !ok {
+	if sourceID == "advisor" || (sourceID == "builtin" && toolName == "advisor") {
+		return true
+	}
+	if registry == nil {
 		return false
 	}
 
@@ -181,8 +183,16 @@ func (a *AnthropicV1Adapter) SendFinalMessage(c *gin.Context) error {
 // Event processing
 
 func (a *AnthropicV1Adapter) ClassifyEvent(event any) EventType {
-	e, ok := event.(*anthropic.MessageStreamEventUnion)
-	if !ok {
+	var e anthropic.MessageStreamEventUnion
+	switch v := event.(type) {
+	case anthropic.MessageStreamEventUnion:
+		e = v
+	case *anthropic.MessageStreamEventUnion:
+		if v == nil {
+			return EventUnknown
+		}
+		e = *v
+	default:
 		return EventUnknown
 	}
 
@@ -218,8 +228,16 @@ func (a *AnthropicV1Adapter) ClassifyEvent(event any) EventType {
 }
 
 func (a *AnthropicV1Adapter) ExtractToolFromEvent(event any) (Tool, bool) {
-	e, ok := event.(*anthropic.MessageStreamEventUnion)
-	if !ok {
+	var e anthropic.MessageStreamEventUnion
+	switch v := event.(type) {
+	case anthropic.MessageStreamEventUnion:
+		e = v
+	case *anthropic.MessageStreamEventUnion:
+		if v == nil {
+			return nil, false
+		}
+		e = *v
+	default:
 		return nil, false
 	}
 
@@ -237,8 +255,9 @@ func (a *AnthropicV1Adapter) ExtractToolFromEvent(event any) (Tool, bool) {
 }
 
 func (a *AnthropicV1Adapter) ShouldSuppressEvent(event any, virtualRegistry *runtime.VirtualToolRegistry) bool {
-	_, ok := event.(*anthropic.MessageStreamEventUnion)
-	if !ok {
+	_, okValue := event.(anthropic.MessageStreamEventUnion)
+	_, okPtr := event.(*anthropic.MessageStreamEventUnion)
+	if !okValue && !okPtr {
 		return false
 	}
 

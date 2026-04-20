@@ -46,12 +46,14 @@ func (a *AnthropicBetaAdapter) ExtractTools(response any) ([]Tool, error) {
 }
 
 func (a *AnthropicBetaAdapter) IsVirtualTool(tool Tool, registry *runtime.VirtualToolRegistry) bool {
-	if registry == nil {
+	sourceID, toolName, ok := runtime.ParseNormalizedToolName(tool.Name())
+	if !ok {
 		return false
 	}
-
-	_, toolName, ok := runtime.ParseNormalizedToolName(tool.Name())
-	if !ok {
+	if sourceID == "advisor" || (sourceID == "builtin" && toolName == "advisor") {
+		return true
+	}
+	if registry == nil {
 		return false
 	}
 
@@ -181,8 +183,16 @@ func (a *AnthropicBetaAdapter) SendFinalMessage(c *gin.Context) error {
 // Event processing
 
 func (a *AnthropicBetaAdapter) ClassifyEvent(event any) EventType {
-	e, ok := event.(*anthropic.BetaRawMessageStreamEventUnion)
-	if !ok {
+	var e anthropic.BetaRawMessageStreamEventUnion
+	switch v := event.(type) {
+	case anthropic.BetaRawMessageStreamEventUnion:
+		e = v
+	case *anthropic.BetaRawMessageStreamEventUnion:
+		if v == nil {
+			return EventUnknown
+		}
+		e = *v
+	default:
 		return EventUnknown
 	}
 
@@ -218,8 +228,16 @@ func (a *AnthropicBetaAdapter) ClassifyEvent(event any) EventType {
 }
 
 func (a *AnthropicBetaAdapter) ExtractToolFromEvent(event any) (Tool, bool) {
-	e, ok := event.(*anthropic.BetaRawMessageStreamEventUnion)
-	if !ok {
+	var e anthropic.BetaRawMessageStreamEventUnion
+	switch v := event.(type) {
+	case anthropic.BetaRawMessageStreamEventUnion:
+		e = v
+	case *anthropic.BetaRawMessageStreamEventUnion:
+		if v == nil {
+			return nil, false
+		}
+		e = *v
+	default:
 		return nil, false
 	}
 
@@ -237,8 +255,9 @@ func (a *AnthropicBetaAdapter) ExtractToolFromEvent(event any) (Tool, bool) {
 }
 
 func (a *AnthropicBetaAdapter) ShouldSuppressEvent(event any, virtualRegistry *runtime.VirtualToolRegistry) bool {
-	_, ok := event.(*anthropic.BetaRawMessageStreamEventUnion)
-	if !ok {
+	_, okValue := event.(anthropic.BetaRawMessageStreamEventUnion)
+	_, okPtr := event.(*anthropic.BetaRawMessageStreamEventUnion)
+	if !okValue && !okPtr {
 		return false
 	}
 
@@ -296,6 +315,9 @@ func (t *AnthropicBetaTool) Name() string {
 }
 
 func (t *AnthropicBetaTool) Arguments() string {
-	return fmt.Sprintf("%v", t.ToolUseBlock.Input)
+	b, err := json.Marshal(t.ToolUseBlock.Input)
+	if err != nil || len(b) == 0 {
+		return "{}"
+	}
+	return string(b)
 }
-

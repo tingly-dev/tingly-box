@@ -36,31 +36,17 @@ func registerTestAdvisorVirtualTool(t *testing.T, s *Server) {
 }
 
 func TestHandleMCPToolCalls_MixedVirtualAndExternal_StashAndReturnExternalOnly(t *testing.T) {
+	probe := &pathProbe{}
+	backend := newOpenAIMixedPathBackend(t, probe)
+	defer backend.Close()
+
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
 	s.pendingVirtualToolResults = newPendingVirtualToolResultStore()
 	registerTestAdvisorVirtualTool(t, s)
 
-	req := &openai.ChatCompletionNewParams{
-		Model: "worker-model",
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.UserMessage("help"),
-		},
-	}
-
-	var toolCallResp openai.ChatCompletion
-	require.NoError(t, json.Unmarshal([]byte(`{
-		"id":"chatcmpl-worker-tool",
-		"object":"chat.completion",
-		"created":1,
-		"model":"worker-model",
-		"choices":[{"index":0,"message":{"role":"assistant","content":"","tool_calls":[
-			{"id":"call_virtual","type":"function","function":{"name":"tingly_box_mcp__builtin__advisor","arguments":"{\"reason\":\"need strategy\"}"}},
-			{"id":"call_external","type":"function","function":{"name":"tingly_box_mcp__webtools__mcp_web_search","arguments":"{\"query\":\"tingly\"}"}}
-		]},"finish_reason":"tool_calls"}],
-		"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}
-	}`), &toolCallResp))
-
-	finalResp, err := s.handleMCPToolCalls(context.Background(), &typ.Provider{}, req, &toolCallResp)
+	req := buildOpenAIMixedReq()
+	provider := &typ.Provider{Name: "p-o-mixed-unit", APIStyle: "openai", APIBase: backend.URL + "/v1", Token: "k", Enabled: true}
+	finalResp, _, err := s.runGenericOpenAIChatNonStream(context.Background(), provider, req, nil)
 	require.NoError(t, err)
 	require.Len(t, finalResp.Choices, 1)
 	require.Len(t, finalResp.Choices[0].Message.ToolCalls, 1)
@@ -76,29 +62,17 @@ func TestHandleMCPToolCalls_MixedVirtualAndExternal_StashAndReturnExternalOnly(t
 }
 
 func TestHandleAnthropicBetaMCPToolCalls_MixedVirtualAndExternal_StashAndReturnExternalOnly(t *testing.T) {
+	probe := &pathProbe{}
+	backend := newAnthropicMixedPathBackend(t, probe)
+	defer backend.Close()
+
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
 	s.pendingVirtualToolResults = newPendingVirtualToolResultStore()
 	registerTestAdvisorVirtualTool(t, s)
 
-	req := &anthropic.BetaMessageNewParams{
-		Model: "worker-model",
-	}
-
-	var toolResp anthropic.BetaMessage
-	require.NoError(t, json.Unmarshal([]byte(`{
-		"id":"msg_worker_tool",
-		"type":"message",
-		"role":"assistant",
-		"model":"worker-model",
-		"content":[
-			{"type":"tool_use","id":"toolu_virtual","name":"tingly_box_mcp__builtin__advisor","input":{"reason":"need strategy"}},
-			{"type":"tool_use","id":"toolu_external","name":"tingly_box_mcp__webtools__mcp_web_search","input":{"query":"tingly"}}
-		],
-		"stop_reason":"tool_use",
-		"usage":{"input_tokens":1,"output_tokens":1}
-	}`), &toolResp))
-
-	finalResp, _, err := s.handleAnthropicBetaMCPToolCalls(context.Background(), &typ.Provider{}, req, &toolResp)
+	req := buildAnthropicBetaMixedReq()
+	provider := &typ.Provider{Name: "p-a-beta-mixed-unit", APIStyle: "anthropic", APIBase: backend.URL, Token: "k", Enabled: true}
+	finalResp, _, err := s.runGenericAnthropicBetaNonStream(context.Background(), provider, req, nil)
 	require.NoError(t, err)
 
 	respBytes, err := json.Marshal(finalResp)
@@ -118,31 +92,17 @@ func TestHandleAnthropicBetaMCPToolCalls_MixedVirtualAndExternal_StashAndReturnE
 }
 
 func TestMixedFlow_OpenAI_FirstHopStash_SecondHopInject(t *testing.T) {
+	probe := &pathProbe{}
+	backend := newOpenAIMixedPathBackend(t, probe)
+	defer backend.Close()
+
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
 	s.pendingVirtualToolResults = newPendingVirtualToolResultStore()
 	registerTestAdvisorVirtualTool(t, s)
 
-	req := &openai.ChatCompletionNewParams{
-		Model: "worker-model",
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.UserMessage("help"),
-		},
-	}
-
-	var toolCallResp openai.ChatCompletion
-	require.NoError(t, json.Unmarshal([]byte(`{
-		"id":"chatcmpl-worker-tool",
-		"object":"chat.completion",
-		"created":1,
-		"model":"worker-model",
-		"choices":[{"index":0,"message":{"role":"assistant","content":"","tool_calls":[
-			{"id":"call_virtual","type":"function","function":{"name":"tingly_box_mcp__builtin__advisor","arguments":"{\"reason\":\"need strategy\"}"}},
-			{"id":"call_external","type":"function","function":{"name":"tingly_box_mcp__webtools__mcp_web_search","arguments":"{\"query\":\"tingly\"}"}}
-		]},"finish_reason":"tool_calls"}],
-		"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}
-	}`), &toolCallResp))
-
-	_, err := s.handleMCPToolCalls(context.Background(), &typ.Provider{}, req, &toolCallResp)
+	req := buildOpenAIMixedReq()
+	provider := &typ.Provider{Name: "p-o-mixed-flow", APIStyle: "openai", APIBase: backend.URL + "/v1", Token: "k", Enabled: true}
+	_, _, err := s.runGenericOpenAIChatNonStream(context.Background(), provider, req, nil)
 	require.NoError(t, err)
 
 	followUpReq := &openai.ChatCompletionNewParams{
@@ -162,29 +122,17 @@ func TestMixedFlow_OpenAI_FirstHopStash_SecondHopInject(t *testing.T) {
 }
 
 func TestMixedFlow_AnthropicBeta_FirstHopStash_SecondHopInject(t *testing.T) {
+	probe := &pathProbe{}
+	backend := newAnthropicMixedPathBackend(t, probe)
+	defer backend.Close()
+
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
 	s.pendingVirtualToolResults = newPendingVirtualToolResultStore()
 	registerTestAdvisorVirtualTool(t, s)
 
-	req := &anthropic.BetaMessageNewParams{
-		Model: "worker-model",
-	}
-
-	var toolResp anthropic.BetaMessage
-	require.NoError(t, json.Unmarshal([]byte(`{
-		"id":"msg_worker_tool",
-		"type":"message",
-		"role":"assistant",
-		"model":"worker-model",
-		"content":[
-			{"type":"tool_use","id":"toolu_virtual","name":"tingly_box_mcp__builtin__advisor","input":{"reason":"need strategy"}},
-			{"type":"tool_use","id":"toolu_external","name":"tingly_box_mcp__webtools__mcp_web_search","input":{"query":"tingly"}}
-		],
-		"stop_reason":"tool_use",
-		"usage":{"input_tokens":1,"output_tokens":1}
-	}`), &toolResp))
-
-	_, _, err := s.handleAnthropicBetaMCPToolCalls(context.Background(), &typ.Provider{}, req, &toolResp)
+	req := buildAnthropicBetaMixedReq()
+	provider := &typ.Provider{Name: "p-a-beta-mixed-flow", APIStyle: "anthropic", APIBase: backend.URL, Token: "k", Enabled: true}
+	_, _, err := s.runGenericAnthropicBetaNonStream(context.Background(), provider, req, nil)
 	require.NoError(t, err)
 
 	followUpReq := &anthropic.BetaMessageNewParams{
@@ -206,29 +154,17 @@ func TestMixedFlow_AnthropicBeta_FirstHopStash_SecondHopInject(t *testing.T) {
 }
 
 func TestMixedFlow_AnthropicV1_FirstHopStash_SecondHopInject(t *testing.T) {
+	probe := &pathProbe{}
+	backend := newAnthropicMixedPathBackend(t, probe)
+	defer backend.Close()
+
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
 	s.pendingVirtualToolResults = newPendingVirtualToolResultStore()
 	registerTestAdvisorVirtualTool(t, s)
 
-	req := &anthropic.MessageNewParams{
-		Model: "worker-model",
-	}
-
-	var toolResp anthropic.Message
-	require.NoError(t, json.Unmarshal([]byte(`{
-		"id":"msg_worker_tool",
-		"type":"message",
-		"role":"assistant",
-		"model":"worker-model",
-		"content":[
-			{"type":"tool_use","id":"toolu_virtual","name":"tingly_box_mcp__builtin__advisor","input":{"reason":"need strategy"}},
-			{"type":"tool_use","id":"toolu_external","name":"tingly_box_mcp__webtools__mcp_web_search","input":{"query":"tingly"}}
-		],
-		"stop_reason":"tool_use",
-		"usage":{"input_tokens":1,"output_tokens":1}
-	}`), &toolResp))
-
-	_, _, err := s.handleAnthropicV1MCPToolCalls(context.Background(), &typ.Provider{}, req, &toolResp)
+	req := buildAnthropicV1MixedReq()
+	provider := &typ.Provider{Name: "p-a-v1-mixed-flow", APIStyle: "anthropic", APIBase: backend.URL, Token: "k", Enabled: true}
+	_, _, err := s.runGenericAnthropicV1NonStream(context.Background(), provider, req, nil)
 	require.NoError(t, err)
 
 	followUpReq := &anthropic.MessageNewParams{

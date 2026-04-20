@@ -40,11 +40,16 @@ func sendMessageStop(c *gin.Context) {
 }
 
 func isVirtualTool(normalizedName string, registry *runtime.VirtualToolRegistry) bool {
-	if registry == nil {
+	sourceID, toolName, ok := runtime.ParseNormalizedToolName(normalizedName)
+	if !ok {
 		return false
 	}
-	_, toolName, ok := runtime.ParseNormalizedToolName(normalizedName)
-	if !ok {
+	// Built-in virtual tools are always considered server-side, even when disabled.
+	// Disabled tools are handled by call-time guard and return canonical error payload.
+	if sourceID == "advisor" || (sourceID == "builtin" && toolName == "advisor") {
+		return true
+	}
+	if registry == nil {
 		return false
 	}
 	_, ok = registry.Get(toolName)
