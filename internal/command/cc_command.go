@@ -40,11 +40,15 @@ Flags:
   -p, --profile <id>     Profile ID or name (e.g., p1, Premium)
 
 Examples:
-  tingly-box cc                                     # launch without profile
+  tingly-box cc                                     # launch without profile (uses scenario flag)
   tingly-box cc -p Premium                          # launch with named profile
   tingly-box cc -p p1 resume                        # pass "resume" to claude
   tingly-box cc -p p1 --print "hello"               # pass --print to claude
-  tingly-box cc --dangerously-skip-permissions       # forwarded to claude`,
+  tingly-box cc --dangerously-skip-permissions       # forwarded to claude
+
+Unified mode:
+  Use "tingly-box scenario set-flag claude-code unified true" to enable unified mode
+  (single model for all requests). Default is separate mode (individual models).`,
 		DisableFlagParsing: true,
 		Args:               cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -130,10 +134,16 @@ func runCC(appManager *AppManager, profile string, claudeArgs []string) error {
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 	apiKey := globalConfig.GetModelToken()
 
-	// Unified mode comes from profile config only; no CLI override allowed
+	// Unified mode determination:
+	// 1. If profile is used, use profile's unified setting
+	// 2. Otherwise, use scenario flag (defaults to false/separate mode)
 	var envUnified bool
 	if profileMeta != nil {
+		// Profile mode: use profile's unified setting
 		envUnified = profileMeta.Unified
+	} else {
+		// Default mode: use scenario flag
+		envUnified = globalConfig.GetScenarioFlag(scenario, "unified")
 	}
 	env := generateCCEnv(baseURL, apiKey, scenarioPath, envUnified, profileID != "")
 
