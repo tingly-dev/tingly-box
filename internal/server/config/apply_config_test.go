@@ -404,3 +404,229 @@ func TestEnsureDir(t *testing.T) {
 		t.Errorf("Expected directory to be created")
 	}
 }
+
+func TestApplyClaudeSettingsToPath_WithBackupDisabled(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "tingly-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create existing file
+	targetPath := filepath.Join(tempDir, "settings.json")
+	existingConfig := map[string]interface{}{
+		"someKey": "someValue",
+	}
+	existingData, _ := json.MarshalIndent(existingConfig, "", "  ")
+	if err := os.WriteFile(targetPath, existingData, 0644); err != nil {
+		t.Fatalf("Failed to create existing file: %v", err)
+	}
+
+	// Apply with backup disabled
+	result, err := ApplyClaudeSettingsToPath(targetPath, map[string]string{
+		"ANTHROPIC_MODEL": "test-model",
+	}, WithBackup(false))
+	if err != nil {
+		t.Fatalf("ApplyClaudeSettingsToPath failed: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("Expected success, got failure: %s", result.Message)
+	}
+
+	// Verify no backup was created
+	if result.BackupPath != "" {
+		t.Errorf("Expected no backup when disabled, got: %s", result.BackupPath)
+	}
+
+	backupDir := filepath.Join(filepath.Dir(targetPath), "backup")
+	entries, _ := os.ReadDir(backupDir)
+	if len(entries) > 0 {
+		t.Errorf("Expected backup directory to be empty, found %d entries", len(entries))
+	}
+}
+
+func TestApplyClaudeSettingsToPath_WithBackupEnabled(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "tingly-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create existing file
+	targetPath := filepath.Join(tempDir, "settings.json")
+	existingConfig := map[string]interface{}{
+		"someKey": "someValue",
+	}
+	existingData, _ := json.MarshalIndent(existingConfig, "", "  ")
+	if err := os.WriteFile(targetPath, existingData, 0644); err != nil {
+		t.Fatalf("Failed to create existing file: %v", err)
+	}
+
+	// Apply with backup enabled (default)
+	result, err := ApplyClaudeSettingsToPath(targetPath, map[string]string{
+		"ANTHROPIC_MODEL": "test-model",
+	}, WithBackup(true))
+	if err != nil {
+		t.Fatalf("ApplyClaudeSettingsToPath failed: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("Expected success, got failure: %s", result.Message)
+	}
+
+	// Verify backup was created
+	if result.BackupPath == "" {
+		t.Errorf("Expected backup path when enabled")
+	}
+
+	if _, err := os.Stat(result.BackupPath); os.IsNotExist(err) {
+		t.Errorf("Expected backup file to exist at %s", result.BackupPath)
+	}
+}
+
+func TestApplyClaudeSettingsToPath_WithExtra(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "tingly-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	targetPath := filepath.Join(tempDir, "settings.json")
+
+	// Apply with extra statusLine config
+	statusLine := map[string]any{
+		"type":    "command",
+		"command": "/path/to/script.sh",
+	}
+	result, err := ApplyClaudeSettingsToPath(targetPath, map[string]string{
+		"ANTHROPIC_MODEL": "test-model",
+	}, WithExtra("statusLine", statusLine), WithBackup(false))
+	if err != nil {
+		t.Fatalf("ApplyClaudeSettingsToPath failed: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("Expected success, got failure: %s", result.Message)
+	}
+
+	// Verify statusLine was added
+	data, err := os.ReadFile(targetPath)
+	if err != nil {
+		t.Fatalf("Failed to read file: %v", err)
+	}
+
+	var config map[string]interface{}
+	if err := json.Unmarshal(data, &config); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	sl, ok := config["statusLine"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected statusLine section in config")
+	}
+
+	if sl["type"] != "command" {
+		t.Errorf("Expected statusLine type to be 'command', got: %v", sl["type"])
+	}
+
+	if sl["command"] != "/path/to/script.sh" {
+		t.Errorf("Expected statusLine command to be '/path/to/script.sh', got: %v", sl["command"])
+	}
+}
+
+func TestApplyClaudeSettingsToPath_MultipleWithExtra(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "tingly-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	targetPath := filepath.Join(tempDir, "settings.json")
+
+	// Apply with multiple extras using multiple WithExtra calls
+	result, err := ApplyClaudeSettingsToPath(targetPath, map[string]string{
+		"ANTHROPIC_MODEL": "test-model",
+	},
+		WithExtra("key1", "value1"),
+		WithExtra("key2", "value2"),
+		WithExtra("statusLine", map[string]any{
+			"type":    "command",
+			"command": "/path/to/script.sh",
+		}),
+		WithBackup(false),
+	)
+	if err != nil {
+		t.Fatalf("ApplyClaudeSettingsToPath failed: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("Expected success, got failure: %s", result.Message)
+	}
+
+	// Verify all extras were added
+	data, err := os.ReadFile(targetPath)
+	if err != nil {
+		t.Fatalf("Failed to read file: %v", err)
+	}
+
+	var config map[string]interface{}
+	if err := json.Unmarshal(data, &config); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	if config["key1"] != "value1" {
+		t.Errorf("Expected key1 to be 'value1', got: %v", config["key1"])
+	}
+	if config["key2"] != "value2" {
+		t.Errorf("Expected key2 to be 'value2', got: %v", config["key2"])
+	}
+
+	sl, ok := config["statusLine"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected statusLine section in config")
+	}
+
+	if sl["command"] != "/path/to/script.sh" {
+		t.Errorf("Expected statusLine command to be '/path/to/script.sh', got: %v", sl["command"])
+	}
+}
+
+func TestApplyClaudeSettingsToPath_DefaultBackupBehavior(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "tingly-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create existing file
+	targetPath := filepath.Join(tempDir, "settings.json")
+	existingConfig := map[string]interface{}{
+		"someKey": "someValue",
+	}
+	existingData, _ := json.MarshalIndent(existingConfig, "", "  ")
+	if err := os.WriteFile(targetPath, existingData, 0644); err != nil {
+		t.Fatalf("Failed to create existing file: %v", err)
+	}
+
+	// Apply without specifying backup option (should default to true)
+	result, err := ApplyClaudeSettingsToPath(targetPath, map[string]string{
+		"ANTHROPIC_MODEL": "test-model",
+	})
+	if err != nil {
+		t.Fatalf("ApplyClaudeSettingsToPath failed: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("Expected success, got failure: %s", result.Message)
+	}
+
+	// Verify backup was created by default
+	if result.BackupPath == "" {
+		t.Errorf("Expected backup path by default")
+	}
+
+	if _, err := os.Stat(result.BackupPath); os.IsNotExist(err) {
+		t.Errorf("Expected backup file to exist at %s by default", result.BackupPath)
+	}
+}
