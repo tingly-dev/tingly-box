@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
-	"github.com/tingly-dev/tingly-box/internal/server/mcp"
+	"github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 

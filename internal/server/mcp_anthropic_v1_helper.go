@@ -10,7 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
-	"github.com/tingly-dev/tingly-box/internal/server/mcp"
+	"github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/anthropics/anthropic-sdk-go"
 )
