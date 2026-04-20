@@ -5,6 +5,7 @@ import {
     Delete as DeleteIcon,
     Edit as EditIcon,
     ExpandMore as ExpandMoreIcon,
+    Send as SendIcon,
 } from '@mui/icons-material';
 import {
     Box,
@@ -44,6 +45,7 @@ interface BotGraphRowProps {
     onBotToggle?: (uuid: string, enabled: boolean) => void;
     onEdit?: () => void;
     onDelete?: () => void;
+    onTestClick?: () => void;
     readOnly?: boolean;
     isToggling?: boolean;
 }
@@ -58,6 +60,7 @@ const BotGraphRow: React.FC<BotGraphRowProps> = ({
     onBotToggle,
     onEdit,
     onDelete,
+    onTestClick,
     readOnly = false,
     isToggling = false,
 }) => {
@@ -120,6 +123,13 @@ const BotGraphRow: React.FC<BotGraphRowProps> = ({
                             <Tooltip title="Edit">
                                 <IconButton size="small" color="primary" onClick={handleActionClick(onEdit)} disabled={isToggling}>
                                     <EditIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+                        {onTestClick && (
+                            <Tooltip title="Send Test Message">
+                                <IconButton size="small" color="info" onClick={handleActionClick(onTestClick)} disabled={isToggling}>
+                                    <SendIcon fontSize="small" />
                                 </IconButton>
                             </Tooltip>
                         )}

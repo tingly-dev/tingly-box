@@ -1,4 +1,4 @@
-import {Delete as DeleteIcon, Edit as EditIcon, Warning as WarningIcon} from '@mui/icons-material';
+import {Delete as DeleteIcon, Edit as EditIcon, Warning as WarningIcon, Send as SendIcon} from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -99,6 +99,7 @@ interface BotCardProps {
     onBotToggle: () => void;
     onModelClick: () => void;
     onCWDChange: (cwd: string) => void;
+    onTestClick?: () => void;
     isToggling?: boolean;
 }
 
@@ -110,9 +111,10 @@ const BotCard: React.FC<BotCardProps> = ({
                                              onBotToggle,
                                              onModelClick,
                                              onCWDChange,
+                                             onTestClick,
                                              isToggling = false,
-                                         }) => {
-    const isActive = bot.enabled ?? true;
+                                        }) => {
+    const isActive = bot.enabled === true;
     const isExpanded = true;
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
@@ -211,6 +213,18 @@ const BotCard: React.FC<BotCardProps> = ({
                             <EditIcon fontSize="small"/>
                         </IconButton>
                     </Tooltip>
+                    {isActive && onTestClick && (
+                        <Tooltip title="Send Test Message">
+                            <IconButton
+                                size="small"
+                                color="info"
+                                onClick={onTestClick}
+                                disabled={isToggling}
+                            >
+                                <SendIcon fontSize="small"/>
+                            </IconButton>
+                        </Tooltip>
+                    )}
                     <Tooltip title="Delete">
                         <IconButton
                             size="small"

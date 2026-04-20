@@ -1,4 +1,4 @@
-// Bot Card Components (New)
+// Bot Card Components
 export { default as BotCard } from './BotCard';
 export { default as BotSettingsMenu } from './BotSettingsMenu';
 

@@ -1251,6 +1251,17 @@ export const api = {
         return uiAPI(`/imbot-platform-config?platform=${platform}`);
     },
 
+    // Send a test message to an ImBot
+    sendImbotTestMessage: async (uuid: string, markdown: string, chatId?: string): Promise<any> => {
+        return uiAPI(`/imbot-settings/${uuid}/test`, {
+            method: 'POST',
+            body: JSON.stringify({
+                markdown,
+                chat_id: chatId,
+            }),
+        });
+    },
+
     // ============================================
     // Remote Control API (Session management only)
     // ============================================
