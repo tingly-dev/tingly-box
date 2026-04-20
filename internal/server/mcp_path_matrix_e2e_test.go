@@ -283,8 +283,6 @@ func TestMCPPathMatrixE2E(t *testing.T) {
 		defer backend.Close()
 
 		s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
-		s.config.GenericMCP.UseGenericAnthropicV1Stream = true
-		s.config.GenericMCP.UseGenericAnthropicV1NonStream = true
 
 		var toolCalls atomic.Int32
 		s.mcpRuntime.VirtualRegistry().Register(runtime.VirtualTool{Name: "echo", Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -313,8 +311,6 @@ func TestMCPPathMatrixE2E(t *testing.T) {
 		defer backend.Close()
 
 		s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
-		s.config.GenericMCP.UseGenericAnthropicBetaStream = true
-		s.config.GenericMCP.UseGenericAnthropicBetaNonStream = true
 
 		provider := &typ.Provider{UUID: "p-a-beta", Name: "p-a-beta", APIStyle: protocol.APIStyleAnthropic, APIBase: backend.URL, Token: "k", Enabled: true}
 
@@ -334,8 +330,6 @@ func TestMCPPathMatrixE2E(t *testing.T) {
 		defer backend.Close()
 
 		s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
-		s.config.GenericMCP.UseGenericOpenAIChatStream = true
-		s.config.GenericMCP.UseGenericOpenAIChatNonStream = true
 
 		provider := &typ.Provider{UUID: "p-o", Name: "p-o", APIStyle: protocol.APIStyleOpenAI, APIBase: backend.URL + "/v1", Token: "k", Enabled: true}
 
@@ -373,7 +367,6 @@ func TestMCPPathMatrixE2E(t *testing.T) {
 		defer backend.Close()
 
 		s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
-		s.config.GenericMCP.UseGenericAnthropicBetaStream = true
 		provider := &typ.Provider{UUID: "p-oa-beta", Name: "p-oa-beta", APIStyle: protocol.APIStyleAnthropic, APIBase: backend.URL, Token: "k", Enabled: true}
 
 		code, header, _ := runDispatch(t, s, provider, buildAnthropicBetaReq(true), protocol.TypeOpenAIChat, protocol.TypeAnthropicBeta, true)

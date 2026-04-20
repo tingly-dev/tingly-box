@@ -123,18 +123,15 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 	req := reqCtx.Request.(*anthropic.MessageNewParams)
 	s.injectPendingVirtualResultsAnthropicV1(req)
 
-	// Check if generic MCP path should be used
+	// Check if we should use generic MCP path (now default behavior)
 	if s.shouldUseGenericMCPForProvider(provider) {
-		// Phase 1: non-streaming
-		if !isStreaming && s.config.GenericMCP.UseGenericAnthropicV1NonStream {
+		// Use unified generic MCP architecture (default for all MCP scenarios)
+		if !isStreaming {
 			s.dispatchGenericAnthropicV1NonStream(c, reqCtx, rule, provider, recorder)
 			return
 		}
-		// Phase 2: streaming
-		if isStreaming && s.config.GenericMCP.UseGenericAnthropicV1Stream {
-			s.dispatchGenericAnthropicV1Stream(c, reqCtx, rule, provider, recorder)
-			return
-		}
+		s.dispatchGenericAnthropicV1Stream(c, reqCtx, rule, provider, recorder)
+		return
 	}
 
 	ctx := c.Request.Context()
@@ -309,7 +306,6 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 
 		if hasDeclaredMCPAnthropicBetaTools(req) {
 			// Check if generic MCP path should be used for cross-format streaming
-			if s.shouldUseGenericMCPForProvider(provider) && s.config.GenericMCP.UseGenericAnthropicBetaStream {
 				// Use TRUE streaming forwarding (not legacy non-stream approach)
 				streamResp, cancel, err := ForwardAnthropicV1BetaStream(fc, wrapper, req)
 				if cancel != nil {
@@ -340,79 +336,6 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 				return
 			}
 
-			// Legacy implementation: non-stream forwarding for MCP tool handling
-			anthropicResp, cancel, err := ForwardAnthropicV1Beta(fc, wrapper, req)
-			if cancel != nil {
-				defer cancel()
-			}
-			if err != nil {
-				s.trackUsageFromContext(c, 0, 0, err)
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Failed to forward Anthropic request: " + err.Error(),
-						Type:    "api_error",
-					},
-				})
-				if recorder != nil {
-					recorder.RecordError(err)
-				}
-				return
-			}
-
-			anthropicResp, req, err = s.handleAnthropicBetaMCPToolCalls(ctx, provider, req, anthropicResp)
-			if err != nil {
-				respondMCPError(s, c, recorder, err, "Failed to handle MCP tool calls")
-				return
-			}
-
-			inputTokens := int(anthropicResp.Usage.InputTokens)
-			outputTokens := int(anthropicResp.Usage.OutputTokens)
-			cacheTokens := int(anthropicResp.Usage.CacheReadInputTokens + anthropicResp.Usage.CacheCreationInputTokens)
-			tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
-			s.trackUsageWithTokenUsage(c, tokenUsage, nil)
-
-			openaiResp := ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
-			if ShouldRoundtripResponse(c, "anthropic") {
-				roundtripped, err := RoundtripOpenAIMapViaAnthropic(openaiResp, responseModel, provider, actualModel)
-				if err != nil {
-					c.JSON(http.StatusInternalServerError, ErrorResponse{
-						Error: ErrorDetail{
-							Message: "Failed to roundtrip response: " + err.Error(),
-							Type:    "api_error",
-						},
-					})
-					return
-				}
-				openaiResp = roundtripped
-			}
-
-			cursorCompat := false
-			if v, ok := reqCtx.Extra["cursor_compat"]; ok {
-				cursorCompat = v.(bool)
-			}
-			if cursorCompat {
-				delete(openaiResp, "usage")
-			}
-
-			var parsed openai.ChatCompletion
-			raw, _ := json.Marshal(openaiResp)
-			if err := json.Unmarshal(raw, &parsed); err != nil {
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Failed to encode streaming response: " + err.Error(),
-						Type:    "api_error",
-					},
-				})
-				return
-			}
-
-			streamSingleOpenAICompletion(c, &parsed, responseModel, disableStreamUsage)
-			if recorder != nil {
-				recorder.SetAssembledResponse(anthropicResp)
-				recorder.RecordResponse(provider, actualModel)
-			}
-			return
-		}
 
 		streamResp, cancel, err := ForwardAnthropicV1BetaStream(fc, wrapper, req)
 		if cancel != nil {
@@ -507,16 +430,14 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 	case protocol.TypeOpenAIChat:
 		s.dispatchOpenAIChatFromAnthropicBeta(c, reqCtx, rule, provider, isStreaming, recorder)
 	default:
-		// Check if we should use generic MCP path for this provider
+		// Use unified generic MCP architecture (default for all MCP scenarios)
 		if s.shouldUseGenericMCPForProvider(provider) {
-			if !isStreaming && s.config.GenericMCP.UseGenericAnthropicBetaNonStream {
+			if !isStreaming {
 				s.dispatchGenericAnthropicBetaNonStream(c, reqCtx, rule, provider, recorder)
 				return
 			}
-			if isStreaming && s.config.GenericMCP.UseGenericAnthropicBetaStream {
-				s.dispatchGenericAnthropicBetaStream(c, reqCtx, rule, provider, recorder)
-				return
-			}
+			s.dispatchGenericAnthropicBetaStream(c, reqCtx, rule, provider, recorder)
+			return
 		}
 
 		actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
