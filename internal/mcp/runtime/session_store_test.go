@@ -8,8 +8,7 @@ import (
 func TestSessionStore_PutGetDestroy(t *testing.T) {
 	ss := NewSessionStore(5 * time.Minute)
 	ctx := &SessionContext{
-		SessionID:     "sess-1",
-		WorkspaceTree: map[string]any{"file.go": "package main"},
+		SessionID: "sess-1",
 	}
 	ss.Put(ctx)
 

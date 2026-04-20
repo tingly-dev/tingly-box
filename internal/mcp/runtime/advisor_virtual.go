@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -129,13 +128,6 @@ func enrichAdvisorContextWithSession(actx *AdvisorContext, sc *SessionContext) *
 		actx = &AdvisorContext{}
 	}
 	var enriched []map[string]any
-	if len(sc.WorkspaceTree) > 0 {
-		treeJSON, _ := json.Marshal(sc.WorkspaceTree)
-		enriched = append(enriched, map[string]any{
-			"role":    "system",
-			"content": "Workspace tree:\n" + string(treeJSON),
-		})
-	}
 	if len(sc.BuildLogs) > 0 {
 		enriched = append(enriched, map[string]any{
 			"role":    "system",

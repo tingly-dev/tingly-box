@@ -8,7 +8,6 @@ import (
 // SessionContext holds session-persistent heavy data.
 type SessionContext struct {
 	SessionID      string
-	WorkspaceTree  map[string]any
 	BuildLogs      []string
 	LastWorkerResp string
 	CreatedAt      time.Time

@@ -351,7 +351,6 @@ func TestAdvisorVirtualTool_WithSessionStore(t *testing.T) {
 
 	sessionStore.Put(&runtime.SessionContext{
 		SessionID:      "sess-42",
-		WorkspaceTree:  map[string]any{"main.go": "package main"},
 		BuildLogs:      []string{"build succeeded", "test passed"},
 		LastWorkerResp: "All tests passed.",
 	})
