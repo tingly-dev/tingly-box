@@ -49,8 +49,77 @@ func hasOnlyMCPToolUsesBeta(content []anthropic.BetaContentBlockUnion) ([]anthro
 	return toolUses, true
 }
 
+func splitVirtualAndExternalAnthropicV1ToolUses(
+	toolUses []anthropic.ToolUseBlock,
+	registry *runtime.VirtualToolRegistry,
+) (virtualUses []anthropic.ToolUseBlock, externalUses []anthropic.ToolUseBlock, externalIDs []string) {
+	virtualUses = make([]anthropic.ToolUseBlock, 0, len(toolUses))
+	externalUses = make([]anthropic.ToolUseBlock, 0, len(toolUses))
+	externalIDs = make([]string, 0, len(toolUses))
+	for _, tu := range toolUses {
+		if isVirtualTool(tu.Name, registry) {
+			virtualUses = append(virtualUses, tu)
+			continue
+		}
+		externalUses = append(externalUses, tu)
+		if tu.ID != "" {
+			externalIDs = append(externalIDs, string(tu.ID))
+		}
+	}
+	return virtualUses, externalUses, externalIDs
+}
+
+func splitVirtualAndExternalAnthropicBetaToolUses(
+	toolUses []anthropic.BetaToolUseBlock,
+	registry *runtime.VirtualToolRegistry,
+) (virtualUses []anthropic.BetaToolUseBlock, externalUses []anthropic.BetaToolUseBlock, externalIDs []string) {
+	virtualUses = make([]anthropic.BetaToolUseBlock, 0, len(toolUses))
+	externalUses = make([]anthropic.BetaToolUseBlock, 0, len(toolUses))
+	externalIDs = make([]string, 0, len(toolUses))
+	for _, tu := range toolUses {
+		if isVirtualTool(tu.Name, registry) {
+			virtualUses = append(virtualUses, tu)
+			continue
+		}
+		externalUses = append(externalUses, tu)
+		if tu.ID != "" {
+			externalIDs = append(externalIDs, string(tu.ID))
+		}
+	}
+	return virtualUses, externalUses, externalIDs
+}
+
+func filterExternalAnthropicV1Content(
+	content []anthropic.ContentBlockUnion,
+	registry *runtime.VirtualToolRegistry,
+) []anthropic.ContentBlockUnion {
+	out := make([]anthropic.ContentBlockUnion, 0, len(content))
+	for _, block := range content {
+		if tu, ok := block.AsAny().(anthropic.ToolUseBlock); ok && isVirtualTool(tu.Name, registry) {
+			continue
+		}
+		out = append(out, block)
+	}
+	return out
+}
+
+func filterExternalAnthropicBetaContent(
+	content []anthropic.BetaContentBlockUnion,
+	registry *runtime.VirtualToolRegistry,
+) []anthropic.BetaContentBlockUnion {
+	out := make([]anthropic.BetaContentBlockUnion, 0, len(content))
+	for _, block := range content {
+		if tu, ok := block.AsAny().(anthropic.BetaToolUseBlock); ok && isVirtualTool(tu.Name, registry) {
+			continue
+		}
+		out = append(out, block)
+	}
+	return out
+}
+
 // handleAnthropicV1MCPToolCalls executes MCP tool calls in a loop until no more MCP tools
-// are returned. Returns the final (possibly modified) response and request.
+// are returned. Mixed virtual+external MCP calls are split:
+// virtual calls execute server-side, external calls are returned to client.
 func (s *Server) handleAnthropicV1MCPToolCalls(
 	ctx context.Context,
 	provider *typ.Provider,
@@ -79,9 +148,18 @@ func (s *Server) handleAnthropicV1MCPToolCalls(
 		}
 		logrus.Debugf("[MCP-DEBUG] V1 round %d: executing %d MCP tools: %v", round, len(toolUses), toolNames)
 
-		toolResults := make([]anthropic.ContentBlockParamUnion, 0, len(toolUses))
+		virtualUses, externalUses, externalIDs := splitVirtualAndExternalAnthropicV1ToolUses(
+			toolUses,
+			s.mcpRuntime.VirtualRegistry(),
+		)
+		if len(virtualUses) == 0 {
+			return currentResp, currentReq, nil
+		}
+
 		hookMessages := extractAnthropicV1Messages(append(append([]anthropic.MessageParam{}, currentReq.Messages...), currentResp.ToParam()))
-		for _, tu := range toolUses {
+		toolResults := make([]anthropic.ContentBlockParamUnion, 0, len(virtualUses))
+		virtualResults := make([]virtualToolExecutionResult, 0, len(virtualUses))
+		for _, tu := range virtualUses {
 			arguments := string(tu.Input)
 			if arguments == "" {
 				arguments = "{}"
@@ -91,6 +169,17 @@ func (s *Server) handleAnthropicV1MCPToolCalls(
 				logrus.WithError(err).Warnf("mcp: tool call failed name=%s arguments=%s", tu.Name, arguments)
 			}
 			toolResults = append(toolResults, anthropic.NewToolResultBlock(tu.ID, result, err != nil))
+			virtualResults = append(virtualResults, virtualToolExecutionResult{
+				ToolUseID: string(tu.ID),
+				Content:   result,
+				IsError:   err != nil,
+			})
+		}
+
+		if len(externalUses) > 0 {
+			s.stashPendingVirtualToolResults(externalIDs, virtualResults)
+			currentResp.Content = filterExternalAnthropicV1Content(currentResp.Content, s.mcpRuntime.VirtualRegistry())
+			return currentResp, currentReq, nil
 		}
 
 		nextReq := *currentReq
@@ -147,7 +236,8 @@ func recordMCPForwardingError(s *Server, c *gin.Context, err error, recorder *Pr
 }
 
 // handleAnthropicBetaMCPToolCalls executes MCP tool calls in a loop until no more MCP tools
-// are returned. Returns the final (possibly modified) response and request.
+// are returned. Mixed virtual+external MCP calls are split:
+// virtual calls execute server-side, external calls are returned to client.
 func (s *Server) handleAnthropicBetaMCPToolCalls(
 	ctx context.Context,
 	provider *typ.Provider,
@@ -176,9 +266,18 @@ func (s *Server) handleAnthropicBetaMCPToolCalls(
 		}
 		logrus.Debugf("[MCP-DEBUG] Beta round %d: executing %d MCP tools: %v", round, len(toolUses), toolNames)
 
-		toolResults := make([]anthropic.BetaContentBlockParamUnion, 0, len(toolUses))
+		virtualUses, externalUses, externalIDs := splitVirtualAndExternalAnthropicBetaToolUses(
+			toolUses,
+			s.mcpRuntime.VirtualRegistry(),
+		)
+		if len(virtualUses) == 0 {
+			return currentResp, currentReq, nil
+		}
+
 		hookMessages := extractAnthropicBetaMessages(append(append([]anthropic.BetaMessageParam{}, currentReq.Messages...), currentResp.ToParam()))
-		for _, tu := range toolUses {
+		toolResults := make([]anthropic.BetaContentBlockParamUnion, 0, len(virtualUses))
+		virtualResults := make([]virtualToolExecutionResult, 0, len(virtualUses))
+		for _, tu := range virtualUses {
 			arguments := "{}"
 			if b, err := json.Marshal(tu.Input); err == nil && len(b) > 0 {
 				arguments = string(b)
@@ -188,6 +287,17 @@ func (s *Server) handleAnthropicBetaMCPToolCalls(
 				logrus.WithError(err).Warnf("mcp: beta tool call failed name=%s arguments=%s", tu.Name, arguments)
 			}
 			toolResults = append(toolResults, anthropic.NewBetaToolResultBlock(tu.ID, result, err != nil))
+			virtualResults = append(virtualResults, virtualToolExecutionResult{
+				ToolUseID: string(tu.ID),
+				Content:   result,
+				IsError:   err != nil,
+			})
+		}
+
+		if len(externalUses) > 0 {
+			s.stashPendingVirtualToolResults(externalIDs, virtualResults)
+			currentResp.Content = filterExternalAnthropicBetaContent(currentResp.Content, s.mcpRuntime.VirtualRegistry())
+			return currentResp, currentReq, nil
 		}
 
 		nextReq := *currentReq

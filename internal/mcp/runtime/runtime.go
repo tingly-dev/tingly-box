@@ -237,6 +237,13 @@ func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments
 		}
 	}
 
+	// Backward compatibility: legacy adviser source ID maps to builtin virtual tool.
+	if sourceID == mcptools.BuiltinAdvisorSourceID && r.virtualRegistry != nil {
+		if tool, ok := r.virtualRegistry.Get(toolName); ok {
+			return r.callVirtualTool(ctx, tool, arguments)
+		}
+	}
+
 	// 2. Forward to remote tool source (user mode)
 	source, err := r.getOrCreateSource(ctx, sourceID)
 	if err != nil {
@@ -446,6 +453,11 @@ func (r *Runtime) ListSourceTools(ctx context.Context) (map[string][]SourceTool,
 			continue
 		}
 
+		// Skip virtual-only sources (e.g., adviser) — they are not remote tool sources.
+		if source.Advisor != nil {
+			continue
+		}
+
 		// Get or create tool source
 		toolSource, err := r.getOrCreateSource(ctx, source.ID)
 		if err != nil {
@@ -574,6 +586,11 @@ func (r *Runtime) GetConfig() *typ.MCPRuntimeConfig {
 	return r.getConfigOrDefault()
 }
 
+// VirtualRegistry returns the runtime's virtual tool registry.
+func (r *Runtime) VirtualRegistry() *VirtualToolRegistry {
+	return r.virtualRegistry
+}
+
 func buildAllowList(names []string) (bool, map[string]bool) {
 	if len(names) == 0 {
 		return true, nil
@@ -596,7 +613,7 @@ func (r *Runtime) RegisterAdviser(cfg typ.AdvisorConfig, cp *client.ClientPool) 
 	if r == nil || r.virtualRegistry == nil {
 		return
 	}
-	tool := NewAdvisorVirtualTool(cfg, cp)
+	tool := NewAdvisorVirtualTool(cfg, cp, r.sessionStore)
 	r.virtualRegistry.Register(tool)
 }
 

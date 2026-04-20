@@ -34,120 +34,6 @@ func detectAdvisorFormat(cfg typ.AdvisorConfig) AdvisorFormat {
 	return FormatOpenAI
 }
 
-// AdvisorToolSource is an in-process ToolSource that serves the advisor tool.
-type AdvisorToolSource struct {
-	*BaseToolSource
-	config     typ.AdvisorConfig
-	clientPool *client.ClientPool
-}
-
-// NewAdvisorToolSource creates a new advisor tool source.
-func NewAdvisorToolSource(sourceConfig typ.MCPSourceConfig, cp *client.ClientPool) (*AdvisorToolSource, error) {
-	base := NewBaseToolSource(sourceConfig.ID, TransportType("advisor"))
-	cfg := typ.AdvisorConfig{MaxUsesPerRequest: 3}
-	if sourceConfig.Advisor != nil {
-		cfg = *sourceConfig.Advisor
-	}
-	if cfg.MaxUsesPerRequest <= 0 {
-		cfg.MaxUsesPerRequest = 3
-	}
-	if cfg.MaxTokens <= 0 {
-		cfg.MaxTokens = 4096
-	}
-	return &AdvisorToolSource{
-		BaseToolSource: base,
-		config:         cfg,
-		clientPool:     cp,
-	}, nil
-}
-
-// Connect is a no-op for the in-process advisor source.
-func (s *AdvisorToolSource) Connect(ctx context.Context) error {
-	s.setState(StateConnected, nil)
-	return nil
-}
-
-// Disconnect is a no-op for the in-process advisor source.
-func (s *AdvisorToolSource) Disconnect(ctx context.Context) error {
-	s.setState(StateDisconnected, nil)
-	return nil
-}
-
-// IsConnected always returns true for the in-process advisor source.
-func (s *AdvisorToolSource) IsConnected() bool {
-	return true
-}
-
-// ListTools returns the advisor tool definition.
-func (s *AdvisorToolSource) ListTools(ctx context.Context) ([]ToolDefinition, error) {
-	schema := map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"reason": map[string]any{
-				"type":        "string",
-				"description": "Why the executor is consulting the advisor.",
-			},
-		},
-		"required": []string{"reason"},
-	}
-	schemaBytes, err := json.Marshal(schema)
-	if err != nil {
-		return nil, fmt.Errorf("advisor: failed to marshal tool schema: %w", err)
-	}
-
-	remainingUses := s.config.MaxUsesPerRequest
-	if actx, ok := GetAdvisorContext(ctx); ok {
-		remainingUses = actx.UsesRemaining
-	}
-
-	return []ToolDefinition{{
-		Name:        "advisor",
-		Description: s.description(remainingUses),
-		InputSchema: schemaBytes,
-	}}, nil
-}
-
-// CallTool executes the advisor tool.
-func (s *AdvisorToolSource) CallTool(ctx context.Context, toolName string, arguments string) (string, error) {
-	var input struct {
-		Reason string `json:"reason"`
-	}
-	if err := json.Unmarshal([]byte(arguments), &input); err != nil {
-		logrus.WithError(err).Warn("advisor: failed to unmarshal arguments, using empty reason")
-	}
-
-	actx, ok := GetAdvisorContext(ctx)
-	if !ok || actx.UsesRemaining <= 0 {
-		logrus.Debug("[MCP-DEBUG] ADVISOR: consultations exhausted for this request")
-		return "Advisor consultations exhausted for this request.", nil
-	}
-
-	logrus.WithFields(logrus.Fields{
-		"reason":         input.Reason,
-		"uses_remaining": actx.UsesRemaining,
-		"format":         detectAdvisorFormat(s.config),
-	}).Debug("[MCP-DEBUG] ADVISOR: calling advisor model")
-
-	advisorCtx, cancel := context.WithTimeout(ctx, advisorCallTimeout)
-	defer cancel()
-
-	var result string
-	var err error
-	format := detectAdvisorFormat(s.config)
-	if format == FormatOpenAI {
-		result, err = callOpenAI(advisorCtx, s.config, s.clientPool, input.Reason, actx)
-	} else {
-		result, err = callAnthropic(advisorCtx, s.config, s.clientPool, input.Reason, actx)
-	}
-	if err != nil {
-		logrus.WithError(err).Error("[MCP-DEBUG] ADVISOR: consultation failed")
-		return "", err
-	}
-	actx.UsesRemaining--
-	logrus.WithField("uses_remaining", actx.UsesRemaining).Debug("[MCP-DEBUG] ADVISOR: consultation completed")
-	return result, nil
-}
-
 func buildProvider(cfg typ.AdvisorConfig, style protocol.APIStyle) *typ.Provider {
 	return &typ.Provider{
 		Name:     "advisor",
@@ -304,23 +190,7 @@ func normalizeAdvisorResponse(raw string) string {
 	return string(b)
 }
 
-// GetSourceConfig returns the source configuration.
-func (s *AdvisorToolSource) GetSourceConfig() any {
-	return s.config
-}
-
-// HealthCheck is a no-op for the in-process advisor source.
-func (s *AdvisorToolSource) HealthCheck(ctx context.Context) error {
-	return nil
-}
-
-// EnableHealthCheck is a no-op.
-func (s *AdvisorToolSource) EnableHealthCheck(ctx context.Context, interval time.Duration) {}
-
-// DisableHealthCheck is a no-op.
-func (s *AdvisorToolSource) DisableHealthCheck(ctx context.Context) {}
-
-func (s *AdvisorToolSource) description(remainingUses int) string {
+func description(remainingUses int) string {
 	return "Consult a more powerful advisor model for strategic guidance. " +
 		"Use this when facing architectural decisions, complex debugging, unclear trade-offs, or when stuck. " +
 		"You have " + strconv.Itoa(remainingUses) + " advisor consultation(s) remaining this request."

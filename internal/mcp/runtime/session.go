@@ -143,6 +143,15 @@ func (sc *sessionCache) getOrCreate(ctx context.Context, source typ.MCPSourceCon
 			MaxRetries:           3,
 			DisableStandaloneSSE: true, // Some MCP servers don't support standalone SSE GET endpoint
 		}
+	case "sse":
+		if strings.TrimSpace(source.Endpoint) == "" {
+			return nil, nil, &sourceError{sourceID: source.ID, msg: "empty endpoint"}
+		}
+		httpClient := buildSSEHTTPClient(source)
+		t = &mcp.SSEClientTransport{
+			Endpoint:   source.Endpoint,
+			HTTPClient: httpClient,
+		}
 	default:
 		return nil, nil, &sourceError{sourceID: source.ID, msg: "unsupported transport: " + transport}
 	}

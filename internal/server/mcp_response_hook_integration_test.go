@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -21,6 +22,10 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+func writeSSEEvent(w http.ResponseWriter, eventType, data string) {
+	fmt.Fprintf(w, "event: %s\ndata: %s\n\n", eventType, data)
+}
+
 func newMCPEnabledTestServer(t *testing.T, cfg *typ.MCPRuntimeConfig) *Server {
 	t.Helper()
 
@@ -28,6 +33,14 @@ func newMCPEnabledTestServer(t *testing.T, cfg *typ.MCPRuntimeConfig) *Server {
 	rt := mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig { return cfg })
 	require.NotNil(t, rt)
 	rt.SetClientPool(cp)
+
+	// Register advisor virtual tool if configured and enabled
+	for _, source := range cfg.Sources {
+		if source.Advisor != nil && typ.IsMCPSourceEnabled(source) {
+			rt.RegisterAdviser(*source.Advisor, cp)
+		}
+	}
+
 	t.Cleanup(rt.Close)
 
 	conf, err := serverconfig.NewConfig(serverconfig.WithConfigDir(t.TempDir()))
@@ -516,9 +529,20 @@ func TestDispatchAnthropicToAnthropicV1_Streaming_AdvisorSSEEndToEnd(t *testing.
 			})
 		case "claude-worker-v1":
 			workerCalls++
+			isStream, _ := req["stream"].(bool)
 			if strings.Contains(string(body), `"tool_result"`) {
 				if strings.Contains(string(body), "stream-advisor-plan") {
 					workerSawAdvisorToolResult = true
+				}
+				if isStream {
+					w.Header().Set("Content-Type", "text/event-stream")
+					writeSSEEvent(w, "message_start", `{"type":"message_start","message":{"id":"msg_worker_final","type":"message","role":"assistant","model":"claude-worker-v1","content":[],"stop_reason":null,"usage":{"input_tokens":30,"output_tokens":0}}}`)
+					writeSSEEvent(w, "content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`)
+					writeSSEEvent(w, "content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"final answer uses stream-advisor-plan"}}`)
+					writeSSEEvent(w, "content_block_stop", `{"type":"content_block_stop","index":0}`)
+					writeSSEEvent(w, "message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":10}}`)
+					writeSSEEvent(w, "message_stop", `{"type":"message_stop"}`)
+					return
 				}
 				w.Header().Set("Content-Type", "application/json")
 				_ = json.NewEncoder(w).Encode(map[string]any{
@@ -538,6 +562,16 @@ func TestDispatchAnthropicToAnthropicV1_Streaming_AdvisorSSEEndToEnd(t *testing.
 				return
 			}
 
+			if isStream {
+				w.Header().Set("Content-Type", "text/event-stream")
+				writeSSEEvent(w, "message_start", `{"type":"message_start","message":{"id":"msg_worker_tool","type":"message","role":"assistant","model":"claude-worker-v1","content":[],"stop_reason":null,"usage":{"input_tokens":8,"output_tokens":0}}}`)
+				writeSSEEvent(w, "content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"tingly_box_mcp__builtin__advisor","input":{}}}`)
+				writeSSEEvent(w, "content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"reason\":\"need strategy\"}"}}`)
+				writeSSEEvent(w, "content_block_stop", `{"type":"content_block_stop","index":0}`)
+				writeSSEEvent(w, "message_delta", `{"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":4}}`)
+				writeSSEEvent(w, "message_stop", `{"type":"message_stop"}`)
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"id":    "msg_worker_tool",

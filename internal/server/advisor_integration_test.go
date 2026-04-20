@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
@@ -60,7 +61,7 @@ func TestAdvisorToolLoop(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	// Set up SessionStore for completeness (even though adviser doesn't use it yet)
+	// Set up SessionStore for completeness
 	sessionStore := runtime.NewSessionStore(10 * time.Minute)
 	defer sessionStore.Sweep()
 
@@ -70,16 +71,13 @@ func TestAdvisorToolLoop(t *testing.T) {
 	})
 
 	cp := client.NewClientPool()
-	source, err := runtime.NewAdvisorToolSource(typ.MCPSourceConfig{
-		ID: "test-advisor",
-		Advisor: &typ.AdvisorConfig{
-			BaseURL:           mockServer.URL,
-			Model:             "gpt-4",
-			APIKey:            "test-key",
-			MaxUsesPerRequest: 3,
-		},
-	}, cp)
-	require.NoError(t, err)
+	cfg := typ.AdvisorConfig{
+		BaseURL:           mockServer.URL,
+		Model:             "gpt-4",
+		APIKey:            "test-key",
+		MaxUsesPerRequest: 3,
+	}
+	vt := runtime.NewAdvisorVirtualTool(cfg, cp, sessionStore)
 
 	actx := &runtime.AdvisorContext{
 		Messages: []map[string]any{
@@ -91,29 +89,50 @@ func TestAdvisorToolLoop(t *testing.T) {
 	}
 	ctx := runtime.WithAdvisorContext(context.Background(), actx)
 
+	makeReq := func(reason string) mcp.CallToolRequest {
+		return mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Name:      "advisor",
+				Arguments: map[string]any{"reason": reason},
+			},
+		}
+	}
+
+	extractText := func(result *mcp.CallToolResult) string {
+		require.NotNil(t, result)
+		require.NotEmpty(t, result.Content)
+		text, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok)
+		return text.Text
+	}
+
 	// First call should succeed and decrement UsesRemaining.
-	result, err := source.CallTool(ctx, "advisor", `{"reason":"Need strategic guidance"}`)
+	result, err := vt.Handler(ctx, makeReq("Need strategic guidance"))
 	require.NoError(t, err)
-	require.Contains(t, result, "situation clear")
-	require.Contains(t, result, "proceed with caution")
+	require.False(t, result.IsError)
+	require.Contains(t, extractText(result), "situation clear")
+	require.Contains(t, extractText(result), "proceed with caution")
 	require.Equal(t, 2, actx.UsesRemaining)
 
 	// Second call.
-	result, err = source.CallTool(ctx, "advisor", `{"reason":"Still unsure"}`)
+	result, err = vt.Handler(ctx, makeReq("Still unsure"))
 	require.NoError(t, err)
-	require.Contains(t, result, "situation clear")
+	require.False(t, result.IsError)
+	require.Contains(t, extractText(result), "situation clear")
 	require.Equal(t, 1, actx.UsesRemaining)
 
 	// Third call.
-	result, err = source.CallTool(ctx, "advisor", `{"reason":"One more time"}`)
+	result, err = vt.Handler(ctx, makeReq("One more time"))
 	require.NoError(t, err)
-	require.Contains(t, result, "situation clear")
+	require.False(t, result.IsError)
+	require.Contains(t, extractText(result), "situation clear")
 	require.Equal(t, 0, actx.UsesRemaining)
 
-	// Fourth call should return exhaustion message.
-	result, err = source.CallTool(ctx, "advisor", `{"reason":"No uses left"}`)
+	// Fourth call should return exhaustion message as an error result.
+	result, err = vt.Handler(ctx, makeReq("No uses left"))
 	require.NoError(t, err)
-	require.Equal(t, "Advisor consultations exhausted for this request.", result)
+	require.True(t, result.IsError)
+	require.Equal(t, "Advisor consultations exhausted for this request.", extractText(result))
 	require.Equal(t, 0, actx.UsesRemaining)
 
 	// Verify handler had no errors and received correct paths.
@@ -187,10 +206,10 @@ func TestAdvisorToolLoop_Anthropic(t *testing.T) {
 		receivedRequests = append(receivedRequests, req)
 
 		resp := map[string]any{
-			"id":      "msg_01Test",
-			"type":    "message",
-			"role":    "assistant",
-			"model":   "claude-opus-4-6",
+			"id":    "msg_01Test",
+			"type":  "message",
+			"role":  "assistant",
+			"model": "claude-opus-4-6",
 			"content": []map[string]any{
 				{"type": "text", "text": `{"assessment":"anthropic clear","recommendation":"proceed carefully"}`},
 			},
@@ -206,7 +225,7 @@ func TestAdvisorToolLoop_Anthropic(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	// Set up SessionStore for completeness (even though adviser doesn't use it yet)
+	// Set up SessionStore for completeness
 	sessionStore := runtime.NewSessionStore(10 * time.Minute)
 	defer sessionStore.Sweep()
 
@@ -216,17 +235,14 @@ func TestAdvisorToolLoop_Anthropic(t *testing.T) {
 	})
 
 	cp := client.NewClientPool()
-	source, err := runtime.NewAdvisorToolSource(typ.MCPSourceConfig{
-		ID: "test-advisor-anthropic",
-		Advisor: &typ.AdvisorConfig{
-			BaseURL:           mockServer.URL + "/v1",
-			Model:             "claude-opus-4-6",
-			APIKey:            "test-key",
-			MaxUsesPerRequest: 2,
-			MaxTokens:         2048,
-		},
-	}, cp)
-	require.NoError(t, err)
+	cfg := typ.AdvisorConfig{
+		BaseURL:           mockServer.URL + "/v1",
+		Model:             "claude-opus-4-6",
+		APIKey:            "test-key",
+		MaxUsesPerRequest: 2,
+		MaxTokens:         2048,
+	}
+	vt := runtime.NewAdvisorVirtualTool(cfg, cp, sessionStore)
 
 	actx := &runtime.AdvisorContext{
 		Messages: []map[string]any{
@@ -238,19 +254,39 @@ func TestAdvisorToolLoop_Anthropic(t *testing.T) {
 	}
 	ctx := runtime.WithAdvisorContext(context.Background(), actx)
 
-	result, err := source.CallTool(ctx, "advisor", `{"reason":"Need Anthropic guidance"}`)
+	makeReq := func(reason string) mcp.CallToolRequest {
+		return mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Name:      "advisor",
+				Arguments: map[string]any{"reason": reason},
+			},
+		}
+	}
+
+	extractText := func(result *mcp.CallToolResult) string {
+		require.NotNil(t, result)
+		require.NotEmpty(t, result.Content)
+		text, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok)
+		return text.Text
+	}
+
+	result, err := vt.Handler(ctx, makeReq("Need Anthropic guidance"))
 	require.NoError(t, err)
-	require.Contains(t, result, "anthropic clear")
+	require.False(t, result.IsError)
+	require.Contains(t, extractText(result), "anthropic clear")
 	require.Equal(t, 1, actx.UsesRemaining)
 
-	result, err = source.CallTool(ctx, "advisor", `{"reason":"Again"}`)
+	result, err = vt.Handler(ctx, makeReq("Again"))
 	require.NoError(t, err)
-	require.Contains(t, result, "anthropic clear")
+	require.False(t, result.IsError)
+	require.Contains(t, extractText(result), "anthropic clear")
 	require.Equal(t, 0, actx.UsesRemaining)
 
-	result, err = source.CallTool(ctx, "advisor", `{"reason":"Exhausted"}`)
+	result, err = vt.Handler(ctx, makeReq("Exhausted"))
 	require.NoError(t, err)
-	require.Equal(t, "Advisor consultations exhausted for this request.", result)
+	require.True(t, result.IsError)
+	require.Equal(t, "Advisor consultations exhausted for this request.", extractText(result))
 
 	require.Empty(t, handlerErrors)
 	require.Len(t, requestPaths, 2)
@@ -277,4 +313,95 @@ func TestAdvisorToolLoop_Anthropic(t *testing.T) {
 		require.True(t, ok, "request %d: expected messages array", i)
 		require.Len(t, messages, 3, "request %d: expected 3 messages", i)
 	}
+}
+
+func TestAdvisorVirtualTool_WithSessionStore(t *testing.T) {
+	var receivedRequests []map[string]any
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req map[string]any
+		_ = json.Unmarshal(body, &req)
+		receivedRequests = append(receivedRequests, req)
+
+		resp := map[string]any{
+			"id":      "chatcmpl-test",
+			"object":  "chat.completion",
+			"created": 1234567890,
+			"model":   "gpt-4",
+			"choices": []map[string]any{
+				{
+					"index": 0,
+					"message": map[string]any{
+						"role":    "assistant",
+						"content": `{"assessment":"ok","recommendation":"go ahead"}`,
+					},
+					"finish_reason": "stop",
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer mockServer.Close()
+
+	sessionStore := runtime.NewSessionStore(10 * time.Minute)
+	defer sessionStore.Sweep()
+
+	sessionStore.Put(&runtime.SessionContext{
+		SessionID:      "sess-42",
+		WorkspaceTree:  map[string]any{"main.go": "package main"},
+		BuildLogs:      []string{"build succeeded", "test passed"},
+		LastWorkerResp: "All tests passed.",
+	})
+
+	cp := client.NewClientPool()
+	cfg := typ.AdvisorConfig{
+		BaseURL:           mockServer.URL,
+		Model:             "gpt-4",
+		APIKey:            "test-key",
+		MaxUsesPerRequest: 1,
+	}
+	vt := runtime.NewAdvisorVirtualTool(cfg, cp, sessionStore)
+
+	actx := &runtime.AdvisorContext{
+		Messages: []map[string]any{
+			{"role": "user", "content": "Hello"},
+		},
+		UsesRemaining: 1,
+	}
+	ctx := runtime.WithAdvisorContext(context.Background(), actx)
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "advisor",
+			Arguments: map[string]any{
+				"reason":     "Check workspace",
+				"session_id": "sess-42",
+			},
+		},
+	}
+
+	result, err := vt.Handler(ctx, req)
+	require.NoError(t, err)
+	require.False(t, result.IsError)
+	require.Len(t, result.Content, 1)
+
+	// Verify that session data was injected into the request messages.
+	require.Len(t, receivedRequests, 1)
+	messages := receivedRequests[0]["messages"].([]any)
+
+	// Expected: advisor system prompt + workspace tree + build logs + last worker resp + original user + reason
+	require.Len(t, messages, 6)
+
+	require.Equal(t, "system", messages[0].(map[string]any)["role"])
+	require.Equal(t, "system", messages[1].(map[string]any)["role"])
+	require.Contains(t, messages[1].(map[string]any)["content"], "Workspace tree")
+	require.Equal(t, "system", messages[2].(map[string]any)["role"])
+	require.Contains(t, messages[2].(map[string]any)["content"], "Build logs")
+	require.Equal(t, "system", messages[3].(map[string]any)["role"])
+	require.Contains(t, messages[3].(map[string]any)["content"], "Last worker response")
+	require.Equal(t, "user", messages[4].(map[string]any)["role"])
+	require.Equal(t, "user", messages[5].(map[string]any)["role"])
 }

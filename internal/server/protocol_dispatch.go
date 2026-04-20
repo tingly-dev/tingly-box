@@ -94,6 +94,7 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 ) {
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 	req := reqCtx.Request.(*anthropic.MessageNewParams)
+	s.injectPendingVirtualResultsAnthropicV1(req)
 
 	ctx := c.Request.Context()
 
@@ -102,51 +103,37 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 
 	if isStreaming {
 		if hasDeclaredMCPAnthropicV1Tools(req) {
-			anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, req)
-			if cancel != nil {
-				defer cancel()
-			}
-			if err != nil {
-				s.trackUsageFromContext(c, 0, 0, err)
-				stream.SendStreamingError(c, err)
-				if recorder != nil {
-					recorder.RecordError(err)
+			hc := protocol.NewHandleContext(c, responseModel)
+			firstTokenRecorded := false
+			hc.WithOnStreamEvent(func(_ interface{}) error {
+				if !firstTokenRecorded {
+					SetFirstTokenTime(c)
+					firstTokenRecorded = true
 				}
-				return
+				return nil
+			})
+			if recorder != nil {
+				onEvent, onComplete, onError := NewRecorderHooksWithModel(recorder, actualModel, provider)
+				if onEvent != nil {
+					hc.WithOnStreamEvent(onEvent)
+				}
+				if onComplete != nil {
+					hc.WithOnStreamComplete(onComplete)
+				}
+				if onError != nil {
+					hc.WithOnStreamError(onError)
+				}
 			}
-
-			anthropicResp, req, err = s.handleAnthropicV1MCPToolCalls(ctx, provider, req, anthropicResp)
-			if err != nil {
-				recordMCPError(s, c, err, recorder)
-				return
-			}
-
-			usage := protocol.NewTokenUsageWithCache(
-				int(anthropicResp.Usage.InputTokens),
-				int(anthropicResp.Usage.OutputTokens),
-				int(anthropicResp.Usage.CacheReadInputTokens),
-			)
-			s.trackUsageWithTokenUsage(c, usage, nil)
-
-			s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
-			anthropicResp.Model = anthropic.Model(responseModel)
-
-			// response guardrails
 			_, _, _, _, scenario, _, _ := GetTrackingContext(c)
 			if s.guardrailsEnabledForScenario(scenario) {
-				s.applyGuardrailsToAnthropicV1NonStreamResponse(c, req, actualModel, provider, anthropicResp)
+				hc.EnsureGuardrails().Enabled = true
+				s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1(req.System, req.Messages))
 			}
-
-			if err := stream.AnthropicSingleMessage(c, anthropicResp, responseModel); err != nil {
-				stream.SendInternalError(c, err.Error())
-				if recorder != nil {
-					recorder.RecordError(err)
-				}
-				return
-			}
-			if recorder != nil {
-				recorder.SetAssembledResponse(anthropicResp)
-				recorder.RecordResponse(provider, actualModel)
+			interceptor := NewAnthropicV1StreamInterceptor(
+				c, s, provider, hc, s.mcpRuntime.VirtualRegistry(), recorder,
+			)
+			if err := interceptor.Run(req); err != nil {
+				recordMCPError(s, c, err, recorder)
 			}
 			return
 		}
@@ -263,6 +250,7 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 ) {
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
+	s.injectPendingVirtualResultsAnthropicBeta(req)
 
 	ctx := c.Request.Context()
 
@@ -447,6 +435,7 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 	default:
 		actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 		req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
+		s.injectPendingVirtualResultsAnthropicBeta(req)
 
 		ctx := c.Request.Context()
 
@@ -456,52 +445,37 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 		if isStreaming {
 			logrus.Debugf("[MCP-DEBUG] Anthropic Beta: streaming request detected")
 			if hasDeclaredMCPAnthropicBetaTools(req) {
-				logrus.Debugf("[MCP-DEBUG] Anthropic Beta: MCP tools detected, using internal non-streaming + external SSE pattern")
-				anthropicResp, cancel, err := ForwardAnthropicV1Beta(fc, wrapper, req)
-				if cancel != nil {
-					defer cancel()
-				}
-				if err != nil {
-					s.trackUsageFromContext(c, 0, 0, err)
-					stream.SendStreamingError(c, err)
-					if recorder != nil {
-						recorder.RecordError(err)
+				hc := protocol.NewHandleContext(c, responseModel)
+				firstTokenRecorded := false
+				hc.WithOnStreamEvent(func(_ interface{}) error {
+					if !firstTokenRecorded {
+						SetFirstTokenTime(c)
+						firstTokenRecorded = true
 					}
-					return
+					return nil
+				})
+				if recorder != nil {
+					onEvent, onComplete, onError := NewRecorderHooksWithModel(recorder, actualModel, provider)
+					if onEvent != nil {
+						hc.WithOnStreamEvent(onEvent)
+					}
+					if onComplete != nil {
+						hc.WithOnStreamComplete(onComplete)
+					}
+					if onError != nil {
+						hc.WithOnStreamError(onError)
+					}
 				}
-
-				anthropicResp, req, err = s.handleAnthropicBetaMCPToolCalls(ctx, provider, req, anthropicResp)
-				if err != nil {
-					recordMCPError(s, c, err, recorder)
-					return
-				}
-
-				usage := protocol.NewTokenUsageWithCache(
-					int(anthropicResp.Usage.InputTokens),
-					int(anthropicResp.Usage.OutputTokens),
-					int(anthropicResp.Usage.CacheReadInputTokens),
-				)
-				s.trackUsageWithTokenUsage(c, usage, nil)
-
-				s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
-				anthropicResp.Model = anthropic.Model(responseModel)
-
-				// response guardrails
 				_, _, _, _, scenario, _, _ := GetTrackingContext(c)
 				if s.guardrailsEnabledForScenario(scenario) {
-					s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, req, actualModel, provider, anthropicResp)
+					hc.EnsureGuardrails().Enabled = true
+					s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages))
 				}
-
-				if err := stream.AnthropicSingleBetaMessage(c, anthropicResp, responseModel); err != nil {
-					stream.SendInternalError(c, err.Error())
-					if recorder != nil {
-						recorder.RecordError(err)
-					}
-					return
-				}
-				if recorder != nil {
-					recorder.SetAssembledResponse(anthropicResp)
-					recorder.RecordResponse(provider, actualModel)
+				interceptor := NewAnthropicBetaStreamInterceptor(
+					c, s, provider, hc, s.mcpRuntime.VirtualRegistry(), recorder,
+				)
+				if err := interceptor.Run(req); err != nil {
+					recordMCPError(s, c, err, recorder)
 				}
 				return
 			}
@@ -770,6 +744,7 @@ func (s *Server) dispatchChainFromOpenAIChat(
 	c.Set("model", actualModel)
 
 	req := reqCtx.Request.(*openai.ChatCompletionNewParams)
+	s.injectPendingVirtualResultsOpenAI(req)
 	request.CleanupOpenaiFields(req)
 
 	if isStreaming {
@@ -952,6 +927,26 @@ func (s *Server) dispatchChainFromOpenAIChat(
 			}
 			if reqCtx.ScenarioFlags != nil {
 				disableStreamUsage = disableStreamUsage || reqCtx.ScenarioFlags.DisableStreamUsage
+			}
+
+			if hasDeclaredMCPTools(req) && s.mcpEnabled() {
+				hc := protocol.NewHandleContext(c, responseModel)
+				hc.DisableStreamUsage = disableStreamUsage
+				firstTokenRecorded := false
+				hc.WithOnStreamEvent(func(_ interface{}) error {
+					if !firstTokenRecorded {
+						SetFirstTokenTime(c)
+						firstTokenRecorded = true
+					}
+					return nil
+				})
+				interceptor := NewOpenAIChatStreamInterceptor(
+					c, s, provider, hc, s.mcpRuntime.VirtualRegistry(), recorder, responseModel, disableStreamUsage,
+				)
+				if err := interceptor.Run(req); err != nil {
+					recordMCPError(s, c, err, recorder)
+				}
+				return
 			}
 
 			s.handleOpenAIChatStreamingRequest(c, provider, req, responseModel, disableStreamUsage)

@@ -2,7 +2,9 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/sirupsen/logrus"
@@ -11,7 +13,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func NewAdvisorVirtualTool(cfg typ.AdvisorConfig, cp *client.ClientPool) VirtualTool {
+func NewAdvisorVirtualTool(cfg typ.AdvisorConfig, cp *client.ClientPool, store *SessionStore) VirtualTool {
 	if cfg.MaxUsesPerRequest <= 0 {
 		cfg.MaxUsesPerRequest = 3
 	}
@@ -31,14 +33,14 @@ func NewAdvisorVirtualTool(cfg typ.AdvisorConfig, cp *client.ClientPool) Virtual
 
 	return VirtualTool{
 		Name:         "advisor",
-		Description:  fmt.Sprintf("Consult a more powerful advisor model for strategic guidance. Use when facing architectural decisions, complex debugging, unclear trade-offs, or when stuck. You have %d consultation(s) remaining this request.", cfg.MaxUsesPerRequest),
+		Description:  description(cfg.MaxUsesPerRequest),
 		InputSchema:  schema,
-		Handler:      newAdvisorHandler(cfg, cp),
+		Handler:      newAdvisorHandler(cfg, cp, store),
 		IsClientTool: false, // Server tool: not exposed to clients
 	}
 }
 
-func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool) VirtualToolHandler {
+func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *SessionStore) VirtualToolHandler {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Extract arguments
 		args, ok := req.Params.Arguments.(map[string]any)
@@ -74,6 +76,16 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool) VirtualTool
 			}, nil
 		}
 
+		// Enrich advisor context with session data from SessionStore
+		if store != nil {
+			if sessionID, _ := args["session_id"].(string); sessionID != "" {
+				if sc, found := store.Get(sessionID); found {
+					actx = enrichAdvisorContextWithSession(actx, sc)
+					ctx = WithAdvisorContext(ctx, actx)
+				}
+			}
+		}
+
 		// Execute advisor call
 		logrus.WithFields(logrus.Fields{
 			"reason":         reason,
@@ -107,4 +119,35 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool) VirtualTool
 
 		return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(result)}}, nil
 	}
+}
+
+// enrichAdvisorContextWithSession prepends session-persistent heavy data as
+// system messages so the advisor model sees workspace state and build logs
+// before the conversation history.
+func enrichAdvisorContextWithSession(actx *AdvisorContext, sc *SessionContext) *AdvisorContext {
+	if actx == nil {
+		actx = &AdvisorContext{}
+	}
+	var enriched []map[string]any
+	if len(sc.WorkspaceTree) > 0 {
+		treeJSON, _ := json.Marshal(sc.WorkspaceTree)
+		enriched = append(enriched, map[string]any{
+			"role":    "system",
+			"content": "Workspace tree:\n" + string(treeJSON),
+		})
+	}
+	if len(sc.BuildLogs) > 0 {
+		enriched = append(enriched, map[string]any{
+			"role":    "system",
+			"content": "Build logs:\n" + strings.Join(sc.BuildLogs, "\n"),
+		})
+	}
+	if sc.LastWorkerResp != "" {
+		enriched = append(enriched, map[string]any{
+			"role":    "system",
+			"content": "Last worker response:\n" + sc.LastWorkerResp,
+		})
+	}
+	actx.Messages = append(enriched, actx.Messages...)
+	return actx
 }

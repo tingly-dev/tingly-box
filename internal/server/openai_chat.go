@@ -160,7 +160,49 @@ func hasOnlyMCPToolCalls(toolCalls []openai.ChatCompletionMessageToolCallUnion) 
 	return true
 }
 
-// handleMCPToolCalls executes MCP-prefixed tool calls and loops until model returns a non-MCP tool step.
+func splitVirtualAndExternalOpenAIToolCalls(
+	toolCalls []openai.ChatCompletionMessageToolCallUnion,
+	registry *runtime.VirtualToolRegistry,
+) (virtualCalls []openai.ChatCompletionMessageToolCallUnion, externalCalls []openai.ChatCompletionMessageToolCallUnion, externalIDs []string) {
+	virtualCalls = make([]openai.ChatCompletionMessageToolCallUnion, 0, len(toolCalls))
+	externalCalls = make([]openai.ChatCompletionMessageToolCallUnion, 0, len(toolCalls))
+	externalIDs = make([]string, 0, len(toolCalls))
+	for _, tc := range toolCalls {
+		if isVirtualTool(tc.Function.Name, registry) {
+			virtualCalls = append(virtualCalls, tc)
+			continue
+		}
+		externalCalls = append(externalCalls, tc)
+		if tc.ID != "" {
+			externalIDs = append(externalIDs, tc.ID)
+		}
+	}
+	return virtualCalls, externalCalls, externalIDs
+}
+
+func (s *Server) executeVirtualOpenAIToolCalls(
+	ctx context.Context,
+	toolCalls []openai.ChatCompletionMessageToolCallUnion,
+	hookMessages []map[string]any,
+) []virtualToolExecutionResult {
+	results := make([]virtualToolExecutionResult, 0, len(toolCalls))
+	for _, tc := range toolCalls {
+		result, err := s.callMCPToolWithHooks(ctx, tc.Function.Name, tc.Function.Arguments, hookMessages)
+		if err != nil {
+			logrus.WithError(err).Warnf("mcp: openai tool call failed name=%s arguments=%s", tc.Function.Name, tc.Function.Arguments)
+		}
+		results = append(results, virtualToolExecutionResult{
+			ToolUseID: tc.ID,
+			Content:   result,
+			IsError:   err != nil,
+		})
+	}
+	return results
+}
+
+// handleMCPToolCalls executes MCP-prefixed tool calls and loops until the model
+// returns a non-MCP tool step. Mixed virtual+external MCP calls are split:
+// virtual calls execute server-side, external calls are returned to client.
 func (s *Server) handleMCPToolCalls(ctx context.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, toolCallResponse *openai.ChatCompletion) (*openai.ChatCompletion, error) {
 	if s.mcpRuntime == nil || !s.mcpEnabled() {
 		return nil, fmt.Errorf("mcp runtime is not initialized")
@@ -179,14 +221,30 @@ func (s *Server) handleMCPToolCalls(ctx context.Context, provider *typ.Provider,
 			return resp, nil
 		}
 
+		virtualCalls, externalCalls, externalIDs := splitVirtualAndExternalOpenAIToolCalls(
+			resp.Choices[0].Message.ToolCalls,
+			s.mcpRuntime.VirtualRegistry(),
+		)
+		if len(virtualCalls) == 0 {
+			return resp, nil
+		}
+
+		// Mixed mode: execute only server-side virtual tools, keep external
+		// tool calls for client follow-up, and stash pending virtual results.
+		if len(externalCalls) > 0 {
+			hookMessages := extractOpenAIMessages(append(newMessages, resp.Choices[0].Message.ToParam()))
+			virtualResults := s.executeVirtualOpenAIToolCalls(ctx, virtualCalls, hookMessages)
+			s.stashPendingVirtualToolResults(externalIDs, virtualResults)
+			resp.Choices[0].Message.ToolCalls = externalCalls
+			return resp, nil
+		}
+
+		// Pure virtual mode: continue server-side loop.
 		newMessages = append(newMessages, resp.Choices[0].Message.ToParam())
 		hookMessages := extractOpenAIMessages(newMessages)
-		for _, tc := range resp.Choices[0].Message.ToolCalls {
-			result, err := s.callMCPToolWithHooks(ctx, tc.Function.Name, tc.Function.Arguments, hookMessages)
-			if err != nil {
-				logrus.WithError(err).Warnf("mcp: openai tool call failed name=%s arguments=%s", tc.Function.Name, tc.Function.Arguments)
-			}
-			newMessages = append(newMessages, openai.ToolMessage(result, tc.ID))
+		virtualResults := s.executeVirtualOpenAIToolCalls(ctx, virtualCalls, hookMessages)
+		for _, vr := range virtualResults {
+			newMessages = append(newMessages, openai.ToolMessage(vr.Content, vr.ToolUseID))
 		}
 
 		followUpReq := *originalReq

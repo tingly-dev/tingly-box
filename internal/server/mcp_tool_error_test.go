@@ -54,27 +54,33 @@ func TestRemapLegacyAdvisorToolName(t *testing.T) {
 }
 
 func TestCallMCPToolWithHooks_AdvisorInjectsContext(t *testing.T) {
-	s := &Server{
-		mcpRuntime: mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig {
-			return &typ.MCPRuntimeConfig{
-				Sources: []typ.MCPSourceConfig{
-					{
-						ID:           "advisor",
-						Transport:    "advisor",
-						Enabled:      typ.BoolPtr(true),
-						IsClientTool: typ.BoolPtr(false),
-						Tools:        []string{"advisor"},
-						Advisor:      &typ.AdvisorConfig{MaxUsesPerRequest: 3},
-					},
+	cp := client.NewClientPool()
+	rt := mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig {
+		return &typ.MCPRuntimeConfig{
+			Sources: []typ.MCPSourceConfig{
+				{
+					ID:           "advisor",
+					Transport:    "advisor",
+					Enabled:      typ.BoolPtr(true),
+					IsClientTool: typ.BoolPtr(false),
+					Tools:        []string{"advisor"},
+					Advisor:      &typ.AdvisorConfig{MaxUsesPerRequest: 3},
 				},
-			}
-		}),
+			},
+		}
+	})
+	rt.SetClientPool(cp)
+	rt.RegisterAdviser(typ.AdvisorConfig{MaxUsesPerRequest: 3}, nil)
+
+	s := &Server{
+		clientPool: cp,
+		mcpRuntime: rt,
 	}
 	// No pre-injected AdvisorContext here; hook should create one.
 	result, err := s.callMCPToolWithHooks(context.Background(), "tingly_box_mcp__advisor__advisor", `{"reason":"x"}`, []map[string]any{
 		{"role": "user", "content": "hello"},
 	})
-	require.Error(t, err)
+	require.NoError(t, err)
 	require.Contains(t, result, "client pool not available")
 }
 
@@ -125,10 +131,18 @@ func TestCallMCPToolWithHooks_AdvisorUsesDecrementAcrossCalls(t *testing.T) {
 		},
 	}
 
+	cp := client.NewClientPool()
 	rt := mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig { return cfg })
 	require.NotNil(t, rt)
-	cp := client.NewClientPool()
 	rt.SetClientPool(cp)
+
+	// Register advisor virtual tool
+	for _, source := range cfg.Sources {
+		if source.Advisor != nil {
+			rt.RegisterAdviser(*source.Advisor, cp)
+		}
+	}
+
 	t.Cleanup(rt.Close)
 
 	s := &Server{mcpRuntime: rt}
