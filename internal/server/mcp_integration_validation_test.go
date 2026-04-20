@@ -18,7 +18,7 @@ func TestGenericMCPIntegration_ImportCycleResolved(t *testing.T) {
 
 	// Create components from both packages
 	provider := &typ.Provider{
-		Name:  "test-provider",
+		Name:   "test-provider",
 		Models: []string{"test-model"},
 	}
 

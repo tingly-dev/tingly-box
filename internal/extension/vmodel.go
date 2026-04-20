@@ -29,17 +29,33 @@ func RegisterVModelExtension(extRegistry *ExtensionRegistry, vmRegistry *virtual
 		item := &ExtensionItem{
 			ID:          vm.GetID(),
 			ExtensionID: "vmodel",
-			Name:        vm.GetID(), // Use ID as name since GetName() is not available
-			Description: "Virtual model", // Generic description since GetDescription() is not available
-			Type:        "virtual", // Generic type since GetType() is not available
+			Name:        vm.GetName(),
+			Description: vm.GetDescription(),
+			Type:        string(vm.GetType()),
 			Metadata: map[string]interface{}{
-				"vmType": "virtual",
+				"vmType": string(vm.GetType()),
 			},
 			Config: make(map[string]interface{}),
 		}
 
-		// Use a generic icon for all virtual models since type-specific methods are not available
-		item.Icon = "memory"
+		// Add type-specific metadata
+		switch vm.GetType() {
+		case virtualmodel.VirtualModelTypeStatic:
+			item.Icon = "message"
+		case virtualmodel.VirtualModelTypeProxy:
+			item.Icon = "compress"
+			// Add delegate model info if set
+			if delegate := vm.GetDelegateModel(); delegate != "" {
+				item.Metadata["delegateModel"] = delegate
+			}
+		case virtualmodel.VirtualModelTypeTool:
+			item.Icon = "build"
+			// Add tool call info if set
+			if toolCall := vm.GetToolCall(); toolCall != nil {
+				item.Metadata["toolName"] = toolCall.Name
+				item.Metadata["toolArguments"] = toolCall.Arguments
+			}
+		}
 
 		if err := extRegistry.RegisterItem(item); err != nil {
 			// Log but continue with other items

@@ -21,6 +21,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
+	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -40,8 +41,8 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 
 	// Forward request to provider
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
-	fc := NewForwardContext(nil, provider)
-	response, _, err := ForwardOpenAIChat(fc, wrapper, req)
+	fc := forwarding.NewForwardContext(nil, provider)
+	response, _, err := forwarding.ForwardOpenAIChat(fc, wrapper, req)
 	if err != nil {
 		// Track error with no usage
 		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
@@ -132,8 +133,8 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 	req := originalReq
 
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
-	fc := NewForwardContext(c.Request.Context(), provider)
-	streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, req)
+	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
+	streamResp, cancel, err := forwarding.ForwardOpenAIChatStream(fc, wrapper, req)
 	if cancel != nil {
 		defer cancel()
 	}

@@ -20,6 +20,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -140,7 +141,7 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 	ctx := c.Request.Context()
 
 	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, actualModel)
-	fc := NewForwardContext(ctx, provider)
+	fc := forwarding.NewForwardContext(ctx, provider)
 
 	if isStreaming {
 		disableStreamUsage := false
@@ -154,7 +155,7 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 		if hasDeclaredMCPAnthropicBetaTools(req) {
 			// Check if generic MCP path should be used for cross-format streaming
 			// Use TRUE streaming forwarding (not legacy non-stream approach)
-			streamResp, cancel, err := ForwardAnthropicV1BetaStream(fc, wrapper, req)
+			streamResp, cancel, err := forwarding.ForwardAnthropicV1BetaStream(fc, wrapper, req)
 			if cancel != nil {
 				defer cancel()
 			}
@@ -183,7 +184,7 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 			return
 		}
 
-		streamResp, cancel, err := ForwardAnthropicV1BetaStream(fc, wrapper, req)
+		streamResp, cancel, err := forwarding.ForwardAnthropicV1BetaStream(fc, wrapper, req)
 		if cancel != nil {
 			defer cancel()
 		}
@@ -232,7 +233,7 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 				usage = protocol.NewTokenUsageWithCache(genericUsage.InputTokens, genericUsage.OutputTokens, genericUsage.CacheTokens)
 			}
 		} else {
-			anthropicResp, cancel, forwardErr := ForwardAnthropicV1Beta(fc, wrapper, req)
+			anthropicResp, cancel, forwardErr := forwarding.ForwardAnthropicV1Beta(fc, wrapper, req)
 			if cancel != nil {
 				defer cancel()
 			}
@@ -349,7 +350,7 @@ func (s *Server) buildOpenAIToAnthropicMCPHooks(
 		if fn == nil {
 			continue
 		}
-		if !isVirtualTool(fn.Name, registry) {
+		if !mcp.IsVirtualTool(fn.Name, registry) {
 			hasExternalDeclared = true
 			break
 		}
@@ -358,7 +359,7 @@ func (s *Server) buildOpenAIToAnthropicMCPHooks(
 	return &stream.OpenAIToAnthropicMCPHooks{
 		ShouldSuppressTool: func(name string) bool {
 			// Suppress virtual tools only in mixed declarations so external tools remain visible.
-			return hasExternalDeclared && isVirtualTool(name, registry)
+			return hasExternalDeclared && mcp.IsVirtualTool(name, registry)
 		},
 		OnToolCallsFinal: func(calls []stream.OpenAIToAnthropicToolCall) error {
 			if len(calls) == 0 {
@@ -369,7 +370,7 @@ func (s *Server) buildOpenAIToAnthropicMCPHooks(
 			virtualResults := make([]virtualToolExecutionResult, 0, len(calls))
 
 			for _, tc := range calls {
-				if !isVirtualTool(tc.Name, registry) {
+				if !mcp.IsVirtualTool(tc.Name, registry) {
 					if tc.ID != "" {
 						externalIDs = append(externalIDs, tc.ID)
 					}
@@ -412,8 +413,8 @@ func (s *Server) dispatchChainFromGoogle(
 
 	if isStreaming {
 		wrapper := s.clientPool.GetGoogleClient(c.Request.Context(), provider, model)
-		fc := NewForwardContext(c.Request.Context(), provider)
-		streamResp, cancel, err := ForwardGoogleStream(fc, wrapper, model, req, cfg)
+		fc := forwarding.NewForwardContext(c.Request.Context(), provider)
+		streamResp, cancel, err := forwarding.ForwardGoogleStream(fc, wrapper, model, req, cfg)
 		if cancel != nil {
 			defer cancel()
 		}
@@ -443,8 +444,8 @@ func (s *Server) dispatchChainFromGoogle(
 		s.trackUsageWithTokenUsage(c, usage, nil)
 	} else {
 		wrapper := s.clientPool.GetGoogleClient(c.Request.Context(), provider, model)
-		fc := NewForwardContext(nil, provider)
-		resp, _, err := ForwardGoogle(fc, wrapper, model, req, cfg)
+		fc := forwarding.NewForwardContext(nil, provider)
+		resp, _, err := forwarding.ForwardGoogle(fc, wrapper, model, req, cfg)
 		if err != nil {
 			stream.SendForwardingError(c, err)
 			if recorder != nil {
@@ -574,8 +575,8 @@ func (s *Server) dispatchChainFromOpenAIChat(
 		switch reqCtx.SourceAPI {
 		case protocol.TypeAnthropicV1:
 			wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
-			fc := NewForwardContext(c.Request.Context(), provider)
-			streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, req)
+			fc := forwarding.NewForwardContext(c.Request.Context(), provider)
+			streamResp, cancel, err := forwarding.ForwardOpenAIChatStream(fc, wrapper, req)
 			if cancel != nil {
 				defer cancel()
 			}
@@ -608,8 +609,8 @@ func (s *Server) dispatchChainFromOpenAIChat(
 			}
 
 			wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
-			fc := NewForwardContext(c.Request.Context(), provider)
-			streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, req)
+			fc := forwarding.NewForwardContext(c.Request.Context(), provider)
+			streamResp, cancel, err := forwarding.ForwardOpenAIChatStream(fc, wrapper, req)
 			if cancel != nil {
 				defer cancel()
 			}
@@ -700,8 +701,8 @@ func (s *Server) dispatchChainFromOpenAIChat(
 			}
 		} else {
 			wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
-			fc := NewForwardContext(nil, provider)
-			resp, _, err = ForwardOpenAIChat(fc, wrapper, req)
+			fc := forwarding.NewForwardContext(nil, provider)
+			resp, _, err = forwarding.ForwardOpenAIChat(fc, wrapper, req)
 			if err != nil {
 				stream.SendForwardingError(c, err)
 				if recorder != nil {
@@ -758,10 +759,10 @@ func (s *Server) dispatchOpenAIChatFromResponses(
 	req := reqCtx.Request.(*responses.ResponseNewParams)
 
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, actualModel)
-	fc := NewForwardContext(c.Request.Context(), provider)
+	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 
 	if isStreaming {
-		responsesStream, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, *req)
+		responsesStream, cancel, err := forwarding.ForwardOpenAIResponsesStream(fc, wrapper, *req)
 		if cancel != nil {
 			defer cancel()
 		}
@@ -789,7 +790,7 @@ func (s *Server) dispatchOpenAIChatFromResponses(
 			recorder.RecordResponse(provider, reqCtx.RequestModel)
 		}
 	} else {
-		responsesResp, cancel, err := ForwardOpenAIResponses(fc, wrapper, *req)
+		responsesResp, cancel, err := forwarding.ForwardOpenAIResponses(fc, wrapper, *req)
 		if cancel != nil {
 			defer cancel()
 		}
@@ -835,8 +836,8 @@ func (s *Server) nonstreamOpenAIResponses(
 	var cancel context.CancelFunc
 
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, string(params.Model))
-	fc := NewForwardContext(nil, provider)
-	response, cancel, err = ForwardOpenAIResponses(fc, wrapper, *params)
+	fc := forwarding.NewForwardContext(nil, provider)
+	response, cancel, err = forwarding.ForwardOpenAIResponses(fc, wrapper, *params)
 	if cancel != nil {
 		defer cancel()
 	}
@@ -895,8 +896,8 @@ func (s *Server) streamOpenAIResponses(
 
 	// Create streaming request with request context for proper cancellation
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, params.Model)
-	fc := NewForwardContext(c.Request.Context(), provider)
-	respStream, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, *params)
+	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
+	respStream, cancel, err := forwarding.ForwardOpenAIResponsesStream(fc, wrapper, *params)
 	if cancel != nil {
 		defer cancel()
 	}
@@ -937,8 +938,8 @@ func (s *Server) nonstreamOpenAIChatToResponses(
 	chatReq := reqCtx.Request.(*openai.ChatCompletionNewParams)
 
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, string(chatReq.Model))
-	fc := NewForwardContext(nil, provider)
-	chatResp, _, err := ForwardOpenAIChat(fc, wrapper, chatReq)
+	fc := forwarding.NewForwardContext(nil, provider)
+	chatResp, _, err := forwarding.ForwardOpenAIChat(fc, wrapper, chatReq)
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
 		SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to forward request: : %w", err), "api_error")
@@ -965,8 +966,8 @@ func (s *Server) streamOpenAIChatToResponses(
 	chatReq := reqCtx.Request.(*openai.ChatCompletionNewParams)
 
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, string(chatReq.Model))
-	fc := NewForwardContext(c.Request.Context(), provider)
-	chatStream, cancel, err := ForwardOpenAIChatStream(fc, wrapper, chatReq)
+	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
+	chatStream, cancel, err := forwarding.ForwardOpenAIChatStream(fc, wrapper, chatReq)
 	if cancel != nil {
 		defer cancel()
 	}
@@ -995,8 +996,8 @@ func (s *Server) nonstreamAnthropicV1ToResponses(
 	ctx := c.Request.Context()
 
 	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, string(anthropicReq.Model))
-	fc := NewForwardContext(nil, provider)
-	anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, anthropicReq)
+	fc := forwarding.NewForwardContext(nil, provider)
+	anthropicResp, cancel, err := forwarding.ForwardAnthropicV1(fc, wrapper, anthropicReq)
 	if cancel != nil {
 		defer cancel()
 	}
@@ -1027,8 +1028,8 @@ func (s *Server) streamAnthropicV1ToResponses(
 	ctx := c.Request.Context()
 
 	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, string(anthropicReq.Model))
-	fc := NewForwardContext(ctx, provider)
-	anthropicStream, cancel, err := ForwardAnthropicV1Stream(fc, wrapper, anthropicReq)
+	fc := forwarding.NewForwardContext(ctx, provider)
+	anthropicStream, cancel, err := forwarding.ForwardAnthropicV1Stream(fc, wrapper, anthropicReq)
 	if cancel != nil {
 		defer cancel()
 	}
@@ -1074,9 +1075,9 @@ func (s *Server) dispatchOpenAIChatToAnthropicBetaGeneric(
 
 	// Step 2: Forward to Anthropic Beta using TRUE streaming (not non-stream downgrade)
 	wrapper := s.clientPool.GetAnthropicClient(c.Request.Context(), provider, actualModel)
-	fc := NewForwardContext(c.Request.Context(), provider)
+	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 
-	anthropicStream, cancel, err := ForwardAnthropicV1BetaStream(fc, wrapper, anthropicReq)
+	anthropicStream, cancel, err := forwarding.ForwardAnthropicV1BetaStream(fc, wrapper, anthropicReq)
 	if cancel != nil {
 		defer cancel()
 	}
