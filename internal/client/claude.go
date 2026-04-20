@@ -11,6 +11,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
 )
@@ -148,6 +149,8 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 			}
 		}
 
+		modifiedBody = applyThinking(modifiedBody)
+
 		// Trim capacity to length to avoid excessive memory usage
 		modifiedBody = append([]byte(nil), modifiedBody...)
 		// Set GetBody to allow retries and redirects
@@ -190,6 +193,21 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	}
 
 	return resp, nil
+}
+
+func applyThinking(body []byte) []byte {
+	res, err := sjson.DeleteBytes(body, "thinking")
+	if err != nil {
+		logrus.WithError(err).Errorf("error applying thinking")
+		return body
+	}
+
+	res, err = sjson.SetBytes(res, "output_config", map[string]interface{}{"effort": "medium"})
+	if err != nil {
+		logrus.WithError(err).Errorf("error applying thinking")
+		return body
+	}
+	return res
 }
 
 // applyClaudeCodeHeaders sets all Claude Code specific headers
