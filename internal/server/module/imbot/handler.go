@@ -472,6 +472,90 @@ func (h *Handler) GetPlatformConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// SendMessageTest sends a test markdown message to the bot
+// POST /api/v1/imbot-settings/:uuid/test
+func (h *Handler) SendMessageTest(c *gin.Context) {
+	uuid := c.Param("uuid")
+	if uuid == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "UUID is required",
+		})
+		return
+	}
+
+	var req TestMessageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request body",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Get settings to determine platform and default chat ID
+	settings, err := h.store.GetSettingsByUUID(uuid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to get bot settings",
+		})
+		return
+	}
+
+	// Check if settings exist
+	if settings.UUID == "" {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "ImBot settings not found",
+		})
+		return
+	}
+
+	// Determine target chat ID (use override if provided, otherwise use configured)
+	targetChatID := req.ChatID
+	if targetChatID == "" {
+		targetChatID = settings.ChatIDLock
+	}
+
+	if targetChatID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "No chat_id configured. Please set chat_id in bot settings or provide it in the request.",
+		})
+		return
+	}
+
+	// Check if bot is running
+	if !h.botMgr.IsRunning(uuid) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"error":   "Bot is not currently running. Please enable the bot first.",
+		})
+		return
+	}
+
+	// Send the test message
+	if err := h.botMgr.SendMessage(uuid, targetChatID, req.Markdown); err != nil {
+		logrus.WithError(err).WithField("uuid", uuid).Error("Failed to send test message")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to send test message: %s", err.Error()),
+		})
+		return
+	}
+
+	logrus.WithField("uuid", uuid).WithField("platform", settings.Platform).Info("Test message sent successfully")
+
+	response := TestMessageResponse{
+		Success:  true,
+		Platform: settings.Platform,
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
 // Helper function to normalize allowlist
 func normalizeAllowlist(values []string) []string {
 	seen := make(map[string]struct{})

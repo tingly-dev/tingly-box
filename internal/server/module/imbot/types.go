@@ -90,3 +90,21 @@ type DeleteResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }
+
+// =============================================
+// ImBot Test Message API Types
+// =============================================
+
+// TestMessageRequest represents the request to send a test message
+type TestMessageRequest struct {
+	Markdown string `json:"markdown" binding:"required"`
+	ChatID   string `json:"chat_id,omitempty"`
+}
+
+// TestMessageResponse represents the response for a test message
+type TestMessageResponse struct {
+	Success   bool   `json:"success"`
+	MessageID string `json:"message_id,omitempty"`
+	Platform  string `json:"platform,omitempty"`
+	Error     string `json:"error,omitempty"`
+}

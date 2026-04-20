@@ -73,6 +73,20 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		),
 	)
 
+	// POST /imbot-settings/:uuid/test - Send test message
+	router.POST("/imbot-settings/:uuid/test", handler.SendMessageTest,
+		swagger.WithTags("imbot-settings"),
+		swagger.WithDescription("Sends a test markdown message to the bot"),
+		swagger.WithPathParam("uuid", "string", "ImBot configuration UUID"),
+		swagger.WithRequestModel(TestMessageRequest{}),
+		swagger.WithResponseModel(TestMessageResponse{}),
+		swagger.WithErrorResponses(
+			swagger.ErrorResponseConfig{Code: 400, Message: "Invalid request"},
+			swagger.ErrorResponseConfig{Code: 404, Message: "ImBot settings not found"},
+			swagger.ErrorResponseConfig{Code: 503, Message: "Failed to send test message"},
+		),
+	)
+
 	// GET /imbot-platforms - Get all supported platforms
 	router.GET("/imbot-platforms", handler.GetPlatforms,
 		swagger.WithTags("imbot-settings"),

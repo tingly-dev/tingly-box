@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/imbot"
 )
 
 // Agent routing constants
@@ -65,8 +66,10 @@ type Lifecycle interface {
 // runningBot tracks a running bot instance
 type runningBot struct {
 	cancel   context.CancelFunc
-	stopped  bool          // marker to indicate if bot is being stopped
-	doneChan chan struct{} // closed when goroutine finishes
+	stopped  bool           // marker to indicate if bot is being stopped
+	doneChan chan struct{}  // closed when goroutine finishes
+	imbotMgr *imbot.Manager // Reference to the imbot.Manager instance
+	botUUID  string         // The bot UUID for lookup
 }
 
 // SupportsVerboseMode checks if the platform supports verbose mode
