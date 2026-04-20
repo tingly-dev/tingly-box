@@ -458,7 +458,7 @@ export default {
       "mode": "Mode",
       "unified": "Unified",
       "separate": "Separate",
-      "unifiedDescription": "All models use the same routing rule (tingly/cc)",
+      "unifiedDescription": "All models use the same routing rule",
       "separateDescription": "Each model uses its own routing rule",
       "modeUpdated": "Profile mode updated to {{mode}}",
       "modeUpdateFailed": "Failed to update profile mode"
