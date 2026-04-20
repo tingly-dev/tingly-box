@@ -238,6 +238,16 @@ tasks:
       - |
         git submodule sync
         git submodule update --remote
+      - |
+        for dir in libs/*/; do
+          if [ -d "$dir" ]; then
+            name=$(basename "$dir")
+            cd "$dir"
+            git --no-pager log -n 3
+            cd - > /dev/null
+          fi
+        done
+        
 
   changelog:
     cmds:
