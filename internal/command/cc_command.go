@@ -3,7 +3,6 @@ package command
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -25,8 +24,11 @@ func CCCommand(appManager *AppManager) *cobra.Command {
 		Short: "Launch Claude Code with tingly-box routing",
 		Long: `Launch Claude Code with tingly-box as the API proxy.
 
-A temporary settings file is created and passed to Claude Code via --settings,
-so the existing Claude Code configuration is not modified.
+A settings file is created at ~/.tingly-box/claude/default.json (or per-profile
+for profile mode) and passed to Claude Code via --settings. This file includes:
+- Your existing Claude settings (copied from ~/.claude/settings.json)
+- Tingly-box routing environment variables
+- Status line integration
 
 Profiles can be used to switch between different rule sets for the same scenario.
 If a profile name or ID is not found, an interactive list will be shown.
@@ -143,8 +145,9 @@ func runCC(appManager *AppManager, profile string, claudeArgs []string) error {
 		// then merge the env section with tingly-box routing vars.
 		settingsPath, err = buildProfileSettings(profileID, env, scenarioPath)
 	} else {
-		// Default mode: create a temp settings file with only env vars.
-		settingsPath, err = buildTempSettings(env)
+		// Default mode: same as profile mode but with a predictable file name
+		// and no profile suffix in the scenario path.
+		settingsPath, err = buildTempSettings(env, scenarioPath)
 	}
 	if err != nil {
 		return err
@@ -291,32 +294,59 @@ exec ~/.claude/tingly-statusline.sh "$@"
 	return wrapperPath, nil
 }
 
-// buildTempSettings creates a temporary settings file containing only the env vars.
-func buildTempSettings(env map[string]string) (string, error) {
-	settingsContent, err := json.MarshalIndent(map[string]interface{}{
-		"env": env,
-	}, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("failed to generate settings: %w", err)
-	}
-
-	tmpDir := filepath.Join(os.TempDir(), "tingly-box-cc")
+// buildTempSettings creates a temporary settings file that is equivalent to
+// profile mode: copies user's ~/.claude/settings.json as base, then applies
+// tingly-box env vars and status line config. The file is created in a temp
+// directory with a predictable name so it can be reused across launches.
+func buildTempSettings(env map[string]string, scenarioPath string) (string, error) {
+	tmpDir := filepath.Join(constant.GetTinglyConfDir(), "claude")
 	if err := os.MkdirAll(tmpDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create temp dir: %w", err)
 	}
 
-	tmpFile, err := os.CreateTemp(tmpDir, "settings-*.json")
+	destPath := filepath.Join(tmpDir, "default.json")
+
+	// Copy user's ~/.claude/settings.json as the base (if it exists)
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("failed to create temp settings file: %w", err)
+		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
-	tmpPath := tmpFile.Name()
-	defer tmpFile.Close()
+	srcPath := filepath.Join(homeDir, ".claude", "settings.json")
 
-	if _, err := tmpFile.Write(settingsContent); err != nil {
-		return "", fmt.Errorf("failed to write settings file: %w", err)
+	if data, err := os.ReadFile(srcPath); err == nil {
+		if err := os.WriteFile(destPath, data, 0644); err != nil {
+			return "", fmt.Errorf("failed to copy user settings: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return "", fmt.Errorf("failed to read user settings: %w", err)
+	}
+	// If file doesn't exist, destPath may not exist yet — ApplyClaudeSettingsToPath will create it
+
+	// Install the base status line script
+	if _, _, err := config.InstallStatusLineScript(); err != nil {
+		return "", fmt.Errorf("failed to install status line script: %w", err)
 	}
 
-	return tmpPath, nil
+	// Generate a wrapper script that sets TINGLY_SCENARIO
+	wrapperPath, err := buildProfileStatusLineScript(tmpDir, "default", scenarioPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to create status line wrapper: %w", err)
+	}
+
+	// Apply tingly-box env vars + statusLine config
+	statusLine := map[string]any{
+		"type":    "command",
+		"command": wrapperPath,
+	}
+	result, err := config.ApplyClaudeSettingsToPath(destPath, env, config.KV{Key: "statusLine", Value: statusLine})
+	if err != nil {
+		return "", fmt.Errorf("failed to apply settings: %w", err)
+	}
+	if !result.Success {
+		return "", fmt.Errorf("failed to apply settings: %s", result.Message)
+	}
+
+	return destPath, nil
 }
 
 // generateCCEnv builds the env vars map for Claude Code settings.
