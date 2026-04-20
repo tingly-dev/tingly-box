@@ -230,7 +230,7 @@ func (aa *AgentApply) generateOpenCodeConfigPayload(configBaseURL, apiKey, _ str
 
 // applyClaudeSettings applies Claude Code settings.json
 func (aa *AgentApply) applyClaudeSettings(env map[string]string, installStatusLine bool) (*serverconfig.ApplyResult, error) {
-	var extras []serverconfig.KV
+	var opts []serverconfig.ApplyOption
 	if installStatusLine {
 		// Install status line script
 		_, _, err := serverconfig.InstallStatusLineScript()
@@ -240,10 +240,10 @@ func (aa *AgentApply) applyClaudeSettings(env map[string]string, installStatusLi
 		baseURL, _ := aa.getBaseURLAndToken()
 		statusLineCmd := fmt.Sprintf("TINGLY_API_URL=%s ~/.claude/tingly-statusline.sh", baseURL)
 		statusLine := map[string]any{"type": "command", "command": statusLineCmd}
-		extras = append(extras, serverconfig.KV{Key: "statusLine", Value: statusLine})
+		opts = append(opts, serverconfig.WithExtra("statusLine", statusLine))
 	}
 
-	return serverconfig.ApplyClaudeSettingsFromEnv(env, extras...)
+	return serverconfig.ApplyClaudeSettingsFromEnv(env, opts...)
 }
 
 // applyClaudeOnboarding applies Claude Code .claude.json

@@ -179,7 +179,7 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 	var statusLineInstalled bool
 	var statusLinePath string
 
-	var extras = []config.KV{}
+	var opts []config.ApplyOption
 	if req.InstallStatusLine {
 		var scriptCreated bool
 		statusLinePath, scriptCreated, err = config.InstallStatusLineScript()
@@ -194,11 +194,11 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 		_ = scriptCreated // Used for tracking but not needed for response
 		// Add statusLine config to env
 		statusLine := map[string]any{"type": "command", "command": "~/.claude/tingly-statusline.sh"}
-		extras = append(extras, config.KV{Key: "statusLine", Value: statusLine})
+		opts = append(opts, config.WithExtra("statusLine", statusLine))
 	}
 
 	// Apply settings.json (now including statusLine config if requested)
-	settingsResult, err := config.ApplyClaudeSettingsFromEnv(env, extras...)
+	settingsResult, err := config.ApplyClaudeSettingsFromEnv(env, opts...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, config.ApplyResult{
 			Success: false,

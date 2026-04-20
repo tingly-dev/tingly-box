@@ -87,18 +87,47 @@ func ensureDir(path string) error {
 	return os.MkdirAll(dir, 0755)
 }
 
-type KV struct {
-	Key   string
-	Value any
+// ApplyOption is a functional option for ApplyClaudeSettingsToPath
+type ApplyOption func(*applyOptions)
+
+type applyOptions struct {
+	backup bool
+	extras map[string]any
+}
+
+// WithBackup enables or disables backup when applying settings.
+// Default is true (create backup).
+func WithBackup(enable bool) ApplyOption {
+	return func(opts *applyOptions) {
+		opts.backup = enable
+	}
+}
+
+// WithExtra sets a single extra key-value pair to merge into the settings.
+func WithExtra(key string, value any) ApplyOption {
+	return func(opts *applyOptions) {
+		if opts.extras == nil {
+			opts.extras = make(map[string]any)
+		}
+		opts.extras[key] = value
+	}
 }
 
 // ApplyClaudeSettingsToPath applies Claude settings env vars to a specific target file.
 // If the file exists, it merges the env section into the existing config (with backup).
 // If not, it creates a new file with only the env section.
-func ApplyClaudeSettingsToPath(targetPath string, env map[string]string, extras ...KV) (*ApplyResult, error) {
+func ApplyClaudeSettingsToPath(targetPath string, env map[string]string, opts ...ApplyOption) (*ApplyResult, error) {
 	result := &ApplyResult{
 		Success: false,
 		Message: "",
+	}
+
+	// Parse options
+	applyOpts := &applyOptions{
+		backup: true, // default: enable backup
+	}
+	for _, opt := range opts {
+		opt(applyOpts)
 	}
 
 	// Ensure directory exists
@@ -124,12 +153,15 @@ func ApplyClaudeSettingsToPath(targetPath string, env map[string]string, extras 
 			return result, nil
 		}
 
-		backupPath, err := backupFile(targetPath)
-		if err != nil {
-			result.Message = fmt.Sprintf("Failed to create backup: %v", err)
-			return result, nil
+		// Only create backup if enabled
+		if applyOpts.backup {
+			backupPath, err := backupFile(targetPath)
+			if err != nil {
+				result.Message = fmt.Sprintf("Failed to create backup: %v", err)
+				return result, nil
+			}
+			result.BackupPath = backupPath
 		}
-		result.BackupPath = backupPath
 		result.Updated = true
 	} else {
 		existingConfig = make(map[string]interface{})
@@ -143,8 +175,9 @@ func ApplyClaudeSettingsToPath(targetPath string, env map[string]string, extras 
 	}
 
 	existingConfig["env"] = envInterface
-	for _, extra := range extras {
-		existingConfig[extra.Key] = extra.Value
+	// Apply extras from options
+	for k, v := range applyOpts.extras {
+		existingConfig[k] = v
 	}
 
 	// Write the merged config
@@ -173,14 +206,14 @@ func ApplyClaudeSettingsToPath(targetPath string, env map[string]string, extras 
 
 // ApplyClaudeSettingsFromEnv applies Claude settings configuration with env vars
 // This is the safe version - env map is controlled by backend
-func ApplyClaudeSettingsFromEnv(env map[string]string, extras ...KV) (*ApplyResult, error) {
+func ApplyClaudeSettingsFromEnv(env map[string]string, opts ...ApplyOption) (*ApplyResult, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
 	}
 
 	targetPath := filepath.Join(homeDir, ".claude", "settings.json")
-	return ApplyClaudeSettingsToPath(targetPath, env, extras...)
+	return ApplyClaudeSettingsToPath(targetPath, env, opts...)
 }
 
 // InstallStatusLineScript installs the tingly-statusline.sh script to ~/.claude/

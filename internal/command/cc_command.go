@@ -274,7 +274,7 @@ func buildProfileSettings(profileID string, env map[string]string, scenarioPath 
 		"type":    "command",
 		"command": wrapperPath,
 	}
-	result, err := config.ApplyClaudeSettingsToPath(destPath, env, config.KV{Key: "statusLine", Value: statusLine})
+	result, err := config.ApplyClaudeSettingsToPath(destPath, env, config.WithBackup(false), config.WithExtra("statusLine", statusLine))
 	if err != nil {
 		return "", fmt.Errorf("failed to apply settings: %w", err)
 	}
@@ -348,7 +348,7 @@ func buildTempSettings(env map[string]string, scenarioPath string) (string, erro
 		"type":    "command",
 		"command": wrapperPath,
 	}
-	result, err := config.ApplyClaudeSettingsToPath(destPath, env, config.KV{Key: "statusLine", Value: statusLine})
+	result, err := config.ApplyClaudeSettingsToPath(destPath, env, config.WithBackup(false), config.WithExtra("statusLine", statusLine))
 	if err != nil {
 		return "", fmt.Errorf("failed to apply settings: %w", err)
 	}
