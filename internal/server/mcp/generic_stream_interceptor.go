@@ -1,0 +1,455 @@
+package mcp
+
+import (
+	"fmt"
+
+	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/gin-gonic/gin"
+	"github.com/openai/openai-go/v3"
+	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/typ"
+)
+
+const (
+	defaultMaxRounds = 6
+)
+
+// GenericStreamInterceptor implements format-agnostic streaming MCP tool handling
+type GenericStreamInterceptor struct {
+	c                 *gin.Context
+	s                 ServerOps
+	provider          *typ.Provider
+	hc                *protocol.HandleContext
+	virtualRegistry   *runtime.VirtualToolRegistry
+	recorder          ProtocolRecorder
+	adapter           FormatAdapter
+	forwarder         Forwarder
+	toolExecutor      ToolExecutor
+	pendingManager    PendingResultsManager
+	config            InterceptorConfig
+
+	// Cross-round state (not reset)
+	ttftRecorded      bool
+	totalInputTokens  int64
+	totalOutputTokens int64
+	totalCacheTokens  int64
+
+	// Per-round state (reset each round)
+	round             int
+}
+
+// NewGenericStreamInterceptor creates a new generic streaming interceptor
+func NewGenericStreamInterceptor(
+	c *gin.Context,
+	s ServerOps,
+	provider *typ.Provider,
+	hc *protocol.HandleContext,
+	virtualRegistry *runtime.VirtualToolRegistry,
+	recorder ProtocolRecorder,
+	adapter FormatAdapter,
+	forwarder Forwarder,
+	config InterceptorConfig,
+) *GenericStreamInterceptor {
+	if config.MaxRounds == 0 {
+		config.MaxRounds = defaultMaxRounds
+	}
+
+	return &GenericStreamInterceptor{
+		c:               c,
+		s:               s,
+		provider:        provider,
+		hc:              hc,
+		virtualRegistry: virtualRegistry,
+		recorder:        recorder,
+		adapter:         adapter,
+		forwarder:       forwarder,
+		config:          config,
+	}
+}
+
+// Run executes the streaming interceptor loop
+func (i *GenericStreamInterceptor) Run(req any) error {
+	// Setup SSE headers
+	i.adapter.SetupSSEHeaders(i.c)
+	defer i.reportUsage()
+
+	currentReq := req
+
+	for i.round = 0; i.round < i.config.MaxRounds; i.round++ {
+		logrus.Debugf("[MCP-Interceptor] Round %d: starting", i.round)
+
+		// Forward request to upstream
+		stream, err := i.forwarder.ForwardStream(i.c.Request.Context(), i.provider, i.extractModel(currentReq), currentReq)
+		if err != nil {
+			return fmt.Errorf("forward stream failed: %w", err)
+		}
+		defer stream.Close()
+
+		// Consume round and build response
+		response, err := i.consumeRound(stream)
+		if err != nil {
+			return err
+		}
+
+		// Accumulate usage
+		if err := i.accumulateUsage(response); err != nil {
+			logrus.WithError(err).Warn("failed to accumulate usage")
+		}
+
+		// Classify response and decide next action
+		decision := i.classifyResponse(response)
+
+		switch decision {
+		case DecisionNoTools:
+			logrus.Debugf("[MCP-Interceptor] Round %d: no tools, ending", i.round)
+			return i.adapter.SendFinalMessage(i.c)
+
+		case DecisionPureVirtual:
+			logrus.Debugf("[MCP-Interceptor] Round %d: pure virtual, continuing", i.round)
+			return i.handlePureVirtual(response, currentReq)
+
+		case DecisionPureExternal:
+			logrus.Debugf("[MCP-Interceptor] Round %d: pure external, ending", i.round)
+			return i.adapter.SendFinalMessage(i.c)
+
+		case DecisionMixed:
+			logrus.Debugf("[MCP-Interceptor] Round %d: mixed, stashing and ending", i.round)
+			return i.handleMixed(response, currentReq)
+		}
+	}
+
+	// Max rounds exceeded
+	logrus.Infof("[MCP-Interceptor] Max rounds (%d) exceeded", i.config.MaxRounds)
+	return i.adapter.SendFinalMessage(i.c)
+}
+
+// consumeRound processes all events from a stream and builds a complete response
+func (i *GenericStreamInterceptor) consumeRound(stream StreamHandle) (any, error) {
+	for stream.Next() {
+		event := stream.Current()
+
+		// Call guardrails hooks if enabled
+		if i.config.EnableGuardrails && i.hc != nil {
+			for _, hook := range i.hc.OnStreamEventHooks {
+				if err := hook(event); err != nil {
+					logrus.WithError(err).Warn("guardrails hook error")
+				}
+			}
+		}
+
+		// Route event based on type
+		eventType := i.adapter.ClassifyEvent(event)
+		if err := i.routeEvent(event, eventType); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := stream.Err(); err != nil {
+		return nil, fmt.Errorf("stream error: %w", err)
+	}
+
+	// Build complete response from accumulated state
+	return i.adapter.NewResponse(), nil
+}
+
+// routeEvent routes a single event based on its type
+func (i *GenericStreamInterceptor) routeEvent(event any, eventType EventType) error {
+	switch eventType {
+	case EventText:
+		return i.handleTextEvent(event)
+
+	case EventToolStart:
+		return i.handleToolStartEvent(event)
+
+	case EventToolDelta:
+		return i.handleToolDeltaEvent(event)
+
+	case EventToolStop:
+		return i.handleToolStopEvent(event)
+
+	case MessageDelta:
+		// Silently accumulate, interceptor controls end timing
+		return nil
+
+	case MessageStop:
+		// Suppress mid-stream, interceptor controls end timing
+		return nil
+
+	default:
+		// Pass through unknown events
+		return i.adapter.SendEvent(i.c, "message", []byte{})
+	}
+}
+
+// handleTextEvent sends text delta to client
+func (i *GenericStreamInterceptor) handleTextEvent(event any) error {
+	payload, err := i.extractEventPayload(event)
+	if err != nil {
+		return err
+	}
+
+	// Record TTFT
+	if !i.ttftRecorded {
+		i.recordTTFT()
+		i.ttftRecorded = true
+	}
+
+	return i.adapter.SendEvent(i.c, "content_block_delta", payload)
+}
+
+// handleToolStartEvent handles tool use start event
+func (i *GenericStreamInterceptor) handleToolStartEvent(event any) error {
+	tool, ok := i.adapter.ExtractToolFromEvent(event)
+	if !ok {
+		// Not a tool event, pass through
+		payload, err := i.extractEventPayload(event)
+		if err != nil {
+			return err
+		}
+		return i.adapter.SendEvent(i.c, "content_block_start", payload)
+	}
+
+	// Check if virtual tool
+	if i.adapter.IsVirtualTool(tool, i.virtualRegistry) {
+		// Buffer/suppress virtual tool event
+		return i.bufferToolEvent(event)
+	}
+
+	// External tool: pass through to client
+	payload, err := i.extractEventPayload(event)
+	if err != nil {
+		return err
+	}
+	return i.adapter.SendEvent(i.c, "content_block_start", payload)
+}
+
+// handleToolDeltaEvent handles tool parameter delta event
+func (i *GenericStreamInterceptor) handleToolDeltaEvent(event any) error {
+	if i.adapter.ShouldSuppressEvent(event, i.virtualRegistry) {
+		// Suppress virtual tool delta
+		return nil
+	}
+
+	// External tool delta: pass through
+	payload, err := i.extractEventPayload(event)
+	if err != nil {
+		return err
+	}
+	return i.adapter.SendEvent(i.c, "content_block_delta", payload)
+}
+
+// handleToolStopEvent handles tool stop event
+func (i *GenericStreamInterceptor) handleToolStopEvent(event any) error {
+	if i.adapter.ShouldSuppressEvent(event, i.virtualRegistry) {
+		// Suppress virtual tool stop
+		return nil
+	}
+
+	// External tool stop: pass through
+	payload, err := i.extractEventPayload(event)
+	if err != nil {
+		return err
+	}
+	return i.adapter.SendEvent(i.c, "content_block_stop", payload)
+}
+
+// classifyResponse classifies the response to determine next action
+func (i *GenericStreamInterceptor) classifyResponse(response any) ResponseDecision {
+	tools, err := i.adapter.ExtractTools(response)
+	if err != nil || len(tools) == 0 {
+		return DecisionNoTools
+	}
+
+	hasVirtual := false
+	hasExternal := false
+
+	for _, tool := range tools {
+		if i.adapter.IsVirtualTool(tool, i.virtualRegistry) {
+			hasVirtual = true
+		} else {
+			hasExternal = true
+		}
+	}
+
+	if hasVirtual && hasExternal {
+		return DecisionMixed
+	}
+	if hasVirtual {
+		return DecisionPureVirtual
+	}
+	return DecisionPureExternal
+}
+
+// handlePureVirtual executes virtual tools and continues loop
+func (i *GenericStreamInterceptor) handlePureVirtual(response, req any) error {
+	tools, err := i.adapter.ExtractTools(response)
+	if err != nil {
+		return err
+	}
+
+	// Execute virtual tools
+	results := make([]ToolExecutionResult, 0, len(tools))
+	for _, tool := range tools {
+		result, err := i.executeTool(tool, req)
+		if err != nil {
+			logrus.WithError(err).Warnf("tool execution failed: %s", tool.Name())
+		}
+		results = append(results, result)
+	}
+
+	// Append tool results to request and continue loop
+	updatedReq, err := i.adapter.AppendToolResults(req, response, i.resultsToAny(results))
+	if err != nil {
+		return err
+	}
+
+	// Send keep-alive to client
+	if err := i.adapter.SendKeepAlive(i.c); err != nil {
+		return err
+	}
+
+	// Continue to next round (loop continues in Run())
+	return i.continueLoop(updatedReq)
+}
+
+// handleMixed executes virtual tools, stashes results, returns external to client
+func (i *GenericStreamInterceptor) handleMixed(response, req any) error {
+	tools, err := i.adapter.ExtractTools(response)
+	if err != nil {
+		return err
+	}
+
+	virtual, external, externalIDs := i.adapter.SplitVirtualExternal(tools, i.virtualRegistry)
+
+	// Execute virtual tools
+	results := make([]ToolExecutionResult, 0, len(virtual))
+	for _, tool := range virtual {
+		result, err := i.executeTool(tool, req)
+		if err != nil {
+			logrus.WithError(err).Warnf("tool execution failed: %s", tool.Name())
+		}
+		results = append(results, result)
+	}
+
+	// Stash results linked to external IDs
+	if i.pendingManager != nil && len(externalIDs) > 0 {
+		if err := i.pendingManager.Stash(externalIDs, results); err != nil {
+			logrus.WithError(err).Warn("failed to stash pending results")
+		}
+	}
+
+	// Filter response to only include external tools
+	_, err = i.adapter.FilterVirtualTools(response, external)
+	if err != nil {
+		return err
+	}
+
+	// Send final message (external tools already streamed to client)
+	return i.adapter.SendFinalMessage(i.c)
+}
+
+// executeTool executes a single virtual tool
+func (i *GenericStreamInterceptor) executeTool(tool Tool, req any) (ToolExecutionResult, error) {
+	// Extract messages from request
+	messages := i.extractMessages(req)
+
+	// Execute tool
+	result, err := i.s.CallMCPTool(i.c.Request.Context(), tool.Name(), tool.Arguments(), messages)
+
+	return ToolExecutionResult{
+		ToolUseID: tool.ID(),
+		Content:   result,
+		IsError:   err != nil,
+	}, err
+}
+
+// Helper methods
+
+func (i *GenericStreamInterceptor) extractModel(req any) string {
+	// Extract model from request based on format
+	switch r := req.(type) {
+	case *anthropic.MessageNewParams:
+		return string(r.Model)
+	case *anthropic.BetaMessageNewParams:
+		return string(r.Model)
+	case *openai.ChatCompletionNewParams:
+		return string(r.Model)
+	default:
+		// Fallback to provider's first model if available
+		if len(i.provider.Models) > 0 {
+			return i.provider.Models[0]
+		}
+		return ""
+	}
+}
+
+func (i *GenericStreamInterceptor) extractEventPayload(event any) ([]byte, error) {
+	// Extract raw JSON payload from streaming events
+	// Different SDK types have different methods to access raw data
+	switch e := event.(type) {
+	case *anthropic.MessageStreamEventUnion:
+		return []byte(e.RawJSON()), nil
+	case *anthropic.BetaRawMessageStreamEventUnion:
+		return []byte(e.RawJSON()), nil
+	case *openai.ChatCompletionChunk:
+		// For OpenAI, return the raw JSON string
+		return []byte(e.RawJSON()), nil
+	default:
+		// Fallback: return empty payload for unknown types
+		return []byte{}, nil
+	}
+}
+
+func (i *GenericStreamInterceptor) extractMessages(req any) []map[string]any {
+	// Extract messages for tool execution hooks
+	return nil
+}
+
+func (i *GenericStreamInterceptor) resultsToAny(results []ToolExecutionResult) []any {
+	out := make([]any, len(results))
+	for i, r := range results {
+		out[i] = r
+	}
+	return out
+}
+
+func (i *GenericStreamInterceptor) recordTTFT() {
+	// Time To First Token (TTFT) tracking is handled at the dispatch layer
+	// through HandleContext hooks. This method is called for consistency
+	// but the actual tracking is done in the dispatch functions.
+	// See: mcp_anthropic_v1_helper.go - dispatchGeneric*Stream functions
+}
+
+func (i *GenericStreamInterceptor) bufferToolEvent(event any) error {
+	// Buffer tool event for potential later flush
+	// Currently virtual tool events are suppressed, so this is a no-op
+	// If buffering is needed in the future, implement here
+	return nil
+}
+
+func (i *GenericStreamInterceptor) accumulateUsage(response any) error {
+	usage, err := i.adapter.ExtractUsage(response)
+	if err != nil {
+		return err
+	}
+
+	i.totalInputTokens += int64(usage.InputTokens)
+	i.totalOutputTokens += int64(usage.OutputTokens)
+	i.totalCacheTokens += int64(usage.CacheTokens)
+	return nil
+}
+
+func (i *GenericStreamInterceptor) reportUsage() {
+	if i.c != nil {
+		i.s.TrackUsage(i.c, int(i.totalInputTokens), int(i.totalOutputTokens), int(i.totalCacheTokens))
+	}
+}
+
+func (i *GenericStreamInterceptor) continueLoop(req any) error {
+	// Store updated request for next round
+	// This is handled by the Run() loop
+	return nil
+}

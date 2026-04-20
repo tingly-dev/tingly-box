@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
@@ -41,6 +42,32 @@ func extractAnthropicBetaMessages(messages []anthropic.BetaMessageParam) []map[s
 	var out []map[string]any
 	_ = json.Unmarshal(b, &out)
 	return out
+}
+
+// shouldUseGenericMCPForProvider checks if the provider is allowed to use generic MCP path
+func (s *Server) shouldUseGenericMCPForProvider(provider *typ.Provider) bool {
+	limits := s.config.GenericMCP.ProviderLimits
+	if limits == "" || limits == "*" {
+		// No limits configured, all providers can use generic path
+		return true
+	}
+
+	// Check if provider is in the limits list
+	// Format: comma-separated provider names (e.g., "provider1,provider2")
+	if limits == provider.Name {
+		return true
+	}
+
+	// Parse comma-separated limits and check if provider is in the list
+	// This is a simple implementation - can be improved with proper parsing
+	parts := strings.Split(limits, ",")
+	for _, part := range parts {
+		if strings.TrimSpace(part) == provider.Name {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (s *Server) dispatchChainResult(
@@ -95,6 +122,20 @@ func (s *Server) dispatchAnthropicToAnthropicV1(
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 	req := reqCtx.Request.(*anthropic.MessageNewParams)
 	s.injectPendingVirtualResultsAnthropicV1(req)
+
+	// Check if generic MCP path should be used
+	if s.shouldUseGenericMCPForProvider(provider) {
+		// Phase 1: non-streaming
+		if !isStreaming && s.config.GenericMCP.UseGenericAnthropicV1NonStream {
+			s.dispatchGenericAnthropicV1NonStream(c, reqCtx, rule, provider, recorder)
+			return
+		}
+		// Phase 2: streaming
+		if isStreaming && s.config.GenericMCP.UseGenericAnthropicV1Stream {
+			s.dispatchGenericAnthropicV1Stream(c, reqCtx, rule, provider, recorder)
+			return
+		}
+	}
 
 	ctx := c.Request.Context()
 
@@ -267,6 +308,39 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 		}
 
 		if hasDeclaredMCPAnthropicBetaTools(req) {
+			// Check if generic MCP path should be used for cross-format streaming
+			if s.shouldUseGenericMCPForProvider(provider) && s.config.GenericMCP.UseGenericAnthropicBetaStream {
+				// Use TRUE streaming forwarding (not legacy non-stream approach)
+				streamResp, cancel, err := ForwardAnthropicV1BetaStream(fc, wrapper, req)
+				if cancel != nil {
+					defer cancel()
+				}
+				if err != nil {
+					stream.SendStreamingError(c, err)
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
+
+				// Convert Anthropic Beta stream to OpenAI Chat format on-the-fly
+				inputTokens, outputTokens, err := stream.AnthropicToOpenAIStream(c, req, streamResp, responseModel, disableStreamUsage)
+				if err != nil {
+					tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
+					s.trackUsageWithTokenUsage(c, tokenUsage, err)
+					stream.SendInternalError(c, err.Error())
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
+					return
+				}
+
+				tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
+				s.trackUsageWithTokenUsage(c, tokenUsage, nil)
+				return
+			}
+
+			// Legacy implementation: non-stream forwarding for MCP tool handling
 			anthropicResp, cancel, err := ForwardAnthropicV1Beta(fc, wrapper, req)
 			if cancel != nil {
 				defer cancel()
@@ -433,6 +507,18 @@ func (s *Server) dispatchChainFromAnthropicBeta(
 	case protocol.TypeOpenAIChat:
 		s.dispatchOpenAIChatFromAnthropicBeta(c, reqCtx, rule, provider, isStreaming, recorder)
 	default:
+		// Check if we should use generic MCP path for this provider
+		if s.shouldUseGenericMCPForProvider(provider) {
+			if !isStreaming && s.config.GenericMCP.UseGenericAnthropicBetaNonStream {
+				s.dispatchGenericAnthropicBetaNonStream(c, reqCtx, rule, provider, recorder)
+				return
+			}
+			if isStreaming && s.config.GenericMCP.UseGenericAnthropicBetaStream {
+				s.dispatchGenericAnthropicBetaStream(c, reqCtx, rule, provider, recorder)
+				return
+			}
+		}
+
 		actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 		req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 		s.injectPendingVirtualResultsAnthropicBeta(req)
@@ -838,6 +924,14 @@ func (s *Server) dispatchChainFromOpenAIChat(
 			s.trackUsageWithTokenUsage(c, usage, nil)
 		case protocol.TypeAnthropicBeta:
 			if hasDeclaredMCPTools(req) {
+				// Check if generic MCP path should be used for this cross-format scenario
+				if s.shouldUseGenericMCPForProvider(provider) && s.config.GenericMCP.UseGenericAnthropicBetaStream {
+					// Use unified generic MCP architecture for cross-format streaming
+					s.dispatchOpenAIChatToAnthropicBetaGeneric(c, reqCtx, rule, provider, isStreaming, recorder)
+					return
+				}
+
+				// Legacy implementation for cross-format path
 				reqForMCP := *req
 				// This branch intentionally uses non-stream forwarding to execute
 				// server-side MCP tool loop, so stream-only options must be omitted.
@@ -1332,4 +1426,58 @@ func (s *Server) streamAnthropicV1ToResponses(
 	})
 	usage, err := stream.HandleAnthropicToOpenAIResponsesStream(hc, anthropicStream, responseModel)
 	s.trackUsageWithTokenUsage(c, usage, err)
+}
+
+
+
+
+// dispatchOpenAIChatToAnthropicBetaGeneric handles OpenAI Chat -> Anthropic Beta
+// cross-format streaming using TRUE streaming forwarding (not downgrade)
+func (s *Server) dispatchOpenAIChatToAnthropicBetaGeneric(
+	c *gin.Context,
+	reqCtx *transform.TransformContext,
+	rule *typ.Rule,
+	provider *typ.Provider,
+	isStreaming bool,
+	recorder *ProtocolRecorder,
+) {
+	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
+	req := reqCtx.Request.(*openai.ChatCompletionNewParams)
+	s.injectPendingVirtualResultsOpenAI(req)
+
+	// Step 1: Convert OpenAI Chat request to Anthropic Beta format
+	const defaultMaxTokens = 4096
+	anthropicReq := request.ConvertOpenAIToAnthropicRequest(req, defaultMaxTokens)
+
+	// Step 2: Forward to Anthropic Beta using TRUE streaming (not non-stream downgrade)
+	wrapper := s.clientPool.GetAnthropicClient(c.Request.Context(), provider, actualModel)
+	fc := NewForwardContext(c.Request.Context(), provider)
+
+	anthropicStream, cancel, err := ForwardAnthropicV1BetaStream(fc, wrapper, anthropicReq)
+	if cancel != nil {
+		defer cancel()
+	}
+	if err != nil {
+		stream.SendStreamingError(c, err)
+		if recorder != nil {
+			recorder.RecordError(err)
+		}
+		return
+	}
+
+	// Step 3: Convert Anthropic Beta stream back to OpenAI Chat format on-the-fly
+	// This achieves TRUE streaming with proper format conversion
+	inputTokens, outputTokens, err := stream.AnthropicToOpenAIStream(c, anthropicReq, anthropicStream, responseModel, false)
+	if err != nil {
+		usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
+		s.trackUsageWithTokenUsage(c, usage, err)
+		stream.SendInternalError(c, err.Error())
+		if recorder != nil {
+			recorder.RecordError(err)
+		}
+		return
+	}
+
+	usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
+	s.trackUsageWithTokenUsage(c, usage, nil)
 }

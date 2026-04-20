@@ -1,11 +1,11 @@
-package server
+package forwarding
 
 import (
 	"context"
-	"github.com/tingly-dev/tingly-box/internal/constant"
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 

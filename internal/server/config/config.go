@@ -78,6 +78,10 @@ type Config struct {
 	// HTTP Transport settings for upstream API connections
 	HTTPTransport HTTPTransportConfig `json:"http_transport,omitempty" yaml:"http_transport,omitempty"`
 
+	// Generic MCP path feature flags
+	// When enabled, routes traffic through the new generic MCP architecture
+	GenericMCP GenericMCPConfig `json:"generic_mcp,omitempty" yaml:"generic_mcp,omitempty"`
+
 	// ProviderTemplateSource supports three modes:
 	// 1. Empty/default -> use embedded templates (default GitHub sync behavior)
 	// 2. file:///path/to/template.json -> load from local file
@@ -164,6 +168,40 @@ type MultiTenantConfig struct {
 	// APITokenIssuer is the issuer claim for JWT tokens
 	// Default: "tingly-box"
 	APITokenIssuer string `json:"api_token_issuer,omitempty" yaml:"api_token_issuer,omitempty"`
+}
+
+// GenericMCPConfig holds settings for the new generic MCP architecture
+type GenericMCPConfig struct {
+	// UseGenericAnthropicV1NonStream enables generic path for A→A V1 non-streaming
+	// When false: uses existing dispatch implementation
+	// When true: uses GenericLoopProcessor
+	UseGenericAnthropicV1NonStream bool `json:"use_generic_anthropic_v1_non_stream,omitempty" yaml:"use_generic_anthropic_v1_non_stream,omitempty"`
+
+	// UseGenericAnthropicV1Stream enables generic path for A→A V1 streaming
+	// When false: uses existing dispatch implementation
+	// When true: uses GenericStreamInterceptor
+	UseGenericAnthropicV1Stream bool `json:"use_generic_anthropic_v1_stream,omitempty" yaml:"use_generic_anthropic_v1_stream,omitempty"`
+
+	// UseGenericOpenAIChatNonStream enables generic path for O→O non-streaming
+	UseGenericOpenAIChatNonStream bool `json:"use_generic_openai_chat_non_stream,omitempty" yaml:"use_generic_openai_chat_non_stream,omitempty"`
+
+	// UseGenericOpenAIChatStream enables generic path for O→O streaming
+	UseGenericOpenAIChatStream bool `json:"use_generic_openai_chat_stream,omitempty" yaml:"use_generic_openai_chat_stream,omitempty"`
+
+	// UseGenericAnthropicBetaNonStream enables generic path for Aβ→Aβ non-streaming
+	// When false: uses existing dispatch implementation
+	// When true: uses GenericLoopProcessor
+	UseGenericAnthropicBetaNonStream bool `json:"use_generic_anthropic_beta_non_stream,omitempty" yaml:"use_generic_anthropic_beta_non_stream,omitempty"`
+
+	// UseGenericAnthropicBetaStream enables generic path for Aβ→Aβ streaming
+	// When false: uses existing dispatch implementation
+	// When true: uses GenericStreamInterceptor
+	UseGenericAnthropicBetaStream bool `json:"use_generic_anthropic_beta_stream,omitempty" yaml:"use_generic_anthropic_beta_stream,omitempty"`
+
+	// ProviderLimits limits which providers use generic path
+	// Empty means all providers can use generic path
+	// Format: comma-separated provider names (e.g., "provider1,provider2")
+	ProviderLimits string `json:"provider_limits,omitempty" yaml:"provider_limits,omitempty"`
 }
 
 // ConfigOption is a function that modifies a Config during initialization
