@@ -9,34 +9,14 @@ import {
     Tooltip,
     Typography
 } from '@mui/material';
-import React, {type ReactNode } from 'react';
-import { ApiConfigRow } from './ApiConfigRow';
-import { BaseUrlRow } from './BaseUrlRow';
+import React, { type ReactNode, useState } from 'react';
+import { ConfigRow } from './ConfigRow';
+import { CompactConfigCard } from './CompactConfigCard';
 import PluginFeatures from './PluginFeatures';
-
-export interface ConfigSectionProps {
-    label: string;
-    children: ReactNode;
-    infoTooltip?: string;
-}
-
-const ConfigSection: React.FC<ConfigSectionProps> = ({ label, children, infoTooltip }) => (
-    <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                {label}
-            </Typography>
-            {infoTooltip && (
-                <Tooltip title={infoTooltip} arrow>
-                    <InfoIcon sx={{ fontSize: '1rem', color: 'text.secondary', cursor: 'help' }} />
-                </Tooltip>
-            )}
-        </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-            {children}
-        </Box>
-    </Box>
-);
+import { EnvironmentModeSwitcher, type EnvironmentMode } from './EnvironmentModeSwitcher';
+import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import { copyableTextStyle } from '@/styles/textStyles';
+import { maskToken, transformUrlByMode } from '@/utils/tokenUtils';
 
 export interface ProviderConfigCardProps {
     /** Card title */
@@ -47,10 +27,6 @@ export interface ProviderConfigCardProps {
     baseUrl: string;
     /** Copy handler */
     onCopy: (text: string, label: string) => Promise<void>;
-    /** API key token */
-    token: string;
-    /** Handler to show token modal */
-    onShowTokenModal: () => void;
     /** Optional: scenario for experimental features */
     scenario?: string;
     /** Optional: mode selection component */
@@ -64,6 +40,8 @@ export interface ProviderConfigCardProps {
     titleInfoTooltip?: string;
     /** Optional: custom label for base URL row */
     baseUrlLabel?: string;
+    /** Optional: use compact horizontal tab mode */
+    compact?: boolean;
     /** Container props */
     containerProps?: BoxProps;
 }
@@ -72,9 +50,16 @@ export interface ProviderConfigCardProps {
  * Unified provider configuration card component.
  * Provides a consistent layout for SDK configuration across all provider pages.
  *
- * Structure:
- * 1. Base URL row (always shown)
- * 2. API Key row (optional, shown by default)
+ * Modal state (token, showTokenModal, setShowTokenModal) is obtained from
+ * ScenarioPageModalProvider context, so the parent page doesn't need to pass them.
+ *
+ * Modes:
+ * - Compact: Horizontal tab switching (Base URL | API Key) - saves vertical space
+ * - Standard: Vertical rows with Base URL and API Key sections
+ *
+ * Standard Structure:
+ * 1. Base URL row (when showBaseUrlRow=true)
+ * 2. API Key row (when showApiKeyRow=true)
  * 3. Divider
  * 4. Mode selection (optional, e.g., ClaudeCode)
  * 5. Experimental features (optional, when scenario is provided)
@@ -84,75 +69,151 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
     baseUrlPath,
     baseUrl,
     onCopy,
-    token,
-    onShowTokenModal,
     scenario,
     modeSelection,
     extraContent,
     showApiKeyRow = true,
     showBaseUrlRow = true,
-    titleInfoTooltip,
     baseUrlLabel = 'Base URL',
+    compact = false,
     containerProps,
 }) => {
+    // Get modal state from context instead of props
+    const { token, setShowTokenModal } = useScenarioPageModal();
     const showOptionalSections = scenario || modeSelection || extraContent;
     const hasDivider = showApiKeyRow && showOptionalSections;
 
+    // Compact mode: single horizontal layout with tab switching
+    if (compact) {
+        return (
+            <Box {...containerProps}>
+                <Box sx={{ px: 2, py: 0.5 }}>
+                    <CompactConfigCard
+                        baseUrlPath={baseUrlPath}
+                        baseUrl={baseUrl}
+                        onCopy={onCopy}
+                        baseUrlLabel={baseUrlLabel}
+                        title={title}
+                    />
+                </Box>
+
+                {/* Mode Selection - Optional */}
+                {modeSelection && (
+                    <Box sx={{ px: 2, pt: 0.5 }}>
+                        {modeSelection}
+                    </Box>
+                )}
+
+                {/* Extra Content - Optional */}
+                {extraContent && (
+                    <Box sx={{ px: 2, pt: 0.5 }}>
+                        {extraContent}
+                    </Box>
+                )}
+
+                {/* Scenario Features - Optional */}
+                {scenario && (
+                    <Box sx={{ px: 2, pt: 0.5 }}>
+                        <PluginFeatures scenario={scenario} />
+                    </Box>
+                )}
+            </Box>
+        );
+    }
+
+    // Standard mode: two separate rows using ConfigRow (single tab each)
+    const [envMode, setEnvMode] = useState<EnvironmentMode>('local');
+
+    // Build full URL based on environment mode
+    const fullUrl = React.useMemo(() => {
+        const url = `${baseUrl}${baseUrlPath}`;
+        return transformUrlByMode(url, envMode);
+    }, [baseUrl, baseUrlPath, envMode]);
+
     return (
         <Box {...containerProps}>
-            {/* Base URL Row - Always shown */}
-            {showBaseUrlRow && <Box sx={{ p: 2, pb: showApiKeyRow ? 2 : 0 }}>
-                <BaseUrlRow
-                    label={baseUrlLabel}
-                    path={baseUrlPath}
-                    baseUrl={baseUrl}
-                    onCopy={(url) => onCopy(url, title)}
-                    urlLabel={`${title} Base URL`}
-                />
-            </Box>}
-
-            {/* API Key Row - Optional but shown by default */}
-            {showApiKeyRow && (
-                <Box sx={{ px: 2, pb: hasDivider ? 2 : 2 }}>
-                    <ApiConfigRow label="API Key" value={token}>
-                        <Box sx={{ display: 'flex', gap: 0.5, ml: 'auto' }}>
-                            <Tooltip title="View Token">
-                                <IconButton onClick={onShowTokenModal} size="small">
-                                    <VisibilityIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Copy Token">
-                                <IconButton onClick={() => onCopy(token, 'API Key')} size="small">
-                                    <CopyIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                        </Box>
-                    </ApiConfigRow>
+            {/* Base URL Row - single tab mode */}
+            {showBaseUrlRow && (
+                <Box sx={{ px: 2, py: 0.5 }}>
+                    <ConfigRow
+                        tabs={[
+                            {
+                                key: 'baseUrl',
+                                label: baseUrlLabel,
+                                content: (
+                                    <Typography
+                                        variant="subtitle2"
+                                        onClick={() => onCopy(fullUrl, `${title} ${baseUrlLabel}`)}
+                                        sx={copyableTextStyle}
+                                        title={`Click to copy ${baseUrlLabel}`}
+                                    >
+                                        {fullUrl}
+                                    </Typography>
+                                ),
+                                actions: (
+                                    <EnvironmentModeSwitcher
+                                        value={envMode}
+                                        onChange={setEnvMode}
+                                    />
+                                ),
+                            },
+                        ]}
+                        activeTab="baseUrl"
+                        onTabChange={() => {}}
+                    />
                 </Box>
             )}
 
-            {/* Divider - Between core config and optional sections */}
-            {hasDivider && (
-                <Divider sx={{ mx: 2 }} />
+            {/* API Key Row - single tab mode */}
+            {showApiKeyRow && (
+                <Box sx={{ px: 2, py: 0.5 }}>
+                    <ConfigRow
+                        tabs={[
+                            {
+                                key: 'apiKey',
+                                label: 'API Key',
+                                content: (
+                                    <Typography
+                                        variant="subtitle2"
+                                        onClick={() => onCopy(token, 'API Key')}
+                                        sx={copyableTextStyle}
+                                        title="Click to copy API Key"
+                                    >
+                                        {maskToken(token)}
+                                    </Typography>
+                                ),
+                                actions: (
+                                    <Tooltip title="View Full Token">
+                                        <IconButton onClick={() => setShowTokenModal(true)} size="small">
+                                            <VisibilityIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                ),
+                            },
+                        ]}
+                        activeTab="apiKey"
+                        onTabChange={() => {}}
+                    />
+                </Box>
             )}
 
             {/* Mode Selection - Optional (e.g., ClaudeCode unified/separate) */}
             {modeSelection && (
-                <Box sx={{ px: 2 }}>
+                <Box sx={{ px: 2, py: 0.5 }}>
                     {modeSelection}
                 </Box>
             )}
 
             {/* Extra Content - Optional */}
             {extraContent && (
-                <Box sx={{ px: 2 }}>
+                <Box sx={{ px: 2, py: 0.5 }}>
                     {extraContent}
                 </Box>
             )}
 
             {/* Scenario Features (Thinking Effort + Plugin) - Optional (when scenario is provided) */}
             {scenario && (
-                <Box sx={{ px: 2 }}>
+                <Box sx={{ px: 2, py: 0.5 }}>
                     <PluginFeatures scenario={scenario} />
                 </Box>
             )}

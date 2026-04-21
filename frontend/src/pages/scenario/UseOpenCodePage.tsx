@@ -4,20 +4,17 @@ import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import { Box, Button, Tooltip, IconButton } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
 import { useState } from 'react';
-import ExperimentalFeatures from '@/components/ExperimentalFeatures.tsx';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import OpenCodeConfigModal from '@/components/OpenCodeConfigModal';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { api } from '@/services/api';
+import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 
 const scenario = "opencode";
 
-const UseOpenCodePage: React.FC = () => {
+const UseOpenCodePageContent: React.FC = () => {
     const {
-        showTokenModal,
-        setShowTokenModal,
-        token,
         isLoading,
         notification,
         showNotification,
@@ -27,13 +24,11 @@ const UseOpenCodePage: React.FC = () => {
 
     const [configModalOpen, setConfigModalOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
-    // Config preview state
     const [configJson, setConfigJson] = useState('');
     const [scriptWindows, setScriptWindows] = useState('');
     const [scriptUnix, setScriptUnix] = useState('');
     const [isConfigLoading, setIsConfigLoading] = useState(false);
 
-    // Fetch OpenCode config preview from backend
     const fetchConfigPreview = async () => {
         setIsConfigLoading(true);
         try {
@@ -45,7 +40,7 @@ const UseOpenCodePage: React.FC = () => {
             } else {
                 setConfigJson('// Error: ' + (result.message || 'Failed to load config'));
                 setScriptWindows('// Error loading config');
-                setScriptUnix('// Error loading config');
+                setScriptUnix('// Error: Failed to connect to server');
                 showNotification('Failed to load config preview: ' + (result.message || 'Unknown error'), 'error');
             }
         } catch (err) {
@@ -59,9 +54,7 @@ const UseOpenCodePage: React.FC = () => {
         }
     };
 
-    // Handle opening config modal - fetch preview first
     const handleOpenConfigModal = async () => {
-        // Reset config state
         setConfigJson('// Loading...');
         setScriptWindows('// Loading...');
         setScriptUnix('// Loading...');
@@ -69,7 +62,6 @@ const UseOpenCodePage: React.FC = () => {
         setConfigModalOpen(true);
     };
 
-    // Apply handler for OpenCode config - calls backend to generate and write config
     const handleApply = async () => {
         try {
             setIsApplyLoading(true);
@@ -127,10 +119,9 @@ const UseOpenCodePage: React.FC = () => {
                         baseUrlPath="/tingly/opencode"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
-                        token={token}
-                        onShowTokenModal={() => setShowTokenModal(true)}
                         scenario={scenario}
                         showApiKeyRow={true}
+                        compact={true}
                     />
                 </UnifiedCard>
 
@@ -154,6 +145,14 @@ const UseOpenCodePage: React.FC = () => {
                 />
             </CardGrid>
         </PageLayout>
+    );
+};
+
+const UseOpenCodePage: React.FC = () => {
+    return (
+        <ScenarioPageModalProvider>
+            <UseOpenCodePageContent />
+        </ScenarioPageModalProvider>
     );
 };
 

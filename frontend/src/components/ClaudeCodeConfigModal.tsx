@@ -3,6 +3,7 @@ import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import CodeBlock from './CodeBlock';
 import { isFullEdition } from '@/utils/edition';
+import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -11,7 +12,6 @@ interface ClaudeCodeConfigModalProps {
     onClose: () => void;
     configMode: ConfigMode;
     baseUrl: string;
-    token: string;
     rules: any[];
     copyToClipboard: (text: string, label: string) => Promise<void>;
     // Apply handlers
@@ -58,13 +58,14 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     onClose,
     configMode,
     baseUrl,
-    token,
     rules,
     copyToClipboard,
     onApply,
     onApplyWithStatusLine,
     isApplyLoading = false,
 }) => {
+    // Get token from context
+    const { token } = useScenarioPageModal();
     const { t } = useTranslation();
     const [settingsTab, setSettingsTab] = React.useState<ScriptTab>('json');
     const [claudeJsonTab, setClaudeJsonTab] = React.useState<ScriptTab>('json');

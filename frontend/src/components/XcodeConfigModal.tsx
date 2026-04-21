@@ -1,12 +1,12 @@
 import { Box, Dialog, DialogActions, DialogContent, DialogTitle, Button, Typography, Stack } from '@mui/material';
 import React from 'react';
 import xcodeImage from '../assets/images/xcode.png';
+import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 
 interface XcodeConfigModalProps {
     open: boolean;
     onClose: () => void;
     baseUrl: string;
-    token: string;
     copyToClipboard: (text: string, label: string) => Promise<void>;
 }
 
@@ -14,9 +14,10 @@ const XcodeConfigModal: React.FC<XcodeConfigModalProps> = ({
     open,
     onClose,
     baseUrl,
-    token,
     copyToClipboard,
 }) => {
+    // Get token from context
+    const { token } = useScenarioPageModal();
     return (
         <Dialog
             open={open}

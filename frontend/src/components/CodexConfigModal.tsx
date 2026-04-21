@@ -3,12 +3,12 @@ import React from 'react';
 import CodeBlock from './CodeBlock';
 import { shouldIgnoreDialogClose } from './dialogClose';
 import { api } from '@/services/api';
+import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 
 interface CodexConfigModalProps {
     open: boolean;
     onClose: () => void;
     baseUrl: string;
-    token: string;
     copyToClipboard: (text: string, label: string) => Promise<void>;
 }
 
@@ -21,9 +21,10 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
     open,
     onClose,
     baseUrl,
-    token,
     copyToClipboard,
 }) => {
+    // Get token from context
+    const { token } = useScenarioPageModal();
     const [configTab, setConfigTab] = React.useState<ScriptTab>('json');
     const [authTab, setAuthTab] = React.useState<ScriptTab>('json');
     const [sessionAction, setSessionAction] = React.useState<SessionAction | null>(null);

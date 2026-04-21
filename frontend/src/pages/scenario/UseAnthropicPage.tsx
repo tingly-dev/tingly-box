@@ -5,15 +5,12 @@ import { Box } from '@mui/material';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
+import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 
 const scenario = "anthropic";
 
-const UseAnthropicPage: React.FC = () => {
+const UseAnthropicPageContent: React.FC = () => {
     const {
-        showTokenModal,
-        setShowTokenModal,
-        token,
-        providers,
         isLoading,
         notification,
         copyToClipboard,
@@ -36,8 +33,6 @@ const UseAnthropicPage: React.FC = () => {
                         baseUrlPath="/tingly/anthropic"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
-                        token={token}
-                        onShowTokenModal={() => setShowTokenModal(true)}
                     />
                 </UnifiedCard>
                 <TemplatePage
@@ -48,6 +43,14 @@ const UseAnthropicPage: React.FC = () => {
                 />
             </CardGrid>
         </PageLayout>
+    );
+};
+
+const UseAnthropicPage: React.FC = () => {
+    return (
+        <ScenarioPageModalProvider>
+            <UseAnthropicPageContent />
+        </ScenarioPageModalProvider>
     );
 };
 

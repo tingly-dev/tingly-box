@@ -8,14 +8,12 @@ import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import VSCodeConfigModal from '@/components/VSCodeConfigModal';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
+import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 
 const scenario = "vscode";
 
-const UseVSCodePage: React.FC = () => {
+const UseVSCodePageContent: React.FC = () => {
     const {
-        showTokenModal,
-        setShowTokenModal,
-        token,
         isLoading,
         notification,
         copyToClipboard,
@@ -40,22 +38,7 @@ const UseVSCodePage: React.FC = () => {
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                 </IconButton>
                             </Tooltip>
-                        </Box>
-                    }
-                    size="full"
-                    rightAction={
-                        <Button
-                            onClick={handleOpenConfigModal}
-                            variant="contained"
-                            size="small"
-                        >
-                            Config Guide
-                        </Button>
-                    }
-                >
-                    {/* Tingly Box For VS Code subtitle */}
-                    <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary">
+                             <Typography variant="body2" color="text.secondary">
                             Tingly Box For VS Code ·{' '}
                             <Link
                                 href="https://marketplace.visualstudio.com/items?itemName=Tingly-Dev.vscode-tingly-box"
@@ -71,17 +54,27 @@ const UseVSCodePage: React.FC = () => {
                                 Install Now
                             </Link>
                         </Typography>
-                    </Box>
-
+                        </Box>
+                    }
+                    size="full"
+                    rightAction={
+                        <Button
+                            onClick={handleOpenConfigModal}
+                            variant="contained"
+                            size="small"
+                        >
+                            Config Guide
+                        </Button>
+                    }
+                >
                     <ProviderConfigCard
                         title="VSCode Copliot Chat"
                         baseUrlPath="/tingly/vscode"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
-                        token={token}
-                        onShowTokenModal={() => setShowTokenModal(true)}
                         scenario={scenario}
                         showApiKeyRow={true}
+                        compact={false}
                     />
                 </UnifiedCard>
 
@@ -96,11 +89,18 @@ const UseVSCodePage: React.FC = () => {
                     open={configModalOpen}
                     onClose={() => setConfigModalOpen(false)}
                     baseUrl={baseUrl}
-                    token={token}
                     copyToClipboard={copyToClipboard}
                 />
             </CardGrid>
         </PageLayout>
+    );
+};
+
+const UseVSCodePage: React.FC = () => {
+    return (
+        <ScenarioPageModalProvider>
+            <UseVSCodePageContent />
+        </ScenarioPageModalProvider>
     );
 };
 
