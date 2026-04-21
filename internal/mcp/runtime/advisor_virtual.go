@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/sirupsen/logrus"
@@ -93,7 +94,11 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *Sess
 			"format":         detectAdvisorFormat(cfg),
 		}).Debug("[MCP-DEBUG] ADVISOR: calling advisor model")
 
-		advisorCtx, cancel := context.WithTimeout(ctx, advisorCallTimeout)
+		timeout := advisorCallTimeout
+		if cfg.TimeoutSeconds > 0 {
+			timeout = time.Duration(cfg.TimeoutSeconds) * time.Second
+		}
+		advisorCtx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
 		var result string

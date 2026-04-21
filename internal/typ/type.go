@@ -284,6 +284,8 @@ type AdvisorConfig struct {
 	MaxUsesPerRequest int    `json:"max_uses_per_request,omitempty" yaml:"max_uses_per_request,omitempty"`
 	// The max token output by adviser. Too much explodes worker's context. 4k is enough for pure suggestions.
 	MaxTokens int `json:"max_tokens,omitempty" yaml:"max_tokens,omitempty"`
+	// TimeoutSeconds overrides the default 60s per-call timeout. Set higher for slow/large models.
+	TimeoutSeconds int `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
 }
 
 // MCPStdioConfig STDIO connection configuration
