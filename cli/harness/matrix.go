@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/internal/protocol_validate"
 )
@@ -71,6 +72,19 @@ Use flags to filter specific combinations.`,
 
 // runMatrix executes the matrix tests with the given options.
 func runMatrix(opts *matrixOptions) error {
+	// Set log level based on verbose flag
+	// Default (v=0): Warn level - minimal output
+	// v=1: Info level - normal output
+	// v=2+: Debug level - detailed output
+	switch opts.verbose {
+	case 0:
+		logrus.SetLevel(logrus.WarnLevel)
+	case 1:
+		logrus.SetLevel(logrus.InfoLevel)
+	default:
+		logrus.SetLevel(logrus.DebugLevel)
+	}
+
 	// Build matrix with filters
 	matrix := protocol_validate.DefaultMatrix()
 
