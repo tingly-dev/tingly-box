@@ -2,13 +2,27 @@ import { useEffect, useState, useCallback } from 'react';
 import api from '../services/api';
 import type { ProviderModelData, ProviderModelsDataByUuid } from '../types/provider';
 import { useNewModels } from './useNewModels';
+import { useLocalStorage } from './useLocalStorage';
+import { createEventSystem } from '../utils/eventSystem';
 
 // Local storage key for refresh timestamps
 const REFRESH_TIMESTAMPS_KEY = 'tingly_provider_refresh_timestamps';
 const AUTO_REFRESH_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const DEFAULT_TIMESTAMPS = {};
 
-// Helper functions to manage refresh timestamps
-export const loadRefreshTimestamps = (): { [providerUuid: string]: string } => {
+// Type for refresh timestamps
+type RefreshTimestamps = { [providerUuid: string]: string };
+
+// Event system for provider models updates
+const providerModelsEvent = createEventSystem<{ providerUuid: string; models: ProviderModelData | null }>(
+    'tingly_provider_models_update'
+);
+
+// Export event name for backward compatibility
+export const PROVIDER_MODELS_UPDATE_EVENT = providerModelsEvent.eventName;
+
+// Helper functions to manage refresh timestamps (now using useLocalStorage internally)
+export const loadRefreshTimestamps = (): RefreshTimestamps => {
     try {
         const stored = localStorage.getItem(REFRESH_TIMESTAMPS_KEY);
         return stored ? JSON.parse(stored) : {};
@@ -18,7 +32,7 @@ export const loadRefreshTimestamps = (): { [providerUuid: string]: string } => {
     }
 };
 
-export const saveRefreshTimestamp = (providerUuid: string, timestamp: string) => {
+export const saveRefreshTimestamp = (providerUuid: string, timestamp: string): boolean => {
     try {
         const timestamps = loadRefreshTimestamps();
         timestamps[providerUuid] = timestamp;
@@ -43,34 +57,24 @@ export const shouldAutoRefresh = (providerUuid: string): boolean => {
     return now - lastRefreshTime >= AUTO_REFRESH_INTERVAL;
 };
 
-// Export event name for provider models updates
-export const PROVIDER_MODELS_UPDATE_EVENT = 'tingly_provider_models_update';
-
-// Helper to dispatch provider models update event
+// Helper to dispatch provider models update event (backward compatibility)
 export const dispatchProviderModelsUpdate = (providerUuid: string, models: ProviderModelData | null) => {
-    window.dispatchEvent(new CustomEvent(PROVIDER_MODELS_UPDATE_EVENT, {
-        detail: { providerUuid, models }
-    }));
+    providerModelsEvent.dispatch({ providerUuid, models });
 };
 
-// Helper to listen for provider models updates
-export const listenForProviderModelsUpdates = (callback: (providerUuid: string, models: ProviderModelData | null) => void) => {
-    const handler = ((event: CustomEvent) => {
-        callback(event.detail.providerUuid, event.detail.models);
-    }) as EventListener;
-
-    window.addEventListener(PROVIDER_MODELS_UPDATE_EVENT, handler);
-
-    return () => {
-        window.removeEventListener(PROVIDER_MODELS_UPDATE_EVENT, handler);
-    };
+// Helper to listen for provider models updates (backward compatibility)
+export const listenForProviderModelsUpdates = (
+    callback: (providerUuid: string, models: ProviderModelData | null) => void
+) => {
+    return providerModelsEvent.listen(({ providerUuid, models }) => {
+        callback(providerUuid, models);
+    });
 };
 
 // Custom hook to manage provider models
 export const useProviderModels = () => {
     const [providerModels, setProviderModels] = useState<ProviderModelsDataByUuid>({});
     const [refreshingProviders, setRefreshingProviders] = useState<Set<string>>(new Set());
-    const [version, setVersion] = useState(0);
     const { detectAndStoreNewModels } = useNewModels();
 
     // Fetch models for a provider (GET - cached data, auto-refresh if empty or 24h passed)
@@ -108,8 +112,7 @@ export const useProviderModels = () => {
                         ...prev,
                         [providerUuid]: refreshResult.data!
                     }));
-                    setVersion(prev => prev + 1);
-                    dispatchProviderModelsUpdate(providerUuid, refreshResult.data);
+                    providerModelsEvent.dispatch({ providerUuid, models: refreshResult.data });
                     return refreshResult.data;
                 }
             }
@@ -134,8 +137,7 @@ export const useProviderModels = () => {
                             ...prev,
                             [providerUuid]: refreshResult.data!
                         }));
-                        setVersion(prev => prev + 1);
-                        dispatchProviderModelsUpdate(providerUuid, refreshResult.data);
+                        providerModelsEvent.dispatch({ providerUuid, models: refreshResult.data });
                         return refreshResult.data;
                     }
                 } else {
@@ -143,8 +145,7 @@ export const useProviderModels = () => {
                         ...prev,
                         [providerUuid]: result.data!
                     }));
-                    setVersion(prev => prev + 1);
-                    dispatchProviderModelsUpdate(providerUuid, result.data);
+                    providerModelsEvent.dispatch({ providerUuid, models: result.data });
                     return result.data;
                 }
             }
@@ -189,8 +190,7 @@ export const useProviderModels = () => {
                     ...prev,
                     [providerUuid]: result.data!
                 }));
-                setVersion(prev => prev + 1);
-                dispatchProviderModelsUpdate(providerUuid, result.data);
+                providerModelsEvent.dispatch({ providerUuid, models: result.data });
                 return result.data;
             }
         } catch (error) {
@@ -212,8 +212,7 @@ export const useProviderModels = () => {
             ...prev,
             [providerUuid]: models
         }));
-        setVersion(prev => prev + 1);
-        dispatchProviderModelsUpdate(providerUuid, models);
+        providerModelsEvent.dispatch({ providerUuid, models });
     }, []);
 
     // Remove models for a provider
@@ -223,8 +222,7 @@ export const useProviderModels = () => {
             delete next[providerUuid];
             return next;
         });
-        setVersion(prev => prev + 1);
-        dispatchProviderModelsUpdate(providerUuid, null);
+        providerModelsEvent.dispatch({ providerUuid, models: null });
     }, []);
 
     // Refetch all providers that have cached data
@@ -245,7 +243,7 @@ export const useProviderModels = () => {
 
     // Listen for updates from other components
     useEffect(() => {
-        const cleanup = listenForProviderModelsUpdates((providerUuid, models) => {
+        const cleanup = providerModelsEvent.listen(({ providerUuid, models }) => {
             if (models) {
                 setProviderModels(prev => ({
                     ...prev,
@@ -258,7 +256,6 @@ export const useProviderModels = () => {
                     return next;
                 });
             }
-            setVersion(prev => prev + 1);
         });
         return cleanup;
     }, []);
@@ -266,7 +263,6 @@ export const useProviderModels = () => {
     return {
         providerModels,
         refreshingProviders: Array.from(refreshingProviders),
-        version,
         fetchModels,
         refreshModels,
         setModels,
