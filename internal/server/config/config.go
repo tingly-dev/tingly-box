@@ -1412,64 +1412,16 @@ func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, 
 		}
 	}
 
-	oldUnified := profiles[idx].Unified
-
 	// Update fields
 	profiles[idx].Name = name
 	if unified != nil {
 		profiles[idx].Unified = *unified
 	}
 
-	// If mode changed, we need to update the rules
-	if unified != nil && *unified != oldUnified && baseScenario == typ.ScenarioClaudeCode {
-		profiledScenario := typ.ProfiledScenarioName(baseScenario, profileID)
-
-		// Remove existing profile rules
-		c.Rules = slices.DeleteFunc(c.Rules, func(r typ.Rule) bool {
-			return r.Scenario == profiledScenario
-		})
-
-		// Re-clone rules with new mode setting
-		// IMPORTANT: Collect rules to clone first, then append to avoid modifying slice during iteration
-		var rulesToClone []typ.Rule
-		for _, rule := range c.Rules {
-			if rule.Scenario == baseScenario {
-				if *unified {
-					// Unified mode: only include built-in-cc, rename to "*"
-					if rule.UUID == RuleUUIDBuiltinCC {
-						cloned := rule
-						cloned.UUID = uuid.New().String()
-						cloned.Scenario = profiledScenario
-						cloned.RequestModel = "cc" // Use "cc" for unified mode
-						rulesToClone = append(rulesToClone, cloned)
-					}
-					continue
-				} else {
-					// Separate mode: skip built-in-cc, include individual model rules
-					if rule.UUID == RuleUUIDBuiltinCC {
-						continue
-					}
-				}
-
-				cloned := rule
-				cloned.UUID = uuid.New().String()
-				cloned.Scenario = profiledScenario
-				// Strip "tingly/cc-" prefix for profile rules
-				if strings.HasPrefix(cloned.RequestModel, "tingly/cc-") {
-					cloned.RequestModel = strings.TrimPrefix(cloned.RequestModel, "tingly/cc-")
-				} else if cloned.RequestModel == "tingly/cc" {
-					if !*unified {
-						continue
-					}
-					// For unified mode, rename to "cc"
-					cloned.RequestModel = "cc"
-				}
-				rulesToClone = append(rulesToClone, cloned)
-			}
-		}
-		// Append all cloned rules at once
-		c.Rules = append(c.Rules, rulesToClone...)
-	}
+	// Note: Mode (unified/separate) is determined at profile creation time.
+	// Changing the mode field here only affects display, not the actual rules.
+	// To switch modes, users should delete and recreate the profile.
+	// This prevents confusion and data loss from rule reconstruction.
 
 	return c.Save()
 }

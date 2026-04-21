@@ -298,20 +298,20 @@ const ClaudeCodeProfilePage: React.FC = () => {
                                 ? t('claudeCode.profile.unifiedDescription')
                                 : t('claudeCode.profile.separateDescription')}
                             </Typography>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                                <Typography variant="body2" color="text.secondary">
-                                    {t('claudeCode.profile.separate')}
-                                </Typography>
-                                <Switch
-                                    checked={unifiedMode}
-                                    onChange={handleModeToggle}
-                                    disabled={isUpdatingMode}
-                                    size="small"
-                                />
-                                <Typography variant="body2" color="text.secondary">
-                                    {t('claudeCode.profile.unified')}
-                                </Typography>
-                            </Stack>
+                            {/*<Stack direction="row" spacing={1} alignItems="center">*/}
+                            {/*    <Typography variant="body2" color="text.secondary">*/}
+                            {/*        {t('claudeCode.profile.separate')}*/}
+                            {/*    </Typography>*/}
+                            {/*    <Switch*/}
+                            {/*        checked={unifiedMode}*/}
+                            {/*        onChange={handleModeToggle}*/}
+                            {/*        disabled={isUpdatingMode}*/}
+                            {/*        size="small"*/}
+                            {/*    />*/}
+                            {/*    <Typography variant="body2" color="text.secondary">*/}
+                            {/*        {t('claudeCode.profile.unified')}*/}
+                            {/*    </Typography>*/}
+                            {/*</Stack>*/}
                         </Box>
 
                     </Box>
