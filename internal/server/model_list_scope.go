@@ -16,9 +16,24 @@ func scenarioSupportsTransport(scenario typ.RuleScenario, transport typ.Scenario
 }
 
 func shouldIncludeRuleInModelList(requestedScenario typ.RuleScenario, ruleScenario typ.RuleScenario) bool {
+	// If requested scenario is a profile (e.g., "claude_code:p1"), only include exact matches.
+	// Profiles are isolated scopes and should not fallback to transport-based reachability.
+	if typ.IsProfiledScenario(requestedScenario) {
+		return requestedScenario == ruleScenario
+	}
+
+	// If the rule belongs to a profiled scenario, it must not be visible to non-profile requests.
+	// Profile rules are exclusively scoped to their own profile.
+	if typ.IsProfiledScenario(ruleScenario) {
+		return false
+	}
+
+	// For non-profile scenarios, check exact match first
 	if requestedScenario == ruleScenario {
 		return true
 	}
+
+	// Then check transport reachability for non-profile scenarios
 	requestedDescriptor, ok := typ.GetScenarioDescriptor(requestedScenario)
 	if !ok {
 		return false
