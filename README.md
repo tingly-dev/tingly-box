@@ -250,10 +250,25 @@ Special badges are minted to recognize the contributions from following contribu
 
 <br />
 
-<img width="144" height="144" alt="image" src="https://github.com/user-attachments/assets/18730cd4-5e04-4840-9ef7-eab5cb418032" />
-<img width="144" height="144" alt="image" src="https://github.com/user-attachments/assets/2df1c253-94f8-4cef-b6b7-9fef11ac9ecc" />
-<img width="144" height="144" alt="image" src="https://github.com/user-attachments/assets/67b90687-780c-42f8-ad7f-e58e28752c91" />
-<img width="144" height="144" alt="image" src="https://github.com/user-attachments/assets/85281640-678c-4391-b96f-4ec759018846" />
+<table border="0" cellpadding="0" cellspacing="0" style="border:none; border-collapse:collapse; ">
+  <tr style="border:none;">
+    <td style="border:none; padding:4px;">
+      <img width="140" height="140" alt="image" src="https://github.com/user-attachments/assets/ee8bfa35-3c19-4ddb-8e2d-cb0416f3f7b7" style="display:block; border:none;" />
+    </td>
+    <td style="border:none; padding:4px;">
+      <img width="144" height="144" alt="image" src="https://github.com/user-attachments/assets/91d2fed3-158a-4dd9-9f8c-9ac552d4dc22" style="display:block; border:none;" />
+    </td>
+    <td style="border:none; padding:4px;">
+      <img width="140" height="140" alt="image" src="https://github.com/user-attachments/assets/9e485b5c-dc2d-4d4e-be69-f8559bbb830c" style="display:block; border:none;" />
+    </td>
+    <td style="border:none; padding:4px;">
+      <img width="133" height="133" alt="image" src="https://github.com/user-attachments/assets/8450f42c-61e4-4cce-8025-95956146fc35" style="display:block; border:none;" />
+    </td>
+    <td style="border:none; padding:4px;">
+      <img width="140" height="140" alt="image" src="https://github.com/user-attachments/assets/1b216610-6fe3-4567-8066-dbc5249b2cbc" style="display:block; border:none;" />
+    </td>
+  </tr>
+</table>
 
 ## License
 
