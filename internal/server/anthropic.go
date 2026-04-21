@@ -99,6 +99,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 				},
 			})
 			logrus.WithError(err).WithField("body", string(bodyBytes)).Errorf("Anthropic beta decode error")
+			c.Abort()
 			return
 		}
 		requestModel = string(betaMessages.Model)
@@ -117,6 +118,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 				},
 			})
 			logrus.WithError(err).WithField("body", string(bodyBytes)).Errorf("Anthropic decode error")
+			c.Abort()
 			return
 		}
 
