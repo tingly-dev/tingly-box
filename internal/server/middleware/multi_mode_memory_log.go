@@ -63,13 +63,12 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		path := c.Request.URL.Path
 		raw := c.Request.URL.RawQuery
 
-		// Wrap request body to capture content for logging while still allowing
-		// downstream handlers to read it. This is a tee-style reader that doesn't
-		// block or fail - if capture fails, the request continues normally.
+		// Capture request body using TeeReader for logging.
+		// We ALWAYS read (to support error debugging), but only STORE on errors (4xx/5xx).
+		// This minimizes storage overhead while keeping logging capability.
 		var bodyBuffer *bytes.Buffer
 		if m.requestBodyStore != nil && c.Request.Body != nil && c.Request.Method != "GET" && c.Request.Method != "HEAD" {
 			bodyBuffer = &bytes.Buffer{}
-			// TeeReader copies reads to both bodyBuffer and the original body
 			teeReader := io.TeeReader(c.Request.Body, bodyBuffer)
 			c.Request.Body = io.NopCloser(teeReader)
 		}
@@ -128,9 +127,9 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 			"user_agent": c.Request.UserAgent(),
 		}
 
-		// Add body reference if request body was captured
-		// This is done after c.Next() so we have the complete body
-		if bodyBuffer != nil && bodyBuffer.Len() > 0 {
+		// Add body reference - ONLY for error responses (4xx/5xx) to minimize storage overhead
+		// Happy path (2xx) requests don't store body, saving memory and CPU
+		if bodyBuffer != nil && statusCode >= 400 && bodyBuffer.Len() > 0 {
 			bodyRef := m.requestBodyStore.Store(method, path, bodyBuffer.String(), MaxRequestBodySize)
 			fields["body_ref"] = bodyRef
 		}
