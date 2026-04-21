@@ -41,6 +41,7 @@ import {
     Edit as EditIcon,
     InfoOutlined as InfoIcon,
     PowerSettingsNew as PowerIcon,
+    Refresh as RefreshIcon,
     Visibility as VisibilityIcon,
     VisibilityOff as VisibilityOffIcon,
 } from '@mui/icons-material';
@@ -448,7 +449,8 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
                 </ConfigRow>
 
                 <ConfigRow label="Model" hint="Model ID, e.g. gpt-4o, qwen3-235b-a22b, deepseek-chat">
-                    <FormControl fullWidth size="small">
+                    <Stack direction="row" spacing={0.5} alignItems="center">
+                        <FormControl fullWidth size="small">
                         <Select
                             value={advisorModels.includes(model) ? model : (model ? '__custom__' : '')}
                             onChange={(e) => {
@@ -463,7 +465,6 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
                             displayEmpty
                             renderValue={(v) => v ? (v === '__custom__' ? model : v) : <span style={{ color: '#999' }}>Select model</span>}
                             sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}
-                            endAdornment={modelsFetching ? <CircularProgress size={14} sx={{ mr: 2 }} /> : undefined}
                         >
                             {advisorModels.map((m) => (
                                 <MenuItem key={m} value={m} sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{m}</MenuItem>
@@ -479,6 +480,14 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
                             </MenuItem>
                         </Select>
                     </FormControl>
+                        <Tooltip title="Refresh model list">
+                            <span>
+                                <IconButton size="small" onClick={() => { void fetchAdvisorModels(baseUrl, apiKey); }} disabled={modelsFetching || !baseUrl}>
+                                    <RefreshIcon fontSize="small" />
+                                </IconButton>
+                            </span>
+                        </Tooltip>
+                    </Stack>
                 </ConfigRow>
 
                 <Dialog open={customModelOpen} onClose={() => setCustomModelOpen(false)} maxWidth="xs" fullWidth>
