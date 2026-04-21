@@ -63,23 +63,15 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		path := c.Request.URL.Path
 		raw := c.Request.URL.RawQuery
 
-		// Read request body for storage (before it's consumed by handlers)
-		var bodyRef string
+		// Wrap request body to capture content for logging while still allowing
+		// downstream handlers to read it. This is a tee-style reader that doesn't
+		// block or fail - if capture fails, the request continues normally.
+		var bodyBuffer *bytes.Buffer
 		if m.requestBodyStore != nil && c.Request.Body != nil && c.Request.Method != "GET" && c.Request.Method != "HEAD" {
-			bodyBytes, err := io.ReadAll(c.Request.Body)
-			if err != nil {
-				// Log the error but continue processing
-				logrus.WithFields(logrus.Fields{
-					"method": c.Request.Method,
-					"path":   c.Request.URL.Path,
-					"error":  err.Error(),
-				}).Warn("Failed to read request body for storage")
-			} else if len(bodyBytes) > 0 {
-				// Store body and get reference ID
-				bodyRef = m.requestBodyStore.Store(c.Request.Method, c.Request.URL.Path, string(bodyBytes), MaxRequestBodySize)
-				// Restore body for downstream handlers
-				c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-			}
+			bodyBuffer = &bytes.Buffer{}
+			// TeeReader copies reads to both bodyBuffer and the original body
+			teeReader := io.TeeReader(c.Request.Body, bodyBuffer)
+			c.Request.Body = io.NopCloser(teeReader)
 		}
 
 		// Wrap response writer to capture body for error responses
@@ -136,8 +128,10 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 			"user_agent": c.Request.UserAgent(),
 		}
 
-		// Add body reference if request body was stored
-		if bodyRef != "" {
+		// Add body reference if request body was captured
+		// This is done after c.Next() so we have the complete body
+		if bodyBuffer != nil && bodyBuffer.Len() > 0 {
+			bodyRef := m.requestBodyStore.Store(method, path, bodyBuffer.String(), MaxRequestBodySize)
 			fields["body_ref"] = bodyRef
 		}
 
