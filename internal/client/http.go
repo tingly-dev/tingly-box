@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
@@ -388,6 +389,21 @@ func CreateHTTPClientWithProxy(proxyURL string) *http.Client {
 // This allows both the real TransportPool and test doubles to be used.
 type TransportPoolInterface interface {
 	GetTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType, sessionID typ.SessionID) *http.Transport
+	AcquireTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType, sessionID typ.SessionID) (*http.Transport, func())
+}
+
+// refCountedBody wraps an io.ReadCloser and calls onclose exactly once when closed.
+// The sync.Once prevents double-decrement if the body is closed multiple times.
+type refCountedBody struct {
+	io.ReadCloser
+	once    sync.Once
+	onclose func()
+}
+
+func (b *refCountedBody) Close() error {
+	err := b.ReadCloser.Close()
+	b.once.Do(b.onclose)
+	return err
 }
 
 // SessionBoundTransport is a RoundTripper that binds to a specific session.
@@ -406,21 +422,30 @@ type SessionBoundTransport struct {
 }
 
 // RoundTrip implements http.RoundTripper for SessionBoundTransport.
-// It gets the transport for the stored session from the pool and executes the request.
+// It acquires the transport for the stored session (incrementing refCount),
+// executes the request, and wraps the response body to auto-release on close.
 func (t *SessionBoundTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// Get the transport for this session (cached in pool)
-	transport := t.transportPool.GetTransport(
+	transport, release := t.transportPool.AcquireTransport(
 		t.providerUUID,
 		"", // model - not used for transport keying
 		t.proxyURL,
 		t.oauthType,
-		t.sessionID, // Use stored sessionID
+		t.sessionID,
 	)
 
 	// Execute request
 	resp, err := transport.RoundTrip(req)
 	if err != nil {
+		release()
 		return nil, err
+	}
+
+	// Wrap response body to auto-release refCount on close.
+	// This ensures long-running streaming requests keep the transport alive.
+	if resp.Body != nil {
+		resp.Body = &refCountedBody{ReadCloser: resp.Body, onclose: release}
+	} else {
+		release()
 	}
 
 	// Apply response wrapper if needed (e.g., tool prefix stripping)

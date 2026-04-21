@@ -2,10 +2,16 @@ package client
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // TestClientPool_BasicCreation tests basic client creation
@@ -320,4 +326,315 @@ func TestClientPool_ConcurrentAccess(t *testing.T) {
 	for i := 0; i < numGoroutines; i++ {
 		<-done
 	}
+}
+
+// --- Transport Pool Reference Counting Tests ---
+
+// newTestTransportPool creates an isolated TransportPool for testing
+// (not the global singleton).
+func newTestTransportPool() *TransportPool {
+	return &TransportPool{
+		transports: make(map[string]*pooledTransport),
+		config:     nil,
+	}
+}
+
+// TestTransportPool_AcquireReleaseRefCount verifies that AcquireTransport increments
+// the refCount and the release callback decrements it.
+func TestTransportPool_AcquireReleaseRefCount(t *testing.T) {
+	pool := newTestTransportPool()
+	sessionID := typ.SessionID{Source: typ.SessionSourceUser, Value: "refcount-test"}
+	providerUUID := "test-provider-refcount"
+
+	// Acquire transport
+	_, release := pool.AcquireTransport(providerUUID, "", "", oauth.ProviderClaudeCode, sessionID)
+	if release == nil {
+		t.Fatal("Expected non-nil release callback")
+	}
+
+	// Verify refCount == 1
+	key := NewTransportKey(providerUUID, "", oauth.ProviderClaudeCode, sessionID).String()
+	pool.mutex.RLock()
+	pooled, exists := pool.transports[key]
+	pool.mutex.RUnlock()
+	if !exists {
+		t.Fatal("Expected transport to exist in pool")
+	}
+	if pooled.getRefCount() != 1 {
+		t.Errorf("Expected refCount=1, got %d", pooled.getRefCount())
+	}
+
+	// Release
+	release()
+
+	// Verify refCount == 0
+	if pooled.getRefCount() != 0 {
+		t.Errorf("Expected refCount=0 after release, got %d", pooled.getRefCount())
+	}
+}
+
+// TestTransportPool_CleanupSkipsActiveTransports verifies that cleanup does not
+// evict transports that have active in-flight requests (refCount > 0).
+func TestTransportPool_CleanupSkipsActiveTransports(t *testing.T) {
+	pool := newTestTransportPool()
+	sessionID := typ.SessionID{Source: typ.SessionSourceUser, Value: "cleanup-skip-test"}
+	providerUUID := "test-provider-cleanup-skip"
+
+	// Acquire transport (refCount = 1)
+	_, release := pool.AcquireTransport(providerUUID, "", "", oauth.ProviderClaudeCode, sessionID)
+
+	// Set lastAccess to far in the past so it's "expired"
+	key := NewTransportKey(providerUUID, "", oauth.ProviderClaudeCode, sessionID).String()
+	pool.mutex.RLock()
+	pooled := pool.transports[key]
+	pool.mutex.RUnlock()
+	atomic.StoreInt64(&pooled.lastAccess, time.Now().Add(-30*time.Minute).UnixNano())
+
+	// Run cleanup with short TTL
+	pool.cleanupExpiredTransports(15 * time.Minute)
+
+	// Transport should still be in the map (refCount > 0)
+	pool.mutex.RLock()
+	_, stillExists := pool.transports[key]
+	pool.mutex.RUnlock()
+	if !stillExists {
+		t.Error("Expected transport to still exist after cleanup (refCount > 0)")
+	}
+
+	// Release
+	release()
+}
+
+// TestTransportPool_CleanupEvictsAfterRelease verifies that cleanup evicts
+// a transport once its refCount drops to 0 and TTL has expired.
+func TestTransportPool_CleanupEvictsAfterRelease(t *testing.T) {
+	pool := newTestTransportPool()
+	sessionID := typ.SessionID{Source: typ.SessionSourceUser, Value: "cleanup-evict-test"}
+	providerUUID := "test-provider-cleanup-evict"
+
+	// Acquire and set lastAccess to far past
+	_, release := pool.AcquireTransport(providerUUID, "", "", oauth.ProviderClaudeCode, sessionID)
+
+	key := NewTransportKey(providerUUID, "", oauth.ProviderClaudeCode, sessionID).String()
+	pool.mutex.RLock()
+	pooled := pool.transports[key]
+	pool.mutex.RUnlock()
+	atomic.StoreInt64(&pooled.lastAccess, time.Now().Add(-30*time.Minute).UnixNano())
+
+	// Cleanup while active — should skip
+	pool.cleanupExpiredTransports(15 * time.Minute)
+
+	// Release (refCount -> 0)
+	release()
+
+	// Set lastAccess to far past again (first cleanup refreshed it when skipping)
+	atomic.StoreInt64(&pooled.lastAccess, time.Now().Add(-30*time.Minute).UnixNano())
+
+	// Cleanup again — should now evict
+	pool.cleanupExpiredTransports(15 * time.Minute)
+
+	pool.mutex.RLock()
+	_, stillExists := pool.transports[key]
+	pool.mutex.RUnlock()
+	if stillExists {
+		t.Error("Expected transport to be removed after release and cleanup")
+	}
+}
+
+// TestTransportPool_InvalidateSessionDefersActive verifies that InvalidateSession
+// defers removal of transports with active requests.
+func TestTransportPool_InvalidateSessionDefersActive(t *testing.T) {
+	pool := newTestTransportPool()
+	sessionID := typ.SessionID{Source: typ.SessionSourceUser, Value: "invalidate-defer-test"}
+	providerUUID := "test-provider-invalidate-defer"
+
+	// Acquire transport (refCount = 1)
+	_, release := pool.AcquireTransport(providerUUID, "", "", oauth.ProviderClaudeCode, sessionID)
+
+	key := NewTransportKey(providerUUID, "", oauth.ProviderClaudeCode, sessionID).String()
+
+	// Invalidate session while active
+	pool.InvalidateSession(providerUUID, sessionID.Value)
+
+	// Transport should still be in the map (refCount > 0), but marked for removal
+	pool.mutex.RLock()
+	_, stillExists := pool.transports[key]
+	pool.mutex.RUnlock()
+	if !stillExists {
+		t.Error("Expected transport to still exist after invalidation (refCount > 0)")
+	}
+
+	// Verify lastAccess was set to epoch (marked for deferred removal)
+	pool.mutex.RLock()
+	lastAccessNano := atomic.LoadInt64(&pool.transports[key].lastAccess)
+	pool.mutex.RUnlock()
+	if lastAccessNano != 0 {
+		t.Errorf("Expected lastAccess to be zero (epoch), got %d", lastAccessNano)
+	}
+
+	// Release (refCount -> 0)
+	release()
+
+	// Cleanup should now evict it
+	pool.cleanupExpiredTransports(1 * time.Minute)
+
+	pool.mutex.RLock()
+	_, stillExists = pool.transports[key]
+	pool.mutex.RUnlock()
+	if stillExists {
+		t.Error("Expected transport to be removed after release and cleanup")
+	}
+}
+
+// TestTransportPool_AcquireReleaseConcurrentRace tests that concurrent AcquireTransport
+// and release calls do not cause data races (run with -race).
+func TestTransportPool_AcquireReleaseConcurrentRace(t *testing.T) {
+	pool := newTestTransportPool()
+	sessionID := typ.SessionID{Source: typ.SessionSourceUser, Value: "race-test"}
+	providerUUID := "test-provider-race"
+
+	const numGoroutines = 50
+	var wg sync.WaitGroup
+
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, release := pool.AcquireTransport(providerUUID, "", "", oauth.ProviderClaudeCode, sessionID)
+			// Simulate some work
+			time.Sleep(time.Microsecond * 10)
+			release()
+		}()
+	}
+
+	wg.Wait()
+
+	// All releases done; refCount should be 0
+	key := NewTransportKey(providerUUID, "", oauth.ProviderClaudeCode, sessionID).String()
+	pool.mutex.RLock()
+	pooled := pool.transports[key]
+	pool.mutex.RUnlock()
+	if pooled.getRefCount() != 0 {
+		t.Errorf("Expected refCount=0 after all releases, got %d", pooled.getRefCount())
+	}
+}
+
+// TestSessionBoundTransport_RefCountedBodyRelease tests that the response body
+// wrapper correctly decrements the refCount when closed.
+func TestSessionBoundTransport_RefCountedBodyRelease(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer server.Close()
+
+	// Use a real TransportPool (not test double) to verify ref counting
+	pool := newTestTransportPool()
+	sessionID := typ.SessionID{Source: typ.SessionSourceUser, Value: "body-release-test"}
+	providerUUID := "test-provider-body-release"
+
+	transport := &SessionBoundTransport{
+		transportPool: pool,
+		providerUUID:  providerUUID,
+		proxyURL:      "",
+		oauthType:     oauth.ProviderClaudeCode,
+		sessionID:     sessionID,
+	}
+
+	client := &http.Client{Transport: transport}
+
+	key := NewTransportKey(providerUUID, "", oauth.ProviderClaudeCode, sessionID).String()
+
+	req, _ := http.NewRequest("GET", server.URL, nil)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+
+	// During the request, refCount should be 1 (body not yet closed)
+	pool.mutex.RLock()
+	pooled := pool.transports[key]
+	pool.mutex.RUnlock()
+	if pooled.getRefCount() != 1 {
+		t.Errorf("Expected refCount=1 during request, got %d", pooled.getRefCount())
+	}
+
+	// Close the body — should decrement refCount
+	resp.Body.Close()
+
+	if pooled.getRefCount() != 0 {
+		t.Errorf("Expected refCount=0 after body close, got %d", pooled.getRefCount())
+	}
+}
+
+// TestSessionBoundTransport_RefCountedBodyDoubleClose tests that double-closing
+// the response body does not double-decrement (sync.Once protection).
+func TestSessionBoundTransport_RefCountedBodyDoubleClose(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer server.Close()
+
+	pool := newTestTransportPool()
+	sessionID := typ.SessionID{Source: typ.SessionSourceUser, Value: "double-close-test"}
+	providerUUID := "test-provider-double-close"
+
+	sbt := &SessionBoundTransport{
+		transportPool: pool,
+		providerUUID:  providerUUID,
+		proxyURL:      "",
+		oauthType:     oauth.ProviderClaudeCode,
+		sessionID:     sessionID,
+	}
+
+	client := &http.Client{Transport: sbt}
+	key := NewTransportKey(providerUUID, "", oauth.ProviderClaudeCode, sessionID).String()
+
+	req, _ := http.NewRequest("GET", server.URL, nil)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+
+	// Close body twice
+	resp.Body.Close()
+	resp.Body.Close() // Second close should be safe (sync.Once)
+
+	pool.mutex.RLock()
+	pooled := pool.transports[key]
+	pool.mutex.RUnlock()
+	if pooled.getRefCount() != 0 {
+		t.Errorf("Expected refCount=0 after double close, got %d", pooled.getRefCount())
+	}
+}
+
+// TestTransportPool_LastAccessAtomicRace tests that the lastAccess timestamp
+// is updated atomically without the RUnlock->Lock race (run with -race).
+func TestTransportPool_LastAccessAtomicRace(t *testing.T) {
+	pool := newTestTransportPool()
+	sessionID := typ.SessionID{Source: typ.SessionSourceUser, Value: "atomic-race-test"}
+	providerUUID := "test-provider-atomic-race"
+
+	const numGoroutines = 50
+	var wg sync.WaitGroup
+
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pool.GetTransport(providerUUID, "", "", oauth.ProviderClaudeCode, sessionID)
+		}()
+	}
+
+	// Also run cleanup concurrently
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pool.cleanupExpiredTransports(1 * time.Nanosecond) // Very short TTL to trigger cleanup
+		}()
+	}
+
+	wg.Wait()
 }

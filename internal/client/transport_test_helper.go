@@ -46,6 +46,13 @@ func (p *TestTransportPool) GetTransport(providerUUID, model, proxyURL string, o
 	return transport
 }
 
+// AcquireTransport returns a transport for the given configuration.
+// The release function is a no-op for tests (no reference counting).
+func (p *TestTransportPool) AcquireTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType, sessionID typ.SessionID) (*http.Transport, func()) {
+	transport := p.GetTransport(providerUUID, model, proxyURL, oauthType, sessionID)
+	return transport, func() {} // no-op for tests
+}
+
 // Keys returns all transport keys that were requested.
 func (p *TestTransportPool) Keys() []string {
 	p.mutex.Lock()
