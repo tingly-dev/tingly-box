@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -47,10 +48,38 @@ const (
 	DefaultTransportCleanupInterval = 5 * time.Minute  // Default interval for cleanup task
 )
 
-// pooledTransport wraps a transport with its last access timestamp for TTL tracking
+// pooledTransport wraps a transport with reference counting and last access timestamp for TTL tracking.
+// refCount and lastAccess use atomic operations so they can be updated under RLock without
+// upgrading to a full write lock.
 type pooledTransport struct {
 	transport  *http.Transport
-	lastAccess time.Time
+	refCount   int32 // active in-flight requests (atomic)
+	lastAccess int64 // UnixNano of last access (atomic)
+}
+
+// incrementRefCount atomically increments and returns the new value.
+func (pt *pooledTransport) incrementRefCount() int32 {
+	return atomic.AddInt32(&pt.refCount, 1)
+}
+
+// decrementRefCount atomically decrements and returns the new value.
+func (pt *pooledTransport) decrementRefCount() int32 {
+	return atomic.AddInt32(&pt.refCount, -1)
+}
+
+// getRefCount returns the current reference count.
+func (pt *pooledTransport) getRefCount() int32 {
+	return atomic.LoadInt32(&pt.refCount)
+}
+
+// setLastAccess atomically sets the last access time to now.
+func (pt *pooledTransport) setLastAccess() {
+	atomic.StoreInt64(&pt.lastAccess, time.Now().UnixNano())
+}
+
+// getLastAccess returns the last access time.
+func (pt *pooledTransport) getLastAccess() time.Time {
+	return time.Unix(0, atomic.LoadInt64(&pt.lastAccess))
 }
 
 // TransportPool manages shared HTTP transports for clients
@@ -111,17 +140,17 @@ func SetTransportConfig(config *TransportConfig) {
 // The transport key is based on: providerUUID + sessionID (for OAuth providers).
 // proxyURL is used to configure the transport but is NOT part of the key.
 // sessionID is used to scope transports for OAuth providers that require per-session isolation.
+//
+// Note: For in-flight request tracking (preventing cleanup of active transports),
+// use AcquireTransport instead.
 func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType, sessionID typ.SessionID) *http.Transport {
 	key := NewTransportKey(providerUUID, "", oauthType, sessionID).String()
 
-	// Try to get existing transport with read lock first
+	// Try to get existing transport with read lock
 	tp.mutex.RLock()
 	if pooled, exists := tp.transports[key]; exists {
+		pooled.setLastAccess() // atomic — no need to upgrade to write lock
 		tp.mutex.RUnlock()
-		// Update last access time
-		tp.mutex.Lock()
-		pooled.lastAccess = time.Now()
-		tp.mutex.Unlock()
 		logrus.Debugf("Using cached transport for key: %s", key)
 		return pooled.transport
 	}
@@ -133,7 +162,7 @@ func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oaut
 
 	// Double-check after acquiring write lock to avoid race conditions
 	if pooled, exists := tp.transports[key]; exists {
-		pooled.lastAccess = time.Now()
+		pooled.setLastAccess()
 		logrus.Debugf("Using cached transport for key: %s (double-check)", key)
 		return pooled.transport
 	}
@@ -142,12 +171,53 @@ func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oaut
 	logrus.Infof("Creating new transport for provider: %s, model: %s, proxy: %s, oauth: %s, session: %s",
 		providerUUID, model, proxyURL, oauthType, sessionID.Value)
 	transport := tp.createTransport(proxyURL)
-	tp.transports[key] = &pooledTransport{
-		transport:  transport,
-		lastAccess: time.Now(),
-	}
+	pt := &pooledTransport{transport: transport}
+	pt.setLastAccess()
+	tp.transports[key] = pt
 
 	return transport
+}
+
+// AcquireTransport returns a transport for the given configuration and increments its
+// reference count. The caller MUST call the returned release function exactly once
+// when the request is complete (typically by wrapping the response body).
+// This prevents the cleanup task from evicting a transport that has active in-flight requests.
+func (tp *TransportPool) AcquireTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType, sessionID typ.SessionID) (*http.Transport, func()) {
+	key := NewTransportKey(providerUUID, "", oauthType, sessionID).String()
+
+	// Fast path: read lock for cache hit
+	tp.mutex.RLock()
+	if pooled, exists := tp.transports[key]; exists {
+		pooled.incrementRefCount()
+		pooled.setLastAccess()
+		tp.mutex.RUnlock()
+		logrus.Debugf("Acquired cached transport for key: %s", key)
+		return pooled.transport, func() { pooled.decrementRefCount() }
+	}
+	tp.mutex.RUnlock()
+
+	// Slow path: write lock to create
+	tp.mutex.Lock()
+	defer tp.mutex.Unlock()
+
+	// Double-check after acquiring write lock
+	if pooled, exists := tp.transports[key]; exists {
+		pooled.incrementRefCount()
+		pooled.setLastAccess()
+		logrus.Debugf("Acquired cached transport for key: %s (double-check)", key)
+		return pooled.transport, func() { pooled.decrementRefCount() }
+	}
+
+	// Create new transport
+	logrus.Infof("Creating new transport for provider: %s, model: %s, proxy: %s, oauth: %s, session: %s",
+		providerUUID, model, proxyURL, oauthType, sessionID.Value)
+	transport := tp.createTransport(proxyURL)
+	pt := &pooledTransport{transport: transport}
+	pt.setLastAccess()
+	pt.incrementRefCount()
+	tp.transports[key] = pt
+
+	return transport, func() { pt.decrementRefCount() }
 }
 
 // generateTransportKey creates a unique key for transport caching.
@@ -261,21 +331,35 @@ func (tp *TransportPool) Stats() map[string]interface{} {
 	}
 }
 
-// Clear removes all transports from the pool and closes idle connections
+// Clear removes all transports from the pool and closes idle connections.
+// Transports with active in-flight requests (refCount > 0) are marked for deferred
+// removal (lastAccess set to epoch) and will be cleaned up on the next cycle after
+// their requests complete.
 func (tp *TransportPool) Clear() {
 	tp.mutex.Lock()
 	defer tp.mutex.Unlock()
 
+	removedCount := 0
+	deferredCount := 0
+
 	for key, pooled := range tp.transports {
-		pooled.transport.CloseIdleConnections()
-		logrus.Debugf("Closed idle connections for transport key: %s", key)
+		if pooled.getRefCount() > 0 {
+			pooled.transport.CloseIdleConnections()
+			atomic.StoreInt64(&pooled.lastAccess, 0) // mark for deferred removal
+			deferredCount++
+		} else {
+			pooled.transport.CloseIdleConnections()
+			delete(tp.transports, key)
+			removedCount++
+		}
 	}
-	tp.transports = make(map[string]*pooledTransport)
-	logrus.Info("Transport pool cleared")
+
+	logrus.Infof("Transport pool cleared: %d removed, %d deferred (active requests)", removedCount, deferredCount)
 }
 
 // InvalidateProvider removes all transports associated with a specific provider UUID.
 // This should be called when provider credentials are updated (e.g., OAuth token refresh).
+// Transports with active requests are marked for deferred removal.
 func (tp *TransportPool) InvalidateProvider(providerUUID string) {
 	if providerUUID == "" {
 		return
@@ -285,23 +369,32 @@ func (tp *TransportPool) InvalidateProvider(providerUUID string) {
 	defer tp.mutex.Unlock()
 
 	uuidToken := `"` + providerUUID + `"`
-	count := 0
+	removedCount := 0
+	deferredCount := 0
 
 	for key, pooled := range tp.transports {
 		if strings.Contains(key, uuidToken) {
-			pooled.transport.CloseIdleConnections()
-			delete(tp.transports, key)
-			count++
+			if pooled.getRefCount() > 0 {
+				pooled.transport.CloseIdleConnections()
+				atomic.StoreInt64(&pooled.lastAccess, 0) // mark for deferred removal
+				deferredCount++
+			} else {
+				pooled.transport.CloseIdleConnections()
+				delete(tp.transports, key)
+				removedCount++
+			}
 		}
 	}
 
-	if count > 0 {
-		logrus.Infof("Invalidated %d transport(s) for provider UUID: %s", count, providerUUID)
+	if removedCount > 0 || deferredCount > 0 {
+		logrus.Infof("Invalidated %d transport(s) for provider UUID: %s (%d deferred due to active requests)",
+			removedCount, providerUUID, deferredCount)
 	}
 }
 
 // InvalidateSession removes all transports associated with a specific session for a provider.
 // This should be called when a session ends or its OAuth token is revoked.
+// Transports with active requests are marked for deferred removal.
 func (tp *TransportPool) InvalidateSession(providerUUID, sessionID string) {
 	if sessionID == "" {
 		return
@@ -310,26 +403,34 @@ func (tp *TransportPool) InvalidateSession(providerUUID, sessionID string) {
 	tp.mutex.Lock()
 	defer tp.mutex.Unlock()
 
-	// Keys are JSON from TransportKey.String(); match both provider_uuid and session_id value fields.
 	uuidToken := `"` + providerUUID + `"`
 	sessionToken := `"` + sessionID + `"`
-	count := 0
+	removedCount := 0
+	deferredCount := 0
 
 	for key, pooled := range tp.transports {
-		// Note: ProxyURL is no longer part of the key, so we don't need to match it
 		if strings.Contains(key, uuidToken) && strings.Contains(key, sessionToken) {
-			pooled.transport.CloseIdleConnections()
-			delete(tp.transports, key)
-			count++
+			if pooled.getRefCount() > 0 {
+				pooled.transport.CloseIdleConnections()
+				atomic.StoreInt64(&pooled.lastAccess, 0) // mark for deferred removal
+				deferredCount++
+			} else {
+				pooled.transport.CloseIdleConnections()
+				delete(tp.transports, key)
+				removedCount++
+			}
 		}
 	}
 
-	if count > 0 {
-		logrus.Infof("Invalidated %d transport(s) for provider UUID: %s session: %s", count, providerUUID, sessionID)
+	if removedCount > 0 || deferredCount > 0 {
+		logrus.Infof("Invalidated %d transport(s) for provider UUID: %s session: %s (%d deferred due to active requests)",
+			removedCount, providerUUID, sessionID, deferredCount)
 	}
 }
 
-// cleanupExpiredTransports removes transports that haven't been accessed within the TTL period
+// cleanupExpiredTransports removes transports that haven't been accessed within the TTL period.
+// Transports with active in-flight requests (refCount > 0) are skipped and their lastAccess
+// is refreshed so they get a fresh TTL window after the active request completes.
 func (tp *TransportPool) cleanupExpiredTransports(ttl time.Duration) {
 	tp.mutex.Lock()
 	defer tp.mutex.Unlock()
@@ -338,16 +439,24 @@ func (tp *TransportPool) cleanupExpiredTransports(ttl time.Duration) {
 	expirationThreshold := now.Add(-ttl)
 
 	removedCount := 0
+	skippedCount := 0
 	for key, pooled := range tp.transports {
-		if pooled.lastAccess.Before(expirationThreshold) {
+		if pooled.getRefCount() > 0 {
+			// Transport has active requests; refresh lastAccess so it gets a fresh
+			// TTL window once the request completes instead of being immediately evicted.
+			pooled.setLastAccess()
+			skippedCount++
+			continue
+		}
+		if pooled.getLastAccess().Before(expirationThreshold) {
 			pooled.transport.CloseIdleConnections()
 			delete(tp.transports, key)
 			removedCount++
 		}
 	}
 
-	if removedCount > 0 {
-		logrus.Infof("Cleaned up %d expired transports from pool", removedCount)
+	if removedCount > 0 || skippedCount > 0 {
+		logrus.Infof("Cleaned up %d expired transports from pool, skipped %d with active requests", removedCount, skippedCount)
 	}
 }
 
