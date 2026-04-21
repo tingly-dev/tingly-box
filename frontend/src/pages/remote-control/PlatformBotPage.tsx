@@ -592,7 +592,41 @@ interface TestDialogProps {
 }
 
 const TestDialog: React.FC<TestDialogProps> = ({ open, onClose, bot }) => {
-    const [markdown, setMarkdown] = useState('');
+    const defaultMarkdown = `# Test Message
+
+This is a **bold** and *italic* text test.
+
+## Code Examples
+
+Inline \`code\` example:
+
+\`\`\`javascript
+function hello() {
+    console.log("Hello from Tingly Bot!");
+}
+\`\`\`
+
+## Lists
+
+- Item 1
+- Item 2
+  - Nested item
+
+1. First
+2. Second
+3. Third
+
+## Block Quote
+
+> This is a block quote.
+> Multiple lines supported.
+
+## Links
+
+[Visit Tingly](https://tingly.dev)
+`;
+
+    const [markdown, setMarkdown] = useState(defaultMarkdown);
     const [sending, setSending] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -605,7 +639,7 @@ const TestDialog: React.FC<TestDialogProps> = ({ open, onClose, bot }) => {
         try {
             const response = await api.sendImbotTestMessage(bot.uuid!, markdown, bot.chat_id);
             if (response.success) {
-                setMarkdown('');
+                setMarkdown(defaultMarkdown);
                 onClose();
             } else {
                 setError(response.error || 'Failed to send test message');
@@ -619,7 +653,7 @@ const TestDialog: React.FC<TestDialogProps> = ({ open, onClose, bot }) => {
 
     const handleClose = () => {
         if (!sending) {
-            setMarkdown('');
+            setMarkdown(defaultMarkdown);
             setError(null);
             onClose();
         }
