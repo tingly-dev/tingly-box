@@ -1759,6 +1759,14 @@ export const api = {
         });
     },
 
+    // Probe models from an arbitrary OpenAI-compatible endpoint
+    probeModels: async (baseUrl: string, apiKey?: string): Promise<{ success: boolean; models?: string[]; error?: string }> => {
+        return uiAPI('/probe-models', {
+            method: 'POST',
+            body: JSON.stringify({ base_url: baseUrl, api_key: apiKey || '' }),
+        });
+    },
+
     // List all registered MCP clients
     listMCPClients: async (): Promise<any> => {
         return uiAPI('/mcp/clients', {

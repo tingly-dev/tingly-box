@@ -7,6 +7,10 @@ import {
     Button,
     Chip,
     CircularProgress,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
     Divider,
     FormControl,
     FormControlLabel,
@@ -123,10 +127,11 @@ const ConfigRow: React.FC<ConfigRowProps> = ({ label, hint, children }) => (
 interface SecretInputProps {
     value: string;
     onChange: (v: string) => void;
+    onBlur?: () => void;
     placeholder?: string;
 }
 
-const SecretInput: React.FC<SecretInputProps> = ({ value, onChange, placeholder }) => {
+const SecretInput: React.FC<SecretInputProps> = ({ value, onChange, onBlur, placeholder }) => {
     const [visible, setVisible] = useState(false);
     return (
         <TextField
@@ -135,6 +140,7 @@ const SecretInput: React.FC<SecretInputProps> = ({ value, onChange, placeholder 
             type={visible ? 'text' : 'password'}
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            onBlur={onBlur}
             placeholder={placeholder || 'Enter value'}
             InputProps={{
                 endAdornment: (
@@ -243,15 +249,40 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
     const [apiKey, setApiKey] = useState('');
     const [model, setModel] = useState('');
     const [advisorSaving, setAdvisorSaving] = useState(false);
+    const [advisorModels, setAdvisorModels] = useState<string[]>(ADVISOR_MODELS);
+    const [modelsFetching, setModelsFetching] = useState(false);
+    const [customModelOpen, setCustomModelOpen] = useState(false);
+    const [customModelInput, setCustomModelInput] = useState('');
+
+    const fetchAdvisorModels = async (url: string, key: string) => {
+        if (!url) return;
+        setModelsFetching(true);
+        try {
+            const result = await api.probeModels(url, key);
+            if (result.success && Array.isArray(result.models) && result.models.length > 0) {
+                setAdvisorModels(result.models);
+            } else {
+                setAdvisorModels(ADVISOR_MODELS);
+            }
+        } catch {
+            setAdvisorModels(ADVISOR_MODELS);
+        } finally {
+            setModelsFetching(false);
+        }
+    };
 
     useEffect(() => {
         setSerperKey(webtoolsSource?.env?.['SERPER_API_KEY'] ?? '');
     }, [webtoolsSource]);
 
     useEffect(() => {
-        setBaseUrl(advisorSource?.advisor?.base_url ?? advisorSource?.env?.['ADVISOR_BASE_URL'] ?? '');
-        setApiKey(advisorSource?.advisor?.api_key ?? advisorSource?.env?.['ADVISOR_API_KEY'] ?? '');
-        setModel(advisorSource?.advisor?.model ?? advisorSource?.env?.['ADVISOR_MODEL'] ?? '');
+        const url = advisorSource?.advisor?.base_url ?? advisorSource?.env?.['ADVISOR_BASE_URL'] ?? '';
+        const key = advisorSource?.advisor?.api_key ?? advisorSource?.env?.['ADVISOR_API_KEY'] ?? '';
+        const m = advisorSource?.advisor?.model ?? advisorSource?.env?.['ADVISOR_MODEL'] ?? '';
+        setBaseUrl(url);
+        setApiKey(key);
+        setModel(m);
+        if (url) { void fetchAdvisorModels(url, key); }
     }, [advisorSource]);
 
     const handleWebtoolsToggle = (enabled: boolean) => {
@@ -318,7 +349,7 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
     const webtoolsEnabled = webtoolsSource?.enabled ?? true;
     const advisorEnabled = advisorSource?.enabled ?? true;
     const webtoolsTools = webtoolsSource?.tools ?? ['mcp_web_search', 'mcp_web_fetch'];
-    const isCustomModel = model && !ADVISOR_MODELS.includes(model);
+    const isCustomModel = model && !advisorModels.includes(model);
 
     return (
         <UnifiedCard title="Builtin Servers" size="full">
@@ -401,6 +432,7 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
                         size="small"
                         value={baseUrl}
                         onChange={(e) => { setBaseUrl(e.target.value); }}
+                        onBlur={() => { void fetchAdvisorModels(baseUrl, apiKey); }}
                         placeholder="https://api.openai.com/v1"
                         InputProps={{ sx: { fontFamily: 'monospace', fontSize: '0.8rem' } }}
                     />
@@ -410,6 +442,7 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
                     <SecretInput
                         value={apiKey}
                         onChange={(v) => { setApiKey(v); }}
+                        onBlur={() => { void fetchAdvisorModels(baseUrl, apiKey); }}
                         placeholder="sk-..."
                     />
                 </ConfigRow>
@@ -417,16 +450,22 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
                 <ConfigRow label="Model" hint="Model ID, e.g. gpt-4o, qwen3-235b-a22b, deepseek-chat">
                     <FormControl fullWidth size="small">
                         <Select
-                            value={ADVISOR_MODELS.includes(model) ? model : (model ? '__custom__' : '')}
+                            value={advisorModels.includes(model) ? model : (model ? '__custom__' : '')}
                             onChange={(e) => {
                                 const v = e.target.value;
-                                if (v !== '__custom__') { setModel(v); }
+                                if (v === '__add_custom__') {
+                                    setCustomModelInput(isCustomModel ? model : '');
+                                    setCustomModelOpen(true);
+                                } else if (v !== '__custom__') {
+                                    setModel(v);
+                                }
                             }}
                             displayEmpty
                             renderValue={(v) => v ? (v === '__custom__' ? model : v) : <span style={{ color: '#999' }}>Select model</span>}
                             sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}
+                            endAdornment={modelsFetching ? <CircularProgress size={14} sx={{ mr: 2 }} /> : undefined}
                         >
-                            {ADVISOR_MODELS.map((m) => (
+                            {advisorModels.map((m) => (
                                 <MenuItem key={m} value={m} sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{m}</MenuItem>
                             ))}
                             {isCustomModel && (
@@ -434,22 +473,42 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
                                     {model} <Chip label="custom" size="small" sx={{ ml: 1, fontSize: '0.65rem', height: 18 }} />
                                 </MenuItem>
                             )}
+                            <Divider />
+                            <MenuItem value="__add_custom__" sx={{ fontSize: '0.8rem', color: 'primary.main' }}>
+                                + Custom
+                            </MenuItem>
                         </Select>
                     </FormControl>
                 </ConfigRow>
 
-                {(isCustomModel || (!ADVISOR_MODELS.includes(model) && !isCustomModel)) && (
-                    <Box sx={{ pl: '168px', pb: 1 }}>
+                <Dialog open={customModelOpen} onClose={() => setCustomModelOpen(false)} maxWidth="xs" fullWidth>
+                    <DialogTitle sx={{ fontSize: '1rem' }}>Custom Model ID</DialogTitle>
+                    <DialogContent>
                         <TextField
+                            autoFocus
                             fullWidth
                             size="small"
-                            value={model}
-                            onChange={(e) => { setModel(e.target.value); }}
-                            placeholder={isCustomModel ? 'custom-model-id' : 'or type a custom model ID'}
-                            InputProps={{ sx: { fontFamily: 'monospace', fontSize: '0.8rem' } }}
+                            value={customModelInput}
+                            onChange={(e) => setCustomModelInput(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && customModelInput.trim()) {
+                                    setModel(customModelInput.trim());
+                                    setCustomModelOpen(false);
+                                }
+                            }}
+                            placeholder="e.g. for-adviser, my-custom-model"
+                            sx={{ mt: 1, fontFamily: 'monospace' }}
+                            InputProps={{ sx: { fontFamily: 'monospace', fontSize: '0.85rem' } }}
                         />
-                    </Box>
-                )}
+                    </DialogContent>
+                    <DialogActions>
+                        <Button size="small" onClick={() => setCustomModelOpen(false)}>Cancel</Button>
+                        <Button size="small" variant="contained" disabled={!customModelInput.trim()} onClick={() => {
+                            setModel(customModelInput.trim());
+                            setCustomModelOpen(false);
+                        }}>Confirm</Button>
+                    </DialogActions>
+                </Dialog>
 
                 <Stack direction="row" justifyContent="flex-end" sx={{ pt: 1 }}>
                     <Button
