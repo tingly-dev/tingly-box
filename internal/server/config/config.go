@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -1295,6 +1294,38 @@ func (c *Config) GetProfile(baseScenario typ.RuleScenario, profileID string) (ty
 	return typ.ProfileMeta{}, false
 }
 
+// newCCProfileRules builds fresh rules for a claude_code profile.
+// unified=true → one rule "cc"; unified=false → five rules (default/haiku/sonnet/opus/subagent).
+// Rules are empty (no services, no smart routing) for users to configure.
+func newCCProfileRules(profiledScenario typ.RuleScenario, unified bool) []typ.Rule {
+	newRule := func(requestModel, description string) typ.Rule {
+		return typ.Rule{
+			UUID:         uuid.New().String(),
+			Scenario:     profiledScenario,
+			RequestModel: requestModel,
+			Description:  description,
+			LBTactic: typ.Tactic{
+				Type:   loadbalance.TacticAdaptive,
+				Params: typ.DefaultAdaptiveParams(),
+			},
+			Active: true,
+		}
+	}
+
+	if unified {
+		return []typ.Rule{
+			newRule("cc", "Claude Code profile - unified mode"),
+		}
+	}
+	return []typ.Rule{
+		newRule("default", "Claude Code profile - default model"),
+		newRule("haiku", "Claude Code profile - haiku model"),
+		newRule("sonnet", "Claude Code profile - sonnet model"),
+		newRule("opus", "Claude Code profile - opus model"),
+		newRule("subagent", "Claude Code profile - subagent model"),
+	}
+}
+
 // CreateProfile adds a new profile to a base scenario. Returns the created ProfileMeta.
 // The unified parameter determines whether to use unified mode (single model) or separate mode (individual models).
 func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unified bool) (typ.ProfileMeta, error) {
@@ -1333,55 +1364,12 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 
 	c.Profiles[base] = append(c.Profiles[base], meta)
 
-	// Clone rules from base scenario to the new profiled scenario.
-	// For claude_code, mode determines which rules to include:
-	// - unified mode: include built-in-cc rule as "*" (wildcard), skip individual model rules
-	// - separate mode: skip built-in-cc rule, include individual model rules
+	// Create fresh profile rules from DefaultRules templates (not copied from existing rules).
+	// For claude_code: unified mode → one "cc" rule; separate mode → five individual model rules.
+	// All profile rules start with empty Services/SmartRouting for users to configure.
 	profiledScenario := typ.ProfiledScenarioName(baseScenario, meta.ID)
-	for _, rule := range c.Rules {
-		if rule.Scenario == baseScenario {
-			// Handle claude_code scenario specially based on mode
-			if baseScenario == typ.ScenarioClaudeCode {
-				if unified {
-					// Unified mode: only include built-in-cc, rename request model to "cc"
-					if rule.UUID == RuleUUIDBuiltinCC {
-						cloned := rule
-						cloned.UUID = uuid.New().String()
-						cloned.Scenario = profiledScenario
-						cloned.RequestModel = "cc" // Use "cc" for unified mode
-						cloned.Services = nil      // cleared here (not at bottom) because unified path uses continue
-						cloned.SmartRouting = nil
-						c.Rules = append(c.Rules, cloned)
-					}
-					// Skip individual model rules (haiku, sonnet, opus, default, subagent)
-					continue
-				} else {
-					// Separate mode: skip built-in-cc, include individual model rules
-					if rule.UUID == RuleUUIDBuiltinCC {
-						continue
-					}
-				}
-			}
-
-			cloned := rule
-			cloned.UUID = uuid.New().String()
-			cloned.Scenario = profiledScenario
-			// Strip "tingly/cc-" prefix for profile rules (e.g. "tingly/cc-default" -> "default")
-			if strings.HasPrefix(cloned.RequestModel, "tingly/cc-") {
-				cloned.RequestModel = strings.TrimPrefix(cloned.RequestModel, "tingly/cc-")
-			} else if cloned.RequestModel == "tingly/cc" {
-				// Skip unified model name for separate mode
-				if !unified {
-					continue
-				}
-				// For unified mode, rename to "cc"
-				cloned.RequestModel = "cc"
-			}
-			// Clear services and smart routing - users should configure their own
-			cloned.Services = nil
-			cloned.SmartRouting = nil
-			c.Rules = append(c.Rules, cloned)
-		}
+	if baseScenario == typ.ScenarioClaudeCode {
+		c.Rules = append(c.Rules, newCCProfileRules(profiledScenario, unified)...)
 	}
 
 	return meta, c.Save()
