@@ -372,18 +372,30 @@ func generateCCEnv(baseURL, apiKey, scenarioPath string, unified bool, isProfile
 	}
 
 	if unified {
-		env["ANTHROPIC_MODEL"] = "tingly/cc"
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "tingly/cc"
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "tingly/cc"
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "tingly/cc"
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = "tingly/cc"
+		if isProfile {
+			// Profile unified mode: use "*" to match the wildcard rule
+			env["ANTHROPIC_MODEL"] = "*"
+			env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "*"
+			env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "*"
+			env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "*"
+			env["CLAUDE_CODE_SUBAGENT_MODEL"] = "*"
+		} else {
+			// Non-profile unified mode: use full model name
+			env["ANTHROPIC_MODEL"] = "tingly/cc"
+			env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "tingly/cc"
+			env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "tingly/cc"
+			env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "tingly/cc"
+			env["CLAUDE_CODE_SUBAGENT_MODEL"] = "tingly/cc"
+		}
 	} else if isProfile {
+		// Profile separate mode: use short names (rules have stripped prefix)
 		env["ANTHROPIC_MODEL"] = "default"
 		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "haiku"
 		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "opus"
 		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "sonnet"
 		env["CLAUDE_CODE_SUBAGENT_MODEL"] = "subagent"
 	} else {
+		// Non-profile separate mode: use full model names
 		env["ANTHROPIC_MODEL"] = "tingly/cc-default"
 		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "tingly/cc-haiku"
 		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "tingly/cc-opus"
