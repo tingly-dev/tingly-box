@@ -14,6 +14,10 @@ import {
     Box,
     Button,
     CircularProgress,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
     Modal,
     Snackbar,
     Stack,
@@ -54,6 +58,9 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
 
     // Toggle loading state
     const [togglingBotUuid, setTogglingBotUuid] = useState<string | null>(null);
+
+    // Test dialog state
+    const [testDialogBot, setTestDialogBot] = useState<BotSettings | null>(null);
 
     // Snackbar notification state
     const [snackbar, setSnackbar] = useState<{
@@ -294,6 +301,18 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
         }
     }, [loadBotSettings, showNotification]);
 
+    // Test message handler
+    const handleTestClick = useCallback((botUuid: string) => {
+        const bot = bots.find(b => b.uuid === botUuid);
+        if (bot) {
+            setTestDialogBot(bot);
+        }
+    }, [bots]);
+
+    const handleCloseTestDialog = useCallback(() => {
+        setTestDialogBot(null);
+    }, []);
+
     // SmartGuide dialog using the same pattern as RuleCard
     const handleBotModelUpdate = useCallback(async (uuid: string, provider: string, model: string) => {
         const response = await api.updateImbotSetting(uuid, {
@@ -380,12 +399,22 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
                                 onBotToggle={() => handleBotToggle(bot.uuid!, !bot.enabled)}
                                 onModelClick={() => handleBotModelSelect(bot.uuid!)}
                                 onCWDChange={(cwd) => handleCWDChange(bot.uuid!, cwd)}
+                                onTestClick={() => handleTestClick(bot.uuid!)}
                                 isToggling={togglingBotUuid === bot.uuid}
                             />
                         </div>
                     ))
                 )}
             </UnifiedCard>
+
+            {/* Test Message Dialog */}
+            {testDialogBot && (
+                <TestDialog
+                    open={!!testDialogBot}
+                    onClose={handleCloseTestDialog}
+                    bot={testDialogBot}
+                />
+            )}
 
             {/* Bot Add/Edit Dialog */}
             <Modal open={botTokenDialogOpen} onClose={() => setBotTokenDialogOpen(false)}>
@@ -552,6 +581,123 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
                 </Alert>
             </Snackbar>
         </PageLayout>
+    );
+};
+
+// Test Message Dialog Component
+interface TestDialogProps {
+    open: boolean;
+    onClose: () => void;
+    bot: BotSettings;
+}
+
+const TestDialog: React.FC<TestDialogProps> = ({ open, onClose, bot }) => {
+    const defaultMarkdown = `# Test Message
+
+This is a **bold** and *italic* text test.
+
+## Code Examples
+
+Inline \`code\` example:
+
+\`\`\`javascript
+function hello() {
+    console.log("Hello from Tingly Bot!");
+}
+\`\`\`
+
+## Lists
+
+- Item 1
+- Item 2
+  - Nested item
+
+1. First
+2. Second
+3. Third
+
+## Block Quote
+
+> This is a block quote.
+> Multiple lines supported.
+
+## Links
+
+[Visit Tingly](https://tingly.dev)
+`;
+
+    const [markdown, setMarkdown] = useState(defaultMarkdown);
+    const [sending, setSending] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleSend = async () => {
+        if (!markdown.trim()) return;
+
+        setSending(true);
+        setError(null);
+
+        try {
+            const response = await api.sendImbotTestMessage(bot.uuid!, markdown, bot.chat_id);
+            if (response.success) {
+                setMarkdown(defaultMarkdown);
+                onClose();
+            } else {
+                setError(response.error || 'Failed to send test message');
+            }
+        } catch (err: any) {
+            setError(err.message || 'Failed to send test message');
+        } finally {
+            setSending(false);
+        }
+    };
+
+    const handleClose = () => {
+        if (!sending) {
+            setMarkdown(defaultMarkdown);
+            setError(null);
+            onClose();
+        }
+    };
+
+    return (
+        <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+            <DialogTitle>Send Test Message to {bot.name || bot.platform}</DialogTitle>
+            <DialogContent>
+                {error && (
+                    <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+                        {error}
+                    </Alert>
+                )}
+                <TextField
+                    fullWidth
+                    multiline
+                    rows={6}
+                    label="Markdown Message"
+                    value={markdown}
+                    onChange={(e) => setMarkdown(e.target.value)}
+                    placeholder="Enter your test message in markdown format..."
+                    disabled={sending}
+                    margin="normal"
+                />
+                {bot.chat_id && (
+                    <Alert severity="info" sx={{ mt: 1 }}>
+                        Message will be sent to chat ID: <code>{bot.chat_id}</code>
+                    </Alert>
+                )}
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={handleClose} disabled={sending}>
+                    Cancel
+                </Button>
+                <Button
+                    onClick={handleSend}
+                    variant="contained"
+                    disabled={!markdown.trim() || sending}
+                >
+                    {sending ? 'Sending...' : 'Send Test'}
+                </Button>
+            </DialogActions>
+        </Dialog>
     );
 };
 

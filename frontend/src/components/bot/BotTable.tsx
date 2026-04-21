@@ -28,6 +28,7 @@ interface BotTableProps {
     onBotToggle?: (uuid: string, enabled: boolean) => void;
     onBotModelSelect?: (botUuid: string) => void;
     onCWDChange?: (botUuid: string, cwd: string) => void;
+    onTestClick?: (botUuid: string) => void;
     defaultExpanded?: string[];
     loading?: boolean;
     error?: string | null;
@@ -53,6 +54,7 @@ const BotTable = ({
     onBotToggle,
     onBotModelSelect,
     onCWDChange,
+    onTestClick,
     defaultExpanded = [],
     loading = false,
     error = null,
@@ -163,6 +165,7 @@ const BotTable = ({
                                     onBotToggle={onBotToggle}
                                     onEdit={onEdit ? () => onEdit(bot.uuid!) : undefined}
                                     onDelete={() => handleDeleteClick(bot.uuid!)}
+                                    onTestClick={onTestClick ? () => onTestClick(bot.uuid!) : undefined}
                                     isToggling={isToggling}
                                 />
                             );

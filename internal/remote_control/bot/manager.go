@@ -16,11 +16,11 @@ import (
 )
 
 // runBotWithSettings starts a bot using JSON file storage for chat state
-func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, tbClient tbclient.TBClient) error {
+func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, tbClient tbclient.TBClient) (*imbot.Manager, error) {
 	// Create a JSON-based chat store
 	chatStore, err := NewChatStoreJSON(dataPath)
 	if err != nil {
-		return fmt.Errorf("failed to create chat store: %w", err)
+		return nil, fmt.Errorf("failed to create chat store: %w", err)
 	}
 	defer chatStore.Close()
 
@@ -29,7 +29,7 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 	platform := imbot.Platform(setting.Platform)
 
 	if sessionMgr == nil {
-		return fmt.Errorf("session manager is nil")
+		return nil, fmt.Errorf("session manager is nil")
 	}
 
 	directoryBrowser := NewDirectoryBrowser()
@@ -64,7 +64,7 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 		Options:  options,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to start %s bot: %w", setting.Platform, err)
+		return nil, fmt.Errorf("failed to start %s bot: %w", setting.Platform, err)
 	}
 
 	// Register unified message handler with platform parameter
@@ -72,7 +72,7 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {
-		return fmt.Errorf("failed to start bot manager: %w", err)
+		return nil, fmt.Errorf("failed to start bot manager: %w", err)
 	}
 
 	// Setup menu button after bot is connected
@@ -88,7 +88,7 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 	// The manager will automatically clean up when context is cancelled
 	<-ctx.Done()
 
-	return nil
+	return manager, nil
 }
 
 // buildAuthConfig creates auth config based on platform
@@ -289,9 +289,18 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	// Start bot in goroutine (dataPath and tbClient already captured above)
 	go func() {
 		defer close(doneChan) // Signal that goroutine is done
-		if err := runBotWithSettings(ctx, s, dataPath, m.sessionMgr, m.agentBoot, tbClient); err != nil {
+		imbotMgr, err := runBotWithSettings(ctx, s, dataPath, m.sessionMgr, m.agentBoot, tbClient)
+		if err != nil {
 			logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
 		}
+
+		// Store the imbot manager reference in runningBot
+		m.mu.Lock()
+		if rb, exists := m.running[uuid]; exists {
+			rb.imbotMgr = imbotMgr
+			rb.botUUID = uuid
+		}
+		m.mu.Unlock()
 
 		// Bot stopped, remove from running map
 		m.removeRunning(uuid)
@@ -458,4 +467,42 @@ func (m *Manager) removeRunning(uuid string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.running, uuid)
+}
+
+// SendMessage sends a test message to a target chat ID for a running bot
+func (m *Manager) SendMessage(uuid string, targetChatID string, markdown string) error {
+	m.mu.RLock()
+	rb, exists := m.running[uuid]
+	m.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("bot %s is not running", uuid)
+	}
+
+	if rb.imbotMgr == nil {
+		return fmt.Errorf("bot manager not initialized for %s", uuid)
+	}
+
+	bot := rb.imbotMgr.GetBotByUUID(rb.botUUID)
+	if bot == nil {
+		return fmt.Errorf("bot instance not found for %s", uuid)
+	}
+
+	// Send message with markdown parse mode
+	opts := &imbot.SendMessageOptions{
+		Text:      markdown,
+		ParseMode: imbot.ParseModeMarkdown,
+	}
+
+	_, err := bot.SendMessage(context.Background(), targetChatID, opts)
+	if err != nil {
+		return fmt.Errorf("failed to send message: %w", err)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"uuid":         uuid,
+		"targetChatID": targetChatID,
+	}).Info("Test message sent successfully")
+
+	return nil
 }

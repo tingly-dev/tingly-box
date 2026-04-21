@@ -363,3 +363,19 @@ func (bm *BotManager) GetTBClient() tbclient.TBClient {
 
 	return bm.tbClient
 }
+
+// SendMessage sends a test message to a running bot.
+func (bm *BotManager) SendMessage(uuid string, targetChatID string, markdown string) error {
+	if bm == nil {
+		return fmt.Errorf("bot manager is nil")
+	}
+
+	bm.mu.RLock()
+	defer bm.mu.RUnlock()
+
+	if bm.manager == nil {
+		return fmt.Errorf("internal bot manager is nil")
+	}
+
+	return bm.manager.SendMessage(uuid, targetChatID, markdown)
+}
