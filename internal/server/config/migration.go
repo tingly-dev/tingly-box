@@ -35,6 +35,7 @@ func Migrate(c *Config) error {
 	migrate20260210(c)
 	migrate20260306(c)
 	migrate20260416(c) // Enable multi-tenant by default
+	migrate20260421(c) // Migrate profile unified model from "*" to "cc"
 	return nil
 }
 
@@ -368,4 +369,37 @@ func migrate20260416(c *Config) {
 	// Keep global token enabled for backward compatibility
 
 	_ = c.Save()
+}
+
+// migrate20260421 migrates profile unified model name from "*" to "cc"
+// This ensures consistency with the new naming convention where profile
+// rules use simplified names: "cc" (unified), "default", "haiku", etc. (separate)
+// Only applies to claude-code scenario profiles.
+func migrate20260421(c *Config) {
+	needsSave := false
+
+	for i := range c.Rules {
+		rule := &c.Rules[i]
+
+		// Only migrate claude-code profile rules
+		// Profile rules have scenario like "claude-code:profileID"
+		if !typ.IsProfiledScenario(rule.Scenario) {
+			continue
+		}
+		// Check if base scenario is claude-code
+		baseScenario, _ := typ.ParseScenarioProfile(rule.Scenario)
+		if baseScenario != typ.ScenarioClaudeCode {
+			continue
+		}
+
+		// Migrate "*" to "cc" for unified mode
+		if rule.RequestModel == "*" {
+			rule.RequestModel = "cc"
+			needsSave = true
+		}
+	}
+
+	if needsSave {
+		_ = c.Save()
+	}
 }

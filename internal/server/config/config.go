@@ -1343,12 +1343,12 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 			// Handle claude_code scenario specially based on mode
 			if baseScenario == typ.ScenarioClaudeCode {
 				if unified {
-					// Unified mode: only include built-in-cc, rename request model to "*"
+					// Unified mode: only include built-in-cc, rename request model to "cc"
 					if rule.UUID == RuleUUIDBuiltinCC {
 						cloned := rule
 						cloned.UUID = uuid.New().String()
 						cloned.Scenario = profiledScenario
-						cloned.RequestModel = "*" // Use "*" as wildcard for all models
+						cloned.RequestModel = "cc" // Use "cc" for unified mode
 						c.Rules = append(c.Rules, cloned)
 					}
 					// Skip individual model rules (haiku, sonnet, opus, default, subagent)
@@ -1430,6 +1430,8 @@ func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, 
 		})
 
 		// Re-clone rules with new mode setting
+		// IMPORTANT: Collect rules to clone first, then append to avoid modifying slice during iteration
+		var rulesToClone []typ.Rule
 		for _, rule := range c.Rules {
 			if rule.Scenario == baseScenario {
 				if *unified {
@@ -1438,8 +1440,8 @@ func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, 
 						cloned := rule
 						cloned.UUID = uuid.New().String()
 						cloned.Scenario = profiledScenario
-						cloned.RequestModel = "*" // Use "*" as wildcard for all models
-						c.Rules = append(c.Rules, cloned)
+						cloned.RequestModel = "cc" // Use "cc" for unified mode
+						rulesToClone = append(rulesToClone, cloned)
 					}
 					continue
 				} else {
@@ -1459,12 +1461,14 @@ func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, 
 					if !*unified {
 						continue
 					}
-					// For unified mode, rename to "*"
-					cloned.RequestModel = "*"
+					// For unified mode, rename to "cc"
+					cloned.RequestModel = "cc"
 				}
-				c.Rules = append(c.Rules, cloned)
+				rulesToClone = append(rulesToClone, cloned)
 			}
 		}
+		// Append all cloned rules at once
+		c.Rules = append(c.Rules, rulesToClone...)
 	}
 
 	return c.Save()

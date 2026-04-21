@@ -373,12 +373,12 @@ func generateCCEnv(baseURL, apiKey, scenarioPath string, unified bool, isProfile
 
 	if unified {
 		if isProfile {
-			// Profile unified mode: use "*" to match the wildcard rule
-			env["ANTHROPIC_MODEL"] = "*"
-			env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "*"
-			env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "*"
-			env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "*"
-			env["CLAUDE_CODE_SUBAGENT_MODEL"] = "*"
+			// Profile unified mode: use "cc" to match the profile rule
+			env["ANTHROPIC_MODEL"] = "cc"
+			env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "cc"
+			env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "cc"
+			env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "cc"
+			env["CLAUDE_CODE_SUBAGENT_MODEL"] = "cc"
 		} else {
 			// Non-profile unified mode: use full model name
 			env["ANTHROPIC_MODEL"] = "tingly/cc"
